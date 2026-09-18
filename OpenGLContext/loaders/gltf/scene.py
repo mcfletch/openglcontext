@@ -17,6 +17,7 @@ the public entry points in :mod:`loader`.
 """
 from __future__ import annotations
 
+import logging
 import re
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple, Union
 
@@ -44,6 +45,8 @@ else:
     from OpenGLContext.scenegraph.basenodes import (
         Transform, Viewpoint, DirectionalLight, PointLight, SpotLight,
     )
+from OpenGLContext.scenegraph.lod import ScreenCoverageLOD
+from OpenGLContext.loaders.gltf import lod as lodext
 from OpenGLContext.loaders.gltf.accessors import (
     _buffer_bytes, _decode_data_uri, _read_normalized, _resolver_max,
 )
@@ -57,6 +60,8 @@ from OpenGLContext.loaders.gltf.animation import (
     Player, compute_world_matrices,
     _trs_animated_nodes, _build_animations, _register_morph, _register_skin,
 )
+
+log = logging.getLogger(__name__)
 
 
 class GLTFScene(object):
@@ -476,6 +481,11 @@ class _SceneBuilder:
         # OMI_environment_sky: the document's skies[], from which the active
         # scene picks one. None where the document declares none.
         self.skies: list = environment_sky.read_skies(top_ext)
+        # MSFT_lod: the node indices that are somebody's coarser level, so one
+        # is built where it belongs and nowhere else, and how deep the walk
+        # currently is inside such a level.
+        self.lod_alternatives: set = lodext.alternative_ids(g)
+        self._coarser_levels = 0
 
     def mesh_shapes(self, mesh_index: int) -> list:
         if mesh_index in self.mesh_cache:
@@ -500,7 +510,14 @@ class _SceneBuilder:
 
     def _record_part(self, world: np.ndarray, shape: Any,
                      bounds: Tuple[np.ndarray, np.ndarray]) -> None:
-        """Note where one drawn primitive ended up, and how much of it there is."""
+        """Note where one drawn primitive ended up, and how much of it there is.
+
+        A coarser level of an object already recorded is not another part of
+        the model: it is the same part, drawn instead. Recording it would frame
+        the camera on a scene counted several times over.
+        """
+        if self._coarser_levels:
+            return
         minimum, maximum = _world_box(world, bounds)
         positions = getattr(shape.geometry, 'positions', None)
         self.parts.append(
@@ -547,7 +564,11 @@ class _SceneBuilder:
             if gi_ext:
                 placements = gpu_instance_placements(
                     self.g, gi_ext, self.resolver)
-        if node.mesh is not None and node_visible:
+        lod_ids = lodext.level_ids(
+            node_ext.get(lodext.EXTENSION) if isinstance(node_ext, dict) else None)
+        if lod_ids and node.mesh is not None and node_visible and placements is None:
+            children.append(self._lod_node(node, lod_ids, world, ancestry, node_visible))
+        elif node.mesh is not None and node_visible:
             shapes = self.mesh_shapes(node.mesh)
             if placements is not None:
                 # One node per mesh primitive holding every placement, sharing
@@ -586,6 +607,40 @@ class _SceneBuilder:
             children.append(self.build(child, world, ancestry, node_visible))
         group.children = children
         return group
+
+    def _lod_node(self, node: Any, ids: list, world: np.ndarray,
+                  ancestry: Tuple[int, ...], node_visible: bool) -> Any:
+        """One switching node for a node that carries ``MSFT_lod``.
+
+        The node's own mesh is the finest level and the nodes ``ids`` names are
+        the coarser ones, each built as the subtree it is. Anything else the
+        node holds -- its children, a light, an emitter -- stays outside the
+        switch, because the extension offers alternatives for the geometry and
+        not for the rest of what a node is.
+        """
+        levels: list = [Transform(children=[shape for shape, _bounds in
+                                            self.mesh_shapes(node.mesh)])]
+        for shape, bounds in self.mesh_shapes(node.mesh):
+            self._record_part(world, shape, bounds)
+        for index in ids:
+            if not 0 <= index < len(self.g.nodes or []):
+                log.warning(
+                    'MSFT_lod names node %d as a coarser level, which this file '
+                    'does not have; that level is left out', index)
+                continue
+            self._coarser_levels += 1
+            try:
+                levels.append(self.build(index, world, ancestry, node_visible))
+            finally:
+                self._coarser_levels -= 1
+        measured = lodext.mesh_bounds(self.g, node.mesh)
+        centre, radius = measured if measured else ((0.0, 0.0, 0.0), 0.0)
+        return ScreenCoverageLOD(
+            level=levels,
+            screenCoverage=lodext.screen_coverage(node, len(levels)),
+            center=centre,
+            radius=radius,
+        )
 
     @property
     def audio_library(self) -> AudioLibrary:
@@ -682,7 +737,8 @@ class _SceneBuilder:
         # renderable container (GLTFScene.group); the SceneGraph is its parent and
         # carries the DEF registry for by-name lookup.
         root = Transform()
-        root_children = [self.build(ni, np.eye(4)) for ni in _scene_root_indices(g)]
+        root_children = [self.build(ni, np.eye(4)) for ni in _scene_root_indices(g)
+                         if ni not in self.lod_alternatives]
         # Scene-level emitters are global by definition -- music and ambience --
         # so they hang off the root, where no transform reaches them.
         active = _active_scene(g)

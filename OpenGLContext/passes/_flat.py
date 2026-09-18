@@ -1074,6 +1074,11 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         replaces a subtree, and the flattened scenegraph the pass renders from
         has to be told about the new one before it walks it.
 
+        Each node is given the matrix that places it and the lens it is seen
+        through, since a node switching on screen coverage is answering a
+        question about the projection as much as about the distance -- the same
+        object through a narrower field of view covers more of the window.
+
         Only from the camera. A shadow pass draws the same scene from a light,
         and choosing detail by how far a *lamp* is from a figure would swap
         levels as the sun moved.
@@ -1081,15 +1086,25 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         paths = self.paths.get( lod.LOD, () )
         if not paths:
             return
+        tangent = lod.viewer_tangent( self.fieldOfView() )
         for path in list( paths ):
             node = path[-1]
             try:
-                distance = lod.distance_to_viewer(
-                    node, dot( path.transformMatrix(), matrix ) )
-            except Exception as err:      # pragma: no cover - malformed content
+                node.selectFor( dot( path.transformMatrix(), matrix ), tangent )
+            except Exception as err:
                 log.warning( 'could not place an LOD node: %s', err )
-                continue
-            node.select( distance )
+
+    def fieldOfView( self ) -> Optional[float]:
+        """The viewer's vertical field of view in degrees, where it has one.
+
+        None from anything that cannot be asked -- a pass rendering to a
+        surface with no view platform behind it -- which a level of detail
+        takes as the ordinary lens rather than failing the frame over it.
+        """
+        platform = getattr( self.context, 'getViewPlatform', None )
+        if platform is None:
+            return None
+        return float( platform().frustum[0] )
 
     def renderSet( self, matrix: Any ) -> List[Any]:
         """The scene's shapes, culled to the frustum and ordered for drawing.

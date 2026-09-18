@@ -1,7 +1,11 @@
 # A human model, decimated, walked up to
 
-**Status:** 📋 Planned. The measurement harness it rests on has landed
-(`OpenGLContext/meshlod/`, `scripts/lod_quality.py`); the scene has not.
+**Status:** 📋 Planned. Two of the four pieces it needs have landed: the
+measurement harness (`OpenGLContext/meshlod/`, `scripts/lod_quality.py`), and
+the reader -- `MSFT_lod` into a `ScreenCoverageLOD` the render pass switches
+once a frame (`OpenGLContext/loaders/gltf/lod.py`,
+`OpenGLContext/scenegraph/lod.py`). What is left is the asset, as a content
+pack, and the scene.
 
 ## Why a human
 
@@ -51,9 +55,24 @@ as elsewhere. Worth an email to the project asking them to state one.
 
 ## What the demo does
 
-A single bust on a plinth, and a camera the viewer walks in and out on. Nothing
-else in the scene: the subject of the demo is the geometry, and a background
-would only give the eye somewhere else to go.
+**Hundreds of busts, not one.** A gallery of them receding into the distance, and
+a camera the viewer walks through it. One bust proves the metric; a field of them
+proves the *system*, because it is the only arrangement in which every level of
+the chain is on screen at once -- the near ones at level 0 and the far ones at
+level 5, with the switch happening somewhere in the middle of the view where a
+viewer can watch it. It is also the only arrangement that exercises what a game
+actually pays: the draw call count with a chain in play.
+
+**Which is where instancing meets level of detail.** The levels are decoded once
+and shared, and the pass batches by the geometry and appearance a record uses --
+so the busts at a given level collapse into one instanced draw and the frame
+costs one draw per *level in use*, not one per bust. Two hundred busts over a
+six-level chain is at most six draws. The readout should say so: busts on
+screen, draws issued, and the split across levels, because the case for the
+whole design is the distance between those first two numbers.
+
+Nothing else in the scene: the subject of the demo is the geometry, and a
+background would only give the eye somewhere else to go.
 
 - **Walk in from far.** The chain switches down as the bust grows, and the
   switch distances are the ones `meshlod.measure_chain` computed for *this*
@@ -74,14 +93,24 @@ would only give the eye somewhere else to go.
 1. **A content pack for the asset.** `OpenGLContext/contentpacks/` already has
    the registry, the fetch, the store and safe extraction, and requires a
    `copyright` field because the notices screen is generated from it. The bust
-   becomes an entry in a `packs.json`; nothing large is committed.
-2. **The scene.** A `Shape` per level under a switching node, fed by
-   `meshlod.build_chain` at load or from a baked `.npz`.
+   becomes an entry in a `packs.json`; nothing large is committed. What the pack
+   carries is the **baked chain** -- the glb plus its sidecars, as
+   `meshlod.write_chain` produces them -- rather than the Poly Haven download,
+   so the demo opens a file the loader already reads and nothing is decimated at
+   startup. That makes this the engine's own first content pack: the three in
+   the workspace belong to forest, twig-bb and glisteel, so OpenGLContext gains
+   a `release-assets.py` of the same shape, publishing to a content tag on its
+   own repository.
+2. **The scene.** The loader's own: the pack's glb loads as a
+   `ScreenCoverageLOD`, and the demo places copies of it. The levels are shared
+   between the copies, which is what lets the batcher collapse them.
 3. **Geomorph in the shader.** A second position stream and a morph factor in
    `pbr.vert`, per [MESH-DECIMATION.md](MESH-DECIMATION.md) M9.
-4. **A baked chain on disk.** Decimating 17k triangles into five levels takes a
-   few seconds; doing it at every startup is a few seconds nobody should pay.
-   The forest demo's `.npz` convention is the precedent.
+4. **A baked chain on disk** -- which is what the pack carries, and
+   `meshlod.write_chain` is what writes it. Decimating 17k triangles into five
+   levels takes a few seconds; doing it at every startup is a few seconds
+   nobody should pay, and doing it for the two hundred assets this design is
+   aimed at is not a startup at all.
 5. **A normal map baked from the fine mesh** (M10). The measurements say this is
    worth more to the coarse levels than any further decimator work: the outline
    is already within two per cent at a thirty-second of the triangles, and it is
@@ -101,7 +130,8 @@ all before, and the reason [MESH-DECIMATION.md](MESH-DECIMATION.md) exists.
 2. **Does the demo belong in `openglcontext/tests/` as a runnable script, or as
    its own project?** The forest and marble demos are separate projects; this is
    smaller than either and is closer to a reference scene, which argues for
-   `tests/` beside the other runnable examples.
+   `tests/` beside the other runnable examples. A pack published from this
+   repository argues the same way: the asset and the scene then live together.
 3. **Which material.** The measurements were taken with a deliberately plain
    shader and a sharp specular, which is the pessimistic case. A real PBR marble
    will hide some faceting and show other artefacts; the switch distances should

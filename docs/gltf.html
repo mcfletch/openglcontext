@@ -139,6 +139,10 @@ browses the whole sample set with side-by-side reference screenshots.</p>
   <li><strong>Instancing</strong>: <code>EXT_mesh_gpu_instancing</code>, and
     repeated meshes are batched into one instanced draw whether or not the file
     says so &mdash; see <a href="instancing.html">Instanced rendering</a>.</li>
+  <li><strong>Levels of detail</strong>: <code>MSFT_lod</code>, with
+    <code>MSFT_screencoverage</code> &mdash; a node's coarser alternatives and
+    how much of the window each is worth drawing at. See
+    <a href="#lod">Levels of detail</a> below.</li>
   <li><strong>Material extensions</strong>: <code>KHR_materials_clearcoat</code>,
     <code>KHR_materials_sheen</code>, <code>KHR_materials_transmission</code>,
     <code>KHR_materials_volume</code>, <code>KHR_materials_ior</code>,
@@ -172,6 +176,55 @@ browses the whole sample set with side-by-side reference screenshots.</p>
 <p>glTF nodes become <code>Transform</code> nodes, meshes become
 <code>Shape</code> nodes with a PBR mesh geometry and a PBR material, so a loaded
 model is a normal OpenGLContext scenegraph you can inspect and modify.</p>
+
+<h3 id="lod">Levels of detail</h3>
+<p>A model may ship several times over at decreasing detail, so a copy far from
+the camera costs the triangles it is worth rather than the triangles it has.
+<code>MSFT_lod</code> is how a glTF says so: the node carrying the extension is
+the finest level, its <code>ids</code> name the coarser ones in decreasing
+detail, and <code>MSFT_screencoverage</code> in the node's <code>extras</code>
+gives the share of the window at which each takes over.</p>
+<pre>
+"nodes": [
+    {"mesh": 0,
+     "extensions": {"MSFT_lod": {"ids": [1, 2]}},
+     "extras": {"MSFT_screencoverage": [0.5, 0.2, 0.01]}},
+    {"mesh": 1},
+    {"mesh": 2}
+]
+</pre>
+<p>The loader builds one
+<a href="../OpenGLContext/scenegraph/lod.py"><code>ScreenCoverageLOD</code></a>
+holding a level per alternative, and the render pass chooses between them once a
+frame. Reading the example: the finest level is drawn while the model covers
+half the window's height or more, the next from there down to a fifth, the
+coarsest from a fifth down to one per cent, and below that nothing is drawn. A
+file whose coarsest level should stay on screen however small it gets ends the
+list with <code>0</code>.</p>
+<p><strong>Coverage, not distance.</strong> A level is judged by how many pixels
+of it the viewer is actually looking at, so the same model holds its detail
+twice as far out when it is twice the size, and further again through a narrower
+field of view. The size it is measured by comes from the finest level's
+<code>POSITION</code> accessor bounds, which glTF requires a file to declare, so
+a level can be sized and placed without its geometry being read. A transform
+above the node counts: a model scaled up switches later.</p>
+<p><strong>What else the node carries stays put.</strong> The extension offers
+alternatives for the node's own geometry; the node's children, its light and its
+emitters belong to the node and are drawn at every level.</p>
+<p><strong>Copies batch per level.</strong> The levels of a chain are decoded
+once and shared between every node that names them, and the pass groups a frame's
+draws by the geometry and appearance they share &mdash; so two copies of a model
+drawing the same level are one instanced draw, and copies at different levels are
+drawn separately, which is what drawing different geometry means. See
+<a href="instancing.html">Instanced rendering</a>.</p>
+<p>Coverage is a hint, in the extension's own words, and a file may leave it out.
+The levels are then switched on a halving series &mdash; a half, a quarter, an
+eighth &mdash; ending at zero, so a threshold the <em>reader</em> guessed is
+never the reason something disappears.</p>
+<p><code>OpenGLContext.meshlod</code> writes chains in this shape, with the
+coarsest level inside the glb and each finer one a sidecar the operating system
+never opens until it is wanted; <code>MSFT_lod</code> on a <em>material</em>,
+which the extension also allows, is not read.</p>
 
 <h3 id="omi">OMI Extensions</h3>
 <p>The <a href="https://github.com/omigroup/gltf-extensions">Open Metaverse

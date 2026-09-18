@@ -145,6 +145,31 @@ format**:
 `OpenGLContext.meshlod.asset` writes and reads that, and the streaming claims
 are tested by deleting the other levels' files.
 
+**And the scene reads it.** `OpenGLContext/loaders/gltf/lod.py` turns a node
+carrying `MSFT_lod` into a `ScreenCoverageLOD` holding one level per
+alternative, and the render pass chooses between them once a frame. The choice
+is made on **screen coverage** -- the share of the window's height the object's
+bounding sphere spans -- rather than on a distance, which is the question a
+level was measured against in the first place: how many pixels of it somebody is
+looking at. The size it is judged by comes from the finest level's `POSITION`
+accessor bounds, so a level is sized, placed and culled without its geometry
+being read, and a transform above the node counts, so a model scaled up switches
+later. Below the last coverage the file names, nothing is drawn, as the
+extension's own example has it; a chain that named none is switched on a halving
+series ending at zero, because a threshold the *reader* guessed must not be the
+reason something disappears.
+
+**Copies batch per level, and that falls out of sharing.** The levels are
+decoded once and shared between every node that names them, so two copies of a
+model drawing the same level have the same geometry object and land in one
+instanced draw, while copies at different levels are separate draws. The cost
+of a chain is therefore bounded: a scene of one model at five levels is at most
+five draws rather than one per copy.
+
+Still plan here: `MSFT_lod` on a *material*, which the extension also allows,
+and building a level only when it is first chosen -- today all of a chain's
+levels are decoded at load, which opens every sidecar.
+
 **3D Tiles is the alternative and is not the same tool.** The engine already
 implements it, and it is the right answer for streaming a *scene* -- a spatial
 hierarchy of many tiles, with refinement and geometric error. For one asset with

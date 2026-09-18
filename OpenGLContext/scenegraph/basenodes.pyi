@@ -52,6 +52,7 @@ from OpenGLContext.scenegraph.light import DirectionalLight as DirectionalLight
 from OpenGLContext.scenegraph.light import PointLight as PointLight
 from OpenGLContext.scenegraph.light import SpotLight as SpotLight
 from OpenGLContext.scenegraph.lod import LOD as LOD
+from OpenGLContext.scenegraph.lod import ScreenCoverageLOD as ScreenCoverageLOD
 from OpenGLContext.scenegraph.material import Material as Material
 from OpenGLContext.scenegraph.mouseover import MouseOver as MouseOver
 from OpenGLContext.scenegraph.nurbs import Contour2D as Contour2D
@@ -206,6 +207,7 @@ __all__ = [
     'ProximitySensor',
     'ROUTE',
     'ScalarInterpolator',
+    'ScreenCoverageLOD',
     'Shader',
     'ShaderAttribute',
     'ShaderBuffer',
