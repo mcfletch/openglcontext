@@ -6,18 +6,23 @@ a name like ``../../.bashrc`` is a write outside the directory it was extracted
 into. Every name is therefore resolved against the destination **before
 anything is written**, and one that lands outside stops the whole extraction --
 an archive carrying such a name is not one to take the rest of on trust.
+
+:func:`write` is the other half, for whoever publishes a pack: an archive whose
+bytes are a function of the content and of nothing else, so the digest a
+registry records is one a rebuild reaches again.
 """
 
 from __future__ import annotations
 
+import gzip
 import hashlib
 import os
 import tarfile
 import zipfile
 
-__all__ = ['DigestMismatch', 'MAX_ENTRIES', 'MAX_EXPANSION',
+__all__ = ['DigestMismatch', 'EPOCH', 'MAX_ENTRIES', 'MAX_EXPANSION',
            'MINIMUM_UNPACKED', 'TooLarge', 'UnreadableArchive', 'UnsafeArchive',
-           'check_digest', 'extract', 'unpacked_limit']
+           'check_digest', 'digest', 'extract', 'unpacked_limit', 'write']
 
 #: How much of a file is hashed at a time. A base pack is tens of megabytes and
 #: is not held in memory to digest it.
@@ -37,6 +42,12 @@ MINIMUM_UNPACKED = 64 * 1024 * 1024
 #: service of its own -- inodes, directory entries and the time to write them --
 #: and no content pack here is within two orders of magnitude of it.
 MAX_ENTRIES = 100000
+
+#: The modification time every entry :func:`write` stores carries, and the one
+#: in the gzip header above them. The date is arbitrary and fixed: what matters
+#: is that it does not move, since a time that did would put the hour of the
+#: build into a digest that is meant to describe the content.
+EPOCH = 1600000000
 
 
 class TooLarge(IOError):
@@ -108,24 +119,87 @@ def _refuse_the_size(sizes: list[int], max_bytes: int | None,
                        % (path, total, max_bytes))
 
 
-def check_digest(path: str, digest: str) -> None:
-    """Refuse ``path`` unless it hashes to ``digest``; an empty one asks nothing.
+def write(directory: str, path: str, compresslevel: int = 9) -> str:
+    """Archive the tree at ``directory`` as the ``.tar.gz`` ``path``; its path.
+
+    **The bytes are a function of the content and of nothing else**, which is
+    what makes the digest a registry records worth recording: entries are
+    written in sorted order, each carrying :data:`EPOCH` rather than its own
+    modification time, no owner, no group and one mode; and the gzip container
+    above them carries the same fixed time and none of the name it was given.
+    Two builds of the same files, on different machines and in different
+    checkouts, reach the same digest -- so a release rebuilt from its tag can be
+    shown to be the release, and a pack that did change says so.
+
+    Files only: directories arrive as the parents of the entries inside them,
+    which is what a pack is. Names are stored relative to ``directory``, so a
+    pack unpacks as its own root wherever the store puts it.
+    """
+    with open(path, 'wb') as raw:
+        with gzip.GzipFile(filename='', mode='wb', fileobj=raw,
+                           compresslevel=compresslevel,
+                           mtime=EPOCH) as compressed:
+            with tarfile.open(fileobj=compressed, mode='w|') as handle:
+                for name in _entries(directory):
+                    full = os.path.join(directory, *name.split('/'))
+                    info = handle.gettarinfo(full, name)
+                    info.mtime = EPOCH
+                    info.uid = info.gid = 0
+                    info.uname = info.gname = ''
+                    info.mode = 0o644
+                    with open(full, 'rb') as content:
+                        handle.addfile(info, content)
+    return path
+
+
+def _entries(directory: str) -> list[str]:
+    """The names ``write`` stores, in the order it stores them.
+
+    The disk's own order is whatever a filesystem happened to hand back, and it
+    differs between two checkouts of one tree; sorting is what makes the archive
+    the same archive on both.
+
+    Sorted as a tar stores them -- separated by ``/`` -- rather than as the
+    platform spells a path. Windows' ``\\`` sorts after the digits and the
+    capitals where ``/`` sorts before them, so sorting the local spelling would
+    put ``a/b`` and ``a0`` in one order here and the other order there, and the
+    same content would digest differently on the two.
+    """
+    return sorted(
+        os.path.relpath(os.path.join(root, leaf), directory).replace(os.sep,
+                                                                    '/')
+        for root, _, files in os.walk(directory) for leaf in files)
+
+
+def digest(path: str) -> str:
+    """The SHA-256 of the file at ``path``, as a registry states it.
+
+    Read in blocks: a base pack is tens of megabytes and is not held in memory
+    to hash it.
+    """
+    found = hashlib.sha256()
+    with open(path, 'rb') as handle:
+        for block in iter(lambda: handle.read(BLOCK), b''):
+            found.update(block)
+    return found.hexdigest()
+
+
+def check_digest(path: str, expected: str) -> None:
+    """Refuse ``path`` unless it hashes to ``expected``; an empty one asks
+    nothing.
 
     A pack hosted by somebody who may replace the file under the same URL states
     no digest, and there is nothing to check. One we publish states its own, and
     a truncated or substituted download is then a refusal here rather than a
     rendering fault somewhere later.
     """
-    if not digest:
+    if not expected:
         return
-    found = hashlib.sha256()
-    with open(path, 'rb') as handle:
-        for block in iter(lambda: handle.read(BLOCK), b''):
-            found.update(block)
-    if found.hexdigest() != digest.lower():
+    found = digest(path)
+    if found != expected.lower():
         raise DigestMismatch(
             '%s hashes to %s, and the registry names %s'
-            % (path, found.hexdigest(), digest.lower()))
+            % (path, found, expected.lower()))
 
 
 def _extract_zip(path: str, directory: str, max_bytes: int | None,

@@ -506,3 +506,76 @@ class TestARegistryFetchedFromElsewhere:
         with pytest.raises(fetch.Cancelled):
             fetch.fetch_registry(base + '/registry.zip', store,
                                  cache_dir=cache, cancel=lambda: True)
+
+
+class TestFetchingContentAPackIsIncompleteWithout:
+    """A track and the art it shares arrive as one directory.
+
+    The paths inside a baked world resolve against the world's own root, so
+    the art a track names cannot sit beside the track: it unpacks *into* it.
+    The archive is downloaded once and cached, and a second track that names
+    the same art pays for the extraction rather than for the transfer.
+    """
+
+    def both(self, where, base):
+        make_tarball(where, 'ashdown.tar.gz')
+        make_tarball(where, 'art.tar.gz', members=('trees/fir.npz',))
+        track = pack(base + '/ashdown.tar.gz', needs=('glisteel/forest-art',))
+        art = pack(base + '/art.tar.gz', key='glisteel/forest-art',
+                   directory='forest-art', marker='trees')
+        return catalog.merge([track, art])
+
+    def test_the_art_lands_under_the_track(self, served, store, cache) -> None:
+        where, base = served
+        track, art = self.both(where, base)
+        fetch.fetch_pack(track, store, cache_dir=cache, within=track)
+        root = fetch.fetch_pack(art, store, cache_dir=cache, within=track)
+        assert root == store.directory_for(track)
+        assert os.path.isfile(os.path.join(root, 'trees', 'fir.npz'))
+        assert os.path.isfile(os.path.join(root, 'world.json'))
+
+    def test_a_choice_asks_for_the_whole_set(self, served, store,
+                                             cache) -> None:
+        where, base = served
+        packs = self.both(where, base)
+        assert [one.key for one in fetch.wanted_for(packs[0], packs, store)] \
+            == ['glisteel/ashdown', 'glisteel/forest-art']
+
+    def test_and_asks_again_for_a_second_track(self, served, store,
+                                               cache) -> None:
+        """The art under one track says nothing about another."""
+        where, base = served
+        packs = self.both(where, base)
+        make_tarball(where, 'beacon.tar.gz')
+        second = pack(base + '/beacon.tar.gz', key='glisteel/beacon',
+                      directory='beacon', needs=('glisteel/forest-art',))
+        packs = catalog.merge(list(packs) + [second])
+        job = fetch.FetchJob(fetch.wanted_for(packs[0], packs, store), store,
+                             cache_dir=cache, within=packs[0])
+        drive(job)
+        assert job.failed is None and job.finished
+        assert fetch.wanted_for(packs[0], packs, store) == []
+        assert [one.key for one in fetch.wanted_for(second, packs, store)] == \
+            ['glisteel/beacon', 'glisteel/forest-art']
+
+    def test_a_job_puts_every_pack_where_the_choice_says(self, served, store,
+                                                         cache) -> None:
+        where, base = served
+        packs = self.both(where, base)
+        job = fetch.FetchJob(packs, store, cache_dir=cache, within=packs[0])
+        drive(job)
+        assert job.failed is None
+        assert job.roots == [store.directory_for(packs[0])] * 2
+        assert os.path.isfile(os.path.join(store.directory_for(packs[0]),
+                                           'trees', 'fir.npz'))
+
+
+def drive(job, limit=2000):
+    """Poll a job as a frame loop would, until it says it is done."""
+    import time
+    for _ in range(limit):
+        job.poll()
+        if job.finished:
+            return job
+        time.sleep(0.005)
+    raise AssertionError('the job never finished')

@@ -296,3 +296,34 @@ class TestADocumentThatIsMalformedInOtherWays:
         with pytest.raises(catalog.BadCatalog) as raised:
             catalog.load(registry(tmp_path, {'approximate_bytes': 'large'}))
         assert 'size' in str(raised.value)
+
+
+class TestWhatIsWorthOffering:
+    """A registry names content a chooser puts in front of somebody, and
+    content that arrives with it.
+
+    The art four tracks share is the second kind: it is fetched by choosing a
+    track, and a line of its own in a download screen offers a player something
+    they cannot use on its own -- and one that never reads as installed, since
+    a needed pack lands under each pack that needs it.
+    """
+
+    def packs(self, tmp_path):
+        return catalog.merge(catalog.load(registry(
+            tmp_path,
+            {'key': 'glisteel/cars', 'directory': 'cars', 'base': True,
+             'sha256': 'ab' * 32, 'marker': 'cars/hero.glb'},
+            {'key': 'glisteel/forest-art', 'directory': 'forest-art'},
+            {'key': 'glisteel/ashdown', 'needs': ['glisteel/forest-art']},
+            {'key': 'glisteel/beacon', 'directory': 'beacon',
+             'needs': ['glisteel/forest-art']})))
+
+    def test_what_another_pack_needs_is_not_offered_on_its_own(self,
+                                                               tmp_path) -> None:
+        assert [one.key for one in catalog.offered(self.packs(tmp_path))] == [
+            'glisteel/cars', 'glisteel/ashdown', 'glisteel/beacon']
+
+    def test_a_registry_where_nothing_needs_anything_offers_all_of_it(
+            self, tmp_path) -> None:
+        packs = catalog.merge(catalog.load(registry(tmp_path)))
+        assert catalog.offered(packs) == packs

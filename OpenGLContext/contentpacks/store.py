@@ -60,7 +60,8 @@ class ContentStore:
             userpaths.appdatadirectory(), application, CONTENT)
         self.search = list(search) if search is not None else _from_environment()
 
-    def directory_for(self, pack: ContentPack) -> str:
+    def directory_for(self, pack: ContentPack,
+                      within: ContentPack | None = None) -> str:
         """Where this pack unpacks, whether or not it is there yet.
 
         **Under the pack's namespace, not under its bare ``directory``.** Only a
@@ -71,32 +72,48 @@ class ContentStore:
         than forbidden, and leaves two packs of the *same* publisher free to
         share a tree on purpose -- which is how a world and the art it needs
         arrive as one directory.
-        """
-        return os.path.join(self.root, PACKS, pack.namespace, pack.directory)
 
-    def root_for(self, pack: ContentPack) -> str | None:
+        ``within`` is that case: content another pack is incomplete without
+        unpacks into *that* pack's directory rather than into one of its own,
+        because the paths inside a world resolve against the world's own root.
+        The archive is fetched once and cached; what repeats is the extraction,
+        so a second track carrying the same art costs disk and no download.
+        """
+        owner = within if within is not None else pack
+        return os.path.join(self.root, PACKS, owner.namespace, owner.directory)
+
+    def root_for(self, pack: ContentPack,
+                 within: ContentPack | None = None) -> str | None:
         """This pack's unpacked content root, or None if it is not here.
 
         The searched directories are tried before the store, so a machine
         pointed at a local copy never consults what a previous run downloaded.
         They are laid out the same way -- ``<namespace>/<directory>`` -- since a
         flat one would be the hole :meth:`directory_for` closes.
+
+        With ``within``, the question is whether the content is under *that*
+        pack -- the marker is the needed pack's own, and the directory is the
+        one that needs it, so one track having the art says nothing about
+        another.
         """
-        here = os.path.join(PACKS, pack.namespace, pack.directory)
+        owner = within if within is not None else pack
         for base in self.search:
-            where = os.path.join(base, pack.namespace, pack.directory)
+            where = os.path.join(base, owner.namespace, owner.directory)
             if _unpacked(where, pack.marker):
                 return where
-        where = os.path.join(self.root, here)
+        where = os.path.join(self.root, PACKS, owner.namespace, owner.directory)
         return where if _unpacked(where, pack.marker) else None
 
-    def installed(self, packs: Iterable[ContentPack]) -> list[ContentPack]:
+    def installed(self, packs: Iterable[ContentPack],
+                  within: ContentPack | None = None) -> list[ContentPack]:
         """Those of ``packs`` already on this machine, in the order asked."""
-        return [pack for pack in packs if self.root_for(pack) is not None]
+        return [pack for pack in packs
+                if self.root_for(pack, within) is not None]
 
-    def missing(self, packs: Iterable[ContentPack]) -> list[ContentPack]:
+    def missing(self, packs: Iterable[ContentPack],
+                within: ContentPack | None = None) -> list[ContentPack]:
         """Those of ``packs`` that would have to be fetched."""
-        return [pack for pack in packs if self.root_for(pack) is None]
+        return [pack for pack in packs if self.root_for(pack, within) is None]
 
     def registries(self) -> list[str]:
         """Registry files added to this store, in a settled order.

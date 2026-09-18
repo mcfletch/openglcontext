@@ -1,11 +1,13 @@
 # Content packs: shipping data outside the wheel
 
-**Status: the engine facility has landed (work items 1–3); the documentation,
-the twig-bb move and glisteel's side are open.**
+**Status: the engine facility, the documentation and the publishing side have
+landed (work items 1–4 and 8); the twig-bb move is open. glisteel's side is
+done — `./release-assets.py` bakes, archives, digests, writes the registry,
+installs into this machine's store and pushes to the release tag.**
 
 `OpenGLContext/contentpacks/` is in the tree: `pack.py`, `catalog.py`,
-`store.py`, `archive.py` and `fetch.py`, at 100% statement coverage over 172
-cases, ruff and mypy clean. The fetch cases run against a real HTTP server on
+`store.py`, `archive.py`, `fetch.py` and `publish.py`, at 100% statement
+coverage over 213 cases, ruff and mypy clean. The fetch cases run against a real HTTP server on
 the loopback address rather than a mocked resolver, so what is checked is that
 the download, the cap, the digest and the unpacking compose into one pack on
 disk.
@@ -72,8 +74,9 @@ answers, and each is testable without a window or a network.
 | `pack.py` | `ContentPack`, one pack as a frozen value |
 | `catalog.py` | reading and validating a registry file; `BadCatalog` |
 | `store.py` | `ContentStore` — where an application's packs live, and which are installed |
-| `archive.py` | `extract()` for zip and tar, refusing any entry that escapes the destination; `check_digest()` |
-| `fetch.py` | `fetch_pack()`, `fetch_registry()`, `missing_base()`, and `FetchJob` for running one off the frame loop |
+| `archive.py` | `extract()` for zip and tar, refusing any entry that escapes the destination; `write()` and `digest()` for building one; `check_digest()` |
+| `fetch.py` | `fetch_pack()`, `fetch_registry()`, `wanted_for()`, `missing_base()`, and `FetchJob` for running one off the frame loop |
+| `publish.py` | `install()` a built pack into a store, and `push()` the files to a release |
 
 ### What keeps publishers apart
 
@@ -106,9 +109,10 @@ second fetch replacing the first and every pack it had offered.
 direction, and nothing privileges the shipped registry — a third-party track may
 name the shipped forest art rather than carry a copy. A key resolves to the
 entry in *its own* registry, so the URL fetched and the digest checked are that
-publisher's whoever named the key. What it does not do is grant access: a needed
-pack lands in its own publisher's tree, and an application reading across packs
-resolves against several roots.
+publisher's whoever named the key. Where it lands is under the pack that named
+it — a world resolves its own paths against its own root, so art it is
+incomplete without has to be inside it — and the download is cached, so four
+tracks naming one art pack is one transfer and four extractions.
 
 ### Two limits, not one
 
@@ -327,18 +331,57 @@ A machine that cannot reach the network, or should not, still has to run:
    those are incomplete without, since half a floor is not a floor. The screen
    an application shows before its menu is the application's; the engine owns
    the decision and the fetch.
-4. Documentation: a page under `docs/` for application authors, listed in
-   `documentation.html`, covering the registry schema, every field, the units of
-   `approximate_bytes`, where packs land on each platform, the base-pack rule
-   and the environment variable.
+4. ✅ Documentation: [docs/contentpacks.html](../docs/contentpacks.html) for
+   application authors — the registry schema, every field, the units of
+   `approximate_bytes`, where packs land on each platform, the base-pack rule,
+   the environment variable and the publishing side.
 5. Move twig-bb onto it — `twig_bb.assetpack`/`catalog`/`fetcher` become
    re-exports or go, `download.py` keeps only the Quake-specific half, and the
    18 existing entries gain namespaced keys.
 6. Move `twig_bb/assets/` (15 MB) to a base pack on twig-bb's own releases.
-7. Glisteel's side is its own plan,
+   Declared, built and installable — `twig-bb/art` is in the registry and
+   twig-bb's `./release-assets.py` builds it, digests it and can push it. What
+   is left is the release itself, and then one line of `pyproject.toml` taking
+   the copy out of the wheel.
+7. ✅ Glisteel's side is its own plan,
    [TRACK-PACKS.md](https://github.com/mcfletch/glisteel/blob/main/plans/TRACK-PACKS.md).
+8. ✅ The publishing side: `archive.write` and `contentpacks/publish.py`, so
+   building a release is one command per project rather than a script per
+   project (see below).
 
 Order matters only in that 1–4 precede 5–7; 5 and 7 are independent.
+
+## Publishing, and testing a release before there is one
+
+A pack is built, installed and attached by the engine, because three
+applications here publish content and each had written the same fifteen lines.
+
+- **`archive.write(directory, path)`** makes the `.tar.gz` a release carries.
+  Both copies of the hand-written version fixed their tar entries' timestamps
+  and left the gzip container's own, so the digest moved between builds of
+  identical content — the same size, a different hash — and a digest that
+  nothing can reproduce is a digest nothing can check a rebuild against. Sorted
+  entries, `EPOCH` on every entry and on the container, no owner, one mode.
+- **`publish.install(pack, store, archives)`** puts what was just built where a
+  download would have left it: digest checked, unpacking bounded, content under
+  the store. An application then runs against content no release carries, which
+  is how the two defects above were found.
+- **`publish.push(repository, tag, paths)`** attaches them through the GitHub
+  CLI, creating the release at that tag the first time and replacing its assets
+  afterwards. The repository is read off the registry's own URL rather than
+  named a second time.
+
+**What a pack `needs` unpacks into it, not beside it.** A baked world resolves
+every path inside it against its own root, so the art four glisteel tracks share
+belongs under each of them; the registry gives that art a `directory` of its
+own, and a fetched track drove through a treeless world until this was fixed.
+`store.directory_for(pack, within=...)`, `store.root_for(pack, within=...)` and
+`fetch.wanted_for(chosen, packs, store)` are that relationship — the archive is
+downloaded once and cached, and what repeats is the extraction. It costs a copy
+of the art per track, which is what keeps a world one directory that can be
+moved, copied or deleted whole. `catalog.offered(packs)` is the other half: a
+pack that exists only to be needed is not one to put in a download screen, since
+it would never read as arrived.
 
 ## What this does not do
 

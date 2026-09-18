@@ -37,7 +37,7 @@ log = logging.getLogger(__name__)
 
 __all__ = ['Cancelled', 'FLOOR', 'FetchJob', 'HEADROOM', 'REGISTRY_LIMIT',
            'TooLarge', 'fetch_limit', 'fetch_pack', 'fetch_registry',
-           'missing_base']
+           'missing_base', 'wanted_for']
 
 #: How much larger than its published size a pack is allowed to be. A size
 #: drifts between releases, and a fetch that fails on the last megabyte is worse
@@ -92,15 +92,19 @@ def missing_base(packs: Sequence[ContentPack],
     incomplete without -- a base pack may be split, and half of one is not a
     floor. Empty where an application ships all of its own art, which is the
     answer for anything that declares no base pack.
+
+    What a base pack needs is asked for, and fetched, **within** that base pack,
+    so an application fetching this set passes the base pack as ``within``.
     """
     wanted: list[ContentPack] = []
     for pack in packs:
         if not pack.base:
             continue
-        for one in catalog.with_needed(pack, packs):
+        for one in store.missing(catalog.with_needed(pack, packs),
+                                 within=pack):
             if one not in wanted:
                 wanted.append(one)
-    return store.missing(wanted)
+    return wanted
 
 
 def fetch_registry(url: str, store: ContentStore, progress: Any = None,
@@ -131,14 +135,33 @@ def fetch_registry(url: str, store: ContentStore, progress: Any = None,
     return catalog.load_bundle(kept, store.unpacked_registry(kept))
 
 
+def wanted_for(chosen: ContentPack, packs: Sequence[ContentPack],
+               store: ContentStore) -> list[ContentPack]:
+    """What choosing ``chosen`` has to fetch: it, and what it needs.
+
+    Asked of the machine as it stands, and asked **within the choice**: content
+    a pack is incomplete without unpacks into that pack's own directory, so the
+    same art already under one track is still to be written under another. A
+    caller hands the answer to :class:`FetchJob` with the same ``within``.
+    """
+    return store.missing(catalog.with_needed(chosen, packs), within=chosen)
+
+
 def fetch_pack(pack: ContentPack, store: ContentStore,
                progress: Any = None, cancel: Any = None,
-               cache_dir: str | None = None) -> str:
+               cache_dir: str | None = None,
+               within: ContentPack | None = None) -> str:
     """Fetch and unpack one pack; return its content root.
 
     A pack already on this machine is returned without touching the network, and
     its progress is reported as finished, so a caller drawing a bar sees it fill
     whether or not anything was downloaded.
+
+    ``within`` names the pack this one is being fetched for, and is what puts a
+    needed pack's content under it rather than beside it -- see
+    :meth:`~OpenGLContext.contentpacks.store.ContentStore.directory_for`. The
+    download is cached under the URL either way, so art shared by four tracks
+    is transferred once.
 
     The digest is checked before anything is written into the store, so a
     truncated or substituted download is a refusal here rather than content that
@@ -146,7 +169,7 @@ def fetch_pack(pack: ContentPack, store: ContentStore,
     its size was -- a cap on the transfer says nothing about what the transfer
     expands to.
     """
-    existing = store.root_for(pack)
+    existing = store.root_for(pack, within)
     if existing is not None:
         _report(progress, pack.approximate_bytes, pack.approximate_bytes)
         return existing
@@ -165,7 +188,8 @@ def fetch_pack(pack: ContentPack, store: ContentStore,
                                        fetch_limit(pack.approximate_bytes),
                                        pack.human_size(), error)) from error
     archive.check_digest(downloaded, pack.sha256)
-    return archive.extract(downloaded, store.directory_for(pack), pack.archive,
+    return archive.extract(downloaded, store.directory_for(pack, within),
+                           pack.archive,
                            max_bytes=archive.unpacked_limit(
                                pack.approximate_bytes))
 
@@ -186,13 +210,18 @@ class FetchJob:
 
     def __init__(self, packs: Sequence[ContentPack], store: ContentStore,
                  fetch: Fetch | None = None, cache_dir: str | None = None,
-                 on_progress: Callable[[], None] | None = None) -> None:
+                 on_progress: Callable[[], None] | None = None,
+                 within: ContentPack | None = None) -> None:
         self.packs = list(packs)
         self.store = store
         self.cache_dir = cache_dir
+        #: The pack this job was started for. Everything in it lands under that
+        #: one's directory, which is what a world and the art it needs are.
+        self.within = within
         self._fetch: Fetch = fetch if fetch is not None else (
             lambda pack, progress, cancel: fetch_pack(
-                pack, store, progress, cancel, cache_dir=cache_dir))
+                pack, store, progress, cancel, cache_dir=cache_dir,
+                within=within))
         #: Called after each :meth:`poll` that saw something change, so a caller
         #: can ask for a redraw without polling for a difference.
         self.on_progress = on_progress

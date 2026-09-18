@@ -277,3 +277,89 @@ class TestAnArchiveThatWouldFillTheDisk:
     def test_a_real_pack_is_comfortably_inside_it(self, tmp_path) -> None:
         """A glisteel track measures 57 MB unpacked against 48 MB compressed."""
         assert archive.unpacked_limit(48 * 1024 * 1024) > 57 * 1024 * 1024
+
+
+class TestWritingAPack:
+    """The other half: making the archive a registry then names.
+
+    A registry records a digest, so what is published has to be a function of
+    the content and of nothing else. Two builds of the same files, minutes
+    apart and from different checkouts, are the same bytes.
+    """
+
+    def content(self, root):
+        (root / 'trees').mkdir(parents=True)
+        (root / 'trees' / 'fir.glb').write_bytes(b'glb' * 100)
+        (root / 'tileset.json').write_text('{"asset": {}}')
+        return str(root)
+
+    def test_it_writes_what_was_there(self, tmp_path) -> None:
+        where = self.content(tmp_path / 'track')
+        path = archive.write(where, str(tmp_path / 'track.tar.gz'))
+        out = str(tmp_path / 'out')
+        archive.extract(path, out, 'tar')
+        assert os.path.isfile(os.path.join(out, 'tileset.json'))
+        assert os.path.isfile(os.path.join(out, 'trees', 'fir.glb'))
+
+    def test_the_same_content_twice_is_the_same_bytes(self, tmp_path) -> None:
+        """Nothing about *when* it was built may reach the file.
+
+        The gzip container carries a timestamp of its own, above the tar
+        entries, so fixing the entries' own times is not enough on its own.
+        """
+        where = self.content(tmp_path / 'track')
+        one = archive.write(where, str(tmp_path / 'one.tar.gz'))
+        os.utime(os.path.join(where, 'tileset.json'), (0, 0))
+        two = archive.write(where, str(tmp_path / 'two.tar.gz'))
+        assert archive.digest(one) == archive.digest(two)
+
+    def test_the_name_it_was_given_is_not_in_the_bytes(self, tmp_path) -> None:
+        """Two names for one pack are one digest: gzip stores a filename."""
+        where = self.content(tmp_path / 'track')
+        one = archive.write(where, str(tmp_path / 'ashdown.tar.gz'))
+        two = archive.write(where, str(tmp_path / 'glisteel-ashdown.tar.gz'))
+        assert archive.digest(one) == archive.digest(two)
+
+    def test_who_built_it_is_not_in_the_bytes(self, tmp_path) -> None:
+        """Owner, group and mode are facts about a build machine."""
+        where = self.content(tmp_path / 'track')
+        os.chmod(os.path.join(where, 'tileset.json'), 0o600)
+        one = archive.digest(archive.write(where, str(tmp_path / 'one.tar.gz')))
+        os.chmod(os.path.join(where, 'tileset.json'), 0o755)
+        two = archive.digest(archive.write(where, str(tmp_path / 'two.tar.gz')))
+        assert one == two
+        with tarfile.open(str(tmp_path / 'one.tar.gz')) as handle:
+            for member in handle:
+                assert member.uname == member.gname == ''
+                assert member.uid == member.gid == 0
+                assert member.mtime == archive.EPOCH
+
+    def test_the_order_is_settled_rather_than_the_disk_s(self, tmp_path) -> None:
+        """Two checkouts hand os.walk their entries in different orders."""
+        where = self.content(tmp_path / 'track')
+        (tmp_path / 'track' / 'a.txt').write_text('a')
+        (tmp_path / 'track' / 'z.txt').write_text('z')
+        path = archive.write(where, str(tmp_path / 'track.tar.gz'))
+        with tarfile.open(path) as handle:
+            assert handle.getnames() == sorted(handle.getnames())
+
+    def test_the_digest_is_of_the_file(self, tmp_path) -> None:
+        import hashlib
+        path = tmp_path / 'a.bin'
+        path.write_bytes(b'hello')
+        assert archive.digest(str(path)) == hashlib.sha256(b'hello').hexdigest()
+
+    def test_the_names_are_spelled_as_a_tar_spells_them(self, tmp_path) -> None:
+        """A path, not the platform's idea of one.
+
+        Windows' separator sorts on the other side of the digits and capitals
+        from `/`, so ordering the local spelling would give two machines two
+        archives of one tree.
+        """
+        where = self.content(tmp_path / 'track')
+        (tmp_path / 'track' / 'trees0.txt').write_text('0')
+        assert archive._entries(where) == [
+            'tileset.json', 'trees/fir.glb', 'trees0.txt']
+        path = archive.write(where, str(tmp_path / 'track.tar.gz'))
+        with tarfile.open(path) as handle:
+            assert 'trees/fir.glb' in handle.getnames()

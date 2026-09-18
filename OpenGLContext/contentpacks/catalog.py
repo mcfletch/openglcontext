@@ -35,7 +35,7 @@ from .pack import ContentPack
 
 __all__ = ['ARCHIVE_KINDS', 'BadCatalog', 'MANIFEST', 'OPTIONAL',
            'PREVIEW_SUFFIXES', 'REQUIRED', 'load', 'load_bundle', 'merge',
-           'pack_for_key', 'with_needed']
+           'offered', 'pack_for_key', 'with_needed']
 
 #: What the registry document is called, on its own or inside a bundle.
 MANIFEST = 'packs.json'
@@ -160,6 +160,20 @@ def pack_for_key(key: str, packs: Iterable[ContentPack]) -> ContentPack | None:
         if pack.key == key:
             return pack
     return None
+
+
+def offered(packs: Sequence[ContentPack]) -> list[ContentPack]:
+    """Those packs a chooser puts in front of somebody, in the order given.
+
+    A registry names two kinds of thing: content somebody chooses, and content
+    that arrives because something else named it in ``needs``. The art four
+    tracks share is the second kind -- it is not a thing to have on its own,
+    and it unpacks under each track that needs it rather than into a place of
+    its own, so offering it separately offers a download that would never read
+    as arrived.
+    """
+    needed = {key for pack in packs for key in pack.needs}
+    return [pack for pack in packs if pack.key not in needed]
 
 
 def with_needed(pack: ContentPack,

@@ -89,8 +89,8 @@ for pack in store.missing(packs):
 <tr><td><code>family</code></td><td>no</td><td>Which group of alternatives it
   belongs to, for a chooser that groups them.</td></tr>
 <tr><td><code>needs</code></td><td>no</td><td>Keys of packs this one is
-  incomplete without. Fetched with it, sized with it, consented to with
-  it.</td></tr>
+  incomplete without. Fetched with it, sized with it, consented to with it, and
+  unpacked <em>into</em> it.</td></tr>
 <tr><td><code>requires</code></td><td>no</td><td>A PEP 440 specifier on the
   application's version, so content built against a later format is declined
   rather than loaded.</td></tr>
@@ -193,12 +193,27 @@ than carry its own copy of it, and nothing privileges the shipped registry. A
 key resolves to the entry in <em>its own</em> registry, so the URL fetched and
 the digest checked are that publisher's, whoever named the key.</p>
 
-<p>What <code>needs</code> does <em>not</em> do is grant access: a needed pack is
-fetched, and it lands in its own publisher's tree. An application reading across
-packs resolves against several roots rather than assuming one directory holds
-everything.</p>
+<p>Needed content lands <em>under the pack that needs it</em>, not beside it.
+A baked world resolves every path inside it — tree meshes, impostors, ground
+cover — against its own root, so art shared by four tracks belongs under each
+of them. <code>within</code> is how a caller says which pack is being fetched
+for, and every question about that content takes the same argument:</p>
 
-<pre><code>roots = [store.root_for(one) for one in catalog.with_needed(chosen, packs)]</code></pre>
+<pre><code>wanted = fetch.wanted_for(chosen, packs, store)   # chosen, and what it needs
+job = fetch.FetchJob(wanted, store, within=chosen) # all of it under `chosen`
+store.root_for(art, within=chosen)                 # is it under this one?</code></pre>
+
+<p>The archive is downloaded once and cached, so a second track naming the same
+art pays for the extraction and not for the transfer. The cost is disk — a copy
+per track — and what it buys is that a world stays one directory that can be
+moved, copied or deleted whole.</p>
+
+<p>A pack that exists only to be needed is not something to offer on its own:
+<code>catalog.offered(packs)</code> drops those, which is what a download screen
+should list. What <code>needs</code> does <em>not</em> do is grant access:
+a pack is fetched under whatever named it, and an application reading across
+publishers resolves against several roots rather than assuming one directory
+holds everything.</p>
 
 <h2 id="bombs">Size, and what an archive expands to</h2>
 
@@ -241,8 +256,8 @@ downloaded. The digest is checked before anything is written into the store.</p>
 450 MB on the frame loop's thread stops the window dead for minutes: no redraw,
 no cancel, and eventually a "not responding" from the window manager.</p>
 
-<pre><code>job = fetch.FetchJob(catalog.with_needed(chosen, packs), store,
-                     on_progress=self.triggerRedraw)
+<pre><code>job = fetch.FetchJob(fetch.wanted_for(chosen, packs, store), store,
+                     within=chosen, on_progress=self.triggerRedraw)
 
 def OnIdle(self, *args):
     job.poll()                      # the only place the worker's work is read
@@ -310,6 +325,7 @@ variable:</p>
 <table>
 <tr><th>What</th><th>Where</th></tr>
 <tr><td>An application's packs</td><td><code>&lt;app data&gt;/&lt;application&gt;/content/packs/&lt;namespace&gt;/&lt;directory&gt;/</code></td></tr>
+<tr><td>What one of them needs</td><td>under that pack's own directory, not a directory of its own</td></tr>
 <tr><td>Added registries</td><td><code>&lt;app data&gt;/&lt;application&gt;/content/registries/</code></td></tr>
 <tr><td>Their unpacked thumbnails</td><td><code>.../registries/.unpacked/&lt;name&gt;/</code></td></tr>
 <tr><td>Downloaded archives</td><td>the engine's own cache, shared between applications</td></tr>
@@ -324,18 +340,40 @@ into it.</p>
 
 <h2 id="publishing">Publishing a pack</h2>
 
+<p><code>OpenGLContext.contentpacks.publish</code> and
+<code>archive.write</code> are the publishing side: an application's own
+<code>release-assets.py</code> says what to build and what the registry should
+say about it, and the steps below are the same in all of them.</p>
+
 <ol>
-<li>Build the archive. Prefer fixed timestamps and sorted entries, so rebuilding
-  the same content gives the same bytes and the same digest.</li>
-<li>Attach it to a release. A GitHub release asset is 2 GB at most, with no
-  count limit and no bandwidth billing, at a stable
+<li>Build the archive with <code>archive.write(directory, path)</code>. Its
+  bytes are a function of the content and of nothing else — sorted entries, a
+  fixed timestamp on each and on the gzip container above them, no owner and one
+  mode — so the same content gives the same digest on any machine, and a
+  rebuild from a tag can be shown to be the release.</li>
+<li>Measure it and take its digest: <code>os.path.getsize(path)</code> and
+  <code>archive.digest(path)</code>. Write the registry entry from those, so no
+  entry can describe a file that was never built.</li>
+<li>Install it here and drive the application against it:
+  <code>publish.install(pack, store, archives)</code> leaves exactly what a
+  download would — digest checked, unpacking bounded, content in the directory a
+  first run looks in — with only the transfer left out. This is how a content
+  release is tested before it is a release.</li>
+<li>Attach it to a release:
+  <code>publish.push(publish.repository(pack.url), tag, paths)</code>, which
+  runs the GitHub CLI, creating the release at that tag the first time and
+  replacing the assets on it afterwards. A release asset is 2 GB at most, with
+  no count limit and no bandwidth billing, at a stable
   <code>https://github.com/&lt;owner&gt;/&lt;repo&gt;/releases/download/&lt;tag&gt;/&lt;file&gt;</code>.
   A tag that carries content and nothing else keeps it clear of the code's
   tags.</li>
-<li>Measure the size and take the digest:
-  <code>sha256sum ashdown.tar.gz</code>.</li>
-<li>Add the entry, with a thumbnail beside the registry.</li>
+<li>Ship the thumbnail beside the registry, since a chooser needs a picture
+  before anything is downloaded.</li>
 </ol>
+
+<pre><code>./release-assets.py                 # build the archives, write the registry
+./release-assets.py --install       # ...and put them in this machine's store
+./release-assets.py --push          # ...and attach them to the release tag</code></pre>
 
 <p>State a <code>sha256</code> wherever you control the bytes. An uncompressed
 tarball truncated at a member boundary reads as a valid shorter archive, with

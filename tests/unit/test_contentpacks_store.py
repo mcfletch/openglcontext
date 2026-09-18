@@ -187,3 +187,56 @@ class TestTheRegistriesDirectory:
                 handle.write('{}')
         assert store.registries() == [os.path.join(where, 'a.json'),
                                       os.path.join(where, 'b.json')]
+
+
+class TestContentAPackIsIncompleteWithout:
+    """Where a *needed* pack goes, which is not where its own name would put it.
+
+    A glisteel track names the art every track shares, and the paths inside the
+    track resolve against the track's own root -- so the art has to be under
+    that root, not beside it. `within` is how a caller says which pack it is
+    being fetched for; the archive is downloaded once and the extraction is
+    what repeats.
+    """
+
+    def art(self):
+        return pack(key='glisteel/forest-art', directory='forest-art',
+                    marker='trees')
+
+    def test_it_lands_inside_the_pack_that_needs_it(self, store) -> None:
+        track = pack()
+        assert store.directory_for(self.art(), within=track) == \
+            store.directory_for(track)
+
+    def test_it_is_here_only_where_the_pack_that_needs_it_is(self,
+                                                             store) -> None:
+        track, art = pack(), self.art()
+        assert store.root_for(art, within=track) is None
+        where = os.path.join(store.directory_for(track), art.marker)
+        os.makedirs(where)
+        assert store.root_for(art, within=track) == store.directory_for(track)
+
+    def test_the_same_art_under_another_track_is_a_separate_question(
+            self, store) -> None:
+        one = pack(key='glisteel/ashdown', directory='ashdown')
+        two = pack(key='glisteel/beacon', directory='beacon')
+        os.makedirs(os.path.join(store.directory_for(one), 'trees'))
+        assert store.root_for(self.art(), within=one) is not None
+        assert store.root_for(self.art(), within=two) is None
+
+    def test_asking_about_several_takes_the_same_answer(self, store) -> None:
+        track, art = pack(), self.art()
+        assert store.missing([art], within=track) == [art]
+        os.makedirs(os.path.join(store.directory_for(track), 'trees'))
+        assert store.installed([art], within=track) == [art]
+
+    def test_a_searched_directory_is_read_the_same_way(self, tmp_path) -> None:
+        """`OPENGLCONTEXT_CONTENT` holds what a fetch would have written."""
+        track, art = pack(), self.art()
+        beside = tmp_path / 'shipped'
+        (beside / track.namespace / track.directory / art.marker).mkdir(
+            parents=True)
+        store = ContentStore('glisteel', root=str(tmp_path / 'content'),
+                             search=[str(beside)])
+        assert store.root_for(art, within=track) == str(
+            beside / track.namespace / track.directory)
