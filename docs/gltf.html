@@ -221,10 +221,13 @@ drawn separately, which is what drawing different geometry means. See
 The levels are then switched on a halving series &mdash; a half, a quarter, an
 eighth &mdash; ending at zero, so a threshold the <em>reader</em> guessed is
 never the reason something disappears.</p>
-<p><code>OpenGLContext.meshlod</code> writes chains in this shape, with the
+<p>Making a chain is a bake, not something a game does, so it lives in
+<a href="https://github.com/mcfletch/openglcontext-editor">OpenGLContext-editor</a>:
+<code>OpenGLContext_editor.meshlod</code> decimates a mesh into levels, measures
+what each one costs to look at, and writes them in this shape &mdash; the
 coarsest level inside the glb and each finer one a sidecar the operating system
-never opens until it is wanted; <code>MSFT_lod</code> on a <em>material</em>,
-which the extension also allows, is not read.</p>
+never opens until it is wanted. The engine reads them. <code>MSFT_lod</code> on a
+<em>material</em>, which the extension also allows, is not read.</p>
 
 <h3 id="omi">OMI Extensions</h3>
 <p>The <a href="https://github.com/omigroup/gltf-extensions">Open Metaverse

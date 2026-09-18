@@ -49,7 +49,7 @@ rather than quietly:
 ### Measured on real assets
 
 **Quality, on Poly Haven's `marble_bust_01` (CC0, 17,456 triangles).** Levels
-built by halving, measured by `OpenGLContext.meshlod` rendering each against the
+built by halving, measured by `OpenGLContext_editor.meshlod` rendering each against the
 original over distances from touching the surface to sixty-four radii out. The
 share of the object's own pixels that change, split into outline and shading:
 
@@ -142,8 +142,19 @@ format**:
   length, so a level is a seek and a read, and opening a file parses only the
   JSON chunk.
 
-`OpenGLContext.meshlod.asset` writes and reads that, and the streaming claims
+`OpenGLContext_editor.meshlod.asset` writes and reads that, and the streaming claims
 are tested by deleting the other levels' files.
+
+**Where each half lives.** Making a level is a bake and drawing one is not, so
+the two are in different distributions: `OpenGLContext_editor.meshlod` builds a
+chain, measures it and writes it, and the engine reads it. That keeps
+`opengl_decimate` out of the engine's dependencies -- a game installs the
+renderer, not the reducer -- and it is what the division of labour between the
+two packages already says everywhere else. The lean reader that opens a glb's
+JSON chunk and seeks one level's bytes went with the writer, because it is the
+writer's round trip; when a level should be decoded only once something asks for
+it, that belongs in `loaders/gltf/`, where the resolver that decides what a
+document may reach already is.
 
 **And the scene reads it.** `OpenGLContext/loaders/gltf/lod.py` turns a node
 carrying `MSFT_lod` into a `ScreenCoverageLOD` holding one level per
@@ -815,7 +826,8 @@ found by a user rather than by a test.
 
 ### What stays in the engine
 
-`OpenGLContext/meshlod/` — GL-free selection and bookkeeping, plus the draw path:
+GL-free selection and bookkeeping, plus the draw path -- beside
+`scenegraph/lod.py`, which is where the engine's own level switching lives:
 
 - `MeshLOD`, a scenegraph node that holds a baked `ClusterDAG` and draws the
   current cut. Sits beside `PBRMesh` and uses the same vertex semantics, so the
@@ -1111,8 +1123,8 @@ memory.
 *Red:* a 50M-triangle input exhausts memory, or the quantised DAG exceeds 12
 bytes per triangle.
 
-**M9 — Engine runtime.** `OpenGLContext/meshlod/`, the `MeshLOD` node, cut
-selection and frustum culling, quantised vertex formats, the
+**M9 — Engine runtime.** The cut the engine draws: a `MeshLOD` node beside
+`scenegraph/lod.py`, cut selection and frustum culling, quantised vertex formats, the
 `glMultiDrawElements` path, cluster streaming through the existing residency and
 load manager, geomorph in `pbr.vert`, dither cross-fade, hysteresis, the
 triangle-budget controller, and the editor's baker calling it.
@@ -1155,7 +1167,8 @@ Part of the work, not a follow-up:
   covers.
 - The workspace `CLAUDE.md` project list gains `opengl_decimate` under
   "Renderer-agnostic engine components".
-- `openglcontext/CLAUDE.md`'s directory map gains `OpenGLContext/meshlod/`.
+- `openglcontext/CLAUDE.md`'s directory map names the reader under
+  `loaders/gltf/`, and `openglcontext-editor`'s README the baking side.
 - `plans/PROJECT-PLAN.md` gains the summary row.
 
 ## Licensing

@@ -490,10 +490,10 @@ def simulation_provider(simulation: Callable[[], Any]) -> Provider:
 def audio_provider(context: Any) -> Provider:
     """What this context's sound is doing, and whether it is doing it at all.
 
-    The one subsystem whose state cannot be seen, which is exactly why it wants
-    a place on the overlay: a sound that is not audible may be off, may have no
-    device, may have lost its voice to a louder one, or may simply be too far
-    away, and no amount of listening tells those four apart.
+    The one subsystem whose state cannot be seen, so the overlay is where it is
+    reported: a sound that is not audible may be off, may have no device, may
+    have lost its voice to a louder one, or may simply be too far away, and no
+    amount of listening tells those four apart.
 
     Reported even when there is no engine, because "audio: idle" -- nothing in
     this scene has asked to make a noise -- is itself the answer to the most

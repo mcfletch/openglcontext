@@ -33,7 +33,7 @@ COVERAGE = 'MSFT_screencoverage'
 
 #: Where a guessed series starts, and what each further level takes over at.
 #: Halving is the shape of a chain whose levels halve, which is what
-#: :func:`OpenGLContext.meshlod.build_chain` produces.
+#: ``OpenGLContext_editor.meshlod.build_chain`` produces.
 FIRST_COVERAGE = 0.5
 
 

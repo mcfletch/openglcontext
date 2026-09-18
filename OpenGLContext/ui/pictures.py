@@ -7,7 +7,7 @@ often at the end of a URL -- and decoding one inside the draw call that first
 shows it is a visible stutter every time the selection moves, while keeping all
 of them is a texture budget that only grows.
 
-So this cache does three things the naive one did not:
+So this cache does three things:
 
 * **Decodes on a worker thread and uploads on the render thread.**  GL is
   single-threaded, so the split is exactly there: the worker produces pixels,

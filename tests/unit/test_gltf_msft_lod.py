@@ -8,8 +8,8 @@ This is the loader turning that into a
 
 The minimal documents here are built by hand so the reader is held to the
 extension as it is specified rather than to what this engine's writer happens to
-emit; :class:`TestAChainThisEngineWrote` then loads the real thing, sidecars and
-all, through :func:`OpenGLContext.meshlod.write_chain`.
+emit. A chain written by the baking tools is loaded back in
+``openglcontext-editor``'s own suite, where the writer lives.
 """
 import base64
 import json
@@ -19,8 +19,6 @@ import pytest
 
 from OpenGLContext.loaders import gltf
 from OpenGLContext.passes.instancing import geometry_instance_key
-from OpenGLContext.meshlod import write_chain
-from OpenGLContext.meshlod.chain import LODChain, LODLevel
 from OpenGLContext.scenegraph.lod import ScreenCoverageLOD
 from OpenGLContext.scenegraph.shape import Shape
 
@@ -185,47 +183,6 @@ class TestWhatElseTheNodeCarries:
 
         assert len(node.level) == 2
         assert 'MSFT_lod' in caplog.text
-
-
-class TestAChainThisEngineWrote:
-    """The real files: a glb holding the coarsest level, sidecars for the rest."""
-
-    def _chain(self, tmp_path):
-        levels = []
-        for index in range(3):
-            points = _triangle(scale=1.0 / (index + 1)).astype('f4')
-            levels.append(LODLevel(
-                attributes={'POSITION': points,
-                            'NORMAL': np.tile(np.array([0, 0, 1], 'f4'), (3, 1))},
-                indices=np.array([0, 1, 2], np.uint32),
-                error=0.01 * index,
-                vertex_map=np.arange(3, dtype=np.uint32),
-            ))
-        chain = LODChain(levels=levels, centre=(0.5, 0.5, 0.0), radius=1.0)
-        written = write_chain(str(tmp_path / 'bust.glb'), chain)
-        return written
-
-    def test_a_written_chain_loads_as_its_levels(self, tmp_path):
-        written = self._chain(tmp_path)
-
-        node = _the_lod(gltf.load_gltf(written[0]))
-
-        assert len(node.level) == 3
-
-    def test_the_finer_levels_come_from_their_sidecars(self, tmp_path):
-        written = self._chain(tmp_path)
-
-        node = _the_lod(gltf.load_gltf(written[0]))
-        sizes = [_shapes(level)[0].geometry.positions.max() for level in node.level]
-
-        assert sizes == pytest.approx([1.0, 0.5, 1.0 / 3.0])
-
-    def test_the_coverage_written_is_the_coverage_read(self, tmp_path):
-        written = self._chain(tmp_path)
-
-        node = _the_lod(gltf.load_gltf(written[0]))
-
-        assert list(node.screenCoverage) == pytest.approx([0.5, 0.25, 0.125])
 
 
 class TestBatchingCopiesOfOneModel:

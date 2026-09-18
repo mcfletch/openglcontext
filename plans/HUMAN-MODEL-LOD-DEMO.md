@@ -1,7 +1,7 @@
 # A human model, decimated, walked up to
 
 **Status:** 📋 Planned. Two of the four pieces it needs have landed: the
-measurement harness (`OpenGLContext/meshlod/`, `scripts/lod_quality.py`), and
+measurement harness (`OpenGLContext_editor.meshlod`, `tools/lod_quality.py`), and
 the reader -- `MSFT_lod` into a `ScreenCoverageLOD` the render pass switches
 once a frame (`OpenGLContext/loaders/gltf/lod.py`,
 `OpenGLContext/scenegraph/lod.py`). What is left is the asset, as a content
