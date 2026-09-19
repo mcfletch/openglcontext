@@ -168,21 +168,41 @@ eight views a side</strong> &mdash; thirty-two pixels a view &mdash; covers it
 with room to spare. Twice as many views is four times the texture for angles a
 distant object does not resolve.</p>
 
-<h3 id="impostor-cost">What it buys</h3>
-<p>The gallery, from the far end, with a hundred and eight busts on screen:</p>
+<h3 id="impostor-cost">What it buys, and when it buys nothing</h3>
+<p>An impostor lets a chain <strong>stop decimating early</strong>: four mesh
+levels and a card carry a model further than six mesh levels do. On the gallery
+from its far end, with a hundred and eight busts on screen, that is 62% of the
+triangles and one draw call fewer:</p>
 <table>
-  <tr><th>Chain</th><th>Triangles in the busts</th><th>Draws in the frame</th></tr>
-  <tr><td>6 mesh levels</td><td>103,536</td><td>11</td></tr>
-  <tr><td>6 mesh levels + an impostor</td><td>90,620</td><td>12</td></tr>
-  <tr><td><strong>4 mesh levels + an impostor</strong></td><td><strong>39,460</strong></td><td><strong>10</strong></td></tr>
+  <tr><th>Chain</th><th>Triangles in the busts</th><th>Draws</th>
+    <th>ms a frame, 1280&times;720</th></tr>
+  <tr><td>6 mesh levels</td><td>103,536</td><td>11</td><td>4.96</td></tr>
+  <tr><td>6 mesh levels + an impostor</td><td>90,620</td><td>12</td><td>&mdash;</td></tr>
+  <tr><td>4 mesh levels + an impostor</td><td>39,460</td><td>10</td><td>4.93</td></tr>
 </table>
-<p>The middle row is the one worth reading twice: bolting an impostor onto the
-end of a chain that already decimates to five hundred triangles saves an eighth
-of the triangles and costs a draw. The gain is in the third row, and it is not
-that the impostor is cheap &mdash; it is that <strong>an impostor lets you stop
-decimating early</strong>. Four mesh levels and a card beat six mesh levels by
-62% of the triangles and one draw, and there are two fewer levels to bake, ship
-and hold in memory.</p>
+<p><strong>And it makes that scene no faster at all.</strong> Two hundred frames
+a second either way, on a discrete-class GPU, because the frame is not waiting
+on geometry: it is waiting on the engine. The same world renders in the same
+5&nbsp;ms at 640&times;360 and at 1920&times;1080, and a four-object scene
+renders in 0.59&nbsp;ms where this three-hundred-object one takes 5.06 &mdash;
+about fifteen microseconds of processor time per object per frame, whatever is
+in it. Triangles are not what this costs.</p>
+<p><strong>Where it does pay is where geometry is the bottleneck.</strong> The
+same two worlds on a software rasteriser, which is what a weak integrated part
+behaves like:</p>
+<table>
+  <tr><th>Chain</th><th>ms a frame (llvmpipe, 640&times;360)</th></tr>
+  <tr><td>6 mesh levels</td><td>46.8</td></tr>
+  <tr><td>4 mesh levels + an impostor</td><td><strong>19.1</strong></td></tr>
+</table>
+<p>Two and a half times faster, from the same change that bought nothing on the
+discrete card. That is the rule to take away: an impostor is worth reaching for
+when a frame is spending its time on vertices and fragments, and worth nothing
+when it is spending it somewhere else. Measure which before baking one.</p>
+<p class="technical">On the gallery the largest single item is not geometry
+either: <strong>shadows cost 1.8&nbsp;ms of the 4.96</strong>, most of it
+gathering the casters. <code>--no-shadows</code> takes the same scene from 202
+to 316 frames a second.</p>
 
 <h2 id="authoring">Authoring a chain</h2>
 <p>Two routes, and they meet in the same file.</p>
