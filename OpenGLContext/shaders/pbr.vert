@@ -30,6 +30,18 @@ uniform mat4 projectionMatrix;
 uniform mat3 normalMatrix;
 uniform bool instancingEnabled;   // read model + id from instance attributes
 
+// Octahedral impostor: a quad turned to face the viewer, showing the one of
+// `impostorGrid` x `impostorGrid` baked views that matches the direction it is
+// being looked at from.  0 -- the default -- is every ordinary draw, and costs
+// one uniform test.  The whole of it is here rather than in the fragment
+// shader because the view is a property of the *object*: which tile of the
+// atlas to read is constant across the quad, so selecting it is an affine
+// change to the texture coordinate and the fragment shader samples its base
+// colour exactly as it always does.  See OpenGLContext/scenegraph/octahedral.py,
+// which is the same mapping in Python and is what the baker renders against.
+uniform int impostorGrid;
+uniform bool impostorHemi;
+
 out vec3 vNormal;        // eye space
 out vec3 vPosition;      // eye space
 out vec2 vSurface;       // where on the water this is, in its own plane
@@ -44,6 +56,25 @@ out float vModelScale;   // world-space object scale, for KHR_materials_volume t
 flat out uint vObjectId;       // per-instance picking id (used only when instancing)
 flat out uint vMaterialIndex;  // per-instance material-array index
 
+// Where on the unit square a direction's baked view lives.  The twin of
+// `octahedral.direction_to_uv`; the two have to agree or the impostor shows the
+// wrong picture.
+vec2 octahedralUV(vec3 direction, bool hemi) {
+    vec3 d = normalize(direction);
+    if (hemi) { d.y = abs(d.y); }
+    d /= (abs(d.x) + abs(d.y) + abs(d.z));
+    vec2 uv;
+    if (hemi) {
+        uv = vec2(d.x + d.z, d.z - d.x);
+    } else if (d.y >= 0.0) {
+        uv = d.xz;
+    } else {
+        uv = vec2((1.0 - abs(d.z)) * (d.x >= 0.0 ? 1.0 : -1.0),
+                  (1.0 - abs(d.x)) * (d.z >= 0.0 ? 1.0 : -1.0));
+    }
+    return clamp(uv * 0.5 + 0.5, 0.0, 1.0);
+}
+
 void main() {
     mat4 mv = instancingEnabled ? aInstanceModelView : modelViewMatrix;
     // Normal matrix follows the (per-instance) modelview. The uniform path passes
@@ -56,6 +87,7 @@ void main() {
     // the model matrix then takes to the world.
     vec3 position = aPosition;
     vec3 normal = aNormal;
+    vec4 eyePositionOverride = vec4(0.0);
     vec3 tangent = aTangent.xyz;
     applySkin(position, normal, tangent);
     // Water moves on the card too, and after the mesh's own animation:
@@ -70,9 +102,39 @@ void main() {
     vSurfX = nrm * vec3(1.0, 0.0, 0.0);
     vSurfZ = nrm * vec3(0.0, 0.0, 1.0);
 
-    vec4 eyePosition = mv * vec4(position, 1.0);
+    vec2 impostorOrigin = vec2(0.0);
+    float impostorSpan = 1.0;
+    if (impostorGrid > 0) {
+        // The quad hangs off the object's own origin, turned flat to the
+        // viewer: in eye space the view direction is -z, so a corner offset in
+        // x and y is already facing us.  The object's scale is the modelview's,
+        // so the card is as big as the model it stands for.
+        vec3 origin = (mv * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+        float scale = (length(mat3(mv)[0]) + length(mat3(mv)[1])
+                       + length(mat3(mv)[2])) / 3.0;
+        position = vec3(0.0);
+        // Which way the object is being looked at from, in the object's own
+        // space -- the view is rigid, so the modelview's transpose takes an eye
+        // vector back into it.
+        vec3 toEye = transpose(mat3(mv)) * (-origin);
+        vec2 uv = octahedralUV(toEye, impostorHemi);
+        float side = 1.0 / float(impostorGrid);
+        vec2 cell = floor(min(uv * float(impostorGrid),
+                              float(impostorGrid) - 0.001));
+        // Half a texel in from the tile's edge, so the bilinear filter cannot
+        // reach across into the view next door.
+        float inset = 0.5 / float(impostorGrid * 512);
+        impostorOrigin = cell * side + inset;
+        impostorSpan = side - 2.0 * inset;
+        eyePositionOverride = vec4(origin + vec3(aPosition.xy * scale, 0.0), 1.0);
+        normal = vec3(0.0, 0.0, 1.0);
+    }
+
+    vec4 eyePosition = impostorGrid > 0 ? eyePositionOverride
+                                        : mv * vec4(position, 1.0);
     vPosition = eyePosition.xyz;
-    vNormal = normalize(nrm * normal);
+    vNormal = impostorGrid > 0 ? vec3(0.0, 0.0, 1.0)
+                               : normalize(nrm * normal);
     // Tangents are surface-direction vectors, so they transform by the modelview
     // upper-3x3, NOT the inverse-transpose normalMatrix (that is for normals).
     // Guard the normalize: with no tangent attribute location 3 defaults to 0, and
@@ -82,7 +144,9 @@ void main() {
     float tLen = length(tEye);
     vTangent = tLen > 0.0 ? tEye / tLen : vec3(0.0);
     vTangentW = aTangent.w;
-    vTexCoord = aTexCoord;
+    vTexCoord = impostorGrid > 0
+        ? impostorOrigin + aTexCoord * impostorSpan
+        : aTexCoord;
     vTexCoord1 = aTexCoord1;
     vColor = aColor;
     // The view is rigid (no scale), so the modelview upper-3x3 column lengths are the

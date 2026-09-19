@@ -199,6 +199,7 @@ _MATERIAL_EXT_HANDLERS = {
 
 _MATERIAL_EXT_DEFAULTS = dict(
     unlit=False, bakedLight=False, emissiveStrength=1.0, specular=1.0,
+    octahedralViews=0, octahedralHemi=True,
     specularColor=(1.0, 1.0, 1.0),
     ior=1.5, clearcoat=0.0, clearcoatRoughness=0.0, sheenColor=(0.0, 0.0, 0.0),
     sheenRoughness=0.0, iridescence=0.0, iridescenceIor=1.3,

@@ -569,6 +569,17 @@ class PBRShaderProgram(VRML97ShaderProgram):
         """Enable/disable per-vertex color (glTF COLOR_0) modulation of baseColor."""
         self._set_uniform1i('hasVertexColor', 1 if enabled else 0, self.program)
 
+    def set_impostor(self, views: int, hemi: bool = True) -> None:
+        """Draw this material's geometry as an octahedral impostor, or not.
+
+        ``views`` is how many baked views a side its base colour holds, and 0 --
+        every ordinary material -- turns the whole thing off. The vertex shader
+        does the rest: it turns the quad to the viewer and moves its texture
+        coordinate into the tile for the direction it is being seen from.
+        """
+        self._set_uniform1i('impostorGrid', int(views), self.program)
+        self._set_uniform1i('impostorHemi', 1 if hemi else 0, self.program)
+
     # -- skinning ----------------------------------------------------------
     def _init_skinning(self, program: Any) -> None:
         """Point a program's palette sampler at its unit, once at compile time."""
@@ -694,6 +705,12 @@ class PBRShaderProgram(VRML97ShaderProgram):
         # the early-out so it stays correct for repeated same-material shapes.
         if mode is not None:
             mode._appearance_double_sided = bool(getattr(material, 'doubleSided', False))
+        # An octahedral impostor is a property of the material rather than of
+        # the draw, so it is set here beside the rest of it. Before the
+        # same-material early-out: the previous shape may have been an ordinary
+        # one, and a stale `impostorGrid` would billboard it.
+        self.set_impostor(int(getattr(material, 'octahedralViews', 0) or 0),
+                          bool(getattr(material, 'octahedralHemi', True)))
         # Same material as the previous shape this frame -> its uniforms and bound
         # textures are already live; skip the re-box entirely. Identity compare is
         # safe within a frame (materials aren't mutated mid-frame) and the cache is

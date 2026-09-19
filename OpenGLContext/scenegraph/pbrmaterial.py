@@ -90,6 +90,14 @@ class PBRMaterial(node.Node):
     # lightmaps are authored against an engine-specific exposure.
     lightmapStrength = field.newField('lightmapStrength', 'SFFloat', 1, 1.0)
     unlit = field.newField('unlit', 'SFBool', 1, False)               # KHR_materials_unlit
+    #: An octahedral impostor: the base colour texture holds this many views a
+    #: side of the model, and the quad wearing it is turned to the viewer and
+    #: shows the one matching the direction it is seen from. 0 is every
+    #: ordinary material. See `OpenGLContext.scenegraph.octahedral`.
+    octahedralViews = field.newField('octahedralViews', 'SFInt32', 1, 0)
+    #: Whether that atlas holds the upper hemisphere only, which is what a
+    #: thing standing on the ground wants.
+    octahedralHemi = field.newField('octahedralHemi', 'SFBool', 1, True)
     #: Whether ``COLOR_0`` is *baked light* rather than a tint. Set, the
     #: vertex colours are added as emission and the surface keeps its own
     #: colour -- so light worked out when the world was built is on the
