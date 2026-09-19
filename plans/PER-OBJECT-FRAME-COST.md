@@ -1,6 +1,6 @@
 # What a frame costs per object
 
-**Status:** 📋 Planned, measured 2026-09-19.
+**Status:** 🟢 Complete, 2026-09-19. Measured 5.26 -> 2.57 ms a frame on the scene below, a **2.05x speedup**; see [What it was worth](#what-it-was-worth).
 
 A scene of three hundred objects costs about **5 ms of processor time a frame
 before anything is drawn**, and the cost is very nearly linear in the number of
@@ -273,22 +273,49 @@ deliberately loose — 45 µs an object against a measured ~13 — because what 
 is there to catch is a per-object cost coming back, which shows as a multiple.
 The counts are the tight gate.
 
-## What this is worth
+## What it was worth
 
-Not all of the 1.7 ms the shadows cost is gathering — the depth passes are real
-draws and stay. The profile puts `_casterWorldGeometry` at about two thirds of
-`renderShadowMaps`, so A is worth on the order of **1 ms** and B most of its
-**1 ms**: a three-hundred-object frame of about 5.0 ms going to somewhere near
-**3.0–3.5**, and the slope against object count falling with it. That is worth
-having and it is not the end of it; C is the structural change that would move
-the slope again, and it is the largest of the three to make.
+The estimate was 5.0 ms going to somewhere near 3.0–3.5. The measured answer is
+**5.26 → 2.57 ms, a 2.05x speedup**, 190 frames a second to 389.
 
-The figures above are one scene on one machine, and what they are for is
-choosing what to do first rather than predicting the result. D is how the answer
-gets checked.
+| the gallery, 300 objects, 1280x720 | ms/frame | fps |
+|---|---|---|
+| before | 5.258 | 190 |
+| after | 2.569 | 389 |
 
-Neither A nor B changes a pixel, so the conformance baselines are what says they
-did not.
+Measured by rendering the same world at two frame counts and dividing the
+difference by the difference, so start-up and scene load cancel; the two trees
+were timed **turn about** over eleven rounds rather than one after the other, so
+a machine that gets busier during the run moves both readings together instead
+of favouring whichever went second. The two spreads do not overlap (4.945–5.492
+against 2.327–2.763), and a separate seven-round run gave 2.07x.
+
+Where it went, per frame:
+
+| | before | after |
+|---|---|---|
+| `_occluderPoints` (shadow fit) | 1.56 ms | 0.15 |
+| `selectLevels`, 120 nodes | 1.20 | 0.40 still / 0.93 moving |
+| `_refreshCasterData` | 0.27 | 0.05 |
+| the walk itself | 1.20 | 1.08 |
+| `transformMatrix()` calls | 680 | 404 |
+| `nodepath.__getitem__` calls | 3,199 | 2,648 |
+| caster memo hit rate | 0% | 99.1% |
+
+**A still camera is the best case, and it is not the only case measured.** With
+the camera moving every frame, so that nothing worked out last frame can be
+reused, the per-object slope goes from **22.2 µs to 16.1 µs** — measured on D's
+own harness between 60 and 360 objects — and 360 objects go from 9.89 ms to
+6.71.
+
+**Nothing here changes a pixel**, and the whole glTF conformance suite is what
+says so: 10,025 tests pass, with the baselines untouched.
+
+**The frame is still not fill-bound.** The same world renders in the same time
+at 640x360, 1280x720 and 1920x1080 after the change as before it — nine times
+the pixels, no difference. What was removed was processor time, and what is left
+is processor time too: the draw-set work that is still per record (the sort key,
+the material grouping, the instancing grouping) is where the next of it is.
 
 ## Where this came from
 
