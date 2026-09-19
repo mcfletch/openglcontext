@@ -18,7 +18,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import numpy as np
 
-from OpenGLContext.loaders.resolver import Resolver, _decode_data_uri, _resolver_max
+from OpenGLContext.loaders.resolver import Resolver, decode_data_uri, resolver_max
 
 if TYPE_CHECKING:
     import pygltflib
@@ -72,7 +72,7 @@ def _buffer_bytes(g: "pygltflib.GLTF2", buffer_index: int, resolver: Resolver) -
     if uri is None:
         data = g.binary_blob()
     elif uri.startswith('data:'):
-        data = _decode_data_uri(uri, _resolver_max(resolver))
+        data = decode_data_uri(uri, resolver_max(resolver))
     else:
         data = resolver.fetch(uri)
     if cache is not None:

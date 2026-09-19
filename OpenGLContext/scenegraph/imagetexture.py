@@ -239,18 +239,18 @@ class ImageTexture(_Texture, basenodes.ImageTexture):
         """
         from OpenGLContext.loaders.loader import Loader
 
-        try:
-            baseNode = protofunctions.root(self)
-            if baseNode:
-                baseURI = baseNode.baseURI
-            else:
-                baseURI = None
-            result = Loader(url, baseURL=baseURI)
-        except IOError:
-            pass
-        else:
-            if result:
-                baseURL, filename, file, headers = result
+        baseNode = protofunctions.root(self)
+        baseURI = baseNode.baseURI if baseNode else None
+        for single in ([url] if isinstance(url, (bytes, str)) else list(url)):
+            try:
+                result = Loader(single, baseURL=baseURI)
+            except IOError as err:
+                log.warning("Unable to fetch the image at %s: %s", single, err)
+                continue
+            if not result:
+                continue
+            baseURL, filename, file, headers = result
+            try:
                 with contextlib.closing(file):
                     image = Image.open(file)
                     # Decoded here rather than by whoever first looks at the
@@ -258,9 +258,18 @@ class ImageTexture(_Texture, basenodes.ImageTexture):
                     # holds the file it came from open -- six of them for a
                     # cubemap -- and does its reading on the thread that draws.
                     image.load()
-                image.info["url"] = baseURL
-                image.info["filename"] = filename
-                return self.setImage(image, contexts)
+            except Exception as err:
+                # Whatever a decoder makes of bytes that are not the image they
+                # claim to be: truncated, another format, or a few dozen bytes
+                # declaring a billion pixels, which Pillow refuses outright. One
+                # unreadable texture costs the texture, and the world it is in
+                # goes on being drawn -- so the next url in the list is tried,
+                # a file that does not decode having not succeeded.
+                log.warning("Unable to decode the image at %s: %s", single, err)
+                continue
+            image.info["url"] = baseURL
+            image.info["filename"] = filename
+            return self.setImage(image, contexts)
 
         # should set client.image to something here to indicate
         # failure to the user.
@@ -291,18 +300,17 @@ class ImageTexture(_Texture, basenodes.ImageTexture):
             url = "memory:%s" % (hash(data),)
         try:
             image = Image.open(fh)
-        except IOError as err:
-            log.info("IOError %s opening image", err)
-        else:
-            if image:
-                self.image = image
-                self.image.info["url"] = str(url)
-                self.image.info["file"] = "memory"
-                self.components = -1
-                return self.image
-            else:
-                log.warning("Null image")
-        return None
+            image.load()
+        except Exception as err:
+            # As in loadBackground: bytes that are not the image they claim to
+            # be are a warning and no texture, whatever the decoder made of them.
+            log.warning("Unable to decode the image from %s: %s", url, err)
+            return None
+        self.image = image
+        self.image.info["url"] = str(url)
+        self.image.info["file"] = "memory"
+        self.components = -1
+        return self.image
 
 
 class MMImageTexture(ImageTexture):

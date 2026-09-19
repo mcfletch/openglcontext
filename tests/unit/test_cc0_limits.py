@@ -87,3 +87,64 @@ class TestTheCacheLocation:
         monkeypatch.setattr(userpaths, "appdatadirectory", lambda: str(tmp_path))
         created = cc0.cache_dir()
         assert (os.stat(created).st_mode & 0o077) == 0
+
+
+class TestWhereTheArchiveMayComeFrom:
+    """The API answers with a download link, and that answer is data.
+
+    ambientCG says where the archive is and the loader fetches it. A service
+    that is compromised or wrong can name anywhere at all, so the link is
+    checked against the hosts ambientCG publishes from before it is followed --
+    the same rule a document's own references go through.
+    """
+
+    def _answering(self, monkeypatch, link):
+        """Make the API answer with ``link`` and record what gets fetched."""
+        fetched = []
+
+        def _api(asset, resolution):
+            return cc0._require_download_host(link)
+
+        monkeypatch.setattr(cc0, "_api_download_link", _api)
+        monkeypatch.setattr(cc0, "_read_capped",
+                            lambda url, cap: fetched.append(url) or b"")
+        return fetched
+
+    def test_an_ambientcg_link_is_followed(self, monkeypatch):
+        fetched = self._answering(
+            monkeypatch, "https://ambientcg.com/get?file=Bark012_1K-JPG.zip")
+
+        with pytest.raises(zipfile.BadZipFile):
+            cc0._download("Bark012")
+
+        assert fetched == ["https://ambientcg.com/get?file=Bark012_1K-JPG.zip"]
+
+    def test_a_link_to_somewhere_else_is_refused(self, monkeypatch):
+        fetched = self._answering(monkeypatch, "https://evil.example/a.zip")
+
+        with pytest.raises(IOError):
+            cc0._download("Bark012")
+
+        assert fetched == []
+
+    def test_a_file_url_is_refused(self, monkeypatch):
+        self._answering(monkeypatch, "file:///etc/passwd")
+
+        with pytest.raises(IOError):
+            cc0._download("Bark012")
+
+    def test_a_plaintext_link_is_refused(self, monkeypatch):
+        self._answering(monkeypatch, "http://ambientcg.com/get?file=x.zip")
+
+        with pytest.raises(IOError):
+            cc0._download("Bark012")
+
+
+class TestTheApiAnswerIsBounded:
+    def test_an_unbounded_answer_is_refused(self, monkeypatch):
+        """A JSON body is read into memory before it is parsed, so its size is
+        as much a limit as the archive's is."""
+        monkeypatch.setattr(cc0, "_read_capped", _refuse)
+
+        with pytest.raises(ValueError):
+            cc0._api_download_link("Bark012", "1K")

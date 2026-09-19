@@ -48,7 +48,7 @@ else:
 from OpenGLContext.scenegraph.lod import ScreenCoverageLOD
 from OpenGLContext.loaders.gltf import lod as lodext
 from OpenGLContext.loaders.gltf.accessors import (
-    _buffer_bytes, _decode_data_uri, _read_normalized, _resolver_max,
+    _buffer_bytes, decode_data_uri, _read_normalized, resolver_max,
 )
 from OpenGLContext.loaders.gltf import environment_sky
 from OpenGLContext.loaders.gltf.meshes import _primitive_shape
@@ -668,7 +668,7 @@ class _SceneBuilder:
         if not audio.uri:
             return None
         if audio.uri.startswith('data:'):
-            return _decode_data_uri(audio.uri, _resolver_max(self.resolver))
+            return decode_data_uri(audio.uri, resolver_max(self.resolver))
         return self.resolver.fetch(audio.uri)
 
     def _fetch_audio(self, library: AudioLibrary, index: int,

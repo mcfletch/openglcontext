@@ -20,7 +20,7 @@ from typing import Any, Dict, IO, List, Optional, Sequence, Tuple, Union
 from OpenGL._bytes import as_8_bit
 from OpenGLContext.loaders.resolver import (
     Resolver,
-    _fetch_url,
+    fetch_url,
     _ALLOWED_URL_SCHEMES,
     DEFAULT_MAX_RESOURCE_BYTES,
 )
@@ -208,7 +208,7 @@ class _Loader(object):
         scheme = url_scheme(url)
         if scheme in _ALLOWED_URL_SCHEMES:
             log.debug("download: %s", url)
-            data = _fetch_url(url)
+            data = fetch_url(url)
             return (url, BytesIO(data), url, None)
         # Local file: resolve to an absolute path so the scenegraph's baseURI is
         # the file's own location, not a path relative to the process's cwd.

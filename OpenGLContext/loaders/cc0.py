@@ -25,7 +25,7 @@ from typing import Optional
 from OpenGLContext import userpaths
 from OpenGLContext.loaders import resolver
 
-_UA = {"User-Agent": resolver._user_agent()}
+_UA = {"User-Agent": resolver.user_agent()}
 _CTX = ssl.create_default_context()
 _API = "https://ambientcg.com/api/v2/full_json?id=%s&type=Material&include=downloadData"
 
@@ -34,6 +34,14 @@ MAX_ARCHIVE_BYTES = 256 * 1024 * 1024      # 256 MiB
 
 #: Ceiling on one map extracted from an archive, applied before it is written.
 MAX_MEMBER_BYTES = 64 * 1024 * 1024        # 64 MiB
+
+#: Ceiling on the library's JSON answer, which is read into memory before it is
+#: parsed. A description of one material is a few kilobytes.
+MAX_API_BYTES = 8 * 1024 * 1024            # 8 MiB
+
+#: Where an ambientCG archive may be fetched from. The API answers with the
+#: link, and an answer is not permission to fetch from anywhere.
+DOWNLOAD_HOSTS = ('ambientcg.com', 'acg-download.struffelproductions.com')
 
 # Curated CC0 materials (ambientCG asset ids) for a coniferous-forest floor + trunks.
 CATALOG = {
@@ -62,19 +70,31 @@ def _read_capped(url: str, max_bytes: int) -> bytes:
     """Read a URL, refusing a body over ``max_bytes`` as it arrives."""
     request = urllib.request.Request(url, headers=_UA)
     with urllib.request.urlopen(request, timeout=60, context=_CTX) as response:
-        return resolver._stream(response, max_bytes)
+        return resolver.stream_capped(response, max_bytes)
+
+
+def _require_download_host(link: str) -> str:
+    """``link``, unless it is somewhere ambientCG does not publish from.
+
+    The library is asked where an archive is and answers with a URL. That
+    answer is data: a service that is compromised, misconfigured or simply
+    wrong can name a local address, a plaintext link or a ``file://`` path, and
+    a client that fetches whatever it is told has handed over the decision. The
+    hosts are a fact about the provider, so they are stated here rather than
+    taken from the reply.
+    """
+    return resolver.require_host(link, DOWNLOAD_HOSTS)
 
 
 def _api_download_link(asset: str, resolution: str) -> str:
     """The JPG download URL ambientCG offers for ``asset`` at ``resolution``."""
-    req = urllib.request.Request(_API % asset, headers=_UA)
-    data = json.load(urllib.request.urlopen(req, timeout=25, context=_CTX))
+    data = json.loads(_read_capped(_API % asset, MAX_API_BYTES))
     folders = (data["foundAssets"][0]["downloadFolders"]["default"]
                ["downloadFiletypeCategories"])
     for cat in folders.values():
         for f in cat["downloads"]:
             if f.get("attribute", "").startswith(resolution) and "JPG" in f["attribute"]:
-                return str(f["downloadLink"])
+                return _require_download_host(str(f["downloadLink"]))
     raise RuntimeError("no %s JPG download for %s" % (resolution, asset))
 
 
@@ -106,7 +126,7 @@ def material(name: str, resolution: str = "1K",
             if marker in n and n.lower().endswith((".jpg", ".png")):
                 # The declared size is checked before extracting, so a bomb is
                 # refused rather than expanded onto the disk and measured after.
-                resolver._check_size(z.getinfo(n).file_size, max_member_bytes, n)
+                resolver.check_size(z.getinfo(n).file_size, max_member_bytes, n)
                 with open(paths[kind], "wb") as fh:
                     fh.write(z.read(n))
                 written[kind] = paths[kind]

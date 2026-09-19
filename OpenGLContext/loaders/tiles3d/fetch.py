@@ -92,11 +92,11 @@ def read_bytes(uri: str, cache_dir: Optional[str] = None,
         ValueError: where the payload exceeds `max_bytes`.
     """
     if is_url(uri):
-        return resolver._fetch_url(uri, cache_dir or default_cache_dir(),
+        return resolver.fetch_url(uri, cache_dir or default_cache_dir(),
                                    max_bytes=max_bytes)
     # Size-check on disk before reading, so a huge local tile is refused rather
     # than slurped into RAM and then measured.
     if max_bytes is not None:
-        resolver._check_size(os.path.getsize(uri), max_bytes, uri)
+        resolver.check_size(os.path.getsize(uri), max_bytes, uri)
     with open(uri, "rb") as fh:
         return fh.read()

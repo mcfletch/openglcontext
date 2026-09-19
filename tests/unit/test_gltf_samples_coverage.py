@@ -1,6 +1,6 @@
 """Coverage tests for the Khronos sample-catalogue helpers.
 
-No real network: ``_fetch_url`` and ``load_gltf_url`` are monkeypatched so the
+No real network: ``fetch_url`` and ``load_gltf_url`` are monkeypatched so the
 Models.md parser and the load_sample variant-fallback loop run offline.
 """
 import pytest
@@ -17,7 +17,7 @@ class TestCatalogParsingSkipsNonMatchingRows:
             "| [Box](Box/README.md)<br>"
             "[![Box](Box/screenshot/screenshot.jpg)](Box/README.md) | a box |\n"
         )
-        monkeypatch.setattr(samples, '_fetch_url',
+        monkeypatch.setattr(samples, 'fetch_url',
                             lambda url, cache=None: md.encode('utf-8'))
         rows = samples.fetch_sample_catalog()
         assert [r['name'] for r in rows] == ['Box']

@@ -61,7 +61,9 @@ Fetching the document by itself could not: the base URL is gone by then and the
 relative references have nowhere to resolve from.</p>
 <p>External resources are fetched through the same hardened resolver the rest of
 the loader uses &mdash; same-origin, size-capped and disk-cached &mdash; so a
-document cannot pull in a reference from somewhere else.</p>
+document cannot pull in a reference from somewhere else. What a file you did not
+write is allowed to reach, across every loader, is
+<a href="untrusted.html">Loading content you did not write</a>.</p>
 <h3>Controls</h3>
 <p>These are OpenGLContext's default view-platform navigation keys:</p>
 <ul>

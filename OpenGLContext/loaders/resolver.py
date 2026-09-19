@@ -18,9 +18,22 @@ containment core, kept in one auditable place. It enforces:
 * the disk cache lives under the per-user app-data directory, not world-writable
   system temp.
 
-:func:`safe_url`, :func:`_fetch_url` and :func:`_decode_data_uri` are the
+:func:`safe_url`, :func:`fetch_url` and :func:`decode_data_uri` are the
 fetch/decode primitives; :class:`Resolver` ties them to one document's origin.
+
+**These are public names**, not the engine's own business: a loader in another
+distribution -- ``OpenGLContext_editor`` reading a baked level's sidecar, an
+application reading a format this project has never heard of -- is held to the
+same policy by importing the same names, and a containment rule with a second
+implementation somewhere else is a containment rule with a hole in it.
 """
+
+__all__ = [
+    'Resolver', 'FetchCancelled', 'Progress', 'Cancel',
+    'DEFAULT_MAX_RESOURCE_BYTES', 'DEFAULT_MAX_IMAGE_PIXELS', 'DOWNLOAD_CHUNK_BYTES',
+    'safe_url', 'is_url', 'require_host', 'user_agent', 'check_size', 'check_pixels', 'decode_data_uri', 'resolver_max',
+    'fetch_url', 'fetch_to_cache', 'stream_capped', 'cached_path', 'purge_cache',
+]
 
 import base64
 import logging
@@ -29,7 +42,7 @@ import threading
 import urllib.parse
 import urllib.request
 import urllib.error
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Sequence, Tuple
 
 log = logging.getLogger(__name__)
 
@@ -55,6 +68,11 @@ def safe_url(url: str) -> str:
 # Ceiling on a single fetched/decoded external resource; override per-load via the
 # ``max_resource_bytes`` argument on the load entry points.
 DEFAULT_MAX_RESOURCE_BYTES = 256 * 1024 * 1024   # 256 MiB
+
+#: Ceiling on the pixels an image may declare before anything is allocated for
+#: it. Pillow's own decompression-bomb threshold, so a picture is judged the
+#: same way whichever decoder reads it.
+DEFAULT_MAX_IMAGE_PIXELS = 178_956_970
 
 #: How much of a download is read at a time.  Small enough that a progress bar
 #: moves and a cancel is acted on promptly, large enough that a big transfer is
@@ -87,6 +105,66 @@ def _origin(url: str) -> Tuple[str, str]:
     """
     parts = urllib.parse.urlsplit(url)
     return (parts.scheme.lower(), parts.netloc.lower())
+
+
+def require_host(url: str, allowed: Sequence[str]) -> str:
+    """``url`` unchanged, or ``IOError`` unless it is https on an allowed host.
+
+    For a URL a *service* handed back rather than one a person typed: a
+    catalogue is asked where an asset lives and answers with a link, and that
+    answer is data like any other. A service that is compromised,
+    misconfigured or simply wrong can answer ``file:///etc/passwd``,
+    ``http://169.254.169.254/`` or a plaintext link to the right name, and a
+    client that fetches whatever it is told has handed the decision over.
+
+    So the caller names the hosts its provider publishes from in advance --
+    they are a fact about the provider, not about the response -- and the
+    comparison is on the parsed host, exactly and case-insensitively. A
+    hostname *ending* in an allowed one is a different host
+    (``polyhaven.com.example``), userinfo before the host names a different
+    host (``dl.polyhaven.org@example``), and a non-default port is a different
+    service.
+
+    Plaintext ``http`` is refused rather than upgraded: what comes back is
+    written to a cache and read as content, so a connection anyone on the path
+    can rewrite is not one to take it over.
+    """
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme.lower() != 'https':
+        raise IOError("%r must be an https URL to be fetched" % (url,))
+    host = (parts.hostname or '').lower()
+    if host not in {name.lower() for name in allowed}:
+        raise IOError(
+            "%r is not on a host this asset may come from (%s)"
+            % (url, ', '.join(sorted(allowed))))
+    try:
+        port = parts.port
+    except ValueError as err:
+        raise IOError("%r does not name a usable port" % (url,)) from err
+    if port not in (None, 443):
+        raise IOError("%r names port %s rather than the https port" % (url, port))
+    return url
+
+
+def check_pixels(width: int, height: int,
+                 max_pixels: int = DEFAULT_MAX_IMAGE_PIXELS,
+                 what: str = 'image') -> None:
+    """Refuse a picture whose declared size is not a picture.
+
+    An image format states its dimensions in a header, and a decoder allocates
+    against that statement before it has read a pixel -- so a hundred bytes can
+    ask for forty gigabytes. Pillow refuses that arithmetic for the formats it
+    decodes; a decoder written here asks this instead, so one rule covers both.
+
+    The default is Pillow's own threshold, which keeps the two answers the same
+    whichever decoder a file happens to reach.
+    """
+    if width <= 0 or height <= 0:
+        raise ValueError("%s has non-positive dimensions %dx%d" % (what, width, height))
+    if width * height > max_pixels:
+        raise ValueError(
+            "%s declares %dx%d = %d pixels, over the %d-pixel limit"
+            % (what, width, height, width * height, max_pixels))
 
 
 def is_url(source: Optional[str]) -> bool:
@@ -129,7 +207,7 @@ class _OriginLockedRedirectHandler(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-def _user_agent() -> str:
+def user_agent() -> str:
     """How this fetcher identifies itself to a server.
 
     A number of asset hosts reject Python's default ``Python-urllib/x.y``
@@ -147,7 +225,7 @@ def _urlopen_same_origin(url: str, base_url: str, timeout: int = 30) -> Any:
     """Open ``url`` refusing any redirect that leaves ``base_url``'s origin."""
     opener = urllib.request.build_opener(_OriginLockedRedirectHandler(base_url))
     request = urllib.request.Request(safe_url(url),
-                                     headers={'User-Agent': _user_agent()})
+                                     headers={'User-Agent': user_agent()})
     return opener.open(request, timeout=timeout)
 
 
@@ -171,14 +249,14 @@ def _resolve_local(base_dir: str, uri: str) -> str:
     return full
 
 
-def _check_size(nbytes: int, max_bytes: Optional[int], what: str) -> None:
+def check_size(nbytes: int, max_bytes: Optional[int], what: str) -> None:
     if max_bytes is not None and nbytes > max_bytes:
         raise ValueError(
             "resource %s is %d bytes, over the %d-byte limit"
             % (what, nbytes, max_bytes))
 
 
-def _decode_data_uri(uri: str, max_bytes: Optional[int] = None) -> bytes:
+def decode_data_uri(uri: str, max_bytes: Optional[int] = None) -> bytes:
     """Decode a ``data:`` URI to bytes.
 
     Handles ``data:[<mediatype>][;base64],<payload>`` -- base64 or percent-encoded
@@ -192,11 +270,11 @@ def _decode_data_uri(uri: str, max_bytes: Optional[int] = None) -> bytes:
         data = base64.b64decode(payload)
     else:
         data = urllib.parse.unquote_to_bytes(payload)
-    _check_size(len(data), max_bytes, 'data: URI')
+    check_size(len(data), max_bytes, 'data: URI')
     return data
 
 
-def _resolver_max(resolver: Optional["Resolver"]) -> Optional[int]:
+def resolver_max(resolver: Optional["Resolver"]) -> Optional[int]:
     return getattr(resolver, 'max_resource_bytes', None) if resolver is not None else None
 
 
@@ -274,12 +352,12 @@ class Resolver:
             return self._cache[uri]
         target = self.resolve(uri)
         if self.base_url is not None:
-            data = _fetch_url(target, max_bytes=self.max_resource_bytes)
+            data = fetch_url(target, max_bytes=self.max_resource_bytes)
         else:
             # Size-check the file's size on disk before reading it, so a confined
             # but huge local sibling cannot be slurped past the cap into RAM first.
             if self.max_resource_bytes is not None:
-                _check_size(os.path.getsize(target), self.max_resource_bytes, uri)
+                check_size(os.path.getsize(target), self.max_resource_bytes, uri)
             with open(target, 'rb') as f:
                 data = f.read()
         self._cache[uri] = data
@@ -307,7 +385,7 @@ def cached_path(url: str, cache_dir: Optional[str] = None) -> str:
     """Local cache path a fetch of ``url`` uses, whether or not it is cached yet.
 
     The single definition of the on-disk key (a sha1 of the URL, keeping the URL's
-    extension); :func:`_fetch_url` and :func:`fetch_to_cache` both route through it
+    extension); :func:`fetch_url` and :func:`fetch_to_cache` both route through it
     so no caller re-derives the path.
     """
     import hashlib
@@ -361,7 +439,7 @@ def _release_download_slot(path: str) -> None:
                 del _INFLIGHT[path]
 
 
-def _fetch_url(url: str, cache_dir: Optional[str] = None,
+def fetch_url(url: str, cache_dir: Optional[str] = None,
                max_bytes: Optional[int] = DEFAULT_MAX_RESOURCE_BYTES,
                progress: Optional[Progress] = None,
                cancel: Optional[Cancel] = None) -> bytes:
@@ -398,7 +476,7 @@ def _fetch_url(url: str, cache_dir: Optional[str] = None,
             # endpoint.
             resp = _urlopen_same_origin(url, url, timeout=30)
             try:
-                data = _stream(resp, max_bytes, progress, cancel)
+                data = stream_capped(resp, max_bytes, progress, cancel)
             finally:
                 resp.close()
             _atomic_write(path, data, cache_dir)
@@ -436,7 +514,7 @@ def _report(progress: Optional[Progress], done: int,
         log.warning('a download progress callback raised', exc_info=True)
 
 
-def _stream(response: Any, max_bytes: Optional[int],
+def stream_capped(response: Any, max_bytes: Optional[int],
             progress: Optional[Progress] = None,
             cancel: Optional[Cancel] = None) -> bytes:
     """Read a response a chunk at a time, watching the cap, the caller and the size.
@@ -461,7 +539,7 @@ def _stream(response: Any, max_bytes: Optional[int],
         if not chunk:
             break
         read += len(chunk)
-        _check_size(read, max_bytes, 'remote resource')
+        check_size(read, max_bytes, 'remote resource')
         chunks.append(chunk)
         _report(progress, read, total)
     if not chunks:
@@ -498,7 +576,7 @@ def fetch_to_cache(url: str, cache_dir: Optional[str] = None,
                    cancel: Optional[Cancel] = None) -> str:
     """Fetch ``url`` into the cache (once) and return its local file path.
 
-    The path variant of :func:`_fetch_url`, for callers that want the cached file
+    The path variant of :func:`fetch_url`, for callers that want the cached file
     on disk (e.g. an image to embed) rather than its bytes.
 
     ``progress(done, total)`` is called as the bytes arrive, with ``total``
@@ -508,14 +586,14 @@ def fetch_to_cache(url: str, cache_dir: Optional[str] = None,
     with :class:`FetchCancelled` when it returns true.  Neither leaves a
     partial file in the cache.
     """
-    _fetch_url(url, cache_dir, max_bytes, progress=progress, cancel=cancel)
+    fetch_url(url, cache_dir, max_bytes, progress=progress, cancel=cancel)
     return cached_path(url, cache_dir)
 
 
 def purge_cache(cache_dir: Optional[str] = None, max_age_days: int = 30) -> int:
     """Delete cached assets not used within ``max_age_days``, returning the count.
 
-    :func:`_fetch_url` touches an entry on every hit, so its mtime is its
+    :func:`fetch_url` touches an entry on every hit, so its mtime is its
     last-use time; anything older than the cutoff is a working-set miss and is
     removed. A missing cache directory is a no-op.
     """

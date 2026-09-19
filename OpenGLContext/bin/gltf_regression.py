@@ -168,7 +168,7 @@ _MIRROR_DIR = os.path.join(resolver._default_cache_dir(), 'gltf_mirror')
 
 def _cached_url_path(url: str, cache_dir: str) -> str:
     """Fetch ``url`` into the sha1-keyed cache and return its local path."""
-    resolver._fetch_url(url, cache_dir)
+    resolver.fetch_url(url, cache_dir)
     key = hashlib.sha1(url.encode('utf-8')).hexdigest() + os.path.splitext(url)[1]
     return os.path.join(cache_dir, key)
 

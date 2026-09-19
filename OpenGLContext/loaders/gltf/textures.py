@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Optional
 
 from OpenGLContext.scenegraph.pbrmaterial import PBRTexture
 from OpenGLContext.loaders.gltf.accessors import _buffer_bytes
-from OpenGLContext.loaders.resolver import Resolver, _decode_data_uri, _resolver_max
+from OpenGLContext.loaders.resolver import Resolver, decode_data_uri, resolver_max
 
 if TYPE_CHECKING:
     import pygltflib
@@ -68,7 +68,7 @@ def _image_bytes(g: "pygltflib.GLTF2", image_index: int,
         return bytes(data[start:start + bv.byteLength])
     uri = getattr(img, 'uri', None)
     if uri and uri.startswith('data:'):
-        return _decode_data_uri(uri, _resolver_max(resolver))
+        return decode_data_uri(uri, resolver_max(resolver))
     if uri:
         fetched = resolver.fetch(uri)
         return None if fetched is None else bytes(fetched)

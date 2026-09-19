@@ -760,7 +760,7 @@ class TestCacheDir:
                 return _Resp()
         monkeypatch.setattr(resolver.urllib.request, 'build_opener',
                             lambda *a, **k: _Opener())
-        data = resolver._fetch_url('http://example.invalid/x.glb')
+        data = resolver.fetch_url('http://example.invalid/x.glb')
         assert data == b'glTFdummy'
         assert (tmp_path / 'c').is_dir()
 
@@ -810,12 +810,12 @@ class TestCachePurge:
         monkeypatch.setattr(resolver.urllib.request, 'build_opener',
                             lambda *a, **k: _Opener())
         url = 'http://example.invalid/x.glb'
-        resolver._fetch_url(url)                       # populate the cache
+        resolver.fetch_url(url)                       # populate the cache
         key = hashlib.sha1(url.encode('utf-8')).hexdigest() + '.glb'
         path = cache / key
         old = time.time() - 40 * 86400
         os.utime(path, (old, old))
-        resolver._fetch_url(url)                       # cache hit -> touch
+        resolver.fetch_url(url)                       # cache hit -> touch
         assert os.path.getmtime(path) > old + 86400    # mtime bumped to ~now
 
 
@@ -926,7 +926,7 @@ class TestResourceSizeCap:
     def test_data_uri_over_cap_rejected(self):
         uri = 'data:;base64,' + resolver.base64.b64encode(b'x' * 100).decode()
         with pytest.raises(ValueError):
-            resolver._decode_data_uri(uri, max_bytes=10)
+            resolver.decode_data_uri(uri, max_bytes=10)
 
 
 class TestDataUriParsing:
@@ -934,14 +934,14 @@ class TestDataUriParsing:
 
     def test_base64_payload(self):
         uri = 'data:application/octet-stream;base64,' + resolver.base64.b64encode(b'hi').decode()
-        assert resolver._decode_data_uri(uri) == b'hi'
+        assert resolver.decode_data_uri(uri) == b'hi'
 
     def test_percent_encoded_payload(self):
-        assert resolver._decode_data_uri('data:text/plain,Hello%20World') == b'Hello World'
+        assert resolver.decode_data_uri('data:text/plain,Hello%20World') == b'Hello World'
 
     def test_malformed_no_comma_raises(self):
         with pytest.raises(ValueError, match='data:'):
-            resolver._decode_data_uri('data:nonsense')
+            resolver.decode_data_uri('data:nonsense')
 
 
 class TestSceneRoots:

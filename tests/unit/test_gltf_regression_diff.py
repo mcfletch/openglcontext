@@ -548,7 +548,7 @@ class TestEnvPrefixFor:
 
 class TestFetchHelpers:
     def test_cached_url_path_keys_by_sha1(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(R.resolver, '_fetch_url', lambda url, cache: None)
+        monkeypatch.setattr(R.resolver, 'fetch_url', lambda url, cache: None)
         p = R._cached_url_path('https://x/model.glb', str(tmp_path))
         assert p.startswith(str(tmp_path)) and p.endswith('.glb')
 

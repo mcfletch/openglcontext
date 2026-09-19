@@ -10,7 +10,7 @@ security-hardened :mod:`resolver`; :func:`load_sample` defers to the package's
 import urllib.parse
 from typing import TYPE_CHECKING, Optional
 
-from OpenGLContext.loaders.resolver import _fetch_url, fetch_to_cache
+from OpenGLContext.loaders.resolver import fetch_url, fetch_to_cache
 
 if TYPE_CHECKING:
     from OpenGLContext.loaders.gltf.scene import GLTFScene
@@ -63,7 +63,7 @@ def fetch_sample_catalog(cache_dir: Optional[str] = None) -> list[dict[str, Opti
     relative to the Models/ directory, so it is joined onto ``SAMPLE_MODELS_BASE``.
     """
     import re
-    text = _fetch_url(SAMPLE_README_URL, cache_dir).decode('utf-8', 'replace')
+    text = fetch_url(SAMPLE_README_URL, cache_dir).decode('utf-8', 'replace')
     link = re.compile(r'\|\s*\[([^\]]+)\]\(([^)]+?)/README\.md\)')
     shot_res = (
         re.compile(r'!\[[^\]]*\]\(([^)]+?/screenshot/[^)]+)\)'),

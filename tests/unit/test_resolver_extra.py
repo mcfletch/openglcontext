@@ -162,7 +162,7 @@ class TestSubResourcesAreCachedOnDisk:
                  cancel=None):
             calls.append(url)
             return b'BYTES'
-        monkeypatch.setattr(resolver, '_fetch_url', fake)
+        monkeypatch.setattr(resolver, 'fetch_url', fake)
         return resolver.Resolver(base_url='https://example.com/m/model.gltf')
 
     def test_it_goes_through_the_disk_cache(self, monkeypatch):
@@ -195,7 +195,7 @@ class TestSubResourcesAreCachedOnDisk:
                  cancel=None):
             seen['max_bytes'] = max_bytes
             return b''
-        monkeypatch.setattr(resolver, '_fetch_url', fake)
+        monkeypatch.setattr(resolver, 'fetch_url', fake)
         found = resolver.Resolver(base_url='https://example.com/m/model.gltf',
                                   max_resource_bytes=1234)
         found.fetch('t.png')
@@ -206,7 +206,7 @@ class TestSubResourcesAreCachedOnDisk:
         from OpenGLContext.loaders import resolver
         calls = []
         monkeypatch.setattr(
-            resolver, '_fetch_url',
+            resolver, 'fetch_url',
             lambda url, **named: calls.append(url) or b'')
         found = resolver.Resolver(base_url='https://example.com/m/model.gltf')
         with pytest.raises(IOError):

@@ -123,7 +123,7 @@ class TestReadBytesIsSizeCapped:
             seen.update(url=url, cache_dir=cache_dir, max_bytes=max_bytes)
             return b"glb"
 
-        monkeypatch.setattr(resolver, "_fetch_url", fake)
+        monkeypatch.setattr(resolver, "fetch_url", fake)
         got = fetch.read_bytes(REMOTE + "0.glb", cache_dir=str(tmp_path),
                                max_bytes=99)
         assert got == b"glb"

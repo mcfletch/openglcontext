@@ -25,6 +25,8 @@ from typing import BinaryIO, Union, cast
 
 import numpy as np
 
+from OpenGLContext.loaders import resolver
+
 __all__ = ['load_hdr', 'load_hdr_bytes', 'rgbe_to_float']
 
 
@@ -32,8 +34,22 @@ class HDRError(ValueError):
     """A file that is not a well-formed Radiance RGBE image."""
 
 
-def _readline(fh: BinaryIO) -> str:
-    """Read one newline-terminated header line as ``str`` (headers are ASCII)."""
+#: The longest a header line may be. Radiance writes short ones -- a format, a
+#: resolution, a few comments -- and a file with no newline in it would
+#: otherwise be read to its end a byte at a time, whatever its size.
+MAX_HEADER_LINE = 4096
+
+#: Ceiling on the pixels a file may declare, shared with every other decoder
+#: here: the dimensions are allocated against before a scanline is read.
+MAX_PIXELS = resolver.DEFAULT_MAX_IMAGE_PIXELS
+
+
+def _readline(fh: BinaryIO, limit: int = MAX_HEADER_LINE) -> str:
+    """Read one newline-terminated header line as ``str`` (headers are ASCII).
+
+    Raises :class:`HDRError` past ``limit`` bytes rather than reading on: a
+    header line that long is not one, and the file saying so is untrusted.
+    """
     buf = bytearray()
     while True:
         ch = fh.read(1)
@@ -42,6 +58,8 @@ def _readline(fh: BinaryIO) -> str:
         if ch == b'\n':
             break
         buf += ch
+        if len(buf) > limit:
+            raise HDRError('Radiance header line longer than %d bytes' % (limit,))
     return buf.decode('latin-1')
 
 
@@ -80,10 +98,17 @@ def _parse_header(fh: BinaryIO) -> tuple[int, int, bool, bool]:
     ay, ny, ax, nx = parts
     if ay[1:] not in ('Y', 'X') or ax[1:] not in ('Y', 'X'):
         raise HDRError('bad Radiance resolution line %r' % res)
-    height = int(ny)
-    width = int(nx)
-    if width <= 0 or height <= 0:
-        raise HDRError('non-positive Radiance dimensions %dx%d' % (width, height))
+    try:
+        height = int(ny)
+        width = int(nx)
+    except ValueError as err:
+        raise HDRError('bad Radiance resolution line %r' % res) from err
+    # Checked here, where the numbers are read, so nothing is allocated on the
+    # strength of a header that claims more picture than there can be.
+    try:
+        resolver.check_pixels(width, height, MAX_PIXELS, 'Radiance HDR')
+    except ValueError as err:
+        raise HDRError(str(err)) from err
     # "-Y" means the first scanline is the top row (no vertical flip needed to get
     # a top-to-bottom array); "+Y" means bottom-up, so flip. Likewise "-X" flips
     # columns.
