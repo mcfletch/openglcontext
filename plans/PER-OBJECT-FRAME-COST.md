@@ -163,10 +163,11 @@ matrix, and works out a distance and a coverage in Python.
 ### What landed
 
 - `lod.viewer_distances`, `lod.uniform_scales` and `lod.screen_fractions` are
-  the plural forms, and the singular ones are each their one-member case, so
-  the two cannot drift apart. `selectLevels` stacks the nodes' world matrices,
-  puts them through the camera in one product, and hands each node its own
-  distance and scale.
+  the plural forms. `selectLevels` stacks the nodes' world matrices, puts them
+  through the camera in one product, and hands each node its own distance and
+  scale. Each has a singular form beside it written in its own terms, and what
+  keeps the pair honest is that each is tested against the other rather than
+  implemented in terms of it — see below.
 - `LOD.selectAt(distance, scale, tangent)` is what the pass calls: the node is
   left the part that is genuinely its own, which threshold the coverage falls in
   and whether the change is worth announcing. `selectFor(modelview, tangent)`
@@ -184,6 +185,17 @@ The stack is the LOD paths' own rather than a slice of `renderSet`'s, because
 replaces a subtree the gather then walks. What is left in it is `path[-1]` and
 `path.transformMatrix()` per level-of-detail path: 0.40 ms of the frame, and C's
 to remove.
+
+**A singular form is not its plural with one member.** Written that way first,
+`screen_fraction` — a float multiply and a comparison — became two
+`np.asarray` calls, a `np.maximum`, a `np.minimum` and a `np.where` to work out
+one number, and `LOD.selectAt` asks it once per object per frame: 2.61 µs
+against 0.168, and 4.5 ms of a 1600-object frame. Delegating was meant to stop
+the two drifting apart, and what actually stops that is the test that asserts
+they agree (`TestTheWholeSceneAtOnce`), which costs nothing at run time. Each
+form is now written in the terms that suit it. The array form earns its numpy
+calls over several hundred objects; over one it spends them doing arithmetic a
+float multiply had already done.
 
 ## C. The same paths are walked three times a frame — 🟢 landed 2026-09-19
 

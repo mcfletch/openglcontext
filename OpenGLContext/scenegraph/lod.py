@@ -108,20 +108,37 @@ def screen_fractions(radii: Any, distances: Any, tangent: float) -> np.ndarray:
     return fractions
 
 
+# The three above answer for a whole scene at once and the three below answer
+# for one object. Both are wanted, and each is written in the terms that suit
+# it: an array expression over several hundred objects costs a handful of numpy
+# calls, while the same expression over *one* costs those same calls to do
+# arithmetic a float multiply would have done -- and the one-object form is
+# asked once per object per frame by :meth:`LOD.selectAt`, which is the hottest
+# place either of them appears. What keeps the pairs from drifting is that each
+# is tested against the other, in
+# ``tests/unit/test_screen_coverage_lod.py::TestTheWholeSceneAtOnce``.
+
+
 def distance_to_viewer(node: Any, modelview: Any) -> float:
     """How far the viewer is from ``node``'s centre, given its modelview."""
-    return float(viewer_distances(
-        np.asarray(node.center, dtype='d')[None, :3], [modelview])[0])
+    centre = np.concatenate([np.asarray(node.center, dtype='d')[:3], [1.0]])
+    eye = centre @ np.asarray(modelview, dtype='d')
+    return float(np.linalg.norm(eye[:3]))
 
 
 def uniform_scale(modelview: Any) -> float:
     """What ``modelview`` does to a length: the longest a unit axis comes out."""
-    return float(uniform_scales([modelview])[0])
+    matrix = np.asarray(modelview, dtype='d')[:3, :3]
+    return float(np.sqrt((matrix * matrix).sum(axis=1)).max())
 
 
 def screen_fraction(radius: float, distance: float, tangent: float) -> float:
     """Share of the window's height a sphere of ``radius`` covers from ``distance``."""
-    return float(screen_fractions([radius], [distance], tangent)[0])
+    radius = float(radius)
+    distance = float(distance)
+    if distance <= radius:
+        return 1.0
+    return min(1.0, radius / max(distance * float(tangent), _TINY))
 
 
 class LOD(basenodes.LOD):
