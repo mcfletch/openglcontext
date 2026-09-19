@@ -1125,7 +1125,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         if not paths:
             return []
         volumes, points, bounded, drawing = self._boundingArrays( paths )
-        matrices = self._worldMatrices( paths )
+        matrices, own = self._worldMatrices( paths )
         keep = self._frustumSurvivors( matrices, points, bounded, drawing )
         if not len(keep):
             return []
@@ -1137,7 +1137,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         seen = self.visiblePlacements = {}
         for at, index in enumerate( keep ):
             path = paths[index]
-            tmatrix = matrices[index]
+            tmatrix = own[index]
             node = path[-1]
             # A declared set is one object to the test above, so its whole box
             # survived if any of it did. Ask it which of its copies this frustum
@@ -1213,19 +1213,31 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         return (volumes, points, array( bounded, dtype=bool ),
                 array( drawing, dtype=bool ))
 
-    def _worldMatrices( self, paths: Sequence[Any] ) -> Any:
-        """Every path's world matrix, stacked into one array.
+    def _worldMatrices( self, paths: Sequence[Any] ) -> Tuple[Any, List[Any]]:
+        """Every path's world matrix, stacked into one array and kept as it came.
 
         The per-path call stands because the transform cache behind it is what
         knows whether anything moved; what is saved is everything downstream of
         it being done one shape at a time.
+
+        Both forms are wanted, which is why both are returned. The stack is for
+        the arithmetic the whole scene is put through at once -- the camera
+        product and the frustum test. The *objects* are for everything that
+        remembers a per-object answer between frames: the scenegraph's transform
+        cache hands back one matrix object while a node is unmoved and a fresh
+        one once it moves, so a memo can read "this has not moved" straight off
+        the identity. A row of this buffer carries the same numbers but is a new
+        object every frame, and every such memo would miss every time.
         """
         matrices = self._matrixBuffer
         if matrices is None or len(matrices) != len(paths):
             matrices = self._matrixBuffer = zeros( (len(paths), 4, 4), 'f' )
+        own = []
         for index, path in enumerate( paths ):
-            matrices[index] = path.transformMatrix()
-        return matrices
+            matrix = path.transformMatrix()
+            own.append( matrix )
+            matrices[index] = matrix
+        return matrices, own
 
     def _frustumSurvivors( self, matrices: Any, points: Any, bounded: Any,
                            drawing: Any ) -> Any:

@@ -736,12 +736,12 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         return self._casterWorldGeometry(toRender)[0]
 
     @staticmethod
-    def _casterGeometry(tmatrix: Any, bvolume: Any
-                        ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
-        """One caster's world points and the eight corners of their AABB.
+    def _casterLocalPoints(bvolume: Any) -> Optional[np.ndarray]:
+        """A caster's own bounding points, or ``None`` if it offers none.
 
-        Returns ``None`` for a caster that has no bounding volume, or whose
-        volume yields no points -- it contributes nothing to a shadow fit.
+        A caster with no bounding volume, an unbounded one, or one whose volume
+        yields an empty set contributes nothing to a shadow fit and is left out
+        rather than made to stand for the whole world.
         """
         if bvolume is None:
             return None
@@ -751,16 +751,52 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
             return None
         if pts is None or len(pts) == 0:
             return None
-        pts = np.asarray(pts, dtype='d')
-        if pts.shape[1] == 3:
-            pts = np.concatenate([pts, np.ones((pts.shape[0], 1))], axis=1)
-        world = (pts @ np.asarray(tmatrix, dtype='d'))[:, :3]
-        lo = world.min(axis=0)
-        hi = world.max(axis=0)
-        corners = np.asarray([[x, y, z] for x in (lo[0], hi[0])
-                              for y in (lo[1], hi[1])
-                              for z in (lo[2], hi[2])], dtype='d')
-        return world, corners
+        return np.asarray(pts, dtype='d')
+
+    @classmethod
+    def _casterGeometryBatch(cls, records: List
+                             ) -> List[Optional[Tuple[np.ndarray, np.ndarray]]]:
+        """Every caster's world points and AABB corners, derived together.
+
+        One entry per record, in the records' own order: ``(world points, eight
+        AABB corners)``, or ``None`` where the caster offers no bounding points.
+
+        The arithmetic is a matrix product, a minimum and a maximum over eight
+        rows -- so small that numpy's per-call cost is the whole of it, and a
+        scene of several hundred casters pays that cost several hundred times if
+        it is asked one at a time. Volumes are gathered by how many points they
+        carry, since that is what lets a group become one array, and each group
+        is placed and boxed in a single pass
+        (:func:`~OpenGLContext.passes.shadowmath.world_bounds`). A scene of
+        boxes is one group.
+        """
+        grouped: Dict[int, List[Tuple[int, np.ndarray]]] = {}
+        for index, record in enumerate(records):
+            points = cls._casterLocalPoints(record[3])
+            if points is not None:
+                grouped.setdefault(len(points), []).append((index, points))
+        found: List[Optional[Tuple[np.ndarray, np.ndarray]]] = [None] * len(records)
+        for members in grouped.values():
+            world, corners = shadowmath.world_bounds(
+                np.stack([points for _index, points in members]),
+                np.stack([np.asarray(records[index][2], dtype='d')
+                          for index, _points in members]),
+            )
+            for at, (index, _points) in enumerate(members):
+                found[index] = (world[at], corners[at])
+        return found
+
+    @classmethod
+    def _casterGeometry(cls, tmatrix: Any, bvolume: Any
+                        ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+        """One caster's world points and the eight corners of their AABB.
+
+        Returns ``None`` for a caster that has no bounding volume, or whose
+        volume yields no points -- it contributes nothing to a shadow fit. The
+        answer is :meth:`_casterGeometryBatch`'s, so the one-caster form and the
+        scene-at-once form can never drift apart.
+        """
+        return cls._casterGeometryBatch([(None, None, tmatrix, bvolume, None)])[0]
 
     @classmethod
     def _worldPointsFromRecords(cls, records: List) -> Optional[np.ndarray]:
@@ -769,8 +805,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         Each record is a ``(sortKey, mvmatrix, tmatrix, bvolume, path)`` tuple;
         only ``tmatrix`` and ``bvolume`` are read here.
         """
-        chunks = [found[0] for found in
-                  (cls._casterGeometry(r[2], r[3]) for r in records)
+        chunks = [found[0] for found in cls._casterGeometryBatch(records)
                   if found is not None]
         if not chunks:
             return None
@@ -784,8 +819,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         :func:`shadowmath._extend_near_for_casters` can test each caster's box
         against a cascade footprint independently.
         """
-        boxes = [found[1] for found in
-                 (cls._casterGeometry(r[2], r[3]) for r in records)
+        boxes = [found[1] for found in cls._casterGeometryBatch(records)
                  if found is not None]
         if not boxes:
             return None
@@ -813,18 +847,30 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         if current is None:
             current = self._caster_geometry_cache = {}
         previous = self._caster_geometry_previous or {}
-        points: List[np.ndarray] = []
-        boxes: List[np.ndarray] = []
+        missing = []
+        entries: List[Optional[tuple]] = []
         for record in records:
-            tmatrix, bvolume = record[2], record[3]
-            key = (id(tmatrix), id(bvolume))
+            key = (id(record[2]), id(record[3]))
             entry = current.get(key) or previous.get(key)
             if entry is None:
-                found = self._casterGeometry(tmatrix, bvolume)
-                if found is None:
-                    continue
-                entry = (tmatrix, bvolume, found[0], found[1])
-            current[key] = entry
+                missing.append((len(entries), record, key))
+            entries.append(entry)
+        # Everything this frame has still to work out, in one pass: the misses
+        # are what the derivation costs, and asking for them together is what
+        # keeps a scene arriving all at once from costing one numpy call per
+        # object per array operation.
+        for (at, record, key), found in zip(
+                missing, self._casterGeometryBatch([m[1] for m in missing])):
+            if found is None:
+                continue
+            entries[at] = current[key] = (record[2], record[3],
+                                          found[0], found[1])
+        points: List[np.ndarray] = []
+        boxes: List[np.ndarray] = []
+        for record, entry in zip(records, entries):
+            if entry is None:
+                continue
+            current[(id(record[2]), id(record[3]))] = entry
             points.append(entry[2])
             boxes.append(entry[3])
         return (np.concatenate(points, axis=0) if points else None,

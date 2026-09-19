@@ -443,6 +443,25 @@ between them. For the design discussion and what was deferred (for example varia
 shadow maps), see the
 <a href="https://github.com/mcfletch/openglcontext/blob/main/plans/SHADOW-MAPPING.md">shadow-mapping
 plan</a>.</p>
+
+<h3>What a caster costs per frame</h3>
+<p class="technical">Fitting the cascades and the spot/point near-far planes needs
+every caster's world-space bounding points, which is its bounding volume's corners
+through its world transform. Two things keep that off the frame's critical path.</p>
+<p class="technical">A caster's world geometry depends on its bounding volume and
+its world transform and on nothing else, so it is derived once and kept per caster
+rather than per caster <em>set</em>: one car moving through several hundred still
+trees costs one car's work. The scenegraph's transform cache is what makes that
+readable at a glance -- it hands back the same matrix object while a node is unmoved
+and a fresh one once it moves, so identity alone says whether a caster has to be
+re-derived. Two frames' worth is kept, so a caster still present is carried forward
+and one that has gone is dropped a frame later, and a world paging tiles in and out
+does not accumulate every tile it has ever held.</p>
+<p class="technical">What does have to be derived is derived for the whole set at
+once. A caster's arithmetic is a matrix product, a minimum and a maximum over eight
+rows -- small enough that numpy's per-call cost is the whole of it -- so the volumes
+are gathered by point count and each group placed and boxed in a single pass
+(<code>shadowmath.world_bounds</code>). A scene of boxes is one group.</p>
 </section>
 
 <section>

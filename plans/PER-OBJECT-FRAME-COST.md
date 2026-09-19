@@ -65,7 +65,17 @@ Subtracting the configurations above gives the same picture in milliseconds:
 | Everything else per object (bounding, frustum, sort, submit) | ~1.6 | 32% |
 | The fixed cost of a frame at all | ~0.6 | 12% |
 
-## A. The shadow caster memo never hits
+## A. The shadow caster memo never hits — 🟢 landed 2026-09-19
+
+Measured after: `_occluderPoints` **1.56 → 0.15 ms**, the memo's hit rate
+**0 → 99.1%** (29,760 hits against 276 misses over 120 frames, the misses being
+the first two frames' populate), and the frame **5.05 → 3.65 ms** — 198 to 274
+frames a second. The whole glTF conformance suite is unchanged, which is what
+says no pixel moved.
+
+The account below is what was found; what was done about it is at the end of the
+section.
+
 
 `ShadowMapMixin._casterWorldGeometry` keeps a per-caster memo so that "a game
 has one car moving through several hundred still trees" does not re-derive the
@@ -98,6 +108,31 @@ Two changes, either of which pays:
 
 Do (2) first: it is a smaller change, it is not conditional on a cache being
 correct, and it makes the moving case fast too.
+
+### What landed
+
+Both, and a third thing that turned out to be the actual defect.
+
+The memo's key was never wrong: `_shadowCasterRecords` builds its records from
+`path.transformMatrix()` and its ids *are* stable, which is why
+`_refreshCasterData` was already reusing last frame's answer and cost 0.31 ms.
+Every miss came from the **other** caller. `_occluderPoints` is handed the
+camera's render set, and `renderSet` filled the matrix slot from a row of the
+`(N,4,4)` buffer `_worldMatrices` refills each frame — the same numbers, a new
+object every frame. So the one path that ran 250 times a frame missed 250 times.
+
+- `_worldMatrices` now returns the stacked buffer **and** the matrix objects as
+  the transform cache handed them over. The stack is still what the camera
+  product and the frustum test run on; the objects are what goes in the record,
+  so identity means what every memo downstream reads it as meaning.
+  `tests/unit/test_per_frame_gather.py` holds the gather to that directly,
+  rather than leaving it to be noticed as a slow frame.
+- `shadowmath.world_bounds(points, matrices)` places `K` point sets by their own
+  matrices and boxes each, in one pass. `_casterGeometryBatch` gathers a scene's
+  volumes by point count — a scene of boxes is one group — and
+  `_casterWorldGeometry` derives a frame's misses together.
+- `_casterGeometry` is that batch with one member, so the single-caster form and
+  the scene-at-once form cannot drift apart.
 
 ## B. Level-of-detail selection is a Python loop over a matrix walk
 
