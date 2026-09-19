@@ -134,7 +134,13 @@ object every frame. So the one path that ran 250 times a frame missed 250 times.
 - `_casterGeometry` is that batch with one member, so the single-caster form and
   the scene-at-once form cannot drift apart.
 
-## B. Level-of-detail selection is a Python loop over a matrix walk
+## B. Level-of-detail selection is a Python loop over a matrix walk — 🟢 landed 2026-09-19
+
+Measured after: `selectLevels` for 120 nodes **1.20 → 0.93 ms** with the camera
+moving every frame, and **→ 0.40 ms** where nothing has moved. The frame goes
+**3.65 → 3.38** with the camera moving and **→ 2.86** with it still. Cumulative
+with A: **5.05 → 2.86 ms** still, **→ 3.38** moving.
+
 
 `_flat.selectLevels` costs **~1.0 ms for 120 nodes — 8 to 10 microseconds
 each**, to decide a number that is usually the number it decided last frame.
@@ -153,6 +159,31 @@ matrix, and works out a distance and a coverage in Python.
   LOD's world transform has changed since the last frame, the answer is last
   frame's answer. How often that holds depends on the application; it is free to
   check and it costs a matrix comparison when it does not.
+
+### What landed
+
+- `lod.viewer_distances`, `lod.uniform_scales` and `lod.screen_fractions` are
+  the plural forms, and the singular ones are each their one-member case, so
+  the two cannot drift apart. `selectLevels` stacks the nodes' world matrices,
+  puts them through the camera in one product, and hands each node its own
+  distance and scale.
+- `LOD.selectAt(distance, scale, tangent)` is what the pass calls: the node is
+  left the part that is genuinely its own, which threshold the coverage falls in
+  and whether the change is worth announcing. `selectFor(modelview, tangent)`
+  stays as the single-node entry point, and is that call with the two numbers
+  worked out from the one matrix.
+- `_levelsAlreadyChosen` is the still-scene shortcut, and on a static camera it
+  is the larger half of the win. It compares the path generation, the camera,
+  and each node's world matrix **by identity** -- which is what the transform
+  cache guarantees. The matrices are kept rather than their `id`s: a freed
+  matrix's address can be handed to the one that replaced it, and a comparison
+  against an address nothing holds would read a move as a stillness.
+
+The stack is the LOD paths' own rather than a slice of `renderSet`'s, because
+`selectLevels` runs *before* the gather -- it has to, since a level change
+replaces a subtree the gather then walks. What is left in it is `path[-1]` and
+`path.transformMatrix()` per level-of-detail path: 0.40 ms of the frame, and C's
+to remove.
 
 ## C. The same paths are walked three times a frame
 

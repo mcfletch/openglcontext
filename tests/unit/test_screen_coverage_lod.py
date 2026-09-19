@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 from pydispatch import dispatcher
 
+from OpenGLContext.scenegraph import lod
 from OpenGLContext.scenegraph.lod import (
     CULLED, LOD, ScreenCoverageLOD, screen_fraction, uniform_scale,
 )
@@ -250,3 +251,107 @@ class TestTheDistanceNodeIsUnchanged:
         node.selectFor(_at(1e6), SQUARE)
 
         assert node.whichLevel == 2
+
+
+class TestTheWholeSceneAtOnce:
+    """The same arithmetic, asked of every node in one pass.
+
+    A frame decides a level for every level-of-detail node in the scene, and
+    each decision is a matrix product and a length over four-by-four arrays --
+    the size at which numpy's cost is the call rather than the arithmetic. The
+    plural forms are what the pass uses; they have to give the singular ones'
+    answers exactly, or a scene would switch levels differently from a node
+    asked on its own.
+    """
+
+    def _views(self):
+        turn = np.identity(4)
+        turn[0, 0] = turn[2, 2] = math.cos(0.7)
+        turn[0, 2], turn[2, 0] = math.sin(0.7), -math.sin(0.7)
+        bigger = np.identity(4)
+        bigger[0, 0] = bigger[1, 1] = bigger[2, 2] = 2.5
+        return [_at(4.0), _at(100.0), turn @ _at(12.0), bigger @ _at(9.0)]
+
+    def test_distances_match_one_at_a_time(self):
+        node = _node()
+        views = self._views()
+        found = lod.viewer_distances(
+            np.tile(np.asarray(node.center, dtype='d')[:3], (len(views), 1)),
+            np.stack(views))
+        assert found == pytest.approx(
+            [lod.distance_to_viewer(node, view) for view in views])
+
+    def test_a_nodes_own_centre_is_used(self):
+        """Each node is placed by its own centre, not by the first one's."""
+        centres = np.array([[0.0, 0.0, 0.0], [0.0, 3.0, 0.0]])
+        views = np.stack([_at(4.0), _at(4.0)])
+        found = lod.viewer_distances(centres, views)
+        assert found[0] == pytest.approx(4.0)
+        assert found[1] == pytest.approx(5.0)
+
+    def test_scales_match_one_at_a_time(self):
+        views = self._views()
+        assert lod.uniform_scales(np.stack(views)) == pytest.approx(
+            [uniform_scale(view) for view in views])
+
+    def test_fractions_match_one_at_a_time(self):
+        radii = np.array([1.0, 2.0, 0.5])
+        distances = np.array([4.0, 0.25, 100.0])
+        assert lod.screen_fractions(radii, distances, SQUARE) == pytest.approx(
+            [screen_fraction(r, d, SQUARE)
+             for r, d in zip(radii, distances)])
+
+    def test_a_viewer_inside_the_sphere_covers_the_window(self):
+        found = lod.screen_fractions(np.array([1.0, 1.0]),
+                                     np.array([0.25, 8.0]), SQUARE)
+        assert found[0] == 1.0 and found[1] < 1.0
+
+    def test_nothing_to_choose_for_is_an_empty_answer(self):
+        assert len(lod.viewer_distances(np.zeros((0, 3)),
+                                        np.zeros((0, 4, 4)))) == 0
+        assert len(lod.uniform_scales(np.zeros((0, 4, 4)))) == 0
+
+
+class TestChoosingFromNumbersAlreadyWorkedOut:
+    """``selectAt`` is the decision once the distance and the scale are known.
+
+    The pass works those out for the whole scene in one pass and hands each
+    node its own, so the node is left with the part that is genuinely its own:
+    which of its thresholds the coverage falls in, and whether that is a
+    change worth announcing.
+    """
+
+    def test_a_coverage_node_chooses_as_selectFor_would(self):
+        for distance in (2.0, 4.0, 9.0, 40.0, 400.0):
+            one, other = _node(), _node()
+            one.selectFor(_at(distance), SQUARE)
+            other.selectAt(distance, 1.0, SQUARE)
+            assert one.whichLevel == other.whichLevel
+
+    def test_a_magnified_node_is_told_by_its_scale(self):
+        """A transform that makes the object bigger holds a finer level."""
+        plain, magnified = _node(), _node()
+        bigger = np.identity(4)
+        bigger[0, 0] = bigger[1, 1] = bigger[2, 2] = 8.0
+        plain.selectAt(40.0, 1.0, SQUARE)
+        magnified.selectAt(40.0, uniform_scale(bigger), SQUARE)
+        assert (plain.whichLevel, magnified.whichLevel) == (2, 1)
+
+    def test_a_node_with_no_size_keeps_its_finest_level(self):
+        node = ScreenCoverageLOD(level=_levels(), screenCoverage=[0.5],
+                                 radius=0.0)
+        node._measured = 0.0
+        assert node.selectAt(50.0, 1.0, SQUARE) is False
+        assert node.whichLevel == 0
+
+    def test_a_vrml_node_reads_the_distance_and_ignores_the_rest(self):
+        node = LOD(level=_levels(), range=[10.0, 20.0])
+        node.selectAt(15.0, 99.0, SQUARE)
+        assert node.whichLevel == 1
+
+    def test_an_unchanged_level_is_not_announced(self):
+        node = _node()
+        node.selectAt(4.0, 1.0, SQUARE)
+        listener = _Listener(node)
+        assert node.selectAt(4.0, 1.0, SQUARE) is False
+        assert listener.seen == []

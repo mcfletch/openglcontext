@@ -87,6 +87,25 @@ it walks it. Only the camera decides &mdash; a shadow pass draws the same scene
 from a lamp, and choosing detail by how far a <em>light</em> is from a figure
 would swap levels as the sun moved.</p>
 
+<h3 id="choosing-cost">What choosing costs</h3>
+<p>A frame decides this for every level-of-detail node in the scene, so the
+decision is made for the whole set at once. The nodes' world matrices are
+stacked and put through the camera in one product, and the distances and the
+scales come out of two array expressions &mdash; because each decision on its
+own is a handful of four-by-four operations, and at that size a numpy call costs
+more than the arithmetic in it. What is left per node is the part that is that
+node's own: <code>selectAt(distance, scale, tangent)</code> asks which of its
+thresholds the coverage falls in, and announces a change only where there is
+one. <code>selectFor(modelview, tangent)</code> is the same decision for a
+single node, for a caller that has one to place.</p>
+<p>A frame in which neither the camera nor any of those nodes has moved chooses
+what it chose last frame, so it does not choose again. The scenegraph's
+transform cache is what makes that cheap to establish: it hands back the same
+matrix object while a node is unmoved, so the question is one identity
+comparison per node. On the gallery above, a still camera leaves 120 nodes
+costing 0.40&nbsp;ms a frame instead of 1.20; with the camera moving every
+frame, where the shortcut never applies, it is 0.93.</p>
+
 <h3 id="nodes">The nodes</h3>
 <table>
   <tr><th>Node</th><th>Chooses by</th><th>Fields</th></tr>

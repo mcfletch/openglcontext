@@ -120,6 +120,11 @@ class SGObserver( object ):
     #: The ``(N,4,4)`` array :meth:`_worldMatrices` fills each frame, kept so a
     #: frame allocates nothing for a scene whose size has not changed.
     _matrixBuffer: Optional[Any] = None
+    #: What the last :meth:`selectLevels` chose for: the path generation, the
+    #: level-of-detail nodes' world matrices as the transform cache handed them
+    #: over, and the camera. A frame matching all three is choosing again what
+    #: it chose last time.
+    _levelChoice: Optional[Tuple[int, List[Any], bytes]] = None
     #: Which copies of each declared set this gather's frustum kept, by ``id``
     #: of the record's path. Belongs to the gather rather than to the shapes: a
     #: depth pass culling against a light must not read the camera's answer.
@@ -1082,17 +1087,64 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         Only from the camera. A shadow pass draws the same scene from a light,
         and choosing detail by how far a *lamp* is from a figure would swap
         levels as the sun moved.
+
+        The placing is done to the whole set at once -- one product of the
+        stacked world matrices against the camera, then one distance and one
+        scale per node out of two array expressions -- because at four-by-four
+        a numpy call costs more than the arithmetic in it, and a scene has as
+        many of these as it has models. What is left per node is the part that
+        is that node's own: which of its thresholds the answer falls in, and
+        whether that is a change the flattened scenegraph has to be told about.
         """
         paths = self.paths.get( lod.LOD, () )
         if not paths:
             return
-        tangent = lod.viewer_tangent( self.fieldOfView() )
-        for path in list( paths ):
-            node = path[-1]
+        placed = []
+        for path in paths:
             try:
-                node.selectFor( dot( path.transformMatrix(), matrix ), tangent )
+                placed.append( (path[-1], path.transformMatrix()) )
             except Exception as err:
                 log.warning( 'could not place an LOD node: %s', err )
+        if not placed:
+            return
+        own = [ world for _node, world in placed ]
+        if self._levelsAlreadyChosen( matrix, own ):
+            return
+        tangent = lod.viewer_tangent( self.fieldOfView() )
+        modelviews = asarray( own, 'd' ) @ asarray( matrix, 'd' )
+        distances = lod.viewer_distances(
+            [ node.center for node, _world in placed ], modelviews )
+        scales = lod.uniform_scales( modelviews )
+        for (node, _world), distance, scale in zip( placed, distances, scales ):
+            try:
+                node.selectAt( float(distance), float(scale), tangent )
+            except Exception as err:
+                log.warning( 'could not place an LOD node: %s', err )
+
+    def _levelsAlreadyChosen( self, matrix: Any, own: List[Any] ) -> bool:
+        """Whether this frame's levels are the ones already chosen.
+
+        Nothing moved and the camera did not either, so every node would work
+        out the coverage it worked out last frame and announce no change. How
+        often that holds is the application's business; asking costs one
+        identity comparison per node, because the scenegraph's transform cache
+        hands back the same matrix object while a node is unmoved.
+
+        The matrices themselves are kept rather than their ``id``s: a freed
+        matrix's address can be handed to the one that replaced it, and a
+        comparison against an address nothing holds would then read a move as a
+        stillness. Holding them also costs one frame of four-by-fours.
+        """
+        previous = self._levelChoice
+        camera = asarray( matrix, 'f' ).tobytes()
+        if ( previous is not None
+             and previous[0] == self._pathGeneration
+             and previous[2] == camera
+             and len(previous[1]) == len(own)
+             and all( a is b for a, b in zip( previous[1], own ) ) ):
+            return True
+        self._levelChoice = ( self._pathGeneration, own, camera )
+        return False
 
     def fieldOfView( self ) -> Optional[float]:
         """The viewer's vertical field of view in degrees, where it has one.
