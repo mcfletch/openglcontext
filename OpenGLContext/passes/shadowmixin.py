@@ -95,6 +95,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         _caster_points: Optional[np.ndarray]
 
         def getModelView(self) -> np.ndarray: ...
+        def takeGather(self) -> Any: ...
         def _instanceKey(self, record: Any) -> Any: ...
         def _instanceable(self, record: Any) -> bool: ...
 
@@ -621,18 +622,20 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         render-set tuple shape ``(sortKey, mvmatrix, tmatrix, bvolume, path)``; the
         depth pass and :meth:`_cullOccluders` use only ``tmatrix`` (world transform),
         ``bvolume`` and ``path``, so the first two slots are unused placeholders.
+
+        Every question here -- the node at the end of a path, where it is, what
+        bounds it -- the frame's gather has already asked and answered, so the
+        pool takes that table
+        (:meth:`~OpenGLContext.passes._flat.FlatPass.takeGather`) rather than
+        walking the scene a second time. A depth pass driven on its own, with no
+        gather before it, walks the scene itself.
         """
+        gathered = self.takeGather()
         records = []
-        for path in self.paths.get(nodetypes.Rendering, ()):
-            node = path[-1]
-            if not getattr(node, 'castsShadow', True):
-                continue
-            try:
-                tmatrix = path.transformMatrix()
-            except Exception:
-                continue
-            bvolume = node.boundingVolume(self) if hasattr(node, 'boundingVolume') else None
-            records.append((None, None, tmatrix, bvolume, path))
+        for path, node, tmatrix, bvolume in zip(
+                gathered.paths, gathered.nodes, gathered.own, gathered.volumes):
+            if getattr(node, 'castsShadow', True):
+                records.append((None, None, tmatrix, bvolume, path))
         return records
 
     @staticmethod

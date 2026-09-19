@@ -248,6 +248,25 @@ if description is not None and description.software:
       by more than the pixel gate allows &mdash; see
       <a href="#pixels">Comparing pixels</a>.</dd>
   </dl>
+
+  <h3 id="cost-per-object">Counting the work, not the milliseconds</h3>
+  <p>A timing assertion is a claim about the machine as much as about the
+  engine, so where a gate can be written against the <em>work</em> a frame does
+  instead, it is. <code>tests/unit/test_per_object_frame_cost.py</code> renders
+  a field of shadow-casting level-of-detail chains at two sizes and reads three
+  counts off it: how many times a path was asked where it is in the world, how
+  many casters had their world geometry derived, and how many times the scene's
+  levels were chosen. On a scene where nothing has moved the last two are zero
+  and the first is one per path, and those answers are the same on every
+  machine &mdash; a change that puts per-object work back into the frame moves
+  them immediately, where it might hide in the milliseconds on a fast box.</p>
+  <p>The frame time is tracked alongside them, as the slope between the two
+  sizes so the fixed cost of a frame cancels: what is asserted is the processor
+  time one more object adds. That one carries <code>performance</code> as well
+  as <code>serial</code>. See
+  <a href="https://github.com/mcfletch/openglcontext/blob/main/plans/PER-OBJECT-FRAME-COST.md">the
+  plan</a> for the measurements behind it.</p>
+
   <p>Continuous integration runs on two OpenGL implementations, both free for a
     public repository: Mesa's llvmpipe on a Linux runner under
     <code>xvfb-run</code>, and Apple's GL on the macOS runners, which are real

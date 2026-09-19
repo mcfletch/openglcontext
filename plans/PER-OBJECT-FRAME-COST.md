@@ -185,7 +185,13 @@ replaces a subtree the gather then walks. What is left in it is `path[-1]` and
 `path.transformMatrix()` per level-of-detail path: 0.40 ms of the frame, and C's
 to remove.
 
-## C. The same paths are walked three times a frame
+## C. The same paths are walked three times a frame — 🟢 landed 2026-09-19
+
+Measured after: `transformMatrix()` **680 → 404** calls a frame and
+`nodepath.__getitem__` **3,199 → 2,648**; `_refreshCasterData` **0.27 → 0.05 ms**
+and the merged walk **1.20 → 1.08**. A fourth change, in pyvrml97, took the
+remaining `__getitem__` calls from 0.144 µs to 0.053.
+
 
 `nodepath.__getitem__` is called **3,200 times a frame**: `renderSet`,
 `selectLevels` and the shadow caster gather each walk the scene's paths
@@ -199,7 +205,39 @@ answered correctly; this only stacks the answers": so the stack can be kept
 between frames and only the rows whose volume cache version moved need
 rewriting.
 
-## D. Keep a number on it
+### What landed
+
+`gatherPaths()` walks the scene once and publishes a `GatheredPaths` table --
+paths, nodes, stacked matrices, the transform cache's own matrix objects,
+volumes, corners, and the `bounded`/`drawing` masks. `_boundingArrays` and
+`_worldMatrices` were two loops over the same paths and are now that one walk.
+`renderSet` reads the table, and so does `_shadowCasterRecords`, which had been
+asking every path for its node, its matrix and its volume a second time.
+
+`takeGather()` rather than a plain attribute, because the table is only true for
+the frame that built it: one left lying about would answer next frame's
+questions with last frame's transforms and nothing would say so. Taking it makes
+that impossible -- a caller that finds none walks the scene itself. Keeping the
+table as an ordinary cache was written first and was wrong for exactly this
+reason: `tests/unit/test_shadow_caching.py` caught it as a moved caster whose
+shadow geometry was never re-derived.
+
+The cost that remains is the walking itself: `path[-1]` is how every pass
+reaches the node it is about to draw, and 2,648 of them a frame made
+`nodepath.__getitem__` the largest self-time entry in the profile. The override
+is there so that a slice of a path is a path; nothing about an integer index
+needs it, and it was building a `super()` object on every lookup. Testing for
+the slice first and going through `list.__getitem__` leaves the common case at
+0.053 µs against 0.144. That is a **pyvrml97** change (`vrml/nodepath.py`), not
+this project's, and it is where the cost actually is.
+
+What is **not** done: `selectLevels` still asks its 120 paths for their
+matrices, because it runs before the gather and has to -- a level change
+replaces the subtree the gather then walks. Sharing there would mean gathering
+twice or choosing levels from last frame's placement.
+
+## D. Keep a number on it — 🟢 landed 2026-09-19
+
 
 None of the above is visible from a suite that asserts pixels. A benchmark that
 reports ms/frame for a scene of N objects — the gallery is one, parameterised by
@@ -207,6 +245,33 @@ reports ms/frame for a scene of N objects — the gallery is one, parameterised 
 when a world gets big. `tests/unit/test_instancing_performance.py` is the
 pattern: it compares wall-clock frame times and carries the `serial` marker so
 it gets the machine to itself, which anything measuring a clock has to.
+
+### What landed
+
+`tests/unit/test_per_object_frame_cost.py` over
+`tests/helpers/_frame_cost_harness.py`: a field of shadow-casting
+level-of-detail chains, rendered at 60 objects and at 360, with the slope read
+off the difference so the fixed cost of a frame cancels.
+
+It tracks the milliseconds, but what it *asserts* hardest is the **work**, which
+is the same number on every machine:
+
+| | still | what a regression does |
+|---|---|---|
+| world matrices asked for | one per path | 3 per object when the caster pool walks the scene again |
+| caster geometry derived | none | one per caster per frame when the memo's key moves |
+| level choices made | none | one per frame with the shortcut refused |
+
+Each of the three was checked by putting the defect back: the memo keyed on the
+buffer row again gives 200 derivations a frame against 0 and costs 0.52 ms at
+200 objects; the shortcut refused gives 1 choice a frame and costs 0.93 ms; the
+caster pool walking the scene itself gives 602 matrices against 402. All three
+turn their assertion red.
+
+The ms/frame check keeps `performance` as well as `serial`, and its ceiling is
+deliberately loose — 45 µs an object against a measured ~13 — because what it
+is there to catch is a per-object cost coming back, which shows as a multiple.
+The counts are the tight gate.
 
 ## What this is worth
 

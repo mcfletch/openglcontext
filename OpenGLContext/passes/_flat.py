@@ -15,7 +15,8 @@ a context and caches the choice across frames.
 from __future__ import annotations
 
 from typing import (
-    Any, Callable, Dict, List, Optional, Sequence, Tuple, TYPE_CHECKING,
+    Any, Callable, Dict, List, NamedTuple, Optional, Sequence, Tuple,
+    TYPE_CHECKING,
 )
 
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod,lightgrid
@@ -99,6 +100,33 @@ def disable_object_id_blend() -> None:
         glDisablei(GL_BLEND, OBJECT_ID_ATTACHMENT)
     except Exception as err:
         log.debug("indexed blend disable unavailable: %s", err)
+class GatheredPaths( NamedTuple ):
+    """One frame's answers about every renderable path in the scene.
+
+    What :meth:`SGObserver.gatherPaths` produces and everything else in the
+    frame reads. Camera-independent throughout: the viewpoint enters after this,
+    which is what lets the colour pass and a light's depth pass share one table.
+    """
+
+    #: Every path to a renderable node, in the order the scene declares them.
+    paths: List[Any]
+    #: The node each path ends at, so nothing has to walk the path again.
+    nodes: List[Any]
+    #: ``(N,4,4)`` world transforms stacked, for the arithmetic done at once.
+    matrices: Any
+    #: The same transforms as the scenegraph's cache handed them over -- one
+    #: object per unmoved node, a fresh one once it moves. What a memo keys on.
+    own: List[Any]
+    #: Each node's bounding volume, or None where it draws nothing.
+    volumes: List[Any]
+    #: ``(N,8,4)`` bounding corners, meaningful where ``bounded`` says so.
+    points: Any
+    #: Which paths offer the eight corners a frustum test needs.
+    bounded: Any
+    #: Which paths have anything to put on screen at all.
+    drawing: Any
+
+
 class SGObserver( object ):
     """Observer of a scenegraph that creates a flat set of paths
 
@@ -120,6 +148,10 @@ class SGObserver( object ):
     #: The ``(N,4,4)`` array :meth:`_worldMatrices` fills each frame, kept so a
     #: frame allocates nothing for a scene whose size has not changed.
     _matrixBuffer: Optional[Any] = None
+    #: What :meth:`gatherPaths` last worked out, for the rest of that frame to
+    #: read rather than walk the scene again. The gather is the frame's first
+    #: act, so anything after it in the same frame is reading this frame's.
+    _gathered: Optional['GatheredPaths'] = None
     #: What the last :meth:`selectLevels` chose for: the path generation, the
     #: level-of-detail nodes' world matrices as the transform cache handed them
     #: over, and the camera. A frame matching all three is choosing again what
@@ -1173,12 +1205,13 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         for a shape that survives, and in a level most shapes do not.  The keys
         of shapes nobody can see were never read.
         """
-        paths = self.paths.get( nodetypes.Rendering, ())
+        gathered = self.gatherPaths()
+        paths, volumes, matrices, own = (gathered.paths, gathered.volumes,
+                                         gathered.matrices, gathered.own)
         if not paths:
             return []
-        volumes, points, bounded, drawing = self._boundingArrays( paths )
-        matrices, own = self._worldMatrices( paths )
-        keep = self._frustumSurvivors( matrices, points, bounded, drawing )
+        keep = self._frustumSurvivors( matrices, gathered.points,
+                                       gathered.bounded, gathered.drawing )
         if not len(keep):
             return []
         kept = matrices[keep]
@@ -1190,7 +1223,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         for at, index in enumerate( keep ):
             path = paths[index]
             tmatrix = own[index]
-            node = path[-1]
+            node = gathered.nodes[index]
             # A declared set is one object to the test above, so its whole box
             # survived if any of it did. Ask it which of its copies this frustum
             # actually keeps, and drop the record if the answer is none.
@@ -1208,12 +1241,48 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         toRender.sort( key = lambda x: x[0])
         return toRender
 
-    def _boundingArrays( self, paths: Sequence[Any]
-                         ) -> Tuple[List[Any], Any, Any, Any]:
-        """Each path's bounding volume and its corner points, stacked.
+    def gatherPaths( self ) -> GatheredPaths:
+        """Walk the scene and publish what this frame found, for one frame.
 
-        Asked of every node every frame rather than remembered: a volume is not
-        a property of the shape alone. An
+        :meth:`takeGather` is how the rest of the frame reads it. See
+        :meth:`_walkPaths` for what the table holds.
+        """
+        gathered = self._gathered = self._walkPaths()
+        return gathered
+
+    def takeGather( self ) -> GatheredPaths:
+        """This frame's gather, taken, or a fresh walk where there is none.
+
+        A handoff rather than a cache. The table describes the scene as it
+        stood when it was walked, so it may be read in the frame that built it
+        and nowhere else -- a table left lying about would answer next frame's
+        questions with last frame's transforms, and nothing would say so. Taking
+        it is what makes that impossible: :meth:`gatherPaths` publishes one,
+        whoever needs it takes it, and a caller that finds none walks the scene
+        itself rather than reading something stale.
+        """
+        gathered, self._gathered = self._gathered, None
+        return gathered if gathered is not None else self._walkPaths()
+
+    def _walkPaths( self ) -> GatheredPaths:
+        """Everything this frame needs to know about every renderable path.
+
+        One walk of the scene, because everything in it is asked for more than
+        once a frame and every asking gets the same answer: the gather culls and
+        sorts against it, the shadow pass's caster pool is drawn from it, and
+        the draw reads it again. Walking a path is not free -- the node at the
+        end of it, its world matrix and its bounding volume each come through
+        the scenegraph's own caches, and a scene has as many of them as it has
+        shapes -- so the frame pays for one walk rather than three.
+
+        The table stands for the frame that built it and is kept as
+        :attr:`_gathered` for the rest of that frame to read. It says nothing
+        about *where* anything is seen from: the camera enters afterwards, which
+        is what lets one table serve the colour pass and a light's depth pass
+        alike.
+
+        ``volumes`` is asked of every node every frame rather than remembered,
+        because a volume is not a property of the shape alone: an
         :class:`~OpenGLContext.scenegraph.instancedshape.InstancedShape` bounds
         all of its placements, so its extent changes whenever they do, and a set
         of corners kept from an earlier frame would cull this frame's copies
@@ -1231,16 +1300,36 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         :meth:`~OpenGLContext.scenegraph.shape.Shape.drawsNothing`. A node that
         says no is left out: it is not culled for being outside the frustum, it
         simply is not there this frame.
+
+        ``matrices`` and ``own`` are the same transforms twice over, and both
+        are wanted. The stack is for the arithmetic the whole scene is put
+        through at once -- the camera product and the frustum test. The
+        *objects* are for everything that remembers a per-object answer between
+        frames: the transform cache hands back one matrix object while a node is
+        unmoved and a fresh one once it moves, so a memo can read "this has not
+        moved" straight off the identity. A row of the stack carries the same
+        numbers but is a new object every frame, and every such memo keyed on it
+        would miss every time.
         """
+        paths = self.paths.get( nodetypes.Rendering, ())
         count = len(paths)
         points = self._pointsBuffer
         if points is None or len(points) != count:
             points = self._pointsBuffer = zeros( (count, 8, 4), 'f' )
+        matrices = self._matrixBuffer
+        if matrices is None or len(matrices) != count:
+            matrices = self._matrixBuffer = zeros( (count, 4, 4), 'f' )
+        nodes: List[Any] = []
+        own: List[Any] = []
         volumes: List[Any] = []
         bounded: List[bool] = []
         drawing: List[bool] = []
         for index, path in enumerate( paths ):
             node = path[-1]
+            nodes.append( node )
+            matrix = path.transformMatrix()
+            own.append( matrix )
+            matrices[index] = matrix
             nothing = getattr( node, 'drawsNothing', None )
             if nothing is not None and nothing():
                 volumes.append( None )
@@ -1262,34 +1351,10 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 bounded.append( True )
             else:
                 bounded.append( False )
-        return (volumes, points, array( bounded, dtype=bool ),
-                array( drawing, dtype=bool ))
-
-    def _worldMatrices( self, paths: Sequence[Any] ) -> Tuple[Any, List[Any]]:
-        """Every path's world matrix, stacked into one array and kept as it came.
-
-        The per-path call stands because the transform cache behind it is what
-        knows whether anything moved; what is saved is everything downstream of
-        it being done one shape at a time.
-
-        Both forms are wanted, which is why both are returned. The stack is for
-        the arithmetic the whole scene is put through at once -- the camera
-        product and the frustum test. The *objects* are for everything that
-        remembers a per-object answer between frames: the scenegraph's transform
-        cache hands back one matrix object while a node is unmoved and a fresh
-        one once it moves, so a memo can read "this has not moved" straight off
-        the identity. A row of this buffer carries the same numbers but is a new
-        object every frame, and every such memo would miss every time.
-        """
-        matrices = self._matrixBuffer
-        if matrices is None or len(matrices) != len(paths):
-            matrices = self._matrixBuffer = zeros( (len(paths), 4, 4), 'f' )
-        own = []
-        for index, path in enumerate( paths ):
-            matrix = path.transformMatrix()
-            own.append( matrix )
-            matrices[index] = matrix
-        return matrices, own
+        return GatheredPaths(
+            list(paths), nodes, matrices, own, volumes, points,
+            array( bounded, dtype=bool ), array( drawing, dtype=bool ),
+        )
 
     def _frustumSurvivors( self, matrices: Any, points: Any, bounded: Any,
                            drawing: Any ) -> Any:

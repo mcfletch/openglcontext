@@ -470,18 +470,20 @@ class TestWhereACallerSetsTheOptOut:
         assert not self.shape(castsShadow=False).castsShadow
 
     def test_the_caster_pool_leaves_out_a_shape_that_opted_out(self):
-        class Path(list):
-            """What the pass asks of a path: where the node is in the world."""
+        from vrml.vrml97 import nodepath, nodetypes
 
-            def transformMatrix(self):
-                return np.identity(4, 'd')
+        from OpenGLContext.passes import _flat, flatcore
+        from OpenGLContext.scenegraph.transform import Transform
 
-        mixin = ShadowMapMixin()
         casting, opted_out = self.shape(), self.shape(castsShadow=False)
-        from vrml.vrml97 import nodetypes
+        # The real pass over real paths: the caster pool is drawn from the
+        # frame's own gather, which is what walks a path to its node.
+        mixin = flatcore.FlatPass.__new__(flatcore.FlatPass)
+        _flat.SGObserver.__init__(mixin, None, [])
+        mixin.paths = {nodetypes.Rendering: [
+            nodepath.NodePath([Transform(children=[node]), node])
+            for node in (casting, opted_out)]}
 
-        mixin.paths = {nodetypes.Rendering: [Path([casting]),
-                                             Path([opted_out])]}
         found = [record[4][-1] for record in mixin._shadowCasterRecords()]
         assert casting in found
         assert opted_out not in found

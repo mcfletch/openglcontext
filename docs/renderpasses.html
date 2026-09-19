@@ -142,6 +142,31 @@ being drawn is not a change: the signal is not sent, and a pass that hears one
 keeps the path it has rather than walking the subtree again. A node that
 switches its own children should follow the same rule, so that observers are
 woken for changes rather than for writes.</p>
+
+<h3>One walk of the scene per frame</h3>
+<p>Three questions are asked of every renderable path each frame: which node it
+ends at, where that node is in the world, and what bounds it. The frustum cull
+wants all three, the shadow pass's caster pool wants all three, and the draw
+reads them again. None of them is free &mdash; each goes through a scenegraph
+cache, and a scene has as many of them as it has shapes &mdash; so they are
+asked once. <code>gatherPaths()</code> walks the scene and publishes a
+<code>GatheredPaths</code> table; <code>takeGather()</code> is how the rest of
+the frame reads it.</p>
+<p>It is a handoff, not a cache. The table describes the scene as it stood when
+it was walked, so it may be read in the frame that built it and nowhere else
+&mdash; one left lying about would answer next frame's questions with last
+frame's transforms, and nothing would say so. Taking it is what makes that
+impossible: the gather publishes one, whoever needs it takes it, and a caller
+that finds none walks the scene itself. A depth pass driven on its own through
+<code>renderGeometry()</code> is such a caller.</p>
+<p>The table holds the world transforms twice: stacked into one
+<code>(N,4,4)</code> array for the arithmetic the whole scene goes through at
+once, and as the individual objects the scenegraph's transform cache handed
+over. The second form is what anything remembering a per-object answer between
+frames keys on &mdash; that cache returns the same object while a node is
+unmoved and a fresh one once it moves, so identity alone says whether a
+remembered answer still stands. A row of the stacked array carries the same
+numbers but is a new object every frame.</p>
 </section>
 
 <section>

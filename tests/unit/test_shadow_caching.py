@@ -647,9 +647,12 @@ class TestCasterSignatureIdentityContract:
 
     def _mixin_with_path(self, path):
         from vrml.vrml97 import nodetypes
-        m = ShadowMapMixin()
-        # _shadowCasterRecords reads self.paths[Rendering]; hand it the real path
-        # so _casterSignature runs on real transformMatrix()/boundingVolume() ids.
+        from OpenGLContext.passes import _flat, flatcore
+        # The caster pool is drawn from the frame's own gather, so this is the
+        # real pass with the real path in it -- _casterSignature then runs on
+        # real transformMatrix()/boundingVolume() ids, which is the point.
+        m = flatcore.FlatPass.__new__(flatcore.FlatPass)
+        _flat.SGObserver.__init__(m, None, [])
         m.paths = {nodetypes.Rendering: [path]}
         return m
 
