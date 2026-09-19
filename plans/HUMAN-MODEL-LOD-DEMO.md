@@ -20,18 +20,41 @@ makes a field of them batch. The baker is the add-on's
 
 **What it buys, measured on the hall from its far end, 108 busts on screen:**
 
-| Chain | Bust triangles | Draws |
-|---|---|---|
-| 6 mesh levels | 103,536 | 11 |
-| 6 mesh levels + impostor | 90,620 | 12 |
-| **4 mesh levels + impostor** | **39,460** | **10** |
+| Chain | Bust triangles | Draws | ms/frame, 1280x720 |
+|---|---|---|---|
+| 6 mesh levels | 103,536 | 11 | 4.96 |
+| 6 mesh levels + impostor | 90,620 | 12 | -- |
+| **4 mesh levels + impostor** | **39,460** | **10** | **4.93** |
 
-The middle row is the lesson. Bolting an impostor onto a chain that already
-decimates to 546 triangles saves an eighth of them and costs a draw call -- the
-coarsest mesh level was already cheap, so replacing it saves little. The gain is
-that **an impostor lets you stop decimating early**: four mesh levels and a card
-beat six mesh levels by 62% of the triangles and one draw, with two fewer levels
-to bake, ship and hold.
+**It makes this scene no faster, and the frame-time column is why that entry
+exists.** 62% fewer triangles and one fewer draw buys 0.6% of a frame, which is
+inside the noise. The reason is that the frame is not waiting on geometry:
+
+- the same world renders in the same ~5 ms at 640x360, 1280x720 **and**
+  1920x1080 -- resolution changes nothing, so it is not fill;
+- a four-object scene renders in 0.59 ms where this three-hundred-object one
+  takes 5.06 -- about **15 microseconds of processor time per object per
+  frame**, whatever is in it;
+- `--no-shadows` takes it from 4.96 to 3.16 ms, so **shadows are 36% of the
+  frame**, most of it gathering casters (`shadowmixin._casterGeometry` and
+  `_casterWorldGeometry` are the top of the profile after `nodepath.__getitem__`).
+
+**Where the impostor does pay is where geometry is the bottleneck.** The same
+two worlds on llvmpipe at 640x360, which is what a weak integrated part behaves
+like: **46.8 ms against 19.1 ms, 2.4x faster**. Same change, nothing on the
+discrete card, a different game entirely on the soft one.
+
+The rule, and it belongs in the documentation rather than here: reach for an
+impostor when a frame is spending its time on vertices and fragments; measure
+which before baking one.
+
+**What this says about the engine** is a subject of its own, and is written up
+as one: a ~15 us/object/frame processor cost is a ceiling of about 200 frames a
+second at three hundred objects and about 30 at two thousand, before anything is
+drawn. It has nothing to do with level of detail -- the gallery is only where it
+was noticed. See
+[PER-OBJECT-FRAME-COST.md](PER-OBJECT-FRAME-COST.md) for the measurements and
+what to do about them.
 
 **Three things it found:**
 

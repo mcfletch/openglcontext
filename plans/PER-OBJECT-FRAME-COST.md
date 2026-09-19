@@ -1,0 +1,169 @@
+# What a frame costs per object
+
+**Status:** 📋 Planned, measured 2026-09-19.
+
+A scene of three hundred objects costs about **5 ms of processor time a frame
+before anything is drawn**, and the cost is very nearly linear in the number of
+objects rather than in what is in them. That is a ceiling of ~200 frames a
+second at three hundred objects and ~30 at two thousand, on a machine whose GPU
+is doing almost nothing.
+
+This is not a rendering problem. It is the same per-object Python work being
+done two and three times a frame, a memo that never hits, and a per-caster
+numpy loop where a single batched call would do.
+
+## What was measured
+
+The bust gallery (`docs/lod.html#demo`): a hall, 120 plinths, 120 busts, 30
+beams — about 300 objects, of which 108 busts and their plinths are on screen.
+Radeon 8060S (radeonsi), 1280x720. Frame time is measured by rendering the same
+scene at two frame counts and dividing the difference by the difference, so
+process start-up and scene load cancel.
+
+| Scene | ms/frame |
+|---|---|
+| 120 busts, no LOD, no shadows | 2.20 |
+| 120 busts, 6-level LOD, no shadows | 3.10 |
+| 120 busts, no LOD, shadows | 3.81 |
+| **120 busts, 6-level LOD, shadows** | **5.01** |
+| 4 objects (a two-block test scene) | **0.59** |
+
+Three facts follow, and each was checked on its own:
+
+- **It is not fill.** The same world renders in the same ~5.2 ms at 640x360, at
+  1280x720 and at 1920x1080. Nine times the pixels, no change.
+- **It is not geometry.** Cutting the busts from 103,536 triangles to 39,460 —
+  62% — moved the frame from 4.96 ms to 4.93, which is inside the run-to-run
+  spread. (The same change is worth 2.4x on a software rasteriser, where
+  geometry *is* the bottleneck; that is what says the two are separable.)
+- **It is the object count.** Four objects cost 0.59 ms and three hundred cost
+  5.01, which is about **15 microseconds of processor time per object per
+  frame**.
+
+## Where the time goes
+
+`cProfile` over 300 frames, sorted by cumulative time inside `_flat.Render`.
+The profiler roughly triples the frame, so the *shares* are what to read:
+
+| | share of the frame |
+|---|---|
+| `shaderRenderOpaque` | 27% |
+| `renderShadowMaps` | 25% |
+| `renderSet` | 20% |
+| `selectLevels` | 17% |
+
+and by self time, the top entries are `vrml/nodepath.py:__getitem__` (959,000
+calls in 300 frames — 3,200 a frame), `shadowmixin._casterGeometry`,
+`numpy.asarray` (612,000 calls), and `_flat._boundingArrays`.
+
+Subtracting the configurations above gives the same picture in milliseconds:
+
+| | ms/frame | of 5.01 |
+|---|---|---|
+| Shadow caster gathering and the depth passes | ~1.7 | 34% |
+| Level-of-detail selection, 120 nodes | ~1.0 | 20% |
+| Everything else per object (bounding, frustum, sort, submit) | ~1.6 | 32% |
+| The fixed cost of a frame at all | ~0.6 | 12% |
+
+## A. The shadow caster memo never hits
+
+`ShadowMapMixin._casterWorldGeometry` keeps a per-caster memo so that "a game
+has one car moving through several hundred still trees" does not re-derive the
+trees. **It has a hit rate of zero.** Counted on the gallery:
+`_casterGeometry` runs **250.3 times a frame**, which is once per caster, every
+frame, for a scene in which nothing moves.
+
+The key is `(id(tmatrix), id(bvolume))`. The bounding volumes are stable — the
+same scene shows only **10 distinct `bvolume` ids** — but `tmatrix` comes from
+`_flat._worldMatrices`, which writes into a reused `(N,4,4)` buffer and hands
+out `matrices[index]`: a **fresh view object every frame**. Its `id` is never
+the one the memo stored, so every lookup misses and every caster is derived
+again.
+
+Two changes, either of which pays:
+
+1. **Key it on something that lasts.** A `NodePath` is stable between
+   re-flattens, so `(id(path), id(bvolume))` identifies a caster across frames.
+   Movement still has to invalidate it: keep the 4x4 in the entry and compare it
+   with `np.array_equal` on a hit — 250 comparisons of 16 doubles a frame
+   against 250 derivations.
+2. **Derive them all at once.** `_casterGeometry` runs per caster: an
+   `asarray`, a concatenate, a 4x4 matmul over 8 points, a `min` and a `max`.
+   For 250 casters that is well over a thousand numpy calls a frame on arrays of
+   eight rows, which is the shape where numpy's per-call overhead is the whole
+   cost. Stack the local corners into `(K,8,4)` and the matrices into
+   `(K,4,4)`, one `matmul`, then `min`/`max` over axis 1 — three calls instead
+   of thousands, and it removes the memo's reason to exist for the static case
+   as well.
+
+Do (2) first: it is a smaller change, it is not conditional on a cache being
+correct, and it makes the moving case fast too.
+
+## B. Level-of-detail selection is a Python loop over a matrix walk
+
+`_flat.selectLevels` costs **~1.0 ms for 120 nodes — 8 to 10 microseconds
+each**, to decide a number that is usually the number it decided last frame.
+For each node it calls `path.transformMatrix()`, `dot`s it with the camera
+matrix, and works out a distance and a coverage in Python.
+
+- **The matrices are already to hand.** `renderSet` calls `_worldMatrices` over
+  every rendering path in the same frame and stacks them. The LOD paths are a
+  subset. Compute the stack once per frame and let both read it.
+- **Distance is one expression over an array.** With the world matrices stacked,
+  every LOD node's centre, distance and coverage is a handful of vectorised
+  operations rather than 120 trips through Python. Only the nodes whose level
+  actually changed then need `show()` called on them, which is the part that has
+  to stay per node because it fires a signal.
+- **A still camera changes no levels.** When neither the view matrix nor any
+  LOD's world transform has changed since the last frame, the answer is last
+  frame's answer. How often that holds depends on the application; it is free to
+  check and it costs a matrix comparison when it does not.
+
+## C. The same paths are walked three times a frame
+
+`nodepath.__getitem__` is called **3,200 times a frame**: `renderSet`,
+`selectLevels` and the shadow caster gather each walk the scene's paths
+independently, and each asks for world matrices and bounding volumes the others
+have already asked for.
+
+Compute **one per-frame path table** — world matrix, bounding corners, whether
+it draws — and have the three read it. `_boundingArrays` already says in its own
+docstring that the node's volume cache "is where that question is already
+answered correctly; this only stacks the answers": so the stack can be kept
+between frames and only the rows whose volume cache version moved need
+rewriting.
+
+## D. Keep a number on it
+
+None of the above is visible from a suite that asserts pixels. A benchmark that
+reports ms/frame for a scene of N objects — the gallery is one, parameterised by
+`--bays` — makes the ceiling a tracked figure rather than something rediscovered
+when a world gets big. `tests/unit/test_instancing_performance.py` is the
+pattern: it compares wall-clock frame times and carries the `serial` marker so
+it gets the machine to itself, which anything measuring a clock has to.
+
+## What this is worth
+
+Not all of the 1.7 ms the shadows cost is gathering — the depth passes are real
+draws and stay. The profile puts `_casterWorldGeometry` at about two thirds of
+`renderShadowMaps`, so A is worth on the order of **1 ms** and B most of its
+**1 ms**: a three-hundred-object frame of about 5.0 ms going to somewhere near
+**3.0–3.5**, and the slope against object count falling with it. That is worth
+having and it is not the end of it; C is the structural change that would move
+the slope again, and it is the largest of the three to make.
+
+The figures above are one scene on one machine, and what they are for is
+choosing what to do first rather than predicting the result. D is how the answer
+gets checked.
+
+Neither A nor B changes a pixel, so the conformance baselines are what says they
+did not.
+
+## Where this came from
+
+The bust gallery, built to demonstrate level of detail
+([HUMAN-MODEL-LOD-DEMO.md](HUMAN-MODEL-LOD-DEMO.md)). Octahedral impostors cut
+62% of its triangles and made it no faster, which is what prompted the
+measurement: the frame was never waiting on the thing the technique addresses.
+The impostor work stands on its own — 2.4x on a software rasteriser — and the
+ceiling it ran into is this.
