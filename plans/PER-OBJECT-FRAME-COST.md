@@ -1,6 +1,6 @@
 # What a frame costs per object
 
-**Status:** 🟢 Complete, 2026-09-19. Measured 5.26 -> 2.57 ms a frame on the scene below, a **2.05x speedup**; see [What it was worth](#what-it-was-worth).
+**Status:** 🟢 Complete, 2026-09-19. The per-object slope is halved — **29.1 -> 11.8 µs an object** with a still camera, 26.6 -> 13.3 with it moving — so the gain grows with the world: 2.0x at fifty objects, **2.4x at sixteen hundred**. The bust gallery goes 5.26 -> 2.57 ms a frame. See [How it scales](#how-it-scales).
 
 A scene of three hundred objects costs about **5 ms of processor time a frame
 before anything is drawn**, and the cost is very nearly linear in the number of
@@ -131,8 +131,11 @@ object every frame. So the one path that ran 250 times a frame missed 250 times.
   matrices and boxes each, in one pass. `_casterGeometryBatch` gathers a scene's
   volumes by point count — a scene of boxes is one group — and
   `_casterWorldGeometry` derives a frame's misses together.
-- `_casterGeometry` is that batch with one member, so the single-caster form and
-  the scene-at-once form cannot drift apart.
+- `_casterGeometry` is that batch with one member. That is safe *here* because
+  nothing on a frame's path calls it — it is the one-caster form the tests check
+  the batch against. Where the one-at-a-time form is itself hot, writing it as
+  its plural with one member costs more than it saves; see the note at the end
+  of B.
 
 ## B. Level-of-detail selection is a Python loop over a matrix walk — 🟢 landed 2026-09-19
 
@@ -284,6 +287,82 @@ The ms/frame check keeps `performance` as well as `serial`, and its ceiling is
 deliberately loose — 45 µs an object against a measured ~13 — because what it
 is there to catch is a per-object cost coming back, which shows as a multiple.
 The counts are the tight gate.
+
+## How it scales
+
+The frame time is very nearly linear in the object count, so the figure that
+decides how big a world can get is the **slope** — what one more object adds to
+every frame — and that is what this was for. The gallery's 2x is one point on
+that line; the line itself is what follows.
+
+Measured on D's harness, 50 to 1600 shadow-casting level-of-detail chains, each
+count timed turn about against the same count on the other tree so load affects
+both alike. Three rounds, 80 frames each, medians.
+
+**Camera still** (the shortcuts apply):
+
+| objects | before | after | | fps after |
+|---:|---:|---:|---:|---:|
+| 50 | 2.96 ms | 1.46 | 2.03x | 685 |
+| 100 | 3.89 | 1.91 | 2.04x | 524 |
+| 200 | 6.29 | 3.52 | 1.79x | 284 |
+| 400 | 11.26 | 5.66 | 1.99x | 177 |
+| 800 | 22.56 | 9.93 | 2.27x | 101 |
+| 1600 | 47.84 | 19.85 | 2.41x | 50 |
+
+**Camera moving every frame** (nothing from last frame can be reused):
+
+| objects | before | after | | fps after |
+|---:|---:|---:|---:|---:|
+| 50 | 2.80 ms | 1.63 | 1.72x | 613 |
+| 100 | 3.95 | 2.91 | 1.36x | 344 |
+| 200 | 6.78 | 4.06 | 1.67x | 247 |
+| 400 | 11.05 | 6.54 | 1.69x | 153 |
+| 800 | 22.34 | 11.40 | 1.96x | 88 |
+| 1600 | 43.92 | 22.73 | 1.93x | 44 |
+
+Least squares over the whole sweep:
+
+| | slope | fixed cost |
+|---|---|---|
+| before, still | 29.07 µs an object | 0.54 ms |
+| **after, still** | **11.77 µs** | 0.87 ms |
+| before, moving | 26.59 µs | 1.18 ms |
+| **after, moving** | **13.32 µs** | 1.22 ms |
+
+The still-camera sweep was run three times over the day, on a machine other
+work was coming and going on: 2.40x, 2.47x and 2.35x. Call it 2.4x.
+
+**The slope is halved: ~2.4x still, 2.0x moving.** That is the result the
+frame-time figure follows from, and it is why the speedup *grows* with the
+object count rather than shrinking — 2.03x at fifty objects, 2.41x at sixteen
+hundred. A fixed cost that stays fixed matters less the bigger the world gets;
+a slope that halves matters more.
+
+In the terms this plan opened with — "a ceiling of ~200 frames a second at
+three hundred objects and ~30 at two thousand" — two thousand objects now
+extrapolate to about **41 frames a second** against the measured 17.
+
+### What the slope is still made of
+
+At 1600 objects, by what the profile counts per frame:
+
+- **`path[-1]`, 17,500 times** — about eleven per object. Seven separate
+  consumers each walk a record to the node it ends at
+  (`record_placements` alone 7,207, then `selectLevels`, `_walkPaths`,
+  `build_instance_groups`, `renderShadowMaps`, `transmissiveRecords`,
+  `_materialSortKey`, `group_material_table` at one per record each). Carrying
+  the node in the render record would remove most of them; that is a change to
+  a tuple shape eight places read, which is why it was not made here.
+  `record_placements` being asked 5.3 times per record is separately a memo.
+- **`cache.depend_signal`, 2,000 times** — the scenegraph's dependency cache
+  registering a receiver, one and a quarter per object per frame, and with
+  `saferef.__init__` behind it the largest single entry in the profile. A level
+  changing over rebuilds the node's bounding volume, and rebuilding it
+  re-registers what it depends on.
+
+Neither is level-of-detail's, and neither was in this plan's four items. They
+are where the next halving is.
 
 ## What it was worth
 
