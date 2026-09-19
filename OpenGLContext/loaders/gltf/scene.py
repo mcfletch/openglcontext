@@ -341,10 +341,16 @@ def _meter_exposure(light_meter: list, center: Sequence[float]) -> float:
     glTF KHR_lights_punctual intensities are physical (point/spot candela,
     directional lux); a scene authored with real values (hundreds to thousands)
     clips to white without a camera exposure, exactly the job a light meter does.
-    Estimate the strongest illuminance any light delivers near the scene centre --
+    Estimate the illuminance the lights deliver near the scene centre --
     directional is illuminance directly, point/spot is intensity / d^2 -- and expose
-    so that peak maps to a fixed target. Never brightens (result <= 1.0), so
+    so that it maps to a fixed target. Never brightens (result <= 1.0), so
     normalized test scenes (intensity ~1) and IBL/analytic-lit scenes stay at 1.0.
+
+    The contributions are **added**, because that is what illuminance does. A
+    hall with twenty lamps down it is brighter than the same hall with one, and
+    a meter reading only the strongest lamp returns the same number for both --
+    so the room lit the way a room is lit comes out over by about the number of
+    lamps in it.
     """
     if not light_meter:
         return 1.0
@@ -353,10 +359,10 @@ def _meter_exposure(light_meter: list, center: Sequence[float]) -> float:
     for light, wpos in light_meter:
         intensity = float(light.intensity)
         if wpos is None:                      # directional: illuminance == intensity
-            key = max(key, intensity)
+            key += intensity
         else:
             d2 = float(np.sum((np.asarray(wpos, dtype='d') - c) ** 2))
-            key = max(key, intensity / max(d2, 1e-3))
+            key += intensity / max(d2, 1e-3)
     # Only stop down scenes whose lights genuinely overexpose. Modestly-lit scenes
     # (a few lux -- e.g. the Parthenon rig, IridescenceSuzanne) already read right at
     # neutral exposure and must stay at 1.0 so their baselines don't shift; only the
@@ -524,7 +530,8 @@ class _SceneBuilder:
             (minimum, maximum, 0 if positions is None else len(positions)))
 
     def build(self, node_index: int, parent_world: np.ndarray,
-              ancestry: Tuple[int, ...] = (), parent_visible: bool = True) -> "Transform":
+              ancestry: Tuple[int, ...] = (), parent_visible: bool = True,
+              replacing: bool = False) -> "Transform":
         # A glTF node graph is meant to be a forest, but nothing in the format
         # prevents a node from listing an ancestor as a child. Walking that with
         # plain recursion stack-overflows; track the current path and reject a
@@ -535,7 +542,14 @@ class _SceneBuilder:
                 % (node_index, list(ancestry)))
         ancestry = ancestry + (node_index,)
         node = self.g.nodes[node_index]
-        group = _transform_for(node, force_trs=node_index in self.trs_animated)
+        # A node named as a coarser level stands *in place of* the node that
+        # named it, so where it is drawn is where that node is. Its own
+        # transform is in the same parent space as that node's, not underneath
+        # it, and applying both puts the level at twice the translation and
+        # twice the turn -- a bust two metres down a hall drawn four metres
+        # down it, and facing the other way.
+        group = (Transform() if replacing else
+                 _transform_for(node, force_trs=node_index in self.trs_animated))
         self.node_transforms[node_index] = group
         # regDefName stamps group.DEF and registers it in scene_graph.defNames.
         self.scene_graph.regDefName(
@@ -567,7 +581,8 @@ class _SceneBuilder:
         lod_ids = lodext.level_ids(
             node_ext.get(lodext.EXTENSION) if isinstance(node_ext, dict) else None)
         if lod_ids and node.mesh is not None and node_visible and placements is None:
-            children.append(self._lod_node(node, lod_ids, world, ancestry, node_visible))
+            children.append(self._lod_node(node, lod_ids, world, ancestry,
+                                           node_visible, group))
         elif node.mesh is not None and node_visible:
             shapes = self.mesh_shapes(node.mesh)
             if placements is not None:
@@ -609,7 +624,8 @@ class _SceneBuilder:
         return group
 
     def _lod_node(self, node: Any, ids: list, world: np.ndarray,
-                  ancestry: Tuple[int, ...], node_visible: bool) -> Any:
+                  ancestry: Tuple[int, ...], node_visible: bool,
+                  carrier: Any = None) -> Any:
         """One switching node for a node that carries ``MSFT_lod``.
 
         The node's own mesh is the finest level and the nodes ``ids`` names are
@@ -617,6 +633,12 @@ class _SceneBuilder:
         node holds -- its children, a light, an emitter -- stays outside the
         switch, because the extension offers alternatives for the geometry and
         not for the rest of what a node is.
+
+        The switch sits under the carrying node's transform, so every level is
+        drawn where that node is and an alternative's own transform is not
+        applied a second time on top of it. An alternative that asks to be
+        somewhere else is drawn here and said so, because the extension offers
+        another *version* of a node rather than another place for it.
         """
         levels: list = [Transform(children=[shape for shape, _bounds in
                                             self.mesh_shapes(node.mesh)])]
@@ -628,9 +650,11 @@ class _SceneBuilder:
                     'MSFT_lod names node %d as a coarser level, which this file '
                     'does not have; that level is left out', index)
                 continue
+            self._warn_if_displaced(node, index, carrier)
             self._coarser_levels += 1
             try:
-                levels.append(self.build(index, world, ancestry, node_visible))
+                levels.append(self.build(index, world, ancestry, node_visible,
+                                         replacing=True))
             finally:
                 self._coarser_levels -= 1
         measured = lodext.mesh_bounds(self.g, node.mesh)
@@ -641,6 +665,29 @@ class _SceneBuilder:
             center=centre,
             radius=radius,
         )
+
+    def _warn_if_displaced(self, node: Any, index: int, carrier: Any) -> None:
+        """Say so where an alternative asks to stand somewhere of its own.
+
+        An alternative usually repeats the placement of the node that named it,
+        or states none at all; either way it is drawn where that node is. One
+        that states a *different* placement means something this switch cannot
+        express, and drawing it at the node's place without a word would be a
+        model quietly in the wrong spot.
+        """
+        if carrier is None:
+            return
+        alternative = _local_matrix_rv(_transform_for(self.g.nodes[index]))
+        if np.allclose(alternative, np.identity(4), atol=1e-6):
+            return
+        if np.allclose(alternative, _local_matrix_rv(carrier), atol=1e-6):
+            return
+        log.warning(
+            'MSFT_lod: node %d is a coarser level of %r and places itself '
+            'somewhere else; it is drawn where %r is, which is what the '
+            'extension offers alternatives for',
+            index, getattr(node, 'name', None) or '<unnamed>',
+            getattr(node, 'name', None) or '<unnamed>')
 
     @property
     def audio_library(self) -> AudioLibrary:

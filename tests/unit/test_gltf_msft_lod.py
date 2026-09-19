@@ -222,3 +222,95 @@ class TestBatchingCopiesOfOneModel:
         first, second = self._two_copies(tmp_path)
 
         assert _shapes(first.level[1])[0].geometry is _shapes(second.level[1])[0].geometry
+
+
+def _placed(document, translation, rotation=None, on=(0, 1, 2)):
+    """Put ``translation`` on each of the nodes ``on`` names."""
+    for index in on:
+        document['nodes'][index]['translation'] = list(translation)
+        if rotation is not None:
+            document['nodes'][index]['rotation'] = list(rotation)
+    return document
+
+
+def _world_of(scene, node, level):
+    """Where level ``level`` of ``node`` actually lands, walking the graph."""
+    from OpenGLContext.loaders.gltf.transforms import _local_matrix_rv
+
+    target = _shapes(node.level[level])[0]
+
+    def walk(current, matrix):
+        if current is target:
+            return matrix
+        local = (_local_matrix_rv(current)
+                 if hasattr(current, 'translation') else np.identity(4))
+        here = local @ matrix
+        for child in (getattr(current, 'children', None) or []):
+            found = walk(child, here)
+            if found is not None:
+                return found
+        for one in (getattr(current, 'level', None) or []):
+            found = walk(one, here)
+            if found is not None:
+                return found
+        return None
+
+    return walk(scene.group, np.identity(4))
+
+
+class TestWhereALevelIsDrawn:
+    """Every level stands where the node carrying the extension stands.
+
+    An alternative is a replacement for that node, so its own transform is in
+    the *parent's* space and not on top of the node's. Applied twice, a bust
+    two metres along a hall is drawn four metres along it -- and, with a
+    rotation in play, somewhere else entirely.
+    """
+
+    def test_a_placed_node_puts_its_finest_level_where_it_is(self, tmp_path):
+        scene = _loaded(tmp_path, _placed(_document(), (2.0, 0.0, 3.0)))
+
+        where = _world_of(scene, _the_lod(scene), 0)
+
+        assert where[3][:3] == pytest.approx([2.0, 0.0, 3.0])
+
+    def test_a_coarser_level_lands_in_the_same_place(self, tmp_path):
+        scene = _loaded(tmp_path, _placed(_document(), (2.0, 0.0, 3.0)))
+
+        where = _world_of(scene, _the_lod(scene), 2)
+
+        assert where[3][:3] == pytest.approx([2.0, 0.0, 3.0])
+
+    def test_no_level_is_placed_twice(self, tmp_path):
+        """The translation doubling that the extension invites."""
+        scene = _loaded(tmp_path, _placed(_document(), (2.0, 0.0, 3.0)))
+        lod = _the_lod(scene)
+
+        places = [_world_of(scene, lod, level)[3][:3] for level in range(3)]
+
+        for place in places:
+            assert place == pytest.approx([2.0, 0.0, 3.0])
+
+    def test_a_turned_node_does_not_turn_its_levels_twice(self, tmp_path):
+        """A quarter turn applied twice is a half turn, which moves a level
+        across the object it is a level of rather than merely facing it away."""
+        quarter = [0.0, 0.7071068, 0.0, 0.7071068]
+        scene = _loaded(tmp_path,
+                        _placed(_document(), (4.0, 0.0, 0.0), rotation=quarter))
+        lod = _the_lod(scene)
+
+        finest = _world_of(scene, lod, 0)
+        coarsest = _world_of(scene, lod, 2)
+
+        assert coarsest[3][:3] == pytest.approx(finest[3][:3])
+        assert coarsest[:3, :3] == pytest.approx(finest[:3, :3], abs=1e-6)
+
+    def test_an_alternative_with_no_transform_of_its_own_still_lands_there(
+            self, tmp_path):
+        """The shape the canonical example is in: a bare mesh node."""
+        document = _placed(_document(), (2.0, 0.0, 3.0), on=(0,))
+        scene = _loaded(tmp_path, document)
+
+        where = _world_of(scene, _the_lod(scene), 1)
+
+        assert where[3][:3] == pytest.approx([2.0, 0.0, 3.0])

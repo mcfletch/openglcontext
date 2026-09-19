@@ -1,11 +1,58 @@
 # A human model, decimated, walked up to
 
-**Status:** 📋 Planned. Two of the four pieces it needs have landed: the
-measurement harness (`OpenGLContext_editor.meshlod`, `tools/lod_quality.py`), and
-the reader -- `MSFT_lod` into a `ScreenCoverageLOD` the render pass switches
-once a frame (`OpenGLContext/loaders/gltf/lod.py`,
-`OpenGLContext/scenegraph/lod.py`). What is left is the asset, as a content
-pack, and the scene.
+**Status:** 🟡 Mostly landed, 2026-09-19. The demo runs: `oglc-view` opens the
+published content pack directly -- `oglc-view gallery-world.tar.gz` -- and it is
+a hall of 120 marble busts on plinths, each a six-level `MSFT_lod` chain, and from
+the far end 108 of them are on screen across four levels in **four instanced
+draws** -- eleven for the whole frame. What is left is geomorphing (M9), the
+baked normal map (M10), and lazy per-level decoding.
+
+## What landed
+
+**Authored in Blender, which is the part that matters to anyone else.** The
+chain is not made by a script of ours that nobody else can run: it is cut by
+Blender's own Decimate modifier through an add-on
+(`OpenGLContext_editor/blender/openglcontext_lod`) that also writes `MSFT_lod`
+from Blender's ordinary glTF export. An artist installs the add-on and never
+installs this toolkit. The gallery world is built by that same add-on driven
+headlessly (`oglce-gallery`), so what ships is what the add-on produces rather
+than a second path that might disagree with it.
+
+**The world is a room, not a void.** The earlier note here said "nothing else in
+the scene: a background would only give the eye somewhere else to go". That was
+wrong for the demonstration this turned out to be. A field of busts in a void
+gives a viewer no sense of distance, and distance is the whole subject; a hall
+with a floor, walls and beams receding is what makes the switch legible, because
+the eye reads the depth off the room and then notices the geometry changing in
+it. Polished parquet with a clearcoat, white plaster, dark beams -- all CC0 from
+ambientCG, the bust CC0 from Poly Haven.
+
+**A content pack, published from this repository.** `OpenGLContext/packs.json`
+plus `release-assets.py`, the same three flags as every other project's. The
+pack carries the finished world rather than the Poly Haven download, so nothing
+is decimated at startup. It is the engine's own first content pack.
+
+**Two defects the demo found, both fixed in the engine:**
+
+- *Every coarse level was drawn in the wrong place.* An `MSFT_lod` alternative
+  stands **in place of** the node that names it, so its transform is in that
+  node's parent space; the reader was applying it underneath the carrier's
+  instead. Translation doubled and rotation applied twice, which put a bust two
+  metres down the hall four metres down it and facing elsewhere -- and it was
+  invisible in every test until a chain was placed somewhere other than the
+  origin *and* turned. Levels are now drawn where the carrying node is, and an
+  alternative asking to stand somewhere of its own is drawn there anyway with a
+  warning.
+- *The light meter read one lamp and not the room.* `_meter_exposure` took the
+  **strongest** light's illuminance at the scene centre where illuminance
+  **adds**, so a hall with twenty lamps metered the same as a hall with one and
+  rendered about that many times over.
+
+**And one engine limit the demo has to live inside:** the forward PBR pass binds
+eight lights. The gallery's lamps are therefore eight, spread the length of the
+hall; twenty of them is not a brighter hall but the first eight lighting one end
+of a dark one. Worth knowing before a world is authored, and worth lifting one
+day.
 
 ## Why a human
 

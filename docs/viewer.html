@@ -278,9 +278,11 @@ frame, and the least recently used are dropped once a texel budget is reached
 
 <section id="capture">
 <h2>Capturing a frame</h2>
-<pre>oglc-view model.glb --capture shot.png --size 1100x680
-oglc-view model.glb --camera aerial --capture shot.png --capture-delay 0.5
+<pre>oglc-view model.glb --capture-image shot.png --size 1100x680
+oglc-view model.glb --camera aerial --capture-image shot.png --capture-delay 0.5
 oglc-view model.glb --list-cameras</pre>
+<p class="technical"><code>--capture</code> is the same flag under its older
+name, and stays.</p>
 <p><code>--capture</code> renders the scene, waits for it to settle &mdash; a
 wall-clock delay and a minimum frame count, so the adaptive analytic-sky IBL has
 converged &mdash; writes the PNG and exits. The captured frame carries no
@@ -291,6 +293,35 @@ and with nothing on screen consuming frames the swap never returns; a hidden
 window renders and reads back identically. Both are overridable
 (<code>OPENGLCONTEXT_HIDDEN=0</code>), since watching a capture happen is how you
 find out why it looks wrong.</p>
+
+<h3 id="video">Recording a video</h3>
+<pre>oglc-view world.glb --capture-video walk.mp4 --fly-through
+oglc-view world.glb --capture-video spin.mp4 --turntable --video-seconds 8
+oglc-view world.glb --capture-video walk.mp4 --fly-through \
+    --video-seconds 16 --video-fps 30 --size 1280x720</pre>
+<p><code>--capture-video</code> records the frames the viewer draws to an
+H.264 file and exits when it has enough of them. The encoder is the one in the
+graphics driver and the frame never leaves the GPU, so recording costs little
+more than drawing. Like a captured frame, a recorded one carries no caption and
+no developer overlay.</p>
+<p>The recording is a <em>fixed number of frames</em> rather than however many
+the machine managed in the time: the clock is advanced a frame at a time while
+it runs, so the result plays at the speed it says whatever the frame rate was
+while it was made. A slow machine takes longer to record; it does not record a
+slower world.</p>
+<p><strong>Something has to move.</strong> A recording of a still is a picture
+with a file size, and there are two ways to give it motion.
+<code>--turntable</code> spins the model, which suits an object.
+<code>--fly-through</code> walks the camera along the <em>scene's own
+viewpoints</em>, in the order the file declares them, easing in and out of each
+leg &mdash; so the path is the one the author placed, and a world with two
+cameras in it is already a shot. It is what a scene too big to see at once
+wants: see <a href="lod.html#demo">Levels of detail</a>, where the walk from one
+end of a hall to a bust at the other is exactly the two cameras that world
+carries.</p>
+<p class="technical">Recording needs <a href="https://pypi.org/project/pyopengl-video/"><code>pyopengl-video</code></a>,
+which <code>OpenGLContext[video]</code> installs. Without it
+<code>--capture-video</code> says so rather than recording nothing.</p>
 </section>
 
 <section id="embedding">

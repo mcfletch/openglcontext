@@ -1,6 +1,8 @@
 # Recording what the engine draws
 
-**Status:** Landed for NVIDIA on Linux.
+**Status:** Landed. Written against NVIDIA on Linux; **recorded on AMD**
+(Radeon 8060S, radeonsi) on 2026-09-19 without a change, which is the
+recorder asking for an encoder and getting whichever one the machine has.
 **Documentation:** [docs/recording.html](../docs/recording.html)
 
 ## What this is for
@@ -66,6 +68,26 @@ the framebuffer it came from — an orientation test that needs no decoder.
 more*. Collapsing them made the mixin treat the wait for a streaming world as
 the recording having finished, and the demo quit on its first frame. Two
 questions, two answers.
+
+## The viewer records
+
+`RecordingMixin` existed for two months before anything a user could type
+reached it: every recording was a program somebody wrote. `oglc-view` now has
+`--capture-video`, beside the `--capture-image` that was always there, and the
+frames it writes carry no caption and no developer overlay for the same reason a
+screenshot does not.
+
+A recording needs something to *move*, and a viewer opening a file somebody else
+made has no path of its own to offer. `--fly-through` takes the one the author
+already left: the scene's own viewpoints, walked in the order the file declares
+them, eased in and out of each leg. A world with two cameras in it is a shot
+without anybody framing one, which is what made the bust gallery's walk a single
+command rather than a script. The arithmetic is
+`OpenGLContext/viewer/flythrough.py` and carries no GL.
+
+The path is stepped by *recorded frames* rather than by wall time, so the shot
+is the same length as the video however fast the machine drew it -- the same
+reasoning as the recorder's own fixed-step clock.
 
 ## What is not here
 

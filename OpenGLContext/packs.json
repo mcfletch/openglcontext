@@ -1,0 +1,18 @@
+{
+ "namespace": "openglcontext",
+ "packs": [
+  {
+   "key": "openglcontext/gallery",
+   "title": "Bust gallery demo world",
+   "url": "https://github.com/mcfletch/openglcontext/releases/download/content-v1/gallery-world.tar.gz",
+   "directory": "gallery",
+   "archive": "tar",
+   "approximate_bytes": 12150998,
+   "sha256": "f80f9e391e18c603057aecbe5c38320c4944a914e04e319906c8ce883578b58f",
+   "base": false,
+   "copyright": "'Marble Bust 01' by Rico Cilliers from Poly Haven, and the floor, wall, ceiling and beam materials from ambientCG -- all CC0 1.0 (public domain). Full attribution in CREDITS.txt inside the pack.",
+   "marker": "gallery.glb",
+   "notes": "A hall of 120 marble busts on plinths, each a six-level MSFT_lod chain, with a polished parquet floor and dark beams overhead. An ordinary glTF file -- a viewer that does not know the extension draws every bust at its finest level."
+  }
+ ]
+}

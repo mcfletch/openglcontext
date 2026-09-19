@@ -1,14 +1,15 @@
 #! /usr/bin/env python
 """Walk-around viewer for a 3D scene (``oglc-view``).
 
-Opens a local file **or an http(s) URL**, renders it with the metallic/roughness
-PBR pass, and lets you walk through it with the keyboard/mouse. What format the
-source is in is worked out from the source itself, so one command opens them
-all:
+Opens a local file, an http(s) URL **or a member of an archive**, renders it
+with the metallic/roughness PBR pass, and lets you walk through it with the
+keyboard/mouse. What format the source is in is worked out from the source
+itself, so one command opens them all:
 
 ===============================  ==============================================
 ``.gltf`` ``.glb``               a glTF 2.0 model
 ``.wrl`` ``.wrz`` ``.vrml``      a VRML97 world
+``.zip`` ``.tar.gz`` ``.tgz``    an archive; ``#member`` says what to open
 ===============================  ==============================================
 
 Every format gets everything the viewer can do. If the file contains no lights, a
@@ -30,13 +31,21 @@ Usage::
     oglc-view path/to/model.glb
     oglc-view path/to/world.wrl
     oglc-view https://example.com/model.glb
+    oglc-view world.tar.gz#gallery.glb
+    oglc-view https://example.com/world.tar.gz#gallery.glb
     oglc-view model.glb --camera aerial --capture shot.png --capture-delay 0.5
     oglc-view model.glb --list-cameras
     GLTF=path/to/model.gltf oglc-view
 
 A ``.glb`` is self-contained, so URLs work cleanly. A ``.gltf`` URL fetches only
 that file; models that reference external ``.bin``/texture files by relative URI
-will be missing those (download the whole model set locally instead).
+will be missing those -- **which is what an archive is for**. A world that is
+more than one file travels as one, and naming a member with ``#`` unpacks the
+whole archive once, into a per-user directory, and opens that member from
+inside it, so its relative references resolve. An archive holding exactly one
+scene needs no ``#``; one holding several says which it holds. Extraction is the
+content packs' own: bounded, and refusing a member that is absolute or climbs
+out of the directory.
 
 Controls (OpenGLContext's default view-platform navigation)::
 
@@ -128,12 +137,15 @@ def build_parser(prog: str = 'oglc-view') -> argparse.ArgumentParser:
             key for key in known_sources() if '/' not in key),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         argument_default=argparse.SUPPRESS,
-        epilog="A local path or an http(s) URL. .glb is self-contained (URLs work "
-               "cleanly); a .gltf that references external .bin/textures should be "
-               "downloaded locally as a set. Falls back to the GLTF env var.",
+        epilog="A local path, an http(s) URL, or an archive with #member naming "
+               "what to open inside it. .glb is self-contained (URLs work "
+               "cleanly); a .gltf that references external .bin/textures should "
+               "travel as an archive or be downloaded locally as a set. Falls "
+               "back to the GLTF env var.",
     )
     parser.add_argument('source', nargs='?',
-                        help='scene file path or http(s) URL (or set GLTF=...)')
+                        help='scene file path, http(s) URL, or archive#member '
+                             '(or set GLTF=...)')
     parser.add_argument('--format', metavar='NAME',
                         help='read the source as this format instead of guessing '
                              'from its name (%s); for a URL that serves a scene '
@@ -146,6 +158,23 @@ def build_parser(prog: str = 'oglc-view') -> argparse.ArgumentParser:
                         help="print the scene's camera names and exit")
     parser.add_argument('--no-cameras', action='store_true',
                         help="ignore the scene's own cameras; centre and auto-frame it")
+    parser.add_argument('--capture-video', dest='capture_video', metavar='PATH',
+                        help='record the scene to a video file, then exit. With '
+                             '--fly-through the camera walks the scene\'s own '
+                             'cameras in order, which is what makes a recording '
+                             'of a world rather than of a still')
+    parser.add_argument('--video-seconds', dest='video_seconds', type=float,
+                        metavar='SECONDS',
+                        help='how long the recording is (default 12)')
+    parser.add_argument('--video-fps', dest='video_fps', type=int, metavar='N',
+                        help='frames a second in the recording (default 30)')
+    parser.add_argument('--fly-through', dest='fly_through',
+                        action='store_true',
+                        help="walk the camera along the scene's own viewpoints, "
+                             'in the order it declares them')
+    parser.add_argument('--capture-image', dest='capture', metavar='PATH',
+                        help='render to PATH (PNG) after settling, then exit; '
+                             'the same as --capture')
     parser.add_argument('--capture', metavar='PATH',
                         help='render to PATH (PNG) after settling, then exit')
     parser.add_argument('--capture-delay', type=float, metavar='SECONDS',
@@ -260,6 +289,19 @@ def main(argv: Optional[list[str]] = None, prog: str = 'oglc-view') -> Any:
         except UnknownSourceType as error:
             parser.error(str(error))
 
+    if getattr(options, 'capture_video', None):
+        # A recording wants a clean frame for the same reason a screenshot
+        # does: the developer overlay is for watching, not for keeping.
+        os.environ.setdefault('OPENGLCONTEXT_DISABLE_FPS_DISPLAY', '1')
+        # Asked for now rather than at the first frame: a machine that cannot
+        # record should say so before it opens a window and draws a world.
+        from OpenGLContext.video.recorder import (
+            RecordingUnavailable, load_encoder_api,
+        )
+        try:
+            load_encoder_api()
+        except RecordingUnavailable as error:
+            parser.error(str(error))
     apply_render_env(options)
     TestContext.options = options
     return TestContext.ContextMainLoop(size=options.size) if options.size \

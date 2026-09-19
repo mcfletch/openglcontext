@@ -65,6 +65,7 @@ from OpenGLContext.viewer.adapters import (
 )
 from OpenGLContext.ui.overlay import OverlayMixin
 from OpenGLContext.viewer.asyncscene import AsyncSceneMixin
+from OpenGLContext.video.recorder import RecordingMixin
 from OpenGLContext.viewer.capture import SettleCaptureMixin
 from OpenGLContext.viewer.options import ViewerOptions
 from OpenGLContext.viewer.caption import CaptionMixin
@@ -133,7 +134,8 @@ else:
 
 
 class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
-                       SettleCaptureMixin, ViewerScreensMixin, _MovementHost):
+                       SettleCaptureMixin, RecordingMixin,
+                       ViewerScreensMixin, _MovementHost):
     """Showing one scene: assembly, cameras, animation and the caption."""
 
     #: What to show and how.  A class attribute so a subclass can simply set it.
@@ -175,6 +177,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
                             **named: Any) -> Any: ...
         def triggerRedraw(self, force: int = 0) -> Any: ...
         def getSceneGraph(self) -> Any: ...
+        def getViewPlatform(self) -> Any: ...
         def setupPhysics(self, enable: bool = False) -> bool: ...
         def enablePhysics(self, on: bool = True) -> bool: ...
         def stepPhysics(self, dt: Optional[float] = None) -> None: ...
@@ -188,6 +191,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         self.modelTransform = None
         self._cameraNames: List[str] = []
         self._turntableStart = self._now()
+        self._flyPath: Any = None
         self._defaultModelRotation: Sequence[float] = (0, 1, 0, 0.0)
         self._animations: List[Any] = []
         self._animationNames: List[str] = []
@@ -199,10 +203,18 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         self.setupAsyncScene()
         self.setupCaption()
         self.prepareSource()
+        self.setupRecording(
+            self.options.capture_video,
+            fps=self.options.video_fps,
+            seconds=self.options.video_seconds,
+            size=self.options.size,
+        )
         self.setupCapture(self.options.capture, self.options.capture_delay,
                           self.options.frames)
-        # A captured frame is the scene and nothing else.
-        self.showCaption(not self.capturing)
+        # Neither a screenshot nor a recording carries the caption: it
+        # names the file and the controls, which is for somebody driving
+        # the viewer rather than for what comes out of it.
+        self.showCaption(not self.capturing and not self.recording)
         if not self.capturing:
             debug.install(self)
             self.setupScreens()
@@ -934,6 +946,46 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         self.modelTransform.rotation = (0, 1, 0, base + elapsed * TURNTABLE_RATE)
         return True
 
+    # -- the fly-through --------------------------------------------------
+    def flyThroughPath(self) -> List[Any]:
+        """The path to walk: the scene's own viewpoints, in order.
+
+        Empty when the scene brought fewer than two, which is a scene with no
+        path of its own to walk -- the camera then stays where it was put.
+        """
+        if not self.options.fly_through or len(self.viewpoints) < 2:
+            return []
+        from OpenGLContext.viewer import flythrough
+        if self._flyPath is None:
+            self._flyPath = flythrough.poses_from(self.viewpoints)
+        found: List[Any] = self._flyPath
+        return found
+
+    def flyThroughFraction(self) -> float:
+        """How far along the path we are, from 0 at the start to 1 at the end.
+
+        Measured in *recorded frames* while recording, so the path is the same
+        length as the video however fast the machine drew it, and in wall time
+        otherwise.
+        """
+        recorder = self.recorder
+        if recorder is not None and recorder.limit:
+            return min(1.0, recorder.frames_written / float(recorder.limit))
+        elapsed = self._now() - self._turntableStart
+        return min(1.0, elapsed / max(self.options.video_seconds, 1e-6))
+
+    def advanceFlyThrough(self) -> bool:
+        """Put the camera where the path says.  Returns whether to redraw."""
+        path = self.flyThroughPath()
+        if not path:
+            return False
+        from OpenGLContext.viewer import flythrough
+        where, facing = flythrough.pose_at(path, self.flyThroughFraction())
+        platform = self.getViewPlatform()
+        platform.setPosition(where)
+        platform.quaternion = facing
+        return True
+
     # -- the caption ------------------------------------------------------
     def updateOverlay(self) -> None:
         """Recompose the caption: what is loaded, which camera, and how you move."""
@@ -1027,7 +1079,12 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
             self.triggerRedraw(1)
         elif self.physicsWalking:
             self.stepPhysics()
-        elif self.advanceTurntable() or animated or streamed:
+        elif self.advanceFlyThrough() or self.advanceTurntable() \
+                or animated or streamed:
+            self.triggerRedraw(1)
+        if self.recording:
+            # A recording is a fixed number of frames rather than whatever the
+            # machine managed, so it always wants the next one.
             self.triggerRedraw(1)
         return 1
 
@@ -1046,6 +1103,10 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         # only until it is swapped away.  Presenting is the step that owns that
         # moment; the screenshot key is taken from it too.
         captured = self.tickCapture()
+        # Not before the scene is up: a recording that starts during the load
+        # opens on black, and its first second is of the world arriving.
+        if self.sceneLoaded:
+            self.tickRecording()
         result = super(SceneViewerMixin, self).presentFrame()  # type: ignore[misc]
         if captured:
             self.finishCapture()

@@ -14,6 +14,15 @@ alternative. The size it judges coverage by comes from the finest level's
 chain that streams is that a level can be sized, placed and culled without its
 geometry being read.
 
+Which end of the chain the file's own node is at is the thing to get wrong, so
+in the specification's words: "The ``node`` object with the extension is the
+highest LOD level", "each value in the array points to a LOD level that is lower
+in quality than the previous level", and a client without the extension loads
+"the highest LOD level" and ignores the rest. Where a level's *bytes* live is a
+separate question -- a baked chain keeps the coarsest inside the glb and each
+finer one in a sidecar -- and says nothing about which node carries the
+extension.
+
 Reference:
     https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/MSFT_lod
 """

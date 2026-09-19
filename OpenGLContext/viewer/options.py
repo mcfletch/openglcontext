@@ -123,6 +123,14 @@ class ViewerOptions:
     capture_delay: float = 0.5
     #: Frames to render before capturing, whatever the delay says.
     frames: int = 10
+    #: Record to this video file, then exit.
+    capture_video: Optional[str] = None
+    #: How long the recording is, in seconds.
+    video_seconds: float = 12.0
+    #: Frames a second in the recording.
+    video_fps: int = 30
+    #: Walk the camera along the scene's own viewpoints while recording.
+    fly_through: bool = False
 
     def replace(self, **named: Any) -> 'ViewerOptions':
         """A copy with ``named`` changed -- for a caller who wants to keep the

@@ -46,6 +46,23 @@ draw, and the same run records the same way twice.</p>
 </section>
 
 <section id="recording">
+  <h2>Recording from the viewer</h2>
+  <p>Nothing to write: <a href="viewer.html"><code>oglc-view</code></a> records
+    any scene it can open.</p>
+  <pre>oglc-view world.glb --capture-video walk.mp4 --fly-through
+oglc-view model.glb --capture-video spin.mp4 --turntable --video-seconds 8
+oglc-view model.glb --capture-image shot.png</pre>
+  <p>A recording needs something to move, and a viewer opening somebody else's
+    file has no path of its own to offer. <code>--fly-through</code> takes the
+    one the author already left &mdash; the scene's own viewpoints, walked in
+    the order the file declares them and eased in and out of each leg &mdash; so
+    a world with two cameras in it is a shot without anybody framing one. The
+    path is stepped by recorded frames rather than by wall time, so it is the
+    same length as the video however fast the machine drew it.</p>
+  <p>A recorded frame carries no caption and no developer overlay, for the same
+    reason a screenshot does not. See
+    <a href="viewer.html#video">Recording a video</a>.</p>
+
   <h2>Recording from a context</h2>
   <p><code>RecordingMixin</code> gives a context the mode. Set the recording up,
     tick it from <a href="structure.html#present"><code>presentFrame</code></a>,

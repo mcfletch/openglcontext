@@ -1,0 +1,203 @@
+"""Opening a scene that is inside an archive.
+
+A world that is more than one file -- a ``.gltf`` with its buffers, its textures
+and its level-of-detail sidecars -- travels as an archive. A viewer that can
+only open a loose path makes the person unpack it first and then find the right
+file inside, which is a chore the viewer is in a better position to do.
+
+    oglc-view world.tar.gz#gallery.glb
+    oglc-view https://example.com/world.tar.gz#gallery.glb
+
+The fragment names the member. Without one the archive is opened if it holds
+exactly one scene file, because then there is no choice to make.
+
+An archive from a URL is somebody else's file, so it goes through the same
+extraction the content packs use -- bounded, and refusing a member that climbs
+out of the directory. No GL here: this is the source resolution.
+"""
+
+import os
+import tarfile
+import zipfile
+
+import pytest
+
+from OpenGLContext.viewer import source as viewersource
+
+
+def _tar(path, names, payload=b'glTF-ish'):
+    with tarfile.open(path, 'w:gz') as archive:
+        for name in names:
+            beside = str(path) + '.' + os.path.basename(name)
+            with open(beside, 'wb') as handle:
+                handle.write(payload)
+            archive.add(beside, arcname=name)
+            os.unlink(beside)
+    return str(path)
+
+
+def _zip(path, names, payload=b'glTF-ish'):
+    with zipfile.ZipFile(path, 'w') as archive:
+        for name in names:
+            archive.writestr(name, payload)
+    return str(path)
+
+
+@pytest.fixture
+def cache(tmp_path):
+    return str(tmp_path / 'unpacked')
+
+
+class TestTellingAnArchiveFromAModel:
+    @pytest.mark.parametrize('name', [
+        'world.tar.gz', 'world.tgz', 'world.tar', 'world.zip',
+        'https://example.com/world.tar.gz',
+    ])
+    def test_these_are_archives(self, name):
+        assert viewersource.is_archive(name)
+
+    @pytest.mark.parametrize('name', [
+        'model.glb', 'model.gltf', 'world.wrl', 'tileset.json',
+        'https://example.com/model.glb',
+    ])
+    def test_these_are_not(self, name):
+        assert not viewersource.is_archive(name)
+
+    def test_a_fragment_does_not_confuse_it(self):
+        assert viewersource.is_archive('world.tar.gz#gallery.glb')
+
+    def test_the_member_is_split_off(self):
+        assert viewersource.split_member('world.tar.gz#a/b.glb') == \
+            ('world.tar.gz', 'a/b.glb')
+
+    def test_a_source_with_no_fragment_has_no_member(self):
+        assert viewersource.split_member('world.tar.gz') == ('world.tar.gz', None)
+
+    def test_a_windows_path_is_not_a_fragment(self):
+        assert viewersource.split_member(r'C:\worlds\a.glb') == \
+            (r'C:\worlds\a.glb', None)
+
+
+class TestOpeningAMemberOfALocalArchive:
+    def test_the_named_member_is_returned(self, tmp_path, cache):
+        path = _tar(tmp_path / 'world.tar.gz', ['gallery.glb', 'CREDITS.txt'])
+
+        got = viewersource.open_archive(path + '#gallery.glb', cache_dir=cache)
+
+        assert os.path.basename(got) == 'gallery.glb'
+        assert os.path.exists(got)
+
+    def test_a_zip_works_the_same_way(self, tmp_path, cache):
+        path = _zip(tmp_path / 'world.zip', ['gallery.glb'])
+
+        got = viewersource.open_archive(path + '#gallery.glb', cache_dir=cache)
+
+        assert os.path.exists(got)
+
+    def test_a_member_in_a_subdirectory(self, tmp_path, cache):
+        path = _tar(tmp_path / 'w.tar.gz', ['gallery/scene.gltf', 'gallery/a.bin'])
+
+        got = viewersource.open_archive(path + '#gallery/scene.gltf',
+                                        cache_dir=cache)
+
+        assert os.path.exists(got)
+
+    def test_everything_beside_it_is_unpacked_too(self, tmp_path, cache):
+        """A .gltf names its buffers relatively; they have to be there."""
+        path = _tar(tmp_path / 'w.tar.gz', ['scene.gltf', 'scene.bin'])
+
+        got = viewersource.open_archive(path + '#scene.gltf', cache_dir=cache)
+
+        assert os.path.exists(os.path.join(os.path.dirname(got), 'scene.bin'))
+
+    def test_the_only_scene_file_needs_no_fragment(self, tmp_path, cache):
+        path = _tar(tmp_path / 'w.tar.gz', ['gallery.glb', 'CREDITS.txt'])
+
+        got = viewersource.open_archive(path, cache_dir=cache)
+
+        assert os.path.basename(got) == 'gallery.glb'
+
+    def test_a_choice_of_scenes_asks_for_one(self, tmp_path, cache):
+        path = _tar(tmp_path / 'w.tar.gz', ['a.glb', 'b.glb'])
+
+        with pytest.raises(viewersource.UnknownMember) as raised:
+            viewersource.open_archive(path, cache_dir=cache)
+
+        assert 'a.glb' in str(raised.value) and 'b.glb' in str(raised.value)
+
+    def test_an_archive_with_no_scene_in_it_says_so(self, tmp_path, cache):
+        path = _tar(tmp_path / 'w.tar.gz', ['CREDITS.txt'])
+
+        with pytest.raises(viewersource.UnknownMember):
+            viewersource.open_archive(path, cache_dir=cache)
+
+    def test_a_member_that_is_not_there_says_so(self, tmp_path, cache):
+        path = _tar(tmp_path / 'w.tar.gz', ['gallery.glb'])
+
+        with pytest.raises(viewersource.UnknownMember) as raised:
+            viewersource.open_archive(path + '#absent.glb', cache_dir=cache)
+
+        assert 'absent.glb' in str(raised.value)
+
+    def test_the_second_opening_does_not_unpack_again(self, tmp_path, cache):
+        path = _tar(tmp_path / 'w.tar.gz', ['gallery.glb'])
+        first = viewersource.open_archive(path + '#gallery.glb', cache_dir=cache)
+        os.utime(first, (1, 1))
+
+        again = viewersource.open_archive(path + '#gallery.glb', cache_dir=cache)
+
+        assert again == first
+        assert os.stat(again).st_mtime == 1
+
+
+class TestWhatAnArchiveMayNotDo:
+    def test_a_member_climbing_out_is_refused(self, tmp_path, cache):
+        """The extraction the content packs use, for the same reason."""
+        path = str(tmp_path / 'evil.zip')
+        with zipfile.ZipFile(path, 'w') as archive:
+            archive.writestr('../escaped.glb', b'x')
+
+        got = None
+        try:
+            got = viewersource.open_archive(path + '#escaped.glb',
+                                            cache_dir=cache)
+        except (IOError, viewersource.UnknownMember):
+            pass
+        assert not os.path.exists(str(tmp_path / 'escaped.glb'))
+        if got is not None:
+            assert os.path.realpath(got).startswith(os.path.realpath(cache))
+
+    def test_a_member_naming_an_absolute_path_is_refused(self, tmp_path, cache):
+        outside = tmp_path / 'outside.glb'
+        path = str(tmp_path / 'evil.zip')
+        with zipfile.ZipFile(path, 'w') as archive:
+            archive.writestr('/' + str(outside).lstrip('/'), b'x')
+
+        try:
+            viewersource.open_archive(path, cache_dir=cache)
+        except (IOError, viewersource.UnknownMember):
+            pass
+
+        assert not outside.exists()
+
+
+class TestTheViewersOwnResolution:
+    def test_an_archive_resolves_to_the_member_inside_it(self, tmp_path, cache):
+        path = _tar(tmp_path / 'w.tar.gz', ['gallery.glb'])
+
+        got = viewersource.resolve_source(path + '#gallery.glb', cache_dir=cache)
+
+        assert os.path.basename(got) == 'gallery.glb'
+
+    def test_a_plain_path_is_unchanged(self, tmp_path):
+        path = tmp_path / 'model.glb'
+        path.write_bytes(b'x')
+
+        assert viewersource.resolve_source(str(path)) == str(path)
+
+    def test_a_url_is_unchanged(self):
+        assert viewersource.resolve_source('https://example.com/a.glb') == \
+            'https://example.com/a.glb'
+
+    def test_a_path_that_is_not_there_is_none(self, tmp_path):
+        assert viewersource.resolve_source(str(tmp_path / 'absent.glb')) is None
