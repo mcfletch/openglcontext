@@ -112,6 +112,8 @@ OpenGLContext/
 │   ├── frommesh.py   # Generated glTF-shaped arrays -> scenegraph nodes
 │   ├── pbrmaterial.py, pbrmesh.py   # The metallic/roughness material and mesh
 │   ├── lightgrid.py  # Baked irradiance grid: lights what a lightmap cannot
+│   ├── octahedral.py # The fold an impostor's views are laid out by; the same
+│   │                 # arithmetic is in pbr.vert -- docs/lod.html#impostors
 │   ├── geometryarrays.py   # What a geometry offers a shader, and binding it
 │   ├── vertexsemantics.py  # Which attribute location each vertex array is read at
 │   ├── road*.py      # Roads, roadworks, signs -- docs/roads.html

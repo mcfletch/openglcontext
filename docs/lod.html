@@ -128,10 +128,68 @@ shared. See <a href="instancing.html">Instanced rendering</a>.</p>
 instancing has a fixed per-batch cost, and a pair of shapes is cheaper drawn as
 a pair.</p>
 
+<h2 id="impostors">Where a mesh stops being worth it</h2>
+<p>A chain's coarsest level is still a mesh, and past a certain distance a mesh
+is the wrong thing entirely: a bust twenty pixels tall spends five hundred
+triangles on a silhouette a picture would draw exactly. An <strong>octahedral
+impostor</strong> is that picture &mdash; one view of the model per direction,
+folded onto a single square texture, drawn on a card turned to the viewer that
+shows whichever view matches where they are standing.</p>
+<p>The fold is what makes it fit. Inflate an octahedron to the sphere of
+directions, cut it along its equator and unfold it flat, and every direction has
+a place on a unit square, with directions near each other in space landing near
+each other on it. <code>OpenGLContext.scenegraph.octahedral</code> is that
+arithmetic and holds no GL; <code>pbr.vert</code> is the same fold in GLSL, and
+the two are held to each other by a test that paints each tile with its own
+address and reads back which one the shader chose.</p>
+<p>A material declares it, which is also what makes a field of them batch &mdash;
+they share a material, so they share a draw:</p>
+<pre>"materials": [
+  {"pbrMetallicRoughness": {"baseColorTexture": {"index": 4}},
+   "alphaMode": "MASK",
+   "extras": {"octahedralViews": 8, "octahedralHemi": true}}
+]</pre>
+<p><code>extras</code> rather than an extension, because that is where the
+format puts what an application knows and a reader that does not is meant to
+step over &mdash; and only a reader that understood <code>MSFT_lod</code> reaches
+an impostor at all, since it is a chain's coarsest level and a reader without
+the extension draws the finest.</p>
+<p><strong>hemi</strong> holds the upper hemisphere and spends the whole square
+on it, which is what a thing standing on the ground wants: nobody walks under a
+bust, and the lower half would be half the resolution spent on views nobody
+takes. <code>"octahedralHemi": false</code> holds the whole sphere, for
+something seen from any side.</p>
+
+<h3 id="impostor-size">How big the atlas has to be</h3>
+<p>A question about how small the model will be on screen when the impostor
+takes over, and nothing else. At a threshold of three per cent of a 720-line
+window the model is twenty-odd pixels tall, so a <strong>256-pixel atlas at
+eight views a side</strong> &mdash; thirty-two pixels a view &mdash; covers it
+with room to spare. Twice as many views is four times the texture for angles a
+distant object does not resolve.</p>
+
+<h3 id="impostor-cost">What it buys</h3>
+<p>The gallery, from the far end, with a hundred and eight busts on screen:</p>
+<table>
+  <tr><th>Chain</th><th>Triangles in the busts</th><th>Draws in the frame</th></tr>
+  <tr><td>6 mesh levels</td><td>103,536</td><td>11</td></tr>
+  <tr><td>6 mesh levels + an impostor</td><td>90,620</td><td>12</td></tr>
+  <tr><td><strong>4 mesh levels + an impostor</strong></td><td><strong>39,460</strong></td><td><strong>10</strong></td></tr>
+</table>
+<p>The middle row is the one worth reading twice: bolting an impostor onto the
+end of a chain that already decimates to five hundred triangles saves an eighth
+of the triangles and costs a draw. The gain is in the third row, and it is not
+that the impostor is cheap &mdash; it is that <strong>an impostor lets you stop
+decimating early</strong>. Four mesh levels and a card beat six mesh levels by
+62% of the triangles and one draw, and there are two fewer levels to bake, ship
+and hold in memory.</p>
+
 <h2 id="authoring">Authoring a chain</h2>
 <p>Two routes, and they meet in the same file.</p>
 <h3 id="blender">In Blender</h3>
-<p>The add-on in
+<p>It bakes the impostor too: <code>--impostor 8</code> renders the finest level
+from each of the atlas's directions in Blender and makes the card the chain's
+last level. The add-on in
 <a href="https://github.com/mcfletch/openglcontext-editor">openglcontext-editor</a>
 (<code>OpenGLContext_editor/blender/openglcontext_lod</code>) adds an operator
 that cuts a chain from the selected mesh with Blender's own Decimate modifier,
@@ -173,6 +231,14 @@ reading, including what the node's children and lights do, is in
   <li><strong>The switch is a pop.</strong> There is no geomorphing between
   levels yet, so a change of level is visible as one if you are looking for it.
   The correspondence a morph needs is already recorded by the decimator.</li>
+  <li><strong>An impostor shows its nearest view, not a blend of the nearest
+  few.</strong> Turning past the angle between two baked views swaps one
+  picture for another. At the sizes an impostor is drawn at that is hard to
+  catch; blending the three nearest views is what would remove it.</li>
+  <li><strong>An impostor is lit as it was baked.</strong> The card carries the
+  lighting the bake had -- an even white surround -- and does not respond to
+  the lights around it. A model that walks from daylight into a cellar keeps
+  its daylight at the distance the impostor takes over.</li>
   <li><strong><code>MSFT_lod</code> on a <em>material</em></strong>, which the
   extension also allows, is not read.</li>
 </ul>

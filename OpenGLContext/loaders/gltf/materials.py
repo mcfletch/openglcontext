@@ -15,6 +15,7 @@ spec/gloss workflow is converted to metallic/roughness in the sibling
 """
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any, Callable, List, Optional
 
 from OpenGLContext.scenegraph.pbrmaterial import (
@@ -25,6 +26,8 @@ from OpenGLContext.loaders.gltf.textures import _info, _texture_holder, _pil_for
 from OpenGLContext.loaders.gltf.specular_glossiness import (
     _specgloss_to_metalrough, _specgloss_textures_to_metalrough,
 )
+
+log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     import pygltflib
@@ -199,7 +202,6 @@ _MATERIAL_EXT_HANDLERS = {
 
 _MATERIAL_EXT_DEFAULTS = dict(
     unlit=False, bakedLight=False, emissiveStrength=1.0, specular=1.0,
-    octahedralViews=0, octahedralHemi=True,
     specularColor=(1.0, 1.0, 1.0),
     ior=1.5, clearcoat=0.0, clearcoatRoughness=0.0, sheenColor=(0.0, 0.0, 0.0),
     sheenRoughness=0.0, iridescence=0.0, iridescenceIor=1.3,
@@ -217,6 +219,36 @@ def _read_material_extensions(exts: dict, add: AddTexture) -> dict:
         if name in exts:
             kwargs.update(handler(exts[name] or {}, add))
     return kwargs
+
+
+#: What a material's ``extras`` call an octahedral impostor's atlas. Not an
+#: extension: ``extras`` is where the format puts what an application knows and
+#: a reader that does not is meant to step over, and only a reader that
+#: understood ``MSFT_lod`` reaches an impostor at all -- it is a chain's
+#: coarsest level, and a reader without the extension draws the finest.
+IMPOSTOR_VIEWS = 'octahedralViews'
+IMPOSTOR_HEMI = 'octahedralHemi'
+
+
+def _octahedral_impostor(mat: Any) -> dict:
+    """``octahedralViews``/``octahedralHemi`` where the material declares them.
+
+    A grid of fewer than two views a side is one picture, which is an ordinary
+    textured card and wants none of this.
+    """
+    extras = getattr(mat, 'extras', None)
+    if not isinstance(extras, dict):
+        return {}
+    try:
+        views = int(extras.get(IMPOSTOR_VIEWS, 0) or 0)
+    except (TypeError, ValueError):
+        log.warning('%r is not a number of views; the material is drawn as an '
+                    'ordinary one', extras.get(IMPOSTOR_VIEWS))
+        return {}
+    if views < 2:
+        return {}
+    return {'octahedralViews': views,
+            'octahedralHemi': bool(extras.get(IMPOSTOR_HEMI, True))}
 
 
 def _build_material(g: "pygltflib.GLTF2", material_index: Optional[int],
@@ -307,6 +339,7 @@ def _build_material(g: "pygltflib.GLTF2", material_index: Optional[int],
         textures=collector.textures, uv_transform=uv_transform,
         texCoordMask=collector.tex_coord_mask,
         **ext_kwargs,   # KHR extension factors
+        **_octahedral_impostor(mat),
     )
     result._uv_params = collector.uv_params   # for live KHR_animation_pointer UV edits
     result._tex_coord_mask = collector.tex_coord_mask

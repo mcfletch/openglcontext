@@ -7,6 +7,52 @@ the far end 108 of them are on screen across four levels in **four instanced
 draws** -- eleven for the whole frame. What is left is geomorphing (M9), the
 baked normal map (M10), and lazy per-level decoding.
 
+## Octahedral impostors (2026-09-19)
+
+The coarsest level no longer has to be a mesh. An impostor bakes one view of the
+model per direction into a single octahedral atlas and draws a card turned to
+the viewer showing the matching one:
+`OpenGLContext/scenegraph/octahedral.py` (the fold, no GL), a dozen lines of
+`pbr.vert` behind an `impostorGrid` uniform that is 0 for every ordinary draw,
+and `octahedralViews`/`octahedralHemi` on the material -- which is also what
+makes a field of them batch. The baker is the add-on's
+(`openglcontext_lod/impostor.py`), rendering the finest level in Blender.
+
+**What it buys, measured on the hall from its far end, 108 busts on screen:**
+
+| Chain | Bust triangles | Draws |
+|---|---|---|
+| 6 mesh levels | 103,536 | 11 |
+| 6 mesh levels + impostor | 90,620 | 12 |
+| **4 mesh levels + impostor** | **39,460** | **10** |
+
+The middle row is the lesson. Bolting an impostor onto a chain that already
+decimates to 546 triangles saves an eighth of them and costs a draw call -- the
+coarsest mesh level was already cheap, so replacing it saves little. The gain is
+that **an impostor lets you stop decimating early**: four mesh levels and a card
+beat six mesh levels by 62% of the triangles and one draw, with two fewer levels
+to bake, ship and hold.
+
+**Three things it found:**
+
+- *Blender views a render through AgX by default.* A bake taken through a film
+  curve is a visibly paler, flatter version of the model at the moment the
+  impostor appears. The bake pins `Standard`.
+- *Blender has had no alpha-clip blend mode since 4.2*, so a cut-out material
+  exports as `BLEND` and is drawn as glass -- sorted, and out of the opaque
+  batch. The export hook sets `MASK` explicitly, which is what put the
+  impostors back in the instanced draw.
+- *The mapping now exists three times* -- the engine's Python, the add-on's (it
+  installs into Blender carrying nothing of ours) and GLSL. Held together by a
+  test in each direction: the editor's suite imports both Python copies and
+  compares them over thousands of directions, and the engine's GL test paints
+  every tile with its own address and reads back which one the shader chose.
+
+**Still open:** an impostor shows its nearest view rather than a blend of the
+nearest few, so turning past the angle between two baked views swaps one picture
+for another; and it carries the lighting it was baked under rather than the
+lighting around it.
+
 ## What landed
 
 **Authored in Blender, which is the part that matters to anyone else.** The
