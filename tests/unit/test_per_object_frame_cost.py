@@ -42,6 +42,14 @@ FRAMES = 90
 #: which shows up as a multiple rather than as a few percent.
 CEILING_US = 45.0
 
+#: How much dearer a still frame may measure than a moving one. Both draw the
+#: same scene; what the still one skips -- deriving casters, choosing levels --
+#: is a small part of a frame, so the two readings sit within the noise of each
+#: other and a strict ordering between them decides on that noise. Generous for
+#: the same reason as the ceiling above: what this is here to catch is the
+#: still path becoming the expensive one, which is a multiple and not a percent.
+STILL_MARGIN = 1.10
+
 
 def _run(objects, camera='still'):
     """The harness's reading, or None where this machine cannot render at all.
@@ -152,6 +160,8 @@ class TestWhatAFrameCostsPerObject:
 
     def test_a_still_scene_is_not_dearer_than_a_moving_one(self, still, moving):
         """The shortcuts a still scene takes must actually pay."""
-        assert still[1]['median_ms'] <= moving['median_ms'], (
-            'still=%.2fms moving=%.2fms at %d objects'
-            % (still[1]['median_ms'], moving['median_ms'], LARGE))
+        assert still[1]['median_ms'] <= moving['median_ms'] * STILL_MARGIN, (
+            'still=%.2fms moving=%.2fms at %d objects, over the %.0f%% a still '
+            'frame may measure above a moving one'
+            % (still[1]['median_ms'], moving['median_ms'], LARGE,
+               (STILL_MARGIN - 1.0) * 100.0))

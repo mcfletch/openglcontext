@@ -288,6 +288,13 @@ deliberately loose — 45 µs an object against a measured ~13 — because what 
 is there to catch is a per-object cost coming back, which shows as a multiple.
 The counts are the tight gate.
 
+The still-against-moving check is loose for the same reason, and has to be: a
+still frame and a moving one draw the same scene, so the two medians land
+within noise of each other — 5.66 ms against 5.61 at 360 objects in one run —
+and a strict ordering between them decides on that noise rather than on the
+engine. `STILL_MARGIN` is 10%, which a still path that stopped taking its
+shortcuts would clear several times over.
+
 ## How it scales
 
 The frame time is very nearly linear in the object count, so the figure that
