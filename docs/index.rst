@@ -120,6 +120,10 @@ Features
   - :doc:`Physically based materials <pbr>` — a metallic/roughness
     :doc:`uber-shader <ubershader>` with image-based lighting
 
+  - :ref:`HDR backgrounds <environment-lighting>` — a Radiance ``.hdr``
+    panorama as the sky, tone-mapped with the scene and reflected by
+    everything metal in it
+
   - :doc:`Dynamic shadows <shadows>` from cascaded shadow maps, shared by the core
     lighting and PBR passes
 
@@ -140,9 +144,12 @@ Features
   - :doc:`NURBS surfaces and curves <nurbs>` — rational, trimmed, and tessellated
     to the distance they are seen from
 
-  - :doc:`Extrusions, lathes, screws, spirals and tubes <extrusions>` — swept as
-    vertex arrays, so they draw in either profile, and filled by a constrained
-    Delaunay tessellator that also handles any outline you hand it
+  - :doc:`Extrusions, lathes, screws, spirals and tubes <extrusions>` — swept
+    as vertex arrays, so they draw in either profile
+
+  - :doc:`Turning an outline into triangles <tessellation>` — a constrained
+    Delaunay tessellator for glyphs, floor plans, lakes and the caps on the
+    ends of a sweep
 
   - :doc:`Text <text>` — TrueType, as a screen-space texture atlas, 3-D polygonal
     solids, or 3-D outlines
@@ -277,6 +284,7 @@ Documentation
    :caption: Geometry and text
 
    extrusions
+   tessellation
    nurbs
    text
    characters

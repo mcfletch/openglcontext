@@ -1,5 +1,5 @@
-Swept Geometry and Tessellation
-===============================
+Swept Geometry
+==============
 
 Six geometry nodes describe a shape by sweeping a 2D outline along a path: a
 lathe, a spiral, a screw, two kinds of tube, and VRML97's own ``Extrusion``.
@@ -289,41 +289,10 @@ offers, named ``vertex``/``normal``, optionally ``model``, then
 Tessellation
 ------------
 
-.. figure:: images/extrusions/tessellation.png
-   :alt: Six tessellated faces with their triangle edges drawn
-
-   From ``tests/extrusions_tessellation.py``; the white lines are the triangle
-   edges. Top: a letter O (two rings, one a hole), a pentagram by the odd rule
-   (the doubly-wound middle comes out empty), the same by the nonzero rule.
-   Bottom: a rounded square plain, the same refined to a maximum triangle area,
-   and a star refined to a minimum angle.
-
-.. figure:: images/extrusions/fig_preprocessing.png
-   :alt: Six awkward outlines and what preprocessing makes of them
-
-   From ``tests/extrusions_preprocessing.py``: an outline crossing itself, two
-   rings crossing, a T-junction, two shapes sharing an edge, near-duplicate
-   vertices, and a ring closed by a repeated point.
-
-End caps are tessellated, which is why an extrusion of a contour with holes
-gets a cap with the holes in it. The tessellator is a public API in its own
-right -- a **constrained Delaunay triangulation** with exact-sign predicates,
-which copes with outlines that cross themselves, holes, coincident vertices
-and T-junctions:
-
-.. code-block:: python
-
-   from opengl_extrusions import tessellate
-
-   result = tessellate([outer_ring, hole_ring], winding='odd', min_angle=30.0)
-   result.points        # (V, 2)
-   result.triangles     # (T, 3), counter-clockwise
-
-Which parts come out solid is decided by a winding rule: ``odd`` (the default,
-under which nested rings alternate), ``nonzero``, ``positive``, ``negative``
-or ``abs_geq_two``. ``min_angle`` and ``max_area`` refine the mesh; an angle
-target spends triangles only where the outline forces thin ones, while an area
-target subdivides evenly throughout.
+An end cap is a filled outline, so it is tessellated rather than fanned —
+which is why an extrusion of a contour with holes gets a cap with the holes in
+it. The tessellator is a public call in its own right and has :doc:`a page of
+its own <tessellation>`.
 
 Generated geometry into the scenegraph
 --------------------------------------

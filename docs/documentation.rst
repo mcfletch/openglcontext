@@ -256,12 +256,15 @@ translations are a good starting point for beginning OpenGL programmers.
     hooks make work, and building a Debian package that carries its own
     interpreter under ``/opt`` with ``oglc-deb``
 
-  - :doc:`Swept Geometry & Tessellation <extrusions>` -- Lathes, spirals, screws,
-    tubes and VRML97's ``Extrusion``, generated as vertex arrays and drawn in a
-    core profile: join styles and miter limits, spline paths sampled to a
-    curvature tolerance, rotation-minimizing frames, closed loops, and the
-    constrained Delaunay tessellator that fills their caps and any other outline
-    you hand it
+  - :doc:`Swept Geometry <extrusions>` -- Lathes, spirals, screws, tubes and
+    VRML97's ``Extrusion``, generated as vertex arrays and drawn in a core
+    profile: join styles and miter limits, spline paths sampled to a curvature
+    tolerance, rotation-minimizing frames and closed loops
+
+  - :doc:`Turning an Outline into Triangles <tessellation>` -- The constrained
+    Delaunay tessellator: winding rules, refinement by minimum angle or maximum
+    area, and what it makes of an outline that crosses itself, has holes, or
+    meets itself at a T-junction
 
   - :doc:`NURBS Surfaces & Curves <nurbs>` -- Surfaces, trimmed surfaces and
     curves from control nets and knot vectors, evaluated to indexed triangle

@@ -404,6 +404,8 @@ A material only looks right if the scene is lit. The PBR renderer lights
 surfaces two ways at once: direct lights (sun, lamps, spotlights) and the
 surrounding environment.
 
+.. _environment-lighting:
+
 Environment Lighting (Reflections and Ambient)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -418,6 +420,15 @@ on by default. You can adjust or disable it:
 
 - ``OPENGLCONTEXT_IBL`` -- force it ``full``, ``analytic`` (a cheaper
   approximation), or ``off`` (flat ambient, no reflections).
+
+A scene that carries its own sky lights itself with it. ``HDRBackground``
+takes a Radiance ``.hdr`` equirectangular panorama — the usual HDRI
+interchange format — draws it as the sky, and registers the same panorama as
+the environment, so what a metal reflects is what is behind it. The panorama
+keeps its values above 1.0 where the sun and the sky are brighter than white,
+which is the reason to use one, and the visible sky is exposure-scaled and
+tone-mapped the way lit geometry is, so that the two agree. Six LDR JPEG faces
+in a ``CubeBackground`` are the cheaper alternative, and light nothing.
 
 Left to itself, environment lighting steps down to the cheaper approximation
 when the frame rate sags and climbs back after sustained headroom, so it never
