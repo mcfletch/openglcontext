@@ -30,6 +30,7 @@ Secure fetching of external assets is delegated to the shared
     specular_glossiness   the archived spec/gloss extension -> metallic/roughness
     transforms            matrix / quaternion / bounds / camera math
     materials             glTF material + KHR extensions -> PBRMaterial
+    hooks                 OGLC_hook: what a material or node is, and the registry
     draco                 KHR_draco_mesh_compression -> decoded attribute arrays
     meshes                primitive -> renderable Shape (normals/tangents/morph)
     animation             the animation runtime engine + its load-time parsing

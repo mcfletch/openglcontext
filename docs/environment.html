@@ -169,6 +169,11 @@ needs.</p>
 <tr><td><code>OPENGLCONTEXT_PHYSICS</code></td><td>yes/no</td><td>off</td>
   <td>Whether the viewer walks the scene with gravity and collision rather
   than framing it. See <a href="physics.html">Physics</a>.</td></tr>
+<tr><td><code>OPENGLCONTEXT_GLTF_HOOKS</code></td><td>yes/no</td><td>on</td>
+  <td>Whether an <code>OGLC_hook</code> tag in a glTF is read, so a material or
+  a node marked as water loads as water. Off, every tag in every file is left
+  unread and the model loads as ordinary shapes. See
+  <a href="gltf.html#hooks">Engine hooks</a>.</td></tr>
 </table>
 
 <h2>The window, capture and the interface</h2>

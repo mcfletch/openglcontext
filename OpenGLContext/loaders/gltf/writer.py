@@ -39,6 +39,7 @@ from typing import Any, Iterable, Optional, Sequence, Union
 import numpy as np
 
 from OpenGLContext import __version__ as _engine_version
+from OpenGLContext.loaders.gltf import hooks as _hooks
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 GENERATOR = "OpenGLContext %s glTF writer" % _engine_version
@@ -151,6 +152,11 @@ class SceneNode:
     mesh). The placement is either ``matrix`` (16 floats, column-major) or the
     ``translation``/``rotation``/``scale`` triple; a node giving both is refused,
     since glTF cannot express the pair. ``rotation`` is an xyzw quaternion.
+
+    ``extras`` is written through as the node's ``extras``, which is the
+    format's slot for what an application knows; ``hook`` is an ``OGLC_hook``
+    block saying what the engine should make of this object
+    (:mod:`OpenGLContext.loaders.gltf.hooks`).
     """
 
     mesh: Union[PBRMesh, Sequence[PBRMesh], None] = None
@@ -161,6 +167,8 @@ class SceneNode:
     matrix: Optional[Sequence[float]] = None
     children: Sequence["SceneNode"] = dataclass_field(default_factory=list)
     instances: Optional[InstanceSet] = None
+    extras: Optional[dict] = None
+    hook: Optional[dict] = None
 
 
 # --- accessors and buffer layout ----------------------------------------------
@@ -321,6 +329,10 @@ _EXTENSION_TEXTURE_KEY = {
 # Bit per channel in PBRMaterial.texCoordMask: set means "sample TEXCOORD_1".
 _TEXCOORD_BIT = {'baseColor': 1, 'metallicRoughness': 2, 'normal': 4,
                  'occlusion': 8, 'emissive': 16}
+
+# Ours: what a material or a node is, for the engine to make something of on
+# load. The reader's half of the pair is in hooks, and so is the name.
+_HOOK_EXTENSION = _hooks.EXTENSION
 
 
 def _close(value: Any, default: Any) -> bool:
@@ -513,10 +525,36 @@ class GLTFWriter:
             entry['emissiveTexture'] = emissive_texture
 
         extensions = self._material_extensions(material, texture_info)
+        extensions.update(self._hook_extension(getattr(material, 'hook', None)))
         if extensions:
             entry['extensions'] = extensions
             self._extensions_used.update(extensions)
+        self._carry_extras(entry, getattr(material, 'extras', None))
         return entry
+
+    def _hook_extension(self, hook: Any) -> dict:
+        """An ``OGLC_hook`` block for a material or node that carries one.
+
+        A dict naming a ``kind``, or the kind on its own. What the loader read
+        off a document comes back here, so a world loaded, edited and baked
+        again keeps what it was tagged as.
+        """
+        if isinstance(hook, str) and hook.strip():
+            hook = {'kind': hook.strip()}
+        if not isinstance(hook, dict) or not hook.get('kind'):
+            return {}
+        return {_HOOK_EXTENSION: dict(hook)}
+
+    @staticmethod
+    def _carry_extras(entry: dict, extras: Any) -> None:
+        """Write an object's ``extras`` through, where it has any.
+
+        The format's own slot for what an application knows, and a reader that
+        does not know it is meant to step over it -- so what is written is what
+        was given, uninterpreted.
+        """
+        if isinstance(extras, dict) and extras:
+            entry['extras'] = dict(extras)
 
     def _material_extensions(self, material: Any, texture_info: Any) -> dict:
         """The ``KHR_materials_*`` blocks whose factors or maps are not default."""
@@ -664,6 +702,11 @@ class GLTFWriter:
             entry.setdefault('extensions', {})['EXT_mesh_gpu_instancing'] = \
                 self._instancing(node.instances)
             self._extensions_used.add('EXT_mesh_gpu_instancing')
+        hook = self._hook_extension(node.hook)
+        if hook:
+            entry.setdefault('extensions', {}).update(hook)
+            self._extensions_used.update(hook)
+        self._carry_extras(entry, node.extras)
         if node.children:
             entry['children'] = [self.add_node(child, root=False)
                                  for child in node.children]

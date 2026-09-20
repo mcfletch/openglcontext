@@ -412,7 +412,9 @@ uv pip install -e ".[glfw,gltf]"</pre>
             weather from one wave field taken from world position and time, moved
             on the card by the vertex shader, with glints as a river's level of
             detail -- and water as a medium you are inside, closing the view in
-            and muffling the mix</li>
+            and muffling the mix, whether it is built in Python or
+            <a href="water.html#authoring">marked on a material in the
+            model</a></li>
           <li><a href="editing.html">Building an Editor</a> -- Tool modes that
             get the pointer before the camera does, the point on the world under
             the cursor, dragging against a plane, a tri-axis handle that holds a
@@ -458,8 +460,10 @@ uv pip install -e ".[glfw,gltf]"</pre>
           <li><a href="gltf.html">Loading glTF</a> -- The glTF&nbsp;2.0 loader:
             what it supports, using it from your own code,
             <a href="gltf.html#names">driving a model by the names it was
-            authored under</a>, and the
-            <a href="gltf.html#assets">library a package's own art loads
+            authored under</a>,
+            <a href="gltf.html#hooks">tagging a material or an object with what
+            it is</a> so the engine makes water or a trigger volume of it, and
+            the <a href="gltf.html#assets">library a package's own art loads
             through</a></li>
           <li><a href="untrusted.html">Loading content you did not write</a> --
             What a model, world or texture from somewhere else is allowed to

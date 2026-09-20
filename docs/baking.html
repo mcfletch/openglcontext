@@ -83,6 +83,19 @@ material an application finds by name in one document is found by that name in a
 document written from it &mdash; see
 <a href="gltf.html#names">Driving a model by name</a>.
 <code>GLTFWriter.add_material( material, name=... )</code> names one explicitly.</p>
+<h3 id="tags">Saying what a thing is</h3>
+<p>Two slots carry what the PBR fields have no room for, on a material and on a
+<code>SceneNode</code> alike. <code>extras</code> is written through
+uninterpreted &mdash; the format's own place for what an application knows and a
+reader that does not is meant to step over. <code>hook</code> becomes an
+<code>OGLC_hook</code> extension block, which says what the engine should make
+of the thing as it loads:</p>
+<pre>material.hook = {'kind': 'water', 'style': 'choppy', 'depth': 6.0}
+write_glb(SceneNode(mesh=lake, name='reservoir'), path='valley.glb')</pre>
+<p>The loader reads both spellings back onto the material, so a world can be
+loaded, edited and baked again with its tags intact &mdash; which is how an
+editor bakes a world with its water already marked. See
+<a href="gltf.html#hooks">Engine hooks</a>.</p>
 <h3>Many copies of one mesh</h3>
 <p>An <code>InstanceSet</code> on a node writes the standard
 <code>EXT_mesh_gpu_instancing</code> extension, so thousands of placements of one

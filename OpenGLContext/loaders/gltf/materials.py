@@ -22,6 +22,7 @@ from OpenGLContext.scenegraph.pbrmaterial import (
     PBRMaterial, PBRTexture, uv_transform_matrix,
 )
 from OpenGLContext.loaders.resolver import Resolver
+from OpenGLContext.loaders.gltf import hooks
 from OpenGLContext.loaders.gltf.textures import _info, _texture_holder, _pil_for_texinfo
 from OpenGLContext.loaders.gltf.specular_glossiness import (
     _specgloss_to_metalrough, _specgloss_textures_to_metalrough,
@@ -343,4 +344,25 @@ def _build_material(g: "pygltflib.GLTF2", material_index: Optional[int],
     )
     result._uv_params = collector.uv_params   # for live KHR_animation_pointer UV edits
     result._tex_coord_mask = collector.tex_coord_mask
+    _carry_application_data(result, mat, exts)
     return result
+
+
+def _carry_application_data(material: PBRMaterial, mat: Any, exts: dict) -> None:
+    """Keep what the document said that the engine's own fields have no room for.
+
+    ``extras`` is the format's slot for what an application knows, and an
+    ``OGLC_hook`` block is what an application was told to make of the surface
+    (:mod:`OpenGLContext.loaders.gltf.hooks`). Neither is a shading parameter,
+    so neither is a field; they travel beside the material as plain attributes
+    and the writer puts them back, which is what lets a world be loaded, edited
+    and baked again with its tags intact.
+    """
+    extras = getattr(mat, 'extras', None)
+    if isinstance(extras, dict) and extras:
+        material.extras = dict(extras)
+    hook = exts.get(hooks.EXTENSION)
+    if isinstance(hook, dict) and hook:
+        material.hook = dict(hook)
+    elif isinstance(hook, str) and hook.strip():
+        material.hook = {'kind': hook.strip()}

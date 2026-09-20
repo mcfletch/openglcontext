@@ -11,6 +11,11 @@ which attribute disagrees instead of crashing in the VBO upload.
 
 Also reads a primitive's morph ``targets`` (position/normal/tangent deltas) for the
 animation Player to blend per frame.
+
+A primitive whose material carries an ``OGLC_hook`` tag passes through the hook
+that tag names before it is returned, so an application can make something else
+of it -- a sheet of water, a force field -- with the decoded mesh in hand. See
+:mod:`OpenGLContext.loaders.gltf.hooks`.
 """
 from __future__ import annotations
 
@@ -25,6 +30,7 @@ from OpenGLContext.loaders.resolver import Resolver
 
 if TYPE_CHECKING:
     import pygltflib
+    from OpenGLContext.loaders.gltf.hooks import HookRunner
     # ``Shape``/``Appearance`` are registered into basenodes dynamically (plugin
     # entry points), so mypy cannot see them there; take the types from their
     # defining modules.
@@ -88,7 +94,9 @@ def _triangulate_indices(mode: Optional[int], indices: Optional[np.ndarray],
 
 
 def _primitive_shape(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
-                     resolver: Resolver, mat_cache: dict, tex_cache: dict
+                     resolver: Resolver, mat_cache: dict, tex_cache: dict,
+                     hooks: "Optional[HookRunner]" = None,
+                     world: Optional[np.ndarray] = None
                      ) -> Tuple[Optional["Shape"], Optional[Tuple[np.ndarray, np.ndarray]]]:
     attrs = primitive.attributes
     if attrs.POSITION is None:
@@ -184,6 +192,18 @@ def _primitive_shape(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
     acc = g.accessors[attrs.POSITION]
     bounds = (np.asarray(acc.min, dtype='d'), np.asarray(acc.max, dtype='d')) \
         if acc.min and acc.max else _bounds_from_points(positions)
+    if hooks is not None and key is not None:
+        # The material hook stands here rather than beside _build_material
+        # because what a substance needs is often on the *geometry* -- water's
+        # wave is two attributes on the mesh -- and the finished objects only
+        # exist once the primitive is decoded.
+        declared = (g.materials or [])[key] if 0 <= key < len(g.materials or []) else None
+        shape, bounds, shareable = hooks.material(
+            primitive, declared, mesh, material, shape, bounds, world)
+        if not shareable and shape is not None:
+            # Read back by mesh_shapes, which keeps a hook's per-node result out
+            # of the mesh cache exactly as a morphed or skinned mesh is kept out.
+            shape._gltf_unshareable = True
     return shape, bounds
 
 

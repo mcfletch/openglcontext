@@ -187,6 +187,59 @@ rather than converting.</p>
 </section>
 
 <section>
+<h2 id="authoring">Authoring water in a model</h2>
+<p>Everything above builds water in Python. An artist can also mark it in the
+model: give the lake's material a custom property called <code>OGLC_hook</code>,
+export, and the surface loads moving. Nothing registers anything &mdash; the
+<code>water</code> kind ships bound &mdash; so a tagged file opens in
+<code>oglc-view</code> as water.</p>
+<pre>OGLC_hook = {"kind": "water", "style": "choppy", "depth": 6.0}</pre>
+<p>In Blender that is a custom property on the material datablock, exported with
+<strong>Include &rsaquo; Custom Properties</strong> ticked; no add-on, and
+Blender 4.x is enough. The shorthand is the kind on its own,
+<code>OGLC_hook = "water"</code>, which is a pond. <a href="gltf.html#hooks">Engine
+hooks</a> is the mechanism underneath, including how to tag a node rather than a
+material and how to register a kind of your own.</p>
+<table>
+<tr><th>Parameter</th><th>Default</th><th>What it says</th></tr>
+<tr><td><code>style</code></td><td><code>still</code></td>
+  <td><code>still</code>, <code>flowing</code>, <code>choppy</code> or
+  <code>lake</code> &mdash; or an object spelling out the
+  <code>WaterStyle</code> fields (<code>amplitude</code>,
+  <code>wavelength</code>, <code>speed</code>, <code>steepness</code>,
+  <code>flow</code>) for water that is none of the four. A name nothing answers
+  to draws a pond and says so in the log.</td></tr>
+<tr><td><code>material</code></td><td><code>keep</code></td>
+  <td><code>keep</code> shades the surface with the material the file carries, so
+  what the artist authored is what is drawn. <code>engine</code> takes
+  <code>water_material()</code> instead.</td></tr>
+<tr><td><code>medium</code></td><td><code>water</code></td>
+  <td><code>water</code>, <code>slime</code> or <code>lava</code>: what being
+  inside it is like. Lava is this kind with another medium and another material,
+  which is why there is no second one.</td></tr>
+<tr><td><code>depth</code></td><td><code>0.0</code></td>
+  <td>How far below the surface the body reaches, in metres. A surface has no
+  thickness, so a sheet with no <code>depth</code> bounds a box nothing is
+  inside of except exactly at the waterline.</td></tr>
+</table>
+<p>Each tagged primitive arrives as one <code>WaterBody</code> in
+<code>scene.hook_data[ 'water' ]</code> &mdash; the mesh whose wave a frame
+advances, the style it moves with, and the <code>Volume</code> saying where it
+is, in world metres and round <em>this</em> copy of the surface. Two nodes
+sharing one tagged mesh are two bodies of water, with a box each.</p>
+<pre>scene = gltf.load_gltf( "valley.glb" )
+volumes = Volumes([ body.volume for body in scene.hook_data.get( 'water', () ) ])
+...
+submerge( self, volumes, self.platform.position )   # once a frame</pre>
+<p>A wave costs nothing per frame because the card holds the field, but something
+has to say what time it is. <code>scene.advance( seconds )</code> moves every
+body's surface and answers whether anything changed; the viewer calls it from its
+idle, and a game driving its own loop calls it itself. A scene of ponds answers
+<code>False</code> &mdash; still water carries its ripple in the normals, and
+there is nothing to redraw for.</p>
+</section>
+
+<section>
 <h2 id="demo">Seeing it work</h2>
 <figure>
   <img src="images/demos/water_demo.jpg"
@@ -303,8 +356,9 @@ medium under the camera: air</pre>
 
 <footer>
 <p>See also: <a href="terrain.html">Terrain &amp; Landscapes</a> for the
-landscape water sits in, <a href="baking.html">Baking a world</a> for putting
-rivers and lakes into a streamable tileset,
+landscape water sits in, <a href="gltf.html#hooks">Engine hooks</a> for the
+mechanism a tagged model goes through, <a href="baking.html">Baking a world</a>
+for putting rivers and lakes into a streamable tileset,
 <a href="pbr.html">PBR materials</a> for what <code>water_material</code>
 builds, <a href="audio.html">Spatial Audio</a> for the mix the muffle acts on,
 and <a href="navigation.html">Movement modes</a> for swimming in it.</p>
