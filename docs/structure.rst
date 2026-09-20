@@ -3,76 +3,85 @@ OpenGLContext Structural Overview
 
 .. rst-class:: introduction
 
-What the engine is made of, what it is built on, and what is built on it. An
-arrow means "uses"; a dashed one is an optional extra rather than something a
-plain install brings.
+How the stack is built up. Each layer is written against the one below it;
+blue is ours and grey is somebody else's. A dashed line is an optional extra
+rather than something a plain install brings.
 
 .. mermaid::
 
    flowchart TD
-       subgraph built["Built on it"]
-           apps["oglc-view · the demos · your game"]
-           editor["OpenGLContext-editor<br/>world baking, levels of detail"]
+       classDef ours fill:#dbe7ff,stroke:#5a7ab5,color:#111
+       classDef third fill:#ededed,stroke:#999999,color:#111
+
+       subgraph apps["Games and demos"]
+           glisteel["GLinting Steel"]
+           twig["twig-bb"]
+           forest["forest demo"]
        end
 
-       subgraph engine["OpenGLContext"]
-           context["Context<br/>window, main loop, input"]
-           passes["Render passes<br/>flat · PBR · shadows · instancing"]
-           scene["Scenegraph<br/>nodes, fields, routes"]
-           loaders["Loaders<br/>glTF · VRML97 · OBJ · 3D Tiles"]
-           world["Worlds<br/>terrain · vegetation · water · roads"]
-           sim["Simulation<br/>physics · navmesh · movement · audio"]
-           ui["Overlay UI · HUD"]
-           ship["Telemetry · recording · content packs · packaging"]
+       subgraph authoring["Authoring"]
+           editor["OpenGLContext-editor"]
        end
 
-       subgraph ours["Ours, released separately"]
-           vrml["PyVRML97<br/>the node and field model"]
+       subgraph engine["The engine"]
+           oglc["OpenGLContext"]
+       end
+
+       subgraph libs["Libraries"]
+           pyopengl["PyOpenGL"]
+           vrml["PyVRML97"]
            omip["omi_physics"]
            omia["omi_audio"]
            ext["opengl_extrusions"]
-           dec["opengl_decimate"]
            ttf["TTFQuery"]
-           simple["SimpleParse"]
-           dispatch["PyDispatcher"]
-           video["pyopengl-video"]
-           qt["OpenGLContext-qt"]
        end
 
-       subgraph under["Underneath"]
-           pyopengl["PyOpenGL"]
+       subgraph base["Underneath"]
+           simple["SimpleParse"]
+           dispatch["PyDispatcher"]
            numpy["numpy"]
            pillow["Pillow"]
            gltflib["pygltflib"]
+           miniaudio["miniaudio"]
+       end
+
+       subgraph metal["The machine"]
            driver["The GL driver, and the GPU"]
        end
 
-       apps --> context
-       editor --> context
-       editor -.-> dec
-       qt -.-> context
-       context --> passes
-       context --> ui
-       context --> scene
-       passes --> scene
-       loaders --> scene
-       world --> scene
-       sim --> scene
-       scene --> vrml
-       scene --> ext
-       scene --> ttf
-       vrml --> dispatch
+       glisteel --> editor
+       glisteel --> oglc
+       twig --> editor
+       twig --> oglc
+       forest --> oglc
+       editor --> oglc
+       oglc --> pyopengl
+       oglc --> vrml
+       oglc --> omip
+       oglc --> omia
+       oglc --> ext
+       oglc --> ttf
+       oglc --> numpy
+       oglc --> pillow
+       oglc --> gltflib
        vrml --> simple
-       sim --> omip
-       sim --> omia
-       loaders --> gltflib
-       loaders --> pillow
-       ship -.-> video
-       passes --> pyopengl
-       ui --> pyopengl
-       scene --> numpy
-       video -.-> pyopengl
+       vrml --> dispatch
+       vrml --> numpy
+       omip --> numpy
+       omia --> numpy
+       omia -.-> miniaudio
+       ext --> numpy
        pyopengl --> driver
+
+       class glisteel,twig,forest,editor,oglc,pyopengl,vrml,omip,omia,ext,ttf,simple,dispatch ours
+       class numpy,pillow,gltflib,miniaudio,driver third
+
+Each of those is released on its own and useful on its own: ``omi_physics``
+and ``omi_audio`` are the OMI glTF models in numpy with no renderer in them,
+``opengl_extrusions`` sweeps and tessellates geometry for anyone who wants
+vertex arrays, and ``PyVRML97`` is the node, field and route model the
+scenegraph is built from. What the engine adds is the window, the render
+passes and the scenegraph that ties them together.
 
 The OpenGLContext Package (top-level)
 -------------------------------------

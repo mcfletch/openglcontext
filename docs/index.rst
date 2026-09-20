@@ -32,16 +32,24 @@ plumbing under it. It is also the environment PyOpenGL itself is exercised and
 taught in: the :doc:`tutorials <tutorials/index>` and the :doc:`sample code
 <documentation>` are a way into OpenGL for people who have not written any.
 
-Install it, then open a model and walk around it:
+One line, and a window opens on the Khronos glTF sample models with the
+engine drawing them — `uv <https://docs.astral.sh/uv/>`__ fetches what it
+needs and leaves nothing installed:
 
 .. code-block:: bash
 
-   pip install "OpenGLContext[glfw]"
-   oglc-view model.glb
+   uv run --with "OpenGLContext[gltf,glfw]>=3.0.0a4" oglc-gltf-demo
 
-The :ref:`installation notes <installation>` cover the optional extras — other
-backends, Draco-compressed glTF, audio playback and video recording — and the
-:doc:`viewer <viewer>` page covers what ``oglc-view`` can open.
+Your own model, the same way:
+
+.. code-block:: bash
+
+   uv run --with "OpenGLContext[gltf,glfw]>=3.0.0a4" oglc-view model.glb
+
+The :ref:`installation notes <installation>` cover installing it properly and
+the optional extras — other backends, Draco-compressed glTF, audio playback
+and video recording — and the :doc:`viewer <viewer>` page covers what
+``oglc-view`` can open.
 
 .. _features:
 

@@ -123,6 +123,18 @@ p.source-reference {
     margin-top: 2em;
 }
 
+/* --- diagrams ----------------------------------------------------------- */
+
+/* Mermaid scales its drawing to the column it is in, which is what keeps the
+ * text in it the size of the text around it. Where a diagram is wider than
+ * that even so, it scrolls inside its own box rather than pushing the page
+ * sideways. */
+.mermaid {
+    overflow-x: auto;
+    margin: 1em 0;
+    text-align: center;
+}
+
 /* --- tables ------------------------------------------------------------- */
 
 /* Several pages declare a field, its type and what it does, which is wider
