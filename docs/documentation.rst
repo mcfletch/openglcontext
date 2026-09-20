@@ -212,7 +212,7 @@ translations are a good starting point for beginning OpenGL programmers.
   - :doc:`Physically Based Rendering <pbr>` -- The PBR metallic/roughness pass,
     materials and image-based lighting
 
-  - :doc:`The PBR Uber-Shader <ubershader>` -- Line-by-line walkthrough of the
+  - :doc:`PBR Uber-Shader <ubershader>` -- Line-by-line walkthrough of the
     fragment shader: textures, uniforms and lobes
 
   - :doc:`GLSL in OpenGLContext <glslversions>` -- What the engine supplies a

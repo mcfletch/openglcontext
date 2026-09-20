@@ -1,5 +1,5 @@
-Physics & Collision, Explained
-==============================
+Physics & Collision
+===================
 
 .. rst-class:: introduction
 

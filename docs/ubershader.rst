@@ -1,5 +1,5 @@
-The PBR Uber-Shader, Step by Step
-=================================
+PBR Uber-Shader
+===============
 
 .. rst-class:: introduction
 

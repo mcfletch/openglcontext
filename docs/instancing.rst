@@ -1,5 +1,5 @@
-Instanced Geometry, Explained
-=============================
+Instanced Geometry
+==================
 
 .. rst-class:: introduction
 

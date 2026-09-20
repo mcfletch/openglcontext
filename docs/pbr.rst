@@ -525,7 +525,7 @@ Under the Hood: the Shading Math
 This section is a short overview for the curious; you do not need it to use
 the renderer. For a full line-by-line walkthrough of the fragment shader --
 every texture, uniform and buffer it reads, and how each lobe is sampled and
-combined -- see :doc:`The PBR Uber-Shader, Step by Step <ubershader>`.
+combined -- see :doc:`the PBR uber-shader <ubershader>`.
 
 .. rst-class:: technical
 

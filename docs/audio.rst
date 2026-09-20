@@ -1,5 +1,5 @@
-Spatial Audio, Explained
-========================
+Spatial Audio
+=============
 
 .. rst-class:: introduction
 

@@ -1,5 +1,5 @@
-Terrain & Landscapes, Explained
-===============================
+Terrain & Landscapes
+====================
 
 .. rst-class:: introduction
 
