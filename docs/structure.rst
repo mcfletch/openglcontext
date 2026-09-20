@@ -3,52 +3,59 @@ OpenGLContext Structural Overview
 
 .. rst-class:: introduction
 
-How the stack is built up. Each box sits on what it is written against, and
-everything stands on numpy in the end. Blue is ours; grey is somebody else's.
+How the stack is built up. Each box sits on what it is written against, with
+the two file-format libraries at the right-hand end and numpy under nearly all
+of it. Blue is ours; grey is somebody else's.
 
 .. mermaid::
 
    block-beta
-       columns 7
+       columns 8
 
        glisteel["GLinting Steel"]:2
        twig["Twitchy GLitchy Bang Bang"]:3
-       forest["the forest demo"]:2
+       forest["OpenGLContext Forest Demo"]:3
 
        editor["OpenGLContext-editor"]:5
-       space:2
+       space:3
 
-       oglc["OpenGLContext"]:7
+       oglc["OpenGLContext"]:8
 
        pyopengl["PyOpenGL"]:1
-       vrml["PyVRML97"]:2
        omip["omi_physics"]:1
        omia["omi_audio"]:1
        ext["opengl_extrusions"]:1
        ttf["TTFQuery"]:1
+       vrml["PyVRML97"]:2
+       gltflib["pygltflib"]:1
 
-       space:1
-       simple["SimpleParse"]:1
-       dispatch["PyDispatcher"]:1
-       space:1
+       space:2
        mini["miniaudio"]:1
        space:1
        fonttools["fontTools"]:1
+       simple["SimpleParse"]:1
+       dispatch["PyDispatcher"]:1
+       space:1
 
        numpy["numpy"]:7
+       space:1
 
        classDef ours fill:#dbe7ff,stroke:#5a7ab5,color:#111
        classDef third fill:#ededed,stroke:#999999,color:#111
 
        class glisteel,twig,forest,editor,oglc,pyopengl,vrml,omip,omia,ext,ttf,simple,dispatch ours
-       class mini,fonttools,numpy third
+       class mini,fonttools,gltflib,numpy third
 
-``miniaudio`` is the only optional one there: ``omi_audio`` mixes without it
-and plays nothing. Each of the others is released on its own and useful on its
-own — ``omi_physics`` and ``omi_audio`` are the OMI glTF models in numpy with
-no renderer in them, ``opengl_extrusions`` sweeps and tessellates geometry for
-anyone who wants vertex arrays, and ``PyVRML97`` is the node, field and route
-model the scenegraph is built from. What the engine adds on top is the window,
+The two at the right are where a file becomes a scene: ``pygltflib`` reads
+glTF and GLB, ``PyVRML97`` is the node, field and route model a ``.wrl`` file
+parses into and the scenegraph is built from. ``miniaudio`` is the one
+optional box — ``omi_audio`` mixes without it and plays nothing — and
+``pygltflib`` is the one thing here that does not stand on numpy.
+
+Each of the packages of ours is released on its own and useful on its own:
+``omi_physics`` and ``omi_audio`` are the OMI glTF models in numpy with no
+renderer in them, and ``opengl_extrusions`` sweeps and tessellates geometry
+for anyone who wants vertex arrays. What the engine adds on top is the window,
 the render passes and the scenegraph that ties them together.
 
 The OpenGLContext Package (top-level)
