@@ -1,0 +1,145 @@
+/* OpenGLContext's own styles, over the theme's.
+ *
+ * Three kinds of thing live here: the two paragraph classes the pages use for
+ * a lead and for a technical aside, the picture layouts (a row of thumbnails,
+ * a single still, an inline diagram), and a few table rules for the wide
+ * declaration tables several pages carry.
+ */
+
+/* --- paragraph classes -------------------------------------------------- */
+
+/* The opening paragraph of a page: what this is, for a reader who arrived
+ * from a search. */
+p.introduction {
+    font-size: 1.05em;
+    color: var(--color-foreground-primary);
+}
+
+/* An aside for the reader who wants the mechanism: what a picture is showing,
+ * which module does the work, what the numbers mean. */
+p.technical,
+.technical {
+    color: var(--color-foreground-secondary);
+    font-size: 95%;
+}
+
+/* --- pictures ----------------------------------------------------------- */
+
+/* A row of small pictures, one per feature: as many across as will fit, and
+ * each column capped at the thumbnail's own width so a wide display gets more
+ * of them across rather than larger ones. */
+.thumb-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 360px));
+    justify-content: center;
+    gap: .6em;
+    margin: .75em 0;
+}
+
+.thumb-row figure,
+.thumb-row .figure {
+    margin: 0;
+    padding: 0;
+}
+
+.thumb-row img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border-radius: 3px;
+}
+
+.thumb-row figcaption,
+.thumb-row .caption {
+    color: var(--color-foreground-secondary);
+    font-size: 85%;
+    padding-top: .25em;
+    text-align: center;
+}
+
+/* Several pictures meant to be looked at together: the same scene under two
+ * settings, a sequence of steps.  As many across as fit. */
+.shot-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: .6em;
+    margin: .75em 0;
+}
+
+.shot-row figure,
+.shot-row .figure {
+    margin: 0;
+    max-width: 48%;
+}
+
+/* A single still, captioned. */
+figure.shot {
+    margin: .75em auto;
+}
+
+figure.shot img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    border-radius: 3px;
+}
+
+/* The drawn diagrams: SVG written into the page, which scales to the column
+ * rather than to its own pixel size. */
+.diagram svg,
+svg.diagram {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: .75em auto;
+}
+
+/* --- the tutorials ------------------------------------------------------ */
+
+/* Boilerplate the walkthrough is not teaching -- imports, the window setup it
+ * has already been through -- marked `#collapse` in the script.  It is in the
+ * page, in a box of its own height, rather than expanded down the page. */
+.highlight-python.collapsed-code,
+div.collapsed-code {
+    max-height: 12em;
+    overflow: auto;
+}
+
+/* Which script the page was written from. */
+p.source-reference {
+    color: var(--color-foreground-muted);
+    font-size: 85%;
+    text-align: center;
+    margin-top: 2em;
+}
+
+/* --- tables ------------------------------------------------------------- */
+
+/* Several pages declare a field, its type and what it does, which is wider
+ * than the prose column; the table scrolls inside itself rather than pushing
+ * the page sideways. */
+table.docutils {
+    display: block;
+    overflow-x: auto;
+    max-width: 100%;
+}
+
+table.docutils td,
+table.docutils th {
+    vertical-align: top;
+}
+
+/* --- the sidebar's badges ----------------------------------------------- */
+
+.project-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3em;
+    justify-content: center;
+    padding: .5em .75em 1em;
+}
+
+.project-badges img {
+    height: 20px;
+}

@@ -13,7 +13,7 @@
 #
 #     oglc-deb --project . --runtime <a relocatable CPython> --backend tk
 #
-# See `../build-deb.sh`, and `docs/packaging.html` in the engine.
+# See `../build-deb.sh`, and `docs/packaging.rst` in the engine.
 
 [build-system]
 requires = ["setuptools>=77", "wheel"]

@@ -11,7 +11,7 @@ it to the user, and finds what has already arrived.
     >>> store = ContentStore('glisteel')                     # doctest: +SKIP
     >>> store.missing(packs)                                 # doctest: +SKIP
 
-What each module answers is in its own docstring; ``docs/contentpacks.html`` is
+What each module answers is in its own docstring; ``docs/contentpacks.rst`` is
 the guide for an application author.
 """
 

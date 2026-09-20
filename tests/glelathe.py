@@ -9,7 +9,7 @@ same square contour and turning under an `OrientationInterpolator`.
 
 The geometry is generated as vertex arrays, so this renders in a core
 profile as well as a compatibility one. See `extrusions_shapes.py` for the
-whole set of swept nodes, and `docs/extrusions.html` for what each field
+whole set of swept nodes, and `docs/extrusions.rst` for what each field
 does.
 '''
 #import OpenGL

@@ -18,7 +18,7 @@ at run time, and which backends it does not use.
 This is the whole of the difference for an *embedded* viewer, and it is one
 word: ``keep=['tk']``.  A view in a Tk window needs Tcl/Tk and needs none of
 Qt, wx, pygame or GLFW; a Qt one says ``keep=['qt']`` and gets the opposite.
-See ``docs/packaging.html``.
+See ``docs/packaging.rst``.
 """
 
 import os

@@ -28,5 +28,5 @@ Sound is **optional and never fatal**.  ``miniaudio`` may be absent and a device
 may fail to open; both end in one warning and a silent run, so a machine with no
 sound card is simply a machine with no sound.
 
-See ``docs/audio.html`` for the data-flow diagrams and a worked example.
+See ``docs/audio.rst`` for the data-flow diagrams and a worked example.
 """

@@ -45,7 +45,7 @@ The pieces underneath are useful on their own and live beside this module:
 :class:`~OpenGLContext.move.physicswalk.PhysicsWalkMixin`, which every
 interactive context has.
 
-See [docs/gltf.html](../../docs/gltf.html).
+See [docs/gltf.rst](../../docs/gltf.rst).
 """
 import os
 from typing import (

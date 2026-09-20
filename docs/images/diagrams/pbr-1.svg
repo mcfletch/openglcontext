@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" aria-label="Diagram: material properties and scene lighting feed the PBR shader, which produces the shaded pixel" role="img" style="max-width: 100%; height: auto; font-family: Arial, Helvetica, sans-serif;" viewbox="0 0 780 470" width="780">
+<defs>
+<marker id="ah" markerheight="10" markerunits="strokeWidth" markerwidth="10" orient="auto" refx="8" refy="3">
+<path d="M0,0 L8,3 L0,6 Z" fill="#555"></path>
+</marker>
+<radialgradient cx="35%" cy="30%" id="sphere" r="75%">
+<stop offset="0%" stop-color="#fdfcf5"></stop>
+<stop offset="55%" stop-color="#c9a15a"></stop>
+<stop offset="100%" stop-color="#3d2f14"></stop>
+</radialgradient>
+</defs>
+<!-- Material inputs -->
+<text fill="#334" font-size="15" font-weight="bold" x="20" y="30">Material (PBRMaterial)</text>
+<rect fill="#f4f6ff" height="372" rx="10" stroke="#8899cc" width="252" x="12" y="40"></rect>
+<g font-size="12.5">
+<rect fill="#ffffff" height="42" rx="5" stroke="#ccd3e6" width="228" x="24" y="52"></rect>
+<text fill="#223" font-weight="bold" x="34" y="70">Base colour</text>
+<text fill="#556" x="34" y="87">surface colour / metal reflection tint</text>
+<rect fill="#ffffff" height="42" rx="5" stroke="#ccd3e6" width="228" x="24" y="100"></rect>
+<text fill="#223" font-weight="bold" x="34" y="118">Metalness</text>
+<text fill="#556" x="34" y="135">metal ↔ non-metal</text>
+<rect fill="#ffffff" height="42" rx="5" stroke="#ccd3e6" width="228" x="24" y="148"></rect>
+<text fill="#223" font-weight="bold" x="34" y="166">Roughness</text>
+<text fill="#556" x="34" y="183">glossy ↔ matte</text>
+<rect fill="#ffffff" height="42" rx="5" stroke="#ccd3e6" width="228" x="24" y="196"></rect>
+<text fill="#223" font-weight="bold" x="34" y="214">Normal map</text>
+<text fill="#556" x="34" y="231">fine surface detail (bumps)</text>
+<rect fill="#ffffff" height="42" rx="5" stroke="#ccd3e6" width="228" x="24" y="244"></rect>
+<text fill="#223" font-weight="bold" x="34" y="262">Occlusion</text>
+<text fill="#556" x="34" y="279">shadow in creases</text>
+<rect fill="#ffffff" height="42" rx="5" stroke="#ccd3e6" width="228" x="24" y="292"></rect>
+<text fill="#223" font-weight="bold" x="34" y="310">Emissive</text>
+<text fill="#556" x="34" y="327">self-glow (screens, LEDs)</text>
+<rect fill="#ffffff" height="60" rx="5" stroke="#ccd3e6" width="228" x="24" y="340"></rect>
+<text fill="#223" font-weight="bold" x="34" y="358">Optional lobes</text>
+<text fill="#556" x="34" y="375">clearcoat · sheen</text>
+<text fill="#556" x="34" y="392">transmission (glass) · ior</text>
+</g>
+<!-- Shader -->
+<rect fill="#eef7ee" height="150" rx="12" stroke="#77aa77" width="200" x="336" y="150"></rect>
+<text fill="#254" font-size="15" font-weight="bold" text-anchor="middle" x="436" y="212">PBR shader</text>
+<text fill="#476" font-size="12" text-anchor="middle" x="436" y="234">Cook-Torrance +</text>
+<text fill="#476" font-size="12" text-anchor="middle" x="436" y="250">image-based lighting</text>
+<!-- Lighting -->
+<rect fill="#fff7e6" height="72" rx="10" stroke="#ccaa55" width="200" x="336" y="336"></rect>
+<text fill="#653" font-size="14" font-weight="bold" text-anchor="middle" x="436" y="366">Scene lighting</text>
+<text fill="#875" font-size="12" text-anchor="middle" x="436" y="386">lights · environment · shadows</text>
+<!-- Result -->
+<circle cx="670" cy="225" fill="url(#sphere)" r="46" stroke="#3d2f14" stroke-width="0.5"></circle>
+<text fill="#334" font-size="13" font-weight="bold" text-anchor="middle" x="670" y="300">Shaded pixels</text>
+<!-- Arrows -->
+<line marker-end="url(#ah)" stroke="#555" stroke-width="2.5" x1="266" x2="330" y1="225" y2="225"></line>
+<line marker-end="url(#ah)" stroke="#555" stroke-width="2.5" x1="436" x2="436" y1="336" y2="306"></line>
+<line marker-end="url(#ah)" stroke="#555" stroke-width="2.5" x1="538" x2="616" y1="225" y2="225"></line>
+</svg>

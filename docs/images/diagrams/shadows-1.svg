@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" aria-label="The camera and the light each view the scene; a point is in shadow when the light's nearest-depth record shows something closer than that point." role="img" viewbox="0 0 720 380">
+<defs>
+<marker id="s-ah" markerheight="9" markerwidth="9" orient="auto" refx="7" refy="3"><path d="M0,0 L7,3 L0,6 Z" fill="#555"></path></marker>
+</defs>
+<!-- ground -->
+<line stroke="#9a8654" stroke-width="3" x1="70" x2="700" y1="330" y2="330"></line>
+<text fill="#776" font-size="12" x="70" y="350">ground</text>
+<!-- light -->
+<circle cx="590" cy="46" fill="#ffdf6b" r="20" stroke="#c9a400" stroke-width="2"></circle>
+<text fill="#665" font-size="13" font-weight="bold" x="560" y="24">light</text>
+<!-- occluder -->
+<rect fill="#a7bbe0" height="95" stroke="#5a6a90" width="36" x="380" y="235"></rect>
+<text fill="#456" font-size="12" text-anchor="middle" x="398" y="228">occluder</text>
+<!-- shadow region on ground: LEFT of the occluder, away from the light -->
+<polygon fill="#3a3f4a" fill-opacity="0.18" points="380,330 274,330 380,235"></polygon>
+<!-- ray from the light grazing the occluder's top corner + the shadow edge -->
+<line stroke="#e0b000" stroke-dasharray="5,4" stroke-width="1.5" x1="590" x2="380" y1="46" y2="235"></line>
+<line stroke="#8a8a8a" stroke-dasharray="3,4" stroke-width="1" x1="380" x2="274" y1="235" y2="330"></line>
+<!-- ray light -> P: a lit point just left of the shadow; the ray clears the
+       occluder's top, so the light reaches it -->
+<line marker-end="url(#s-ah)" stroke="#e0b000" stroke-dasharray="5,4" stroke-width="1.5" x1="590" x2="250" y1="46" y2="330"></line>
+<circle cx="250" cy="330" fill="#3a9a3a" r="5"></circle>
+<text fill="#284" font-size="12" text-anchor="end" x="242" y="322">P: lit</text>
+<!-- ray light -> Q, intercepted by the occluder (Q sits in the shadow) -->
+<line stroke="#e0b000" stroke-dasharray="5,4" stroke-width="1.5" x1="590" x2="416" y1="46" y2="244"></line>
+<line stroke="#cc4444" stroke-dasharray="3,4" stroke-width="1.3" x1="416" x2="340" y1="244" y2="330"></line>
+<circle cx="340" cy="330" fill="#b23" r="5"></circle>
+<text fill="#822" font-size="12" x="300" y="352">Q: shadowed</text>
+<!-- camera -->
+<rect fill="#dfe4ee" height="30" rx="3" stroke="#66708a" width="40" x="36" y="180"></rect>
+<polygon fill="#dfe4ee" points="76,188 96,180 96,210 76,202" stroke="#66708a"></polygon>
+<text fill="#556" font-size="13" font-weight="bold" x="30" y="175">camera</text>
+<!-- camera view lines to P and Q (neither passes through the occluder) -->
+<line stroke="#8894b0" stroke-width="1" x1="90" x2="250" y1="202" y2="330"></line>
+<line stroke="#8894b0" stroke-width="1" x1="90" x2="340" y1="202" y2="330"></line>
+<!-- note box (top-left, clear of the rays) -->
+<rect fill="#f6f8ff" height="88" rx="8" stroke="#aab6d8" width="256" x="60" y="34"></rect>
+<text fill="#334" font-size="12" x="72" y="56">The light records the nearest</text>
+<text fill="#334" font-size="12" x="72" y="74">depth it sees in each direction.</text>
+<text fill="#334" font-size="12" x="72" y="96">Q sits behind the occluder from</text>
+<text fill="#334" font-size="12" x="72" y="113">the light → blocked → shadowed.</text>
+</svg>

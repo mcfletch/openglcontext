@@ -45,5 +45,5 @@ field of every node announces a change: the outline listens to the fields
 holding other nodes, so the tree follows the scene, and each demo listens to
 the one selected node, so the panel showing it keeps up.
 
-See ``docs/embedding.html`` and ``plans/EMBEDDING-EXAMPLES.md``.
+See ``docs/embedding.rst`` and ``plans/EMBEDDING-EXAMPLES.md``.
 """

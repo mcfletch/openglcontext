@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-"""=RedBook NURBS Trim=
+'''=RedBook NURBS Trim=
 
 [nurbsobject.py-screen-0001.png Screenshot]
 
@@ -9,7 +9,7 @@ demo using the scenegraph API.
 
 This version includes an animation that morphs the NURBS surface
 through different shapes: original mound, flattened, expanded, and risen.
-"""
+'''
 
 from OpenGLContext import testingcontext
 
@@ -117,14 +117,14 @@ class TestContext(BaseContext):
 with an ice-cream-cone-shaped trimming curve
 (a hole cut out of it).""")
 
-        """GLU Nurbs trims via contours which are applied in the 
+        '''GLU Nurbs trims via contours which are applied in the 
         same way as tessellation, i.e. your outermost contour will 
         trim off the edges of your nurbs, while inner contours will 
         cut "holes" in to the Nurbs.  Since we don't want to trim off 
         the edge of the hill, we define a contour that includes all 
         of the surface.  The coordinates are in the parametric 
         coordinate system, so 0.0 is the start and 1.0 is the finish.
-        """
+        '''
         trimmingContour = [
             Contour2D(
                 children=[
@@ -173,9 +173,9 @@ with an ice-cream-cone-shaped trimming curve
         ]
 
         knots = [0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0]
-        """The color array is indexed to the control-point array 
+        '''The color array is indexed to the control-point array 
         when/if it is provided.  Here we make a progression of colours 
-        across the surface"""
+        across the surface'''
         color = zeros((4, 4, 3), "d")
         color[0, :, :] = (1.0, 0, 0)
         color[1, :, :] = (0.66, 0.33, 0)

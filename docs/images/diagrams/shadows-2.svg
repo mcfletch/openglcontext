@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" aria-label="Without bias a surface self-shadows (acne); a small bias clears it; too much bias detaches the shadow from the object (peter-panning)." role="img" viewbox="0 0 720 250">
+<!-- panel 1: acne. The stored depth is quantized to one value per texel, so the
+       sloped surface crosses it: where a step sits ABOVE the surface (red), the
+       surface reads as farther than the recorded nearest depth and shadows itself. -->
+<text fill="#556" font-size="13" font-weight="bold" x="20" y="24">No bias</text>
+<g stroke-width="2.4">
+<!-- treads: red = above the surface (self-shadow), gold = below -->
+<line stroke="#c0392b" x1="20" x2="40" y1="146" y2="146"></line>
+<line stroke="#c9a24a" x1="40" x2="60" y1="146" y2="146"></line>
+<line stroke="#c0392b" x1="60" x2="80" y1="138" y2="138"></line>
+<line stroke="#c9a24a" x1="80" x2="100" y1="138" y2="138"></line>
+<line stroke="#c0392b" x1="100" x2="120" y1="130" y2="130"></line>
+<line stroke="#c9a24a" x1="120" x2="140" y1="130" y2="130"></line>
+<line stroke="#c0392b" x1="140" x2="160" y1="122" y2="122"></line>
+<line stroke="#c9a24a" x1="160" x2="180" y1="122" y2="122"></line>
+<line stroke="#c0392b" x1="180" x2="200" y1="114" y2="114"></line>
+<line stroke="#c9a24a" x1="200" x2="220" y1="114" y2="114"></line>
+<!-- risers -->
+<line stroke="#c9a24a" stroke-width="1.4" x1="60" x2="60" y1="146" y2="138"></line>
+<line stroke="#c9a24a" stroke-width="1.4" x1="100" x2="100" y1="138" y2="130"></line>
+<line stroke="#c9a24a" stroke-width="1.4" x1="140" x2="140" y1="130" y2="122"></line>
+<line stroke="#c9a24a" stroke-width="1.4" x1="180" x2="180" y1="122" y2="114"></line>
+</g>
+<!-- true surface on top -->
+<line stroke="#333" stroke-width="2.5" x1="20" x2="220" y1="150" y2="110"></line>
+<!-- speckles on the surface under each step that pokes above it -->
+<g fill="#b23">
+<circle cx="29" cy="148" r="2.6"></circle><circle cx="69" cy="140" r="2.6"></circle>
+<circle cx="109" cy="132" r="2.6"></circle><circle cx="149" cy="124" r="2.6"></circle>
+<circle cx="189" cy="116" r="2.6"></circle>
+</g>
+<text fill="#822" font-size="11.5" x="20" y="192">steps poke above the surface → it shadows itself</text>
+<line stroke="#c0392b" stroke-width="2.4" x1="20" x2="38" y1="206" y2="206"></line>
+<text fill="#666" font-size="10.5" x="44" y="210">stored depth (one value per texel)</text>
+<!-- panel 2: biased -->
+<text fill="#556" font-size="13" font-weight="bold" x="260" y="24">Small bias</text>
+<line stroke="#666" stroke-width="2.5" x1="260" x2="460" y1="150" y2="110"></line>
+<path d="M260,166 h34 v-8 h34 v-8 h34 v-8 h34 v-8 h34 v-8" fill="none" stroke="#c9a24a" stroke-dasharray="4,3" stroke-width="1.6"></path>
+<text fill="#284" font-size="11.5" x="260" y="196">stored depth pushed below surface → clean</text>
+<!-- panel 3: peter-panning -->
+<text fill="#556" font-size="13" font-weight="bold" x="500" y="24">Too much bias</text>
+<line stroke="#666" stroke-width="2.5" x1="500" x2="560" y1="180" y2="180"></line>
+<rect fill="#a7bbe0" height="60" stroke="#5a6a90" width="26" x="560" y="120"></rect>
+<line stroke="#666" stroke-width="2.5" x1="586" x2="700" y1="180" y2="180"></line>
+<!-- shadow detached from base -->
+<rect fill="#3a3f4a" fill-opacity="0.3" height="8" width="70" x="612" y="176"></rect>
+<text fill="#822" font-size="11.5" x="596" y="150">shadow floats away</text>
+<text fill="#822" font-size="11.5" x="596" y="205">from the contact point</text>
+</svg>

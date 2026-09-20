@@ -1,18 +1,19 @@
 """Every picture the documentation shows is there, described, and accounted for.
 
-A page whose ``<img>`` points nowhere is worse than a page with no picture: the
+A page whose picture points nowhere is worse than a page with no picture: the
 reader sees a broken frame where the evidence was meant to be, and nothing in a
 render or a test run notices. Regenerating the tutorials lost `transforms_1`'s
 screenshots once, and it was found by opening the page.
 
 So this walks the whole of ``docs/``: every image reference resolves to a file,
 every image says what it shows, every file under ``docs/images/`` is claimed by
-``docs/images/manifest.toml``, and every gallery block matches the manifest that
-generates it. None of it renders anything, so it costs nothing and runs
+``docs/images/manifest.toml``, and every gallery a page shows is one the
+manifest declares. None of it renders anything, so it costs nothing and runs
 everywhere.
 """
 import os
 import re
+import sys
 import tomllib
 
 import pytest
@@ -25,24 +26,39 @@ DOCS = os.path.join(REPO, 'docs')
 IMAGES = os.path.join(DOCS, 'images')
 MANIFEST = os.path.join(IMAGES, 'manifest.toml')
 
-#: ``<img ...>``, and the attributes of it, in source order.
-IMG = re.compile(r'<img\s([^>]*?)/?>', re.IGNORECASE | re.DOTALL)
-ATTRIBUTE = re.compile(r'([\w-]+)\s*=\s*"([^"]*)"', re.DOTALL)
+#: ``.. image:: uri`` or ``.. figure:: uri``, and the options indented under it.
+PICTURE = re.compile(
+    r'^(?P<indent>[ ]*)\.\.[ ]+(?:image|figure)::[ ]*(?P<uri>\S+)[ ]*$',
+    re.MULTILINE,
+)
+OPTION = re.compile(r'^[ ]*:([\w-]+):[ ]*(.*)$')
+
+#: ``.. gallery:: name``, which shows a gallery the manifest declares.
+GALLERY = re.compile(r'^[ ]*\.\.[ ]+gallery::[ ]*([\w-]+)[ ]*$', re.MULTILINE)
 
 #: Directories the manifest owns outright: everything in one is something it
 #: rendered, so a file it does not declare is a picture nothing can regenerate.
 #: The rest of ``docs/images/`` is older material each page references directly,
-#: some of it the manifest's own source images; taking those over is a job the
-#: plan describes rather than a rule to enforce today.
+#: some of it the manifest's own source images.
 MANAGED = {'gallery', 'features'}
+
+#: Not read: ``_build`` is the built site, and the module pages carry no
+#: pictures of their own.
+SKIP = {'_build', 'api', '_static', '_templates', '_ext'}
 
 
 def pages():
-    """Every HTML page in the documentation, as (relative path, text)."""
+    """Every page of the set, as (relative path, text).
+
+    The tutorials are included: they are written from ``tests/*.py`` and the
+    screenshots they name are committed beside them, so a lost screenshot is
+    exactly the failure this catches.
+    """
     found = []
-    for directory, _, names in os.walk(DOCS):
-        for name in sorted(names):
-            if not name.endswith('.html'):
+    for directory, names, files in os.walk(DOCS):
+        names[:] = [name for name in names if name not in SKIP]
+        for name in sorted(files):
+            if not name.endswith('.rst'):
                 continue
             path = os.path.join(directory, name)
             with open(path, encoding='utf8', errors='replace') as handle:
@@ -51,9 +67,19 @@ def pages():
 
 
 def images_in(text):
-    """(attributes, whole tag) for each ``<img>``, as a dict of attributes."""
-    for match in IMG.finditer(text):
-        yield dict(ATTRIBUTE.findall(match.group(1))), match.group(0)
+    """(uri, options) for each picture in a page."""
+    lines = text.split('\n')
+    for match in PICTURE.finditer(text):
+        start = text[: match.start()].count('\n') + 1
+        options = {}
+        for line in lines[start:]:
+            if not line.strip():
+                break
+            found = OPTION.match(line)
+            if not found:
+                break
+            options[found.group(1)] = found.group(2).strip()
+        yield match.group('uri'), options
 
 
 def manifest():
@@ -71,60 +97,34 @@ PAGES = pages()
 
 
 class TestEveryPictureIsThere:
+    def test_the_pages_are_there_to_read(self):
+        """A walk that found nothing passes every check under it."""
+        assert len(PAGES) > 40
+
     def test_no_page_points_at_a_missing_image(self):
         """The failure a reader sees first, and a test run never does."""
         missing = []
         for page, text in PAGES:
-            for attributes, _ in images_in(text):
-                source = attributes.get('src') or attributes.get('data-src')
-                if not source or source.startswith(('http:', 'https:', 'data:')):
+            for uri, _ in images_in(text):
+                if uri.startswith(('http:', 'https:', 'data:')):
                     continue
-                path = os.path.join(DOCS, os.path.dirname(page), source)
+                if uri.startswith('/'):
+                    path = os.path.join(DOCS, uri[1:])
+                else:
+                    path = os.path.join(DOCS, os.path.dirname(page), uri)
                 if not os.path.exists(path):
-                    missing.append('%s -> %s' % (page, source))
+                    missing.append('%s -> %s' % (page, uri))
         assert not missing, 'documentation images that do not exist:\n  ' + \
             '\n  '.join(sorted(missing))
 
-    def test_a_declared_size_is_the_size_the_file_is(self):
-        """The stylesheet caps a picture at its own pixel width.
-
-        ``max-width: max-content`` stops a wide display scaling a render up into
-        a blur, and the ``width``/``height`` attributes are what reserve the
-        space before the bytes arrive. A stale pair moves the page as it loads
-        and, until then, sizes the box wrongly.
-        """
-        Image = pytest.importorskip('PIL.Image')
-        wrong = []
-        for page, text in PAGES:
-            for attributes, _ in images_in(text):
-                source = attributes.get('src') or attributes.get('data-src')
-                if not source:
-                    continue
-                # HTML wants a plain integer here; a couple of the older pages
-                # write a CSS length, which a browser ignores and so does this.
-                if not (attributes.get('width', '').isdigit()
-                        and attributes.get('height', '').isdigit()):
-                    continue
-                path = os.path.join(DOCS, os.path.dirname(page), source)
-                if not os.path.exists(path):
-                    continue        # reported by the test above
-                declared = (int(attributes['width']), int(attributes['height']))
-                with Image.open(path) as image:
-                    if image.size != declared:
-                        wrong.append('%s -> %s says %dx%d, is %dx%d'
-                                     % ((page, source) + declared + image.size))
-        assert not wrong, 'images whose declared size is not their size:\n  ' + \
-            '\n  '.join(sorted(wrong))
-
     def test_every_image_says_what_it_shows(self):
         """Without ``alt`` the picture is not there at all for some readers."""
-        silent = []
-        for page, text in PAGES:
-            for attributes, tag in images_in(text):
-                if not attributes.get('alt', '').strip():
-                    source = (attributes.get('src') or attributes.get('data-src')
-                              or tag[:60])
-                    silent.append('%s -> %s' % (page, source))
+        silent = [
+            '%s -> %s' % (page, uri)
+            for page, text in PAGES
+            for uri, options in images_in(text)
+            if not options.get('alt', '').strip()
+        ]
         assert not silent, 'documentation images with no alt text:\n  ' + \
             '\n  '.join(sorted(silent))
 
@@ -140,6 +140,29 @@ class TestTheManifestAndTheTreeAgree:
         absent = [entry['out'] for entry in entries()
                   if not os.path.exists(os.path.join(DOCS, entry['out']))]
         assert not absent, 'declared but not rendered:\n  ' + '\n  '.join(absent)
+
+    def test_a_declared_size_is_the_size_the_file_is(self):
+        """The gallery writes these into the page as the slide's dimensions.
+
+        They reserve the space before the bytes arrive, and the stylesheet caps
+        the panel at the picture's own width so a wide display does not scale a
+        render up into a blur. A stale pair moves the page as it loads.
+        """
+        Image = pytest.importorskip('PIL.Image')
+        wrong = []
+        for entry in entries():
+            path = os.path.join(DOCS, entry['out'])
+            if not os.path.exists(path):
+                continue        # reported by the test above
+            declared = tuple(entry['size'])
+            with Image.open(path) as image:
+                if image.size != declared:
+                    wrong.append(
+                        '%s says %dx%d, is %dx%d'
+                        % ((entry['id'],) + declared + image.size)
+                    )
+        assert not wrong, 'pictures whose declared size is not their size:\n  ' + \
+            '\n  '.join(sorted(wrong))
 
     def test_the_managed_directories_hold_nothing_else(self):
         declared = {os.path.normpath(os.path.join(DOCS, entry['out']))
@@ -179,13 +202,18 @@ class TestTheManifestAndTheTreeAgree:
 
 
 class TestTheGalleriesMatchTheManifest:
-    """A gallery block is generated; a hand edit to one is silently overwritten."""
+    """A page names a gallery; the manifest says what is in it.
 
-    def test_every_gallery_a_page_includes_is_declared(self):
+    The slides are written as the page is built (``docs/_ext/oglc_gallery.py``),
+    so a page and the manifest cannot disagree about what a gallery holds --
+    but a page can name one that was renamed or removed.
+    """
+
+    def test_every_gallery_a_page_shows_is_declared(self):
         names = {gallery['name'] for gallery in manifest()['gallery']}
         for page, text in PAGES:
-            for used in re.findall(r'<!-- gallery: ([\w-]+) -->', text):
-                assert used in names, '%s includes undeclared gallery %r' % (page, used)
+            for used in GALLERY.findall(text):
+                assert used in names, '%s shows undeclared gallery %r' % (page, used)
 
     def test_every_declared_gallery_names_pictures_that_exist(self):
         by_id = {entry['id']: entry for entry in entries()}
@@ -198,30 +226,101 @@ class TestTheGalleriesMatchTheManifest:
                 out = os.path.join(DOCS, by_id[image_id]['out'])
                 assert os.path.exists(out), '%s is missing' % by_id[image_id]['out']
 
-    def test_a_gallery_shows_its_first_slide_without_javascript(self):
-        """The rest carry ``data-src``; the first has to carry ``src``.
+    def test_the_component_is_loaded_by_the_set(self):
+        """Every page gets the stylesheet and the script, from the configuration."""
+        with open(os.path.join(DOCS, 'conf.py'), encoding='utf8') as handle:
+            conf = handle.read()
+        assert 'gallery.css' in conf
+        assert 'gallery.js' in conf
+        assert os.path.isfile(os.path.join(DOCS, '_static', 'gallery.css'))
+        assert os.path.isfile(os.path.join(DOCS, '_static', 'gallery.js'))
 
-        A page read from a checkout over ``file://`` runs with whatever the
-        browser allows and fetches nothing, so the picture that shows when
-        nothing else works is the one written into the first slide.
-        """
-        for page, text in PAGES:
-            for block in re.findall(
-                    r'<!-- gallery: [\w-]+ -->(.*?)<!-- /gallery -->',
-                    text, re.DOTALL):
-                slides = list(images_in(block))
-                if not slides:
-                    continue
-                first, _ = slides[0]
-                assert 'src' in first, \
-                    '%s: the first slide would not show without JavaScript' % page
 
-    def test_the_component_is_loaded_by_every_page_that_uses_it(self):
-        for page, text in PAGES:
-            if '<!-- gallery: ' not in text:
-                continue
-            assert 'style/gallery.css' in text, '%s has a gallery and no stylesheet' % page
-            assert 'js/gallery.js' in text, '%s has a gallery and no script' % page
+class TestTheGalleryMarkup:
+    """What the directive writes into the page.
+
+    A page is as often read from a checkout over ``file://`` as from the
+    published site, so the slides are in the page rather than fetched: the
+    first one carries ``src`` and shows with no JavaScript at all, and the rest
+    carry ``data-src`` for the script to load as it reaches them.
+    """
+
+    @pytest.fixture
+    def gallery(self):
+        sys.path.insert(0, os.path.join(DOCS, '_ext'))
+        oglc_gallery = pytest.importorskip('oglc_gallery')
+        node = oglc_gallery.gallery()
+        node['classes'] = ['gallery-rotate']
+        node['label'] = 'What it draws'
+        node['interval'] = 6000
+        node['slides'] = [
+            {
+                'uri': 'images/gallery/showcase/one.jpg',
+                'alt': 'the first',
+                'caption': 'One',
+                'credit': 'A game',
+                'width': 1200,
+                'height': 675,
+            },
+            {
+                'uri': 'images/gallery/showcase/two.jpg',
+                'alt': 'the second',
+                'caption': 'Two',
+                'credit': '',
+                'width': 1200,
+                'height': 675,
+            },
+        ]
+        return oglc_gallery, node
+
+    def markup(self, gallery):
+        oglc_gallery, node = gallery
+
+        class Builder:
+            images = {
+                'images/gallery/showcase/one.jpg': 'one.jpg',
+                'images/gallery/showcase/two.jpg': 'two.jpg',
+            }
+            imgpath = '_images'
+
+        class Translator:
+            builder = Builder()
+            body: list = []
+
+            def attval(self, text):
+                return str(text).replace('"', '&quot;')
+
+        from docutils import nodes
+
+        translator = Translator()
+        # The visitor writes the whole panel and skips the image nodes under
+        # it, which it says by raising.
+        with pytest.raises(nodes.SkipNode):
+            oglc_gallery.visit_gallery_html(translator, node)
+        return ''.join(translator.body)
+
+    def test_the_first_slide_shows_without_javascript(self, gallery):
+        html = self.markup(gallery)
+        assert '<img src="_images/one.jpg"' in html
+
+    def test_the_rest_load_as_the_script_reaches_them(self, gallery):
+        html = self.markup(gallery)
+        assert '<img data-src="_images/two.jpg"' in html
+
+    def test_each_slide_says_what_it_shows(self, gallery):
+        html = self.markup(gallery)
+        assert 'alt="the first"' in html
+        assert 'alt="the second"' in html
+
+    def test_the_credit_travels_with_the_caption(self, gallery):
+        html = self.markup(gallery)
+        assert '<figcaption>One <span class="credit">A game</span></figcaption>' in html
+        assert '<figcaption>Two</figcaption>' in html
+
+    def test_the_panel_carries_its_own_width(self, gallery):
+        """The stylesheet caps it there, so a wide display does not scale up."""
+        html = self.markup(gallery)
+        assert '--slide-width: 1200px' in html
 
 
 if __name__ == '__main__':

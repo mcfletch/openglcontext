@@ -38,7 +38,7 @@ The parts are useful separately, and each is worth reaching for on its own:
 Walking is not here: it is a capability of *every* interactive context, in
 :class:`~OpenGLContext.move.physicswalk.PhysicsWalkMixin`.
 
-See [docs/gltf.html](../../docs/gltf.html).
+See [docs/gltf.rst](../../docs/gltf.rst).
 """
 from typing import Any, Dict, Optional
 
