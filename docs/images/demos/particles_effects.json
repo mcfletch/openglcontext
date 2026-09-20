@@ -1,0 +1,12 @@
+{
+  "frames": 81,
+  "git": "v3.0.0a4-45-g57c9247-dirty",
+  "id": "demos/particles_effects",
+  "licence": "BSD-3-Clause",
+  "module": "particles_effects",
+  "producer": "script",
+  "size": [
+    1100,
+    680
+  ]
+}

@@ -162,6 +162,12 @@ translations are a good starting point for beginning OpenGL programmers.
 
       Swept geometry
 
+   .. figure:: images/features/particles.jpg
+      :alt: Fire, smoke, sparks and an explosion burning side by side in the dark
+      :target: particles.html
+
+      Particle effects
+
    .. figure:: images/features/nurbs.jpg
       :alt: Four coloured NURBS surfaces meeting in a mound
       :target: nurbs.html

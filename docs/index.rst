@@ -80,6 +80,12 @@ Features
 
       Swept geometry
 
+   .. figure:: images/features/particles.jpg
+      :alt: Fire, smoke, sparks and an explosion burning side by side in the dark
+      :target: particles.html
+
+      Particle effects
+
    .. figure:: images/features/text.jpg
       :alt: Rendered text in a 3D scene
       :target: text.html

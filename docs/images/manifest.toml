@@ -176,6 +176,29 @@ source = "images/beautiful-game.jpg"
 crop = [0.02, 0.14, 0.98, 0.95]
 
 # --------------------------------------------------------------------------- #
+# Demos: a picture of a demo script, for the page that describes what it shows.
+# --------------------------------------------------------------------------- #
+[[image]]
+id = "demos/particles_effects"
+out = "images/demos/particles_effects.jpg"
+size = [1100, 680]
+licence = "BSD-3-Clause"
+alt = "Fire, smoke, sparks and an explosion burning side by side in the dark"
+caption = "The five presets, side by side"
+producer = "script"
+module = "particles_effects"
+render_size = [1600, 900]
+# The world clock advances a frame at a time under the capture harness, so a
+# frame number is a moment: 81 is 1.35 seconds in, a tenth of a second after
+# the burst timer last fired, with the fire and the smoke column established
+# and the explosion at its widest.
+frames = 81
+# The five effects sit in a band across the middle of the window the demo
+# opens, with the floor's near edge below them: this is that band, and no
+# more of the dark around it than the shape of the picture asks for.
+crop = [0.2125, 0.304, 0.775, 0.922]
+
+# --------------------------------------------------------------------------- #
 # Features: a small picture per subject, for the row that indexes the pages.
 # Each is the picture that page already shows, cut down to a thumbnail.
 # --------------------------------------------------------------------------- #
@@ -238,6 +261,16 @@ alt = "Rendered text in a 3D scene"
 caption = "Text"
 producer = "copy"
 source = "images/text_simple.png"
+
+[[image]]
+id = "features/particles"
+out = "images/features/particles.jpg"
+size = [360, 230]
+licence = "BSD-3-Clause"
+alt = "Fire, smoke, sparks and an explosion burning side by side in the dark"
+caption = "Particle effects"
+producer = "copy"
+source = "images/demos/particles_effects.jpg"
 
 [[image]]
 id = "features/hud"

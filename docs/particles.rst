@@ -10,6 +10,13 @@ about a hundred lines of core-profile GL. The two are kept strictly apart,
 which is why the interesting half can be tested with no window at all. The
 indented technical notes point at the code.
 
+.. figure:: images/demos/particles_effects.jpg
+   :alt: Fire, smoke, sparks and an explosion burning side by side in the dark
+
+   The five presets side by side, from ``tests/particles_effects.py``: fire,
+   smoke, sparks, an explosion and a trail. None of them loads a texture —
+   without one a particle is a soft round dot computed in the fragment shader.
+
 .. _particles-quickstart:
 
 The shortest thing that catches fire
