@@ -85,9 +85,81 @@ class TutorialPath:
     title: str
     description: str
     scripts: list[str]
+    #: Pages of ``docs/tutorials`` written by hand rather than from a script,
+    #: listed at the head of this path.
+    pages: list[str] = dataclasses.field(default_factory=list)
 
 
 PATHS = [
+    TutorialPath(
+        'Using the Engine',
+        """How to get something on screen and make it move: loading a model,
+        animating it, playing the clips a rigged model was authored with,
+        walking a character along a route, and putting an interface over the
+        frame.""",
+        [
+            'using_gltf_model',
+            'using_animation',
+            'using_clips',
+            'crowd_demo',
+            'using_npc',
+            'navmesh_demo',
+            'using_ui',
+            'hud_demo',
+            'editing_demo',
+        ],
+    ),
+    TutorialPath(
+        'Physics',
+        """Rigid bodies, the materials they are made of, the joints that hold
+        them together, and what a game does with what the solver reports.""",
+        pages=['physics_getting_started'],
+        scripts=[
+            'physics_room_drop',
+            'physics_bounce',
+            'physics_friction',
+            'using_collisions',
+            'physics_triggers',
+            'physics_joints',
+            'physics_gravity_zones',
+            'physics_cook_view',
+            'physics_navigate',
+            'physics_stress',
+        ],
+    ),
+    TutorialPath(
+        'Building a World',
+        """The scenery nodes and the tools around them: water, roads, audio,
+        particles, instanced batching, writing a scene out as glTF, and
+        recording a session or a video of one.""",
+        [
+            'water_demo',
+            'roads_demo',
+            'particles_effects',
+            'audio_spatial',
+            'instancing_batched',
+            'bake_demo',
+            'recording_demo',
+            'telemetry_demo',
+        ],
+    ),
+    TutorialPath(
+        'Swept Geometry and Tessellation',
+        """Geometry generated from an outline: tubes and lathes swept along a
+        curve, the joins and normals that decide how they look, and turning a
+        polygon into the triangles that draw it.""",
+        [
+            'extrusions_shapes',
+            'extrusions_curves',
+            'extrusions_joins',
+            'extrusions_normals',
+            'extrusions_gallery',
+            'extrusions_tessellation',
+            'extrusions_preprocessing',
+            'extrusions_vrml97',
+            'glelathe',
+        ],
+    ),
     TutorialPath(
         'Introduction to Shaders (Lighting)',
         """A low-level introductory path, for a reader who has either never
@@ -154,6 +226,7 @@ PATHS = [
             'nehe8',
             'nehe6_timer',
             'nehe6_multi',
+            'nehe6_compressed',
             'glprint',
         ],
     ),
@@ -268,21 +341,24 @@ def render_index(paths: Iterable[TutorialPath], written: Iterable[str]) -> str:
             'describes.  The paths are meant to be read in order.'
         ),
     ]
+    listed = set()
     for path in paths:
-        names = [name for name in path.scripts if name in written]
+        names = list(path.pages) + [name for name in path.scripts if name in written]
         if not names:
             continue
+        listed.update(names)
         out.append(heading(path.title, 1))
         out.append(markup.wrap(' '.join(path.description.split())))
         out.append(
             '.. toctree::\n   :maxdepth: 1\n\n%s'
             % ('\n'.join('   %s' % (name,) for name in names),)
         )
-    if HAND_WRITTEN:
+    others = [name for name, _ in HAND_WRITTEN if name not in listed]
+    if others:
         out.append(heading('Other tutorials', 1))
         out.append(
             '.. toctree::\n   :maxdepth: 1\n\n%s'
-            % ('\n'.join('   %s' % (name,) for name, _ in HAND_WRITTEN),)
+            % ('\n'.join('   %s' % (name,) for name in others),)
         )
     return '\n\n'.join(out).rstrip() + '\n'
 

@@ -1,8 +1,8 @@
 # What is in these pictures, and on what terms
 
-Every picture under `docs/images/` is a render this project produced. The
-*render* is ours; what is **in** the render carries its own terms, and this file
-records them.
+Every picture under `docs/images/`, and every tutorial screenshot under
+`docs/tutorials/`, is a render this project produced. The *render* is ours;
+what is **in** the render carries its own terms, and this file records them.
 
 Most of these are the Khronos glTF sample models, which is what the engine is
 held to for conformance (`tests/unit/test_gltf_conformance.py`). The gallery
@@ -51,7 +51,7 @@ repository, where the full legal notice for a model lives in its own `README.md`
 |---|---|
 | AntiqueCamera | &copy; 2018 UX3D &mdash; CC0 1.0 |
 | BarramundiFish | public domain &mdash; CC0 1.0 |
-| BoomBox | public domain &mdash; CC0 1.0 |
+| BoomBox (`using_gltf_model`) | public domain &mdash; CC0 1.0 |
 | ClearCoatCarPaint | public domain &mdash; CC0 1.0 |
 | Corset | &copy; 2017 UX3D &mdash; CC0 1.0 |
 | FlightHelmet | public domain &mdash; CC0 1.0 |
@@ -73,7 +73,7 @@ repository, where the full legal notice for a model lives in its own `README.md`
 | SheenWoodLeatherSofa | &copy; 2024 Darmstadt Graphics Group &mdash; CC-BY 4.0 |
 | StainedGlassLamp | &copy; 2021 Wayfair &mdash; CC-BY 4.0 |
 | SunglassesKhronos | &copy; 2024 Darmstadt Graphics Group &mdash; CC-BY 4.0 |
-| Fox (`crowd_demo`) | &copy; PixelMannen, tomkranis &mdash; CC-BY 4.0 |
+| Fox (`crowd_demo`, `using_clips`, `using_npc`) | &copy; PixelMannen, tomkranis &mdash; CC-BY 4.0 |
 
 The Khronos and vendor logos that appear on several of these models are
 trademarks of their owners, used as they arrive in the sample model.

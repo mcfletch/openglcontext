@@ -10,7 +10,12 @@ between the statements, written in a small wiki-like notation:
 
     A paragraph.  A link is [https://example.org/ written like this], a bare
     URL is a link too, and [shader_1.py-screen-0001.png a picture] is one when
-    the target is an image.
+    the target is an image.  A link to [molehill.html another page] of this
+    documentation becomes a reference the build checks.
+
+    reST written into the commentary is kept as markup: ``a literal``,
+    `a name`, :doc:`a role <index>`, *emphasis* and **strong**.  A star with
+    nothing to close it is an asterisk.
 
     * a bullet
     * another, whose continuation lines are indented
@@ -35,7 +40,10 @@ import re
 import textwrap
 from typing import Iterator
 
-__all__ = ['Block', 'commentary', 'inline', 'escape', 'wrap', 'entry_points']
+__all__ = [
+    'Block', 'commentary', 'inline', 'escape', 'wrap', 'entry_points',
+    'pictures',
+]
 
 #: ``[target text]``, where the target looks like a location -- a scheme, a
 #: path, an anchor or a file name.  Ordinary bracketed prose is left alone
@@ -53,6 +61,10 @@ _LINK = re.compile(
 #: A picture rather than a page.
 _IMAGES = ('.png', '.jpg', '.bmp', '.tif')
 
+#: A page of this documentation: a ``.html`` name with no host in front of it,
+#: and no anchor, which is what the scripts link to each other by.
+_PAGE = re.compile(r'(?P<path>/?[\w./-]*[\w-])\.html$')
+
 #: Text that names the kind of thing a picture is rather than saying anything
 #: about this one, and so is the alt text without also being the caption.
 _UNCAPTIONED = frozenset({'screenshot', 'screen shot', 'image', 'picture'})
@@ -64,6 +76,21 @@ _DEFINITION = re.compile(r"""[ \t]*(?P<term>\w+)\W*--\W*(?P<definition>.*)""")
 #: literally; a trailing underscore is a reference unless it is escaped.
 _ESCAPE = re.compile(r'([\\*`|])')
 _TRAILING = re.compile(r'(?<=\w)_(?=\s|$|[.,;:!?)\]])')
+
+#: reST inline markup a script wrote on purpose: a literal, a role, a
+#: reference, interpreted text under the default role, or emphasis.  The
+#: scripts document themselves in reST and mean these as markup, so they are
+#: carried through rather than escaped.  A star with a word tight against it
+#: on the outside is arithmetic or an argument list rather than emphasis, and
+#: one that opens nothing is an asterisk.
+_RST_INLINE = re.compile(
+    r'(?::[\w.+:-]+:)?``[^`\n]+``'      # a literal, with or without a role
+    r'|:[\w.+:-]+:`[^`\n]+`'            # a role
+    r'|`[^`\n]+`__?'                    # a reference
+    r'|`[^`\n]+`'                       # interpreted text, under the default role
+    r'|(?<![\w*])\*\*[^\s*][^*\n]*\*\*(?![\w*])'      # strong
+    r'|(?<![\w*])\*[^\s*][^*\n]*\*(?![\w*])'          # emphasis
+)
 
 _BLANK_LINE = re.compile(r'\n[ \t]*\n')
 
@@ -122,7 +149,15 @@ def link_calls(text: str) -> str:
     name, so the target is ``OpenGL.GL.glBegin`` and the ``~`` is what shows
     the reader the name they wrote.  Where that set is not reachable the name
     renders as itself.
+
+    A name already inside reST markup is left alone: what a writer wrote as a
+    literal or a reference is the reference they meant.
     """
+    if _RST_INLINE.search(text):
+        return ''.join(
+            piece if _RST_INLINE.fullmatch(piece) else link_calls(piece)
+            for piece in _split_rst(text)
+        )
     known = entry_points()
 
     def reference(match: re.Match) -> str:
@@ -132,7 +167,7 @@ def link_calls(text: str) -> str:
         elif call in known:
             role = ':py:func:`~%s.%s`' % (known[call], call)
         else:
-            return match.group(0)
+            return str(match.group(0))
         before = text[match.start() - 1] if match.start() else ' '
         after = text[match.end()] if match.end() < len(text) else ' '
         return '%s%s%s' % (
@@ -160,9 +195,25 @@ def escape(text: str) -> str:
     """``text`` as reST that renders as itself.
 
     The commentary is prose rather than markup: a ``*`` in it is an asterisk
-    and ``__init__`` is a name, so neither starts anything.
+    and ``__init__`` is a name, so neither starts anything.  A span of reST --
+    a literal, a role, a reference -- is markup the script wrote on purpose
+    and is left as it stands.
     """
-    return _TRAILING.sub(r'\\_', _ESCAPE.sub(r'\\\1', text))
+    return ''.join(
+        piece if _RST_INLINE.fullmatch(piece)
+        else _TRAILING.sub(r'\\_', _ESCAPE.sub(r'\\\1', piece))
+        for piece in _split_rst(text)
+    )
+
+
+def _split_rst(text: str) -> Iterator[str]:
+    """``text`` as its reST spans and the prose between them."""
+    position = 0
+    for match in _RST_INLINE.finditer(text):
+        yield text[position : match.start()]
+        yield match.group(0)
+        position = match.end()
+    yield text[position:]
 
 
 def inline(text: str) -> str:
@@ -174,16 +225,37 @@ def inline(text: str) -> str:
         if match.group('bald'):
             out.append(match.group('bald'))
         else:
-            out.append(
-                '`%s <%s>`__' % (collapse(match.group('text')), match.group('url'))
-            )
+            out.append(reference(match.group('url'), collapse(match.group('text'))))
         position = match.end()
     out.append(link_calls(escape(text[position:])))
     return collapse(''.join(out)).strip()
 
 
+def reference(url: str, text: str) -> str:
+    """One link, as the reST for it.
+
+    A ``.html`` target with no host is another page of this documentation --
+    ``molehill.html`` is the tutorial beside this one, ``/structure.html`` a
+    page at the top -- and a ``:doc:`` reference to it is checked when the
+    site is built, where a bare address is not.  Anything else is a link.
+    """
+    page = _PAGE.match(url)
+    if page:
+        return ':doc:`%s <%s>`' % (text, page.group('path'))
+    return '`%s <%s>`__' % (text, url)
+
+
 def collapse(text: str) -> str:
     return re.sub(r'[ \t\n]+', ' ', text)
+
+
+def pictures(text: str) -> list[str]:
+    """The names of the pictures ``text`` shows, in the order it shows them."""
+    return [
+        match.group('url')
+        for match in _LINK.finditer(text)
+        if (match.group('url') or '').lower().endswith(_IMAGES)
+    ]
 
 
 def images(block: str) -> str:
@@ -215,6 +287,23 @@ def images(block: str) -> str:
     return '.. container:: shot-row\n\n%s' % (
         _indent('\n\n'.join(found), '   '),
     )
+
+
+def _leads_a_block(block: str) -> tuple[str, str] | None:
+    """A line introducing an indented block under it, as the two of them.
+
+    ``Keys:`` and a column of keys against what each does is the common one.
+    The lines under it are laid out by hand, so they keep their spacing, while
+    the line that introduces them is a sentence and is wrapped like one.
+    """
+    lines = [line for line in block.splitlines() if line.strip()]
+    if len(lines) < 2 or not lines[0].rstrip().endswith(':'):
+        return None
+    head = indent_level(lines[0])
+    if any(indent_level(line) <= head for line in lines[1:]):
+        return None
+    body = textwrap.dedent('\n'.join(lines[1:]).replace('\t', ' ' * 8))
+    return lines[0].strip(), body
 
 
 def indent_level(line: str) -> int:
@@ -321,7 +410,12 @@ def commentary(text: str) -> list[Block]:
             out.append(Block('rst', pictures))
             continue
         stripped = textwrap.dedent(block)
-        if stripped.lstrip().startswith(('*', '-')):
+        lead = _leads_a_block(block)
+        if lead:
+            head, body = lead
+            out.append(Block('rst', wrap(inline(head))))
+            out.append(Block('rst', '::\n\n%s' % (_indent(body, '   '),)))
+        elif stripped.lstrip().startswith(('*', '-')):
             out.append(Block('rst', _bullets(stripped)))
         elif _DEFINITION.match(stripped):
             out.append(Block('rst', _definitions(stripped)))

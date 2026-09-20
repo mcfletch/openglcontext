@@ -26,16 +26,16 @@ DOCS = os.path.join(ROOT, 'docs')
 
 #: demo module (in tests/) -> the documentation page that must point at it.
 DEMOS = {
-    'instancing_batched': 'instancing.html',
-    'water_demo': 'water.html',
-    'roads_demo': 'roads.html',
-    'hud_demo': 'hud.html',
-    'crowd_demo': 'characters.html',
-    'navmesh_demo': 'navmesh.html',
-    'editing_demo': 'editing.html',
-    'recording_demo': 'recording.html',
-    'telemetry_demo': 'telemetry.html',
-    'bake_demo': 'baking.html',
+    'instancing_batched': 'instancing.rst',
+    'water_demo': 'water.rst',
+    'roads_demo': 'roads.rst',
+    'hud_demo': 'hud.rst',
+    'crowd_demo': 'characters.rst',
+    'navmesh_demo': 'navmesh.rst',
+    'editing_demo': 'editing.rst',
+    'recording_demo': 'recording.rst',
+    'telemetry_demo': 'telemetry.rst',
+    'bake_demo': 'baking.rst',
 }
 
 #: Frames to run before the automatic exit captures.  Enough that a scene

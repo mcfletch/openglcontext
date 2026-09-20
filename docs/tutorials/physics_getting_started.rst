@@ -1,5 +1,5 @@
-Tutorial: Add Physics to a Scene
-================================
+Adding physics to a scene
+=========================
 
 .. rst-class:: introduction
 

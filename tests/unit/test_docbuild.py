@@ -37,13 +37,27 @@ class TestProse:
         out = self.render('one ' * 60)
         assert max(len(line) for line in out.splitlines()) <= 78
 
-    def test_an_asterisk_in_prose_is_an_asterisk(self):
-        """The commentary is prose: nothing in it is reST markup."""
-        assert '\\*must\\*' in self.render('what a shader *must* do')
+    def test_a_lone_asterisk_is_an_asterisk(self):
+        """The commentary is prose, so a star that starts nothing is a star."""
+        assert '\\*' in self.render('a * marks the default')
+        assert '\\*args' in self.render('passed as *args')
 
     def test_a_link_becomes_a_link(self):
         out = self.render('the [https://example.org/ example] page')
         assert '`example <https://example.org/>`__' in out
+
+    def test_a_link_to_another_page_becomes_a_reference_to_it(self):
+        """``.html`` is where a page lands, not where its source is."""
+        out = self.render('the [molehill.html Molehill] scene')
+        assert ':doc:`Molehill <molehill>`' in out
+
+    def test_a_link_to_a_page_outside_the_tutorials_keeps_its_path(self):
+        out = self.render('see [/structure.html the structure] page')
+        assert ':doc:`the structure </structure>`' in out
+
+    def test_a_link_to_somewhere_else_is_still_a_link(self):
+        out = self.render('the [https://example.org/x.html example] page')
+        assert '`example <https://example.org/x.html>`__' in out
 
     def test_a_bare_url_is_a_link(self):
         assert 'https://example.org/x' in self.render('see https://example.org/x')
@@ -70,9 +84,59 @@ class TestProse:
 
     def test_a_block_whose_spacing_means_something_keeps_it(self):
         """A line indented under the line above it is a block laid out by hand."""
-        out = self.render('The fields:\n  size    the count\n      in bytes\n')
+        out = self.render('size    the count\n    in bytes\nflags   what to do\n')
         assert out.startswith('::')
         assert 'size    the count' in out
+
+    def test_an_indented_list_under_a_heading_keeps_its_columns(self):
+        """The keys a demo binds, written as a column against what they do."""
+        out = self.render('Keys:\n    space   drop another body\n    r       reset\n')
+        assert out.startswith('Keys:')
+        assert 'space   drop another body' in out
+        assert 'r       reset' in out
+
+
+class TestRestInTheCommentary:
+    """A script whose commentary is written in reST keeps its markup.
+
+    The notation grew up around plain prose, where a backtick is a backtick.
+    The newer scripts document themselves in reST -- a literal, a role, a
+    reference -- and those spans are markup rather than text.
+    """
+
+    def render(self, text):
+        return '\n\n'.join(block.text for block in markup.commentary(text))
+
+    def test_a_literal_is_left_as_markup(self):
+        assert '``build``' in self.render('what ``build`` keeps')
+
+    def test_interpreted_text_is_left_as_markup(self):
+        assert self.render('one `HUDLayer` over the world').startswith(
+            'one `HUDLayer` over'
+        )
+
+    def test_a_role_is_left_as_markup(self):
+        out = self.render('see :doc:`the characters page </characters>`')
+        assert ':doc:`the characters page </characters>`' in out
+
+    def test_a_name_inside_a_literal_is_not_linked_again(self):
+        """``glBegin`` written as a literal is already what the writer meant."""
+        assert self.render('call ``glBegin``') == 'call ``glBegin``'
+
+    def test_emphasis_is_left_as_markup(self):
+        assert self.render('what a shader *must* do') == 'what a shader *must* do'
+
+    def test_strong_is_left_as_markup(self):
+        assert '**one**' in self.render('they share **one** mesh')
+
+    def test_multiplication_is_not_emphasis(self):
+        """``2*3*4`` is arithmetic: the stars have words tight against them."""
+        assert self.render('a 2*3*4 grid') == 'a 2\\*3\\*4 grid'
+
+    def test_prose_around_the_markup_is_still_escaped(self):
+        out = self.render('a lone * beside ``code``')
+        assert '\\*' in out
+        assert '``code``' in out
 
 
 class TestPictures:
@@ -242,6 +306,17 @@ class TestTheIndex:
         for name, _ in tutorials.HAND_WRITTEN:
             assert name in page
 
+    def test_a_path_can_open_with_a_page_written_by_hand(self):
+        """A walkthrough belongs with the scripts it walks through."""
+        paths = [tutorials.TutorialPath('Physics', 'x', ['shader_1'],
+                                        pages=['physics_getting_started'])]
+        page = tutorials.render_index(paths, ['shader_1'])
+        assert '   physics_getting_started\n   shader_1' in page
+
+    def test_a_page_in_a_path_is_not_listed_twice(self):
+        page = tutorials.render_index(tutorials.PATHS, [])
+        assert page.count('physics_getting_started') == 1
+
 
 class TestWritingThemAll:
     def test_every_named_script_gets_a_page(self, tmp_path):
@@ -300,3 +375,28 @@ class TestThePathsThemselves:
     def test_no_script_is_in_two_paths(self):
         named = [name for path in tutorials.PATHS for name in path.scripts]
         assert len(named) == len(set(named))
+
+    def test_every_picture_a_tutorial_shows_is_there(self):
+        """A named picture that is not in ``docs/tutorials`` is a broken image."""
+        missing = []
+        for path in tutorials.PATHS:
+            for name in path.scripts:
+                source = os.path.join(tutorials.TESTS, '%s.py' % (name,))
+                for piece in tutorials.parse(source).pieces:
+                    if piece.kind != 'commentary':
+                        continue
+                    for url in markup.pictures(piece.text):
+                        if not os.path.isfile(os.path.join(tutorials.OUTPUT, url)):
+                            missing.append('%s: %s' % (name, url))
+        assert missing == []
+
+    def test_every_page_a_path_names_by_hand_is_there(self):
+        missing = [
+            name
+            for path in tutorials.PATHS
+            for name in path.pages
+            if not os.path.isfile(
+                os.path.join(tutorials.OUTPUT, '%s.rst' % (name,))
+            )
+        ]
+        assert missing == []
