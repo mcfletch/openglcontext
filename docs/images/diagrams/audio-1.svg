@@ -1,67 +1,100 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" aria-label="Data flow from a URL through decoding, spatialisation and mixing to the device" class="diagram" role="img" viewbox="0 0 860 470">
-<defs>
-<marker id="arrow" markerheight="7" markerwidth="7" orient="auto-start-reverse" refx="9" refy="5" viewbox="0 0 10 10">
-<path d="M 0 0 L 10 5 L 0 10 z" fill="#666"></path>
-</marker>
-</defs>
-<rect class="thread" height="454" rx="8" width="500" x="8" y="8"></rect>
-<text class="sub" x="20" y="28">control thread — the render loop</text>
-<rect class="thread" height="454" rx="8" width="328" x="524" y="8"></rect>
-<text class="sub" x="536" y="28">audio thread — the device callback</text>
-<rect class="ctl" height="46" rx="5" width="200" x="30" y="44"></rect>
-<text class="lbl" x="42" y="64">AudioSource.url</text>
-<text class="sub" x="42" y="80">['water.ogg', ...]</text>
-<rect class="ctl" height="60" rx="5" width="200" x="30" y="118"></rect>
-<text class="lbl" x="42" y="138">ClipCache</text>
-<text class="sub" x="42" y="154">decode once, keyed by</text>
-<text class="sub" x="42" y="168">resolved path</text>
-<rect class="ctl" height="60" rx="5" width="200" x="30" y="206"></rect>
-<text class="lbl" x="42" y="226">Clip</text>
-<text class="sub" x="42" y="242">mono float32,</text>
-<text class="sub" x="42" y="256">one sample rate</text>
-<rect class="ctl" height="76" rx="5" width="212" x="278" y="44"></rect>
-<text class="lbl" x="290" y="64">Transform above the node</text>
-<text class="sub" x="290" y="82">world position + forward</text>
-<text class="sub" x="290" y="98">ViewPlatform → Listener</text>
-<rect class="ctl" height="118" rx="5" width="212" x="278" y="148"></rect>
-<text class="lbl" x="290" y="168">spatial</text>
-<text class="sub" x="290" y="186">distance_gain()</text>
-<text class="sub" x="290" y="202">× cone_gain()</text>
-<text class="sub" x="290" y="218">× emitter.gain × source.gain</text>
-<text class="sub" x="290" y="238">equal_power_pan(azimuth)</text>
-<text class="sub" x="290" y="256">→ (left, right)</text>
-<rect class="ctl" height="60" rx="5" width="300" x="120" y="308"></rect>
-<text class="lbl" x="132" y="328">Mixer.play_gains(clip, left, right)</text>
-<text class="sub" x="132" y="346">claims a slot, or steals, or refuses</text>
-<rect class="ctl" height="52" rx="5" width="300" x="120" y="392"></rect>
-<text class="lbl" x="132" y="412">VoiceHandle.set_gain(l, r)</text>
-<text class="sub" x="132" y="430">every frame, for a moving sound</text>
-<rect class="aud" height="88" rx="5" width="264" x="556" y="118"></rect>
-<text class="lbl" x="568" y="138">Voice pool (fixed size)</text>
-<text class="sub" x="568" y="156">resample by rate</text>
-<text class="sub" x="568" y="172">× ramped gain, per ear</text>
-<text class="sub" x="568" y="188">accumulate into the block</text>
-<rect class="aud" height="70" rx="5" width="264" x="556" y="234"></rect>
-<text class="lbl" x="568" y="254">master gain, muffle, clip</text>
-<text class="sub" x="568" y="272">low-pass blend, then</text>
-<text class="sub" x="568" y="288">clamp to full scale</text>
-<rect class="aud" height="56" rx="5" width="264" x="556" y="332"></rect>
-<text class="lbl" x="568" y="352">Mixer.blocks()</text>
-<text class="sub" x="568" y="370">yields a memoryview, no copy</text>
-<rect class="aud" height="40" rx="5" width="264" x="556" y="410"></rect>
-<text class="lbl" x="568" y="435">AudioDevice → speakers / silence</text>
-<path class="flow" d="M 130 90 L 130 118"></path>
-<path class="flow" d="M 130 178 L 130 206"></path>
-<path class="flow" d="M 384 120 L 384 148"></path>
-<path class="flow" d="M 230 236 L 260 236 L 260 320 L 120 320 L 130 320"></path>
-<path class="flow" d="M 384 266 L 384 320 L 420 320"></path>
-<path class="flow" d="M 270 368 L 270 392"></path>
-<path class="flow" d="M 420 338 L 480 338 L 480 162 L 556 162"></path>
-<path class="flow" d="M 420 418 L 512 418 L 512 176 L 556 176"></path>
-<path class="flow" d="M 688 206 L 688 234"></path>
-<path class="flow" d="M 688 304 L 688 332"></path>
-<path class="flow" d="M 688 388 L 688 410"></path>
-<path class="flow" d="M 660 450 L 660 462 L 540 462 L 540 360 L 556 360"></path>
-<text class="sub" x="546" y="470">device pulls: send(frames)</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 470" class="diagram" role="img"
+         aria-label="Data flow from a URL through decoding, spatialisation and mixing to the device">
+<style>
+.diagram { font-family: sans-serif; font-size: 13px; }
+    .diagram .box { fill: #f4f4f4; stroke: #666; stroke-width: 1.2; }
+    .diagram .ctl { fill: #e8f0fb; stroke: #37629c; stroke-width: 1.2; }
+    .diagram .aud { fill: #fdeee6; stroke: #b4581f; stroke-width: 1.2; }
+    .diagram .lbl { fill: #111; }
+    .diagram .sub { fill: #444; font-size: 11px; }
+    .diagram .flow { stroke: #666; stroke-width: 1.4; fill: none;
+                     marker-end: url(#arrow); }
+    .diagram .thread { fill: none; stroke: #999; stroke-dasharray: 5 4; }@media (prefers-color-scheme: dark) {
+      .diagram .box { fill: #2a2a2a; stroke: #999; }
+      .diagram .ctl { fill: #1e2b3d; stroke: #7ba7dd; }
+      .diagram .aud { fill: #3a2a1e; stroke: #d9924f; }
+      .diagram .lbl { fill: #eee; }
+      .diagram .sub { fill: #bbb; }
+      .diagram .flow { stroke: #aaa; }
+    }
+</style>
+      <defs>
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#666"/>
+        </marker>
+      </defs>
+
+      <rect class="thread" x="8" y="8" width="500" height="454" rx="8"/>
+      <text class="sub" x="20" y="28">control thread — the render loop</text>
+      <rect class="thread" x="524" y="8" width="328" height="454" rx="8"/>
+      <text class="sub" x="536" y="28">audio thread — the device callback</text>
+
+      <rect class="ctl" x="30" y="44" width="200" height="46" rx="5"/>
+      <text class="lbl" x="42" y="64">AudioSource.url</text>
+      <text class="sub" x="42" y="80">['water.ogg', ...]</text>
+
+      <rect class="ctl" x="30" y="118" width="200" height="60" rx="5"/>
+      <text class="lbl" x="42" y="138">ClipCache</text>
+      <text class="sub" x="42" y="154">decode once, keyed by</text>
+      <text class="sub" x="42" y="168">resolved path</text>
+
+      <rect class="ctl" x="30" y="206" width="200" height="60" rx="5"/>
+      <text class="lbl" x="42" y="226">Clip</text>
+      <text class="sub" x="42" y="242">mono float32,</text>
+      <text class="sub" x="42" y="256">one sample rate</text>
+
+      <rect class="ctl" x="278" y="44" width="212" height="76" rx="5"/>
+      <text class="lbl" x="290" y="64">Transform above the node</text>
+      <text class="sub" x="290" y="82">world position + forward</text>
+      <text class="sub" x="290" y="98">ViewPlatform → Listener</text>
+
+      <rect class="ctl" x="278" y="148" width="212" height="118" rx="5"/>
+      <text class="lbl" x="290" y="168">spatial</text>
+      <text class="sub" x="290" y="186">distance_gain()</text>
+      <text class="sub" x="290" y="202">× cone_gain()</text>
+      <text class="sub" x="290" y="218">× emitter.gain × source.gain</text>
+      <text class="sub" x="290" y="238">equal_power_pan(azimuth)</text>
+      <text class="sub" x="290" y="256">→ (left, right)</text>
+
+      <rect class="ctl" x="120" y="308" width="300" height="60" rx="5"/>
+      <text class="lbl" x="132" y="328">Mixer.play_gains(clip, left, right)</text>
+      <text class="sub" x="132" y="346">claims a slot, or steals, or refuses</text>
+
+      <rect class="ctl" x="120" y="392" width="300" height="52" rx="5"/>
+      <text class="lbl" x="132" y="412">VoiceHandle.set_gain(l, r)</text>
+      <text class="sub" x="132" y="430">every frame, for a moving sound</text>
+
+      <rect class="aud" x="556" y="118" width="264" height="88" rx="5"/>
+      <text class="lbl" x="568" y="138">Voice pool (fixed size)</text>
+      <text class="sub" x="568" y="156">resample by rate</text>
+      <text class="sub" x="568" y="172">× ramped gain, per ear</text>
+      <text class="sub" x="568" y="188">accumulate into the block</text>
+
+      <rect class="aud" x="556" y="234" width="264" height="70" rx="5"/>
+      <text class="lbl" x="568" y="254">master gain, muffle, clip</text>
+      <text class="sub" x="568" y="272">low-pass blend, then</text>
+      <text class="sub" x="568" y="288">clamp to full scale</text>
+
+      <rect class="aud" x="556" y="332" width="264" height="56" rx="5"/>
+      <text class="lbl" x="568" y="352">Mixer.blocks()</text>
+      <text class="sub" x="568" y="370">yields a memoryview, no copy</text>
+
+      <rect class="aud" x="556" y="410" width="264" height="40" rx="5"/>
+      <text class="lbl" x="568" y="435">AudioDevice → speakers / silence</text>
+
+      <path class="flow" d="M 130 90 L 130 118"/>
+      <path class="flow" d="M 130 178 L 130 206"/>
+      <path class="flow" d="M 384 120 L 384 148"/>
+      <path class="flow" d="M 230 236 L 260 236 L 260 320 L 120 320 L 130 320"/>
+      <path class="flow" d="M 384 266 L 384 320 L 420 320"/>
+      <path class="flow" d="M 270 368 L 270 392"/>
+      <path class="flow" d="M 420 338 L 480 338 L 480 162 L 556 162"/>
+      <path class="flow" d="M 420 418 L 512 418 L 512 176 L 556 176"/>
+      <path class="flow" d="M 688 206 L 688 234"/>
+      <path class="flow" d="M 688 304 L 688 332"/>
+      <path class="flow" d="M 688 388 L 688 410"/>
+      <path class="flow" d="M 660 450 L 660 462 L 540 462 L 540 360 L 556 360"/>
+      <text class="sub" x="546" y="470">device pulls: send(frames)</text>
+    </svg>

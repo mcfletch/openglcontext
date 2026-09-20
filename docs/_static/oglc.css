@@ -94,11 +94,13 @@ figure.shot img {
     border-radius: 3px;
 }
 
-/* The drawn diagrams: SVG written into the page, which scales to the column
- * rather than to its own pixel size. */
+/* The drawn diagrams.  Each is an SVG file with a `viewBox` and no size of
+ * its own, so it takes the width of the column and keeps its proportions. */
+img.diagram,
 .diagram svg,
 svg.diagram {
     display: block;
+    width: 100%;
     max-width: 100%;
     height: auto;
     margin: .75em auto;

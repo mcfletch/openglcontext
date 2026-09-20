@@ -1,17 +1,44 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" aria-label="Two nested ellipsoids around a sound location, with the ramp between them" class="diagram" role="img" viewbox="0 0 620 260">
-<ellipse cx="330" cy="130" fill="none" rx="230" ry="92" stroke="#b4581f" stroke-dasharray="6 4" stroke-width="1.6"></ellipse>
-<ellipse cx="205" cy="130" fill="none" rx="105" ry="42" stroke="#37629c" stroke-width="1.6"></ellipse>
-<circle cx="140" cy="130" fill="#111" r="5"></circle>
-<text class="lbl" x="112" y="118">location</text>
-<line stroke="#888" stroke-width="1" x1="140" x2="560" y1="130" y2="130"></line>
-<path class="flow" d="M 140 168 L 300 168"></path>
-<text class="sub" x="180" y="186">direction</text>
-<text class="sub" x="250" y="82">minFront</text>
-<text class="sub" x="430" y="42">maxFront</text>
-<text class="sub" x="86" y="150">minBack</text>
-<text class="sub" x="86" y="222">maxBack</text>
-<text class="lbl" x="176" y="136">full</text>
-<text class="sub" x="330" y="136">0 dB → −20 dB</text>
-<text class="sub" x="470" y="240">silent beyond</text>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 620 260" class="diagram" role="img"
+         aria-label="Two nested ellipsoids around a sound location, with the ramp between them">
+<defs>
+<marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#666"/>
+        </marker>
+</defs>
+<style>
+.diagram { font-family: sans-serif; font-size: 13px; }
+    .diagram .box { fill: #f4f4f4; stroke: #666; stroke-width: 1.2; }
+    .diagram .ctl { fill: #e8f0fb; stroke: #37629c; stroke-width: 1.2; }
+    .diagram .aud { fill: #fdeee6; stroke: #b4581f; stroke-width: 1.2; }
+    .diagram .lbl { fill: #111; }
+    .diagram .sub { fill: #444; font-size: 11px; }
+    .diagram .flow { stroke: #666; stroke-width: 1.4; fill: none;
+                     marker-end: url(#arrow); }
+    .diagram .thread { fill: none; stroke: #999; stroke-dasharray: 5 4; }@media (prefers-color-scheme: dark) {
+      .diagram .box { fill: #2a2a2a; stroke: #999; }
+      .diagram .ctl { fill: #1e2b3d; stroke: #7ba7dd; }
+      .diagram .aud { fill: #3a2a1e; stroke: #d9924f; }
+      .diagram .lbl { fill: #eee; }
+      .diagram .sub { fill: #bbb; }
+      .diagram .flow { stroke: #aaa; }
+    }
+</style>
+      <ellipse cx="330" cy="130" rx="230" ry="92" fill="none" stroke="#b4581f"
+               stroke-width="1.6" stroke-dasharray="6 4"/>
+      <ellipse cx="205" cy="130" rx="105" ry="42" fill="none" stroke="#37629c"
+               stroke-width="1.6"/>
+      <circle cx="140" cy="130" r="5" fill="#111"/>
+      <text class="lbl" x="112" y="118">location</text>
+      <line x1="140" y1="130" x2="560" y2="130" stroke="#888" stroke-width="1"/>
+      <path class="flow" d="M 140 168 L 300 168"/>
+      <text class="sub" x="180" y="186">direction</text>
+      <text class="sub" x="250" y="82">minFront</text>
+      <text class="sub" x="430" y="42">maxFront</text>
+      <text class="sub" x="86" y="150">minBack</text>
+      <text class="sub" x="86" y="222">maxBack</text>
+      <text class="lbl" x="176" y="136">full</text>
+      <text class="sub" x="330" y="136">0 dB → −20 dB</text>
+      <text class="sub" x="470" y="240">silent beyond</text>
+    </svg>
