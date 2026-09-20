@@ -1,6 +1,6 @@
 # What a frame costs per object
 
-**Status:** 🟢 Complete, 2026-09-19. The per-object slope is halved — **29.1 -> 11.8 µs an object** with a still camera, 26.6 -> 13.3 with it moving — so the gain grows with the world: 2.0x at fifty objects, **2.4x at sixteen hundred**. The bust gallery goes 5.26 -> 2.57 ms a frame. See [How it scales](#how-it-scales).
+**Status:** A to D 🟢 complete 2026-09-19; E and F 📋 planned from what the profile showed afterwards. The per-object slope is halved — **29.1 -> 11.8 µs an object** with a still camera, 26.6 -> 13.3 with it moving — so the gain grows with the world: 2.0x at fifty objects, **2.4x at sixteen hundred**. The bust gallery goes 5.26 -> 2.57 ms a frame. See [How it scales](#how-it-scales).
 
 A scene of three hundred objects costs about **5 ms of processor time a frame
 before anything is drawn**, and the cost is very nearly linear in the number of
@@ -345,24 +345,14 @@ extrapolate to about **41 frames a second** against the measured 17.
 
 ### What the slope is still made of
 
-At 1600 objects, by what the profile counts per frame:
+At 1600 objects, by what the profile counts per frame. Neither of these is
+level-of-detail's, and neither was in A to D; they are E and F below.
 
-- **`path[-1]`, 17,500 times** — about eleven per object. Seven separate
-  consumers each walk a record to the node it ends at
-  (`record_placements` alone 7,207, then `selectLevels`, `_walkPaths`,
-  `build_instance_groups`, `renderShadowMaps`, `transmissiveRecords`,
-  `_materialSortKey`, `group_material_table` at one per record each). Carrying
-  the node in the render record would remove most of them; that is a change to
-  a tuple shape eight places read, which is why it was not made here.
-  `record_placements` being asked 5.3 times per record is separately a memo.
+- **`path[-1]`, 17,500 times** — about eleven per object, across seven
+  consumers that each walk a record to the node it ends at.
 - **`cache.depend_signal`, 2,000 times** — the scenegraph's dependency cache
-  registering a receiver, one and a quarter per object per frame, and with
-  `saferef.__init__` behind it the largest single entry in the profile. A level
-  changing over rebuilds the node's bounding volume, and rebuilding it
-  re-registers what it depends on.
-
-Neither is level-of-detail's, and neither was in this plan's four items. They
-are where the next halving is.
+  registering a receiver, and with `saferef.__init__` behind it the largest
+  single entry in the profile.
 
 ## What it was worth
 
@@ -407,6 +397,88 @@ at 640x360, 1280x720 and 1920x1080 after the change as before it — nine times
 the pixels, no difference. What was removed was processor time, and what is left
 is processor time too: the draw-set work that is still per record (the sort key,
 the material grouping, the instancing grouping) is where the next of it is.
+
+## E. Every reader walks the record back to its node
+
+A render record is `(sortKey, mvmatrix, tmatrix, bvolume, path)`, and what
+almost every reader of one actually wants is the node at the end of that path.
+So each of them asks for it, and `path[-1]` is a Python `__getitem__` on a
+`list` subclass:
+
+| asks `path[-1]` | times a frame at 1600 objects |
+|---|---:|
+| `instancing.record_placements` | 7,207 |
+| `_flat.selectLevels` | 1,600 |
+| `_flat._walkPaths` | 1,600 |
+| `instancing.build_instance_groups` | 1,596 |
+| `shadowmixin.renderShadowMaps` | 1,370 |
+| `flateffects.transmissiveRecords` | 1,369 |
+| `_flat._materialSortKey` | 1,369 |
+| `instancing.group_material_table` | 1,369 |
+
+**Carry the node in the record.** The gather already has it — `gatherPaths`
+puts every path's node in `nodes` — so the record can hold it and no reader
+need walk anything. It costs one more slot in a tuple that is built once per
+visible object per frame; a plain tuple's sixth element is free, where a
+`NamedTuple`'s would not be (0.131 µs to build against 0.016).
+
+Two things fall out of it:
+
+- The five `instancing` key functions all open with `shape = path[-1]` and use
+  nothing else of the path, so they should take the node. That changes the
+  `key` argument of `build_instance_groups` from "record-path -> key" to
+  "node -> key", which is the honest signature.
+- `record_placements` is asked **5.3 times for every record** — by
+  `instance_counts` from `build_instance_groups`, again from the pass, again
+  from `instance_matrices`, again from the shadow pass. That is its own
+  question, separate from the walk.
+
+The cost of the change is its breadth: the tuple's shape is read in about
+twenty-five places and built in a dozen test files.
+
+## F. Changing a level rebuilds the transform cache
+
+`cache.depend_signal` runs 2,000 times a frame, but **not** once per object —
+it is once per *level change*. About 53 of 1600 objects cross a threshold in
+any frame with the camera moving, and each one costs roughly 38 dispatcher
+registrations:
+
+```
+800.0/frame  cache.depend <- nodepath.get_mat <- transformMatrix <- selectLevels
+800.0/frame  cache.depend <- nodepath.get_mat <- transformMatrix <- _walkPaths
+400.2/frame  cache.depend <- basenodes.localMatrices <- get_mat <- transformMatrix
+```
+
+The mechanism: when an LOD picks a different level, `SGObserver.onSwitchChange`
+invalidates the path to the old level and integrates the new one, which builds
+a **new `NodePath`**. A new path has no entry in the transform cache, so the
+first `transformMatrix()` on it builds one and registers a receiver for every
+field it depends on — the Transform's `translation`, `scale`,
+`scaleOrientation`, `rotation` and `center`, and the parent's local matrices.
+
+What makes that waste rather than work: **the new path's world matrix is the
+one the old path had.** Neither an `LOD` nor the `Shape` under it is a
+`Transforming` node, so `transformChildren()` yields the same transforms either
+way; the product is recomputed and the same receivers re-registered to reach an
+identical answer.
+
+Two ways to stop paying it, and they want weighing rather than picking:
+
+1. **Keep a path per level.** The levels of a chain are a fixed, small set, so
+   the paths to them are too. Switching would then reuse a path whose cache is
+   already warm instead of building one. What it costs is memory and receivers:
+   `levels x nodes` paths where there are now `nodes`, and `onSwitchChange`'s
+   own docstring warns against accumulating paths to the same node — though
+   what it warns about is *unbounded* accumulation from re-walking, which this
+   is not.
+2. **Let a new path inherit the transform its prefix already has.** The cache
+   is keyed on the path object, and a path knows its `parent`; a path that adds
+   no `Transforming` node to its parent has its parent's matrix, exactly, and
+   could hold the parent's cache entry rather than building its own. That is a
+   pyvrml97 change and a deeper one, but it pays for every switched subtree in
+   the engine rather than only for level-of-detail.
+
+Measure (1) first: it is contained in `_flat.py` and reversible.
 
 ## Where this came from
 
