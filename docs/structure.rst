@@ -3,9 +3,14 @@ OpenGLContext Structural Overview
 
 .. rst-class:: introduction
 
-How the stack is built up. Each box sits on what it is written against, with
-the two file-format libraries at the right-hand end and numpy under nearly all
-of it. Blue is ours; grey is somebody else's.
+OpenGLContext is a scenegraph (retained mode) game engine, it is built out of
+a large number of Open Source components. The first-party demo applications
+generally try to push their reusable code pieces down into the engine for
+other projects to use, so they tend to be fairly small wrappers around the
+engine that are focussed on just making the game or demo run. Pieces of
+functionality that might be useful for other engines, such as ``omi_audio``,
+``omi_physics``, ``opengl_extrusions`` and ``pyopengl-video`` have been split
+out as separate reusable components.
 
 .. mermaid::
 
@@ -20,6 +25,9 @@ of it. Blue is ours; grey is somebody else's.
        space:3
 
        oglc["OpenGLContext"]:8
+
+       video["pyopengl-video"]:1
+       space:7
 
        pyopengl["PyOpenGL"]:1
        omip["omi_physics"]:1
@@ -43,20 +51,17 @@ of it. Blue is ours; grey is somebody else's.
        classDef ours fill:#dbe7ff,stroke:#5a7ab5,color:#111
        classDef third fill:#ededed,stroke:#999999,color:#111
 
-       class glisteel,twig,forest,editor,oglc,pyopengl,vrml,omip,omia,ext,ttf,simple,dispatch ours
+       class glisteel,twig,forest,editor,oglc,video,pyopengl,vrml,omip,omia,ext,ttf,simple,dispatch ours
        class mini,fonttools,gltflib,numpy third
 
-The two at the right are where a file becomes a scene: ``pygltflib`` reads
-glTF and GLB, ``PyVRML97`` is the node, field and route model a ``.wrl`` file
-parses into and the scenegraph is built from. ``miniaudio`` is the one
-optional box — ``omi_audio`` mixes without it and plays nothing — and
-``pygltflib`` is the one thing here that does not stand on numpy.
-
-Each of the packages of ours is released on its own and useful on its own:
-``omi_physics`` and ``omi_audio`` are the OMI glTF models in numpy with no
-renderer in them, and ``opengl_extrusions`` sweeps and tessellates geometry
-for anyone who wants vertex arrays. What the engine adds on top is the window,
-the render passes and the scenegraph that ties them together.
+Blue is ours and grey is somebody else's; each box sits on what it is written
+against, and numpy is under all of it but ``pygltflib``. Two are optional
+extras: ``pyopengl-video``, which encodes the colour buffer to H.264 on the
+GPU's own encoder without the frame leaving the card, and ``miniaudio``,
+without which ``omi_audio`` mixes and plays nothing. The two at the
+right-hand end are where a file becomes a scene: ``pygltflib`` reads glTF and
+GLB, and ``PyVRML97`` is the node, field and route model a ``.wrl`` parses
+into and the scenegraph is built from.
 
 The OpenGLContext Package (top-level)
 -------------------------------------
