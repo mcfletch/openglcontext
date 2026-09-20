@@ -28,8 +28,10 @@ GUI toolkits, loads glTF 2.0, VRML97, OBJ and 3D Tiles content into a
 scenegraph, and draws it with a physically based OpenGL 3.3 core-profile
 renderer — with physics, spatial audio, an overlay UI and a movement model
 beside it, so that an application is the world you author rather than the
-plumbing under it. It is also the environment PyOpenGL itself is exercised and
-taught in: the :doc:`tutorials <tutorials/index>` and the :doc:`sample code
+plumbing under it. The :doc:`tutorials <tutorials/index>` work through using
+it — loading a model, animating it, physics, a character walking a route, an
+interface over the frame — and, since this is also the environment PyOpenGL
+itself is exercised and taught in, they and the :doc:`sample code
 <documentation>` are a way into OpenGL for people who have not written any.
 
 One line, and a window opens on the Khronos glTF sample models with the

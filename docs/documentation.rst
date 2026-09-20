@@ -192,14 +192,21 @@ translations are a good starting point for beginning OpenGL programmers.
 
       Editing
 
-- :doc:`Tutorials <tutorials/index>` -- Documentation for users unfamiliar with
-  OpenGL
+- :doc:`Tutorials <tutorials/index>` -- code walkthroughs, each one a script in
+  ``tests/`` that runs
 
-  - **NeHe** translations
+  - **Using the Engine** -- loading a model, animating it, clips, an NPC on a
+    navmesh, an interface over the frame
 
-  - **Introduction to Shaders**
+  - **Physics** -- a world, materials, joints, triggers, and what a game does
+    with a collision
 
-  - Special Effects
+  - **Building a World** -- water, roads, particles, audio, baking, recording
+
+  - **Swept Geometry and Tessellation**
+
+  - **Introduction to Shaders** and the **NeHe** translations, for a reader
+    writing OpenGL directly
 
 - Rendering
 
