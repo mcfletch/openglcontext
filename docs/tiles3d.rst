@@ -1,5 +1,5 @@
-Streamed 3D Tiles
-=================
+Loading Tiles3D (Streamed)
+==========================
 
 .. rst-class:: introduction
 

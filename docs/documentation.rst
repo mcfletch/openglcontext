@@ -283,7 +283,7 @@ translations are a good starting point for beginning OpenGL programmers.
     deciding which ground material shows where, chunked colliders a car drives on,
     and the mix-in that walks it
 
-  - :doc:`Streamed 3D Tiles <tiles3d>` -- A world too big to load, as an octree of
+  - :doc:`Loading Tiles3D (Streamed) <tiles3d>` -- A world too big to load, as an octree of
     glTF tiles: screen-space-error LOD, frustum-culled paging under a memory
     budget, per-tile walkable colliders, procedural & DEM heightmaps, caves and
     overhangs, and the ``oglc-terrain`` viewer -- plus what a third-party
