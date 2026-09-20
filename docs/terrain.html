@@ -183,8 +183,108 @@ ground.update(car_position)                        # once a frame</code></pre>
   <p><strong><code>holes</code></strong> is how something that passes <em>through</em>
   the ground says so. A tunnel's bore runs inside the hill and the hill's surface
   is still drawn over it; left in the physics world that surface is a wall across
-  the road. <code>holes(x, z) -&gt; mask</code> cuts the collider wherever it is
-  set, and the bore's own lining is what the vehicle then drives through.</p>
+  the road. <code>holes(x, z) -&gt; mask</code> is true where the ground is not
+  there, and the bore's own lining is what the vehicle then drives through.</p>
+  <p>The same callable goes to <code>HeightField.mesh()</code> and to the
+  colliders, so the surface a player sees and the surface a car meets are one
+  surface:</p>
+  <pre><code>from OpenGLContext.scenegraph.roadworks import bore_opening
+
+mouth = bore_opening(bore_centreline, field.sample, profile=road_profile)
+terrain.holes = mouth                              # what is drawn
+ground = HeightFieldColliders(physics_world, field, holes=mouth)</code></pre>
+  <p><code>OpenGLContext.scenegraph.terrain.holes.cut</code> is what both use to
+  apply it. The triangles the opening's edge crosses are <em>cut on that edge</em>
+  &mdash; the crossing is found by halving, to under a millimetre on a cell metres
+  wide &mdash; so the ground stops where the opening starts rather than a cell
+  either side of it, and a new corner carries the normal the surface already had
+  there. A crossing belongs to the grid edge rather than to the triangle that
+  asked for it, so the two triangles sharing an edge are handed the same corner
+  and the cut leaves no crack. Detail finer than a cell &mdash; an opening smaller
+  than one, or a corner where the edge turns inside one &mdash; is resolved to
+  the triangle it falls in, which goes if its centre is in the opening.</p>
+  <p><a href="roads.html#bores">Roads</a> has what a bore's opening is, and why it
+  is the mouth rather than the length of the tunnel.</p>
+
+  <h3 id="tiledground">Ground that arrives in the tiles</h3>
+  <p>A world can carry its ground in its <em>tiles</em> instead: meshed when the
+  world was baked, refined by the streamer as the camera comes in, and drawn as
+  it arrived. What makes it ground is the same shading &mdash; the same detail
+  materials, the same control map, the same baked light &mdash; held apart from
+  the mesh it is drawn on:</p>
+  <pre><code>from OpenGLContext.scenegraph.terrain.ground import GroundShading, GroundPatch
+
+ground = GroundShading(extent=2048.0, layers=layers, control='control.png',
+                       shading=field.sun_shadow(sun))
+patch = GroundPatch(ground, vertices, indices, model=tile_transform)</code></pre>
+  <p>A bake says which primitive is ground by <strong>naming its material</strong>
+  <code>ground</code>, and the tile loader mounts those as patches of the world's
+  own ground
+  (<code>OpenGLContext.scenegraph.terrain.ground.mount_ground</code>); the
+  material's vertex colours stay on it, so a viewer that has never heard of the
+  convention still draws a landscape. <code>extras.terrain.drawn</code> in the
+  tileset says which way round a world is: <code>field</code> for the one mesh
+  above, <code>tiles</code> for ground that streams. Either way the height field
+  is written beside the tileset, because it is what the world is collided
+  against, clamped to and planted on &mdash; the surface that must not change
+  resolution under a wheel as a tile refines.</p>
+
+  <h3 id="relief">The grain in the ground</h3>
+  <p>A height function says where the hills are. What it does not say is what a
+  hillside is made of &mdash; the hummocks, the ruts and the swells a metre or
+  two across that someone standing on it sees. Sampling the function more finely
+  does not produce them, because they are not in it.
+  <code>OpenGLContext.scenegraph.terrain.Relief</code> is:</p>
+  <pre><code>from OpenGLContext.scenegraph.terrain import Relief, GROUND_RELIEF
+
+grain = Relief(coarsest=24.0, finest=0.75, roughness=0.09)
+ground = grain.over(height_fn, spacing=tile_spacing, error=tile_error)</code></pre>
+  <p>Relief is a band of noise per feature size, and a surface carries the bands
+  it is sampled finely enough to show: a band is drawn only where a feature
+  spans <code>samples_per_feature</code> vertices or more, so a tile meshed every
+  sixty metres carries none of them and one meshed every half metre carries them
+  all. The grain therefore <em>arrives</em> as a 3D Tiles tree refines rather
+  than aliasing into a coarse tile as speckle.</p>
+  <p><strong>Keep the features small.</strong> A band is as tall as
+  <code>roughness</code> times its own width, so a coarse band is not grain but a
+  dune: at 24 m and a roughness of a tenth it is two and a half metres of swell,
+  which on a landscape a car drives over is terrain rather than texture. What a
+  landscape is <em>shaped</em> like is the height function's job; this is what a
+  hillside is made of.</p>
+  <p>The whole displacement is scaled to fit inside the tile's own geometric
+  error &mdash; the distance the streamer is already willing for the drawn
+  surface to stand from the real one. <code>roughness</code> is metres of rise
+  per metre of feature; <code>seed</code> chooses which grain.
+  <code>GROUND_RELIEF</code> is the one a baked landscape carries by default.</p>
+  <p><strong>What is drawn is what is collided against.</strong> The height
+  field is still the one surface every reader agrees about &mdash; the car, the
+  camera, the seat of a scattered plant &mdash; so the grain goes into
+  <em>it</em>, and the tiles are meshed from the same function. A band the field
+  cannot hold would be relief a player sees and walks straight through, so
+  <code>no_finer_than(spacing)</code> cuts those before anything draws them:</p>
+  <pre><code>grain = GROUND_RELIEF.no_finer_than(field_spacing)   # what a grid that size can carry
+ground = grain.over(height_fn, spacing=finest_tile_spacing, error=finest_tile_error)</code></pre>
+  <p>The field is sampled from <code>ground</code> and so is the finest tile, so
+  the two are one surface; the coarser tiles are that surface with its finer
+  bands left off, which is ordinary level of detail.</p>
+  <p><strong>How much can be felt is set by the field's own grid.</strong> The
+  grain goes into the landscape and the landscape is a grid, so
+  <code>no_finer_than</code> cuts what it cannot hold: at a sample every two
+  metres that leaves one swell of about half a metre across sixteen, which
+  reads as modulation across a hillside. Ruts are a metre across, and feeling
+  one wants a surface sampled a few tens of centimetres apart near the camera
+  rather than a finer grid over the whole world.</p>
+  <p>The other half of agreeing is <code>where</code>: ground that was
+  <em>worked</em> has no grain left in it. A road is a strip that was cleared and
+  levelled to build it, and a hummock in the carriageway is one a grader took
+  out &mdash; so a caller hands the relief a weight from 0 on the made ground to
+  1 clear of it, and the same weight reaches the tiles and the field alike.</p>
+  <p>Baking it into a world is
+  <a href="https://github.com/mcfletch/openglcontext-editor">openglcontext-editor</a>'s
+  <code>HeightfieldLayer(relief=...)</code>, which meshes each tile from the
+  height function with the tile's own bands already in it, and
+  <code>ProceduralWorld.grain</code>, which puts the same grain in the landscape
+  beside the tileset.</p>
 
   <h3>Walking it</h3>
   <p><code>OpenGLContext.move.terrainwalk.TerrainWalkMixin</code> is what walks

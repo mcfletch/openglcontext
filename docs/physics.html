@@ -199,8 +199,9 @@ road.update(car_position)                # once a frame</code></pre>
   <a href="terrain.html#fieldphysics"><code>HeightFieldColliders</code></a> does
   the same for ground carried as a field. Between them a game can turn tile
   colliders off entirely, which is what <code>glisteel</code> does.</p>
-  <p><strong>And so is everything else standing in the world.</strong> A boulder
-  on the verge is drawn from a tile and must not be <em>collided</em> from one,
+  <h3 id="props">Things standing in the world</h3>
+  <p><strong>Everything else standing in the world is collided the same way.</strong>
+  A boulder on the verge is drawn from a tile and must not be <em>collided</em> from one,
   or it is a rock the car drives through at the moment the tile behind it swaps.
   <code>OpenGLContext.physics.props.PropColliders</code> reads the
   <a href="roads.html#props">prop records</a> a baked world carries and stands
@@ -210,10 +211,27 @@ road.update(car_position)                # once a frame</code></pre>
   <pre><code>from OpenGLContext.physics.props import PropColliders
 obstacles = PropColliders(physics_world, world.props)
 obstacles.update(car_position)           # once a frame</code></pre>
-  <p>A prop's body is an upright box the size the prop says it takes up, rather
-  than the mesh it is drawn as. What a car needs from a boulder is that it stops
-  there, and a triangle soup per rock costs the broadphase and the narrow phase
-  both for a difference nobody driving past at forty metres a second can see.</p>
+  <p>A prop's body is the shape the prop says it is, at the size it says it
+  takes up, rather than the mesh it is drawn as: a triangle soup per rock costs
+  the broadphase and the narrow phase both for a difference nobody driving past
+  at forty metres a second can see. <code>Prop.shape</code> picks between the
+  two:</p>
+  <ul>
+    <li><strong><code>box</code></strong> &mdash; a thing that stops you: a
+      boulder, a barrier, a broken-down car. What a car needs from one is that
+      there is no way through.</li>
+    <li><strong><code>dome</code></strong> &mdash; a thing you go
+      <em>over</em>: a stone lying in the grass, which is part of the ground
+      rather than an obstacle in it. A sphere as wide as the stone, sunk until
+      its top stands where the stone's does, so a wheel rides over it and a
+      walker steps onto it. The same stone as a block is a kerb across the
+      hillside.</li>
+  </ul>
+  <p>A world's loose stone is thousands of domes where its boulders are hundreds
+  of boxes, and the two want different reaches &mdash; a boulder has to stop a
+  car from a long way off, a stone only has to be there where the wheel is. So
+  they are two <code>PropColliders</code> over two tables rather than one over
+  a merged one.</p>
 </section>
 
 <section id="walking">

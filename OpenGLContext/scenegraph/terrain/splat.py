@@ -32,9 +32,7 @@ from OpenGL.GL import (
 )
 from vrml.vrml97 import basenodes as vnodes
 from OpenGLContext.scenegraph import boundingvolume
-from OpenGLContext.scenegraph.vertexsemantics import LOC_POSITION, LOC_NORMAL
-from OpenGLContext.scenegraph.instancedgl import (
-    load_program, texture_rgba, ensure_gl, delete_gl)
+from OpenGLContext.scenegraph.terrain.ground import GroundPatch, GroundShading
 
 if TYPE_CHECKING:
     from OpenGLContext.scenegraph.terrain.heightfield import HeightField
@@ -149,10 +147,10 @@ class SplatTerrain(vnodes.PointSet):
         self.canopy_deepest = float(canopy_deepest)
         self.canopy_crown = float(canopy_crown)
         self.canopy_spread = float(canopy_spread)
-        self._gl: Any = None
         self._shading: Any = None
         self._closure: Any = None
-        self._disabled = False
+        self._ground: Any = None
+        self._patch: Any = None
 
     @property
     def shading(self) -> np.ndarray:
@@ -222,77 +220,49 @@ class SplatTerrain(vnodes.PointSet):
                     0, size - 1).astype(int)
         return np.asarray(grid[v, u])
 
-    def _init_gl(self) -> None:
-        prog = load_program("terrain_splat.vert", "terrain_splat.frag")
-        inter, idx = self.hf.mesh(holes=self.holes)
-        vao = glGenVertexArrays(1)
-        glBindVertexArray(vao)
-        vb = glGenBuffers(1)
-        glBindBuffer(GL_ARRAY_BUFFER, vb)
-        glBufferData(GL_ARRAY_BUFFER, inter.nbytes, inter, GL_STATIC_DRAW)
-        ib = glGenBuffers(1)
-        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ib)
-        glBufferData(GL_ELEMENT_ARRAY_BUFFER, idx.nbytes, idx, GL_STATIC_DRAW)
-        # The splat program and the shadow pass's depth-only program read the
-        # position and normal from the same locations, so one vertex array
-        # serves both -- and the ground is the largest mesh in the world.
-        glVertexAttribPointer(LOC_POSITION, 3, GL_FLOAT, GL_FALSE, 24,
-                              ctypes.c_void_p(0))
-        glEnableVertexAttribArray(LOC_POSITION)
-        glVertexAttribPointer(LOC_NORMAL, 3, GL_FLOAT, GL_FALSE, 24,
-                              ctypes.c_void_p(12))
-        glEnableVertexAttribArray(LOC_NORMAL)
-        glBindVertexArray(0)
-        tex = dict(col=_array_texture("color", self.layers, self.material_fn),
-                   nrm=_array_texture("normal", self.layers, self.material_fn),
-                   rgh=_array_texture("roughness", self.layers, self.material_fn),
-                   ctl=texture_rgba(self.control, clamp=True, mipmap=False))
-        lit = self.shading
-        st = glGenTextures(1)
-        glBindTexture(GL_TEXTURE_2D, st)
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_R8, lit.shape[1], lit.shape[0], 0,
-                     GL_RED, GL_FLOAT, np.ascontiguousarray(lit))
-        for pp, vv in [(GL_TEXTURE_MIN_FILTER, GL_LINEAR), (GL_TEXTURE_MAG_FILTER, GL_LINEAR),
-                       (GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE), (GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE)]:
-            glTexParameteri(GL_TEXTURE_2D, pp, vv)
-        tex["sun"] = st
-        U = {n: glGetUniformLocation(prog, n) for n in
-             ("layerColor", "layerNormal", "layerRough", "controlMap", "sunShadow",
-              "numLayers", "worldMin", "worldSize", "detailScale", "macroScale",
-              "normalStrength", "uModelView", "uProjection", "uNormalMatrix",
-              "sunDirEye", "sunColor", "skyColor", "groundAmbient", "fogDensity", "fogColor")}
-        self._gl = dict(prog=prog, vao=vao, vb=vb, ib=ib,
-                        ncount=len(idx), tex=tex, U=U)
+    @property
+    def ground(self) -> GroundShading:
+        """What this terrain is made of, as a world's ground shading.
+
+        The layers, the control map and the light baked into the landscape, held
+        apart from the mesh they are drawn on so a streamed world's tiles can be
+        drawn with the same ground (:mod:`OpenGLContext.scenegraph.terrain.ground`).
+        """
+        if self._ground is None:
+            self._ground = GroundShading(
+                extent=self.hf.extent, layers=self.layers, control=self.control,
+                shading=self.shading, sun=self.sun,
+                material_fn=self.material_fn)
+        found: GroundShading = self._ground
+        return found
+
+    @property
+    def patch(self) -> GroundPatch:
+        """The field's own mesh, drawn with that ground.
+
+        Built at the first draw rather than at construction, because what it is
+        cut by is not settled until then: a game reads a tileset to stand the
+        ground up and reads it again to find the roads, and only the roads know
+        where a bore runs (:attr:`holes`).
+        """
+        if self._patch is None:
+            vertices, indices = self.hf.mesh(holes=self.holes)
+            self._patch = GroundPatch(self.ground, vertices, indices)
+        found: GroundPatch = self._patch
+        return found
 
     def render_depth(self, mode: Any) -> int:
-        """Write the ground's depth for a shadow map.
-
-        **The ground casts.** A hill shades the valley behind it, a cutting
-        shades its own floor, and the rock over a bore is what keeps the sun out
-        of it -- none of which happens for a terrain that only receives. The
-        baked sun and canopy terms this node carries shade *itself*; they say
-        nothing to anything standing on it or running through it.
-
-        The shadow pass has bound its own depth program and set its matrices, so
-        all this does is hand over the geometry -- through a second vertex array
-        that puts the position where that program reads it, which is not where
-        the splat program does.
-        """
-        if not ensure_gl(self):
-            return 1
-        glBindVertexArray(self._gl["vao"])
-        glDrawElements(GL_TRIANGLES, self._gl["ncount"], GL_UNSIGNED_INT, None)
-        glBindVertexArray(0)
-        return 1
+        """Write the ground's depth for a shadow map."""
+        return self.patch.render_depth(mode)
 
     def dispose(self) -> None:
-        """Free this node's GL objects (VAO, buffers, textures, program). GL thread."""
-        g = self._gl
-        if not g:
-            return
-        delete_gl(vaos=[g["vao"]], buffers=[g["vb"], g["ib"]],
-                  textures=list(g["tex"].values()), programs=[g["prog"]])
-        self._gl = None
+        """Free this node's GL objects (mesh, textures, program). GL thread."""
+        if self._patch is not None:
+            self._patch.dispose()
+            self._patch = None
+        if self._ground is not None:
+            self._ground.dispose()
+            self._ground = None
 
     def boundingVolume(self, mode: Any) -> "boundingvolume.AABoundingBox":
         E = self.hf.extent
@@ -301,61 +271,4 @@ class SplatTerrain(vnodes.PointSet):
             size=(E, H, E), center=(0, self.hf.base + self.hf.relief / 2.0, 0))
 
     def render(self, mode: Any = None, **kw: Any) -> int:
-        if getattr(mode, 'shadow_pass', False):
-            return self.render_depth(mode)
-        if not getattr(mode, 'visible', True):
-            return 1
-        if not ensure_gl(self):
-            return 1
-        g = self._gl
-        U = g["U"]
-        E = self.hf.extent
-        from OpenGLContext.passes.instancing import set_cull_state
-        prev_prog = mode.current_program() if hasattr(mode, "current_program") else 0
-        glUseProgram(g["prog"])
-        glUniformMatrix4fv(U["uModelView"], 1, GL_FALSE, np.ascontiguousarray(mode.matrix, np.float32))
-        glUniformMatrix4fv(U["uProjection"], 1, GL_FALSE, np.ascontiguousarray(mode.projection, np.float32))
-        # The normal matrix is the plain modelview upper-3x3, correct while that
-        # block is orthonormal (rotation only). The terrain carries no scale, so no
-        # inverse-transpose is needed; a scaled terrain transform would skew normals.
-        glUniformMatrix3fv(U["uNormalMatrix"], 1, GL_FALSE, np.ascontiguousarray(np.asarray(mode.matrix)[:3, :3], np.float32))
-        se = np.asarray(mode.matrix)[:3, :3].T @ self.sun
-        se /= np.linalg.norm(se)
-        glUniform3f(U["sunDirEye"], *se.astype(np.float32))
-        glUniform1i(U["layerColor"], 0)
-        glUniform1i(U["layerNormal"], 1)
-        glUniform1i(U["layerRough"], 2)
-        glUniform1i(U["controlMap"], 3)
-        glUniform1i(U["sunShadow"], 4)
-        glUniform1i(U["numLayers"], len(self.layers))
-        glUniform2f(U["worldMin"], -E / 2, -E / 2)
-        glUniform2f(U["worldSize"], E, E)
-        glUniform1f(U["detailScale"], DETAIL_SCALE)
-        glUniform1f(U["macroScale"], MACRO_SCALE)
-        glUniform1f(U["normalStrength"], NORMAL_STRENGTH)
-        glUniform3f(U["sunColor"], *SUN_COLOR)
-        glUniform3f(U["skyColor"], *SKY_COLOR)
-        glUniform3f(U["groundAmbient"], *GROUND_AMBIENT)
-        glUniform1f(U["fogDensity"], FOG_DENSITY)
-        glUniform3f(U["fogColor"], *FOG_COLOR)
-        glActiveTexture(GL_TEXTURE0)
-        glBindTexture(GL_TEXTURE_2D_ARRAY, g["tex"]["col"])
-        glActiveTexture(GL_TEXTURE1)
-        glBindTexture(GL_TEXTURE_2D_ARRAY, g["tex"]["nrm"])
-        glActiveTexture(GL_TEXTURE2)
-        glBindTexture(GL_TEXTURE_2D_ARRAY, g["tex"]["rgh"])
-        glActiveTexture(GL_TEXTURE3)
-        glBindTexture(GL_TEXTURE_2D, g["tex"]["ctl"])
-        glActiveTexture(GL_TEXTURE4)
-        glBindTexture(GL_TEXTURE_2D, g["tex"]["sun"])
-        glActiveTexture(GL_TEXTURE0)
-        glEnable(GL_DEPTH_TEST)
-        # Back-face cull the ground; through the pass's cull memo so the next mesh
-        # re-issues its own winding, with no glGet snapshot/restore of live state.
-        set_cull_state(mode, True, GL_CCW)
-        glCullFace(GL_BACK)
-        glBindVertexArray(g["vao"])
-        glDrawElements(GL_TRIANGLES, g["ncount"], GL_UNSIGNED_INT, None)
-        glBindVertexArray(0)
-        glUseProgram(prev_prog)
-        return 1
+        return self.patch.render(mode, **kw)

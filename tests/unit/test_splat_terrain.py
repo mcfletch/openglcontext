@@ -35,7 +35,7 @@ def test_render_is_noop_in_shadow_pass():
     node = SplatTerrain(_hf(), ["floor"], "control.png",
                         material_fn=lambda *a, **k: {})
     assert node.render(types.SimpleNamespace(shadow_pass=True, visible=True)) == 1
-    assert node._gl is None                        # never initialized GL
+    assert node.patch._gl is None                  # never initialized GL
 
 
 def test_render_is_noop_when_disabled():
@@ -49,7 +49,7 @@ def test_dispose_before_init_is_a_noop():
     node = SplatTerrain(_hf(), ["floor"], "control.png",
                         material_fn=lambda *a, **k: {})
     node.dispose()                                 # nothing allocated yet
-    assert node._gl is None
+    assert node._patch is None
 
 
 def test_sun_direction_is_normalized():
@@ -86,7 +86,7 @@ def test_canopy_shadow_is_baked_into_the_sun_texture(gl, tmp_path):
                                  shadow_pass=False, visible=True)
     node.render(mode)
     assert glGetError() == GL_NO_ERROR
-    assert node._gl is not None
+    assert node.patch._gl is not None
     node.dispose()
 
 

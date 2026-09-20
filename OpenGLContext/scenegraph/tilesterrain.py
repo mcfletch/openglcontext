@@ -93,6 +93,10 @@ class TilesTerrain(Group):
         #: The landscape, when this world carries one as a field; None when its
         #: ground streams as tiles like everything else.
         self.field: Any = None
+        #: Whether the ground the player sees comes from the tiles rather than
+        #: from the field. The field is still there either way: it is what the
+        #: world is collided against and clamped to.
+        self.drawn_as_tiles = False
         #: The node that draws it.
         self.ground: Any = None
         self._field_node: Any = None
@@ -117,6 +121,12 @@ class TilesTerrain(Group):
         if vegetation and extras.get('vegetation'):
             self._mount_cover(extras['vegetation'].get('cover'), base_uri,
                               extras.get('terrain'))
+        if self.drawn_as_tiles and self.ground is not None:
+            # What the tiles' ground is drawn with is what the field's ground is
+            # made of: one blend, one control map, one baked light, whichever
+            # mesh carries it. Taken here rather than at the mount, because the
+            # light is not baked until the canopy over it is known.
+            self.runtime.uploader.ground = self.ground.ground
         self._mounted = [node for node in (self._field_node, self.cover,
                                            self.vegetation)
                          if node is not None]
@@ -124,7 +134,17 @@ class TilesTerrain(Group):
 
     def _mount_field(self, record: Any, base_uri: str,
                      cache_dir: Optional[str]) -> None:
-        """Build the field this world carries, and the node that draws it."""
+        """Build the field this world carries, and the node that draws it.
+
+        A world whose ``terrain`` record says its ground is ``drawn`` by the
+        *tiles* still builds the field, and still builds what the ground is made
+        of from it -- the layers, the control map, the light baked into the
+        landscape. What it does not do is draw it: the tiles carry the ground
+        there, meshed and detailed when the world was baked, and they are drawn
+        with that same shading. The field is then what the world is *collided*
+        against, walked on and planted on, which is the surface that must not
+        change under a wheel as a tile refines.
+        """
         from OpenGLContext.scenegraph.terrain.heightfield import HeightField
         from OpenGLContext.scenegraph.terrain.splat import SplatTerrain
         layers = list(record.get('layers') or ())
@@ -144,8 +164,9 @@ class TilesTerrain(Group):
         from OpenGLContext.scenegraph.shape import Shape
         self.ground = SplatTerrain(
             self.field, layers, _beside(base_uri, record['control'], cache_dir))
-        self._field_node = Shape(geometry=self.ground,
-                                 appearance=Appearance(material=Material()))
+        self.drawn_as_tiles = str(record.get('drawn') or 'field') == 'tiles'
+        self._field_node = None if self.drawn_as_tiles else Shape(
+            geometry=self.ground, appearance=Appearance(material=Material()))
 
     @property
     def holes(self) -> "Optional[Callable[[Any, Any], Any]]":

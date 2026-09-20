@@ -244,4 +244,6 @@ def test_splat_terrain_render_restores_state_and_disposes(gl, tmp_path):
     assert not bool(mask[0] if hasattr(mask, '__len__') else mask)
 
     node.dispose()
-    assert node._gl is None
+    # The mesh and the ground it is drawn with are both let go of: a terrain is
+    # a patch of ground shading, and disposing it frees each.
+    assert node._patch is None and node._ground is None

@@ -167,20 +167,47 @@ road, because a road is built on a formation and surfaced on top of it — and
 because two surfaces at exactly the same height fight over which one is drawn,
 which shows as the ground flickering through the tarmac.</p>
 
-<h3>Bridges, causeways and tunnels: where the earthwork stops</h3>
+<h3 id="bores">Bridges, causeways and tunnels: where the earthwork stops</h3>
 <p>Past a point the ground cannot absorb the road. An embankment fourteen metres
 tall already needs fill growing as the square of its height, and a cutting
 eighteen metres deep has to put its spoil somewhere and hold its faces; past
 those the road is <strong>carried</strong> instead — a deck on piers over the low
 ground, a bore through the high ground. Under a deck the land is left exactly as
 it was found: filling a valley in would put the structure inside a hill of its
-own making. Through a bore the opposite holds and the cutting <em>runs the
-length of the tunnel</em>, because a ground mesh draws straight lines between
-its samples: a cut that stops at the portal leaves the line from the last cut
-sample up to the untouched hill standing across the opening, and the road
-arrives at a bank with the arch in the air behind it. The cost is that the hill
-over a long bore opens into a broad cutting; what would keep it whole is a hole
-in the ground mesh with the bore's own outside plugging it.</p>
+own making. Over a bore it is left exactly as it was found for the same reason
+&mdash; the hill a tunnel passes through is a hill, and digging it out to road
+level would trade the tunnel for a canyon with a lid.</p>
+<p>What a height field cannot say is that a hill is <em>hollow</em>, and at the
+portal that puts the hillside where the carriageway is. So the mouth is cut out
+of the ground rather than drawn:
+<code>OpenGLContext.scenegraph.roadworks.bore_opening</code> answers where the
+ground stands inside the bore &mdash; over the carriageway, within the portal
+face's width and under its top &mdash; and that is the <code>holes</code> mask the
+<a href="terrain.html#fieldphysics">ground mesh and the collider</a> are both cut
+with. It is the mouth and no more: where the hill has closed over the crown
+there is nothing between the road and the arch, so nothing is opened, and the
+bore's own lining is what is seen through what is.</p>
+<pre>from OpenGLContext.scenegraph.roadworks import bore_opening
+mouth = bore_opening(centreline[run], field.sample, profile=profile)</pre>
+<p>Two numbers shape the opening, and both are in the module beside it.
+<code>BORE_INSET</code> draws it a little <em>inside</em> the face, so the face
+covers the edge of the cut rather than standing level with a row of teeth;
+<code>BORE_APPROACH_CELLS</code> clears the road's own width in front of each
+face, in cells of whatever grid the ground is sampled on, because the step from
+the cutting to the hillside is drawn between one sample under the road and one
+over the hill and no rule about heights removes it.</p>
+<p>A world whose ground is meshed into its <a href="terrain.html#tiledground">
+tiles</a> cuts the openings at bake time instead, against the portal's own
+outline rather than against a grid at run time:
+<code>OpenGLContext_editor.world.road.RoadPath.bore_openings</code> gives every
+mouth in one mask and <code>HeightfieldLayer(holes=...)</code> cuts the tiles
+with it. The run-time mask then has only the collider's field to cut.</p>
+<p>A portal is <em>dug</em>, though, and that half is the authoring side's:
+<code>OpenGLContext_editor.world.road.conform_terrain</code> holds the ground
+around each portal down to the top of its face and lets it rise from there at
+the batter the rest of the cutting uses. Without it the ground steps from the
+carriageway to the hillside between one sample and the next, and what stands
+over the arch is a face one sample thick.</p>
 <p>A <strong>portal opens where the bore fits inside the hill</strong>, which is
 measured to the <em>crown</em> and not to the carriageway: a bore's arch stands
 seven or eight metres over the road, so a portal placed where there are two
@@ -260,7 +287,12 @@ land is doing beneath each point, with a lip where the road meets it so the wall
 always has something under it.</p>
 <p><code>TunnelProfile</code> sets the crown's clearance over the carriageway,
 how far below it the arch's feet sit, and how far the portal's face stands out
-around the arch. A bore is a <strong>closed tube</strong>: the ground it runs
+around the arch. The face is a <strong>wall with the arch in it</strong> &mdash;
+a flat top and two uprights, not a larger arch &mdash; because a portal stands
+in a cut and the wall is what holds it: the ground is dug back to the face
+(<code>OpenGLContext_editor.world.road.conform_terrain</code>) and meets its top
+edge, which a hillside sampled on a grid metres wide can do and a curve is not.
+A bore is a <strong>closed tube</strong>: the ground it runs
 through has to be cut away for the road to pass, so the lining is all there is
 under the road, and one open underneath leaves a trench beside the carriageway
 for a wheel to drop into. It also carries <strong>its own shade</strong> on its
@@ -592,6 +624,11 @@ tile behind it swaps. So the props travel in the tileset's <code>extras</code>,
 the same way the road does, and the game stands them up itself — the ones within
 reach, because a world's boulders are hundreds of bodies and the broadphase pays
 for every one it holds.</p>
+<p><strong>A prop says which shape its measurements describe.</strong> A
+<code>box</code> is a thing that stops you and a <code>dome</code> is a thing you
+go over &mdash; a stone lying in the grass is part of the ground, and a block the
+size of it is a kerb across the hillside. See
+<a href="physics.html#props">Physics</a>.</p>
 <p>What each one looks like is art, and the toolkit ships none. The exception is
 the kind a landscape supplies for free: <code>rock_mesh</code> grows a boulder
 out of a subdivided icosahedron, pushed in and out by a smooth function of

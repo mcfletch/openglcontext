@@ -1,15 +1,21 @@
 """Ground that is not there, because a road runs inside the hill.
 
 A height field is a surface, so a tunnel through a hill has nowhere to say the
-hill is hollow. The *collider* has said so for a while --
-:class:`~OpenGLContext.physics.heightfield.HeightFieldColliders` takes ``holes``
-and drops a triangle whose centre falls in one -- and the drawn surface could
-not, which is why a world with a bore in it had the hill cut down to road level
-instead.
+hill is hollow. ``holes(x, z)`` is where that is said, and both the drawn
+surface and the collider are cut by it --
+:class:`~OpenGLContext.physics.heightfield.HeightFieldColliders` takes the same
+callable :meth:`~HeightField.mesh` does.
 
-The rule here is the collider's rule, deliberately: a triangle goes when its
-centre is in a hole. Agreeing by construction is worth more than agreeing by
-care, since what a car drives through and what a player sees are the same hill.
+One rule, applied by one piece of code
+(:func:`OpenGLContext.scenegraph.terrain.holes.cut`): agreeing by construction is
+worth more than agreeing by care, since what a car drives through and what a
+player sees are the same hill. The cases here hold the two to each other; what
+the rule *is* -- the edge of the opening, and the centre of a triangle too small
+to have one -- is in ``test_terrain_holes.py``.
+
+The hole these use falls on the grid lines of the field they use it on, which is
+where a cut needs no corners of its own and every index still means what it
+meant.
 """
 
 import numpy as np
@@ -29,11 +35,15 @@ def middle(x, z):
     return (np.abs(np.asarray(x)) < 30.0) & (np.abs(np.asarray(z)) < 30.0)
 
 
-def centres(field, indices):
-    """Where each triangle of a mesh sits, in world XZ."""
-    inter, _ = field.mesh()
-    points = inter.reshape(-1, 6)[:, :3]
-    return points[indices.reshape(-1, 3)].mean(axis=1)
+def centres(field, indices, vertices=None):
+    """Where each triangle of a mesh sits, in world XZ.
+
+    ``vertices`` are the ones the indices go with, which is the field's own grid
+    until a cut appends the corners it needed to it.
+    """
+    inter = field.mesh()[0] if vertices is None else vertices
+    points = np.asarray(inter).reshape(-1, 6)[:, :3]
+    return points[np.asarray(indices).reshape(-1, 3)].mean(axis=1)
 
 
 class TestAFieldWithNothingMissing:
@@ -137,11 +147,27 @@ class _NoWorld:
 
 @pytest.mark.parametrize('res', [5, 9, 33])
 def test_a_hole_works_at_any_resolution(res) -> None:
+    """The hole is 60 m square wherever the grid's lines happen to fall.
+
+    Its sides are cut on the side, whatever the cell size; its four corners turn
+    inside a cell, and a corner is resolved to the triangle it is in.
+    """
     field = flat(res=res)
-    kept = field.mesh(holes=middle)[1]
-    where = centres(field, kept)
+    cell = 160.0 / (res - 1)
+    vertices, kept = field.mesh(holes=middle)
+    where = centres(field, kept, vertices)
     assert not middle(where[:, 0], where[:, 2]).any()
-    assert kept.size < field.mesh()[1].size
+    assert _ground(vertices, kept) == pytest.approx(160.0 ** 2 - 60.0 ** 2,
+                                                    abs=4 * cell ** 2)
+
+
+def _ground(vertices, indices):
+    """How much ground a mesh covers, measured in the ground plane."""
+    p = np.asarray(vertices).reshape(-1, 6)[:, [0, 2]][
+        np.asarray(indices).reshape(-1, 3)]
+    return float(0.5 * np.abs(
+        (p[:, 1, 0] - p[:, 0, 0]) * (p[:, 2, 1] - p[:, 0, 1])
+        - (p[:, 1, 1] - p[:, 0, 1]) * (p[:, 2, 0] - p[:, 0, 0])).sum())
 
 
 class TestTheTerrainNodeCarriesItThrough:
