@@ -8,11 +8,13 @@
 /* `--slide-width` is the render's own pixel width, written into the page beside
  * the slides: the box grows to the picture and no further, so a wide display
  * gets the image at its true size with space around it rather than a scaled-up
- * one.  Below that width `width: auto` applies, so it still shrinks to a narrow
- * window. */
+ * one.  The column it sits in comes first, though -- the page has a table of
+ * contents down the right-hand side, and a panel that took its own width would
+ * run under it. */
 .gallery-rotate {
     margin: .75em auto;
-    max-width: var(--slide-width, max-content);
+    max-width: 100%;
+    max-width: min(100%, var(--slide-width, max-content));
     position: relative;
 }
 
@@ -51,6 +53,10 @@
 .gallery-rotate.is-live .slide {
     display: block;
     grid-area: 1 / 1;              /* every slide stacked in the one cell */
+    /* A grid item is not allowed to shrink below its contents unless it is
+     * told it may, and a slide's contents are a 1200-pixel-wide picture: the
+     * cell would otherwise be that wide whatever the column is. */
+    min-width: 0;
     opacity: 0;
     transition: opacity .6s ease-in-out;
     pointer-events: none;
@@ -58,6 +64,7 @@
 
 .gallery-rotate.is-live .frame {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
 }
 
 /* Half the picture each: clicking the left of it goes back, the right forward. */

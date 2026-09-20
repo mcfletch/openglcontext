@@ -40,6 +40,9 @@ p.technical,
 .thumb-row .figure {
     margin: 0;
     padding: 0;
+    /* A grid item is not allowed to shrink below its contents unless it is
+     * told it may, and the contents are a picture with a width of its own. */
+    min-width: 0;
 }
 
 .thumb-row img {
@@ -71,6 +74,12 @@ p.technical,
 .shot-row .figure {
     margin: 0;
     max-width: 48%;
+    min-width: 0;                  /* as above: the picture may be scaled down */
+}
+
+.shot-row img {
+    max-width: 100%;
+    height: auto;
 }
 
 /* A single still, captioned. */
