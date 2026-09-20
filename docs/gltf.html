@@ -435,6 +435,16 @@ uninterpreted, and its <code>hook</code> becomes an <code>OGLC_hook</code>
 extension block. So a world can be loaded, edited and baked again with its tags
 intact.</p>
 
+<h4>Saying an object does not cast a shadow</h4>
+<p>Beside the hook tag, and read the same way, is
+<code>OGLC_castsShadow</code>: a node's <code>extras</code> key that keeps its
+geometry out of the shadow maps while leaving it lit and still receiving
+shadows. An interior is what it is for &mdash; a room's shell stands between
+every outside light and everything in the room. It is ANDed down the node graph
+like <code>KHR_node_visibility</code>, and a light on a marked node becomes a
+fill with no shadow map of its own.
+<a href="shadows.html#notcasting">Shadows</a> has the detail.</p>
+
 <h4>The <code>water</code> kind</h4>
 <p>Shipped registered, so a tagged file works in <code>oglc-view</code> with no
 application code at all. <a href="water.html#authoring">Authoring water in a

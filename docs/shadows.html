@@ -126,6 +126,26 @@ the default for all three light types; clear it on a light that should light
 without occluding. Loaded glTF <code>KHR_lights_punctual</code> lights carry the
 extension's own <code>castShadows</code> where it is given, and default to casting
 for a sun.</p>
+
+<h3 id="notcasting">Geometry that is lit but throws nothing</h3>
+<p>A <code>Shape</code>'s <code>castsShadow</code> field says whether it goes into
+the depth pass. Clearing it leaves the shape lit and still <em>receiving</em>
+shadows, and keeps it out of every shadow map &mdash; which is what dense alpha
+foliage wants, and what an <strong>interior</strong> needs: a room's shell stands
+between every light outside it and everything in the room, so a hall whose walls
+and ceiling cast is a hall with the lights switched off.</p>
+<p>glTF has no flag for this, so a file says it in <code>extras</code>, on the
+node:</p>
+<pre>{"nodes": [{"name": "Ceiling", "mesh": 3,
+            "extras": {"OGLC_castsShadow": false}}]}</pre>
+<p>In Blender that is a <strong>custom property</strong> called
+<code>OGLC_castsShadow</code> set to <code>0</code>, exported with <strong>Include
+&rsaquo; Custom Properties</strong> ticked &mdash; the same route a
+<a href="gltf.html#hooks">hook tag</a> takes. The flag is ANDed down the node
+graph exactly as <code>KHR_node_visibility</code> is, so marking a group marks
+the room; a light on a marked node is a <em>fill</em> and gets no shadow map of
+its own. A renderer that has never heard of the key draws the file exactly as
+before.</p>
 </section>
 
 <section>

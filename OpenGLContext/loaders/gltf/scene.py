@@ -71,6 +71,10 @@ from OpenGLContext.loaders.gltf.animation import (
 
 log = logging.getLogger(__name__)
 
+#: The ``extras`` key a node says with that its geometry is not to be drawn
+#: into the shadow maps. See :func:`_casts_shadow`.
+CASTS_SHADOW = 'OGLC_castsShadow'
+
 
 class GLTFScene(object):
     """Result of loading a glTF: a scenegraph subtree plus framing bounds.
@@ -404,6 +408,24 @@ def _meter_exposure(light_meter: list, center: Sequence[float]) -> float:
     return min(1.0, TARGET / max(key, TARGET))
 
 
+def _casts_shadow(node: Any) -> bool:
+    """Whether this node's own geometry goes into the depth pass.
+
+    glTF has no flag for it, so the answer is an ``extras`` key,
+    ``OGLC_castsShadow``. An interior is what it is for: a room's shell stands
+    between every light and everything in the room, so a hall whose walls cast
+    is a hall with the lights switched off. Such a shell is still lit and still
+    *receives* shadows -- not casting is not being absent.
+
+    The flag is ANDed down the node graph, as ``KHR_node_visibility`` is: what
+    a group settles for a room, a slab inside it does not reopen.
+    """
+    extras = getattr(node, 'extras', None)
+    if not isinstance(extras, dict) or CASTS_SHADOW not in extras:
+        return True
+    return bool(extras[CASTS_SHADOW])
+
+
 def _beside_fields(node: Any, **values: Any) -> None:
     """Attach glTF-only values to *node* as plain attributes.
 
@@ -417,13 +439,17 @@ def _beside_fields(node: Any, **values: Any) -> None:
         setattr(node, name, value)
 
 
-def _light_node(light_def: Any,
-                world: np.ndarray) -> "Optional[Union[DirectionalLight, PointLight, SpotLight]]":
+def _light_node(light_def: Any, world: np.ndarray, casts: bool = True
+                ) -> "Optional[Union[DirectionalLight, PointLight, SpotLight]]":
     """Build a scenegraph light from a KHR_lights_punctual light + world matrix.
 
     Intensities/colours are passed through as authored. Directional lights cast
     shadows by default (the usual key light); point/spot lights do not, so a
-    scene can add fill lights without multiplying the shadow cost.
+    scene can add fill lights without multiplying the shadow cost. ``casts`` is
+    the node's own ``OGLC_castsShadow`` (:func:`_casts_shadow`), which is how a
+    file says that *this* light is a fill: a bounce light standing in for the
+    light a room's own surfaces would throw back has nothing to shadow, and a
+    shadow map for it is a map's worth of cost for nothing.
     """
     if not isinstance(light_def, dict):
         return None
@@ -437,7 +463,7 @@ def _light_node(light_def: Any,
     # left off-centre lights displaced past their targets.)
     pos = (0.0, 0.0, 0.0)
     direction = (0.0, 0.0, -1.0)
-    shadows = bool(light_def.get('castShadows', kind == 'directional'))
+    shadows = casts and bool(light_def.get('castShadows', kind == 'directional'))
     if kind == 'directional':
         # Directional intensity is illuminance (lux); no distance falloff.
         return DirectionalLight(direction=direction, color=color,
@@ -487,8 +513,9 @@ class _SceneBuilder:
         self.resolver = resolver
         self.mat_cache: dict = {}
         self.tex_cache: dict = {}
-        # decoded mesh shapes + local bounds, per mesh index
-        self.mesh_cache: dict[int, list] = {}
+        # decoded mesh shapes + local bounds, per mesh index and whether the
+        # node referencing it casts a shadow (that is a property of the Shape)
+        self.mesh_cache: dict[tuple[int, bool], list] = {}
         # SceneGraph holds the DEF registry; every node's Transform is registered
         # under a DEF so a caller can grab it by name (see _def_name).
         self.scene_graph = SceneGraph()
@@ -531,9 +558,14 @@ class _SceneBuilder:
         self.hooks = hookreg.HookRunner(g, resolver)
 
     def mesh_shapes(self, mesh_index: int,
-                    world: Optional[np.ndarray] = None) -> list:
-        if mesh_index in self.mesh_cache:
-            return self.mesh_cache[mesh_index]
+                    world: Optional[np.ndarray] = None,
+                    casts: bool = True) -> list:
+        # Keyed by the casting flag as well as the mesh, because the flag is a
+        # property of the node and the shape is what carries it: a box used for
+        # a wall that does not cast and a plinth that does is two shapes.
+        key = (mesh_index, bool(casts))
+        if key in self.mesh_cache:
+            return self.mesh_cache[key]
         shapes = []
         dynamic = False
         for prim in self.g.meshes[mesh_index].primitives:
@@ -542,6 +574,8 @@ class _SceneBuilder:
                 self.hooks, world)
             if shape is not None:
                 shapes.append((shape, bounds))
+                if not casts and hasattr(shape, 'castsShadow'):
+                    shape.castsShadow = False
                 # A hook may have put something else here entirely, which has
                 # no geometry of its own to ask about.
                 geo = getattr(shape, 'geometry', None)
@@ -554,7 +588,7 @@ class _SceneBuilder:
         # so nodes that reference it must each get their own copy (independent
         # weights / joint matrices / wave clock) -- never share it via the cache.
         if not dynamic:
-            self.mesh_cache[mesh_index] = shapes
+            self.mesh_cache[key] = shapes
         return shapes
 
     def _record_part(self, world: np.ndarray, shape: Any,
@@ -574,7 +608,7 @@ class _SceneBuilder:
 
     def build(self, node_index: int, parent_world: np.ndarray,
               ancestry: Tuple[int, ...] = (), parent_visible: bool = True,
-              replacing: bool = False) -> Any:
+              replacing: bool = False, parent_casts: bool = True) -> Any:
         # Any rather than Transform: a node carrying an OGLC_hook tag may end
         # up as whatever its hook made of it -- see _place.
         # A glTF node graph is meant to be a forest, but nothing in the format
@@ -614,6 +648,7 @@ class _SceneBuilder:
         # so the flag threads down the recursion as `parent_visible`. The authored
         # initial flag may itself be a KHR_animation_pointer target baked in above.
         node_visible = parent_visible
+        node_casts = parent_casts and _casts_shadow(node)
         placements: Optional[np.ndarray] = None
         if isinstance(node_ext, dict):
             nv = node_ext.get('KHR_node_visibility')
@@ -627,9 +662,9 @@ class _SceneBuilder:
             node_ext.get(lodext.EXTENSION) if isinstance(node_ext, dict) else None)
         if lod_ids and node.mesh is not None and node_visible and placements is None:
             children.append(self._lod_node(node, lod_ids, world, ancestry,
-                                           node_visible, group))
+                                           node_visible, group, node_casts))
         elif node.mesh is not None and node_visible:
-            shapes = self.mesh_shapes(node.mesh, world)
+            shapes = self.mesh_shapes(node.mesh, world, node_casts)
             if placements is not None:
                 # One node per mesh primitive holding every placement, sharing
                 # the mesh's geometry and appearance -> one render record, and
@@ -649,7 +684,7 @@ class _SceneBuilder:
         if isinstance(node_ext, dict) and self.light_defs and node_visible:
             li = (node_ext.get('KHR_lights_punctual', {}) or {}).get('light')
             if li is not None and 0 <= li < len(self.light_defs):
-                light = _light_node(self.light_defs[li], world)
+                light = _light_node(self.light_defs[li], world, node_casts)
                 if light is not None:
                     children.append(light)
                     self.node_light[node_index] = light   # for KHR_animation_pointer visibility
@@ -659,7 +694,8 @@ class _SceneBuilder:
         if self.audio_document.emitters:
             children.extend(self._audio_emitters(node))
         for child in (node.children or []):
-            children.append(self.build(child, world, ancestry, node_visible))
+            children.append(self.build(child, world, ancestry, node_visible,
+                                       parent_casts=node_casts))
         return self._place(node, node_index, group, children, world)
 
     def _place(self, node: Any, node_index: int, group: "Transform",
@@ -719,7 +755,7 @@ class _SceneBuilder:
 
     def _lod_node(self, node: Any, ids: list, world: np.ndarray,
                   ancestry: Tuple[int, ...], node_visible: bool,
-                  carrier: Any = None) -> Any:
+                  carrier: Any = None, node_casts: bool = True) -> Any:
         """One switching node for a node that carries ``MSFT_lod``.
 
         The node's own mesh is the finest level and the nodes ``ids`` names are
@@ -734,9 +770,10 @@ class _SceneBuilder:
         somewhere else is drawn here and said so, because the extension offers
         another *version* of a node rather than another place for it.
         """
-        levels: list = [Transform(children=[shape for shape, _bounds in
-                                            self.mesh_shapes(node.mesh, world)])]
-        for shape, bounds in self.mesh_shapes(node.mesh, world):
+        levels: list = [Transform(children=[
+            shape for shape, _bounds in
+            self.mesh_shapes(node.mesh, world, node_casts)])]
+        for shape, bounds in self.mesh_shapes(node.mesh, world, node_casts):
             self._record_part(world, shape, bounds)
         for index in ids:
             if not 0 <= index < len(self.g.nodes or []):
@@ -748,7 +785,7 @@ class _SceneBuilder:
             self._coarser_levels += 1
             try:
                 levels.append(self.build(index, world, ancestry, node_visible,
-                                         replacing=True))
+                                         replacing=True, parent_casts=node_casts))
             finally:
                 self._coarser_levels -= 1
         measured = lodext.mesh_bounds(self.g, node.mesh)
