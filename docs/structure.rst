@@ -3,85 +3,53 @@ OpenGLContext Structural Overview
 
 .. rst-class:: introduction
 
-How the stack is built up. Each layer is written against the one below it;
-blue is ours and grey is somebody else's. A dashed line is an optional extra
-rather than something a plain install brings.
+How the stack is built up. Each box sits on what it is written against, and
+everything stands on numpy in the end. Blue is ours; grey is somebody else's.
 
 .. mermaid::
 
-   flowchart TD
+   block-beta
+       columns 7
+
+       glisteel["GLinting Steel"]:2
+       twig["Twitchy GLitchy Bang Bang"]:3
+       forest["the forest demo"]:2
+
+       editor["OpenGLContext-editor"]:5
+       space:2
+
+       oglc["OpenGLContext"]:7
+
+       pyopengl["PyOpenGL"]:1
+       vrml["PyVRML97"]:2
+       omip["omi_physics"]:1
+       omia["omi_audio"]:1
+       ext["opengl_extrusions"]:1
+       ttf["TTFQuery"]:1
+
+       space:1
+       simple["SimpleParse"]:1
+       dispatch["PyDispatcher"]:1
+       space:1
+       mini["miniaudio"]:1
+       space:1
+       fonttools["fontTools"]:1
+
+       numpy["numpy"]:7
+
        classDef ours fill:#dbe7ff,stroke:#5a7ab5,color:#111
        classDef third fill:#ededed,stroke:#999999,color:#111
 
-       subgraph apps["Games and demos"]
-           glisteel["GLinting Steel"]
-           twig["twig-bb"]
-           forest["forest demo"]
-       end
-
-       subgraph authoring["Authoring"]
-           editor["OpenGLContext-editor"]
-       end
-
-       subgraph engine["The engine"]
-           oglc["OpenGLContext"]
-       end
-
-       subgraph libs["Libraries"]
-           pyopengl["PyOpenGL"]
-           vrml["PyVRML97"]
-           omip["omi_physics"]
-           omia["omi_audio"]
-           ext["opengl_extrusions"]
-           ttf["TTFQuery"]
-       end
-
-       subgraph base["Underneath"]
-           simple["SimpleParse"]
-           dispatch["PyDispatcher"]
-           numpy["numpy"]
-           pillow["Pillow"]
-           gltflib["pygltflib"]
-           miniaudio["miniaudio"]
-       end
-
-       subgraph metal["The machine"]
-           driver["The GL driver, and the GPU"]
-       end
-
-       glisteel --> editor
-       glisteel --> oglc
-       twig --> editor
-       twig --> oglc
-       forest --> oglc
-       editor --> oglc
-       oglc --> pyopengl
-       oglc --> vrml
-       oglc --> omip
-       oglc --> omia
-       oglc --> ext
-       oglc --> ttf
-       oglc --> numpy
-       oglc --> pillow
-       oglc --> gltflib
-       vrml --> simple
-       vrml --> dispatch
-       vrml --> numpy
-       omip --> numpy
-       omia --> numpy
-       omia -.-> miniaudio
-       ext --> numpy
-       pyopengl --> driver
-
        class glisteel,twig,forest,editor,oglc,pyopengl,vrml,omip,omia,ext,ttf,simple,dispatch ours
-       class numpy,pillow,gltflib,miniaudio,driver third
+       class mini,fonttools,numpy third
 
-Each of those is released on its own and useful on its own: ``omi_physics``
-and ``omi_audio`` are the OMI glTF models in numpy with no renderer in them,
-``opengl_extrusions`` sweeps and tessellates geometry for anyone who wants
-vertex arrays, and ``PyVRML97`` is the node, field and route model the
-scenegraph is built from. What the engine adds is the window, the render
-passes and the scenegraph that ties them together.
+``miniaudio`` is the only optional one there: ``omi_audio`` mixes without it
+and plays nothing. Each of the others is released on its own and useful on its
+own — ``omi_physics`` and ``omi_audio`` are the OMI glTF models in numpy with
+no renderer in them, ``opengl_extrusions`` sweeps and tessellates geometry for
+anyone who wants vertex arrays, and ``PyVRML97`` is the node, field and route
+model the scenegraph is built from. What the engine adds on top is the window,
+the render passes and the scenegraph that ties them together.
 
 The OpenGLContext Package (top-level)
 -------------------------------------
