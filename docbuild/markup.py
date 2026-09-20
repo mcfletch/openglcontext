@@ -29,11 +29,13 @@ classes and functions the tutorial is building.
 from __future__ import annotations
 
 import dataclasses
+import functools
+import importlib
 import re
 import textwrap
 from typing import Iterator
 
-__all__ = ['Block', 'commentary', 'inline', 'escape', 'wrap']
+__all__ = ['Block', 'commentary', 'inline', 'escape', 'wrap', 'entry_points']
 
 #: ``[target text]``, where the target looks like a location -- a scheme, a
 #: path, an anchor or a file name.  Ordinary bracketed prose is left alone
@@ -65,6 +67,82 @@ _TRAILING = re.compile(r'(?<=\w)_(?=\s|$|[.,;:!?)\]])')
 
 _BLANK_LINE = re.compile(r'\n[ \t]*\n')
 
+#: A GL call, as the commentary writes one: ``gl``, ``glu``, ``glut`` or
+#: ``gle`` and a capital after it.  Whether it is really an entry point is a
+#: question for :func:`entry_points`, which is what keeps ``glTF`` out.
+_CALL = re.compile(r'\b(gl(?:u|ut|e)?[A-Z]\w*)\b')
+
+#: A name PyOpenGL's own set declares: a dotted one, which is a module or
+#: something a module holds, or a bare call.  One pattern and one pass, so
+#: that a name written into the text as a reference is not read again as a
+#: call -- ``OpenGL.GL.glBegin`` is the dotted one and nothing else.
+_NAMES = re.compile(r'\bOpenGL(?:\.\w+)+\b|' + _CALL.pattern)
+
+#: reStructuredText reads a reference as a reference only where it starts
+#: after whitespace or one of these and ends before whitespace or one of the
+#: closers.  ``glGetUniformLocation( shader )`` is what needs saying: an
+#: opening bracket is in neither set.
+_OPENERS = set(' \t\n-:/\'"<([{')
+_CLOSERS = set(' \t\n-.,:;!?\\/\'")]}>')
+
+#: The packages a bare entry point could have come from, in the order a name
+#: is claimed.  ``gluPerspective`` is GLU's and ``glutInit`` is GLUT's, and
+#: neither is in ``OpenGL.GL``, so the order only settles a name in two -- of
+#: which there are none today.
+CALL_PACKAGES = ('OpenGL.GL', 'OpenGL.GLU', 'OpenGL.GLUT', 'OpenGL.GLE')
+
+
+@functools.lru_cache(maxsize=None)
+def entry_points() -> dict[str, str]:
+    """Every entry point PyOpenGL exports, and the package it is exported from.
+
+    Read from the installed packages rather than from a list: the point of the
+    lookup is that a name the commentary writes is linked where PyOpenGL has
+    it and left as text where it does not, and PyOpenGL is what knows.  A
+    package that will not import -- GLUT with no library on the machine --
+    contributes nothing and the rest still answer.
+    """
+    found: dict[str, str] = {}
+    for package in CALL_PACKAGES:
+        try:
+            module = importlib.import_module(package)
+        except Exception:
+            continue
+        for name in dir(module):
+            if _CALL.fullmatch(name) and callable(getattr(module, name, None)):
+                found.setdefault(name, package)
+    return found
+
+
+def link_calls(text: str) -> str:
+    """The GL names in a run of prose, as references into PyOpenGL's own set.
+
+    ``glBegin`` becomes a link to the reference page for it, through
+    ``intersphinx``: PyOpenGL declares every entry point under its own package
+    name, so the target is ``OpenGL.GL.glBegin`` and the ``~`` is what shows
+    the reader the name they wrote.  Where that set is not reachable the name
+    renders as itself.
+    """
+    known = entry_points()
+
+    def reference(match: re.Match) -> str:
+        call = match.group(1)
+        if call is None:
+            role = ':py:obj:`%s`' % (match.group(0),)
+        elif call in known:
+            role = ':py:func:`~%s.%s`' % (known[call], call)
+        else:
+            return match.group(0)
+        before = text[match.start() - 1] if match.start() else ' '
+        after = text[match.end()] if match.end() < len(text) else ' '
+        return '%s%s%s' % (
+            '' if before in _OPENERS else '\\ ',
+            role,
+            '' if after in _CLOSERS else '\\ ',
+        )
+
+    return _NAMES.sub(reference, text)
+
 
 @dataclasses.dataclass
 class Block:
@@ -92,7 +170,7 @@ def inline(text: str) -> str:
     out: list[str] = []
     position = 0
     for match in _LINK.finditer(text):
-        out.append(escape(text[position : match.start()]))
+        out.append(link_calls(escape(text[position : match.start()])))
         if match.group('bald'):
             out.append(match.group('bald'))
         else:
@@ -100,7 +178,7 @@ def inline(text: str) -> str:
                 '`%s <%s>`__' % (collapse(match.group('text')), match.group('url'))
             )
         position = match.end()
-    out.append(escape(text[position:]))
+    out.append(link_calls(escape(text[position:])))
     return collapse(''.join(out)).strip()
 
 

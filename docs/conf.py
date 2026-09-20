@@ -4,14 +4,14 @@ The narrative pages are written by hand in this directory.  Two directories
 beside them are written by generators and are not in version control:
 
 ``tutorials/``
-    the code walkthroughs, extracted by ``directdocs.oglctutorials`` from the
-    triple-quoted commentary in ``tests/*.py``.  The screenshots beside them
-    are committed; the pages are not.
+    the code walkthroughs, written by ``docbuild.tutorials`` from the
+    ``'''`` commentary in ``tests/*.py``.  The screenshots beside them are
+    committed; the pages are not.
 
 ``api/``
-    a page per Python module, written by ``directdocs.dumbpydoc`` from the
-    installed packages -- the engine, the packages it is built from and the
-    ones built on it.
+    a page per Python module, written by PyOpenGL's ``directdocs.dumbpydoc``
+    from the installed packages -- the engine, the packages it is built from
+    and the ones built on it.
 
 ``python build-docs.py`` runs both and then calls Sphinx.
 """
@@ -69,22 +69,46 @@ highlight_language = 'none'
 
 nitpicky = False
 
+
+def _pyopengl_inventory():
+    """Where to read PyOpenGL's inventory from, or None for the published one.
+
+    A checkout that has built PyOpenGL's set has the inventory on disk, and
+    reading it there is what makes the links resolve before that set is
+    published and on a machine with no network.  The addresses written into
+    the page are the published ones either way.
+    """
+    named = os.environ.get('PYOPENGL_INVENTORY')
+    beside = os.path.join(
+        os.path.dirname(PACKAGE_ROOT), 'pyopengl', 'docs', '_build', 'html',
+        'objects.inv',
+    )
+    for candidate in ([named] if named else []) + [beside]:
+        if os.path.isfile(candidate):
+            return (candidate, None)
+    return None
+
+
 #: The published sets these pages link into.  PyOpenGL's own set declares every
 #: entry point, so ``glDrawElementsInstanced`` in a page here resolves to the
 #: reference page for it; a set that is not reachable leaves the name as text.
 intersphinx_mapping = {
     'python': ('https://docs.python.org/3', None),
     'numpy': ('https://numpy.org/doc/stable/', None),
-    'pyopengl': ('https://mcfletch.github.io/pyopengl/', None),
+    'pyopengl': ('https://mcfletch.github.io/pyopengl/', _pyopengl_inventory()),
     'simpleparse': ('https://mcfletch.github.io/simpleparse/', None),
 }
 
-#: Off by default, because a build behind a firewall would otherwise wait for
-#: each of them.  `build-docs.py --intersphinx` turns them on.
-if not os.environ.get('OPENGLCONTEXT_DOCS_INTERSPHINX'):
+#: `build-docs.py --no-intersphinx` builds without them, for a machine with no
+#: network: the names are then text rather than links.
+if os.environ.get('OPENGLCONTEXT_DOCS_NO_INTERSPHINX'):
     intersphinx_mapping = {}
 
 intersphinx_timeout = 10
+
+#: The prose writes its own: "call ``glBegin()``" rather than "call glBegin".
+#: A reference adding a second pair is what that would otherwise read as.
+add_function_parentheses = False
 
 extlinks = {
     'khronos': ('https://registry.khronos.org/OpenGL/extensions/%s', '%s'),

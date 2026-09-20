@@ -47,41 +47,90 @@ through ``plugins.Loader``, ``plugins.Adapter`` (see :doc:`Adding a format
 Which backends are supported
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**GLFW, GLUT, Pygame, Tkinter, wxPython and Qt/PySide are all first-class
-targets.** Breaking one of them is a regression, not a cleanup, and none of
-them is a candidate for removal. GLFW is what the test suite and the
-visual-regression captures run against, and it is the recommended backend for
-core-profile and PBR rendering; **Tkinter needs nothing installed**, since it
-ships with Python, and is the one to reach for in a tool whose dependencies
-are meant to stay short; wxPython and Tkinter both embed a GL view inside a
-larger application's window rather than owning the whole window (see
-``tests/wx_with_controls.py``, and ``TkContext(parent=...)``) — the wx backend
-asks for its GL context through ``wx.glcanvas.GLContext``, so it wants
-wxPython 4 (Phoenix) or newer; Qt/PySide is supported through the separate
-:py:mod:`OpenGLContext_qt <OpenGLContext_qt>` project, which OpenGLContext
-imports opportunistically. All of them can request a core profile, and all of
-them can create a compatibility-profile context for the fixed-function
-tutorials and for the display-list-backed font providers.
+Six toolkits, in two shapes. Three of them open a window and the scene is
+that window; three put a GL view inside an interface built of ordinary
+widgets, which is what a tool with menus and panels around the view wants.
+The engine is the same either way: every backend can ask for a core profile
+or a compatibility one, and the window-level capabilities below are the same
+on all of them. ``OPENGLCONTEXT_BACKEND`` names the one to use.
+
+The scene is the window
+^^^^^^^^^^^^^^^^^^^^^^^
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Backend
+     - Runs on
+     - What it brings
+   * - ``glfw``
+     - Linux (X11 and Wayland), Windows, macOS
+     - What the test suite and the visual-regression captures run against,
+       and the one to reach for in core-profile and PBR work. ``pip install
+       "OpenGLContext[glfw]"`` carries the library with it.
+   * - ``glut``
+     - Linux (X11; XWayland under Wayland), Windows, macOS
+     - freeglut, through the C library the system provides — ``pip install
+       PyOpenGL[glut]`` is what supplies it on Windows. The oldest path, and
+       the one the NeHe tutorials are written against. freeglut has no
+       Wayland backend of its own.
+   * - ``pygame``
+     - Linux (X11 and Wayland), Windows, macOS
+     - SDL2's window, input and audio, for an application already built on
+       that stack. ``pip install "OpenGLContext[pygame]"``.
+
+A view inside an interface
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Backend
+     - Runs on
+     - What it brings
+   * - ``tk``
+     - Linux (X11; XWayland under Wayland), Windows, macOS
+     - Tkinter, through PyOpenGL's own ``OpenGL.Tk.GLFrame`` widget, so
+       nothing outside Python's standard library is imported. Tcl/Tk itself
+       is a system package, and several Linux distributions leave it out of a
+       default Python install (``apt install python3-tk``).
+       ``TkContext(parent=...)`` puts the view in a frame you built.
+   * - ``wx``
+     - Linux (X11 and Wayland, through GTK3), Windows, macOS
+     - wxPython's native widgets, with the view in a ``wx.glcanvas.GLCanvas``
+       — wxPython 4 (Phoenix) or newer. GTK3 makes its GL context through
+       EGL, so a core profile there wants ``PYOPENGL_PLATFORM=egl``. See
+       ``tests/wx_with_controls.py``.
+   * - ``qt``
+     - Linux (X11, and Wayland where the Qt build's platform plugin offers a
+       drawable GL surface; ``QT_QPA_PLATFORM=xcb`` runs it through XWayland
+       otherwise), Windows, macOS
+     - Qt 6 through PySide6, from the separate :py:mod:`OpenGLContext_qt
+       <OpenGLContext_qt>` distribution, which the engine imports where it is
+       installed.
 
 .. rst-class:: technical
 
-The Tk backend draws into ``OpenGL.Tk.GLFrame`` — PyOpenGL's own widget, which
-makes a GL context on the window Tk hands out, through GLX on X11 and WGL on
-Windows. Tk has no Wayland backend, so a Wayland-only session runs it through
-XWayland and a headless machine runs it under ``xvfb-run``, as GLUT and Pygame
-also need. A Tk window has no native handle until it has been mapped, so
-``OPENGLCONTEXT_HIDDEN`` is honoured by withdrawing the window once the
-context exists: it appears and goes, rather than never appearing, and
-rendering and reading back are unaffected because both happen in the back
-buffer.
+The Tk backend draws into ``OpenGL.Tk.GLFrame``, which makes a GL context on
+the window Tk hands out — through GLX on X11 and WGL on Windows. A Tk window
+has no native handle until it has been mapped, so ``OPENGLCONTEXT_HIDDEN`` is
+honoured by withdrawing the window once the context exists: it appears and
+goes, rather than never appearing, and rendering and reading back are
+unaffected because both happen in the back buffer. A headless machine runs
+the X11-only backends under ``xvfb-run``.
 
-A seventh backend owns no window at all. :doc:`eglcontext.EGLContext
-<offscreen>` takes a GPU directly through EGL and renders to a pbuffer, which
-is what a build machine, a rendering service or a batch job wants: no display
-server has to be running. It is the one backend that is not available
-everywhere, because EGL is not — it is a Linux and Android facility, and
-elsewhere a hidden window (``OPENGLCONTEXT_HIDDEN=1``) is the way to render
-without one being seen.
+No window at all
+^^^^^^^^^^^^^^^^
+
+A seventh backend owns no window. :doc:`eglcontext.EGLContext <offscreen>`
+takes a GPU directly through EGL and renders to a pbuffer, which is what a
+build machine, a rendering service or a batch job wants: no display server
+has to be running. EGL is a Linux and Android facility, so this is the one
+backend that is not available everywhere; ``wgl`` is the Windows counterpart,
+a pbuffer with no window on screen, and elsewhere a hidden window
+(``OPENGLCONTEXT_HIDDEN=1``) is how to render without one being seen.
 
 Code that targets one platform is supported on that platform whether or not
 the machine you are reading this on can run it -- for instance

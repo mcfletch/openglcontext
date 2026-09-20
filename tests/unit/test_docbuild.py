@@ -105,6 +105,49 @@ class TestPictures:
         assert '.. image::' not in out
 
 
+class TestLinkingTheGLNames:
+    """A call named in the commentary is a link into PyOpenGL's own set.
+
+    That set declares every entry point under its package name, so the target
+    is ``OpenGL.GL.glBegin`` and ``~`` is what shows the reader the name they
+    wrote; ``intersphinx`` turns it into an address at build time, and where
+    that set is out of reach the name renders as itself.
+    """
+
+    def render(self, text):
+        return '\n\n'.join(block.text for block in markup.commentary(text))
+
+    def test_an_entry_point_becomes_a_reference(self):
+        assert self.render('call glBegin to start') == (
+            'call :py:func:`~OpenGL.GL.glBegin` to start'
+        )
+
+    def test_a_word_that_only_looks_like_one_is_left_alone(self):
+        """``glTF`` is a file format, and PyOpenGL exports nothing of the name."""
+        assert 'glTF' in self.render('a glTF model')
+        assert 'py:func' not in self.render('a glTF model')
+
+    def test_a_dotted_name_becomes_a_reference(self):
+        assert self.render('from OpenGL.GL.shaders import x') == (
+            'from :py:obj:`OpenGL.GL.shaders` import x'
+        )
+
+    def test_a_dotted_name_is_read_once(self):
+        """Not as a module and then again as the call at the end of it."""
+        out = self.render('see OpenGL.GL.glBegin')
+        assert out == 'see :py:obj:`OpenGL.GL.glBegin`'
+
+    def test_a_reference_running_into_a_bracket_is_separated(self):
+        """reST reads a reference as one only where it ends before a closer."""
+        out = self.render('glGetUniformLocation( shader, name )')
+        assert out.startswith(':py:func:`~OpenGL.GL.glGetUniformLocation`\\ (')
+
+    def test_the_glu_and_glut_names_come_from_their_own_packages(self):
+        known = markup.entry_points()
+        assert known.get('gluPerspective') == 'OpenGL.GLU'
+        assert known.get('glBegin') == 'OpenGL.GL'
+
+
 SCRIPT = '''#! /usr/bin/env python
 \'\'\'=A title=
 
