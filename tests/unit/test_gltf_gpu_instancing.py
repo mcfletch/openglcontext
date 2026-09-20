@@ -104,7 +104,7 @@ class TestWhatTheLoaderBuilds:
         first = _loaded(tmp_path, TRANSLATIONS, 'a.gltf')
         second = _loaded(tmp_path, TRANSLATIONS, 'b.gltf')
         from OpenGLContext.passes.instancing import geometry_content_key
-        keys = [geometry_content_key([n]) for nodes in (first, second)
+        keys = [geometry_content_key(n) for nodes in (first, second)
                 for n in nodes if isinstance(n, InstancedShape)]
         assert keys[0][0] == keys[1][0]
 

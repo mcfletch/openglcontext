@@ -24,13 +24,13 @@ class FakeShape:
 
 
 def rec(shape, mv=None):
-    # (sortKey, mvmatrix, tmatrix, bvolume, path); path[-1] is the shape.
+    # (sortKey, mvmatrix, tmatrix, bvolume, path, node).
     key = (False, [], 0.0)
-    return (key, mv or [[1]], [[1]], None, [shape])
+    return (key, mv or [[1]], [[1]], None, [shape], shape)
 
 
-def instanceable(path):
-    return getattr(path[-1].geometry, '_instanceable', False)
+def instanceable(shape):
+    return getattr(shape.geometry, '_instanceable', False)
 
 
 class TestGeometryKey:
@@ -110,7 +110,7 @@ class TestGrouping:
         assert len(groups) == 1
         assert len(groups[0].members) == 3
         assert len(singles) == 1
-        assert singles[0][-1][-1].geometry is unique
+        assert singles[0][5].geometry is unique
 
     def test_every_record_accounted_for_once(self):
         g1, g2 = FakeGeometry('a'), FakeGeometry('b')
@@ -136,9 +136,9 @@ class TestOneShapeIsKeyedOnce:
         shape = FakeShape(g, m)
         asked = []
 
-        def counting(path):
-            asked.append(path[-1])
-            return geometry_instance_key(path)
+        def counting(shape):
+            asked.append(shape)
+            return geometry_instance_key(shape)
 
         records = [rec(shape) for _ in range(24)]
         build_instance_groups(records, min_instances=2, key=counting,
@@ -150,9 +150,9 @@ class TestOneShapeIsKeyedOnce:
         m = object()
         asked = []
 
-        def counting(path):
-            asked.append(path[-1])
-            return geometry_instance_key(path)
+        def counting(shape):
+            asked.append(shape)
+            return geometry_instance_key(shape)
 
         records = [rec(FakeShape(g, m)) for _ in range(5)]
         build_instance_groups(records, min_instances=2, key=counting,
@@ -174,9 +174,9 @@ class TestOneShapeIsKeyedOnce:
         shape = FakeShape(FakeGeometry('g', instanceable=False), object())
         asked = []
 
-        def counting(path):
-            asked.append(path[-1])
-            return geometry_instance_key(path)
+        def counting(shape):
+            asked.append(shape)
+            return geometry_instance_key(shape)
 
         records = [rec(shape) for _ in range(6)]
         groups, singles = build_instance_groups(

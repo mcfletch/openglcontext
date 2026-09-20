@@ -32,9 +32,9 @@ def _unit_box(scale=1.0):
 
 
 def _record(tmatrix, volume, shape=None):
-    """A caster record: (sortKey, mvmatrix, tmatrix, bvolume, path)."""
-    path = [object() if shape is None else shape]
-    return (None, None, np.asarray(tmatrix, dtype='d'), volume, path)
+    """A caster record: (sortKey, mvmatrix, tmatrix, bvolume, path, node)."""
+    node = object() if shape is None else shape
+    return (None, None, np.asarray(tmatrix, dtype='d'), volume, [node], node)
 
 
 def _moved(x=0.0, z=0.0):
@@ -379,11 +379,12 @@ _SHARED_PATHS = {}
 
 
 def _shared_path(i):
-    """A stable (sortKey, mv, tmatrix, bvolume, path) record; path identity is
-    reused per index so the cache key is stable across calls."""
+    """A stable (sortKey, mv, tmatrix, bvolume, path, node) record; the path
+    identity is reused per index so the cache key is stable across calls."""
     if i not in _SHARED_PATHS:
         _SHARED_PATHS[i] = [_Shape()]
-    return (None, np.eye(4), np.eye(4), None, _SHARED_PATHS[i])
+    return (None, np.eye(4), np.eye(4), None, _SHARED_PATHS[i],
+            _SHARED_PATHS[i][-1])
 
 
 class TestLightSpaceModelviews:

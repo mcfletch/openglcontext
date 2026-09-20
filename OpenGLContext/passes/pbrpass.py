@@ -860,7 +860,7 @@ class PBRPass(flatcore.FlatPass):
     # 73 * 224 B = 16352 B, within the guaranteed 16384-byte UBO block).
     MAX_INSTANCE_MATERIALS: int = 73   # 224 B/material fits the 16 KB UBO min
 
-    def _instanceable(self, path: Any) -> bool:
+    def _instanceable(self, shape: Any) -> bool:
         """Any geometry exposing ``instanceGPU(mode)`` (PBRMesh, Box, Sphere, ...).
 
         A **skinned** mesh counts where the shader poses it: figures of a build
@@ -870,7 +870,7 @@ class PBRPass(flatcore.FlatPass):
         vertices, so no two of them are the same geometry and there is nothing
         to collapse.
         """
-        geometry = getattr(path[-1], 'geometry', None)
+        geometry = getattr(shape, 'geometry', None)
         if getattr(geometry, 'skin_joints', None) is not None:
             # Settle where this mesh is skinned before asking, not at its first
             # draw: a mesh that batches has no draw of its own to settle it in,
@@ -883,7 +883,7 @@ class PBRPass(flatcore.FlatPass):
                 return False
         return hasattr(geometry, 'instanceGPU')
 
-    def _instanceKey(self, path: Any) -> Any:
+    def _instanceKey(self, shape: Any) -> Any:
         """Batch by geometry + texture set: materials differing only by FACTORS
         share one instanced draw (each instance indexes the material array). With
         opportunistic collapse on, key geometry by CONTENT so distinct nodes with
@@ -892,8 +892,8 @@ class PBRPass(flatcore.FlatPass):
             geometry_texture_key, geometry_content_key,
         )
         if instance_collapse_is_enabled():
-            return geometry_content_key(path)
-        return geometry_texture_key(path)
+            return geometry_content_key(shape)
+        return geometry_texture_key(shape)
 
     def _material_chunks(self, members: list, materials: list, indices: list,
                          max_mats: int) -> Iterator[tuple]:
@@ -988,7 +988,7 @@ class PBRPass(flatcore.FlatPass):
                 modelviews = instance_matrices(members, visible=self.visiblePlacements)
                 counts = instance_counts(members, visible=self.visiblePlacements)
                 if id_map is not None:
-                    oids = [self._objectIdFor(rec[4]) if self._shapePickable(rec[4])
+                    oids = [self._objectIdFor(rec[4]) if self._shapePickable(rec[5])
                             else 0 for rec in members]
                 else:
                     oids = [0] * len(members)

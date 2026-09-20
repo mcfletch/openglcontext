@@ -213,3 +213,53 @@ class TestTheShadowPoolReadsTheGather:
         passing.renderSet(np.eye(4, dtype='f'))
         for record in passing._shadowCasterRecords():
             assert record[2] is record[4].transformMatrix()
+
+
+class TestTheRecordCarriesItsNode:
+    """A record holds the node it draws, so nothing has to walk back for it.
+
+    Almost everything that reads a render record wants the node at the end of
+    its path -- to key an instanced batch on, to ask whether it casts a shadow,
+    to sort its material, to draw it. The gather already knows that node, so
+    the record carries it and the walk happens once rather than once per
+    reader. `path[-1]` is a Python ``__getitem__`` on a list subclass, and a
+    frame of a few thousand objects was making tens of thousands of them.
+    """
+
+    def test_a_record_carries_the_node_it_draws(self, gather):
+        passing, _moves = gather
+        records = passing.renderSet(np.eye(4, dtype='f'))
+        assert records
+        for record in records:
+            assert record[5] is record[4][-1]
+
+    def test_the_caster_pool_carries_it_too(self):
+        from OpenGLContext.passes import _flat, flatcore
+        scene, _moves = _scene(3)
+        passing = flatcore.FlatPass.__new__(flatcore.FlatPass)
+        _flat.SGObserver.__init__(passing, scene, [])
+        passing.frustum = frustum.Frustum(planes=np.zeros((0, 4), 'f'))
+
+        for record in passing._shadowCasterRecords():
+            assert record[5] is record[4][-1]
+
+    def test_grouping_a_frame_walks_no_paths(self, gather, monkeypatch):
+        """What the record carrying its node is for: the readers stop asking."""
+        from vrml.nodepath import NodePath
+        from OpenGLContext.passes import instancing
+        passing, _moves = gather
+        records = passing.renderSet(np.eye(4, dtype='f'))
+
+        walks = []
+        real = NodePath.__getitem__
+        monkeypatch.setattr(
+            NodePath, '__getitem__',
+            lambda self, index: (walks.append(index), real(self, index))[1])
+
+        groups, singles = instancing.build_instance_groups(records)
+        instancing.instance_counts(records)
+        for record in records:
+            instancing.record_placements(record)
+
+        assert len(groups) + len(singles) >= 1
+        assert walks == []

@@ -116,12 +116,12 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
             self, 'instancing',
             renderoptions.env_flag_once('OPENGLCONTEXT_INSTANCING', True))
 
-    def _instanceable(self, path: Any) -> bool:
+    def _instanceable(self, shape: Any) -> bool:
         """Geometry drawable through the shared instanced path -- anything exposing
         an ``instanceGPU(mode)`` (PBRMesh, Box, Sphere, ...)."""
-        return hasattr(getattr(path[-1], 'geometry', None), 'instanceGPU')
+        return hasattr(getattr(shape, 'geometry', None), 'instanceGPU')
 
-    def _instanceKey(self, path: Any) -> Any:
+    def _instanceKey(self, shape: Any) -> Any:
         """Group by (geometry-content, material): distinct same-shape geometry
         nodes sharing a Material batch (a sphere field of many Sphere nodes). With
         collapse off, fall back to node-identity grouping (USE/DEF only)."""
@@ -131,8 +131,8 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
         collapse = os.environ.get('OPENGLCONTEXT_INSTANCE_COLLAPSE', '1').strip().lower() \
             not in ('0', 'off', 'false', 'no')
         if collapse:
-            return geometry_content_instance_key(path)
-        return geometry_instance_key(path)
+            return geometry_content_instance_key(shape)
+        return geometry_instance_key(shape)
 
     def _drawInstanceGroup(self, group: Any, shader: Any, prog: Any,
                            id_map: Optional[Dict[int, Any]]) -> None:
@@ -157,7 +157,7 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
         modelviews = instance_matrices(members, visible=self.visiblePlacements)
         counts = instance_counts(members, visible=self.visiblePlacements)
         if id_map is not None:
-            oids = [self._objectIdFor(rec[4]) if self._shapePickable(rec[4]) else 0
+            oids = [self._objectIdFor(rec[4]) if self._shapePickable(rec[5]) else 0
                     for rec in members]
         else:
             oids = [0] * len(members)

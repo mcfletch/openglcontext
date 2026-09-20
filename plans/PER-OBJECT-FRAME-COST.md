@@ -398,7 +398,7 @@ the pixels, no difference. What was removed was processor time, and what is left
 is processor time too: the draw-set work that is still per record (the sort key,
 the material grouping, the instancing grouping) is where the next of it is.
 
-## E. Every reader walks the record back to its node
+## E. Every reader walks the record back to its node — 🟢 landed 2026-09-20
 
 A render record is `(sortKey, mvmatrix, tmatrix, bvolume, path)`, and what
 almost every reader of one actually wants is the node at the end of that path.
@@ -435,6 +435,34 @@ Two things fall out of it:
 
 The cost of the change is its breadth: the tuple's shape is read in about
 twenty-five places and built in a dozen test files.
+
+### What landed
+
+All of it. A record is now
+`(sortKey, mvmatrix, tmatrix, bvolume, path, node)`; the five `instancing` key
+functions and the passes' `_instanceKey`/`_instanceable` hooks take the node;
+`_shapePickable` and `applyLightGrid` read the node they were walking to; and
+every loop that unpacked a record unpacks the node with it.
+
+**Path walks fall from 17,487 a frame to 3,205 at 1600 objects** — 82% — and
+what is left is exactly the two that have to happen: the gather's one per
+renderable path, which is where the record's node comes from, and level
+selection's one per LOD path, which runs before the gather. Everything else
+reads the node off the record.
+
+| objects | before | after | |
+|---:|---:|---:|---:|
+| 200 | 4.008 ms | 3.747 | −6.5% |
+| 800 | 10.691 | 10.136 | −5.2% |
+| 1600 | 20.296 | 19.165 | −5.6% |
+
+Five rounds alternating between the two trees. `record_placements` still runs
+5.3 times per record; what it no longer does is walk a path each time.
+
+The harness counts `path_walks` now, and
+`test_a_path_is_walked_to_its_node_twice_a_frame_at_most` holds it to two per
+object. On the tree before this change that reads 2,294 at 200 objects against
+the 416 the gate allows, so it is a gate rather than a comment.
 
 ## F. Changing a level rebuilds the transform cache
 

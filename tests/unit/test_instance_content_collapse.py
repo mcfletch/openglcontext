@@ -22,7 +22,7 @@ def mesh(seed=0):
 
 
 def rec(shape):
-    return ((False, [], 0.0), np.eye(4), np.eye(4), None, [shape])
+    return ((False, [], 0.0), np.eye(4), np.eye(4), None, [shape], shape)
 
 
 class TestContentKey:
@@ -30,15 +30,15 @@ class TestContentKey:
         # Two separate PBRMesh objects, identical arrays -> identical content key.
         a, b = mesh(0), mesh(0)
         assert a is not b
-        assert geometry_content_key([FakeShape(a)]) == geometry_content_key([FakeShape(b)])
+        assert geometry_content_key(FakeShape(a)) == geometry_content_key(FakeShape(b))
 
     def test_different_content_different_key(self):
-        assert (geometry_content_key([FakeShape(mesh(0))])
-                != geometry_content_key([FakeShape(mesh(9))]))
+        assert (geometry_content_key(FakeShape(mesh(0)))
+                != geometry_content_key(FakeShape(mesh(9))))
 
     def test_key_is_cached_on_node(self):
         m = mesh(0)
-        geometry_content_key([FakeShape(m)])
+        geometry_content_key(FakeShape(m))
         assert getattr(m, '_instance_content_id', None) is not None
 
 

@@ -122,23 +122,23 @@ class TestWhichObjectsAreLookedUp:
 
     def test_an_object_with_no_lightmap_is_sampled(self):
         pass_, shader, matrix = self._pass(self._grid())
-        pass_.applyLightGrid(shader, [self._shape()], matrix, None)
+        pass_.applyLightGrid(shader, self._shape(), matrix, None)
         assert len(self.sampled) == 1
 
     def test_a_lightmapped_surface_is_not(self):
         pass_, shader, matrix = self._pass(self._grid())
-        pass_.applyLightGrid(shader, [self._shape(lightmap=True)], matrix, None)
+        pass_.applyLightGrid(shader, self._shape(lightmap=True), matrix, None)
         assert self.sampled == []
 
     def test_a_scene_with_no_grid_costs_nothing_per_object(self):
         pass_, shader, matrix = self._pass(None)
-        pass_.applyLightGrid(shader, [self._shape()], matrix, None)
+        pass_.applyLightGrid(shader, self._shape(), matrix, None)
         assert self.sampled == []
 
     def test_a_shape_with_no_material_is_sampled(self):
         from OpenGLContext.scenegraph.basenodes import Shape
         pass_, shader, matrix = self._pass(self._grid())
-        pass_.applyLightGrid(shader, [Shape()], matrix, None)
+        pass_.applyLightGrid(shader, Shape(), matrix, None)
         assert len(self.sampled) == 1
 
 

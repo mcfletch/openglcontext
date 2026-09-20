@@ -99,7 +99,7 @@ def _shapes(node):
 
 def _key(node, level):
     """What the pass would batch this level of ``node`` by."""
-    return geometry_instance_key([_shapes(node.level[level])[0]])
+    return geometry_instance_key(_shapes(node.level[level])[0])
 
 
 class TestReadingTheExtension:

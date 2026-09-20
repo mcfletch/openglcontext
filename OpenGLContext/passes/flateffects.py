@@ -46,12 +46,12 @@ class _FlatEffectsMixin:
         renderPath: Any
         transparent: bool
 
-        def _writeShapeId(self, shader: Any, path: Any, prog: Any,
+        def _writeShapeId(self, shader: Any, path: Any, node: Any, prog: Any,
                           id_map: Optional[Dict]) -> Any: ...
 
         def _restoreShapeId(self, masked: Any) -> None: ...
 
-        def applyLightGrid(self, shader: Any, path: Any, tmatrix: Any,
+        def applyLightGrid(self, shader: Any, node: Any, tmatrix: Any,
                            bvolume: Any, program: Any = None) -> None: ...
 
         def currentFog(self) -> Any: ...
@@ -188,7 +188,7 @@ class _FlatEffectsMixin:
         for i, rec in enumerate(toRender):
             if rec[0][0]:
                 continue  # already routed to the blended pass
-            shape = rec[4][-1]
+            shape = rec[5]
             appearance = getattr(shape, 'appearance', None)
             material = getattr(appearance, 'material', None)
             if material is not None and getattr(material, 'transmission', 0.0) > 0.0:
@@ -244,17 +244,17 @@ class _FlatEffectsMixin:
         self.transparent = (mode == 'blend')
         debugFrustum = self.context.contextDefinition.debugBBox
         try:
-            for _obj_index, (_key, mvmatrix, tmatrix, bvolume, path) in records:
+            for _obj_index, (_key, mvmatrix, tmatrix, bvolume, path, node) in records:
                 self.matrix = mvmatrix
                 self.renderPath = path
                 shader.set_matrices(mvmatrix, self.projection, program=prog)
-                masked = self._writeShapeId(shader, path, prog, id_map)
-                self.applyLightGrid(shader, path, tmatrix, bvolume, prog)
+                masked = self._writeShapeId(shader, path, node, prog, id_map)
+                self.applyLightGrid(shader, node, tmatrix, bvolume, prog)
                 try:
                     if mode == 'blend':
-                        path[-1].RenderTransparent(mode=self)
+                        node.RenderTransparent(mode=self)
                     else:
-                        path[-1].Render(mode=self)
+                        node.Render(mode=self)
                     if debugFrustum and bvolume:
                         bvolume.debugRender()
                 except Exception as err:
@@ -293,7 +293,7 @@ class _FlatEffectsMixin:
                           getTraceback(err))
         result = []
         for record in records:
-            (key,mv,tm,bv,path) = record
+            (key,mv,tm,bv,path,node) = record
             if bv is not None:
                 visible = bv.visible(
                     self.frustum, tm.astype('f'),

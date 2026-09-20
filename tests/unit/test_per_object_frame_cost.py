@@ -102,6 +102,19 @@ class TestWhatAFrameWorksOutPerObject:
             objects = reading['objects']
             assert reading['world_matrices'] <= 2 * objects + 8, reading
 
+    def test_a_path_is_walked_to_its_node_twice_a_frame_at_most(self, still):
+        """The record carries its node, so no reader walks back for it.
+
+        Two walks a path: the gather's, which is where the record's node comes
+        from, and level selection's, which runs before the gather over its own
+        paths. Every other reader -- the instanced grouping, the caster pool,
+        the material sort, the draw -- reads the node off the record. A third
+        walk means one of them has gone back to asking.
+        """
+        for reading in still:
+            objects = reading['objects']
+            assert reading['path_walks'] <= 2 * objects + 16, reading
+
     def test_a_still_scene_derives_no_caster_geometry(self, still):
         """Nothing moved, so every caster's world geometry already stands."""
         for reading in still:

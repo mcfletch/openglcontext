@@ -8,14 +8,14 @@ Builds ``objects`` shadow-casting level-of-detail chains, renders ``frames``
 frames of them, and emits one JSON line::
 
     {"objects": N, "median_ms": ..., "mean_ms": ...,
-     "world_matrices": ..., "caster_derivations": ..., "level_choices": ...,
-     "shapes_drawn": ...}
+     "world_matrices": ..., "path_walks": ..., "caster_derivations": ...,
+     "level_choices": ...}
 
-The three counts are per frame, and they are what the timing is a consequence
-of: how many times a path was asked where it is, how many casters had their
-world geometry worked out, and how many times the scene's levels were chosen.
-A machine's speed moves the milliseconds; only a change in the engine moves
-those.
+The four counts are per frame, and they are what the timing is a consequence
+of: how many times a path was asked where it is, how many times one was walked
+to the node at its end, how many casters had their world geometry worked out,
+and how many times the scene's levels were chosen. A machine's speed moves the
+milliseconds; only a change in the engine moves those.
 
 ``moving`` walks the camera a little every frame, which is the case in which
 nothing a frame worked out last time can be reused. ``still`` leaves it where
@@ -67,7 +67,7 @@ def main():
     from OpenGLContext.scenegraph import lod as lod_module
     from OpenGLContext.passes import shadowmixin
 
-    counts = {'matrices': 0, 'derivations': 0, 'choices': 0}
+    counts = {'matrices': 0, 'walks': 0, 'derivations': 0, 'choices': 0}
 
     from vrml.vrml97 import nodepath as vrml_nodepath
     _matrix = vrml_nodepath._NodePath.transformMatrix
@@ -77,6 +77,15 @@ def main():
         return _matrix(self, *args, **named)
 
     vrml_nodepath._NodePath.transformMatrix = counted_matrix
+
+    from vrml.nodepath import NodePath
+    _walk = NodePath.__getitem__
+
+    def counted_walk(self, index):
+        counts['walks'] += 1
+        return _walk(self, index)
+
+    NodePath.__getitem__ = counted_walk
 
     _derive = shadowmixin.ShadowMapMixin._casterGeometryBatch.__func__
 
@@ -156,7 +165,7 @@ def main():
             platform.setPosition((0.0, 0.0, frame * 0.01))
         del drawn[:]
         if frame == WARMUP:
-            counts.update(matrices=0, derivations=0, choices=0)
+            counts.update(matrices=0, walks=0, derivations=0, choices=0)
             measured = 0
         start = time.perf_counter()
         context.OnDraw(force=1)
@@ -174,6 +183,7 @@ def main():
         'objects': OBJECTS, 'camera': CAMERA, 'frames': measured,
         'median_ms': round(median, 4), 'mean_ms': round(mean, 4),
         'world_matrices': round(counts['matrices'] / per, 2),
+        'path_walks': round(counts['walks'] / per, 2),
         'caster_derivations': round(counts['derivations'] / per, 2),
         'level_choices': round(counts['choices'] / per, 3),
     }))

@@ -167,6 +167,24 @@ frames keys on &mdash; that cache returns the same object while a node is
 unmoved and a fresh one once it moves, so identity alone says whether a
 remembered answer still stands. A row of the stacked array carries the same
 numbers but is a new object every frame.</p>
+
+<h3>What a render record holds</h3>
+<p>The gather's output is a list of records, one per shape that survived the
+frustum, each
+<code>(sortKey, mvmatrix, tmatrix, bvolume, path, node)</code>. The last of
+those is the node at the end of <code>path</code>, and it is carried rather
+than looked up because almost everything that reads a record wants it &mdash;
+to key an instanced batch on, to ask whether it casts a shadow, to sort its
+material, to draw it. <code>path[-1]</code> is a Python call, and a frame of a
+few thousand objects was making tens of thousands of them to reach a node the
+gather already had in hand.</p>
+<p>So a pass reads <code>record[5]</code>, and the hooks that used to be handed
+a path are handed the node instead: <code>_instanceKey(node)</code>,
+<code>_instanceable(node)</code>, the <code>key</code> argument of
+<code>build_instance_groups</code>, <code>_shapePickable(node)</code> and
+<code>applyLightGrid(shader, node, ...)</code>. The path stays in the record for
+the things that genuinely want the route rather than its end &mdash; a stable
+pick id, a world transform.</p>
 </section>
 
 <section>

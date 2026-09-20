@@ -159,7 +159,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         # camera-visible occluder set; the depth-pass caster pool excludes it in
         # _shadowCasterRecords, so it is skipped there too.
         toRender = [r for r in toRender
-                    if getattr(r[4][-1], "castsShadow", True)]
+                    if getattr(r[5], "castsShadow", True)]
         if not toRender:
             return
         shader = self.shader_program
@@ -619,9 +619,10 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         Geometry that opts out with ``node.castsShadow = False`` (e.g. dense alpha
         foliage) is excluded here, so it is drawn into no depth map -- this is the
         pool the per-light depth pass actually culls from. Each record mirrors the
-        render-set tuple shape ``(sortKey, mvmatrix, tmatrix, bvolume, path)``; the
+        render-set tuple shape ``(sortKey, mvmatrix, tmatrix, bvolume, path, node)``; the
         depth pass and :meth:`_cullOccluders` use only ``tmatrix`` (world transform),
-        ``bvolume`` and ``path``, so the first two slots are unused placeholders.
+        ``bvolume``, ``path`` and ``node``, so the first two slots are unused
+        placeholders.
 
         Every question here -- the node at the end of a path, where it is, what
         bounds it -- the frame's gather has already asked and answered, so the
@@ -635,7 +636,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         for path, node, tmatrix, bvolume in zip(
                 gathered.paths, gathered.nodes, gathered.own, gathered.volumes):
             if getattr(node, 'castsShadow', True):
-                records.append((None, None, tmatrix, bvolume, path))
+                records.append((None, None, tmatrix, bvolume, path, node))
         return records
 
     @staticmethod
@@ -799,13 +800,14 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         answer is :meth:`_casterGeometryBatch`'s, so the one-caster form and the
         scene-at-once form can never drift apart.
         """
-        return cls._casterGeometryBatch([(None, None, tmatrix, bvolume, None)])[0]
+        return cls._casterGeometryBatch(
+            [(None, None, tmatrix, bvolume, None, None)])[0]
 
     @classmethod
     def _worldPointsFromRecords(cls, records: List) -> Optional[np.ndarray]:
         """World-space bounding points of a set of render/caster records.
 
-        Each record is a ``(sortKey, mvmatrix, tmatrix, bvolume, path)`` tuple;
+        Each record is a ``(sortKey, mvmatrix, tmatrix, bvolume, path, node)`` tuple;
         only ``tmatrix`` and ``bvolume`` are read here.
         """
         chunks = [found[0] for found in cls._casterGeometryBatch(records)
@@ -1022,7 +1024,6 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                     log.debug("instanced shadow depth failure: %s", err)
             for record in casters:
                 tmatrix = record[2]
-                path = record[4]
                 self.matrix = dot(tmatrix, light_view).astype('f')
                 # A caster binds whatever program it draws through -- a line set
                 # draws through the unlit one and leaves it bound -- so the depth
@@ -1033,7 +1034,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                 shader.use_depth()
                 shader.set_matrices(self.matrix, self.projection, program=depth_prog)
                 try:
-                    path[-1].Render(mode=self)
+                    record[5].Render(mode=self)
                 except Exception as err:
                     log.debug("shadow depth render failure: %s", err)
         finally:

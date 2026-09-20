@@ -205,7 +205,7 @@ class _RaisingVol:
 
 
 def _record(bvolume):
-    return ('key', identity(4, 'f'), None, bvolume, ['path'])
+    return ('key', identity(4, 'f'), None, bvolume, ['path'], 'path')
 
 
 class TestComputeScreenSpaceBBoxes:

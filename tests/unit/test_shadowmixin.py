@@ -22,8 +22,9 @@ class FakeVolume:
         return self._points
 
 
-def _record(tmatrix, volume):
-    return (None, None, np.asarray(tmatrix, dtype='d'), volume, None)
+def _record(tmatrix, volume, node=None):
+    return (None, None, np.asarray(tmatrix, dtype='d'), volume,
+            None if node is None else [node], node)
 
 
 class TestCastsShadow:
@@ -399,7 +400,7 @@ class TestRenderShadowMapsGuards:
         return types.SimpleNamespace(castsShadow=casts)
 
     def _record(self, node):
-        return (None, None, np.identity(4, 'd'), None, [node])
+        return (None, None, np.identity(4, 'd'), None, [node], node)
 
     def test_disabled_shadows_clears_bindings_and_returns(self):
         m = ShadowMapMixin()
@@ -491,6 +492,7 @@ class TestWhereACallerSetsTheOptOut:
     def test_the_render_set_leaves_out_a_shape_that_opted_out(self):
         mixin = ShadowMapMixin()
         mixin.use_shadows = True
-        mixin.renderShadowMaps([_record(np.identity(4, 'd'), None)[:4]
-                                + ([self.shape(castsShadow=False)],)])
+        mixin.renderShadowMaps([
+            _record(np.identity(4, 'd'), None,
+                    self.shape(castsShadow=False))])
         assert mixin._shadow_bindings == []
