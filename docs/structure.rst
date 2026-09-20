@@ -783,7 +783,7 @@ Loaders and Command-Line Tools
 
 The **loaders** package reads external model formats into the scenegraph:
 
-- VRML97 / VRML files, parsed with SimpleParse (see :doc:`Using VRML97
+- VRML97 / VRML files, parsed with SimpleParse (see :doc:`Loading VRML97
   <vrml97>`).
 
 - glTF 2.0 and binary GLB, via pygltflib, mapped onto PBR materials (see

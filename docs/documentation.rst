@@ -376,7 +376,7 @@ translations are a good starting point for beginning OpenGL programmers.
   - :doc:`Rendering Text <text>` -- The Text and FontStyle nodes, the font
     providers, and extruded solid text
 
-  - :doc:`Using VRML97 <vrml97>` -- Using the (partial) VRML97 loader and the
+  - :doc:`Loading VRML97 <vrml97>` -- Using the (partial) VRML97 loader and the
     nodes it creates
 
 - Built with it

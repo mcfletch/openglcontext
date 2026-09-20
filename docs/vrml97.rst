@@ -1,5 +1,5 @@
-Using VRML97 with OpenGLContext
-===============================
+Loading VRML97
+==============
 
 .. rst-class:: introduction
 
