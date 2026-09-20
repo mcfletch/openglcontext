@@ -147,9 +147,9 @@ Features
   - :doc:`Extrusions, lathes, screws, spirals and tubes <extrusions>` — swept
     as vertex arrays, so they draw in either profile
 
-  - :doc:`Turning an outline into triangles <tessellation>` — a constrained
-    Delaunay tessellator for glyphs, floor plans, lakes and the caps on the
-    ends of a sweep
+  - :doc:`Tessellation <tessellation>` — a constrained Delaunay tessellator
+    that turns an outline into triangles: glyphs, floor plans, lakes and the
+    caps on the ends of a sweep
 
   - :doc:`Text <text>` — TrueType, as a screen-space texture atlas, 3-D polygonal
     solids, or 3-D outlines

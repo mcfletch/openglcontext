@@ -1,5 +1,5 @@
-Turning an outline into triangles
-=================================
+Tessellation
+============
 
 .. rst-class:: introduction
 
@@ -49,3 +49,16 @@ gets a cap with the holes in it — see :doc:`swept geometry <extrusions>`.
 The polygonal and outlined :doc:`3D text <text>` nodes tessellate the glyph
 outlines a font gives them, and any node that fills an authored outline —
 a floor plan, a lake, a plot of land — does the same with this call.
+
+Demonstrations
+--------------
+
+- ``tests/extrusions_tessellation.py`` -- tessellated faces with their
+  triangles drawn
+
+- ``tests/extrusions_preprocessing.py`` -- outlines that cross themselves,
+  share edges or meet at a T-junction, and what preprocessing makes of them
+
+.. code-block:: bash
+
+   python tests/extrusions_tessellation.py

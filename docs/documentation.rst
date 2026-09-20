@@ -261,7 +261,7 @@ translations are a good starting point for beginning OpenGL programmers.
     profile: join styles and miter limits, spline paths sampled to a curvature
     tolerance, rotation-minimizing frames and closed loops
 
-  - :doc:`Turning an Outline into Triangles <tessellation>` -- The constrained
+  - :doc:`Tessellation <tessellation>` -- The constrained
     Delaunay tessellator: winding rules, refinement by minimum angle or maximum
     area, and what it makes of an outline that crosses itself, has holes, or
     meets itself at a T-junction

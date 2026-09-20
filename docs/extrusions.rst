@@ -12,6 +12,11 @@ the same path as every other piece of geometry in the scene: **core profile
 and compatibility profile alike**, lit, shadowed, textured, pickable,
 depth-sorted, and eligible for the pass-level instancing batcher.
 
+An end cap is a filled outline rather than a fan, which is why an extrusion of
+a contour with holes gets a cap with the holes in it. What fills it is
+:doc:`the tessellator <tessellation>`, which is a call in its own right and
+has a page of its own.
+
 .. figure:: images/extrusions/shapes.png
    :alt: A lathe, a spiral, a screw, a torus, a pipe elbow and a tapering elbow
 
@@ -286,14 +291,6 @@ offers, named ``vertex``/``normal``, optionally ``model``, then
    flat across the face whatever its shape -- including one with a hole, and
    refined ones.
 
-Tessellation
-------------
-
-An end cap is a filled outline, so it is tessellated rather than fanned —
-which is why an extrusion of a contour with holes gets a cap with the holes in
-it. The tessellator is a public call in its own right and has :doc:`a page of
-its own <tessellation>`.
-
 Generated geometry into the scenegraph
 --------------------------------------
 
@@ -338,9 +335,6 @@ Demonstrations
 - ``tests/extrusions_vrml97.py`` -- the VRML97 node's fields
 
 - ``tests/extrusions_normals.py`` -- the three shading modes on two subjects
-
-- ``tests/extrusions_tessellation.py`` -- tessellated faces with their triangles
-  drawn
 
 - ``tests/extrusions_gallery.py`` -- one figure per parameter, which is what the
   figures above are captured from. Run ``python tests/extrusions_gallery.py
