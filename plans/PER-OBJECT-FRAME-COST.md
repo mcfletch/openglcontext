@@ -1,6 +1,6 @@
 # What a frame costs per object
 
-**Status:** A to D 🟢 complete 2026-09-19; E and F 📋 planned from what the profile showed afterwards. The per-object slope is halved — **29.1 -> 11.8 µs an object** with a still camera, 26.6 -> 13.3 with it moving — so the gain grows with the world: 2.0x at fifty objects, **2.4x at sixteen hundred**. The bust gallery goes 5.26 -> 2.57 ms a frame. See [How it scales](#how-it-scales).
+**Status:** A to E 🟢 complete (A-D 2026-09-19, E 2026-09-20); F 🔴 withdrawn 2026-09-20, the figure it rested on being a whole-run total read as a per-frame rate. The per-object slope is halved — **29.1 -> 11.8 µs an object** with a still camera, 26.6 -> 13.3 with it moving — so the gain grows with the world: 2.0x at fifty objects, **2.4x at sixteen hundred**. The bust gallery goes 5.26 -> 2.57 ms a frame. See [How it scales](#how-it-scales).
 
 A scene of three hundred objects costs about **5 ms of processor time a frame
 before anything is drawn**, and the cost is very nearly linear in the number of
@@ -349,10 +349,10 @@ At 1600 objects, by what the profile counts per frame. Neither of these is
 level-of-detail's, and neither was in A to D; they are E and F below.
 
 - **`path[-1]`, 17,500 times** — about eleven per object, across seven
-  consumers that each walk a record to the node it ends at.
-- **`cache.depend_signal`, 2,000 times** — the scenegraph's dependency cache
-  registering a receiver, and with `saferef.__init__` behind it the largest
-  single entry in the profile.
+  consumers that each walk a record to the node it ends at. That is E, and it
+  was worth having.
+- **`cache.depend_signal`, 2,000 times** — which turned out not to be a
+  per-frame figure at all. That is F, and it was withdrawn.
 
 ## What it was worth
 
@@ -464,49 +464,48 @@ The harness counts `path_walks` now, and
 object. On the tree before this change that reads 2,294 at 200 objects against
 the 416 the gate allows, so it is a gate rather than a comment.
 
-## F. Changing a level rebuilds the transform cache
+## F. Changing a level rebuilds the transform cache — 🔴 withdrawn 2026-09-20
 
-`cache.depend_signal` runs 2,000 times a frame, but **not** once per object —
-it is once per *level change*. About 53 of 1600 objects cross a threshold in
-any frame with the camera moving, and each one costs roughly 38 dispatcher
-registrations:
+**There is nothing here. The figure this item was raised on was a total read as
+a rate**: `cache.depend_signal` runs 131,250 times over a 1600-object run, and
+dividing that by the frame count gave "2,000 times a frame". It is not per
+frame. Counted inside the measured window instead of across the process:
 
 ```
-800.0/frame  cache.depend <- nodepath.get_mat <- transformMatrix <- selectLevels
-800.0/frame  cache.depend <- nodepath.get_mat <- transformMatrix <- _walkPaths
-400.2/frame  cache.depend <- basenodes.localMatrices <- get_mat <- transformMatrix
+connects total 131250; before the measured frames 131250; during them 0
 ```
 
-The mechanism: when an LOD picks a different level, `SGObserver.onSwitchChange`
-invalidates the path to the old level and integrates the new one, which builds
-a **new `NodePath`**. A new path has no entry in the transform cache, so the
-first `transformMatrix()` on it builds one and registers a receiver for every
-field it depends on — the Transform's `translation`, `scale`,
-`scaleOrientation`, `rotation` and `center`, and the parent's local matrices.
+All of it is scene setup — 3,204 paths each building one transform-cache entry
+and registering the fields it depends on, once. `integrate` runs **0.0 times a
+frame** in that scene, because a camera creeping 0.01 units a frame crosses no
+threshold: nothing was switching, so the cost of switching could not have been
+what the profile was showing.
 
-What makes that waste rather than work: **the new path's world matrix is the
-one the old path had.** Neither an `LOD` nor the `Shape` under it is a
-`Transforming` node, so `transformChildren()` yields the same transforms either
-way; the product is recomputed and the same receivers re-registered to reach an
-identical answer.
+Driven hard enough to switch — the camera moving 0.9 units a frame, 13 to 18
+levels changing over per frame — it is **400 connects a frame**, not 2,000. And
+that costs nothing measurable. Freezing every level change after warm-up, on an
+idle machine, against the same scene:
 
-Two ways to stop paying it, and they want weighing rather than picking:
+| | normal | levels frozen |
+|---|---|---|
+| 800 objects, switching | 9.95 / 9.95 / 10.09 ms | 10.21 / 9.88 / 10.32 |
+| 1600 objects, creeping | 18.51 / 18.77 / 18.93 | 19.17 / 18.73 / 18.82 |
 
-1. **Keep a path per level.** The levels of a chain are a fixed, small set, so
-   the paths to them are too. Switching would then reuse a path whose cache is
-   already warm instead of building one. What it costs is memory and receivers:
-   `levels x nodes` paths where there are now `nodes`, and `onSwitchChange`'s
-   own docstring warns against accumulating paths to the same node — though
-   what it warns about is *unbounded* accumulation from re-walking, which this
-   is not.
-2. **Let a new path inherit the transform its prefix already has.** The cache
-   is keyed on the path object, and a path knows its `parent`; a path that adds
-   no `Transforming` node to its parent has its parent's matrix, exactly, and
-   could hold the parent's cache entry rather than building its own. That is a
-   pyvrml97 change and a deeper one, but it pays for every switched subtree in
-   the engine rather than only for level-of-detail.
+The two are indistinguishable. Neither of the routes this section proposed was
+worth taking, and one of them was tried: making a path with no `Transforming`
+node of its own defer to its parent's cache entry is **slower**, because the
+deferring path then caches nothing and re-walks on every call — 18.54 ms to
+20.01 at 1600 objects. It is reverted.
 
-Measure (1) first: it is contained in `_flat.py` and reversible.
+### What to take from it
+
+`cProfile` charges its own per-call overhead to the caller, so a function
+called 121,645 times over a run is inflated far more than one called 60 times,
+and `saferef.__init__` sat at the top of the profile while costing nothing a
+frame. A profile ranks *where to look*. What settles whether something costs
+anything is removing it and timing the frame — which is the same discipline
+this plan's own D section is built on, and which reading the profile as an
+answer skipped.
 
 ## Where this came from
 
