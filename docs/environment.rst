@@ -359,8 +359,9 @@ no diagnostic at all.
 Not ours
 --------
 
-``PYOPENGL_PLATFORM`` belongs to PyOpenGL and selects the GL platform binding.
-It matters here in one case: wxPython on GTK3 creates its context through EGL,
-so core-profile rendering under wx wants ``PYOPENGL_PLATFORM=egl``. The
-``wxcontext`` module sets it when it can, which it cannot if OpenGL was
-imported first. See :doc:`the structural overview <structure>`.
+``PYOPENGL_PLATFORM`` belongs to PyOpenGL and names the GL platform binding.
+On Linux it is worth leaving unset: that platform loads both GLX and EGL and
+probes for whichever owns the live context, which is what lets a GLX toolkit
+and an EGL one work in the same install. Naming one pins it, which is what an
+offscreen render wants (``PYOPENGL_PLATFORM=egl``, or ``osmesa`` for the
+software rasteriser) and what a windowed program does not.

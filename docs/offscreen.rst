@@ -145,11 +145,10 @@ Two things change the choice:
    * - ``LIBGL_ALWAYS_SOFTWARE``, ``GALLIUM_DRIVER``
      - When the environment asks for software rendering, a software device is chosen.
 
-Honouring a request for software rendering is not merely a courtesy. Asking
-Mesa for a display on a *hardware* device while ``LIBGL_ALWAYS_SOFTWARE``
-demands software is a contradiction it detects, warns about, and then
-segfaults on rather than refusing cleanly. Choosing the matching device is
-what keeps the process alive.
+A request for software rendering is honoured because Mesa crashes
+otherwise: asking it for a display on a *hardware* device while
+``LIBGL_ALWAYS_SOFTWARE`` demands software is a contradiction it detects,
+warns about, and then segfaults on rather than refusing cleanly.
 
 Where no device of the preferred kind exists, the first device is used and a
 warning says so: rendering on the other sort beats not rendering.

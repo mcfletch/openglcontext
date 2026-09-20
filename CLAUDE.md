@@ -1081,30 +1081,15 @@ def test_mousemove_events_filtered_when_no_handlers():
 OPENGLCONTEXT_PROFILE=compatibility /workspaces/OpenGL-dev/.venv/bin/pytest tests/<testname>.py
 ```
 
-#### wxPython GTK3 Requires EGL for Core Profile
+#### wxPython, GTK3 and EGL
 
-**Important:** wxPython GTK3 uses EGL (not GLX) for OpenGL context creation.
-Core profile rendering with wxPython requires `PYOPENGL_PLATFORM=egl` to be set
-so PyOpenGL can properly track the OpenGL context.
-
-The `wxcontext` module attempts to set this automatically when GTK3 is detected,
-but if OpenGL is imported before wxcontext, you must set it manually:
-
-```bash
-PYOPENGL_PLATFORM=egl /workspaces/OpenGL-dev/.venv/bin/pytest tests/<testname>.py
-```
-
-Or in code (before any OpenGL imports):
-
-```python
-import os
-os.environ['PYOPENGL_PLATFORM'] = 'egl'
-```
-
-**Symptoms if EGL is not set:** Errors like "Attempt to retrieve context when no
-valid context" during shader rendering, particularly in `glVertexAttribPointer`
-or other VAO/VBO operations. Legacy (fixed-function) rendering may still work
-because it doesn't rely on PyOpenGL's context tracking.
+wxPython on GTK3 makes its GL context through EGL rather than GLX, and on X11
+it may be either. **Do not set `PYOPENGL_PLATFORM` for it.** PyOpenGL's Linux
+platform loads both interfaces and probes for the live context
+(`OpenGL/platform/linux.py`), so the calls are routed to whichever API owns the
+context the toolkit made — naming one pins it and breaks the other. Pinning is
+for an offscreen render (`PYOPENGL_PLATFORM=egl`, or `osmesa`), where there is
+no toolkit to ask.
 
 Key test files:
 

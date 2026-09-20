@@ -40,9 +40,19 @@ version = '.'.join(__version__.split('.')[:2])
 extensions = [
     'sphinx.ext.extlinks',
     'sphinx.ext.intersphinx',
+    'sphinxcontrib.mermaid',
     'oglc_gallery',
     'oglc_sidebar',
 ]
+
+#: The diagrams are drawn in the reader's browser, from the source written
+#: into the page: a build needs no renderer, and a reader with no network --
+#: someone reading the page out of a checkout -- sees the source rather than
+#: an empty space.  The script itself comes from jsDelivr, pinned to the
+#: version the extension names.
+mermaid_output_format = 'raw'
+mermaid_light_theme = 'default'
+mermaid_dark_theme = 'dark'
 
 # `sphinx.ext.viewcode` is deliberately absent: it follows imports into every
 # package the engine sits on and writes a highlighted copy of each into the

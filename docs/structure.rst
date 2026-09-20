@@ -1,6 +1,79 @@
 OpenGLContext Structural Overview
 =================================
 
+.. rst-class:: introduction
+
+What the engine is made of, what it is built on, and what is built on it. An
+arrow means "uses"; a dashed one is an optional extra rather than something a
+plain install brings.
+
+.. mermaid::
+
+   flowchart TD
+       subgraph built["Built on it"]
+           apps["oglc-view · the demos · your game"]
+           editor["OpenGLContext-editor<br/>world baking, levels of detail"]
+       end
+
+       subgraph engine["OpenGLContext"]
+           context["Context<br/>window, main loop, input"]
+           passes["Render passes<br/>flat · PBR · shadows · instancing"]
+           scene["Scenegraph<br/>nodes, fields, routes"]
+           loaders["Loaders<br/>glTF · VRML97 · OBJ · 3D Tiles"]
+           world["Worlds<br/>terrain · vegetation · water · roads"]
+           sim["Simulation<br/>physics · navmesh · movement · audio"]
+           ui["Overlay UI · HUD"]
+           ship["Telemetry · recording · content packs · packaging"]
+       end
+
+       subgraph ours["Ours, released separately"]
+           vrml["PyVRML97<br/>the node and field model"]
+           omip["omi_physics"]
+           omia["omi_audio"]
+           ext["opengl_extrusions"]
+           dec["opengl_decimate"]
+           ttf["TTFQuery"]
+           simple["SimpleParse"]
+           dispatch["PyDispatcher"]
+           video["pyopengl-video"]
+           qt["OpenGLContext-qt"]
+       end
+
+       subgraph under["Underneath"]
+           pyopengl["PyOpenGL"]
+           numpy["numpy"]
+           pillow["Pillow"]
+           gltflib["pygltflib"]
+           driver["The GL driver, and the GPU"]
+       end
+
+       apps --> context
+       editor --> context
+       editor -.-> dec
+       qt -.-> context
+       context --> passes
+       context --> ui
+       context --> scene
+       passes --> scene
+       loaders --> scene
+       world --> scene
+       sim --> scene
+       scene --> vrml
+       scene --> ext
+       scene --> ttf
+       vrml --> dispatch
+       vrml --> simple
+       sim --> omip
+       sim --> omia
+       loaders --> gltflib
+       loaders --> pillow
+       ship -.-> video
+       passes --> pyopengl
+       ui --> pyopengl
+       scene --> numpy
+       video -.-> pyopengl
+       pyopengl --> driver
+
 The OpenGLContext Package (top-level)
 -------------------------------------
 
@@ -100,8 +173,8 @@ A view inside an interface
    * - ``wx``
      - Linux (X11 and Wayland, through GTK3), Windows, macOS
      - wxPython's native widgets, with the view in a ``wx.glcanvas.GLCanvas``
-       — wxPython 4 (Phoenix) or newer. GTK3 makes its GL context through
-       EGL, so a core profile there wants ``PYOPENGL_PLATFORM=egl``. See
+       — wxPython 4 (Phoenix) or newer. GTK3 makes its context through EGL
+       rather than GLX, which PyOpenGL works out for itself. See
        ``tests/wx_with_controls.py``.
    * - ``qt``
      - Linux (X11, and Wayland where the Qt build's platform plugin offers a
@@ -124,18 +197,40 @@ the X11-only backends under ``xvfb-run``.
 No window at all
 ^^^^^^^^^^^^^^^^
 
-A seventh backend owns no window. :doc:`eglcontext.EGLContext <offscreen>`
-takes a GPU directly through EGL and renders to a pbuffer, which is what a
-build machine, a rendering service or a batch job wants: no display server
-has to be running. EGL is a Linux and Android facility, so this is the one
-backend that is not available everywhere; ``wgl`` is the Windows counterpart,
-a pbuffer with no window on screen, and elsewhere a hidden window
-(``OPENGLCONTEXT_HIDDEN=1``) is how to render without one being seen.
+A build machine, a rendering service and a batch job want a context with no
+window and no display server behind it. Each platform reaches one through its
+own interface, and the engine has a backend for two of the three:
 
-Code that targets one platform is supported on that platform whether or not
-the machine you are reading this on can run it -- for instance
-``scenegraph/text/wglfont.py`` is Windows font support, and is expected to
-work on Windows.
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Backend
+     - Runs on
+     - What it brings
+   * - ``egl``
+     - Linux, and Android
+     - :doc:`eglcontext.EGLContext <offscreen>` takes a GPU through EGL and
+       renders to a pbuffer: no display server, no compositor, no session. A
+       machine with several EGL devices — a GPU and a CPU rasteriser — is
+       asked which it has, and the application picks.
+   * - ``wgl``
+     - Windows
+     - ``OpenGLContext.wglcontext`` makes a pbuffer through WGL. It wants a
+       driver offering ``WGL_ARB_pbuffer`` and a window station with a
+       desktop, which a service in session 0 has; nothing appears on screen.
+   * - —
+     - macOS
+     - CGL (:py:mod:`OpenGL.CGL`) makes a context with no window, but no
+       default framebuffer with it, so there is no backend here yet. A hidden
+       window is the way: ``OPENGLCONTEXT_HIDDEN=1`` on any of the backends
+       above.
+
+``Context.getOffscreenContextType()`` answers with whichever of them this
+machine has, or ``None``, so a program that runs on more than one platform
+asks rather than naming a class. :doc:`Rendering offscreen <offscreen>` covers
+the device choice, what each backend needs and what to do where there is
+neither.
 
 .. _backend-capabilities:
 
@@ -316,22 +411,14 @@ the constructor outranks both. Each context gets its own copy of what the
 class declared, since a context writes its own size back to its definition as
 the window is resized.
 
-wxPython GTK3 and EGL
-^^^^^^^^^^^^^^^^^^^^^
+wxPython, GTK3 and EGL
+^^^^^^^^^^^^^^^^^^^^^^
 
-**Important:** wxPython on GTK3 uses EGL (not GLX) for OpenGL context
-creation. When using core profile rendering with wxPython, you must configure
-PyOpenGL to use EGL for proper context tracking:
-
-.. code-block:: bash
-
-   PYOPENGL_PLATFORM=egl python your_script.py
-
-The wxcontext module attempts to set this automatically, but if OpenGL is
-imported before wxcontext, you may need to set it manually. Symptoms of
-missing EGL configuration include errors like "Attempt to retrieve context
-when no valid context" during shader rendering. Legacy (fixed-function)
-rendering typically works without this setting.
+wxPython on GTK3 makes its GL context through EGL rather than GLX, and on X11
+it may be either. Nothing has to be configured for that: PyOpenGL's Linux
+platform loads both interfaces and probes for the live context, so the calls
+are routed to whichever API owns the context the toolkit made
+(:py:mod:`OpenGL.platform.linux`).
 
 Qt/PySide and the platform plugin
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

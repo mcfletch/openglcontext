@@ -85,7 +85,7 @@ all = ["OpenGLContext[pygame,glfw,gltf,draco,audio,accelerate]"]
 # the module pages is PyOpenGL's `directdocs`, which is in the PyOpenGL
 # repository rather than in the PyOpenGL distribution, so it is not here: point
 # DIRECTDOCS at a checkout of it.
-docs = ["sphinx>=7", "furo"]
+docs = ["sphinx>=7", "furo", "sphinxcontrib-mermaid"]
 dev = ["OpenGLContext[all]","pytest", "pytest-cov", "pytest-html", "pytest-timeout", "psutil", "ruff", "mypy"]
 
 [project.scripts]

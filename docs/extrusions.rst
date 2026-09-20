@@ -339,10 +339,10 @@ and no parsing in between, through ``OpenGLContext.scenegraph.frommesh``:
    pipe = extrude(circle(0.1, 16), [(0, 0, 0), (0, 1, 0), (1, 2, 0)])
    scene.children.append(shape_from_mesh(pipe, appearance=steel))
 
-**This is the form the glTF loader already produces.** A generated primitive
-is not merely glTF-*shaped*: it is the same arrangement of arrays ``PBRMesh``
-holds, which is the node ``loaders/gltf`` builds for every primitive of every
-``.glb`` the engine reads. Attribute names, component types, index type and
+**This is the form the glTF loader already produces.** A generated
+primitive is the same arrangement of arrays ``PBRMesh`` holds, which is the
+node ``loaders/gltf`` builds for every primitive of every ``.glb`` the engine
+reads. Attribute names, component types, index type and
 memory layout all line up, so generated geometry and loaded geometry arrive at
 the render pass indistinguishable from one another -- and shadow, instance,
 pick and sort by the same code.
