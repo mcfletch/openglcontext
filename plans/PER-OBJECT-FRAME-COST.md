@@ -1,6 +1,6 @@
 # What a frame costs per object
 
-**Status:** A to E 🟢 complete (A-D 2026-09-19, E 2026-09-20); F 🔴 withdrawn 2026-09-20, the figure it rested on being a whole-run total read as a per-frame rate. The per-object slope is halved — **29.1 -> 11.8 µs an object** with a still camera, 26.6 -> 13.3 with it moving — so the gain grows with the world: 2.0x at fifty objects, **2.4x at sixteen hundred**. The bust gallery goes 5.26 -> 2.57 ms a frame. See [How it scales](#how-it-scales).
+**Status:** A to E 🟢 complete (A-D 2026-09-19, E 2026-09-20); F 🔴 withdrawn 2026-09-20, the figure it rested on being a whole-run total read as a per-frame rate. The per-object slope is **24.7 -> 10.6 µs** with a still camera and 22.7 -> 11.6 with it moving, so the gain grows with the world: 1.5x at fifty objects, **2.3x at sixteen hundred**. The bust gallery goes 5.26 -> 2.57 ms a frame. See [How it scales](#how-it-scales).
 
 A scene of three hundred objects costs about **5 ms of processor time a frame
 before anything is drawn**, and the cost is very nearly linear in the number of
@@ -297,51 +297,49 @@ that line; the line itself is what follows.
 
 Measured on D's harness, 50 to 1600 shadow-casting level-of-detail chains, each
 count timed turn about against the same count on the other tree so load affects
-both alike. Three rounds, 80 frames each, medians.
+both alike. Three rounds of 80 frames each, medians, on an idle machine, with
+A to E all in.
 
 **Camera still** (the shortcuts apply):
 
 | objects | before | after | | fps after |
 |---:|---:|---:|---:|---:|
-| 50 | 2.96 ms | 1.46 | 2.03x | 685 |
-| 100 | 3.89 | 1.91 | 2.04x | 524 |
-| 200 | 6.29 | 3.52 | 1.79x | 284 |
-| 400 | 11.26 | 5.66 | 1.99x | 177 |
-| 800 | 22.56 | 9.93 | 2.27x | 101 |
-| 1600 | 47.84 | 19.85 | 2.41x | 50 |
+| 50 | 2.11 ms | 1.37 | 1.53x | 728 |
+| 100 | 3.93 | 1.92 | 2.05x | 522 |
+| 200 | 6.41 | 3.56 | 1.80x | 281 |
+| 400 | 10.60 | 5.46 | 1.94x | 183 |
+| 800 | 20.11 | 9.66 | 2.08x | 104 |
+| 1600 | 40.90 | 17.96 | **2.28x** | 56 |
 
 **Camera moving every frame** (nothing from last frame can be reused):
 
 | objects | before | after | | fps after |
 |---:|---:|---:|---:|---:|
-| 50 | 2.80 ms | 1.63 | 1.72x | 613 |
-| 100 | 3.95 | 2.91 | 1.36x | 344 |
-| 200 | 6.78 | 4.06 | 1.67x | 247 |
-| 400 | 11.05 | 6.54 | 1.69x | 153 |
-| 800 | 22.34 | 11.40 | 1.96x | 88 |
-| 1600 | 43.92 | 22.73 | 1.93x | 44 |
+| 50 | 2.47 ms | 1.63 | 1.51x | 613 |
+| 100 | 4.19 | 2.71 | 1.55x | 370 |
+| 200 | 6.18 | 3.94 | 1.57x | 254 |
+| 400 | 10.44 | 6.02 | 1.73x | 166 |
+| 800 | 19.84 | 10.97 | 1.81x | 91 |
+| 1600 | 37.83 | 19.83 | **1.91x** | 50 |
 
 Least squares over the whole sweep:
 
 | | slope | fixed cost |
 |---|---|---|
-| before, still | 29.07 µs an object | 0.54 ms |
-| **after, still** | **11.77 µs** | 0.87 ms |
-| before, moving | 26.59 µs | 1.18 ms |
-| **after, moving** | **13.32 µs** | 1.22 ms |
+| before, still | 24.68 µs an object | 1.05 ms |
+| **after, still** | **10.61 µs** | 1.08 ms |
+| before, moving | 22.67 µs | 1.59 ms |
+| **after, moving** | **11.59 µs** | 1.43 ms |
 
-The still-camera sweep was run three times over the day, on a machine other
-work was coming and going on: 2.40x, 2.47x and 2.35x. Call it 2.4x.
-
-**The slope is halved: ~2.4x still, 2.0x moving.** That is the result the
+**The slope is halved: 2.33x still, 1.96x moving.** That is the result the
 frame-time figure follows from, and it is why the speedup *grows* with the
-object count rather than shrinking — 2.03x at fifty objects, 2.41x at sixteen
+object count rather than shrinking — 1.53x at fifty objects, 2.28x at sixteen
 hundred. A fixed cost that stays fixed matters less the bigger the world gets;
 a slope that halves matters more.
 
 In the terms this plan opened with — "a ceiling of ~200 frames a second at
 three hundred objects and ~30 at two thousand" — two thousand objects now
-extrapolate to about **41 frames a second** against the measured 17.
+extrapolate to about **45 frames a second** against the measured 20.
 
 ### What the slope is still made of
 
