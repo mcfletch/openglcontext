@@ -1,8 +1,9 @@
 # glTF engine hooks: authoring what a material or an object *is*
 
-Status: **Complete** — 2026-09-20. Stages 1 to 3 have landed: the registry, both
-hook points, the writer's two spellings, the built-in `water` kind, and the
-documentation. Stages 4 and 5 are the optional ones and are untouched.
+Status: **Complete** — 2026-09-20. Stages 1 to 4 have landed: the registry, both
+hook points, the writer's two spellings, the built-in `water` kind, the
+documentation, and the Blender add-on. Stage 5 is the registry formality and is
+untouched.
 
 Three things the build settled that the design had not:
 
@@ -113,6 +114,7 @@ installed package cannot add a kind to somebody else's viewer by being present.
 | `loaders/gltf/writer.py` | `extras` pass-through and the `OGLC_hook` extension, so a tag round-trips and an editor can author one |
 | `scenegraph/water/gltf.py` | The built-in `water` hook, registered by `scenegraph.water` |
 | `viewer/sceneviewer.py` | `advanceHooks()`, beside `advanceAnimation()` |
+| `tools/blender/oglc_hook/` | The add-on: the panels, and the exporter hooks that write the extension |
 
 ### The registry
 
@@ -256,9 +258,18 @@ is loaded and re-saved keeps its tags and the editors
 2. ~~**The node hook point, `hook_data` and `advance`.** The viewer calls it.~~
    Landed, as `SceneViewerMixin.advanceHooks()` beside `advanceAnimation()`.
 3. ~~**The water hook, the GL test and the documentation.**~~ Landed.
-4. *Optional:* a Blender add-on under `tools/blender/` adding a material panel
+4. ~~*Optional:* a Blender add-on under `tools/blender/` adding a material panel
    and emitting the extension through `gather_material_hook`, for pipelines that
-   want the extension rather than a custom property.
+   want the extension rather than a custom property.~~ Landed as
+   `tools/blender/oglc_hook`, with an object panel as well as a material one:
+   the node-level tag wants authoring too, and it is the same panel and the same
+   `gather_node_hook` beside it. The rules are in `tag.py`, which imports no
+   `bpy` and is tested as ordinary code; `__init__.py` is properties, panels and
+   the two exporter hooks. Two things the build settled: the panel writes only
+   what differs from the loader's defaults, so a tag says what the artist
+   changed; and a parameters field that is not JSON is drawn in red in the panel
+   and logged at export rather than raising, since an export that died on a
+   mistyped brace would lose a session's work.
 5. *Optional:* reserve the `OGLC_` prefix in the Khronos registry, if the
    extension spelling is to be published rather than kept in-house.
 
@@ -292,6 +303,16 @@ back with `load_gltf`, as `tests/unit/test_gltf_named_materials.py` does.
 `tests/unit/test_gltf_water_hook_gl.py`
 - a tagged file renders, and the surface moves between two `advance()` values —
   the shape of `tests/unit/test_water_gpu_gl.py`
+
+`tests/unit/test_blender_hook_addon.py`
+- the add-on's key, styles and media are the engine's, and `tag.py` imports no
+  `bpy`
+- the panel writes the kind alone, the water parameters that differ from the
+  defaults, and whatever the parameters field says over them
+- a parameters field that is not a JSON object is reported, with what is wrong
+- the block the panel builds loads as the tag it meant, through a written file
+- the Blender half declares both exporter hooks, a Blender version and one copy
+  of the key
 
 ## Documentation
 
@@ -336,7 +357,6 @@ back with `load_gltf`, as `tests/unit/test_gltf_named_materials.py` does.
   geometry, and a `TimeSensor` plus a route to write one is more mechanism than
   that needs. [Time](#time) has the shape of it.
 
-Every question this plan opened is answered, and stages 1 to 3 are built. What
-is left is the two optional ones: a Blender add-on for pipelines that want the
-extension rather than a custom property, and reserving the `OGLC_` prefix with
-Khronos if the spelling is to be published.
+Every question this plan opened is answered, and stages 1 to 4 are built. What
+is left is stage 5: reserving the `OGLC_` prefix with Khronos, if the spelling is
+to be published rather than kept in-house.

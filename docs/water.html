@@ -196,7 +196,10 @@ export, and the surface loads moving. Nothing registers anything &mdash; the
 <pre>OGLC_hook = {"kind": "water", "style": "choppy", "depth": 6.0}</pre>
 <p>In Blender that is a custom property on the material datablock, exported with
 <strong>Include &rsaquo; Custom Properties</strong> ticked; no add-on, and
-Blender 4.x is enough. The shorthand is the kind on its own,
+Blender 4.x is enough. The add-on in <code>tools/blender/oglc_hook</code> is the
+other way to author it: an <strong>Engine Hook</strong> panel with a field per
+parameter below, writing the extension spelling on export. The shorthand is the
+kind on its own,
 <code>OGLC_hook = "water"</code>, which is a pond. <a href="gltf.html#hooks">Engine
 hooks</a> is the mechanism underneath, including how to tag a node rather than a
 material and how to register a kind of your own.</p>

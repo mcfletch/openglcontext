@@ -351,13 +351,23 @@ registered for loads as an ordinary shape, so a file authored for another engine
 still loads here.</p>
 
 <h4>Authoring one in Blender</h4>
-<p>No add-on. Give the material (or the object) a <strong>custom property</strong>
-called <code>OGLC_hook</code> in the Properties editor, holding the string
+<p>Two ways, and the loader reads both. <strong>With no add-on:</strong> give the
+material (or the object) a <strong>custom property</strong> called
+<code>OGLC_hook</code> in the Properties editor, holding the string
 <code>water</code> or a JSON object, and export with <strong>Include &rsaquo;
 Custom Properties</strong> ticked. Blender writes material custom properties to
 <code>material.extras</code> and object custom properties to
 <code>node.extras</code>, which is exactly what the loader reads. Blender 4.x is
 enough.</p>
+<p><strong>With the add-on</strong> in <code>tools/blender/oglc_hook</code>: an
+<strong>Engine Hook</strong> panel on the material and object tabs, with fields
+for the <code>water</code> kind and a JSON object for any other, writing the
+<code>OGLC_hook</code> <em>extension</em> as each material and node is exported.
+It is a form rather than a typed-out string, it says under the fields exactly
+what the file will carry, and no export option has to be ticked for it. Zip the
+folder, install it with <strong>Edit &rsaquo; Preferences &rsaquo; Add-ons
+&rsaquo; Install from Disk</strong>, and tick it;
+<code>tools/blender/README.md</code> has the rest.</p>
 
 <h4>Registering a kind of your own</h4>
 <pre>from OpenGLContext.loaders.gltf import hooks
