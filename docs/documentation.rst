@@ -272,10 +272,10 @@ translations are a good starting point for beginning OpenGL programmers.
     trimming loops triangulated to the sampling rate, and a coarser tessellation
     for a surface far from the camera
 
-  - :doc:`Particle Effects <particles>` -- Fire, smoke, sparks, explosions and
-    trails as camera-facing quads in one instanced draw: a numpy pool with a
-    packed live set, emitters as declared nodes, life curves as uniforms, and
-    named presets
+  - :doc:`Particle Systems <particles>` -- Fire, smoke, sparks, explosions and
+    trails as camera-facing quads in one instanced draw: the emitter node and
+    its fields, six presets, bursting at a point, and how the numpy pool, the
+    step and the renderer work
 
   - :doc:`Terrain & Landscapes <terrain>` -- Which of the two paths a landscape
     wants, and the one that needs no streaming: a :ref:`height field
