@@ -54,14 +54,205 @@ out as separate reusable components.
        class glisteel,twig,forest,editor,oglc,video,pyopengl,vrml,omip,omia,ext,ttf,simple,dispatch ours
        class mini,fonttools,gltflib,numpy third
 
-Blue is ours and grey is somebody else's; each box sits on what it is written
-against, and numpy is under all of it but ``pygltflib``. Two are optional
-extras: ``pyopengl-video``, which encodes the colour buffer to H.264 on the
-GPU's own encoder without the frame leaving the card, and ``miniaudio``,
-without which ``omi_audio`` mixes and plays nothing. The two at the
-right-hand end are where a file becomes a scene: ``pygltflib`` reads glTF and
-GLB, and ``PyVRML97`` is the node, field and route model a ``.wrl`` parses
-into and the scenegraph is built from.
+.. mermaid::
+
+   block-beta
+       columns 2
+       legendfirst["Blue: first-party packages"]
+       legendthird["Grey: third-party packages"]
+
+       classDef ours fill:#dbe7ff,stroke:#5a7ab5,color:#111
+       classDef third fill:#ededed,stroke:#999999,color:#111
+
+       class legendfirst ours
+       class legendthird third
+
+What each of them provides
+--------------------------
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Package
+     - What it provides
+   * - `PyOpenGL <https://mcfletch.github.io/pyopengl/>`__
+     - The OpenGL bindings: every entry point of GL, GLU, GLUT, EGL, WGL and
+       GLX, the extensions, and the array handling that gets Python data to
+       the driver.
+   * - `pyopengl-video <https://github.com/mcfletch/pyopengl-video>`__
+     - Encodes the colour buffer to H.264 on the GPU's own encoder, the frame
+       never leaving the card. An extra: ``OpenGLContext[video]``.
+   * - `PyVRML97 <https://github.com/mcfletch/pyvrml97>`__
+     - The node, field, route and prototype model the scenegraph is built
+       from, and the VRML97 parser that fills it.
+   * - `pygltflib <https://gitlab.com/dodgyville/pygltflib>`__
+     - Reads and writes glTF 2.0 and GLB, as the typed records the
+       specification describes.
+   * - `omi_physics <https://github.com/mcfletch/omi_physics>`__
+     - Rigid bodies, colliders, joints and gravity zones on the OMI glTF
+       physics model, stepped in numpy.
+   * - `omi_audio <https://github.com/mcfletch/omi_audio>`__
+     - Spatial audio on glTF's ``KHR_audio_emitter`` model: the gain curves,
+       the voice pool and the block mixing, in numpy.
+   * - `opengl_extrusions <https://github.com/mcfletch/opengl_extrusions>`__
+     - Sweeping, lathing and tubing, and the constrained Delaunay
+       tessellator that fills any outline it is handed.
+   * - `TTFQuery <https://github.com/mcfletch/ttfquery>`__
+     - Finds the fonts installed on the machine and reads the outlines out of
+       them.
+   * - `SimpleParse <https://mcfletch.github.io/simpleparse/>`__
+     - The parser generator the VRML97 grammar is written in.
+   * - `PyDispatcher <https://github.com/mcfletch/pydispatcher>`__
+     - The signal dispatch a field change travels through, which is what
+       makes the scenegraph observable.
+   * - `fontTools <https://github.com/fonttools/fonttools>`__
+     - Reads the tables of a TrueType or OpenType file, under TTFQuery.
+   * - `miniaudio <https://github.com/irmen/pyminiaudio>`__
+     - Decodes audio files and reaches a sound card. An extra:
+       ``omi_audio[playback]``, without which the mixer runs and plays
+       nothing.
+   * - `numpy <https://numpy.org/>`__
+     - The arrays all of it computes in, and the memory the driver is handed.
+
+The packages inside OpenGLContext
+---------------------------------
+
+.. mermaid::
+
+   block-beta
+       columns 8
+
+       bin["bin"]:2
+       viewer["viewer"]:3
+       demos["demos"]:3
+
+       ui["ui"]:2
+       edit["edit"]:2
+       testing["testing"]:1
+       telemetry["telemetry"]:1
+       debug["debug"]:1
+       packaging["packaging"]:1
+
+       passes["passes"]:2
+       physics["physics"]:1
+       nav["nav"]:1
+       character["character"]:1
+       move["move"]:1
+       audio["audio"]:1
+       video["video"]:1
+
+       scenegraph["scenegraph"]:3
+       loaders["loaders"]:2
+       shaders["shaders · resources"]:2
+       contentpacks["contentpacks"]:1
+
+       context["context"]:3
+       events["events"]:2
+       resources["contextresources"]:3
+
+Each layer is written against the ones below it. A frame starts at the bottom
+— a window and its events — and what is drawn is a scenegraph, walked by the
+render passes, with the simulation packages moving what is in it.
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Package
+     - What it does
+     - Described in
+   * - ``bin``
+     - The console commands: ``oglc-view``, ``oglc-terrain``,
+       ``oglc-gltf-demo`` and the rest.
+     - :doc:`The viewer <viewer>`
+   * - ``viewer``
+     - The embeddable viewer the commands are built on, and the per-format
+       adapters it dispatches on.
+     - :doc:`The viewer <viewer>`
+   * - ``demos``
+     - A GL view inside a Tk or wx application, for a tool with an interface
+       around the scene.
+     - :doc:`Embedding <embedding>`
+   * - ``ui``
+     - The overlay: panels, widgets, a generated settings screen, the
+       key-binding editor, the console and the in-world HUD.
+     - :doc:`Overlay UI <overlayui>`, :doc:`HUD <hud>`
+   * - ``edit``
+     - The editor toolkit: tool modes, plan and orbit views, the tri-axis
+       handle, a NURBS node's control points.
+     - :doc:`Editing <editing>`
+   * - ``testing``
+     - The machinery a suite imports: a hidden GL context, the pytest
+       fixtures that hand one over, capture and comparison.
+     - :doc:`Testing what you draw <testing>`
+   * - ``telemetry``
+     - A whole session — input, frame times, exceptions, marks — to one file,
+       read back or replayed.
+     - :doc:`Session telemetry <telemetry>`
+   * - ``debug``
+     - Developer aids: buffer dumps, GL state, leak counts.
+     - —
+   * - ``packaging``
+     - Shipping an application: a PyInstaller bundle, or a Debian package
+       carrying its own interpreter.
+     - :doc:`Packaging <packaging>`
+   * - ``passes``
+     - The render passes: the flat core and compatibility passes, the PBR
+       uber-shader, shadows, image-based lighting and instancing.
+     - :ref:`Rendering Passes <passes>`
+   * - ``physics``
+     - Rigid bodies, colliders, gravity zones, triggers and the character
+       controller, on ``omi_physics``.
+     - :doc:`Physics <physics>`
+   * - ``nav``
+     - The navigation mesh worked out from the collision mesh, and routes
+       pulled taut through its portals.
+     - :doc:`Navigation meshes <navmesh>`
+   * - ``character``
+     - Rigged characters: the rig, the clips, the mixer, attachments and
+       crowds.
+     - :doc:`Rigged characters <characters>`
+   * - ``move``
+     - The camera and the movement modes — examine, fly, walk, swim and
+       mouse-look — and the walking model under them.
+     - :doc:`Movement <navigation>`
+   * - ``audio``
+     - The scenegraph's audio nodes and the per-context engine that plays
+       them, on ``omi_audio``.
+     - :doc:`Spatial audio <audio>`
+   * - ``video``
+     - H.264 capture of what a context drew, through ``pyopengl-video``.
+     - :doc:`Recording <recording>`
+   * - ``scenegraph``
+     - Every node type: shapes, materials, lights, text, NURBS, extrusions,
+       terrain, water, roads, vegetation and the PBR mesh.
+     - :ref:`Scenegraph Rendering <scenegraph-rendering>`
+   * - ``loaders``
+     - File formats into the scenegraph: glTF and GLB, VRML97, OBJ and
+       streamed 3D Tiles.
+     - :ref:`Loaders <structure-loaders>`
+   * - ``shaders``, ``resources``
+     - The GLSL sources the passes compile, and the icons, font atlases and
+       shader text that travel as generated modules.
+     - :doc:`GLSL in OpenGLContext <glslversions>`
+   * - ``contentpacks``
+     - Data an application fetches rather than ships: the registry, the
+       store, safe extraction and the polled download.
+     - :doc:`Content packs <contentpacks>`
+   * - ``context``
+     - The window, the main loop, the profile and the context definition,
+       with one module per backend.
+     - :ref:`The top-level package <top-level>`
+   * - ``events``
+     - One keyboard, mouse and window event model across the backends, and
+       the dispatch that carries a change through the scenegraph.
+     - :ref:`Events and Selection <events-and-selection>`
+   * - ``contextresources``
+     - The caches that let go of a GL context's names as it dies.
+     - :ref:`Context resources <context-resources>`
+
+.. _top-level:
 
 The OpenGLContext Package (top-level)
 -------------------------------------
@@ -585,6 +776,8 @@ this are:
   binds the scene's active Viewpoint into the view platform for the core-profile
   path.
 
+.. _structure-loaders:
+
 Loaders and Command-Line Tools
 ------------------------------
 
@@ -675,6 +868,8 @@ libraries it asks the operating system for. It carries one console command,
 ``oglc-deb``. Nothing in it is imported at run time and nothing in it draws
 (see :doc:`Packaging an application <packaging>`).
 
+.. _scenegraph-rendering:
+
 Scenegraph Rendering
 --------------------
 
@@ -707,6 +902,8 @@ material and mesh produced by the :doc:`glTF loader <gltf>` and rendered by
 the :doc:`PBR pass <pbr>`. Legacy ``Material`` nodes are converted to the same
 model when the PBR renderer is active, so both kinds of content share one
 pipeline.
+
+.. _events-and-selection:
 
 Events and Selection
 --------------------
