@@ -48,6 +48,14 @@ class TilesTerrain(Group):
     that wants only what streams and should not pay to decode them.
     """
 
+    #: What a world's ground carries, before it is mounted. :attr:`holes` reads
+    #: them to pass an opening on, and a terrain is asked for its holes before
+    #: it is asked for anything else.
+    field: Any = None
+    ground: Any = None
+    vegetation: Any = None
+    cover: Any = None
+
     def __init__(self, tileset_path: str, memory_budget: int = 256 * 1024 * 1024,
                  max_sse: float = 16.0, fovy: Optional[float] = None,
                  prefetch_factor: float = 2.0,
@@ -179,7 +187,10 @@ class TilesTerrain(Group):
 
         Hand the same callable to
         :class:`~OpenGLContext.physics.heightfield.HeightFieldColliders` and
-        what is drawn and what is driven on are the same surface.
+        what is drawn and what is driven on are the same surface. Whatever
+        this terrain grows is told as well: a height field answers with a
+        height inside an opening as readily as outside one, so cover seated on
+        that answer alone stands in the portal in mid-air.
         """
         return None if self.ground is None else self.ground.holes
 
@@ -187,6 +198,8 @@ class TilesTerrain(Group):
     def holes(self, holes: "Optional[Callable[[Any, Any], Any]]") -> None:
         if self.ground is not None:
             self.ground.holes = holes
+        if self.cover is not None:
+            self.cover.holes = holes
 
     def _mount_vegetation(self, record: Any, base_uri: str,
                           cache_dir: Optional[str]) -> None:

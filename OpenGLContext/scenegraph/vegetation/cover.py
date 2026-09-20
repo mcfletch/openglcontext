@@ -373,6 +373,13 @@ class GroundCover(Group):
     ``field`` is the ground it sits on and ``species`` what it is made of --
     one :class:`CoverSpecies` or a sequence of them.
     ``mask(x, z) -> weight`` says where it grows; see :func:`control_weight`.
+    ``holes(x, z) -> mask`` says where the ground is not there -- over a
+    tunnel's bore, say. A height field answers with a height everywhere,
+    including inside an opening cut through it, so cover seated on that answer
+    alone stands in mid-air in the portal. Hand this the same callable the
+    terrain and its colliders were given and the three agree about where the
+    ground is. It may be set after the cover is built, which is what a game
+    reading its roads after its ground needs.
     ``shade(x, z) -> sun`` says how much of the sun reaches it, in [0, 1].
     ``canopy(x, z) -> closure`` says how much tree cover stands over it, which
     is what a species' own ``canopy`` band is read against -- it is how a wood
@@ -392,6 +399,7 @@ class GroundCover(Group):
                  card_radius: float = CARD_RADIUS,
                  far_radius: float = FAR_RADIUS,
                  mask: Optional[Callable[[Any, Any], Any]] = None,
+                 holes: Optional[Callable[[Any, Any], Any]] = None,
                  shade: Optional[Callable[[Any, Any], Any]] = None,
                  canopy: Optional[Callable[[Any, Any], Any]] = None,
                  sun: "tuple[float, float, float]" = CLUMP_SUN,
@@ -407,6 +415,10 @@ class GroundCover(Group):
         self.card_radius = max(float(card_radius), float(clump_radius))
         self.far_radius = max(float(far_radius), self.card_radius)
         self.mask = mask
+        #: Where the ground is not there, so nothing is seated on it. Kept
+        #: apart from :attr:`mask`, which says what grows on the ground there
+        #: is: an opening is not a kind of ground a plant does badly on.
+        self.holes = holes
         self.shade = shade
         #: How much tree cover stands over a place, which is what decides what
         #: grows there rather than how it is lit.
@@ -454,18 +466,21 @@ class GroundCover(Group):
     def _suits(self, rung: CoverRung) -> Callable[[Any, Any], Any]:
         """How well one species does at a place, in [0, 1].
 
-        Three things at once, because they all answer the same question and the
+        Four things at once, because they all answer the same question and the
         scatter can only be told once: the ground's own mask (where cover may
-        grow at all), the species' beds, and the canopy light it wants. A plant
+        grow at all), the openings cut through it (where there is no ground to
+        grow on), the species' beds, and the canopy light it wants. A plant
         scores 0 where any of them says no.
         """
-        ground, patches = self.mask, rung.patches
+        ground, patches, opened = self.mask, rung.patches, self.holes
         band, closure = rung.species.canopy, self.canopy
 
         def at(x: Any, z: Any) -> Any:
             fit = patches.weight(x, z)
             if ground is not None:
                 fit = fit * np.clip(np.asarray(ground(x, z), 'd'), 0.0, 1.0)
+            if opened is not None:
+                fit = fit * ~np.asarray(opened(x, z), dtype=bool)
             if band is not None and closure is not None:
                 fit = fit * _band(np.asarray(closure(x, z), 'd'), band)
             return fit

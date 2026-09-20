@@ -169,6 +169,52 @@ class TestWhereItDoesNot:
         assert float(cover.rungs[0].cards.pos[:, 0].min()) < -150.0
 
 
+class TestWhereTheGroundIsNotThere:
+    """A bore's mouth is a hole cut in the ground, and the height field under
+    it still answers with a height. What is seated on that answer without
+    asking whether the ground is there stands in the opening, in mid-air, in
+    plain view through the portal."""
+
+    def _hole(self, radius=60.0):
+        def holes(x, z):
+            return np.hypot(np.asarray(x, 'd'),
+                            np.asarray(z, 'd')) < radius
+        return holes
+
+    def test_nothing_grows_in_the_opening(self) -> None:
+        cover = _cover(card_radius=300.0, holes=self._hole())
+        cover.update((0.0, 0.0, 0.0))
+        away = np.hypot(cover.rungs[0].cards.pos[:, 0],
+                        cover.rungs[0].cards.pos[:, 2])
+        assert float(away.min()) >= 60.0
+
+    def test_and_it_grows_everywhere_else(self) -> None:
+        cover = _cover(card_radius=300.0, holes=self._hole())
+        cover.update((0.0, 0.0, 0.0))
+        assert len(cover.rungs[0].cards.pos) > 100
+
+    def test_a_hole_told_to_it_afterwards_is_in_time(self) -> None:
+        """A game stands the ground up from a tileset and finds out where the
+        bores are from the roads, which it reads second."""
+        cover = _cover(card_radius=300.0)
+        cover.holes = self._hole()
+        cover.update((0.0, 0.0, 0.0))
+        away = np.hypot(cover.rungs[0].cards.pos[:, 0],
+                        cover.rungs[0].cards.pos[:, 2])
+        assert float(away.min()) >= 60.0
+
+    def test_it_is_the_mask_and_the_hole_together(self) -> None:
+        """Neither answers the other's question: the mask says what ground
+        this plant grows on, the hole says whether there is ground at all."""
+        grew = _cover(card_radius=300.0, mask=lambda x, z: np.where(
+            np.asarray(x, 'd') > 0.0, 1.0, 0.0))
+        grew.holes = self._hole()
+        grew.update((0.0, 0.0, 0.0))
+        placed = grew.rungs[0].cards.pos
+        assert float(placed[:, 0].min()) > 0.0
+        assert float(np.hypot(placed[:, 0], placed[:, 2]).min()) >= 60.0
+
+
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
 

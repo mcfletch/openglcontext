@@ -352,6 +352,25 @@ class TestTheGroundCoverAWorldCarries:
         finally:
             terrain.shutdown()
 
+    def test_a_hole_in_the_ground_is_a_hole_in_the_cover(self,
+                                                         tmp_path) -> None:
+        """One predicate, told once. A game says where the ground is not there
+        and the mesh, the colliders and what grows on it all hear it -- so a
+        bore's mouth is an opening rather than an opening with grass standing
+        in it."""
+        def bore(x, z):
+            return np.hypot(np.asarray(x, 'd'), np.asarray(z, 'd')) < 40.0
+        terrain = TilesTerrain(self._covered(tmp_path), workers=1)
+        try:
+            terrain.holes = bore
+            assert terrain.cover.holes is bore
+            terrain.cover.update((0.0, 0.0, 0.0))
+            placed = terrain.cover.rungs[0].cards.pos
+            assert len(placed)
+            assert float(np.hypot(placed[:, 0], placed[:, 2]).min()) >= 40.0
+        finally:
+            terrain.shutdown()
+
 
 class TestTheForestIsLitByTheGroundItStandsOn:
     """One world, one answer about where the light is.

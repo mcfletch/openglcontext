@@ -142,6 +142,17 @@ for the whole world.
    `OpenGLContext.scenegraph.roadworks`, so the bake and the game take the same
    numbers from one place.
 
+   **Ground cover was the one reader the mask did not reach.** Trees, boulders
+   and loose stone are placed at bake time against the cleared corridor, and
+   measuring Beacon put none of them in an opening. Cover is not placed at
+   bake time: it is scattered around the camera every time that moves, seated
+   on `field.sample`, which answers with a height inside an opening as readily
+   as outside one — so a portal had grass standing in it, in mid-air. The
+   scatter now takes the same `holes` predicate, and `TilesTerrain` hands its
+   own to the cover it built, so a game that tells the terrain tells the
+   grass. Measured at Beacon's second portal: 1508 plants inside the mouth
+   before, 0 after, with 775,037 still growing around it.
+
 ## What the tiled path still needs, found while wiring it up
 
 Baking Beacon with `--ground tiles` and driving it shows two things that have

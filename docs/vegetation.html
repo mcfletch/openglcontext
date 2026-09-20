@@ -138,6 +138,18 @@ cover.update(camera_position)                    # once a frame</code></pre>
     mask and nothing else has to know about any of it. A control map has to be
     fine enough to resolve what it is masking: over four kilometres, 512 pixels
     is eight metres each and a road corridor is thinner than one of them.</p>
+  <p><strong>Where there is no ground it does not grow at all.</strong>
+    <code>holes(x, z) -&gt; mask</code> is the same predicate the terrain is
+    drawn and collided with (<a href="terrain.html#holes">holes in the
+    ground</a>): true where the ground is not there, over a tunnel's bore say.
+    A height field answers with a height inside an opening as readily as
+    outside one, so cover seated on that answer alone stands in the portal in
+    mid-air. A <code>TilesTerrain</code> hands its own <code>holes</code> to
+    the cover it built, so a game that tells the terrain tells the grass; set
+    <code>cover.holes</code> directly for cover built by hand. It is kept apart
+    from <code>mask</code> because the two answer different questions: the mask
+    says what grows on the ground there is, and an opening is not a kind of
+    ground a plant does badly on.</p>
   <p><strong>How much it gathers is the species' own.</strong>
     <code>patchiness</code> runs from 0 &mdash; as likely here as anywhere,
     which is what a grass or a small flower wants &mdash; to 1, gathered into

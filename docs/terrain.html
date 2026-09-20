@@ -89,6 +89,12 @@ which one it wants depends on whether it fits in memory.</p>
   it, and vegetation buried to the tips.
   <code>tests/unit/test_heightfield_is_the_drawn_surface.py</code> holds the three
   readers to each other.</p>
+  <p><strong>Where the ground has been cut away, a fourth thing has to be
+  asked.</strong> <code>sample</code> answers with a height inside an
+  <a href="#holes">opening</a> as readily as outside one &mdash; it reads the
+  grid, which has no notion of what was cut out of the mesh built from it. So a
+  reader that seats something on the ground asks <code>holes</code> as well, and
+  the three agree again.</p>
   <p><strong>A height function is not the ground; the mesh built from it is.</strong>
   The same rule applies wherever a surface is meshed by sampling a function at
   vertices &mdash; the <a href="tiles3d.html">streamed tiles</a>,
@@ -180,19 +186,24 @@ ground.update(car_position)                        # once a frame</code></pre>
   an hour of driving costs what one view of the world costs. Chunks are cut on the
   field's own grid lines and share their edge rows, so two neighbours agree
   exactly where they meet.</p>
-  <p><strong><code>holes</code></strong> is how something that passes <em>through</em>
+  <p id="holes"><strong><code>holes</code></strong> is how something that passes <em>through</em>
   the ground says so. A tunnel's bore runs inside the hill and the hill's surface
   is still drawn over it; left in the physics world that surface is a wall across
   the road. <code>holes(x, z) -&gt; mask</code> is true where the ground is not
   there, and the bore's own lining is what the vehicle then drives through.</p>
-  <p>The same callable goes to <code>HeightField.mesh()</code> and to the
-  colliders, so the surface a player sees and the surface a car meets are one
-  surface:</p>
+  <p>The same callable goes to <code>HeightField.mesh()</code>, to the colliders
+  and to whatever is seated on the ground, so the surface a player sees, the
+  surface a car meets and the surface things stand on are one surface:</p>
   <pre><code>from OpenGLContext.scenegraph.roadworks import bore_opening
 
 mouth = bore_opening(bore_centreline, field.sample, profile=road_profile)
-terrain.holes = mouth                              # what is drawn
+terrain.holes = mouth                              # what is drawn, and what grows
 ground = HeightFieldColliders(physics_world, field, holes=mouth)</code></pre>
+  <p>A <code>TilesTerrain</code> passes what it is given to its
+  <a href="vegetation.html#wheretheygrow">ground cover</a> as well. A height field answers
+  with a height inside an opening as readily as outside one, so anything placed
+  by asking it alone stands in the portal in mid-air; a reader that seats
+  something on the ground asks <code>holes</code> too.</p>
   <p><code>OpenGLContext.scenegraph.terrain.holes.cut</code> is what both use to
   apply it. The triangles the opening's edge crosses are <em>cut on that edge</em>
   &mdash; the crossing is found by halving, to under a millimetre on a cell metres
