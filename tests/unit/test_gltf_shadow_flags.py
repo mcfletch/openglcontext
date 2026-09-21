@@ -1,8 +1,8 @@
 """A file saying which of its objects cast shadows.
 
 glTF has no flag for it, so the engine reads one out of ``extras``:
-``OGLC_castsShadow: false`` on a node means the shapes under it are lit and
-receive shadows like anything else, and are left out of the depth pass. A room
+``OGLC_castsShadow: false`` on a node means that node's geometry is lit and
+receives shadows like anything else, and is left out of the depth pass. A room
 is the case it is for -- an interior's walls stand between every light and
 everything inside, so a hall whose shell casts is a hall with the lights
 switched off.
@@ -59,24 +59,24 @@ def test_saying_it_does_cast_is_the_default_said_out_loud():
     assert shapes[0].castsShadow
 
 
-def test_the_flag_reaches_the_children_of_the_node_that_carries_it():
-    """A room marked at its group is a room, not one slab of one."""
+def test_the_flag_says_what_one_node_does():
+    """It does not reach a node's children: that is how the tools that author
+    it treat shadow visibility, and a group is not a decision about what
+    stands inside it."""
     _scene, shapes = _loaded(SceneNode(
         extras={FLAG: False},
         children=[SceneNode(mesh=_slab()), SceneNode(mesh=_slab(size=2.0))],
     ))
     assert len(shapes) == 2
-    assert [bool(shape.castsShadow) for shape in shapes] == [False, False]
+    assert [bool(shape.castsShadow) for shape in shapes] == [True, True]
 
 
-def test_a_child_cannot_cast_from_inside_a_group_that_does_not():
-    """The same AND the specification gives node visibility, for the same
-    reason: what an ancestor settles, a descendant does not reopen."""
+def test_a_child_speaks_for_itself():
     _scene, shapes = _loaded(SceneNode(
-        extras={FLAG: False},
-        children=[SceneNode(mesh=_slab(), extras={FLAG: True})],
+        children=[SceneNode(mesh=_slab(), extras={FLAG: False}),
+                  SceneNode(mesh=_slab(size=2.0))],
     ))
-    assert bool(shapes[0].castsShadow) is False
+    assert sorted(bool(shape.castsShadow) for shape in shapes) == [False, True]
 
 
 def test_two_nodes_on_one_mesh_keep_their_own_answer():
@@ -130,7 +130,7 @@ def test_a_light_on_a_node_that_does_not_cast_is_a_fill():
     assert bool(_sun(extras=False).castShadows) is False
 
 
-def test_a_light_that_asks_to_cast_inside_a_group_that_does_not_still_does_not():
+def test_a_light_on_a_marked_node_does_not_cast_even_asking_to():
     assert bool(_sun(extras=False, casts=True).castShadows) is False
 
 

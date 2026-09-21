@@ -417,8 +417,12 @@ def _casts_shadow(node: Any) -> bool:
     is a hall with the lights switched off. Such a shell is still lit and still
     *receives* shadows -- not casting is not being absent.
 
-    The flag is ANDed down the node graph, as ``KHR_node_visibility`` is: what
-    a group settles for a room, a slab inside it does not reopen.
+    It says what *one* node does and does not reach that node's children, which
+    is how the tools that author it treat shadow visibility -- a group is not a
+    decision about what stands inside it. It does carry to a node's
+    ``MSFT_lod`` alternatives, since those are the same object drawn instead: a
+    shadow appearing as a viewer walks closer would be the level switch made
+    visible.
     """
     extras = getattr(node, 'extras', None)
     if not isinstance(extras, dict) or CASTS_SHADOW not in extras:
@@ -648,7 +652,7 @@ class _SceneBuilder:
         # so the flag threads down the recursion as `parent_visible`. The authored
         # initial flag may itself be a KHR_animation_pointer target baked in above.
         node_visible = parent_visible
-        node_casts = parent_casts and _casts_shadow(node)
+        node_casts = parent_casts and _casts_shadow(node)   # parent_casts: an MSFT_lod alternative of a marked node
         placements: Optional[np.ndarray] = None
         if isinstance(node_ext, dict):
             nv = node_ext.get('KHR_node_visibility')
@@ -694,8 +698,7 @@ class _SceneBuilder:
         if self.audio_document.emitters:
             children.extend(self._audio_emitters(node))
         for child in (node.children or []):
-            children.append(self.build(child, world, ancestry, node_visible,
-                                       parent_casts=node_casts))
+            children.append(self.build(child, world, ancestry, node_visible))
         return self._place(node, node_index, group, children, world)
 
     def _place(self, node: Any, node_index: int, group: "Transform",

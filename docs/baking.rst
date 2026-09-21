@@ -176,6 +176,24 @@ the engine's half of the split. The baker, the half that turns a world into a
 streamable tileset, comes with `OpenGLContext-editor
 <https://github.com/mcfletch/openglcontext-editor>`__.
 
+Saying what a thing is
+~~~~~~~~~~~~~~~~~~~~~~
+
+A material and a ``SceneNode`` each carry two slots for what the geometry alone
+cannot say. ``extras`` is written through uninterpreted — the format's own place
+for what an application knows — and ``hook`` becomes an :ref:`OGLC_hook <hooks>`
+extension block, which is how a baked world says that this surface is water and
+that object is a spawn point:
+
+.. code-block:: python
+
+   lake.hook = {'kind': 'water', 'style': 'lake', 'depth': 4.0}
+   writer.add_node(SceneNode(mesh=lake, extras={'OGLC_castsShadow': 0}))
+
+Both survive a load and a re-bake, so an editor can open a world, move the lake
+and write it out still marked. A reader that has never heard of either draws the
+same geometry it always would.
+
 What the baker produces
 -----------------------
 
