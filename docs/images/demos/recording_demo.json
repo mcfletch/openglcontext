@@ -1,9 +1,9 @@
 {
-  "frames": 81,
+  "frames": 60,
   "git": "v3.0.0a4-66-ge405489-dirty",
-  "id": "demos/particles_effects",
+  "id": "demos/recording_demo",
   "licence": "BSD-3-Clause",
-  "module": "particles_effects",
+  "module": "recording_demo",
   "producer": "script",
   "size": [
     1100,

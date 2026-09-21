@@ -57,6 +57,11 @@ class TestContext( BaseContext ):
     not to hide what it is moving.'''
     GIZMO_SIZE = 2.0
 
+    '''Which control point is chosen when the demo opens.  Index 3 of the
+    first net is the one six units up, at the top of a hill, where the handle
+    stands clear of the surface under it.'''
+    OPENING_SELECTION = 3
+
     def OnInit( self ):
         """Build the Molehill scene, then make its control points editable"""
         '''The parent fills in self.sg and self.shapes; everything below
@@ -102,6 +107,12 @@ three coloured arms to move it.  Escape abandons a drag.""")
             "mousemove", buttons = (0,), function = self.OnDrag )
         self.addEventHandler(
             "keyboard", name = "<escape>", state = 1, function = self.OnCancel )
+
+        '''It opens with one point already chosen, so the handle is on screen
+        before anything is clicked: a reader who has never seen one has
+        something to aim at.  Clicking another point moves the handle to it.'''
+        if self.nets:
+            self.OnSelect( self.nets[0], self.OPENING_SELECTION )
 
     def OnPress( self, event ):
         """Grab an arm of the handle, or choose the control point under the cursor"""

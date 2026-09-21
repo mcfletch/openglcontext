@@ -8,7 +8,7 @@
   ],
   "credit": "the GLinting Steel track editor",
   "frames": 150,
-  "git": "19d98d2-dirty",
+  "git": "v3.0.0a4-66-ge405489-dirty",
   "id": "showcase/track-editor",
   "licence": "BSD-3-Clause",
   "producer": "command",

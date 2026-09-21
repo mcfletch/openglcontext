@@ -10,11 +10,11 @@
   "credit": "the forest demo",
   "frames": 90,
   "git": "v3.0.0a4-66-ge405489-dirty",
-  "id": "showcase/forest-walk",
+  "id": "pages/forest-instancing",
   "licence": "BSD-3-Clause; CC0 assets",
   "producer": "command",
   "size": [
-    1200,
-    675
+    1280,
+    720
   ]
 }

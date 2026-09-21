@@ -1,9 +1,9 @@
 {
-  "frames": 81,
+  "frames": 60,
   "git": "v3.0.0a4-66-ge405489-dirty",
-  "id": "demos/particles_effects",
+  "id": "demos/instancing_batched",
   "licence": "BSD-3-Clause",
-  "module": "particles_effects",
+  "module": "instancing_batched",
   "producer": "script",
   "size": [
     1100,
