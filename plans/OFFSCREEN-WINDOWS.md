@@ -158,10 +158,25 @@ vendor's GLSL front end, which is most of the value of running them at all.
   framebuffer: a `CGLContext` would have to bind a framebuffer object and make
   every pass that reads framebuffer zero read that instead. Worth doing, and a
   larger change than this one.
-- **A windowless mode for the Linux suite.** `OPENGLCONTEXT_TEST_WINDOWING`
-  has a provider for Windows only; the Linux one would build on `eglcontext`'s
-  pbuffer path. The suite there already runs headless through
-  `PYOPENGL_PLATFORM=egl` with a hidden GLFW window, so this buys a run with no
-  windowing library installed rather than a run with no display.
+- ~~**A windowless mode for the Linux suite.**~~ ✅ Landed.
+  `OPENGLCONTEXT_TEST_WINDOWING=offscreen` runs on an EGL pbuffer on Linux,
+  built on `eglcontext`'s path as planned. The EGL machinery that was woven
+  into `EGLContext`'s methods is now module-level — `selectDevice`,
+  `openDisplay`, `chooseConfig`, `createContext`, `createPbufferSurface`,
+  `contextAttributes` — with `PbufferContext` composing them into a bare
+  context and `EGLContext` delegating to the same functions, so there is one
+  copy of each call. `contextAttributes` is new: `EGLContext` names neither
+  profile nor version and takes what the driver makes, which a harness cannot
+  do, since a case written against GLSL 330 in a core profile has to be given
+  one.
+
+  **Writing it found a defect in `EGLContext`.** `eglGetPlatformDisplayEXT`
+  answers the *same* display for the same device, and `eglTerminate`
+  invalidates every context and surface on it, so the release path took any
+  sibling context down with it — `EGL_NOT_INITIALIZED` from
+  `eglDestroySurface` on the second one out. Displays are use-counted now
+  (`openDisplay`/`closeDisplay`) and the last user out terminates. The
+  harness's `test_two_can_be_alive_at_once` is what caught it, and holds it
+  fixed.
 - **`CommercialRefrigerator` needs one `--bless`** on the machine the baseline
   corpus was blessed on (NVIDIA; the sidecar records which).

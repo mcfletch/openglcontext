@@ -126,10 +126,25 @@ container with no desktop, a machine with no GLFW installed:
 
    OPENGLCONTEXT_TEST_WINDOWING=offscreen pytest tests/unit
 
-The backend is the platform's: a :doc:`WGL pbuffer <offscreen>` on Windows. A
-platform with none says so rather than opening a window the run asked not to
-have, and ``OPENGLCONTEXT_TEST_WINDOWING=glfw`` (the default) is the hidden
-window described above.
+The backend is the platform's: an :doc:`EGL pbuffer <offscreen>` on Linux, a
+WGL pbuffer on Windows. A platform with none — macOS today — says so rather
+than opening a window the run asked not to have, and
+``OPENGLCONTEXT_TEST_WINDOWING=glfw`` (the default) is the hidden window
+described above.
+
+The Linux one renders on an EGL *device* rather than through a display server,
+so it needs neither ``DISPLAY`` nor ``WAYLAND_DISPLAY`` nor a windowing
+library. That is the difference from the default: a hidden GLFW window is
+already headless enough for a machine with no desktop, while this also runs
+where GLFW is not installed. ``OPENGLCONTEXT_EGL_DEVICE`` pins which device a
+run uses, as it does for ``EGLContext`` — see :doc:`offscreen`.
+``OpenGLContext.eglcontext.PbufferContext`` is the context itself, usable on
+its own::
+
+   from OpenGLContext.eglcontext import PbufferContext
+
+   with PbufferContext(width=96, height=48) as gl:
+       glReadPixels(0, 0, gl.width, gl.height, GL_RGB, GL_UNSIGNED_BYTE)
 
 **What a test gets is the same either way** — a current context of the profile
 and size it asked for. What differs is the handle the fixture yields, which is

@@ -83,11 +83,25 @@ log = logging.getLogger(__name__)
 __all__ = (
     'EGLContext',
     'EGLContextError',
+    'PROFILES',
+    'PbufferContext',
+    'chooseConfig',
     'chooseDevice',
+    'closeDisplay',
     'configAttributes',
+    'contextAttributes',
+    'createContext',
+    'createPbufferSurface',
     'devices',
+    'openDisplay',
     'prefersSoftware',
+    'selectDevice',
 )
+
+#: The profiles :func:`contextAttributes` accepts.  ``'any'`` names neither a
+#: profile nor a version, which is the only thing to ask for below GL 3.2,
+#: where the profile mask does not exist.
+PROFILES = ('core', 'compatibility', 'any')
 
 #: Values of ``LIBGL_ALWAYS_SOFTWARE`` that mean "no".  Anything else is a yes,
 #: because Mesa itself treats the variable as set-or-not.
@@ -226,6 +240,254 @@ def _eglArray(values: Sequence[int]) -> Any:
     return (EGL.EGLint * len(values))(*[int(value) for value in values])
 
 
+def contextAttributes(
+    profile: str = 'core',
+    version: Sequence[int] = (3, 3),
+    forwardCompatible: bool = False,
+) -> List[int]:
+    """The ``eglCreateContext`` attribute list for this profile and version.
+
+    ``profile`` is one of :data:`PROFILES`.  ``'any'`` asks for nothing at all,
+    which is what gets the context the implementation makes by default -- below
+    GL 3.2 there is no profile mask to ask about.  A context asked for as core
+    is additionally forward-compatible where ``forwardCompatible`` says so,
+    which is the pair the windowed backends ask for.
+    """
+    if profile not in PROFILES:
+        # A ValueError rather than an EGLContextError: the name came from the
+        # caller's own source, so this is a typo to fix and not a machine that
+        # cannot render.  Callers turn the latter into a skip.
+        raise ValueError(
+            'no EGL profile named %r (expected one of %s)'
+            % (profile, ', '.join(PROFILES)))
+    if profile == 'any':
+        return [EGL.EGL_NONE]
+    major, minor = version
+    attributes: List[int] = [
+        EGL.EGL_CONTEXT_MAJOR_VERSION, int(major),
+        EGL.EGL_CONTEXT_MINOR_VERSION, int(minor),
+        EGL.EGL_CONTEXT_OPENGL_PROFILE_MASK,
+        (EGL.EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT if profile == 'core'
+         else EGL.EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT),
+    ]
+    if forwardCompatible:
+        attributes += [EGL.EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE, EGL.EGL_TRUE]
+    attributes.append(EGL.EGL_NONE)
+    return attributes
+
+
+def selectDevice(environ: Optional[Mapping[str, str]] = None) -> DeviceInfo:
+    """The EGL device to render on, or say that this system offers none."""
+    available = devices()
+    # chooseDevice answers None only for an empty list, so the two questions --
+    # are there any, and which -- are one question here.
+    device = chooseDevice(available, environ) if available else None
+    if device is None:
+        raise EGLContextError(
+            'no EGL devices; this system cannot create an offscreen EGL '
+            'context (EGL_EXT_device_enumeration is missing or reports none)'
+        )
+    log.info('EGL offscreen context on %r of %d device(s)', device, len(available))
+    return device
+
+
+#: How many live contexts each initialised EGL display has.
+#: ``eglGetPlatformDisplayEXT`` answers the *same* display for the same device,
+#: and ``eglTerminate`` invalidates every context and surface on it, so a
+#: context that terminated on its way out would take its siblings with it.
+#: Keyed by the handle rather than by the wrapper, which is a new object each
+#: call.  A process holds one or two of these, so the map never grows.
+_DISPLAY_USES: dict = {}
+
+
+def _displayKey(display: Any) -> int:
+    """The address the display wrapper carries, which is its identity."""
+    return ctypes.cast(display, ctypes.c_void_p).value or 0
+
+
+def openDisplay(device: DeviceInfo) -> Any:
+    """An initialised EGL display for ``device``, counted as one more user.
+
+    :func:`closeDisplay` gives it back.  Initialising a display that is already
+    initialised is EGL's own idempotent call, so the count is what decides when
+    it may be terminated rather than the initialisation.
+    """
+    display = eglGetPlatformDisplayEXT(EGL_PLATFORM_DEVICE_EXT, device.handle, None)
+    if not display or display == EGL.EGL_NO_DISPLAY:
+        raise EGLContextError('eglGetPlatformDisplayEXT gave no display for %r' % (device,))
+    major, minor = EGL.EGLint(), EGL.EGLint()
+    if not EGL.eglInitialize(display, major, minor):
+        raise EGLContextError('eglInitialize failed for %r' % (device,))
+    key = _displayKey(display)
+    _DISPLAY_USES[key] = _DISPLAY_USES.get(key, 0) + 1
+    log.debug('EGL %d.%d on %r, %d user(s)', major.value, minor.value,
+              device, _DISPLAY_USES[key])
+    return display
+
+
+def closeDisplay(display: Any) -> bool:
+    """Give back one use of ``display``; terminate it on the last.
+
+    Answers whether it was terminated, which is what a test asking "did that
+    one take the display down with it" wants to know.
+    """
+    key = _displayKey(display)
+    remaining = _DISPLAY_USES.get(key, 0) - 1
+    if remaining > 0:
+        _DISPLAY_USES[key] = remaining
+        return False
+    _DISPLAY_USES.pop(key, None)
+    EGL.eglTerminate(display)
+    return True
+
+
+def chooseConfig(display: Any, attributes: Sequence[int], asked: str = '') -> Any:
+    """The first EGL config on ``display`` matching ``attributes``.
+
+    ``asked`` describes the request in the error raised where nothing matches,
+    since the attribute list itself is a flat array of enum values and tells a
+    reader very little.
+    """
+    if not EGL.eglBindAPI(EGL.EGL_OPENGL_API):
+        raise EGLContextError('eglBindAPI(EGL_OPENGL_API) failed; no desktop GL here')
+    configs = (EGL.EGLConfig * 1)()
+    found = (EGL.EGLint * 1)()
+    if not EGL.eglChooseConfig(
+        display, _eglArray(attributes), configs, 1, found
+    ) or not found[0]:
+        raise EGLContextError('no EGL config matched the requested buffers %s' % (asked,))
+    return configs[0]
+
+
+def createContext(display: Any, config: Any,
+                  attributes: Optional[Sequence[int]] = None) -> Any:
+    """A GL context on ``display``, sharing with nothing.
+
+    ``attributes`` of None asks for no profile and no version, which is the
+    context the implementation makes by default; :func:`contextAttributes`
+    builds one that names them.
+    """
+    context = EGL.eglCreateContext(
+        display, config, EGL.EGL_NO_CONTEXT,
+        None if attributes is None else _eglArray(attributes))
+    if not context or context == EGL.EGL_NO_CONTEXT:
+        raise EGLContextError('eglCreateContext failed')
+    return context
+
+
+def createPbufferSurface(display: Any, config: Any, width: int, height: int) -> Any:
+    """A pbuffer surface of this size: the drawable there is no window for."""
+    attributes = _eglArray([EGL.EGL_WIDTH, width, EGL.EGL_HEIGHT, height, EGL.EGL_NONE])
+    surface = EGL.eglCreatePbufferSurface(display, config, attributes)
+    if not surface or surface == EGL.EGL_NO_SURFACE:
+        raise EGLContextError('eglCreatePbufferSurface failed for %dx%d' % (width, height))
+    return surface
+
+
+class PbufferContext:
+    """A GL context on an EGL pbuffer, current from construction to release.
+
+    The surface alone, with no scenegraph, no event loop and no engine caches
+    behind it: what a caller wanting a windowless context outside the engine's
+    own Context classes builds on, and what
+    :mod:`OpenGLContext.testing.glcontext` renders on where a run asks for no
+    window.  :class:`EGLContext` is the same surface driven as an OpenGLContext
+    context.
+
+    ``width`` and ``height`` stay readable afterwards, so a caller can ask how
+    big the framebuffer is without having kept the numbers itself::
+
+        with PbufferContext(width=96, height=48) as gl:
+            glReadPixels(0, 0, gl.width, gl.height, GL_RGB, GL_UNSIGNED_BYTE)
+
+    A pbuffer is single-buffered, so the frame just drawn is in the front
+    buffer rather than waiting on a swap; ``glFlush`` is what makes it
+    readable, and :meth:`flush` is that call named.
+    """
+
+    #: The device this was built on; a caller reporting what it got reads it.
+    device: Optional[DeviceInfo] = None
+    display: Any = None
+    context: Any = None
+    surface: Any = None
+
+    def __init__(self, width: int = 256, height: int = 256,
+                 profile: str = 'core',
+                 version: Sequence[int] = (3, 3),
+                 forwardCompatible: bool = False,
+                 depthBuffer: int = 24, stencilBuffer: int = 8,
+                 alpha: bool = False,
+                 environ: Optional[Mapping[str, str]] = None) -> None:
+        self.width = int(width)
+        self.height = int(height)
+        try:
+            self.device = selectDevice(environ)
+            self.display = openDisplay(self.device)
+            config = chooseConfig(
+                self.display,
+                configAttributes(depthBuffer=depthBuffer,
+                                 stencilBuffer=stencilBuffer, alpha=alpha),
+                'depth=%s stencil=%s alpha=%s' % (depthBuffer, stencilBuffer, alpha))
+            self.context = createContext(
+                self.display, config,
+                contextAttributes(profile, version, forwardCompatible))
+            self.surface = createPbufferSurface(
+                self.display, config, self.width, self.height)
+            self.make_current()
+        except Exception:
+            # A half-built context still holds a display and perhaps a surface,
+            # and a caller that only ever sees the exception has no handle to
+            # give them back with.
+            self.release()
+            raise
+
+    def make_current(self) -> None:
+        """Bind this context and its surface to the calling thread.
+
+        Named as :class:`OpenGL.WGL.offscreen.OffscreenContext` names it: a
+        caller holding a windowless context of whichever platform it is on
+        drives it through the same two calls.
+        """
+        if not EGL.eglMakeCurrent(
+            self.display, self.surface, self.surface, self.context
+        ):
+            raise EGLContextError('eglMakeCurrent failed')
+
+    def flush(self) -> None:
+        """Finish the frame so its pixels can be read back."""
+        glFlush()
+
+    def release(self) -> None:
+        """Give back the EGL objects this holds.  Safe to call twice.
+
+        Callable part-way through construction, where some of them do not exist
+        yet.
+        """
+        if self.display is None:
+            return
+        EGL.eglMakeCurrent(
+            self.display, EGL.EGL_NO_SURFACE, EGL.EGL_NO_SURFACE, EGL.EGL_NO_CONTEXT
+        )
+        if self.surface is not None:
+            EGL.eglDestroySurface(self.display, self.surface)
+            self.surface = None
+        if self.context is not None:
+            EGL.eglDestroyContext(self.display, self.context)
+            self.context = None
+        closeDisplay(self.display)
+        self.display = None
+
+    def __enter__(self) -> 'PbufferContext':
+        return self
+
+    def __exit__(self, *exception: Any) -> Literal[False]:
+        self.release()
+        return False
+
+    def __repr__(self) -> str:
+        return '<%s %dx%d>' % (self.__class__.__name__, self.width, self.height)
+
+
 class EGLContext(
     viewplatformmixin.ViewPlatformMixin,
     InteractiveContext,
@@ -317,31 +579,12 @@ class EGLContext(
     # -- construction, one step per EGL call that can fail ------------------
 
     def _selectDevice(self) -> DeviceInfo:
-        available = devices()
-        # chooseDevice answers None only for an empty list, so the two
-        # questions -- are there any, and which -- are one question here.
-        device = chooseDevice(available) if available else None
-        if device is None:
-            raise EGLContextError(
-                'no EGL devices; this system cannot create an offscreen EGL '
-                'context (EGL_EXT_device_enumeration is missing or reports none)'
-            )
-        log.info('EGL offscreen context on %r of %d device(s)', device, len(available))
-        return device
+        return selectDevice()
 
     def _openDisplay(self, device: DeviceInfo) -> Any:
-        display = eglGetPlatformDisplayEXT(EGL_PLATFORM_DEVICE_EXT, device.handle, None)
-        if not display or display == EGL.EGL_NO_DISPLAY:
-            raise EGLContextError('eglGetPlatformDisplayEXT gave no display for %r' % (device,))
-        major, minor = EGL.EGLint(), EGL.EGLint()
-        if not EGL.eglInitialize(display, major, minor):
-            raise EGLContextError('eglInitialize failed for %r' % (device,))
-        log.debug('EGL %d.%d on %r', major.value, minor.value, device)
-        return display
+        return openDisplay(device)
 
     def _chooseConfig(self, definition: Any) -> Any:
-        if not EGL.eglBindAPI(EGL.EGL_OPENGL_API):
-            raise EGLContextError('eglBindAPI(EGL_OPENGL_API) failed; no desktop GL here')
         attributes = configAttributes(
             depthBuffer=definition.depthBuffer if definition.depthBuffer > 0 else 24,
             stencilBuffer=definition.stencilBuffer,
@@ -350,35 +593,22 @@ class EGLContext(
             multisampleSamples=max(0, definition.multisampleSamples),
             multisampleBuffer=max(0, definition.multisampleBuffer),
         )
-        configs = (EGL.EGLConfig * 1)()
-        found = (EGL.EGLint * 1)()
-        if not EGL.eglChooseConfig(
-            self.display, _eglArray(attributes), configs, 1, found
-        ) or not found[0]:
-            raise EGLContextError(
-                'no EGL config matched the requested buffers '
-                '(depth=%s stencil=%s alpha=%s samples=%s)'
-                % (
-                    definition.depthBuffer,
-                    definition.stencilBuffer,
-                    definition.alpha,
-                    definition.multisampleSamples,
-                )
-            )
-        return configs[0]
+        return chooseConfig(
+            self.display, attributes,
+            '(depth=%s stencil=%s alpha=%s samples=%s)'
+            % (
+                definition.depthBuffer,
+                definition.stencilBuffer,
+                definition.alpha,
+                definition.multisampleSamples,
+            ),
+        )
 
     def _createContext(self, config: Any) -> Any:
-        context = EGL.eglCreateContext(self.display, config, EGL.EGL_NO_CONTEXT, None)
-        if not context or context == EGL.EGL_NO_CONTEXT:
-            raise EGLContextError('eglCreateContext failed')
-        return context
+        return createContext(self.display, config)
 
     def _createSurface(self, config: Any, width: int, height: int) -> Any:
-        attributes = _eglArray([EGL.EGL_WIDTH, width, EGL.EGL_HEIGHT, height, EGL.EGL_NONE])
-        surface = EGL.eglCreatePbufferSurface(self.display, config, attributes)
-        if not surface or surface == EGL.EGL_NO_SURFACE:
-            raise EGLContextError('eglCreatePbufferSurface failed for %dx%d' % (width, height))
-        return surface
+        return createPbufferSurface(self.display, config, width, height)
 
     # -- the Context contract ----------------------------------------------
 
@@ -510,7 +740,7 @@ class EGLContext(
         if self.context is not None:
             EGL.eglDestroyContext(self.display, self.context)
             self.context = None
-        EGL.eglTerminate(self.display)
+        closeDisplay(self.display)
         self.display = None
 
     def __enter__(self) -> 'EGLContext':
