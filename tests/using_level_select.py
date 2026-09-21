@@ -3,12 +3,11 @@
 
 [using_level_select.py-screen-0001.png Screenshot]
 
-A drop-down is the right control for a setting and the wrong one for a
-level: what tells one arena from another is what it looks like, and a list
-of names makes a player open each in turn to find out which is which.
-`OpenGLContext.ui.gallery.Carousel` is a band of pictures with their names
-underneath, rolled by the arrows, the keyboard, or a click on any picture
-already on screen.
+A level carousel lets the user select a level by name and image, so that
+they have some indication of the nature and quality of the level they will
+download.  `OpenGLContext.ui.gallery.Carousel` is the widget: a band of
+pictures with their names underneath, rolled by the arrows, the keyboard,
+or a click on any picture already on screen.
 
 Keys and mouse:
 

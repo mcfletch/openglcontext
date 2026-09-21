@@ -250,10 +250,9 @@ The library
 -----------
 
 ``oglc-view`` with nothing named is not a usage message. It opens a menu, and
-from it a shelf of models and worlds shown by **their own pictures** — because
-what tells one sample from another is what it looks like, and a list of names
-like ``MetalRoughSpheresNoTextures`` makes you open each in turn to find out
-which is which.
+from it a shelf of models and worlds shown by their own pictures, so that you
+can see what a sample is before opening it rather than reading a name like
+``MetalRoughSpheresNoTextures``.
 
 The shelf is *derived* from the demo roster the capture harness already uses
 (``OpenGLContext.loaders.gltf_demos``), so the library and the reference
