@@ -69,6 +69,11 @@ _PAGE = re.compile(r'(?P<path>/?[\w./-]*[\w-])\.html$')
 #: about this one, and so is the alt text without also being the caption.
 _UNCAPTIONED = frozenset({'screenshot', 'screen shot', 'image', 'picture'})
 
+#: A bullet: a star or a dash, and then a space.  The space is what tells a
+#: marker from a word in emphasis at the head of a paragraph, and from the
+#: ``--`` of a definition line.
+_BULLET = re.compile(r'[*-][ \t]')
+
 #: ``term -- definition``, which is a definition list.
 _DEFINITION = re.compile(r"""[ \t]*(?P<term>\w+)\W*--\W*(?P<definition>.*)""")
 
@@ -77,18 +82,18 @@ _DEFINITION = re.compile(r"""[ \t]*(?P<term>\w+)\W*--\W*(?P<definition>.*)""")
 _ESCAPE = re.compile(r'([\\*`|])')
 _TRAILING = re.compile(r'(?<=\w)_(?=\s|$|[.,;:!?)\]])')
 
-#: reST inline markup a script wrote on purpose: a literal, a role, a
-#: reference, interpreted text under the default role, or emphasis.  The
-#: scripts document themselves in reST and mean these as markup, so they are
-#: carried through rather than escaped.  A star with a word tight against it
-#: on the outside is arithmetic or an argument list rather than emphasis, and
-#: one that opens nothing is an asterisk.
 #: What a span may hold: anything but its own marker, over as many lines as
 #: the docstring happened to wrap it across.  A block is split on blank lines
 #: before any of this runs, so a marker with no partner runs to the end of its
 #: paragraph at worst.
 _SPAN = r'(?:[^%s\n]|\n(?![ \t]*\n))'
 
+#: reST inline markup a script wrote on purpose: a literal, a role, a
+#: reference, interpreted text under the default role, or emphasis.  The
+#: scripts document themselves in reST and mean these as markup, so they are
+#: carried through rather than escaped.  A star with a word tight against it
+#: on the outside is arithmetic or an argument list rather than emphasis, and
+#: one that opens nothing is an asterisk.
 _RST_INLINE = re.compile(
     r'(?::[\w.+:-]+:)?``%(tick)s+``'    # a literal, with or without a role
     r'|:[\w.+:-]+:`%(tick)s+`'          # a role
@@ -352,7 +357,7 @@ def _bullets(block: str) -> str:
     """A bulleted list; a line that is not a bullet continues the one above."""
     items: list[list[str]] = []
     for line in block.splitlines():
-        if line.lstrip().startswith(('*', '-')) and not line.lstrip().startswith('--'):
+        if _BULLET.match(line.lstrip()):
             items.append([line.lstrip()[1:].strip()])
         elif items and line.strip():
             items[-1].append(line.strip())
@@ -426,7 +431,7 @@ def commentary(text: str) -> list[Block]:
             head, body = lead
             out.append(Block('rst', wrap(inline(head))))
             out.append(Block('rst', '::\n\n%s' % (_indent(body, '   '),)))
-        elif stripped.lstrip().startswith(('*', '-')):
+        elif _BULLET.match(stripped.lstrip()):
             out.append(Block('rst', _bullets(stripped)))
         elif _DEFINITION.match(stripped):
             out.append(Block('rst', _definitions(stripped)))

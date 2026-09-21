@@ -154,14 +154,14 @@ def write_model():
 
 The format is geometry and surface colour, and a program supplies the rest:
 
-* *No animation.*  Anything that moves is moved from code, or the model is
+* No animation - anything that moves is moved from code, or the model is
   converted to glTF, which does carry it --
   :doc:`Playing a canned animation <using_clips>`.
-* *No lights and no camera.*  The scene above provides both.
-* *No units, no up axis.*  A model may arrive a thousand times too large or
+* No lights and no camera - the scene above provides both.
+* No units and no up axis - a model may arrive a thousand times too large or
   lying on its side; a scale and a rotation on the ``Transform`` above it
   are where that is settled.
-* *No skinning.*  A rigged character wants glTF.
+* No skinning - a rigged character wants glTF.
 
 For anything beyond a static prop, glTF is the format to convert to --
 Blender reads OBJ and writes glTF, and

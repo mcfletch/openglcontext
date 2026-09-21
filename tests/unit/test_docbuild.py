@@ -77,6 +77,12 @@ class TestProse:
         out = self.render('* a bullet\n  carried on\n* another')
         assert '- a bullet carried on' in out
 
+    def test_a_paragraph_opening_with_emphasis_is_not_a_bullet(self):
+        """A marker is a star and a space; ``*Which file*`` is emphasis."""
+        out = self.render('*Which file to write.*  The menu offers three.')
+        assert out.startswith('*Which file to write.*')
+        assert '- ' not in out
+
     def test_term_definitions_become_a_definition_list(self):
         out = self.render('target -- which buffer type is intended')
         assert out.splitlines()[0] == 'target'

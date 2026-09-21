@@ -3,11 +3,12 @@ Levels of detail
 
 .. rst-class:: introduction
 
-A model far from the camera should cost the triangles it is worth rather than
-the triangles it has. This page is the whole of that in this engine: the demo
-you can walk through, how a level is chosen, how copies of one model at the
-same level collapse into a single draw, and how to author a chain of your own
-in Blender.
+LODs reduce the detail of a particular model based on distance or screen area,
+swapping a lower-detail mesh into the scene below a given threshold. Often an
+*impostor* mesh, such as a billboard or an octahedron, will be the
+lowest-detail level of the LOD. OpenGLContext supports both distance-based
+LODs (used in VRML97) and screen-coverage LODs (used in glTF's ``MSFT_lod``
+extension).
 
 .. _lod-demo:
 
@@ -17,6 +18,13 @@ Walk through it
 .. code-block:: bash
 
    oglc-view https://github.com/mcfletch/openglcontext/releases/download/content-v1/gallery-world.tar.gz --background none
+
+.. figure:: images/demos/gallery.jpg
+   :alt: A long hall of marble busts on plinths, two rows receding to a far wall under dark ceiling beams, on a parquet floor
+
+   The gallery from the near end of the hall. The busts by the camera are
+   drawn at 17,456 triangles each and the ones at the far end at 544, and the
+   switch between the six levels of the chain is what this page is about.
 
 A hall of a hundred and twenty marble busts on plinths. Each bust is a
 six-level chain — 17,456 triangles down to 544 — declared with ``MSFT_lod``,

@@ -100,14 +100,14 @@ class TestContext(BaseContext):
 
 The format carries more than geometry, and the engine reads it as written:
 
-* *Appearance and Material* -- diffuse, emissive, specular, shininess and
+* Appearance and Material - diffuse, emissive, specular, shininess and
   transparency, and an ``ImageTexture`` beside them.
-* *Lights* -- ``PointLight``, ``DirectionalLight`` and ``SpotLight``, with
+* Lights - ``PointLight``, ``DirectionalLight`` and ``SpotLight``, with
   their own attenuation and radius.
-* *Sensors and routes* -- ``TimeSensor`` and the interpolators, wired with
+* Sensors and routes - ``TimeSensor`` and the interpolators, wired with
   ``ROUTE``, which is what makes a file animate itself.
-* *Viewpoints* -- named cameras the viewer can step through.
-* *Inline* -- another file, loaded where the node sits.
+* Viewpoints - named cameras the viewer can step through.
+* Inline - another file, loaded where the node sits.
 
 ``oglc-view model.wrl`` opens one without writing a program;
 :doc:`the viewer page </viewer>` is what else it does.

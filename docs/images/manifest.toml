@@ -179,6 +179,25 @@ crop = [0.02, 0.14, 0.98, 0.95]
 # Demos: a picture of a demo script, for the page that describes what it shows.
 # --------------------------------------------------------------------------- #
 [[image]]
+id = "demos/gallery"
+out = "images/demos/gallery.jpg"
+size = [1200, 675]
+licence = "CC0 1.0"
+credit = "'Marble Bust 01' by Rico Cilliers (Poly Haven) and ambientCG materials, CC0"
+alt = "A long hall of marble busts on plinths, receding under dark ceiling beams"
+caption = "The bust gallery: 120 busts, each a six-level chain, seen from the near end of the hall."
+producer = "command"
+cwd = "openglcontext"
+timeout = 900
+# The world is a content pack, so this fetches it the first time and reads the
+# unpacked copy afterwards; a machine that cannot reach it skips the entry and
+# keeps the committed picture.  "Gallery" is the camera the world was authored
+# with for this view, down the length of the hall.
+argv = ["-m", "OpenGLContext.bin.view",
+        "https://github.com/mcfletch/openglcontext/releases/download/content-v1/gallery-world.tar.gz",
+        "--camera", "Gallery", "--size", "1600x900", "--capture", "{png}"]
+
+[[image]]
 id = "demos/particles_effects"
 out = "images/demos/particles_effects.jpg"
 size = [1100, 680]
