@@ -80,7 +80,7 @@ class Tutorial:
 
 @dataclasses.dataclass
 class TutorialPath:
-    """A series of tutorials to be read in order."""
+    """Tutorials on one subject, ordered from the least assumed."""
 
     title: str
     description: str
@@ -93,11 +93,13 @@ class TutorialPath:
 PATHS = [
     TutorialPath(
         'Using the Engine',
-        """How to get something on screen and make it move: loading a model,
-        animating it, playing the clips a rigged model was authored with, and
-        walking a character along a route.""",
+        """How to get something on screen and make it move: loading a model in
+        each of the three formats, animating it, playing the clips a rigged
+        model was authored with, and walking a character along a route.""",
         [
             'using_gltf_model',
+            'using_vrml97',
+            'using_obj',
             'using_animation',
             'using_clips',
             'crowd_demo',
@@ -125,12 +127,16 @@ PATHS = [
     ),
     TutorialPath(
         'Interface and Tools',
-        """What the player reads and what an author edits: a panel over the
-        frame, the screen furniture beside it, and the editor's tool modes and
-        plan view.""",
+        """What the player reads and what an author edits: panels and screen
+        furniture over the frame, a settings page, a console, choosing a level
+        by its picture, and picking something in the world to drag.""",
         [
             'using_ui',
             'hud_demo',
+            'using_settings',
+            'using_console',
+            'using_level_select',
+            'using_selection',
             'editing_demo',
         ],
     ),
@@ -153,9 +159,11 @@ PATHS = [
     TutorialPath(
         'Swept Geometry and Tessellation',
         """Geometry generated from an outline: tubes and lathes swept along a
-        curve, the joins and normals that decide how they look, and turning a
-        polygon into the triangles that draw it.""",
+        curve, the joins and normals that decide how they look, turning a
+        polygon into the triangles that draw it, and the glyphs of a font as
+        solid text.""",
         [
+            'solid_font',
             'extrusions_shapes',
             'extrusions_curves',
             'extrusions_joins',
@@ -345,7 +353,9 @@ def render_index(paths: Iterable[TutorialPath], written: Iterable[str]) -> str:
         markup.wrap(
             'Each of these is a runnable script in the OpenGLContext source, '
             'with the commentary written into the script beside the code it '
-            'describes.  The paths are meant to be read in order.'
+            'describes.  The headings below group them by subject; a group '
+            'can be read straight through, or a page taken out of it on its '
+            'own.'
         ),
     ]
     listed = set()

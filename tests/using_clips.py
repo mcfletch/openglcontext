@@ -92,5 +92,41 @@ class TestContext(BaseContext):
         print('playing %s' % (name,))
 
 
+'''_Where the clips come from_
+
+A clip is an animation in the glTF file, and the file is usually Blender's
+output.  Blender's own material on animating a rigged figure is the
+*Animation & Rigging* half of its manual --
+[https://docs.blender.org/manual/en/latest/animation/index.html Animation &
+Rigging] for the editors and the workflow,
+[https://docs.blender.org/manual/en/latest/animation/armatures/index.html
+Armatures] for the skeleton that the mesh is bound to, and
+[https://studio.blender.org/training/animation-fundamentals/ Animation
+Fundamentals] on Blender Studio for a course that works up from a bouncing
+ball to character acting.
+
+*The names are the track names.*  An action in Blender has a name, but what
+the exporter writes as the glTF animation's name comes from the NLA track
+it is pushed onto: in the Dope Sheet's Action Editor, name the action, then
+**Push Down** to make a strip of it, and name the **NLA track** in the
+Nonlinear Animation editor -- that name is the one ``model.clips`` answers
+with and the one ``play()`` is called with.  A figure with a Walk, a Run
+and an Idle is three tracks, each holding one strip.
+
+*Exporting them.*  *File > Export > glTF 2.0*, then **Animation > NLA
+Strips** on -- with it off, only the object's active action is written, and
+the three clips arrive as one.  The merge mode beside it decides whether
+tracks of the same name across several objects become one animation or
+several; one track per clip and the default is what a character wants.
+**Animation > Always Sample Animations** is worth leaving on for a rig
+whose bones are driven by constraints, since the constraint itself does not
+export -- the samples of what it produced do.
+
+*What arrives.*  Each glTF animation becomes one entry in ``model.clips``,
+keyed by its name.  A file whose names you do not know prints them::
+
+    print(sorted(CharacterModel.load('mymodel.glb').clips))
+'''
+
 if __name__ == "__main__":
     TestContext.ContextMainLoop()

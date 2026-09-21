@@ -31,6 +31,16 @@ Following a route and turning to face it are
 route is made of.  The model is `Fox` from the Khronos sample catalogue
 (CC-BY 4.0, by PixelMannen and tomkranis).
 
+Running out of route is arriving, and that is where
+``play(IDLE, loop=True, fade=0.3)`` goes: the idle clip replaces the walk
+on the same layer, blended over a third of a second, so the legs stop when
+the body does.  The same place records ``rest_until``, the time the fox
+may choose again.  It is a time to compare the clock against rather than a
+counter ticking down, which is what keeps a paused game paused and a
+session replayed at another frame rate the same session.  Once the clock
+passes it, `NavMesh.random_point` picks somewhere on the mesh and the
+route is planned from where the fox stands to there.
+
 Press `g` to send the fox to the next of four goals, `r` to pick a random
 point on the mesh, and `c` to print the numbers again.  Every re-path
 prints how many cells the corridor runs through and what the pull saved:

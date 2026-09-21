@@ -195,14 +195,14 @@ translations are a good starting point for beginning OpenGL programmers.
 - :doc:`Tutorials <tutorials/index>` -- code walkthroughs, each one a script in
   ``tests/`` that runs
 
-  - **Using the Engine** -- loading a model, animating it, clips, a crowd, an
-    NPC on a navmesh
+  - **Using the Engine** -- loading a glTF, VRML97 or OBJ model, animating it,
+    clips, a crowd, an NPC on a navmesh
 
   - **Physics** -- a world, materials, joints, triggers, and what a game does
     with a collision
 
-  - **Interface and Tools** -- a panel over the frame, the HUD, the editor's
-    tool modes
+  - **Interface and Tools** -- panels, the HUD, a settings page, a console,
+    choosing a level, picking and dragging, the editor's tool modes
 
   - **Building a World** -- water, roads, particles, audio, baking, recording
 
