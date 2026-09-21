@@ -39,10 +39,21 @@ class SettleCaptureMixin(object):
             return
         from OpenGLContext.capture import SettleCapture
         self.settleCapture = SettleCapture(path, delay=delay, min_frames=frames)
+        # Tell the renderer to stop adapting, as a bounded run does: a settle
+        # capture draws until the scene converges and then reads one frame.
+        self._capturing = True
 
     @property
     def capturing(self) -> bool:
-        """Whether this run exists to take a picture rather than be looked at."""
+        """Whether a settle capture is in progress.
+
+        What the viewer drives itself by: it loads the scene before the loop
+        rather than alongside it, leaves the caption and the developer overlay
+        off, and runs no simulation.  Whether the *renderer* should stop
+        adapting is the wider question
+        :attr:`~OpenGLContext.context.Context.renderingForCapture` answers; a
+        bounded run answers that one yes and this one no.
+        """
         return self.settleCapture is not None
 
     def wantsMoreFrames(self) -> bool:

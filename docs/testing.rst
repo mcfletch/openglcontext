@@ -518,9 +518,17 @@ byte-stable references are wanted.
 A frame is only comparable if the renderer was told to stop adapting.
 Directional-shadow cascade count and image-based lighting both follow the
 frame rate, so a capture pins them: ``OPENGLCONTEXT_SHADOW_CASCADES=n`` fixes
-the cascades, and the capture path fixes the IBL. A scene loaded through the
-viewer pins its ``anim_time``. Without that, what is compared is the moment
-the capture happened to be taken.
+the cascades, and a capture fixes the IBL at the mode the GPU resolves to. A
+scene loaded through the viewer pins its ``anim_time``. Without that, what is
+compared is the moment the capture happened to be taken.
+
+A run's frames are read back when it is bounded —
+``OPENGLCONTEXT_AUTO_EXIT_FRAMES`` — or when it was given a settle capture
+through the viewer. ``Context.renderingForCapture`` is that question and the
+adaptive paths ask it; ``OPENGLCONTEXT_IBL=full`` or ``analytic`` pins the mode
+by name for a run that is neither. The viewer's own ``capturing`` is narrower:
+it says a settle capture is driving the run, which is what makes the viewer
+load its scene before the loop and simulate nothing.
 
 **A capture counts frames rather than seconds.** A scene animated against the
 wall clock reaches a different point in its animation on a fast machine than

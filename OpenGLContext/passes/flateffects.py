@@ -97,7 +97,7 @@ class _FlatEffectsMixin:
                 base, adaptive=ibl.ibl_is_adaptive(
                     requested,
                     capturing=bool(getattr(getattr(self, 'context', None),
-                                           'capturing', False))))
+                                           'renderingForCapture', False))))
         fc = getattr(getattr(self, 'context', None), 'frameCounter', None)
         fps = fc.recentFps() if fc is not None else 0.0
         mode = self._ibl_controller.effective_mode(fps)
