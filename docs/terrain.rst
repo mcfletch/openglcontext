@@ -87,6 +87,12 @@ under the hill looking out through it, and vegetation buried to the tips.
 ``tests/unit/test_heightfield_is_the_drawn_surface.py`` holds the three
 readers to each other.
 
+**Where the ground has been cut away, a fourth thing has to be asked.**
+``sample`` answers with a height inside an :ref:`opening <holes>` as readily as
+outside one — it reads the grid, which has no notion of what was cut out of the
+mesh built from it. So a reader that seats something on the ground asks
+``holes`` as well, and the three agree again.
+
 **A height function is not the ground; the mesh built from it is.** The same
 rule applies wherever a surface is meshed by sampling a function at vertices —
 the :doc:`streamed tiles <tiles3d>`, ``terrain_patch``. What is drawn there is
@@ -209,22 +215,31 @@ an hour of driving costs what one view of the world costs. Chunks are cut on
 the field's own grid lines and share their edge rows, so two neighbours agree
 exactly where they meet.
 
+.. _holes:
+
 ``holes`` is how something that passes *through* the ground says so. A
 tunnel's bore runs inside the hill and the hill's surface is still drawn over
 it; left in the physics world that surface is a wall across the road.
 ``holes(x, z) -> mask`` is true where the ground is not there, and the bore's
 own lining is what the vehicle then drives through.
 
-The same callable goes to ``HeightField.mesh()`` and to the colliders, so the
-surface a player sees and the surface a car meets are one surface:
+The same callable goes to ``HeightField.mesh()``, to the colliders and to
+whatever is seated on the ground, so the surface a player sees, the surface a
+car meets and the surface things stand on are one surface:
 
 .. code-block:: python
 
    from OpenGLContext.scenegraph.roadworks import bore_opening
 
    mouth = bore_opening(bore_centreline, field.sample, profile=road_profile)
-   terrain.holes = mouth                              # what is drawn
+   terrain.holes = mouth                              # what is drawn, and what grows
    ground = HeightFieldColliders(physics_world, field, holes=mouth)
+
+A ``TilesTerrain`` passes what it is given to its :ref:`ground cover
+<wheretheygrow>` as well. A height field answers with a height inside an
+opening as readily as outside one, so anything placed by asking it alone stands
+in the portal in mid-air; a reader that seats something on the ground asks
+``holes`` too.
 
 ``OpenGLContext.scenegraph.terrain.holes.cut`` is what both use to apply it.
 The triangles the opening's edge crosses are *cut on that edge* — the crossing

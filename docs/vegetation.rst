@@ -146,6 +146,17 @@ control map has to be fine enough to resolve what it is masking: over four
 kilometres, 512 pixels is eight metres each and a road corridor is thinner
 than one of them.
 
+**Where there is no ground it does not grow at all.** ``holes(x, z) -> mask``
+is the same predicate the terrain is drawn and collided with (:ref:`holes in
+the ground <holes>`): true where the ground is not there, over a tunnel's bore
+say. A height field answers with a height inside an opening as readily as
+outside one, so cover seated on that answer alone stands in the portal in
+mid-air. A ``TilesTerrain`` hands its own ``holes`` to the cover it built, so a
+game that tells the terrain tells the grass; set ``cover.holes`` directly for
+cover built by hand. It is kept apart from ``mask`` because the two answer
+different questions: the mask says what grows on the ground there is, and an
+opening is not a kind of ground a plant does badly on.
+
 **How much it gathers is the species' own.** ``patchiness`` runs from 0 — as
 likely here as anywhere, which is what a grass or a small flower wants — to 1,
 gathered into beds with bare ground between, and ``patch_metres`` is how far
