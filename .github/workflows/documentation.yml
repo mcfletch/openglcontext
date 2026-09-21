@@ -15,16 +15,20 @@ name: Documentation
 # many releases there are -- see `build-docs.py`.  That means a force push,
 # which is why this job has `contents: write` and why nothing else should write
 # to that branch.
+#
+# The site moves when somebody runs this, rather than on a push: a release
+# tags, publishes to PyPI and moves the branch at once, and a build that
+# starts in the middle of that is installing a stack only part of which is
+# published yet.  Run it once the release has settled.
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       publish:
         description: >-
-          Whether to put the result on gh-pages. Off by default on a manual
-          run, which is then a build that says whether the set still builds.
+          Whether to put the result on gh-pages. Off by default, which makes a
+          run a build that says whether the set still builds; tick it to move
+          the published site.
         type: boolean
         default: false
 
@@ -82,13 +86,14 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Build the set
-        # `--publish` only on a push, or on a manual run that asked for it.
+        # `--publish` only on a run that asked for it: otherwise the build is
+        # the thing being checked, and the branch is left alone.
         env:
           DIRECTDOCS: ${{ github.workspace }}/.pyopengl
         run: |
           python build-docs.py \
             --stage site \
-            ${{ (github.event_name == 'push' || inputs.publish) && '--publish --push origin' || '' }}
+            ${{ inputs.publish && '--publish --push origin' || '' }}
 
       - name: Keep the built site with the run
         uses: actions/upload-artifact@v4
