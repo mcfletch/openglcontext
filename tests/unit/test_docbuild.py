@@ -119,6 +119,17 @@ class TestRestInTheCommentary:
         out = self.render('see :doc:`the characters page </characters>`')
         assert ':doc:`the characters page </characters>`' in out
 
+    def test_a_role_wrapped_across_lines_is_still_one_role(self):
+        """A docstring wraps its lines; the role does not care where."""
+        out = self.render('see :doc:`Light Nodes,\nROUTEs <lightobject>` for it')
+        assert ':doc:`Light Nodes, ROUTEs <lightobject>`' in out
+
+    def test_a_literal_block_follows_the_colons_that_announce_it(self):
+        """``::`` at the end of a paragraph means the next block is literal."""
+        out = self.render('Run one of these::\n\n    prog --lathe\n    prog --list')
+        assert 'Run one of these::' in out
+        assert '   prog --lathe\n   prog --list' in out
+
     def test_a_name_inside_a_literal_is_not_linked_again(self):
         """``glBegin`` written as a literal is already what the writer meant."""
         assert self.render('call ``glBegin``') == 'call ``glBegin``'

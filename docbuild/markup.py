@@ -83,13 +83,20 @@ _TRAILING = re.compile(r'(?<=\w)_(?=\s|$|[.,;:!?)\]])')
 #: carried through rather than escaped.  A star with a word tight against it
 #: on the outside is arithmetic or an argument list rather than emphasis, and
 #: one that opens nothing is an asterisk.
+#: What a span may hold: anything but its own marker, over as many lines as
+#: the docstring happened to wrap it across.  A block is split on blank lines
+#: before any of this runs, so a marker with no partner runs to the end of its
+#: paragraph at worst.
+_SPAN = r'(?:[^%s\n]|\n(?![ \t]*\n))'
+
 _RST_INLINE = re.compile(
-    r'(?::[\w.+:-]+:)?``[^`\n]+``'      # a literal, with or without a role
-    r'|:[\w.+:-]+:`[^`\n]+`'            # a role
-    r'|`[^`\n]+`__?'                    # a reference
-    r'|`[^`\n]+`'                       # interpreted text, under the default role
-    r'|(?<![\w*])\*\*[^\s*][^*\n]*\*\*(?![\w*])'      # strong
-    r'|(?<![\w*])\*[^\s*][^*\n]*\*(?![\w*])'          # emphasis
+    r'(?::[\w.+:-]+:)?``%(tick)s+``'    # a literal, with or without a role
+    r'|:[\w.+:-]+:`%(tick)s+`'          # a role
+    r'|`%(tick)s+`__?'                  # a reference
+    r'|`%(tick)s+`'                     # interpreted text, under the default role
+    r'|(?<![\w*])\*\*[^\s*]%(star)s*\*\*(?![\w*])'    # strong
+    r'|(?<![\w*])\*[^\s*]%(star)s*\*(?![\w*])'        # emphasis
+    % {'tick': _SPAN % ('`',), 'star': _SPAN % ('*',)}
 )
 
 _BLANK_LINE = re.compile(r'\n[ \t]*\n')
@@ -411,7 +418,11 @@ def commentary(text: str) -> list[Block]:
             continue
         stripped = textwrap.dedent(block)
         lead = _leads_a_block(block)
-        if lead:
+        if out and out[-1].text.rstrip().endswith('::'):
+            # reST's own announcement: the paragraph before it said that what
+            # comes next is laid out by hand.
+            out.append(Block('rst', _indent(_dedent_all(block), '   ')))
+        elif lead:
             head, body = lead
             out.append(Block('rst', wrap(inline(head))))
             out.append(Block('rst', '::\n\n%s' % (_indent(body, '   '),)))

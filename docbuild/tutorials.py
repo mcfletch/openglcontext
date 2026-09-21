@@ -94,9 +94,8 @@ PATHS = [
     TutorialPath(
         'Using the Engine',
         """How to get something on screen and make it move: loading a model,
-        animating it, playing the clips a rigged model was authored with,
-        walking a character along a route, and putting an interface over the
-        frame.""",
+        animating it, playing the clips a rigged model was authored with, and
+        walking a character along a route.""",
         [
             'using_gltf_model',
             'using_animation',
@@ -104,9 +103,6 @@ PATHS = [
             'crowd_demo',
             'using_npc',
             'navmesh_demo',
-            'using_ui',
-            'hud_demo',
-            'editing_demo',
         ],
     ),
     TutorialPath(
@@ -125,6 +121,17 @@ PATHS = [
             'physics_cook_view',
             'physics_navigate',
             'physics_stress',
+        ],
+    ),
+    TutorialPath(
+        'Interface and Tools',
+        """What the player reads and what an author edits: a panel over the
+        frame, the screen furniture beside it, and the editor's tool modes and
+        plan view.""",
+        [
+            'using_ui',
+            'hud_demo',
+            'editing_demo',
         ],
     ),
     TutorialPath(
