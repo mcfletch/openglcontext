@@ -560,3 +560,96 @@ class TestFlushingPendingPicks:
         context.flushPendingPicks()
         context.flushPendingPicks()
         assert len(clicks) == 1
+
+
+class TestContextAttributes:
+    """The profile and version an EGL context is asked for.
+
+    ``EGLContext`` itself names neither and takes what the driver makes, which
+    is enough for a scene.  A test harness has to ask: a case written against
+    GLSL 330 in a core profile must get one, or it is testing a context nobody
+    ships.
+    """
+
+    def test_the_version_asked_for_is_requested(self):
+        attributes = eglcontext.contextAttributes('core', (4, 1))
+        assert _attribute(attributes, eglcontext.EGL.EGL_CONTEXT_MAJOR_VERSION) == 4
+        assert _attribute(attributes, eglcontext.EGL.EGL_CONTEXT_MINOR_VERSION) == 1
+
+    def test_core_asks_for_the_core_profile(self):
+        assert _attribute(
+            eglcontext.contextAttributes('core'),
+            eglcontext.EGL.EGL_CONTEXT_OPENGL_PROFILE_MASK,
+        ) == eglcontext.EGL.EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT
+
+    def test_compatibility_asks_for_the_compatibility_profile(self):
+        assert _attribute(
+            eglcontext.contextAttributes('compatibility'),
+            eglcontext.EGL.EGL_CONTEXT_OPENGL_PROFILE_MASK,
+        ) == eglcontext.EGL.EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT
+
+    def test_any_asks_for_nothing(self):
+        """Below GL 3.2 there is no profile mask, so naming one refuses a
+        context that would otherwise have been made."""
+        assert eglcontext.contextAttributes('any') == [eglcontext.EGL.EGL_NONE]
+
+    def test_forward_compatible_is_requested_only_when_asked_for(self):
+        asked = eglcontext.contextAttributes('core', forwardCompatible=True)
+        assert _attribute(
+            asked, eglcontext.EGL.EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE
+        ) == eglcontext.EGL.EGL_TRUE
+        assert eglcontext.EGL.EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE not in _attributes(
+            eglcontext.contextAttributes('core'))
+
+    def test_a_profile_nobody_offers_is_a_programming_error(self):
+        """A ValueError, not an EGLContextError: the name came from the
+        caller's own source, and a caller that turned this into a skip would
+        hide the typo forever."""
+        with pytest.raises(ValueError, match='deluxe'):
+            eglcontext.contextAttributes('deluxe')
+
+    def test_the_list_is_terminated(self):
+        assert eglcontext.contextAttributes('core')[-1] == eglcontext.EGL.EGL_NONE
+
+
+class TestTheDisplayIsSharedRatherThanOwned:
+    """``eglGetPlatformDisplayEXT`` answers the same display for the same
+    device, and ``eglTerminate`` invalidates every context and surface on it.
+    So a context that terminated on its way out would take its siblings down,
+    and the suite opens two at once on purpose."""
+
+    def test_the_last_user_out_terminates_it(self):
+        try:
+            device = eglcontext.selectDevice()
+            first = eglcontext.openDisplay(device)
+            second = eglcontext.openDisplay(device)
+        except eglcontext.EGLContextError as err:
+            pytest.skip(str(err))
+        assert eglcontext._displayKey(first) == eglcontext._displayKey(second)
+        assert eglcontext.closeDisplay(second) is False
+        assert eglcontext.closeDisplay(first) is True
+
+    def test_two_pbuffer_contexts_live_at_once(self):
+        """Releasing one leaves the other drawable."""
+        from OpenGL.GL import GL_VERSION, glGetString
+
+        try:
+            first = eglcontext.PbufferContext(width=16, height=16)
+        except eglcontext.EGLContextError as err:
+            pytest.skip(str(err))
+        try:
+            second = eglcontext.PbufferContext(width=16, height=16)
+            second.release()
+            first.make_current()
+            assert glGetString(GL_VERSION) is not None
+        finally:
+            first.release()
+
+    def test_releasing_twice_is_harmless(self):
+        try:
+            context = eglcontext.PbufferContext(width=16, height=16)
+        except eglcontext.EGLContextError as err:
+            pytest.skip(str(err))
+        context.release()
+        context.release()
+        assert context.display is None

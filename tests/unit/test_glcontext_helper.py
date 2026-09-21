@@ -350,11 +350,32 @@ class TestWhichPlatformsRenderWithoutAWindow:
     def test_windows_renders_on_a_pbuffer(self, platform):
         assert glcontext.offscreen_backend(platform) == 'wgl'
 
-    @pytest.mark.parametrize('platform', ['linux', 'darwin'])
+    @pytest.mark.parametrize('platform', ['linux', 'linux2'])
+    def test_linux_renders_on_an_egl_pbuffer(self, platform):
+        assert glcontext.offscreen_backend(platform) == 'egl'
+
+    @pytest.mark.parametrize('platform', ['darwin'])
     def test_a_platform_with_no_backend_here_says_so(self, platform):
         """Said rather than guessed: opening a window for a caller who asked
         for none is worse than refusing."""
         assert glcontext.offscreen_backend(platform) is None
+
+    def test_a_mapped_platform_has_a_provider_behind_it(self):
+        """A name in the map must have code answering to it.
+
+        :func:`offscreen_window` turns both "no backend for this platform" and
+        "no provider for that backend" into :class:`GLUnavailable`, and the
+        cases below skip on one, so a platform mapped to a backend nobody
+        implemented would read as a skipped suite rather than a missing one.
+        """
+        backend = glcontext.offscreen_backend()
+        if backend is None:
+            pytest.skip('no windowless backend for %s' % (sys.platform,))
+        try:
+            with glcontext.offscreen_window('provider'):
+                pass
+        except GLUnavailable as err:
+            assert 'no provider' not in str(err), str(err)
 
     def test_it_reads_the_platform_by_default(self):
         assert glcontext.offscreen_backend() == glcontext.offscreen_backend(

@@ -84,6 +84,7 @@ WINDOWINGS = ('glfw', 'offscreen')
 #: has no windowless path here and says so rather than opening a window the
 #: caller asked not to have.
 OFFSCREEN_BY_PLATFORM = (
+    ('linux', 'egl'),
     ('win32', 'wgl'),
     ('cygwin', 'wgl'),
 )
@@ -339,6 +340,54 @@ def _cgl_window(size: Sequence[int], profile: str, version: Sequence[int],
 
 
 @contextlib.contextmanager
+def _egl_pbuffer(size: Sequence[int], profile: str, version: Sequence[int],
+                 forward_compatible: bool) -> Iterator[Any]:
+    """A GL context on an EGL pbuffer, current for the body.
+
+    The windowless path on Linux.  EGL renders on a *device* rather than on a
+    display server, so this needs neither a window nor a session -- which is
+    the difference between it and the hidden GLFW window the suite otherwise
+    uses, since that still wants a windowing library and something to talk to.
+    """
+    try:
+        from OpenGLContext.eglcontext import EGLContextError, PbufferContext
+    except ImportError as err:
+        raise GLUnavailable('no EGL here: %s' % (err,)) from err
+    width, height = size
+    try:
+        context = PbufferContext(
+            width=width, height=height,
+            # 'any' means "a context, whichever kind", and names no version:
+            # below GL 3.2 there is no profile mask to ask about.
+            profile=profile,
+            version=tuple(version),
+            # Core implies forward-compatible here for the reason it does on a
+            # window: it is the pair the engine's own backends ask for, and a
+            # test must get the same context whichever mode the run is in.
+            forwardCompatible=forward_compatible or profile == 'core',
+        )
+    except EGLContextError as err:
+        raise GLUnavailable(
+            'the driver would not give a %dx%d %s offscreen context: %s'
+            % (width, height, profile, err)) from err
+    try:
+        yield context
+    finally:
+        # Made current again first: the caches let go of whichever context is
+        # current, and a caller that opened two and released the inner one has
+        # left none current by the time this runs -- so the outer one's names
+        # would outlive it.  A suite opens hundreds of these in one process,
+        # which is the setting in which a driver hands the same address out
+        # again.
+        try:
+            context.make_current()
+        except Exception:                      # pragma: no cover - a lost context
+            pass
+        contextresources.context_lost()
+        context.release()
+
+
+@contextlib.contextmanager
 def offscreen_window(title: str = 'OpenGLContext test',
                      size: Sequence[int] = DEFAULT_SIZE,
                      profile: str = 'core',
@@ -359,17 +408,22 @@ def offscreen_window(title: str = 'OpenGLContext test',
         raise GLUnavailable(
             'no windowless GL backend for %s; unset %s to render on a hidden '
             'window instead' % (sys.platform, WINDOWING_VARIABLE))
-    if backend != 'wgl':                       # pragma: no cover - one today
+    if backend not in ('wgl', 'egl'):          # pragma: no cover - two today
         # Named rather than assumed: a platform added to the map above without
-        # a provider here would otherwise import the Windows one and fail
+        # a provider here would otherwise import one of these and fail
         # somewhere less obvious.
         raise GLUnavailable('no provider for the %r offscreen backend'
                             % (backend,))
-    from OpenGL.WGL import offscreen
 
     # The engine reads this to pick a backend; a test that goes on to build an
     # OpenGLContext context inside this one gets the offscreen backend too.
     os.environ.setdefault('OPENGLCONTEXT_BACKEND', backend)
+    if backend == 'egl':
+        with _egl_pbuffer(size, profile, version, forward_compatible) as context:
+            yield context
+        return
+    from OpenGL.WGL import offscreen
+
     missing = offscreen.available('legacy' if profile == 'any' else profile)
     if missing:
         raise GLUnavailable(
@@ -546,6 +600,16 @@ def release_current() -> None:
     cache keyed on the current context answers differently when there is none.
     """
     if windowing() == 'offscreen':
+        if offscreen_backend() == 'egl':
+            from OpenGL import EGL
+
+            # The display to let go of is the one this thread is drawing
+            # through; with nothing current there is nothing to release.
+            display = EGL.eglGetCurrentDisplay()
+            if display and display != EGL.EGL_NO_DISPLAY:
+                EGL.eglMakeCurrent(display, EGL.EGL_NO_SURFACE,
+                                   EGL.EGL_NO_SURFACE, EGL.EGL_NO_CONTEXT)
+            return
         from OpenGL import WGL
         from OpenGL.raw.WGL._types import HDC, HGLRC
 

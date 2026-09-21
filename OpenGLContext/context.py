@@ -299,6 +299,13 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     _autoExitFrames: int | None = None
     _autoExitFrameCount = 0
     _autoExitCaptureDir: str | None = None
+    #: Whether this run's frames are read back.  Set once by
+    #: :meth:`setupAutoExit` for a bounded run, and by the viewer's
+    #: ``setupCapture`` for a settle capture; not cleared, because
+    #: ``_autoExitFrames`` is -- ``_autoExitDraw`` clears that to keep its
+    #: forced redraw from recursing, and that redraw is the frame the picture
+    #: is of.
+    _capturing = False
     #: The frame-counting clock this run advances, if it is a capture.
     _captureClock: FixedStepClock | None = None
 
@@ -384,6 +391,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             try:
                 self._autoExitFrames = int(auto_exit)
                 self._autoExitFrameCount = 0
+                self._capturing = True
                 log.info(f"Auto-exit enabled: will exit after {self._autoExitFrames} frames")
             except ValueError:
                 log.warning(f"Invalid OPENGLCONTEXT_AUTO_EXIT_FRAMES value: {auto_exit}")
@@ -392,6 +400,26 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         if capture_dir:
             self._autoExitCaptureDir = capture_dir
             log.info(f"Auto-exit capture enabled: screenshots will be saved to {capture_dir}")
+
+    @property
+    def renderingForCapture(self) -> bool:
+        """Whether this run's frames are read back rather than looked at.
+
+        True for a bounded run -- ``OPENGLCONTEXT_AUTO_EXIT_FRAMES``, which
+        draws that many frames and reads the last one back -- and for a viewer
+        given a settle capture. The adaptive renderer paths pin themselves
+        where this is true, so the frame that is read back follows from the
+        scene rather than from how quickly the machine reached it: adaptive IBL
+        climbs back to ``full`` over tens of frames, and a capture of five
+        would show whichever mode the climb had got to.
+        :func:`OpenGLContext.video.clock.capture_clock` reads the same variable
+        to put the world on a frame-counting clock.
+
+        Wider than the viewer's own ``capturing``, which says that a settle
+        capture is driving the run and that the scene is therefore loaded up
+        front and simulated not at all.
+        """
+        return self._capturing
 
     def setupCaptureClock(self) -> FixedStepClock | None:
         """Put this run on a frame-counting clock if it is a capture.
