@@ -224,16 +224,15 @@ is both what takes it out of the batch and what makes it visibly the one being
 worked on.
 
 .. figure:: images/demos/molehill_edit.jpg
-   :alt: Four coloured NURBS surfaces meeting in a molehill, white spheres marking their control points and thin lines joining the points into a grid, a red-green-blue tri-axis handle standing on one selected point at the top of the red hill, and two control points far above the surfaces with long lines running down to their neighbours
+   :alt: Four coloured NURBS surfaces meeting in a molehill, white spheres marking their control points and thin lines joining the points into a grid, and two control points far above the surfaces with long lines running down to their neighbours
 
    ``python tests/molehill_edit.py`` — the :doc:`Molehill <tutorials/molehill>`
-   surfaces with their control net made draggable. Click a marker to select it,
-   then drag one of the three arms; the surface retessellates as the point
-   travels. The red hill here has been pulled three units east along its own
-   ``x`` axis. The two markers standing well above everything, with their long
-   cage lines, are the control points Molehill raises the green and blue hills
-   by: the cage is what makes that legible. Escape abandons a drag, or puts the
-   handle away.
+   surfaces with their control net made draggable, as the demo opens. Click a
+   marker to select it and the tri-axis handle stands on it; drag one of the
+   three arms and the surface retessellates as the point travels. The two
+   markers standing well above everything, with their long cage lines, are the
+   control points Molehill raises the green and blue hills by: the cage is what
+   makes that legible. Escape abandons a drag, or puts the handle away.
 
 Reading relief off a plan view
 ------------------------------

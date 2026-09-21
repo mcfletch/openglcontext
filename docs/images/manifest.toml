@@ -300,7 +300,7 @@ id = "demos/molehill_edit"
 out = "images/demos/molehill_edit.jpg"
 size = [1100, 680]
 # The demo's camera stands back far enough to see the control points that
-# tower over the hills, which leaves the surfaces and the handle in the
+# tower over the hills, which leaves the surfaces and their cage in the
 # middle of the frame; this is that middle.
 crop = [0.28, 0.10, 0.75, 0.90]
 licence = "BSD-3-Clause"
