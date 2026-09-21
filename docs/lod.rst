@@ -17,7 +17,7 @@ Walk through it
 
 .. code-block:: bash
 
-   oglc-view https://github.com/mcfletch/openglcontext/releases/download/content-v1/gallery-world.tar.gz --background none
+   oglc-view https://github.com/mcfletch/openglcontext/releases/download/content-v1/gallery-world.tar.gz
 
 .. figure:: images/demos/gallery.jpg
    :alt: A long hall of marble busts on plinths, two rows receding to a far wall under dark ceiling beams, on a parquet floor
@@ -34,6 +34,14 @@ overhead. The world is CC0 art published as a :doc:`content pack
 and opens the world inside it, so the second run downloads nothing. The
 archive holds one scene, so nothing has to say which —
 ``...tar.gz#gallery.glb`` names it where an archive holds several.
+
+The hall is lit by a pair of suns leaning in across it from above the roof,
+with a weak upward light standing in for what the floor throws back. The shell
+— floor, walls, ceiling — is marked as :ref:`no shadow caster <castsshadow>`,
+so the light reaches the room while the plinths and the busts still throw the
+shadows that give the hall its depth. Its lights are stated at the illuminance
+the engine reads as neutral, so it needs no exposure flag and looks the same
+with or without a sky behind its walls.
 
 Walk down the hall with the arrow keys. The busts near you are at their finest
 level and the ones at the far end at their coarsest, and because the level is
@@ -70,20 +78,10 @@ a recording of it is one command:
 
 .. code-block:: bash
 
-   oglc-view <the archive> --background none \
+   oglc-view <the archive> \
        --capture-video walk.mp4 --fly-through --video-seconds 16
 
 See :ref:`Recording a video <video>`.
-
-.. rst-class:: technical
-
-Why ``--background none``. The hall is a closed room lit by its own lamps,
-stated in the absolute units ``KHR_lights_punctual`` uses. The viewer meters a
-self-lit scene and stops it down the way a camera would, but only when it is
-not also adding an environment — a model shown against a sky is lit by the
-sky, and metering it by its own lamps would crush it. An interior is the other
-case, and the viewer has no way to tell the two apart, so it is said on the
-command line. ``--background sky`` shows what the other choice does.
 
 .. _lod-choosing:
 

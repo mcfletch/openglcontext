@@ -70,6 +70,37 @@ without occluding. Loaded glTF ``KHR_lights_punctual`` lights carry the
 extension's own ``castShadows`` where it is given, and default to casting for
 a sun.
 
+.. _optout:
+
+Geometry That Does Not Cast
+---------------------------
+
+Clear ``castsShadow`` on a ``Shape`` and it is drawn into no shadow map. It
+still renders, is still lit, and still takes the shadows of everything around
+it; what it no longer does is put a shadow into the scene.
+
+.. code-block:: python
+
+   shape = Shape( geometry = ..., appearance = ..., castsShadow = False )
+
+Three kinds of geometry want it:
+
+- A shell around a scene lit from outside it - a hall standing under a sun has
+  a roof between the two. A roof that casts shadows everything under it, and
+  the hall renders as though the sun were switched off — lit by the ambient
+  term alone, even on every surface, with no shadow anywhere to say where the
+  light comes from. Clear the flag on the floor, walls and ceiling and the
+  light reaches the room, while what stands in the room goes on casting.
+- Dense alpha foliage - a field of grass costs more to rasterise into every
+  cascade than its shadow is worth; see :doc:`Vegetation <vegetation>`.
+- Geometry standing in for something that is not there - a sky drawn as a
+  backdrop, a marker, a gizmo.
+
+The flag is on the shape rather than on the geometry, because a caster is
+something rendered and the geometry under one may be shared with a shape that
+does cast. A glTF says it with :ref:`OGLC_castsShadow <castsshadow>` on a
+node's ``extras``.
+
 Why Shadow Edges Look Blocky
 ----------------------------
 

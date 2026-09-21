@@ -442,7 +442,16 @@ all of them.
 
    ./release-assets.py                 # build the archives, write the registry
    ./release-assets.py --install       # ...and put them in this machine's store
+   ./release-assets.py --reinstall     # ...over whatever that store already holds
    ./release-assets.py --push          # ...and attach them to the release tag
+
+``--install`` leaves a pack that is already in the store where it is, so
+running it over a store is not a way to lose what is in one. While a world is
+still being authored that is the wrong answer — the store holds the build
+before the change, and the game opens that one — so ``--reinstall`` throws the
+installed copy away and unpacks the new build in its place. It removes
+everything under that pack's directory, including anything put there by hand,
+which is why it is a separate word.
 
 State a ``sha256`` wherever you control the bytes. An uncompressed tarball
 truncated at a member boundary reads as a valid shorter archive, with the

@@ -257,6 +257,43 @@ inside the glb and each finer one a sidecar the operating system never opens
 until it is wanted. The engine reads them. ``MSFT_lod`` on a *material*, which
 the extension also allows, is not read.
 
+.. _castsshadow:
+
+A node that is not a shadow caster
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``OGLC_castsShadow`` in a node's ``extras``, set to ``0``, keeps that node's
+geometry out of the shadow maps. It is still drawn and still lit, and it still
+takes the shadows of everything else; what it does not do is put a shadow of
+its own into the scene. The same flag on a node carrying a light gives that
+light no shadow map.
+
+.. code-block:: json
+
+   "nodes": [
+       {"mesh": 0, "name": "Ceiling", "extras": {"OGLC_castsShadow": 0}},
+       {"mesh": 1, "name": "Plinth"}
+   ]
+
+What it is for is a room lit from outside itself. A hall standing under a sun
+has a roof between the two, so a roof that casts shadows the whole interior and
+the room renders as though the sun were not there. Marking the shell — floor,
+walls, ceiling — lets the light into the room, and the busts on their plinths
+still throw the shadows that give the hall its depth. The other use is a light
+that stands in for light a renderer does not compute: a weak upward fill
+standing in for what the floor throws back arrives from everywhere and shadows
+nothing.
+
+The flag says what one node does and does not reach that node's children, which
+is how the tools that author it treat shadow visibility. It does carry to a
+node's ``MSFT_lod`` alternatives, since those are the same object drawn instead
+— a shadow that appeared as a viewer walked closer would be the level switch
+made visible. It is ``extras`` rather than an extension, so a reader that has
+never heard of it draws the node exactly as it would anyway. In Blender it is
+an object custom property of that name, written by `OpenGLContext-editor
+<https://github.com/mcfletch/openglcontext-editor>`__'s add-on; in the
+scenegraph it arrives as :ref:`Shape.castsShadow <optout>`.
+
 .. _omi:
 
 OMI Extensions
