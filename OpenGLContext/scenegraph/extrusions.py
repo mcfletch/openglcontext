@@ -33,7 +33,7 @@ Contours for ``Lathe``, ``Spiral`` and ``Screw`` are read as ``(x, y)`` pairs:
 for the rotational sweeps x is distance out from the axis and y is height, and
 for ``Screw`` they are the cross-section's own axes.
 
-See ``docs/extrusions.html``.
+See ``docs/extrusions.rst``.
 """
 from __future__ import annotations
 

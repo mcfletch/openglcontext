@@ -1,0 +1,11 @@
+{
+  "git": "v3.0.0a4-66-ge405489-dirty",
+  "id": "features/particles",
+  "licence": "BSD-3-Clause",
+  "producer": "copy",
+  "size": [
+    360,
+    230
+  ],
+  "source": "images/demos/particles_effects.jpg"
+}

@@ -196,25 +196,25 @@ class FlatPass( _flat.FlatPass ):
         """Render the opaque geometry from toRender (in reverse order)"""
         self.transparent = False
         debugFrustum = self.context.contextDefinition.debugBBox
-        for key,mvmatrix,_tmatrix,bvolume,path in toRender:
+        for key,mvmatrix,_tmatrix,bvolume,path,node in toRender:
             if not key[0]:
                 self.matrix = mvmatrix
                 self.renderPath = path
                 glMatrixMode(GL_MODELVIEW)
                 glLoadMatrixf( mvmatrix )
                 try:
-                    path[-1].Render( mode = self )
+                    node.Render( mode = self )
                     if debugFrustum:
                         bvolume.debugRender( )
                 except Exception as err:
-                    self.renderFailed( 'opaque', path[-1], err )
+                    self.renderFailed( 'opaque', node, err )
     def renderTransparent( self, toRender: Sequence[Any] ) -> None:
         """Render the transparent geometry from toRender (in forward order)"""
         self.transparent = True
         setup = False
         debugFrustum = self.context.contextDefinition.debugBBox
         try:
-            for key,mvmatrix,_tmatrix,bvolume,path in toRender:
+            for key,mvmatrix,_tmatrix,bvolume,path,node in toRender:
                 if key[0]:
                     if not setup:
                         setup = True
@@ -227,11 +227,11 @@ class FlatPass( _flat.FlatPass ):
                     self.renderPath = path
                     glLoadMatrixf( mvmatrix )
                     try:
-                        path[-1].RenderTransparent( mode = self )
+                        node.RenderTransparent( mode = self )
                         if debugFrustum:
                             bvolume.debugRender( )
                     except Exception as err:
-                        self.renderFailed( 'transparent', path[-1], err )
+                        self.renderFailed( 'transparent', node, err )
         finally:
             self.transparent = False
             if setup:

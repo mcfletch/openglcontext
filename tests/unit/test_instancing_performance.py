@@ -50,6 +50,18 @@ SHAPES = 800
 TIMED_SHAPES = 200
 FRAMES = 120
 
+#: How many readings each mode gets, the two taken turn about.  Two is what it
+#: takes for a moment of machine state to land on one reading rather than on
+#: the comparison; see `_both`.
+ROUNDS = 2
+
+#: How far above the other a converged reading may sit before the collapsed
+#: draws are making the frame worse.  At `SHAPES` the two modes measure the
+#: same gather, so their medians land within noise of one another; what is
+#: being watched for there is instancing becoming the expensive path, which is
+#: a multiple and not a percent.
+CONVERGED_MARGIN = 1.10
+
 
 def _run(mode, shapes=SHAPES):
     """The harness's reading, or None where this machine cannot render at all.
@@ -81,11 +93,28 @@ def _run(mode, shapes=SHAPES):
 
 
 def _both(shapes):
-    """One reading each way, or a skip where there is no GL to have them with."""
-    on, off = _run('on', shapes), _run('off', shapes)
-    if on is None or off is None:
-        pytest.skip('no usable GL context for the instancing perf harness')
-    return on, off
+    """The best reading each way, or a skip where there is no GL to have them.
+
+    Turn about, and the best of each rather than one apiece: the two modes are
+    separate subprocesses, so anything the machine does between them lands on
+    one of the readings and not the other, and a ratio taken across that drift
+    is measuring the drift.  Run straight after the rest of the suite, a single
+    pair had `on` reading 2.37 ms against a 1.84-2.13 it takes on a machine
+    that has been left alone -- enough to put the ratio the wrong side of the
+    bar with the draws collapsing exactly as they should.  The quickest reading
+    is the one least spent on something else, which is what makes it the
+    comparable one.
+    """
+    best: dict[str, dict] = {}
+    for _ in range(ROUNDS):
+        for mode in ('on', 'off'):
+            reading = _run(mode, shapes)
+            if reading is None:
+                pytest.skip('no usable GL context for the instancing perf harness')
+            if (mode not in best
+                    or reading['median_ms'] < best[mode]['median_ms']):
+                best[mode] = reading
+    return best['on'], best['off']
 
 
 @pytest.fixture(scope='module')
@@ -123,6 +152,11 @@ def test_instancing_is_never_slower_even_at_scale(perf):
     modes converge on it, so the *margin* is not worth asserting there — but
     collapsing the draws must never make a frame worse."""
     on, off = perf
-    assert on['median_ms'] <= off['median_ms'], (
-        'instancing should not cost frame time: on=%.2fms off=%.2fms'
-        % (on['median_ms'], off['median_ms']))
+    # With a margin, because two readings that converge are within the noise of
+    # each other and a strict ordering between them decides on that noise --
+    # which is a coin toss rather than a claim about the engine. What "worse"
+    # means here is measurably worse.
+    assert on['median_ms'] <= off['median_ms'] * CONVERGED_MARGIN, (
+        'instancing should not cost frame time: on=%.2fms off=%.2fms, over the '
+        '%.0f%% a converged reading may sit above the other'
+        % (on['median_ms'], off['median_ms'], (CONVERGED_MARGIN - 1.0) * 100.0))

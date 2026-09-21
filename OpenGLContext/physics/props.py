@@ -92,20 +92,29 @@ class PropColliders:
         self._at = None
 
     def _stand(self, prop: "Prop") -> int:
-        """One prop as a static body: an upright box the size it takes up.
+        """One prop as a static body, of the shape the prop says it is.
 
-        A box rather than the mesh it is drawn as. What a car needs from a
-        boulder is that it stops there, and a triangle soup per rock costs the
-        broadphase and the narrow phase both for a difference nobody driving
-        past at forty metres a second can see.
+        Not the mesh it is drawn as, either way. A triangle soup per rock costs
+        the broadphase and the narrow phase both, for a difference nobody
+        driving past at forty metres a second can see.
+
+        A ``box`` is what a boulder wants: what a car needs from one is that it
+        stops there. A ``dome`` is what a stone lying in the grass wants -- a
+        sphere as wide as the stone, sunk until its top stands where the
+        stone's does, so a wheel rides over it and a walker steps onto it. The
+        same stone as a block is a kerb across the hillside.
         """
-        shape = self.world.add_shape(model.Shape.box(
-            (prop.radius * 2.0, prop.height, prop.radius * 2.0)))
-        half = np.array([0.0, prop.height / 2.0, 0.0])
+        if prop.shape == 'dome':
+            shape = self.world.add_shape(model.Shape.sphere(prop.radius))
+            lift = np.array([0.0, prop.height - prop.radius, 0.0])
+        else:
+            shape = self.world.add_shape(model.Shape.box(
+                (prop.radius * 2.0, prop.height, prop.radius * 2.0)))
+            lift = np.array([0.0, prop.height / 2.0, 0.0])
         return int(self.world.add_body(
             model.Motion(type=model.STATIC),
             collider=model.Collider(shape=shape),
-            position=tuple(np.asarray(prop.position, dtype='d') + half),
+            position=tuple(np.asarray(prop.position, dtype='d') + lift),
             orientation=_yaw(prop.yaw)))
 
 

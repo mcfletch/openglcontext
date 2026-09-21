@@ -63,22 +63,28 @@ class Shape:
             self.appearance = None
 
 
-def path(shape):
-    return [shape]
+def node(shape):
+    """What a record carries, and what a key function is handed."""
+    return shape
+
+
+def record(shape):
+    """A render record: (sortKey, mvmatrix, tmatrix, bvolume, path, node)."""
+    return (None, None, None, None, [shape], shape)
 
 
 class TestNoGeometry:
     def test_instance_key_none_without_geometry(self):
-        assert geometry_instance_key(path(Shape(None))) is None
+        assert geometry_instance_key(node(Shape(None))) is None
 
     def test_texture_key_none_without_geometry(self):
-        assert geometry_texture_key(path(Shape(None))) is None
+        assert geometry_texture_key(node(Shape(None))) is None
 
     def test_content_key_none_without_geometry(self):
-        assert geometry_content_key(path(Shape(None))) is None
+        assert geometry_content_key(node(Shape(None))) is None
 
     def test_content_instance_key_none_without_geometry(self):
-        assert geometry_content_instance_key(path(Shape(None))) is None
+        assert geometry_content_instance_key(node(Shape(None))) is None
 
 
 class TestMaterialTextureIds:
@@ -86,7 +92,7 @@ class TestMaterialTextureIds:
         tex = object()
         g = Geom(content_key=('g',))
         m = MatWithTexturesDict({'baseColor': tex, 'normal': None})
-        key = geometry_content_key(path(Shape(g, material=m)))
+        key = geometry_content_key(node(Shape(g, material=m)))
         # tex_key element is (channel, id(tex)); the None channel is dropped.
         tex_key = key[1]
         assert tex_key == (('baseColor', id(tex)),)
@@ -94,15 +100,15 @@ class TestMaterialTextureIds:
     def test_two_materials_same_textures_share_texkey(self):
         tex = object()
         g = Geom(content_key=('g',))
-        a = geometry_content_key(path(Shape(g, MatWithTexturesDict({'baseColor': tex}))))
-        b = geometry_content_key(path(Shape(g, MatWithTexturesDict({'baseColor': tex}))))
+        a = geometry_content_key(node(Shape(g, MatWithTexturesDict({'baseColor': tex}))))
+        b = geometry_content_key(node(Shape(g, MatWithTexturesDict({'baseColor': tex}))))
         assert a[1] == b[1]
 
     def test_single_texture_attribute_fallback(self):
         tex = object()
         g = Geom(content_key=('g',))
         m = MatWithTextureAttrs(base=tex)
-        key = geometry_content_key(path(Shape(g, material=m)))
+        key = geometry_content_key(node(Shape(g, material=m)))
         assert key[1] == (('baseColorTexture', id(tex)),)
 
     def test_callable_texture_attribute_ignored(self):
@@ -110,48 +116,48 @@ class TestMaterialTextureIds:
         g = Geom(content_key=('g',))
         m = MatWithTextureAttrs()
         m.baseColorTexture = lambda: None      # callable -> skipped
-        key = geometry_content_key(path(Shape(g, material=m)))
+        key = geometry_content_key(node(Shape(g, material=m)))
         assert key[1] == ()
 
 
 class TestContentSignature:
     def test_explicit_content_key_used(self):
-        a = geometry_content_key(path(Shape(Geom(content_key=('Sphere', 1.0)))))
-        b = geometry_content_key(path(Shape(Geom(content_key=('Sphere', 1.0)))))
+        a = geometry_content_key(node(Shape(Geom(content_key=('Sphere', 1.0)))))
+        b = geometry_content_key(node(Shape(Geom(content_key=('Sphere', 1.0)))))
         # Distinct nodes, equal explicit key -> same content component.
         assert a[0] == b[0] == ('Sphere', 1.0)
 
     def test_explicit_key_exception_falls_back_to_node_identity(self):
         g = RaisingGeom()
-        key = geometry_content_key(path(Shape(g)))
+        key = geometry_content_key(node(Shape(g)))
         # No cached id, positions None -> content None -> id(geometry).
         assert key[0] == id(g)
 
     def test_cached_content_id_reused(self):
         g = Geom(content_key='__missing__')
         g._instance_content_id = 'CACHED'
-        key = geometry_content_key(path(Shape(g)))
+        key = geometry_content_key(node(Shape(g)))
         assert key[0] == 'CACHED'
 
     def test_vertex_arrays_hashed_and_cached(self):
         pts = np.arange(9, dtype='f').reshape(3, 3)
         g = Geom(content_key='__missing__', positions=pts)
-        key1 = geometry_content_key(path(Shape(g)))
+        key1 = geometry_content_key(node(Shape(g)))
         # A second identical-content node hashes to the same signature.
         g2 = Geom(content_key='__missing__', positions=pts.copy())
-        key2 = geometry_content_key(path(Shape(g2)))
+        key2 = geometry_content_key(node(Shape(g2)))
         assert key1[0] == key2[0]
         assert getattr(g, '_instance_content_id', None) == key1[0]
 
     def test_hash_cache_setattr_failure_is_tolerated(self):
         pts = np.arange(9, dtype='f').reshape(3, 3)
         g = SlottedGeom(pts)      # __slots__ -> cannot stash _instance_content_id
-        key = geometry_content_key(path(Shape(g)))
+        key = geometry_content_key(node(Shape(g)))
         assert isinstance(key[0], str) and len(key[0]) == 32
 
     def test_no_positions_uses_node_identity(self):
         g = Geom(content_key='__missing__')     # no positions, no cache
-        key = geometry_content_key(path(Shape(g)))
+        key = geometry_content_key(node(Shape(g)))
         assert key[0] == id(g)
 
 
@@ -159,7 +165,7 @@ class TestAppearanceTextureFallback:
     def test_appearance_texture_used_when_material_untextured(self):
         tex = object()
         g = Geom(content_key=('g',))
-        key = geometry_content_key(path(Shape(g, material=None, texture=tex)))
+        key = geometry_content_key(node(Shape(g, material=None, texture=tex)))
         assert key[1] == (('appearance_texture', id(tex)),)
 
 
@@ -167,21 +173,21 @@ class TestContentInstanceKey:
     def test_splits_on_material_identity(self):
         g = Geom(content_key=('g',))
         m1, m2 = object(), object()
-        a = geometry_content_instance_key(path(Shape(g, material=m1)))
-        b = geometry_content_instance_key(path(Shape(g, material=m2)))
+        a = geometry_content_instance_key(node(Shape(g, material=m1)))
+        b = geometry_content_instance_key(node(Shape(g, material=m2)))
         assert a != b
         assert a[0] == b[0]     # same content
 
     def test_content_none_falls_back_to_node_identity(self):
         g = Geom(content_key='__missing__')     # no content signature
-        key = geometry_content_instance_key(path(Shape(g)))
+        key = geometry_content_instance_key(node(Shape(g)))
         assert key[0] == id(g)
 
 
 class TestInstanceGroupValue:
     def test_len_and_repr(self):
         geo = Geom(content_key=('g',))
-        members = [(None, None, None, None, path(Shape(geo))) for _ in range(3)]
+        members = [record(Shape(geo)) for _ in range(3)]
         grp = InstanceGroup(key='k', geometry=geo, appearance=None,
                             members=members)
         assert len(grp) == 3

@@ -56,40 +56,84 @@ def viewer_tangent(field_of_view: Optional[float] = None) -> float:
     return math.tan(math.radians(float(field_of_view)) / 2.0)
 
 
-def distance_to_viewer(node: Any, modelview: Any) -> float:
-    """How far the viewer is from ``node``'s centre, given its modelview.
+def viewer_distances(centres: Any, modelviews: Any) -> np.ndarray:
+    """How far the viewer is from each of ``N`` centres, given ``N`` modelviews.
 
-    The modelview takes the node's own coordinates to eye coordinates, where
-    the viewer is the origin -- so the length of the transformed centre is the
-    distance, and no separate camera position has to be threaded through.
+    ``centres`` is ``(N,3)`` in each node's own coordinates and ``modelviews``
+    is ``(N,4,4)``; a modelview takes its node's coordinates to eye coordinates,
+    where the viewer is the origin, so the length of the placed centre is the
+    distance and no separate camera position has to be threaded through.
+
+    For the whole set at once because a frame chooses a level for every
+    level-of-detail node in the scene, and at four-by-four a numpy call costs
+    more than the arithmetic inside it.
     """
+    centres = np.asarray(centres, dtype='d')
+    placed = np.concatenate(
+        [centres[:, :3], np.ones((len(centres), 1))], axis=1)
+    eye = (placed[:, None, :] @ np.asarray(modelviews, dtype='d'))[:, 0, :3]
+    distances: np.ndarray = np.linalg.norm(eye, axis=1)
+    return distances
+
+
+def uniform_scales(modelviews: Any) -> np.ndarray:
+    """What each of ``N`` modelviews does to a length, as an ``(N,)`` array.
+
+    The longest a unit axis comes out. A node's radius is in its own
+    coordinates and the distance to it is in the viewer's, so one of them has
+    to be carried into the other before they can be compared. The view part of
+    the matrix is a rotation and a translation and changes no length, which
+    leaves the node's own transform -- and the largest of its three axes is
+    what settles how big it looks, because that is the one that reaches
+    furthest across the window.
+    """
+    matrices = np.asarray(modelviews, dtype='d')[:, :3, :3]
+    largest: np.ndarray = np.sqrt((matrices * matrices).sum(axis=2)).max(axis=1)
+    return largest
+
+
+def screen_fractions(radii: Any, distances: Any, tangent: float) -> np.ndarray:
+    """Share of the window's height each of ``N`` spheres covers.
+
+    ``tangent`` is the tangent of half the vertical field of view, so the
+    window is ``2 * distance * tangent`` high where an object is and the object
+    is ``2 * radius`` of it. A viewer close enough to be inside a sphere covers
+    the window, which is where the ratio stops meaning anything.
+    """
+    radii = np.asarray(radii, dtype='d')
+    distances = np.asarray(distances, dtype='d')
+    spanned = radii / np.maximum(distances * float(tangent), _TINY)
+    fractions: np.ndarray = np.where(distances <= radii, 1.0,
+                                     np.minimum(1.0, spanned))
+    return fractions
+
+
+# The three above answer for a whole scene at once and the three below answer
+# for one object. Both are wanted, and each is written in the terms that suit
+# it: an array expression over several hundred objects costs a handful of numpy
+# calls, while the same expression over *one* costs those same calls to do
+# arithmetic a float multiply would have done -- and the one-object form is
+# asked once per object per frame by :meth:`LOD.selectAt`, which is the hottest
+# place either of them appears. What keeps the pairs from drifting is that each
+# is tested against the other, in
+# ``tests/unit/test_screen_coverage_lod.py::TestTheWholeSceneAtOnce``.
+
+
+def distance_to_viewer(node: Any, modelview: Any) -> float:
+    """How far the viewer is from ``node``'s centre, given its modelview."""
     centre = np.concatenate([np.asarray(node.center, dtype='d')[:3], [1.0]])
     eye = centre @ np.asarray(modelview, dtype='d')
     return float(np.linalg.norm(eye[:3]))
 
 
 def uniform_scale(modelview: Any) -> float:
-    """What ``modelview`` does to a length: the longest a unit axis comes out.
-
-    A node's radius is in its own coordinates and the distance to it is in the
-    viewer's, so one of them has to be carried into the other before they can
-    be compared. The view part of the matrix is a rotation and a translation
-    and changes no length, which leaves the node's own transform -- and the
-    largest of its three axes is what settles how big it looks, because that is
-    the one that reaches furthest across the window.
-    """
+    """What ``modelview`` does to a length: the longest a unit axis comes out."""
     matrix = np.asarray(modelview, dtype='d')[:3, :3]
     return float(np.sqrt((matrix * matrix).sum(axis=1)).max())
 
 
 def screen_fraction(radius: float, distance: float, tangent: float) -> float:
-    """Share of the window's height a sphere of ``radius`` covers from ``distance``.
-
-    ``tangent`` is the tangent of half the vertical field of view, so the window
-    is ``2 * distance * tangent`` high where the object is and the object is
-    ``2 * radius`` of it. A viewer close enough to be inside the sphere covers
-    the window, which is where the ratio stops meaning anything.
-    """
+    """Share of the window's height a sphere of ``radius`` covers from ``distance``."""
     radius = float(radius)
     distance = float(distance)
     if distance <= radius:
@@ -112,12 +156,29 @@ class LOD(basenodes.LOD):
     def selectFor(self, modelview: Any, tangent: float) -> bool:
         """Choose a level for the viewer this modelview and field of view are.
 
-        What the render pass calls, once a frame, for every level-of-detail
-        node in the scene. ``tangent`` is the tangent of half the vertical
-        field of view: a VRML97 ``LOD`` names its levels in distances and has
-        no use for it, and a node that switches on screen coverage does.
+        For one node on its own. ``tangent`` is the tangent of half the
+        vertical field of view: a VRML97 ``LOD`` names its levels in distances
+        and has no use for it, and a node that switches on screen coverage
+        does. A render pass with a scene's worth to choose for works the two
+        numbers out for the whole set and calls :meth:`selectAt`.
         """
-        return self.select(distance_to_viewer(self, modelview))
+        return self.selectAt(distance_to_viewer(self, modelview),
+                             uniform_scale(modelview), tangent)
+
+    def selectAt(self, distance: float, scale: float, tangent: float) -> bool:
+        """Choose a level from numbers already worked out; True if it changed.
+
+        What the render pass calls, once a frame, for every level-of-detail
+        node in the scene. ``distance`` is how far the viewer is from this
+        node's centre and ``scale`` is what the node's own transform does to a
+        length; the pass derives both for the whole scene at once, which leaves
+        each node the part that is genuinely its own -- which of its thresholds
+        the answer falls in, and whether that is a change worth announcing.
+
+        A VRML97 ``LOD`` names its levels in distances, so the scale and the
+        lens are nothing to it.
+        """
+        return self.select(distance)
 
     def select(self, distance: float) -> bool:
         """Choose the level for a viewer ``distance`` away; True if it changed.
@@ -242,16 +303,15 @@ class ScreenCoverageLOD(LOD):
         """New levels are a new size to judge them by."""
         self._measured = 0.0
 
-    def selectFor(self, modelview: Any, tangent: float) -> bool:
+    def selectAt(self, distance: float, scale: float, tangent: float) -> bool:
         """Choose the level for the coverage this viewer gives the object."""
-        radius = self.coverageRadius() * uniform_scale(modelview)
+        radius = self.coverageRadius() * scale
         if radius <= 0:
             # Nothing to measure: the finest level stands, which is what a
             # reader that had never heard of the extension would draw.
             return False
-        coverage = screen_fraction(
-            radius, distance_to_viewer(self, modelview), tangent)
-        return self.show(self.levelForCoverage(coverage))
+        return self.show(self.levelForCoverage(
+            screen_fraction(radius, distance, tangent)))
 
     def levelForCoverage(self, coverage: float) -> int:
         """The level to draw where the object covers ``coverage`` of the window.

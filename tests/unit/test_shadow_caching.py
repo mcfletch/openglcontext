@@ -32,9 +32,9 @@ def _unit_box(scale=1.0):
 
 
 def _record(tmatrix, volume, shape=None):
-    """A caster record: (sortKey, mvmatrix, tmatrix, bvolume, path)."""
-    path = [object() if shape is None else shape]
-    return (None, None, np.asarray(tmatrix, dtype='d'), volume, path)
+    """A caster record: (sortKey, mvmatrix, tmatrix, bvolume, path, node)."""
+    node = object() if shape is None else shape
+    return (None, None, np.asarray(tmatrix, dtype='d'), volume, [node], node)
 
 
 def _moved(x=0.0, z=0.0):
@@ -53,13 +53,19 @@ class TestCasterDataCache:
     recomputing the still ones because the car moved is the whole cost."""
 
     def _mixin(self, records):
+        """A mixin that records which casters it had to derive.
+
+        One entry per caster actually put through the derivation, so the counts
+        below read as "how much of the scene was worked out this frame"
+        whatever shape the derivation itself takes.
+        """
         self.calls = calls = []
 
         class Counting(ShadowMapMixin):
-            @staticmethod
-            def _casterGeometry(tmatrix, bvolume):
-                calls.append(id(bvolume))
-                return ShadowMapMixin._casterGeometry(tmatrix, bvolume)
+            @classmethod
+            def _casterGeometryBatch(cls, batch):
+                calls.extend(id(record[3]) for record in batch)
+                return ShadowMapMixin._casterGeometryBatch(batch)
 
         m = Counting()
         m._shadowCasterRecords = lambda: list(records)
@@ -373,11 +379,12 @@ _SHARED_PATHS = {}
 
 
 def _shared_path(i):
-    """A stable (sortKey, mv, tmatrix, bvolume, path) record; path identity is
-    reused per index so the cache key is stable across calls."""
+    """A stable (sortKey, mv, tmatrix, bvolume, path, node) record; the path
+    identity is reused per index so the cache key is stable across calls."""
     if i not in _SHARED_PATHS:
         _SHARED_PATHS[i] = [_Shape()]
-    return (None, np.eye(4), np.eye(4), None, _SHARED_PATHS[i])
+    return (None, np.eye(4), np.eye(4), None, _SHARED_PATHS[i],
+            _SHARED_PATHS[i][-1])
 
 
 class TestLightSpaceModelviews:
@@ -641,9 +648,12 @@ class TestCasterSignatureIdentityContract:
 
     def _mixin_with_path(self, path):
         from vrml.vrml97 import nodetypes
-        m = ShadowMapMixin()
-        # _shadowCasterRecords reads self.paths[Rendering]; hand it the real path
-        # so _casterSignature runs on real transformMatrix()/boundingVolume() ids.
+        from OpenGLContext.passes import _flat, flatcore
+        # The caster pool is drawn from the frame's own gather, so this is the
+        # real pass with the real path in it -- _casterSignature then runs on
+        # real transformMatrix()/boundingVolume() ids, which is the point.
+        m = flatcore.FlatPass.__new__(flatcore.FlatPass)
+        _flat.SGObserver.__init__(m, None, [])
         m.paths = {nodetypes.Rendering: [path]}
         return m
 
@@ -684,19 +694,150 @@ class TestCasterSignatureIdentityContract:
         transform, path = _real_transform_shape_path()
         m = self._mixin_with_path(path)
         calls = {'n': 0}
-        real = ShadowMapMixin._casterGeometry
+        real = ShadowMapMixin._casterGeometryBatch
 
-        def counting(tmatrix, bvolume):
-            calls['n'] += 1
-            return real(tmatrix, bvolume)
+        def counting(batch):
+            calls['n'] += len(batch)
+            return real(batch)
 
-        m._casterGeometry = staticmethod(counting)
+        m._casterGeometryBatch = staticmethod(counting)
         m._refreshCasterData()
         m._refreshCasterData()
         assert calls['n'] == 1              # unmoved -> world geometry cached
         transform.translation = (3.0, 0.0, 0.0)
         m._refreshCasterData()
         assert calls['n'] == 2              # moved -> recomputed
+
+
+class TestCasterGeometryInBatches:
+    """Every caster that has to be derived is derived in one pass.
+
+    A caster's world geometry is an eight-row matrix product, a minimum and a
+    maximum -- arrays small enough that numpy's cost is the call rather than
+    the arithmetic. A scene's worth of them is therefore asked for together,
+    and the answer has to be the one the single-caster form gives.
+    """
+
+    def _pairs(self):
+        return [
+            _record(_moved(4.0, -2.0), FakeVolume(_unit_box())),
+            _record(np.eye(4), FakeVolume(_unit_box(3.0))),
+            _record(_moved(z=11.0), FakeVolume(_unit_box(0.5))),
+        ]
+
+    def test_a_batch_matches_one_at_a_time(self):
+        records = self._pairs()
+        found = ShadowMapMixin._casterGeometryBatch(records)
+        assert len(found) == len(records)
+        for record, batched in zip(records, found):
+            single = ShadowMapMixin._casterGeometry(record[2], record[3])
+            assert np.allclose(batched[0], single[0])
+            assert np.allclose(batched[1], single[1])
+
+    def test_a_caster_with_no_volume_answers_nothing(self):
+        records = [_record(np.eye(4), None),
+                   _record(np.eye(4), FakeVolume(_unit_box()))]
+        found = ShadowMapMixin._casterGeometryBatch(records)
+        assert found[0] is None and found[1] is not None
+
+    def test_a_caster_whose_volume_yields_no_points_answers_nothing(self):
+        records = [_record(np.eye(4), FakeVolume(np.zeros((0, 4)))),
+                   _record(np.eye(4), FakeVolume(_unit_box()))]
+        found = ShadowMapMixin._casterGeometryBatch(records)
+        assert found[0] is None and found[1] is not None
+
+    def test_an_unbounded_volume_answers_nothing(self):
+        from OpenGLContext.scenegraph.boundingvolume import UnboundedVolume
+        found = ShadowMapMixin._casterGeometryBatch(
+            [_record(np.eye(4), UnboundedVolume())])
+        assert found == [None]
+
+    def test_volumes_of_different_point_counts_mix(self):
+        """A batch is not one array: a scene holds boxes and point clouds."""
+        cloud = np.random.default_rng(3).normal(size=(17, 3))
+        records = [_record(_moved(2.0), FakeVolume(_unit_box())),
+                   _record(np.eye(4), FakeVolume(cloud)),
+                   _record(_moved(-5.0), FakeVolume(_unit_box(2.0)))]
+        found = ShadowMapMixin._casterGeometryBatch(records)
+        assert [f[0].shape for f in found] == [(8, 3), (17, 3), (8, 3)]
+        for record, batched in zip(records, found):
+            single = ShadowMapMixin._casterGeometry(record[2], record[3])
+            assert np.allclose(batched[1], single[1])
+
+    def test_three_component_points_are_placed_like_four(self):
+        flat = np.array([[x, y, z] for x in (-1, 1) for y in (-1, 1)
+                         for z in (-1, 1)], dtype='d')
+        records = [_record(_moved(6.0), FakeVolume(flat))]
+        found = ShadowMapMixin._casterGeometryBatch(records)
+        assert np.allclose(found[0][0].mean(axis=0), [6, 0, 0])
+
+    def test_an_empty_batch_is_an_empty_answer(self):
+        assert ShadowMapMixin._casterGeometryBatch([]) == []
+
+
+class TestTheMemoHitsAcrossFrames:
+    """The memo's whole purpose is a still scene costing nothing to re-derive.
+
+    It tells "still" from the transform matrix being the same object it was
+    handed last frame, which is what the scenegraph's transform cache
+    guarantees. These drive the two callers the way a frame does -- the
+    camera-visible fit first, then the whole caster pool -- over a real
+    scenegraph, so the identity under test is the one the gather really hands
+    out rather than one a stub arranged.
+    """
+
+    def _pass_over(self, count=4):
+        from OpenGLContext import frustum
+        from OpenGLContext.passes import _flat, flatcore
+        from OpenGLContext.scenegraph import basenodes
+        moves = [basenodes.Transform(
+            translation=(index * 3.0, 0, 0),
+            children=[basenodes.Shape(geometry=basenodes.Box(size=(1, 1, 1)))])
+            for index in range(count)]
+        scene = basenodes.sceneGraph(children=moves)
+        # The shader pass as a frame drives it, built without its GL setup: the
+        # gather and the shadow fit are arithmetic over the scenegraph.
+        passing = flatcore.FlatPass.__new__(flatcore.FlatPass)
+        _flat.SGObserver.__init__(passing, scene, [])
+        passing.frustum = frustum.Frustum(planes=np.zeros((0, 4), 'f'))
+        self.derived = derived = []
+        real = type(passing)._casterGeometryBatch
+
+        def counting(records):
+            derived.extend(id(r[3]) for r in records)
+            return real(records)
+
+        passing._casterGeometryBatch = staticmethod(counting)
+        return passing, moves
+
+    def _frame(self, passing):
+        """What renderShadowMaps asks for, in the order it asks."""
+        toRender = passing.renderSet(np.eye(4, dtype='f'))
+        passing._occluderPoints(toRender)
+        passing._refreshCasterData()
+        return toRender
+
+    def test_a_still_scene_derives_each_caster_once(self):
+        passing, _moves = self._pass_over(4)
+        for _frame in range(5):
+            self._frame(passing)
+        assert len(self.derived) == 4
+
+    def test_a_caster_that_moves_is_derived_again(self):
+        passing, moves = self._pass_over(4)
+        self._frame(passing)
+        assert len(self.derived) == 4
+        moves[2].translation = (0.0, 7.0, 0.0)
+        self._frame(passing)
+        self._frame(passing)
+        assert len(self.derived) == 5
+
+    def test_the_fit_and_the_pool_agree_on_what_they_derived(self):
+        passing, _moves = self._pass_over(3)
+        toRender = self._frame(passing)
+        fresh = ShadowMapMixin._worldPointsFromRecords(toRender)
+        assert np.allclose(np.sort(passing._occluderPoints(toRender), axis=0),
+                           np.sort(fresh, axis=0))
 
 
 class TestFarCascadeCullCompleteness:

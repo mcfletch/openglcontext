@@ -19,7 +19,7 @@ class FakeShape:
 
 def rec(shape, mv):
     key = (False, [], 0.0)
-    return (key, mv, [[1]], None, [shape])
+    return (key, mv, [[1]], None, [shape], shape)
 
 
 IDENT = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]

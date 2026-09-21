@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 300" role="img" aria-label="A point light sits inside a cube of six depth maps; a ray through one face measures the distance to an object. The cube unfolds into six faces, one depth render each.">
+  <defs>
+    <marker id="p-ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#333"></path></marker>
+    <marker id="p-ah2" markerWidth="9" markerHeight="9" refX="1" refY="3" orient="auto"><path d="M8,0 L1,3 L8,6 Z" fill="#333"></path></marker>
+  </defs>
+  <!-- cube around the light (oblique) : back square + connectors -->
+  <polygon points="110,102 200,102 200,192 110,192" fill="none" stroke="#9aa8cc" stroke-width="1" stroke-dasharray="4,3"></polygon>
+  <line x1="70" y1="140" x2="110" y2="102" stroke="#9aa8cc" stroke-width="1"></line>
+  <line x1="160" y1="140" x2="200" y2="102" stroke="#9aa8cc" stroke-width="1"></line>
+  <line x1="160" y1="230" x2="200" y2="192" stroke="#9aa8cc" stroke-width="1"></line>
+  <line x1="70" y1="230" x2="110" y2="192" stroke="#9aa8cc" stroke-width="1"></line>
+  <!-- right (+X) face highlighted: the ray passes through it -->
+  <polygon points="160,140 200,102 200,192 160,230" fill="#cfe0c9" fill-opacity="0.6" stroke="#77aa77"></polygon>
+  <!-- front face of the cube -->
+  <rect x="70" y="140" width="90" height="90" fill="none" stroke="#5a6a90" stroke-width="1.5"></rect>
+  <text x="60" y="252" font-size="11.5" fill="#556">a cube of six depth maps around the light</text>
+  <!-- the light, at the centre of the cube -->
+  <circle cx="135" cy="170" r="12" fill="#ffdf6b" stroke="#c9a400" stroke-width="1.5"></circle>
+  <text x="103" y="164" font-size="11" font-weight="bold" fill="#665">light</text>
+  <!-- an object outside the cube -->
+  <rect x="288" y="152" width="34" height="34" rx="3" fill="#a7bbe0" stroke="#5a6a90"></rect>
+  <text x="288" y="204" font-size="11" fill="#456">object</text>
+  <!-- ray from the light through the +X face to the object, measuring distance -->
+  <line x1="135" y1="170" x2="305" y2="169" stroke="#333" stroke-width="1.4" marker-start="url(#p-ah2)" marker-end="url(#p-ah)"></line>
+  <circle cx="181" cy="169" r="3.6" fill="#c0392b"></circle>
+  <text x="150" y="150" font-size="11" fill="#334">distance to the object,</text>
+  <text x="150" y="164" font-size="11" fill="#334">stored in the +X face</text>
+  <!-- unfolded cube (cross of six faces) -->
+  <text x="428" y="34" font-size="12" font-weight="bold" fill="#556">unfolded: six faces</text>
+  <g fill="#ffffff" stroke="#77aa77">
+    <rect x="474" y="66" width="44" height="44"></rect>
+    <rect x="430" y="110" width="44" height="44"></rect>
+    <rect x="474" y="110" width="44" height="44"></rect>
+    <rect x="562" y="110" width="44" height="44"></rect>
+    <rect x="474" y="154" width="44" height="44"></rect>
+  </g>
+  <rect x="518" y="110" width="44" height="44" fill="#cfe0c9" fill-opacity="0.6" stroke="#77aa77"></rect>
+  <text x="530" y="137" font-size="11" fill="#254">+X</text>
+  <text x="428" y="224" font-size="11.5" fill="#822">six faces &#8594; six depth renders / frame</text>
+  <text x="428" y="242" font-size="11.5" fill="#822">memory = 6 &#215; resolution&#178; per light</text>
+</svg>

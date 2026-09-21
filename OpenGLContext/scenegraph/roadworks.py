@@ -38,7 +38,8 @@ from OpenGLContext.scenegraph.road import RoadProfile, sweep_frames
 __all__ = [
     'BarrierProfile', 'BridgeProfile', 'CausewayProfile', 'TunnelProfile',
     'bridge_meshes', 'causeway_meshes', 'tunnel_meshes', 'barrier_wall',
-    'bore_shade', 'bore_sky', 'tunnel_lamps',
+    'bore_opening', 'bore_shade', 'bore_sky', 'tunnel_lamps',
+    'BORE_APPROACH_CELLS', 'BORE_INSET',
     'concrete_material', 'barrier_material', 'lamp_material',
 ]
 
@@ -206,7 +207,12 @@ class TunnelProfile:
     drop into.
 
     ``portal_border`` is how far the portal's face stands out around the arch
-    where the bore meets the hillside.
+    where the bore meets the hillside. The face is a *wall* with the arch in it
+    -- a flat top and two uprights -- because the ground is dug back to it and
+    meets it, and a hillside drawn from a grid metres wide comes down to a
+    straight edge rather than to a curve. It follows that the border wants to be
+    at least as wide as the ground's own sampling: what shows past the face is
+    the cut edge of the ground, and that is resolved to a cell.
 
     ``daylight`` is how far into the bore the light from a portal reaches, in
     metres, and ``gloom`` how much of the lining's colour is left past that. A
@@ -431,15 +437,14 @@ def tunnel_meshes(points: Any, profile: Optional[RoadProfile] = None,
     half = profile.on_structure().total_width / 2.0 + tunnel.margin
     arch = _arch(half, tunnel.clearance, tunnel.segments,
                  foot=tunnel.springing, floor=tunnel.floor)
-    outer = _arch(half + tunnel.portal_border,
-                  tunnel.clearance + tunnel.portal_border, tunnel.segments,
-                  foot=tunnel.springing + tunnel.portal_border,
-                  floor=tunnel.floor)
+    carried, outer = _portal_face(arch, half + tunnel.portal_border,
+                                  tunnel.clearance + tunnel.portal_border,
+                                  tunnel.springing + tunnel.portal_border)
     bore = _swept(line, right, up, lining, arch, facing=INWARD,
                   shade=bore_shade(line, tunnel),
                   sky=bore_sky(line, tunnel))
-    portals = _merge([_ring(line[at], right[at], up[at], arch, outer, material,
-                            outwards=facing)
+    portals = _merge([_ring(line[at], right[at], up[at], carried, outer,
+                            material, outwards=facing)
                       for at, facing in ((0, -1.0), (len(line) - 1, 1.0))],
                      material)
     parts = {'bore': bore, 'portals': portals}
@@ -515,6 +520,172 @@ def tunnel_lamps(points: Any, tunnel: Optional[TunnelProfile] = None,
     at = np.clip(np.searchsorted(station, wanted), 0, len(line) - 1)
     height = float(tunnel.clearance) - float(tunnel.lamp_drop)
     return line[at] + up[at] * height
+
+
+#: How far in front of a portal the road's own space is cleared of ground, as a
+#: multiple of the ground's sample spacing. The surface steps from the cutting
+#: to the hillside inside one cell at a face, and the step is drawn between a
+#: sample under the road and one over the hill -- a wall across the carriageway
+#: that no rule about heights takes out, since neither of the two samples it is
+#: drawn between is in the way. What carries a car over the hole is the road's
+#: own surface, so clearing a few cells of it costs nothing.
+BORE_APPROACH_CELLS = 6.0
+
+#: How far inside the portal's face a bore's mouth is opened, in metres. The
+#: ground at a mouth steps from the cutting to the hillside inside one cell, and
+#: what a grid makes of that is a row of teeth: cut to the face's own edge they
+#: show along it, and cut to a little inside it the face stands in front of
+#: them. A cell is metres and this is centimetres, because what it has to clear
+#: is how exactly the earthwork and the face agree rather than the grid.
+BORE_INSET = 0.3
+
+
+def bore_opening(points: Any, ground: HeightFn,
+                 profile: Optional[RoadProfile] = None,
+                 tunnel: Optional[TunnelProfile] = None,
+                 inset: float = 0.0,
+                 approach: float = 0.0,
+                 chunk: int = 4096) -> "Callable[[Any, Any], np.ndarray]":
+    """Where a bore breaks the surface of the ground it runs through.
+
+    A height field is a surface, so the hill a road passes *inside* is drawn as
+    a hill and collided with as one -- which at the portal puts the hillside
+    where the carriageway is. The mouth is what has to come out of it, and this
+    is that shape: ``holes(x, z) -> mask``, true where the ground stands inside
+    the bore, to hand to
+    :meth:`~OpenGLContext.scenegraph.terrain.heightfield.HeightField.mesh` and
+    to :class:`~OpenGLContext.physics.heightfield.HeightFieldColliders`.
+
+    Inside the bore means standing where the portal's face and the tube behind
+    it stand: over the carriageway, within the face's own width, and under its
+    top. So the answer is the mouth and not a trench down the length of the
+    tunnel -- the ground under the road is ground the road is laid on, and the
+    hillside that has closed over the face is hillside. Where the hill covers
+    the bore from end to end -- which is where a bore belongs -- nothing is open
+    at all.
+
+    ``points`` is (N,3) at the height the road surface runs at, the same
+    stretch of centreline :func:`tunnel_meshes` lines; ``ground(x, z)`` is the
+    surface being cut, which is the field's own
+    :meth:`~OpenGLContext.scenegraph.terrain.heightfield.HeightField.sample`.
+
+    ``inset`` draws the opening *inside* the face by that much, which is what
+    leaves the face covering the edge of the cut: the ground at a mouth steps
+    from the cutting to the hillside inside one cell, and what a grid makes of
+    that is a row of teeth. Cut to the face's own edge they show along it; cut
+    to a little inside, the face stands in front of them.
+
+    ``approach`` clears the road's own space for that far in front of each face,
+    whatever the ground there is doing. The same step the teeth come from is
+    drawn *across the carriageway* between the last sample of the cutting and
+    the first of the hillside -- a wall the car meets at speed, and one no rule
+    about heights removes, since the two samples it is drawn between are one
+    under the road and one over the hill. It is cleared under the road's own
+    width and no wider, so the surface drawn for the road covers the hole and
+    the collider built for it carries the car over. A few of the ground's own
+    cells is enough, and it costs nothing to give it more.
+
+    The face is measured in plan, from the nearest point of the centreline: a
+    bore banks and bends, and the difference that makes to where its mouth
+    reaches is under the metre an inset is given in.
+    """
+    line = _line(points, "a tunnel")
+    laid = profile or RoadProfile()
+    profile = laid.on_structure()
+    tunnel = tunnel or TunnelProfile()
+    # The portal's face rather than the arch in it: the face is what holds the
+    # cut, so ground standing anywhere across it is ground the face replaces.
+    reach = (profile.total_width / 2.0 + tunnel.margin + tunnel.portal_border
+             - float(inset))
+    crown = tunnel.clearance + tunnel.portal_border - float(inset)
+    # The road's own width on the approach: what the surface drawn for it
+    # covers, verge to verge, so a hole cleared under it is one nothing sees.
+    paved = laid.total_width / 2.0
+    faces, inward = _faces_of(line)
+    span = reach + float(approach)
+    low = line[:, [0, 2]].min(axis=0) - span
+    high = line[:, [0, 2]].max(axis=0) + span
+
+    def opened(x: Any, z: Any) -> np.ndarray:
+        shape = np.broadcast_shapes(np.shape(np.asarray(x)),
+                                    np.shape(np.asarray(z)))
+        across_x = np.broadcast_to(np.asarray(x, dtype='d'), shape).ravel()
+        across_z = np.broadcast_to(np.asarray(z, dtype='d'), shape).ravel()
+        found = np.zeros(len(across_x), dtype=bool)
+        # Only what is over the bore can be in it, and on a landscape that is
+        # nearly nothing: four comparisons rule out the rest of the world.
+        maybe = np.flatnonzero((across_x >= low[0]) & (across_x <= high[0])
+                               & (across_z >= low[1]) & (across_z <= high[1]))
+        for start in range(0, len(maybe), chunk):
+            batch = maybe[start:start + chunk]
+            here_x, here_z = across_x[batch], across_z[batch]
+            away, road = _beside(line, np.stack([here_x, here_z], axis=-1))
+            surface = np.asarray(ground(here_x, here_z), 'd')
+            inside = ((away <= reach)
+                      & (surface > road + profile.section_offset(away))
+                      & (surface < road + crown))
+            found[batch] = inside | _cleared(here_x, here_z, faces, inward,
+                                             paved, float(approach))
+        return found.reshape(shape)
+
+    return opened
+
+
+def _faces_of(line: np.ndarray) -> "tuple[np.ndarray, np.ndarray]":
+    """A bore's two faces, and the way each of them looks out of the hill."""
+    faces = np.stack([line[0], line[-1]])
+    inward = np.stack([line[1] - line[0], line[-2] - line[-1]])
+    inward[:, 1] = 0.0
+    length = np.linalg.norm(inward, axis=1, keepdims=True)
+    return faces, inward / np.where(length > 0.0, length, 1.0)
+
+
+def _cleared(x: np.ndarray, z: np.ndarray, faces: np.ndarray,
+             inward: np.ndarray, paved: float, approach: float) -> np.ndarray:
+    """Which points stand in the road's own space on the run up to a face.
+
+    The ground steps from the cutting to the hillside inside one cell at a
+    portal, and a step drawn across the carriageway is a wall the car meets at
+    speed -- whatever height the two samples it is drawn between happen to have,
+    which is why this asks nothing about height. Under the road's own width and
+    no wider, so what carries the car over the hole is the road, and what a
+    player sees there is the road as well.
+    """
+    found = np.zeros(len(x), dtype=bool)
+    if approach <= 0.0:
+        return found
+    for face, way in zip(faces, inward):
+        away_x, away_z = x - face[0], z - face[2]
+        ahead = away_x * way[0] + away_z * way[2]
+        beside = np.abs(away_x * way[2] - away_z * way[0])
+        found |= (ahead <= 0.0) & (ahead >= -approach) & (beside <= paved)
+    return found
+
+
+def _beside(line: np.ndarray, points: np.ndarray
+            ) -> "tuple[np.ndarray, np.ndarray]":
+    """How far each point is from the line in plan, and how high the line is there.
+
+    Measured to the nearest point *of the nearest segment*, so a centreline
+    written every eight metres answers about the road between its points rather
+    than about a chain of circles around them.
+    """
+    start = line[:-1]
+    delta = line[1:] - start
+    span = np.einsum('ij,ij->i', delta[:, [0, 2]], delta[:, [0, 2]])
+    # A segment of no length has no direction to project onto; a divisor of one
+    # leaves everything pinned to its start.
+    span = np.where(span > 0.0, span, 1.0)
+    gap = points[:, None, :] - start[None, :, [0, 2]]
+    along = np.clip(np.einsum('ijk,jk->ij', gap, delta[:, [0, 2]]) / span,
+                    0.0, 1.0)
+    on = start[None, :, [0, 2]] + along[:, :, None] * delta[None, :, [0, 2]]
+    away = points[:, None, :] - on
+    distance = np.einsum('ijk,ijk->ij', away, away)
+    at = distance.argmin(axis=1)
+    rows = np.arange(len(points))
+    height = (start[at, 1] + along[rows, at] * delta[at, 1])
+    return np.sqrt(distance[rows, at]), height
 
 
 def bore_shade(points: Any, tunnel: Optional[TunnelProfile] = None) -> np.ndarray:
@@ -866,13 +1037,89 @@ def _arch(half_width: float, clearance: float, segments: int,
     return walled + [walled[0]] if floor else walled
 
 
+def _portal_face(section: list, half: float, crown: float,
+                 foot: float) -> "tuple[list, list]":
+    """The arch, and the rectangle a portal's face carries it in.
+
+    A portal stands in a **cut face**: the ground is dug back to it, and the
+    wall is what holds the cut and carries the arch. So the outside of the face
+    is a rectangle -- a flat top and two uprights -- and not a larger arch. It
+    is also what makes the mouth meet the ground cleanly: a hillside sampled on
+    a grid metres wide cannot come down to a curve, and a band that follows the
+    arch leaves the cut face of the ground showing in slivers either side of it.
+
+    Each point of the arch goes out along its own ray to the wall's edge, so the
+    face is one quad per facet of the arch and meets it exactly. Where two
+    facets land on different edges of the rectangle the corner between them is
+    carried too, against the arch point they share.
+
+    :returns: ``(inner, outer)`` -- the arch as the face carries it, and the
+        wall's own outline, point for point.
+    """
+    inner: list = []
+    outer: list = []
+    for point in section:
+        placed, edge = _onto_face(point, half, crown, foot)
+        if inner:
+            corner = _corner_between(outer[-1], placed, half, crown, foot)
+            if corner is not None:
+                inner.append(inner[-1])
+                outer.append(corner)
+        inner.append(point)
+        outer.append(placed)
+    return inner, outer
+
+
+def _onto_face(point: "tuple[float, float]", half: float, crown: float,
+               foot: float) -> "tuple[tuple[float, float], tuple[int, int]]":
+    """One section point pushed out to the wall, and which edge it landed on."""
+    lateral, vertical = point
+    across = half / abs(lateral) if lateral else math.inf
+    along = (crown / vertical if vertical > 0
+             else foot / abs(vertical) if vertical < 0 else math.inf)
+    reach = min(across, along)
+    edge = ((int(math.copysign(1, lateral)), 0) if across <= along
+            else (0, int(math.copysign(1, vertical))))
+    return (lateral * reach, vertical * reach), edge
+
+
+def _corner_between(before: "tuple[float, float]",
+                    after: "tuple[float, float]", half: float, crown: float,
+                    foot: float) -> "Optional[tuple[float, float]]":
+    """The corner of the wall two points cross, or None where they share an edge.
+
+    Read off the points themselves rather than carried along: a point is on an
+    upright where it stands at the wall's own half-width, and on the top or the
+    bottom where it stands at the wall's height.
+    """
+    def edges(point: "tuple[float, float]") -> set:
+        lateral, vertical = point
+        found = set()
+        if abs(abs(lateral) - half) < 1e-9:
+            found.add(('x', math.copysign(1, lateral)))
+        if abs(vertical - crown) < 1e-9:
+            found.add(('y', 1.0))
+        elif abs(vertical + foot) < 1e-9:
+            found.add(('y', -1.0))
+        return found
+
+    first, second = edges(before), edges(after)
+    if first & second:
+        return None
+    upright = next((one for one in first | second if one[0] == 'x'), None)
+    level = next((one for one in first | second if one[0] == 'y'), None)
+    if upright is None or level is None:
+        return None
+    return (upright[1] * half, crown if level[1] > 0 else -foot)
+
+
 def _ring(centre: np.ndarray, right: np.ndarray, up: np.ndarray,
           inner: list, outer: list, material: PBRMaterial,
           outwards: float) -> PBRMesh:
     """A flat band between two sections, standing square across the road.
 
-    The portal's face: the hillside side of the bore, wide enough around the
-    arch to read as a headwall rather than as the cut edge of a hole.
+    The portal's face: the hillside side of the bore, standing round the arch
+    as a headwall rather than as the cut edge of a hole.
     """
     def place(section: list) -> np.ndarray:
         lateral = np.asarray([p[0] for p in section])[:, None]
@@ -888,7 +1135,15 @@ def _ring(centre: np.ndarray, right: np.ndarray, up: np.ndarray,
     d = c + 1
     quads = (np.stack([a, c, b, b, c, d], axis=-1) if outwards > 0
              else np.stack([a, b, c, b, d, c], axis=-1))
-    return _mesh(positions, quads.ravel().astype(np.uint32), material)
+    triangles = quads.reshape(-1, 3)
+    # A corner of the face is carried against one point of the arch, so the
+    # quad that turns it has two corners in the same place: half of it is a
+    # triangle and the other half is nothing.
+    flat = ((triangles[:, 0] == triangles[:, 1])
+            | (triangles[:, 1] == triangles[:, 2])
+            | (triangles[:, 2] == triangles[:, 0]))
+    return _mesh(positions, triangles[~flat].ravel().astype(np.uint32),
+                 material)
 
 
 def _piers(line: np.ndarray, right: np.ndarray, up: np.ndarray,

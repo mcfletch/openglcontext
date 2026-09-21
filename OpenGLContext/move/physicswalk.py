@@ -33,7 +33,7 @@ overrides nothing -- so it can be added to any class that offers:
 ``addEventHandler``, ``triggerRedraw``, ``getNavigation``, ``updateNavigation``
     The event and navigation plumbing every ``Context`` has.
 
-See [docs/physics.html](../../docs/physics.html) and
+See [docs/physics.rst](../../docs/physics.rst) and
 ``plans/PHYSICS-COLLISION.md`` §Phase 5.
 """
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple

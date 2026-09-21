@@ -22,8 +22,9 @@ class FakeVolume:
         return self._points
 
 
-def _record(tmatrix, volume):
-    return (None, None, np.asarray(tmatrix, dtype='d'), volume, None)
+def _record(tmatrix, volume, node=None):
+    return (None, None, np.asarray(tmatrix, dtype='d'), volume,
+            None if node is None else [node], node)
 
 
 class TestCastsShadow:
@@ -399,7 +400,7 @@ class TestRenderShadowMapsGuards:
         return types.SimpleNamespace(castsShadow=casts)
 
     def _record(self, node):
-        return (None, None, np.identity(4, 'd'), None, [node])
+        return (None, None, np.identity(4, 'd'), None, [node], node)
 
     def test_disabled_shadows_clears_bindings_and_returns(self):
         m = ShadowMapMixin()
@@ -470,18 +471,20 @@ class TestWhereACallerSetsTheOptOut:
         assert not self.shape(castsShadow=False).castsShadow
 
     def test_the_caster_pool_leaves_out_a_shape_that_opted_out(self):
-        class Path(list):
-            """What the pass asks of a path: where the node is in the world."""
+        from vrml.vrml97 import nodepath, nodetypes
 
-            def transformMatrix(self):
-                return np.identity(4, 'd')
+        from OpenGLContext.passes import _flat, flatcore
+        from OpenGLContext.scenegraph.transform import Transform
 
-        mixin = ShadowMapMixin()
         casting, opted_out = self.shape(), self.shape(castsShadow=False)
-        from vrml.vrml97 import nodetypes
+        # The real pass over real paths: the caster pool is drawn from the
+        # frame's own gather, which is what walks a path to its node.
+        mixin = flatcore.FlatPass.__new__(flatcore.FlatPass)
+        _flat.SGObserver.__init__(mixin, None, [])
+        mixin.paths = {nodetypes.Rendering: [
+            nodepath.NodePath([Transform(children=[node]), node])
+            for node in (casting, opted_out)]}
 
-        mixin.paths = {nodetypes.Rendering: [Path([casting]),
-                                             Path([opted_out])]}
         found = [record[4][-1] for record in mixin._shadowCasterRecords()]
         assert casting in found
         assert opted_out not in found
@@ -489,6 +492,7 @@ class TestWhereACallerSetsTheOptOut:
     def test_the_render_set_leaves_out_a_shape_that_opted_out(self):
         mixin = ShadowMapMixin()
         mixin.use_shadows = True
-        mixin.renderShadowMaps([_record(np.identity(4, 'd'), None)[:4]
-                                + ([self.shape(castsShadow=False)],)])
+        mixin.renderShadowMaps([
+            _record(np.identity(4, 'd'), None,
+                    self.shape(castsShadow=False))])
         assert mixin._shadow_bindings == []

@@ -304,7 +304,11 @@ DEMO_SCENES: Tuple[SceneSpec, ...] = (
     SceneSpec('RiggedFigure', anim_time=0.6),
     SceneSpec('RiggedSimple'),
     _studio('ScatteringSkull', yaw=-0.6, elevation=0.12, margin=0.9),
-    _studio('SheenChair'),
+    _hdr('SheenChair', 'procedural_studio',
+         description='Sheen velvet over a wooden frame. A neutral grey studio, '
+                     'because the photo-studio panorama is a room furnished at '
+                     'the scale of a tabletop object, and a chair standing in '
+                     'one stands on nothing.'),
     _studio('SheenTestGrid', margin=0.95),
     _studio('SheenWoodLeatherSofa'),
     SceneSpec('SimpleInstancing'),

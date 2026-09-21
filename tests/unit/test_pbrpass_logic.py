@@ -62,20 +62,20 @@ class TestPassInstancing:
 
     def test_instanceable_requires_instance_gpu(self):
         p = PBRPass.__new__(PBRPass)
-        assert p._instanceable([Shape(Geom(instanceable=True))]) is True
-        assert p._instanceable([Shape(Geom(instanceable=False))]) is False
+        assert p._instanceable(Shape(Geom(instanceable=True))) is True
+        assert p._instanceable(Shape(Geom(instanceable=False))) is False
 
     def test_instance_key_uses_content_when_collapse_on(self, monkeypatch):
         monkeypatch.setenv('OPENGLCONTEXT_INSTANCE_COLLAPSE', '1')
         p = PBRPass.__new__(PBRPass)
-        pth = [Shape(Geom(content=('C', 2.0)))]
-        assert p._instanceKey(pth) == instancing.geometry_content_key(pth)
+        node = Shape(Geom(content=('C', 2.0)))
+        assert p._instanceKey(node) == instancing.geometry_content_key(node)
 
     def test_instance_key_uses_texture_when_collapse_off(self, monkeypatch):
         monkeypatch.setenv('OPENGLCONTEXT_INSTANCE_COLLAPSE', 'off')
         p = PBRPass.__new__(PBRPass)
-        pth = [Shape(Geom(content=('C', 2.0)))]
-        assert p._instanceKey(pth) == instancing.geometry_texture_key(pth)
+        node = Shape(Geom(content=('C', 2.0)))
+        assert p._instanceKey(node) == instancing.geometry_texture_key(node)
 
 
 class TestMaterialChunks:

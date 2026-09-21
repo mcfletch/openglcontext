@@ -32,6 +32,14 @@ if TYPE_CHECKING:
 class Uploader(Protocol):
     """GL-facing sink: turns a loaded payload into a drawable and frees it later."""
 
+    #: The world's ground shading, for a world whose ground is drawn by the
+    #: tiles rather than by a field
+    #: (:class:`~OpenGLContext.scenegraph.terrain.ground.GroundShading`). Set
+    #: by whoever knows both where the ground is and what stands on it, which
+    #: is later than the uploader is built; None for a world that carries no
+    #: ground of its own.
+    ground: Any
+
     def upload(self, tile: "RuntimeTile", payload: Any) -> tuple[Any, int]: ...
 
     def release(self, drawable: Any) -> None: ...

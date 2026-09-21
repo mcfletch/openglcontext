@@ -203,6 +203,33 @@ class TestATunnel:
         portals = meshes['portals']
         assert float(portals.positions[:, 1].max()) > float(bore.positions[:, 1].max())
 
+    def test_the_portal_is_a_wall_with_the_arch_in_it(self) -> None:
+        """What the ground is cut back to meets a straight edge.
+
+        A ring of concrete following the arch leaves the hillside to come down
+        and meet a curve, which is a curve a terrain sampled on a grid metres
+        wide cannot follow: what shows either side of the arch is then the cut
+        face of the ground, in slivers. A face with a flat top and two vertical
+        sides is what the ground meets instead, and what a portal is built as.
+        """
+        tunnel = TunnelProfile()
+        meshes = tunnel_meshes(_straight(height=0.0), ROAD, tunnel)
+        face = meshes['portals'].positions
+        top = tunnel.clearance + tunnel.portal_border
+        side = (ROAD.on_structure().total_width / 2.0 + tunnel.margin
+                + tunnel.portal_border)
+        assert float(face[:, 1].max()) == pytest.approx(top, abs=0.01)
+        assert float(np.abs(face[:, 2]).max()) == pytest.approx(side, abs=0.01)
+        # The top edge runs the whole width of the face rather than arching
+        # down to meet the sides.
+        along = face[face[:, 1] > top - 0.01]
+        assert float(np.abs(along[:, 2]).max()) == pytest.approx(side, abs=0.01)
+        # ...and the sides run from the top of it to below the springing the
+        # arch stands on, so the wall carries the whole of the opening.
+        upright = face[np.abs(np.abs(face[:, 2]) - side) < 0.01]
+        assert float(upright[:, 1].max()) == pytest.approx(top, abs=0.01)
+        assert float(upright[:, 1].min()) <= -tunnel.springing
+
     def test_it_follows_a_bend(self) -> None:
         angle = np.linspace(0.0, np.pi / 2, 24)
         line = np.stack([300.0 * np.cos(angle), np.zeros(24),

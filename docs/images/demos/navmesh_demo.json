@@ -1,0 +1,12 @@
+{
+  "frames": 60,
+  "git": "v3.0.0a4-66-ge405489-dirty",
+  "id": "demos/navmesh_demo",
+  "licence": "BSD-3-Clause",
+  "module": "navmesh_demo",
+  "producer": "script",
+  "size": [
+    1100,
+    680
+  ]
+}

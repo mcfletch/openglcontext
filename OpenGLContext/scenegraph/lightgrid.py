@@ -28,7 +28,7 @@ Who fills it in: a loader that has a baked grid to convert (see
 :mod:`twig_bb.lighting` for the Quake 3 one).  Who reads it: the PBR render
 pass, which finds the node in the scenegraph and lights each object that
 carries no lightmap of its own with it -- see
-:mod:`OpenGLContext.passes.pbrpass` and ``docs/pbr.html``.
+:mod:`OpenGLContext.passes.pbrpass` and ``docs/pbr.rst``.
 """
 from typing import Any, List, Optional, Tuple
 

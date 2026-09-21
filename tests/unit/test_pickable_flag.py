@@ -42,13 +42,11 @@ class TestPickableField:
 class TestShapePickableDecision:
     def test_pickable_shape_reported_pickable(self):
         fp = _bare_pass()
-        path = FakePath([shape.Shape(pickable=True)])
-        assert fp._shapePickable(path) is True
+        assert fp._shapePickable(shape.Shape(pickable=True)) is True
 
     def test_non_pickable_shape_reported_non_pickable(self):
         fp = _bare_pass()
-        path = FakePath([shape.Shape(pickable=False)])
-        assert fp._shapePickable(path) is False
+        assert fp._shapePickable(shape.Shape(pickable=False)) is False
 
     def test_node_without_flag_defaults_pickable(self):
         # A rendered node that is not a Shape (no pickable field) must stay
@@ -57,14 +55,13 @@ class TestShapePickableDecision:
 
         class Bare:
             pass
-        assert fp._shapePickable(FakePath([Bare()])) is True
+        assert fp._shapePickable(Bare()) is True
 
     def test_non_pickable_shape_gets_no_object_id(self):
         # A masked (non-pickable) shape must never be allocated an id, so it can
         # never be resolved from the id map even by a stale read.
         fp = _bare_pass()
-        path = FakePath([shape.Shape(pickable=False)])
         # The render loop skips _objectIdFor for non-pickable shapes; assert the
         # decision that guards it.
-        assert not fp._shapePickable(path)
+        assert not fp._shapePickable(shape.Shape(pickable=False))
         assert fp._sel_id_map in (None, {})

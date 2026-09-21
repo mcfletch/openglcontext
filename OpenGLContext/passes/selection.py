@@ -330,7 +330,7 @@ class SelectionMixin(_AsyncPickMixin):
                 # Render only the objects that may be under this pick point
                 id_map = {}
                 for obj_id, idx in enumerate(hit_indices):
-                    key, mvmatrix, tmatrix, bvolume, path = toRender[idx]
+                    key, mvmatrix, tmatrix, bvolume, path, node = toRender[idx]
                     color_id = (obj_id + 1) << 12
 
                     r = (color_id >> 0) & 0xFF
@@ -343,7 +343,7 @@ class SelectionMixin(_AsyncPickMixin):
 
                     self.matrix = mvmatrix
                     self.renderPath = path
-                    path[-1].Render(mode=self)
+                    node.Render(mode=self)
                     id_map[color_id] = path
 
                 # Read back the center pixel
@@ -405,7 +405,7 @@ class SelectionMixin(_AsyncPickMixin):
         result: List[Optional[Tuple[float, float, float, float]]] = []
 
         for record in toRender:
-            key, mvmatrix, tmatrix, bvolume, path = record
+            key, mvmatrix, tmatrix, bvolume, path, node = record
 
             if bvolume is None:
                 result.append(None)

@@ -1,9 +1,8 @@
 """Choosing one of several things by looking at them.
 
-A drop-down is the right control for a *setting* and the wrong one for a level.
-What tells one arena from another is what it looks like, and a list of names
-makes a player open each in turn to find out which is which — so
-:class:`Carousel` shows a band of pictures with their names underneath, and the
+A :class:`Carousel` lets the user select a level by name and image, so that
+they have some indication of the nature and quality of the level they are
+choosing. It shows a band of pictures with their names underneath, and the
 arrows roll it along.
 
 Two widgets, and the smaller one is useful on its own:
@@ -67,9 +66,9 @@ class Item:
 class Picture(Widget):
     """One image, letterboxed into whatever rectangle it is given.
 
-    Letterboxed rather than stretched: a screenshot squeezed into the wrong
-    proportions reads as a *bad* screenshot rather than as a small one, and the
-    whole reason to show art is that a player judges a level by it.
+    Letterboxed rather than stretched, since the player is judging the level
+    by its picture: a screenshot squeezed into the wrong proportions reads as
+    a bad screenshot rather than as a small one.
 
     An image that cannot be read leaves the frame empty rather than taking the
     screen down — a level with no art is a normal thing.

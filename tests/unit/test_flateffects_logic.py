@@ -46,7 +46,7 @@ def record(tx=0.0, ty=0.0, tz=0.0, bv=None, key0=False, material=None,
     shape = type('S', (), {})()
     shape.appearance = type('A', (), {'material': material})()
     path = [shape]
-    return ((key0, [], 0.0), tm, tm, bv, path)
+    return ((key0, [], 0.0), tm, tm, bv, path, shape)
 
 
 def pass_with_frustum():

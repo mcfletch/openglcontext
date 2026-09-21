@@ -113,10 +113,9 @@ def load(path: str) -> list[ContentPack]:
 def load_bundle(path: str, into: str) -> list[ContentPack]:
     """A registry handed around as one file: its JSON and its pictures together.
 
-    A chooser offering packs nobody has downloaded has nothing to show them
-    with, since a pack's own art is inside the archive being chosen. A bundle is
-    small -- a document and some thumbnails -- so fetching one gives a picture
-    of every pack it declares before anything large is committed to.
+    Previews are bundled with the content-pack index: a bundle is a document
+    and some thumbnails, so fetching one gives a picture of every pack it
+    declares before anything large is downloaded.
 
     Extracted into ``into`` through the same reader a content pack goes through,
     so a bundle from elsewhere is held to the same rule about where its entries

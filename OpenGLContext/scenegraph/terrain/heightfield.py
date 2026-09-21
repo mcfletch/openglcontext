@@ -185,8 +185,10 @@ class HeightField:
         """Interleaved (position, normal) vertices and triangle indices for the grid.
 
         :param holes: ``holes(x, z) -> mask`` over arrays of world positions,
-            true where the ground is not there — over a tunnel's bore, say. A
-            triangle is dropped when its centre is in a hole.
+            true where the ground is not there — over a tunnel's bore, say. The
+            grid is cut back to the opening's own edge
+            (:func:`OpenGLContext.scenegraph.terrain.holes.cut`), so the ground
+            stops where the opening starts rather than a cell either side of it.
 
         A height field is a surface, so a hill with a road running *through* it
         has no way to say it is hollow. ``holes`` is that way. The rule is the
@@ -195,8 +197,8 @@ class HeightField:
         car meets are the same surface — agreeing by construction rather than by
         care. Pass the same callable to both.
 
-        Only triangles go; the vertices stay. One nothing indexes costs a little
-        memory and saves renumbering every index that survives.
+        The vertices of the grid stay where they are and keep their indices;
+        what the cut needs is appended after them.
 
         :returns: ``(vertices Nx6 float32, indices uint32)`` — a regular triangulated
             grid over the world square with per-vertex normals from the gradient.
@@ -225,10 +227,9 @@ class HeightField:
         idx[:, 5] = d2
         if holes is None:
             return inter, idx.ravel()
-        triangles = idx.reshape(-1, 3)
-        centre = inter[:, :3][triangles].mean(axis=1)
-        missing = np.asarray(holes(centre[:, 0], centre[:, 2]), bool)
-        return inter, triangles[~missing].ravel()
+        from OpenGLContext.scenegraph.terrain.holes import cut
+        inter, triangles = cut(inter, idx.reshape(-1, 3), holes)
+        return inter, triangles.ravel().astype(np.uint32)
 
     def sun_shadow(self, sun: "np.ndarray | tuple[float, float, float]",
                    steps: int = 170, softness: float = 35.0,

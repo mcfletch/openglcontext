@@ -1,0 +1,22 @@
+{
+  "argv": [
+    "-m",
+    "OpenGLContext.bin.view",
+    "https://github.com/mcfletch/openglcontext/releases/download/content-v1/gallery-world.tar.gz",
+    "--camera",
+    "Gallery",
+    "--size",
+    "1600x900",
+    "--capture",
+    "{png}"
+  ],
+  "credit": "'Marble Bust 01' by Rico Cilliers (Poly Haven) and ambientCG materials, CC0",
+  "git": "unknown",
+  "id": "demos/gallery",
+  "licence": "CC0 1.0",
+  "producer": "command",
+  "size": [
+    1200,
+    675
+  ]
+}

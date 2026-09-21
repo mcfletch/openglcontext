@@ -29,7 +29,11 @@ from OpenGLContext.loaders.gltf.meshes import estimate_normals
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
-__all__ = ['Prop', 'RockProfile', 'rock_mesh', 'rock_material']
+__all__ = ['Prop', 'RockProfile', 'rock_mesh', 'rock_material', 'SHAPES']
+
+#: What a prop's ``radius`` and ``height`` describe, for the physics world that
+#: has to stand a body up from them. See :class:`Prop`.
+SHAPES = frozenset(('box', 'dome'))
 
 #: Weathered granite at its lightest: grey, faintly warm, entirely rough, and
 #: not a metal. Dark, because a boulder is -- a stone quoted at the reflectance
@@ -109,6 +113,12 @@ class Prop:
     and ``height`` are what it occupies once placed, in metres -- the numbers a
     physics world needs to stand a body up without being handed the geometry,
     and the numbers a scatter needs to keep two of them out of each other.
+
+    ``shape`` is what those numbers describe. A ``box`` is a thing that stops
+    you: a boulder, a barrier, a broken-down car, where what matters is that
+    there is no way through. A ``dome`` is a thing you go *over* -- a stone
+    lying in the grass, which is part of the ground rather than an obstacle in
+    it, and which a block the size of it turns into a kerb across the hillside.
     """
 
     kind: str
@@ -117,6 +127,13 @@ class Prop:
     scale: float = 1.0
     radius: float = 0.5
     height: float = 1.0
+    shape: str = 'box'
+
+    def __post_init__(self) -> None:
+        if self.shape not in SHAPES:
+            raise ValueError(
+                "a prop is a %s, not a %r"
+                % (' or a '.join(sorted(SHAPES)), self.shape))
 
     def __repr__(self) -> str:
         return 'Prop(%s at %s)' % (
@@ -124,7 +141,7 @@ class Prop:
 
     @classmethod
     def of(cls, mesh: PBRMesh, kind: str, position: Any, yaw: float = 0.0,
-           scale: float = 1.0) -> 'Prop':
+           scale: float = 1.0, shape: str = 'box') -> 'Prop':
         """A prop measured from the mesh it is drawn as.
 
         The radius is taken across the widest of the two horizontal axes rather
@@ -137,7 +154,8 @@ class Prop:
         return cls(kind=kind, position=tuple(float(v) for v in position),
                    yaw=float(yaw), scale=float(scale),
                    radius=wide / 2.0 * float(scale),
-                   height=float(np.ptp(points[:, 1])) * float(scale))
+                   height=float(np.ptp(points[:, 1])) * float(scale),
+                   shape=shape)
 
     def to_json(self) -> Dict[str, Any]:
         """This prop as a baked world carries it."""
@@ -146,7 +164,8 @@ class Prop:
                 'yaw': round(float(self.yaw), 4),
                 'scale': round(float(self.scale), 4),
                 'radius': round(float(self.radius), 4),
-                'height': round(float(self.height), 4)}
+                'height': round(float(self.height), 4),
+                'shape': self.shape}
 
     @classmethod
     def from_json(cls, record: Any) -> 'Prop':
@@ -156,7 +175,8 @@ class Prop:
                    yaw=float(record.get('yaw', 0.0)),
                    scale=float(record.get('scale', 1.0)),
                    radius=float(record.get('radius', 0.5)),
-                   height=float(record.get('height', 1.0)))
+                   height=float(record.get('height', 1.0)),
+                   shape=str(record.get('shape', 'box')))
 
 
 #: The twelve vertices of an icosahedron, and the twenty faces over them.

@@ -15,7 +15,8 @@ a context and caches the choice across frames.
 from __future__ import annotations
 
 from typing import (
-    Any, Callable, Dict, List, Optional, Sequence, Tuple, TYPE_CHECKING,
+    Any, Callable, Dict, List, NamedTuple, Optional, Sequence, Tuple,
+    TYPE_CHECKING,
 )
 
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod,lightgrid
@@ -99,6 +100,33 @@ def disable_object_id_blend() -> None:
         glDisablei(GL_BLEND, OBJECT_ID_ATTACHMENT)
     except Exception as err:
         log.debug("indexed blend disable unavailable: %s", err)
+class GatheredPaths( NamedTuple ):
+    """One frame's answers about every renderable path in the scene.
+
+    What :meth:`SGObserver.gatherPaths` produces and everything else in the
+    frame reads. Camera-independent throughout: the viewpoint enters after this,
+    which is what lets the colour pass and a light's depth pass share one table.
+    """
+
+    #: Every path to a renderable node, in the order the scene declares them.
+    paths: List[Any]
+    #: The node each path ends at, so nothing has to walk the path again.
+    nodes: List[Any]
+    #: ``(N,4,4)`` world transforms stacked, for the arithmetic done at once.
+    matrices: Any
+    #: The same transforms as the scenegraph's cache handed them over -- one
+    #: object per unmoved node, a fresh one once it moves. What a memo keys on.
+    own: List[Any]
+    #: Each node's bounding volume, or None where it draws nothing.
+    volumes: List[Any]
+    #: ``(N,8,4)`` bounding corners, meaningful where ``bounded`` says so.
+    points: Any
+    #: Which paths offer the eight corners a frustum test needs.
+    bounded: Any
+    #: Which paths have anything to put on screen at all.
+    drawing: Any
+
+
 class SGObserver( object ):
     """Observer of a scenegraph that creates a flat set of paths
 
@@ -120,6 +148,15 @@ class SGObserver( object ):
     #: The ``(N,4,4)`` array :meth:`_worldMatrices` fills each frame, kept so a
     #: frame allocates nothing for a scene whose size has not changed.
     _matrixBuffer: Optional[Any] = None
+    #: What :meth:`gatherPaths` last worked out, for the rest of that frame to
+    #: read rather than walk the scene again. The gather is the frame's first
+    #: act, so anything after it in the same frame is reading this frame's.
+    _gathered: Optional['GatheredPaths'] = None
+    #: What the last :meth:`selectLevels` chose for: the path generation, the
+    #: level-of-detail nodes' world matrices as the transform cache handed them
+    #: over, and the camera. A frame matching all three is choosing again what
+    #: it chose last time.
+    _levelChoice: Optional[Tuple[int, List[Any], bytes]] = None
     #: Which copies of each declared set this gather's frustum kept, by ``id``
     #: of the record's path. Belongs to the gather rather than to the shapes: a
     #: depth pass culling against a light must not read the camera's answer.
@@ -344,14 +381,14 @@ def _color_select_render(pass_obj: 'FlatPass', mode: Any, toRender: Sequence[Any
     try:
         id_holder = array([0, 0, 0, 0], 'B')
         id_setter = id_holder.view('<I')
-        for index, (_key, mvmatrix, _tmatrix, _bvolume, path) in enumerate(toRender):
+        for index, (_key, mvmatrix, _tmatrix, _bvolume, path, node) in enumerate(toRender):
             color_id = (index + 1) << id_shift
             id_setter[0] = color_id
             glColor4ubv(id_holder)
             self.matrix = mvmatrix
             self.renderPath = path
             glLoadMatrixf(mvmatrix)
-            path[-1].Render(mode=self)
+            node.Render(mode=self)
             id_map[color_id] = path
         pixel = array([0, 0, 0, 0], 'B')
         depth_pixel = array([[0]], 'f')
@@ -679,7 +716,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         parts to a handful of appearance uploads. Alive-this-frame, so ids are
         stable within the sort.
         """
-        shape = rec[4][-1]
+        shape = rec[5]
         appearance = getattr(shape, 'appearance', None)
         return id(getattr(appearance, 'material', None))
 
@@ -688,7 +725,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         """Render opaque geometry using shaders.
 
         Args:
-            toRender: List of (sortKey, mvmatrix, tmatrix, bvolume, path) tuples
+            toRender: List of (sortKey, mvmatrix, tmatrix, bvolume, path, node) tuples
             id_map: Optional dict to populate with {object_id: path} for MRT selection.
                    If provided, object IDs will be set for each rendered object.
             skip: Optional set of toRender indices to omit (transmissive shapes,
@@ -749,7 +786,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
 
         self.stats.opaque += len(singles)
         self.stats.draws += len(singles)
-        for _obj_index, (_key, mvmatrix, tmatrix, bvolume, path) in singles:
+        for _obj_index, (_key, mvmatrix, tmatrix, bvolume, path, node) in singles:
             self.matrix = mvmatrix
             self.renderPath = path
 
@@ -761,15 +798,15 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             # persistent map is maintained by _objectIdFor, not rebuilt here).
             # A non-pickable shape masks the id attachment instead, reading
             # through to whatever is behind it.
-            masked = self._writeShapeId(shader, path, prog, id_map)
-            self.applyLightGrid(shader, path, tmatrix, bvolume, prog)
+            masked = self._writeShapeId(shader, path, node, prog, id_map)
+            self.applyLightGrid(shader, node, tmatrix, bvolume, prog)
 
             try:
-                path[-1].Render(mode=self)
+                node.Render(mode=self)
                 if debugFrustum and bvolume:
                     bvolume.debugRender()
             except Exception as err:
-                self.renderFailed('opaque', path[-1], err)
+                self.renderFailed('opaque', node, err)
             finally:
                 self._restoreShapeId(masked)
 
@@ -779,7 +816,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         """Render transparent geometry using shaders.
 
         Args:
-            toRender: List of (sortKey, mvmatrix, tmatrix, bvolume, path) tuples
+            toRender: List of (sortKey, mvmatrix, tmatrix, bvolume, path, node) tuples
             id_map: Optional dict to populate with {object_id: path} for MRT selection.
                    If provided, object IDs will be set for each rendered object.
         """
@@ -819,7 +856,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         prog = shader.program
 
         try:
-            for _obj_index, (_key, mvmatrix, tmatrix, bvolume, path) in transparent:
+            for _obj_index, (_key, mvmatrix, tmatrix, bvolume, path, node) in transparent:
                 self.matrix = mvmatrix
                 self.renderPath = path
 
@@ -829,15 +866,15 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
 
                 # Set object ID for MRT selection buffer (stable per-path id),
                 # or mask it for a non-pickable shape.
-                masked = self._writeShapeId(shader, path, prog, id_map)
-                self.applyLightGrid(shader, path, tmatrix, bvolume, prog)
+                masked = self._writeShapeId(shader, path, node, prog, id_map)
+                self.applyLightGrid(shader, node, tmatrix, bvolume, prog)
 
                 try:
-                    path[-1].RenderTransparent(mode=self)
+                    node.RenderTransparent(mode=self)
                     if debugFrustum and bvolume:
                         bvolume.debugRender()
                 except Exception as err:
-                    self.renderFailed('transparent', path[-1], err)
+                    self.renderFailed('transparent', node, err)
                 finally:
                     self._restoreShapeId(masked)
         finally:
@@ -889,7 +926,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         if apply is not None and self._lightGrid is None:
             apply()
 
-    def applyLightGrid(self, shader: Any, path: Any, tmatrix: Any,
+    def applyLightGrid(self, shader: Any, node: Any, tmatrix: Any,
                        bvolume: Any, program: Any = None) -> None:
         """Light the object about to be drawn from where it stands.
 
@@ -900,7 +937,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         anyway; taking it would still cost a lookup per surface per frame.
         """
         grid = self._lightGrid
-        if grid is None or self._carriesLightmap(path[-1]):
+        if grid is None or self._carriesLightmap(node):
             return
         apply = getattr(shader, 'set_light_grid', None)
         if apply is None:
@@ -969,16 +1006,16 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         """
         return 8
 
-    def _instanceable( self, path: Any ) -> bool:
-        """Whether this path's geometry can be drawn instanced (base: never)."""
+    def _instanceable( self, shape: Any ) -> bool:
+        """Whether this shape's geometry can be drawn instanced (base: never)."""
         return False
 
-    def _instanceKey( self, path: Any ) -> Any:
-        """Batch key for a path. Base: geometry + material + texture identity, so a
+    def _instanceKey( self, shape: Any ) -> Any:
+        """Batch key for a shape. Base: geometry + material + texture identity, so a
         group is a set of visually identical shapes. PBRPass widens this to
         geometry + texture set (materials vary per instance via a material array)."""
         from OpenGLContext.passes.instancing import geometry_instance_key
-        return geometry_instance_key( path )
+        return geometry_instance_key( shape )
 
     def _drawInstanceGroup( self, group: Any, shader: Any, prog: Any,
                             id_map: Optional[Dict[int, Any]] ) -> None:
@@ -987,16 +1024,16 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             "instancing_enabled is True but _drawInstanceGroup is not implemented"
         )
 
-    def _shapePickable( self, path: Any ) -> bool:
-        """Whether this path's rendered node accepts picks (the default).
+    def _shapePickable( self, node: Any ) -> bool:
+        """Whether this rendered node accepts picks (the default).
 
         The ``pickable`` flag is opt-out: only a Shape explicitly marked
         ``pickable=False`` is skipped; any node without the field (non-Shape
         renderables) stays pickable.
         """
-        return bool( getattr( path[-1], 'pickable', True ) )
+        return bool( getattr( node, 'pickable', True ) )
 
-    def _writeShapeId( self, shader: Any, path: Any, prog: Any,
+    def _writeShapeId( self, shader: Any, path: Any, node: Any, prog: Any,
                        id_map: Optional[Dict[int, Any]] ) -> bool:
         """Set this shape's object id, or mask the id attachment if non-pickable.
 
@@ -1008,7 +1045,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         """
         if id_map is None:
             return False
-        if self._shapePickable( path ):
+        if self._shapePickable( node ):
             shader.set_object_id( self._objectIdFor( path ), program=prog )
             return False
         glColorMaski( OBJECT_ID_ATTACHMENT, GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE )
@@ -1082,17 +1119,64 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         Only from the camera. A shadow pass draws the same scene from a light,
         and choosing detail by how far a *lamp* is from a figure would swap
         levels as the sun moved.
+
+        The placing is done to the whole set at once -- one product of the
+        stacked world matrices against the camera, then one distance and one
+        scale per node out of two array expressions -- because at four-by-four
+        a numpy call costs more than the arithmetic in it, and a scene has as
+        many of these as it has models. What is left per node is the part that
+        is that node's own: which of its thresholds the answer falls in, and
+        whether that is a change the flattened scenegraph has to be told about.
         """
         paths = self.paths.get( lod.LOD, () )
         if not paths:
             return
-        tangent = lod.viewer_tangent( self.fieldOfView() )
-        for path in list( paths ):
-            node = path[-1]
+        placed = []
+        for path in paths:
             try:
-                node.selectFor( dot( path.transformMatrix(), matrix ), tangent )
+                placed.append( (path[-1], path.transformMatrix()) )
             except Exception as err:
                 log.warning( 'could not place an LOD node: %s', err )
+        if not placed:
+            return
+        own = [ world for _node, world in placed ]
+        if self._levelsAlreadyChosen( matrix, own ):
+            return
+        tangent = lod.viewer_tangent( self.fieldOfView() )
+        modelviews = asarray( own, 'd' ) @ asarray( matrix, 'd' )
+        distances = lod.viewer_distances(
+            [ node.center for node, _world in placed ], modelviews )
+        scales = lod.uniform_scales( modelviews )
+        for (node, _world), distance, scale in zip( placed, distances, scales ):
+            try:
+                node.selectAt( float(distance), float(scale), tangent )
+            except Exception as err:
+                log.warning( 'could not place an LOD node: %s', err )
+
+    def _levelsAlreadyChosen( self, matrix: Any, own: List[Any] ) -> bool:
+        """Whether this frame's levels are the ones already chosen.
+
+        Nothing moved and the camera did not either, so every node would work
+        out the coverage it worked out last frame and announce no change. How
+        often that holds is the application's business; asking costs one
+        identity comparison per node, because the scenegraph's transform cache
+        hands back the same matrix object while a node is unmoved.
+
+        The matrices themselves are kept rather than their ``id``s: a freed
+        matrix's address can be handed to the one that replaced it, and a
+        comparison against an address nothing holds would then read a move as a
+        stillness. Holding them also costs one frame of four-by-fours.
+        """
+        previous = self._levelChoice
+        camera = asarray( matrix, 'f' ).tobytes()
+        if ( previous is not None
+             and previous[0] == self._pathGeneration
+             and previous[2] == camera
+             and len(previous[1]) == len(own)
+             and all( a is b for a, b in zip( previous[1], own ) ) ):
+            return True
+        self._levelChoice = ( self._pathGeneration, own, camera )
+        return False
 
     def fieldOfView( self ) -> Optional[float]:
         """The viewer's vertical field of view in degrees, where it has one.
@@ -1120,13 +1204,22 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         of the frame proportional to what is on screen: a key is only worked out
         for a shape that survives, and in a level most shapes do not.  The keys
         of shapes nobody can see were never read.
+
+        A record is ``(sortKey, mvmatrix, tmatrix, bvolume, path, node)``, and
+        ``node`` is the one at the end of ``path``. It is carried rather than
+        looked up because almost everything that reads a record wants it -- to
+        key an instanced batch on, to ask whether it casts a shadow, to sort its
+        material, to draw it -- and `path[-1]` is a Python call. A frame of a
+        few thousand objects was making tens of thousands of them to reach a
+        node the gather already had in hand.
         """
-        paths = self.paths.get( nodetypes.Rendering, ())
+        gathered = self.gatherPaths()
+        paths, volumes, matrices, own = (gathered.paths, gathered.volumes,
+                                         gathered.matrices, gathered.own)
         if not paths:
             return []
-        volumes, points, bounded, drawing = self._boundingArrays( paths )
-        matrices = self._worldMatrices( paths )
-        keep = self._frustumSurvivors( matrices, points, bounded, drawing )
+        keep = self._frustumSurvivors( matrices, gathered.points,
+                                       gathered.bounded, gathered.drawing )
         if not len(keep):
             return []
         kept = matrices[keep]
@@ -1137,8 +1230,8 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         seen = self.visiblePlacements = {}
         for at, index in enumerate( keep ):
             path = paths[index]
-            tmatrix = matrices[index]
-            node = path[-1]
+            tmatrix = own[index]
+            node = gathered.nodes[index]
             # A declared set is one object to the test above, so its whole box
             # survived if any of it did. Ask it which of its copies this frustum
             # actually keeps, and drop the record if the answer is none.
@@ -1151,17 +1244,53 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                     seen[id(path)] = found
             toRender.append( (
                 node.sortKey( self, tmatrix ),
-                modelviews[at], tmatrix, volumes[index], path,
+                modelviews[at], tmatrix, volumes[index], path, node,
             ) )
         toRender.sort( key = lambda x: x[0])
         return toRender
 
-    def _boundingArrays( self, paths: Sequence[Any]
-                         ) -> Tuple[List[Any], Any, Any, Any]:
-        """Each path's bounding volume and its corner points, stacked.
+    def gatherPaths( self ) -> GatheredPaths:
+        """Walk the scene and publish what this frame found, for one frame.
 
-        Asked of every node every frame rather than remembered: a volume is not
-        a property of the shape alone. An
+        :meth:`takeGather` is how the rest of the frame reads it. See
+        :meth:`_walkPaths` for what the table holds.
+        """
+        gathered = self._gathered = self._walkPaths()
+        return gathered
+
+    def takeGather( self ) -> GatheredPaths:
+        """This frame's gather, taken, or a fresh walk where there is none.
+
+        A handoff rather than a cache. The table describes the scene as it
+        stood when it was walked, so it may be read in the frame that built it
+        and nowhere else -- a table left lying about would answer next frame's
+        questions with last frame's transforms, and nothing would say so. Taking
+        it is what makes that impossible: :meth:`gatherPaths` publishes one,
+        whoever needs it takes it, and a caller that finds none walks the scene
+        itself rather than reading something stale.
+        """
+        gathered, self._gathered = self._gathered, None
+        return gathered if gathered is not None else self._walkPaths()
+
+    def _walkPaths( self ) -> GatheredPaths:
+        """Everything this frame needs to know about every renderable path.
+
+        One walk of the scene, because everything in it is asked for more than
+        once a frame and every asking gets the same answer: the gather culls and
+        sorts against it, the shadow pass's caster pool is drawn from it, and
+        the draw reads it again. Walking a path is not free -- the node at the
+        end of it, its world matrix and its bounding volume each come through
+        the scenegraph's own caches, and a scene has as many of them as it has
+        shapes -- so the frame pays for one walk rather than three.
+
+        The table stands for the frame that built it and is kept as
+        :attr:`_gathered` for the rest of that frame to read. It says nothing
+        about *where* anything is seen from: the camera enters afterwards, which
+        is what lets one table serve the colour pass and a light's depth pass
+        alike.
+
+        ``volumes`` is asked of every node every frame rather than remembered,
+        because a volume is not a property of the shape alone: an
         :class:`~OpenGLContext.scenegraph.instancedshape.InstancedShape` bounds
         all of its placements, so its extent changes whenever they do, and a set
         of corners kept from an earlier frame would cull this frame's copies
@@ -1179,16 +1308,36 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         :meth:`~OpenGLContext.scenegraph.shape.Shape.drawsNothing`. A node that
         says no is left out: it is not culled for being outside the frustum, it
         simply is not there this frame.
+
+        ``matrices`` and ``own`` are the same transforms twice over, and both
+        are wanted. The stack is for the arithmetic the whole scene is put
+        through at once -- the camera product and the frustum test. The
+        *objects* are for everything that remembers a per-object answer between
+        frames: the transform cache hands back one matrix object while a node is
+        unmoved and a fresh one once it moves, so a memo can read "this has not
+        moved" straight off the identity. A row of the stack carries the same
+        numbers but is a new object every frame, and every such memo keyed on it
+        would miss every time.
         """
+        paths = self.paths.get( nodetypes.Rendering, ())
         count = len(paths)
         points = self._pointsBuffer
         if points is None or len(points) != count:
             points = self._pointsBuffer = zeros( (count, 8, 4), 'f' )
+        matrices = self._matrixBuffer
+        if matrices is None or len(matrices) != count:
+            matrices = self._matrixBuffer = zeros( (count, 4, 4), 'f' )
+        nodes: List[Any] = []
+        own: List[Any] = []
         volumes: List[Any] = []
         bounded: List[bool] = []
         drawing: List[bool] = []
         for index, path in enumerate( paths ):
             node = path[-1]
+            nodes.append( node )
+            matrix = path.transformMatrix()
+            own.append( matrix )
+            matrices[index] = matrix
             nothing = getattr( node, 'drawsNothing', None )
             if nothing is not None and nothing():
                 volumes.append( None )
@@ -1210,22 +1359,10 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 bounded.append( True )
             else:
                 bounded.append( False )
-        return (volumes, points, array( bounded, dtype=bool ),
-                array( drawing, dtype=bool ))
-
-    def _worldMatrices( self, paths: Sequence[Any] ) -> Any:
-        """Every path's world matrix, stacked into one array.
-
-        The per-path call stands because the transform cache behind it is what
-        knows whether anything moved; what is saved is everything downstream of
-        it being done one shape at a time.
-        """
-        matrices = self._matrixBuffer
-        if matrices is None or len(matrices) != len(paths):
-            matrices = self._matrixBuffer = zeros( (len(paths), 4, 4), 'f' )
-        for index, path in enumerate( paths ):
-            matrices[index] = path.transformMatrix()
-        return matrices
+        return GatheredPaths(
+            list(paths), nodes, matrices, own, volumes, points,
+            array( bounded, dtype=bool ), array( drawing, dtype=bool ),
+        )
 
     def _frustumSurvivors( self, matrices: Any, points: Any, bounded: Any,
                            drawing: Any ) -> Any:
@@ -1262,7 +1399,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         shapes therefore means changing that floor as well, which changes the
         projection every scene is drawn with.
         """
-        for (_key,_mv,_tm,bv,_path) in toRender:
+        for (_key,_mv,_tm,bv,_path,_node) in toRender:
             try:
                 bv.getPoints()
             except (AttributeError,boundingvolume.UnboundedObject):
@@ -1567,25 +1704,25 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         """Render the opaque geometry from toRender (in reverse order)"""
         self.transparent = False
         debugFrustum = self.context.contextDefinition.debugBBox
-        for key,mvmatrix,_tmatrix,bvolume,path in toRender:
+        for key,mvmatrix,_tmatrix,bvolume,path,node in toRender:
             if not key[0]:
                 self.matrix = mvmatrix
                 self.renderPath = path
 #                glMatrixMode(GL_MODELVIEW)
 #                glLoadMatrixf( mvmatrix )
                 try:
-                    path[-1].Render( mode = self )
+                    node.Render( mode = self )
                     if debugFrustum:
                         bvolume.debugRender( )
                 except Exception as err:
-                    self.renderFailed( 'opaque', path[-1], err )
+                    self.renderFailed( 'opaque', node, err )
     def renderTransparent( self, toRender: Sequence[Any] ) -> None:
         """Render the transparent geometry from toRender (in forward order)"""
         self.transparent = True
         setup = False
         debugFrustum = self.context.contextDefinition.debugBBox
         try:
-            for key,mvmatrix,_tmatrix,bvolume,path in toRender:
+            for key,mvmatrix,_tmatrix,bvolume,path,node in toRender:
                 if key[0]:
                     if not setup:
                         setup = True
@@ -1598,11 +1735,11 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                     self.renderPath = path
                     glLoadMatrixf( mvmatrix )
                     try:
-                        path[-1].RenderTransparent( mode = self )
+                        node.RenderTransparent( mode = self )
                         if debugFrustum:
                             bvolume.debugRender( )
                     except Exception as err:
-                        self.renderFailed( 'transparent', path[-1], err )
+                        self.renderFailed( 'transparent', node, err )
         finally:
             self.transparent = False
             if setup:

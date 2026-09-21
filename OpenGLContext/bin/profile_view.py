@@ -1,10 +1,14 @@
 #! /usr/bin/env python
 """VRML97 load-and-view demonstration/test"""
-from typing import Any
-import OpenGL 
-OpenGL.ERROR_CHECKING = False 
-#OpenGL.ERROR_ON_COPY = True
-from OpenGLContext import testingcontext
+import os
+
+# Before anything imports an API namespace: the entry points are built with
+# whatever error checking was configured when PyOpenGL first read its
+# settings, so an assignment after that has no effect and says so.
+os.environ.setdefault('PYOPENGL_ERROR_CHECKING', '0')
+
+from typing import Any                                       # noqa: E402
+from OpenGLContext import testingcontext                     # noqa: E402
 #: The backend is chosen at run time, so the class this subclasses is not
 #: one a checker can name -- which is what Any says here.
 BaseContext: Any = testingcontext.getInteractive()

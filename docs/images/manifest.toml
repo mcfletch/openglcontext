@@ -36,6 +36,10 @@ timeout = 900
 # run, and the capture is asked for by frame rather than after a wall-clock
 # delay. Two runs write the same bytes. See glisteel/sessions/README.md.
 replay = "sessions/doc-lap.jsonl"
+# The world is baked rather than checked in, and a run without it opens the
+# game's menu instead of a lap -- which would capture cleanly and write a
+# picture of the menu over this one.  Named here so the entry skips instead.
+requires = ["baked-world/tileset.json"]
 argv = ["-m", "glisteel.game", "baked-world/tileset.json", "--size", "1600x900",
         "--view", "chase", "--no-hud", "--autopilot",
         "--capture-frame", "569", "--capture", "{png}"]
@@ -53,6 +57,7 @@ cwd = "glisteel"
 timeout = 900
 # Frame 1297 of the same recorded lap: mid-viaduct, over the valley.
 replay = "sessions/doc-lap.jsonl"
+requires = ["baked-world/tileset.json"]
 argv = ["-m", "glisteel.game", "baked-world/tileset.json", "--size", "1600x900",
         "--view", "chase", "--no-hud", "--autopilot",
         "--capture-frame", "1297", "--capture", "{png}"]
@@ -176,9 +181,220 @@ source = "images/beautiful-game.jpg"
 crop = [0.02, 0.14, 0.98, 0.95]
 
 # --------------------------------------------------------------------------- #
+# Demos: a picture of a demo script, for the page that describes what it shows.
+# --------------------------------------------------------------------------- #
+[[image]]
+id = "demos/gallery"
+out = "images/demos/gallery.jpg"
+size = [1200, 675]
+licence = "CC0 1.0"
+credit = "'Marble Bust 01' by Rico Cilliers (Poly Haven) and ambientCG materials, CC0"
+alt = "A long hall of marble busts on plinths, receding under dark ceiling beams"
+caption = "The bust gallery: 120 busts, each a six-level chain, seen from the near end of the hall."
+producer = "command"
+cwd = "openglcontext"
+timeout = 900
+# The world is a content pack, so this fetches it the first time and reads the
+# unpacked copy afterwards; a machine that cannot reach it skips the entry and
+# keeps the committed picture.  "Gallery" is the camera the world was authored
+# with for this view, down the length of the hall.
+argv = ["-m", "OpenGLContext.bin.view",
+        "https://github.com/mcfletch/openglcontext/releases/download/content-v1/gallery-world.tar.gz",
+        "--camera", "Gallery", "--size", "1600x900", "--capture", "{png}"]
+
+[[image]]
+id = "demos/particles_effects"
+out = "images/demos/particles_effects.jpg"
+size = [1100, 680]
+licence = "BSD-3-Clause"
+alt = "Fire, smoke, sparks and an explosion burning side by side in the dark"
+caption = "The five presets, side by side"
+producer = "script"
+module = "particles_effects"
+render_size = [1600, 900]
+# The world clock advances a frame at a time under the capture harness, so a
+# frame number is a moment: 81 is 1.35 seconds in, a tenth of a second after
+# the burst timer last fired, with the fire and the smoke column established
+# and the explosion at its widest.
+frames = 81
+# The five effects sit in a band across the middle of the window the demo
+# opens, with the floor's near edge below them: this is that band, and no
+# more of the dark around it than the shape of the picture asks for.
+crop = [0.2125, 0.304, 0.775, 0.922]
+
+# --------------------------------------------------------------------------- #
 # Features: a small picture per subject, for the row that indexes the pages.
 # Each is the picture that page already shows, cut down to a thumbnail.
 # --------------------------------------------------------------------------- #
+[[image]]
+id = "demos/bake_demo"
+out = "images/demos/bake_demo.jpg"
+size = [1100, 680]
+licence = "BSD-3-Clause"
+alt = "A cairn of grey boulders under a gold capstone, ringed by twelve pebbles on green vertex-coloured ground"
+caption = "A scene written out as glTF and loaded back in"
+producer = "script"
+module = "bake_demo"
+render_size = [1600, 900]
+frames = 60
+timeout = 600
+
+[[image]]
+id = "demos/crowd_demo"
+out = "images/demos/crowd_demo.jpg"
+size = [1100, 680]
+licence = "BSD-3-Clause"
+alt = "A hundred and fifty copies of one rigged model spread across a plain, each at a different point in a walk, a run or a stop"
+caption = "A crowd of rigged figures, posed on the GPU"
+producer = "script"
+module = "crowd_demo"
+render_size = [1600, 900]
+frames = 60
+timeout = 600
+env = { OPENGLCONTEXT_SHADOWS = "1" }
+
+[[image]]
+id = "demos/editing_demo"
+out = "images/demos/editing_demo.jpg"
+size = [1100, 680]
+licence = "BSD-3-Clause"
+alt = "A plan view looking straight down on green ground, five grey-roofed blocks casting short shadows, and five coloured markers dropped on the ground, one of them standing on the roof of the tallest block"
+caption = "The editor toolkit: tool modes, a plan view and the point under the cursor"
+producer = "script"
+module = "editing_demo"
+render_size = [1600, 900]
+frames = 60
+timeout = 600
+
+[[image]]
+id = "demos/hud_demo"
+out = "images/demos/hud_demo.jpg"
+size = [1100, 680]
+licence = "BSD-3-Clause"
+alt = "A reticule, two bar meters, a lamp row, a message, a mini-map and an ammunition read-out drawn over a dusk world of pillars"
+caption = "A game's screen furniture over a live world"
+producer = "script"
+module = "hud_demo"
+# Rendered at the size the page shows, because the HUD is measured in pixels:
+# a render scaled down afterwards is a HUD drawn at the wrong size and then
+# blurred.
+render_size = [1100, 680]
+frames = 60
+timeout = 600
+
+[[image]]
+id = "demos/instancing_batched"
+out = "images/demos/instancing_batched.jpg"
+size = [1100, 680]
+licence = "BSD-3-Clause"
+alt = "Three fields of spheres, blue, orange and green, above a row of boxes"
+caption = "Repeated shapes collapsed into one instanced draw"
+producer = "script"
+module = "instancing_batched"
+render_size = [1600, 900]
+frames = 60
+timeout = 600
+
+[[image]]
+id = "demos/molehill_edit"
+out = "images/demos/molehill_edit.jpg"
+size = [1100, 680]
+# The demo's camera stands back far enough to see the control points that
+# tower over the hills, which leaves the surfaces and their cage in the
+# middle of the frame; this is that middle.
+crop = [0.28, 0.10, 0.75, 0.90]
+licence = "BSD-3-Clause"
+alt = "Four coloured NURBS surfaces meeting in a molehill, white spheres marking their control points and thin lines joining the points into a grid, a red-green-blue tri-axis handle standing on one selected point at the top of the red hill, and two control points far above the surfaces with long lines running down to their neighbours"
+caption = "A NURBS control net, with the handle on a selected point"
+producer = "script"
+module = "molehill_edit"
+render_size = [1600, 900]
+frames = 60
+timeout = 600
+
+[[image]]
+id = "demos/navmesh_demo"
+out = "images/demos/navmesh_demo.jpg"
+size = [1100, 680]
+licence = "BSD-3-Clause"
+alt = "An overhead view of a square room with two walls across it: the floor is covered in green wireframe triangles, an amber line zigzags from a blue sphere around both walls to an orange sphere, and a straighter cyan line follows the same route"
+caption = "A navigation mesh, a corridor, and the route pulled taut through it"
+producer = "script"
+module = "navmesh_demo"
+render_size = [1600, 900]
+frames = 60
+timeout = 600
+
+[[image]]
+id = "demos/recording_demo"
+out = "images/demos/recording_demo.jpg"
+size = [1100, 680]
+licence = "BSD-3-Clause"
+alt = "Eight coloured blocks ride a carousel around a white sphere on a grey floor, each casting a shadow, and a red lamp burns above and to the left"
+caption = "The scene a recording is made of, written straight to H.264"
+producer = "script"
+module = "recording_demo"
+render_size = [1600, 900]
+frames = 60
+timeout = 600
+
+[[image]]
+id = "demos/roads_demo"
+out = "images/demos/roads_demo.jpg"
+size = [1100, 680]
+licence = "BSD-3-Clause"
+alt = "A two-lane road curving away across rolling green ground, its dark carriageway between pale gravel shoulders and darker grass verges"
+caption = "A centreline swept through a cross-section"
+producer = "script"
+module = "roads_demo"
+render_size = [1600, 900]
+frames = 60
+timeout = 600
+
+[[image]]
+id = "demos/telemetry_demo"
+out = "images/demos/telemetry_demo.jpg"
+size = [1100, 680]
+licence = "BSD-3-Clause"
+alt = "Four coloured spheres on dotted rings around a yellow lamp, each ring carrying a pale gate post, on a dark square plinth"
+caption = "The scene a recorded session is replayed from"
+producer = "script"
+module = "telemetry_demo"
+render_size = [1600, 900]
+frames = 60
+timeout = 600
+
+[[image]]
+id = "demos/water_demo"
+out = "images/demos/water_demo.jpg"
+size = [1100, 680]
+licence = "BSD-3-Clause"
+alt = "Three rectangular pools cut in sand, each carrying a grid of orange floats: the left grid flat, the middle gently uneven, the right thrown about by large waves, with a river running across behind them"
+caption = "Three water styles, a river, and the floats that read the surface"
+producer = "script"
+module = "water_demo"
+render_size = [1600, 900]
+frames = 60
+timeout = 600
+
+[[image]]
+id = "pages/forest-instancing"
+out = "images/forest-instancing.jpg"
+size = [1280, 720]
+licence = "BSD-3-Clause; CC0 assets"
+credit = "the forest demo"
+alt = "A forested hillside of instanced firs and ground cover, receding into haze"
+caption = "The forest demo: every tree and every grass clump on this hillside is one of a handful of meshes, drawn once per mesh."
+producer = "command"
+cwd = "openglcontext-forest"
+harness = "auto-exit"
+# The seed settles where the walker is put down, so it is what frames the
+# picture; 3 opens on a hillside with the stand receding, which is what an
+# instanced draw of several hundred trees looks like.
+frames = 90
+timeout = 900
+argv = ["-m", "openglcontext_forest_demo.run", "--quality", "high", "--seed", "3"]
+
 [[image]]
 id = "features/terrain"
 out = "images/features/terrain.jpg"
@@ -238,6 +454,16 @@ alt = "Rendered text in a 3D scene"
 caption = "Text"
 producer = "copy"
 source = "images/text_simple.png"
+
+[[image]]
+id = "features/particles"
+out = "images/features/particles.jpg"
+size = [360, 230]
+licence = "BSD-3-Clause"
+alt = "Fire, smoke, sparks and an explosion burning side by side in the dark"
+caption = "Particle effects"
+producer = "copy"
+source = "images/demos/particles_effects.jpg"
 
 [[image]]
 id = "features/hud"

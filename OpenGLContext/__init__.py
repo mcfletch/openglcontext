@@ -29,7 +29,7 @@ What it holds:
 
 It is also the primary suite of test cases PyOpenGL is verified against.
 
-Documentation is under `docs/`, indexed by `docs/documentation.html`.
+Documentation is under `docs/`, indexed by `docs/documentation.rst`.
 '''
 
 __version__ = "3.0.0a5"

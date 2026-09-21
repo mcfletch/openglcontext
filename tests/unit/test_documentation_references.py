@@ -78,7 +78,7 @@ SIBLING_COMMANDS = {
 }
 
 #: Paths the documentation names inside a sibling package's own checkout, in a
-#: sentence that says which package.  ``docs/audio.html`` describes the tests
+#: sentence that says which package.  ``docs/audio.rst`` describes the tests
 #: that live in ``omi_audio``.
 SIBLING_PATHS = {
     'tests/test_device.py',
@@ -95,7 +95,7 @@ class TestDocsNameCommandsThatExist:
     def test_every_oglc_command_in_the_docs_is_registered(self):
         scripts = self._scripts()
         broken = {}
-        for page in sorted(DOCS.glob('*.html')):
+        for page in sorted(DOCS.glob('*.rst')):
             text = page.read_text(encoding='utf-8', errors='replace')
             # Not inside a filesystem path, and not a prefix of a longer
             # hyphenated word: a page quoting a run whose temporary directory
@@ -120,11 +120,10 @@ class TestDocsNameFilesThatExist:
     @pytest.mark.skipif(not DOCS.is_dir(), reason='docs/ not in this checkout')
     def test_every_repository_path_named_in_the_docs_exists(self):
         pattern = re.compile(
-            r'\b((?:tests|OpenGLContext|plans|docs)/[\w./-]+\.(?:py|glsl|vert|frag|md|html))')
+            r'\b((?:tests|OpenGLContext|plans|docs)/[\w./-]+\.(?:py|glsl|vert|frag|md|rst))')
         broken = {}
-        for page in sorted(DOCS.glob('*.html')):
-            text = re.sub(r'<[^>]+>', ' ',
-                          page.read_text(encoding='utf-8', errors='replace'))
+        for page in sorted(DOCS.glob('*.rst')):
+            text = page.read_text(encoding='utf-8', errors='replace')
             for path in set(pattern.findall(text)):
                 if path in SIBLING_PATHS:
                     continue
@@ -162,7 +161,7 @@ class TestTheDirectoryMapIsComplete:
 
 
 class TestTheEnvironmentReferenceIsComplete:
-    """``docs/environment.html`` is the only page that lists the switches.
+    """``docs/environment.rst`` is the only page that lists the switches.
 
     They are otherwise described across a dozen feature pages, which is fine
     for someone who already knows which feature they want and no use to anyone
@@ -170,7 +169,7 @@ class TestTheEnvironmentReferenceIsComplete:
     every variable and invents none.
     """
 
-    PAGE = DOCS / 'environment.html'
+    PAGE = DOCS / 'environment.rst'
 
     def _documented(self):
         text = self.PAGE.read_text(encoding='utf-8')
@@ -182,7 +181,7 @@ class TestTheEnvironmentReferenceIsComplete:
         missing = set(renderoptions.ENVIRONMENT) - self._documented()
         assert not missing, (
             'in renderoptions.ENVIRONMENT but absent from '
-            'docs/environment.html: %s' % sorted(missing))
+            'docs/environment.rst: %s' % sorted(missing))
 
     @pytest.mark.skipif(not DOCS.is_dir(), reason='docs/ not in this checkout')
     def test_it_documents_the_inherited_ones_too(self):
@@ -202,26 +201,65 @@ class TestTheEnvironmentReferenceIsComplete:
                 path.read_text(encoding='utf-8', errors='replace')))
         invented = self._documented() - package
         assert not invented, (
-            'documented in docs/environment.html but named nowhere in the '
+            'documented in docs/environment.rst but named nowhere in the '
             'package: %s' % sorted(invented))
 
 
+def _toctree_entries():
+    """Every document named in a toctree anywhere in the set.
+
+    A toctree is a directive whose body is one document name per line, so the
+    entries are the indented lines under it that are not options.
+    """
+    named = set()
+    for page in sorted(DOCS.glob('*.rst')):
+        lines = page.read_text(encoding='utf-8').splitlines()
+        inside = False
+        for line in lines:
+            if line.strip().startswith('.. toctree::'):
+                inside = True
+                continue
+            if not inside:
+                continue
+            if line.strip() and not line.startswith(' '):
+                inside = False
+            elif line.strip() and not line.strip().startswith(':'):
+                named.add(line.strip())
+    return named
+
+
 class TestNoOrphanPages:
-    """A page nothing links to is a page nobody finds."""
+    """A page no toctree names is a page nobody finds.
+
+    It is also what Sphinx warns about as it builds, but a warning in a build
+    log is not a failing test: the toctrees are what the sidebar and the
+    previous/next links are made of, so a page missing from them is missing
+    from the navigation of every other page.
+    """
 
     @pytest.mark.skipif(not DOCS.is_dir(), reason='docs/ not in this checkout')
-    def test_every_page_is_reachable_from_the_index(self):
-        index = DOCS / 'documentation.html'
-        linked = set(re.findall(r'href="([a-z0-9_-]+\.html)"',
-                                index.read_text(encoding='utf-8')))
-        pages = {p.name for p in DOCS.glob('*.html')}
-        assert not (pages - linked), (
-            'not linked from docs/documentation.html: %s'
-            % sorted(pages - linked))
+    def test_every_page_is_named_in_a_toctree(self):
+        named = _toctree_entries()
+        pages = {path.stem for path in DOCS.glob('*.rst')} - {'index'}
+        assert not (pages - named), (
+            'not named in any toctree, so nothing navigates to them: %s'
+            % sorted(pages - named))
+
+    @pytest.mark.skipif(not DOCS.is_dir(), reason='docs/ not in this checkout')
+    def test_no_toctree_names_a_page_that_is_not_there(self):
+        """The generated halves of the set are named too, and are not here."""
+        generated = ('api/', 'tutorials/')
+        missing = sorted(
+            name
+            for name in _toctree_entries()
+            if not name.startswith(generated)
+            and not (DOCS / ('%s.rst' % (name,))).is_file()
+        )
+        assert not missing, 'named in a toctree but not written: %s' % (missing,)
 
 
 class TestTheConsoleCommandsAreDocumented:
-    """``docs/documentation.html`` is where a reader finds what to type.
+    """``docs/documentation.rst`` is where a reader finds what to type.
 
     A command declared in ``[project.scripts]`` and described nowhere is a
     command nobody runs: it appears on the path at install time and there is no
@@ -229,15 +267,19 @@ class TestTheConsoleCommandsAreDocumented:
     checked is that it names every command and invents none.
     """
 
-    PAGE = DOCS / 'documentation.html'
+    PAGE = DOCS / 'documentation.rst'
 
     def _declared(self):
         data = tomllib.loads((ROOT / 'pyproject.toml').read_text(encoding='utf-8'))
         return set(data['project']['scripts'])
 
     def _listed(self, text):
-        """The commands with an entry of their own in the list"""
-        return set(re.findall(r'<dt><code>([a-z0-9-]+)</code></dt>', text))
+        """The commands with an entry of their own in the list.
+
+        A definition list: the term is a line of its own, and what it means is
+        indented under it.
+        """
+        return set(re.findall(r'^``([a-z0-9-]+)``$', text, re.M))
 
     def _excused(self, text):
         """Every command named in a paragraph about deprecation
@@ -256,9 +298,9 @@ class TestTheConsoleCommandsAreDocumented:
         which is the case that matters.
         """
         excused = set()
-        for paragraph in re.findall(r'<p class="technical">(.*?)</p>', text, re.S):
+        for paragraph in re.split(r'\n[ \t]*\n', text):
             if 'deprecated' in paragraph:
-                excused.update(re.findall(r'<code>([a-z0-9-]+)</code>', paragraph))
+                excused.update(re.findall(r'``([a-z0-9-]+)``', paragraph))
         return excused
 
     @pytest.mark.skipif(not DOCS.is_dir(), reason='docs/ not in this checkout')
@@ -273,12 +315,12 @@ class TestTheConsoleCommandsAreDocumented:
             self._declared() - self._listed(text) - self._excused(text))
         assert not missing, (
             'declared in [project.scripts] with no entry in the console-command '
-            'list in docs/documentation.html: %s' % (missing,))
+            'list in docs/documentation.rst: %s' % (missing,))
 
     @pytest.mark.skipif(not DOCS.is_dir(), reason='docs/ not in this checkout')
     def test_the_list_invents_nothing(self):
         text = self.PAGE.read_text(encoding='utf-8')
         invented = sorted(self._listed(text) - self._declared())
         assert not invented, (
-            'listed as a console command in docs/documentation.html but not '
+            'listed as a console command in docs/documentation.rst but not '
             'declared in [project.scripts]: %s' % (invented,))

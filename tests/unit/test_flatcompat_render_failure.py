@@ -45,10 +45,11 @@ class _Context:
 
 
 def _records(nodes: List[Any], transparent: int) -> List[Tuple[Any, ...]]:
-    """One (sortKey, mvmatrix, tmatrix, bvolume, path) record per node."""
+    """One (sortKey, mvmatrix, tmatrix, bvolume, path, node) record per node."""
     from OpenGLContext.arrays import identity
     matrix = identity(4, 'f')
-    return [((transparent, 0.0), matrix, matrix, None, [node]) for node in nodes]
+    return [((transparent, 0.0), matrix, matrix, None, [node], node)
+            for node in nodes]
 
 
 @pytest.fixture

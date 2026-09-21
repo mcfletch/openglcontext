@@ -60,6 +60,39 @@ def perspective_matrix(fovy: float, aspect: float, near: float, far: float) -> M
     return matrix.astype('f')
 
 
+#: Which end of each axis each of the eight corners of a box takes, x outermost
+#: and z innermost. Indexing a ``(K,1,3)`` low and high against this gives every
+#: box's corners in one expression.
+_CORNER_ENDS = np.array([[bool(i & 4), bool(i & 2), bool(i & 1)]
+                         for i in range(8)])
+
+
+def world_bounds(points: np.ndarray, matrices: np.ndarray
+                 ) -> Tuple[np.ndarray, np.ndarray]:
+    """Place ``K`` sets of points by their own matrices, and box each set.
+
+    points -- ``(K,n,3)`` or ``(K,n,4)`` local points, ``n`` the same for all
+    matrices -- ``(K,4,4)`` row-vector world transforms, one per set
+
+    Returns ``(world, corners)``: the placed points as ``(K,n,3)``, and each
+    set's axis-aligned bounding box as its eight ``(K,8,3)`` corners.
+
+    For the whole set at once because a caster's bounding volume is eight rows
+    and a scene's is several hundred such: at that size a numpy call costs more
+    than the arithmetic it performs, so the number of calls is what the frame
+    pays. :meth:`~OpenGLContext.passes.shadowmixin.ShadowMapMixin._casterGeometryBatch`
+    is what groups a scene's volumes into the uniform ``n`` this wants.
+    """
+    points = np.asarray(points, dtype='d')
+    if points.shape[-1] == 3:
+        points = np.concatenate(
+            [points, np.ones(points.shape[:-1] + (1,))], axis=-1)
+    world = (points @ np.asarray(matrices, dtype='d'))[..., :3]
+    low = world.min(axis=1)[:, None, :]
+    high = world.max(axis=1)[:, None, :]
+    return world, np.where(_CORNER_ENDS, high, low)
+
+
 def near_far_from_points(
     view_matrix: Matrix4,
     points: np.ndarray,

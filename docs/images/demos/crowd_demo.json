@@ -1,0 +1,15 @@
+{
+  "env": {
+    "OPENGLCONTEXT_SHADOWS": "1"
+  },
+  "frames": 60,
+  "git": "v3.0.0a4-66-ge405489-dirty",
+  "id": "demos/crowd_demo",
+  "licence": "BSD-3-Clause",
+  "module": "crowd_demo",
+  "producer": "script",
+  "size": [
+    1100,
+    680
+  ]
+}

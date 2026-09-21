@@ -303,5 +303,80 @@ class TestCube:
         assert clip[3] > 0
 
 
+class TestWorldBounds:
+    """Many objects' world points and boxes in one pass over the arrays.
+
+    A shadow fit asks this of every caster in the scene each frame, so it is
+    asked for the whole set at once rather than one object at a time: on the
+    eight-corner arrays a bounding volume yields, a numpy call costs far more
+    than the arithmetic inside it.
+    """
+
+    def _cube(self, scale=1.0):
+        return np.array([[x, y, z] for x in (-scale, scale)
+                         for y in (-scale, scale)
+                         for z in (-scale, scale)], dtype='d')
+
+    def _moved(self, x=0.0, y=0.0, z=0.0):
+        matrix = np.eye(4)
+        matrix[3, :3] = (x, y, z)
+        return matrix
+
+    def test_points_are_placed_by_their_own_matrix(self):
+        points = np.stack([self._cube(), self._cube()])
+        matrices = np.stack([self._moved(10.0), self._moved(z=-4.0)])
+        world, _corners = shadowmath.world_bounds(points, matrices)
+        assert world.shape == (2, 8, 3)
+        assert np.allclose(world[0].mean(axis=0), [10, 0, 0])
+        assert np.allclose(world[1].mean(axis=0), [0, 0, -4])
+
+    def test_corners_span_the_world_points(self):
+        points = np.stack([self._cube(2.0)])
+        matrices = np.stack([self._moved(1.0, 2.0, 3.0)])
+        world, corners = shadowmath.world_bounds(points, matrices)
+        assert corners.shape == (1, 8, 3)
+        assert np.allclose(corners.min(axis=1), world.min(axis=1))
+        assert np.allclose(corners.max(axis=1), world.max(axis=1))
+
+    def test_corner_order_varies_z_fastest(self):
+        """The eight corners run x outermost and z innermost."""
+        points = np.stack([self._cube()])
+        _world, corners = shadowmath.world_bounds(points, np.stack([np.eye(4)]))
+        expected = [[x, y, z] for x in (-1, 1) for y in (-1, 1)
+                    for z in (-1, 1)]
+        assert np.allclose(corners[0], expected)
+
+    def test_a_rotation_bounds_the_turned_shape(self):
+        """An AABB of a turned box is the box's extent, not the box."""
+        angle = np.pi / 4
+        turn = np.eye(4)
+        turn[0, 0] = turn[2, 2] = np.cos(angle)
+        turn[0, 2], turn[2, 0] = np.sin(angle), -np.sin(angle)
+        _world, corners = shadowmath.world_bounds(np.stack([self._cube()]),
+                                                  np.stack([turn]))
+        assert corners[:, :, 0].max() == pytest.approx(np.sqrt(2.0))
+        assert corners[:, :, 1].max() == pytest.approx(1.0)
+
+    def test_homogeneous_points_are_taken_as_they_come(self):
+        plain = np.stack([self._cube()])
+        homogeneous = np.concatenate(
+            [plain, np.ones(plain.shape[:-1] + (1,))], axis=-1)
+        matrices = np.stack([self._moved(3.0)])
+        assert np.allclose(shadowmath.world_bounds(plain, matrices)[0],
+                           shadowmath.world_bounds(homogeneous, matrices)[0])
+
+    def test_a_volume_of_any_point_count_is_bounded(self):
+        points = np.random.default_rng(7).normal(size=(3, 21, 3))
+        world, corners = shadowmath.world_bounds(
+            points, np.stack([np.eye(4)] * 3))
+        assert world.shape == (3, 21, 3)
+        assert np.allclose(corners.min(axis=1), points.min(axis=1))
+
+    def test_nothing_to_bound_is_an_empty_answer(self):
+        world, corners = shadowmath.world_bounds(
+            np.zeros((0, 8, 3)), np.zeros((0, 4, 4)))
+        assert world.shape == (0, 8, 3) and corners.shape == (0, 8, 3)
+
+
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))

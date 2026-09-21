@@ -30,7 +30,7 @@ def _at(x=0.0, y=0.0, z=0.0):
 
 def _record(shape, matrix=None):
     matrix = np.identity(4, 'f') if matrix is None else matrix
-    return ((False, [], 0.0), matrix, matrix, None, [shape])
+    return ((False, [], 0.0), matrix, matrix, None, [shape], shape)
 
 
 class TestBuildingThePlacements:

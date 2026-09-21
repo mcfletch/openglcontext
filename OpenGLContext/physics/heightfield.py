@@ -160,7 +160,6 @@ class HeightFieldColliders:
         d = c + 1
         indices = np.stack([a, b, c, b, d, c], axis=-1).reshape(-1, 3)
         if self.holes is not None:
-            centre = points[indices].mean(axis=1)
-            missing = np.asarray(self.holes(centre[:, 0], centre[:, 2]), bool)
-            indices = indices[~missing]
+            from OpenGLContext.scenegraph.terrain.holes import cut
+            points, indices = cut(points, indices, self.holes)
         return points, indices.astype('i')

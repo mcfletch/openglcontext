@@ -78,7 +78,7 @@ def max_materials_per_ubo(block_size_bytes: int,
     return max(1, int(block_size_bytes) // int(stride))
 
 
-def geometry_instance_key(path: Any) -> Optional[tuple]:
+def geometry_instance_key(shape: Any) -> Optional[tuple]:
     """Instance-batch key for a render path, or None if it has no geometry.
 
     Two records share a batch when they share geometry AND a compatible
@@ -91,7 +91,6 @@ def geometry_instance_key(path: Any) -> Optional[tuple]:
     identity keeps every instance in a group visually identical, which is the
     common duplicated-geometry case.
     """
-    shape = path[-1]
     geometry = getattr(shape, 'geometry', None)
     if geometry is None:
         return None
@@ -146,7 +145,7 @@ def _material_pass_signature(material: Any) -> tuple:
     return (str(am) if am is not None else None, transmission, transparency)
 
 
-def geometry_texture_key(path: Any) -> Optional[tuple]:
+def geometry_texture_key(shape: Any) -> Optional[tuple]:
     """Stage 2 batch key: geometry + texture set + pass signature, IGNORING
     material identity.
 
@@ -155,7 +154,6 @@ def geometry_texture_key(path: Any) -> Optional[tuple]:
     draw; each instance then indexes its own material in the group's material
     array. Returns None when there is no geometry.
     """
-    shape = path[-1]
     geometry = getattr(shape, 'geometry', None)
     if geometry is None:
         return None
@@ -208,7 +206,7 @@ def _geometry_content_id(geometry: Any) -> Any:
     return cid
 
 
-def geometry_content_key(path: Any) -> Optional[tuple]:
+def geometry_content_key(shape: Any) -> Optional[tuple]:
     """Stage 3 batch key: geometry CONTENT + texture set + pass signature.
 
     Like :func:`geometry_texture_key` but keys geometry by content hash instead of
@@ -216,7 +214,6 @@ def geometry_content_key(path: Any) -> Optional[tuple]:
     one instanced draw. Falls back to node identity for geometry without vertex
     arrays. Returns None when there is no geometry.
     """
-    shape = path[-1]
     geometry = getattr(shape, 'geometry', None)
     if geometry is None:
         return None
@@ -232,7 +229,7 @@ def geometry_content_key(path: Any) -> Optional[tuple]:
     return (content, tex_key, _material_pass_signature(material))
 
 
-def geometry_content_instance_key(path: Any) -> Optional[tuple]:
+def geometry_content_instance_key(shape: Any) -> Optional[tuple]:
     """Content-based key that ALSO splits on material identity.
 
     For passes that bind a single material per instanced group (the VRML97 lit
@@ -241,7 +238,6 @@ def geometry_content_instance_key(path: Any) -> Optional[tuple]:
     collapse into one draw, differently-coloured atoms into their own. Returns None
     when there is no geometry.
     """
-    shape = path[-1]
     geometry = getattr(shape, 'geometry', None)
     if geometry is None:
         return None
@@ -356,7 +352,7 @@ def group_material_table(group: Any) -> tuple[list, list]:
     slot: dict = {}
     indices: list = []
     for rec in group.members:
-        shape = rec[-1][-1]
+        shape = rec[5]
         appearance = getattr(shape, 'appearance', None)
         material = getattr(appearance, 'material', None) if appearance is not None else None
         k = _material_content_key(material)
@@ -515,12 +511,11 @@ def record_placements(record: tuple, visible: Optional[dict] = None) -> Optional
     against a light while the colour pass culls against the camera; a pass that
     offers none gets the whole set, which is what the depth pass wants.
     """
-    shape = record[-1][-1]
     if visible is not None:
-        found = visible.get(id(record[-1]))
+        found = visible.get(id(record[4]))
         if found is not None:
             return found
-    placements = getattr(shape, 'instancePlacements', None)
+    placements = getattr(record[5], 'instancePlacements', None)
     return placements() if placements is not None else None
 
 
@@ -591,7 +586,7 @@ def instance_joint_bases(mode: Any, group: Any) -> Optional[Dict[int, int]]:
     bases: Dict[int, int] = {}
     pending: list = []
     for record in group.members:
-        geometry = record[4][-1].geometry
+        geometry = record[5].geometry
         claimed = geometry.skin_claim(mode)
         if claimed is None:
             return None
@@ -614,7 +609,7 @@ def member_joint_bases(bases: Dict[int, int], records: List[tuple],
     record standing for a placement set hands its figure's joints to each of
     its placements.
     """
-    return per_instance([bases[id(r[4][-1].geometry)] for r in records], counts)
+    return per_instance([bases[id(r[5].geometry)] for r in records], counts)
 
 
 def _winding_sign(mv: Any) -> int:
@@ -641,14 +636,15 @@ def build_instance_groups(
     """Partition render records into instanced groups and leftover singles.
 
     Args:
-        records: (sortKey, mvmatrix, tmatrix, bvolume, path) tuples -- the opaque
+        records: (sortKey, mvmatrix, tmatrix, bvolume, path, node) tuples -- the opaque
             render set. Order is preserved: groups appear in first-seen order and
             each group's members keep scene order.
         min_instances: a batch needs at least this many members to be worth an
             instanced draw (instancing has fixed per-batch setup cost); smaller
             batches fall through to singles.
-        key: record-path -> hashable key (or None to never batch that record).
-        instanceable: predicate(path) -> bool; records whose geometry cannot be
+        key: the record's node -> hashable key (or None to never batch that
+            record).
+        instanceable: predicate(node) -> bool; records whose geometry cannot be
             drawn instanced are always singles. Defaults to "everything with a
             key is instanceable".
 
@@ -666,13 +662,12 @@ def build_instance_groups(
     asked: "Dict[int, Tuple[Any, bool]]" = {}
 
     for record in records:
-        path = record[-1]
-        shape = path[-1]
+        shape = record[5]
         answer = asked.get(id(shape))
         if answer is None:
-            k = key(path)
+            k = key(shape)
             answer = (k, k is not None
-                      and (instanceable is None or bool(instanceable(path))))
+                      and (instanceable is None or bool(instanceable(shape))))
             asked[id(shape)] = answer
         k, batchable = answer
         if not batchable:
@@ -698,7 +693,7 @@ def build_instance_groups(
         if sum(instance_counts(members)) < min_instances:
             singles.extend(members)
             continue
-        shape = members[0][-1][-1]
+        shape = members[0][5]
         groups.append(InstanceGroup(
             key=k,
             geometry=shape.geometry,

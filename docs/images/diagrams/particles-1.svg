@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 840 340" class="diagram" role="img"
+         aria-label="Per-frame flow: emit, step, compact, upload, one instanced draw">
+<style>
+.diagram { font-family: sans-serif; font-size: 13px; }
+    .diagram .box { fill: #f4f4f4; stroke: #666; stroke-width: 1.2; }
+    .diagram .cpu { fill: #e8f0fb; stroke: #37629c; stroke-width: 1.2; }
+    .diagram .gpu { fill: #e9f4ea; stroke: #3d7c46; stroke-width: 1.2; }
+    .diagram .lbl { fill: #111; }
+    .diagram .sub { fill: #444; font-size: 11px; }
+    .diagram .flow { stroke: #666; stroke-width: 1.4; fill: none;
+                     marker-end: url(#parrow); }
+    .diagram .zone { fill: none; stroke: #999; stroke-dasharray: 5 4; }@media (prefers-color-scheme: dark) {
+      .diagram .box { fill: #2a2a2a; stroke: #999; }
+      .diagram .cpu { fill: #1e2b3d; stroke: #7ba7dd; }
+      .diagram .gpu { fill: #1e3222; stroke: #7fc48c; }
+      .diagram .lbl { fill: #eee; }
+      .diagram .sub { fill: #bbb; }
+      .diagram .flow { stroke: #aaa; }
+    }
+</style>
+      <defs>
+        <marker id="parrow" viewBox="0 0 10 10" refX="9" refY="5"
+                markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#666"/>
+        </marker>
+      </defs>
+
+      <rect class="zone" x="8" y="8" width="546" height="324" rx="8"/>
+      <text class="sub" x="20" y="28">CPU — numpy, once per frame</text>
+      <rect class="zone" x="570" y="8" width="262" height="324" rx="8"/>
+      <text class="sub" x="582" y="28">GPU — one draw call</text>
+
+      <rect class="cpu" x="28" y="46" width="222" height="62" rx="5"/>
+      <text class="lbl" x="40" y="66">emit()</text>
+      <text class="sub" x="40" y="84">rate × dt, accumulated;</text>
+      <text class="sub" x="40" y="98">writes at the end of the live prefix</text>
+
+      <rect class="cpu" x="28" y="130" width="222" height="76" rx="5"/>
+      <text class="lbl" x="40" y="150">step(dt)</text>
+      <text class="sub" x="40" y="168">v *= exp(-drag dt)</text>
+      <text class="sub" x="40" y="184">v += gravity dt</text>
+      <text class="sub" x="40" y="200">p += v dt;  age += dt</text>
+
+      <rect class="cpu" x="28" y="228" width="222" height="76" rx="5"/>
+      <text class="lbl" x="40" y="248">compact</text>
+      <text class="sub" x="40" y="266">keep = age &lt; lifetime</text>
+      <text class="sub" x="40" y="282">survivors move down over</text>
+      <text class="sub" x="40" y="298">the gaps; live shrinks</text>
+
+      <rect class="cpu" x="290" y="130" width="240" height="120" rx="5"/>
+      <text class="lbl" x="302" y="150">instances()</text>
+      <text class="sub" x="302" y="170">one row per living particle:</text>
+      <text class="sub" x="302" y="188">x  y  z   size</text>
+      <text class="sub" x="302" y="204">rotation   life   random</text>
+      <text class="sub" x="302" y="228">7 floats -- a view of the pool's</text>
+      <text class="sub" x="302" y="242">own array, rewritten in place</text>
+
+      <rect class="cpu" x="290" y="268" width="240" height="46" rx="5"/>
+      <text class="lbl" x="302" y="288">InstanceBuffer.upload()</text>
+      <text class="sub" x="302" y="306">grow, or glBufferSubData</text>
+
+      <rect class="gpu" x="588" y="60" width="228" height="82" rx="5"/>
+      <text class="lbl" x="600" y="80">vertex shader</text>
+      <text class="sub" x="600" y="98">centre to eye space,</text>
+      <text class="sub" x="600" y="114">quad corner added to x,y</text>
+      <text class="sub" x="600" y="130">colour and size from life</text>
+
+      <rect class="gpu" x="588" y="164" width="228" height="66" rx="5"/>
+      <text class="lbl" x="600" y="184">fragment shader</text>
+      <text class="sub" x="600" y="202">sprite texture, or a soft</text>
+      <text class="sub" x="600" y="218">round dot computed here</text>
+
+      <rect class="gpu" x="588" y="252" width="228" height="62" rx="5"/>
+      <text class="lbl" x="600" y="272">glDrawArraysInstanced</text>
+      <text class="sub" x="600" y="290">4 vertices, N instances,</text>
+      <text class="sub" x="600" y="306">additive or alpha blend</text>
+
+      <path class="flow" d="M 139 108 L 139 130"/>
+      <path class="flow" d="M 139 206 L 139 228"/>
+      <path class="flow" d="M 250 266 L 270 266 L 270 190 L 290 190"/>
+      <path class="flow" d="M 410 250 L 410 268"/>
+      <path class="flow" d="M 530 290 L 560 290 L 560 100 L 588 100"/>
+      <path class="flow" d="M 702 142 L 702 164"/>
+      <path class="flow" d="M 702 230 L 702 252"/>
+    </svg>

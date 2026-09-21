@@ -60,6 +60,11 @@ class _CombinedScene:
 
     def __init__(self, scenes: "list[GLTFScene]") -> None:
         self.group = Group(children=[s.group for s in scenes])
+        # The named materials of all of them, first content first: a name means
+        # the same thing across the contents of one tile.
+        self.materials: dict = {}
+        for scene in reversed(scenes):
+            self.materials.update(getattr(scene, "materials", None) or {})
         centers = np.array([np.asarray(s.center, "d") for s in scenes])
         self.center = centers.mean(axis=0)
         self.radius = max(
@@ -229,7 +234,18 @@ def _make_dispose(drawable: Any) -> Callable[[], None]:
 
 
 class GLTileUploader:
-    """Mounts parsed tile scenes as drawable scenegraph nodes."""
+    """Mounts parsed tile scenes as drawable scenegraph nodes.
+
+    ``ground`` is the world's own ground shading, when it has one
+    (:class:`~OpenGLContext.scenegraph.terrain.ground.GroundShading`): a tile
+    that carries ground is then drawn with it, so the ground a bake meshed into
+    the tiles has the blend, the control map and the baked light of the
+    landscape it is part of. Settable after the uploader is built, and it has to
+    be: a world reads its tileset to stand the streamer up and reads it again to
+    find the landscape.
+    """
+
+    ground: Any = None
 
     def upload(self, tile: "RuntimeTile",
                payload: "tuple[_Scene, int]") -> "tuple[Any, int]":
@@ -243,6 +259,16 @@ class GLTileUploader:
         else:
             # content_transform is column-vector (M·p); MatrixTransform is row-vector (p·M).
             drawable = MatrixTransform(localMatrix=m.T, children=[scene.group])
+        if self.ground is not None:
+            from OpenGLContext.scenegraph.terrain.ground import (
+                GROUND_MATERIAL,
+                mount_ground,
+            )
+            # The tile's own transform, not the wrapper's: which layer is on the
+            # ground here is read from world XZ.
+            mount_ground(drawable, self.ground,
+                         material=getattr(scene, 'materials', {}).get(GROUND_MATERIAL),
+                         model=m)
         drawable.dispose = _make_dispose(drawable)
         return drawable, nbytes
 

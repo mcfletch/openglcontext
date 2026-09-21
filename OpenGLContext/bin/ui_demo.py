@@ -12,7 +12,7 @@ Run it and press the keys it prints:
     F7    a yes/no question
     F5    save a screenshot (into the current directory)
     Alt+f the developer overlay -- a HUD layer rather than a panel, so it takes
-          no input and these screens draw over it (see docs/hud.html)
+          no input and these screens draw over it (see docs/hud.rst)
 
 The artwork the ``--skin`` mode uses is drawn at start-up rather than shipped,
 so the demo shows what a nine-slice does -- corners that stay square while the
