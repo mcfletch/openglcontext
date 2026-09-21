@@ -27,14 +27,25 @@ OpenGLContext is a Python OpenGL framework providing a scenegraph-based renderin
 
 ## User Documentation
 
-User documentation is in the `docs/` directory as HTML files. When asked to "update the docs" or "update the documentation", update the files in `docs/`, not this file (CLAUDE.md).
+User documentation is in the `docs/` directory as reStructuredText, built into
+a site by Sphinx. When asked to "update the docs" or "update the
+documentation", update the pages in `docs/`, not this file (CLAUDE.md).
 
 Key documentation files:
 
-- `docs/index.html` - Main landing page
-- `docs/documentation.html` - Documentation index with links to tutorials and references
-- `docs/structure.html` - Structural overview of the codebase (contexts, rendering, events)
-- `docs/tutorials/` - Tutorial HTML files
+- `docs/index.rst` - Main landing page, and the toctrees every page hangs from
+- `docs/documentation.rst` - Documentation index, annotated
+- `docs/structure.rst` - Structural overview of the codebase (contexts, rendering, events)
+- `docs/tutorials/` - The code walkthroughs, written from `tests/*.py`
+
+Two directories beside them are **generated and not in version control**:
+`docs/tutorials/*.rst` from the `'''`-string commentary in `tests/*.py`, and
+`docs/api/` -- a page per module of the engine, of the packages it is built
+from and of the ones built on it. `python build-docs.py` writes both and runs
+Sphinx; `--stage DIR` puts a copy somewhere to look at and `--publish` puts it
+on `gh-pages`. The module pages need PyOpenGL's `directdocs` package, which is
+in the PyOpenGL *repository*: `DIRECTDOCS=../pyopengl` or `--directdocs` says
+where. `docbuild/` holds this project's half of it.
 
 ## Project Plans
 
@@ -57,100 +68,100 @@ package whose code ends up somewhere else.
 
 ```text
 OpenGLContext/
-├── audio/            # Spatial audio nodes + the per-context engine -- docs/audio.html
-├── bin/              # The console commands (see [project.scripts]) -- docs/viewer.html
-├── character/        # Rigged characters: rig, clips, mixer, crowds -- docs/characters.html
+├── audio/            # Spatial audio nodes + the per-context engine -- docs/audio.rst
+├── bin/              # The console commands (see [project.scripts]) -- docs/viewer.rst
+├── character/        # Rigged characters: rig, clips, mixer, crowds -- docs/characters.rst
 ├── contentpacks/     # Data an application fetches rather than ships: the
 │                     # registry, the store, safe extraction and the polled
-│                     # download job -- docs/contentpacks.html
+│                     # download job -- docs/contentpacks.rst
 ├── packs.json        # The content packs this project publishes: the
 │                     # bust-gallery world's URL, digest and terms, written
-│                     # by release-assets.py -- docs/lod.html
+│                     # by release-assets.py -- docs/lod.rst
 ├── debug/            # Developer aids: buffer dumps, GL state, leak counts
-├── demos/            # A view inside a Tk or wx application -- docs/embedding.html
+├── demos/            # A view inside a Tk or wx application -- docs/embedding.rst
 │                     # (the Qt one is in the openglcontext-qt distribution)
-├── edit/             # Editor toolkit: tool modes, plan/orbit views, handles -- docs/editing.html
+├── edit/             # Editor toolkit: tool modes, plan/orbit views, handles -- docs/editing.rst
 │   ├── gizmo.py      # The tri-axis handle; a drag held to one axis
 │   └── controlnet.py # A NURBS node's control points, as pickable markers
-├── events/           # Cross-backend event generation and dispatch -- docs/eventmodel.html
+├── events/           # Cross-backend event generation and dispatch -- docs/eventmodel.rst
 │   └── wheel.py      # Rotation reports into whole notches, for the backends
 │                     # whose toolkit states a detent size
-├── loaders/          # File formats into the scenegraph -- docs/gltf.html, vrml97.html
+├── loaders/          # File formats into the scenegraph -- docs/gltf.rst, vrml97.rst
 │   ├── background.py # The pool a url field hands its fetch to, and the rule
 │   │                 # that its imports are made by the submitting thread
 │   ├── gltf/         # glTF 2.0 / GLB
 │   │   └── lod.py    # MSFT_lod: a node's coarser levels, and when each is
-│   │                 # worth drawing -- docs/gltf.html#lod. Making them is
+│   │                 # worth drawing -- docs/gltf.rst#lod. Making them is
 │   │                 # openglcontext-editor's job, not the engine's
-│   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/tiles3d.html
-├── move/             # Camera, movement modes, walking -- docs/navigation.html
+│   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/tiles3d.rst
+├── move/             # Camera, movement modes, walking -- docs/navigation.rst
 │   └── orbit.py      # The examine gestures: orbit, dolly, pan -- no GL, no events
 ├── nav/              # Navigation mesh generated from a collision mesh
-├── packaging/        # Shipping an application: /opt environments, .deb -- docs/packaging.html
-├── passes/           # Rendering passes -- docs/renderpasses.html, flat.html, pbr.html
+├── packaging/        # Shipping an application: /opt environments, .deb -- docs/packaging.rst
+├── passes/           # Rendering passes -- docs/renderpasses.rst, flat.rst, pbr.rst
 │   ├── _flat.py      # What both flat passes share; not instantiated directly
 │   ├── flatcore.py   # Core-profile pass (GLSL)
 │   ├── flatcompat.py # Compatibility-profile pass (fixed function)
 │   ├── renderpass.py # Chooses between the two and caches the choice
-│   ├── pbrpass.py    # Metallic/roughness uber-shader -- docs/ubershader.html
+│   ├── pbrpass.py    # Metallic/roughness uber-shader -- docs/ubershader.rst
 │   ├── ibl.py        # Image-based lighting probe
-│   ├── shadow*.py    # Shadow mapping -- docs/shadows.html
-│   ├── instancing.py # Collapsing repeated shapes -- docs/instancing.html
+│   ├── shadow*.py    # Shadow mapping -- docs/shadows.rst
+│   ├── instancing.py # Collapsing repeated shapes -- docs/instancing.rst
 │   └── shaderpass.py # VRML97ShaderProgram -- compiles and holds the programs
-├── __pyinstaller/    # PyInstaller hooks, found by entry point -- docs/packaging.html
-├── physics/          # Rigid bodies, colliders, gravity zones -- docs/physics.html
+├── __pyinstaller/    # PyInstaller hooks, found by entry point -- docs/packaging.rst
+├── physics/          # Rigid bodies, colliders, gravity zones -- docs/physics.rst
 ├── resources/        # Generated Python modules holding icons and shader text
-├── py.typed          # The engine's declarations are real -- docs/typing.html
+├── py.typed          # The engine's declarations are real -- docs/typing.rst
 ├── scenegraph/       # VRML97-style nodes
 │   ├── basenodes.py  # Every registered node class, by name
 │   ├── basenodes.pyi # ...declared, since that namespace is filled at import
 │   │                 # time. `scripts/write_basenodes_stub.py` writes it
 │   ├── _basenodes_stub.py  # ...and this works out what it should say
 │   ├── shape.py      # Binds Appearance to geometry
-│   ├── extrusions.py # Swept geometry nodes -- docs/extrusions.html
-│   ├── nurbs*.py     # NURBS surfaces, curves, trims, sampling -- docs/nurbs.html
+│   ├── extrusions.py # Swept geometry nodes -- docs/extrusions.rst
+│   ├── nurbs*.py     # NURBS surfaces, curves, trims, sampling -- docs/nurbs.rst
 │   ├── frommesh.py   # Generated glTF-shaped arrays -> scenegraph nodes
 │   ├── pbrmaterial.py, pbrmesh.py   # The metallic/roughness material and mesh
 │   ├── lightgrid.py  # Baked irradiance grid: lights what a lightmap cannot
 │   ├── octahedral.py # The fold an impostor's views are laid out by; the same
-│   │                 # arithmetic is in pbr.vert -- docs/lod.html#impostors
+│   │                 # arithmetic is in pbr.vert -- docs/lod.rst#impostors
 │   ├── geometryarrays.py   # What a geometry offers a shader, and binding it
 │   ├── vertexsemantics.py  # Which attribute location each vertex array is read at
-│   ├── road*.py      # Roads, roadworks, signs -- docs/roads.html
-│   ├── water/        # Wave field, surface, medium -- docs/water.html
-│   ├── terrain/      # Height fields and splat materials -- docs/terrain.html
-│   ├── vegetation/   # Instanced cover and fields -- docs/vegetation.html
-│   └── text/         # Text rendering and font providers -- docs/text.html
+│   ├── road*.py      # Roads, roadworks, signs -- docs/roads.rst
+│   ├── water/        # Wave field, surface, medium -- docs/water.rst
+│   ├── terrain/      # Height fields and splat materials -- docs/terrain.rst
+│   ├── vegetation/   # Instanced cover and fields -- docs/vegetation.rst
+│   └── text/         # Text rendering and font providers -- docs/text.rst
 ├── shaders/          # GLSL sources (.vert/.frag plus shared _*.glsl includes)
-├── telemetry/        # A whole session to one file, and back -- docs/telemetry.html
+├── telemetry/        # A whole session to one file, and back -- docs/telemetry.rst
 ├── testing/          # The shipped test machinery conftest.py imports
 ├── tests/            # A second test root -- being moved to tests/unit/ (C1)
-├── ui/               # Overlay UI: panels, widgets, skin -- docs/overlayui.html
+├── ui/               # Overlay UI: panels, widgets, skin -- docs/overlayui.rst
 │   ├── overlay.py    # OverlayStack + OverlayMixin: the stack and input routing
 │   ├── panel.py      # One screen: focus, accelerators, modality
 │   ├── widgets.py    # Label/Button/Toggle/Select/Slider/Text+NumberField
-│   ├── hudwidgets.py # The in-world HUD: reticule, meters, messages -- docs/hud.html
+│   ├── hudwidgets.py # The in-world HUD: reticule, meters, messages -- docs/hud.rst
 │   ├── debugoverlay.py  # The developer overlay, fed by registered providers
 │   ├── layout.py     # Row/Column/Grid (built on hud.GUIBox)
 │   ├── draw.py       # The GL renderer: one program, one batched buffer
 │   └── generate.py   # A settings page from a node's fields (UI_HINTS)
-├── video/            # H.264 capture of the colour buffer -- docs/recording.html
-├── viewer/           # The embeddable viewer behind oglc-view -- docs/viewer.html
+├── video/            # H.264 capture of the colour buffer -- docs/recording.rst
+├── viewer/           # The embeddable viewer behind oglc-view -- docs/viewer.rst
 │   └── adapters/     # One per format; what oglc-view dispatches on
 ├── hud.py            # Screen-space layout GUINode/GUIBox use (see ui/)
 ├── outline.py        # The scenegraph as rows, for a tree control -- no GL, no
-│                     # toolkit -- docs/embedding.html
+│                     # toolkit -- docs/embedding.rst
 ├── renderoptions.py  # How a pass reads a rendering feature from the definition
-├── screenshot.py     # The F2 key every context binds -- docs/structure.html
+├── screenshot.py     # The F2 key every context binds -- docs/structure.rst
 ├── swapcontrol.py    # Waiting for the refresh, for backends that name nothing
 ├── contextresources.py   # Caches let go of a GL context's names as it dies
 ├── contextdefinition.py  # The fields a context is configured by
 ├── context.py        # Base context class
 ├── glfwcontext.py, glutcontext.py, pygamecontext.py, tkcontext.py,
 │   wxcontext.py      # One per backend, plus *interactive*, *vrml*, *testing*
-├── eglcontext.py     # Offscreen on Linux: no window, no display server -- docs/offscreen.html
+├── eglcontext.py     # Offscreen on Linux: no window, no display server -- docs/offscreen.rst
 ├── eglvrmlcontext.py # The VRML97-aware form of it
-├── wglcontext.py     # Offscreen on Windows: a WGL pbuffer -- docs/offscreen.html
+├── wglcontext.py     # Offscreen on Windows: a WGL pbuffer -- docs/offscreen.rst
 ├── wglvrmlcontext.py # The VRML97-aware form of it
 ├── interactivecontext.py  # Interactive context with mouse/keyboard
 └── testingcontext.py      # Picks the backend's testing context
@@ -277,7 +288,7 @@ The first word of the declaration's own comment is the marker: `required`, or
 array any geometry might carry and reads most of them only where a uniform says
 this one did, so `required` is the short list, and it is what
 `report_missing_inputs` names a geometry against
-(`passes/shadersource.required_inputs`, `docs/renderpasses.html`).
+(`passes/shadersource.required_inputs`, `docs/renderpasses.rst`).
 
 ```glsl
 layout(location = 1) in vec3 aNormal;    // required: shading has no direction without it
@@ -313,7 +324,7 @@ Passes read through `OpenGLContext.renderoptions`, never the environment
 directly. The fields are `shadows`, `shadowsSoft`, `shadowCascades`,
 `maximumLights`, `bloom`, `ibl`, `iblIntensity`, `transmission`, `instancing`,
 `tessellationLOD`, `vsync` and `uiScale`; see
-[docs/overlayui.html](docs/overlayui.html).
+[docs/overlayui.rst](docs/overlayui.rst).
 
 **These are start-up switches, and each is read once.** A pass that changed its
 mind mid-session because something else edited `os.environ` would be
@@ -368,7 +379,7 @@ matrix stack, display lists, or GLSL's `gl_ModelViewProjectionMatrix` — none o
 which exist in core. `Context.resolveDefinition` is where the order is decided,
 and every backend calls it before it opens a window, since the profile, version
 and buffer formats are all window-creation parameters. See
-[docs/structure.html](docs/structure.html#core-profile).
+[docs/structure.rst](docs/structure.rst#core-profile).
 
 **`scripts/profile_sweep.py` compares the two profiles by what they drew.** A
 fixed-function call in a core context raises `GLError(1282)`, and the render pass
@@ -431,7 +442,7 @@ export OPENGLCONTEXT_BACKEND=glfw
 
 The two offscreen backends are the same context class in the plain, interactive
 and VRML slots, because a context nothing can click on has no separate
-interactive form. See [docs/offscreen.html](docs/offscreen.html).
+interactive form. See [docs/offscreen.rst](docs/offscreen.rst).
 
 
 ### OPENGLCONTEXT_STALL_MS / OPENGLCONTEXT_TRACE_STALLS
@@ -455,7 +466,7 @@ OPENGLCONTEXT_STALL_MS=40 /workspaces/OpenGL-dev/.venv/bin/python -m twig_bb
 
 Unlike the variables above, these change nothing about what a frame looks like,
 so they are **not** in `renderoptions.ENVIRONMENT` and a subprocess capture
-inherits them. See [docs/hud.html](docs/hud.html) and
+inherits them. See [docs/hud.rst](docs/hud.rst) and
 [plans/LOOP-INSTRUMENTATION.md](plans/LOOP-INSTRUMENTATION.md).
 
 ### OPENGLCONTEXT_STALL_TRACE
@@ -501,7 +512,7 @@ played out the same way.
 Unlike the stall switches these **are** in `renderoptions.ENVIRONMENT`: a
 journal names one file for one session, so a subprocess capture that inherited
 the name would overwrite its parent's, and a replay drives the camera. See
-[docs/telemetry.html](docs/telemetry.html) and
+[docs/telemetry.rst](docs/telemetry.rst) and
 [plans/SESSION-TELEMETRY.md](plans/SESSION-TELEMETRY.md).
 
 ### OPENGLCONTEXT_SEED
@@ -625,7 +636,7 @@ record how the code came to be — that provenance is dead the day it lands, git
 blame already keeps it, and it crowds out the description a reader actually needs.
 
 This applies to every docstring, comment and module header **and to the user
-documentation in `docs/`**. A user reading `docs/audio.html` has even less use
+documentation in `docs/`**. A user reading `docs/audio.rst` has even less use
 for the backstory than a maintainer does: "nothing has ever played them, they
 work now" tells them nothing about how to play a sound, dates the page the moment
 it lands, and reads as the project congratulating itself. Write what the feature
@@ -697,7 +708,7 @@ short answer for the places a change most often lands.
 - Rendering passes are in `OpenGLContext/passes/`
 - Shaders are in `OpenGLContext/shaders/` as `.vert` and `.frag` files
 - Context implementations (GLUT, GLFW, Pygame, wx) are in `OpenGLContext/`
-- User documentation is `docs/*.html`; plans are `plans/*.md`
+- User documentation is `docs/*.rst`; plans are `plans/*.md`
 
 **A capability a game would also want belongs in the engine, not in a demo or
 a tool.** If the natural home is a new module, add it to a package that already
@@ -906,7 +917,7 @@ machine with no desktop or no GLFW needs. The default is `glfw`, the hidden
 window. A test that reaches past the context to the window it came from uses
 `testing.glcontext.make_current` / `release_current` / `framebuffer_size`, which
 work under both, and one that genuinely asks GLFW about a window skips on
-`glcontext.windowing() != 'glfw'`. See [docs/testing.html](docs/testing.html).
+`glcontext.windowing() != 'glfw'`. See [docs/testing.rst](docs/testing.rst).
 
 Order-dependent GL failures are almost always **context/state pollution** between
 tests. The fix is better isolation, not weaker assertions: prefer the test harness
@@ -921,7 +932,7 @@ hidden core-profile 3.3 window, current for that test and gone afterwards. It
 comes from `OpenGLContext.testing.plugin`, which `pyproject.toml` turns on with
 `addopts = "-p OpenGLContext.testing.plugin"`, so an application built on the
 engine turns the same fixtures on the same way -- see
-[docs/testing.html](docs/testing.html).
+[docs/testing.rst](docs/testing.rst).
 
 ```python
 def test_the_glow_spreads(gl_context):
@@ -1070,30 +1081,15 @@ def test_mousemove_events_filtered_when_no_handlers():
 OPENGLCONTEXT_PROFILE=compatibility /workspaces/OpenGL-dev/.venv/bin/pytest tests/<testname>.py
 ```
 
-#### wxPython GTK3 Requires EGL for Core Profile
+#### wxPython, GTK3 and EGL
 
-**Important:** wxPython GTK3 uses EGL (not GLX) for OpenGL context creation.
-Core profile rendering with wxPython requires `PYOPENGL_PLATFORM=egl` to be set
-so PyOpenGL can properly track the OpenGL context.
-
-The `wxcontext` module attempts to set this automatically when GTK3 is detected,
-but if OpenGL is imported before wxcontext, you must set it manually:
-
-```bash
-PYOPENGL_PLATFORM=egl /workspaces/OpenGL-dev/.venv/bin/pytest tests/<testname>.py
-```
-
-Or in code (before any OpenGL imports):
-
-```python
-import os
-os.environ['PYOPENGL_PLATFORM'] = 'egl'
-```
-
-**Symptoms if EGL is not set:** Errors like "Attempt to retrieve context when no
-valid context" during shader rendering, particularly in `glVertexAttribPointer`
-or other VAO/VBO operations. Legacy (fixed-function) rendering may still work
-because it doesn't rely on PyOpenGL's context tracking.
+wxPython on GTK3 makes its GL context through EGL rather than GLX, and on X11
+it may be either. **Do not set `PYOPENGL_PLATFORM` for it.** PyOpenGL's Linux
+platform loads both interfaces and probes for the live context
+(`OpenGL/platform/linux.py`), so the calls are routed to whichever API owns the
+context the toolkit made — naming one pins it and breaks the other. Pinning is
+for an offscreen render (`PYOPENGL_PLATFORM=egl`, or `osmesa`), where there is
+no toolkit to ask.
 
 Key test files:
 

@@ -81,6 +81,11 @@ audio = ["omi_audio[playback]"]
 # setups that still request OpenGLContext[accelerate] don't break.
 accelerate = []
 all = ["OpenGLContext[pygame,glfw,gltf,draco,audio,accelerate]"]
+# What `build-docs.py` needs to build the documentation set. The generator for
+# the module pages is PyOpenGL's `directdocs`, which is in the PyOpenGL
+# repository rather than in the PyOpenGL distribution, so it is not here: point
+# DIRECTDOCS at a checkout of it.
+docs = ["sphinx>=7", "furo", "sphinxcontrib-mermaid"]
 dev = ["OpenGLContext[all]","pytest", "pytest-cov", "pytest-html", "pytest-timeout", "psutil", "ruff", "mypy"]
 
 [project.scripts]
@@ -274,7 +279,7 @@ commands = [["mypy", { replace = "posargs", extend = true }]]
 testpaths = ["OpenGLContext/tests", "tests"]
 # The GL-window fixtures the rendering tests ask for (gl_context, gl_window,
 # gl_context_compat) ship in the package, so an application built on the engine
-# turns on the same ones the same way -- see docs/testing.html.
+# turns on the same ones the same way -- see docs/testing.rst.
 #
 # `-ra` makes every run state its skips and xfails rather than folding them into
 # a count. A skip is how a suite goes green without having run something, and a

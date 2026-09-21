@@ -19,7 +19,7 @@ shadows are on by default. A scene that brings its own sky keeps it.
 A model with no camera of its own is centred and auto-framed. The fit is on the
 *model*: a part the file stranded far outside the rest is still drawn but does
 not push the camera back to take it in, and the viewer prints a line saying how
-many such parts there are and how far out they go. See docs/viewer.html.
+many such parts there are and how far out they go. See docs/viewer.rst.
 
 Each camera the scene defines becomes a ``Viewpoint`` node, so PageUp/PageDown
 cycle between them through OpenGLContext's standard viewpoint mechanism; cameras
@@ -69,7 +69,7 @@ Controls (OpenGLContext's default view-platform navigation)::
     Alt + f                 the developer overlay: frame rate and time, which
                             renderer features are on, what the last frame cost
                             in shapes and draw calls, and where the camera is
-                            (see docs/hud.html)
+                            (see docs/hud.rst)
 
 Free-fly by default; ``--physics`` (or ``g``) walks the scene instead, with
 gravity and collision keeping you on the ground and out of walls. ``g`` again
@@ -77,7 +77,7 @@ returns to free-fly, so a viewpoint inside the geometry is never a trap.
 
 The viewer itself is :mod:`OpenGLContext.viewer`, which an application can embed
 without this command line, and the formats it opens are the adapters registered
-in :mod:`OpenGLContext.viewer.adapters`; see docs/gltf.html.
+in :mod:`OpenGLContext.viewer.adapters`; see docs/gltf.rst.
 """
 import argparse
 import os

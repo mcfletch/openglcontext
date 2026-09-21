@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 470" width="780" style=" font-family: Arial, Helvetica, sans-serif;" role="img" aria-label="Diagram: material properties and scene lighting feed the PBR shader, which produces the shaded pixel">
+  <defs>
+    <marker id="ah" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L8,3 L0,6 Z" fill="#555"></path>
+    </marker>
+    <radialGradient id="sphere" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#fdfcf5"></stop>
+      <stop offset="55%" stop-color="#c9a15a"></stop>
+      <stop offset="100%" stop-color="#3d2f14"></stop>
+    </radialGradient>
+  </defs>
+
+  <!-- Material inputs -->
+  <text x="20" y="30" font-size="15" font-weight="bold" fill="#334">Material (PBRMaterial)</text>
+  <rect x="12" y="40" width="252" height="372" rx="10" fill="#f4f6ff" stroke="#8899cc"></rect>
+  <g font-size="12.5">
+    <rect x="24" y="52"  width="228" height="42" rx="5" fill="#ffffff" stroke="#ccd3e6"></rect>
+    <text x="34" y="70" font-weight="bold" fill="#223">Base colour</text>
+    <text x="34" y="87" fill="#556">surface colour / metal reflection tint</text>
+
+    <rect x="24" y="100" width="228" height="42" rx="5" fill="#ffffff" stroke="#ccd3e6"></rect>
+    <text x="34" y="118" font-weight="bold" fill="#223">Metalness</text>
+    <text x="34" y="135" fill="#556">metal &#8596; non-metal</text>
+
+    <rect x="24" y="148" width="228" height="42" rx="5" fill="#ffffff" stroke="#ccd3e6"></rect>
+    <text x="34" y="166" font-weight="bold" fill="#223">Roughness</text>
+    <text x="34" y="183" fill="#556">glossy &#8596; matte</text>
+
+    <rect x="24" y="196" width="228" height="42" rx="5" fill="#ffffff" stroke="#ccd3e6"></rect>
+    <text x="34" y="214" font-weight="bold" fill="#223">Normal map</text>
+    <text x="34" y="231" fill="#556">fine surface detail (bumps)</text>
+
+    <rect x="24" y="244" width="228" height="42" rx="5" fill="#ffffff" stroke="#ccd3e6"></rect>
+    <text x="34" y="262" font-weight="bold" fill="#223">Occlusion</text>
+    <text x="34" y="279" fill="#556">shadow in creases</text>
+
+    <rect x="24" y="292" width="228" height="42" rx="5" fill="#ffffff" stroke="#ccd3e6"></rect>
+    <text x="34" y="310" font-weight="bold" fill="#223">Emissive</text>
+    <text x="34" y="327" fill="#556">self-glow (screens, LEDs)</text>
+
+    <rect x="24" y="340" width="228" height="60" rx="5" fill="#ffffff" stroke="#ccd3e6"></rect>
+    <text x="34" y="358" font-weight="bold" fill="#223">Optional lobes</text>
+    <text x="34" y="375" fill="#556">clearcoat &#183; sheen</text>
+    <text x="34" y="392" fill="#556">transmission (glass) &#183; ior</text>
+  </g>
+
+  <!-- Shader -->
+  <rect x="336" y="150" width="200" height="150" rx="12" fill="#eef7ee" stroke="#77aa77"></rect>
+  <text x="436" y="212" font-size="15" font-weight="bold" fill="#254" text-anchor="middle">PBR shader</text>
+  <text x="436" y="234" font-size="12" fill="#476" text-anchor="middle">Cook-Torrance +</text>
+  <text x="436" y="250" font-size="12" fill="#476" text-anchor="middle">image-based lighting</text>
+
+  <!-- Lighting -->
+  <rect x="336" y="336" width="200" height="72" rx="10" fill="#fff7e6" stroke="#ccaa55"></rect>
+  <text x="436" y="366" font-size="14" font-weight="bold" fill="#653" text-anchor="middle">Scene lighting</text>
+  <text x="436" y="386" font-size="12" fill="#875" text-anchor="middle">lights &#183; environment &#183; shadows</text>
+
+  <!-- Result -->
+  <circle cx="670" cy="225" r="46" fill="url(#sphere)" stroke="#3d2f14" stroke-width="0.5"></circle>
+  <text x="670" y="300" font-size="13" font-weight="bold" fill="#334" text-anchor="middle">Shaded pixels</text>
+
+  <!-- Arrows -->
+  <line x1="266" y1="225" x2="330" y2="225" stroke="#555" stroke-width="2.5" marker-end="url(#ah)"></line>
+  <line x1="436" y1="336" x2="436" y2="306" stroke="#555" stroke-width="2.5" marker-end="url(#ah)"></line>
+  <line x1="538" y1="225" x2="616" y2="225" stroke="#555" stroke-width="2.5" marker-end="url(#ah)"></line>
+</svg>

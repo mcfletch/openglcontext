@@ -10,7 +10,7 @@ Neither is specific to a *demo*.  What is here is what any application on the
 engine writes, and it is short because the engine answers the parts it is the
 one that knows -- which modules are reached by name, which toolkits are not
 being used, which libraries the machine is asked for.  See
-[docs/packaging.html](../../../docs/packaging.html).
+[docs/packaging.rst](../../../docs/packaging.rst).
 
 ## A frozen bundle
 

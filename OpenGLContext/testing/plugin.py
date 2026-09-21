@@ -53,7 +53,7 @@ never going to serve it::
 
 What the marker names is set for the test, reaches any child process it
 launches, and is put back afterwards.  See :mod:`OpenGLContext.testing.gl_env`
-for the rule that tells configuration from the machine, and ``docs/testing.html``
+for the rule that tells configuration from the machine, and ``docs/testing.rst``
 for the whole of it.
 
 The window machinery itself is in :mod:`OpenGLContext.testing.glcontext` and has

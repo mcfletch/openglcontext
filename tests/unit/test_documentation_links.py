@@ -1,16 +1,16 @@
 """A link from one page to another has to land where it says.
 
-``docs/physics.html`` sends a reader to ``terrain.html#heightfield``, and a
-browser given an anchor it cannot find shows the top of the page instead --
-silently, so the reader lands somewhere plausible and never learns they were
-sent to the wrong place.  Reorganising the documentation is exactly what breaks
-one of these: a section moves to another page and the anchor keeps resolving
-right up until it does not.
+``docs/physics.rst`` sends a reader to the heightfield section of
+``terrain.rst``, and a link that has lost its target is silent in a browser:
+the reader lands at the top of some page and never learns they were sent to
+the wrong place.  Reorganising the documentation is exactly what breaks one --
+a section moves to another page and the label keeps resolving right up until
+it does not.
 
-Only *relative* links are checked.  An ``http(s)`` URL is somebody else's page,
-a root-relative one (``/context/…``) is a position on the published site rather
-than in this checkout, and a ``../pydoc/`` one is generated from the source
-rather than written.
+Sphinx reports both of these as it builds, and a build log is not a failing
+test.  Only the links the hand-written pages make are checked here; the
+generated halves of the set are written from the source and are checked by
+the generators' own tests.
 """
 import re
 
@@ -20,68 +20,70 @@ from OpenGLContext.testing.paths import tests_root
 
 DOCS = tests_root(__file__).parent / 'docs'
 
-#: ``href="target"``, in any of the quoting the pages use.
-HREF = re.compile(r'href=["\']([^"\']+)["\']')
+#: ``:doc:`text <target>``` or ``:doc:`target```.
+DOC = re.compile(r':doc:`(?:[^`<>]*<([^`<>]+)>|([^`<>]+))`')
 
-#: ``id="name"``, which is what an anchor has to find.  ``name="…"`` on an
-#: anchor element is the older spelling and still resolves in every browser.
-ANCHOR = re.compile(r'(?:id|name)=["\']([^"\']+)["\']')
+#: ``:ref:`text <label>``` or ``:ref:`label```.
+REF = re.compile(r':ref:`(?:[^`<>]*<([^`<>]+)>|([^`<>]+))`')
+
+#: ``.. _label:`` on a line of its own, which is what a ``:ref:`` finds.
+LABEL = re.compile(r'^\.\. _([\w.-]+):\s*$', re.M)
+
+#: Labels Sphinx defines for itself.
+BUILT_IN = {'genindex', 'modindex', 'search', 'py-modindex'}
+
+#: The directories written by the generators, which are not in the checkout
+#: until the set is built.
+GENERATED = ('api/', 'tutorials/', '/api/', '/tutorials/')
 
 
 def _pages():
-    """Every page of the site, the tutorials included."""
-    return sorted(DOCS.glob('*.html')) + sorted(DOCS.glob('tutorials/*.html'))
+    return sorted(DOCS.glob('*.rst'))
 
 
-def _anchors(path):
-    return set(ANCHOR.findall(path.read_text(encoding='utf-8', errors='replace')))
+def _targets(pattern, text):
+    for explicit, bare in pattern.findall(text):
+        yield explicit or bare
 
 
-def _links(path):
-    """(target page, anchor) for each relative link out of this page.
-
-    The anchor is ``''`` for a link to the page as a whole.  A bare ``#name``
-    is a link into the page it appears on.
-    """
-    text = path.read_text(encoding='utf-8', errors='replace')
-    for href in HREF.findall(text):
-        if '://' in href or href.startswith(('mailto:', 'data:', '/')):
-            continue
-        target, _, anchor = href.partition('#')
-        if not target:
-            yield path, anchor
-            continue
-        resolved = (path.parent / target).resolve()
-        yield resolved, anchor
+def _document(page, target):
+    """The document ``target`` names, seen from ``page``, without its suffix."""
+    if target.startswith('/'):
+        return target[1:]
+    if target.startswith('../'):
+        return target[3:]
+    return target
 
 
 @pytest.mark.skipif(not DOCS.is_dir(), reason='docs/ not in this checkout')
 class TestEveryLinkLandsSomewhere:
-    """The pages are the whole site, so both halves of a link are checkable."""
-
-    def test_every_relative_link_names_a_file_that_exists(self):
-        """Generated trees (``pydoc/``) are not in the checkout, so skip them."""
-        broken = {}
+    def test_every_doc_reference_names_a_page(self):
+        broken = []
         for page in _pages():
-            for target, _anchor in _links(page):
-                if 'pydoc' in target.parts or not target.name.endswith('.html'):
+            text = page.read_text(encoding='utf-8')
+            for target in _targets(DOC, text):
+                if target.startswith(GENERATED) or target.lstrip('/').startswith(
+                    ('api/', 'tutorials/')
+                ):
                     continue
-                if not target.exists():
-                    broken.setdefault(page.name, set()).add(target.name)
-        assert not broken, (
-            'links to a page that is not in docs/: %s'
-            % {k: sorted(v) for k, v in broken.items()})
+                name = _document(page, target)
+                if not (DOCS / ('%s.rst' % (name,))).is_file():
+                    broken.append('%s -> %s' % (page.name, target))
+        assert not broken, 'links to a page that is not there: %s' % (broken,)
 
-    def test_every_anchor_is_an_id_on_the_page_it_names(self):
-        known = {page: _anchors(page) for page in _pages()}
-        broken = {}
+    def test_every_section_reference_names_a_label(self):
+        labels = set(BUILT_IN)
         for page in _pages():
-            for target, anchor in _links(page):
-                if not anchor or target not in known:
-                    continue
-                if anchor not in known[target]:
-                    broken.setdefault(page.name, set()).add(
-                        '%s#%s' % (target.name, anchor))
-        assert not broken, (
-            'anchors named in docs/ that no page defines: %s'
-            % {k: sorted(v) for k, v in broken.items()})
+            labels.update(LABEL.findall(page.read_text(encoding='utf-8')))
+        for page in sorted(DOCS.glob('tutorials/*.rst')):
+            labels.update(LABEL.findall(page.read_text(encoding='utf-8')))
+        broken = []
+        for page in _pages():
+            for target in _targets(REF, page.read_text(encoding='utf-8')):
+                if target not in labels:
+                    broken.append('%s -> %s' % (page.name, target))
+        assert not broken, 'links to a section that is not there: %s' % (broken,)
+
+    def test_the_pages_are_there_to_check(self):
+        """A check over an empty set passes and says nothing."""
+        assert len(_pages()) > 20

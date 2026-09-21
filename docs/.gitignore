@@ -1,0 +1,8 @@
+# Written by build-docs.py: the module pages from the installed packages, and
+# the tutorials from the commentary in tests/*.py.  Regenerated on every build.
+/api/
+/tutorials/*.rst
+/_build/
+
+# ...except this one, which is written by hand rather than from a script.
+!/tutorials/physics_getting_started.rst

@@ -2,9 +2,8 @@
 
 ``oglc-view`` with nothing named opens :func:`main_menu` rather than printing a
 usage message, and from it :func:`browse_screen` -- a shelf of models and worlds
-shown by **their own pictures**, because what tells one sample from another is
-what it looks like and a list of names like ``MetalRoughSpheresNoTextures``
-makes you open each in turn to find out which is which.
+shown by their own pictures, so that a reader can see what a sample is before
+opening it rather than reading a name like ``MetalRoughSpheresNoTextures``.
 
 Everything here is a plain :class:`~OpenGLContext.ui.panel.Panel` built from the
 shared widgets, so the screens take the skin, the interface scale and the input

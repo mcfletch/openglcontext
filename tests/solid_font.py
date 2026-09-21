@@ -1,8 +1,34 @@
 #! /usr/bin/env python
-'''Low-level tests of solid fonts
+'''=3D text=
 
-Tests solid 3D font rendering using the scenegraph with Transform nodes.
-This approach works in both core and compatibility OpenGL profiles.
+[solid_font.py-screen-0001.png Screenshot]
+
+Text with depth: the glyphs of an installed font, turned into triangles and
+given a thickness.  It is the same work as any other swept shape -- a
+closed outline tessellated into a face, and the outline swept to make the
+sides -- with the outlines coming from the font file rather than from a
+list of points.
+
+`Text` is the VRML97 node and `FontStyle3D` says how to build it:
+
+    family       which installed font, by name
+    size         how tall a line is, in scene units
+    thickness    how far the glyphs are extruded
+    quality      how finely a curved edge is subdivided
+    justify      where the string sits against its origin
+    renderFront, renderBack, renderSides
+                 which of the three surfaces to build
+
+The fonts are the ones on the machine.  ``fontprovider.getProviders``
+answers which providers are registered; the ``toolsfont`` provider reads
+TrueType outlines through `ttfquery`, and the registry it builds is what
+``getTTFFiles`` below returns.  :doc:`The text page </text>` covers the
+flat text nodes beside these, and :doc:`Tessellation </tessellation>` is
+the outline-to-triangles step on its own.
+
+Keys:
+
+    n       the next installed font
 '''
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()

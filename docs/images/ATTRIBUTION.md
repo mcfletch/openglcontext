@@ -1,8 +1,8 @@
 # What is in these pictures, and on what terms
 
-Every picture under `docs/images/` is a render this project produced. The
-*render* is ours; what is **in** the render carries its own terms, and this file
-records them.
+Every picture under `docs/images/`, and every tutorial screenshot under
+`docs/tutorials/`, is a render this project produced. The *render* is ours;
+what is **in** the render carries its own terms, and this file records them.
 
 Most of these are the Khronos glTF sample models, which is what the engine is
 held to for conformance (`tests/unit/test_gltf_conformance.py`). The gallery
@@ -38,6 +38,7 @@ careless about which ones we host:
 | `gallery/showcase/marble-board.jpg` | the marble demo, MIT, on CC0 generated assets |
 | `gallery/showcase/parthenon.jpg`, `parthenon/*.jpg` | the Parthenon model, CC0 |
 | `demos/*.jpg`, `extrusions/*.png`, `shadow_demo.jpg`, `text_simple.png` | BSD-3-Clause; scenes built by the demo scripts in `tests/` |
+| `demos/gallery.jpg` | the bust-gallery content pack &mdash; 'Marble Bust 01' by Rico Cilliers (Poly Haven) and ambientCG materials, all CC0 1.0 |
 | `toronto-3dtiles.jpg` | City of Toronto 3D massing data, Open Government Licence &mdash; Toronto |
 
 ## Khronos glTF sample models
@@ -56,7 +57,7 @@ repository, where the full legal notice for a model lives in its own `README.md`
 | Corset | &copy; 2017 UX3D &mdash; CC0 1.0 |
 | FlightHelmet | public domain &mdash; CC0 1.0 |
 | GlassVaseFlowers | public domain &mdash; CC0 1.0 |
-| Lantern | &copy; 2017 Microsoft, &copy; 2018 Frank Galligan &mdash; CC0 1.0 |
+| Lantern (`using_gltf_model`) | &copy; 2017 Microsoft, &copy; 2018 Frank Galligan &mdash; CC0 1.0 |
 | SciFiHelmet | public domain &mdash; CC0 1.0 |
 | ToyCar | public domain &mdash; CC0 1.0 |
 | WaterBottle | public domain &mdash; CC0 1.0 |
@@ -73,7 +74,7 @@ repository, where the full legal notice for a model lives in its own `README.md`
 | SheenWoodLeatherSofa | &copy; 2024 Darmstadt Graphics Group &mdash; CC-BY 4.0 |
 | StainedGlassLamp | &copy; 2021 Wayfair &mdash; CC-BY 4.0 |
 | SunglassesKhronos | &copy; 2024 Darmstadt Graphics Group &mdash; CC-BY 4.0 |
-| Fox (`crowd_demo`) | &copy; PixelMannen, tomkranis &mdash; CC-BY 4.0 |
+| Fox (`crowd_demo`, `using_clips`, `using_npc`) | &copy; PixelMannen, tomkranis &mdash; CC-BY 4.0 |
 
 The Khronos and vendor logos that appear on several of these models are
 trademarks of their owners, used as they arrive in the sample model.

@@ -21,7 +21,7 @@ Three sources are consulted, in this order:
 
 The third is what makes an ordinary rigged glTF usable without any extension at
 all, and it is what most content is. See :doc:`the character documentation
-<../../docs/characters>` for the naming a model should carry to be recognised.
+</characters>` for the naming a model should carry to be recognised.
 
 A bone map is not a pose. What it buys is addressing: :meth:`Humanoid.transform`
 for a joint to hang a weapon on, :meth:`Humanoid.mask` for the set of joints an

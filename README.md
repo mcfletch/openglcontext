@@ -91,8 +91,8 @@ everything.
 
 ## Documentation
 
-[docs/documentation.html](docs/documentation.html) is the index — installation,
-tutorials, and a page per feature. [docs/structure.html](docs/structure.html)
+[docs/documentation.rst](docs/documentation.rst) is the index — installation,
+tutorials, and a page per feature. [docs/structure.rst](docs/structure.rst)
 describes how the pieces fit together.
 
 ## Development
@@ -141,53 +141,53 @@ needs changing. Everything else here is additive.
   morph targets, sparse accessors, computed tangents and the
   `KHR_materials_*`/`KHR_texture_transform`/unlit/specular-glossiness family.
   `KHR_draco_mesh_compression` decodes when the optional `DracoPy` is installed.
-  See `docs/gltf.html`.
+  See `docs/gltf.rst`.
 
 - **Physically-based rendering** — a metallic/roughness uber-shader and PBR
   render pass, `PBRMaterial`, image-based lighting (analytic or a runtime probe,
   with Radiance `.hdr` panoramas), screen-space transmission and emissive bloom.
-  `docs/pbr.html`, `docs/ubershader.html`.
+  `docs/pbr.rst`, `docs/ubershader.rst`.
 
 - **Shadow maps**, per-light, with cascades for directional lights and an
   fps-adaptive cascade count. Replaces the removed stencil-volume path.
-  `docs/shadows.html`.
+  `docs/shadows.rst`.
 
 - **Instanced rendering**, automatic: the pass batches shapes that share geometry
   and a compatible appearance into one `glDrawElementsInstanced`, for VRML
   `USE`/`DEF`, shared glTF meshes and `EXT_mesh_gpu_instancing` alike.
-  `docs/instancing.html`.
+  `docs/instancing.rst`.
 
 - **One viewer, `oglc-view`**, for glTF, VRML97, OBJ and 3D Tiles: format is
   chosen from the source by a registered `SceneAdapter`, so a third party adds a
   format without touching the viewer. It carries a launch menu, a model library,
   and settings and controls screens. `oglc-vrml`, `oglc-gltf` and `oglc-tiles`
-  are deprecated aliases for it. `docs/viewer.html`.
+  are deprecated aliases for it. `docs/viewer.rst`.
 
 - **An overlay UI** (`ui/`) — panels, widgets, layout and a skin, drawn in one
   batched call, with a settings screen generated from a node's own fields, a
-  console and a key-bindings editor. `docs/overlayui.html`.
+  console and a key-bindings editor. `docs/overlayui.rst`.
 
 - **Rigid-body physics and character movement** — collision, gravity, joints and
   gravity zones through the `omi_physics` package, first-person and examine
   navigation, declared movement modes, and a terrain-walking mode.
-  `docs/physics.html`, `docs/navigation.html`.
+  `docs/physics.rst`, `docs/navigation.rst`.
 
 - **Terrain and 3D Tiles** — an OGC 3D Tiles streaming runtime with
-  screen-space-error LOD, async paging and eviction (`docs/tiles3d.html`);
-  splat-textured heightfield terrain, walked (`docs/terrain.html`); and
-  instanced vegetation (`docs/vegetation.html`).
+  screen-space-error LOD, async paging and eviction (`docs/tiles3d.rst`);
+  splat-textured heightfield terrain, walked (`docs/terrain.rst`); and
+  instanced vegetation (`docs/vegetation.rst`).
 
 - **Spatial audio** — VRML97's `Sound` and `AudioClip` play, alongside glTF's
-  `KHR_audio_emitter`, through the `omi_audio` package. `docs/audio.html`.
+  `KHR_audio_emitter`, through the `omi_audio` package. `docs/audio.rst`.
 
 - **Swept geometry** — `Lathe`, `Spiral`, `Screw`, `PolyCylinder`, `PolyCone` and
   VRML97's `Extrusion` generate their vertex arrays with the `opengl_extrusions`
   package, which also provides the constrained Delaunay tessellator that fills
   their end caps. The result is an indexed triangle mesh, so these draw in a core
-  profile like any other geometry. `docs/extrusions.html`.
+  profile like any other geometry. `docs/extrusions.rst`.
 
 - **Particle systems**, **fog**, and a **HUD/debug overlay** with frame timing and
-  loop instrumentation. `docs/particles.html`, `docs/hud.html`.
+  loop instrumentation. `docs/particles.rst`, `docs/hud.rst`.
 
 - **Untrusted assets are contained.** A document that names external resources —
   a glTF's buffers, images and audio, a 3D Tiles tileset's content and nested
@@ -204,8 +204,8 @@ needs changing. Everything else here is additive.
 - glTF audio codec extensions. A `KHR_audio_emitter` source may offer the same
   sound in Ogg Vorbis through `OMI_audio_ogg_vorbis`, keeping its own MP3 as the
   fallback; the Vorbis is decoded and preferred. Which OMI extensions are
-  supported at all is tabulated in `docs/gltf.html`; the codec rules are in
-  `docs/audio.html`.
+  supported at all is tabulated in `docs/gltf.rst`; the codec rules are in
+  `docs/audio.rst`.
 
 - Removed code that nothing reached any more. None of the five GUI backends is
   affected.
@@ -218,7 +218,7 @@ needs changing. Everything else here is additive.
 
   - `shadow` sub-package — stencil shadow volumes, which required the
     fixed-function pipeline and an infinite-perspective projection. Dynamic
-    shadows are shadow maps (see `docs/shadows.html`); the `vrml_view_shadow`
+    shadows are shadow maps (see `docs/shadows.rst`); the `vrml_view_shadow`
     script goes with it.
 
   - `scenegraph.tree` — the volumetric/space-colonization tree. Shipped
@@ -230,7 +230,7 @@ needs changing. Everything else here is additive.
     (`passes/_flat.py`) for some time; these were reachable only from the two
     sub-packages removed above. `renderpass.py` now just selects a flat pass,
     `viewpointbinding.py` just binds the active `Viewpoint`, and `visitor.py` is
-    the `find()` traversal. `docs/renderprocess.html`, which documented the
+    the `find()` traversal. `docs/renderprocess.rst`, which documented the
     removed system, is withdrawn.
 
   - `DisplayListCompiler` / `DisplayListRenderer` — unreachable: the

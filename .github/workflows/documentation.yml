@@ -1,0 +1,103 @@
+name: Documentation
+
+# Build the documentation set and put it on `gh-pages`, which is what GitHub
+# Pages serves.
+#
+# The set is built from the checkout: the narrative pages in `docs/*.rst`, the
+# tutorials extracted from the commentary in `tests/*.py`, and a page per
+# module of the engine and the packages around it.  The pictures are committed
+# -- rendering those needs a GPU and the sibling projects that appear in them,
+# so `tools/doc_images.py` is run on a workstation and what it wrote is what
+# this publishes.
+#
+# The site is published as a single commit with no parent, replacing the branch
+# rather than adding to it, so the repository carries one copy of it however
+# many releases there are -- see `build-docs.py`.  That means a force push,
+# which is why this job has `contents: write` and why nothing else should write
+# to that branch.
+#
+# The site moves when somebody runs this, rather than on a push: a release
+# tags, publishes to PyPI and moves the branch at once, and a build that
+# starts in the middle of that is installing a stack only part of which is
+# published yet.  Run it once the release has settled.
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: >-
+          Whether to put the result on gh-pages. Off by default, which makes a
+          run a build that says whether the set still builds; tick it to move
+          the published site.
+        type: boolean
+        default: false
+
+# One at a time.  Two builds racing would each force the branch over the
+# other's, and the lease in `build-docs.py` would turn the loser into a failed
+# job rather than a lost site.
+concurrency:
+  group: documentation
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out PyOpenGL beside it
+        # The module pages are written by `directdocs`, which is part of the
+        # PyOpenGL repository rather than of the PyOpenGL distribution.
+        uses: actions/checkout@v4
+        with:
+          repository: mcfletch/pyopengl
+          path: .pyopengl
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the libraries the packages bind to
+        # Every module is imported to be documented, and a module whose
+        # library is absent cannot be imported and gets no page.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libegl-mesa0 libgl1 libglx-mesa0 libgl1-mesa-dri \
+            libglu1-mesa libosmesa6 freeglut3-dev \
+            libx11-6 libxrandr2 libxinerama1 libxcursor1 libxi6
+
+      - name: Install the engine and the documentation tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[docs,gltf,glfw]"
+
+      - name: Name the commits this job makes
+        # `git commit-tree` wants an author and a committer, and a runner has
+        # neither configured.
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Build the set
+        # `--publish` only on a run that asked for it: otherwise the build is
+        # the thing being checked, and the branch is left alone.
+        env:
+          DIRECTDOCS: ${{ github.workspace }}/.pyopengl
+        run: |
+          python build-docs.py \
+            --stage site \
+            ${{ inputs.publish && '--publish --push origin' || '' }}
+
+      - name: Keep the built site with the run
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation
+          path: site
+          retention-days: 14

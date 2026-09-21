@@ -14,7 +14,7 @@ registries.  A third party adds a format by registering one more entry.
     adapter = adapter_for('model.glb')
     scene = adapter.load('model.glb')
 
-See [docs/gltf.html](../../../docs/gltf.html).
+See [docs/gltf.rst](../../../docs/gltf.rst).
 """
 import json
 import os

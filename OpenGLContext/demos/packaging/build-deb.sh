@@ -21,7 +21,7 @@
 #   --bindir       /usr/games and the Game menu category are the defaults, this
 #   --categories   being an engine for games; a viewer is a graphics tool.
 #
-# See `docs/packaging.html`, and `viewer-demos.spec` beside this for the frozen
+# See `docs/packaging.rst`, and `viewer-demos.spec` beside this for the frozen
 # bundle, which is the same application delivered the other way.
 set -eu
 

@@ -1,28 +1,11 @@
 """Context functionality under the wxPython GUI environment
 
-Note: wxPython GTK3 uses EGL for OpenGL context creation, not GLX.
-PyOpenGL must be configured to use EGL for proper context tracking,
-which is required for shader-based rendering (VAO/VBO operations).
-This module automatically sets PYOPENGL_PLATFORM=egl when GTK3 is detected.
+wxPython on GTK3 makes its GL context through EGL rather than GLX, and on
+X11 it may be either.  Which one it was is a question PyOpenGL answers for
+itself: its Linux platform loads both interfaces and probes for the live
+context, so nothing here has to name one (``OpenGL.platform.linux``).
 """
-import os
-import sys
 import wx
-
-# wxPython GTK3 uses EGL for OpenGL contexts, but PyOpenGL defaults to GLX.
-# We need to set PYOPENGL_PLATFORM before importing OpenGL modules.
-# Check if we're on GTK3 and EGL hasn't been explicitly configured.
-if '__WXGTK__' in wx.PlatformInfo and 'gtk3' in wx.PlatformInfo:
-    if 'PYOPENGL_PLATFORM' not in os.environ:
-        os.environ['PYOPENGL_PLATFORM'] = 'egl'
-        # If OpenGL was already imported, warn the user
-        if 'OpenGL' in sys.modules:
-            import logging
-            logging.getLogger(__name__).warning(
-                "OpenGL was imported before wxcontext could set PYOPENGL_PLATFORM=egl. "
-                "This may cause issues with shader rendering. "
-                "Set PYOPENGL_PLATFORM=egl before importing OpenGL."
-            )
 
 from io import BytesIO
 from typing import Any, List, Optional, Tuple
