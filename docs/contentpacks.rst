@@ -127,9 +127,8 @@ download and nobody can see the absence of. ``catalog.BadCatalog``.
 Pictures before the download
 ----------------------------
 
-A chooser offering packs nobody has downloaded has nothing to show them with,
-because a pack's own art is inside the archive being chosen. So a registry
-carries thumbnails, and ``preview`` comes back as a path on this machine:
+Previews are bundled with the content-pack index: a registry carries
+thumbnails, and ``preview`` comes back as a path on this machine:
 
 .. code-block:: python
 
