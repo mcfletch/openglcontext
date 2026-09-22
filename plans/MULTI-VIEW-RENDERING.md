@@ -486,6 +486,14 @@ wrapper code.
   `furthest`; `GLTFScene` gained `minimum` / `maximum`.
 - `tests/multiview_quad.py` loads any glTF model into the quad; it is in the
   visual suite with a baseline and in the "Interface and Tools" tutorial path.
+- `scripts/multiview_bench.py` measures a layout against a single view, which
+  is what an editor wants before it opens four views. At 1280x960 on a Radeon
+  8060S (Mesa radeonsi), 60 frames after 20 warm-up frames, the quad costs
+  against one view: one glTF model (Lantern, 3 draws) 1.40x `vertex`, 1.43x
+  `geometry`, 1.58x `sequential`; 400 boxes batched into one instanced draw
+  8.80 ms -> 1.34x, 1.40x, 2.08x; 400 boxes drawn singly 16.60 ms -> 1.21x,
+  1.24x, 2.41x. So a shared strategy costs about a quarter to a half again,
+  and the fallback between a half and a further 1.4x on top of that.
 
 Found on the way and fixed in the engine:
 

@@ -189,12 +189,27 @@ context and decides:
 
 ``sequential`` runs on every driver the engine supports, on both profiles, and
 costs one submission of the scene per view. The other two submit the opaque
-scene once, whatever the number of views. On a four-view layout of 400 shapes
-drawn through the core-profile pass, ``vertex`` and ``geometry`` each take
-about half the frame time of ``sequential`` (Radeon 8060S, Mesa radeonsi): the
-frame is spent issuing draws, and they issue a quarter as many. A GL 4.1 driver
-without the vertex-shader extension, such as Apple silicon's, draws with
-``geometry``. A driver's answer is logged at start-up.
+scene once, whatever the number of views. A GL 4.1 driver without the
+vertex-shader extension, such as Apple silicon's, draws with ``geometry``. A
+driver's answer is logged at start-up.
+
+``scripts/multiview_bench.py`` draws a scene through one view and through the
+four-view quad under each strategy this driver runs, and reports the median
+frame time and the draw calls of each:
+
+.. code-block:: console
+
+   $ scripts/multiview_bench.py --model lantern.glb
+   $ scripts/multiview_bench.py --boxes 400 --frames 60
+
+At 1280x960 on a Radeon 8060S (Mesa radeonsi), four views of one glTF model
+cost 1.40x a single view under ``vertex``, 1.43x under ``geometry`` and 1.58x
+under ``sequential``. Four views of 400 separately drawn shapes -- the
+draw-bound case, 400 draws a view -- cost 1.21x, 1.24x and 2.41x; with those
+shapes batched into one instanced draw, 1.34x, 1.40x and 2.08x. A shared
+strategy issues one draw for four views where ``sequential`` issues four, so
+what it adds over a single view is the rasterising of three more views rather
+than three more submissions of the scene.
 
 ``ContextDefinition.multiview`` (env: ``OPENGLCONTEXT_MULTIVIEW``) asks for one
 by name -- ``auto``, ``vertex``, ``geometry`` or ``sequential`` -- so each can be
