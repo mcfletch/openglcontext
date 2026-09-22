@@ -40,6 +40,13 @@ The viewer selects the core profile, the PBR renderer, the GLFW backend and
 shadows for you, so you do not need to set any environment variables. A binary
 ``.glb`` is self-contained, so URLs to a ``.glb`` work directly.
 
+A model loaded into a compatibility-profile context is drawn by the
+fixed-function pass. Its materials are lit through ``glMaterial`` from their
+factors -- the base colour as the diffuse colour, metalness and roughness as the
+highlight, the emissive colour at its strength as the emission -- and the base
+colour map is drawn over them. The other maps, image-based lighting and GPU
+skinning are the PBR pass's; a skinned model is posed on the CPU there.
+
 A non-binary ``.gltf`` usually references external ``.bin`` and texture files,
 by URI *relative to the document*. A URL therefore goes through
 ``load_gltf_url()`` (below), which keeps hold of where the document came from

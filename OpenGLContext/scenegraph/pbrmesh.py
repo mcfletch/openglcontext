@@ -668,7 +668,7 @@ class PBRMesh(node.Node):
         if self.positions is None or not len(self.positions):
             return 1
         if not getattr(mode, 'shader_mode', False):
-            return 1  # PBR meshes are shader-only
+            return self._render_legacy(mode, textured=bool(textured))
 
         sp = getattr(mode, 'shader_program', None)
         if self.skin_joints is not None:
@@ -698,6 +698,60 @@ class PBRMesh(node.Node):
                 bound, gpu.vertexArrays(), sp.required_inputs(bound),
                 mode=mode, node=self, where='PBRMesh')
         gpu.draw(mode)
+        return 1
+
+    def _render_legacy(self, mode: Any, textured: bool = False) -> int:
+        """Draw through the fixed-function pipeline, from client-side arrays.
+
+        The compatibility profile's pass. Positions and normals are the posed
+        ones, deformed on the CPU; vertex colours are drawn through
+        ``GL_COLOR_MATERIAL``; ``textured`` says a base colour map is bound,
+        and the first set of texture coordinates is supplied for it.
+        """
+        from OpenGL import GL
+        positions, normals = self.positions, self.normals
+        assert positions is not None, 'render draws nothing without positions'
+        if self.is_deformable:
+            posed, posed_normals = self._deformed()[:2]
+            if posed is not None:
+                positions = np.ascontiguousarray(posed, dtype=np.float32)
+            if posed_normals is not None:
+                normals = np.ascontiguousarray(posed_normals, dtype=np.float32)
+        GL.glBindBuffer(GL.GL_ARRAY_BUFFER, 0)
+        GL.glBindBuffer(GL.GL_ELEMENT_ARRAY_BUFFER, 0)
+        arrays = [GL.GL_VERTEX_ARRAY]
+        GL.glVertexPointer(3, GL.GL_FLOAT, 0, positions)
+        if normals is not None:
+            arrays.append(GL.GL_NORMAL_ARRAY)
+            GL.glNormalPointer(GL.GL_FLOAT, 0, normals)
+        if textured and self.texcoords is not None:
+            arrays.append(GL.GL_TEXTURE_COORD_ARRAY)
+            GL.glTexCoordPointer(2, GL.GL_FLOAT, 0, self.texcoords)
+        if self.colors is not None:
+            arrays.append(GL.GL_COLOR_ARRAY)
+            GL.glColorPointer(4, GL.GL_FLOAT, 0, self.colors)
+            GL.glColorMaterial(GL.GL_FRONT_AND_BACK, GL.GL_AMBIENT_AND_DIFFUSE)
+            GL.glEnable(GL.GL_COLOR_MATERIAL)
+        culled = bool(self.solid)
+        if not culled:
+            GL.glDisable(GL.GL_CULL_FACE)
+            GL.glLightModeli(GL.GL_LIGHT_MODEL_TWO_SIDE, GL.GL_TRUE)
+        for array in arrays:
+            GL.glEnableClientState(array)
+        try:
+            if self.indices is not None:
+                GL.glDrawElements(self.draw_mode, len(self.indices),
+                                  GL.GL_UNSIGNED_INT, self.indices)
+            else:
+                GL.glDrawArrays(self.draw_mode, 0, len(positions))
+        finally:
+            for array in arrays:
+                GL.glDisableClientState(array)
+            if self.colors is not None:
+                GL.glDisable(GL.GL_COLOR_MATERIAL)
+            if not culled:
+                GL.glLightModeli(GL.GL_LIGHT_MODEL_TWO_SIDE, GL.GL_FALSE)
+                GL.glEnable(GL.GL_CULL_FACE)
         return 1
 
     # -- skinning -----------------------------------------------------------
