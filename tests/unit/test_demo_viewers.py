@@ -25,9 +25,25 @@ pytest.importorskip('tkinter')
 
 DRIVER = tests_root(__file__) / 'helpers' / '_tk_viewer_drive.py'
 
+def _display_answers() -> bool:
+    """Whether ``DISPLAY`` names an X server that accepts a connection.
+
+    The name alone is not enough: a machine often carries a stale socket from a
+    server that has gone, and a test reading only the name then fails for want
+    of an X server rather than saying it cannot be run here. Asked in a
+    subprocess, so the process running the tests never holds a Tk interpreter.
+    """
+    if not os.environ.get('DISPLAY', '').strip():
+        return False
+    probe = subprocess.run(
+        [sys.executable, '-c', 'import tkinter; tkinter.Tk().destroy()'],
+        capture_output=True, text=True, timeout=120)
+    return probe.returncode == 0
+
+
 needs_display = pytest.mark.skipif(
-    not os.environ.get('DISPLAY', '').strip(),
-    reason='Tk needs an X display; run under xvfb-run to exercise it')
+    not _display_answers(),
+    reason='Tk needs an X display that answers; run under xvfb-run to exercise it')
 
 
 def _drive(*steps):
