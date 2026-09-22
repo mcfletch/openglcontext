@@ -25,6 +25,7 @@ out vec3 vNormal;
 out vec3 vPosition;  // Position in eye/view space
 out vec2 vTexCoord;
 flat out uint vObjectId;
+#include "_multiview_inc.glsl"
 
 void main() {
     mat4 mv = instancingEnabled ? aInstanceModelView : modelViewMatrix;
@@ -47,4 +48,7 @@ void main() {
 
     // Final clip-space position
     gl_Position = projectionMatrix * eyePosition;
+#ifdef MULTIVIEW_VERTEX
+    routeToView(vPosition);
+#endif
 }

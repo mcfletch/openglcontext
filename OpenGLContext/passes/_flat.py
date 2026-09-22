@@ -1608,8 +1608,17 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 # Asked once, before any view confines drawing to its rectangle:
                 # building the environment probe renders offscreen.
                 lighting = self.iblPrepare()
+                shared: Optional[set] = None
+                if self.multiviewStrategy in ('geometry', 'vertex') and len(frames) > 1:
+                    for frame in frames:
+                        self.applyViewFrame(frame)
+                        self._drawBackground(frame)
+                    shared = self.renderShared(frames, id_map, lighting)
                 for frame in frames:
-                    self.renderViewShader(frame, id_map, lighting)
+                    joined = shared is not None and not frame.view.style.wireframe
+                    self.renderViewShader(frame, id_map, lighting,
+                                          background=shared is None,
+                                          shared=shared if joined else frozenset())
                 self.finishViews()
 
                 try:
@@ -1662,18 +1671,26 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         self.matrix = matrix
         self.shader_mode = False  # Reset after render
 
-    def _beginView( self, frame: 'ViewFrame' ) -> None:
-        """Look through ``frame``'s view and clear its rectangle for drawing.
-
-        A view with a flat background clears to it; any other draws the
-        scene's bound ``Background``, which clears as it draws.
-        """
+    def _beginView( self, frame: 'ViewFrame', background: bool = True ) -> None:
+        """Look through ``frame``'s view, clearing its rectangle if ``background``."""
         self.applyViewFrame( frame )
         self.visible = True
         self.transparent = False
         self.lighting = True
         self.textured = True
         self._deferredTransparent = []
+        if background:
+            self._drawBackground( frame )
+        self.matrix = frame.modelView
+        if frame.view.style.wireframe:
+            glPolygonMode( GL_FRONT_AND_BACK, GL_LINE )
+
+    def _drawBackground( self, frame: 'ViewFrame' ) -> None:
+        """Clear the view the pass is looking through to its background.
+
+        A view with a flat background clears to it; any other draws the
+        scene's bound ``Background``, which clears as it draws.
+        """
         colour = frame.view.style.clearColour()
         if colour is not None:
             glClearColor( *colour )
@@ -1682,9 +1699,6 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             self.shaderBackgroundRender( frame.camera, frame.modelView )
         else:
             self.legacyBackgroundRender( frame.camera, frame.modelView )
-        self.matrix = frame.modelView
-        if frame.view.style.wireframe:
-            glPolygonMode( GL_FRONT_AND_BACK, GL_LINE )
 
     def _endView( self, frame: 'ViewFrame' ) -> None:
         """Undo what :meth:`_beginView` set that the next view must not inherit."""
@@ -1692,18 +1706,22 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             glPolygonMode( GL_FRONT_AND_BACK, GL_FILL )
 
     def renderViewShader( self, frame: 'ViewFrame', id_map: Optional[Dict[int, Any]],
-                          lighting: Any = None ) -> None:
+                          lighting: Any = None, background: bool = True,
+                          shared: Any = frozenset() ) -> None:
         """Draw one view of the frame through the shader passes.
 
         Everything here is per view because it depends on the camera: the
         background is drawn from it, the lights are put in its eye space, the
         shadow maps are read through it and the shapes are the ones its frustum
-        kept. ``lighting`` is the frame's :meth:`iblPrepare`.
+        kept. ``lighting`` is the frame's :meth:`iblPrepare`. ``shared`` holds
+        the ``id`` of each path :meth:`renderShared` has already drawn for
+        every view, which this view leaves out; ``background`` is False where
+        the background was drawn before them.
         """
         shader_program = self.shader_program
         assert shader_program is not None, 'shader views are drawn with a program'
         matrix = frame.modelView
-        self._beginView( frame )
+        self._beginView( frame, background )
         try:
             self.setupShaderLights(matrix)
             if self.use_shadows:
@@ -1723,7 +1741,9 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 amb = (float(amb),) * 3
             shader_program.set_scene_ambient(tuple(amb))
             self.setupLightGrid()
-            toRender = frame.toRender
+            toRender = ( [ record for record in frame.toRender
+                           if id( record[4] ) not in shared ]
+                         if shared else frame.toRender )
             # Transmissive (glass) shapes are opaque-alpha but must draw after
             # the opaque scene so they can sample it as a backdrop; split them
             # out of the opaque pass unless transmission is disabled.
@@ -1745,6 +1765,160 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 pass
         finally:
             self._endView( frame )
+
+    #: The cameras the shape being drawn is seen from, as points in the eye
+    #: space it is drawn in, while one draw serves several views; None for a
+    #: draw that serves one. What a shape choosing its detail by distance
+    #: measures to; see :func:`OpenGLContext.scenegraph.tessellationlod.lod_level`.
+    viewerEyes: Optional[List[Any]] = None
+    #: How many views each draw of a shared ``vertex``-strategy draw reaches,
+    #: so every draw is instanced that many times over; 0 otherwise. See
+    #: :func:`OpenGLContext.passes.multiview.draw_arrays`.
+    viewCopies: int = 0
+
+    def sharesDraw( self, record: Sequence[Any] ) -> bool:
+        """Whether one draw of ``record`` can serve every view that sees it.
+
+        True for an opaque shape whose geometry says it draws with the pass's
+        lit programs alone (``multiviewShared``) and whose appearance brings no
+        program of its own. A transparent or glass shape is sorted and drawn
+        per view, and an instanced set that culls its own placements culls them
+        per view.
+        """
+        key, node = record[0], record[5]
+        if key[0] or getattr( node, 'visiblePlacements', None ) is not None:
+            return False
+        if not getattr( getattr( node, 'geometry', None ), 'multiviewShared', False ):
+            return False
+        appearance = getattr( node, 'appearance', None )
+        if appearance is not None and hasattr( appearance, 'objects' ):
+            return False
+        material = getattr( appearance, 'material', None )
+        return not ( getattr( material, 'transmission', 0.0 )
+                     or getattr( material, 'octahedralViews', 0 ) )
+
+    def sharedRecords( self, frames: Sequence['ViewFrame'],
+                       reference: 'ViewFrame' ) -> Dict[int, List[Any]]:
+        """The records one draw serves several views for, by view mask.
+
+        Each is put in ``reference``'s eye space, which is where a shared draw
+        is made; the mask says which views it is sent to. Grouped by mask so
+        the draws of a group are made with one uniform setting. A wireframe
+        view takes no part: ``glPolygonMode`` holds for every viewport at once,
+        so it draws its shapes itself.
+        """
+        found: Dict[int, List[Any]] = {}
+        for index, frame in enumerate( frames ):
+            if frame.view.style.wireframe:
+                continue
+            for record in frame.toRender:
+                if not self.sharesDraw( record ):
+                    continue
+                entry = found.get( id( record[4] ) )
+                if entry is None:
+                    found[id( record[4] )] = entry = [ record, 0 ]
+                entry[1] |= 1 << index
+        if not found:
+            return {}
+        entries = list( found.values() )
+        worlds = asarray( [ record[2] for record, _mask in entries ], 'f' )
+        modelviews = worlds @ asarray( reference.modelView, 'f' )
+        groups: Dict[int, List[Any]] = {}
+        for (record, mask), modelview in zip( entries, modelviews ):
+            key, _mv, tmatrix, bvolume, path, node = record
+            groups.setdefault( mask, [] ).append(
+                ( key, modelview, tmatrix, bvolume, path, node ) )
+        return groups
+
+    _viewTable: Optional[int] = None
+
+    def uploadViewTable( self, frames: Sequence['ViewFrame'],
+                         reference: 'ViewFrame' ) -> List[Any]:
+        """Fill and bind the ``ViewBlock`` for drawing ``frames`` in ``reference``'s space.
+
+        Returns the records, whose eyes the shapes measure their detail to.
+        """
+        from OpenGL import GL
+        from OpenGLContext.passes.multiview import (
+            VIEW_BLOCK_BINDING, pack_view_table, view_records,
+        )
+        if self._viewTable is None:
+            self._viewTable = int( GL.glGenBuffers( 1 ) )
+        data = pack_view_table( frames, reference )
+        GL.glBindBuffer( GL.GL_UNIFORM_BUFFER, self._viewTable )
+        GL.glBufferData( GL.GL_UNIFORM_BUFFER, len( data ), data, GL.GL_DYNAMIC_DRAW )
+        GL.glBindBuffer( GL.GL_UNIFORM_BUFFER, 0 )
+        GL.glBindBufferBase( GL.GL_UNIFORM_BUFFER, VIEW_BLOCK_BINDING, self._viewTable )
+        return view_records( frames, reference )
+
+    def renderShared( self, frames: Sequence['ViewFrame'],
+                      id_map: Optional[Dict[int, Any]],
+                      lighting: Any = None ) -> Optional[set]:
+        """Draw every shape that can serve several views once, for all of them.
+
+        The draw is made in the active view's eye space, exactly as that view
+        alone would draw it -- its modelviews, lights and shadow matrices -- and
+        programs compiled for this many views send each triangle to the views
+        in the shape's mask, through the ``ViewBlock``: a geometry stage does it
+        for the ``geometry`` strategy, and for ``vertex`` each draw is instanced
+        once per view and the vertex stage routes each copy. Returns the ``id`` of every path drawn, for each view to
+        leave out, or None where the programs for this many views did not
+        compile and every view draws everything itself.
+        """
+        from OpenGL import GL
+        shader = self.shader_program
+        assert shader is not None, 'a shared draw is made with the pass program'
+        reference = self.activeFrame if self.activeFrame is not None else frames[0]
+        groups = self.sharedRecords( frames, reference )
+        if not groups:
+            return set()
+        strategy = self.multiviewStrategy or 'geometry'
+        if not shader.select_program_set( len( frames ), strategy ):
+            return None
+        drawn: set = set()
+        try:
+            self.applyViewFrame( reference, gl=False )
+            rects = array( [ frame.rect for frame in frames ], 'f' )
+            GL.glViewportArrayv( 0, len( frames ), rects )
+            GL.glScissorArrayv( 0, len( frames ), rects.astype( 'i' ) )
+            glEnable( GL_SCISSOR_TEST )
+            records = self.uploadViewTable( frames, reference )
+            matrix = reference.modelView
+            self.matrix = matrix
+            self.visible = True
+            self.transparent = False
+            self.lighting = True
+            self.textured = True
+            self.setupShaderLights( matrix )
+            if self.use_shadows:
+                self.bindShadowUniforms( fitted=True )
+            self.iblSetup( matrix, lighting )
+            shader.set_default_material()
+            amb = getattr( self.context, 'gltf_scene_ambient', None )
+            if amb is None:
+                amb = ( 0.2, 0.2, 0.2 )
+            elif not isinstance( amb, ( tuple, list ) ):
+                amb = ( float( amb ), ) * 3
+            shader.set_scene_ambient( tuple( amb ) )
+            self.setupLightGrid()
+            for mask, group in groups.items():
+                shader.set_view_mask( mask )
+                self.viewerEyes = [ record.eye for index, record in enumerate( records )
+                                    if mask >> index & 1 ]
+                if strategy == 'vertex':
+                    self.viewCopies = len( self.viewerEyes )
+                self.shaderRenderOpaque( group, id_map )
+                drawn.update( id( record[4] ) for record in group )
+            try:
+                from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+                PBRMesh.reset_draw_state( self )
+            except Exception:
+                pass
+        finally:
+            self.viewerEyes = None
+            self.viewCopies = 0
+            shader.select_program_set( 0 )
+        return drawn
 
     def renderViewLegacy( self, frame: 'ViewFrame' ) -> None:
         """Draw one view of the frame through the fixed-function passes."""

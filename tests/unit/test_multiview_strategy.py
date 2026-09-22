@@ -25,9 +25,12 @@ class TestAvailability:
         # viewport index is not offered.
         assert caps(version=(4, 1)).available() == ('geometry', 'sequential')
 
-    def test_the_viewport_array_extension_does_the_same_below_41(self):
-        assert caps({'GL_ARB_viewport_array'}, (3, 3)).available() == (
-            'geometry', 'sequential')
+    def test_the_extensions_do_the_same_below_41(self):
+        assert caps({'GL_ARB_viewport_array', 'GL_ARB_gpu_shader5'},
+                    (3, 3)).available() == ('geometry', 'sequential')
+
+    def test_a_geometry_shader_must_be_invocable_once_per_view(self):
+        assert caps({'GL_ARB_viewport_array'}, (3, 3)).available() == ('sequential',)
 
     def test_a_vertex_shader_viewport_index_is_preferred_when_offered(self):
         found = caps({'GL_ARB_shader_viewport_layer_array'}, (4, 6))
@@ -43,6 +46,11 @@ class TestAvailability:
         found = caps({'GL_AMD_vertex_shader_viewport_index',
                       'GL_ARB_shader_viewport_layer_array'}, (4, 6))
         assert found.vertex_extension == 'GL_ARB_shader_viewport_layer_array'
+
+    def test_a_vertex_viewport_index_is_used_from_gl_41(self):
+        found = caps({'GL_ARB_shader_viewport_layer_array', 'GL_ARB_viewport_array',
+                      'GL_ARB_gpu_shader5'}, (4, 0))
+        assert found.available() == ('geometry', 'sequential')
 
     def test_a_vertex_viewport_index_needs_viewport_arrays_to_route_to(self):
         found = caps({'GL_ARB_shader_viewport_layer_array'}, (3, 3))

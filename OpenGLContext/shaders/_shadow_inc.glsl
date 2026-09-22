@@ -177,7 +177,7 @@ bool inShadowMap(vec4 lc) {
 float csmFactor(int slot) {
     int n = cascadeCount[slot];
     int c = n - 1;
-    if (cascadeByFit == 1) {
+    if (cascadeByFit == 1 || viewCascadesByFit()) {
         c = -1;
         for (int i = 0; i < MAX_CASCADES; i++) {
             if (i >= n) break;

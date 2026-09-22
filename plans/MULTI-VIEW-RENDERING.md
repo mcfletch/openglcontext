@@ -2,12 +2,11 @@
 
 ## Status: In progress (2026-09-22)
 
-Phase 1 (the PyOpenGL array checks) landed 2026-09-22. Phase 3 (`View`,
-`ViewLayout` and the `sequential` strategy) landed 2026-09-22 ahead of phase 2,
-on the `multiview` branch of openglcontext; see "Landed: the sequential
-strategy" below. The shared-submission strategies (phases 4 and 5) are next,
-built on the reference-eye-space design recorded in "Revised: one submission
-without world-space shading", which replaces phase 2.
+Phase 1 (the PyOpenGL array checks) landed 2026-09-22. Phases 3, 4 and 5 --
+`View`/`ViewLayout` with the `sequential`, `vertex` and `geometry` strategies
+-- landed 2026-09-22 on the `multiview` branch of openglcontext; see "Landed"
+below. Phase 2 is replaced by "Revised: one submission without world-space
+shading". Phase 6 (the editor quad and the editors' adoption) is next.
 
 ## What this is for
 
@@ -417,6 +416,50 @@ the faster strategies as upgrades where the driver allows them.
 
 The single-view frame is the same code with one view, and the whole suite,
 visual regression included, passes on it unchanged.
+
+## Landed: one submission for every view (2026-09-22)
+
+- `geometry`: `shadersource.geometry_stage_source` generates the geometry stage
+  from each lit vertex shader's `out` list (renamed `gs_*` by define), invoked
+  once per view (`invocations = N`, so GL 4.0 or `GL_ARB_gpu_shader5` as well
+  as viewport arrays), emitting each triangle to the views in `viewMask`.
+- `vertex`: `shadersource.vertex_routing_source` compiles the lit vertex
+  shaders at GLSL 4.10 with `GL_ARB_shader_viewport_layer_array` (or the AMD
+  name); `routeToView` sends copy `gl_InstanceID % viewCount` to
+  `viewList[...]`. Draws go through `multiview.draw_arrays` /
+  `draw_elements`, instanced `mode.viewCopies` times; `draw_instanced_mesh`
+  multiplies its instance count and sets every per-instance divisor to match.
+- `ViewBlock` (binding 2): `mat4 refToClip; vec4 eye; ivec4 flags` per view,
+  96 bytes, packed by `multiview.pack_view_table` and held to the driver's
+  offsets in `tests/unit/test_multiview_shader.py`.
+- `VRML97ShaderProgram.select_program_set(views, strategy)` keeps a second
+  compiled set of the lit and vertex-colour programs per (strategy, views),
+  each initialised once; every uniform setter already targets the set in
+  place. The fragment shaders read the viewer through `toViewer()` and
+  `viewCascadesByFit()` (`_viewer_inc.glsl`), which are `-p` and `false` in
+  the single-view programs.
+- Which shapes share: `FlatPass.sharesDraw` -- opaque, `geometry.multiviewShared`
+  (Box, quadrics, IndexedFaceSet, triangle `PBRMesh`), no appearance program,
+  no impostor or transmission, no per-view placements. Everything else is drawn
+  per view after the shared stage. Tessellation LOD in a shared draw measures
+  to the closest of `mode.viewerEyes`.
+- Measured, 4 views, 400 boxes, shadows on, 1280x960, Radeon 8060S radeonsi:
+  `sequential` 39.3 ms/frame (1534 draws), `geometry` 19.8 ms (400),
+  `vertex` 19.1 ms (400). With the 400 as one instanced group: 16.1, 11.9 and
+  11.4 ms. `geometry` is therefore the automatic choice where `vertex` is not
+  offered (phase 5's condition), and `vertex` where it is.
+- Tests: `test_multiview_geometry.py` renders one four-view scene with
+  shadows, a transparent shape and an instanced crowd under each shared
+  strategy and both renderers, and holds it to `sequential` (< 0.5% of pixels
+  differ) and to one draw per shared shape; picking through a shared view.
+
+Found on the way, not fixed here: PyOpenGL's `glGetUniformIndices` (GL 3.1
+and `ARB_uniform_buffer_object`) sizes its output array by looking the
+`uniformCount` argument up as a `glGet` enum, so any count but a handful
+raises `KeyError`; the GLES3 wrapper already takes a list of names. The
+engine passes its own output array. It belongs with the size sweep in
+`pyopengl/plans/INPUT-ARRAY-SIZES.md`, whose uncommitted work touches the same
+wrapper code.
 
 ## Revised: one submission without world-space shading
 

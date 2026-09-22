@@ -13,7 +13,7 @@ import os
 import re
 import logging
 from functools import lru_cache
-from typing import Dict, FrozenSet, Optional, Tuple
+from typing import Dict, FrozenSet, List, NamedTuple, Optional, Tuple
 
 log = logging.getLogger(__name__)
 
@@ -84,15 +84,19 @@ def preprocess_shader(filename: str, defines: Optional[list] = None) -> str:
     """
     with open(os.path.join(SHADER_DIR, filename), 'r') as f:
         src = f.read()
-    src = _resolve_includes(src, set())
-    if defines:
-        lines = src.split('\n')
-        for i, line in enumerate(lines):
-            if line.lstrip().startswith('#version'):
-                lines[i + 1:i + 1] = list(defines)
-                break
-        src = '\n'.join(lines)
-    return src
+    return inject_defines(_resolve_includes(src, set()), defines)
+
+
+def inject_defines(source: str, defines: Optional[list] = None) -> str:
+    """``source`` with ``defines`` spliced in immediately after its ``#version``."""
+    if not defines:
+        return source
+    lines = source.split('\n')
+    for i, line in enumerate(lines):
+        if line.lstrip().startswith('#version'):
+            lines[i + 1:i + 1] = list(defines)
+            break
+    return '\n'.join(lines)
 
 
 def input_markers(source: str) -> Dict[str, str]:
@@ -182,3 +186,133 @@ def load_fragment_source(filename: str, max_shadow_lights: int,
     (e.g. the sampler-budget gate for extension textures)."""
     return preprocess_shader(
         filename, shadow_defines(max_shadow_lights, cube_array) + list(extra_defines or []))
+
+
+# -- the geometry stage of a shared multi-view draw ---------------------------
+
+#: A vertex output declared at the top level: ``flat out uint vObjectId;``.
+_OUTPUT_RE = re.compile(
+    r'^[ \t]*(flat[ \t]+)?out[ \t]+(\w+)[ \t]+(\w+)[ \t]*;', re.MULTILINE)
+
+#: The prefix a vertex output is renamed with when a geometry stage reads it.
+GEOMETRY_INPUT_PREFIX = 'gs_'
+
+
+class VertexOutput(NamedTuple):
+    """One value the vertex stage hands on: its GLSL type, name and qualifier."""
+
+    type: str
+    name: str
+    flat: bool
+
+
+#: What the multi-view routing itself declares, which is never handed on.
+_ROUTING_OUTPUTS = frozenset(('vView',))
+
+
+def vertex_outputs(source: str) -> List[VertexOutput]:
+    """Every ``out`` the vertex shader ``source`` hands on to be shaded, in order.
+
+    ``vView``, which the vertex strategy's routing declares for itself, is not
+    among them: a geometry stage writes its own.
+    """
+    return [VertexOutput(kind, name, bool(flat))
+            for flat, kind, name in _OUTPUT_RE.findall(source)
+            if name not in _ROUTING_OUTPUTS]
+
+
+def vertex_routing_source(vertex_source: str, views: int, extension: str) -> str:
+    """``vertex_source`` compiled to route each instanced copy to its view.
+
+    GLSL 4.10 with the extension that gives the vertex stage
+    ``gl_ViewportIndex``, and ``MULTIVIEW_VERTEX`` switching on the
+    ``routeToView`` call each lit vertex shader ends with.
+    """
+    lines = vertex_source.split('\n')
+    for index, line in enumerate(lines):
+        if line.lstrip().startswith('#version'):
+            lines[index] = '#version 410 core'
+            break
+    return inject_defines('\n'.join(lines), [
+        '#extension %s : require' % extension,
+        '#define MULTIVIEW_VIEWS %d' % int(views),
+        '#define MULTIVIEW_VERTEX 1',
+    ])
+
+
+def geometry_input_defines(source: str) -> List[str]:
+    """``#define`` lines renaming each vertex output for a geometry stage to read.
+
+    Spliced into the vertex shader after its ``#version``, they rename the
+    declaration and every write to it, so the geometry stage can read
+    ``gs_vNormal`` and write ``vNormal`` -- the name the fragment shader reads.
+    """
+    return ['#define %s %s%s' % (output.name, GEOMETRY_INPUT_PREFIX, output.name)
+            for output in vertex_outputs(source)]
+
+
+def geometry_stage_source(vertex_source: str, views: int,
+                          gl_version: Tuple[int, int],
+                          position: str = 'vPosition') -> str:
+    """A geometry shader sending each triangle to the views in ``viewMask``.
+
+    Generated from the vertex shader it follows, so the two agree about what
+    passes between them. It is invoked once per view; an invocation whose view
+    is not in the draw's mask emits nothing, and one whose view is emits the
+    triangle with its ``gl_ViewportIndex`` and with ``gl_Position`` taken from
+    ``position`` -- an eye-space position in the reference camera's space --
+    through that view's ``refToClip``. ``vView`` tells the fragment shader
+    which view it is shading.
+
+    ``gl_version`` picks the header: GLSL 4.10 has both the invocations and the
+    viewport index; 4.00 asks for viewport arrays; 3.30 asks for both.
+    """
+    from OpenGLContext.passes.multiview import MAX_VIEWS
+    if not 2 <= int(views) <= MAX_VIEWS:
+        raise ValueError('a shared draw reaches 2 to %d views, not %r'
+                         % (MAX_VIEWS, views))
+    if tuple(gl_version) >= (4, 1):
+        header = ['#version 410 core']
+    elif tuple(gl_version) >= (4, 0):
+        header = ['#version 400 core',
+                  '#extension GL_ARB_viewport_array : require']
+    else:
+        header = ['#version 330 core',
+                  '#extension GL_ARB_gpu_shader5 : require',
+                  '#extension GL_ARB_viewport_array : require']
+    outputs = vertex_outputs(vertex_source)
+    if not any(output.name == position for output in outputs):
+        raise ValueError('the vertex stage declares no %r to project' % (position,))
+    lines = header + [
+        '#define MULTIVIEW_VIEWS %d' % int(views),
+        '#include "_multiview_inc.glsl"',
+        'layout(triangles, invocations = %d) in;' % int(views),
+        'layout(triangle_strip, max_vertices = 3) out;',
+        'uniform uint viewMask;',
+    ]
+    for output in outputs:
+        flat = 'flat ' if output.flat else ''
+        lines.append('%sin %s %s%s[];' % (
+            flat, output.type, GEOMETRY_INPUT_PREFIX, output.name))
+        lines.append('%sout %s %s;' % (flat, output.type, output.name))
+    lines += [
+        'flat out int vView;',
+        'void main() {',
+        '    int view = gl_InvocationID;',
+        '    if (((viewMask >> uint(view)) & 1u) == 0u) return;',
+        '    for (int i = 0; i < 3; ++i) {',
+    ]
+    for output in outputs:
+        lines.append('        %s = %s%s[i];' % (
+            output.name, GEOMETRY_INPUT_PREFIX, output.name))
+    lines += [
+        '        vView = view;',
+        '        gl_ViewportIndex = view;',
+        '        gl_Position = views[view].refToClip * vec4(%s%s[i], 1.0);'
+        % (GEOMETRY_INPUT_PREFIX, position),
+        '        EmitVertex();',
+        '    }',
+        '    EndPrimitive();',
+        '}',
+    ]
+    return _resolve_includes('\n'.join(lines), set())

@@ -16,7 +16,7 @@ from typing import Any, Optional, Tuple
 
 import numpy as np
 from OpenGL.GL import (
-    GL_TRIANGLES, GL_POINTS, GL_FLOAT, GL_FALSE, GL_UNSIGNED_INT,
+    GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN, GL_POINTS, GL_FLOAT, GL_FALSE, GL_UNSIGNED_INT,
     GL_ELEMENT_ARRAY_BUFFER, GL_CCW, GL_CW,
     glGenVertexArrays, glBindVertexArray, glDeleteVertexArrays,
     glEnableVertexAttribArray, glVertexAttribPointer,
@@ -136,11 +136,12 @@ class _MeshGPU(object):
             glEnableVertexAttribArray(loc)
             glVertexAttribPointer(loc, size, GL_FLOAT, GL_FALSE, 0, None)
 
-    def _draw_elements(self) -> None:
+    def _draw_elements(self, mode: Any = None) -> None:
+        from OpenGLContext.passes.multiview import draw_arrays, draw_elements
         if self.indexed:
-            glDrawElements(self.draw_mode, self.count, GL_UNSIGNED_INT, None)
+            draw_elements(mode, self.draw_mode, self.count, GL_UNSIGNED_INT, None)
         else:
-            glDrawArrays(self.draw_mode, 0, self.count)
+            draw_arrays(mode, self.draw_mode, 0, self.count)
 
     def update_dynamic(self, mesh: Any) -> None:
         """Re-upload the deformed vertex buffers in place.
@@ -156,16 +157,17 @@ class _MeshGPU(object):
                 buf.bind()      # pushes the new data to the existing buffer id
                 buf.unbind()
 
-    def draw(self) -> None:
+    def draw(self, mode: Any = None) -> None:
+        """Draw the mesh; ``mode`` says whether a shared multi-view draw is in progress."""
         glBindVertexArray(self.vao)
         if self.draw_mode == GL_POINTS:
             # let the vertex shader's gl_PointSize take effect (core profile)
             from OpenGL.GL import glEnable, glDisable, GL_PROGRAM_POINT_SIZE
             glEnable(GL_PROGRAM_POINT_SIZE)
-            self._draw_elements()
+            self._draw_elements(mode)
             glDisable(GL_PROGRAM_POINT_SIZE)
         else:
-            self._draw_elements()
+            self._draw_elements(mode)
         glBindVertexArray(0)
 
     def release(self) -> None:
@@ -239,6 +241,16 @@ class PBRMesh(node.Node):
     #: to the shader; a mesh that has neither is not water and pays nothing.
     wave_style: Any = None
     wave_time: float = 0.0
+
+    @property
+    def multiviewShared(self) -> bool:
+        """Whether one draw of this mesh can serve every view that sees it.
+
+        Triangles can: they draw with the pass's lit programs, whose geometry
+        stage sends a triangle to several views. Points and lines are drawn
+        once per view.
+        """
+        return self.draw_mode in (GL_TRIANGLES, GL_TRIANGLE_STRIP, GL_TRIANGLE_FAN)
 
     def __init__(self, positions: Any = None, normals: Any = None, texcoords: Any = None,
                  tangents: Any = None, colors: Any = None, indices: Any = None,
@@ -685,7 +697,7 @@ class PBRMesh(node.Node):
             report_missing_inputs(
                 bound, gpu.vertexArrays(), sp.required_inputs(bound),
                 mode=mode, node=self, where='PBRMesh')
-        gpu.draw()
+        gpu.draw(mode)
         return 1
 
     # -- skinning -----------------------------------------------------------

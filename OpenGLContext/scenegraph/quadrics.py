@@ -68,6 +68,10 @@ def mesh_indices( zstep: int, ystep: int, xstep: int = 1 ) -> Any:
 
 class Quadric( nodetypes.Geometry, node.Node ):
     """Base-class for the various quadratic-type geometry classes"""
+    #: Draws with the pass's lit programs alone, so one draw can serve every
+    #: view of a frame that sees it; see :mod:`OpenGLContext.passes.multiview`.
+    multiviewShared = True
+
     def render (
             self,
             visible: int = 1, # can skip normals and textures if not

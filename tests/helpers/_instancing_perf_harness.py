@@ -56,15 +56,15 @@ def main():
 
     counts = {'single': 0, 'instanced': 0, 'instances': 0}
     _od = pbrmesh._MeshGPU.draw
-    def _cd(self):
+    def _cd(self, *args, **named):
         counts['single'] += 1
-        return _od(self)
+        return _od(self, *args, **named)
     pbrmesh._MeshGPU.draw = _cd
     _oi = instancing.draw_instanced_mesh
     def _ci(gpu, mvs, oids, material_indices=None, **named):
         counts['instanced'] += 1
         counts['instances'] += len(mvs)
-        return _oi(gpu, mvs, oids, material_indices)
+        return _oi(gpu, mvs, oids, material_indices, **named)
     instancing.draw_instanced_mesh = _ci
 
     from OpenGLContext import testingcontext

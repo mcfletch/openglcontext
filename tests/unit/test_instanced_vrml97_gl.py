@@ -36,7 +36,7 @@ try:
     _od = instancing.draw_instanced_mesh
     def _cd(gpu, mvs, oids, material_indices=None, **named):
         STATE['calls'] += 1
-        return _od(gpu, mvs, oids, material_indices)
+        return _od(gpu, mvs, oids, material_indices, **named)
     instancing.draw_instanced_mesh = _cd
 
     _os = selection.SelectionMixin.submitAsyncPicks

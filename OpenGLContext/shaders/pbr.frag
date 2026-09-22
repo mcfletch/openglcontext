@@ -54,6 +54,7 @@
 
 in vec3 vNormal;
 in vec3 vPosition;
+#include "_viewer_inc.glsl"
 in vec2 vSurface;        // where on the water this is, in its own plane
 in vec3 vSurfX;          // that plane's axes in eye space
 in vec3 vSurfZ;
@@ -497,7 +498,7 @@ void main() {
         Nc = normalize(mat3(Tc, Bc, Ngeom) * cTex);
     }
 #endif
-    vec3 V = normalize(-vPosition);
+    vec3 V = normalize(toViewer(vPosition));
     float NdotV = max(dot(N, V), 1e-4);
     float NcdotV = max(dot(Nc, V), 1e-4);   // clearcoat normal · view
 
@@ -940,7 +941,7 @@ void main() {
         // How far through the fog this fragment lies: eye distance over the
         // visible range for the VRML97 curves, or distance times density for
         // the aerial-perspective one.  One number, read three ways.
-        float reach = fogDensity * length(vPosition);
+        float reach = fogDensity * length(toViewer(vPosition));
         float fog;
         if (fogMode == 1) {
             fog = 1.0 - exp(-reach);                    // aerial perspective

@@ -15,19 +15,22 @@ import re
 import logging
 from math import cos, sin
 from typing import (
-    Any, Callable, Dict, FrozenSet, Iterable, Optional, Tuple, TYPE_CHECKING,
+    Any, Callable, Dict, FrozenSet, Iterable, List, Optional, Tuple, TYPE_CHECKING,
 )
 
 from OpenGL.GL import (
-    GL_FALSE, GL_VERTEX_SHADER, GL_FRAGMENT_SHADER,
+    GL_FALSE, GL_VERTEX_SHADER, GL_FRAGMENT_SHADER, GL_GEOMETRY_SHADER,
+    GL_INVALID_INDEX,
     GL_TEXTURE0, GL_TEXTURE_2D, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_CUBE_MAP,
     GL_TEXTURE_CUBE_MAP_ARRAY,
     GL_CURRENT_PROGRAM, GL_TEXTURE_COMPARE_MODE, GL_NONE, GL_NEAREST,
     GL_TEXTURE_MIN_FILTER, GL_TEXTURE_MAG_FILTER,
     glUseProgram, glGetUniformLocation, glGetIntegerv,
     glUniform1i, glUniform1f, glUniform1ui,
-    glUniform2fv, glUniform3fv, glUniform4fv, glUniformMatrix3fv, glUniformMatrix4fv,
+    glUniform2fv, glUniform3fv, glUniform4fv, glUniform4iv,
+    glUniformMatrix3fv, glUniformMatrix4fv,
     glActiveTexture, glBindTexture, glGenSamplers, glSamplerParameteri, glBindSampler,
+    glGetUniformBlockIndex, glUniformBlockBinding,
 )
 from OpenGL.GL import shaders as GL_shaders
 from OpenGLContext import contextresources
@@ -62,8 +65,57 @@ from OpenGLContext.passes.shadersource import (
     shadow_defines,
     resolve_shadow_config,
     load_fragment_source,
+    inject_defines,
+    geometry_input_defines,
+    geometry_stage_source,
+    vertex_routing_source,
 )
 from OpenGLContext.passes.shaderpass_shadow import _ShadowUniformMixin
+
+
+def _upload_view_list(location: int, indices: Tuple[int, ...]) -> None:
+    """``viewList``: sixteen view indices as four ``ivec4``."""
+    glUniform4iv(location, len(indices) // 4, np.asarray(indices, 'i'))
+
+
+def link_program(vert_source: str, frag_source: str, validate: bool = True,
+                 views: int = 0, strategy: str = 'geometry') -> Any:
+    """Compile and link a program from preprocessed sources.
+
+    ``views`` of two or more compiles it for a shared draw of that many views,
+    the fragment stage told ``MULTIVIEW_VIEWS`` and the ``ViewBlock`` pointed
+    at its binding. ``strategy`` says how a draw reaches them: ``'geometry'``
+    adds a geometry stage generated from the vertex shader, which sends each
+    triangle to the views in ``viewMask`` (see
+    :func:`OpenGLContext.passes.shadersource.geometry_stage_source`);
+    ``'vertex'`` compiles the vertex stage to route each instanced copy to a
+    view in ``viewList`` (see
+    :func:`OpenGLContext.passes.shadersource.vertex_routing_source`).
+    """
+    shaders = []
+    if views:
+        from OpenGLContext.passes.multiview import (
+            MultiviewCapabilities, VIEW_BLOCK_BINDING,
+        )
+        capabilities = MultiviewCapabilities.detect()
+        if strategy == 'vertex':
+            vert_source = vertex_routing_source(
+                vert_source, views, capabilities.vertex_extension or '')
+        else:
+            geometry = geometry_stage_source(vert_source, views, capabilities.gl_version)
+            vert_source = inject_defines(
+                vert_source, geometry_input_defines(vert_source))
+            shaders.append(GL_shaders.compileShader(geometry, GL_GEOMETRY_SHADER))
+        frag_source = inject_defines(frag_source, ['#define MULTIVIEW_VIEWS %d' % views])
+    shaders.insert(0, GL_shaders.compileShader(vert_source, GL_VERTEX_SHADER))
+    shaders.append(GL_shaders.compileShader(frag_source, GL_FRAGMENT_SHADER))
+    program = GL_shaders.compileProgram(*shaders, validate=validate)
+    VRML97ShaderProgram._delete_shaders(*shaders)
+    if views:
+        index = glGetUniformBlockIndex(program, 'ViewBlock')
+        if index != GL_INVALID_INDEX:
+            glUniformBlockBinding(program, index, VIEW_BLOCK_BINDING)
+    return program
 
 
 def normal_matrix(modelview: Matrix4) -> Matrix4:
@@ -346,6 +398,98 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         assert program is not None  # a program is always compiled+bound at draw time
         return program
 
+    #: The programs a shared draw of several views binds. Each is compiled a
+    #: second time with a geometry stage; see :meth:`select_program_set`.
+    MULTIVIEW_PROGRAMS: Tuple[str, ...] = ('program', 'vertex_color_program')
+
+    #: Which set of :data:`MULTIVIEW_PROGRAMS` is in the attributes: 0 for the
+    #: programs one view draws with, or the number of views a set was compiled
+    #: for, with :attr:`program_strategy` saying how it reaches them.
+    program_set: int = 0
+    program_strategy: str = ''
+
+    def select_program_set(self, views: int, strategy: str = 'geometry') -> bool:
+        """Put the programs compiled for a shared draw of ``views`` views in place.
+
+        ``strategy`` is ``'geometry'`` or ``'vertex'``; see :func:`link_program`.
+        0 views puts back the programs a single view draws with. A set is
+        compiled the first time it is asked for and kept, with its uniform
+        state, for the life of this object; everything that sets a uniform on
+        ``program`` or ``vertex_color_program`` then sets it on the set in
+        place. False where a set would not compile, which leaves the current
+        one in place.
+        """
+        views = int(views)
+        key = (strategy, views) if views else ('', 0)
+        if key == (self.program_strategy, self.program_set):
+            return True
+        if not self._compiled:
+            self.compile()
+        sets = self.__dict__.setdefault('_program_sets', {})
+        if ('', 0) not in sets:
+            sets[('', 0)] = {name: getattr(self, name) for name in self.MULTIVIEW_PROGRAMS}
+        built = key not in sets
+        if built:
+            programs = self._compile_program_set(views, strategy)
+            if any(programs.get(name) is None for name in self.MULTIVIEW_PROGRAMS):
+                log.error('could not compile the programs for %d views drawn by '
+                          'the %s strategy', views, strategy)
+                return False
+            sets[key] = programs
+        for name, program in sets[key].items():
+            setattr(self, name, program)
+        self.program_strategy, self.program_set = key
+        self._active_program = None
+        if built:
+            self._init_program_set()
+        return True
+
+    def _compile_program_set(self, views: int,
+                             strategy: str = 'geometry') -> Dict[str, Optional[int]]:
+        """:data:`MULTIVIEW_PROGRAMS` compiled for a shared draw of ``views`` views."""
+        return {
+            'program': self._compile_one(
+                'lit', 'vrml97_lighting.vert', 'vrml97_lighting.frag',
+                validate=False, shadow_frag=True, views=views, strategy=strategy),
+            'vertex_color_program': self._compile_one(
+                'vertex_color', 'vrml97_vertex_color.vert', 'vrml97_vertex_color.frag',
+                validate=False, shadow_frag=True, views=views, strategy=strategy),
+        }
+
+    def _init_program_set(self) -> None:
+        """The one-time setup a newly compiled set of lit programs needs."""
+        try:
+            for prog in self.shadow_receiver_programs():
+                self._shadow_program = prog
+                self._bind_program(prog)
+                self.init_shadow_samplers()
+        finally:
+            self._shadow_program = None
+            self._bind_program(0)
+
+    def set_view_mask(self, mask: int) -> None:
+        """Which views the next shared draws reach, as a bit mask of view indices.
+
+        Carried onto whatever lit program a geometry then binds, as the object id is.
+        """
+        self._view_mask = int(mask)
+        if self.program_set and self._active_program:
+            self._apply_view_mask(self._active_program)
+
+    _view_mask: int = 0
+
+    def _apply_view_mask(self, program: Optional[int]) -> None:
+        """Set the mask on ``program``, which is bound: as a mask, or as a list."""
+        if program is None or not self.program_set:
+            return
+        if self.program_strategy == 'vertex':
+            from OpenGLContext.passes.multiview import view_list
+            count, indices = view_list(self._view_mask)
+            self._set_uniform('viewCount', count, program, glUniform1i)
+            self._set_uniform('viewList', tuple(indices), program, _upload_view_list)
+        else:
+            self._set_uniform('viewMask', self._view_mask, program, glUniform1ui)
+
     # Every GL program handle the pass may bind; cleared together on failure.
     _PROGRAM_ATTRS: Tuple[str, ...] = (
         'program', 'unlit_program', 'vertex_color_program',
@@ -414,7 +558,8 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
 
     def _compile_one(self, label: str, vert_name: str, frag_name: str,
                      validate: bool = True,
-                     shadow_frag: bool = False) -> Optional[int]:
+                     shadow_frag: bool = False, views: int = 0,
+                     strategy: str = 'geometry') -> Optional[int]:
         """Compile one program in isolation; return its handle or None.
 
         A break in any single shader must degrade only that feature, not take
@@ -432,11 +577,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
                     frag_name, self.MAX_SHADOW_LIGHTS, self.shadow_cube_array)
             else:
                 frag_source = preprocess_shader(frag_name)
-            vertex = GL_shaders.compileShader(vert_source, GL_VERTEX_SHADER)
-            fragment = GL_shaders.compileShader(frag_source, GL_FRAGMENT_SHADER)
-            program = GL_shaders.compileProgram(vertex, fragment, validate=validate)
-            self._delete_shaders(vertex, fragment)
-            return program
+            return int(link_program(vert_source, frag_source, validate, views, strategy))
         except Exception as err:
             log.error("Failed to compile %s shader (%s/%s): %s",
                       label, vert_name, frag_name, err)
@@ -494,15 +635,9 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
             # program: the vertex-colour one includes the same samplers, and
             # otherwise only gets its units when shadows are switched on.
             try:
-                for prog in self.shadow_receiver_programs():
-                    self._shadow_program = prog
-                    self._bind_program(prog)
-                    self.init_shadow_samplers()
+                self._init_program_set()
             except Exception as err:
                 log.error("Shadow sampler init failed: %s", err)
-            finally:
-                self._shadow_program = None
-                self._bind_program(0)
             log.info("VRML97 shader programs compiled (lit ok; "
                      "unlit=%s vc=%s point=%s line=%s depth=%s)",
                      self.unlit_program is not None,
@@ -539,6 +674,8 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
             self._bind_program(program)
             if self._pick_active:
                 self._apply_object_id(program)
+            if self.program_set and lit:
+                self._apply_view_mask(program)
         return program is not None
 
     def use_depth(self) -> Optional[int]:

@@ -21,6 +21,7 @@
 // Inputs from vertex shader
 in vec3 vNormal;
 in vec3 vPosition;
+#include "_viewer_inc.glsl"
 in vec4 vColor;  // Per-vertex color (replaces diffuseColor)
 
 // Material uniforms (diffuse comes from vColor, not a uniform)
@@ -58,7 +59,7 @@ void main() {
     if (!gl_FrontFacing) normal = -normal;
 
     // View direction (camera is at origin in eye space)
-    vec3 viewDir = normalize(-vPosition);
+    vec3 viewDir = normalize(toViewer(vPosition));
 
     // Use vertex color as diffuse (like GL_COLOR_MATERIAL)
     vec3 matDiffuse = vColor.rgb;

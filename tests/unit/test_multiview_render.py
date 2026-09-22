@@ -202,18 +202,13 @@ class TestTheStrategy:
         render_scene(_scene(), frames=2, size=(WIDTH, HEIGHT))
         assert renderpass.FLAT.multiviewStrategy is None
 
-    def test_a_strategy_this_build_cannot_draw_is_reported(self, render_scene, env,
-                                                           caplog):
-        import logging
+    def test_a_pinned_strategy_is_the_one_drawn_with(self, render_scene, env):
         from OpenGLContext.passes import multiview, renderpass
 
         def layout(context):
-            context.contextDefinition.multiview = 'geometry'
+            context.contextDefinition.multiview = 'sequential'
             return _side_by_side(context)
 
         multiview.reset_detected()
-        with caplog.at_level(logging.WARNING, logger=multiview.__name__):
-            render_scene(_scene(), frames=2, size=(WIDTH, HEIGHT), layout=layout)
-        assert renderpass.FLAT.multiviewStrategy in multiview.IMPLEMENTED
-        if 'geometry' not in multiview.IMPLEMENTED:
-            assert 'geometry' in caplog.text
+        render_scene(_scene(), frames=2, size=(WIDTH, HEIGHT), layout=layout)
+        assert renderpass.FLAT.multiviewStrategy == 'sequential'

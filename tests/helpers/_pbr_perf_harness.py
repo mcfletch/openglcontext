@@ -87,7 +87,7 @@ def main() -> int:
 
     pbrmesh_mod.glGenVertexArrays = _counting_gen
 
-    def _draw_uncached(self):
+    def _draw_uncached(self, mode=None):
         # The pre-cache baseline: rebuild the VAO and re-specify the attribute
         # pointers every call. Lives here (not on the shipped node) so the
         # production _MeshGPU carries only the cached fast path.
@@ -102,7 +102,7 @@ def main() -> int:
             self._bind_attributes()
             if self.idx_vbo is not None:
                 self.idx_vbo.bind()
-            self._draw_elements()
+            self._draw_elements(mode)
         finally:
             if self.idx_vbo is not None:
                 self.idx_vbo.unbind()

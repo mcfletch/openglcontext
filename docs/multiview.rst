@@ -169,25 +169,63 @@ context and decides:
      - Needs
      - How a draw reaches its views
    * - ``vertex``
-     - ``GL_ARB_shader_viewport_layer_array`` or
-       ``GL_AMD_vertex_shader_viewport_index``, and viewport arrays
+     - GL 4.1, and ``GL_ARB_shader_viewport_layer_array`` or
+       ``GL_AMD_vertex_shader_viewport_index``
      - one instanced draw, the vertex shader writing ``gl_ViewportIndex``
    * - ``geometry``
-     - viewport arrays: GL 4.1, or ``GL_ARB_viewport_array``
+     - viewport arrays (GL 4.1, or ``GL_ARB_viewport_array``) and
+       instanced geometry shaders (GL 4.0, or ``GL_ARB_gpu_shader5``)
      - one draw, a geometry shader emitting each primitive to its views
    * - ``sequential``
      - GL 3.3
      - the scene drawn once per view, the viewport and scissor set between
 
 ``sequential`` runs on every driver the engine supports, on both profiles, and
-is the one this release draws with: its cost is one submission of the scene
-per view. The other two submit the scene once whatever the number of views;
-they are recognised on the drivers that offer them, and a driver's answer is
-logged at start-up. A GL 4.1 driver without the vertex-shader extension, such
-as Apple silicon's, offers ``geometry`` and ``sequential``.
+costs one submission of the scene per view. The other two submit the opaque
+scene once, whatever the number of views. On a four-view layout of 400 shapes
+drawn through the core-profile pass, ``vertex`` and ``geometry`` each take
+about half the frame time of ``sequential`` (Radeon 8060S, Mesa radeonsi): the
+frame is spent issuing draws, and they issue a quarter as many. A GL 4.1 driver
+without the vertex-shader extension, such as Apple silicon's, draws with
+``geometry``. A driver's answer is logged at start-up.
 
 ``ContextDefinition.multiview`` (env: ``OPENGLCONTEXT_MULTIVIEW``) asks for one
 by name -- ``auto``, ``vertex``, ``geometry`` or ``sequential`` -- so each can be
 run and compared on one machine. ``auto`` takes the fastest that can run. A
 request that cannot be honoured is logged and the best strategy that can run is
 used instead.
+
+One submission for every view
+-----------------------------
+
+The shared submission is made as the active view would make it alone: the same
+modelviews, lights and shadow matrices, in that camera's eye space. What sends
+each triangle on to the other views is a table of views, one record each, that
+the programs read -- the matrix from the active camera's eye space to the
+view's clip space, where the view's camera is, and how it reads the shadow
+cascades. With ``geometry`` a geometry stage, generated from the lit vertex
+shader, emits each triangle once per view in the draw's mask; with ``vertex``
+the draw is instanced once per view and the vertex stage routes each copy. The
+lit programs are compiled a second time for this the first time a layout of
+several views is drawn, and the single-view programs are unchanged.
+
+A shape takes part when its geometry says it draws with the pass's lit programs
+alone. ``Box``, ``Sphere``, ``Cone``, ``Cylinder``, ``IndexedFaceSet`` and a glTF
+mesh of triangles do. Everything else is drawn once per view, as ``sequential``
+draws it: transparent and glass shapes, which are sorted and refracted per
+view; everything in a wireframe view, since polygon mode holds for every
+viewport at once; an appearance with a GLSL program of its own; an octahedral
+impostor;
+point and line sets; instanced sets that cull their own placements; and nodes
+that draw with programs of their own, such as vegetation, terrain, particles
+and text.
+
+A geometry node joins the shared submission by declaring
+``multiviewShared = True`` and issuing its draw through
+``OpenGLContext.passes.multiview.draw_arrays`` or ``draw_elements``, which
+instance it once per view while a ``vertex`` submission is being made.
+``OpenGLContext.scenegraph.geometryarrays.render_geometry`` does both for a node
+drawn from ``GeometryArrays``. A node that measures its detail by distance from
+the camera reads ``mode.viewerEyes`` during a shared draw: the cameras the draw
+serves, in the eye space it is drawn in; see
+``OpenGLContext.scenegraph.tessellationlod.lod_level``.

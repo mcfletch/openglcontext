@@ -114,15 +114,15 @@ def render_scene_factory(monkeypatch):
         def counting_draw(gpu, mvs, oids, material_indices=None, **named):
             counters['instanced_calls'] += 1
             counters['instances'] += len(mvs)
-            return orig_draw(gpu, mvs, oids, material_indices)
+            return orig_draw(gpu, mvs, oids, material_indices, **named)
 
         monkeypatch.setattr(instancing, 'draw_instanced_mesh', counting_draw)
 
         orig_single = pbrmesh._MeshGPU.draw
 
-        def counting_single(self):
+        def counting_single(self, *args, **named):
             counters['single'] += 1
-            return orig_single(self)
+            return orig_single(self, *args, **named)
 
         monkeypatch.setattr(pbrmesh._MeshGPU, 'draw', counting_single)
 

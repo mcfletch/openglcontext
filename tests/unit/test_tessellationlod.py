@@ -85,3 +85,22 @@ class TestLodLevelPipeline:
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class TestSeveralViewers:
+    """A shape drawn once for several views is tessellated for the closest."""
+
+    def test_the_closest_viewer_decides(self):
+        mode = _mode(_translate_z(-500.0))
+        mode.viewerEyes = [(0.0, 0.0, 0.0), (0.0, 0.0, -497.0)]
+        assert lod.lod_level(mode, (0, 0, 0), 1.0) == 0
+
+    def test_viewers_all_far_away_coarsen_it(self):
+        mode = _mode(_translate_z(-3.0))
+        mode.viewerEyes = [(0.0, 0.0, 600.0), (600.0, 0.0, 0.0)]
+        assert lod.lod_level(mode, (0, 0, 0), 1.0) == lod.COARSEST_LEVEL
+
+    def test_no_viewers_named_is_the_camera_at_the_origin(self):
+        mode = _mode(_translate_z(-500.0))
+        mode.viewerEyes = None
+        assert lod.lod_level(mode, (0, 0, 0), 1.0) == lod.COARSEST_LEVEL

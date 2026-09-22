@@ -181,6 +181,12 @@ On each visible frame the core ``FlatPass`` runs these steps in order:
   into its map, once for every view (see :doc:`Shadows <shadows>`). On by
   default in core profile.
 
+- Shared opaque - where the driver allows one submission for every view (the
+  ``vertex`` or ``geometry`` strategy), each view's background is drawn and then
+  the opaque shapes that can share a draw are drawn once for all the views that
+  see them. The rest of each view is drawn in the step below. See
+  :doc:`Several views on one window <multiview>`.
+
 - Each view in turn, inside its own rectangle:
 
   - Background - the view's flat colour, or the scene's sky/ground gradient or
