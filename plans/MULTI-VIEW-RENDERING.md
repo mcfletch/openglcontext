@@ -499,7 +499,12 @@ Found on the way in PyOpenGL: with OpenGL_accelerate, the typed client-array
 setters (`glVertexPointerf`, `glColorPointerf`, ...) leave the driver reading
 memory that does not hold the array; with `PYOPENGL_USE_ACCELERATE=0` they are
 correct. It is what drew the compatibility profile's sphere background
-magenta. Being fixed on pyopengl branch `pointer-lifetime`.
+magenta. The C dispatch layer recorded one set of customisations per entry
+point, so every typed variant replayed the first (`...Pointerd`) variant's
+GLdouble converter while telling the driver its own type. Fixed on pyopengl
+branch `pointer-lifetime` (3d9e8715, not yet merged): customisations belong to
+the chain that made them. `test_sphere_background_legacy.py` passes against
+it and fails against a PyOpenGL without it.
 
 ## Revised: one submission without world-space shading
 
