@@ -82,6 +82,9 @@ OpenGLContext/
 │                     # (the Qt one is in the openglcontext-qt distribution)
 ├── edit/             # Editor toolkit: tool modes, plan/orbit views, handles -- docs/editing.rst
 │   ├── gizmo.py      # The tri-axis handle; a drag held to one axis
+│   ├── orthoview.py  # A view along one axis at a scale: top, front, side
+│   ├── quadview.py   # Three orthographic views around a perspective one,
+│   │                 # and the gestures that move them -- docs/editing.rst
 │   └── controlnet.py # A NURBS node's control points, as pickable markers
 ├── events/           # Cross-backend event generation and dispatch -- docs/eventmodel.rst
 │   └── wheel.py      # Rotation reports into whole notches, for the backends

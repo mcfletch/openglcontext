@@ -25,7 +25,7 @@ the editor is looking.
 from __future__ import annotations
 
 import math
-from typing import Any, Tuple
+from typing import Any, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -59,7 +59,10 @@ class OrbitView:
     land under it changes. ``heading`` is degrees clockwise from north --
     zero puts the camera to the south looking north, which is the way up a map
     is read -- ``pitch`` is degrees above the horizontal, and ``distance`` is
-    how far off it stands, in metres.
+    how far off it stands, in metres. ``nearest`` and ``furthest`` are how
+    near and how far it may be dollied, :attr:`NEAREST` and :attr:`FURTHEST`
+    unless given; a view of one object rather than of the land wants them
+    fitted to that object.
     """
 
     #: How near and how far the camera may be dollied, in metres.
@@ -75,7 +78,10 @@ class OrbitView:
     def __init__(self, centre: Tuple[float, float] = (0.0, 0.0),
                  ground: float = 0.0, heading: float = 0.0,
                  pitch: float = DEFAULT_PITCH, distance: float = 800.0,
-                 fov: float = DEFAULT_FOV) -> None:
+                 fov: float = DEFAULT_FOV, nearest: float | None = None,
+                 furthest: float | None = None) -> None:
+        self.nearest = float(self.NEAREST if nearest is None else nearest)
+        self.furthest = float(self.FURTHEST if furthest is None else furthest)
         self.centre = (float(centre[0]), float(centre[1]))
         #: The height of the ground it is looking at, in metres.
         self.ground = float(ground)
@@ -117,7 +123,7 @@ class OrbitView:
     def dolly(self, factor: float) -> None:
         """Move in or out. Below 1 comes closer; above 1 draws back."""
         self.distance = float(min(max(self.distance * float(factor),
-                                      self.NEAREST), self.FURTHEST))
+                                      self.nearest), self.furthest))
 
     def look_at(self, centre: Tuple[float, float],
                 ground: float | None = None) -> None:
@@ -141,6 +147,24 @@ class OrbitView:
         vertical = (down / 2.0) / max(math.tan(half), 1e-6)
         horizontal = (across / 2.0) / max(math.tan(half) * width / height, 1e-6)
         self.dolly(max(vertical, horizontal) / max(self.distance, 1e-9))
+
+    def frame_box(self, minimum: Union[Sequence[float], np.ndarray],
+                  maximum: Union[Sequence[float], np.ndarray],
+                  viewport: Tuple[int, int]) -> None:
+        """Look at the middle of a box from far enough off to see all of it.
+
+        The box is fitted by the sphere around it, so it stays on screen
+        whatever the heading and pitch are orbited to afterwards.
+        """
+        low = np.asarray(minimum[:3], dtype='d')
+        high = np.asarray(maximum[:3], dtype='d')
+        middle = (low + high) / 2.0
+        self.look_at((float(middle[0]), float(middle[2])), float(middle[1]))
+        radius = max(float(np.linalg.norm(high - low)) / 2.0, 1e-9)
+        width, height = (int(viewport[0]) or 1), (int(viewport[1]) or 1)
+        half = math.radians(self.fov) / 2.0
+        across = math.atan(math.tan(half) * width / height)
+        self.dolly(radius / math.sin(min(half, across)) / max(self.distance, 1e-9))
 
     # -- the camera --------------------------------------------------------
     def matrices(self, viewport: Tuple[int, int]) -> Tuple[np.ndarray, np.ndarray]:
@@ -167,7 +191,7 @@ class OrbitView:
 
     def _projection(self, viewport: Tuple[int, int]) -> np.ndarray:
         aspect = (int(viewport[0]) or 1) / (int(viewport[1]) or 1)
-        near = max(self.distance * NEAR_SHARE, 0.1)
+        near = max(self.distance, self.nearest) * NEAR_SHARE
         far = max(self.distance * FAR_SHARE, near * 10.0)
         return np.asarray(
             perspective_matrix(math.radians(self.fov), aspect, near, far),

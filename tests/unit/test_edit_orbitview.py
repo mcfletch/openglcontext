@@ -106,6 +106,46 @@ class TestFramingARegion:
         assert far.distance > near.distance
 
 
+class TestFramingABox:
+    """An object rather than a region of ground: all of it, from any side."""
+
+    def _project(self, view, point):
+        model, projection = view.matrices(VIEWPORT)
+        clip = np.append(np.asarray(point, 'd'), 1.0) @ model @ projection
+        return clip[:3] / clip[3]
+
+    def test_it_looks_at_the_middle_of_the_box(self) -> None:
+        view = OrbitView(nearest=0.01)
+        view.frame_box((-1.0, 0.0, 2.0), (3.0, 2.0, 4.0), VIEWPORT)
+        assert view.target() == pytest.approx((1.0, 1.0, 3.0))
+
+    @pytest.mark.parametrize('heading, pitch', [(0.0, 35.0), (120.0, 10.0), (250.0, 80.0)])
+    def test_every_corner_is_on_screen_whichever_way_it_looks(self, heading, pitch) -> None:
+        view = OrbitView(heading=heading, pitch=pitch, nearest=0.01)
+        view.frame_box((-0.2, 0.0, -0.1), (0.2, 1.8, 0.1), VIEWPORT)
+        for corner in [(x, y, z) for x in (-0.2, 0.2) for y in (0.0, 1.8) for z in (-0.1, 0.1)]:
+            ndc = self._project(view, corner)
+            assert np.all(np.abs(ndc) < 1.0), (corner, ndc)
+
+    def test_a_small_object_is_looked_at_from_close_by(self) -> None:
+        view = OrbitView(nearest=0.01)
+        view.frame_box((-0.1, -0.1, -0.1), (0.1, 0.1, 0.1), VIEWPORT)
+        assert view.distance < 1.0
+
+
+class TestItsLimits:
+    def test_the_limits_can_be_given_to_one_view(self) -> None:
+        view = OrbitView(distance=5.0, nearest=1.0, furthest=10.0)
+        view.dolly(0.01)
+        assert view.distance == pytest.approx(1.0)
+        view.dolly(1000.0)
+        assert view.distance == pytest.approx(10.0)
+
+    def test_by_default_they_are_the_classs(self) -> None:
+        view = OrbitView()
+        assert (view.nearest, view.furthest) == (OrbitView.NEAREST, OrbitView.FURTHEST)
+
+
 class TestAsACamera:
     def _platform(self, **named):
         view = _view(**named)

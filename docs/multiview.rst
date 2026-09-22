@@ -33,7 +33,8 @@ rule that places them. Assign one to the context and every frame draws it:
 
 A view's camera is anything with the view platform's matrix interface:
 :class:`~OpenGLContext.move.viewplatform.ViewPlatform`,
-:class:`~OpenGLContext.edit.mapview.MapViewPlatform` or
+:class:`~OpenGLContext.edit.mapview.MapViewPlatform`,
+:class:`~OpenGLContext.edit.orthoview.OrthoViewPlatform` or
 :class:`~OpenGLContext.edit.orbitview.OrbitViewPlatform`. A view with no camera
 draws through the context's own view platform, whatever ``getViewPlatform()``
 answers that frame, so the navigation, the bound ``Viewpoint`` and any
@@ -84,6 +85,12 @@ bottom left as ``glViewport`` counts them. Views are drawn in their order, so a
 view that overlaps another is drawn over it.
 
 A layout holds at most ``OpenGLContext.views.MAX_VIEWS`` views, which is 16.
+
+An editor's four views -- top, front and side orthographic views around a
+perspective one -- are ``OpenGLContext.edit.quadview.QuadView``, which builds
+the layout, frames a model in every view and moves each view's camera with the
+pointer; see :ref:`Top, front and side <quad-view>`. ``tests/multiview_quad.py``
+loads any glTF model into it.
 
 How a view draws
 ----------------

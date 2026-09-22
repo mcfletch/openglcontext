@@ -409,6 +409,72 @@ once: a :class:`~OpenGLContext.views.ViewLayout` puts each camera in its own
 part of the window, and a click picks through the camera of the view it lands
 in. See :doc:`Several views on one window <multiview>`.
 
+.. _quad-view:
+
+Top, front and side
+-------------------
+
+``OrthoView`` is a plan view that can look along any axis: ``'top'``,
+``'bottom'``, ``'front'``, ``'back'``, ``'left'`` or ``'right'``. The camera
+stands on the side the name gives -- ``'front'`` stands at +z looking down -z,
+the view a VRML or glTF scene opens on -- and ``'top'`` puts -z up the screen,
+as a map puts north. The projection is orthographic, and ``centre`` is a point
+in the world rather than on the ground:
+
+.. code-block:: python
+
+   from OpenGLContext.edit.orthoview import OrthoView, OrthoViewPlatform
+
+   front = OrthoView('front', centre=(0.0, 1.0, 0.0), span=4.0)
+   view = View(OrthoViewPlatform(front), name='front')
+   ...
+   front.pan(dx, dy, view.size)                     # a drag, in view pixels
+   front.zoom(0.8, at=view.local(x, y), viewport=view.size)
+   point = front.world_from_screen(*view.local(x, y), view.size)
+
+``span`` is how many units fit down the view and ``depth`` how far along the
+axis it reaches, half in front of the centre and half behind. The pointer
+conversions work in the view's plane through the centre, so a point dragged in
+the front view moves in x and y and keeps its z. ``frame(minimum, maximum,
+viewport)`` fits a box, and ``MapView`` is the ``'top'`` view with its centre
+given as a map's ``(x, z)``.
+
+``QuadView`` is the window of four an editor opens on: three orthographic views
+-- by default the plan, the front and the view from the left -- around an
+``OrbitView`` in perspective. It builds the
+:class:`~OpenGLContext.views.ViewLayout`, frames a box in all four views, and
+turns the pointer into camera moves: a drag pans an orthographic view, a left
+drag orbits the perspective view and any other button pans it, and the wheel
+zooms the view under the pointer.
+
+.. code-block:: python
+
+   from OpenGLContext.edit.quadview import QuadView
+
+   class Editor(BaseContext):
+       def OnInit(self):
+           self.quad = QuadView()
+           self.viewLayout = self.quad.layout
+           self.quad.layout.arrange(*self.getViewPort())
+           self.quad.frame(minimum, maximum)
+
+       def ProcessEvent(self, event):
+           if self.quad.handle(event):
+               self.triggerRedraw(1)
+               return None
+           return super(Editor, self).ProcessEvent(event)
+
+``QuadView(directions=('front', 'right', 'bottom'))`` chooses other
+orthographic views, and ``background`` the flat colour they clear to; the
+perspective view draws the scene's own ``Background``. ``press``, ``drag``,
+``release`` and ``wheel`` are the same gestures for an application that reads
+its pointer another way. ``OrbitView`` takes ``nearest`` and ``furthest`` for
+how close and how far it may be dollied, and ``frame_box`` fits a whole object
+rather than a region of ground; ``QuadView.frame`` sets all three from the box.
+
+``python tests/multiview_quad.py model.glb`` puts any glTF model in the four
+views; :doc:`tutorials/multiview_quad` walks through it.
+
 .. _editing-demo:
 
 Seeing it work

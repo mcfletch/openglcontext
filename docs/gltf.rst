@@ -441,11 +441,16 @@ bounds and any cameras:
    group   = scene.group      # a scenegraph Group you can add to your own scene
    centre  = scene.center     # bounding-sphere centre, for framing
    radius  = scene.radius     # bounding-sphere radius
+   low     = scene.minimum    # the corners of the box that sphere surrounds
+   high    = scene.maximum
    strays  = scene.strays     # parts the file stranded outside that sphere
    cameras = scene.cameras    # list of baked camera poses
 
 You can drop ``scene.group`` straight into a context's scenegraph, or use
 ``scene.center`` / ``scene.radius`` to frame the model, as the viewer does.
+An orthographic view fits the box, ``scene.minimum`` / ``scene.maximum``, more
+closely than it fits the sphere; :doc:`multiview` frames all four views of an
+editor that way.
 
 That sphere is fitted to the *model*, not to the file's whole extent: a part
 the exporter stranded far outside the rest is left out of it, so that one
