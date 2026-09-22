@@ -84,7 +84,9 @@ OpenGLContext/
 │   ├── gizmo.py      # The tri-axis handle; a drag held to one axis
 │   ├── orthoview.py  # A view along one axis at a scale: top, front, side
 │   ├── quadview.py   # Three orthographic views around a perspective one,
-│   │                 # and the gestures that move them -- docs/editing.rst
+│   │                 # built on viewgestures -- docs/editing.rst
+│   ├── viewgestures.py  # The pointer moving the camera of the view it is in,
+│   │                 # for a window laying out views of its own
 │   └── controlnet.py # A NURBS node's control points, as pickable markers
 ├── events/           # Cross-backend event generation and dispatch -- docs/eventmodel.rst
 │   └── wheel.py      # Rotation reports into whole notches, for the backends

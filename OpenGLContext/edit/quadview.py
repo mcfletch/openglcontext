@@ -12,6 +12,9 @@ camera:
 - a wheel notch zooms the view under the pointer, an orthographic one about
   the pixel the pointer is on.
 
+The gestures are :class:`~OpenGLContext.edit.viewgestures.ViewGestures`, which
+a window laying out views of its own uses directly.
+
 It holds no GL. A context hands it each pointer event, and it takes the
 ones that move a camera::
 
@@ -31,24 +34,16 @@ reads its pointer some other way.
 """
 from __future__ import annotations
 
-import math
 from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
 from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
 from OpenGLContext.edit.orthoview import OrthoView, OrthoViewPlatform, Point
-from OpenGLContext.events.mouseevents import WHEEL_BUTTONS, WHEEL_UP
+from OpenGLContext.edit.viewgestures import ORBIT_RATE, ZOOM_STEP, ViewGestures
 from OpenGLContext.views import View, ViewLayout, ViewStyle
 
 __all__ = ['QuadView', 'ORBIT_RATE', 'ZOOM_STEP']
-
-#: Degrees a perspective view orbits for each pixel the pointer is dragged.
-ORBIT_RATE = 0.4
-
-#: What one wheel notch towards the scene multiplies a view's span or
-#: distance by.
-ZOOM_STEP = 0.8
 
 Colour = Union[Tuple[float, float, float], Tuple[float, float, float, float]]
 
@@ -80,7 +75,8 @@ class QuadView:
                           style=ViewStyle(background=True)))
         #: The layout to give the context.
         self.layout = ViewLayout.quad(views[0], views[1], views[2], views[3])
-        self._held: Optional[Tuple[View, int, float, float]] = None
+        #: What turns the pointer into a move of a view's camera.
+        self.gestures = ViewGestures(self.layout)
 
     def view(self, name: str) -> Optional[View]:
         """The view called ``name``: a direction, or ``'perspective'``."""
@@ -122,80 +118,26 @@ class QuadView:
         ``WHEEL_DOWN``; the press is the notch and the release is taken with
         it.
         """
-        kind = getattr(event, 'type', None)
-        if kind not in ('mousebutton', 'mousemove'):
-            return False
-        if event.view is None:
-            event.view = self.layout.route(event)
-        x, y = event.getPickPoint()
-        if kind == 'mousemove':
-            return self.drag(event.view, x, y)
-        if event.button in WHEEL_BUTTONS:
-            if not event.state:
-                return self._owns(event.view)
-            notches = 1 if event.button == WHEEL_UP else -1
-            return self.wheel(event.view, x, y, notches)
-        if event.state:
-            return self.press(event.view, x, y, event.button)
-        return self.release(event.view, x, y)
+        return self.gestures.handle(event)
 
     def press(self, view: Optional[View], x: float, y: float, button: int) -> bool:
         """A button went down at window pixel ``(x, y)``; True where a gesture began."""
-        if not self._owns(view):
-            return False
-        assert view is not None
-        self._held = (view, int(button), float(x), float(y))
-        return True
+        return self.gestures.press(view, x, y, button)
 
     def drag(self, view: Optional[View], x: float, y: float) -> bool:
         """The pointer moved to ``(x, y)``; True where it moved a camera.
 
         The gesture stays with the view it began in, wherever the pointer goes.
         """
-        if self._held is None:
-            return False
-        held, button, last_x, last_y = self._held
-        dx, dy = float(x) - last_x, float(y) - last_y
-        self._held = (held, button, float(x), float(y))
-        camera = held.camera
-        if isinstance(camera, OrthoViewPlatform):
-            camera.view.pan(dx, dy, _size(held))
-        elif button == 0:
-            self.orbit.orbit(-dx * ORBIT_RATE, -dy * ORBIT_RATE)
-        else:
-            self._pan_orbit(dx, dy, _size(held))
-        return True
+        return self.gestures.drag(view, x, y)
 
     def release(self, view: Optional[View], x: float, y: float) -> bool:
         """The button came up; True where it ended a gesture."""
-        held = self._held is not None
-        self._held = None
-        return held
+        return self.gestures.release(view, x, y)
 
     def wheel(self, view: Optional[View], x: float, y: float, notches: int) -> bool:
         """The wheel turned ``notches`` over ``(x, y)``, positive towards the scene."""
-        if not self._owns(view):
-            return False
-        assert view is not None
-        factor = ZOOM_STEP ** int(notches)
-        if isinstance(view.camera, OrthoViewPlatform):
-            view.camera.view.zoom(factor, at=view.local(x, y), viewport=_size(view))
-        else:
-            self.orbit.dolly(factor)
-        return True
-
-    # -- helpers -----------------------------------------------------------
-    def _owns(self, view: Optional[View]) -> bool:
-        return view is not None and any(view is mine for mine in self.layout.views)
-
-    def _pan_orbit(self, dx: float, dy: float, viewport: Tuple[int, int]) -> None:
-        """Carry the perspective view's target with the pointer, at the target's depth."""
-        model, _projection = self.orbit.matrices(viewport)
-        right, up = model[:3, 0], model[:3, 1]
-        scale = (2.0 * self.orbit.distance * math.tan(math.radians(self.orbit.fov) / 2.0)
-                 / viewport[1])
-        target = self.orbit.target() - (right * dx + up * dy) * scale
-        self.orbit.look_at((float(target[0]), float(target[2])), float(target[1]))
+        return self.gestures.wheel(view, x, y, notches)
 
 
 def _size(view: View) -> Tuple[int, int]:

@@ -90,7 +90,9 @@ An editor's four views -- top, front and side orthographic views around a
 perspective one -- are ``OpenGLContext.edit.quadview.QuadView``, which builds
 the layout, frames a model in every view and moves each view's camera with the
 pointer; see :ref:`Top, front and side <quad-view>`. ``tests/multiview_quad.py``
-loads any glTF model into it.
+loads any glTF model into it. An application laying out its own views takes the
+gestures alone, as ``OpenGLContext.edit.viewgestures.ViewGestures``, and names
+which views they drive.
 
 How a view draws
 ----------------

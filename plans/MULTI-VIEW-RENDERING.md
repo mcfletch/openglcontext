@@ -8,7 +8,7 @@ Phase 1 (the PyOpenGL array checks) landed 2026-09-22. Phases 3, 4 and 5 --
 below. Phase 2 is replaced by "Revised: one submission without world-space
 shading". Phase 6's engine half -- `OrthoView`, `QuadView` and the
 `tests/multiview_quad.py` tutorial -- landed 2026-09-22; the splitter drag,
-per-view labels and the glisteel-editor and marble-editor adoption are next.
+per-view labels and the marble-editor adoption are next.
 
 ## What this is for
 
@@ -484,6 +484,22 @@ wrapper code.
   the perspective one and other buttons pan it, the wheel zooms the view under
   the pointer). `OrbitView` gained `frame_box` and per-view `nearest` /
   `furthest`; `GLTFScene` gained `minimum` / `maximum`.
+- `OpenGLContext.edit.viewgestures.ViewGestures`: the pointer moving the camera
+  of the view it lands in, which `QuadView` is built on and an application
+  laying out its own views uses directly. `views` names the views it drives, so
+  a window whose plan view belongs to its tools keeps that one; `layout` is
+  assignable, for a window that rearranges its views. It moves a
+  `MapViewPlatform` as well as an `OrthoViewPlatform`.
+- glisteel-editor adopted it (`glisteel_editor/views.py`): the `p` swap became
+  four arrangements of the same cameras -- map, angled, the two side by side,
+  and the quad with the front and left elevations -- with `v` taking them in
+  turn and `space` maximising one. The map keeps the tools wherever it is on
+  screen, since `MapControls` is told the map's own rectangle and a window
+  pixel is read in the map's own pixels. The editor's `OrbitControls` went:
+  `ViewGestures` does it. `EditorViews` is the editor's own for now; marble-
+  editor wants the same four arrangements over a map and an orbit camera, so
+  the question when it adopts them is whether the class moves into
+  `OpenGLContext.edit` rather than being written a second time.
 - `tests/multiview_quad.py` loads any glTF model into the quad; it is in the
   visual suite with a baseline and in the "Interface and Tools" tutorial path.
 - `scripts/multiview_bench.py` measures a layout against a single view, which

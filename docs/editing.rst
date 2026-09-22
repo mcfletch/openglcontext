@@ -475,6 +475,34 @@ rather than a region of ground; ``QuadView.frame`` sets all three from the box.
 ``python tests/multiview_quad.py model.glb`` puts any glTF model in the four
 views; :doc:`tutorials/multiview_quad` walks through it.
 
+Views of your own
+~~~~~~~~~~~~~~~~~
+
+An application that lays out its own views -- a window whose plan view is where
+its tools draw, or one offering several arrangements of the same cameras --
+takes the gestures without the layout. ``ViewGestures`` moves the camera of
+whichever view an event lands in, and ``views`` names the ones it drives, so a
+view the application moves itself is left alone:
+
+.. code-block:: python
+
+   from OpenGLContext.edit.viewgestures import ViewGestures
+
+   gestures = ViewGestures(layout, views=[elevation, angled])
+   ...
+   def ProcessEvent(self, event):
+       if gestures.handle(event):          # never takes an event in `plan`
+           self.triggerRedraw(1)
+           return None
+       return super(Editor, self).ProcessEvent(event)
+
+It pans and zooms a :class:`~OpenGLContext.edit.orthoview.OrthoViewPlatform` or
+a :class:`~OpenGLContext.edit.mapview.MapViewPlatform`, and orbits, pans and
+dollies an :class:`~OpenGLContext.edit.orbitview.OrbitViewPlatform`. ``layout``
+and ``views`` can both be assigned, so a window that rearranges its views hands
+over the new layout. ``orbit_rate`` is degrees per pixel dragged and
+``zoom_step`` what a notch multiplies a span or a distance by.
+
 .. _editing-demo:
 
 Seeing it work
