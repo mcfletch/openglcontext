@@ -6,7 +6,9 @@ Phase 1 (the PyOpenGL array checks) landed 2026-09-22. Phases 3, 4 and 5 --
 `View`/`ViewLayout` with the `sequential`, `vertex` and `geometry` strategies
 -- landed 2026-09-22 on the `multiview` branch of openglcontext; see "Landed"
 below. Phase 2 is replaced by "Revised: one submission without world-space
-shading". Phase 6 (the editor quad and the editors' adoption) is next.
+shading". Phase 6's engine half -- `OrthoView`, `QuadView` and the
+`tests/multiview_quad.py` tutorial -- landed 2026-09-22; the splitter drag,
+per-view labels and the glisteel-editor and marble-editor adoption are next.
 
 ## What this is for
 
@@ -460,6 +462,44 @@ raises `KeyError`; the GLES3 wrapper already takes a list of names. The
 engine passes its own output array. It belongs with the size sweep in
 `pyopengl/plans/INPUT-ARRAY-SIZES.md`, whose uncommitted work touches the same
 wrapper code.
+
+## Landed: degrading, and the editor quad (2026-09-22)
+
+- A strategy whose programs fail to compile is logged once and passed over
+  (`FlatPass.multiviewFailed`, `MultiviewCapabilities.choose(failed=...)`):
+  that frame draws the views in turn and the next uses the next strategy,
+  so `vertex` falls to `geometry` and that to `sequential`. A layout of more
+  views than `GL_MAX_VIEWPORTS` is drawn in turn (`FlatPass.sharesViews`).
+  Held by `tests/unit/test_multiview_geometry.py` with forced compile failures
+  and a forced viewport limit. A GL 3.3 driver without the extensions
+  (`MESA_GL_VERSION_OVERRIDE=3.3` with the extensions overridden off) draws the
+  quad tutorial identically, pixel for pixel, to the 4.6 driver.
+- `OpenGLContext.edit.orthoview.OrthoView` / `OrthoViewPlatform`: the six axis
+  views, pan, zoom about a pixel, box framing, pixel/world in the view's
+  plane. `MapView` was kept as it is, since editors use its `(x, z)` API; the
+  `'top'` OrthoView draws what it draws, which a test holds.
+- `OpenGLContext.edit.quadview.QuadView`: the layout of three orthographic
+  views and an `OrbitView`, `frame(minimum, maximum)`, and `handle(event)`
+  for the context's pointer events (drag pans an ortho view, left drag orbits
+  the perspective one and other buttons pan it, the wheel zooms the view under
+  the pointer). `OrbitView` gained `frame_box` and per-view `nearest` /
+  `furthest`; `GLTFScene` gained `minimum` / `maximum`.
+- `tests/multiview_quad.py` loads any glTF model into the quad; it is in the
+  visual suite with a baseline and in the "Interface and Tools" tutorial path.
+
+Found on the way and fixed in the engine:
+
+- glTF models drew nothing under the compatibility profile: `PBRMesh` had no
+  fixed-function draw and `PBRMaterial` no `render`. Both exist now (factors
+  through `glMaterial`, the base colour map bound by `Appearance`).
+- The fixed-function sphere background was clipped by any near plane beyond
+  one unit, which an orbit camera's is; it draws with `GL_DEPTH_CLAMP`.
+
+Found on the way in PyOpenGL: with OpenGL_accelerate, the typed client-array
+setters (`glVertexPointerf`, `glColorPointerf`, ...) leave the driver reading
+memory that does not hold the array; with `PYOPENGL_USE_ACCELERATE=0` they are
+correct. It is what drew the compatibility profile's sphere background
+magenta. Being fixed on pyopengl branch `pointer-lifetime`.
 
 ## Revised: one submission without world-space shading
 
