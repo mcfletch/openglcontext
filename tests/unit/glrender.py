@@ -85,13 +85,17 @@ class Rendered:
 def render_scene_factory(monkeypatch):
     """Factory: build a context around a scenegraph and render frames.
 
-    Returns a callable(children, frames=4, picks=None, mrt=True) -> _Rendered and
-    tears the window down afterward.
+    Returns a callable(children, frames=4, picks=None, mrt=True, shadows=None,
+    layout=None, size=None) -> _Rendered and tears the window down afterward.
+    ``layout`` is called with the context once it is built and returns the
+    :class:`~OpenGLContext.views.ViewLayout` it should draw; ``size`` is the
+    window's ``(width, height)``.
     """
     windows = []
     contexts = []
 
-    def run(children, frames=4, picks=None, mrt=True, shadows=None):
+    def run(children, frames=4, picks=None, mrt=True, shadows=None, layout=None,
+            size=None):
         from OpenGLContext.passes import (
             instancing, selection, flateffects, shadowmixin, pbrpass, flatcore,
         )
@@ -148,8 +152,14 @@ def render_scene_factory(monkeypatch):
         sg = basenodes.sceneGraph(children=children)
 
         class _Ctx(Base):
+            if size is not None:
+                from OpenGLContext.contextdefinition import ContextDefinition
+                contextDefinition = ContextDefinition(size=size)
+
             def OnInit(self):
                 self.sg = sg
+                if layout is not None:
+                    self.viewLayout = layout(self)
                 if picks is not None:
                     self.contextDefinition.pickAsync = False
                     self.addEventHandler('mousebutton', button=0, state=1,

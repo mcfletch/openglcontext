@@ -107,6 +107,8 @@ OpenGLContext/
 │   ├── ibl.py        # Image-based lighting probe
 │   ├── shadow*.py    # Shadow mapping -- docs/shadows.rst
 │   ├── instancing.py # Collapsing repeated shapes -- docs/instancing.rst
+│   ├── multiview.py  # How several views are drawn: the strategy a driver
+│   │                 # allows, and one view's part of a frame -- docs/multiview.rst
 │   └── shaderpass.py # VRML97ShaderProgram -- compiles and holds the programs
 ├── __pyinstaller/    # PyInstaller hooks, found by entry point -- docs/packaging.rst
 ├── physics/          # Rigid bodies, colliders, gravity zones -- docs/physics.rst
@@ -149,6 +151,8 @@ OpenGLContext/
 ├── viewer/           # The embeddable viewer behind oglc-view -- docs/viewer.rst
 │   └── adapters/     # One per format; what oglc-view dispatches on
 ├── hud.py            # Screen-space layout GUINode/GUIBox use (see ui/)
+├── views.py          # Several cameras on one window: View, ViewLayout, which
+│                     # view the pointer is in -- no GL -- docs/multiview.rst
 ├── outline.py        # The scenegraph as rows, for a tree control -- no GL, no
 │                     # toolkit -- docs/embedding.rst
 ├── renderoptions.py  # How a pass reads a rendering feature from the definition

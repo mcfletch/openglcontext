@@ -206,6 +206,16 @@ class ContextDefinition( node.Node ):
     #: teapots, quadrics, NURBS (env: OPENGLCONTEXT_LOD).
     tessellationLOD = field.newField( "tessellationLOD", "SFBool", 1,
                                       lambda: renderoptions.env_flag('OPENGLCONTEXT_LOD', True))
+    #: How several views on one window are drawn: "auto", "vertex",
+    #: "geometry" or "sequential" (env: OPENGLCONTEXT_MULTIVIEW). "auto" takes
+    #: the fastest the driver offers; naming one pins it, for comparing them.
+    #: See OpenGLContext.passes.multiview.
+    multiview = field.newField( "multiview", "SFString", 1,
+                                lambda: renderoptions.env_choice(
+                                    'OPENGLCONTEXT_MULTIVIEW',
+                                    renderoptions.CHOICES['multiview'],
+                                    {'vs': 'vertex', 'gs': 'geometry',
+                                     'loop': 'sequential'}))
     #: Wait for the display's refresh before presenting a frame. Off uncaps the
     #: frame rate and lets a benchmark measure it (env: OPENGLCONTEXT_NO_VSYNC).
     vsync = field.newField( "vsync", "SFBool", 1,
@@ -270,6 +280,9 @@ class ContextDefinition( node.Node ):
         'debugBBox': {'label': 'Show bounding boxes'},
         'debugSelection': {'label': 'Show the selection buffer'},
         'debug': {'label': 'Debug output'},
+        'multiview': {'label': 'Multi-view drawing',
+                      'options': renderoptions.CHOICES['multiview'],
+                      'optionLabels': renderoptions.LABELS['multiview']},
     }
 
     #: Fields a settings screen shows under "Rendering", in the order they
@@ -293,6 +306,7 @@ class ContextDefinition( node.Node ):
     #: Fields a settings screen shows under "Diagnostics".
     DIAGNOSTIC_FIELDS = (
         'pickEnabled', 'pickAsync', 'debugBBox', 'debugSelection', 'debug',
+        'multiview',
     )
 
     def __init__( self, **named: Any ) -> None:

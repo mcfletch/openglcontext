@@ -19,7 +19,7 @@ announces itself on the same signal a ``Switch`` uses, because the pass keeps a
 flattened scenegraph and a level nobody told it about would not be drawn.
 """
 import math
-from typing import Any, Optional, Sequence
+from typing import Any, NamedTuple, Optional, Sequence
 
 import numpy as np
 from pydispatch import dispatcher
@@ -29,8 +29,9 @@ from vrml.vrml97 import basenodes, nodetypes
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.switch import SWITCH_CHANGE_SIGNAL
 
-__all__ = ['LOD', 'ScreenCoverageLOD', 'CULLED', 'distance_to_viewer',
-           'screen_fraction', 'uniform_scale', 'viewer_tangent']
+__all__ = ['LOD', 'ScreenCoverageLOD', 'CULLED', 'Viewer', 'distance_to_viewer',
+           'finest', 'screen_fraction', 'uniform_scale', 'viewer_for',
+           'viewer_tangent']
 
 #: ``whichLevel`` for a node that is drawing nothing at all, which is what
 #: ``MSFT_lod`` asks for below the coarsest level's screen coverage.
@@ -54,6 +55,58 @@ def viewer_tangent(field_of_view: Optional[float] = None) -> float:
     if field_of_view is None:
         field_of_view = DEFAULT_FIELD_OF_VIEW
     return math.tan(math.radians(float(field_of_view)) / 2.0)
+
+
+class Viewer(NamedTuple):
+    """One camera a frame's levels of detail are chosen for.
+
+    ``modelview`` places the world in front of the camera. ``tangent`` is half
+    the window's height one unit in front of a perspective camera -- the
+    tangent of half its vertical field of view -- and, for an ``orthographic``
+    one, half the height of the world it shows, which is the same at every
+    distance.
+    """
+
+    modelview: Any
+    tangent: float
+    orthographic: bool = False
+
+    def tangents(self, distances: Any) -> Any:
+        """The tangent each node at ``distances`` is seen through.
+
+        What a node's coverage is divided by, over the distance. An
+        orthographic view shows a node the same size wherever it stands, so
+        its tangent shrinks with distance to leave the product at the view's
+        half-height.
+        """
+        if not self.orthographic:
+            return np.full(len(distances), float(self.tangent))
+        return float(self.tangent) / np.maximum(np.asarray(distances, 'd'), _TINY)
+
+
+def viewer_for(camera: Any, modelview: Any, projection: Any) -> Viewer:
+    """The :class:`Viewer` a camera is, from its matrices.
+
+    A projection whose last column is ``(0, 0, 0, 1)`` is orthographic, and
+    ``1 / projection[1][1]`` is half its height. A perspective camera states
+    its field of view where it has a ``frustum`` to state it in, which is the
+    figure :func:`viewer_tangent` has always been given; otherwise the same
+    element of its projection is the tangent.
+    """
+    matrix = np.asarray(projection, 'd')
+    scale = float(matrix[1, 1]) or _TINY
+    if abs(float(matrix[3, 3]) - 1.0) < 1e-6 and abs(float(matrix[2, 3])) < 1e-6:
+        return Viewer(modelview, 1.0 / scale, orthographic=True)
+    frustum = getattr(camera, 'frustum', None)
+    if frustum is not None:
+        return Viewer(modelview, viewer_tangent(frustum[0]))
+    return Viewer(modelview, 1.0 / scale)
+
+
+def finest(levels: Sequence[int]) -> int:
+    """The most detailed of ``levels``: the lowest index, and :data:`CULLED` last."""
+    drawn = [level for level in levels if level != CULLED]
+    return min(drawn) if drawn else CULLED
 
 
 def viewer_distances(centres: Any, modelviews: Any) -> np.ndarray:
@@ -178,7 +231,15 @@ class LOD(basenodes.LOD):
         A VRML97 ``LOD`` names its levels in distances, so the scale and the
         lens are nothing to it.
         """
-        return self.select(distance)
+        return self.show(self.levelAt(distance, scale, tangent))
+
+    def levelAt(self, distance: float, scale: float, tangent: float) -> int:
+        """The level :meth:`selectAt` would draw for these numbers, without drawing it.
+
+        What a frame drawn through several cameras asks each of them, before
+        showing the finest of the answers.
+        """
+        return self.levelFor(distance)
 
     def select(self, distance: float) -> bool:
         """Choose the level for a viewer ``distance`` away; True if it changed.
@@ -303,15 +364,15 @@ class ScreenCoverageLOD(LOD):
         """New levels are a new size to judge them by."""
         self._measured = 0.0
 
-    def selectAt(self, distance: float, scale: float, tangent: float) -> bool:
-        """Choose the level for the coverage this viewer gives the object."""
+    def levelAt(self, distance: float, scale: float, tangent: float) -> int:
+        """The level for the coverage this viewer gives the object."""
         radius = self.coverageRadius() * scale
         if radius <= 0:
-            # Nothing to measure: the finest level stands, which is what a
-            # reader that had never heard of the extension would draw.
-            return False
-        return self.show(self.levelForCoverage(
-            screen_fraction(radius, distance, tangent)))
+            # Nothing to measure: the level being drawn stands, which is the
+            # finest unless something chose otherwise -- what a reader that had
+            # never heard of the extension would draw.
+            return self.whichLevel
+        return self.levelForCoverage(screen_fraction(radius, distance, tangent))
 
     def levelForCoverage(self, coverage: float) -> int:
         """The level to draw where the object covers ``coverage`` of the window.

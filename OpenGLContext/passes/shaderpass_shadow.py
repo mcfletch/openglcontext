@@ -108,16 +108,22 @@ class _ShadowUniformMixin:
     def set_shadow_params(self, resolution: int = 2048,
                           normal_offset: float = 0.0, soft: bool = False,
                           gather: bool = False, light_size: float = 0.01,
-                          eye_to_world: Optional['Matrix4'] = None) -> None:
+                          eye_to_world: Optional['Matrix4'] = None,
+                          cascade_by_fit: bool = False) -> None:
         """Set the shadow parameters every slot shares.
 
         The depth bias is not among them: it converts against each map's own
         projection, so it is set per slot by the bind_*_slot methods.
+
+        ``cascade_by_fit`` chooses a directional light's cascade by which map
+        holds the fragment rather than by its distance from the camera, which
+        is how a view other than the one the cascades were fitted to reads them.
         """
         self._set_uniform1f('shadowTexel', 1.0 / float(max(1, resolution)), self._shadow_prog)
         self._set_uniform1f('shadowNormalOffset', float(normal_offset), self._shadow_prog)
         self._set_uniform1i('shadowSoft', 1 if soft else 0, self._shadow_prog)
         self._set_uniform1f('shadowLightSize', float(light_size), self._shadow_prog)
+        self._set_uniform1i('cascadeByFit', 1 if cascade_by_fit else 0, self._shadow_prog)
         if eye_to_world is not None:
             self.set_eye_to_world(eye_to_world)
 

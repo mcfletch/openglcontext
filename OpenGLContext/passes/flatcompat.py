@@ -52,66 +52,38 @@ class FlatPass( _flat.FlatPass ):
 
     cache = None
 
-    #: Bloom composites the scene with a shader; this pass has no shader path
-    #: to composite with, so it draws straight to the framebuffer.
+    #: The fixed function writes display-referred colour, which the bloom
+    #: chain would tone-map a second time, so this pass draws straight to the
+    #: framebuffer whatever ``ContextDefinition.bloom`` says.
     supports_bloom = False
 
     
     def Render( self, context: Any, mode: Any ) -> None:
         """Render the geometry attached to this flat-renderer's scenegraph"""
-        # clear the projection matrix set up by legacy sg
-        matrix = self.getModelView()
+        frames = self.prepareViews()
+        active = self.activeFrame if self.activeFrame is not None else frames[0]
+        matrix = active.modelView
         self.matrix = matrix
 
-        toRender = self.renderSet( matrix )
-        maxDepth = self.maxDepth = self.greatestDepth( toRender )
-        vp = context.getViewPlatform()
-        if maxDepth:
-            self.projection = vp.viewMatrix(maxDepth)
-        
-        # Load our projection matrix for all legacy rendering operations...
-        glMatrixMode( GL_PROJECTION )
-        glLoadMatrixf( self.getProjection() )
-        
         # do we need to do a selection-render pass?
         events = context.getPickEvents()
         debugSelection = (mode.context.contextDefinition.debugSelection
                           and mode.context.contextDefinition.pickEnabled)
-        
+
         if events or debugSelection:
-            self.selectRender( mode, toRender, events )
+            self.selectRenderViews( mode, events, debugSelection )
             events.clear()
-            glMatrixMode( GL_PROJECTION )
-            glLoadMatrixf( self.getProjection() )
-        
-        # Load the root 
-        glMatrixMode( GL_MODELVIEW )
-        matrix = self.getModelView()
+
         if not debugSelection:
-            glLoadIdentity()
             self.matrix = matrix
             self.visible = True
             self.transparent = False
             self.lighting = True
             self.textured = True
-            # Runtime-transparent shapes deferred from the opaque pass (3b).
-            self._deferredTransparent = []
-
-            self.legacyBackgroundRender( vp,matrix )
-            # Set up generic "geometric" rendering parameters
-            glFrontFace( GL_CCW )
-            glEnable(GL_DEPTH_TEST)
-            glDepthFunc( GL_LESS )
-            glEnable(GL_LIGHTING)
-            glDepthFunc(GL_LESS)
-            glEnable(GL_CULL_FACE)
-            glCullFace(GL_BACK)
-            self.legacyNormalRescale()
-
-            self.legacyLightRender( matrix )
-
-            self.renderOpaque( toRender )
-            self.renderTransparent( toRender )
+            for frame in frames:
+                self.renderViewLegacy( frame )
+            self.finishViews()
+        self.applyViewFrame( active, gl=False )
 
         # The HUD, the developer overlay and any screen that is open, drawn over
         # the finished frame.  The overlay renderer builds its own program and
@@ -124,6 +96,40 @@ class FlatPass( _flat.FlatPass ):
 
         _flat.presentFrame( context )
         self.matrix = matrix
+
+    def applyViewFrame( self, frame: Any, gl: bool = True ) -> None:
+        """Look through ``frame``'s view, with its projection on the matrix stack.
+
+        Every fixed-function draw is projected by the stack rather than by a
+        uniform, so the view's projection is loaded as it is chosen, and the
+        modelview left at the identity the background and lights load onto.
+        """
+        super( FlatPass, self ).applyViewFrame( frame, gl )
+        if gl:
+            glMatrixMode( GL_PROJECTION )
+            glLoadMatrixf( self.getProjection() )
+            glMatrixMode( GL_MODELVIEW )
+            glLoadIdentity()
+
+    def renderViewLegacy( self, frame: Any ) -> None:
+        """Draw one view of the frame through the fixed-function pipeline."""
+        self._beginView( frame )
+        try:
+            # Set up generic "geometric" rendering parameters
+            glFrontFace( GL_CCW )
+            glEnable(GL_DEPTH_TEST)
+            glDepthFunc( GL_LESS )
+            glEnable(GL_LIGHTING)
+            glEnable(GL_CULL_FACE)
+            glCullFace(GL_BACK)
+            self.legacyNormalRescale()
+
+            self.legacyLightRender( frame.modelView )
+
+            self.renderOpaque( frame.toRender )
+            self.renderTransparent( frame.toRender )
+        finally:
+            self._endView( frame )
 
     def legacyBackgroundRender( self, vp: Any, matrix: Any ) -> None:
         """Do legacy background rendering"""

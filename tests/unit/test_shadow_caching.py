@@ -454,7 +454,7 @@ class TestSpotMapReuse:
     def test_first_frame_renders(self):
         m = self._mixin()
         path = _StableSpotPath(np.eye(4))
-        b = m._renderSpot(path, path[0], 0, 0, np.eye(4))
+        b = m._renderSpot(path, path[0], 0, 0)
         assert b is not None
         assert self.depths == 1 and self.binds == 1
 
@@ -462,7 +462,7 @@ class TestSpotMapReuse:
         m = self._mixin()
         path = _StableSpotPath(np.eye(4))
         for _ in range(5):
-            b = m._renderSpot(path, path[0], 0, 0, np.eye(4))
+            b = m._renderSpot(path, path[0], 0, 0)
             assert b is not None            # binding returned every frame
         assert self.depths == 1             # depth pass ran only once
         assert self.binds == 1
@@ -470,30 +470,30 @@ class TestSpotMapReuse:
     def test_moving_light_rerenders(self):
         m = self._mixin()
         path = _StableSpotPath(np.eye(4))
-        m._renderSpot(path, path[0], 0, 0, np.eye(4))
+        m._renderSpot(path, path[0], 0, 0)
         moved = np.eye(4)
         moved[3, 0] = 3.0
         path.move(moved)
-        m._renderSpot(path, path[0], 0, 0, np.eye(4))
+        m._renderSpot(path, path[0], 0, 0)
         assert self.depths == 2
 
     def test_moving_a_caster_rerenders(self):
         m = self._mixin()
         path = _StableSpotPath(np.eye(4))
-        m._renderSpot(path, path[0], 0, 0, np.eye(4))
+        m._renderSpot(path, path[0], 0, 0)
         m._caster_sig = ('sceneB',)         # a caster moved this frame
-        m._renderSpot(path, path[0], 0, 0, np.eye(4))
+        m._renderSpot(path, path[0], 0, 0)
         assert self.depths == 2
 
     def test_reallocated_texture_rerenders(self):
         m = self._mixin()
         path = _StableSpotPath(np.eye(4))
-        m._renderSpot(path, path[0], 0, 0, np.eye(4))
+        m._renderSpot(path, path[0], 0, 0)
         # Simulate the depth array being reallocated (new GL texture id).
         m._shared_map = lambda: types.SimpleNamespace(
             texture=99, bind_layer=lambda *a: (setattr(self, 'binds', self.binds+1) or True),
             unbind=lambda: None)
-        m._renderSpot(path, path[0], 0, 0, np.eye(4))
+        m._renderSpot(path, path[0], 0, 0)
         assert self.depths == 2
 
 
@@ -538,7 +538,7 @@ class TestPointMapReuse:
         m = self._mixin()
         path = _StablePointPath(np.eye(4))
         for _ in range(4):
-            b = m._renderPoint(path, path[0], 0, 0, np.eye(4), CAPS)
+            b = m._renderPoint(path, path[0], 0, 0, CAPS)
             assert b is not None
         assert self.faces == 6      # bound once, on the first frame only
         assert self.depths == 6
@@ -570,11 +570,11 @@ class TestSpotSlotOwnership:
         m = self._mixin()
         a = _StableSpotPath(np.eye(4))
         b = _StableSpotPath(np.eye(4))
-        m._renderSpot(a, a[0], 0, 0, np.eye(4))    # A -> slot0/layer0
+        m._renderSpot(a, a[0], 0, 0)    # A -> slot0/layer0
         assert self.depths == 1
-        m._renderSpot(b, b[0], 0, 1, np.eye(4))    # B reclaims slot0/layer0 (A left view)
+        m._renderSpot(b, b[0], 0, 1)    # B reclaims slot0/layer0 (A left view)
         assert self.depths == 2
-        m._renderSpot(a, a[0], 0, 0, np.eye(4))    # A returns to slot0/layer0
+        m._renderSpot(a, a[0], 0, 0)    # A returns to slot0/layer0
         assert self.depths == 3                    # must re-render, not reuse B's depth
 
 
@@ -603,11 +603,11 @@ class TestDepthCacheCommit:
         bind_ok = [False]
         m = self._mixin(bind_ok)
         path = _StableSpotPath(np.eye(4))
-        b = m._renderSpot(path, path[0], 0, 0, np.eye(4))
+        b = m._renderSpot(path, path[0], 0, 0)
         assert b is None                    # bind failed, light skipped this frame
         assert self.depths == 0
         bind_ok[0] = True                   # allocation succeeds next frame
-        b = m._renderSpot(path, path[0], 0, 0, np.eye(4))
+        b = m._renderSpot(path, path[0], 0, 0)
         assert b is not None
         assert self.depths == 1             # re-attempted, not wrongly skipped
 

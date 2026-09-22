@@ -211,7 +211,7 @@ class TestSpotUsesCasterPool:
 
         m._spotViewProjection = spy
         light = SpotLight(location=(0, 5, 0), direction=(0, -1, 0), cutOffAngle=0.5)
-        binding = m._renderSpot(_FakePath(np.eye(4)), light, 0, 0, np.eye(4))
+        binding = m._renderSpot(_FakePath(np.eye(4)), light, 0, 0)
         assert binding is not None
         # The near/far fit saw the whole caster pool, not a camera-culled subset.
         assert captured['points'] is pool
@@ -319,7 +319,7 @@ class TestCubeFaceClearing:
         # near/far now come from the full caster pool cached on the mixin
         #, not a per-call occluder argument.
         m._caster_points = np.array([[0, 0, 0], [1, 1, 1]], dtype='d')
-        return m._renderPoint(_FakePath(np.eye(4)), light, 0, 0, np.eye(4), CAPS)
+        return m._renderPoint(_FakePath(np.eye(4)), light, 0, 0, CAPS)
 
     def test_all_six_faces_bound_without_occluders(self):
         m = self._mixin(cull_result=[])           # no caster in any face

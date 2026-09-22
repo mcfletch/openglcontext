@@ -33,6 +33,10 @@ uniform float shadowLightSize;
 uniform mat4  shadowMatrix[MAX_SHADOW_LIGHTS * MAX_CASCADES];   // eye -> light clip
 uniform int   cascadeCount[MAX_SHADOW_LIGHTS];
 uniform float cascadeSplit[MAX_SHADOW_LIGHTS * MAX_CASCADES];   // eye-space -z far per cascade
+// 1 in a view the cascades were not fitted to: its eye depth says nothing about
+// the fitted camera's splits, so the finest cascade whose map holds the
+// fragment is used instead.
+uniform int   cascadeByFit;
 uniform vec3  cubeLightPos[MAX_SHADOW_LIGHTS];                  // world-space light position
 uniform float cubeNear[MAX_SHADOW_LIGHTS];
 uniform float cubeFar[MAX_SHADOW_LIGHTS];
@@ -163,13 +167,32 @@ float spotFactor(int slot) {
 }
 
 // --- Directional light: cascaded shadow maps (this slot's layer block) --------
+// Whether light-clip position `lc` falls inside its map.
+bool inShadowMap(vec4 lc) {
+    if (lc.w <= 0.0) return false;
+    vec3 p = (lc.xyz / lc.w) * 0.5 + 0.5;
+    return all(greaterThanEqual(p, vec3(0.0))) && all(lessThanEqual(p, vec3(1.0)));
+}
+
 float csmFactor(int slot) {
     int n = cascadeCount[slot];
-    float depth = -vPosition.z;                        // eye-space distance from camera
     int c = n - 1;
-    for (int i = 0; i < MAX_CASCADES; i++) {
-        if (i >= n) break;
-        if (depth <= cascadeSplit[slot * MAX_CASCADES + i]) { c = i; break; }
+    if (cascadeByFit == 1) {
+        c = -1;
+        for (int i = 0; i < MAX_CASCADES; i++) {
+            if (i >= n) break;
+            if (inShadowMap(shadowMatrix[slot * MAX_CASCADES + i] * vec4(shadowSamplePos(), 1.0))) {
+                c = i;
+                break;
+            }
+        }
+        if (c < 0) return 1.0;                         // outside every cascade: lit
+    } else {
+        float depth = -vPosition.z;                    // eye-space distance from camera
+        for (int i = 0; i < MAX_CASCADES; i++) {
+            if (i >= n) break;
+            if (depth <= cascadeSplit[slot * MAX_CASCADES + i]) { c = i; break; }
+        }
     }
     int index = slot * MAX_CASCADES + c;
     float layer = float(index);

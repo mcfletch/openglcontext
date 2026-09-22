@@ -739,8 +739,12 @@ Rendering Passes
 The **passes** package holds the current rendering system. A single
 ``FlatPass`` observes the scenegraph and, each frame, draws it in a fixed
 sequence -- background, opaque, transmissive, transparent, selection and
-overlay -- rather than traversing it once per rendering mode. The base class
-(``passes/_flat.py``) carries two code paths, chosen by one flag:
+overlay -- rather than traversing it once per rendering mode. The sequence runs
+once for each view of the context's ``ViewLayout`` (``OpenGLContext/views.py``):
+the scene is walked once, and each view culls that walk against its own camera
+and draws into its own rectangle; see :doc:`Several views on one window
+<multiview>`. The base class (``passes/_flat.py``) carries two code paths,
+chosen by one flag:
 
 - ``flatcompat.py`` -- the compatibility-profile pass, using the fixed-function
   pipeline (``glLight*``, ``glMaterial*``).
@@ -770,6 +774,9 @@ this are:
   (``KHR_materials_transmission``).
 
 - ``selection.py`` -- colour/object-id picking.
+
+- ``multiview.py`` -- how a window of several views is drawn on this driver, and
+  the ``ViewFrame`` holding one view's camera, frustum and draw list for a frame.
 
 - ``renderpass.py`` -- picks which ``FlatPass`` subclass renders a context
   (profile + renderer) and caches it across frames; ``viewpointbinding.py``
@@ -925,6 +932,12 @@ X11 numbering), it is an increment rather than a state, and its pick key is
 distinct per notch so none is dropped. GLFW reports scrolling on a callback of
 its own in offsets and translates to those buttons; see :ref:`the overlay UI
 documentation <wheel>`.
+
+An event is routed to a view as it arrives: ``Context.routeEvent`` records on
+``event.view`` the view it belongs to, which is the one under the pointer, the
+one a held button's press began in, or for a key the active one. The selection
+pass resolves the pick through that view's camera. See :doc:`Several views on
+one window <multiview>`.
 
 .. _structure-bindings:
 

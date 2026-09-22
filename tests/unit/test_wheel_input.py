@@ -265,10 +265,13 @@ class TestEveryNotchSurvivesTheFrame:
     """
 
     class Queue:
-        """The context's own pick queue, with nothing else attached to it."""
+        """The context's own pick queue and the router that fills it."""
 
         contextDefinition = None
+        viewLayout = None
         addPickEvent = Context.addPickEvent
+        getViewLayout = Context.getViewLayout
+        routeEvent = Context.routeEvent
 
         def __init__(self):
             self.pickEvents = {}

@@ -167,22 +167,57 @@ class TestTransmissionMode:
         assert p.transmissionMode() == mode
 
 
+class _Window:
+    """The context the bloom target is sized from."""
+
+    def __init__(self, width, height):
+        self.size = (width, height)
+
+    def getViewPort(self):
+        return self.size
+
+
 class TestBloomWrapDefensive:
     """The bloom-wrap begin/end guard + failure branches (no GL needed)."""
+
+    def test_the_target_holds_the_whole_window_not_one_view(self, monkeypatch):
+        from OpenGLContext.passes import bloom
+        sizes = []
+
+        class _Recording:
+            def begin(self, w, h):
+                sizes.append((w, h))
+
+        monkeypatch.setattr(bloom, 'bloom_enabled', lambda source=None: True)
+        monkeypatch.setattr(bloom, 'BloomPass', _Recording)
+        p = _FlatEffectsMixin()
+        p.context = _Window(640, 480)
+        p.viewport = (320, 0, 320, 480)       # one of two views
+        assert p._begin_bloom() is True
+        assert sizes == [(640, 480)]
 
     def test_begin_bloom_disabled_returns_false(self, monkeypatch):
         from OpenGLContext.passes import bloom
         monkeypatch.setattr(bloom, 'bloom_enabled', lambda source=None: False)
         p = _FlatEffectsMixin()
-        p.viewport = (0, 0, 64, 64)
+        p.context = _Window(64, 64)
         assert p._begin_bloom() is False
         assert p._bloom_active is False
 
-    def test_begin_bloom_zero_viewport_returns_false(self, monkeypatch):
+    def test_a_pass_that_cannot_composite_draws_straight_to_the_window(self, monkeypatch):
+        from OpenGLContext.passes import bloom
+        from OpenGLContext.passes.flatcompat import FlatPass as CompatPass
+        monkeypatch.setattr(bloom, 'bloom_enabled', lambda source=None: True)
+        p = CompatPass.__new__(CompatPass)
+        p.context = _Window(64, 64)
+        assert p._begin_bloom() is False
+        assert p._bloom_active is False
+
+    def test_begin_bloom_zero_window_returns_false(self, monkeypatch):
         from OpenGLContext.passes import bloom
         monkeypatch.setattr(bloom, 'bloom_enabled', lambda source=None: True)
         p = _FlatEffectsMixin()
-        p.viewport = (0, 0, 0, 0)
+        p.context = _Window(0, 0)
         assert p._begin_bloom() is False
         assert p._bloom_active is False
 
@@ -196,7 +231,7 @@ class TestBloomWrapDefensive:
         monkeypatch.setattr(bloom, 'bloom_enabled', lambda source=None: True)
         monkeypatch.setattr(bloom, 'BloomPass', _BoomPass)
         p = _FlatEffectsMixin()
-        p.viewport = (0, 0, 64, 64)
+        p.context = _Window(64, 64)
         p._bloom_pass = None
         assert p._begin_bloom() is False
         assert p._bloom_active is False

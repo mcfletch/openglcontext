@@ -1526,6 +1526,35 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         if self.contextDefinition:
             self.contextDefinition.size = width, height
 
+    #: The views this context draws, or None for one view through its own
+    #: view platform; :meth:`getViewLayout` makes that layout on first use.
+    #: Assign a :class:`~OpenGLContext.views.ViewLayout` to draw several.
+    viewLayout: Any = None
+
+    def getViewLayout(self) -> Any:
+        """The :class:`~OpenGLContext.views.ViewLayout` this context draws.
+
+        One view through :meth:`getViewPlatform` unless the application has
+        assigned :attr:`viewLayout`; see ``docs/multiview.rst``.
+        """
+        if self.viewLayout is None:
+            from OpenGLContext.views import ViewLayout
+            self.viewLayout = ViewLayout.single()
+        return self.viewLayout
+
+    def routeEvent(self, event: Any) -> Any:
+        """Say which view ``event`` belongs to, on the event, and return it.
+
+        The view under the pointer, the one a held button's press began in,
+        or for an event with no position the active view; see
+        :meth:`OpenGLContext.views.ViewLayout.route`. An event already routed
+        keeps its view, so an event handled twice is not routed twice -- a
+        release routed again would find the drag it ended already over.
+        """
+        if event.view is None:
+            event.view = self.getViewLayout().route(event)
+        return event.view
+
     def getViewPort(self) -> tuple[int, int]:
         """Method to retrieve the current dimensions of the context
 
@@ -1558,6 +1587,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         line). An event object that does not offer one is keyed as it always
         was, so a hand-rolled event still records.
         """
+        self.routeEvent(event)
         cd = self.contextDefinition
         if cd is not None and not cd.pickEnabled:
             return

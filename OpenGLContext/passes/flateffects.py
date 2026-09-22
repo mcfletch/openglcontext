@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import os
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 import numpy as np
 from OpenGL.GL import (
@@ -76,19 +76,25 @@ class _FlatEffectsMixin:
 
     _bloom_pass: Optional["BloomPass"] = None
     _bloom_active = False
+    #: Whether this pass's colour can be composited through the HDR bloom
+    #: chain: its shaders write linear HDR while bloom is on. A pass whose
+    #: output is already display-referred says False and draws straight to
+    #: the framebuffer.
+    supports_bloom = True
 
     # -- image-based lighting ----------------------------------------------
-    def iblSetup(self, matrix: Any) -> str:
-        """Bind the environment-lighting path onto the PBR program for this frame.
+    def iblPrepare(self) -> Tuple[str, Optional["IBLProbe"]]:
+        """This frame's environment-lighting mode, and the probe when it is 'full'.
 
-        Resolves the effective IBL mode (with fps-adaptive degradation), builds the
-        probe lazily when 'full', binds probe textures + the world-space transform,
-        and sets ``iblMode``. No-op unless the bound program is the PBR program.
-        Returns the effective mode string.
+        Resolves the effective IBL mode (with fps-adaptive degradation) and
+        builds the probe the first time 'full' is asked for. The build renders
+        offscreen, so a frame of several views asks here once, before any view
+        confines drawing to its rectangle, and hands the answer to each view's
+        :meth:`iblSetup`.
         """
         shader = self.shader_program
         if shader is None or not hasattr(shader, 'set_ibl_mode'):
-            return 'off'
+            return 'off', None
         from OpenGLContext.passes import ibl
         if self._ibl_controller is None:
             requested = renderoptions.choice(self, 'ibl', 'auto')
@@ -110,6 +116,22 @@ class _FlatEffectsMixin:
                 probe = self._ibl_probe
             else:
                 mode = 'analytic'                # build failed -> degrade this frame
+        return mode, probe
+
+    def iblSetup(self, matrix: Any,
+                 prepared: Optional[Tuple[str, Optional["IBLProbe"]]] = None) -> str:
+        """Bind the environment-lighting path onto the PBR program for one view.
+
+        ``prepared`` is this frame's :meth:`iblPrepare`, asked for here where
+        it is not given. Binds the probe textures and the camera's eye-to-world
+        transform, and sets ``iblMode``. No-op unless the bound program is the
+        PBR program. Returns the effective mode string.
+        """
+        shader = self.shader_program
+        if shader is None or not hasattr(shader, 'set_ibl_mode'):
+            return 'off'
+        from OpenGLContext.passes import ibl
+        mode, probe = prepared if prepared is not None else self.iblPrepare()
 
         # eyeToWorld is uploaded with glUniformMatrix4fv, which targets the bound
         # program; the probe build leaves no program bound, so bind the lit PBR
@@ -356,10 +378,12 @@ class _FlatEffectsMixin:
         """Start rendering into the HDR bloom target, if bloom is enabled. The scene
         renders to a linear HDR FBO; _end_bloom composites the glow back to screen."""
         from OpenGLContext.passes import bloom
-        if not bloom.bloom_enabled(self):
+        if not self.supports_bloom or not bloom.bloom_enabled(self):
             self._bloom_active = False
             return False
-        w, h = int(self.viewport[2]), int(self.viewport[3])
+        # The window, not the pass's viewport: with several views the viewport
+        # is one view's tile, and the target holds all of them.
+        w, h = (int(value) for value in self.context.getViewPort())
         if not w or not h:
             self._bloom_active = False
             return False
@@ -374,9 +398,17 @@ class _FlatEffectsMixin:
             return False
 
     def _end_bloom(self) -> None:
+        """Composite the glow onto the frame, each view within its own rectangle.
+
+        Called once the views are drawn and before anything is drawn over them,
+        so the overlay is not bloomed and the frame presented is the finished
+        one.
+        """
+        frames = getattr(self, 'viewFrames', None) or ()
+        rects = [frame.rect for frame in frames] if len(frames) > 1 else None
         try:
             assert self._bloom_pass is not None
-            self._bloom_pass.composite()
+            self._bloom_pass.composite(rects)
         except Exception:
             pass
         self._bloom_active = False

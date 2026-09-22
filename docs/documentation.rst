@@ -235,6 +235,12 @@ translations are a good starting point for beginning OpenGL programmers.
     into a single draw call: how grouping, per-instance data, picking, caching and
     cluster culling work
 
+  - :doc:`Several views on one window <multiview>` -- One scene through several
+    cameras, each in its own rectangle: split and quad layouts, per-view
+    backgrounds and wireframe, a click picking through the view it lands in, and
+    what the views share -- one walk of the scene, one level-of-detail choice,
+    one set of shadow maps
+
   - :doc:`Levels of detail <lod>` -- Drawing a model at the detail its size on
     screen is worth: how a level is chosen, how copies at one level collapse into
     a single draw, authoring a chain in Blender, and the bust-gallery demo

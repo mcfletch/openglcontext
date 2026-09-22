@@ -263,6 +263,9 @@ class EventHandlerMixin(HeldKeyMixin):
         appropriate manager for processing, then dispatches to that manager's
         ProcessEvent method."""
         manager = self.getEventManager(event.type) or self.getEventManager(None)
+        route = getattr(self, 'routeEvent', None)
+        if route is not None:
+            route(event)
         if manager:
             event.context = self
             if self.drawing:
