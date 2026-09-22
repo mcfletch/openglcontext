@@ -89,6 +89,20 @@ class TestChoice:
             assert caps().choose('sideways') == 'sequential'
         assert 'sideways' in caplog.text
 
+    def test_a_strategy_that_failed_is_passed_over_for_the_next(self):
+        found = caps({'GL_ARB_shader_viewport_layer_array'}, (4, 6))
+        assert found.choose('auto', failed={'vertex'}) == 'geometry'
+        assert found.choose('auto', failed={'vertex', 'geometry'}) == 'sequential'
+
+    def test_a_requested_strategy_that_failed_falls_back_and_says_so(self, caplog):
+        found = caps({'GL_ARB_shader_viewport_layer_array'}, (4, 6))
+        with caplog.at_level(logging.WARNING, logger=multiview.__name__):
+            assert found.choose('vertex', failed={'vertex'}) == 'geometry'
+        assert 'vertex' in caplog.text
+
+    def test_sequential_cannot_be_failed_out_of(self):
+        assert caps().choose('auto', failed={'sequential'}) == 'sequential'
+
     def test_the_default_choice_uses_what_this_build_implements(self):
         assert caps().choose() in multiview.IMPLEMENTED
 

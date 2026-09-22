@@ -1609,7 +1609,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 # building the environment probe renders offscreen.
                 lighting = self.iblPrepare()
                 shared: Optional[set] = None
-                if self.multiviewStrategy in ('geometry', 'vertex') and len(frames) > 1:
+                if self.sharesViews( frames ):
                     for frame in frames:
                         self.applyViewFrame(frame)
                         self._drawBackground(frame)
@@ -1874,6 +1874,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             return set()
         strategy = self.multiviewStrategy or 'geometry'
         if not shader.select_program_set( len( frames ), strategy ):
+            self.multiviewFailed( strategy )
             return None
         drawn: set = set()
         try:
@@ -2124,6 +2125,36 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
     #: How this pass draws a frame of several views, settled the first time it
     #: draws one; see :mod:`OpenGLContext.passes.multiview`.
     multiviewStrategy: Optional[str] = None
+    #: The strategies whose programs would not compile on this pass's context.
+    _multiviewFailed: Tuple[str, ...] = ()
+
+    def chooseMultiview( self ) -> str:
+        """The strategy the definition asks for, or the best this driver can build."""
+        from OpenGLContext.passes.multiview import (
+            MultiviewCapabilities, requested_strategy,
+        )
+        return MultiviewCapabilities.detect().choose(
+            requested_strategy( self ), failed=self._multiviewFailed )
+
+    def sharesViews( self, frames: Sequence['ViewFrame'] ) -> bool:
+        """Whether ``frames`` are drawn by one submission rather than in turn.
+
+        That takes several views, a strategy that shares, and no more views
+        than the driver has viewports.
+        """
+        if self.multiviewStrategy not in ( 'geometry', 'vertex' ) or len( frames ) < 2:
+            return False
+        from OpenGLContext.passes.multiview import MultiviewCapabilities
+        return len( frames ) <= MultiviewCapabilities.detect().max_views
+
+    def multiviewFailed( self, strategy: str ) -> None:
+        """Pass over ``strategy`` from now on, its programs having failed to compile.
+
+        The frame that found out draws each view in turn; the next one uses
+        the next strategy the driver offers.
+        """
+        self._multiviewFailed = self._multiviewFailed + ( strategy, )
+        self.multiviewStrategy = self.chooseMultiview()
 
     def __call__( self, context: Any ) -> bool:
         """Overall rendering pass interface for the context client"""
@@ -2233,11 +2264,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         self.activeFrame = active
         self._scissorViews = len( frames ) > 1
         if self._scissorViews and self.multiviewStrategy is None:
-            from OpenGLContext.passes.multiview import (
-                MultiviewCapabilities, requested_strategy,
-            )
-            self.multiviewStrategy = MultiviewCapabilities.detect().choose(
-                requested_strategy( self ) )
+            self.multiviewStrategy = self.chooseMultiview()
         self.applyViewFrame( active, gl=False )
         return frames
 

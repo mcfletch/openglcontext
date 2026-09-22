@@ -195,6 +195,14 @@ run and compared on one machine. ``auto`` takes the fastest that can run. A
 request that cannot be honoured is logged and the best strategy that can run is
 used instead.
 
+A driver can offer a strategy and then fail to compile its programs. The
+failure is logged, the frame in which it happens draws each view in turn, and
+from the next frame the context uses the next strategy in the table, never
+trying the failed one again. ``sequential`` compiles nothing of its own, so a
+context always has it to fall back on. A layout of more views than the
+driver's ``GL_MAX_VIEWPORTS`` is drawn with ``sequential`` for as long as it
+has that many; GL 4.1 and ``GL_ARB_viewport_array`` both provide at least 16.
+
 One submission for every view
 -----------------------------
 

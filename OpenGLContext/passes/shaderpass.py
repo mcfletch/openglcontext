@@ -417,7 +417,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         state, for the life of this object; everything that sets a uniform on
         ``program`` or ``vertex_color_program`` then sets it on the set in
         place. False where a set would not compile, which leaves the current
-        one in place.
+        one in place; a set that would not compile is not tried again.
         """
         views = int(views)
         key = (strategy, views) if views else ('', 0)
@@ -434,8 +434,11 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
             if any(programs.get(name) is None for name in self.MULTIVIEW_PROGRAMS):
                 log.error('could not compile the programs for %d views drawn by '
                           'the %s strategy', views, strategy)
+                sets[key] = None
                 return False
             sets[key] = programs
+        elif sets[key] is None:
+            return False
         for name, program in sets[key].items():
             setattr(self, name, program)
         self.program_strategy, self.program_set = key

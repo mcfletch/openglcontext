@@ -165,6 +165,41 @@ def test_an_instanced_crowd_is_drawn_once_for_every_view(render_scene, env,
     assert differing.mean() < 0.005, differing.sum()
 
 
+def test_programs_that_will_not_compile_leave_the_views_drawn_in_turn(
+        render_scene, env, shared, monkeypatch):
+    """A driver that offers a strategy and then fails to build it still draws."""
+    from OpenGLContext.passes.pbrpass import PBRShaderProgram
+    from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
+    attempts = []
+
+    def refuse(self, views, strategy='geometry'):
+        attempts.append(strategy)
+        return {name: None for name in self.MULTIVIEW_PROGRAMS}
+
+    monkeypatch.setattr(VRML97ShaderProgram, '_compile_program_set', refuse)
+    monkeypatch.setattr(PBRShaderProgram, '_compile_program_set', refuse)
+    from OpenGLContext.passes import renderpass
+    frames = frames_of(render_scene, _scene(), frames=5, shadows=True,
+                       size=(WIDTH, HEIGHT), layout=_layout(shared))
+    assert renderpass.FLAT.multiviewStrategy == 'sequential'
+    # Each strategy is tried once, never again for every frame after.
+    assert sorted(attempts) == sorted(set(attempts))
+    assert shared in attempts
+    sequential, _flat, _ = _render(render_scene, 'sequential')
+    for frame in frames:
+        differing = (abs(frame.astype(int) - sequential.astype(int)).max(axis=-1) > 24)
+        assert differing.mean() < 0.005, differing.sum()
+
+
+def test_more_views_than_the_driver_has_viewports_are_drawn_in_turn(
+        render_scene, env, shared, monkeypatch):
+    from OpenGLContext.passes.multiview import MultiviewCapabilities
+    monkeypatch.setattr(MultiviewCapabilities, 'max_views', property(lambda self: 2))
+    _frame, _flat, draws = _render(render_scene, shared)
+    _frame, _flat, sequential = _render(render_scene, 'sequential')
+    assert draws == sequential
+
+
 def test_a_wireframe_view_beside_shared_ones_draws_its_own_lines(render_scene, env, shared):
     """Polygon mode holds for every viewport, so a wireframe view is drawn apart."""
     from OpenGLContext.views import ViewStyle

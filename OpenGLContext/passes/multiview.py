@@ -44,7 +44,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
+from typing import Any, Collection, Dict, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
 
 import numpy as np
 
@@ -166,15 +166,21 @@ class MultiviewCapabilities:
         return tuple(found)
 
     def choose(self, requested: str = 'auto',
-               implemented: Sequence[str] = IMPLEMENTED) -> str:
+               implemented: Sequence[str] = IMPLEMENTED,
+               failed: Collection[str] = ()) -> str:
         """The strategy to draw with: ``requested`` if it can run here, else the best that can.
+
+        ``failed`` names strategies the driver offered and then could not
+        build programs for; they are passed over. ``sequential`` needs no
+        programs of its own and is never passed over.
 
         A request that cannot be honoured -- a name that is not a strategy, or
         one the driver or this build lacks -- is logged, because it is how a
         strategy is pinned for a comparison and a comparison run on the wrong
         one measures nothing.
         """
-        runnable = [name for name in self.available() if name in implemented]
+        runnable = [name for name in self.available()
+                    if name in implemented and (name == 'sequential' or name not in failed)]
         if requested in ('auto', '', None):
             return runnable[0]
         if requested in runnable:
@@ -182,6 +188,9 @@ class MultiviewCapabilities:
         if requested not in STRATEGIES:
             log.warning('%r is not a multi-view strategy (%s); using %s',
                         requested, ', '.join(STRATEGIES), runnable[0])
+        elif requested in failed:
+            log.warning('multi-view strategy %r did not compile on %r; using %s',
+                        requested, self, runnable[0])
         else:
             log.warning('multi-view strategy %r cannot run on %r; using %s',
                         requested, self, runnable[0])
