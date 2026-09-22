@@ -8,8 +8,8 @@ import logging
 
 import pytest
 
-from OpenGLContext.passes import multiview
-from OpenGLContext.passes.multiview import MultiviewCapabilities
+from OpenGLContext.multiview import strategy as multiview
+from OpenGLContext.multiview.strategy import MultiviewCapabilities
 
 
 def caps(extensions=(), version=(3, 3), viewports=16):

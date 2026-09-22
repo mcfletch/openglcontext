@@ -740,7 +740,8 @@ The **passes** package holds the current rendering system. A single
 ``FlatPass`` observes the scenegraph and, each frame, draws it in a fixed
 sequence -- background, opaque, transmissive, transparent, selection and
 overlay -- rather than traversing it once per rendering mode. The sequence runs
-once for each view of the context's ``ViewLayout`` (``OpenGLContext/views.py``):
+once for each view of the context's ``ViewLayout``
+(``OpenGLContext/multiview/``):
 the scene is walked once, and each view culls that walk against its own camera
 and draws into its own rectangle; see :doc:`Several views on one window
 <multiview>`. The base class (``passes/_flat.py``) carries two code paths,
@@ -775,13 +776,14 @@ this are:
 
 - ``selection.py`` -- colour/object-id picking.
 
-- ``multiview.py`` -- how a window of several views is drawn on this driver, and
-  the ``ViewFrame`` holding one view's camera, frustum and draw list for a frame.
-
 - ``renderpass.py`` -- picks which ``FlatPass`` subclass renders a context
   (profile + renderer) and caches it across frames; ``viewpointbinding.py``
   binds the scene's active Viewpoint into the view platform for the core-profile
   path.
+
+Beside the passes, ``OpenGLContext/multiview/`` holds the views themselves: the
+layout a frame is drawn for, the strategy this driver allows, and the
+``ViewFrame`` with one view's camera, frustum and draw list.
 
 .. _structure-loaders:
 

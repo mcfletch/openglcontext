@@ -209,7 +209,7 @@ class ContextDefinition( node.Node ):
     #: How several views on one window are drawn: "auto", "vertex",
     #: "geometry" or "sequential" (env: OPENGLCONTEXT_MULTIVIEW). "auto" takes
     #: the fastest the driver offers; naming one pins it, for comparing them.
-    #: See OpenGLContext.passes.multiview.
+    #: See OpenGLContext.multiview.strategy.
     multiview = field.newField( "multiview", "SFString", 1,
                                 lambda: renderoptions.env_choice(
                                     'OPENGLCONTEXT_MULTIVIEW',

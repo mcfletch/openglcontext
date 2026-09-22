@@ -12,7 +12,7 @@ When enabled, the pass instead:
 This is what makes ``KHR_materials_emissive_strength`` read as a glow whose spread
 grows with strength (EmissiveStrengthTest), instead of clamping flat to white.
 
-With several views on the window (:mod:`OpenGLContext.views`) each stage runs
+With several views on the window (:mod:`OpenGLContext.multiview.views`) each stage runs
 once per view, over that view's rectangle, and every sample is clamped inside
 it, so a bright object at the edge of one view does not glow into the next.
 """

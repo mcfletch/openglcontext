@@ -38,8 +38,9 @@ os.environ.setdefault('OPENGLCONTEXT_IBL', 'analytic')
 import numpy as np  # noqa: E402
 
 from OpenGLContext import testingcontext  # noqa: E402
-from OpenGLContext.edit.quadview import QuadView  # noqa: E402
-from OpenGLContext.passes import multiview, renderpass  # noqa: E402
+from OpenGLContext.multiview.quad import QuadView  # noqa: E402
+from OpenGLContext.multiview import strategy as multiview  # noqa: E402
+from OpenGLContext.passes import renderpass  # noqa: E402
 from OpenGLContext.scenegraph import basenodes  # noqa: E402
 
 
@@ -120,7 +121,7 @@ def measure(children: list, bounds: Tuple[Any, Any], views: int,
                 self.quad.frame(*bounds)
             else:
                 from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
-                from OpenGLContext.views import ViewLayout
+                from OpenGLContext.multiview.views import ViewLayout
                 orbit = OrbitView(nearest=1e-3, furthest=1e7)
                 orbit.frame_box(bounds[0], bounds[1], size)
                 self.viewLayout = ViewLayout.single(

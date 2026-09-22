@@ -137,7 +137,7 @@ class _MeshGPU(object):
             glVertexAttribPointer(loc, size, GL_FLOAT, GL_FALSE, 0, None)
 
     def _draw_elements(self, mode: Any = None) -> None:
-        from OpenGLContext.passes.multiview import draw_arrays, draw_elements
+        from OpenGLContext.multiview.strategy import draw_arrays, draw_elements
         if self.indexed:
             draw_elements(mode, self.draw_mode, self.count, GL_UNSIGNED_INT, None)
         else:

@@ -2,7 +2,7 @@
 
 The top, front and side views show an object's plan and elevations at a
 scale, and the perspective view shows how it looks. :class:`QuadView` builds
-the :class:`~OpenGLContext.views.ViewLayout` of the four, frames a box in all
+the :class:`~OpenGLContext.multiview.views.ViewLayout` of the four, frames a box in all
 of them, and turns pointer gestures in any view into a move of that view's
 camera:
 
@@ -12,7 +12,7 @@ camera:
 - a wheel notch zooms the view under the pointer, an orthographic one about
   the pixel the pointer is on.
 
-The gestures are :class:`~OpenGLContext.edit.viewgestures.ViewGestures`, which
+The gestures are :class:`~OpenGLContext.multiview.gestures.ViewGestures`, which
 a window laying out views of its own uses directly.
 
 It holds no GL. A context hands it each pointer event, and it takes the
@@ -39,9 +39,10 @@ from typing import Any, Dict, Optional, Sequence, Tuple, Union
 import numpy as np
 
 from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
-from OpenGLContext.edit.orthoview import OrthoView, OrthoViewPlatform, Point
-from OpenGLContext.edit.viewgestures import ORBIT_RATE, ZOOM_STEP, ViewGestures
-from OpenGLContext.views import View, ViewLayout, ViewStyle
+from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform, Point
+from OpenGLContext.multiview.gestures import ORBIT_RATE, ZOOM_STEP
+from OpenGLContext.multiview.views import View, ViewStyle
+from OpenGLContext.multiview.viewset import ViewSet
 
 __all__ = ['QuadView', 'ORBIT_RATE', 'ZOOM_STEP']
 
@@ -73,17 +74,16 @@ class QuadView:
                  for direction, camera in self.orthographic.items()]
         views.append(View(OrbitViewPlatform(self.orbit), name='perspective',
                           style=ViewStyle(background=True)))
+        #: The four views and their one arrangement.
+        self.views = ViewSet(views, arrangements={'quad': views}, mode='quad')
         #: The layout to give the context.
-        self.layout = ViewLayout.quad(views[0], views[1], views[2], views[3])
+        self.layout = self.views.layout
         #: What turns the pointer into a move of a view's camera.
-        self.gestures = ViewGestures(self.layout)
+        self.gestures = self.views.gestures
 
     def view(self, name: str) -> Optional[View]:
         """The view called ``name``: a direction, or ``'perspective'``."""
-        for view in self.layout.views:
-            if view.name == name:
-                return view
-        return None
+        return self.views.view(name)
 
     # -- framing -----------------------------------------------------------
     def frame(self, minimum: Point, maximum: Point) -> None:
@@ -95,18 +95,12 @@ class QuadView:
         """
         low = np.asarray(minimum[:3], 'd')
         high = np.asarray(maximum[:3], 'd')
-        for view in self.layout.views:
-            size = _size(view)
-            if isinstance(view.camera, OrthoViewPlatform):
-                view.camera.view.frame(low, high, size)
         radius = max(float(np.linalg.norm(high - low)) / 2.0, 1e-6)
         # Near enough to fill the view with a much smaller part of the box,
         # far enough to see a thousand of them.
         self.orbit.nearest = radius * 0.01
         self.orbit.furthest = radius * 1000.0
-        perspective = self.view('perspective')
-        assert perspective is not None
-        self.orbit.frame_box(low, high, _size(perspective))
+        self.views.frame(low, high)
 
     # -- gestures ----------------------------------------------------------
     def handle(self, event: Any) -> bool:
@@ -138,11 +132,3 @@ class QuadView:
     def wheel(self, view: Optional[View], x: float, y: float, notches: int) -> bool:
         """The wheel turned ``notches`` over ``(x, y)``, positive towards the scene."""
         return self.gestures.wheel(view, x, y, notches)
-
-
-def _size(view: View) -> Tuple[int, int]:
-    """A view's size, or a square where the layout has not placed it yet."""
-    width, height = view.size
-    if width <= 0 or height <= 0:
-        return (1, 1)
-    return (int(width), int(height))

@@ -10,7 +10,7 @@ matrices.
 import numpy as np
 import pytest
 
-from OpenGLContext.edit.orthoview import DIRECTIONS, OrthoView, OrthoViewPlatform
+from OpenGLContext.multiview.cameras import DIRECTIONS, OrthoView, OrthoViewPlatform
 
 VIEWPORT = (400, 300)
 

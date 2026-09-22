@@ -5,11 +5,11 @@ A :class:`ViewLayout` is an ordered set of views and the rule that places them
 in a window: one view filling it, two side by side or stacked, or four in a
 quad around a movable centre. The render pass draws every view the layout
 places, each through its own camera into its own rectangle, from one gathered
-scene; see :mod:`OpenGLContext.passes.multiview` and ``docs/multiview.rst``.
+scene; see :mod:`OpenGLContext.multiview.strategy` and ``docs/multiview.rst``.
 
 ::
 
-    from OpenGLContext.views import View, ViewLayout
+    from OpenGLContext.multiview.views import View, ViewLayout
 
     context.viewLayout = ViewLayout.split(
         View(MapViewPlatform(plan), name='plan'),

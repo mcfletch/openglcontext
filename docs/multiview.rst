@@ -13,14 +13,14 @@ routes the pointer, so a click in a view picks through that view's camera.
 Laying out views
 ----------------
 
-A :class:`~OpenGLContext.views.View` is a camera and a style. A
-:class:`~OpenGLContext.views.ViewLayout` is an ordered set of views and the
+A :class:`~OpenGLContext.multiview.views.View` is a camera and a style. A
+:class:`~OpenGLContext.multiview.views.ViewLayout` is an ordered set of views and the
 rule that places them. Assign one to the context and every frame draws it:
 
 .. code-block:: python
 
    from OpenGLContext.edit.mapview import MapView, MapViewPlatform
-   from OpenGLContext.views import View, ViewLayout, ViewStyle
+   from OpenGLContext.multiview.views import View, ViewLayout, ViewStyle
 
    class Editor(BaseContext):
        def OnInit(self):
@@ -34,7 +34,7 @@ rule that places them. Assign one to the context and every frame draws it:
 A view's camera is anything with the view platform's matrix interface:
 :class:`~OpenGLContext.move.viewplatform.ViewPlatform`,
 :class:`~OpenGLContext.edit.mapview.MapViewPlatform`,
-:class:`~OpenGLContext.edit.orthoview.OrthoViewPlatform` or
+:class:`~OpenGLContext.multiview.cameras.OrthoViewPlatform` or
 :class:`~OpenGLContext.edit.orbitview.OrbitViewPlatform`. A view with no camera
 draws through the context's own view platform, whatever ``getViewPlatform()``
 answers that frame, so the navigation, the bound ``Viewpoint`` and any
@@ -84,14 +84,14 @@ Rectangles are ``(x, y, width, height)`` in window pixels, counted from the
 bottom left as ``glViewport`` counts them. Views are drawn in their order, so a
 view that overlaps another is drawn over it.
 
-A layout holds at most ``OpenGLContext.views.MAX_VIEWS`` views, which is 16.
+A layout holds at most ``OpenGLContext.multiview.views.MAX_VIEWS`` views, which is 16.
 
 An editor's four views -- top, front and side orthographic views around a
-perspective one -- are ``OpenGLContext.edit.quadview.QuadView``, which builds
+perspective one -- are ``OpenGLContext.multiview.quad.QuadView``, which builds
 the layout, frames a model in every view and moves each view's camera with the
 pointer; see :ref:`Top, front and side <quad-view>`. ``tests/multiview_quad.py``
 loads any glTF model into it. An application laying out its own views takes the
-gestures alone, as ``OpenGLContext.edit.viewgestures.ViewGestures``, and names
+gestures alone, as ``OpenGLContext.multiview.gestures.ViewGestures``, and names
 which views they drive.
 
 How a view draws
@@ -108,7 +108,7 @@ changes, so its aspect ratio is the rectangle's rather than the window's. A
 scale is then metres per pixel of its own view.
 
 A node that draws differently in each view reads ``mode.view``, the
-:class:`~OpenGLContext.views.View` being drawn, during its render.
+:class:`~OpenGLContext.multiview.views.View` being drawn, during its render.
 
 The pointer and the keyboard
 ----------------------------
@@ -166,7 +166,7 @@ How the views are drawn
 -----------------------
 
 There are three ways to draw several views, and which a context uses depends
-on its driver. ``OpenGLContext.passes.multiview.MultiviewCapabilities`` reads
+on its driver. ``OpenGLContext.multiview.strategy.MultiviewCapabilities`` reads
 the GL version, the extension list and ``GL_MAX_VIEWPORTS`` once per GL
 context and decides:
 
@@ -227,6 +227,140 @@ context always has it to fall back on. A layout of more views than the
 driver's ``GL_MAX_VIEWPORTS`` is drawn with ``sequential`` for as long as it
 has that many; GL 4.1 and ``GL_ARB_viewport_array`` both provide at least 16.
 
+.. _quad-view:
+
+Top, front and side
+-------------------
+
+``OrthoView`` is a plan view that can look along any axis: ``'top'``,
+``'bottom'``, ``'front'``, ``'back'``, ``'left'`` or ``'right'``. The camera
+stands on the side the name gives -- ``'front'`` stands at +z looking down -z,
+the view a VRML or glTF scene opens on -- and ``'top'`` puts -z up the screen,
+as a map puts north. The projection is orthographic, and ``centre`` is a point
+in the world rather than on the ground:
+
+.. code-block:: python
+
+   from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
+
+   front = OrthoView('front', centre=(0.0, 1.0, 0.0), span=4.0)
+   view = View(OrthoViewPlatform(front), name='front')
+   ...
+   front.pan(dx, dy, view.size)                     # a drag, in view pixels
+   front.zoom(0.8, at=view.local(x, y), viewport=view.size)
+   point = front.world_from_screen(*view.local(x, y), view.size)
+
+``span`` is how many units fit down the view and ``depth`` how far along the
+axis it reaches, half in front of the centre and half behind. The pointer
+conversions work in the view's plane through the centre, so a point dragged in
+the front view moves in x and y and keeps its z. ``frame(minimum, maximum,
+viewport)`` fits a box, and ``MapView`` is the ``'top'`` view with its centre
+given as a map's ``(x, z)``.
+
+``QuadView`` is the window of four an editor opens on: three orthographic views
+-- by default the plan, the front and the view from the left -- around an
+``OrbitView`` in perspective. It builds the
+:class:`~OpenGLContext.multiview.views.ViewLayout`, frames a box in all four views, and
+turns the pointer into camera moves: a drag pans an orthographic view, a left
+drag orbits the perspective view and any other button pans it, and the wheel
+zooms the view under the pointer.
+
+.. code-block:: python
+
+   from OpenGLContext.multiview.quad import QuadView
+
+   class Editor(BaseContext):
+       def OnInit(self):
+           self.quad = QuadView()
+           self.viewLayout = self.quad.layout
+           self.quad.layout.arrange(*self.getViewPort())
+           self.quad.frame(minimum, maximum)
+
+       def ProcessEvent(self, event):
+           if self.quad.handle(event):
+               self.triggerRedraw(1)
+               return None
+           return super(Editor, self).ProcessEvent(event)
+
+``QuadView(directions=('front', 'right', 'bottom'))`` chooses other
+orthographic views, and ``background`` the flat colour they clear to; the
+perspective view draws the scene's own ``Background``. ``press``, ``drag``,
+``release`` and ``wheel`` are the same gestures for an application that reads
+its pointer another way. ``OrbitView`` takes ``nearest`` and ``furthest`` for
+how close and how far it may be dollied, and ``frame_box`` fits a whole object
+rather than a region of ground; ``QuadView.frame`` sets all three from the box.
+
+``python tests/multiview_quad.py model.glb`` puts any glTF model in the four
+views; :doc:`tutorials/multiview_quad` walks through it.
+
+Arrangements of one set of views
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A window that offers more than one way to look at a scene keeps one set of
+cameras and changes which of them are on screen. ``ViewSet`` holds the views,
+a layout per arrangement, the gestures and the framing:
+
+.. code-block:: python
+
+   from OpenGLContext.multiview import ViewSet
+
+   views = ViewSet([plan, front, left, angled],
+                   arrangements={'map': ('plan',),
+                                 'angled': ('angled',),
+                                 'split': ('plan', 'angled'),
+                                 'quad': ('plan', 'front', 'left', 'angled')},
+                   driven=('front', 'left', 'angled'))
+   context.viewLayout = views.show('quad')
+
+An arrangement names the views it shows, in order, and is placed by how many
+there are: one fills the window, two go side by side, four around a centre.
+With no ``arrangements`` given, each view is offered on its own under its own
+name, the first two as ``'split'`` and the first four as ``'quad'``.
+``show(name)`` changes which is up and answers the layout to draw -- assign it
+to ``viewLayout``, since a layout is what the context draws.
+
+The cameras are shared between the arrangements, so a switch shows what was
+already being looked at. ``arrange(width, height)`` places the views and tells
+each camera the size of its own rectangle; ``size(view)`` answers that size, or
+the window's for a view this arrangement hides, so a view can be framed before
+it is shown. ``frame(minimum, maximum)`` fits a box in every view, each camera
+as its kind is fitted: an orthographic or perspective camera takes the box and
+a plan camera the ground it stands on. ``maximise(view)`` gives one view the
+whole window and the same call gives it back.
+
+``driven`` names the views whose cameras the pointer moves. A window that
+drives one itself -- an editor whose plan view is where its tools draw -- leaves
+that view out, and ``handle(event)`` never takes an event in it.
+``view_for(event)`` answers which view an event belongs to, for deciding what
+else should have it. glisteel-editor's four arrangements are built this way.
+
+Gestures on their own
+~~~~~~~~~~~~~~~~~~~~~
+
+An application with a layout of its own, and no use for the rest of a view
+set, takes the gestures alone. ``ViewGestures`` moves the camera of whichever
+view an event lands in, and ``views`` names the ones it drives, so a view the
+application moves itself is left alone:
+
+.. code-block:: python
+
+   from OpenGLContext.multiview.gestures import ViewGestures
+
+   gestures = ViewGestures(layout, views=[elevation, angled])
+   ...
+   def ProcessEvent(self, event):
+       if gestures.handle(event):          # never takes an event in `plan`
+           self.triggerRedraw(1)
+           return None
+       return super(Editor, self).ProcessEvent(event)
+
+It pans and zooms a :class:`~OpenGLContext.multiview.cameras.OrthoViewPlatform` or
+a :class:`~OpenGLContext.edit.mapview.MapViewPlatform`, and orbits, pans and
+dollies an :class:`~OpenGLContext.edit.orbitview.OrbitViewPlatform`. ``layout``
+and ``views`` can both be assigned, so a window that rearranges its views hands
+over the new layout. ``orbit_rate`` is degrees per pixel dragged and
+``zoom_step`` what a notch multiplies a span or a distance by.
+
 One submission for every view
 -----------------------------
 
@@ -254,7 +388,7 @@ and text.
 
 A geometry node joins the shared submission by declaring
 ``multiviewShared = True`` and issuing its draw through
-``OpenGLContext.passes.multiview.draw_arrays`` or ``draw_elements``, which
+``OpenGLContext.multiview.strategy.draw_arrays`` or ``draw_elements``, which
 instance it once per view while a ``vertex`` submission is being made.
 ``OpenGLContext.scenegraph.geometryarrays.render_geometry`` does both for a node
 drawn from ``GeometryArrays``. A node that measures its detail by distance from

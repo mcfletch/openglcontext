@@ -1,6 +1,6 @@
 """Pointer gestures that move the camera of the view they land in.
 
-What :class:`~OpenGLContext.edit.quadview.QuadView` moves its four views with,
+What :class:`~OpenGLContext.multiview.quad.QuadView` moves its four views with,
 offered to an application that lays out views of its own: a plan camera, an
 orthographic elevation and a perspective view each answer the pointer as their
 kind does, and an application that drives one of its views itself keeps that
@@ -13,9 +13,9 @@ import pytest
 
 from OpenGLContext.edit.mapview import MapView, MapViewPlatform
 from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
-from OpenGLContext.edit.orthoview import OrthoView, OrthoViewPlatform
-from OpenGLContext.edit.viewgestures import ViewGestures
-from OpenGLContext.views import View, ViewLayout
+from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
+from OpenGLContext.multiview.gestures import ViewGestures
+from OpenGLContext.multiview.views import View, ViewLayout
 
 WINDOW = (800, 600)
 

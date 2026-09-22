@@ -1528,17 +1528,17 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
 
     #: The views this context draws, or None for one view through its own
     #: view platform; :meth:`getViewLayout` makes that layout on first use.
-    #: Assign a :class:`~OpenGLContext.views.ViewLayout` to draw several.
+    #: Assign a :class:`~OpenGLContext.multiview.views.ViewLayout` to draw several.
     viewLayout: Any = None
 
     def getViewLayout(self) -> Any:
-        """The :class:`~OpenGLContext.views.ViewLayout` this context draws.
+        """The :class:`~OpenGLContext.multiview.views.ViewLayout` this context draws.
 
         One view through :meth:`getViewPlatform` unless the application has
         assigned :attr:`viewLayout`; see ``docs/multiview.rst``.
         """
         if self.viewLayout is None:
-            from OpenGLContext.views import ViewLayout
+            from OpenGLContext.multiview.views import ViewLayout
             self.viewLayout = ViewLayout.single()
         return self.viewLayout
 
@@ -1547,7 +1547,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
 
         The view under the pointer, the one a held button's press began in,
         or for an event with no position the active view; see
-        :meth:`OpenGLContext.views.ViewLayout.route`. An event already routed
+        :meth:`OpenGLContext.multiview.views.ViewLayout.route`. An event already routed
         keeps its view, so an event handled twice is not routed twice -- a
         release routed again would find the drag it ended already over.
         """

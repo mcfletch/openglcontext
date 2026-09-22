@@ -12,7 +12,7 @@ import pytest
 glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.scenegraph import basenodes  # noqa: E402
-from OpenGLContext.views import View, ViewLayout  # noqa: E402
+from OpenGLContext.multiview.views import View, ViewLayout  # noqa: E402
 from tests.unit.glrender import base_env, frames_of  # noqa: E402
 
 WIDTH, HEIGHT = 240, 160
@@ -68,7 +68,7 @@ def env(request, monkeypatch):
 @pytest.fixture(params=['geometry', 'vertex'])
 def shared(request, gl_context):
     """A strategy that draws once for every view, where this driver runs it."""
-    from OpenGLContext.passes import multiview
+    from OpenGLContext.multiview import strategy as multiview
     multiview.reset_detected()
     if request.param not in multiview.MultiviewCapabilities.detect().available():
         pytest.skip('this driver cannot run the %s strategy' % request.param)
@@ -193,7 +193,7 @@ def test_programs_that_will_not_compile_leave_the_views_drawn_in_turn(
 
 def test_more_views_than_the_driver_has_viewports_are_drawn_in_turn(
         render_scene, env, shared, monkeypatch):
-    from OpenGLContext.passes.multiview import MultiviewCapabilities
+    from OpenGLContext.multiview.strategy import MultiviewCapabilities
     monkeypatch.setattr(MultiviewCapabilities, 'max_views', property(lambda self: 2))
     _frame, _flat, draws = _render(render_scene, shared)
     _frame, _flat, sequential = _render(render_scene, 'sequential')
@@ -202,7 +202,7 @@ def test_more_views_than_the_driver_has_viewports_are_drawn_in_turn(
 
 def test_a_wireframe_view_beside_shared_ones_draws_its_own_lines(render_scene, env, shared):
     """Polygon mode holds for every viewport, so a wireframe view is drawn apart."""
-    from OpenGLContext.views import ViewStyle
+    from OpenGLContext.multiview.views import ViewStyle
 
     def build(context):
         layout = _layout(shared)(context)

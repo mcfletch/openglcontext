@@ -8,7 +8,8 @@ reads is packed on the CPU in the std140 layout the shader declares.
 import numpy as np
 import pytest
 
-from OpenGLContext.passes import multiview, shadersource
+from OpenGLContext.multiview import strategy as multiview
+from OpenGLContext.passes import shadersource
 
 
 PBR_VERTEX = shadersource.preprocess_shader('pbr.vert', ['#define PBR_SKINNING 1'])
@@ -96,7 +97,7 @@ def _platform(position, look=(0.0, 0.0, 0.0), ortho=None):
 
 
 def _frame(camera, rect):
-    from OpenGLContext.views import View
+    from OpenGLContext.multiview.views import View
     view = View(camera)
     view.rect = rect
     model = np.asarray(camera.modelMatrix(), 'f')

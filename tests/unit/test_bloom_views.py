@@ -10,7 +10,7 @@ import pytest
 glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.scenegraph import basenodes  # noqa: E402
-from OpenGLContext.views import View, ViewLayout  # noqa: E402
+from OpenGLContext.multiview.views import View, ViewLayout  # noqa: E402
 from tests.unit.glrender import base_env, frames_of  # noqa: E402
 
 WIDTH, HEIGHT = 200, 100

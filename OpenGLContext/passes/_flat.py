@@ -62,7 +62,7 @@ import logging
 log = logging.getLogger( __name__ )
 
 if TYPE_CHECKING:
-    from OpenGLContext.passes.multiview import ViewFrame
+    from OpenGLContext.multiview.strategy import ViewFrame
     from OpenGLContext.passes.renderfailures import RenderFailureLog
     from OpenGLContext.passes.renderstats import RenderStats
     from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
@@ -1773,7 +1773,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
     viewerEyes: Optional[List[Any]] = None
     #: How many views each draw of a shared ``vertex``-strategy draw reaches,
     #: so every draw is instanced that many times over; 0 otherwise. See
-    #: :func:`OpenGLContext.passes.multiview.draw_arrays`.
+    #: :func:`OpenGLContext.multiview.strategy.draw_arrays`.
     viewCopies: int = 0
 
     def sharesDraw( self, record: Sequence[Any] ) -> bool:
@@ -1839,7 +1839,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         Returns the records, whose eyes the shapes measure their detail to.
         """
         from OpenGL import GL
-        from OpenGLContext.passes.multiview import (
+        from OpenGLContext.multiview.strategy import (
             VIEW_BLOCK_BINDING, pack_view_table, view_records,
         )
         if self._viewTable is None:
@@ -2123,14 +2123,14 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
     #: test, which a frame of more than one view needs and one view does not.
     _scissorViews = False
     #: How this pass draws a frame of several views, settled the first time it
-    #: draws one; see :mod:`OpenGLContext.passes.multiview`.
+    #: draws one; see :mod:`OpenGLContext.multiview.strategy`.
     multiviewStrategy: Optional[str] = None
     #: The strategies whose programs would not compile on this pass's context.
     _multiviewFailed: Tuple[str, ...] = ()
 
     def chooseMultiview( self ) -> str:
         """The strategy the definition asks for, or the best this driver can build."""
-        from OpenGLContext.passes.multiview import (
+        from OpenGLContext.multiview.strategy import (
             MultiviewCapabilities, requested_strategy,
         )
         return MultiviewCapabilities.detect().choose(
@@ -2144,7 +2144,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         """
         if self.multiviewStrategy not in ( 'geometry', 'vertex' ) or len( frames ) < 2:
             return False
-        from OpenGLContext.passes.multiview import MultiviewCapabilities
+        from OpenGLContext.multiview.strategy import MultiviewCapabilities
         return len( frames ) <= MultiviewCapabilities.detect().max_views
 
     def multiviewFailed( self, strategy: str ) -> None:
@@ -2225,7 +2225,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
     _defaultLayout: Any = None
 
     def viewLayout( self, context: Any ) -> Any:
-        """The :class:`~OpenGLContext.views.ViewLayout` this frame draws.
+        """The :class:`~OpenGLContext.multiview.views.ViewLayout` this frame draws.
 
         The context's own, where it has one; otherwise a single view through
         the context's view platform, kept by the pass.
@@ -2234,7 +2234,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         if found is not None:
             return found()
         if self._defaultLayout is None:
-            from OpenGLContext.views import ViewLayout
+            from OpenGLContext.multiview.views import ViewLayout
             self._defaultLayout = ViewLayout.single()
         return self._defaultLayout
 
@@ -2245,7 +2245,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         pinned to the camera, the audio listener and the shadow cascades are
         placed from it.
         """
-        from OpenGLContext.passes.multiview import ViewFrame
+        from OpenGLContext.multiview.strategy import ViewFrame
         layout = self.viewLayout( context )
         width, height = context.getViewPort()
         shown = layout.arrange( width, height ) or layout.views[:1]

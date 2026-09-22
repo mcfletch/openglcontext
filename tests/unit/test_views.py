@@ -1,6 +1,6 @@
 """Several cameras on one window: the layout arithmetic, with no GL.
 
-What :mod:`OpenGLContext.views` decides is where each view goes and which view
+What :mod:`OpenGLContext.multiview.views` decides is where each view goes and which view
 a pointer is talking to. Both are questions about rectangles and events, so
 they are answered here without a window.
 """
@@ -9,7 +9,7 @@ import pytest
 from OpenGLContext.events.mouseevents import (
     MouseButtonEvent, MouseMoveEvent, WHEEL_UP,
 )
-from OpenGLContext.views import MAX_VIEWS, View, ViewLayout, ViewStyle
+from OpenGLContext.multiview.views import MAX_VIEWS, View, ViewLayout, ViewStyle
 
 
 class Camera:

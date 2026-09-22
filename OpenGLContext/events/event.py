@@ -16,7 +16,7 @@ class Event(object):
             frame, or None outside a render pass
         modifiers -- three-tuple of booleans: (shift, control, alt)
         context -- pointer to the rendering context
-        view -- the :class:`~OpenGLContext.views.View` the event belongs to:
+        view -- the :class:`~OpenGLContext.multiview.views.View` the event belongs to:
             the one under the pointer, the one a drag began in, or for a key
             the active one. None until the context has routed it.
     """

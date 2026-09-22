@@ -29,7 +29,7 @@ itself -- an editor whose plan view is where the drawing tools work gives it
 the other views and keeps that one. ``layout`` can be replaced, so a window
 that rearranges its views hands over the new layout.
 
-:class:`~OpenGLContext.edit.quadview.QuadView` is the four views of an editor
+:class:`~OpenGLContext.multiview.quad.QuadView` is the four views of an editor
 built on this.
 """
 from __future__ import annotations
@@ -39,9 +39,9 @@ from typing import Any, Optional, Sequence, Tuple
 
 from OpenGLContext.edit.mapview import MapViewPlatform
 from OpenGLContext.edit.orbitview import OrbitViewPlatform
-from OpenGLContext.edit.orthoview import OrthoViewPlatform
+from OpenGLContext.multiview.cameras import OrthoViewPlatform
 from OpenGLContext.events.mouseevents import WHEEL_BUTTONS, WHEEL_UP
-from OpenGLContext.views import View, ViewLayout
+from OpenGLContext.multiview.views import View, ViewLayout
 
 __all__ = ['ViewGestures', 'ORBIT_RATE', 'ZOOM_STEP']
 

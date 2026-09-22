@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 
 from OpenGLContext.edit.orbitview import OrbitViewPlatform
-from OpenGLContext.edit.orthoview import OrthoViewPlatform
-from OpenGLContext.edit.quadview import QuadView
+from OpenGLContext.multiview.cameras import OrthoViewPlatform
+from OpenGLContext.multiview.quad import QuadView
 
 WINDOW = (800, 600)
 LOW, HIGH = (-0.3, 0.0, -0.2), (0.3, 1.8, 0.2)
@@ -139,7 +139,7 @@ class TestDragging:
         assert front.camera.view.centre == centre
 
     def test_a_view_that_is_not_the_quads_is_left_alone(self):
-        from OpenGLContext.views import View
+        from OpenGLContext.multiview.views import View
         quad = _quad()
         assert not quad.press(View(), 10, 10, 0)
         assert not quad.wheel(View(), 10, 10, 1)

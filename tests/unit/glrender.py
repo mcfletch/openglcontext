@@ -88,7 +88,7 @@ def render_scene_factory(monkeypatch):
     Returns a callable(children, frames=4, picks=None, mrt=True, shadows=None,
     layout=None, size=None) -> _Rendered and tears the window down afterward.
     ``layout`` is called with the context once it is built and returns the
-    :class:`~OpenGLContext.views.ViewLayout` it should draw; ``size`` is the
+    :class:`~OpenGLContext.multiview.views.ViewLayout` it should draw; ``size`` is the
     window's ``(width, height)``.
     """
     windows = []

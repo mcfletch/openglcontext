@@ -80,7 +80,7 @@ ENVIRONMENT: Tuple[str, ...] = (
     'OPENGLCONTEXT_UI_SCALE', 'OPENGLCONTEXT_PICKING',
     # Which way several views are drawn changes how a frame is produced, and a
     # capture comparing strategies must not inherit one.
-    # See OpenGLContext.passes.multiview.
+    # See OpenGLContext.multiview.strategy.
     'OPENGLCONTEXT_MULTIVIEW',
     'OPENGLCONTEXT_AUTO_EXIT_FRAMES', 'OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR',
     'OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME', 'OPENGLCONTEXT_CAPTURE_DELAY',

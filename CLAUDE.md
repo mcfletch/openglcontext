@@ -82,11 +82,6 @@ OpenGLContext/
 │                     # (the Qt one is in the openglcontext-qt distribution)
 ├── edit/             # Editor toolkit: tool modes, plan/orbit views, handles -- docs/editing.rst
 │   ├── gizmo.py      # The tri-axis handle; a drag held to one axis
-│   ├── orthoview.py  # A view along one axis at a scale: top, front, side
-│   ├── quadview.py   # Three orthographic views around a perspective one,
-│   │                 # built on viewgestures -- docs/editing.rst
-│   ├── viewgestures.py  # The pointer moving the camera of the view it is in,
-│   │                 # for a window laying out views of its own
 │   └── controlnet.py # A NURBS node's control points, as pickable markers
 ├── events/           # Cross-backend event generation and dispatch -- docs/eventmodel.rst
 │   └── wheel.py      # Rotation reports into whole notches, for the backends
@@ -101,6 +96,15 @@ OpenGLContext/
 │   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/tiles3d.rst
 ├── move/             # Camera, movement modes, walking -- docs/navigation.rst
 │   └── orbit.py      # The examine gestures: orbit, dolly, pan -- no GL, no events
+├── multiview/        # Several views of one scene -- docs/multiview.rst
+│   ├── views.py      # View, ViewStyle, ViewLayout: what is drawn where, and
+│   │                 # which view an event belongs to -- no GL
+│   ├── strategy.py   # How a frame reaches every view: vertex-stage routing,
+│   │                 # a geometry stage, or the scene drawn once per view
+│   ├── cameras.py    # OrthoView: a view along one axis at a scale
+│   ├── gestures.py   # The pointer moving the camera of the view it is in
+│   ├── viewset.py    # Several arrangements of one set of views, by name
+│   └── quad.py       # Three orthographic views around a perspective one
 ├── nav/              # Navigation mesh generated from a collision mesh
 ├── packaging/        # Shipping an application: /opt environments, .deb -- docs/packaging.rst
 ├── passes/           # Rendering passes -- docs/renderpasses.rst, flat.rst, pbr.rst
@@ -112,8 +116,6 @@ OpenGLContext/
 │   ├── ibl.py        # Image-based lighting probe
 │   ├── shadow*.py    # Shadow mapping -- docs/shadows.rst
 │   ├── instancing.py # Collapsing repeated shapes -- docs/instancing.rst
-│   ├── multiview.py  # How several views are drawn: the strategy a driver
-│   │                 # allows, and one view's part of a frame -- docs/multiview.rst
 │   └── shaderpass.py # VRML97ShaderProgram -- compiles and holds the programs
 ├── __pyinstaller/    # PyInstaller hooks, found by entry point -- docs/packaging.rst
 ├── physics/          # Rigid bodies, colliders, gravity zones -- docs/physics.rst
@@ -156,8 +158,6 @@ OpenGLContext/
 ├── viewer/           # The embeddable viewer behind oglc-view -- docs/viewer.rst
 │   └── adapters/     # One per format; what oglc-view dispatches on
 ├── hud.py            # Screen-space layout GUINode/GUIBox use (see ui/)
-├── views.py          # Several cameras on one window: View, ViewLayout, which
-│                     # view the pointer is in -- no GL -- docs/multiview.rst
 ├── outline.py        # The scenegraph as rows, for a tree control -- no GL, no
 │                     # toolkit -- docs/embedding.rst
 ├── renderoptions.py  # How a pass reads a rendering feature from the definition

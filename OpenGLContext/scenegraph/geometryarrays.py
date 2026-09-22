@@ -217,9 +217,9 @@ def draw_geometry(arrays: GeometryArrays, mode: Any = None) -> None:
     """Issue the draw ``arrays`` describes, with its vertex array bound.
 
     Once for every view a shared multi-view draw reaches, where ``mode`` says
-    one is in progress; see :func:`OpenGLContext.passes.multiview.draw_arrays`.
+    one is in progress; see :func:`OpenGLContext.multiview.strategy.draw_arrays`.
     """
-    from OpenGLContext.passes.multiview import draw_arrays, draw_elements
+    from OpenGLContext.multiview.strategy import draw_arrays, draw_elements
     if arrays.indexed:
         draw_elements(mode, arrays.draw_mode, arrays.count, arrays.index_type, None)
     else:

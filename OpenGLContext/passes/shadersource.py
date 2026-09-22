@@ -267,7 +267,7 @@ def geometry_stage_source(vertex_source: str, views: int,
     ``gl_version`` picks the header: GLSL 4.10 has both the invocations and the
     viewport index; 4.00 asks for viewport arrays; 3.30 asks for both.
     """
-    from OpenGLContext.passes.multiview import MAX_VIEWS
+    from OpenGLContext.multiview.strategy import MAX_VIEWS
     if not 2 <= int(views) <= MAX_VIEWS:
         raise ValueError('a shared draw reaches 2 to %d views, not %r'
                          % (MAX_VIEWS, views))

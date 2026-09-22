@@ -94,7 +94,7 @@ def link_program(vert_source: str, frag_source: str, validate: bool = True,
     """
     shaders = []
     if views:
-        from OpenGLContext.passes.multiview import (
+        from OpenGLContext.multiview.strategy import (
             MultiviewCapabilities, VIEW_BLOCK_BINDING,
         )
         capabilities = MultiviewCapabilities.detect()
@@ -486,7 +486,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         if program is None or not self.program_set:
             return
         if self.program_strategy == 'vertex':
-            from OpenGLContext.passes.multiview import view_list
+            from OpenGLContext.multiview.strategy import view_list
             count, indices = view_list(self._view_mask)
             self._set_uniform('viewCount', count, program, glUniform1i)
             self._set_uniform('viewList', tuple(indices), program, _upload_view_list)

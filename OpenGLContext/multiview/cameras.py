@@ -8,7 +8,7 @@ moves something in x and y and leaves its z alone.
 :class:`OrthoView` is the arithmetic: which way it looks, the point in the
 middle of the view, how many units fit down it, and the conversions between a
 pixel and a world point. :class:`OrthoViewPlatform` presents it to the render
-pass as an ordinary camera, and is what a :class:`~OpenGLContext.views.View`
+pass as an ordinary camera, and is what a :class:`~OpenGLContext.multiview.views.View`
 is given::
 
     front = OrthoView('front', centre=(0.0, 1.0, 0.0), span=4.0)
@@ -138,7 +138,7 @@ class OrthoView:
         """The world point under a view pixel, in the plane through the centre.
 
         Pixels count from the bottom left of the view, as
-        :meth:`~OpenGLContext.views.View.local` gives them.
+        :meth:`~OpenGLContext.multiview.views.View.local` gives them.
         """
         scale = self.units_per_pixel(viewport)
         width, height = _size(viewport)

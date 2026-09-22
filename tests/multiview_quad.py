@@ -37,7 +37,7 @@ BaseContext = testingcontext.getInteractive()
 '''``QuadView`` is plain Python: views, cameras and the arithmetic of
 panning and zooming them, with no GL in it.  The layout it builds is what the
 context draws.'''
-from OpenGLContext.edit.quadview import QuadView
+from OpenGLContext.multiview.quad import QuadView
 from OpenGLContext.loaders.gltf import load_gltf, sample_model_url
 from OpenGLContext.loaders.resolver import fetch_to_cache
 from OpenGLContext.passes import renderpass

@@ -474,17 +474,32 @@ wrapper code.
   and a forced viewport limit. A GL 3.3 driver without the extensions
   (`MESA_GL_VERSION_OVERRIDE=3.3` with the extensions overridden off) draws the
   quad tutorial identically, pixel for pixel, to the 4.6 driver.
-- `OpenGLContext.edit.orthoview.OrthoView` / `OrthoViewPlatform`: the six axis
+- `OpenGLContext.multiview.cameras.OrthoView` / `OrthoViewPlatform`: the six axis
   views, pan, zoom about a pixel, box framing, pixel/world in the view's
   plane. `MapView` was kept as it is, since editors use its `(x, z)` API; the
   `'top'` OrthoView draws what it draws, which a test holds.
-- `OpenGLContext.edit.quadview.QuadView`: the layout of three orthographic
+- `OpenGLContext.multiview.quad.QuadView`: the layout of three orthographic
   views and an `OrbitView`, `frame(minimum, maximum)`, and `handle(event)`
   for the context's pointer events (drag pans an ortho view, left drag orbits
   the perspective one and other buttons pan it, the wheel zooms the view under
   the pointer). `OrbitView` gained `frame_box` and per-view `nearest` /
   `furthest`; `GLTFScene` gained `minimum` / `maximum`.
-- `OpenGLContext.edit.viewgestures.ViewGestures`: the pointer moving the camera
+- The multi-view code is a package of its own, `OpenGLContext.multiview`: the
+  view model (`views`), the strategy a driver allows (`strategy`, which was
+  `passes/multiview.py`), the axis-aligned camera (`cameras`, which was
+  `edit/orthoview.py`), the gestures (`gestures`), the arrangements
+  (`viewset`) and the ready-made four (`quad`). An editor is one caller of it;
+  a game's mirror, a camera wall and a split screen are others, and none of
+  them wants to import an editor toolkit to get a second view.
+- `OpenGLContext.multiview.viewset.ViewSet`: several arrangements of one set of
+  views, shown by name. An arrangement names the views it shows and is placed
+  by how many there are -- one fills the window, two go side by side, four
+  around a centre. The cameras are shared, so a switch shows what was already
+  being looked at; `driven` names the views the pointer moves the cameras of,
+  and `frame(minimum, maximum)` fits a box in each camera as its kind is
+  fitted. `QuadView` is one of these with a single arrangement, and
+  glisteel-editor's four are another.
+- `OpenGLContext.multiview.gestures.ViewGestures`: the pointer moving the camera
   of the view it lands in, which `QuadView` is built on and an application
   laying out its own views uses directly. `views` names the views it drives, so
   a window whose plan view belongs to its tools keeps that one; `layout` is
@@ -496,10 +511,10 @@ wrapper code.
   turn and `space` maximising one. The map keeps the tools wherever it is on
   screen, since `MapControls` is told the map's own rectangle and a window
   pixel is read in the map's own pixels. The editor's `OrbitControls` went:
-  `ViewGestures` does it. `EditorViews` is the editor's own for now; marble-
-  editor wants the same four arrangements over a map and an orbit camera, so
-  the question when it adopts them is whether the class moves into
-  `OpenGLContext.edit` rather than being written a second time.
+  `ViewGestures` does it. What is left in `glisteel_editor/views.py` is which
+  views the editor has and how a landscape is fitted into them; marble-editor
+  wants the same four arrangements over a map and an orbit camera, and builds
+  its own `ViewSet` when it adopts them.
 - `tests/multiview_quad.py` loads any glTF model into the quad; it is in the
   visual suite with a baseline and in the "Interface and Tools" tutorial path.
 - `scripts/multiview_bench.py` measures a layout against a single view, which

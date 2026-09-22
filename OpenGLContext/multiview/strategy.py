@@ -1,6 +1,6 @@
 """How a context draws several views, and what one view's part of a frame is.
 
-A :class:`~OpenGLContext.views.ViewLayout` can put several cameras on one
+A :class:`~OpenGLContext.multiview.views.ViewLayout` can put several cameras on one
 window. There are three ways to draw them, and which a context can use depends
 on its driver:
 
@@ -49,7 +49,7 @@ from typing import Any, Collection, Dict, Iterable, List, NamedTuple, Optional, 
 import numpy as np
 
 from OpenGLContext import renderoptions
-from OpenGLContext.views import MAX_VIEWS, Rect, View
+from OpenGLContext.multiview.views import MAX_VIEWS, Rect, View
 
 log = logging.getLogger(__name__)
 

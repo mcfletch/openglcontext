@@ -11,7 +11,7 @@ import pytest
 glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.scenegraph import basenodes  # noqa: E402
-from OpenGLContext.views import View, ViewLayout, ViewStyle  # noqa: E402
+from OpenGLContext.multiview.views import View, ViewLayout, ViewStyle  # noqa: E402
 from tests.unit.glrender import base_env, frames_of  # noqa: E402
 
 WIDTH, HEIGHT = 200, 100
@@ -193,7 +193,8 @@ class TestCompatibilityProfile:
 
 class TestTheStrategy:
     def test_a_frame_of_several_views_settles_how_it_is_drawn(self, render_scene, env):
-        from OpenGLContext.passes import multiview, renderpass
+        from OpenGLContext.multiview import strategy as multiview
+        from OpenGLContext.passes import renderpass
         render_scene(_scene(), frames=2, size=(WIDTH, HEIGHT), layout=_side_by_side)
         assert renderpass.FLAT.multiviewStrategy in multiview.IMPLEMENTED
 
@@ -203,7 +204,8 @@ class TestTheStrategy:
         assert renderpass.FLAT.multiviewStrategy is None
 
     def test_a_pinned_strategy_is_the_one_drawn_with(self, render_scene, env):
-        from OpenGLContext.passes import multiview, renderpass
+        from OpenGLContext.multiview import strategy as multiview
+        from OpenGLContext.passes import renderpass
 
         def layout(context):
             context.contextDefinition.multiview = 'sequential'
