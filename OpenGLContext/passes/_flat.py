@@ -1517,6 +1517,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             self.shader_program = None
 
         frames = self.prepareViews()
+        self.clearUncovered( context, frames )
         active = self.activeFrame if self.activeFrame is not None else frames[0]
         toRender = active.toRender
         matrix = active.modelView
@@ -2262,11 +2263,34 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         active.fitted = True
         self.viewFrames = frames
         self.activeFrame = active
-        self._scissorViews = len( frames ) > 1
+        # A view clears and draws inside its own rectangle. One view filling
+        # the window needs no scissor; anything else does, including a single
+        # view an arrangement has placed in part of the window, whose
+        # background would otherwise clear the whole of it.
+        from OpenGLContext.multiview.views import covers
+        self._scissorViews = ( len( frames ) > 1
+                               or not covers( [ frames[0].rect ], width, height ) )
         if self._scissorViews and self.multiviewStrategy is None:
             self.multiviewStrategy = self.chooseMultiview()
         self.applyViewFrame( active, gl=False )
         return frames
+
+    def clearUncovered( self, context: Any, frames: List['ViewFrame'] ) -> None:
+        """Clear the window where no view will draw in it.
+
+        A view clears its own rectangle and nothing else, and a layout need not
+        tile the window: an arrangement of an application's own can leave a
+        band for a toolbar. What no view covers would otherwise hold the frame
+        before it.
+        """
+        from OpenGLContext.multiview.views import covers
+        width, height = context.getViewPort()
+        if covers( [ frame.rect for frame in frames ], width, height ):
+            return
+        glDisable( GL_SCISSOR_TEST )
+        glViewport( 0, 0, int( width ), int( height ) )
+        glClearColor( 0.0, 0.0, 0.0, 1.0 )
+        glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
 
     def applyViewFrame( self, frame: 'ViewFrame', gl: bool = True ) -> None:
         """Look through ``frame``'s view: its camera, its rectangle, its draw list.

@@ -277,3 +277,41 @@ class TestStyle:
     def test_a_background_is_the_scene_or_a_colour(self):
         with pytest.raises(ValueError):
             ViewStyle(background=(1, 2))
+
+
+class TestWhetherTheViewsCoverTheWindow:
+    """What the frame asks before it clears: a layout need not tile the window."""
+
+    def test_one_view_filling_it_does(self):
+        from OpenGLContext.multiview.views import covers
+        assert covers([(0, 0, 800, 600)], 800, 600)
+
+    def test_a_split_and_a_quad_do(self):
+        from OpenGLContext.multiview.views import covers
+        assert covers([(0, 0, 400, 600), (400, 0, 400, 600)], 800, 600)
+        assert covers([(0, 300, 400, 300), (400, 300, 400, 300),
+                       (0, 0, 400, 300), (400, 0, 400, 300)], 800, 600)
+
+    def test_a_band_left_for_a_toolbar_does_not(self):
+        from OpenGLContext.multiview.views import covers
+        assert not covers([(60, 0, 740, 600)], 800, 600)
+
+    def test_a_gap_between_two_views_does_not(self):
+        from OpenGLContext.multiview.views import covers
+        assert not covers([(0, 0, 390, 600), (410, 0, 390, 600)], 800, 600)
+
+    def test_a_band_across_the_bottom_does_not(self):
+        from OpenGLContext.multiview.views import covers
+        assert not covers([(0, 40, 800, 560)], 800, 600)
+
+    def test_views_that_overlap_can_still_cover_it(self):
+        from OpenGLContext.multiview.views import covers
+        assert covers([(0, 0, 500, 600), (300, 0, 500, 600)], 800, 600)
+
+    def test_a_view_placed_nowhere_covers_nothing(self):
+        from OpenGLContext.multiview.views import covers
+        assert not covers([(0, 0, 0, 0)], 800, 600)
+
+    def test_a_window_with_no_pixels_is_covered_by_anything(self):
+        from OpenGLContext.multiview.views import covers
+        assert covers([], 0, 0)

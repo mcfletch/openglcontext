@@ -61,6 +61,7 @@ class FlatPass( _flat.FlatPass ):
     def Render( self, context: Any, mode: Any ) -> None:
         """Render the geometry attached to this flat-renderer's scenegraph"""
         frames = self.prepareViews()
+        self.clearUncovered( context, frames )
         active = self.activeFrame if self.activeFrame is not None else frames[0]
         matrix = active.modelView
         self.matrix = matrix

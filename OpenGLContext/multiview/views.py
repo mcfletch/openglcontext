@@ -140,6 +140,36 @@ class View:
         return (x - self.rect[0], y - self.rect[1])
 
 
+def covers(rects: Sequence[Rect], width: int, height: int) -> bool:
+    """Whether these rectangles together cover every pixel of a window this size.
+
+    A layout need not tile the window: an arrangement of an application's own
+    can leave a band for a toolbar, or place a view over part of another. What
+    no view covers has to be cleared by the frame, since a view clears only its
+    own rectangle -- so the frame asks this.
+    """
+    width, height = int(width), int(height)
+    if width <= 0 or height <= 0:
+        return True
+    edges = sorted({0, width} | {int(x) for x, _y, _w, _h in rects}
+                   | {int(x) + int(w) for x, _y, w, _h in rects})
+    for left, right in zip(edges, edges[1:]):
+        if right <= 0 or left >= width:
+            continue
+        spanning = [(int(y), int(y) + int(h)) for x, y, w, h in rects
+                    if int(x) <= left and int(x) + int(w) >= right]
+        reach = 0
+        for low, high in sorted(spanning):
+            if low > reach:
+                break
+            reach = max(reach, high)
+            if reach >= height:
+                break
+        if reach < height:
+            return False
+    return True
+
+
 def _cut(extent: int, fraction: float) -> int:
     """Where a split at ``fraction`` falls along ``extent`` pixels."""
     return int(round(extent * fraction))

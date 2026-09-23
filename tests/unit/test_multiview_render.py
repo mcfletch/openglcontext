@@ -214,3 +214,53 @@ class TestTheStrategy:
         multiview.reset_detected()
         render_scene(_scene(), frames=2, size=(WIDTH, HEIGHT), layout=layout)
         assert renderpass.FLAT.multiviewStrategy == 'sequential'
+
+
+class TestAnArrangementThatLeavesRoom:
+    """Views need not be equal, and need not cover the window.
+
+    A window with a toolbar down one side gives its views the rest, through an
+    arrangement of its own. What the views do not cover is still cleared, so
+    the band is a colour rather than whatever the last frame left there.
+    """
+
+    def _with_a_band(self, context):
+        band = 60
+
+        def arrangement(width, height):
+            return [(band, 0, (width - band) // 2, height),
+                    (band + (width - band) // 2, 0, (width - band) // 2, height)]
+
+        left = View(_camera(-3.0), name='left',
+                    style=ViewStyle(background=(1.0, 0.0, 0.0)))
+        right = View(_camera(3.0), name='right',
+                     style=ViewStyle(background=(0.0, 0.0, 1.0)))
+        return ViewLayout([left, right], arrangement=arrangement)
+
+    def test_the_views_are_where_the_arrangement_put_them(self, render_scene, env):
+        frame = frames_of(render_scene, _scene(), frames=2,
+                          layout=self._with_a_band, size=(WIDTH, HEIGHT))[-1]
+        assert _tile_centre(frame, 80)[0] > 100      # the left view, red
+        assert _tile_centre(frame, 170)[2] > 100     # the right view, blue
+
+    def test_what_a_view_stops_covering_is_cleared(self, render_scene, env):
+        """A band given up to a toolbar keeps no part of the frame before it."""
+        def shrinking(context):
+            drawn = []
+
+            def arrangement(width, height):
+                drawn.append(1)
+                # The first frame fills the window; the rest leave a band.
+                band = 0 if len(drawn) < 2 else 60
+                return [(band, 0, width - band, height)]
+
+            return ViewLayout(
+                [View(_camera(0.0), name='one',
+                      style=ViewStyle(background=(1.0, 0.0, 0.0)))],
+                arrangement=arrangement)
+
+        frames = frames_of(render_scene, _scene(), frames=3,
+                           layout=shrinking, size=(WIDTH, HEIGHT))
+        assert _tile_centre(frames[0], 20)[0] > 100      # the view was here
+        band = frames[-1][:, :55].astype(int)
+        assert band.max() < 40, band.max()               # ...and is not now
