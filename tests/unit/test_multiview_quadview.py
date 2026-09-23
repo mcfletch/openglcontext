@@ -94,18 +94,18 @@ class TestDragging:
         assert np.allclose(under, after)
         assert top.camera.view.centre == before_top
 
-    def test_a_left_drag_in_the_perspective_view_orbits_it(self):
+    def test_a_right_drag_in_the_perspective_view_orbits_it(self):
         quad = _quad()
         view = quad.view('perspective')
         target = quad.orbit.target().copy()
         heading = quad.orbit.heading
         x, y = _centre_of(view)
-        quad.press(view, x, y, 0)
+        quad.press(view, x, y, 2)
         quad.drag(view, x + 40, y)
         assert quad.orbit.heading != heading
         assert np.allclose(quad.orbit.target(), target)
 
-    @pytest.mark.parametrize('button', [1, 2])
+    @pytest.mark.parametrize('button', [0, 1])
     def test_another_button_pans_the_perspective_view(self, button):
         quad = _quad()
         view = quad.view('perspective')
@@ -122,7 +122,7 @@ class TestDragging:
         view = quad.view('perspective')
         before = quad.orbit.target().copy()
         x, y = _centre_of(view)
-        quad.press(view, x, y, 2)
+        quad.press(view, x, y, 0)
         quad.drag(view, x + 30, y)
         ndc = _ndc(view, before)
         assert ndc[0] * view.size[0] / 2.0 == pytest.approx(30.0, abs=0.01)

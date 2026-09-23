@@ -352,11 +352,11 @@ camera the first time something asks for it.
    * - ``pan``
      - carries the world with the pointer; a camera that turns carries what it
        is looking at
-     - any button in a plan view or an elevation; the middle and right buttons
-       in a view that turns
+     - the left and middle buttons
    * - ``rotate``
      - swings a camera that turns about what it is looking at
-     - the left button, where the camera turns
+     - the right button, where the camera turns; a view with a scale leaves
+       that button unbound
    * - ``zoomin`` / ``zoomout``
      - one notch towards the scene or away from it, about the pointer in a
        view with a scale
@@ -375,8 +375,8 @@ bindings file, and changed in a line:
    from OpenGLContext.multiview.navigation import PAN, ROTATE, ZOOM_DRAG
 
    navigation = view.navigation
-   navigation.rebind(ROTATE, ['<mouse-2>'])        # right-drag turns this view
-   navigation.rebind(PAN, ['<mouse-0>'])           # ...and the left one pans it
+   navigation.rebind(ROTATE, ['<mouse-0>'])        # left-drag turns this view
+   navigation.rebind(PAN, ['<mouse-2>'])           # ...and the right one pans it
    navigation.rebind(ZOOM_DRAG, ['<mouse-1>'])     # middle-drag zooms
    navigation.rebind(PAN, [])                      # this view does not pan
 

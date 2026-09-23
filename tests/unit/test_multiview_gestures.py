@@ -111,17 +111,17 @@ class TestTheElevation:
 
 
 class TestThePerspectiveView:
-    def test_the_left_button_orbits_and_another_pans(self):
+    def test_the_right_button_orbits_and_the_left_pans(self):
         gestures, layout = _laid_out()
         angled = layout.views[2]
         camera = angled.camera.view
         heading, target = camera.heading, camera.target().copy()
-        gestures.press(angled, *_centre_of(angled), 0)
+        gestures.press(angled, *_centre_of(angled), 2)
         gestures.drag(angled, _centre_of(angled)[0] + 40, _centre_of(angled)[1])
         assert camera.heading != heading
         assert np.allclose(camera.target(), target)
         gestures.release(angled, 0, 0)
-        gestures.press(angled, *_centre_of(angled), 2)
+        gestures.press(angled, *_centre_of(angled), 0)
         gestures.drag(angled, _centre_of(angled)[0] + 40, _centre_of(angled)[1])
         assert not np.allclose(camera.target(), target)
 

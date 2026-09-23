@@ -26,7 +26,7 @@ for a notch). So the bindings screen rebinds these like any other command, the
 binding file saves them, and an application changes one in a line::
 
     navigation = view.navigation
-    navigation.rebind(ROTATE, ['<mouse-2>'])       # right-drag turns the view
+    navigation.rebind(ROTATE, ['<mouse-0>'])       # left-drag turns this view
     navigation.rebind(ZOOM_DRAG, ['<mouse-1>'])    # middle-drag zooms
     navigation.rebind(PAN, [])                     # this view does not pan
 
@@ -152,21 +152,30 @@ def _zoom_bindings() -> List[KeyBinding]:
 
 
 def plan_mode() -> ViewNavigationMode:
-    """A view with a scale: a drag moves the world, the wheel changes the scale."""
+    """A view with a scale: a drag moves the world, the wheel changes the scale.
+
+    The left and middle buttons pan, as they do in a view that turns. The right
+    button is left unbound: it turns a camera that can turn, and a view with a
+    scale has nothing to answer it with.
+    """
     return ViewNavigationMode(
         name='plan', label=_('Plan'),
-        bindings=[_binding(PAN, _('Pan'), [button_name(button)
-                                           for button in (0, 1, 2)])]
+        bindings=[_binding(PAN, _('Pan'), [button_name(0), button_name(1)])]
         + _zoom_bindings())
 
 
 def examine_mode() -> ViewNavigationMode:
-    """A camera that turns: a left drag swings it, another carries its target."""
+    """A camera that turns: a right drag swings it, a left one carries its target.
+
+    The left button is what an editor's tools want, wherever the pointer also
+    draws, so the camera takes the right one and leaves the left where a tool
+    can have it.
+    """
     return ViewNavigationMode(
         name='examine', label=_('Examine'),
         bindings=[
-            _binding(ROTATE, _('Rotate'), [button_name(0)]),
-            _binding(PAN, _('Pan'), [button_name(1), button_name(2)]),
+            _binding(ROTATE, _('Rotate'), [button_name(2)]),
+            _binding(PAN, _('Pan'), [button_name(0), button_name(1)]),
         ] + _zoom_bindings())
 
 

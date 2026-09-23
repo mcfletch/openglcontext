@@ -6,9 +6,10 @@ the :class:`~OpenGLContext.multiview.views.ViewLayout` of the four, frames a box
 of them, and turns pointer gestures in any view into a move of that view's
 camera:
 
-- a drag in an orthographic view pans it, the world following the pointer;
-- a drag with the left button in the perspective view orbits it about its
-  target, and with any other button pans the target across the view;
+- a drag with the left or middle button in an orthographic view pans it, the
+  world following the pointer;
+- a drag with the right button in the perspective view orbits it about its
+  target, and with the left or middle button pans the target across the view;
 - a wheel notch zooms the view under the pointer, an orthographic one about
   the pixel the pointer is on.
 

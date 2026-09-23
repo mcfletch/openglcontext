@@ -1,8 +1,8 @@
 """Reading the pointer, and moving the camera of the view it is in.
 
 An editor window holds several views of one scene, and the pointer means
-something different in each: a drag pans a plan or an elevation, and turns a
-perspective view about what it is looking at. :class:`ViewGestures` finds the
+something different in each: a left drag pans a plan or an elevation, and a
+right drag turns a perspective view about what it is looking at. :class:`ViewGestures` finds the
 view each event belongs to and asks that view's
 :class:`~OpenGLContext.multiview.navigation.ViewNavigation` what the button
 raises there -- so which button pans, which turns and which zooms is the
