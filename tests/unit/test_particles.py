@@ -6,6 +6,7 @@ death, compaction, budget -- is asserted about here with no GL context at all.
 """
 
 import math
+import types
 
 import numpy as np
 import pytest
@@ -516,6 +517,24 @@ class TestWorldSpace:
                                             worldSpace=False, speed=0.0, spread=0.0)
         emitter.simulate(0.0, origin=(5.0, 0.0, 0.0))
         assert np.allclose(emitter.pool.position[0], (0.0, 0.0, 0.0))
+
+    def test_the_transform_turns_the_direction_without_stretching_it(self):
+        """A scaled parent places and turns the emitter; ``speed`` stays the speed.
+
+        Size and gravity are world units that no transform reaches, so a
+        direction lengthened by the parent's scale would throw particles
+        faster while leaving them the same size and falling the same way.
+        """
+        emitter = particles.ParticleEmitter(direction=(0.0, 1.0, 0.0))
+        turned = np.diag([3.0, 3.0, 3.0, 1.0])
+        turned[:3, :3] = turned[:3, :3] @ np.array(
+            [[0.0, 1.0, 0.0], [-1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])
+        turned[3, :3] = (1.0, 2.0, 3.0)
+        mode = types.SimpleNamespace(renderPath=types.SimpleNamespace(
+            transformMatrix=lambda: turned))
+        origin, direction = emitter._pose(mode)
+        assert np.allclose(origin, (1.0, 2.0, 3.0))
+        assert np.allclose(direction, (-1.0, 0.0, 0.0))
 
 
 class TestLifeCurves:
