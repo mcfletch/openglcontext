@@ -11,10 +11,12 @@ The shorthand is the kind on its own, ``OGLC_hook = "water"``, which is a pond.
 Four parameters, all optional:
 
 ``style``
-    ``still``, ``flowing``, ``choppy`` or ``lake``, or an object spelling out
-    :class:`~OpenGLContext.scenegraph.water.surface.WaterStyle` in full --
-    ``amplitude``, ``wavelength``, ``speed``, ``steepness``, ``flow`` -- for
-    water that is none of the four.
+    ``still``, ``breeze``, ``flowing``, ``choppy`` or ``lake``, or an object
+    spelling out :class:`~OpenGLContext.scenegraph.water.surface.WaterStyle`
+    over one of them -- ``amplitude``, ``wavelength``, ``speed``,
+    ``steepness``, ``ripple``, ``flow`` -- for water that is none of the five.
+    ``breeze`` is a pond or small lake seen from its bank; ``lake`` is open
+    water seen from a distance.
 ``material``
     ``keep``, the default, shades the surface with the material the file
     carries, so what the artist authored is what is drawn. ``engine`` takes
@@ -49,7 +51,7 @@ from OpenGLContext.loaders.gltf import hooks
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.water.medium import WATER
 from OpenGLContext.scenegraph.water.surface import (
-    CHOPPY, FLOWING, LAKE, STILL, WaterStyle, water_material,
+    BREEZE, CHOPPY, FLOWING, LAKE, STILL, WaterStyle, water_material,
 )
 from OpenGLContext.scenegraph.water.volumes import Volume
 
@@ -61,10 +63,11 @@ __all__ = ['KIND', 'STYLES', 'WaterBody', 'style_for', 'water_hook', 'advance']
 KIND = 'water'
 
 #: The motions a style may be named by. A document may also spell one out in
-#: full, since water is a continuum and four names are a convenience rather
+#: full, since water is a continuum and five names are a convenience rather
 #: than the set of things water does.
 STYLES: Dict[str, WaterStyle] = {
-    'still': STILL, 'flowing': FLOWING, 'choppy': CHOPPY, 'lake': LAKE,
+    'still': STILL, 'breeze': BREEZE, 'flowing': FLOWING, 'choppy': CHOPPY,
+    'lake': LAKE,
 }
 
 
@@ -104,7 +107,7 @@ def _written_out(fields: Dict[str, Any]) -> WaterStyle:
     """A style spelled out field by field, over whichever one it names."""
     base = style_for(fields.get('style', 'still'))
     values: Dict[str, Any] = {}
-    for name in ('amplitude', 'wavelength', 'speed', 'steepness'):
+    for name in ('amplitude', 'wavelength', 'speed', 'steepness', 'ripple'):
         if fields.get(name) is not None:
             values[name] = float(fields[name])
     flow = fields.get('flow')

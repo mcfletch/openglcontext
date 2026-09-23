@@ -13,7 +13,6 @@ import pytest
 from OpenGLContext.passes import shadersource
 from OpenGLContext.scenegraph.water.surface import (
     CHOPPY,
-    RIPPLE_SCALE,
     _TRAINS,
 )
 
@@ -55,7 +54,7 @@ class TestTheTwoFieldsAgree:
 
     def _trains(self):
         text = _include('_wave_inc.glsl')
-        block = text[text.index('WAVE_TRAINS'):text.index('WAVE_RIPPLE_SCALE')]
+        block = text[text.index('WAVE_TRAINS'):text.index('RIPPLE_TRAINS')]
         return [tuple(float(n) for n in row)
                 for row in re.findall(
                     r'vec3\(\s*(-?[\d.]+),\s*(-?[\d.]+),\s*(-?[\d.]+)\s*\)',
@@ -68,10 +67,26 @@ class TestTheTwoFieldsAgree:
         for shader, module in zip(self._trains(), _TRAINS, strict=True):
             assert shader == pytest.approx(module, abs=1e-6)
 
-    def test_the_ripple_repeats_over_the_same_distance(self) -> None:
+    def _ripple_trains(self):
         text = _include('_wave_inc.glsl')
-        found = re.search(r'WAVE_RIPPLE_SCALE\s*=\s*([\d.]+)', text)
-        assert found and float(found.group(1)) == pytest.approx(RIPPLE_SCALE)
+        block = text[text.index('RIPPLE_TRAINS'):text.index('vec2 waveRipple')]
+        return [tuple(float(n) for n in row)
+                for row in re.findall(
+                    r'vec3\(\s*(-?[\d.]+),\s*(-?[\d.]+),\s*(-?[\d.]+)\s*\)',
+                    block)]
+
+    def test_every_ripple_train_matches(self) -> None:
+        from OpenGLContext.scenegraph.water.surface import _RIPPLE_TRAINS
+        shader = self._ripple_trains()
+        assert len(shader) == len(_RIPPLE_TRAINS)
+        for found, module in zip(shader, _RIPPLE_TRAINS, strict=True):
+            assert found == pytest.approx(module, abs=1e-6)
+
+    def test_the_ripple_repeats_over_the_distance_the_style_gives(self) -> None:
+        """A length on the style, not a constant in the shader."""
+        text = _include('_wave_inc.glsl')
+        assert 'uniform float waveRippleScale;' in text
+        assert 'WAVE_RIPPLE_SCALE' not in text
 
 
 class TestTurningItOn:
@@ -109,6 +124,7 @@ class TestTurningItOn:
         assert program.set['waveLength'] == pytest.approx(CHOPPY.wavelength)
         assert program.set['waveSpeed'] == pytest.approx(CHOPPY.speed)
         assert program.set['waveTime'] == pytest.approx(2.5)
+        assert program.set['waveRippleScale'] == pytest.approx(CHOPPY.ripple)
 
     def test_nothing_switches_it_off(self) -> None:
         """Or the hillside after a lake ripples too."""
@@ -118,7 +134,7 @@ class TestTurningItOn:
         assert program.set['waveEnabled'] == 0
 
     def test_only_the_flag_is_written_when_it_is_off(self) -> None:
-        """A shape that is not water pays one uniform, not seven."""
+        """A shape that is not water pays one uniform, not eight."""
         program = self._program()
         program.set_wave(None)
         assert set(program.set) == {'waveEnabled'}

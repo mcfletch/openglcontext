@@ -7,7 +7,7 @@ comes back in the glTF, and a test drives this module directly.
 
 ``settings`` is anything with the panel's properties on it -- a Blender
 ``PropertyGroup`` at export time. The vocabularies below are the engine's: the
-kinds it ships, the four water styles, the three media, and the two ways to
+kinds it ships, the five water styles, the three media, and the two ways to
 shade a surface.
 """
 from __future__ import annotations
@@ -51,9 +51,10 @@ _HOLDER = {'material': 'a material', 'object': 'an object'}
 #: How water moves, and what each motion is.
 STYLES: Dict[str, str] = {
     'still': 'A pond: the ripple is in the normals and the surface holds level',
+    'breeze': 'A pond or small lake seen from its bank: wind-ruffled, fine waves',
     'flowing': 'A river: a long swell carried in one direction',
     'choppy': 'Open water with a wind on it',
-    'lake': 'A sheltered lake: a slow, shallow swell',
+    'lake': 'Open water seen from a distance: a slow, long, low swell',
 }
 
 #: What being inside the body is like.

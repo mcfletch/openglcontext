@@ -662,6 +662,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         self._set_uniform1f('waveLength', float(style.wavelength), target)
         self._set_uniform1f('waveSpeed', float(style.speed), target)
         self._set_uniform1f('waveSteepness', float(style.steepness), target)
+        self._set_uniform1f('waveRippleScale', float(style.ripple), target)
         self._set_uniform2f('waveFlow', (float(style.flow[0]),
                                          float(style.flow[1])), target)
         self._set_uniform1f('waveTime', float(when), target)

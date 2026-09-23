@@ -215,3 +215,87 @@ class TestALakeIsWater:
     def test_without_asking_for_a_million_of_them(self) -> None:
         from OpenGLContext.scenegraph.water import LAKE, MESH_LIMIT, mesh_across
         assert mesh_across(20000.0, LAKE) <= MESH_LIMIT
+
+
+class TestTheRippleIsTheStyles:
+    """How fine the glitter is belongs to the water, as its swell does.
+
+    A lake a few hundred metres across wants a ripple that repeats over metres,
+    or it reads as a mirror; a pond twenty metres across with the same ripple
+    shows two or three dark bands across it, which reads as nothing at all.
+    """
+
+    def test_a_style_says_how_far_its_ripple_repeats(self) -> None:
+        from OpenGLContext.scenegraph.water import RIPPLE_SCALE
+        assert STILL.ripple == RIPPLE_SCALE
+
+    def test_the_ripple_is_drawn_at_the_length_the_style_gives(self) -> None:
+        """The same pattern, at a fifth of the size, over a fifth of the ground."""
+        broad = WaterStyle(name='broad', ripple=10.0)
+        fine = WaterStyle(name='fine', ripple=2.0)
+        x, z = _grid(half=30.0, steps=13)
+        assert np.allclose(wave_normal(fine, x / 5.0, z / 5.0, 0.0),
+                           wave_normal(broad, x, z, 0.0))
+
+
+class TestABreeze:
+    """Wind on sheltered water: a surface seen from its own bank."""
+
+    def test_it_is_named(self) -> None:
+        from OpenGLContext.scenegraph.water import BREEZE
+        assert BREEZE.name == 'breeze'
+
+    def test_its_waves_are_a_stride_across_and_centimetres_high(self) -> None:
+        from OpenGLContext.scenegraph.water import BREEZE
+        assert BREEZE.wavelength < 2.0
+        assert 0.0 < BREEZE.amplitude < 0.05
+
+    def test_its_ripple_is_finer_than_its_waves(self) -> None:
+        from OpenGLContext.scenegraph.water import BREEZE
+        assert BREEZE.ripple < BREEZE.wavelength
+
+    def test_it_moves(self) -> None:
+        from OpenGLContext.scenegraph.water import BREEZE
+        assert BREEZE.moving()
+
+
+class TestTheRippleIsNotALattice:
+    """Two crossing cosines tile the surface like hammered metal, and at a
+    hand's breadth the tiling is the first thing seen. The ripple is several
+    trains of unrelated lengths and headings instead, moving as water moves."""
+
+    @staticmethod
+    def _slopes(style, when=0.0, cells=128):
+        """The ripple's slope along x over a patch sixteen ripples across."""
+        from OpenGLContext.scenegraph.water.surface import _fine_ripple, _heading
+        side = style.ripple * 16.0
+        axis = np.arange(cells) * side / cells
+        x, z = np.meshgrid(axis, axis, indexing='ij')
+        slope_x, _slope_z = _fine_ripple(x, z, float(style.steepness),
+                                         _heading(style), when, style)
+        return slope_x
+
+    def test_it_is_made_of_many_waves(self) -> None:
+        """Counted in its spectrum: each train is a pair of peaks, found as
+        the local maxima of a windowed transform so that a wave not fitting
+        the patch a whole number of times still counts once."""
+        from OpenGLContext.scenegraph.water import BREEZE
+        slopes = self._slopes(BREEZE)
+        window = np.outer(np.hanning(slopes.shape[0]), np.hanning(slopes.shape[1]))
+        spectrum = np.abs(np.fft.fft2(slopes * window))
+        spectrum[0, 0] = 0.0
+        around = np.max([np.roll(np.roll(spectrum, dx, 0), dz, 1)
+                         for dx in (-1, 0, 1) for dz in (-1, 0, 1)
+                         if dx or dz], axis=0)
+        peaks = (spectrum > around) & (spectrum > 0.05 * spectrum.max())
+        assert int(peaks.sum()) >= 10
+
+    def test_it_moves_on_water_with_no_current(self) -> None:
+        """A breeze on a pond moves the glitter, though the pond goes nowhere."""
+        from OpenGLContext.scenegraph.water import BREEZE
+        assert not np.allclose(self._slopes(BREEZE, 0.0), self._slopes(BREEZE, 0.5))
+
+    def test_still_water_holds_its_glitter(self) -> None:
+        """Nothing about still water changes with time, its light included."""
+        x, z = _grid(half=5.0, steps=9)
+        assert np.allclose(wave_normal(STILL, x, z, 0.0), wave_normal(STILL, x, z, 3.0))
