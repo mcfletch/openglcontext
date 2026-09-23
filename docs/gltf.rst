@@ -382,20 +382,39 @@ scan: an installed package cannot add a kind to somebody else's viewer by being
 present. Setting ``OPENGLCONTEXT_GLTF_HOOKS=0`` leaves every tag in every file
 unread.
 
-The engine claims the bare lowercase names it documents and ships — ``water`` is
-the only one — so an application naming its own keeps them out of that
-namespace: ``glisteel:rail``, ``twigbb:teleporter``. A convention, read by
-nothing, so that a kind a game invents today does not collide with one the
-engine ships later.
+The engine claims the bare lowercase names it documents and ships — ``water``,
+``fire``, ``smoke`` and ``sparks`` — so an application naming its own keeps
+them out of that namespace: ``glisteel:rail``, ``twigbb:teleporter``. A
+convention, read by nothing, so that a kind a game invents today does not
+collide with one the engine ships later.
 
 The :doc:`writer <baking>` writes both spellings back: a material's or a
 ``SceneNode``'s ``extras`` pass through uninterpreted, and its ``hook`` becomes
 an ``OGLC_hook`` extension block, so a world can be loaded, edited and baked
 again with its tags intact.
 
-The ``water`` kind ships registered, so a tagged file works in ``oglc-view``
-with no application code at all. :ref:`Authoring water in a model <authoring>`
-has its parameters and what lands on the scene.
+The engine's kinds ship registered, so a tagged file works in ``oglc-view`` with
+no application code at all:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Kind
+     - Tag it on
+     - What it makes
+   * - ``water``
+     - a material
+     - A surface that moves as water, and a volume that can be swum in —
+       :ref:`Authoring water in a model <authoring>`.
+   * - ``fire``, ``smoke``, ``sparks``
+     - an object
+     - A particle effect standing where the object stands —
+       :ref:`Placing an effect in a model <authored-particles>`.
+
+The loader passes over a kind on the holder it is not read from, and the
+Blender add-on's panel draws that case as a warning.
+``tools/blender/demos/lakeside.glb`` is a small world using all four.
 
 .. _castsshadow:
 

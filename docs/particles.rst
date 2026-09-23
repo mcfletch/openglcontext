@@ -76,6 +76,63 @@ effect off turns it off however it is asked for.
 A node per effect would mean editing the scenegraph at the rate things happen,
 and the render pass discards what it has gathered when the scenegraph changes.
 
+.. _authored-particles:
+
+Placing an effect in a model
+----------------------------
+
+A glTF can say where the fires are. An object tagged with the
+:ref:`OGLC_hook <hooks>` kind ``fire``, ``smoke`` or ``sparks`` loads with an
+emitter from the preset of that name standing where the object stands, beside
+whatever mesh the object already carries. In Blender that is an empty — or the
+brazier itself — with the tag on the *object*, written with the
+``tools/blender/oglc_hook`` add-on's **Engine Hook** panel or as a custom
+property:
+
+.. code-block:: javascript
+
+   {"OGLC_hook": {"kind": "fire", "scale": 2.0}}
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Parameter
+     - Default
+     - What it does
+   * - ``scale``
+     - 1
+     - Multiplies every length of the effect: the size of each particle at birth
+       and death, the speed it is thrown at and the gravity bending it. A flame
+       of scale 2 is the same flame twice as tall, over the same lifetime. The
+       object's own scale multiplies it, so resizing the empty in Blender resizes
+       the effect.
+   * - ``density``
+     - 1
+     - Multiplies particles per second, the burst and the budget: more of the
+       same effect.
+   * - any emitter field
+     - the preset's
+     - Set by name before ``scale`` and ``density`` apply:
+       ``{"kind": "fire", "color": [0.3, 0.6, 1.0]}`` is a gas flame. A name
+       that is not one of the :ref:`fields <fields>`, or a value the field will
+       not take, is logged and passed over.
+
+The ``sparks`` preset is a single burst, for a game to fire on an impact. An
+authored ``sparks`` is a steady fountain of 60 a second instead, since a world
+has nothing to fire it; ``{"rate": 0, "burst": 60}`` asks for the preset's burst.
+
+The tag is read from an object only: a material has no single place for a flame
+to stand, and one carrying these kinds loads as it stands. What each tag made is
+in ``scene.hook_data['fire']`` (and ``'smoke'``, ``'sparks'``), one emitter per
+tagged object. Each emitter steps itself on the engine clock as it is drawn, and
+``scene.advance()`` reports whether any is still burning, which is what keeps
+``oglc-view`` drawing.
+
+``tools/blender/demos/lakeside.glb`` is a world authored this way, with a
+campfire, a brazier and two torches; ``oglc-view tools/blender/demos/lakeside.glb``
+shows it burning.
+
 .. _fields:
 
 Fields
@@ -107,7 +164,9 @@ Fields
    * - Frame of reference
      - ``worldSpace``
      - True leaves particles behind when the emitter moves — a rocket trail. False
-       carries them with it — a torch flame.
+       carries them with it — a torch flame. A world-space emitter's
+       ``direction`` is turned by the transform above it and keeps its own
+       length, so a scaled parent places the effect without throwing it faster.
    * - Reproducibility
      - ``seed``
      - A fixed value pins the sequence, for a reference image. −1 draws from the
