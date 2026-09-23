@@ -120,13 +120,20 @@ class TestContext(OverlayMixin, BaseContext):
         print(__doc__)
 
     def ProcessEvent(self, event):
-        '''*The pointer.*  The furniture is offered each event first, through
-        the overlay stack, and takes only what lands on one of its controls;
-        what it leaves goes to the quad view.  The context has already said which view the event
-        belongs to -- the one under the pointer, or the one a held button
-        began in -- and ``handle`` moves that view's camera.  An event it
-        takes goes no further, so the context's own navigation never sees a
-        drag meant for a view.'''
+        '''*The pointer, and the order it is offered in.*  The furniture
+        goes first: ``overlaySinks`` gives the event to the overlay stack,
+        which takes only what lands on one of its controls -- a press on a
+        button, a drag of a splitter -- and leaves everything else.  A window
+        that asked the views first would move a camera with the click meant
+        for the button standing in front of it.
+
+        What the furniture leaves goes to the quad view.  The context has
+        already said which view the event belongs to -- the one under the
+        pointer, or the one a held button began in -- and ``handle`` moves
+        that view's camera.  An event it takes goes no further, so the
+        context's own navigation never sees a drag meant for a view.'''
+        if self.overlaySinks(event):
+            return None
         if self.quad.handle(event):
             self.triggerRedraw(1)
             return None

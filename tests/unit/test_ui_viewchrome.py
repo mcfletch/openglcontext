@@ -133,6 +133,42 @@ class TestTheControlsCanBeTakenAway:
         assert len(_of(chrome, ExpandButton)) == 3
 
 
+class TestThroughTheOverlayStack:
+    """What a window routes a press through, rather than the panel directly."""
+
+    def _stacked(self, layout):
+        from OpenGLContext.ui.overlay import OverlayStack
+        chrome = ViewChrome(layout=layout)
+        stack = OverlayStack()
+        stack.push(chrome)
+        stack.layout(VIEWPORT, REFERENCE_METRICS)
+        return stack, chrome
+
+    def test_a_press_on_a_button_reaches_it(self):
+        layout = _layout()
+        stack, chrome = self._stacked(layout)
+        button = _of(chrome, ExpandButton)[1]
+        assert stack.pointer_pressed(*button.rect.centre)
+        assert stack.pointer_released(*button.rect.centre)
+        assert layout.maximised is button.view
+
+    def test_a_press_in_a_view_goes_past_the_stack(self):
+        """So the window hands it to the views, and a camera moves."""
+        layout = _layout()
+        stack, _chrome = self._stacked(layout)
+        middle = layout.views[3].rect
+        assert not stack.pointer_pressed(middle[0] + middle[2] // 2,
+                                         middle[1] + middle[3] // 2)
+
+    def test_a_splitter_drag_reaches_the_splitter(self):
+        layout = _layout()
+        stack, chrome = self._stacked(layout)
+        splitter = [one for one in _of(chrome, Splitter) if one.vertical is True][0]
+        assert stack.pointer_pressed(splitter.rect.centre[0], 120)
+        stack.pointer_moved(splitter.rect.centre[0] + 80, 120)
+        assert layout.split_at[0] == pytest.approx(0.6, abs=0.02)
+
+
 class TestWhatTheSceneUnderneathStillHears:
     def test_a_press_on_no_control_is_not_the_chromes(self):
         """It stands over the whole window; a click in a view is the view's."""
