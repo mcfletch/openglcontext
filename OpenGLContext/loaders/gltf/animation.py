@@ -703,8 +703,10 @@ def _register_morph(node: Any, node_index: int, shapes: list, g: "pygltflib.GLTF
     supplies the initial morph pose. The setters (one per morphable primitive)
     are stored so the animation Player's ``weights`` channel can drive them.
     """
+    # A material hook may have put something with no geometry of its own in a
+    # primitive's place; what has no morph targets has no setter either way.
     setters = [s.geometry.set_morph_weights for s, _ in shapes
-               if getattr(s.geometry, 'morph_targets', None)]
+               if getattr(getattr(s, 'geometry', None), 'morph_targets', None)]
     if not setters:
         return
     node_morph[node_index] = setters
@@ -739,7 +741,8 @@ def _register_skin(node: Any, node_index: int, shapes: list, g: "pygltflib.GLTF2
     if not (0 <= node.skin < len(g.skins)):
         return
     skin_meshes = [s.geometry for s, _ in shapes
-                   if getattr(s.geometry, 'skin_joints', None) is not None]
+                   if getattr(getattr(s, 'geometry', None),
+                              'skin_joints', None) is not None]
     if not skin_meshes:
         return
     sd = g.skins[node.skin]

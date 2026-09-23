@@ -11,6 +11,12 @@ becomes one :class:`~OpenGLContext.scenegraph.instancedshape.InstancedShape`
 holding every placement. Cycles in the node graph are rejected with a located
 error rather than overflowing the stack.
 
+A node carrying an ``OGLC_hook`` tag passes through the hook that tag names
+before it is placed, so an application can put a node of its own where the
+loader's ``Transform`` would have stood; what the hooks record arrives on the
+scene as ``hook_data``, and ``GLTFScene.advance`` is what moves it. See
+:mod:`OpenGLContext.loaders.gltf.hooks`.
+
 The builder leans on the lower layers -- :mod:`meshes`, :mod:`transforms`,
 :mod:`animation`, :mod:`accessors` -- and hands the assembled ``GLTFScene`` back to
 the public entry points in :mod:`loader`.
@@ -46,11 +52,13 @@ else:
         Transform, Viewpoint, DirectionalLight, PointLight, SpotLight,
     )
 from OpenGLContext.scenegraph.lod import ScreenCoverageLOD
+from OpenGLContext.scenegraph.transform import MatrixTransform
 from OpenGLContext.loaders.gltf import lod as lodext
 from OpenGLContext.loaders.gltf.accessors import (
     _buffer_bytes, decode_data_uri, _read_normalized, resolver_max,
 )
 from OpenGLContext.loaders.gltf import environment_sky
+from OpenGLContext.loaders.gltf import hooks as hookreg
 from OpenGLContext.loaders.gltf.meshes import _primitive_shape
 from OpenGLContext.loaders.gltf.transforms import (
     _transform_for, _local_matrix_rv, _world_box, framing_bounds,
@@ -62,6 +70,10 @@ from OpenGLContext.loaders.gltf.animation import (
 )
 
 log = logging.getLogger(__name__)
+
+#: The ``extras`` key a node says with that its geometry is not to be drawn
+#: into the shadow maps. See :func:`_casts_shadow`.
+CASTS_SHADOW = 'OGLC_castsShadow'
 
 
 class GLTFScene(object):
@@ -148,6 +160,31 @@ class GLTFScene(object):
         # scene carries absolute-unit KHR_lights_punctual lights; a viewer forwards
         # it to the PBR pass so the frame doesn't clip to white.
         self.exposure = 1.0
+        # What the OGLC_hook hooks recorded while the scene was built, keyed by
+        # the kind that recorded it: the bodies of water in the file, the
+        # trigger volumes, whatever a game's own kind put there. Empty for a
+        # document that carries no tag, or one loaded with the mechanism off.
+        self.hook_data: dict = {}
+
+    def advance(self, when: float) -> bool:
+        """Move whatever a hook asked to be moved to ``when``, in seconds.
+
+        Returns whether anything changed, which is what a viewer redraws on.
+        A hook says what it wants advanced by recording it -- the water hook
+        records its meshes -- and a kind that registered no ``advance`` is
+        walked past, so a scene with no timed hook is a return.
+
+        A game driving its own loop calls this itself;
+        :meth:`~OpenGLContext.viewer.sceneviewer.SceneViewerMixin.advanceHooks`
+        is what calls it in the viewer.
+        """
+        moved = False
+        for kind, data in self.hook_data.items():
+            entry = hookreg.registered(kind)
+            if entry is None or entry.advance is None:
+                continue
+            moved = bool(entry.advance(data, float(when))) or moved
+        return moved
 
     def player_named(self, name: str, loop: bool = True) -> "Optional[Player]":
         """A :class:`~OpenGLContext.loaders.gltf.animation.Player` bound to the
@@ -380,6 +417,28 @@ def _meter_exposure(light_meter: list, center: Sequence[float]) -> float:
     return min(1.0, TARGET / max(key, TARGET))
 
 
+def _casts_shadow(node: Any) -> bool:
+    """Whether this node's own geometry goes into the depth pass.
+
+    glTF has no flag for it, so the answer is an ``extras`` key,
+    ``OGLC_castsShadow``. An interior is what it is for: a room's shell stands
+    between every light and everything in the room, so a hall whose walls cast
+    is a hall with the lights switched off. Such a shell is still lit and still
+    *receives* shadows -- not casting is not being absent.
+
+    It says what *one* node does and does not reach that node's children, which
+    is how the tools that author it treat shadow visibility -- a group is not a
+    decision about what stands inside it. It does carry to a node's
+    ``MSFT_lod`` alternatives, since those are the same object drawn instead: a
+    shadow appearing as a viewer walks closer would be the level switch made
+    visible.
+    """
+    extras = getattr(node, 'extras', None)
+    if not isinstance(extras, dict) or CASTS_SHADOW not in extras:
+        return True
+    return bool(extras[CASTS_SHADOW])
+
+
 def _beside_fields(node: Any, **values: Any) -> None:
     """Attach glTF-only values to *node* as plain attributes.
 
@@ -393,13 +452,17 @@ def _beside_fields(node: Any, **values: Any) -> None:
         setattr(node, name, value)
 
 
-def _light_node(light_def: Any,
-                world: np.ndarray) -> "Optional[Union[DirectionalLight, PointLight, SpotLight]]":
+def _light_node(light_def: Any, world: np.ndarray, casts: bool = True
+                ) -> "Optional[Union[DirectionalLight, PointLight, SpotLight]]":
     """Build a scenegraph light from a KHR_lights_punctual light + world matrix.
 
     Intensities/colours are passed through as authored. Directional lights cast
     shadows by default (the usual key light); point/spot lights do not, so a
-    scene can add fill lights without multiplying the shadow cost.
+    scene can add fill lights without multiplying the shadow cost. ``casts`` is
+    the node's own ``OGLC_castsShadow`` (:func:`_casts_shadow`), which is how a
+    file says that *this* light is a fill: a bounce light standing in for the
+    light a room's own surfaces would throw back has nothing to shadow, and a
+    shadow map for it is a map's worth of cost for nothing.
     """
     if not isinstance(light_def, dict):
         return None
@@ -413,7 +476,7 @@ def _light_node(light_def: Any,
     # left off-centre lights displaced past their targets.)
     pos = (0.0, 0.0, 0.0)
     direction = (0.0, 0.0, -1.0)
-    shadows = bool(light_def.get('castShadows', kind == 'directional'))
+    shadows = casts and bool(light_def.get('castShadows', kind == 'directional'))
     if kind == 'directional':
         # Directional intensity is illuminance (lux); no distance falloff.
         return DirectionalLight(direction=direction, color=color,
@@ -463,8 +526,9 @@ class _SceneBuilder:
         self.resolver = resolver
         self.mat_cache: dict = {}
         self.tex_cache: dict = {}
-        # decoded mesh shapes + local bounds, per mesh index
-        self.mesh_cache: dict[int, list] = {}
+        # decoded mesh shapes + local bounds, per mesh index and whether the
+        # node referencing it casts a shadow (that is a property of the Shape)
+        self.mesh_cache: dict[tuple[int, bool], list] = {}
         # SceneGraph holds the DEF registry; every node's Transform is registered
         # under a DEF so a caller can grab it by name (see _def_name).
         self.scene_graph = SceneGraph()
@@ -501,26 +565,43 @@ class _SceneBuilder:
         # currently is inside such a level.
         self.lod_alternatives: set = lodext.alternative_ids(g)
         self._coarser_levels = 0
+        # The OGLC_hook kinds this document's materials and nodes name, and the
+        # hook_data they write. One runner for the whole load, so an unknown
+        # kind is reported once rather than once per primitive.
+        self.hooks = hookreg.HookRunner(g, resolver)
 
-    def mesh_shapes(self, mesh_index: int) -> list:
-        if mesh_index in self.mesh_cache:
-            return self.mesh_cache[mesh_index]
+    def mesh_shapes(self, mesh_index: int,
+                    world: Optional[np.ndarray] = None,
+                    casts: bool = True) -> list:
+        # Keyed by the casting flag as well as the mesh, because the flag is a
+        # property of the node and the shape is what carries it: a box used for
+        # a wall that does not cast and a plinth that does is two shapes.
+        key = (mesh_index, bool(casts))
+        if key in self.mesh_cache:
+            return self.mesh_cache[key]
         shapes = []
         dynamic = False
         for prim in self.g.meshes[mesh_index].primitives:
             shape, bounds = _primitive_shape(
-                self.g, prim, self.resolver, self.mat_cache, self.tex_cache)
+                self.g, prim, self.resolver, self.mat_cache, self.tex_cache,
+                self.hooks, world)
             if shape is not None:
                 shapes.append((shape, bounds))
-                geo = shape.geometry
+                if not casts and hasattr(shape, 'castsShadow'):
+                    shape.castsShadow = False
+                # A hook may have put something else here entirely, which has
+                # no geometry of its own to ask about.
+                geo = getattr(shape, 'geometry', None)
                 if getattr(geo, 'morph_targets', None) or \
-                        getattr(geo, 'skin_joints', None) is not None:
+                        getattr(geo, 'skin_joints', None) is not None or \
+                        getattr(shape, '_gltf_unshareable', False):
                     dynamic = True
-        # A morphed/skinned mesh carries its own deformed vertex state, so nodes
-        # that reference it must each get their own copy (independent weights /
-        # joint matrices) -- never share it via the cache.
+        # A morphed/skinned mesh carries its own deformed vertex state, and so
+        # does a hook's result that stands for one node rather than for a mesh,
+        # so nodes that reference it must each get their own copy (independent
+        # weights / joint matrices / wave clock) -- never share it via the cache.
         if not dynamic:
-            self.mesh_cache[mesh_index] = shapes
+            self.mesh_cache[key] = shapes
         return shapes
 
     def _record_part(self, world: np.ndarray, shape: Any,
@@ -534,13 +615,15 @@ class _SceneBuilder:
         if self._coarser_levels:
             return
         minimum, maximum = _world_box(world, bounds)
-        positions = getattr(shape.geometry, 'positions', None)
+        positions = getattr(getattr(shape, 'geometry', None), 'positions', None)
         self.parts.append(
             (minimum, maximum, 0 if positions is None else len(positions)))
 
     def build(self, node_index: int, parent_world: np.ndarray,
               ancestry: Tuple[int, ...] = (), parent_visible: bool = True,
-              replacing: bool = False) -> "Transform":
+              replacing: bool = False, parent_casts: bool = True) -> Any:
+        # Any rather than Transform: a node carrying an OGLC_hook tag may end
+        # up as whatever its hook made of it -- see _place.
         # A glTF node graph is meant to be a forest, but nothing in the format
         # prevents a node from listing an ancestor as a child. Walking that with
         # plain recursion stack-overflows; track the current path and reject a
@@ -578,6 +661,7 @@ class _SceneBuilder:
         # so the flag threads down the recursion as `parent_visible`. The authored
         # initial flag may itself be a KHR_animation_pointer target baked in above.
         node_visible = parent_visible
+        node_casts = parent_casts and _casts_shadow(node)   # parent_casts: an MSFT_lod alternative of a marked node
         placements: Optional[np.ndarray] = None
         if isinstance(node_ext, dict):
             nv = node_ext.get('KHR_node_visibility')
@@ -591,20 +675,15 @@ class _SceneBuilder:
             node_ext.get(lodext.EXTENSION) if isinstance(node_ext, dict) else None)
         if lod_ids and node.mesh is not None and node_visible and placements is None:
             children.append(self._lod_node(node, lod_ids, world, ancestry,
-                                           node_visible, group))
+                                           node_visible, group, node_casts))
         elif node.mesh is not None and node_visible:
-            shapes = self.mesh_shapes(node.mesh)
+            shapes = self.mesh_shapes(node.mesh, world, node_casts)
             if placements is not None:
                 # One node per mesh primitive holding every placement, sharing
                 # the mesh's geometry and appearance -> one render record, and
                 # one instanced draw that other tiles' copies batch into.
                 for shape, bounds in shapes:
-                    children.append(InstancedShape(
-                        geometry=shape.geometry,
-                        appearance=shape.appearance,
-                        pickable=shape.pickable,
-                        placements=placements,
-                    ))
+                    children.append(self._instanced(node, shape, placements))
                     for placement in placements:
                         self._record_part(placement @ world, shape, bounds)
             else:
@@ -618,7 +697,7 @@ class _SceneBuilder:
         if isinstance(node_ext, dict) and self.light_defs and node_visible:
             li = (node_ext.get('KHR_lights_punctual', {}) or {}).get('light')
             if li is not None and 0 <= li < len(self.light_defs):
-                light = _light_node(self.light_defs[li], world)
+                light = _light_node(self.light_defs[li], world, node_casts)
                 if light is not None:
                     children.append(light)
                     self.node_light[node_index] = light   # for KHR_animation_pointer visibility
@@ -629,12 +708,66 @@ class _SceneBuilder:
             children.extend(self._audio_emitters(node))
         for child in (node.children or []):
             children.append(self.build(child, world, ancestry, node_visible))
-        group.children = children
-        return group
+        return self._place(node, node_index, group, children, world)
+
+    def _place(self, node: Any, node_index: int, group: "Transform",
+               children: list, world: np.ndarray) -> Any:
+        """What stands in this glTF node's slot, once its hook has had its say.
+
+        A node carrying no ``OGLC_hook`` tag, or one whose hook returned
+        ``None``, keeps the ``Transform`` the loader built and the children it
+        gathered. A hook returning ``(node, False)`` stands **under** that
+        transform, so the node's own TRS still places it; one returning
+        ``(node, True)`` stands in the transform's place, having been handed
+        that TRS as ``ctx.local_matrix`` to apply itself.
+
+        Either way the node's DEF moves to whatever ends up in the slot, so
+        :meth:`GLTFScene.getDEF` finds the same name it would have found.
+        ``node_transforms`` keeps the loader's own ``Transform``, because that
+        is where the document says the node is -- which is what a skin's joint
+        walk and an animation channel are written against, and a hook that took
+        the slot took the placement rather than the document's word for it.
+        """
+        made = self.hooks.node(node, group, children,
+                               _local_matrix_rv(group), world)
+        if made is None:
+            group.children = children
+            return group
+        placed, replacing = made
+        if not replacing:
+            group.children = [placed]
+            return group
+        self.scene_graph.regDefName(group.DEF, placed)
+        return placed
+
+    def _instanced(self, node: Any, shape: Any, placements: np.ndarray) -> Any:
+        """Every placement of one primitive as a single instanced draw.
+
+        A material hook that put something else in the primitive's place has no
+        geometry to instance, so its result is placed once per instance
+        instead -- which draws the same scene and costs what the instancing was
+        there to avoid, so it is said out loud.
+        """
+        geometry = getattr(shape, 'geometry', None)
+        if geometry is None:
+            log.warning(
+                'the hook on mesh %r made something that is not a shape, so '
+                'its %d EXT_mesh_gpu_instancing placements are drawn one at a '
+                'time rather than instanced',
+                getattr(node, 'name', None) or node.mesh, len(placements))
+            return Transform(children=[
+                MatrixTransform(localMatrix=placement, children=[shape])
+                for placement in placements])
+        return InstancedShape(
+            geometry=geometry,
+            appearance=shape.appearance,
+            pickable=shape.pickable,
+            placements=placements,
+        )
 
     def _lod_node(self, node: Any, ids: list, world: np.ndarray,
                   ancestry: Tuple[int, ...], node_visible: bool,
-                  carrier: Any = None) -> Any:
+                  carrier: Any = None, node_casts: bool = True) -> Any:
         """One switching node for a node that carries ``MSFT_lod``.
 
         The node's own mesh is the finest level and the nodes ``ids`` names are
@@ -649,9 +782,11 @@ class _SceneBuilder:
         somewhere else is drawn here and said so, because the extension offers
         another *version* of a node rather than another place for it.
         """
-        levels: list = [Transform(children=[shape for shape, _bounds in
-                                            self.mesh_shapes(node.mesh)])]
-        for shape, bounds in self.mesh_shapes(node.mesh):
+        # Asked for once: a mesh the cache does not hold is decoded, and its
+        # hooks run, on every call.
+        finest = self.mesh_shapes(node.mesh, world, node_casts)
+        levels: list = [Transform(children=[shape for shape, _bounds in finest])]
+        for shape, bounds in finest:
             self._record_part(world, shape, bounds)
         for index in ids:
             if not 0 <= index < len(self.g.nodes or []):
@@ -663,7 +798,7 @@ class _SceneBuilder:
             self._coarser_levels += 1
             try:
                 levels.append(self.build(index, world, ancestry, node_visible,
-                                         replacing=True))
+                                         replacing=True, parent_casts=node_casts))
             finally:
                 self._coarser_levels -= 1
         measured = lodext.mesh_bounds(self.g, node.mesh)
@@ -842,6 +977,7 @@ class _SceneBuilder:
         scene.node_names = {i: n.name for i, n in enumerate(g.nodes or [])
                             if getattr(n, 'name', None)}
         scene.materials = self._name_materials()
+        scene.hook_data = self.hooks.scene_data
         top = getattr(g, 'extensions', None) or {}
         scene.extensions = top if isinstance(top, dict) else {}
         if self.skins:

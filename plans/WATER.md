@@ -4,6 +4,11 @@ Status: **Complete** — 2026-08-20. Medium, volumes, submersion, the three
 styles, the ribbon, the glints and the GPU path have landed; twig-bb runs on
 it, and a baked world carries its rivers.
 
+"Where there is water is authoring and lives with whatever builds the world"
+now has an answer for files as well: a material or a node tagged `OGLC_hook`
+in a glTF loads as water, with its volume and its clock. See
+[GLTF-ENGINE-HOOKS.md](GLTF-ENGINE-HOOKS.md).
+
 Water is in the engine twice over and neither half knows about the other. A
 lake is a flat sheet with a ripple in its normals
 (`scenegraph/water.py`); being *inside* a liquid is a fog colour and an audio

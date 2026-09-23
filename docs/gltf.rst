@@ -264,6 +264,139 @@ inside the glb and each finer one a sidecar the operating system never opens
 until it is wanted. The engine reads them. ``MSFT_lod`` on a *material*, which
 the extension also allows, is not read.
 
+.. _hooks:
+
+Engine hooks: what a material or an object *is*
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A glTF carries geometry and PBR factors and nothing that says a surface is
+*water*. The format has no ratified way to ask for a shader, and the one that
+had it — ``KHR_techniques_webgl`` — is archived. ``OGLC_hook`` is this
+project's own answer: a tag naming a **kind**, which the application looks up in
+a registry and makes something of as the file loads.
+
+Two different facts want tagging, and the tag goes on whichever carries the one
+you mean. On a **material** it says *this surface is made of that substance*; on
+a **node** it says *this object is a thing of that kind*. One payload, three
+spellings:
+
+.. code-block:: javascript
+
+   // extensions -- what a tool writes
+   {"OGLC_hook": {"kind": "water", "style": "choppy", "depth": 6.0}}
+
+   // extras -- what a Blender custom property becomes
+   {"OGLC_hook": {"kind": "water", "style": "choppy"}}
+
+   // extras, shorthand: a bare string is the kind, with no parameters
+   {"OGLC_hook": "water"}
+
+The extension wins where both are present, because a file carrying one was
+written by a tool that knew what it meant. A ``kind`` nothing is registered for
+loads as an ordinary shape, so a file authored for another engine still loads
+here.
+
+Authoring one in Blender
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+Two ways, and the loader reads both. **With no add-on:** give the material (or
+the object) a custom property called ``OGLC_hook`` in the Properties editor,
+holding the string ``water`` or a JSON object, and export with **Include ‣
+Custom Properties** ticked. Blender writes material custom properties to
+``material.extras`` and object custom properties to ``node.extras``, which is
+exactly what the loader reads. Blender 4.x is enough.
+
+**With the add-on** in ``tools/blender/oglc_hook``: an **Engine Hook** panel on
+the material and object tabs, with fields for the ``water`` kind and a JSON
+object for any other, writing the ``OGLC_hook`` *extension* as each material and
+node is exported. It is a form rather than a typed-out string, it says under the
+fields exactly what the file will carry, and no export option has to be ticked
+for it. Zip the folder, install it with **Edit ‣ Preferences ‣ Add-ons ‣ Install
+from Disk**, and tick it; ``tools/blender/README.md`` has the rest.
+
+Registering a kind of your own
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. code-block:: python
+
+   from OpenGLContext.loaders.gltf import hooks
+
+   @hooks.register( 'twigbb:teleporter', shareable=False )
+   def teleporter( ctx ):
+       if ctx.at == 'node':
+           return (Portal( target=ctx.params['target'], children=ctx.children ), True)
+       return None
+
+The factory is called at both hook points — once per primitive of a tagged
+material, once per tagged node — and ``ctx.at`` says which. At the material
+point it is handed the finished ``PBRMesh``, ``PBRMaterial`` and ``Shape``, the
+primitive's local ``bounds`` (writable, so a hook that changes the extent
+changes the framing) and the world matrix this copy stands at; it returns
+``None`` to keep the loader's ``Shape``, or a node to put in its place. At the
+node point it is handed the ``Transform``, the children gathered under it and
+the local and world matrices, and returns one of three things:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Return
+     - What the loader does
+   * - ``None``
+     - Keeps its own ``Transform`` and children. The hook augmented and nothing
+       else changed.
+   * - ``(node, False)``
+     - Puts the node inside the glTF node's ``Transform``, in place of the
+       children the loader gathered. The node's TRS still places it, and the
+       hook may return any node type — a ``Switch``, an ``LOD``, a node the game
+       defined.
+   * - ``(node, True)``
+     - Puts the node in the glTF node's own slot in the parent. The
+       ``Transform`` is gone and the hook owns the placement;
+       ``ctx.local_matrix`` is the transform it has taken on.
+
+The flag is on the return rather than on the registration, because whether a
+hook replaces a node is a property of what it made of *this* node. Either way
+the node's DEF moves to whatever ends up in the slot, so ``getDEF`` finds the
+same name it would have found.
+
+``shareable=False`` says the hook's result carries per-node state — a box round
+where this copy stands, a trigger's fired flag — so two nodes referencing one
+mesh each get their own, exactly as a morphed or skinned mesh already does. The
+default shares one result, as the loader always has.
+
+What a hook records with ``ctx.collect()`` arrives on the scene as
+``scene.hook_data[ kind ]``. A kind registered with an ``advance`` callable is
+walked by ``scene.advance( seconds )``, which answers whether anything changed;
+the viewer calls it from its idle, and a game driving its own loop calls it
+itself.
+
+What a file may ask for
+^^^^^^^^^^^^^^^^^^^^^^^
+
+**A file names a kind; it never names code.** The registry is populated by the
+application, so a downloaded model can only select among what the running
+program already registered — plus the kinds the engine itself ships, which are a
+fixed table in ``OpenGLContext.loaders.gltf.hooks``. There is no entry-point
+scan: an installed package cannot add a kind to somebody else's viewer by being
+present. Setting ``OPENGLCONTEXT_GLTF_HOOKS=0`` leaves every tag in every file
+unread.
+
+The engine claims the bare lowercase names it documents and ships — ``water`` is
+the only one — so an application naming its own keeps them out of that
+namespace: ``glisteel:rail``, ``twigbb:teleporter``. A convention, read by
+nothing, so that a kind a game invents today does not collide with one the
+engine ships later.
+
+The :doc:`writer <baking>` writes both spellings back: a material's or a
+``SceneNode``'s ``extras`` pass through uninterpreted, and its ``hook`` becomes
+an ``OGLC_hook`` extension block, so a world can be loaded, edited and baked
+again with its tags intact.
+
+The ``water`` kind ships registered, so a tagged file works in ``oglc-view``
+with no application code at all. :ref:`Authoring water in a model <authoring>`
+has its parameters and what lands on the scene.
+
 .. _castsshadow:
 
 A node that is not a shadow caster

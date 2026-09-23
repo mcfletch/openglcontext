@@ -199,6 +199,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         self.modelTransform = None
         self._cameraNames: List[str] = []
         self._turntableStart = self._now()
+        self._hooksStart = self._now()
         self._flyPath: Any = None
         self._defaultModelRotation: Sequence[float] = (0, 1, 0, 0.0)
         self._animations: List[Any] = []
@@ -444,6 +445,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         """
         self.scene = scene
         self.radius = scene.radius or 1.0
+        self._hooksStart = self._now()
         # A dataset the viewer may not re-centre is a world -- its coordinates
         # are the world's and the camera flies about inside it -- so walking
         # drops in from wherever the camera got to.
@@ -919,6 +921,25 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         self._player.evaluate(self._animationClock)
         return True
 
+    def advanceHooks(self) -> bool:
+        """Move whatever an ``OGLC_hook`` asked to be moved. Returns whether to redraw.
+
+        The water an artist tagged in a model is a wave the card draws from a
+        time the application has to supply, and this is where it comes from:
+        seconds since the scene was mounted, so the phase starts where the
+        model was authored rather than at whatever the wall clock says.
+        A scene with no timed hook -- and one that is not a glTF -- is a return.
+        A time pinned with ``--anim-time`` holds the hooks at that time as it
+        holds the animation, and a held frame has nothing to redraw for.
+        """
+        advance = getattr(self.scene, 'advance', None)
+        if advance is None:
+            return False
+        if self.options.anim_time is not None:
+            advance(self.options.anim_time)
+            return False
+        return bool(advance(self._now() - self._hooksStart))
+
     def toggleAnimation(self, event: Any = None) -> None:
         self._animationPlaying = not self._animationPlaying
         self._animationLast = None      # do not count the time spent paused
@@ -1100,6 +1121,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
             return 1
         streamed = self.advanceStreaming()
         animated = self.advanceAnimation()
+        hooked = self.advanceHooks()
         if self.capturing:
             # Keep drawing so the adaptive analytic-sky IBL converges, as it
             # does live, before the frame is taken.
@@ -1107,7 +1129,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         elif self.physicsWalking:
             self.stepPhysics()
         elif self.advanceFlyThrough() or self.advanceTurntable() \
-                or animated or streamed:
+                or animated or streamed or hooked:
             self.triggerRedraw(1)
         if self.recording:
             # A recording is a fixed number of frames rather than whatever the

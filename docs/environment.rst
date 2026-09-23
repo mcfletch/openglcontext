@@ -320,6 +320,14 @@ Recording a session, and making one repeatable
        session and seeds the ordinary ``random`` and ``numpy.random`` generators from
        it, so a scene that scatters vegetation or throws sparks renders the same way
        twice. It has to be in force before the first generator is drawn from.
+   * - ``OPENGLCONTEXT_GLTF_HOOKS``
+     - flag
+     - ``1``
+     - Whether a glTF's :ref:`OGLC_hook <hooks>` tags are read at all. Off, every
+       tag in every file is ignored and a tagged lake loads as the flat sheet the
+       file draws. It is in this table rather than left to the shell because a
+       tag changes what a frame shows: a reference image captured with the
+       mechanism off is a reference for a different scene.
 
 Sound and diagnostics
 ---------------------

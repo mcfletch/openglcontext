@@ -120,6 +120,11 @@ ENVIRONMENT: Tuple[str, ...] = (
     # against.  A reference image rendered with either inherited is a
     # reference for whatever the parent process happened to be carrying.
     'OPENGLCONTEXT_PHYSICS', 'OPENGLCONTEXT_VIEW_YAW',
+    # Whether an OGLC_hook tag in a glTF is read decides what the file's
+    # materials and nodes become -- a lake either moves or is a flat sheet --
+    # so a reference image rendered under an inherited one is a reference for
+    # a different scene. See OpenGLContext.loaders.gltf.hooks.
+    'OPENGLCONTEXT_GLTF_HOOKS',
 )
 
 #: The two of those that say **how a render is presented** rather than what it

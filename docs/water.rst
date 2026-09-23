@@ -366,6 +366,80 @@ and ``v`` reports what ``submerge`` found as the camera crosses the surface:
    medium under the camera: water
    medium under the camera: air
 
+.. _authoring:
+
+Authoring water in a model
+--------------------------
+
+Everything above builds water in Python. An artist can also mark it in the
+model: give the lake's material a custom property called ``OGLC_hook``, export,
+and the surface loads moving. Nothing registers anything — the ``water`` kind
+ships bound — so a tagged file opens in ``oglc-view`` as water.
+
+.. code-block:: javascript
+
+   OGLC_hook = {"kind": "water", "style": "choppy", "depth": 6.0}
+
+In Blender that is a custom property on the material datablock, exported with
+**Include ‣ Custom Properties** ticked; no add-on, and Blender 4.x is enough.
+The add-on in ``tools/blender/oglc_hook`` is the other way to author it: an
+**Engine Hook** panel with a field per parameter below, writing the extension
+spelling on export. The shorthand is the kind on its own, ``OGLC_hook =
+"water"``, which is a pond. :ref:`Engine hooks <hooks>` is the mechanism
+underneath, including how to tag a node rather than a material and how to
+register a kind of your own.
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Parameter
+     - Default
+     - What it says
+   * - ``style``
+     - ``still``
+     - ``still``, ``flowing``, ``choppy`` or ``lake`` — or an object spelling
+       out the ``WaterStyle`` fields (``amplitude``, ``wavelength``, ``speed``,
+       ``steepness``, ``flow``) for water that is none of the four. A name
+       nothing answers to draws a pond and says so in the log.
+   * - ``material``
+     - ``keep``
+     - ``keep`` shades the surface with the material the file carries, so what
+       the artist authored is what is drawn. ``engine`` takes
+       ``water_material()`` instead.
+   * - ``medium``
+     - ``water``
+     - ``water``, ``slime`` or ``lava``: what being inside it is like. Lava is
+       this kind with another medium and another material, which is why there
+       is no second one.
+   * - ``depth``
+     - ``0.0``
+     - How far below the surface the body reaches, in metres. A surface has no
+       thickness, so a sheet with no ``depth`` bounds a box nothing is inside of
+       except exactly at the waterline.
+
+Each tagged primitive arrives as one ``WaterBody`` in ``scene.hook_data[
+'water' ]`` — the mesh whose wave a frame advances, the style it moves with, and
+the ``Volume`` saying where it is, in world metres and round *this* copy of the
+surface. Two nodes sharing one tagged mesh are two bodies of water, with a box
+each.
+
+.. code-block:: python
+
+   scene = gltf.load_gltf( "valley.glb" )
+   volumes = Volumes([ body.volume for body in scene.hook_data.get( 'water', () ) ])
+   ...
+   submerge( self, volumes, self.platform.position )   # once a frame
+
+A wave costs nothing per frame because the card holds the field, but something
+has to say what time it is. ``scene.advance( seconds )`` moves every body's
+surface and answers whether anything changed; the viewer calls it from its idle,
+and a game driving its own loop calls it itself. A scene of ponds answers
+``False`` — still water carries its ripple in the normals, and there is nothing
+to redraw for. ``oglc-view --anim-time SECONDS`` holds the water at that time as
+it holds the animation, so a capture of a tagged lake is the same frame on every
+run.
+
 Limits
 ------
 
