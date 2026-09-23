@@ -12,22 +12,26 @@ subprocess with a real X server, which is what Tk needs.
 
 See `plans/BACKEND-PARITY.md`.
 """
-import os
 import subprocess
 import sys
 
 import pytest
 
 from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.testing.glcontext import display_answers
 from OpenGLContext.testing.paths import tests_root
 
 pytest.importorskip('tkinter')
 
 DRIVER = tests_root(__file__) / 'helpers' / '_tk_backend_drive.py'
 
+#: Whether an X server answers and lets this process in: a ``DISPLAY`` naming
+#: a server that has gone, or one whose authority this process does not hold,
+#: is no display for Tk to open.
 needs_display = pytest.mark.skipif(
-    not os.environ.get('DISPLAY', '').strip(),
-    reason='Tk needs an X display; run under xvfb-run to exercise it')
+    not display_answers(),
+    reason='Tk needs an X display this process can open; run under xvfb-run '
+           'to exercise it')
 
 
 def _asked(**named):
