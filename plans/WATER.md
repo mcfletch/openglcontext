@@ -132,8 +132,9 @@ table, and what is at a point is a box test.
 
 ## What this is not
 
-**Not a simulation.** No fluid solver, no reflections beyond what the material
-already does, no refraction beyond the transmission the PBR pass has. The wave
+**Not a simulation.** No fluid solver, no refraction beyond the transmission
+the PBR pass has. Reflection of the scene is a planar mirror, not a traced
+one ([WATER-REFLECTION.md](WATER-REFLECTION.md)). The wave
 field is analytic, which is what makes it cheap, seamless and reproducible.
 
 **Not a physics body.** Buoyancy and drag read the height field this provides;
@@ -153,7 +154,7 @@ what every existing style used), sent to the card as `waveRippleScale`; the
 ripple as six trains of unrelated lengths (0.41–1.83 × `ripple`) and headings,
 each moving at the deep-water phase speed of its length, √(g/k), on water that
 moves; and `BREEZE`, a named style for a pond or small lake seen from its bank
-(1.4 m waves 2.5 cm high, a 0.45 m ripple). The module and the shader share
+(retuned with the reflection work, [WATER-REFLECTION.md](WATER-REFLECTION.md): 1.1 m waves 1.2 cm high, a 0.32 m ripple). The module and the shader share
 the table (`_RIPPLE_TRAINS` / `RIPPLE_TRAINS`) and `test_water_gpu.py` holds
 them together. Every existing style keeps its steepness and scale, and gains
 the six-train ripple and its motion.

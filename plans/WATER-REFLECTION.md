@@ -1,6 +1,6 @@
 # Water that reflects the scene
 
-Status: **In progress** — 2026-09-23.
+Status: **Complete** — 2026-09-23.
 
 ## Why
 
@@ -44,11 +44,33 @@ A planar reflection, the standard answer for a flat body of water:
   whose fragment stage has 32 or fewer texture units compiles it out
   (`PBR_PLANAR_REFLECTION`) and keeps the probe reflection.
 
+## What else it took
+
+The lakeside demo showed two more things wrong with the water once it
+reflected anything, and both are fixed with it:
+
+- **The ripple was one strength everywhere**, which reads as a texture laid
+  over the surface. It now varies in gusts: two long trains (23 and 37 ripple
+  lengths) take it from 0.1 to 1.6 of the style's steepness, drifting at 0.6 of
+  its speed (`_GUST_TRAINS`, `GUST_*`, shared with `_wave_inc.glsl`).
+- **Far water drew its full ripple**, which at a few pixels a wave aliases into
+  a grid. Each train now fades as its wavelength falls from four pixels across
+  to two, measured in the fragment shader from `fwidth` of the surface
+  position (`PIXELS_PER_WAVE`). `wave_normal` stays the unfiltered field.
+- `BREEZE` was retuned against the demo: 1.1 m waves 1.2 cm high, a 0.32 m
+  ripple at 0.081 rad.
+
+The mirrored render culls the frame's own walk of the scene through the
+mirrored camera's frustum, so something above the top of the view that
+reflects into it is drawn. `prepareViews` keeps the walk on the pass for that
+until `finishViews`.
+
 ## Limits
 
 - One plane per view: several sheets at different levels reflect the scene as
   seen in the nearest one.
 - Transparent shapes — particles, glass — are not drawn into the reflection.
-- The reflection is of the frame's culled set, so something outside the
-  camera's frustum does not appear in the water even where its reflection
-  would be in view.
+- With several views sharing one draw of an opaque water surface
+  (`renderShared`), that surface reflects the sky alone.
+- `REFLECTION_DISTORTION` (0.12 view widths per unit of tilt) is a single
+  number for every body of water.

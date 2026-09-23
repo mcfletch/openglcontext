@@ -87,6 +87,35 @@ const vec3 RIPPLE_TRAINS[6] = vec3[6](
 // its length do, so the pattern changes as it moves.
 const float WAVE_GRAVITY = 9.81;
 
+// The gusts the ripple's strength varies with: a turn from the heading and a
+// length in multiples of waveRippleScale. Wind comes over water in gusts, so a
+// breeze ruffles it in patches that drift.
+const vec2 GUST_TRAINS[2] = vec2[2](
+    vec2( 0.40, 23.0),
+    vec2(-1.30, 37.0)
+);
+const float GUST_CALM = 0.1;    // the ripple's strength in the calmest patch...
+const float GUST_PEAK = 1.6;    // ...and in the gustiest, as shares of waveSteepness
+const float GUST_DRIFT = 0.6;   // how fast the gusts drift, as a share of waveSpeed
+
+// A ripple train fades out as its wavelength falls from this many pixels
+// across to half as many: finer than that it cannot be drawn, only aliased.
+const float PIXELS_PER_WAVE = 4.0;
+
+// How strongly the wind is ruffling the water at a point, from GUST_CALM to
+// GUST_PEAK.
+float waveGust(vec2 point, float heading, float when) {
+    float scale = max(waveRippleScale, 1e-6);
+    float drift = waveSpeed * GUST_DRIFT * when;
+    float total = 0.0;
+    for (int i = 0; i < 2; ++i) {
+        float angle = heading + GUST_TRAINS[i].x;
+        float along = point.x * cos(angle) + point.y * sin(angle) - drift;
+        total += sin(6.283185307179586 * along / (scale * GUST_TRAINS[i].y));
+    }
+    return GUST_CALM + (GUST_PEAK - GUST_CALM) * (0.5 + 0.25 * total);
+}
+
 // The fine ripple, from a point on the surface in the plane it lies in.
 //
 // Kept out of applyWave and given to the *fragment* shader: it repeats over
@@ -95,7 +124,11 @@ const float WAVE_GRAVITY = 9.81;
 // at the vertices it aliases away to nothing and the surface comes out a
 // flat plate; sampled per pixel it is the same ripple at any mesh density,
 // which is what makes a lake read as water rather than as concrete.
-vec2 waveRipple(vec2 surface) {
+//
+// ``footprint`` is the metres of surface one pixel covers, which only the
+// fragment stage can measure; a train too fine for it to show is faded out,
+// so far water settles into a smooth mirror rather than a grid.
+vec2 waveRipple(vec2 surface, float footprint) {
     if (!waveEnabled || waveSteepness <= 0.0) { return vec2(0.0); }
     // Still water's ripple holds still; water that moves carries its ripple
     // downstream with the flow, each train at its own speed.
@@ -105,12 +138,18 @@ vec2 waveRipple(vec2 surface) {
     vec2 drift = surface - waveFlow * when;
     float heading = waveHeading();
     float scale = max(waveRippleScale, 1e-6);
+    float strength = waveSteepness * waveGust(drift, heading, when);
     vec2 slope = vec2(0.0);
     for (int i = 0; i < 6; ++i) {
+        float wavelength = scale * RIPPLE_TRAINS[i].z;
+        float shown = footprint > 0.0
+            ? clamp((wavelength / footprint - PIXELS_PER_WAVE * 0.5)
+                    / (PIXELS_PER_WAVE * 0.5), 0.0, 1.0)
+            : 1.0;
         float angle = heading + RIPPLE_TRAINS[i].x;
-        float number = 6.283185307179586 / (scale * RIPPLE_TRAINS[i].z);
+        float number = 6.283185307179586 / wavelength;
         float along = drift.x * cos(angle) + drift.y * sin(angle);
-        float tilt = waveSteepness * RIPPLE_TRAINS[i].y
+        float tilt = strength * RIPPLE_TRAINS[i].y * shown
                    * cos(number * along - sqrt(WAVE_GRAVITY * number) * when);
         slope += tilt * vec2(cos(angle), sin(angle));
     }
@@ -118,5 +157,5 @@ vec2 waveRipple(vec2 surface) {
 }
 #else
 void applyWave(inout vec3 position, inout vec3 normal) {}
-vec2 waveRipple(vec2 surface) { return vec2(0.0); }
+vec2 waveRipple(vec2 surface, float footprint) { return vec2(0.0); }
 #endif

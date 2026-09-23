@@ -299,3 +299,66 @@ class TestTheRippleIsNotALattice:
         """Nothing about still water changes with time, its light included."""
         x, z = _grid(half=5.0, steps=9)
         assert np.allclose(wave_normal(STILL, x, z, 0.0), wave_normal(STILL, x, z, 3.0))
+
+
+class TestTheRippleVariesAsWindDoes:
+    """Wind on water is not even: it comes in gusts, so the ruffle is patchy,
+    calm here and ruffled there, and the patches drift. A ripple of one
+    strength everywhere reads as a texture laid over the surface."""
+
+    @staticmethod
+    def _patches(style, when=0.0, patch=3.0, across=40):
+        """The ripple's strength, as RMS slope, over a grid of patches."""
+        from OpenGLContext.scenegraph.water.surface import _fine_ripple, _heading
+        side = style.ripple * patch
+        cells = 12
+        strengths = np.zeros((across, across))
+        for i in range(across):
+            for j in range(across):
+                axis_x = (i + np.arange(cells) / cells) * side
+                axis_z = (j + np.arange(cells) / cells) * side
+                x, z = np.meshgrid(axis_x, axis_z, indexing='ij')
+                sx, sz = _fine_ripple(x, z, float(style.steepness),
+                                      _heading(style), when, style)
+                strengths[i, j] = np.sqrt(np.mean(sx * sx + sz * sz))
+        return strengths
+
+    def test_some_of_the_surface_is_calmer_than_the_rest(self) -> None:
+        from OpenGLContext.scenegraph.water import BREEZE
+        strengths = self._patches(BREEZE)
+        assert strengths.max() > 2.5 * strengths.min()
+
+    def test_the_gusts_move_across_the_water(self) -> None:
+        from OpenGLContext.scenegraph.water import BREEZE
+        before = self._patches(BREEZE, 0.0, across=12)
+        after = self._patches(BREEZE, 8.0, across=12)
+        assert not np.allclose(before, after, rtol=0.1)
+
+
+class TestTheRippleIsFilteredByDistance:
+    """A ripple train finer than a couple of pixels cannot be drawn, only
+    aliased; far water is a smooth mirror because its ripple is below what
+    the eye resolves, and drawing it anyway is what makes far water a grid."""
+
+    @staticmethod
+    def _rms(style, footprint):
+        from OpenGLContext.scenegraph.water.surface import _fine_ripple, _heading
+        axis = np.linspace(0.0, style.ripple * 20.0, 97)
+        x, z = np.meshgrid(axis, axis, indexing='ij')
+        sx, sz = _fine_ripple(x, z, float(style.steepness), _heading(style),
+                              0.0, style, footprint=footprint)
+        return float(np.sqrt(np.mean(sx * sx + sz * sz)))
+
+    def test_close_to_the_camera_it_is_all_there(self) -> None:
+        from OpenGLContext.scenegraph.water import BREEZE
+        assert self._rms(BREEZE, 0.0) == self._rms(BREEZE, BREEZE.ripple * 0.01)
+
+    def test_where_a_pixel_covers_its_waves_it_is_gone(self) -> None:
+        from OpenGLContext.scenegraph.water import BREEZE
+        assert self._rms(BREEZE, BREEZE.ripple * 2.0) == 0.0
+
+    def test_in_between_the_finest_trains_go_first(self) -> None:
+        from OpenGLContext.scenegraph.water import BREEZE
+        near = self._rms(BREEZE, 0.0)
+        middle = self._rms(BREEZE, BREEZE.ripple * 0.3)
+        assert 0.0 < middle < near

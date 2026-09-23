@@ -512,7 +512,7 @@ void main() {
     // whatever normal the surface already has, along that surface's own
     // axes, so the long swell stays in the geometry and the glitter costs
     // the same at any mesh density.
-    vec2 ripple = waveRipple(vSurface);
+    vec2 ripple = waveRipple(vSurface, length(fwidth(vSurface)));
     if (ripple.x != 0.0 || ripple.y != 0.0) {
         Ngeom = normalize(Ngeom - ripple.x * vSurfX - ripple.y * vSurfZ);
     }

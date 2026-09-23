@@ -82,6 +82,29 @@ class TestTheTwoFieldsAgree:
         for found, module in zip(shader, _RIPPLE_TRAINS, strict=True):
             assert found == pytest.approx(module, abs=1e-6)
 
+    def test_every_gust_train_matches(self) -> None:
+        from OpenGLContext.scenegraph.water.surface import _GUST_TRAINS
+        text = _include('_wave_inc.glsl')
+        block = text[text.index('GUST_TRAINS'):text.index('float waveGust')]
+        found = [tuple(float(n) for n in row) for row in re.findall(
+            r'vec2\(\s*(-?[\d.]+),\s*(-?[\d.]+)\s*\)', block)]
+        assert len(found) == len(_GUST_TRAINS)
+        for shader, module in zip(found, _GUST_TRAINS, strict=True):
+            assert shader == pytest.approx(module, abs=1e-6)
+
+    def test_the_gust_constants_match(self) -> None:
+        from OpenGLContext.scenegraph.water import surface
+        text = _include('_wave_inc.glsl')
+        for name, value in (('GUST_CALM', surface.GUST_CALM),
+                            ('GUST_PEAK', surface.GUST_PEAK),
+                            ('GUST_DRIFT', surface.GUST_DRIFT)):
+            found = re.search(r'const float %s\s*=\s*([\d.]+);' % name, text)
+            assert found and float(found.group(1)) == pytest.approx(value), name
+
+    def test_the_fragment_shader_filters_the_ripple_by_its_pixel(self) -> None:
+        """The footprint is a derivative, which only a fragment shader has."""
+        assert 'waveRipple(vSurface, length(fwidth(vSurface)))' in _include('pbr.frag')
+
     def test_the_ripple_repeats_over_the_distance_the_style_gives(self) -> None:
         """A length on the style, not a constant in the shader."""
         text = _include('_wave_inc.glsl')

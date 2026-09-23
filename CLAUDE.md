@@ -123,6 +123,7 @@ OpenGLContext/
 │   ├── renderpass.py # Chooses between the two and caches the choice
 │   ├── pbrpass.py    # Metallic/roughness uber-shader -- docs/ubershader.rst
 │   ├── ibl.py        # Image-based lighting probe
+│   ├── reflection.py # Water's reflection: the scene mirrored in its plane -- docs/water.rst
 │   ├── shadow*.py    # Shadow mapping -- docs/shadows.rst
 │   ├── instancing.py # Collapsing repeated shapes -- docs/instancing.rst
 │   └── shaderpass.py # VRML97ShaderProgram -- compiles and holds the programs
@@ -345,8 +346,8 @@ still pins a feature for a script or a CI run, while the settings screen
 (`OpenGLContext.ui.settings`) writes the field and takes precedence from then on.
 Passes read through `OpenGLContext.renderoptions`, never the environment
 directly. The fields are `shadows`, `shadowsSoft`, `shadowCascades`,
-`maximumLights`, `bloom`, `ibl`, `iblIntensity`, `transmission`, `instancing`,
-`tessellationLOD`, `vsync` and `uiScale`; see
+`maximumLights`, `bloom`, `ibl`, `iblIntensity`, `transmission`,
+`waterReflection`, `instancing`, `tessellationLOD`, `vsync` and `uiScale`; see
 [docs/overlayui.rst](docs/overlayui.rst).
 
 **These are start-up switches, and each is read once.** A pass that changed its

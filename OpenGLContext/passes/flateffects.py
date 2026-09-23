@@ -69,7 +69,7 @@ class _FlatEffectsMixin:
     #: How far, in view widths, a unit of the water's tilt from flat pushes the
     #: reflection lookup. The ripple tilts it by a tenth or so, which moves a
     #: reflected edge by a few percent of the view: broken up, still legible.
-    REFLECTION_DISTORTION = 0.35
+    REFLECTION_DISTORTION = 0.12
 
     # Image-based lighting (environment reflection for metals). Resolved once from
     # the GL renderer; the probe is built lazily on the first 'full' frame.

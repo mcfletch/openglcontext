@@ -38,14 +38,14 @@ One dataclass covers the range, and five settings of it are named:
    * - ``amplitude``
      - metres, trough to crest
      - 0.0
-     - 0.025
+     - 0.012
      - 0.09
      - 0.42
      - 0.16
    * - ``wavelength``
      - metres between crests
      - 11.0
-     - 1.4
+     - 1.1
      - 4.5
      - 7.0
      - 9.0
@@ -59,14 +59,14 @@ One dataclass covers the range, and five settings of it are named:
    * - ``steepness``
      - radians the ripple tilts the normals, on top of the displacement
      - 0.045
-     - 0.108
+     - 0.081
      - 0.063
      - 0.099
      - 0.059
    * - ``ripple``
      - metres the ripple's longest train repeats over
      - 11.0
-     - 0.45
+     - 0.32
      - 11.0
      - 11.0
      - 11.0
@@ -80,8 +80,8 @@ One dataclass covers the range, and five settings of it are named:
 
 ``STILL`` is a pond: nothing moves, and the ripple is in the light on it.
 ``BREEZE`` is a pond or a small lake seen from its bank, ruffled by wind:
-waves a stride apart and a couple of centimetres high, and a ripple a hand's
-breadth across. ``FLOWING`` is a river, with small crests travelling downstream
+waves a metre apart and about a centimetre high, and a ripple a hand's breadth
+across. ``FLOWING`` is a river, with small crests travelling downstream
 and the surface drifting with them. ``CHOPPY`` is weather, with enough height
 in it that a shoreline moves. ``LAKE`` is open water seen from a distance: a
 long, low swell, sized for a sheet hundreds of metres across. A caller who
@@ -200,6 +200,36 @@ the shadow of the shape it is in.
 Build the wave into the vertices *or* hand it to the card — not both, or the
 wave is applied twice. ``Shape`` answers the wave uniforms for every shape it
 draws, so the hillside beside a lake does not ripple.
+
+.. _water-reflection:
+
+What it reflects
+~~~~~~~~~~~~~~~~
+
+Water reflects the scene standing around it: the far bank, a jetty, a fire on
+the shore. Each view with water in it is drawn once more through the camera
+mirrored in the water's plane, and the water reads that picture at its own
+screen position, pushed by how far its ripple and swell tilt the surface from
+flat. Where nothing was mirrored — the sky — it reflects the environment probe
+as before. Water's Fresnel weights both, so the reflection is faint looking
+straight down and strong across the surface at a glance.
+
+Nothing has to be asked for: any geometry carrying a ``wave_style`` is water,
+whether ``water_surface`` built it or an ``OGLC_hook`` tag in a glTF did. The
+mirrored draw is of the opaque scene, at half the view's width and height, in
+a frame with water in view; ``ContextDefinition.waterReflection`` (env
+``OPENGLCONTEXT_WATER_REFLECTION``) turns it off, and the water then reflects
+the sky alone. It needs a fragment stage with more than 32 texture units, and a
+driver with fewer compiles it out.
+
+Its limits:
+
+- One plane a view. Where sheets stand at different levels, the one nearest
+  the camera is mirrored and the others reflect the scene as seen in it.
+- Transparent things — particles, glass — are not in the reflection.
+- A camera under the surface gets none: it is looking up through the water.
+- With several views drawing one scene, an opaque water surface drawn once for
+  all of them reflects the sky alone.
 
 .. _media:
 
@@ -347,6 +377,18 @@ together and the surface does not tile. On water that moves, each train
 travels at the speed water's own waves of its length do, √(g/k), so the long
 ones outrun the short and the glitter changes as it goes rather than sliding
 as one sheet; still water's ripple holds still.
+
+Its strength varies across the surface in gusts: two long, slow trains, 23 and
+37 times the ``ripple`` length, take it from a tenth of ``steepness`` in the
+calmest patch to 1.6 times it in the gustiest, and drift at 0.6 of the style's
+``speed``. Wind comes over water that way, and a ripple of one strength
+everywhere reads as a texture laid over the surface.
+
+Each train is also filtered by the pixel it lands in: it fades out as its
+wavelength falls from four pixels across to two, measured per fragment from
+the derivative of the surface position. Far water is a smooth mirror because
+its ripple is too fine to see, and drawing that ripple anyway draws a grid.
+``wave_normal`` is the unfiltered field.
 
 .. rst-class:: technical
 

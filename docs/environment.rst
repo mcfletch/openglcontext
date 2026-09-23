@@ -134,6 +134,11 @@ Lighting and shadows
      - ``auto``
      - Glass (``KHR_materials_transmission``). ``full`` captures the backdrop and
        refracts it; ``blend`` is the cheap alpha-blended stand-in.
+   * - ``OPENGLCONTEXT_WATER_REFLECTION``
+     - yes/no
+     - on
+     - Water reflects the scene standing around it (:ref:`water-reflection`).
+       Off, it reflects the sky alone.
 
 How much work per frame
 -----------------------
