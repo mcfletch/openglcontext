@@ -244,6 +244,36 @@ class PygameContext(
         self.setFullscreen(renderoptions.fullscreen_window(self))
         Context.settingsChanged(self)
 
+    #: SDL's system cursors, by the name a control asks for. SDL carries a
+    #: picture for each rather than reading a desktop theme, so every one of
+    #: these is there on every platform pygame runs on.
+    CURSOR_SHAPES = {
+        'arrow': 'SYSTEM_CURSOR_ARROW',
+        'hand': 'SYSTEM_CURSOR_HAND',
+        'text': 'SYSTEM_CURSOR_IBEAM',
+        'crosshair': 'SYSTEM_CURSOR_CROSSHAIR',
+        'resize-x': 'SYSTEM_CURSOR_SIZEWE',
+        'resize-y': 'SYSTEM_CURSOR_SIZENS',
+        'resize': 'SYSTEM_CURSOR_SIZEALL',
+        'no': 'SYSTEM_CURSOR_NO',
+    }
+
+    def setPointerShape( self, name: str ) -> bool:
+        """Show this pointer; False for a shape SDL has not got."""
+        if self.screen is None:
+            return False
+        shape = self.CURSOR_SHAPES.get( str( name or 'arrow' ) )
+        if shape is None:
+            return False
+        constant = getattr( pygame, shape, None )
+        if constant is None:
+            return False
+        try:
+            pygame.mouse.set_cursor( constant )
+        except (pygame.error, TypeError):
+            return False
+        return True
+
     def setPointerCapture( self, capture: Any ) -> bool:
         """Grab and hide the pointer for a mouse-look movement mode
 

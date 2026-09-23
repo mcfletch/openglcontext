@@ -207,6 +207,34 @@ class GLUTContext(
             glutSetWindow(self.windowID)
         return swapcontrol.set_swap_interval(1 if wanted else 0)
 
+    #: GLUT's own cursors, by the name a control asks for. It has a fixed
+    #: set and no way to add to it, so what is not here is answered rather
+    #: than approximated.
+    CURSOR_SHAPES = {
+        'arrow': 'GLUT_CURSOR_RIGHT_ARROW',
+        'hand': 'GLUT_CURSOR_INFO',
+        'text': 'GLUT_CURSOR_TEXT',
+        'crosshair': 'GLUT_CURSOR_CROSSHAIR',
+        'resize-x': 'GLUT_CURSOR_LEFT_RIGHT',
+        'resize-y': 'GLUT_CURSOR_UP_DOWN',
+        'no': 'GLUT_CURSOR_DESTROY',
+    }
+
+    def setPointerShape(self, name: str) -> bool:
+        """Show this pointer; False for a shape GLUT has not got."""
+        if not self.windowID:
+            return False
+        shape = self.CURSOR_SHAPES.get(str(name or 'arrow'))
+        if shape is None:
+            return False
+        from OpenGL import GLUT
+        constant = getattr(GLUT, shape, None)
+        if constant is None:
+            return False
+        GLUT.glutSetWindow(self.windowID)
+        GLUT.glutSetCursor(constant)
+        return True
+
     def setPointerCapture(self, capture: Any) -> bool:
         """Hide the pointer and keep it in the window, for a mouse-look mode
 

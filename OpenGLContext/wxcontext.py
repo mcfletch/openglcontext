@@ -437,6 +437,31 @@ class wxContext(
         finally:
             self.unsetCurrent()
 
+    #: wx's stock cursors, by the name a control asks for.
+    CURSOR_SHAPES = {
+        'arrow': 'CURSOR_ARROW',
+        'hand': 'CURSOR_HAND',
+        'text': 'CURSOR_IBEAM',
+        'crosshair': 'CURSOR_CROSS',
+        'resize-x': 'CURSOR_SIZEWE',
+        'resize-y': 'CURSOR_SIZENS',
+        'resize': 'CURSOR_SIZING',
+        'no': 'CURSOR_NO_ENTRY',
+    }
+
+    def setPointerShape( self, name: str ) -> bool:
+        """Show this pointer; False for a shape wx has not got."""
+        if self._pointerGrabbed:
+            return False
+        shape = self.CURSOR_SHAPES.get( str( name or 'arrow' ) )
+        if shape is None:
+            return False
+        constant = getattr( wx, shape, None )
+        if constant is None:
+            return False
+        self.SetCursor( wx.Cursor( constant ) )
+        return True
+
     def setPointerCapture( self, capture: Any ) -> bool:
         """Hide the pointer and keep it in the window, for a mouse-look mode
 

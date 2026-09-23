@@ -155,6 +155,7 @@ OpenGLContext/
 │   ├── debugoverlay.py  # The developer overlay, fed by registered providers
 │   ├── viewchrome.py # A window of several views: each one's name, axes and
 │   │                 # controls, and the splitters between them -- docs/multiview.rst
+│   ├── tooltip.py    # What a control says when the pointer rests on it
 │   ├── layout.py     # Row/Column/Grid (built on hud.GUIBox)
 │   ├── draw.py       # The GL renderer: one program, one batched buffer
 │   └── generate.py   # A settings page from a node's fields (UI_HINTS)

@@ -162,6 +162,28 @@ def inContextThread() -> int:
     return 1
 
 
+#: The pointers a window can be asked for, by name. Each is something the
+#: windowing systems this engine runs on all have a word for, so a control
+#: asks for one of these rather than for a platform's own spelling:
+#:
+#: ``arrow``
+#:     the ordinary pointer, which is also what ``''`` means.
+#: ``hand``
+#:     over something that will act on a click.
+#: ``text``
+#:     over something that takes typing.
+#: ``crosshair``
+#:     over something being aimed or placed.
+#: ``resize-x`` / ``resize-y``
+#:     over a line that drags across or up and down.
+#: ``resize``
+#:     over something that drags either way.
+#: ``no``
+#:     over somewhere this gesture will not go.
+CURSORS = ('arrow', 'hand', 'text', 'crosshair', 'resize-x', 'resize-y',
+           'resize', 'no')
+
+
 class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     """Abstract base class on which all Rendering Contexts are based
 
@@ -1529,6 +1551,22 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     #: The views this context draws, or None for one view through its own
     #: view platform; :meth:`getViewLayout` makes that layout on first use.
     #: Assign a :class:`~OpenGLContext.multiview.views.ViewLayout` to draw several.
+    def setPointerShape(self, name: str) -> bool:
+        """Show the pointer ``name``; False where this backend cannot.
+
+        The names are :data:`CURSORS`, and ``''`` is the ordinary pointer.
+        What a control wants is
+        :attr:`OpenGLContext.ui.widgets.Widget.cursor`, and the overlay asks
+        for it as the pointer crosses the window.
+
+        A backend answers False for a shape it has no picture for, rather than
+        showing another one: a window that cannot say "this drags" is better
+        than one that says it with the wrong picture, and a caller that is
+        told can say it some other way -- the splitters draw a grip because a
+        cursor theme need not carry a resize pointer.
+        """
+        return False
+
     viewLayout: Any = None
 
     def getViewLayout(self) -> Any:

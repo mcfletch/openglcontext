@@ -857,3 +857,34 @@ faster or more permissive reader for a format should be able to say so.
 The registry is empty by default. An entry in it is an application saying it
 has content the imaging library cannot read — it is not a layer over the
 ordinary case, which still goes straight to PIL.
+
+What the pointer is told
+------------------------
+
+A control says what it is by what the pointer does over it. Two things say it,
+and a widget declares both:
+
+.. code-block:: python
+
+   class Splitter(Widget):
+       cursor = 'resize-x'
+       tooltip = 'Drag to move the line between the views'
+
+``cursor`` is one of ``OpenGLContext.context.CURSORS`` -- ``arrow``, ``hand``,
+``text``, ``crosshair``, ``resize-x``, ``resize-y``, ``resize`` and ``no`` --
+and the overlay asks the context for it as the pointer crosses the window,
+setting it when it changes rather than on every movement. Every backend
+answers in those words: GLFW, GLUT, pygame, Tk, wx and Qt each map them to
+their own. **A shape a platform has not got is answered rather than
+approximated** -- ``setPointerShape`` returns False -- because a window that
+cannot say "this drags" is better than one that says it with the wrong
+picture, and a caller that is told can say it another way. A minimal Wayland
+cursor theme carries the arrow and the text bar and nothing else, which is why
+the view splitters also draw a grip.
+
+``tooltip`` is one line, shown where the pointer comes to rest on the control
+for ``OpenGLContext.ui.tooltip.TOOLTIP_PAUSE`` seconds. It is drawn over the
+panels rather than pushed on the stack, so it takes no events and changes
+nothing about modality; a pointer that is only crossing the window shows
+nothing, because the pause restarts with each movement.
+

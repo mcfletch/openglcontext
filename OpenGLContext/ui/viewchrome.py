@@ -82,6 +82,9 @@ MARGIN = 6.0
 #: looks, because a line two pixels wide is not something a pointer can catch.
 SPLITTER_GRAB = 9.0
 
+#: How far apart the three marks of a splitter's grip are drawn, in pixels.
+GRIP_PITCH = 6
+
 #: How wide a button in a view's corner is, in characters of the interface
 #: font: a square, with room round the glyph drawn in it.
 BUTTON_CHARS = 1.6
@@ -162,6 +165,9 @@ class ViewLabel(_ViewWidget):
     text = field.newField('text', 'SFString', 1, '')
     interactive = True
     focusable = True
+    cursor = 'hand'
+    tooltip = _('Which way this view looks, how it is drawn, and what the '
+                'pointer does in it')
 
     def paint(self, renderer: Any) -> None:
         name = fitted(str(self.text), self.rect.width, renderer.metrics)
@@ -248,6 +254,7 @@ class ExpandButton(_ChromeButton):
     """
 
     PROTO = 'ExpandButton'
+    cursor = 'hand'
 
     def maximised(self) -> bool:
         """Whether this view already has the window."""
@@ -264,6 +271,11 @@ class ExpandButton(_ChromeButton):
         for x in (rect.x, rect.x + side[0] + gap):
             for y in (rect.y, rect.y + side[1] + gap):
                 renderer.rect(Rect(x, y, side[0], side[1]), colour)
+
+    def paint(self, renderer: Any) -> None:
+        self.tooltip = (_('Give the views back their tiles') if self.maximised()
+                        else _('Give this view the whole window'))
+        super(ExpandButton, self).paint(renderer)
 
     def activate(self) -> None:
         if self.chrome is not None:
@@ -300,6 +312,7 @@ class Splitter(Widget):
 
     PROTO = 'ViewSplitter'
     interactive = True
+    tooltip = _('Drag to move the line between the views')
 
     vertical: Optional[bool] = True
     chrome: Any = None
@@ -309,6 +322,10 @@ class Splitter(Widget):
         super(Splitter, self).__init__(**named)
         self.vertical = vertical if vertical is None else bool(vertical)
         self.chrome = chrome
+        # What the pointer says about it: a line that drags one way asks for
+        # the arrows that drag that way, and the crossing for either.
+        self.cursor = ('resize-x' if self.vertical is not False
+                       else 'resize-y')
 
     def press(self, x: float, y: float) -> bool:
         self.armed = True
@@ -327,12 +344,29 @@ class Splitter(Widget):
             # The two lines already cross here; this only takes the drag.
             return
         skin = renderer.skin
-        colour = skin.titleText if (self.hovered or self.armed) else skin.labelText
+        held = self.hovered or self.armed
+        colour = skin.titleText if held else skin.labelText
+        middle = self.rect.centre
         if self.vertical:
-            line = Rect(self.rect.centre[0], self.rect.y, 1, self.rect.height)
+            line = Rect(middle[0], self.rect.y, 1, self.rect.height)
         else:
-            line = Rect(self.rect.x, self.rect.centre[1], self.rect.width, 1)
+            line = Rect(self.rect.x, middle[1], self.rect.width, 1)
         renderer.rect(line, colour)
+        # Grips along the line, away from where the lines cross: a cursor that
+        # says "this drags" is a cursor theme's to provide and some have none,
+        # so the line says it itself. One on each half, so a line divided by
+        # another shows one either side of the crossing.
+        for share in (0.25, 0.75):
+            if self.vertical:
+                along = self.rect.y + int(self.rect.height * share)
+                for offset in (-GRIP_PITCH, 0, GRIP_PITCH):
+                    renderer.rect(Rect(middle[0] - 1, along + offset, 3, 2),
+                                  colour)
+            else:
+                along = self.rect.x + int(self.rect.width * share)
+                for offset in (-GRIP_PITCH, 0, GRIP_PITCH):
+                    renderer.rect(Rect(along + offset, middle[1] - 1, 2, 3),
+                                  colour)
 
 
 class ViewChrome(Panel):

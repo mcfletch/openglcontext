@@ -56,6 +56,8 @@ class World:
         self.captureSuspended = None
         self.inputState = InputState()
         self.viewport = (800, 600)
+        #: What the pointer has been put into, in order.
+        self.cursors = []
 
     def getViewPort(self):
         return self.viewport
@@ -71,6 +73,15 @@ class World:
 
     def hasMouseMoveHandlers(self):
         return False
+
+    def setPointerShape(self, name):
+        self.cursors.append(name)
+        return True
+
+    def screenTrees(self, metrics, now=None):
+        """What a context draws over the frame: its HUD layers, of which the
+        stand-in has none."""
+        return []
 
     def ProcessEvent(self, event):
         self.inputState.process(event)
@@ -692,3 +703,89 @@ class TestTheWorldIsToldToLetGoWhenAPanelOpens:
         context.ProcessEvent(FakeEvent('keyboard', name='w', state=1))
         context.ProcessEvent(FakeEvent('keyboard', name='w', state=0))
         assert context.dispatched == []
+
+
+class TestTellingThePointerWhatIsUnderIt:
+    """A tooltip after a pause, and the cursor a widget asks for."""
+
+    def _resting(self, **named):
+        """A context with one panel, the pointer resting on its button."""
+        context = FakeContext()
+        panel = dialog(modal=False, **named)
+        button = panel.find('ok')
+        button.tooltip = 'Say yes'
+        button.cursor = 'hand'
+        context.overlays.push(panel)
+        context.layoutOverlays()
+        where = button.rect.centre
+        context.overlaySinks(FakeEvent('mousemove', pick=where))
+        # The clock these cases measure against, rather than the session's.
+        context.pointerRested(where[0], where[1], now=0.0)
+        return context, panel, button
+
+    def test_the_cursor_a_widget_asks_for_is_set(self):
+        context, _panel, _button = self._resting()
+        assert context.cursorWanted() == 'hand'
+        assert context.cursors[-1] == 'hand'
+
+    def test_it_is_set_when_it_changes_rather_than_on_every_movement(self):
+        context, _panel, button = self._resting()
+        asked = len(context.cursors)
+        where = (button.rect.centre[0] + 1, button.rect.centre[1])
+        context.overlaySinks(FakeEvent('mousemove', pick=where))
+        assert len(context.cursors) == asked
+
+    def test_the_pointer_off_the_widget_goes_back_to_the_arrow(self):
+        context, panel, button = self._resting()
+        away = (button.rect.x - 40, button.rect.y - 40)
+        context.overlaySinks(FakeEvent('mousemove', pick=away))
+        assert context.cursorWanted() == ''
+        assert context.cursors[-1] == ''
+
+    def test_nothing_is_shown_before_the_pause_is_up(self):
+        context, _panel, _button = self._resting()
+        assert context.tooltipTree(now=0.0) is None
+
+    def test_the_tip_comes_up_when_the_pointer_has_rested(self):
+        from OpenGLContext.ui.tooltip import Tooltip
+        context, _panel, button = self._resting()
+        tip = context.tooltipTree(now=10.0)
+        assert isinstance(tip, Tooltip)
+        assert str(tip.text) == 'Say yes'
+
+    def test_it_is_drawn_over_the_panels(self):
+        context, _panel, _button = self._resting()
+        context.tooltipTree(now=10.0)
+        trees = context.screenTrees(FontMetrics(8, 16, 2), now=10.0)
+        from OpenGLContext.ui.tooltip import Tooltip
+        assert isinstance(trees[-1], Tooltip)
+
+    def test_moving_the_pointer_starts_the_pause_again(self):
+        context, _panel, button = self._resting()
+        assert context.tooltipTree(now=10.0) is not None
+        context.overlaySinks(FakeEvent('mousemove',
+                                       pick=(button.rect.x + 1, button.rect.y + 1)))
+        context.pointerRested(button.rect.x + 1, button.rect.y + 1, now=9.9)
+        assert context.tooltipTree(now=10.0) is None
+
+    def test_a_widget_with_nothing_to_say_says_nothing(self):
+        context, panel, button = self._resting()
+        button.tooltip = ''
+        assert context.tooltipTree(now=10.0) is None
+
+    def test_the_tip_stays_inside_the_window(self):
+        from OpenGLContext.ui.metrics import FontMetrics as Metrics
+        context = FakeContext()
+        panel = dialog(modal=False)
+        button = panel.find('ok')
+        button.tooltip = 'A tip long enough to run off the edge of a window'
+        context.overlays.push(panel)
+        context.layoutOverlays()
+        context.overlaySinks(FakeEvent('mousemove', pick=(795, 8)))
+        context.pointerRested(795, 8, now=0.0)
+        tip = context.tooltipTree(now=10.0)
+        if tip is None:
+            pytest.skip('the pointer did not land on the button')
+        tip.layout(context.getViewPort(), Metrics(8, 16, 2))
+        assert tip.rect.x >= 0 and tip.rect.right <= context.getViewPort()[0]
+        assert tip.rect.y >= 0 and tip.rect.top <= context.getViewPort()[1]

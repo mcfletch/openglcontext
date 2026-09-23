@@ -115,6 +115,16 @@ class Widget(GUINode, node.Node):
     #: ring on a click rather than only on Tab.
     acceptsText: bool = False
 
+    #: One line about what this control does, shown where the pointer rests on
+    #: it (:mod:`OpenGLContext.ui.tooltip`). A control whose face is a glyph
+    #: rather than a word is what wants one.
+    tooltip: str = ''
+    #: What the pointer should look like over this widget, as
+    #: :meth:`~OpenGLContext.context.Context.setPointerShape` names them -- a
+    #: splitter asks for a resize cursor, so it reads as something to drag.
+    #: Empty leaves the pointer as it is.
+    cursor: str = ''
+
     #: Transient state -- what the pointer and the keyboard are doing right
     #: now.  Not fields: none of it is worth saving or serialising.
     hovered: bool = False
