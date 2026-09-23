@@ -21,6 +21,7 @@ from OpenGLContext.ui.viewchrome import (
     ViewChrome,
     ViewLabel,
     axis_directions,
+    fitted,
 )
 
 VIEWPORT = (800, 600)
@@ -72,6 +73,24 @@ class TestWhatItPutsInEachView:
             if isinstance(widget, (ViewLabel, AxisTriad, ExpandButton,
                                    NavigationButton)):
                 assert _inside(widget, widget.view), widget
+
+    def test_the_name_stops_where_the_buttons_begin(self):
+        """A name that ran under them would be read through the buttons."""
+        chrome = _chrome()
+        for label in _of(chrome, ViewLabel):
+            buttons = [widget for widget in chrome.walk()
+                       if isinstance(widget, (ExpandButton, NavigationButton))
+                       and widget.view is label.view]
+            assert buttons
+            for button in buttons:
+                assert label.rect.right <= button.rect.x
+
+    def test_a_narrow_view_still_places_its_buttons(self):
+        layout = _layout()
+        layout.arrange(320, 240)
+        chrome = _chrome(layout)
+        for button in _of(chrome, ExpandButton):
+            assert _inside(button, button.view)
 
     def test_the_name_is_the_views(self):
         chrome = _chrome()
@@ -348,3 +367,25 @@ class TestTheNavigationControl:
         item.checked = False
         item.on_activate(item)
         assert navigation.keys_for(PAN) == ()
+
+
+class TestANameTooLongForItsCorner:
+    """Nothing clips what the overlay draws, so a name is cut before it is."""
+
+    def _width(self, text):
+        return REFERENCE_METRICS.text_width(text)
+
+    def test_a_name_that_fits_is_drawn_whole(self):
+        assert fitted('front', self._width('front'), REFERENCE_METRICS) == 'front'
+
+    def test_a_name_that_does_not_fit_is_cut_and_says_so(self):
+        cut = fitted('perspective', self._width('perspec'), REFERENCE_METRICS)
+        assert cut.endswith('...')
+        assert self._width(cut) <= self._width('perspec')
+        assert 'perspective'.startswith(cut[:-3])
+
+    def test_a_corner_with_no_room_draws_nothing(self):
+        assert fitted('perspective', 2, REFERENCE_METRICS) == ''
+
+    def test_nothing_to_draw_stays_nothing(self):
+        assert fitted('', 100, REFERENCE_METRICS) == ''

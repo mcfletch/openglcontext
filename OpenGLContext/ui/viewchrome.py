@@ -53,7 +53,7 @@ from OpenGLContext.ui.widgets import Widget
 
 __all__ = [
     'ViewChrome', 'ViewLabel', 'AxisTriad', 'ExpandButton', 'NavigationButton',
-    'Splitter', 'axis_directions', 'PARTS',
+    'Splitter', 'axis_directions', 'fitted', 'PARTS',
 ]
 
 #: The parts a view can be given, which is what ``only`` names.
@@ -81,6 +81,9 @@ EXPAND_TEXT, RESTORE_TEXT = '[ ]', '[x]'
 
 #: What the navigation button reads as.
 NAVIGATION_TEXT = '(o)'
+
+#: What says a name was cut to fit the room it had.
+ELLIPSIS = '...'
 
 
 def axis_directions(view: View) -> Optional[Dict[str, Tuple[float, float]]]:
@@ -137,8 +140,10 @@ class ViewLabel(_ViewWidget):
     text = field.newField('text', 'SFString', 1, '')
 
     def paint(self, renderer: Any) -> None:
-        renderer.textIn(self.rect, str(self.text), renderer.skin.labelText,
-                        align='left')
+        name = fitted(str(self.text), self.rect.width, renderer.metrics)
+        if name:
+            renderer.textIn(self.rect, name, renderer.skin.labelText,
+                            align='left')
 
 
 class AxisTriad(_ViewWidget):
@@ -384,30 +389,37 @@ class ViewChrome(Panel):
         margin = metrics.pixels(MARGIN)
         row = metrics.char_height + margin
         triad = metrics.pixels(TRIAD_SIZE)
-        for child in self.layoutChildren():
-            child.parent = self
-            if isinstance(child, Splitter):
-                continue
-            room = self.roomIn(child.view, metrics)
-            x, y = room.x, room.y
-            view_width, view_height = room.width, room.height
-            top = y + view_height - margin - metrics.char_height
-            if isinstance(child, ViewLabel):
-                child.arrange(Rect(x + margin, top,
-                                   max(view_width - margin * 2, 1),
-                                   metrics.char_height), metrics)
-            elif isinstance(child, AxisTriad):
-                child.arrange(Rect(x + margin, y + margin,
-                                   min(triad, max(view_width - margin * 2, 1)),
-                                   min(triad, max(view_height - row, 1))),
-                              metrics)
-            else:
+        for view in self._shown():
+            room = self.roomIn(view, metrics)
+            top = room.y + room.height - margin - metrics.char_height
+            # The buttons first, from the right, so the name has what is left
+            # rather than running underneath them.
+            cursor = room.x + room.width - margin
+            for child in self._parts_of(view, _ChromeButton):
+                child.parent = self
                 button = int(metrics.text_width(str(child.text))
                              + metrics.char_height)
-                offset = (button + margin) if isinstance(child, NavigationButton) else 0
-                child.arrange(Rect(x + view_width - margin - button - offset,
-                                   top, button, metrics.char_height), metrics)
+                cursor -= button
+                child.arrange(Rect(cursor, top, button, metrics.char_height),
+                              metrics)
+                cursor -= margin
+            for child in self._parts_of(view, ViewLabel):
+                child.parent = self
+                child.arrange(Rect(room.x + margin, top,
+                                   max(cursor - room.x - margin, 1),
+                                   metrics.char_height), metrics)
+            for child in self._parts_of(view, AxisTriad):
+                child.parent = self
+                child.arrange(Rect(room.x + margin, room.y + margin,
+                                   min(triad, max(room.width - margin * 2, 1)),
+                                   min(triad, max(room.height - row, 1))),
+                              metrics)
         self._arrange_splitters(metrics)
+
+    def _parts_of(self, view: View, kind: Any) -> List[Widget]:
+        """This view's furniture of one kind, in the order it was built."""
+        return [child for child in self.layoutChildren()
+                if isinstance(child, kind) and getattr(child, 'view', None) is view]
 
     def _arrange_splitters(self, metrics: FontMetrics) -> None:
         layout = self.layout_of
@@ -502,6 +514,22 @@ class ViewChrome(Panel):
     def pointer_pressed(self, x: float, y: float, button: int = 0) -> bool:
         """A press that lands on no control belongs to the scene underneath."""
         return bool(super(ViewChrome, self).pointer_pressed(x, y, button))
+
+
+def fitted(text: str, width: int, metrics: FontMetrics) -> str:
+    """``text`` cut to the room it has, with an ellipsis where it was cut.
+
+    A name is drawn where there is a corner for it and a view can be a
+    quarter of a small window, so what will not fit says so rather than
+    running out across the scene: nothing here clips what it draws.
+    """
+    if not text or metrics.text_width(text) <= width:
+        return text
+    for end in range(len(text) - 1, 0, -1):
+        cut = text[:end] + ELLIPSIS
+        if metrics.text_width(cut) <= width:
+            return cut
+    return ''
 
 
 def _take(navigation: Any, command: str, keys: Sequence[str]) -> None:

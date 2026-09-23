@@ -15,11 +15,19 @@ Give it a path to draw a model of your own:
 
 Without one it draws `Lantern` from the Khronos sample catalogue (CC0).
 
+Each view carries its own furniture: its name, an axis triad that turns
+with its camera, `[ ]` to give it the window, and `(o)` to say what the
+pointer does there.  The lines between the views drag, and where they
+cross drags both.
+
 Mouse and keys:
 
     drag         pan an orthographic view, or orbit the perspective view
     right-drag   pan the perspective view
     wheel        zoom the view under the pointer
+    drag a line  move the splitter between the views
+    [ ]          give that view the whole window, and give it back
+    (o)          what the pointer does in that view, to switch on or off
     space        give the active view the whole window, and give it back
     f            frame the model in every view again
     i            print how this driver is drawing the views
@@ -44,8 +52,18 @@ from OpenGLContext.passes import renderpass
 from OpenGLContext.scenegraph.basenodes import (
     Background, DirectionalLight, sceneGraph,
 )
+'''The furniture is an overlay panel, so the context is one with an overlay
+stack: `OverlayMixin` is what every window with menus, dialogs or a HUD
+already mixes in.'''
+from OpenGLContext.ui.overlay import OverlayMixin
+from OpenGLContext.ui.viewchrome import ViewChrome
 
 MODEL = 'Lantern'
+
+#: How big a window this opens. Four views of a model, each with its name and
+#: its axes in the corner, want more room than the square most of these
+#: scripts ask for.
+SIZE = (900, 700)
 
 
 def model_path(arguments):
@@ -56,7 +74,7 @@ def model_path(arguments):
     return fetch_to_cache(sample_model_url(MODEL))
 
 
-class TestContext(BaseContext):
+class TestContext(OverlayMixin, BaseContext):
     def OnInit(self):
         scene = load_gltf(model_path(sys.argv[1:]))
         self.sg = sceneGraph(children=[
@@ -82,14 +100,29 @@ class TestContext(BaseContext):
         self.quad.layout.arrange(*self.getViewPort())
         self.quad.frame(*self.bounds)
 
+        '''*The furniture.*  `ViewChrome` draws each view's name, an axis
+        triad that turns with its camera, and the two buttons in its corner,
+        and puts a splitter on each line the quad divides the window along.
+        It is pushed on the overlay stack like any other panel, and it is not
+        modal: a press that lands on none of its controls reaches the views
+        underneath, which is what leaves the drags above working.
+
+        `on_arrange` is called when a control changed what is on screen -- a
+        view expanded, a splitter moved -- so the window places its views
+        again and draws.'''
+        self.chrome = ViewChrome(layout=self.quad.layout, stack=self.overlays,
+                                 on_arrange=self.OnArranged)
+        self.overlays.push(self.chrome)
+
         self.addEventHandler('keypress', name=' ', function=self.OnMaximise)
         self.addEventHandler('keypress', name='f', function=self.OnFrame)
         self.addEventHandler('keypress', name='i', function=self.OnStrategy)
         print(__doc__)
 
     def ProcessEvent(self, event):
-        '''*The pointer.*  Every event reaching the context is offered to the
-        quad view first.  The context has already said which view the event
+        '''*The pointer.*  The furniture is offered each event first, through
+        the overlay stack, and takes only what lands on one of its controls;
+        what it leaves goes to the quad view.  The context has already said which view the event
         belongs to -- the one under the pointer, or the one a held button
         began in -- and ``handle`` moves that view's camera.  An event it
         takes goes no further, so the context's own navigation never sees a
@@ -103,6 +136,12 @@ class TestContext(BaseContext):
         '''The drags are read in ``ProcessEvent``, which the handler registry
         does not see; saying so keeps the pointer's movements coming.'''
         return True
+
+    def OnArranged(self):
+        '''Place the views again: a control changed what is on screen.'''
+        self.quad.layout.arrange(*self.getViewPort())
+        self.overlays.invalidate()
+        self.triggerRedraw(1)
 
     def OnMaximise(self, event):
         '''``maximise`` gives the active view -- the last one clicked in --
@@ -127,4 +166,4 @@ class TestContext(BaseContext):
 
 
 if __name__ == "__main__":
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(size=SIZE)
