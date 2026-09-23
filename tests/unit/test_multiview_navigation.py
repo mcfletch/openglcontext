@@ -67,21 +67,20 @@ class TestWhatACameraCanBeMovedBy:
 
 
 class TestTheBindingsItStartsWith:
-    def test_the_left_and_middle_buttons_pan_a_plan_view(self):
+    def test_the_right_and_middle_buttons_pan_a_plan_view(self):
         navigation = navigation_for(_plan())
-        for button in (0, 1):
+        for button in (2, 1):
             assert navigation.command_for(button_name(button), NONE) == PAN
 
-    def test_the_right_button_is_unbound_in_a_view_with_a_scale(self):
-        """It turns a camera that turns, and this one has nothing to answer."""
-        assert navigation_for(_plan()).command_for(button_name(2), NONE) is None
-        assert navigation_for(_elevation()).command_for(button_name(2), NONE) is None
+    def test_the_primary_click_is_left_unbound_in_every_view(self):
+        """It is what an editor's tools and its selection are reached with."""
+        for view in (_plan(), _elevation(), _angled()):
+            assert navigation_for(view).command_for(button_name(0), NONE) is None
 
     def test_the_right_button_turns_a_camera_that_turns(self):
-        """The left button is left where an editor's tools can have it."""
+        """...and the middle one pans it; the left is the tools'."""
         navigation = navigation_for(_angled())
         assert navigation.command_for(button_name(2), NONE) == ROTATE
-        assert navigation.command_for(button_name(0), NONE) == PAN
         assert navigation.command_for(button_name(1), NONE) == PAN
 
     def test_the_wheel_zooms_either_way(self):
@@ -113,7 +112,7 @@ class TestChangingThem:
 
     def test_dragging_to_zoom_is_switched_on_by_binding_it(self):
         navigation = navigation_for(_plan())
-        navigation.rebind(PAN, [button_name(0), button_name(2)])
+        navigation.rebind(PAN, [button_name(2)])
         navigation.rebind(ZOOM_DRAG, [button_name(1)])
         assert navigation.command_for(button_name(1), NONE) == ZOOM_DRAG
 
@@ -124,15 +123,21 @@ class TestChangingThem:
         assert navigation.command_for(button_name(1), NONE) == PAN
         assert navigation.keys_for(ZOOM_DRAG) == (button_name(1),)
 
+    def test_a_command_can_be_taken_off_the_button_it_shares(self):
+        navigation = navigation_for(_plan())
+        navigation.rebind(PAN, [button_name(2)])
+        navigation.rebind(ZOOM_DRAG, [button_name(1)])
+        assert navigation.command_for(button_name(1), NONE) == ZOOM_DRAG
+
     def test_a_command_this_camera_has_not_got_is_not_bound(self):
         navigation = navigation_for(_plan())
         assert not navigation.rebind(ROTATE, [button_name(1)])
 
     def test_a_binding_may_ask_for_a_modifier(self):
         navigation = navigation_for(_plan())
-        navigation.rebind(ZOOM_DRAG, [button_name(0)], modifier='ctrl')
-        assert navigation.command_for(button_name(0), (0, 1, 0)) == ZOOM_DRAG
-        assert navigation.command_for(button_name(0), NONE) == PAN
+        navigation.rebind(ZOOM_DRAG, [button_name(2)], modifier='ctrl')
+        assert navigation.command_for(button_name(2), (0, 1, 0)) == ZOOM_DRAG
+        assert navigation.command_for(button_name(2), NONE) == PAN
 
 
 class TestMovingTheCamera:

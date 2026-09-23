@@ -352,11 +352,11 @@ camera the first time something asks for it.
    * - ``pan``
      - carries the world with the pointer; a camera that turns carries what it
        is looking at
-     - the left and middle buttons
+     - the right and middle buttons in a view with a scale; the middle button
+       in one that turns
    * - ``rotate``
      - swings a camera that turns about what it is looking at
-     - the right button, where the camera turns; a view with a scale leaves
-       that button unbound
+     - the right button, where the camera turns
    * - ``zoomin`` / ``zoomout``
      - one notch towards the scene or away from it, about the pointer in a
        view with a scale
@@ -364,6 +364,11 @@ camera the first time something asks for it.
    * - ``zoomdrag``
      - the same zoom, driven by a drag; dragging up comes closer
      - nothing, until a view asks for it
+
+**The primary click is left unbound in every view.** It is what an editor's
+tools and its selection are reached with, and a camera that took it would take
+it from whatever the pointer is being used for; a window with no tools binds it
+in a line.
 
 The bindings are :class:`~OpenGLContext.move.modes.KeyBinding` nodes, the same
 ones the movement modes carry, and a mouse button is named as the event system

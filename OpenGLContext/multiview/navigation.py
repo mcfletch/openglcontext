@@ -154,28 +154,30 @@ def _zoom_bindings() -> List[KeyBinding]:
 def plan_mode() -> ViewNavigationMode:
     """A view with a scale: a drag moves the world, the wheel changes the scale.
 
-    The left and middle buttons pan, as they do in a view that turns. The right
-    button is left unbound: it turns a camera that can turn, and a view with a
-    scale has nothing to answer it with.
+    The right and middle buttons pan. The left one is left unbound here and in
+    every other view, because it is what an editor's tools and its selection
+    are reached with: a camera that took the primary click would take it from
+    whatever the pointer is being used for.
     """
     return ViewNavigationMode(
         name='plan', label=_('Plan'),
-        bindings=[_binding(PAN, _('Pan'), [button_name(0), button_name(1)])]
+        bindings=[_binding(PAN, _('Pan'), [button_name(2), button_name(1)])]
         + _zoom_bindings())
 
 
 def examine_mode() -> ViewNavigationMode:
-    """A camera that turns: a right drag swings it, a left one carries its target.
+    """A camera that turns: a right drag swings it, a middle one carries its target.
 
-    The left button is what an editor's tools want, wherever the pointer also
-    draws, so the camera takes the right one and leaves the left where a tool
-    can have it.
+    The right button does what the view is chiefly moved by -- turning, where
+    the camera turns, and panning where it does not -- and the middle button
+    pans. The left one is left unbound, because it is what an editor's tools
+    and its selection are reached with.
     """
     return ViewNavigationMode(
         name='examine', label=_('Examine'),
         bindings=[
             _binding(ROTATE, _('Rotate'), [button_name(2)]),
-            _binding(PAN, _('Pan'), [button_name(0), button_name(1)]),
+            _binding(PAN, _('Pan'), [button_name(1)]),
         ] + _zoom_bindings())
 
 

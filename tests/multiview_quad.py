@@ -22,8 +22,8 @@ cross drags both.
 
 Mouse and keys:
 
-    drag         pan an orthographic view, or orbit the perspective view
-    right-drag   pan the perspective view
+    right-drag   pan an orthographic view, or orbit the perspective view
+    middle-drag  pan any view
     wheel        zoom the view under the pointer
     drag a line  move the splitter between the views
     [ ]          give that view the whole window, and give it back

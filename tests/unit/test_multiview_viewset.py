@@ -180,7 +180,7 @@ class TestThePointer:
         front = views.view('front')
         before = np.array(front.camera.view.centre)
         x, y = _centre_of(front)
-        assert views.handle(_Event(x, y))
+        assert views.handle(_Event(x, y, button=2))
         assert views.handle(_Event(x + 25, y, kind='mousemove'))
         assert not np.allclose(front.camera.view.centre, before)
 
@@ -188,7 +188,7 @@ class TestThePointer:
         views = _set(mode='quad', driven=('front', 'left', 'angled'))
         plan = views.view('plan')
         centre = plan.camera.view.centre
-        event = _Event(*_centre_of(plan))
+        event = _Event(*_centre_of(plan), button=2)
         assert views.view_for(event) is plan
         assert not views.handle(event)
         assert plan.camera.view.centre == centre

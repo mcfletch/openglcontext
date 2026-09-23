@@ -53,7 +53,7 @@ class TestWhichViewsItDrives:
         plan = layout.views[0]
         centre = plan.camera.view.centre
         assert not gestures.drives(plan)
-        assert not gestures.press(plan, *_centre_of(plan), 0)
+        assert not gestures.press(plan, *_centre_of(plan), 2)
         assert not gestures.wheel(plan, *_centre_of(plan), 1)
         assert plan.camera.view.centre == centre
 
@@ -63,7 +63,7 @@ class TestWhichViewsItDrives:
 
     def test_a_view_with_no_camera_of_its_own_is_not_driven(self):
         gestures, layout = _laid_out()
-        assert not gestures.press(layout.views[3], 10, 10, 0)
+        assert not gestures.press(layout.views[3], 10, 10, 2)
 
 
 class TestThePlanView:
@@ -72,7 +72,7 @@ class TestThePlanView:
         plan = layout.views[0]
         x, y = _centre_of(plan)
         under = plan.camera.view.world_from_screen(*plan.local(x, y), plan.size)
-        assert gestures.press(plan, x, y, 0)
+        assert gestures.press(plan, x, y, 2)
         assert gestures.drag(plan, x + 30, y - 12)
         after = plan.camera.view.world_from_screen(*plan.local(x + 30, y - 12), plan.size)
         assert np.allclose(under, after)
@@ -84,7 +84,7 @@ class TestThePlanView:
         assert plan.size != WINDOW
         metres = plan.camera.view.metres_per_pixel(plan.size)
         centre = plan.camera.view.centre
-        gestures.press(plan, *_centre_of(plan), 0)
+        gestures.press(plan, *_centre_of(plan), 2)
         gestures.drag(plan, _centre_of(plan)[0] + 10, _centre_of(plan)[1])
         assert centre[0] - plan.camera.view.centre[0] == pytest.approx(10.0 * metres)
 
@@ -105,13 +105,13 @@ class TestTheElevation:
         gestures, layout = _laid_out()
         front = layout.views[1]
         centre = np.array(front.camera.view.centre)
-        gestures.press(front, *_centre_of(front), 0)
+        gestures.press(front, *_centre_of(front), 2)
         gestures.drag(front, _centre_of(front)[0] + 15, _centre_of(front)[1])
         assert not np.allclose(front.camera.view.centre, centre)
 
 
 class TestThePerspectiveView:
-    def test_the_right_button_orbits_and_the_left_pans(self):
+    def test_the_right_button_orbits_and_the_middle_one_pans(self):
         gestures, layout = _laid_out()
         angled = layout.views[2]
         camera = angled.camera.view
@@ -121,7 +121,7 @@ class TestThePerspectiveView:
         assert camera.heading != heading
         assert np.allclose(camera.target(), target)
         gestures.release(angled, 0, 0)
-        gestures.press(angled, *_centre_of(angled), 0)
+        gestures.press(angled, *_centre_of(angled), 1)
         gestures.drag(angled, _centre_of(angled)[0] + 40, _centre_of(angled)[1])
         assert not np.allclose(camera.target(), target)
 
@@ -138,7 +138,7 @@ class TestAGestureStaysWithItsView:
         gestures, layout = _laid_out()
         front, plan = layout.views[1], layout.views[0]
         plan_centre = plan.camera.view.centre
-        gestures.press(front, *_centre_of(front), 0)
+        gestures.press(front, *_centre_of(front), 2)
         # The pointer is over the plan view now; the gesture began in the
         # elevation and the elevation is what moves.
         assert gestures.drag(plan, *_centre_of(plan))
@@ -147,7 +147,7 @@ class TestAGestureStaysWithItsView:
     def test_nothing_moves_after_the_release(self):
         gestures, layout = _laid_out()
         front = layout.views[1]
-        gestures.press(front, *_centre_of(front), 0)
+        gestures.press(front, *_centre_of(front), 2)
         assert gestures.release(front, *_centre_of(front))
         centre = np.array(front.camera.view.centre)
         assert not gestures.drag(front, _centre_of(front)[0] + 50, _centre_of(front)[1])
@@ -173,14 +173,14 @@ class TestReadingTheContextsEvents:
         gestures, layout = _laid_out()
         front = layout.views[1]
         centre = np.array(front.camera.view.centre)
-        assert gestures.handle(self._button(*_centre_of(front), 0, 1))
+        assert gestures.handle(self._button(*_centre_of(front), 2, 1))
         assert gestures.handle(self._move(_centre_of(front)[0] + 20, _centre_of(front)[1]))
         assert not np.allclose(front.camera.view.centre, centre)
 
     def test_an_event_in_a_view_it_does_not_drive_is_left_for_the_application(self):
         gestures, layout = _laid_out()
         gestures.views = layout.views[1:]
-        assert not gestures.handle(self._button(*_centre_of(layout.views[0]), 0, 1))
+        assert not gestures.handle(self._button(*_centre_of(layout.views[0]), 2, 1))
 
     def test_a_key_is_none_of_its_business(self):
         from OpenGLContext.events.keyboardevents import KeypressEvent
@@ -196,4 +196,4 @@ class TestReadingTheContextsEvents:
         gestures.layout = other
         assert gestures.drives(plan)
         assert not gestures.drives(layout.views[1])
-        assert gestures.handle(self._button(*_centre_of(plan), 0, 1))
+        assert gestures.handle(self._button(*_centre_of(plan), 2, 1))

@@ -88,7 +88,7 @@ class TestDragging:
         before_top = top.camera.view.centre
         x, y = _centre_of(front)
         under = front.camera.view.world_from_screen(*front.local(x, y), front.size)
-        assert quad.press(front, x, y, 0)
+        assert quad.press(front, x, y, 2)
         assert quad.drag(front, x + 25, y - 10)
         after = front.camera.view.world_from_screen(*front.local(x + 25, y - 10), front.size)
         assert np.allclose(under, after)
@@ -105,7 +105,7 @@ class TestDragging:
         assert quad.orbit.heading != heading
         assert np.allclose(quad.orbit.target(), target)
 
-    @pytest.mark.parametrize('button', [0, 1])
+    @pytest.mark.parametrize('button', [1])
     def test_another_button_pans_the_perspective_view(self, button):
         quad = _quad()
         view = quad.view('perspective')
@@ -122,7 +122,7 @@ class TestDragging:
         view = quad.view('perspective')
         before = quad.orbit.target().copy()
         x, y = _centre_of(view)
-        quad.press(view, x, y, 0)
+        quad.press(view, x, y, 1)
         quad.drag(view, x + 30, y)
         ndc = _ndc(view, before)
         assert ndc[0] * view.size[0] / 2.0 == pytest.approx(30.0, abs=0.01)
@@ -132,7 +132,7 @@ class TestDragging:
         quad = _quad()
         front = quad.view('front')
         x, y = _centre_of(front)
-        quad.press(front, x, y, 0)
+        quad.press(front, x, y, 2)
         quad.release(front, x, y)
         centre = front.camera.view.centre
         assert not quad.drag(front, x + 50, y)
@@ -141,7 +141,7 @@ class TestDragging:
     def test_a_view_that_is_not_the_quads_is_left_alone(self):
         from OpenGLContext.multiview.views import View
         quad = _quad()
-        assert not quad.press(View(), 10, 10, 0)
+        assert not quad.press(View(), 10, 10, 2)
         assert not quad.wheel(View(), 10, 10, 1)
 
 
@@ -189,10 +189,10 @@ class TestEngineEvents:
         front = quad.view('front')
         x, y = _centre_of(front)
         centre = front.camera.view.centre
-        assert quad.handle(self._button(quad, x, y, 0, 1))
+        assert quad.handle(self._button(quad, x, y, 2, 1))
         assert quad.handle(self._move(x + 20, y))
         assert front.camera.view.centre != centre
-        assert quad.handle(self._button(quad, x + 20, y, 0, 0))
+        assert quad.handle(self._button(quad, x + 20, y, 2, 0))
         moved = front.camera.view.centre
         assert not quad.handle(self._move(x + 60, y))
         assert front.camera.view.centre == moved
