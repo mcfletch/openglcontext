@@ -11,12 +11,16 @@ When enabled, the pass instead:
 
 This is what makes ``KHR_materials_emissive_strength`` read as a glow whose spread
 grows with strength (EmissiveStrengthTest), instead of clamping flat to white.
+
+With several views on the window (:mod:`OpenGLContext.multiview.views`) each stage runs
+once per view, over that view's rectangle, and every sample is clamped inside
+it, so a bright object at the edge of one view does not glow into the next.
 """
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Any, Optional, Tuple
+from typing import Any, Optional, Sequence, Tuple
 
 from OpenGL.GL import (
     GL_TRIANGLES, GL_TEXTURE_2D, GL_TEXTURE0, GL_RGBA16F, GL_RGBA, GL_FLOAT,
@@ -33,7 +37,7 @@ from OpenGL.GL import (
     glGenVertexArrays, glBindVertexArray,
     glViewport, glClear, glClearColor, glUseProgram,
     glDrawArrays, glActiveTexture, glEnable, glDisable, glGetIntegerv,
-    glGetUniformLocation, glUniform1i, glUniform1f, glUniform2f,
+    glGetUniformLocation, glUniform1i, glUniform1f, glUniform2f, glUniform4f,
 )
 from OpenGL.GL import shaders as GL_shaders
 
@@ -54,18 +58,22 @@ def bloom_enabled(source: Any = None) -> bool:
 
 _FS_VERT = """#version 330 core
 out vec2 uv;
+// The part of the target the viewport covers, as (offset, size) in texture
+// coordinates: all of it, or one view's rectangle.
+uniform vec4 region;
 void main(){
     // fullscreen triangle from gl_VertexID (no VBO)
     vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
-    uv = p;
+    uv = region.xy + p * region.zw;
     gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
 }"""
 
 _BRIGHT_FRAG = """#version 330 core
 in vec2 uv; out vec4 frag;
 uniform sampler2D scene; uniform float threshold;
+uniform vec4 bounds;    // the texel centres a sample may reach: min.xy, max.xy
 void main(){
-    vec3 c = texture(scene, uv).rgb;
+    vec3 c = texture(scene, clamp(uv, bounds.xy, bounds.zw)).rgb;
     float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
     // soft knee above the threshold so the bloom ramps in smoothly
     float k = clamp((l - threshold) / max(threshold, 1e-3), 0.0, 1.0);
@@ -75,12 +83,14 @@ void main(){
 _BLUR_FRAG = """#version 330 core
 in vec2 uv; out vec4 frag;
 uniform sampler2D image; uniform vec2 direction;   // texel-sized step along one axis
+uniform vec4 bounds;    // the texel centres a sample may reach: min.xy, max.xy
+vec3 tap(vec2 at){ return texture(image, clamp(at, bounds.xy, bounds.zw)).rgb; }
 void main(){
     float w[5] = float[](0.227027, 0.194594, 0.121621, 0.054054, 0.016216);
-    vec3 c = texture(image, uv).rgb * w[0];
+    vec3 c = tap(uv) * w[0];
     for(int i = 1; i < 5; ++i){
-        c += texture(image, uv + direction * float(i)).rgb * w[i];
-        c += texture(image, uv - direction * float(i)).rgb * w[i];
+        c += tap(uv + direction * float(i)) * w[i];
+        c += tap(uv - direction * float(i)) * w[i];
     }
     frag = vec4(c, 1.0);
 }"""
@@ -88,6 +98,7 @@ void main(){
 _COMPOSITE_FRAG = """#version 330 core
 in vec2 uv; out vec4 frag;
 uniform sampler2D scene; uniform sampler2D bloom; uniform float strength;
+uniform vec4 bounds;    // the bloom texel centres a sample may reach: min.xy, max.xy
 vec3 aces(vec3 x){
     const float a=2.51, b=0.03, c=2.43, d=0.59, e=0.14;
     return clamp((x*(a*x+b))/(x*(c*x+d)+e), 0.0, 1.0);
@@ -96,9 +107,44 @@ vec3 toSRGB(vec3 c){
     return mix(1.055*pow(max(c,0.0), vec3(1.0/2.4))-0.055, c*12.92, step(c, vec3(0.0031308)));
 }
 void main(){
-    vec3 hdr = texture(scene, uv).rgb + strength * texture(bloom, uv).rgb;
+    vec3 hdr = texture(scene, uv).rgb
+             + strength * texture(bloom, clamp(uv, bounds.xy, bounds.zw)).rgb;
     frag = vec4(toSRGB(aces(hdr)), 1.0);
 }"""
+
+
+#: ``(x, y, width, height)`` in pixels, from the bottom left.
+Rect = Tuple[int, int, int, int]
+
+
+def scaled_rect(rect: Rect, size: Tuple[int, int],
+                scaled: Tuple[int, int]) -> Rect:
+    """``rect`` of a ``size`` target, in the pixels of a ``scaled`` one.
+
+    Edges are rounded, so rectangles that meet in the one meet in the other.
+    """
+    (x, y, width, height), (full_w, full_h), (to_w, to_h) = rect, size, scaled
+    left, right = round(x * to_w / full_w), round((x + width) * to_w / full_w)
+    bottom, top = round(y * to_h / full_h), round((y + height) * to_h / full_h)
+    return (int(left), int(bottom), int(right - left), int(top - bottom))
+
+
+def tile_uniforms(rect: Rect, size: Tuple[int, int]) -> Tuple[
+        Tuple[float, float, float, float], Tuple[float, float, float, float]]:
+    """``(region, bounds)`` for drawing into ``rect`` of a ``size`` target.
+
+    ``region`` is the rectangle as ``(offset, size)`` in texture coordinates,
+    which is where the full-screen triangle's ``uv`` runs; ``bounds`` is the
+    first and last texel centre inside it, which every sample is clamped to.
+    For the whole target those bounds are where ``GL_CLAMP_TO_EDGE`` stops a
+    sample, so one view blurs as a window with no views does.
+    """
+    x, y, width, height = rect
+    full_w, full_h = float(size[0]), float(size[1])
+    region = (x / full_w, y / full_h, width / full_w, height / full_h)
+    bounds = ((x + 0.5) / full_w, (y + 0.5) / full_h,
+              (x + width - 0.5) / full_w, (y + height - 0.5) / full_h)
+    return region, bounds
 
 
 def _compile(vert: str, frag: str) -> Any:
@@ -224,8 +270,12 @@ class BloomPass(object):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         return True
 
-    def composite(self) -> None:
+    def composite(self, rects: Optional[Sequence[Rect]] = None) -> None:
         """Bright-pass + blur the HDR scene and composite it to the previous target.
+
+        ``rects`` are the views' rectangles in window pixels; each is blurred
+        and composited on its own, its samples clamped inside it. None is the
+        whole window as one.
 
         Does nothing where :meth:`begin` has not run: there is no scene to
         composite, and every name below would be missing.
@@ -235,40 +285,61 @@ class BloomPass(object):
             return
         w, h = targets.size
         bw, bh = targets.bloom_size
+        tiles = list(rects) if rects else [(0, 0, w, h)]
         glDisable(GL_DEPTH_TEST)
         glDisable(GL_BLEND)
         glBindVertexArray(chain.vao)
 
-        # 1. bright pass -> ping[0] (half res)
-        glBindFramebuffer(GL_FRAMEBUFFER, targets.ping_fbo[0])
-        glViewport(0, 0, bw, bh)
-        glUseProgram(chain.bright)
-        self._bind_tex(chain.bright, 'scene', targets.scene_tex, 0)
-        glUniform1f(glGetUniformLocation(chain.bright, 'threshold'), self.THRESHOLD)
-        glDrawArrays(GL_TRIANGLES, 0, 3)
+        blurred = 0
+        for tile in tiles:
+            half = scaled_rect(tile, (w, h), (bw, bh))
+            region, half_bounds = tile_uniforms(half, (bw, bh))
+            _region, full_bounds = tile_uniforms(tile, (w, h))
 
-        # 2. separable Gaussian blur, ping-ponging between the two half-res targets
-        glUseProgram(chain.blur)
-        src, dst = 0, 1
-        for i in range(self.BLUR_ITERATIONS * 2):
-            horizontal = (i % 2 == 0)
-            glBindFramebuffer(GL_FRAMEBUFFER, targets.ping_fbo[dst])
-            glViewport(0, 0, bw, bh)
-            self._bind_tex(chain.blur, 'image', targets.ping_tex[src], 0)
-            dx = (1.0 / bw) if horizontal else 0.0
-            dy = 0.0 if horizontal else (1.0 / bh)
-            glUniform2f(glGetUniformLocation(chain.blur, 'direction'), dx, dy)
+            # 1. bright pass -> ping[0] (half res)
+            glBindFramebuffer(GL_FRAMEBUFFER, targets.ping_fbo[0])
+            glViewport(*half)
+            glUseProgram(chain.bright)
+            self._bind_tex(chain.bright, 'scene', targets.scene_tex, 0)
+            glUniform1f(glGetUniformLocation(chain.bright, 'threshold'), self.THRESHOLD)
+            glUniform4f(glGetUniformLocation(chain.bright, 'region'), *region)
+            glUniform4f(glGetUniformLocation(chain.bright, 'bounds'), *full_bounds)
             glDrawArrays(GL_TRIANGLES, 0, 3)
-            src, dst = dst, src
+
+            # 2. separable Gaussian blur, ping-ponging between the two half-res
+            # targets. Every tile takes the same number of steps, so every
+            # tile's result ends in the same one.
+            glUseProgram(chain.blur)
+            glUniform4f(glGetUniformLocation(chain.blur, 'region'), *region)
+            glUniform4f(glGetUniformLocation(chain.blur, 'bounds'), *half_bounds)
+            src, dst = 0, 1
+            for i in range(self.BLUR_ITERATIONS * 2):
+                horizontal = (i % 2 == 0)
+                glBindFramebuffer(GL_FRAMEBUFFER, targets.ping_fbo[dst])
+                glViewport(*half)
+                self._bind_tex(chain.blur, 'image', targets.ping_tex[src], 0)
+                dx = (1.0 / bw) if horizontal else 0.0
+                dy = 0.0 if horizontal else (1.0 / bh)
+                glUniform2f(glGetUniformLocation(chain.blur, 'direction'), dx, dy)
+                glDrawArrays(GL_TRIANGLES, 0, 3)
+                src, dst = dst, src
+            blurred = src
 
         # 3. composite scene + bloom -> the target that was bound before begin()
         glBindFramebuffer(GL_FRAMEBUFFER, self._prev_fbo)
-        glViewport(0, 0, w, h)
         glUseProgram(chain.composite)
         self._bind_tex(chain.composite, 'scene', targets.scene_tex, 0)
-        self._bind_tex(chain.composite, 'bloom', targets.ping_tex[src], 1)
+        self._bind_tex(chain.composite, 'bloom', targets.ping_tex[blurred], 1)
         glUniform1f(glGetUniformLocation(chain.composite, 'strength'), self.STRENGTH)
-        glDrawArrays(GL_TRIANGLES, 0, 3)
+        for tile in tiles:
+            region, _full = tile_uniforms(tile, (w, h))
+            _half_region, half_bounds = tile_uniforms(
+                scaled_rect(tile, (w, h), (bw, bh)), (bw, bh))
+            glViewport(*tile)
+            glUniform4f(glGetUniformLocation(chain.composite, 'region'), *region)
+            glUniform4f(glGetUniformLocation(chain.composite, 'bounds'), *half_bounds)
+            glDrawArrays(GL_TRIANGLES, 0, 3)
+        glViewport(0, 0, w, h)
 
         glBindVertexArray(0)
         glUseProgram(0)

@@ -1,18 +1,44 @@
-"""Binding the scene's active Viewpoint into the view platform.
+"""The scene's Viewpoints: publishing where they are, and binding the active one.
 
-The core-profile FlatPass drives the camera purely from the view platform and does
-not walk the scenegraph looking for bindable Viewpoints. This bridges the standard
-VRML97 viewpoint-binding mechanism into it, so a Viewpoint authored in a VRML world
--- or synthesised for a glTF camera -- becomes bindable there too.
+The render pass keeps a path to every ``Viewpoint`` in its scene -- authored in
+a VRML97 world, or built by the glTF loader for each of a file's cameras -- and
+keeps it current as nodes come and go. :func:`publish_viewpoints` hands those
+paths to the scenegraph each frame as ``SceneGraph.viewpointPaths``, which is
+where anything outside the pass reads the scene's cameras from, and tells the
+context when the set has changed.
+
+:func:`bind_scene_viewpoint` bridges the standard VRML97 binding mechanism into
+the core-profile pass, which takes its camera from the view platform only.
 """
 
-from typing import Any
+from typing import Any, Sequence
 
 from vrml.vrml97 import nodetypes
-from OpenGLContext import visitor
 import logging
 
 log = logging.getLogger(__name__)
+
+
+def publish_viewpoints(context: Any, pass_: Any) -> None:
+    """Give the scenegraph the pass's paths to its Viewpoints, in the order found.
+
+    Assigns ``SceneGraph.viewpointPaths`` and, where that is a different set
+    of paths from the last frame's, calls ``context.OnViewpointsChanged`` with
+    them: a scene loaded, a camera added or taken away. A pass drawing no
+    scenegraph -- the context's own children -- has nowhere to publish to.
+    """
+    graph = getattr(pass_, 'scene', None)
+    if graph is None:
+        return
+    paths = tuple(pass_.paths.get(nodetypes.Viewpoint, ()))
+    known: Sequence[Any] = getattr(graph, 'viewpointPaths', ())
+    if len(paths) == len(known) and all(
+            path is seen for path, seen in zip(paths, known)):
+        return
+    graph.viewpointPaths = paths
+    changed = getattr(context, 'OnViewpointsChanged', None)
+    if changed is not None:
+        changed(paths)
 
 
 def bind_scene_viewpoint(context: Any) -> None:
@@ -26,18 +52,14 @@ def bind_scene_viewpoint(context: Any) -> None:
     camera) becomes bindable there too. It only teleports when the bound viewpoint
     changes, so it never fights ordinary walk-around navigation.
 
-    The viewpoint paths are cached on the SceneGraph (invalidated naturally when the
-    context's scenegraph is swapped for a fresh one), so a scene with no viewpoints
-    costs one traversal and nothing thereafter.
+    The paths are the ones :func:`publish_viewpoints` gave the scenegraph, so a
+    Viewpoint that arrives after the first frame is as bindable as one that was
+    there from the start.
     """
     sg = context.getSceneGraph()
     if sg is None:
         return
-    paths = getattr(sg, '_core_viewpoint_paths', None)
-    if paths is None:
-        paths = visitor.find(context, (nodetypes.Viewpoint,))
-        sg._core_viewpoint_paths = paths
-        sg.viewpointPaths = paths[:]
+    paths = list(getattr(sg, 'viewpointPaths', ()))
     if not paths:
         return
     view = view_path = None

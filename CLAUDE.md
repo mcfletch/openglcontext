@@ -96,6 +96,24 @@ OpenGLContext/
 │   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/tiles3d.rst
 ├── move/             # Camera, movement modes, walking -- docs/navigation.rst
 │   └── orbit.py      # The examine gestures: orbit, dolly, pan -- no GL, no events
+├── multiview/        # Several views of one scene -- docs/multiview.rst
+│   ├── views.py      # View, ViewStyle, ViewLayout: what is drawn where, and
+│   │                 # which view an event belongs to -- no GL
+│   ├── strategy.py   # How a frame reaches every view: vertex-stage routing,
+│   │                 # a geometry stage, or the scene drawn once per view
+│   ├── cameras.py    # OrthoView: a view along one axis at a scale
+│   ├── viewpoints.py # The scene's cameras (VRML97 Viewpoints, glTF cameras)
+│   │                 # as the render pass finds them, and a view looking
+│   │                 # through one
+│   ├── navigation.py # What the pointer does in one view: the gestures its
+│   │                 # camera offers, and the bindings that raise them
+│   ├── gestures.py   # Reading the pointer, and asking the view it is in
+│   ├── grid.py       # The grid a view is measured against: how closely it
+│   │                 # is ruled, and where its lines are
+│   ├── viewset.py    # Several arrangements of one set of views, by name
+│   ├── mixin.py      # Four views in any context that wants them, over the
+│   │                 # camera it already had -- docs/multiview.rst
+│   └── quad.py       # Three orthographic views around a perspective one
 ├── nav/              # Navigation mesh generated from a collision mesh
 ├── packaging/        # Shipping an application: /opt environments, .deb -- docs/packaging.rst
 ├── passes/           # Rendering passes -- docs/renderpasses.rst, flat.rst, pbr.rst
@@ -142,6 +160,9 @@ OpenGLContext/
 │   ├── widgets.py    # Label/Button/Toggle/Select/Slider/Text+NumberField
 │   ├── hudwidgets.py # The in-world HUD: reticule, meters, messages -- docs/hud.rst
 │   ├── debugoverlay.py  # The developer overlay, fed by registered providers
+│   ├── viewchrome.py # A window of several views: each one's name, axes and
+│   │                 # controls, and the splitters between them -- docs/multiview.rst
+│   ├── tooltip.py    # What a control says when the pointer rests on it
 │   ├── layout.py     # Row/Column/Grid (built on hud.GUIBox)
 │   ├── draw.py       # The GL renderer: one program, one batched buffer
 │   └── generate.py   # A settings page from a node's fields (UI_HINTS)

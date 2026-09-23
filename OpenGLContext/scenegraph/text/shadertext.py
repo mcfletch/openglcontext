@@ -155,6 +155,13 @@ class ShaderTextRenderer:
         return self._char_height
 
     @property
+    def baseline(self) -> int | None:
+        """Pixels from the top of a character cell to the baseline, or None before the atlas loads."""
+        module = self._atlas_module
+        found = getattr(module, 'baseline', None) if module is not None else None
+        return int(found) if found is not None else None
+
+    @property
     def font_size(self) -> int:
         """Actual font size being used."""
         return self._actual_size

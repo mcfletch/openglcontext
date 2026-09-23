@@ -64,6 +64,42 @@ class TestInstallingWhatWasBuilt:
         publish.install(pack, store, str(tmp_path / 'dist'))
         assert os.path.isfile(marker)
 
+    def test_a_rebuilt_pack_replaces_the_one_here_when_asked(self,
+                                                             tmp_path) -> None:
+        """What an author does between builds of a world they are still
+        authoring: the store holds the last one, and the point is to see the
+        next."""
+        an_archive(tmp_path)
+        store = ContentStore('glisteel', root=str(tmp_path / 'store'))
+        first = a_pack(tmp_path, sha256=archive.digest(
+            str(tmp_path / 'dist' / 'glisteel-ashdown.tar.gz')))
+        publish.install(first, store, str(tmp_path / 'dist'))
+
+        (tmp_path / 'build' / 'ashdown' / 'trees' / 'oak.npz').write_bytes(b'2')
+        rebuilt = archive.write(str(tmp_path / 'build' / 'ashdown'),
+                                str(tmp_path / 'dist' / 'glisteel-ashdown.tar.gz'))
+        second = a_pack(tmp_path, sha256=archive.digest(rebuilt))
+        where = publish.install(second, store, str(tmp_path / 'dist'),
+                                replace=True)
+
+        assert os.path.isfile(os.path.join(where, 'trees', 'oak.npz'))
+
+    def test_replacing_leaves_nothing_of_the_pack_it_replaced(self,
+                                                              tmp_path) -> None:
+        """A file the new world does not have is gone, rather than surviving
+        beside it as something no build accounts for."""
+        built = an_archive(tmp_path)
+        pack = a_pack(tmp_path, sha256=archive.digest(built))
+        store = ContentStore('glisteel', root=str(tmp_path / 'store'))
+        stale = os.path.join(publish.install(pack, store, str(tmp_path / 'dist')),
+                             'gone.txt')
+        with open(stale, 'w') as handle:
+            handle.write('from the build before')
+
+        publish.install(pack, store, str(tmp_path / 'dist'), replace=True)
+
+        assert not os.path.exists(stale)
+
     def test_content_that_is_not_what_was_declared_is_refused(self,
                                                               tmp_path) -> None:
         """The digest is the whole point of recording one."""

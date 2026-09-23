@@ -158,6 +158,10 @@ def build_parser(prog: str = 'oglc-view') -> argparse.ArgumentParser:
                         help="print the scene's camera names and exit")
     parser.add_argument('--no-cameras', action='store_true',
                         help="ignore the scene's own cameras; centre and auto-frame it")
+    parser.add_argument('--views', choices=('single', 'quad'),
+                        help='open with one view of the scene or four -- the '
+                             'plan, the front and left elevations, and this '
+                             "camera; `v` switches between them either way")
     parser.add_argument('--capture-video', dest='capture_video', metavar='PATH',
                         help='record the scene to a video file, then exit. With '
                              '--fly-through the camera walks the scene\'s own '

@@ -17,6 +17,7 @@ uniform mat3 normalMatrix;
 out vec3 vNormal;
 out vec3 vPosition;  // Position in eye/view space
 out vec4 vColor;     // Per-vertex color
+#include "_multiview_inc.glsl"
 
 void main() {
     // Transform position to eye space (for lighting calculations)
@@ -31,4 +32,7 @@ void main() {
 
     // Final clip-space position
     gl_Position = projectionMatrix * eyePosition;
+#ifdef MULTIVIEW_VERTEX
+    routeToView(vPosition);
+#endif
 }

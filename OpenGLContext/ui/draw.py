@@ -153,6 +153,8 @@ class OverlayRenderer:
         self._texture: Any = None
         self._mode: str = self.BLEND
         self._scissor: Optional[Rect] = None
+        #: The session's clock for the frame being drawn; see :meth:`drawTrees`.
+        self.now: Optional[float] = None
         self._viewport: Tuple[int, int] = (1, 1)
 
     # -- lifecycle --------------------------------------------------------
@@ -671,8 +673,12 @@ class OverlayRenderer:
             glEnable(GL_DEPTH_TEST)
             glUseProgram(0)
 
-    def drawTrees(self, trees: Sequence[Any], viewport: Tuple[int, int]) -> None:
+    def drawTrees(self, trees: Sequence[Any], viewport: Tuple[int, int],
+                  now: Optional[float] = None) -> None:
         """Draw a run of widget trees, first to last, in one batch.
+
+        ``now`` is the session's clock for this frame, which what moves over
+        time -- a ripple across a control -- is drawn at; read where None.
 
         A tree is anything with a skin and a ``paintTree`` -- a HUD layer or an
         overlay panel -- and the order is the order they are drawn in, so
@@ -683,6 +689,10 @@ class OverlayRenderer:
         # Pictures decoded since the last frame become textures here, on the
         # render thread and before anything asks to draw one.
         self._pictures.pump()
+        if now is None:
+            from OpenGLContext.events import systemtime
+            now = systemtime.systemTime()
+        self.now = now
         if not self.begin(viewport):
             return
         width, height = self._viewport

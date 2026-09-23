@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import os
+import shutil
 import subprocess
 import urllib.parse
 from typing import Callable, Sequence
@@ -57,7 +58,7 @@ def built(pack: ContentPack, archives: str) -> str:
 
 
 def install(pack: ContentPack, store: ContentStore, archives: str,
-            within: ContentPack | None = None) -> str:
+            within: ContentPack | None = None, replace: bool = False) -> str:
     """Install a locally built pack into ``store``; its content root.
 
     What a fetch would have left, without the fetch: a game with this in its
@@ -66,8 +67,17 @@ def install(pack: ContentPack, store: ContentStore, archives: str,
     :func:`~OpenGLContext.contentpacks.fetch.fetch_pack` does. A pack already
     installed is left where it is, so a run of this over a store is not a way to
     lose whatever is in one.
+
+    ``replace`` is for the author of a world they are still building: it throws
+    away what is installed under this key and unpacks the build in its place,
+    so the next run of the game shows the world that was just made rather than
+    the one before it. Everything under that directory goes, including anything
+    put there by hand, so it is asked for rather than assumed.
     """
     existing = store.root_for(pack, within)
+    if existing is not None and replace:
+        shutil.rmtree(store.directory_for(pack, within), ignore_errors=True)
+        existing = None
     if existing is not None:
         return existing
     path = built(pack, archives)

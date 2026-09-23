@@ -166,34 +166,55 @@ The Passes
 
 On each visible frame the core ``FlatPass`` runs these steps in order:
 
-- **Shadow maps** -- if shadows are enabled, render each shadow-casting light's
-  depth into its map first (see :doc:`Shadows <shadows>`). On by default in core
-  profile.
+- Views - place the context's :doc:`view layout <multiview>` in the window and
+  work out each view's camera. A context that assigns none has one view, its
+  own view platform filling the window.
 
-- **Background** -- sky/ground gradient or cube background.
+- Gather - walk the scene once, choose every level of detail for all the views
+  at once, then cull and sort the walk against each view's frustum.
 
-- **Lights** -- upload the scene's light uniforms, bind shadow samplers, and set
-  the default material and scene ambient.
+- Selection - resolve mouse-pick events, either from the object-id render target
+  (MRT) or with the unlit program, each through the camera of the view it was
+  made in.
 
-- **Opaque** -- draw non-transparent geometry, grouped by material and sorted
-  front-to-back.
+- Shadow maps - if shadows are enabled, render each shadow-casting light's depth
+  into its map, once for every view (see :doc:`Shadows <shadows>`). On by
+  default in core profile.
 
-- **Transmissive** -- glass-like surfaces (:doc:`PBR <pbr>` only); the opaque
-  backdrop is captured first so it can be sampled through the surface.
+- Shared opaque - where the driver allows one submission for every view (the
+  ``vertex`` or ``geometry`` strategy), each view's background is drawn and then
+  the opaque shapes that can share a draw are drawn once for all the views that
+  see them. The rest of each view is drawn in the step below. See
+  :doc:`Several views on one window <multiview>`.
 
-- **Transparent** -- draw blended geometry back-to-front with depth writes
-  disabled.
+- Each view in turn, inside its own rectangle:
 
-- **Selection** -- resolve mouse-pick events, either from the object-id render
-  target (MRT) or with the unlit program.
+  - Background - the view's flat colour, or the scene's sky/ground gradient or
+    cube background.
+  - Lights - upload the light uniforms in this view's eye space, bind the shadow
+    maps as this view reads them, and set the default material and scene
+    ambient.
+  - Opaque - draw non-transparent geometry, grouped by material and sorted
+    front-to-back.
+  - Transmissive - glass-like surfaces (:doc:`PBR <pbr>` only); the opaque
+    backdrop is captured first so it can be sampled through the surface.
+  - Transparent - draw blended geometry back-to-front for this view's camera,
+    with depth writes disabled.
 
-- **Overlay** -- the frame counter and any HUD elements, drawn to the screen
-  rather than into the object-id buffer.
+- Bloom - when it is on, blur the bright parts of each view within its own
+  rectangle and composite the glow onto the frame.
+
+- Overlay - the frame counter and any HUD elements, drawn over the whole window
+  rather than into the object-id buffer, and after the bloom so the interface
+  does not glow.
+
+- Present - hand the finished frame to the context, which is where a screenshot
+  or a recording reads it.
 
 .. rst-class:: technical
 
-The compatibility pass runs the analogous fixed-function sequence: legacy
-background, legacy lights, opaque, transparent.
+The compatibility pass runs the analogous fixed-function sequence for each
+view: legacy background, legacy lights, opaque, transparent.
 
 sRGB Output
 -----------

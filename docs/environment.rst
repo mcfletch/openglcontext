@@ -65,6 +65,13 @@ Choosing the renderer
      - ``pbr``
      - unset
      - ``pbr`` selects the metallic/roughness renderer. See :doc:`PBR <pbr>`.
+   * - ``OPENGLCONTEXT_MULTIVIEW``
+     - ``auto``, ``vertex``, ``geometry``, ``sequential``
+     - ``auto``
+     - How a window of several views is drawn. ``auto`` takes the fastest the
+       driver offers; naming one pins it, for comparing them, and a strategy
+       the driver cannot run is reported and replaced. See :doc:`Several views
+       on one window <multiview>`.
 
 Lighting and shadows
 --------------------

@@ -223,6 +223,13 @@ The number of slices adapts to the frame rate so shadows stay smooth; pin it
 with ``OPENGLCONTEXT_SHADOW_CASCADES`` when you need identical output every
 run (see below).
 
+With :doc:`several views <multiview>` on the window, the slices are cut from
+the active view's camera and every view reads the same maps. A view the
+cascades were not fitted to uses, for each point it draws, the finest cascade
+that holds that point; ground it shows outside every cascade is unshadowed.
+Spot and point maps do not depend on the camera, and every view reads them as
+the active one does.
+
 .. rst-class:: technical
 
 Directional cascades use a fixed-width soft edge rather than the

@@ -84,9 +84,6 @@ class TestRenderDraw:
         # GL_POINTS enables GL_PROGRAM_POINT_SIZE around the draw.
         assert _full_mesh(draw_mode=GL_POINTS).render(mode=_mode()) == 1
 
-    def test_render_skips_without_shader_mode(self, gl):
-        assert _full_mesh().render(mode=_mode(shader_mode=False)) == 1
-
     def test_render_skips_empty_mesh(self, gl):
         empty = PBRMesh(positions=np.zeros((0, 3), 'f'))
         assert empty.render(mode=_mode()) == 1

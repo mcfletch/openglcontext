@@ -85,13 +85,17 @@ class Rendered:
 def render_scene_factory(monkeypatch):
     """Factory: build a context around a scenegraph and render frames.
 
-    Returns a callable(children, frames=4, picks=None, mrt=True) -> _Rendered and
-    tears the window down afterward.
+    Returns a callable(children, frames=4, picks=None, mrt=True, shadows=None,
+    layout=None, size=None) -> _Rendered and tears the window down afterward.
+    ``layout`` is called with the context once it is built and returns the
+    :class:`~OpenGLContext.multiview.views.ViewLayout` it should draw; ``size`` is the
+    window's ``(width, height)``.
     """
     windows = []
     contexts = []
 
-    def run(children, frames=4, picks=None, mrt=True, shadows=None):
+    def run(children, frames=4, picks=None, mrt=True, shadows=None, layout=None,
+            size=None):
         from OpenGLContext.passes import (
             instancing, selection, flateffects, shadowmixin, pbrpass, flatcore,
         )
@@ -110,15 +114,15 @@ def render_scene_factory(monkeypatch):
         def counting_draw(gpu, mvs, oids, material_indices=None, **named):
             counters['instanced_calls'] += 1
             counters['instances'] += len(mvs)
-            return orig_draw(gpu, mvs, oids, material_indices)
+            return orig_draw(gpu, mvs, oids, material_indices, **named)
 
         monkeypatch.setattr(instancing, 'draw_instanced_mesh', counting_draw)
 
         orig_single = pbrmesh._MeshGPU.draw
 
-        def counting_single(self):
+        def counting_single(self, *args, **named):
             counters['single'] += 1
-            return orig_single(self)
+            return orig_single(self, *args, **named)
 
         monkeypatch.setattr(pbrmesh._MeshGPU, 'draw', counting_single)
 
@@ -148,8 +152,14 @@ def render_scene_factory(monkeypatch):
         sg = basenodes.sceneGraph(children=children)
 
         class _Ctx(Base):
+            if size is not None:
+                from OpenGLContext.contextdefinition import ContextDefinition
+                contextDefinition = ContextDefinition(size=size)
+
             def OnInit(self):
                 self.sg = sg
+                if layout is not None:
+                    self.viewLayout = layout(self)
                 if picks is not None:
                     self.contextDefinition.pickAsync = False
                     self.addEventHandler('mousebutton', button=0, state=1,

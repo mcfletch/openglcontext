@@ -19,6 +19,7 @@ Cancel becomes real.
 
 from __future__ import annotations
 
+import math
 import re
 from typing import (
     TYPE_CHECKING, Any, Callable, Iterator, List, Optional, Tuple, cast,
@@ -41,7 +42,7 @@ from OpenGLContext.ui.skin import (
 )
 
 __all__ = [
-    'Widget', 'RootWidget', 'BoundWidget', 'Label', 'Button', 'Toggle',
+    'RIPPLE_SECONDS', 'Widget', 'RootWidget', 'BoundWidget', 'Label', 'Button', 'Toggle',
     'Select', 'Slider', 'TextField', 'NumberField', 'KeyCapture', 'Spacer',
     'Separator',
     'key_label',
@@ -62,6 +63,10 @@ _BUTTON_LABELS = {0: 'Left mouse', 1: 'Right mouse', 2: 'Middle mouse'}
 #: *partial* forms is what lets someone type a minus sign before a digit.
 _NUMBER_TEXT = re.compile(r'^-?\d*\.?\d*$')
 _INTEGER_TEXT = re.compile(r'^-?\d*$')
+
+#: How long a click's ripple takes to spread across a control and fade, in
+#: seconds of the session's clock.
+RIPPLE_SECONDS = 0.45
 
 
 def key_label(name: str) -> str:
@@ -115,6 +120,24 @@ class Widget(GUINode, node.Node):
     #: ring on a click rather than only on Tab.
     acceptsText: bool = False
 
+    #: One line about what this control does, shown where the pointer rests on
+    #: it (:mod:`OpenGLContext.ui.tooltip`). A control whose face is a glyph
+    #: rather than a word is what wants one.
+    tooltip: str = ''
+    #: What the pointer should look like over this widget, as
+    #: :meth:`~OpenGLContext.context.Context.setPointerShape` names them -- a
+    #: splitter asks for a resize cursor, so it reads as something to drag.
+    #: Empty leaves the pointer as it is.
+    cursor: str = ''
+    #: Whether the skin's ``hoverWash`` is drawn over this widget while the
+    #: pointer rests on it, which is what says an interactive widget can be
+    #: clicked. Off for a widget whose own painting already changes under the
+    #: pointer, and for a container that is interactive only to take the wheel.
+    hoverWash: bool = True
+    #: Whether pressing or activating this widget spreads a ripple across it.
+    #: Off for what is dragged or typed into rather than clicked.
+    ripples: bool = True
+
     #: Transient state -- what the pointer and the keyboard are doing right
     #: now.  Not fields: none of it is worth saving or serialising.
     hovered: bool = False
@@ -129,6 +152,8 @@ class Widget(GUINode, node.Node):
     #: `w.value` without the caller naming a type it already chose.
     on_activate: Optional[Callable[['Self'], None]] = None
     on_change: Optional[Callable[['Self'], None]] = None
+    #: The ripple running across this widget: when it started, and where.
+    _ripple: Optional[Tuple[float, float, float]] = None
 
     def __init__(self, on_activate: Optional[Callable[['Self'], None]] = None,
                  on_change: Optional[Callable[['Self'], None]] = None,
@@ -243,12 +268,83 @@ class Widget(GUINode, node.Node):
     def focus_lost(self) -> None:
         self.focused = False
 
+    # -- what the pointer is shown ----------------------------------------
+    def showsHover(self) -> bool:
+        """Whether the hover wash is drawn over this widget right now."""
+        return bool(self.hovered and self.interactive and self.enabled
+                    and self.hoverWash)
+
+    def ripple(self, x: Optional[float] = None, y: Optional[float] = None,
+               now: Optional[float] = None) -> bool:
+        """Start a ripple from ``(x, y)``, the middle where None; False where none starts.
+
+        ``now`` is the session's clock, read where None. A disabled widget,
+        one that is not interactive and one that does not ripple start none.
+        """
+        if not (self.interactive and self.enabled and self.ripples):
+            return False
+        from OpenGLContext.events import systemtime
+        middle = self.rect.centre
+        self._ripple = (systemtime.systemTime() if now is None else float(now),
+                        float(middle[0] if x is None else x),
+                        float(middle[1] if y is None else y))
+        started = getattr(self.root(), 'effectStarted', None)
+        if started is not None:
+            started(self)
+        return True
+
+    def rippleAt(self, now: float) -> Optional[Tuple[float, float, float, float]]:
+        """``(x, y, radius, strength)`` of the ripple at ``now``; None with none running.
+
+        The radius eases out to the corner of the widget furthest from where
+        it started, and the strength falls from 1 to 0 as it goes.
+        """
+        if self._ripple is None:
+            return None
+        start, x, y = self._ripple
+        progress = (float(now) - start) / RIPPLE_SECONDS
+        if progress >= 1.0:
+            self._ripple = None
+            return None
+        progress = max(progress, 0.0)
+        rect = self.rect
+        reach = max(math.hypot(corner_x - x, corner_y - y)
+                    for corner_x in (rect.x, rect.x + rect.width)
+                    for corner_y in (rect.y, rect.y + rect.height))
+        radius = reach * (1.0 - (1.0 - progress) ** 3)
+        return (x, y, radius, 1.0 - progress)
+
+    def paintFeedback(self, renderer: Any) -> None:
+        """Draw the hover wash and any ripple over what :meth:`paint` drew."""
+        skin = renderer.skin
+        if self.showsHover():
+            renderer.rect(self.rect, tuple(skin.hoverWash))
+        if self._ripple is None:
+            return
+        now = getattr(renderer, 'now', None)
+        if now is None:
+            from OpenGLContext.events import systemtime
+            now = systemtime.systemTime()
+        found = self.rippleAt(now)
+        if found is None:
+            return
+        x, y, radius, strength = found
+        red, green, blue, alpha = (float(value) for value in skin.rippleFill)
+        size = max(int(round(radius * 2.0)), 1)
+        circle = Rect(int(round(x - radius)), int(round(y - radius)), size, size)
+        previous = renderer.pushScissor(self.rect)
+        try:
+            renderer.disc(circle, (red, green, blue, alpha * strength))
+        finally:
+            renderer.popScissor(previous)
+
     # -- drawing ----------------------------------------------------------
     def paintTree(self, renderer: Any) -> None:
         """Draw this widget and everything inside it, back to front."""
         if not self.visible:
             return
         self.paint(renderer)
+        self.paintFeedback(renderer)
         self.paintChildren(renderer)
 
     def paintChildren(self, renderer: Any) -> None:
@@ -287,7 +383,14 @@ class Widget(GUINode, node.Node):
 
     # -- acting -----------------------------------------------------------
     def activate(self) -> None:
-        """Do whatever this widget does when it is clicked or Entered."""
+        """Do whatever this widget does when it is clicked or Entered.
+
+        Ripples from the middle where no ripple is running already: a key or
+        an accelerator says it was heard the way a click does, and the click
+        that got here has already started one where the pointer went down.
+        """
+        if self._ripple is None:
+            self.ripple()
         if self.on_activate is not None:
             # The constructor is the only way one gets here, and it stores the
             # callback on the widget the caller wrote it for -- which is what
@@ -318,6 +421,8 @@ class RootWidget(Widget):
     """
 
     PROTO = 'UIRootWidget'
+    hoverWash = False
+    ripples = False
     children = field.newField('children', 'MFNode', 1, list)
     #: The artwork and colours this tree paints with; the default flat skin
     #: when NULL.
@@ -330,6 +435,27 @@ class RootWidget(Widget):
     #: This tree's own copy of the default skin; see :meth:`baseSkin`.
     _defaultSkin: Optional[Any] = None
     _scaledBy: float = 1.0
+    #: The widgets in this tree with a ripple running, so a frame can ask
+    #: whether to draw another without walking the tree.
+    _effects: Optional[List[Widget]] = None
+
+    def effectStarted(self, widget: Widget) -> None:
+        """A widget in this tree started something that moves over time."""
+        if self._effects is None:
+            self._effects = []
+        if not any(widget is running for running in self._effects):
+            self._effects.append(widget)
+
+    def animating(self, now: float) -> bool:
+        """Whether anything in this tree is still moving at ``now``.
+
+        What a window asks after drawing, to know whether to draw again.
+        """
+        if not self._effects:
+            return False
+        self._effects = [widget for widget in self._effects
+                         if widget.rippleAt(now) is not None]
+        return bool(self._effects)
 
     def layoutChildren(self) -> List[Widget]:
         return [child for child in self.children
@@ -471,14 +597,21 @@ class Label(Widget):
 
 
 class Separator(Widget):
-    """A hairline between groups of controls."""
+    """A hairline between groups of controls.
+
+    ``height`` is how thick the line is. Given a taller rectangle -- a menu
+    leaves room either side of one -- the line is drawn across its middle.
+    """
 
     PROTO = 'Separator'
     height = field.newField('height', 'SFFloat', 1, 1.0)
     color = field.newField('color', 'SFVec4f', 1, (1, 1, 1, 0.18))
 
     def paint(self, renderer: Any) -> None:
-        renderer.rect(self.rect, self.color)
+        thickness = min(max(int(round(float(self.height))), 1), self.rect.height)
+        middle = self.rect.y + (self.rect.height - thickness) // 2
+        renderer.rect(Rect(self.rect.x, middle, self.rect.width, thickness),
+                      self.color)
 
 
 class Spacer(Widget):
@@ -548,6 +681,8 @@ class Button(BoundWidget):
 
     interactive = True
     focusable = True
+    #: The skin's hover fill lights it; a wash as well would be two.
+    hoverWash = False
 
     def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
@@ -823,6 +958,8 @@ class Slider(BoundWidget):
 
     interactive = True
     focusable = True
+    #: Dragged rather than clicked.
+    ripples = False
 
     def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
@@ -983,6 +1120,8 @@ class TextField(BoundWidget):
     placeholder = field.newField('placeholder', 'SFString', 1, '')
 
     interactive = True
+    #: Typed into rather than clicked.
+    ripples = False
     focusable = True
     acceptsText = True
 

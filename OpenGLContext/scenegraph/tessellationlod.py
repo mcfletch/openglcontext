@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import os
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Optional
 
 import numpy as np
 
@@ -57,16 +57,24 @@ def lod_enabled(mode: Any = None) -> bool:
     return renderoptions.flag(mode, 'tessellationLOD', default)
 
 
-def camera_distance_radii(center_local: Any, radius_local: float, modelview: Any) -> float:
+def camera_distance_radii(center_local: Any, radius_local: float, modelview: Any,
+                          eyes: Optional[Sequence[Any]] = None) -> float:
     """Eye-space camera distance to ``center_local``, in units of ``radius_local``.
 
     The modelview maps local space to eye space, where the camera sits at the
-    origin, so the distance is just the length of the transformed centre. Row-
-    vector convention (``point @ modelview``), matching the rest of the pass.
+    origin, so the distance is the length of the transformed centre. Row-vector
+    convention (``point @ modelview``), matching the rest of the pass.
+
+    ``eyes`` are the cameras a shape drawn once for several views is seen from,
+    as points in that eye space; the distance is then to the closest of them.
     """
     mv = np.asarray(modelview, dtype='d')
     c = np.array([center_local[0], center_local[1], center_local[2], 1.0], dtype='d') @ mv
-    dist = float(np.linalg.norm(c[:3]))
+    if eyes:
+        dist = min(float(np.linalg.norm(c[:3] - np.asarray(eye, 'd')[:3]))
+                   for eye in eyes)
+    else:
+        dist = float(np.linalg.norm(c[:3]))
     return dist / max(float(radius_local), _TINY)
 
 
@@ -91,7 +99,8 @@ def lod_level(mode: Any, center_local: Any, radius_local: float,
     if matrix is None:
         return 0
     try:
-        d = camera_distance_radii(center_local, radius_local, matrix)
+        d = camera_distance_radii(center_local, radius_local, matrix,
+                                  getattr(mode, 'viewerEyes', None))
     except Exception:
         return 0
     return level_from_distance(d, thresholds)

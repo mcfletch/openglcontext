@@ -154,11 +154,6 @@ class SelectionMixin(_AsyncPickMixin):
             # Buffer not ready, fall back to legacy method
             return
 
-        # The camera's, not self.matrix: the traversal rewrites that for
-        # every node it visits, so by dispatch time it holds whatever was
-        # drawn last and every picked point would come back in that node's
-        # local space.
-        matrix = self.modelView
         id_map = getattr(selection_buffer, 'id_map', {}) or {}
 
         for event in events.values():
@@ -171,7 +166,7 @@ class SelectionMixin(_AsyncPickMixin):
 
             self._dispatchPickEvent(
                 mode, event, [path] if path else [[]], x, y, depth,
-                matrix, self.projection, self.viewport)
+                *self._pickCamera(event))
 
     def _createPickProjection(self, pick_region: Tuple[int, int, int, int],
                               viewport: Tuple[int, int, int, int]) -> np.ndarray:

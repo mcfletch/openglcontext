@@ -227,6 +227,34 @@ class TkContext(tkevents.EventHandlerMixin, Context):
         self.setFullscreen(renderoptions.fullscreen_window(self))
         Context.settingsChanged(self)
 
+    #: Tk's cursor names, by the name a control asks for. Tk takes the X11
+    #: names on every platform and maps them to the native pointer, so these
+    #: are the spellings rather than a picture this has to carry.
+    CURSOR_SHAPES = {
+        'arrow': '',
+        'hand': 'hand2',
+        'text': 'xterm',
+        'crosshair': 'crosshair',
+        'resize-x': 'sb_h_double_arrow',
+        'resize-y': 'sb_v_double_arrow',
+        'resize': 'fleur',
+        'no': 'X_cursor',
+    }
+
+    def setPointerShape(self, name: str) -> bool:
+        """Show this pointer; False for a shape Tk has no name for."""
+        if self.frame is None or self._pointerGrabbed:
+            return False
+        wanted = str(name or 'arrow')
+        if wanted not in self.CURSOR_SHAPES:
+            return False
+        import tkinter
+        try:
+            self.frame.configure(cursor=self.CURSOR_SHAPES[wanted])
+        except tkinter.TclError:
+            return False
+        return True
+
     def setPointerCapture(self, capture: Any) -> bool:
         """Hide the pointer and keep it in the window, for a mouse-look mode
 

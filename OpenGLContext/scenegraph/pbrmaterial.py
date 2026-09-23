@@ -9,6 +9,8 @@ so PIL-backed images need not be squeezed into VRML field types.
 """
 from typing import Any
 
+import numpy as np
+
 from vrml import node, field
 
 
@@ -173,6 +175,60 @@ class PBRMaterial(node.Node):
 
     def texture(self, channel: str) -> Any:
         return self.textures.get(channel)
+
+    def legacyTexture(self, mode: Any) -> Any:
+        """The GL texture of the base colour map, or None: what the fixed-function pass draws."""
+        base = self.textures.get('baseColor')
+        return base.cached(mode) if base is not None else None
+
+    def render(self, mode: Any = None) -> float:
+        """Set the fixed-function material from the factors; the alpha it draws with.
+
+        The compatibility profile's pass calls this through ``Appearance``,
+        as it calls ``Material.render``. The factors are mapped onto
+        ``glMaterial``: the base colour is the diffuse and ambient colour, a
+        metal's highlight takes the base colour and a dielectric's is a dim
+        grey, roughness widens the highlight, and the emissive colour at its
+        strength is the emission. An unlit material emits its base colour.
+        Of the texture maps, only the base colour map is drawn by this
+        pipeline, bound by ``Appearance`` through :meth:`legacyTexture`.
+        """
+        from OpenGL import GL
+        alpha = 1.0 - float(self.transparency)
+        if alpha <= 0.0:
+            return 0.0
+        base = np.asarray(self.baseColor, 'f')[:3]
+        emission = np.asarray(self.emissiveColor, 'f')[:3] * float(self.emissiveStrength)
+        if self.unlit:
+            diffuse = specular = np.zeros(3, 'f')
+            emission = base
+            shininess = 0.0
+        else:
+            metallic = min(max(float(self.metallic), 0.0), 1.0)
+            roughness = min(max(float(self.roughness), 0.0), 1.0)
+            # A metal has almost no diffuse term; a quarter is kept so that a
+            # metal lit without an environment to reflect is still seen.
+            diffuse = base * (1.0 - 0.75 * metallic)
+            dielectric = np.full(3, DIELECTRIC_SPECULAR, 'f')
+            specular = (dielectric + (base - dielectric) * metallic) * (1.0 - 0.5 * roughness)
+            shininess = 128.0 * (1.0 - roughness) ** 2
+        face = GL.GL_FRONT_AND_BACK
+        GL.glMaterialfv(face, GL.GL_DIFFUSE, np.append(diffuse, alpha).astype('f'))
+        GL.glMaterialfv(face, GL.GL_AMBIENT,
+                        np.append(diffuse * AMBIENT_SHARE, alpha).astype('f'))
+        GL.glMaterialfv(face, GL.GL_SPECULAR, np.append(specular, alpha).astype('f'))
+        GL.glMaterialfv(face, GL.GL_EMISSION, np.append(emission, alpha).astype('f'))
+        GL.glMaterialf(face, GL.GL_SHININESS, float(shininess))
+        return alpha
+
+
+#: The reflectance of a surface that is not a metal, seen head on: what glTF's
+#: metallic/roughness model gives every dielectric.
+DIELECTRIC_SPECULAR = 0.04
+
+#: How much of the diffuse colour the fixed-function ambient term is, as a VRML97
+#: ``Material``'s default ``ambientIntensity``.
+AMBIENT_SHARE = 0.2
 
 
 def material_is_transparent(material: Any) -> bool:

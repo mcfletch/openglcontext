@@ -129,7 +129,8 @@ PATHS = [
         'Interface and Tools',
         """What the player reads and what an author edits: panels and screen
         furniture over the frame, a settings page, a console, choosing a level
-        by its picture, and picking something in the world to drag.""",
+        by its picture, picking something in the world to drag, and an
+        editor's four views of a model.""",
         [
             'using_ui',
             'hud_demo',
@@ -138,6 +139,7 @@ PATHS = [
             'using_level_select',
             'using_selection',
             'editing_demo',
+            'multiview_quad',
         ],
     ),
     TutorialPath(

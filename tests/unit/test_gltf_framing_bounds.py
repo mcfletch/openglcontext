@@ -191,3 +191,22 @@ class TestLoadedScene:
         scene = gltf.load_gltf(_triangle_glb())
         assert scene.strays == 0
         assert scene.radius > 0
+
+    def test_the_framing_box_is_given_with_its_centre_and_radius(self):
+        pytest.importorskip("pygltflib")
+        from OpenGLContext.loaders import gltf
+        from tests.unit.test_gltf_loader import _triangle_glb
+
+        scene = gltf.load_gltf(_triangle_glb())
+        low, high = np.asarray(scene.minimum), np.asarray(scene.maximum)
+        assert np.all(low <= high)
+        assert np.allclose((low + high) / 2.0, scene.center)
+        assert np.linalg.norm(high - low) / 2.0 == pytest.approx(scene.radius)
+
+    def test_a_scene_with_nothing_drawn_has_a_unit_box_about_the_origin(self):
+        from OpenGLContext.loaders.gltf.scene import GLTFScene
+        from OpenGLContext.scenegraph.basenodes import Transform
+
+        scene = GLTFScene(Transform(), (0.0, 0.0, 0.0), 1.0)
+        assert np.linalg.norm(np.asarray(scene.maximum) - np.asarray(scene.minimum)) / 2.0 \
+            == pytest.approx(1.0)

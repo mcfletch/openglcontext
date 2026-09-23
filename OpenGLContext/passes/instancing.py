@@ -912,9 +912,18 @@ def _build_instance_vao(gpu: Any, arr: np.ndarray, stride: int) -> tuple:
     return vao, inst_vbo
 
 
+def _set_instance_divisor(divisor: int) -> None:
+    """Advance every per-instance attribute of the bound VAO once per ``divisor``."""
+    from OpenGL.GL import glVertexAttribDivisor
+    for loc in (INSTANCE_ATTR_LOC, INSTANCE_ATTR_LOC + 1, INSTANCE_ATTR_LOC + 2,
+                INSTANCE_ATTR_LOC + 3, INSTANCE_OBJECT_ID_LOC, INSTANCE_MATERIAL_LOC,
+                INSTANCE_JOINT_BASE_LOC):
+        glVertexAttribDivisor(loc, divisor)
+
+
 def draw_instanced_mesh(gpu: Any, modelviews: Any, object_ids: Any,
                         material_indices: Any = None,
-                        joint_bases: Any = None) -> int:
+                        joint_bases: Any = None, copies: int = 0) -> int:
     """Draw ``gpu`` (a PBRMesh ``_MeshGPU``) once per instance in one GL call.
 
     Uses a VAO + per-instance VBO cached on ``gpu`` (built once by
@@ -923,6 +932,11 @@ def draw_instanced_mesh(gpu: Any, modelviews: Any, object_ids: Any,
     The instance modelviews are eye-space (view*model), so the buffer is re-uploaded
     each frame even for a static scene; cluster culling (see the plan) is what lets
     a cached, spatially-sorted buffer skip the re-upload. Returns the count drawn.
+
+    ``copies`` draws every instance that many times over, for a shared draw of
+    the ``vertex`` multi-view strategy: the per-instance attributes advance
+    once per ``copies`` instances, so each instance's data serves all of its
+    copies, and the vertex stage routes copy ``i`` to a view.
     """
     from OpenGL.GL import (
         GL_TRIANGLES, GL_UNSIGNED_INT,
@@ -945,12 +959,17 @@ def draw_instanced_mesh(gpu: Any, modelviews: Any, object_ids: Any,
         glBindVertexArray(vao)
         inst_vbo.bind()   # re-upload into the persistent buffer the VAO references
     draw_mode = int(getattr(gpu, 'draw_mode', GL_TRIANGLES))
+    divisor = max(int(copies), 1)
+    if getattr(gpu, '_instance_divisor', 1) != divisor:
+        # The divisor is state of the VAO, so it is set only when it changes.
+        _set_instance_divisor(divisor)
+        gpu._instance_divisor = divisor
     try:
         if gpu.indexed:
             glDrawElementsInstanced(draw_mode, gpu.count, GL_UNSIGNED_INT,
-                                    None, n)
+                                    None, n * divisor)
         else:
-            glDrawArraysInstanced(draw_mode, 0, gpu.count, n)
+            glDrawArraysInstanced(draw_mode, 0, gpu.count, n * divisor)
     finally:
         glBindVertexArray(0)
     return n

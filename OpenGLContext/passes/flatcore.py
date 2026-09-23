@@ -194,6 +194,6 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
             geom._apply_draw_state(self)
         shader.set_instancing(True, program=prog)
         try:
-            draw_instanced_mesh(gpu, modelviews, oids)
+            draw_instanced_mesh(gpu, modelviews, oids, copies=self.viewCopies)
         finally:
             shader.set_instancing(False, program=prog)

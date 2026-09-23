@@ -106,6 +106,90 @@ class TestFramingARegion:
         assert far.distance > near.distance
 
 
+class TestFramingABox:
+    """An object rather than a region of ground: all of it, from any side."""
+
+    def _project(self, view, point):
+        model, projection = view.matrices(VIEWPORT)
+        clip = np.append(np.asarray(point, 'd'), 1.0) @ model @ projection
+        return clip[:3] / clip[3]
+
+    def test_it_looks_at_the_middle_of_the_box(self) -> None:
+        view = OrbitView(nearest=0.01)
+        view.frame_box((-1.0, 0.0, 2.0), (3.0, 2.0, 4.0), VIEWPORT)
+        assert view.target() == pytest.approx((1.0, 1.0, 3.0))
+
+    @pytest.mark.parametrize('heading, pitch', [(0.0, 35.0), (120.0, 10.0), (250.0, 80.0)])
+    def test_every_corner_is_on_screen_whichever_way_it_looks(self, heading, pitch) -> None:
+        view = OrbitView(heading=heading, pitch=pitch, nearest=0.01)
+        view.frame_box((-0.2, 0.0, -0.1), (0.2, 1.8, 0.1), VIEWPORT)
+        for corner in [(x, y, z) for x in (-0.2, 0.2) for y in (0.0, 1.8) for z in (-0.1, 0.1)]:
+            ndc = self._project(view, corner)
+            assert np.all(np.abs(ndc) < 1.0), (corner, ndc)
+
+    def test_a_small_object_is_looked_at_from_close_by(self) -> None:
+        view = OrbitView(nearest=0.01)
+        view.frame_box((-0.1, -0.1, -0.1), (0.1, 0.1, 0.1), VIEWPORT)
+        assert view.distance < 1.0
+
+
+class TestItsLimits:
+    def test_the_pitch_limits_can_be_given_to_one_view(self) -> None:
+        view = OrbitView(lowest=10.0, highest=50.0)
+        view.orbit(0.0, -100.0)
+        assert view.pitch == pytest.approx(10.0)
+        view.orbit(0.0, 100.0)
+        assert view.pitch == pytest.approx(50.0)
+
+    def test_the_limits_can_be_given_to_one_view(self) -> None:
+        view = OrbitView(distance=5.0, nearest=1.0, furthest=10.0)
+        view.dolly(0.01)
+        assert view.distance == pytest.approx(1.0)
+        view.dolly(1000.0)
+        assert view.distance == pytest.approx(10.0)
+
+    def test_by_default_they_are_the_classs(self) -> None:
+        view = OrbitView()
+        assert (view.nearest, view.furthest) == (OrbitView.NEAREST, OrbitView.FURTHEST)
+        assert (view.lowest, view.highest) == (OrbitView.LOWEST, OrbitView.HIGHEST)
+
+    def test_a_view_of_an_object_can_be_tipped_to_look_up_at_it(self) -> None:
+        view = OrbitView(lowest=-80.0)
+        view.orbit(0.0, -60.0)
+        assert view.pitch == pytest.approx(DEFAULT_PITCH - 60.0)
+        view.orbit(0.0, -500.0)
+        assert view.pitch == pytest.approx(-80.0)
+
+
+class TestStandingWhereACameraStands:
+    """Taking the pose of a camera the scene carries."""
+
+    def test_it_stands_at_the_eye_and_looks_along_the_direction(self) -> None:
+        view = OrbitView(nearest=0.01, lowest=-89.0)
+        forward = np.array([1.0, -1.0, -1.0]) / np.sqrt(3.0)
+        view.stand_at((2.0, 5.0, 3.0), forward, 6.0)
+        assert view.position() == pytest.approx((2.0, 5.0, 3.0))
+        assert view.target() == pytest.approx(np.array([2.0, 5.0, 3.0]) + forward * 6.0)
+        assert view.distance == pytest.approx(6.0)
+
+    def test_a_camera_looking_up_is_looked_up_through(self) -> None:
+        view = OrbitView(nearest=0.01, lowest=-89.0)
+        view.stand_at((0.0, 0.0, 0.0), (0.0, 0.5, -1.0), 4.0)
+        assert view.pitch < 0.0
+        assert view.position() == pytest.approx((0.0, 0.0, 0.0), abs=1e-9)
+
+    def test_the_pitch_is_held_to_the_views_limits(self) -> None:
+        view = OrbitView(nearest=0.01)
+        view.stand_at((0.0, 0.0, 0.0), (0.0, 0.5, -1.0), 4.0)
+        assert view.pitch == pytest.approx(OrbitView.LOWEST)
+
+    def test_the_distance_is_held_to_the_views_limits(self) -> None:
+        view = OrbitView(nearest=1.0)
+        view.stand_at((0.0, 0.0, 0.0), (0.0, 0.0, -1.0), 0.1)
+        assert view.distance == pytest.approx(1.0)
+        assert view.position() == pytest.approx((0.0, 0.0, 0.0), abs=1e-9)
+
+
 class TestAsACamera:
     def _platform(self, **named):
         view = _view(**named)
@@ -144,3 +228,76 @@ class TestAsACamera:
         _view_, platform = self._platform()
         product = platform.modelMatrix() @ platform.modelMatrix(inverse=True)
         assert np.allclose(product, np.eye(4), atol=1e-4)
+
+
+class TestSeenWithoutPerspective:
+    """The same camera, drawn flat: what an editor's 'ortho' view is.
+
+    Turning perspective off keeps where the camera is and what it is looking
+    at; what changes is that distance no longer makes a thing smaller, so two
+    beams of the same size measure the same on screen wherever they stand.
+    """
+
+    def _view(self, **named):
+        from OpenGLContext.edit.orbitview import OrbitView
+        return OrbitView(distance=100.0, **named)
+
+    def test_a_camera_starts_in_perspective(self):
+        assert not self._view().orthographic
+
+    def test_what_it_is_looking_at_is_the_same_size_either_way(self):
+        """So switching does not jump: the subject stays the size it was.
+
+        Measured across the view at the target's own depth, which is where the
+        two projections are asked to agree -- nearer than that a perspective
+        view still draws bigger, and further, smaller.
+        """
+        import numpy as np
+        view = self._view()
+        size = (400, 300)
+        model, _projection = view.matrices(size)
+        across = np.asarray(model[:3, 1], 'd')      # up, in the view's own axes
+        edge = view.target() + across * 10.0
+        before = _clip(view, edge, size)
+        view.orthographic = True
+        assert _clip(view, edge, size) == pytest.approx(before, abs=1e-6)
+
+    def test_distance_stops_making_things_smaller(self):
+        """Two things of a size measure the same, however far off each is."""
+        import numpy as np
+        view = self._view()
+        size = (400, 300)
+        model, _projection = view.matrices(size)
+        up = np.asarray(model[:3, 1], 'd')
+        into = view.target() - view.position()
+        into = into / np.linalg.norm(into)
+        near = view.target() + up * 10.0
+        far = near + into * 50.0
+        assert _clip(view, near, size)[1] != pytest.approx(_clip(view, far, size)[1])
+        view.orthographic = True
+        assert _clip(view, near, size) == pytest.approx(_clip(view, far, size), abs=1e-6)
+
+    def test_it_still_turns_and_dollies(self):
+        view = self._view()
+        view.orthographic = True
+        view.orbit(30.0, 0.0)
+        view.dolly(0.5)
+        assert view.heading == pytest.approx(30.0)
+        assert view.distance == pytest.approx(50.0)
+
+    def test_what_is_behind_the_camera_is_still_drawn(self):
+        """An orthographic view has no eye to be behind: it keeps its depth."""
+        import numpy as np
+        view = self._view()
+        view.orthographic = True
+        behind = view.position() + (view.position() - view.target())
+        clip = _clip(view, behind, (400, 300), keep_z=True)
+        assert -1.0 <= clip[2] <= 1.0
+
+
+def _clip(view, point, size, keep_z=False):
+    import numpy as np
+    model, projection = view.matrices(size)
+    clip = np.append(np.asarray(point, 'd'), 1.0) @ model @ projection
+    found = clip[:3] / clip[3]
+    return found if keep_z else (float(found[0]), float(found[1]))

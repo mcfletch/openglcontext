@@ -89,10 +89,19 @@ class GLTFScene(object):
                  camera: Optional[dict] = None, cameras: Optional[list] = None,
                  viewpoints: Optional[list] = None, sceneGraph: Optional[SceneGraph] = None,
                  animations: Optional[list] = None,
-                 node_transforms: Optional[dict] = None) -> None:
+                 node_transforms: Optional[dict] = None,
+                 minimum: Optional[Sequence[float]] = None,
+                 maximum: Optional[Sequence[float]] = None) -> None:
         self.group = group
         self.center = center      # (x, y, z) of the framing box's centre
         self.radius = radius      # bounding-sphere radius (for camera framing)
+        # The framing box's corners. Without them, the cube about the centre
+        # whose half-diagonal is the radius.
+        half = float(radius) / np.sqrt(3.0)
+        self.minimum = tuple(float(v) for v in (
+            minimum if minimum is not None else np.asarray(center, 'd') - half))
+        self.maximum = tuple(float(v) for v in (
+            maximum if maximum is not None else np.asarray(center, 'd') + half))
         # Parts the file stranded far outside the model, which the framing box
         # above therefore leaves out, and how far the farthest of them reaches
         # in radii of that box. Both are 0 for a model that is all in one place;
@@ -938,9 +947,11 @@ class _SceneBuilder:
         self.scene_graph.children = [root]
 
         framed = framing_bounds(self.parts)
+        box: Tuple[Any, Any] = (None, None)
         if framed is None:
             center, radius = (0.0, 0.0, 0.0), 1.0
         else:
+            box = (framed.minimum, framed.maximum)
             center = tuple((framed.minimum + framed.maximum) / 2.0)
             radius = float(np.linalg.norm(framed.maximum - framed.minimum) / 2.0) or 1.0
         poses = _camera_poses(self.cameras)
@@ -950,7 +961,8 @@ class _SceneBuilder:
         scene = GLTFScene(root, center, radius,
                           camera=(poses[0] if poses else None), cameras=poses,
                           viewpoints=viewpoints, sceneGraph=self.scene_graph,
-                          animations=animations, node_transforms=self.node_transforms)
+                          animations=animations, node_transforms=self.node_transforms,
+                          minimum=box[0], maximum=box[1])
         scene.node_morph = self.node_morph
         scene.exposure = _meter_exposure(self.light_meter, center)
         scene.skins = self.skins

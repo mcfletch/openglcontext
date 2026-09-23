@@ -157,6 +157,19 @@ class ScreenMixin(object):
             trees.append(layer)
         return trees
 
+    def redrawWhileAnimating(self, trees: List[Any], now: float) -> None:
+        """Ask for another frame while anything in ``trees`` is still moving at ``now``.
+
+        A ripple spreading across a control is drawn over several frames, and
+        a window that draws only when something happens would otherwise show
+        its first and nothing after.
+        """
+        for tree in trees:
+            animating = getattr(tree, 'animating', None)
+            if animating is not None and animating(now):
+                self.triggerRedraw()
+                return
+
     def renderShaderOverlay(self, pass_: Any) -> None:
         """Draw the HUD and any screens over the finished frame.
 
@@ -168,10 +181,12 @@ class ScreenMixin(object):
         metrics = self.overlayMetrics()
         if metrics is None:
             return
-        trees = self.screenTrees(metrics)
+        now = systemtime.systemTime()
+        trees = self.screenTrees(metrics, now)
         if not trees:
             return
         from OpenGLContext.ui.draw import OverlayRenderer
         renderer = OverlayRenderer.forContext(self, self.overlayFontSize())
         if renderer is not None:
-            renderer.drawTrees(trees, self.getViewPort())
+            renderer.drawTrees(trees, self.getViewPort(), now=now)
+            self.redrawWhileAnimating(trees, now)

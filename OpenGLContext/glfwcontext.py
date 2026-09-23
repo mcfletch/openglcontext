@@ -358,6 +358,72 @@ class GLFWContext(
             if clear is not None:
                 clear()
 
+    #: The pointers this backend can show, by the name a widget asks for,
+    #: each with the GLFW shapes to try in order. The names GLFW 3.4 added are
+    #: first because a Wayland compositor's cursor theme carries those and not
+    #: the older ones: asking for `hand2` there fails, and `default` shapes
+    #: answer. The shapes themselves are made on first use, since a cursor is
+    #: a GLFW object and the window has to exist first.
+    CURSOR_SHAPES = {
+        'arrow': ('ARROW_CURSOR',),
+        'hand': ('POINTING_HAND_CURSOR', 'HAND_CURSOR'),
+        'text': ('IBEAM_CURSOR',),
+        'crosshair': ('CROSSHAIR_CURSOR',),
+        'resize-x': ('RESIZE_EW_CURSOR', 'HRESIZE_CURSOR'),
+        'resize-y': ('RESIZE_NS_CURSOR', 'VRESIZE_CURSOR'),
+        'resize': ('RESIZE_ALL_CURSOR',),
+        'no': ('NOT_ALLOWED_CURSOR',),
+    }
+
+    _cursors: Any = None
+
+    def setPointerShape(self, name: str) -> bool:
+        """Show this pointer; False for a name this platform has not got.
+
+        ``''`` and ``'arrow'`` are the ordinary pointer. A shape the platform
+        does not have is answered rather than approximated: a window that
+        cannot say "this drags" is better than one that says it with the wrong
+        picture.
+        """
+        if not self.window:
+            return False
+        wanted = str(name or 'arrow')
+        shapes = self.CURSOR_SHAPES.get(wanted)
+        if shapes is None:
+            return False
+        if self._cursors is None:
+            self._cursors = {}
+        cursor = self._cursors.get(wanted)
+        if cursor is None:
+            cursor = self._standardCursor(shapes)
+            if cursor is None:
+                return False
+            self._cursors[wanted] = cursor
+        glfw.set_cursor(self.window, cursor)
+        return True
+
+    @staticmethod
+    def _standardCursor(shapes: Any) -> Any:
+        """The first of these shapes this platform will make, or None.
+
+        A cursor theme need not carry every shape, and GLFW answers a missing
+        one with a warning and a null rather than an exception.
+        """
+        import warnings
+        for shape in shapes:
+            constant = getattr(glfw, shape, None)
+            if constant is None:
+                continue
+            with warnings.catch_warnings():
+                warnings.simplefilter('ignore')
+                try:
+                    cursor = glfw.create_standard_cursor(constant)
+                except Exception:
+                    cursor = None
+            if cursor:
+                return cursor
+        return None
+
     def setPointerCapture(self, capture: Any) -> bool:
         """Grab or release the pointer for a mouse-look movement mode.
 

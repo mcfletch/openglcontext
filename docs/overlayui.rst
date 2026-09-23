@@ -117,22 +117,47 @@ the same list at the pointer on a right-click.
    ], stack=context.overlays)
    context.overlays.push(bar)
 
+A pop-up menu -- under a control, or at the pointer on a right-click -- is one
+call. The stack it is pushed on is where its submenus open:
+
+.. code-block:: python
+
+   def showMenu(self, event):
+       x, y = event.getPickPoint()
+       self.pushOverlay(Menu(anchor=(x, y), items=[
+           MenuItem(text='Rename', on_activate=self.rename),
+           MenuItem(text='Delete', on_activate=self.delete),
+           Separator(),
+           MenuItem(text='Move to', submenu=[MenuItem(text=name) for name in folders]),
+       ]))
+
 A menu is a ``Panel``, so it already has the focus, the skin, the accelerators
 and the Escape that closes a screen. What it adds is where it opens and how it
 leaves:
 
 - **It opens where it is asked to.** ``Menu(anchor=(x, y))`` puts its top-left
-  corner there, in window pixels. It moves left to stay on screen, and one that
-  would run off the bottom opens *upwards* rather than sliding up over whatever
-  was clicked. For a right-click menu the anchor is the pick point.
+  corner there, in window pixels, and it moves left to stay on screen. One
+  that would run off the bottom opens *upwards*, sitting on ``above`` -- the
+  top edge of the control that opened it, so the list does not cover what was
+  clicked -- or on the anchor where that is not given. A list with room neither
+  way is moved as little as keeps it inside the window. For a right-click menu
+  the anchor is the pick point.
 
-- **Choosing puts it away** — a menu still up after the thing was done is in the
-  way — and so does clicking anywhere else. That click is spent on dismissing
+- **Choosing runs the item at once and puts the menu away** ``linger`` seconds
+  later (0.2 by default), long enough for the chosen row's ripple to be seen;
+  nothing more can be chosen meanwhile, and ``linger=0`` puts it away at once.
+  Clicking anywhere else puts it away too. That click is spent on dismissing
   the menu and does not also press what was behind it.
 
-- **Up and down walk the list**, Enter chooses, Escape leaves. A ``shortcut``
-  runs its item from anywhere in the menu and is drawn on the right of the row,
-  which is how the reader learns it.
+- **The row under the pointer is lit, and the keyboard is on it**, so Up and
+  Down carry on from wherever the pointer left off. Enter chooses, Escape
+  leaves. A ``shortcut`` runs its item from anywhere in the menu and is drawn
+  on the right of the row, which is how the reader learns it.
+
+- **Every row has a letter that runs it**, underlined in its text: the first
+  letter of one of its words where no other row has it, and otherwise the first
+  of its letters that is free. ``MenuItem(mnemonic='p')`` names the letter where
+  the one given will not do, and ``Menu(mnemonics=False)`` gives a menu none.
 
 - ``checkable`` makes an item a setting rather than an action: it draws its
   state and flips it when chosen.
@@ -632,6 +657,18 @@ will not load logs a warning and falls back rather than taking the frame down.
 ``primary`` button is also the panel's Enter default; ``danger`` marks the
 actions a settings screen must not let someone hit by accident.
 
+**A control shows the pointer it can be used.** While the pointer rests on an
+enabled control, ``hoverWash`` is drawn over it; a button, whose fill already
+changes, and a menu row, which draws ``menuHighlight``, do without. A press
+spreads a ripple of ``rippleFill`` across the control from where the pointer
+went down, clipped to it, fading as it grows over ``RIPPLE_SECONDS`` (0.45 s,
+in ``OpenGLContext.ui.widgets``). A control run from the keyboard, by an
+accelerator or by a menu's letter ripples from its middle. The window draws
+frames for as long as a ripple is running, and a capture's fixed clock times
+it like everything else. A widget class opts out with ``hoverWash = False`` or
+``ripples = False``: a slider, a text field, a scrolling viewport and a view's
+splitter do not ripple.
+
 **Round shapes need no artwork.** A boolean is drawn as a sliding switch, not
 a check box, because the state is then the shape: a knob at one end or the
 other on a track that changes colour reads at a glance, while a tick inside a
@@ -857,3 +894,38 @@ faster or more permissive reader for a format should be able to say so.
 The registry is empty by default. An entry in it is an application saying it
 has content the imaging library cannot read — it is not a layer over the
 ordinary case, which still goes straight to PIL.
+
+What the pointer is told
+------------------------
+
+A control says what it is by what the pointer does over it. Two things say it,
+and a widget declares both:
+
+.. code-block:: python
+
+   class Splitter(Widget):
+       cursor = 'resize-x'
+       tooltip = 'Drag to move the line between the views'
+
+``cursor`` is one of ``OpenGLContext.context.CURSORS`` -- ``arrow``, ``hand``,
+``text``, ``crosshair``, ``resize-x``, ``resize-y``, ``resize`` and ``no`` --
+and the overlay asks the context for it as the pointer crosses the window,
+setting it when it changes rather than on every movement. Every backend
+answers in those words: GLFW, GLUT, pygame, Tk, wx and Qt each map them to
+their own. **A shape a platform has not got is answered rather than
+approximated** -- ``setPointerShape`` returns False -- because a window that
+cannot say "this drags" is better than one that says it with the wrong
+picture, and a caller that is told can say it another way. A minimal Wayland
+cursor theme carries the arrow and the text bar and nothing else, which is why
+the view splitters also draw a grip.
+
+``tooltip`` is one line, shown where the pointer comes to rest on the control
+for ``OpenGLContext.ui.tooltip.TOOLTIP_PAUSE`` seconds. It is drawn over the
+panels rather than pushed on the stack, so it takes no events and changes
+nothing about modality; a pointer that is only crossing the window shows
+nothing, because the pause restarts with each movement.
+
+Every interactive control also answers the pointer on its own, with nothing
+declared: a wash while the pointer rests on it and a ripple when it is used
+(see :ref:`Skinning <overlayui-skinning>`).
+

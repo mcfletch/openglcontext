@@ -52,6 +52,8 @@ class ToolButton(Widget):
 
     interactive = True
     focusable = True
+    #: The skin's hover fill lights it.
+    hoverWash = False
 
     #: The :class:`~OpenGLContext.edit.tools.ToolManager` this button reads and
     #: drives. Not a field: a manager is not something to serialise, so it is

@@ -8,6 +8,7 @@ through :mod:`OpenGLContext.contentpacks`. One command covers the whole of that:
 
     ./release-assets.py                 # build the world, write the registry
     ./release-assets.py --install       # ...and put it in this machine's store
+    ./release-assets.py --reinstall     # ...over whatever that store already holds
     ./release-assets.py --push          # ...and attach it to the release tag
 
 ``--install`` is what makes a content release testable before it is a release:
@@ -122,15 +123,20 @@ def entry(tag: str, path: str, size: int, sha: str) -> dict:
     }
 
 
-def install(into: str) -> int:
-    """Put what was built into the store the demo reads, and say where."""
+def install(into: str, replace: bool = False) -> int:
+    """Put what was built into the store the demo reads, and say where.
+
+    ``replace`` throws away what is installed under each key first, which is
+    what a second build of a world wants: the store holds the last one, and an
+    install that leaves it there shows the world before the change.
+    """
     from OpenGLContext.contentpacks import ContentStore
 
     store = ContentStore(NAMESPACE)
     packs = catalog.merge(catalog.load(CATALOG))
     print(f"store: {store.root}")
     for pack in packs:
-        where = publish.install(pack, store, into)
+        where = publish.install(pack, store, into, replace=replace)
         print(f"  {pack.key:<28} {os.path.relpath(where, store.root)}")
     return 0
 
@@ -165,6 +171,10 @@ def main(argv: list[str] | None = None) -> int:
                         help="install what was built into this machine's own "
                              "store, so the demo runs against it with nothing "
                              "published")
+    parser.add_argument("--reinstall", action="store_true",
+                        help="install, throwing away what is already in the "
+                             "store under this key first, which is what a "
+                             "rebuilt world needs to be the one that opens")
     parser.add_argument("--push", action="store_true",
                         help="attach the archives to the release at --tag, "
                              "creating it if it is not there yet (needs the "
@@ -190,8 +200,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"gallery world: {size / 1048576:.1f} MB, sha256 {sha[:12]}, "
           f"registry written to {os.path.relpath(CATALOG, HERE)}")
 
-    if options.install:
-        install(options.into)
+    if options.install or options.reinstall:
+        install(options.into, replace=options.reinstall)
     if options.push:
         return push(options.tag, [path])
     return 0

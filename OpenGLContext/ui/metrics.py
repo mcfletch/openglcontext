@@ -42,14 +42,29 @@ class FontMetrics:
     """Character measurements for one monospaced font size."""
 
     def __init__(self, char_width: int, char_height: int,
-                 line_gap: int = REFERENCE_LINE_GAP, scale: float = 1.0) -> None:
+                 line_gap: int = REFERENCE_LINE_GAP, scale: float = 1.0,
+                 baseline: Optional[int] = None) -> None:
         self.char_width = int(char_width)
         self.char_height = int(char_height)
+        #: Pixels from the top of a character cell down to the baseline the
+        #: letters sit on; the part of the cell under it is for descenders.
+        #: Three quarters of the cell where the font does not say.
+        self.baseline = (int(baseline) if baseline is not None
+                         else int(round(self.char_height * 0.76)))
         #: Blank pixels between one line's cell and the next.
         self.line_gap = int(line_gap)
         #: How much larger this font is than the reference one, and therefore
         #: how much larger everything measured in pixels should be.
         self.scale = float(scale)
+
+    @property
+    def underline(self) -> int:
+        """How far above the bottom of a character cell an underline is drawn.
+
+        One pixel below the baseline, so it is under the letters rather than
+        under the descenders.
+        """
+        return max(self.char_height - self.baseline - 2, 0)
 
     @property
     def line_height(self) -> int:
@@ -176,7 +191,8 @@ def metrics_for(renderer: Any, line_gap: Optional[int] = None) -> FontMetrics:
     if line_gap is None:
         line_gap = max(1, int(round(REFERENCE_LINE_GAP * scale)))
     return FontMetrics(renderer.char_width, renderer.char_height,
-                       line_gap=line_gap, scale=scale)
+                       line_gap=line_gap, scale=scale,
+                       baseline=getattr(renderer, 'baseline', None))
 
 
 def font_size_for(height: int, scale: float = 1.0) -> int:

@@ -40,6 +40,13 @@ The viewer selects the core profile, the PBR renderer, the GLFW backend and
 shadows for you, so you do not need to set any environment variables. A binary
 ``.glb`` is self-contained, so URLs to a ``.glb`` work directly.
 
+A model loaded into a compatibility-profile context is drawn by the
+fixed-function pass. Its materials are lit through ``glMaterial`` from their
+factors -- the base colour as the diffuse colour, metalness and roughness as the
+highlight, the emissive colour at its strength as the emission -- and the base
+colour map is drawn over them. The other maps, image-based lighting and GPU
+skinning are the PBR pass's; a skinned model is posed on the CPU there.
+
 A non-binary ``.gltf`` usually references external ``.bin`` and texture files,
 by URI *relative to the document*. A URL therefore goes through
 ``load_gltf_url()`` (below), which keeps hold of where the document came from
@@ -574,11 +581,16 @@ bounds and any cameras:
    group   = scene.group      # a scenegraph Group you can add to your own scene
    centre  = scene.center     # bounding-sphere centre, for framing
    radius  = scene.radius     # bounding-sphere radius
+   low     = scene.minimum    # the corners of the box that sphere surrounds
+   high    = scene.maximum
    strays  = scene.strays     # parts the file stranded outside that sphere
    cameras = scene.cameras    # list of baked camera poses
 
 You can drop ``scene.group`` straight into a context's scenegraph, or use
 ``scene.center`` / ``scene.radius`` to frame the model, as the viewer does.
+An orthographic view fits the box, ``scene.minimum`` / ``scene.maximum``, more
+closely than it fits the sphere; :doc:`multiview` frames all four views of an
+editor that way.
 
 That sphere is fitted to the *model*, not to the file's whole extent: a part
 the exporter stranded far outside the rest is left out of it, so that one

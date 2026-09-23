@@ -7,6 +7,51 @@ the far end 108 of them are on screen across four levels in **four instanced
 draws** -- eleven for the whole frame. What is left is geomorphing (M9), the
 baked normal map (M10), and lazy per-level decoding.
 
+## The hall relit, and the two things that took (2026-09-21)
+
+The hall was lit by eight lamps under the plaster, and a point light in this
+engine casts no shadow -- so the room had even light on every surface and
+nothing to read its depth from. It is now lit by two suns leaning in across it
+from above the roof, each bust throwing a shadow to one side and a fainter one
+to the other, with a weak upward light standing in for what the floor throws
+back. Making that work took one thing in the engine and one in the world, and
+both were invisible until something rendered the file.
+
+**A node can say it is not a shadow caster.** The suns are outside the
+building, so a roof drawn into the shadow maps shadows everything under it and
+the hall renders lit by the ambient term alone. `OGLC_castsShadow: 0` in a
+node's `extras` keeps that node's geometry out of the depth passes, and a light
+on such a node gets no shadow map: `loaders/gltf/scene.py`, arriving at
+`Shape.castsShadow`, which the shadow pass already read. The flag is the node's
+own and does not reach its children -- shadow visibility is per object in the
+tools that write it -- but it does carry to a node's `MSFT_lod` alternatives,
+which are the same object drawn instead. The Blender add-on writes it from an
+object custom property of that name; `docs/gltf.html#castsshadow`.
+
+**A world states its lights in the unit the file carries.** Blender measures a
+sun in watts per square metre and its exporter writes that as lux at 683 lumens
+to the watt, so a plan naming 3.0 and meaning lux exported a hall lit 683 times
+over. Metered on a black background that still renders -- the camera stops down
+by a thousand -- but `oglc-view`'s own default draws a sky, and the meter is not
+consulted there, because an environment is the key light and is not measured in
+the meter's units. The plan now states lux, `openglcontext_lod.scene` divides by
+`LUMENS_PER_WATT` on the way into Blender, and the three lights come to five lux
+against the six the meter reads as neutral. The hall then looks the same with a
+sky or without one, and needs no exposure flag.
+
+The assumption about somebody else's exporter is what made both of these quiet,
+so both are now pinned against a real Blender in
+`openglcontext-editor/tests/test_blender_export.py`: what lux a sun is written
+at, and whether the flag survives to the node.
+
+**Still open:** a scene whose own lights genuinely overexpose it is left at
+neutral exposure whenever a background is drawn, since the environment's own
+contribution is not in the meter's units and cannot be added to the reading.
+Metering the suns and leaving the lamps alone was tried and is wrong -- it takes
+`AnimationPointerUVs`, a 50-lux sun in a studio environment, eight stops down.
+Doing better means giving the analytic sky and the IBL probe a stated
+illuminance, which is a change every environment-lit baseline would move under.
+
 ## Octahedral impostors (2026-09-19)
 
 The coarsest level no longer has to be a mesh. An impostor bakes one view of the

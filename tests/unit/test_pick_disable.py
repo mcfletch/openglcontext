@@ -9,6 +9,7 @@ from OpenGLContext.context import Context
 
 class _FakeEvent:
     type = 'mousebutton'
+    view = None
 
     def __init__(self, key=(10, 20)):
         self._key = key
@@ -18,7 +19,15 @@ class _FakeEvent:
 
 
 class _StubContext:
-    """Just enough of a Context to drive addPickEvent in isolation."""
+    """Just enough of a Context to drive addPickEvent in isolation.
+
+    The event is routed to a view before the gate is consulted, so the stub
+    carries the context's layout and router.
+    """
+
+    viewLayout = None
+    getViewLayout = Context.getViewLayout
+    routeEvent = Context.routeEvent
 
     def __init__(self, definition):
         self.pickEvents = {}

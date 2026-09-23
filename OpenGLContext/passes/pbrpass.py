@@ -30,7 +30,7 @@ from OpenGL.GL import shaders as GL_shaders
 
 from OpenGLContext.passes import flatcore
 from OpenGLContext.passes.shaderpass import (
-    VRML97ShaderProgram, load_fragment_source, resolve_shadow_config,
+    VRML97ShaderProgram, link_program, load_fragment_source, resolve_shadow_config,
     preprocess_shader,
 )
 from OpenGLContext.passes.transmission import TransmissionBuffer
@@ -335,16 +335,18 @@ def _delete_shaders(*shaders: Any) -> None:
 def _compile_shadow_frag(vert_name: str, frag_name: str, max_shadow_lights: int,
                          cube_array: bool, validate: bool = False,
                          extra_defines: Optional[list] = None,
-                         vertex_defines: Optional[list] = None) -> Any:
-    """Compile a program whose fragment shader carries the shared shadow include."""
+                         vertex_defines: Optional[list] = None,
+                         views: int = 0, strategy: str = 'geometry') -> Any:
+    """Compile a program whose fragment shader carries the shared shadow include.
+
+    ``views`` compiles it for a shared draw of that many views, reached by
+    ``strategy``; see
+    :func:`OpenGLContext.passes.shaderpass.link_program`.
+    """
     vert = preprocess_shader(vert_name, vertex_defines)
     frag = load_fragment_source(frag_name, max_shadow_lights, cube_array,
                                 extra_defines=extra_defines)
-    v = GL_shaders.compileShader(vert, GL_VERTEX_SHADER)
-    fr = GL_shaders.compileShader(frag, GL_FRAGMENT_SHADER)
-    prog = GL_shaders.compileProgram(v, fr, validate=validate)
-    _delete_shaders(v, fr)
-    return prog
+    return link_program(vert, frag, validate, views, strategy)
 
 
 class PBRShaderProgram(VRML97ShaderProgram):
@@ -390,6 +392,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
             self.skinning_supported = palette_supported()
             skin_defines = ['#define PBR_SKINNING %d'
                             % (1 if self.skinning_supported else 0)]
+            self._defines = (ext_defines, skin_defines)
             # validate=False: PBR + shadow samplers of several targets default to
             # unit 0 at link time; real units are assigned before drawing.
             self.program = _compile_shadow_frag(
@@ -410,12 +413,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
             self.depth_program = _compile_file('shadow_depth.vert', 'shadow_depth.frag',
                                                vertex_defines=skin_defines)
 
-            glUseProgram(self.program)
-            self.init_shadow_samplers()
-            self._init_pbr_samplers()
-            self._init_material_block()
-            self._init_skinning(self.program)
-            glUseProgram(0)
+            self._init_program_set()
             glUseProgram(self.depth_program)
             self._init_skinning(self.depth_program)
             glUseProgram(0)
@@ -432,6 +430,38 @@ class PBRShaderProgram(VRML97ShaderProgram):
     #: Whether this driver has the texture unit the joint palette needs; False
     #: until a program has been compiled against a real context.
     skinning_supported: bool = False
+
+    #: The fragment and vertex defines the lit program was compiled with, so a
+    #: set compiled for several views is compiled the same way.
+    _defines: Tuple[list, list] = ([], [])
+
+    def _compile_program_set(self, views: int,
+                             strategy: str = 'geometry') -> Dict[str, Optional[int]]:
+        """The PBR and vertex-colour programs compiled for ``views`` shared views."""
+        ext_defines, skin_defines = self._defines
+        try:
+            return {
+                'program': _compile_shadow_frag(
+                    'pbr.vert', 'pbr.frag', self.MAX_SHADOW_LIGHTS,
+                    self.shadow_cube_array, extra_defines=ext_defines,
+                    vertex_defines=skin_defines, views=views, strategy=strategy),
+                'vertex_color_program': _compile_shadow_frag(
+                    'vrml97_vertex_color.vert', 'vrml97_vertex_color.frag',
+                    self.MAX_SHADOW_LIGHTS, self.shadow_cube_array, views=views,
+                    strategy=strategy),
+            }
+        except Exception as err:
+            log.error("Failed to compile the PBR programs for %d views: %s", views, err)
+            return {}
+
+    def _init_program_set(self) -> None:
+        """Shadow and material samplers, the material block and the skin palette."""
+        super()._init_program_set()
+        glUseProgram(self.program or 0)
+        self._init_pbr_samplers()
+        self._init_material_block()
+        self._init_skinning(self.program)
+        glUseProgram(0)
 
     # Transmission render path for this frame: 'off' | 'full' | 'blend'. Set by
     # the pass before drawing; configure_appearance consults it per shape.
@@ -998,7 +1028,8 @@ class PBRPass(flatcore.FlatPass):
                 draw_instanced_mesh(gpu, modelviews,
                                     per_instance(oids, counts),
                                     material_indices=per_instance(chunk_idx, counts),
-                                    joint_bases=member_bases)
+                                    joint_bases=member_bases,
+                                    copies=self.viewCopies)
         finally:
             shader.set_instancing(False, program=prog)
             # The transient array UBO replaced the single-material binding; force

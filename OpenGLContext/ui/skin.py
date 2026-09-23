@@ -128,6 +128,19 @@ class Skin(node.Node):
     #: target rather than two things that happen to be side by side.
     rowHover = field.newField('rowHover', 'SFVec4f', 1, (1, 1, 1, 0.06))
     rowFocus = field.newField('rowFocus', 'SFVec4f', 1, (0.35, 0.6, 0.9, 0.14))
+    #: The row of an open menu the pointer or the keyboard is on. Stronger
+    #: than a settings row's wash: a menu is read one row at a time, and the
+    #: row is what a click or Enter will run.
+    menuHighlight = field.newField('menuHighlight', 'SFVec4f', 1,
+                                   (0.32, 0.55, 0.88, 0.55))
+
+    # -- what a control shows the pointer ---------------------------------
+    #: Drawn over a control the pointer is resting on, where the control does
+    #: not light itself: what says it can be clicked.
+    hoverWash = field.newField('hoverWash', 'SFVec4f', 1, (1, 1, 1, 0.08))
+    #: The circle that spreads across a control from where it was pressed,
+    #: at its strongest; it fades as it spreads.
+    rippleFill = field.newField('rippleFill', 'SFVec4f', 1, (1, 1, 1, 0.30))
 
     # -- HUD --------------------------------------------------------------
     # A HUD is read at a glance, over a world whose colours nobody controls, so

@@ -106,6 +106,11 @@ class OverlayStack:
              metrics: Any = None) -> Panel:
         """Put a panel on top, suspending whatever was there.
 
+        With a ``viewport`` and ``metrics`` it is laid out at once; without,
+        the whole stack is laid out again on the next frame, since the panels
+        under it being laid out for this window says nothing about the new
+        one.
+
         A panel that has already been closed is refused rather than accepted
         and then quietly ignored: it would never fire the listener that takes
         it back off, so it would sit on the stack sinking every event for the
@@ -118,9 +123,15 @@ class OverlayStack:
             self.panels[-1].suspend()
         self.panels.append(panel)
         panel.closeListeners.append(self._panelClosed)
+        # A panel that opens panels of its own -- a menu's submenus -- opens
+        # them where it was put, unless it was told somewhere else.
+        if panel.stack is None:
+            panel.stack = self
         if viewport is not None and metrics is not None:
             panel.layout(viewport, metrics)
             self.laidOutFor = viewport
+        else:
+            self.invalidate()
         self._changed()
         return panel
 
@@ -163,6 +174,17 @@ class OverlayStack:
     def _changed(self) -> None:
         if self.on_change is not None:
             self.on_change(self)
+
+    def tick(self, now: float) -> None:
+        """Advance whatever the panels do over time to ``now``.
+
+        A menu that has had something chosen goes away here once it has
+        lingered; a panel with nothing that moves is left alone.
+        """
+        for panel in list(self.panels):
+            tick = getattr(panel, 'tick', None)
+            if tick is not None:
+                tick(now)
 
     # -- layout -----------------------------------------------------------
     def layout(self, viewport: Tuple[int, int], metrics: Any) -> None:
@@ -228,6 +250,14 @@ class OverlayStack:
     def pointer_moved(self, x: float, y: float) -> bool:
         return self._each(lambda panel: panel.pointer_moved(x, y))
 
+    def hovered(self) -> Optional[Any]:
+        """The widget the pointer is over, of the topmost panel that has one."""
+        for panel in self.layers():
+            found = panel.hovered_widget
+            if found is not None:
+                return found
+        return None
+
     def pointer_pressed(self, x: float, y: float, button: int = 0) -> bool:
         return self._first(lambda panel: panel.pointer_pressed(x, y, button))
 
@@ -254,6 +284,7 @@ if TYPE_CHECKING:
         def getViewPort(self) -> Tuple[int, int]: ...
         def triggerRedraw(self, force: int = 0) -> Any: ...
         def overlayMetrics(self) -> Optional[FontMetrics]: ...
+        def setPointerShape(self, name: str) -> bool: ...
         def screenTrees(self, metrics: FontMetrics,
                         now: Optional[float] = None) -> List[Any]: ...
 else:
@@ -278,6 +309,15 @@ class OverlayMixin(_Host):
     #: The input the world is being told about right now, or None. See
     #: :meth:`letGoOfHeldInput`.
     _dispatching: Optional['_Claim'] = None
+
+    #: Where the pointer was last seen, and when it stopped there, for a tip
+    #: that waits for it to rest.
+    _pointerAt: Optional[Tuple[float, float]] = None
+    _pointerSince: float = 0.0
+    _tooltip: Any = None
+    #: The shape the pointer is in, so it is set when it changes and not on
+    #: every movement.
+    _cursorShown: str = ''
 
     @property
     def _holding(self) -> Dict['_Claim', bool]:
@@ -465,7 +505,15 @@ class OverlayMixin(_Host):
             return self._routeButton(stack, event)
         if kind == 'mousemove':
             point = event.getPickPoint()
-            return bool(point) and stack.pointer_moved(point[0], point[1])
+            if not point:
+                return False
+            moved = stack.pointer_moved(point[0], point[1])
+            # Noted whether or not a panel wanted it: a tip waits for the
+            # pointer to rest, and the cursor follows what it is over, in the
+            # gaps between controls as much as on them.
+            self.pointerRested(point[0], point[1])
+            self.showCursor()
+            return bool(moved)
         return False
 
     @staticmethod
@@ -518,9 +566,82 @@ class OverlayMixin(_Host):
 
     def screenTrees(self, metrics: FontMetrics,
                     now: Optional[float] = None) -> List[Any]:
-        """The HUD layers, and then the open panels on top of them."""
+        """The HUD layers, the open panels, and any tip over the lot.
+
+        The panels are advanced to ``now`` first, so one whose time is up is
+        gone before it is drawn.
+        """
         trees = super(OverlayMixin, self).screenTrees(metrics, now)
         stack = self._overlays
+        if stack is not None and stack.visible:
+            from OpenGLContext.events import systemtime
+            stack.tick(systemtime.systemTime() if now is None else float(now))
         if stack is not None and stack.visible and self.layoutOverlays():
             trees.extend(stack.panels)
+            tip = self.tooltipTree(now)
+            if tip is not None:
+                trees.append(tip)
         return trees
+
+    # -- what the pointer is told ------------------------------------------
+    def pointerRested(self, x: float, y: float,
+                      now: Optional[float] = None) -> None:
+        """The pointer moved to ``(x, y)``: note where, and when it stopped.
+
+        The pause a tip waits for is measured from the last movement, so a
+        pointer crossing a window shows nothing and one that comes to rest on
+        a control is answered. ``now`` is the session's clock, which is what
+        :meth:`tooltipTree` measures against.
+        """
+        from OpenGLContext.events import systemtime
+        self._pointerAt = (float(x), float(y))
+        self._pointerSince = (systemtime.systemTime() if now is None
+                              else float(now))
+        self._tooltip = None
+
+    def showCursor(self) -> bool:
+        """Put the pointer into the shape the widget under it asks for.
+
+        Called as the pointer crosses the window. A backend with no cursors
+        answers False and the pointer stays as it is.
+        """
+        wanted = self.cursorWanted()
+        if wanted == self._cursorShown:
+            return True
+        shown = bool(self.setPointerShape(wanted))
+        if shown:
+            self._cursorShown = wanted
+        return shown
+
+    def cursorWanted(self) -> str:
+        """What the widget under the pointer asks the cursor to be, or ``''``."""
+        stack = self._overlays
+        if stack is None or not stack.visible:
+            return ''
+        found = stack.hovered()
+        return str(getattr(found, 'cursor', '') or '')
+
+    def tooltipTree(self, now: Optional[float] = None) -> Optional[Any]:
+        """The tip to draw over the frame, or None while there is none.
+
+        None until the pointer has rested on a control with something to say
+        for :data:`~OpenGLContext.ui.tooltip.TOOLTIP_PAUSE`.
+        """
+        from OpenGLContext.events import systemtime
+        from OpenGLContext.ui.tooltip import TOOLTIP_PAUSE, Tooltip
+        stack = self._overlays
+        if stack is None or not stack.visible or self._pointerAt is None:
+            return None
+        found = stack.hovered()
+        text = str(getattr(found, 'tooltip', '') or '')
+        if not text:
+            self._tooltip = None
+            return None
+        now = systemtime.systemTime() if now is None else float(now)
+        if now - self._pointerSince < TOOLTIP_PAUSE:
+            return None
+        tip = self._tooltip
+        if tip is None or str(tip.text) != text:
+            tip = Tooltip(text=text, anchor=self._pointerAt)
+            self._tooltip = tip
+        return tip
