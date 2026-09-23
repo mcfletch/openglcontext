@@ -515,6 +515,21 @@ wrapper code.
   views the editor has and how a landscape is fitted into them; marble-editor
   wants the same four arrangements over a map and an orbit camera, and builds
   its own `ViewSet` when it adopts them.
+- `OpenGLContext.multiview.navigation.ViewNavigation`: what the pointer does
+  in one view. Each view carries one; it says which gestures its camera can be
+  moved by (`pan`, `rotate` where the camera turns, `zoomin`/`zoomout`, and
+  `zoomdrag` for a pointer with no wheel) and holds the bindings that raise
+  them. The bindings are `KeyBinding` nodes and a button is named as the event
+  system names it, so the bindings screen and the binding file already handle
+  them. `ViewGestures` resolves each event through the view it lands in, so
+  rebinding one view changes that view alone.
+- `OpenGLContext.ui.viewchrome.ViewChrome`: the furniture of a window of
+  views -- each one's name, an axis triad that turns with its camera, an
+  expand button, a navigation button offering that view's gestures, and a
+  splitter on each dividing line with a handle where a quad's two cross. A
+  modeless panel that paints nothing of its own, so a press on no control
+  reaches the scene. Every part switches off, and `only` gives one view a set
+  of its own. glisteel-editor gives its map the expand button alone.
 - `tests/multiview_quad.py` loads any glTF model into the quad; it is in the
   visual suite with a baseline and in the "Interface and Tools" tutorial path.
 - `scripts/multiview_bench.py` measures a layout against a single view, which

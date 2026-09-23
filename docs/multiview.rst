@@ -334,6 +334,111 @@ that view out, and ``handle(event)`` never takes an event in it.
 ``view_for(event)`` answers which view an event belongs to, for deciding what
 else should have it. glisteel-editor's four arrangements are built this way.
 
+What the pointer does in a view
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Each view carries its own navigation: the gestures its camera can be moved by,
+and the bindings that say which button raises each. ``view.navigation`` is a
+:class:`~OpenGLContext.multiview.navigation.ViewNavigation`, made for the
+camera the first time something asks for it.
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Command
+     - Does
+     - Bound to, by default
+   * - ``pan``
+     - carries the world with the pointer; a camera that turns carries what it
+       is looking at
+     - any button in a plan view or an elevation; the middle and right buttons
+       in a view that turns
+   * - ``rotate``
+     - swings a camera that turns about what it is looking at
+     - the left button, where the camera turns
+   * - ``zoomin`` / ``zoomout``
+     - one notch towards the scene or away from it, about the pointer in a
+       view with a scale
+     - the wheel
+   * - ``zoomdrag``
+     - the same zoom, driven by a drag; dragging up comes closer
+     - nothing, until a view asks for it
+
+The bindings are :class:`~OpenGLContext.move.modes.KeyBinding` nodes, the same
+ones the movement modes carry, and a mouse button is named as the event system
+names it. So they are rebound like any other command, saved in the same
+bindings file, and changed in a line:
+
+.. code-block:: python
+
+   from OpenGLContext.multiview.navigation import PAN, ROTATE, ZOOM_DRAG
+
+   navigation = view.navigation
+   navigation.rebind(ROTATE, ['<mouse-2>'])        # right-drag turns this view
+   navigation.rebind(PAN, ['<mouse-0>'])           # ...and the left one pans it
+   navigation.rebind(ZOOM_DRAG, ['<mouse-1>'])     # middle-drag zooms
+   navigation.rebind(PAN, [])                      # this view does not pan
+
+``commands()`` answers what this view's camera can be moved by, so a control
+offering the gestures lists those rather than guessing; ``rebind`` refuses a
+command the camera has not got. ``binding_table()`` is what a settings screen
+reads. Where two bindings claim one button the first declared has it, which is
+the conflict a rebinding screen raises its "steal it?" question about.
+
+A whole set of bindings is a *mode*
+(:class:`~OpenGLContext.multiview.navigation.ViewNavigationMode`):
+``plan_mode()`` for a view with a scale and ``examine_mode()`` for a camera
+that turns are what a view starts with, and ``ViewNavigation(view, mode=...)``
+gives it another.
+
+The furniture of a window of views
+----------------------------------
+
+A window showing four views needs to say which view is which, which way each
+is looking, and how to work it. ``OpenGLContext.ui.viewchrome.ViewChrome`` is
+that, drawn inside each view and taking the clicks:
+
+.. code-block:: python
+
+   from OpenGLContext.ui.viewchrome import ViewChrome
+
+   self.chrome = ViewChrome(layout=views.layout, stack=self.overlays,
+                            on_arrange=self.placeViews)
+   self.overlays.push(self.chrome)
+
+It puts in each view its **name**, an **axis triad** that turns with the
+camera, an **expand** button that gives the view the whole window and gives it
+back, and a **navigation** button that offers the gestures this view's camera
+can be moved by and switches each on or off. Between the views it puts a
+**splitter** on each line the arrangement divides the window along -- and, in
+a quad, a handle where the two cross that moves both. ``on_arrange`` is called
+when a control changed what is on screen, for the window to place its views
+again and draw.
+
+It is a panel at the bottom of the overlay stack, like the tool palette, and
+it is not modal: a press that lands on none of its controls reaches the scene.
+It draws nothing of its own behind the furniture, so nothing is washed over.
+
+Every part is optional. ``labels``, ``axes``, ``expand``, ``navigation`` and
+``splitters`` switch a kind off for the window, and ``only`` gives one view a
+set of its own -- an editor whose plan view belongs to its drawing tools gives
+that view the expand button and nothing else:
+
+.. code-block:: python
+
+   ViewChrome(layout=layout, axes=False,
+              only={'map': ('expand',)})
+
+``reserved`` is room something else has taken at each edge of the window --
+top, right, bottom, left, in reference pixels, as a
+:class:`~OpenGLContext.ui.hudwidgets.HUDLayer` is told it -- so a name drawn
+under a menu bar or behind a tool palette is not what a window with either
+gets.
+
+``axis_directions(view)`` is the arithmetic on its own: which way each world
+axis runs on screen in that view, as unit vectors in the view's own pixels.
+
 Gestures on their own
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -354,12 +459,9 @@ application moves itself is left alone:
            return None
        return super(Editor, self).ProcessEvent(event)
 
-It pans and zooms a :class:`~OpenGLContext.multiview.cameras.OrthoViewPlatform` or
-a :class:`~OpenGLContext.edit.mapview.MapViewPlatform`, and orbits, pans and
-dollies an :class:`~OpenGLContext.edit.orbitview.OrbitViewPlatform`. ``layout``
-and ``views`` can both be assigned, so a window that rearranges its views hands
-over the new layout. ``orbit_rate`` is degrees per pixel dragged and
-``zoom_step`` what a notch multiplies a span or a distance by.
+Every event goes to the navigation of the view it lands in, so what a button
+does is that view's own. ``layout`` and ``views`` can both be assigned, so a
+window that rearranges its views hands over the new layout.
 
 One submission for every view
 -----------------------------
