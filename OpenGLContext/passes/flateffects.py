@@ -57,6 +57,18 @@ class _FlatEffectsMixin:
 
         def currentFog(self) -> Any: ...
 
+        visiblePlacements: Optional[Dict[int, Any]]
+
+        def applyViewFrame(self, frame: Any, gl: bool = True) -> None: ...
+
+        def renderSet(self, matrix: Any, gathered: Any = None) -> List[Any]: ...
+
+        def setupViewLighting(self, matrix: Any, lighting: Any,
+                              fitted: bool = False) -> None: ...
+
+        def shaderRenderOpaque(self, toRender: List, id_map: Optional[Dict] = None,
+                               skip: Optional[set] = None) -> None: ...
+
     # Transmission (KHR_materials_transmission). Filled on the first frame from the
     # GL renderer string; 'full' captures an opaque backdrop, 'blend' fakes it.
     _transmission_mode: Optional[str] = None

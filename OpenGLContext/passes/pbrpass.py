@@ -582,8 +582,8 @@ class PBRShaderProgram(VRML97ShaderProgram):
         if not self.planar_reflection_supported:
             return
         self._set_uniform1i('hasPlanarReflection', 1, self.program)
-        self._set_uniform4f('planarViewport',
-                            tuple(float(value) for value in viewport), self.program)
+        x, y, width, height = (float(value) for value in viewport)
+        self._set_uniform4f('planarViewport', (x, y, width, height), self.program)
         self._set_uniform1f('planarDistortion', float(distortion), self.program)
 
     def clear_planar_reflection(self) -> None:

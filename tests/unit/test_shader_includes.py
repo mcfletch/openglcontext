@@ -49,7 +49,7 @@ class TestIncludeResolver:
         the redefinition."""
         src = SP.preprocess_shader("pbr.frag")
         assert src.count("vec3 sRGBToLinear(vec3 c)") == 1
-        assert src.count("const float PI") == 1
+        assert len(re.findall(r"const float PI\b", src)) == 1
 
     def test_missing_include_raises(self, tmp_path):
         bad = tmp_path / "bad.frag"

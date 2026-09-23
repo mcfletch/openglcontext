@@ -1714,6 +1714,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         view the directional shadow cascades were fitted to.
         """
         shader_program = self.shader_program
+        assert shader_program is not None, 'lighting is set up on a program'
         self.setupShaderLights(matrix)
         if self.use_shadows:
             self.bindShadowUniforms(fitted=fitted)

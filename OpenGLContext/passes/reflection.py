@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import Any, Iterable, Optional, Sequence, Tuple
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 log = logging.getLogger(__name__)
 
@@ -69,7 +70,7 @@ def _sheet_plane(record: Any) -> Optional[Plane]:
     return point, normal / length
 
 
-def water_plane(records: Iterable[Any], eye: Sequence[float]) -> Optional[Plane]:
+def water_plane(records: Iterable[Any], eye: ArrayLike) -> Optional[Plane]:
     """The plane of the water nearest ``eye`` that ``eye`` looks down on.
 
     ``records`` are a view's draw records; water is any whose geometry carries
@@ -77,7 +78,7 @@ def water_plane(records: Iterable[Any], eye: Sequence[float]) -> Optional[Plane]
     water, and where the camera is under every sheet there is: looking up
     through a surface is not looking into a mirror.
     """
-    eye = np.asarray(eye, dtype='d')[:3]
+    where = np.asarray(eye, dtype='d')[:3]
     nearest: Optional[Plane] = None
     closest = np.inf
     for record in records:
@@ -86,7 +87,7 @@ def water_plane(records: Iterable[Any], eye: Sequence[float]) -> Optional[Plane]
         plane = _sheet_plane(record)
         if plane is None:
             continue
-        height = float(np.dot(eye - plane[0], plane[1]))
+        height = float(np.dot(where - plane[0], plane[1]))
         if height <= 0.0:
             continue
         if height < closest:
@@ -94,7 +95,7 @@ def water_plane(records: Iterable[Any], eye: Sequence[float]) -> Optional[Plane]
     return nearest
 
 
-def mirror_matrix(point: Sequence[float], normal: Sequence[float]) -> np.ndarray:
+def mirror_matrix(point: ArrayLike, normal: ArrayLike) -> np.ndarray:
     """The world reflected in the plane through ``point`` facing ``normal``."""
     n = np.asarray(normal, dtype='d')[:3]
     n = n / np.linalg.norm(n)
@@ -105,8 +106,7 @@ def mirror_matrix(point: Sequence[float], normal: Sequence[float]) -> np.ndarray
     return mirror
 
 
-def eye_plane(point: Sequence[float], normal: Sequence[float],
-              view: Any) -> np.ndarray:
+def eye_plane(point: ArrayLike, normal: ArrayLike, view: Any) -> np.ndarray:
     """A world plane in the eye space ``view`` takes the world to.
 
     Returned as the four coefficients ``(a, b, c, d)`` whose dot product with
@@ -115,10 +115,10 @@ def eye_plane(point: Sequence[float], normal: Sequence[float],
     """
     n = np.asarray(normal, dtype='d')[:3]
     world = np.append(n, -float(np.dot(n, np.asarray(point, dtype='d')[:3])))
-    return np.linalg.inv(np.asarray(view, dtype='d')) @ world
+    return np.asarray(np.linalg.inv(np.asarray(view, dtype='d')) @ world, dtype='d')
 
 
-def oblique_projection(projection: Any, plane: Sequence[float]) -> np.ndarray:
+def oblique_projection(projection: Any, plane: ArrayLike) -> np.ndarray:
     """``projection`` with its near plane moved onto ``plane``, in eye space.
 
     What is on the negative side of the plane is clipped by the near plane,
@@ -159,7 +159,7 @@ class Reflection:
     @property
     def modelproj(self) -> np.ndarray:
         """World to clip space, through the mirror."""
-        return self.modelView @ self.projection
+        return np.asarray(self.modelView @ self.projection, dtype='d')
 
 
 def plan(records: Iterable[Any], model_view: Any, projection: Any,
