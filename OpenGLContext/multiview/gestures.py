@@ -1,17 +1,13 @@
-"""Moving the camera of whichever view the pointer is in.
+"""Reading the pointer, and moving the camera of the view it is in.
 
 An editor window holds several views of one scene, and the pointer means
 something different in each: a drag pans a plan or an elevation, and turns a
-perspective view about what it is looking at. :class:`ViewGestures` reads a
-context's pointer events, finds the view each belongs to, and moves that
-view's camera:
-
-- a drag in an orthographic or plan view pans it, the world following the
-  pointer;
-- a drag with the left button in a perspective view orbits it about its
-  target, and with any other button carries the target across the view;
-- a wheel notch zooms the view under the pointer, an orthographic one about
-  the pixel the pointer is on.
+perspective view about what it is looking at. :class:`ViewGestures` finds the
+view each event belongs to and asks that view's
+:class:`~OpenGLContext.multiview.navigation.ViewNavigation` what the button
+raises there -- so which button pans, which turns and which zooms is the
+view's own business, and rebinding one changes what the pointer does in that
+view alone.
 
 It holds no GL. A context hands it each pointer event, and it takes the ones
 that move a camera::
@@ -30,46 +26,38 @@ the other views and keeps that one. ``layout`` can be replaced, so a window
 that rearranges its views hands over the new layout.
 
 :class:`~OpenGLContext.multiview.quad.QuadView` is the four views of an editor
-built on this.
+built on this, and :class:`~OpenGLContext.multiview.viewset.ViewSet` is any
+arrangement of them.
 """
 from __future__ import annotations
 
-import math
-from typing import Any, Optional, Sequence, Tuple
+from typing import Any, Optional, Sequence
 
-from OpenGLContext.edit.mapview import MapViewPlatform
-from OpenGLContext.edit.orbitview import OrbitViewPlatform
-from OpenGLContext.multiview.cameras import OrthoViewPlatform
-from OpenGLContext.events.mouseevents import WHEEL_BUTTONS, WHEEL_UP
+from OpenGLContext.events.mouseevents import WHEEL_BUTTONS, button_name
+from OpenGLContext.multiview.navigation import (
+    ZOOM_IN,
+    ZOOM_OUT,
+    ViewNavigation,
+    navigation_for,
+)
 from OpenGLContext.multiview.views import View, ViewLayout
 
-__all__ = ['ViewGestures', 'ORBIT_RATE', 'ZOOM_STEP']
+__all__ = ['ViewGestures']
 
-#: Degrees a perspective view orbits for each pixel the pointer is dragged.
-ORBIT_RATE = 0.4
-
-#: What one wheel notch towards the scene multiplies a view's span or
-#: distance by.
-ZOOM_STEP = 0.8
-
-#: The cameras that pan and zoom in their own plane: an orthographic view along
-#: an axis, and the plan view an editor draws its map on.
-PLANAR = (OrthoViewPlatform, MapViewPlatform)
+#: The modifiers an event carries when none is held.
+NO_MODIFIERS = (0, 0, 0)
 
 
 class ViewGestures:
     """The pointer gestures that move a layout's cameras."""
 
-    def __init__(self, layout: ViewLayout, views: Optional[Sequence[View]] = None,
-                 orbit_rate: float = ORBIT_RATE,
-                 zoom_step: float = ZOOM_STEP) -> None:
+    def __init__(self, layout: ViewLayout,
+                 views: Optional[Sequence[View]] = None) -> None:
         #: The layout events are routed through.
         self.layout = layout
         #: The views it drives, or None for every view of the layout.
         self.views = views
-        self.orbit_rate = float(orbit_rate)
-        self.zoom_step = float(zoom_step)
-        self._held: Optional[Tuple[View, int, float, float]] = None
+        self._held: Optional[View] = None
 
     def drives(self, view: Optional[View]) -> bool:
         """Whether this view is one it moves the camera of."""
@@ -77,6 +65,13 @@ class ViewGestures:
             return False
         mine = self.views if self.views is not None else self.layout.views
         return any(view is one for one in mine)
+
+    def navigation(self, view: Optional[View]) -> Optional[ViewNavigation]:
+        """The navigation of a view it drives: what the pointer does there."""
+        if not self.drives(view):
+            return None
+        assert view is not None
+        return navigation_for(view)
 
     # -- gestures ----------------------------------------------------------
     def handle(self, event: Any) -> bool:
@@ -96,21 +91,32 @@ class ViewGestures:
         x, y = event.getPickPoint()
         if kind == 'mousemove':
             return self.drag(event.view, x, y)
-        if event.button in WHEEL_BUTTONS:
-            if not event.state:
-                return self.drives(event.view)
-            notches = 1 if event.button == WHEEL_UP else -1
-            return self.wheel(event.view, x, y, notches)
+        modifiers = tuple(event.getModifiers())
+        if event.button in WHEEL_BUTTONS and not event.state:
+            # The release of a notch, which the press already answered.
+            return self.navigation(event.view) is not None
         if event.state:
-            return self.press(event.view, x, y, event.button)
+            return self.press(event.view, x, y, event.button, modifiers)
         return self.release(event.view, x, y)
 
-    def press(self, view: Optional[View], x: float, y: float, button: int) -> bool:
-        """A button went down at window pixel ``(x, y)``; True where a gesture began."""
-        if not self.drives(view):
+    def press(self, view: Optional[View], x: float, y: float, button: int,
+              modifiers: Sequence[int] = NO_MODIFIERS) -> bool:
+        """A button went down at window pixel ``(x, y)``; True where it raised a gesture.
+
+        What the button does is the view's own: its navigation says which
+        command this button and these modifiers raise, and a button nothing is
+        bound to is left for whatever else wants it.
+        """
+        navigation = self.navigation(view)
+        if navigation is None:
             return False
         assert view is not None
-        self._held = (view, int(button), float(x), float(y))
+        command = navigation.command_for(button_name(int(button)), modifiers)
+        if command in (ZOOM_IN, ZOOM_OUT):
+            return navigation.zoom(1 if command == ZOOM_IN else -1, x, y)
+        if command is None or not navigation.begin(command, x, y):
+            return False
+        self._held = view
         return True
 
     def drag(self, view: Optional[View], x: float, y: float) -> bool:
@@ -120,52 +126,20 @@ class ViewGestures:
         """
         if self._held is None:
             return False
-        held, button, last_x, last_y = self._held
-        dx, dy = float(x) - last_x, float(y) - last_y
-        self._held = (held, button, float(x), float(y))
-        camera = held.camera
-        if isinstance(camera, PLANAR):
-            camera.view.pan(dx, dy, _size(held))
-        elif button == 0:
-            camera.view.orbit(-dx * self.orbit_rate, -dy * self.orbit_rate)
-        else:
-            self._pan_orbit(camera.view, dx, dy, _size(held))
-        return True
+        navigation = navigation_for(self._held)
+        return navigation is not None and navigation.drag(x, y)
 
     def release(self, view: Optional[View], x: float, y: float) -> bool:
         """The button came up; True where it ended a gesture."""
-        held = self._held is not None
-        self._held = None
-        return held
+        held, self._held = self._held, None
+        if held is None:
+            return False
+        navigation = navigation_for(held)
+        return navigation is not None and navigation.release()
 
     def wheel(self, view: Optional[View], x: float, y: float, notches: int) -> bool:
         """The wheel turned ``notches`` over ``(x, y)``, positive towards the scene."""
-        if not self.drives(view):
+        navigation = self.navigation(view)
+        if navigation is None:
             return False
-        assert view is not None
-        factor = self.zoom_step ** int(notches)
-        camera = view.camera
-        if isinstance(camera, PLANAR):
-            camera.view.zoom(factor, at=view.local(x, y), viewport=_size(view))
-        else:
-            camera.view.dolly(factor)
-        return True
-
-    # -- helpers -----------------------------------------------------------
-    def _pan_orbit(self, camera: Any, dx: float, dy: float,
-                   viewport: Tuple[int, int]) -> None:
-        """Carry a perspective view's target with the pointer, at the target's depth."""
-        model, _projection = camera.matrices(viewport)
-        right, up = model[:3, 0], model[:3, 1]
-        scale = (2.0 * camera.distance * math.tan(math.radians(camera.fov) / 2.0)
-                 / viewport[1])
-        target = camera.target() - (right * dx + up * dy) * scale
-        camera.look_at((float(target[0]), float(target[2])), float(target[1]))
-
-
-def _size(view: View) -> Tuple[int, int]:
-    """A view's size, or a square where the layout has not placed it yet."""
-    width, height = view.size
-    if width <= 0 or height <= 0:
-        return (1, 1)
-    return (int(width), int(height))
+        return navigation.zoom(int(notches), x, y)

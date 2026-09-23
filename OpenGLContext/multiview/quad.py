@@ -40,11 +40,11 @@ import numpy as np
 
 from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
 from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform, Point
-from OpenGLContext.multiview.gestures import ORBIT_RATE, ZOOM_STEP
+from OpenGLContext.multiview.navigation import ROTATE_RATE, ZOOM_STEP
 from OpenGLContext.multiview.views import View, ViewStyle
 from OpenGLContext.multiview.viewset import ViewSet
 
-__all__ = ['QuadView', 'ORBIT_RATE', 'ZOOM_STEP']
+__all__ = ['QuadView', 'ROTATE_RATE', 'ZOOM_STEP']
 
 Colour = Union[Tuple[float, float, float], Tuple[float, float, float, float]]
 

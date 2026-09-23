@@ -55,6 +55,9 @@ class _Event:
     def getPickPoint(self):
         return self._point
 
+    def getModifiers(self):
+        return (0, 0, 0)
+
 
 class TestTheArrangementsItOffers:
     def test_each_view_on_its_own_and_the_split_and_the_quad(self):

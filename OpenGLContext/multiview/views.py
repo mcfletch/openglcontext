@@ -100,13 +100,21 @@ class View:
 
     ``rect`` is where the layout last placed the view; a view the layout is not
     showing (the others, while one is maximised) is placed nowhere.
+
+    ``navigation`` is what the pointer moves this view's camera by -- the
+    gestures it offers and the buttons that raise them. It is made for the
+    camera the first time something asks
+    (:func:`~OpenGLContext.multiview.navigation.navigation_for`), so a view
+    that nobody navigates carries none.
     """
 
     def __init__(self, camera: Any = None, name: str = '',
-                 style: Optional[ViewStyle] = None) -> None:
+                 style: Optional[ViewStyle] = None,
+                 navigation: Any = None) -> None:
         self.camera = camera
         self.name = name
         self.style = style if style is not None else ViewStyle()
+        self.navigation = navigation
         self.rect: Rect = _NOWHERE
 
     def __repr__(self) -> str:
