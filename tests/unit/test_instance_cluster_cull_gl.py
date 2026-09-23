@@ -38,7 +38,7 @@ try:
     def _cd(gpu, mvs, oids, material_indices=None, **named):
         # Accumulate every instance drawn this frame (reset each frame below).
         STATE['oids'].extend(int(o) for o in oids)
-        return _od(gpu, mvs, oids, material_indices)
+        return _od(gpu, mvs, oids, material_indices, **named)
     instancing.draw_instanced_mesh = _cd
 
     from OpenGLContext import testingcontext

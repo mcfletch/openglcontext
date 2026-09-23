@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import socket
 import sys
 from typing import Any, Dict, Iterator, Mapping, Optional, Sequence
 
@@ -117,6 +118,75 @@ def windowing(environ: Mapping[str, str] | None = None) -> str:
             '%s=%r is not recognised (expected one of %s)'
             % (WINDOWING_VARIABLE, asked, ', '.join(WINDOWINGS)))
     return asked
+
+
+#: Where a local X server's socket is, which is where a client looks for it.
+X_SOCKETS = '/tmp/.X11-unix'
+
+#: The first TCP port X displays are numbered from.
+X_PORT = 6000
+
+#: What is run to find out whether a display can be opened: a client that
+#: builds a window and takes it down again.
+X_CLIENT = 'import tkinter; tkinter.Tk().destroy()'
+
+
+def display_answers(name: str | None = None,
+                    directory: str = X_SOCKETS, timeout: float = 30.0) -> bool:
+    """Whether a client can open ``name`` (by default ``$DISPLAY``).
+
+    A test that needs an X server -- the Tk and GLUT demos do -- asks this
+    rather than whether ``DISPLAY`` is set, so it skips where there is no
+    server and runs where there is. The name alone says nothing: a machine
+    often carries a socket left behind by a server that has gone, and a
+    display that cannot be opened then fails a test rather than skipping it.
+
+    A connection to the socket is what rules out a display nothing serves.
+    Where something does answer, a client is run to see whether it is a server
+    this process may use -- being listened to is not being let in, and the
+    authority a client needs is the client's own business.  With no client to
+    run, a display that accepts a connection is taken at its word.
+    """
+    display = (os.environ.get('DISPLAY', '') if name is None else name).strip()
+    if not _display_listens(display, directory, min(timeout, 2.0)):
+        return False
+    try:
+        import tkinter  # noqa: F401
+    except ImportError:
+        return True
+    import subprocess
+    try:
+        opened = subprocess.run(
+            [sys.executable, '-c', X_CLIENT], capture_output=True,
+            timeout=timeout, env=dict(os.environ, DISPLAY=display))
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return opened.returncode == 0
+
+
+def _display_listens(display: str, directory: str, timeout: float) -> bool:
+    """Whether anything is listening where ``display`` says a server would be."""
+    host, colon, screen = display.rpartition(':')
+    if not colon:
+        return False
+    try:
+        number = int(screen.split('.')[0] or 0)
+    except ValueError:
+        return False
+    try:
+        if host and host != 'unix':
+            with socket.create_connection((host, X_PORT + number), timeout):
+                return True
+        else:
+            connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            try:
+                connection.settimeout(timeout)
+                connection.connect(os.path.join(directory, 'X%d' % number))
+            finally:
+                connection.close()
+        return True
+    except (OSError, ValueError):
+        return False
 
 
 def offscreen_backend(platform: str | None = None) -> str | None:

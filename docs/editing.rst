@@ -404,10 +404,21 @@ the view rather than copying it, as the map platform does; setting a
 there, so anything that moves a camera by position — a bookmark, a saved
 viewpoint — moves this one.
 
-An editor holds both and swaps its ``platform`` between them: one window, one
-scene, two cameras. Rendering both at once is a different piece of work — the
-render pass takes the whole window, so a split view means a viewport and a
-scissor per pass and a second shadow-map and selection pass to pay for.
+An editor can hold both and swap its ``platform`` between them, or show both at
+once: a :class:`~OpenGLContext.multiview.views.ViewLayout` puts each camera in its own
+part of the window, and a click picks through the camera of the view it lands
+in. See :doc:`Several views on one window <multiview>`.
+
+.. _quad-view-pointer:
+
+Top, front and side
+-------------------
+
+The orthographic views an editor draws its elevations in, the four-view window
+they sit in, and the pointer gestures that move each view's camera are
+:doc:`Several views on one window <multiview>`: ``OrthoView``, ``ViewSet``,
+``QuadView`` and ``ViewGestures``, in ``OpenGLContext.multiview``. An editor is
+one caller of them; see :ref:`Top, front and side <quad-view>` there.
 
 .. _editing-demo:
 

@@ -24,6 +24,7 @@
 // Inputs from vertex shader
 in vec3 vNormal;
 in vec3 vPosition;
+#include "_viewer_inc.glsl"
 in vec2 vTexCoord;
 
 // Material uniforms (VRML97 Material node properties)
@@ -69,7 +70,7 @@ void main() {
     if (!gl_FrontFacing) normal = -normal;
 
     // View direction (camera is at origin in eye space)
-    vec3 viewDir = normalize(-vPosition);
+    vec3 viewDir = normalize(toViewer(vPosition));
 
     // Get base diffuse color (from texture or material)
     vec3 matDiffuse = diffuseColor;

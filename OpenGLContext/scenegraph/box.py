@@ -31,6 +31,10 @@ class Box( basenodes.Box ):
     Reference:
         http://www.web3d.org/technicalinfo/specifications/vrml97/part1/nodesRef.html#Box
     """
+    #: Draws with the pass's lit programs alone, so one draw can serve every
+    #: view of a frame that sees it; see :mod:`OpenGLContext.multiview.strategy`.
+    multiviewShared = True
+
     def compile( self, mode: Any = None ) -> Any:
         """Compile the box as a display-list"""
         if vbo.get_implementation():

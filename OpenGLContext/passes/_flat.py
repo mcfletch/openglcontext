@@ -23,9 +23,10 @@ from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod,lightgri
 from OpenGL.GL import *
 from OpenGL.GL import (
     glEnable, glDisable, glDisablei, glBlendFunc, glDepthMask, glDepthFunc,
-    glClear, glClearColor,
+    glClear, glClearColor, glPolygonMode, glScissor, glViewport,
     GL_BLEND, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_LEQUAL, GL_DEPTH_TEST,
-    GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT,
+    GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_FILL, GL_FRONT_AND_BACK,
+    GL_LINE, GL_SCISSOR_TEST,
 )
 from OpenGLContext.arrays import (
     arange, array, asarray, dot, flatnonzero, zeros,
@@ -61,6 +62,7 @@ import logging
 log = logging.getLogger( __name__ )
 
 if TYPE_CHECKING:
+    from OpenGLContext.multiview.strategy import ViewFrame
     from OpenGLContext.passes.renderfailures import RenderFailureLog
     from OpenGLContext.passes.renderstats import RenderStats
     from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
@@ -537,7 +539,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         """Render shadow depth maps before the lit passes (mixin override)."""
         return None   # base pass has no shadows; ShadowMapMixin overrides this
 
-    def bindShadowUniforms(self) -> None:
+    def bindShadowUniforms(self, fitted: bool = True) -> None:
         """Bind shadow maps onto the lit program after lights (mixin override)."""
         return None   # base pass has no shadows; ShadowMapMixin overrides this
 
@@ -1128,8 +1130,23 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         is that node's own: which of its thresholds the answer falls in, and
         whether that is a change the flattened scenegraph has to be told about.
         """
+        if self.paths.get( lod.LOD ):
+            self.chooseLevels( [
+                lod.Viewer( matrix, lod.viewer_tangent( self.fieldOfView() ) ) ] )
+
+    def chooseLevels( self, viewers: Sequence['lod.Viewer'] ) -> None:
+        """Let every LOD node draw the finest level any of ``viewers`` asks for.
+
+        :meth:`selectLevels` is the one-camera case. A frame drawn through
+        several views draws one level per node, because choosing a level
+        replaces a subtree of the scene; the finest of the views' answers is
+        drawn, so the closest view gets the detail it needs.
+
+        Each viewer costs one product of the stacked world matrices and two
+        array expressions, as a single camera does.
+        """
         paths = self.paths.get( lod.LOD, () )
-        if not paths:
+        if not paths or not viewers:
             return
         placed = []
         for path in paths:
@@ -1140,23 +1157,34 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         if not placed:
             return
         own = [ world for _node, world in placed ]
-        if self._levelsAlreadyChosen( matrix, own ):
+        if self._levelsAlreadyChosen( viewers, own ):
             return
-        tangent = lod.viewer_tangent( self.fieldOfView() )
-        modelviews = asarray( own, 'd' ) @ asarray( matrix, 'd' )
-        distances = lod.viewer_distances(
-            [ node.center for node, _world in placed ], modelviews )
-        scales = lod.uniform_scales( modelviews )
-        for (node, _world), distance, scale in zip( placed, distances, scales ):
+        worlds = asarray( own, 'd' )
+        centres = [ node.center for node, _world in placed ]
+        answers: List[List[Tuple[float, float, float]]] = [ [] for _ in placed ]
+        for viewer in viewers:
+            modelviews = worlds @ asarray( viewer.modelview, 'd' )
+            distances = lod.viewer_distances( centres, modelviews )
+            scales = lod.uniform_scales( modelviews )
+            tangents = viewer.tangents( distances )
+            for index, (distance, scale, tangent) in enumerate(
+                    zip( distances, scales, tangents ) ):
+                answers[index].append( ( float(distance), float(scale), float(tangent) ) )
+        for (node, _world), asked in zip( placed, answers ):
             try:
-                node.selectAt( float(distance), float(scale), tangent )
+                if len( asked ) == 1:
+                    node.selectAt( *asked[0] )
+                else:
+                    node.show( lod.finest(
+                        [ node.levelAt( *numbers ) for numbers in asked ] ) )
             except Exception as err:
                 log.warning( 'could not place an LOD node: %s', err )
 
-    def _levelsAlreadyChosen( self, matrix: Any, own: List[Any] ) -> bool:
+    def _levelsAlreadyChosen( self, viewers: Sequence['lod.Viewer'],
+                              own: List[Any] ) -> bool:
         """Whether this frame's levels are the ones already chosen.
 
-        Nothing moved and the camera did not either, so every node would work
+        Nothing moved and no camera did either, so every node would work
         out the coverage it worked out last frame and announce no change. How
         often that holds is the application's business; asking costs one
         identity comparison per node, because the scenegraph's transform cache
@@ -1168,7 +1196,10 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         stillness. Holding them also costs one frame of four-by-fours.
         """
         previous = self._levelChoice
-        camera = asarray( matrix, 'f' ).tobytes()
+        camera = b''.join(
+            asarray( viewer.modelview, 'f' ).tobytes()
+            + array( (viewer.tangent, float(viewer.orthographic)), 'd' ).tobytes()
+            for viewer in viewers )
         if ( previous is not None
              and previous[0] == self._pathGeneration
              and previous[2] == camera
@@ -1190,7 +1221,8 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             return None
         return float( platform().frustum[0] )
 
-    def renderSet( self, matrix: Any ) -> List[Any]:
+    def renderSet( self, matrix: Any,
+                   gathered: Optional[GatheredPaths] = None ) -> List[Any]:
         """The scene's shapes, culled to the frustum and ordered for drawing.
 
         Every path is asked for its world matrix, because a matrix is what the
@@ -1212,8 +1244,14 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         material, to draw it -- and `path[-1]` is a Python call. A frame of a
         few thousand objects was making tens of thousands of them to reach a
         node the gather already had in hand.
+
+        ``gathered`` is this frame's walk of the scene, when the caller has one:
+        a frame drawn through several views culls one table once per view.
+        Left out, the scene is walked here and the walk published for the rest
+        of the frame.
         """
-        gathered = self.gatherPaths()
+        if gathered is None:
+            gathered = self.gatherPaths()
         paths, volumes, matrices, own = (gathered.paths, gathered.volumes,
                                          gathered.matrices, gathered.own)
         if not paths:
@@ -1478,13 +1516,11 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             self.shader_mode = False
             self.shader_program = None
 
-        self.selectLevels( matrix )
-        toRender = self.renderSet( matrix )
-        self.stats.shapes = len(toRender)
-        maxDepth = self.maxDepth = self.greatestDepth( toRender )
-        vp = context.getViewPlatform()
-        if maxDepth:
-            self.projection = vp.viewMatrix(maxDepth)
+        frames = self.prepareViews()
+        active = self.activeFrame if self.activeFrame is not None else frames[0]
+        toRender = active.toRender
+        matrix = active.modelView
+        self.stats.shapes = sum( len( frame.toRender ) for frame in frames )
 
         # Get pick events
         events = context.getPickEvents()
@@ -1520,11 +1556,9 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             self.processPickEventsFromBuffer(mode, events)
             context.pickEvents.clear()
         elif events or debugSelection:
-            # Legacy selection path
-            if self.use_shaders:
-                self.shaderSelectRenderOptimized(mode, toRender, events)
-            else:
-                self.selectRender( mode, toRender, events )
+            # Legacy selection path, a view at a time: each event is drawn
+            # through the camera of the view it was made in.
+            self.selectRenderViews(mode, events, debugSelection)
             context.pickEvents.clear()
 
         # Load the root
@@ -1548,6 +1582,8 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                     'the frame set one where it settled use_shaders')
                 # Render shadow maps before binding the MRT selection FBO; the
                 # shadow pass binds/unbinds its own depth FBOs and restores state.
+                # Once for every view: the maps depend on the lights and the
+                # casters, and the cascades are fitted to the active view.
                 if self.use_shadows:
                     shader_program.use(lit=True)
                     self.renderShadowMaps(toRender)
@@ -1569,42 +1605,24 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                     else:
                         selection_buffer = None
 
-                # Shader-based rendering path (core-profile compatible)
-                self.shaderBackgroundRender(vp, matrix)
-                self.setupShaderLights(matrix)
-                if self.use_shadows:
-                    self.bindShadowUniforms()
-                self.iblSetup(matrix)
-                shader_program.set_default_material()
-                # glTF lighting is IBL + punctual only -- a flat white fill is
-                # non-physical and washes out self-lit scenes (DirectionalLight,
-                # PointLightIntensityTest read pale grey instead of dark + crisp
-                # lights). A glTF viewer sets context.gltf_scene_ambient low/zero;
-                # legacy VRML scenes keep the 0.2 fill that stands in for no lights.
-                amb = getattr(getattr(self, 'context', None),
-                              'gltf_scene_ambient', None)
-                if amb is None:
-                    amb = (0.2, 0.2, 0.2)
-                elif not isinstance(amb, (tuple, list)):
-                    amb = (float(amb),) * 3
-                shader_program.set_scene_ambient(tuple(amb))
-                self.setupLightGrid()
-                # Transmissive (glass) shapes are opaque-alpha but must draw after
-                # the opaque scene so they can sample it as a backdrop; split them
-                # out of the opaque pass unless transmission is disabled.
-                transmissive = (self.transmissiveRecords(toRender)
-                                if self.transmissionMode() != 'off' else set())
-                self.shaderRenderOpaque(toRender, id_map, skip=transmissive)
-                self.shaderRenderTransmissive(toRender, transmissive, id_map)
-                self.shaderRenderTransparent(toRender, id_map)
+                # Asked once, before any view confines drawing to its rectangle:
+                # building the environment probe renders offscreen.
+                lighting = self.iblPrepare()
+                shared: Optional[set] = None
+                if self.sharesViews( frames ):
+                    for frame in frames:
+                        self.applyViewFrame(frame)
+                        self._drawBackground(frame)
+                    shared = self.renderShared(frames, id_map, lighting)
+                for frame in frames:
+                    joined = shared is not None and not frame.view.style.wireframe
+                    self.renderViewShader(frame, id_map, lighting,
+                                          background=shared is None,
+                                          shared=shared if joined else frozenset())
+                self.finishViews()
 
-                # Restore winding/cull GL defaults once, after the geometry loop,
-                # so a PBR mesh's CW winding or disabled culling never leaks past
-                # this frame. No-op for pure VRML97 scenes. Guarded
-                # lazy import keeps the generic pass free of a hard PBR dependency.
                 try:
                     from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-                    PBRMesh.reset_draw_state(self)
                     # Delete VAOs whose meshes were GC'd since last frame, now
                     # that this context is current.
                     PBRMesh.flush_pending_deletes(self)
@@ -1629,10 +1647,14 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
 
             else:
                 # Legacy fixed-function rendering path
-                self.legacyBackgroundRender( vp,matrix )
-                self.legacyLightRender( matrix )
-                self.renderOpaque( toRender )
-                self.renderTransparent( toRender )
+                for frame in frames:
+                    self.renderViewLegacy(frame)
+                self.finishViews()
+            self.applyViewFrame(active, gl=False)
+            # The glow goes on before anything is drawn over the views, and
+            # before the frame is presented, so what is on screen is finished.
+            if self._bloom_active:
+                self._end_bloom()
 
             # The HUD, the developer overlay and any screen that is open, drawn
             # over the finished frame rather than into the MRT buffer.  Outside
@@ -1648,6 +1670,289 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         presentFrame( context )
         self.matrix = matrix
         self.shader_mode = False  # Reset after render
+
+    def _beginView( self, frame: 'ViewFrame', background: bool = True ) -> None:
+        """Look through ``frame``'s view, clearing its rectangle if ``background``."""
+        self.applyViewFrame( frame )
+        self.visible = True
+        self.transparent = False
+        self.lighting = True
+        self.textured = True
+        self._deferredTransparent = []
+        if background:
+            self._drawBackground( frame )
+        self.matrix = frame.modelView
+        if frame.view.style.wireframe:
+            glPolygonMode( GL_FRONT_AND_BACK, GL_LINE )
+
+    def _drawBackground( self, frame: 'ViewFrame' ) -> None:
+        """Clear the view the pass is looking through to its background.
+
+        A view with a flat background clears to it; any other draws the
+        scene's bound ``Background``, which clears as it draws.
+        """
+        colour = frame.view.style.clearColour()
+        if colour is not None:
+            glClearColor( *colour )
+            glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )
+        elif self.use_shaders:
+            self.shaderBackgroundRender( frame.camera, frame.modelView )
+        else:
+            self.legacyBackgroundRender( frame.camera, frame.modelView )
+
+    def _endView( self, frame: 'ViewFrame' ) -> None:
+        """Undo what :meth:`_beginView` set that the next view must not inherit."""
+        if frame.view.style.wireframe:
+            glPolygonMode( GL_FRONT_AND_BACK, GL_FILL )
+
+    def renderViewShader( self, frame: 'ViewFrame', id_map: Optional[Dict[int, Any]],
+                          lighting: Any = None, background: bool = True,
+                          shared: Any = frozenset() ) -> None:
+        """Draw one view of the frame through the shader passes.
+
+        Everything here is per view because it depends on the camera: the
+        background is drawn from it, the lights are put in its eye space, the
+        shadow maps are read through it and the shapes are the ones its frustum
+        kept. ``lighting`` is the frame's :meth:`iblPrepare`. ``shared`` holds
+        the ``id`` of each path :meth:`renderShared` has already drawn for
+        every view, which this view leaves out; ``background`` is False where
+        the background was drawn before them.
+        """
+        shader_program = self.shader_program
+        assert shader_program is not None, 'shader views are drawn with a program'
+        matrix = frame.modelView
+        self._beginView( frame, background )
+        try:
+            self.setupShaderLights(matrix)
+            if self.use_shadows:
+                self.bindShadowUniforms(fitted=frame.fitted)
+            self.iblSetup(matrix, lighting)
+            shader_program.set_default_material()
+            # glTF lighting is IBL + punctual only -- a flat white fill is
+            # non-physical and washes out self-lit scenes (DirectionalLight,
+            # PointLightIntensityTest read pale grey instead of dark + crisp
+            # lights). A glTF viewer sets context.gltf_scene_ambient low/zero;
+            # legacy VRML scenes keep the 0.2 fill that stands in for no lights.
+            amb = getattr(getattr(self, 'context', None),
+                          'gltf_scene_ambient', None)
+            if amb is None:
+                amb = (0.2, 0.2, 0.2)
+            elif not isinstance(amb, (tuple, list)):
+                amb = (float(amb),) * 3
+            shader_program.set_scene_ambient(tuple(amb))
+            self.setupLightGrid()
+            toRender = ( [ record for record in frame.toRender
+                           if id( record[4] ) not in shared ]
+                         if shared else frame.toRender )
+            # Transmissive (glass) shapes are opaque-alpha but must draw after
+            # the opaque scene so they can sample it as a backdrop; split them
+            # out of the opaque pass unless transmission is disabled.
+            transmissive = (self.transmissiveRecords(toRender)
+                            if self.transmissionMode() != 'off' else set())
+            self.shaderRenderOpaque(toRender, id_map, skip=transmissive)
+            self.shaderRenderTransmissive(toRender, transmissive, id_map)
+            self.shaderRenderTransparent(toRender, id_map)
+
+            # Restore winding/cull GL defaults after each view's geometry, so a
+            # PBR mesh's CW winding or disabled culling never leaks into the
+            # next view or past this frame. No-op for pure VRML97 scenes.
+            # Guarded lazy import keeps the generic pass free of a hard PBR
+            # dependency.
+            try:
+                from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+                PBRMesh.reset_draw_state(self)
+            except Exception:
+                pass
+        finally:
+            self._endView( frame )
+
+    #: The cameras the shape being drawn is seen from, as points in the eye
+    #: space it is drawn in, while one draw serves several views; None for a
+    #: draw that serves one. What a shape choosing its detail by distance
+    #: measures to; see :func:`OpenGLContext.scenegraph.tessellationlod.lod_level`.
+    viewerEyes: Optional[List[Any]] = None
+    #: How many views each draw of a shared ``vertex``-strategy draw reaches,
+    #: so every draw is instanced that many times over; 0 otherwise. See
+    #: :func:`OpenGLContext.multiview.strategy.draw_arrays`.
+    viewCopies: int = 0
+
+    def sharesDraw( self, record: Sequence[Any] ) -> bool:
+        """Whether one draw of ``record`` can serve every view that sees it.
+
+        True for an opaque shape whose geometry says it draws with the pass's
+        lit programs alone (``multiviewShared``) and whose appearance brings no
+        program of its own. A transparent or glass shape is sorted and drawn
+        per view, and an instanced set that culls its own placements culls them
+        per view.
+        """
+        key, node = record[0], record[5]
+        if key[0] or getattr( node, 'visiblePlacements', None ) is not None:
+            return False
+        if not getattr( getattr( node, 'geometry', None ), 'multiviewShared', False ):
+            return False
+        appearance = getattr( node, 'appearance', None )
+        if appearance is not None and hasattr( appearance, 'objects' ):
+            return False
+        material = getattr( appearance, 'material', None )
+        return not ( getattr( material, 'transmission', 0.0 )
+                     or getattr( material, 'octahedralViews', 0 ) )
+
+    def sharedRecords( self, frames: Sequence['ViewFrame'],
+                       reference: 'ViewFrame' ) -> Dict[int, List[Any]]:
+        """The records one draw serves several views for, by view mask.
+
+        Each is put in ``reference``'s eye space, which is where a shared draw
+        is made; the mask says which views it is sent to. Grouped by mask so
+        the draws of a group are made with one uniform setting. A wireframe
+        view takes no part: ``glPolygonMode`` holds for every viewport at once,
+        so it draws its shapes itself.
+        """
+        found: Dict[int, List[Any]] = {}
+        for index, frame in enumerate( frames ):
+            if frame.view.style.wireframe:
+                continue
+            for record in frame.toRender:
+                if not self.sharesDraw( record ):
+                    continue
+                entry = found.get( id( record[4] ) )
+                if entry is None:
+                    found[id( record[4] )] = entry = [ record, 0 ]
+                entry[1] |= 1 << index
+        if not found:
+            return {}
+        entries = list( found.values() )
+        worlds = asarray( [ record[2] for record, _mask in entries ], 'f' )
+        modelviews = worlds @ asarray( reference.modelView, 'f' )
+        groups: Dict[int, List[Any]] = {}
+        for (record, mask), modelview in zip( entries, modelviews ):
+            key, _mv, tmatrix, bvolume, path, node = record
+            groups.setdefault( mask, [] ).append(
+                ( key, modelview, tmatrix, bvolume, path, node ) )
+        return groups
+
+    _viewTable: Optional[int] = None
+
+    def uploadViewTable( self, frames: Sequence['ViewFrame'],
+                         reference: 'ViewFrame' ) -> List[Any]:
+        """Fill and bind the ``ViewBlock`` for drawing ``frames`` in ``reference``'s space.
+
+        Returns the records, whose eyes the shapes measure their detail to.
+        """
+        from OpenGL import GL
+        from OpenGLContext.multiview.strategy import (
+            VIEW_BLOCK_BINDING, pack_view_table, view_records,
+        )
+        if self._viewTable is None:
+            self._viewTable = int( GL.glGenBuffers( 1 ) )
+        data = pack_view_table( frames, reference )
+        GL.glBindBuffer( GL.GL_UNIFORM_BUFFER, self._viewTable )
+        GL.glBufferData( GL.GL_UNIFORM_BUFFER, len( data ), data, GL.GL_DYNAMIC_DRAW )
+        GL.glBindBuffer( GL.GL_UNIFORM_BUFFER, 0 )
+        GL.glBindBufferBase( GL.GL_UNIFORM_BUFFER, VIEW_BLOCK_BINDING, self._viewTable )
+        return view_records( frames, reference )
+
+    def renderShared( self, frames: Sequence['ViewFrame'],
+                      id_map: Optional[Dict[int, Any]],
+                      lighting: Any = None ) -> Optional[set]:
+        """Draw every shape that can serve several views once, for all of them.
+
+        The draw is made in the active view's eye space, exactly as that view
+        alone would draw it -- its modelviews, lights and shadow matrices -- and
+        programs compiled for this many views send each triangle to the views
+        in the shape's mask, through the ``ViewBlock``: a geometry stage does it
+        for the ``geometry`` strategy, and for ``vertex`` each draw is instanced
+        once per view and the vertex stage routes each copy. Returns the ``id`` of every path drawn, for each view to
+        leave out, or None where the programs for this many views did not
+        compile and every view draws everything itself.
+        """
+        from OpenGL import GL
+        shader = self.shader_program
+        assert shader is not None, 'a shared draw is made with the pass program'
+        reference = self.activeFrame if self.activeFrame is not None else frames[0]
+        groups = self.sharedRecords( frames, reference )
+        if not groups:
+            return set()
+        strategy = self.multiviewStrategy or 'geometry'
+        if not shader.select_program_set( len( frames ), strategy ):
+            self.multiviewFailed( strategy )
+            return None
+        drawn: set = set()
+        try:
+            self.applyViewFrame( reference, gl=False )
+            rects = array( [ frame.rect for frame in frames ], 'f' )
+            GL.glViewportArrayv( 0, len( frames ), rects )
+            GL.glScissorArrayv( 0, len( frames ), rects.astype( 'i' ) )
+            glEnable( GL_SCISSOR_TEST )
+            records = self.uploadViewTable( frames, reference )
+            matrix = reference.modelView
+            self.matrix = matrix
+            self.visible = True
+            self.transparent = False
+            self.lighting = True
+            self.textured = True
+            self.setupShaderLights( matrix )
+            if self.use_shadows:
+                self.bindShadowUniforms( fitted=True )
+            self.iblSetup( matrix, lighting )
+            shader.set_default_material()
+            amb = getattr( self.context, 'gltf_scene_ambient', None )
+            if amb is None:
+                amb = ( 0.2, 0.2, 0.2 )
+            elif not isinstance( amb, ( tuple, list ) ):
+                amb = ( float( amb ), ) * 3
+            shader.set_scene_ambient( tuple( amb ) )
+            self.setupLightGrid()
+            for mask, group in groups.items():
+                shader.set_view_mask( mask )
+                self.viewerEyes = [ record.eye for index, record in enumerate( records )
+                                    if mask >> index & 1 ]
+                if strategy == 'vertex':
+                    self.viewCopies = len( self.viewerEyes )
+                self.shaderRenderOpaque( group, id_map )
+                drawn.update( id( record[4] ) for record in group )
+            try:
+                from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+                PBRMesh.reset_draw_state( self )
+            except Exception:
+                pass
+        finally:
+            self.viewerEyes = None
+            self.viewCopies = 0
+            shader.select_program_set( 0 )
+        return drawn
+
+    def renderViewLegacy( self, frame: 'ViewFrame' ) -> None:
+        """Draw one view of the frame through the fixed-function passes."""
+        self._beginView( frame )
+        try:
+            self.legacyLightRender( frame.modelView )
+            self.renderOpaque( frame.toRender )
+            self.renderTransparent( frame.toRender )
+        finally:
+            self._endView( frame )
+
+    def selectRenderViews( self, mode: Any, events: Dict[Any, Any],
+                           debugSelection: bool ) -> None:
+        """Resolve ``events`` by drawing the selection render, a view at a time.
+
+        Each view draws its own shapes through its own camera into its own
+        rectangle and resolves the events made in it. ``debugSelection`` puts
+        the selection render on screen in place of the frame, so every view
+        draws it whether or not it has an event to resolve.
+        """
+        grouped = { id( frame ): subset for frame, subset in self.eventsByView( events ) }
+        for frame in self.viewFrames:
+            subset = grouped.get( id( frame ) )
+            if subset is None and not debugSelection:
+                continue
+            self.applyViewFrame( frame )
+            if self.use_shaders:
+                self.shaderSelectRenderOptimized( mode, frame.toRender, subset or {} )
+            else:
+                self.selectRender( mode, frame.toRender, subset or {} )
+        self.finishViews()
+        if self.activeFrame is not None:
+            self.applyViewFrame( self.activeFrame, gl=False )
 
     def legacyBackgroundRender( self, vp: Any, matrix: Any ) -> None:
         """Do legacy background rendering"""
@@ -1806,19 +2111,60 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             setup_fixed_function=False, require_pick_enabled=False)
 
     MAX_LIGHTS = -1
+
+    #: This frame's views, each with its camera's matrices, frustum and draw
+    #: list; the first frame's active view is :attr:`activeFrame`. Built by
+    #: :meth:`layoutViews` and :meth:`prepareViews`.
+    viewFrames: List['ViewFrame'] = []
+    activeFrame: Optional['ViewFrame'] = None
+    #: The view being drawn, for a node that draws differently per view.
+    view: Any = None
+    #: Whether the views are confined to their rectangles by the scissor
+    #: test, which a frame of more than one view needs and one view does not.
+    _scissorViews = False
+    #: How this pass draws a frame of several views, settled the first time it
+    #: draws one; see :mod:`OpenGLContext.multiview.strategy`.
+    multiviewStrategy: Optional[str] = None
+    #: The strategies whose programs would not compile on this pass's context.
+    _multiviewFailed: Tuple[str, ...] = ()
+
+    def chooseMultiview( self ) -> str:
+        """The strategy the definition asks for, or the best this driver can build."""
+        from OpenGLContext.multiview.strategy import (
+            MultiviewCapabilities, requested_strategy,
+        )
+        return MultiviewCapabilities.detect().choose(
+            requested_strategy( self ), failed=self._multiviewFailed )
+
+    def sharesViews( self, frames: Sequence['ViewFrame'] ) -> bool:
+        """Whether ``frames`` are drawn by one submission rather than in turn.
+
+        That takes several views, a strategy that shares, and no more views
+        than the driver has viewports.
+        """
+        if self.multiviewStrategy not in ( 'geometry', 'vertex' ) or len( frames ) < 2:
+            return False
+        from OpenGLContext.multiview.strategy import MultiviewCapabilities
+        return len( frames ) <= MultiviewCapabilities.detect().max_views
+
+    def multiviewFailed( self, strategy: str ) -> None:
+        """Pass over ``strategy`` from now on, its programs having failed to compile.
+
+        The frame that found out draws each view in turn; the next one uses
+        the next strategy the driver offers.
+        """
+        self._multiviewFailed = self._multiviewFailed + ( strategy, )
+        self.multiviewStrategy = self.chooseMultiview()
+
     def __call__( self, context: Any ) -> bool:
         """Overall rendering pass interface for the context client"""
-        vp = context.getViewPlatform()
-        self.setViewPlatform( vp )
         # These values are temporarily stored locally, we are
         # in the context lock, so we're not causing conflicts
         if self.MAX_LIGHTS == -1:
             self.MAX_LIGHTS = 8 #glGetIntegerv( GL_MAX_LIGHTS )
         self.context = context
         self.cache = context.cache
-        self.viewport = (0,0) + context.getViewPort()
-        
-        self.calculateFrustum()
+        self.layoutViews( context )
 
         # Anything the application pins to the camera -- a first-person weapon,
         # a held tool -- is placed here, in the one window where the view
@@ -1839,7 +2185,10 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             try:
                 self.Render( context, self )
             finally:
-                self._end_bloom()
+                # A frame that stopped short of compositing still has to give
+                # the framebuffer back.
+                if self._bloom_active:
+                    self._end_bloom()
         else:
             self.Render( context, self )
         return True # flip yes, for now we always flip...
@@ -1866,8 +2215,140 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
     
     def setViewPlatform( self, vp: Any ) -> None:
         """Set our view platform"""
-        self.viewPlatform = vp 
+        self.viewPlatform = vp
         self.projection = vp.viewMatrix().astype('f')
         self.modelView = vp.modelMatrix().astype('f')
         self.modelproj = dot( self.modelView, self.projection )
-        self.matrix = None 
+        self.matrix = None
+
+    # -- several views -----------------------------------------------------
+    _defaultLayout: Any = None
+
+    def viewLayout( self, context: Any ) -> Any:
+        """The :class:`~OpenGLContext.multiview.views.ViewLayout` this frame draws.
+
+        The context's own, where it has one; otherwise a single view through
+        the context's view platform, kept by the pass.
+        """
+        found = getattr( context, 'getViewLayout', None )
+        if found is not None:
+            return found()
+        if self._defaultLayout is None:
+            from OpenGLContext.multiview.views import ViewLayout
+            self._defaultLayout = ViewLayout.single()
+        return self._defaultLayout
+
+    def layoutViews( self, context: Any ) -> List['ViewFrame']:
+        """Place this frame's views and work out each one's camera.
+
+        Leaves the pass looking through the layout's active view. Attachments
+        pinned to the camera, the audio listener and the shadow cascades are
+        placed from it.
+        """
+        from OpenGLContext.multiview.strategy import ViewFrame
+        layout = self.viewLayout( context )
+        width, height = context.getViewPort()
+        shown = layout.arrange( width, height ) or layout.views[:1]
+        frames = []
+        for view in shown:
+            camera = view.camera if view.camera is not None else context.getViewPlatform()
+            self.setViewPlatform( camera )
+            frames.append( ViewFrame(
+                view, camera, view.rect if view.visible else (0, 0, width, height),
+                self.modelView, self.projection, self.modelproj,
+                self.calculateFrustum(), fitted=view is layout.active,
+            ) )
+        active = next( ( frame for frame in frames if frame.fitted ), frames[0] )
+        active.fitted = True
+        self.viewFrames = frames
+        self.activeFrame = active
+        self._scissorViews = len( frames ) > 1
+        if self._scissorViews and self.multiviewStrategy is None:
+            self.multiviewStrategy = self.chooseMultiview()
+        self.applyViewFrame( active, gl=False )
+        return frames
+
+    def applyViewFrame( self, frame: 'ViewFrame', gl: bool = True ) -> None:
+        """Look through ``frame``'s view: its camera, its rectangle, its draw list.
+
+        Everything the draw stages read about the camera is on the pass --
+        ``modelView``, ``projection``, ``frustum``, ``viewport``,
+        ``visiblePlacements`` -- so drawing a view is setting these and running
+        the same stages. ``gl`` also sets the viewport and, with several views,
+        the scissor rectangle, so a clear and a wide line stay inside the tile.
+        """
+        self.view = frame.view
+        self.viewPlatform = frame.camera
+        self.modelView = frame.modelView
+        self.projection = frame.projection
+        self.modelproj = frame.modelproj
+        self.frustum = frame.frustum
+        self.viewport = frame.rect
+        self.maxDepth = frame.maxDepth
+        self.visiblePlacements = frame.visiblePlacements
+        self.matrix = frame.modelView
+        if gl:
+            glViewport( *frame.rect )
+            if self._scissorViews:
+                glScissor( *frame.rect )
+                glEnable( GL_SCISSOR_TEST )
+
+    def prepareViews( self ) -> List['ViewFrame']:
+        """Cull and sort the scene once per view, from one walk of it.
+
+        Levels of detail are chosen first, for every view at once, since a
+        level that changes replaces a subtree the walk has to see. Each view
+        then culls the one table against its own frustum and trims its
+        projection to the depth of what it kept.
+        """
+        from OpenGLContext.scenegraph.lod import viewer_for
+        frames = self.viewFrames
+        self.chooseLevels( [
+            viewer_for( frame.camera, frame.modelView, frame.projection )
+            for frame in frames ] )
+        gathered = self.gatherPaths()
+        for frame in frames:
+            self.applyViewFrame( frame, gl=False )
+            frame.toRender = self.renderSet( frame.modelView, gathered )
+            frame.visiblePlacements = self.visiblePlacements or {}
+            frame.maxDepth = self.greatestDepth( frame.toRender )
+            if frame.maxDepth:
+                frame.projection = frame.camera.viewMatrix( frame.maxDepth )
+        active = self.activeFrame if self.activeFrame is not None else frames[0]
+        self.applyViewFrame( active, gl=False )
+        return frames
+
+    def frameForEvent( self, event: Any ) -> Optional['ViewFrame']:
+        """The view a pick event is resolved through.
+
+        The one the context routed it to, where that view was drawn this frame;
+        otherwise the one under its pick point; otherwise the active view.
+        """
+        frames = self.viewFrames
+        routed = getattr( event, 'view', None )
+        for frame in frames:
+            if frame.view is routed:
+                return frame
+        point = event.getPickPoint() if hasattr( event, 'getPickPoint' ) else None
+        if point:
+            for frame in frames:
+                if frame.view.contains( point[0], point[1] ):
+                    return frame
+        return self.activeFrame
+
+    def eventsByView( self, events: Dict[Any, Any] ) -> List[Tuple['ViewFrame', Dict[Any, Any]]]:
+        """``events`` divided among the views they are resolved through, in draw order."""
+        grouped: Dict[int, Dict[Any, Any]] = {}
+        for key, event in events.items():
+            frame = self.frameForEvent( event )
+            if frame is not None:
+                grouped.setdefault( id( frame ), {} )[key] = event
+        return [ ( frame, grouped[id( frame )] ) for frame in self.viewFrames
+                 if id( frame ) in grouped ]
+
+    def finishViews( self ) -> None:
+        """Give the whole window back once every view is drawn."""
+        if self._scissorViews:
+            glDisable( GL_SCISSOR_TEST )
+        width, height = self.context.getViewPort()
+        glViewport( 0, 0, int(width), int(height) )

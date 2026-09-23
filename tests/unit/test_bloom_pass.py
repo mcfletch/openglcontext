@@ -112,3 +112,32 @@ def test_release_targets_swallows_delete_errors(gl_context, monkeypatch):
     bp._release_targets()                # every delete throws; must still reset
     assert bp._targets is None
     assert bp.size is None
+
+
+class TestTiles:
+    """Where each view's part of the glow is drawn and how far its samples reach."""
+
+    def test_a_tile_of_the_window_is_the_same_tile_at_half_size(self):
+        from OpenGLContext.passes.bloom import scaled_rect
+        assert scaled_rect((100, 0, 100, 100), (200, 100), (100, 50)) == (50, 0, 50, 50)
+
+    def test_tiles_that_meet_still_meet_at_half_size(self):
+        from OpenGLContext.passes.bloom import scaled_rect
+        left = scaled_rect((0, 0, 67, 101), (201, 101), (100, 50))
+        right = scaled_rect((67, 0, 134, 101), (201, 101), (100, 50))
+        assert left[0] + left[2] == right[0]
+        assert left[2] + right[2] == 100
+
+    def test_the_whole_target_is_sampled_edge_to_edge(self):
+        from OpenGLContext.passes.bloom import tile_uniforms
+        region, bounds = tile_uniforms((0, 0, 100, 50), (100, 50))
+        assert region == (0.0, 0.0, 1.0, 1.0)
+        # The first and last texel centres, which is where GL_CLAMP_TO_EDGE
+        # stops a sample anyway.
+        assert bounds == (0.005, 0.01, 0.995, 0.99)
+
+    def test_a_tile_is_sampled_only_inside_itself(self):
+        from OpenGLContext.passes.bloom import tile_uniforms
+        region, bounds = tile_uniforms((50, 0, 50, 50), (100, 50))
+        assert region == (0.5, 0.0, 0.5, 1.0)
+        assert bounds[0] == 0.505 and bounds[2] == 0.995

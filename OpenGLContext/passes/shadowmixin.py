@@ -227,19 +227,28 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
             glBindFramebuffer(GL_FRAMEBUFFER, saved_fbo)
             glViewport(*saved_viewport)
 
-    def bindShadowUniforms(self) -> None:
+    def bindShadowUniforms(self, fitted: bool = True) -> None:
         """Bind rendered shadow maps onto every shadow-receiving program.
 
-        Call after the lights are set. The lit program *and* the vertex-colour
-        program both sample shadows now, so their uniforms are set
-        in turn; the depth textures are shared GL state and bind only once.
+        Call after the lights are set, once per view drawn. The maps are the
+        same for every view; what is set per view is how the view's eye space
+        reaches each light's clip space, composed here from the camera the pass
+        is looking through. ``fitted`` says whether that camera is the one the
+        directional cascades were fitted to: a view that is not chooses each
+        fragment's cascade by which map holds it, since the split distances are
+        measured along the fitted camera.
+
+        The lit program *and* the vertex-colour program both sample shadows,
+        so their uniforms are set in turn; the depth textures are shared GL
+        state and bind only once.
         """
         shader = self.shader_program
         if shader is None or shader.program is None:
             return
         bindings = self._shadow_bindings or []
         caps = self._shadow_caps
-        eye_to_world = np.linalg.inv(np.asarray(self.getModelView(), dtype='d')).astype('f')
+        camera_view = np.asarray(self.getModelView(), dtype='d')
+        eye_to_world = np.linalg.inv(camera_view).astype('f')
         # Shared depth array (spot + CSM) and, when packed, the point cube-array
         # are GL texture state -> bind once for the whole frame.
         if self._shared_array is not None:
@@ -260,14 +269,20 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                 gather=bool(caps and caps.has_texture_gather),
                 light_size=self._lightSize(),
                 eye_to_world=eye_to_world,
+                cascade_by_fit=not fitted,
             )
             for b in bindings:
                 if b['kind'] == 'spot':
-                    shader.bind_spot_slot(b['slot'], b['light_index'], b['matrix'],
-                                          b['bias'])
+                    shader.bind_spot_slot(
+                        b['slot'], b['light_index'],
+                        shadowmath.shadow_matrix_eye(camera_view, *b['light']),
+                        b['bias'])
                 elif b['kind'] == 'directional':
-                    shader.bind_csm_slot(b['slot'], b['light_index'],
-                                         b['matrices'], b['splits'], b['biases'])
+                    shader.bind_csm_slot(
+                        b['slot'], b['light_index'],
+                        [shadowmath.shadow_matrix_eye(camera_view, view, proj)
+                         for view, proj in b['lights']],
+                        b['splits'], b['biases'])
                 elif b['kind'] == 'point':
                     shader.bind_cube_slot(b['slot'], b['light_index'], b['texture'],
                                           b['light_pos'], b['near'], b['far'],
@@ -285,18 +300,16 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         # only the directional cascades still follow the camera-visible
         # occluder_points.
         if isinstance(light_node, light_module.SpotLight):
-            return self._renderSpot(path, light_node, slot, light_index,
-                                    camera_view)
+            return self._renderSpot(path, light_node, slot, light_index)
         if isinstance(light_node, light_module.DirectionalLight):
             return self._renderDirectional(path, light_node, slot, light_index,
                                            camera_view, camera_proj, occluder_points)
         if isinstance(light_node, light_module.PointLight):
-            return self._renderPoint(path, light_node, slot, light_index,
-                                     camera_view, caps)
+            return self._renderPoint(path, light_node, slot, light_index, caps)
         return None
 
-    def _renderSpot(self, path: Any, light_node: Any, slot: int, light_index: int,
-                    camera_view: np.ndarray) -> Optional[dict]:
+    def _renderSpot(self, path: Any, light_node: Any, slot: int,
+                    light_index: int) -> Optional[dict]:
         raw_transform = path.transformMatrix()
         tmatrix = np.asarray(raw_transform, dtype='d')
         pos = self._world_point(light_node.location, tmatrix)
@@ -316,7 +329,8 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         layer = slot * self.shader_program.MAX_CASCADES
         # R2: the spot depth map is camera-independent, so skip the depth pass when
         # the light + casters are unchanged and the texture layer is intact. The
-        # binding matrix below still folds in the moving camera every frame.
+        # binding keeps the light's own matrices, and bindShadowUniforms folds in
+        # the camera of each view it is drawn for.
         if not self._depthMapFresh(light_node, raw_transform, (smap.texture, layer)):
             if not smap.bind_layer(layer, self.shadow_resolution, self._array_layers()):
                 return None
@@ -326,9 +340,8 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
             finally:
                 smap.unbind()
             self._markDepthRendered(light_node, raw_transform, (smap.texture, layer))
-        matrix = shadowmath.shadow_matrix_eye(camera_view, view, proj)
         return {'kind': 'spot', 'slot': slot, 'light_index': light_index,
-                'matrix': matrix,
+                'light': (view, proj),
                 'bias': shadowmath.depth_bias_terms(
                     proj, light_depth_bias(light_node), self.shadow_resolution)}
 
@@ -384,7 +397,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         # once, and reuse it for every cascade (each cascade still packs its own
         # light-space modelviews, but the group membership is identical).
         grouping = self._depthGrouping(occluders)
-        matrices = []
+        lights = []
         cascade_splits = []
         biases = []
         texel_bias = light_depth_bias(light_node)
@@ -395,17 +408,16 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                 self._renderDepth(occluders, view, proj, grouping=grouping)
             finally:
                 smap.unbind()
-            matrices.append(shadowmath.shadow_matrix_eye(camera_view, view, proj))
+            lights.append((view, proj))
             cascade_splits.append(far_d)
             # Each cascade fits its own box, so a world bias is a different share
             # of each one's depth range.
             biases.append(shadowmath.depth_bias_terms(
                 proj, texel_bias, self.shadow_resolution))
         return {'kind': 'directional', 'slot': slot, 'light_index': light_index,
-                'matrices': matrices, 'splits': cascade_splits, 'biases': biases}
+                'lights': lights, 'splits': cascade_splits, 'biases': biases}
 
     def _renderPoint(self, path: Any, light_node: Any, slot: int, light_index: int,
-                     camera_view: np.ndarray,
                      caps: ShadowCapabilities) -> Optional[dict]:
         if not (caps and caps.has_cube_shadow):
             return None
@@ -492,15 +504,17 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                 rng = None
         if rng is None:
             return True
-        frust = getattr(self, 'frustum', None)
-        planes = getattr(frust, 'planes', None)
-        if planes is None:
-            return True
+        frames = getattr(self, 'viewFrames', None) or ()
+        frusta = [frame.frustum for frame in frames] or [getattr(self, 'frustum', None)]
         center = np.array([world_pos[0], world_pos[1], world_pos[2], 1.0])
-        for plane in planes:
-            if float(np.dot(np.asarray(plane, dtype='d'), center)) < -rng:
-                return False  # sphere entirely behind this frustum plane
-        return True
+        for frust in frusta:
+            planes = getattr(frust, 'planes', None)
+            if planes is None:
+                return True
+            if all(float(np.dot(np.asarray(plane, dtype='d'), center)) >= -rng
+                   for plane in planes):
+                return True   # the sphere reaches into this view
+        return False
 
     def _cullOccluders(self, toRender: List, light_view: np.ndarray,
                        light_proj: np.ndarray) -> List:

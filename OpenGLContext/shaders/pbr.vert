@@ -55,6 +55,7 @@ out vec4 vColor;
 out float vModelScale;   // world-space object scale, for KHR_materials_volume thickness
 flat out uint vObjectId;       // per-instance picking id (used only when instancing)
 flat out uint vMaterialIndex;  // per-instance material-array index
+#include "_multiview_inc.glsl"
 
 // Where on the unit square a direction's baked view lives.  The twin of
 // `octahedral.direction_to_uv`; the two have to agree or the impostor shows the
@@ -161,4 +162,7 @@ void main() {
     // hi-dpi capture. Give them a fixed screen size scaled down with distance so a
     // point cloud reads. Ignored for triangle/line draws (needs GL_PROGRAM_POINT_SIZE).
     gl_PointSize = clamp(120.0 / max(-eyePosition.z, 0.1), 2.0, 12.0);
+#ifdef MULTIVIEW_VERTEX
+    routeToView(vPosition);
+#endif
 }

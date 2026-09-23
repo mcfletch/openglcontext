@@ -121,6 +121,10 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
         have everything
             once tesselated, we have a simple "take" to get values
     """
+    #: Draws with the pass's lit programs alone, so one draw can serve every
+    #: view of a frame that sees it; see :mod:`OpenGLContext.multiview.strategy`.
+    multiviewShared = True
+
 
     USE_DISPLAY_LISTS = 0
     DEBUG_DRAW_NORMALS = 0

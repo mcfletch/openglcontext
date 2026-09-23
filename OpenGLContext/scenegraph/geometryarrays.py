@@ -213,12 +213,17 @@ def bind_geometry(
     return int(vao)
 
 
-def draw_geometry(arrays: GeometryArrays) -> None:
-    """Issue the draw ``arrays`` describes, with its vertex array bound."""
+def draw_geometry(arrays: GeometryArrays, mode: Any = None) -> None:
+    """Issue the draw ``arrays`` describes, with its vertex array bound.
+
+    Once for every view a shared multi-view draw reaches, where ``mode`` says
+    one is in progress; see :func:`OpenGLContext.multiview.strategy.draw_arrays`.
+    """
+    from OpenGLContext.multiview.strategy import draw_arrays, draw_elements
     if arrays.indexed:
-        glDrawElements(arrays.draw_mode, arrays.count, arrays.index_type, None)
+        draw_elements(mode, arrays.draw_mode, arrays.count, arrays.index_type, None)
     else:
-        glDrawArrays(arrays.draw_mode, 0, arrays.count)
+        draw_arrays(mode, arrays.draw_mode, 0, arrays.count)
 
 
 def render_geometry(
@@ -247,7 +252,7 @@ def render_geometry(
         mode=mode, node=owner, where=where)
     glBindVertexArray(vao)
     try:
-        draw_geometry(arrays)
+        draw_geometry(arrays, mode)
     finally:
         glBindVertexArray(0)
     return True

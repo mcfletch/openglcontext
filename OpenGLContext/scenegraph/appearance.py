@@ -2,9 +2,17 @@
 from typing import Any, Tuple
 
 from vrml.vrml97 import basenodes
-from OpenGL.GL import glColor3f
+from OpenGL.GL import (
+    GL_MODULATE, GL_TEXTURE_2D, GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE,
+    glBindTexture, glColor3f, glDisable, glEnable, glTexEnvi,
+)
 from OpenGLContext.arrays import array 
 from OpenGLContext.scenegraph import polygonsort
+
+
+#: The token ``render`` hands back for a material's own base colour map, which
+#: ``renderPost`` unbinds.
+_MATERIAL_TEXTURE = object()
 
 
 class Appearance(basenodes.Appearance):
@@ -59,6 +67,16 @@ class Appearance(basenodes.Appearance):
                 textureToken = self.textureTransform.render (mode=mode)
         else:
             textured = 0
+            # A glTF material carries its base colour map itself rather than
+            # in ``texture``; it modulates the lit colour, as in the shaders.
+            legacy = getattr(self.material, 'legacyTexture', None)
+            texture = legacy(mode) if legacy is not None else None
+            if texture is not None:
+                glEnable(GL_TEXTURE_2D)
+                glBindTexture(GL_TEXTURE_2D, texture.texture)
+                glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE)
+                textured = 1
+                textureToken = _MATERIAL_TEXTURE
         return lit, textured, alpha, textureToken
     def renderPost( self, textureToken: Any = None, mode: Any = None ) -> None:
         """Cleanup after rendering of this node has completed"""
@@ -66,6 +84,9 @@ class Appearance(basenodes.Appearance):
             if self.textureTransform:
                 self.textureTransform.renderPost(textureToken,mode=mode)
             self.texture.renderPost(mode=mode)
+        elif textureToken is _MATERIAL_TEXTURE:
+            glBindTexture(GL_TEXTURE_2D, 0)
+            glDisable(GL_TEXTURE_2D)
 
     def sortKey( self, mode: Any, matrix: Any ) -> Tuple[Any, ...]:
         """Produce the sorting key for this shape's appearance/shaders/etc

@@ -85,6 +85,10 @@ class _SphereBackground( object ):
             second.start()
             try:
                 glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
+                # The sphere has a radius of one about the eye, and a camera's
+                # near plane may be further off than that; clamping depth
+                # rather than clipping at the planes draws it whatever they are.
+                glEnable( GL_DEPTH_CLAMP )
                 glDisable( GL_DEPTH_TEST ) # we don't want to do anything with the depth buffer...
                 glDisable( GL_LIGHTING )
                 glEnable( GL_COLOR_MATERIAL )
@@ -98,6 +102,7 @@ class _SphereBackground( object ):
                 # now, completely wipe out the depth buffer, so this appears as a "background"... no idea how expensive this is
                 glClear( GL_DEPTH_BUFFER_BIT )
 
+                glDisable( GL_DEPTH_CLAMP )
                 glEnable( GL_DEPTH_TEST )
                 glEnable( GL_LIGHTING )
                 glColor( 0.0,0.0,0.0)

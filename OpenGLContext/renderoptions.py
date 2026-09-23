@@ -78,6 +78,10 @@ ENVIRONMENT: Tuple[str, ...] = (
     'OPENGLCONTEXT_GPU_SKINNING', 'OPENGLCONTEXT_GPU_SKELETON',
     'OPENGLCONTEXT_GPU_BLEND',
     'OPENGLCONTEXT_UI_SCALE', 'OPENGLCONTEXT_PICKING',
+    # Which way several views are drawn changes how a frame is produced, and a
+    # capture comparing strategies must not inherit one.
+    # See OpenGLContext.multiview.strategy.
+    'OPENGLCONTEXT_MULTIVIEW',
     'OPENGLCONTEXT_AUTO_EXIT_FRAMES', 'OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR',
     'OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME', 'OPENGLCONTEXT_CAPTURE_DELAY',
     # What a capture's world clock advances by per frame decides where every
@@ -169,6 +173,7 @@ CHOICES: Dict[str, Tuple[str, ...]] = {
     'ibl': ('auto', 'full', 'analytic', 'off'),
     'transmission': ('auto', 'full', 'blend', 'off'),
     'profile': ('compatibility', 'core'),
+    'multiview': ('auto', 'vertex', 'geometry', 'sequential'),
 }
 
 #: What a settings screen shows for each of those values.
@@ -176,6 +181,7 @@ LABELS: Dict[str, Tuple[str, ...]] = {
     'ibl': ('Automatic', 'Full probe', 'Analytic', 'Off'),
     'transmission': ('Automatic', 'Refractive', 'Blended', 'Off'),
     'profile': ('Compatibility', 'Core'),
+    'multiview': ('Automatic', 'Vertex shader', 'Geometry shader', 'One view at a time'),
 }
 
 

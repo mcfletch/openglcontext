@@ -72,6 +72,22 @@ class _AsyncPickMixin:
         if hasattr(mode.context, 'ProcessEvent'):
             mode.context.ProcessEvent(event)
 
+    def _pickCamera(self, event: Any) -> tuple[Any, Any, Any]:
+        """``(modelview, projection, viewport)`` of the view ``event`` is resolved through.
+
+        The camera's own matrices rather than ``self.matrix``, which the
+        traversal rewrites for every node it visits: by dispatch time it holds
+        whatever was drawn last, and every picked point would come back in that
+        node's local space. With several views on screen it is the camera of
+        the view the event was made in, so an unprojected point lands where
+        that view shows it.
+        """
+        frame_for = getattr(self, 'frameForEvent', None)
+        frame = frame_for(event) if frame_for is not None else None
+        if frame is None:
+            return self.modelView, self.projection, self.viewport
+        return frame.modelView, frame.projection, frame.rect
+
     def _acquirePBO(self, nbytes: int) -> tuple[int, int]:
         """Get a pooled Pixel Pack Buffer of at least nbytes (id, capacity)."""
         pool = self._pbo_free
@@ -146,10 +162,9 @@ class _AsyncPickMixin:
             'id_pid': id_pid, 'id_cap': id_cap,
             'dz_pid': dz_pid, 'dz_cap': dz_cap,
             'fence': fence, 'id_map': id_map,
-            # self.modelView, not self.matrix: the traversal has finished
-            # by now and self.matrix holds the last node it drew.
-            'matrix': self.modelView, 'projection': self.projection,
-            'viewport': self.viewport,
+            # Each event's camera as it was when this frame was drawn, not as
+            # it is when the batch resolves a frame or more later.
+            'cameras': [self._pickCamera(e) for e in evs],
         })
         # Keep the in-flight queue bounded: if the GPU falls behind, block on the
         # oldest so events still get delivered and PBOs are recycled.
@@ -255,7 +270,7 @@ class _AsyncPickMixin:
             x, y = b['samples'][i]
             self._dispatchPickEvent(
                 mode, event, [path] if path else [[]], x, y, depth,
-                b['matrix'], b['projection'], b['viewport'])
+                *b['cameras'][i])
 
         glDeleteSync(b['fence'])
         self._releasePBO(b['id_pid'], b['id_cap'])

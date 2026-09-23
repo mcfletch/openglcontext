@@ -279,6 +279,7 @@ Documentation
    shadows
    instancing
    lod
+   multiview
    particles
 
 .. toctree::
