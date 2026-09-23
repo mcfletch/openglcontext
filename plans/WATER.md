@@ -139,6 +139,25 @@ field is analytic, which is what makes it cheap, seamless and reproducible.
 **Not a physics body.** Buoyancy and drag read the height field this provides;
 what they do with it belongs to whatever moves the body.
 
+## The ripple's scale (2026-09-23)
+
+A 22 m lake authored in Blender for the engine-hook demo read as nothing like a
+lake under any of the named styles, and the cause was in the field rather than
+in the parameters: the fine ripple was two crossing cosines at a fixed
+`RIPPLE_SCALE` of 11 m, so every body of water glittered at the scale of open
+water seen from far off, and at a small scale the two cosines tiled the
+surface like hammered metal. It also held still unless the water had a flow.
+
+Landed: `WaterStyle.ripple`, the metres the ripple repeats over (default 11 m,
+what every existing style used), sent to the card as `waveRippleScale`; the
+ripple as six trains of unrelated lengths (0.41–1.83 × `ripple`) and headings,
+each moving at the deep-water phase speed of its length, √(g/k), on water that
+moves; and `BREEZE`, a named style for a pond or small lake seen from its bank
+(1.4 m waves 2.5 cm high, a 0.45 m ripple). The module and the shader share
+the table (`_RIPPLE_TRAINS` / `RIPPLE_TRAINS`) and `test_water_gpu.py` holds
+them together. Every existing style keeps its steepness and scale, and gains
+the six-train ripple and its motion.
+
 ## What was left for later
 
 Three things the wave field does not do, each with a plan of its own:
