@@ -3,24 +3,27 @@ Particle systems
 
 .. rst-class:: introduction
 
-A particle system draws a crowd of small camera-facing quads from a single
-node: fire, smoke, sparks, explosions, impacts and trails. One system is one
-instanced draw call whatever the particle count. The simulation is numpy
-arrays stepped as whole arrays and contains no OpenGL, so it can be driven and
-tested without a window; the renderer is about a hundred lines of
-core-profile GL.
+A particle system draws many small quads that face the camera, from a single
+``ParticleEmitter`` node. Use it for fire, smoke, sparks, explosions, impacts
+and trails. Each system is drawn with one instanced draw call, however many
+particles it has. The simulation is numpy arrays stepped as whole arrays and
+uses no OpenGL, so it can be driven and tested without a window.
 
 .. figure:: images/demos/particles_effects.jpg
    :alt: Fire, smoke, sparks and an explosion burning side by side in the dark
 
-   The five presets side by side, from ``tests/particles_effects.py``: fire,
-   smoke, sparks, an explosion and a trail. None of them loads a texture —
-   without one a particle is a soft round dot computed in the fragment shader.
+   Five of the presets side by side, from ``tests/particles_effects.py``:
+   fire, smoke, sparks, an explosion and a trail. None of them loads a
+   texture; without one, a particle is a soft round dot computed in the
+   fragment shader.
 
 .. _particles-quickstart:
 
-Example: Fire
--------------
+Using it
+--------
+
+A fire
+~~~~~~
 
 .. code-block:: python
 
@@ -32,33 +35,35 @@ Example: Fire
    ])
 
 That is a complete effect. ``ParticleEmitter`` is a rendering node in its own
-right rather than a geometry inside a ``Shape``: an effect has no material and
-no surface, so an ``Appearance`` would have nothing to say about it.
+right, not a geometry inside a ``Shape``: an effect has no material and no
+surface, so an ``Appearance`` would have nothing to set.
 
-Six presets ship — ``fire``, ``smoke``, ``sparks``, ``explosion``, ``trail``
-and ``impact``. Each is a set of field values and nothing more, so anything a
-preset does can be written out by hand, and the values in one are a starting
-point for an effect of your own.
+Six presets are included: ``fire``, ``smoke``, ``sparks``, ``explosion``,
+``trail`` and ``impact``. A preset is only a set of field values, so anything
+a preset does can be written out by hand, and a preset's values are a
+starting point for your own effect. Keyword arguments to ``preset()`` override
+the preset's values.
 
-Example: An explosion on demand
--------------------------------
+An explosion on demand
+~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
    burst = particles.preset('explosion', maxParticles=512, color=(0.6, 0.8, 1.0))
    burst.fire()          # again, later
 
-``fire()`` releases a burst where the emitter is. ``burstOnStart=False`` stops
-the emitter releasing its first burst as soon as it is drawn, which is what an
-emitter that exists to be fired later wants; left on, every such emitter goes
-off at its own position the first time the scene is drawn.
+``fire()`` releases a burst at the emitter's position on the next step. By
+default an emitter also releases its first burst as soon as it is drawn. Set
+``burstOnStart=False`` for an emitter that should only go off when fired;
+otherwise every such emitter goes off at its own position the first time the
+scene is drawn.
 
-Example: Sparks at each impact
-------------------------------
+Sparks at each impact
+~~~~~~~~~~~~~~~~~~~~~
 
-Where the same effect happens in many places — a shotgun's eight impacts, a
-firefight's worth of sparks — one emitter can put a burst wherever it is
-needed rather than a node being added per effect:
+When the same effect happens in many places, such as a shotgun's eight
+impacts, one emitter can release a burst at each place. There is no need to
+add a node per effect:
 
 .. code-block:: python
 
@@ -66,58 +71,123 @@ needed rather than a node being added per effect:
    for hit in shot.impacts:
        sparks.burst_at(hit.point, direction=hit.normal)     # count=... to override
 
-The fields stay on the one node and the position arrives per burst.
-``position`` is in the frame the particles live in — world space for a
-``worldSpace`` emitter, the emitter's own space otherwise — and ``direction``
-is the axis the particles are thrown along, which for an impact is the surface
-normal. A disabled emitter bursts nothing, so a settings switch that turns an
-effect off turns it off however it is asked for.
+The fields stay on the one node, and each burst gets its own position.
+``position`` is in the frame the particles live in: world space for a
+``worldSpace`` emitter, and the emitter's own space otherwise. ``direction``
+is the axis the particles are thrown along; for an impact, that is the surface
+normal. ``burst_at()`` returns how many particles it released. A disabled
+emitter releases nothing, so a settings switch that turns an effect off turns
+it off for bursts too.
 
-A node per effect would mean editing the scenegraph at the rate things happen,
-and the render pass discards what it has gathered when the scenegraph changes.
+Adding a node per effect would change the scenegraph as often as things
+happen, and the render pass discards what it has gathered each time the
+scenegraph changes.
 
 .. _fields:
 
 Fields
 ------
 
+Every field is a declared VRML field with a ``UI_HINTS`` entry, so an emitter
+can be written into a scene file, carried in an ``MFNode``, watched for
+changes, and edited on a generated settings page with no UI code. A
+``*Variation`` field scatters each particle's value by up to that fraction of
+the base value, either way.
+
 .. list-table::
    :widths: auto
    :header-rows: 1
 
-   * - Group
-     - Fields
-     - Notes
-   * - How many, how often
-     - ``rate``, ``burst``, ``maxParticles``, ``lifetime``, ``lifetimeVariation``,
-       ``enabled``, ``burstOnStart``
-     - A burst with ``rate=0`` is a one-shot; call ``fire()`` for another, or
-       ``burst_at()`` to put one somewhere else. ``burstOnStart=False`` stops the
-       first burst going off the moment the emitter is drawn.
-   * - Which way, how fast
-     - ``direction``, ``speed``, ``speedVariation``, ``spread``, ``gravity``,
-       ``drag``
-     - ``spread`` is a cone half-angle in radians: 0 is a laser, π is a sphere.
-       Positive ``gravity`` Y is what makes smoke rise.
-   * - What it looks like
-     - ``size``, ``endSize``, ``sizeVariation``, ``spin``, ``color``, ``endColor``,
-       ``alpha``, ``endAlpha``, ``texture``, ``blending``
-     - Without a ``texture`` a particle is a soft round dot computed in the fragment
-       shader, which is enough for sparks, embers and explosions and needs no asset.
-   * - Frame of reference
-     - ``worldSpace``
-     - True leaves particles behind when the emitter moves — a rocket trail. False
-       carries them with it — a torch flame.
-   * - Reproducibility
-     - ``seed``
-     - A fixed value pins the sequence, for a reference image. −1 draws from the
-       :ref:`session's particle stream <randomness>`, so an emitter looks different
-       every time the game is played and the same every time one recorded session is
-       replayed.
+   * - Field
+     - Default
+     - Meaning
+   * - ``rate``
+     - 50.0
+     - Particles born per second. Fractions carry over between frames, so a
+       rate below one per frame still emits.
+   * - ``burst``
+     - 0
+     - Particles released at once when the emitter starts or ``fire()`` is
+       called. A burst with ``rate=0`` is a one-shot, such as an explosion.
+   * - ``maxParticles``
+     - 500
+     - The pool's capacity. Size it from ``rate × lifetime``, which is how many
+       particles can be alive at once.
+   * - ``lifetime``, ``lifetimeVariation``
+     - 1.5, 0.3
+     - Seconds a particle lives.
+   * - ``enabled``
+     - True
+     - A disabled emitter emits nothing, but particles already out keep
+       ageing, so smoke clears instead of freezing.
+   * - ``burstOnStart``
+     - True
+     - Whether the first ``burst`` is released as soon as the emitter is drawn.
+   * - ``direction``
+     - (0, 1, 0)
+     - Which way particles are thrown, in the emitter's own frame.
+   * - ``speed``, ``speedVariation``
+     - 2.0, 0.3
+     - Speed in units per second.
+   * - ``spread``
+     - 0.4
+     - Half-angle of the emission cone, in radians: 0 is a straight line, π a
+       full sphere.
+   * - ``gravity``
+     - (0, −1, 0)
+     - Constant acceleration. Negative Y falls; positive Y makes smoke rise.
+   * - ``drag``
+     - 0.0
+     - Rate at which velocity decays, per second.
+   * - ``size``, ``endSize``, ``sizeVariation``
+     - 0.3, 0.0, 0.3
+     - Size at birth and at death, in world units.
+   * - ``spin``, ``spinVariation``
+     - 0.0, 1.0
+     - Radians per second each particle turns about the view axis.
+   * - ``color``, ``endColor``
+     - (1, 0.7, 0.3), (0.6, 0.1, 0)
+     - Colour at birth and at death.
+   * - ``alpha``, ``endAlpha``
+     - 1.0, 0.0
+     - Opacity at birth and at death.
+   * - ``texture``
+     - empty
+     - A sprite image for each particle. Without one, a particle is a soft
+       round dot computed in the fragment shader, which suits sparks, embers
+       and explosions and needs no asset.
+   * - ``blending``
+     - ``additive``
+     - ``additive`` for effects that give off light, ``alpha`` for effects
+       that block it. See :ref:`rendering`.
+   * - ``worldSpace``
+     - True
+     - True leaves particles behind when the emitter moves, as for a rocket
+       trail. False carries them with it, as for a torch flame.
+   * - ``seed``
+     - −1
+     - A fixed value makes the sequence repeatable, for a reference image. −1
+       draws from the :ref:`session's particle stream <randomness>`, so an
+       emitter looks different each time the game is played and the same each
+       time one recorded session is replayed.
 
-Each of them is a declared VRML field with a ``UI_HINTS`` entry, so an emitter
-can be written into a scene file, carried in an ``MFNode``, watched for
-change, and presented by the generated settings machinery with no UI code.
+.. _stepping:
+
+When the simulation steps
+-------------------------
+
+Particles are stepped when they are drawn, because the draw is the only
+per-frame hook a scenegraph node has. This has two consequences:
+
+- A scene rendered twice in one frame, for example by a shadow pass and a
+  selection pass, steps by almost zero the second time, not twice, because
+  the step is measured from a clock rather than counted.
+
+- When no frames are drawn, the simulation stops. An application showing
+  effects has to keep requesting frames; the demo does this in ``OnIdle``.
+
+To drive the simulation yourself, from a fixed-tick game loop or a test, call
+``emitter.simulate(dt, origin=...)``. The draw uses the same method.
 
 .. _particles-dataflow:
 
@@ -128,8 +198,8 @@ Each frame
    :alt: Per-frame flow: emit, step, compact, upload, one instanced draw
    :class: diagram
 
-   Emit, step, compact, upload, draw. Each step is a numpy pass over
-   contiguous arrays; nothing loops in Python over particles and nothing
+   Emit, step, compact, upload, draw. Each stage is a numpy operation over
+   contiguous arrays. Nothing loops over particles in Python, and nothing
    allocates per particle.
 
 .. _pool:
@@ -137,14 +207,14 @@ Each frame
 The pool
 --------
 
-Particles die out of order, because lifetimes vary, so a pool that left the
-dead in place would be live particles with holes between them and every
-consumer of it would need a mask.
+Lifetimes vary, so particles die out of order. If dead particles stayed in
+place, the pool would have gaps, and every stage would need a mask to skip
+them.
 
-Instead the survivors are compacted down over the gaps as particles die. The
-living set is therefore always ``arrays[0:live]``: the GPU upload is one
-contiguous slice, the draw is one call, and each step is a whole-array
-operation with no masking.
+Instead, the survivors are moved down over the gaps as particles die. The
+living particles are therefore always ``arrays[0:live]``: the GPU upload is
+one contiguous slice, the draw is one call, and each step is a whole-array
+operation with no mask.
 
 .. code-block:: python
 
@@ -154,22 +224,21 @@ operation with no masking.
        array[:survivors] = array[index]
    live = survivors
 
-Emission writes at the end of that prefix. A full pool emits nothing more and
-reports nothing: ``maxParticles`` is a budget, and reaching it is the system
-working as asked. Size it from ``rate × lifetime``, which is how many
-particles can be alive at once.
+New particles are written after the last live one. When the pool is full, no
+more are emitted and nothing is reported: ``maxParticles`` is a budget, and
+reaching it is normal.
 
 .. rst-class:: technical
 
 ``OpenGLContext/scenegraph/particles.py``, ``ParticlePool._bury``. The class
-needs no GL, and ``tests/unit/test_particles.py`` exercises it without one.
+uses no GL, and ``tests/unit/test_particles.py`` tests it without one.
 
 .. _split:
 
 Per-particle and per-system values
 ----------------------------------
 
-A particle carries only what varies between particles:
+A particle stores only what differs between particles:
 
 .. list-table::
    :widths: auto
@@ -188,10 +257,11 @@ A particle carries only what varies between particles:
    * - one random number
      - colour and alpha at birth and at death
 
-Per-instance data is therefore seven floats rather than twenty, and colour and
-size over life are two uniforms rather than a gradient texture and a texture
-unit. Absolute size being a uniform also means that editing ``size`` on a live
-emitter resizes the particles already in the air.
+The data sent per instance is therefore seven floats rather than twenty.
+Colour and size over a particle's life are two uniforms, not a gradient
+texture with its own texture unit. Because the absolute size is a uniform,
+changing ``size`` on a running emitter also resizes the particles already in
+the air.
 
 The per-particle random number lets a shader vary particles without the
 simulation storing what it varied.
@@ -199,100 +269,87 @@ simulation storing what it varied.
 The step
 --------
 
-Five things the step does that are easy to get wrong elsewhere:
+The step handles five details:
 
-- **Drag is exponential, not linear.** ``v -= v * drag * dt`` overshoots into a
-  reversal on a long frame, so particles fly backwards when the frame rate
-  drops. ``v *= exp(-drag * dt)`` cannot, at any step size.
+- Exponential drag - ``v -= v * drag * dt`` overshoots and reverses on a long
+  frame, so particles fly backwards when the frame rate drops.
+  ``v *= exp(-drag * dt)`` cannot overshoot at any step size.
 
-- **The step comes from the engine's clock**
-  (``OpenGLContext.events.systemtime``) rather than the wall clock, so a system
-  follows whatever drives the rest of the scene: a recording advancing a frame's
-  worth at a time, a replay reading the instants the recording read, or a capture
-  pinned so that the same frame count produces the same picture.
+- The engine's clock - the step comes from
+  ``OpenGLContext.events.systemtime``, not the wall clock. A system therefore
+  follows whatever drives the rest of the scene: a :doc:`recording
+  <recording>` advancing one frame at a time, a replay reading the times the
+  recording read, or a capture fixed so that the same frame count produces the
+  same picture.
 
-- **The frame time is clamped** to ``MAX_STEP`` (0.1 s). A window drag or a
-  stalled texture upload produces a frame of several seconds, and integrating
-  that throws every particle out of sight. It is the same clamp a fixed-timestep
-  physics loop applies.
+- Clamped frame time - each step is limited to ``MAX_STEP`` (0.1 s). Dragging
+  a window or a stalled texture upload can produce a frame of several
+  seconds, and integrating that would throw every particle out of sight. A
+  fixed-timestep physics loop applies the same kind of clamp.
 
-- **Emission accumulates fractions.** At 10 particles a second and a 60 Hz
-  frame, ``int(rate * dt)`` is zero every frame; the remainder is carried.
+- Fractional emission - at 10 particles a second and 60 frames a second,
+  ``int(rate * dt)`` is zero every frame, so the remainder is carried over.
 
-- **Starting angles are random**, and the emission cone samples the spherical
-  cap uniformly rather than the angle. Sampling the angle crowds particles
-  towards the axis, which gives a jet a bright core and a thin skirt.
+- Random starting angles and uniform cones - each particle starts at a
+  random rotation, and the emission cone samples its spherical cap uniformly
+  rather than sampling the angle. Sampling the angle crowds particles towards
+  the axis, giving a jet a bright core and a thin edge.
 
 .. _rendering:
 
 Rendering
 ---------
 
-Billboarding happens in eye space. The particle's centre goes through the
-model-view and the quad's corner is added to its ``x`` and ``y``. Offsetting
-after the view transform makes the quad face the camera at any camera
-orientation, with no per-particle matrix and no work on the CPU.
+Billboarding is done in eye space. The particle's centre is transformed by
+the model-view matrix, and the quad's corner is then added to its ``x`` and
+``y``. Because the offset is added after the view transform, the quad faces
+the camera at any camera orientation, with no per-particle matrix and no CPU
+work.
 
-.. code-block:: python
+.. code-block:: glsl
 
    vec4 centre = uModelView * vec4(aParticle.xyz, 1.0);
    centre.xy += rotate(aCorner, aParams.x) * size;
    gl_Position = uProjection * centre;
 
 The node chooses which matrix to send. A world-space system's particles are
-already in world coordinates, so it is sent the view matrix; a local-space
-system's are in the emitter's frame, so it is sent the full model-view.
-Choosing on the CPU keeps a branch out of the vertex shader.
+already in world coordinates, so it sends the view matrix. A local-space
+system's particles are in the emitter's frame, so it sends the full
+model-view matrix. Making this choice on the CPU keeps a branch out of the
+vertex shader.
 
-Particles are depth tested and do not write depth, so they are hidden by walls
-and blend with each other rather than occluding each other. They draw in the
-transparent pass, after opaque geometry, and never enter a shadow map.
+Particles are depth tested but do not write depth, so walls hide them and
+they blend with each other instead of hiding each other. They are drawn in
+the transparent pass, after opaque geometry (see :doc:`renderpasses`), and
+are never drawn into a shadow map.
 
-Blending is additive by default, which suits effects that emit light: fire,
-sparks, explosions, muzzle flashes. ``blending='alpha'`` suits the effects that
-block light instead: smoke, dust, steam.
+Blending is additive by default, which suits effects that give off light:
+fire, sparks, explosions, muzzle flashes. ``blending='alpha'`` suits effects
+that block light: smoke, dust, steam.
 
 .. rst-class:: technical
 
-Shaders are ``OpenGLContext/shaders/particle.vert`` and ``particle.frag``; the
-GL helpers (``InstanceBuffer``, ``ensure_gl``) are shared with the terrain and
-vegetation nodes in ``scenegraph/instancedgl.py``. A shader compile or driver
-failure disables the node with one logged warning rather than ending the
-frame: the effect is missing and the scene is not.
+The shaders are ``OpenGLContext/shaders/particle.vert`` and ``particle.frag``.
+The GL helpers (``InstanceBuffer``, ``ensure_gl``) are shared with the terrain
+and vegetation nodes in ``scenegraph/instancedgl.py``. If a shader fails to
+compile or the driver fails, the node is disabled with one logged warning:
+the effect is missing, and the rest of the scene still draws.
 
 Bounding volume
 ---------------
 
-A particle system's extent changes every frame and would have to be recomputed
-from the pool to be tight. The node reports a box sized from how far its
-fastest particle could travel in its lifetime, which costs nothing and is
-never too small — the error a tight box would risk is culling an effect that
-is on screen.
-
-.. _stepping:
-
-When the simulation steps
--------------------------
-
-Particles are stepped from the draw, because the draw is the only per-frame
-hook a scenegraph node has. Two consequences:
-
-- A scene rendered twice in one frame — a shadow pass, a selection pass — steps
-  by nearly zero the second time rather than twice, because the step is measured
-  from a clock rather than counted.
-
-- A still frame is a stopped simulation. An application showing effects has to
-  keep asking for frames; the demo does it in ``OnIdle``.
-
-To drive the simulation directly — from a fixed-tick game loop, or a test —
-call ``emitter.simulate(dt, origin=...)``. It is the method the draw uses.
+A particle system's extent changes every frame, and a tight box would have to
+be recomputed from the pool each time. Instead, the node reports a box sized
+by how far its fastest particle could travel in its lifetime. This costs
+nothing to compute and is never too small, so an effect that is on screen is
+never culled.
 
 .. _particles-testing:
 
 Testing
 -------
 
-The pool is pure numpy, so a test asserts about it directly:
+The pool is plain numpy, so a test checks it directly:
 
 .. code-block:: python
 
@@ -302,20 +359,21 @@ The pool is pure numpy, so a test asserts about it directly:
    assert np.allclose(pool.position[0], (0.5, 0, 0))
 
 The suite covers birth, motion under gravity and drag, ageing, death,
-compaction keeping the survivors' state intact, the budget, the fractional
-emission accumulator, the long-frame clamp, reproducibility from a seed, and
-that a full pool stepped thirty times allocates essentially nothing. Rendering
-is covered by the demo's reference image.
+compaction that keeps the survivors' state intact, the budget, fractional
+emission, the long-frame clamp, repeatability from a seed, and that a full
+pool stepped thirty times allocates almost nothing. Rendering is covered by
+the demo's reference image.
 
 .. _particles-demos:
 
 Demo
 ----
 
-``tests/particles_effects.py`` puts the five continuous and burst presets side
-by side over a floor, so what each effect is made of can be read against what
-it looks like. Space re-fires the bursts; ``p`` pauses emission without
-freezing what is already in the air.
+:doc:`tests/particles_effects.py <tutorials/particles_effects>` shows five
+presets, continuous and burst, side by side over a floor, so you can compare
+each effect's fields with how it looks. Press the space bar to fire the
+bursts again, and ``p`` to pause emission without freezing the particles
+already in the air.
 
 .. code-block:: bash
 

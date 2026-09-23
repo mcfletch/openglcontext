@@ -3,14 +3,14 @@ Embedding a view in an application
 
 .. rst-class:: introduction
 
-A thick-client 3D application is a menu bar, a panel of controls, and a view
-of the scene between them, with the toolkit's own main loop driving all of it.
-This is how the engine goes in one: which call puts the view in a
-widget, which of the two loops does the driving, and what the host has to do
-that a full-window program does not.
+A desktop 3D application usually has a menu bar, a panel of controls and a
+view of the scene, all driven by the GUI toolkit's main loop. This page shows
+how to put an OpenGLContext view into such an application: which call puts
+the view in a widget, which loop draws the frames, and what the host
+application has to do that a full-window program does not.
 
-Three sample programs go with this page, deliberately the same program three
-times so they can be read against one another:
+Three sample programs go with this page. They are the same program written
+for three toolkits, so they can be compared line by line:
 
 .. list-table::
    :widths: auto
@@ -18,8 +18,8 @@ times so they can be read against one another:
 
    * - Toolkit
      - Program
-     - How the view goes in
-     - Whose loop
+     - How the view is added
+     - Main loop
    * - Tk
      - ``python -m OpenGLContext.demos.tk_viewer``
      - ``SceneView(parent=frame)``
@@ -33,21 +33,21 @@ times so they can be read against one another:
      - the context *is* the canvas
      - ``wx.App.MainLoop()``, driving itself
 
-Each takes an optional path or URL to open. They are Tk, Qt and wx because
-those are the backends with a GUI library behind them — menus, trees, dialogs,
-something to put a view beside. GLFW, Pygame and GLUT are window and input
-libraries with no widgets, so an application on those draws its interface with
-:doc:`OpenGLContext.ui <overlayui>` instead, which ``oglc-ui-demo`` shows.
+Each takes an optional path or URL to open. Tk, Qt and wx are the backends
+backed by a GUI library, with menus, trees and dialogs to place a view
+beside. GLFW, Pygame and GLUT handle windows and input but have no widgets.
+An application on one of those draws its interface with
+:doc:`OpenGLContext.ui <overlayui>` instead; ``oglc-ui-demo`` shows how.
 
 .. _viewer:
 
-The view
---------
+The view class
+--------------
 
-:doc:`ViewerContext <viewer>` is the viewer ``oglc-view`` is, over whichever
-backend the environment and the user's configuration chose. A program
-embedding a view needs it over the toolkit that owns the window it is going
-into, which is what ``viewerFor`` answers:
+:doc:`ViewerContext <viewer>` is the class behind ``oglc-view``. It runs on
+the backend chosen by the environment and the user's configuration. An
+embedded view has to run on the toolkit that owns the host window.
+``viewerFor`` returns the viewer class for a named backend:
 
 .. code-block:: python
 
@@ -57,55 +57,53 @@ into, which is what ``viewerFor`` answers:
        def hasSceneToShow( self ):
            return True                     # this application has its own File menu
 
-It takes the name a backend is selected by — ``tk``, ``qt``, ``wx``, ``glfw``,
-``pygame``, ``glut`` — or nothing, for the same class ``ViewerContext``
-already is. A name that is not a registered backend, or whose toolkit is not
-installed, raises naming the ones there are. Asking twice gives one class, so
-``isinstance`` means what a reader expects.
+``viewerFor`` takes a backend name (``tk``, ``qt``, ``wx``, ``glfw``,
+``pygame`` or ``glut``), or no argument for the same class as
+``ViewerContext``. An unknown backend, or one whose toolkit is not installed,
+raises an error that lists the available backends. Two calls with the same
+name return the same class, so ``isinstance`` checks work as expected.
 
-``hasSceneToShow`` is worth overriding in every embedded view. A viewer
-started with nothing to show opens its shelf, which is right for ``oglc-view``
-and wrong inside an application that has a File menu of its own. The engine's
-other screens stay on their keys — F1 for the shelf, F10 for the render
-settings, F6 for the controls — and an application that wants those keys for
-itself binds none of them by setting ``LIBRARY_KEY``, ``SETTINGS_KEY`` and
-``BINDINGS_KEY`` to ``''``.
+Override ``hasSceneToShow`` in every embedded view. A viewer started with
+nothing to show opens its library, which suits ``oglc-view`` but not an
+application with its own File menu. The viewer's other screens stay on their
+keys: F1 for the library, F10 for render settings and F6 for controls. To
+free those keys for the application, set ``LIBRARY_KEY``, ``SETTINGS_KEY``
+and ``BINDINGS_KEY`` to ``''`` on the subclass.
 
 .. _widget:
 
-Putting it in the window
-------------------------
+Adding the view to a window
+---------------------------
 
-Each backend joins its toolkit's layout in that toolkit's own way:
+Each backend joins its toolkit's layout in that toolkit's usual way:
 
 Tk
-   Build the context with the widget that is to hold it,
-   ``SceneView(parent=holder)``. The context is not itself a widget — the
-   ``GLFrame`` it draws into is ``context.frame``, packed into the parent as it
-   is made.
+   Pass the containing widget when building the context:
+   ``SceneView(parent=holder)``. The context is not a widget itself. It draws
+   into a ``GLFrame``, available as ``context.frame``, which is packed into
+   the parent when the context is created.
 Qt
-   The window is a ``QWindow``, and ``view.container(parent)`` wraps it in a
-   ``QWidget`` for a layout. That needs ``PySide6.QtWidgets``, so the application
-   object must be a ``QApplication`` rather than a bare ``QGuiApplication`` —
-   **and it must exist before the view is built**, since the view makes one
-   itself if there is none and Qt allows exactly one.
+   The view's window is a ``QWindow``. ``view.container(parent)`` wraps it in
+   a ``QWidget`` to place in a layout. This needs ``PySide6.QtWidgets``, so
+   the application object must be a ``QApplication``, not a bare
+   ``QGuiApplication``. **Create it before building the view.** The view
+   creates an application object if none exists, and Qt allows only one.
 wx
-   The context *is* a ``wx.glcanvas.GLCanvas``: ``SceneView(parent, size=(720,
-   560))`` goes straight into a sizer.
+   The context is a ``wx.glcanvas.GLCanvas``. Add ``SceneView(parent,
+   size=(720, 560))`` to a sizer directly.
 
 .. _embedding-loop:
 
-Whose loop, and who draws
--------------------------
+Running the main loop
+---------------------
 
-A full-window program calls ``ContextMainLoop()`` and the engine owns the
-loop. An embedded view does not: the host's loop is already running, and the
-frames have to come out of it. What that takes differs by backend, and it is
-the one part of embedding that is not the same in all three.
+A full-window program calls ``ContextMainLoop()``, and the engine runs the
+loop. An embedded view cannot, because the host's loop is already running
+and the frames have to come from it. How that works differs by backend.
 
-Tk — the host drives
-   Call ``loopIteration()`` from an ``after`` callback. It answers False once the
-   view has finished, which is how the host learns that a view quit from inside:
+Tk: the host drives the view
+   Call ``loopIteration()`` from an ``after`` callback. It returns ``False``
+   once the view has quit, which tells the host to clean up:
 
    .. code-block:: python
 
@@ -114,41 +112,59 @@ Tk — the host drives
               self.root.destroy()             # the view is gone; so is the window
               return
           self.root.after( 1, self.onFrame )
-Qt — the backend drives
-   ``view.startRenderTimer()``, after the window is shown, and Qt's own timer
-   calls ``loopIteration`` from then on. There is no per-frame callback for the
-   host, so a host that wants to know when a scene has arrived overrides
-   ``onSceneReady()``.
-wx — nothing to do
+Qt: the backend drives the view
+   Call ``view.startRenderTimer()`` after the window is shown. A Qt timer
+   then calls ``loopIteration``. The host gets no per-frame callback; to act
+   when a scene has loaded, override ``onSceneReady()``.
+wx: no action needed
    The canvas renders from its own paint and idle events, so
-   ``wx.App.MainLoop()`` drives the engine by itself.
+   ``wx.App.MainLoop()`` drives it.
 
-Where the host drives the loop, set ``deferRedraw``. With it, an input event
-asks for a redraw rather than rendering where it was handled, so a burst of
-them costs one frame instead of one frame each. Every backend's own
-``MainLoop`` sets it for exactly this reason, and a host calling
-``loopIteration`` is standing in for that loop. Leave it alone under wx, where
-there is no such call and the synchronous redraw is what draws at all.
+When the host drives the loop (Tk), set ``deferRedraw``. An input event then
+requests a redraw instead of rendering immediately, so a burst of events
+costs one frame rather than one frame per event. Every backend's own
+``MainLoop`` sets it for the same reason. Do not set it under wx: there is no
+``loopIteration`` call there, and the immediate redraw is what draws the
+frame.
 
-**Quitting is not the same as ending the process.** A view inside somebody
-else's window is a view: the Tk and Qt contexts close it and return, leaving
-the host running, so the host decides what a finished view means — in these
-samples, the window goes with it. ``releaseWindow()`` is what gives the driver
-back every texture, buffer and shader the engine uploaded, and the host calls
-it as its window closes. The wx context ends the process instead, as
-``Context.OnQuit`` does by default, so the engine's own Quit and the Escape
-key end a wx application rather than closing the view in it.
+Quitting and cleanup
+~~~~~~~~~~~~~~~~~~~~
+
+Under Tk and Qt, quitting the view closes the view and returns; the host
+application keeps running. The host decides what to do next; in the samples,
+the window closes with it. Call ``releaseWindow()`` when the host window
+closes. It frees every texture, buffer and shader the engine uploaded.
+
+Under wx, quitting ends the process, as ``Context.OnQuit`` does by default.
+The engine's Quit command and the Escape key end a wx application rather
+than only closing the view.
+
+.. _loading:
+
+Opening a scene
+---------------
+
+``openSource(path_or_url)`` replaces the scene. The load runs on a worker
+thread, so the previous scene stays on screen and the window keeps drawing
+during a slow download. It returns ``False`` for a source that cannot be
+found or whose format has no adapter. A new request replaces any load still
+in progress, so it is safe to click quickly through a list. The
+:ref:`adapters <adapters>` decide which formats open: glTF and GLB, VRML97,
+OBJ and 3D Tiles, plus any format an application adds an adapter for.
+
+``onSceneReady()`` is called on the render thread just after a scene is
+built. Refill a scene tree from ``context.sg`` there.
 
 .. _outline:
 
 The scene as a tree
 -------------------
 
-:py:mod:`OpenGLContext.outline <OpenGLContext.outline>` is the scenegraph as a
-flat list of rows, with a set of expanded rows and a selection. It holds no GL
-and knows no toolkit, so one model feeds a ``ttk.Treeview``, a ``QTreeWidget``
-and a ``wx.TreeCtrl`` alike — and a program that just wants to know what is in
-the scene it loaded can ask it with no window open at all:
+:py:mod:`OpenGLContext.outline <OpenGLContext.outline>` presents the
+scenegraph as a flat list of rows, with a set of expanded rows and a
+selection. It uses no GL and no toolkit, so one model can feed a
+``ttk.Treeview``, a ``QTreeWidget`` or a ``wx.TreeCtrl``. A program can also
+use it with no window open to list what a loaded scene contains:
 
 .. code-block:: python
 
@@ -159,39 +175,44 @@ the scene it loaded can ask it with no window open at all:
        print( '  ' * row.depth, row.label, row.field or '' )
    outline.toggle( outline.rows[1].path )
 
-A row carries the node, its ``depth``, the ``field`` it hangs from, its
-``defName`` and ``nodeType`` separately, whether it is ``expandable``, and its
-``path`` — the child indices from the root, which is what expansion and
-selection are recorded as and what a tree item should carry. ``row.label`` is
-the name the file gave the node, or its type where it gave none.
+Each row has these attributes:
 
-**Children are the node-valued fields**, in name order: a ``Transform``'s
-``children``, and equally a ``Shape``'s ``geometry`` and ``appearance``, which
-the rendering traversal does not descend into and an inspector wants. A field
-holding a *weak* reference is passed over — it points back into the scene
-rather than down it — as is a value that is not a node. One node reached by
-two routes gets a row under each, since that is what ``USE`` in a VRML file
-and a shared mesh in a glTF one look like.
+- the node;
+- ``depth``;
+- ``field`` - the field of the parent that holds the node;
+- ``defName`` and ``nodeType``;
+- ``expandable``;
+- ``path`` - the child indices from the root. Expansion and selection are
+  recorded by path, so a tree item should store it.
+- ``label`` - the name the file gave the node, or its type if it has no name.
 
-``nodeSummary(node)`` is the panel beside the tree: the values a node carries
-in its own right, as ``(field, text)`` pairs, with the nodes under it left out
-and a long value cut to a width you give it.
+A row's children are its node's node-valued fields, in name order. That
+includes a ``Transform``'s ``children``, and also a ``Shape``'s ``geometry``
+and ``appearance``, which the render traversal does not descend into but an
+inspector needs. Fields holding *weak* references are skipped, because they
+point back up the scene. Values that are not nodes are skipped too. A node
+reachable by two routes gets a row under each, which is how ``USE`` in VRML
+and shared meshes in glTF appear.
+
+``nodeSummary(node, width=60)`` returns the data for a detail panel: the
+node's own field values as ``(field, text)`` pairs, without the child nodes,
+with long values cut to ``width`` characters.
 
 .. _watching:
 
 Following a scene that changes
 ------------------------------
 
-Every field of every node announces a change through :doc:`pydispatcher
-<eventmodel>`, which is what lets a panel keep up with an animation moving a
-node, a route firing into it, or an editor changing it. A ``SceneOutline``
-listens on the fields that hold other nodes, so the tree follows the scene:
+Every field of every node sends a signal through :doc:`pydispatcher
+<eventmodel>` when it changes. That lets a panel follow an animation, a route
+or an editor as they change the scene. A ``SceneOutline`` connects to the
+fields that hold other nodes, so the tree follows the scene structure:
 
 .. code-block:: python
 
    outline = SceneOutline( context.sg, onChange=self.treeNeedsFilling )
 
-and a panel showing one node listens to that node directly:
+A panel showing one node connects to that node directly:
 
 .. code-block:: python
 
@@ -201,65 +222,48 @@ and a panel showing one node listens to that node directly:
    ...
    dispatcher.disconnect( self.onNodeChanged, sender=node )
 
-**A change arrives on whichever thread made it.** The viewer loads on a worker
-thread, so a scene is assembled off the render thread, while a toolkit's
-widgets belong to the toolkit's own thread. So ``onChange`` is a *notice*, not
-a place to fill a tree from. Each sample crosses back the way its toolkit
-does: Tk asks its per-frame callback whether ``outline.dirty``, Qt emits a
-signal and lets a queued connection deliver it, and wx uses ``wx.CallAfter``.
-One notice covers every change until the rows are next read, so a scene being
-built does not flood the host.
+**A change signal arrives on the thread that made the change.** The viewer
+builds scenes on a worker thread, while a toolkit's widgets belong to the
+toolkit's own thread. Treat ``onChange`` as a notification only, and fill the
+tree on the toolkit thread. Each sample does this its toolkit's way: Tk
+checks ``outline.dirty`` in its per-frame callback, Qt emits a signal through
+a queued connection, and wx uses ``wx.CallAfter``. One notification covers
+every change until the rows are next read, so building a scene does not
+flood the host with calls.
 
-``outline.close()`` lets go of the scene and its subscriptions. A viewer that
-opens one model after another calls it on the way out, since the rows are what
-would otherwise keep every scene it has ever shown alive.
-
-.. _loading:
-
-Opening a world
----------------
-
-``openSource(path_or_url)`` shows something else, and the load runs on a
-worker thread — so a slow download leaves the previous scene on screen and the
-window keeps drawing. It answers False for a source that cannot be found or
-whose format has no adapter, and a request supersedes the one before it, so
-clicking quickly through a list is safe. Which formats that covers is the
-:ref:`adapters' <adapters>` business rather than the application's: glTF and
-GLB, VRML97, OBJ and 3D Tiles today, and whatever else an adapter is written
-for.
-
-``onSceneReady()`` is called on the render thread just after a scene has been
-built, which is where a host refills its tree from ``context.sg``.
+``outline.close()`` releases the scene and disconnects the signals. Call it
+before discarding an outline. Otherwise the outline keeps every scene it has
+shown in memory.
 
 .. _shipping:
 
-Shipping one
-------------
+Shipping an embedded viewer
+---------------------------
 
-An embedded viewer is packaged like any other application built on the engine,
-and the samples come with the recipe for both ways of doing it:
-``OpenGLContext/demos/packaging/`` for the Tk one and
-``OpenGLContext_qt/demos/packaging/`` for the Qt one, each with a PyInstaller
-``.spec``, a script that builds a ``.deb``, and the distribution that turns a
-demo into an application. Their ``README.md`` reads alongside :doc:`Packaging
-an application <packaging>`.
+An embedded viewer is packaged like any other application built on the
+engine. The samples include packaging for both PyInstaller and Debian
+packages: ``OpenGLContext/demos/packaging/`` for the Tk sample and
+``OpenGLContext_qt/demos/packaging/`` for the Qt sample. Each has a
+PyInstaller ``.spec`` file, a script that builds a ``.deb``, and a
+distribution that turns the demo into an application. Read their
+``README.md`` alongside :doc:`Packaging an application <packaging>`.
 
-.. code-block:: python
+.. code-block:: bash
 
    pyinstaller OpenGLContext/demos/packaging/viewer-demos.spec
    OpenGLContext/demos/packaging/build-deb.sh
 
-Two things about it belong to the toolkit rather than to the application.
-``unused_backend_modules(keep=['tk'])`` leaves the toolkits the application
-does not use out of the bundle, which for a Tk or wx program is what keeps a
-quarter of a gigabyte of Qt from travelling with it. And a Tk package must be
-built with ``oglc-deb --backend tk``: Tk is part of CPython rather than a
-wheel in the environment, so it is otherwise stripped out with everything else
-an application "cannot reach", and the package installs and then fails to
-start.
+Two settings depend on the toolkit:
 
-A demo is not a command — ``OpenGLContext.demos`` declares no console scripts,
-since a command whose purpose is to be read is in the way of the ones that do
-work — so shipping one means making it an application. For these that is a
-``pyproject.toml`` naming a script and nothing else, which is the smallest
-complete example of what an application of your own already has.
+- ``unused_backend_modules(keep=['tk'])`` leaves out the toolkits the
+  application does not use. For a Tk or wx program this keeps about a quarter
+  of a gigabyte of Qt out of the bundle.
+- Build a Tk package with ``oglc-deb --backend tk``. Tk is part of CPython,
+  not a wheel in the environment. Without the option it is removed along with
+  other modules the application does not import, and the installed package
+  fails to start.
+
+``OpenGLContext.demos`` declares no console scripts, so to ship a demo, turn
+it into an application. For these samples that is a ``pyproject.toml`` that
+names a script, the smallest complete example of an application's own
+packaging.

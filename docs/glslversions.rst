@@ -1,14 +1,13 @@
 GLSL in OpenGLContext
 =====================
 
-Every shader OpenGLContext ships is written in **GLSL 330** and begins with
-``#version 330 core``. That is the version OpenGL 3.3 brings, which is what
-the engine asks for by default (:ref:`core profile <core-profile>`) and what
-every desktop driver of the last decade or so provides.
+.. rst-class:: introduction
 
-This page is for two readers: someone writing a shader for the engine, who
-wants to know what the engine will hand them; and someone with an older shader
-that no longer compiles, who wants to know what to change.
+Every shader OpenGLContext ships is written in **GLSL 330** and starts with
+``#version 330 core``. GLSL 330 is the version that comes with OpenGL 3.3,
+which the engine requests by default (see :ref:`core profile
+<core-profile>`). This page lists the inputs and uniforms the engine gives a
+shader you write, and how to convert a shader between GLSL 1.20 and GLSL 330.
 
 What the engine supplies
 ------------------------
@@ -16,12 +15,13 @@ What the engine supplies
 Vertex inputs
 ~~~~~~~~~~~~~
 
-A geometry node writes its arrays to fixed attribute locations, declared once
-in ``OpenGLContext/scenegraph/vertexsemantics.py`` and listed under
-:doc:`Fixed Attribute Locations <renderpasses>`. Spell an input with the
-engine's own name and it arrives with nothing declared on the node:
+A geometry node binds its arrays to fixed attribute locations. These are
+declared in ``OpenGLContext/scenegraph/vertexsemantics.py`` and listed under
+:ref:`fixed-attribute-locations`.
+Declare an input with the engine's name and it receives the matching array,
+with nothing to configure on the node:
 
-.. code-block:: python
+.. code-block:: glsl
 
    in vec3 aPosition;     // location 2
    in vec3 aNormal;       // location 1
@@ -29,15 +29,14 @@ engine's own name and it arrives with nothing declared on the node:
    in vec4 aTangent;      // location 3
    in vec4 aColor;        // location 4
 
-To call an input something else, name the semantic it carries with a
-``ShaderInput`` on the ``GLSLObject`` — see :doc:`A Shape whose appearance
-brings its own shader <renderpasses>`.
+To give an input a different name, add a ``ShaderInput`` to the
+``GLSLObject`` naming the semantic it carries. See :ref:`shape-own-shader`.
 
 Uniforms
 ~~~~~~~~
 
-The render pass sets these on any ``GLSLObject`` that declares one, so naming
-it is all that is needed:
+The render pass sets these uniforms on any ``GLSLObject`` that declares them,
+so a shader only needs to declare the ones it uses:
 
 .. list-table::
    :widths: auto
@@ -52,29 +51,30 @@ it is all that is needed:
    * - ``mat_modelproj``
      - the two multiplied: model to clip
    * - ``inv_``, ``tps_``, ``itp_`` prefixes
-     - the inverse, the transpose, and the inverse-transpose of each
+     - the inverse, the transpose, and the inverse-transpose of each of the
+       above
 
-All are ``mat4``. The normal matrix is the upper-left 3×3 of
+All of them are ``mat4``. The normal matrix is the upper-left 3×3 of
 ``itp_modelview``:
 
-.. code-block:: python
+.. code-block:: glsl
 
    uniform mat4 itp_modelview;
    ...
    vec3 eyeNormal = mat3( itp_modelview ) * aNormal;
 
-A shader compiled and bound by hand — as the tutorials from ``shader_1`` to
-``shader_11`` do — declares and uploads its own matrices instead, from the
-``mode.matrix`` and ``mode.projection`` the pass hands to ``Render``.
+A shader that you compile and bind yourself, as the tutorials ``shader_1`` to
+``shader_11`` do, declares and uploads its own matrices. It takes them from
+the ``mode.matrix`` and ``mode.projection`` the pass passes to ``Render``.
 
 A fragment shader on its own
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A core profile has no fixed-function vertex stage, so a ``GLSLObject``
-carrying only a fragment shader has nothing to draw with.
-``res://simpleshader_vert_txt`` is the vertex shader for that case: it
-transforms the position and passes on ``baseNormal``, ``texCoord`` and
-``vertexColor``.
+The core profile has no fixed-function vertex stage, so a ``GLSLObject`` with
+only a fragment shader cannot draw anything. Pair it with
+``res://simpleshader_vert_txt``, a vertex shader that transforms the position
+and passes ``baseNormal``, ``texCoord`` and ``vertexColor`` to the fragment
+shader:
 
 .. code-block:: python
 
@@ -90,7 +90,8 @@ transforms the position and passes on ``baseNormal``, ``texCoord`` and
 Moving a GLSL 1.20 shader to 330
 --------------------------------
 
-The substitutions, in the order they usually bite:
+Make these substitutions. They are listed in the order in which the compiler
+usually reports them:
 
 .. list-table::
    :widths: auto
@@ -135,52 +136,61 @@ The substitutions, in the order they usually bite:
 
 .. rst-class:: technical
 
-Two of these are not substitutions but decisions. ``gl_TexCoord[0]`` and
-``gl_Color`` were filled in by the fixed-function vertex stage, so a fragment
-shader reading them needs a vertex shader that writes them — either your own
-or ``res://simpleshader_vert_txt`` above. And the light and material built-ins
-were global GL state, so a shader reading them needs the application to say
-what the light and the material are; the engine's own lit shader
-(``OpenGLContext/shaders/vrml97_lighting.*``) shows one way, packing the
+Two rows need more than a substitution. The fixed-function vertex stage filled
+in ``gl_TexCoord[0]`` and ``gl_Color``, so a fragment shader that reads them
+needs a vertex shader that writes them: your own, or
+``res://simpleshader_vert_txt`` above. The light and material built-ins were
+global GL state, so a shader that reads them needs the application to supply
+the light and material as uniforms. The engine's own lit shader
+(``OpenGLContext/shaders/vrml97_lighting.*``) is one example: it packs the
 lights into a ``uniform vec4 lights[]`` array.
 
 Going the other way
 ~~~~~~~~~~~~~~~~~~~
 
 To run one of these shaders on a driver that offers only GLSL 1.20, reverse
-the table: drop the ``#version`` line, turn each ``in`` in a vertex shader
-back into ``attribute`` and each ``in``/ ``out`` pair between the stages back
-into ``varying``, write to ``gl_FragColor`` instead of a declared output, call
-``texture2D``, and read ``gl_ModelViewProjectionMatrix`` and
-``gl_NormalMatrix`` in place of the matrix uniforms. The context has to ask
-for the profile that still has them:
+the table:
+
+- remove the ``#version`` line;
+
+- in the vertex shader, change each input ``in`` back to ``attribute``;
+
+- change each ``out``/``in`` pair between the stages back to ``varying``;
+
+- write to ``gl_FragColor`` instead of a declared output;
+
+- call ``texture2D`` instead of ``texture``;
+
+- read ``gl_ModelViewProjectionMatrix`` and ``gl_NormalMatrix`` instead of the
+  matrix uniforms.
+
+The context must request the compatibility profile, which still has those
+built-ins:
 
 .. code-block:: python
 
    class MyContext( BaseContext ):
        profile = 'compatibility'
 
-A vertex array object is still required by some drivers even under a
-compatibility profile, so leave the ``glGenVertexArrays`` /
-``glBindVertexArray`` pair in place.
+Some drivers require a vertex array object even in a compatibility profile,
+so keep the ``glGenVertexArrays`` and ``glBindVertexArray`` calls.
 
 Where the shaders are
 ---------------------
 
-- ``OpenGLContext/shaders/*.vert``, ``*.frag`` — the engine's own programs, plus
-  the ``_*.glsl`` files they ``#include``.
+- ``OpenGLContext/shaders/*.vert``, ``*.frag`` -- the engine's own programs,
+  and the ``_*.glsl`` files they ``#include``.
 
-- ``OpenGLContext/resources/*.vert``, ``*.frag``, ``*.txt`` — shaders reachable
-  by ``res://`` URL from a scenegraph. Each has a generated ``*_vert.py`` /
-  ``*_frag.py`` beside it holding the same bytes; edit the source and regenerate
-  the module.
+- ``OpenGLContext/resources/*.vert``, ``*.frag``, ``*.txt`` -- shaders a
+  scenegraph can load by ``res://`` URL. Each has a generated ``*_vert.py`` or
+  ``*_frag.py`` module beside it holding the same text. Edit the source file
+  and regenerate the module.
 
-- ``tests/resources/*.txt`` — the sample shaders ``tests/shaderobjects.py``
-  loads by path.
+- ``tests/resources/*.txt`` -- the sample shaders that
+  ``tests/shaderobjects.py`` loads by path.
 
-Two files in that resources directory stay at GLSL 1.20:
+Two files in ``OpenGLContext/resources/`` remain at GLSL 1.20:
 ``legacy_lighting.vert.txt`` and ``lights.vert.txt``. They reimplement the
-fixed-function lighting model in terms of ``gl_LightSource`` and
-``gl_FrontMaterial``, which is a description of that pipeline rather than a
-shader for this one; nothing loads them, and the engine's own
-``vrml97_lighting.*`` is the lit shader it uses.
+fixed-function lighting model using ``gl_LightSource`` and
+``gl_FrontMaterial``, which exist only in the compatibility profile. The
+engine does not load them; its lit shader is ``vrml97_lighting.*``.

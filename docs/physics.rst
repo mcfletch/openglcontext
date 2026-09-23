@@ -3,25 +3,53 @@ Physics & Collision
 
 .. rst-class:: introduction
 
-OpenGLContext ships a small, fast, game-style rigid-body physics engine that
-runs in real time *alongside* the scenegraph. It integrates gravity and drag,
-resolves collisions between primitives and meshes, supports triggers, gravity
-zones and joints, and drives a first-person character controller — all while
-the render tree, culling, shadows and picking stay untouched. The data model
-is **not** a private format: it is the `OMI glTF physics extension family
-<https://github.com/omigroup/gltf-extensions>`__, so real Godot/Blender
-physics assets import with no translation layer and your scenes round-trip
-back out to glTF. The indented technical notes point at the code.
+OpenGLContext simulates rigid bodies in real time beside the scenegraph. The
+simulation applies gravity and drag, resolves collisions between primitive
+shapes and meshes, and supports triggers, gravity zones and joints. A
+first-person character controller walks on the same collision world. The
+render tree, culling, shadows and picking work the same with or without it.
+
+The simulation itself is the ``omi_physics`` package, a dependency of
+OpenGLContext. OpenGLContext adds the scenegraph binding, walking for any
+context, colliders for streamed worlds, and a debug overlay. The data model is
+the `OMI glTF physics extension family
+<https://github.com/omigroup/gltf-extensions>`__, so physics authored in Godot
+or Blender imports without conversion, and a scene exports back to glTF. The
+indented technical notes point at the code.
+
+.. _physics-authoring:
+
+Adding physics to a scene
+-------------------------
+
+The demos build their scenes with ``OpenGLContext.physics.demo.DemoScene``.
+Each ``add_*`` call creates a scenegraph ``Transform`` and a ``PhysicsBody``
+that the world moves:
+
+.. code-block:: python
+
+   from OpenGLContext.physics.demo import DemoScene
+   scene = DemoScene()                       # default gravity 9.81 down
+   scene.add_box(size=(20,1,20), position=(0,-0.5,0), dynamic=False)  # floor
+   ball = scene.add_sphere(radius=0.5, position=(0,6,0), material='rubber')
+   # each frame:
+   scene.advance(dt)                         # steps the world, writes back Transforms
+
+A ``PhysicsBody`` binds an OMI ``motion`` and ``collider`` to a ``Transform``.
+The world writes the transform while the body is dynamic and awake. While the
+body sleeps or is kinematic, the world leaves the transform alone.
+
+The :doc:`Add physics to a scene <tutorials/physics_getting_started>` tutorial
+builds a scene like this step by step.
 
 .. _model:
 
-The data model is OMI glTF physics
-----------------------------------
+Data model: OMI glTF physics
+----------------------------
 
-Every concept in the engine is an OMI concept. Rather than invent a
-``RigidBody`` node and map it onto glTF at the loader, the OMI schema *is* the
-in-memory model — the loader, the nodes and the simulation all speak the same
-structure.
+Every concept in the engine is an OMI concept. The OMI schema is the in-memory
+model: there is no separate ``RigidBody`` node mapped onto glTF at load time.
+The loader, the nodes and the simulation all use the same structures.
 
 .. list-table::
    :widths: auto
@@ -43,229 +71,114 @@ structure.
      - limits + drives between bodies
      - ``model.Joint``, ``joints.*``
 
+An object's physical properties are OMI motion fields. An immovable body, such
+as the ground, is ``type:"static"``. Weight is ``mass × |g|``. The centre of
+gravity is ``centerOfMass``.
+
 .. rst-class:: technical
 
-The structures live in ``omi_physics/model.py`` with the OMI spec defaults.
-The reader/writer is ``omi_physics/omi_gltf.py``; ``load_document()`` parses a
-glTF's extension blocks into these structures and ``export_extensions()``
-writes them back — a near-identity round-trip. A future
-``KHR_physics_rigid_bodies`` reader drops onto the *same* structures.
-
-**Object characteristics** are just OMI motion fields: an immobile Earth is
-``type:"static"``; weight is ``mass × |g|``; the centre of gravity is
-``centerOfMass``.
+The structures are in ``omi_physics/model.py``, with the OMI specification's
+defaults. The reader and writer are in ``omi_physics/omi_gltf.py``:
+``load_document()`` parses a glTF's extension blocks into these structures, and
+``export_extensions()`` writes them back, so a load followed by an export
+gives nearly the same document. ``KHR_physics_rigid_bodies`` is not read.
 
 .. _engine:
 
 How the simulation runs
 -----------------------
 
-The engine follows the standard real-time recipe (Catto/Box2D, Gaffer's *Fix
-Your Timestep*):
+The engine uses the standard real-time methods (Catto's Box2D, and Gaffer on
+Games' *Fix Your Timestep*):
 
-- **Semi-implicit (symplectic) Euler** integration — energy-stable at trivial
+- Integration - semi-implicit (symplectic) Euler, which stays stable at low
   cost.
 
-- **Fixed timestep with an accumulator** decoupled from render fps; the render
-  pose interpolates the last two states, so motion is smooth and deterministic.
+- Timestep - fixed, with an accumulator, independent of the render frame rate.
+  The rendered pose interpolates between the last two states, so motion is
+  smooth and deterministic.
 
-- **Broad phase**: a dynamic AABB tree with fattened boxes, filtered by
-  collision groups, culls the O(N²) pair explosion.
+- Broad phase - a dynamic AABB tree of enlarged boxes, filtered by collision
+  groups, removes most of the O(N²) candidate pairs.
 
-- **Narrow phase**: analytic tests for primitive pairs; **GJK + EPA** for
-  convex↔convex and convex↔triangle (dynamic-vs-static mesh).
+- Narrow phase - analytic tests for pairs of primitives, and GJK with EPA for
+  convex against convex and convex against triangle (a moving body against a
+  static mesh).
 
-- **Solver**: sequential impulses (projected Gauss-Seidel) with warm starting
-  and split-impulse position correction; restitution and Coulomb friction
-  combine per the OMI material modes. Contacts partition into **islands**;
-  settled bodies **sleep**.
-
-.. rst-class:: technical
-
-State lives in a flat structure-of-arrays (``world.py``) beside the tree,
-synced to ``Transform`` nodes only at step boundaries. The per-stage kernels
-sit behind a ``backend.py`` seam with two implementations: ``NumpyBackend``
-(vectorized CPU) and ``GLComputeBackend`` (``glcompute.py``), which runs the
-per-body force and position integration as GL 4.3 compute shaders over the
-same columnar arrays — fused into one dispatch when a step has no collision or
-joints, so the intermediate velocity never leaves the GPU. It is ~2.4× faster
-than numpy at 10:sup:`5` movers.
+- Solver - sequential impulses (projected Gauss-Seidel) with warm starting and
+  split-impulse position correction. Restitution and Coulomb friction combine
+  according to the OMI material modes. Contacts are grouped into islands, and
+  bodies that have come to rest sleep.
 
 .. rst-class:: technical
 
-The default ``auto`` policy runs on numpy and hands off to the GPU only once
-the awake-body count crosses ``gpu_threshold`` (10k) — below that, numpy wins
-because transfer overhead outweighs the tiny per-body integrate — with
-hysteresis on the way back down and a numpy fallback where GL 4.3 compute is
-absent. ``OPENGLCONTEXT_PHYSICS_BACKEND=numpy|gpu|auto`` overrides. The GPU
-computes in float32, so trajectories match the CPU backend within tolerance
-rather than bit-for-bit. The broad phase, narrow phase, and solver still run
-on the CPU; a full GPU-resident loop (LBVH broad phase, graph-colored/XPBD
-solver) is the next step. ``tests/physics_stress.py`` toggles backends live
-with the ``b`` key.
+Simulation state is a flat structure of arrays (``world.py``), kept beside the
+scenegraph and copied to the ``Transform`` nodes only between steps. The
+per-stage kernels run through ``backend.py``, which has two implementations:
+``NumpyBackend`` (vectorised, on the CPU) and ``GLComputeBackend``
+(``glcompute.py``). The GPU backend runs the per-body force and position
+integration as GL 4.3 compute shaders over the same arrays. When a step has no
+collisions and no joints, both stages run in one dispatch and the intermediate
+velocity stays on the GPU. At 10\ :sup:`5` moving bodies it is about 2.4×
+faster than numpy.
 
-.. _physics-authoring:
+.. rst-class:: technical
 
-Adding physics to a scene
--------------------------
-
-The demos build scenes with the ``physics.demo.DemoScene`` helper, which
-mirrors a scenegraph ``Transform`` with a ``PhysicsBody`` the world drives:
-
-.. code-block:: python
-
-   from OpenGLContext.physics.demo import DemoScene
-   scene = DemoScene()                       # default gravity 9.81 down
-   scene.add_box(size=(20,1,20), position=(0,-0.5,0), dynamic=False)  # floor
-   ball = scene.add_sphere(radius=0.5, position=(0,6,0), material='rubber')
-   # each frame:
-   scene.advance(dt)                         # steps the world, writes back Transforms
-
-Under the hood a ``PhysicsBody`` binds an OMI ``motion``/``collider`` to a
-``Transform``; the world owns the transform while the body is a dynamic awake
-mover and hands it back when the body sleeps or is kinematic.
+The default policy, ``auto``, runs on numpy until the number of awake bodies
+reaches ``gpu_threshold`` (default 10 000), and then switches to the GPU. Below
+that count, the cost of transferring the data is larger than the per-body work
+it saves. The world switches back to numpy when the count falls below 80% of
+the threshold, and stays on numpy where GL 4.3 compute shaders are not
+available. Set ``OPENGLCONTEXT_PHYSICS_BACKEND`` to ``numpy``, ``gpu`` or
+``auto`` to override the policy. The GPU computes in float32, so its
+trajectories match the numpy backend within a tolerance, not bit for bit. The
+broad phase, narrow phase and solver run on the CPU with either backend. In
+``tests/physics_stress.py``, the ``b`` key switches backends while the demo
+runs.
 
 .. _cooking:
 
 Cooking collision shapes from a mesh
 ------------------------------------
 
-Most authored geometry has no hand-made collider, so ``cookery.cook_shape()``
-derives one from an arbitrary vertex array: a best-fit ``primitive``, a
-``convex`` hull (default for movers), a ``decompose`` compound of convex
-pieces for concave movers, or a ``trimesh`` triangle-soup (default for static
-world geometry). The ``physics-cook`` CLI bakes these into a glTF so import is
-free.
+Most authored geometry has no collider of its own.
+``omi_physics.cookery.cook_shape()`` makes one from a vertex array, using one
+of these strategies:
+
+- ``primitive`` - the best-fitting box or sphere.
+- ``convex`` - the convex hull.
+- ``decompose`` - a compound of convex pieces, for concave moving bodies.
+- ``trimesh`` - the triangles themselves, for static world geometry.
+- ``auto`` (the default) - ``trimesh`` for static geometry and ``convex`` for
+  moving bodies, changing to ``decompose`` when a moving body is very concave.
+
+To add colliders to a glTF file ahead of time, run the ``physics-cook`` tool:
+
+.. code-block:: bash
+
+   python -m OpenGLContext.bin.physics_cook scene.gltf -o cooked.gltf
+
+It gives every mesh node that has no physics body an ``OMI_physics_shape`` and
+an ``OMI_physics_body``: a static ``trimesh`` by default, or a ``convex`` body
+with ``--motion dynamic``. It works on ``.gltf`` JSON documents and leaves nodes
+that already have a body unchanged. Without ``-o`` it overwrites the input.
 
 .. rst-class:: technical
 
-Convex hulls and approximate convex decomposition are in ``hull.py`` (no scipy
-dependency); results cache on the vertex array. The ``physics_cook_view.py``
-demo overlays the cooked proxy on the render mesh so you can see the fit.
-
-.. _streamed:
-
-.. _roadcolliders:
-
-Colliding with a world that streams
------------------------------------
-
-A streamed world's geometry is *level-of-detail* geometry: the same ground at
-whatever resolution the streamer picked for the distance it is at, and that
-resolution changes as a camera moves. Turning it into colliders is fine for a
-walker and wrong for anything fast, because two resolutions of one curve are
-the better part of a metre apart and the surface *steps* under the wheels
-every time the streamer refines — which at racing speed is indistinguishable
-from hitting a wall in the middle of an open road.
-
-Two things follow, and both are about building the collider from *the thing*
-rather than from a drawing of it.
-
-**The set of colliders is the set of drawn tiles.** A streamer keeps tiles it
-is not drawing — a coarse parent so it can be shown again the moment the
-camera pulls back, siblings until the budget wants their space — and left in
-the physics world they are a second surface under everything.
-``TerrainColliders.on_drawn`` is wired to the runtime's ``on_drawn`` hook and
-holds exactly what is on screen.
-
-**What a vehicle drives on is built from the road, not the tile.** A road is a
-centreline and a cross-section, and a baked world carries both in its
-:doc:`tileset extras <roads>`. ``OpenGLContext.physics.road.RoadColliders``
-sweeps them into one surface at one resolution, cut into chunks and held near
-the car:
-
-.. code-block:: python
-
-   from OpenGLContext.physics.road import RoadColliders
-   road = RoadColliders(physics_world, course.centreline, course.road_profile(),
-                        closed=True, bank=course.bank)
-   road.update(car_position)                # once a frame
-
-``bank`` is the road's lean at each centreline point, which a baked world
-writes beside the line (:ref:`banked corners <banking>`). It is not optional
-decoration: a flat collider under a superelevated road is a surface the car
-falls through on the inside of every corner and stands on the outside of.
-
-**The chunks are cut out of one road, not built as separate ones.** The frames
-are swept once for the whole centreline and each chunk takes its own slice
-(:ref:`circuits, and roads built a stretch at a time <circuits>`), so two
-neighbouring chunks meet exactly and the ring they share is the same ring.
-``closed=True`` says the road is a circuit, which is what makes the seam the
-same as anywhere else on it — worth having where a start line is, since a
-circuit's is usually right there.
-
-**And a deck needs its edge.** Beside a bridge or a causeway there is nothing
-but the thing it was built to cross, so ``barriers`` takes the stretches that
-are carried — as ``(from, to)`` metres along the centreline, which is how a
-baked world writes them — and puts a wall along both edges of each:
-
-.. code-block:: python
-
-   road = RoadColliders(physics_world, course.centreline, course.road_profile(),
-                        closed=True, bank=course.bank, barriers=course.edges())
-
-The structure is *drawn* with a barrier for exactly this reason, and one that
-is drawn and not collided with keeps nothing on anything: the car goes through
-the railing and off the deck. The collider's wall is the drawn barrier's
-footprint carried to its full height
-(``OpenGLContext.scenegraph.roadworks.barrier_wall``) — solid, because what
-the holes in a railing are for is seeing through, not driving through. A
-*bore* is carried too and gets none: what is beside a tunnel is the hillside
-it is driven through.
-
-Its sibling :ref:`HeightFieldColliders <fieldphysics>` does the same for
-ground carried as a field. Between them a game can turn tile colliders off
-entirely, which is what ``glisteel`` does.
-
-.. _physics-props:
-
-Things standing in the world
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-**Everything else standing in the world is collided the same way.** A boulder
-on the verge is drawn from a tile and must not be *collided* from one, or it
-is a rock the car drives through at the moment the tile behind it swaps.
-``OpenGLContext.physics.props.PropColliders`` reads the :ref:`prop records
-<roads-props>` a baked world carries and stands up the ones within reach,
-taking down the ones behind — a world's boulders are hundreds of bodies and
-the broadphase pays for every one it holds:
-
-.. code-block:: python
-
-   from OpenGLContext.physics.props import PropColliders
-   obstacles = PropColliders(physics_world, world.props)
-   obstacles.update(car_position)           # once a frame
-
-A prop's body is the shape the prop says it is, at the size it says it takes
-up, rather than the mesh it is drawn as: a triangle soup per rock costs the
-broadphase and the narrow phase both for a difference nobody driving past at
-forty metres a second can see. ``Prop.shape`` picks between the two:
-
-- ``box`` — a thing that stops you: a boulder, a barrier, a broken-down car.
-  What a car needs from one is that there is no way through.
-
-- ``dome`` — a thing you go *over*: a stone lying in the grass, which is part of
-  the ground rather than an obstacle in it. A sphere as wide as the stone, sunk
-  until its top stands where the stone's does, so a wheel rides over it and a
-  walker steps onto it. The same stone as a block is a kerb across the hillside.
-
-A world's loose stone is thousands of domes where its boulders are hundreds of
-boxes, and the two want different reaches — a boulder has to stop a car from a
-long way off, a stone only has to be there where the wheel is. So they are two
-``PropColliders`` over two tables rather than one over a merged one.
+Convex hulls and approximate convex decomposition are in ``hull.py`` and do
+not need scipy. Results are cached per vertex array. The
+``physics_cook_view.py`` demo draws the cooked collider over the render mesh
+so you can compare the fit.
 
 .. _walking:
 
 Walking any scene
 -----------------
 
-Walking is a capability of **every interactive context**, not something a
-particular viewer implements.
-``OpenGLContext.move.physicswalk.PhysicsWalkMixin`` is mixed into
-``ViewPlatformMixin``, so any context that has a camera can be asked to hand
-it to an avatar instead. It costs nothing until it is asked for: every physics
-import is inside a method, so a context that never enables it never imports
-the physics package at all.
+Any interactive context can walk. ``OpenGLContext.move.physicswalk.PhysicsWalkMixin``
+is mixed into ``ViewPlatformMixin``, so any context with a camera can hand that
+camera to an avatar. Every physics import is inside a method, so a context
+that never turns walking on never imports the physics package.
 
 .. code-block:: python
 
@@ -274,14 +187,14 @@ the physics package at all.
            self.sg = load_my_world()
            self.setupPhysics( enable=True )    # binds 'g', and starts walking
 
-Two navigators want the camera and only one may have it. While walking, the
-avatar owns ``context.platform`` and the free-fly movement manager is unbound;
-switching back rebinds it where the avatar left the view standing. If both ran
-at once the camera would snap back on every key release.
+While walking, the avatar owns ``context.platform`` and the free-fly movement
+manager is unbound. Switching back rebinds the movement manager at the place
+the avatar left the view. Only one of the two drives the camera at a time; if
+both ran, the camera would jump back on every key release.
 
-It is a run-time toggle rather than a start-up choice on purpose: a viewpoint
-that drops the avatar inside geometry must never be a trap. Press :kbd:`g` to
-fly out, and :kbd:`g` again to resume walking from wherever you got to.
+Walking is switched at run time, not chosen at start-up, so that a viewpoint
+that puts the avatar inside geometry cannot trap the user. Press :kbd:`g` to
+fly out, and :kbd:`g` again to walk from wherever you are.
 
 .. list-table::
    :widths: auto
@@ -290,183 +203,186 @@ fly out, and :kbd:`g` again to resume walking from wherever you got to.
    * - Method
      - What it does
    * - ``setupPhysics( enable=False )``
-     - Make walking available; bind the toggle key; optionally start walking. Returns
-       whether it *is* walking — False when there was nothing walkable, which is not
-       an error.
+     - Makes walking available, binds the toggle key, and optionally starts
+       walking. Returns whether the avatar is walking. It returns False when
+       nothing in the scene is walkable; that is not an error.
    * - ``enablePhysics( on )``
-     - Switch between walking and free-fly, leaving the camera where it is.
+     - Switches between walking and free-fly, leaving the camera where it is.
    * - ``stepPhysics( dt=None )``
-     - Advance the avatar one frame and put the camera where it ended up. Call from
-       ``OnIdle``. ``dt`` defaults to wall-clock since the last step, clamped — a
-       stall is not a licence to teleport through a wall.
+     - Advances the avatar one frame and moves the camera to it. Call it from
+       ``OnIdle``. ``dt`` defaults to the wall-clock time since the last step,
+       clamped so that a stall cannot move the avatar through a wall.
    * - ``buildPhysicsWorld()``
-     - **The seam.** Returns ``(world, (lo, hi))``, or None if nothing is walkable.
-       The default cooks one static collision mesh from ``self.sg``; a context with a
-       world of its own — a terrain heightfield, a level format that ships its
-       collision — overrides this and never touches ``sg``.
+     - Returns ``(world, (lo, hi))``, or None if nothing is walkable. The
+       default cooks one static collision mesh from ``self.sg``. Override it
+       for a context that has its own collision world, such as a terrain height
+       field or a level format that ships its own collision; the override does
+       not need ``sg``.
    * - ``characterCapabilities( scale )``
-     - The avatar's size, and the speeds it starts with. Override to make it
-       something other than roughly a person. The :doc:`movement mode <navigation>`
-       in force retunes the walk, run, fly and swim speeds as it drives, so those are
-       what the mode says rather than what was set here; the proportions, the jump
-       and the crouch stay the body's.
+     - Returns the avatar's size and starting speeds. Override it for an avatar
+       that is not roughly a person. The active :doc:`movement mode
+       <navigation>` sets the walk, run, fly and swim speeds while it drives, so
+       the mode's values replace the speeds set here. The body's proportions,
+       jump and crouch stay as set here.
    * - ``spawnAvatar( lo, hi, caps, viewpoints )``
-     - Stand the avatar somewhere it can walk out of — see below.
+     - Places the avatar somewhere it can walk from. See
+       :ref:`physics-spawn`.
    * - ``moveAvatarToViewpoint( vp )``
-     - Put the avatar where a ``Viewpoint`` looks from, facing where it faces.
-       Safe-bound, and it starts *flying* if the viewpoint is aerial, since falling
-       out of the shot is not what asking for that view meant.
+     - Places the avatar at a ``Viewpoint``'s position, facing the same way,
+       with :ref:`safe placement <character>`. If the viewpoint is in the air,
+       the avatar starts flying, so it stays in the shot instead of falling.
    * - ``resolvePhysicsStep()``
-     - Correct the avatar's pose once the character has solved its own step, and
-       before the camera is taken from it — where a host whose ground is not in the
-       collision world puts it back on the ground. Empty by default.
+     - Called after the character has solved its step and before the camera
+       reads its pose. A host whose ground is not in the collision world
+       corrects the avatar's pose here, for example by putting it back on the
+       ground. Does nothing by default.
    * - ``getNavigationPlatform()``
-     - What the declared movement modes drive: the avatar while walking, the camera
-       otherwise.
+     - Returns what the declared movement modes drive: the avatar while
+       walking, the camera otherwise.
 
 .. _physics-heightfield:
 
 Ground that is not in the collision world
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A landscape is the case the seams above exist for.
-``OpenGLContext.move.terrainwalk.TerrainWalkMixin`` is the same capability
-with a different ground: the avatar, the declared modes and the keys are the
-ones every other program here uses, but the surface is a :ref:`HeightField
-<terrain-heightfield>` and the obstacles are a field of cylinders — both
-answered analytically. A four-kilometre landscape would be millions of
-triangles as a collision mesh, and asking a height field how high the ground
-is costs the same wherever you stand.
+``OpenGLContext.move.terrainwalk.TerrainWalkMixin`` is walking for a
+landscape. It uses the same avatar, movement modes and keys as any other
+walking context, but the ground is a :ref:`HeightField <terrain-heightfield>`
+and the obstacles are a field of cylinders (tree trunks). Both are tested
+analytically, not as meshes. A four-kilometre landscape would be millions of
+triangles as a collision mesh, while a height-field lookup costs the same
+anywhere on it.
 
-It fills in three of the seams and adds nothing to the frame loop:
-``buildPhysicsWorld()`` hands the character a world with nothing in it,
-``spawnAvatar()`` stands it on the ground under the camera the scene placed
-(every point of a height field is standable, so there is nothing to search
-for), and ``resolvePhysicsStep()`` lifts it to the surface and pushes it out
-of the trunks after each step. The surface is a *floor* rather than a rail, so
-a jump rises and an arrival from the air falls; trunks stop a walker and not a
-flier, since flying is noclip. ``oglc-forest`` is this, and so is anything
-else built on ``scenegraph.terrain``.
+It overrides three of the methods above and adds no work to the frame loop:
+
+- ``buildPhysicsWorld()`` gives the character an empty world.
+- ``spawnAvatar()`` stands the avatar on the ground below the camera the scene
+  placed. Every point of a height field can be stood on, so there is no
+  search.
+- ``resolvePhysicsStep()`` lifts the avatar to the surface and pushes it out
+  of the trunks after each step.
+
+The surface acts as a floor, not a rail: a jump rises, and an avatar arriving
+from the air falls onto it. Trunks stop a walker but not a flier, because
+flying has no collision. The ``oglc-forest`` demo uses this mixin, as does
+anything built on ``scenegraph.terrain`` (see :doc:`terrain`).
 
 The avatar is sized to the world
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A viewer opens anything from a bolt to a city, and neither a stride nor
-gravity means anything until they are in the same units as the model. The
-avatar is built at **1/40 of the world's longest side**
-(``physicsAvatarScale``), and the declared :doc:`movement modes <navigation>`
-are re-declared at that same scale by ``applyMovementModes()``, so a stride is
-in the same units as the model it is taken through.
+A viewer can open anything from a bolt to a city, so the avatar's stride and
+gravity have to be in the model's units. The avatar is **1/40 of the world's
+longest side** (``physicsAvatarScale()``). ``applyMovementModes()`` declares
+the :doc:`movement modes <navigation>` again at the same scale.
+
+.. _physics-spawn:
 
 Finding somewhere to stand
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The middle of a model is very often solid — a statue, thick walls, no floor at
-all. ``spawnAvatar()`` therefore samples: authored camera viewpoints first
-(they are curated open spots, and the first supplies the heading), then the
-footprint centre, then rings outwards. Each candidate is kept only if the
-avatar lands grounded and unstuck, and scored by how many of the four
-horizontal directions it has room to move into, preferring the most open and,
-among equals, the most central. A fully open spot is taken at once. If nothing
-is walkable anywhere, the avatar goes to the centre regardless — somewhere is
-better than nowhere, since flying out is one keypress and an unplaced avatar
-has no pose for the camera to take at all.
+The middle of a model is often solid: a statue, thick walls, or no floor at
+all. ``spawnAvatar()`` tries candidate positions in this order:
+
+#. The authored camera viewpoints. The first one also sets the heading.
+#. The centre of the model's footprint.
+#. Rings further and further out from the centre.
+
+It keeps a candidate only if the avatar lands on the ground without being
+stuck. Each kept candidate is scored by how many of the four horizontal
+directions have room to move. The most open spot wins, and among equals the
+most central. A fully open spot is taken at once. If no spot is walkable, the
+avatar goes to the centre anyway: the camera needs a pose, and the user can
+press :kbd:`g` to fly out.
 
 .. rst-class:: technical
 
-The clearance probe places the whole capsule an arm's length along each
-direction and depenetrates it, which catches a wall the avatar's centre line
-would miss. It is a placement test and not a swept move, so a barrier thinner
-than the capsule is transparent to it, and its reach is a fixed margin rather
-than one scaled to the avatar — on a small model it therefore reports "open"
-more readily than it should.
+The clearance test places the whole capsule an arm's length along each
+direction and pushes it out of any overlap. This finds walls that the
+avatar's centre line would miss. It is a placement test, not a swept move, so
+it does not detect a barrier thinner than the capsule. Its reach is a fixed
+distance, not scaled to the avatar, so on a small model it reports more
+directions as open than a scaled test would.
 
 .. _character:
 
-The character controller & safe binding
----------------------------------------
+The character controller
+------------------------
 
-Navigation uses a kinematic capsule with move-and-slide: tiered speed
-(walk/run/sprint/crouch), jump when grounded, fly/noclip, step-up over small
-ledges, and sliding on steep slopes — configured by a non-OMI
-``CharacterCapabilities`` node. Crucially, on every viewpoint bind it runs
-**safe placement**: depenetrate from any overlapping geometry, then snap the
-base onto the floor, so a camera authored low or inside a wall *never* leaves
-the user stuck in the ground. If no free space is found it enters fly rather
-than wedging.
+Walking uses a kinematic capsule with move-and-slide, configured by a
+``CharacterCapabilities`` record, which is not part of the OMI schema. It
+supports walk, run, sprint and crouch speeds, jumping when grounded,
+fly/noclip, stepping up small ledges, and sliding on steep slopes.
 
-A fall is caught however fast it arrives
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Each time a viewpoint is bound, the controller places the capsule safely: it
+pushes the capsule out of any geometry it overlaps, then snaps its base onto
+the floor. A camera authored low or inside a wall therefore never leaves the
+user stuck in the ground. If there is no free space, the controller switches
+to flying.
 
-Contact is **discrete**: each step places the capsule and then resolves
-whatever it overlaps. A step that carries the capsule clean past a floor
-leaves nothing overlapping, and nothing overlapping is nothing to be stopped
-by — a fall from three or four storeys does exactly that at any ordinary frame
-rate. So a frame is advanced in **pieces short enough that the capsule cannot
-cross its own extent** in one of them. The two axes get different allowances
-because the capsule is taller than it is wide, so an ordinary walk is not
-substepped at all while a fall is stepped finely for exactly as long as it is
-fast.
+Fast falls
+~~~~~~~~~~
 
-**How much work that can ever be is calculated, not chosen.**
-``CharacterCapabilities.terminalVelocity`` (55 m/s by default, about what a
-person reaches) caps the fall, and the ceiling on substeps follows from it:
-whatever the capsule is allowed to reach is what the stepping is sized for, so
-the two cannot drift apart. A fixed ceiling is a number nobody can check —
-raise the fall speed past what it allows and a step outruns collision again,
-silently and only at speed. Setting ``terminalVelocity`` to 0 lets a fall
-accelerate without limit and gives up the guarantee along with it;
-``max_substeps()`` reports that rather than returning a reassuring number.
+Contact is **discrete**. Each step moves the capsule, then resolves whatever
+it overlaps. If one step carries the capsule completely past a floor, nothing
+overlaps and nothing stops it. A fall of three or four storeys does this at
+ordinary frame rates.
 
-The other half is which way a contact pushes. Depth against a triangle is
-**how far the capsule reaches past the face**, resolved to the side the
-capsule is on — not the distance to the nearest point on it. Measuring the
-nearest point looks right while the capsule is barely touching and is exactly
-wrong once it is not: a hard landing puts the lower cap below the floor, that
-cap is then the nearest, and pushing toward it drives the character down
-through the surface it just hit while reporting no ground. The side is taken
-from the capsule rather than from the triangle's winding, because a triangle
-soup does not promise one — and taking it from the capsule is also what makes
-a ceiling push down.
+The controller therefore splits each frame into substeps short enough that
+the capsule cannot move further than its own size in one of them. Horizontal
+and vertical movement have separate limits, because the capsule is taller
+than it is wide. An ordinary walk needs no substeps; a fast fall takes small
+steps for as long as it is fast.
 
-Speed is along the ground, not along the horizon
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``CharacterCapabilities.terminalVelocity`` caps the fall speed. The default is
+55 m/s, about the terminal velocity of a falling person. The largest number
+of substeps is computed from this cap, so raising the cap raises the substep
+limit with it. Setting ``terminalVelocity`` to 0 removes the cap and the
+guarantee: the fall accelerates without limit, and ``max_substeps()`` returns
+``sys.maxsize`` to say the count is unbounded.
 
-The move direction is **projected onto the surface underfoot** before it is
-used, so a run up a ramp covers the same metres per second as a run along the
-flat and the climb is the vertical part of that. Moving horizontally instead
-makes the capsule penetrate the slope and be pushed back out along its normal,
-whose horizontal component opposes the motion, so the pace falls away as the
-ramp steepens — a walkable ramp then feels like wading. The step-down snap
-that keeps the capsule on the surface is likewise applied *vertically only*,
-since the seating that finds it also travels along the normal and would drag
-the capsule back downhill on every step of a climb.
+Contact against a triangle pushes the capsule out by **how far it reaches past
+the triangle's face**, towards the side the capsule is on. The push is not
+measured to the nearest point on the triangle. After a hard landing the lower
+cap can be below the floor, and a push towards the nearest point would drive
+the character down through the floor it hit, with no ground reported. The
+side is taken from the capsule's position, not from the triangle's winding,
+because a triangle soup has no consistent winding. The same rule makes a
+ceiling push the capsule down.
 
-What counts as ground is ``maxSlope``, everywhere. Standing, seating, and
-stepping up all ask the same question, so a face too steep to walk cannot be
-stood on, snapped onto, or stepped up — without which a cliff is climbable one
-``stepHeight`` at a time by anything moving fast enough.
+Slopes and steps
+~~~~~~~~~~~~~~~~
 
-**A step is mounted in one motion, and owes back the difference.** Getting
-onto a step means moving the capsule's *centre* past the edge — about a
-radius, and it has to happen in one go, because a capsule stopped against the
-riser is a radius behind it and a shorter probe never reaches over. That
-single motion is further than a frame of running covers, so a staircase taken
-one step per frame is climbed faster than the same distance on the flat, and
-faster still the better the frame rate. What a step advanced beyond its
-frame's due is therefore recorded and taken back out of the frames that
-follow, a little at a time so the capsule never stalls: stairs are climbed at
-running pace, whatever the frame rate.
+The move direction is **projected onto the ground surface** before it is
+applied. A run up a ramp therefore covers the same distance per second as a
+run on the flat, and the climb is the vertical part of that distance. A
+horizontal move would push the capsule into the slope, and the slope would
+push it back out along its normal, against the motion; steep but walkable
+ramps would slow the character down. The step-down snap that keeps the capsule
+on the ground moves it only vertically. A snap along the normal would drag the
+capsule downhill on every step of a climb.
 
-Jump fires when the player meant it
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``maxSlope`` (default 50 degrees) decides what counts as ground. Standing,
+snapping to the ground and stepping up all use it, so a face too steep to walk
+on cannot be stood on, snapped onto or stepped onto. This stops a fast
+character climbing a cliff one ``stepHeight`` at a time.
 
-A jump refused because ``grounded`` happened to be false on that one frame is
-the commonest complaint about a first-person controller, and it is worst where
-it is most noticed: running. A capsule at speed over a step, a ramp lip or a
-seam between two colliders leaves the ground for a frame or two at a time, and
-every press landing in one of those frames is swallowed with no feedback at
-all. Two windows fix it, both in seconds so they hold at any frame rate:
+To mount a step, the capsule's centre has to move past the edge, about one
+radius, in a single motion; a shorter move leaves it stopped against the
+riser. One such motion is further than a frame of running covers, so without
+correction a staircase would be climbed faster than the same distance on the
+flat, and faster at higher frame rates. The controller records how far a step
+moved the capsule beyond its frame's share, and takes that distance back from
+the following frames a little at a time, so the capsule never stalls. Stairs
+are climbed at running speed at any frame rate.
+
+Jumping
+~~~~~~~
+
+A capsule running over a step, the lip of a ramp or a seam between two
+colliders leaves the ground for a frame or two. A jump pressed during one of
+those frames would be refused, with no feedback to the player. Two time
+windows accept those presses. Both are in seconds, so they behave the same at
+any frame rate:
 
 .. list-table::
    :widths: auto
@@ -477,51 +393,172 @@ all. Two windows fix it, both in seconds so they hold at any frame rate:
      - What it does
    * - ``coyoteTime``
      - 0.12 s
-     - A jump is still allowed for this long after walking off something.
+     - A jump is still allowed for this long after walking off an edge.
    * - ``jumpBuffer``
      - 0.12 s
-     - A jump asked for this soon before landing fires on landing rather than being
-       dropped.
+     - A jump pressed this long or less before landing happens on landing.
 
-Both forgive *falling*, never jumping: a capsule that left the ground under
-its own power has no coyote time, so there is no free double jump, and a
-buffered press is spent once. Set either to 0 to switch it off. A refusal on
-any other ground — crouching, ``canJump`` off — is a refusal rather than a
-delay, and is not buffered.
+Both apply only after the capsule has walked or fallen off something. A
+capsule that left the ground by jumping has no coyote time, so there is no
+extra double jump, and a buffered press is used once. Set either value to 0 to
+turn it off. A jump refused for any other reason, such as crouching or
+``canJump`` being off, is not buffered.
 
-**A rising capsule is never grounded**, whatever is beneath it. When nothing
-touched the capsule during a step it looks ``GROUND_PROBE`` (5 cm) below
-itself for floor, which is what keeps a walker attached over the small gaps a
-step opens. One frame after a jump the capsule has climbed only ``vy × dt``,
-and on a fast machine that is *less* than the probe reaches — so the launch is
-snapped straight back down and its velocity zeroed in the frame it started.
-The faster the machine the more jumps vanish, and because frame times vary it
-takes some presses and not others. The capsule also still touches the floor it
-is leaving, so the contact test says "ground" as well; neither answer applies
-to something on its way up.
+**A rising capsule is never grounded**, whatever is below it. When nothing
+touched the capsule during a step, the controller looks ``GROUND_PROBE`` (5 cm)
+below it for a floor; this keeps a walker on the ground over small gaps. In
+the first frame after a jump, the capsule has risen only ``vy × dt``, and at a
+high frame rate that is less than the probe distance. The probe would find the
+floor, snap the capsule back down and zero its velocity, and whether a jump
+worked would depend on the frame time. The capsule is also still touching the
+floor it is leaving. The controller ignores both tests while the capsule is
+moving upward.
 
 .. rst-class:: technical
 
-``character.py`` holds the controller; ``move/physicsplatform.py``'s
-``PhysicsViewPlatform`` drives a context camera from it. See the
+The controller is ``omi_physics/character.py``. ``PhysicsViewPlatform`` in
+``move/physicsplatform.py`` drives a context's camera from it. See the
 ``physics_navigate.py`` demo.
+
+.. _streamed:
+
+.. _roadcolliders:
+
+Colliding with a world that streams
+-----------------------------------
+
+A :doc:`streamed world <tiles3d>` draws level-of-detail geometry. The streamer
+chooses each tile's resolution from its distance to the camera, and changes it
+as the camera moves. Colliders built from those tiles are good enough for a
+walker, but not for a fast vehicle. Two resolutions of the same curve can
+differ by most of a metre, so the surface steps under the wheels each time the
+streamer refines a tile. At racing speed that is like hitting a wall in the
+middle of an open road.
+
+So colliders are built from what is in the world, not from its tiles: only
+drawn tiles get colliders, and roads and props get colliders of their own.
+
+Tile colliders
+~~~~~~~~~~~~~~
+
+A streamer keeps some tiles that it is not drawing: a coarse parent, so it can
+show it again when the camera pulls back, and siblings until the memory budget
+needs their space. Left in the physics world, those tiles form a second
+surface under the drawn one.
+``OpenGLContext.loaders.tiles3d.physics_colliders.TerrainColliders`` connects
+its ``on_drawn`` method to the runtime's ``on_drawn`` hook and holds colliders
+for exactly the tiles on screen.
+
+Road colliders
+~~~~~~~~~~~~~~
+
+A road is a centreline and a cross-section, and a baked world stores both in
+its :doc:`tileset extras <roads>`.
+``OpenGLContext.physics.road.RoadColliders`` sweeps them into one surface at
+one resolution, cuts it into chunks, and keeps the chunks near the car in the
+physics world:
+
+.. code-block:: python
+
+   from OpenGLContext.physics.road import RoadColliders
+   road = RoadColliders(physics_world, course.centreline, course.road_profile(),
+                        closed=True, bank=course.bank)
+   road.update(car_position)                # once a frame
+
+Chunks are 120 m long (``chunk``), and those within 260 m along the road on
+either side of the car are kept (``reach``).
+
+``bank`` is the road's lean at each centreline point, as a fraction. A baked
+world writes it beside the centreline (:ref:`banked corners <banking>`). Pass
+it for any banked road: a flat collider under a banked road puts the car
+through the surface on the inside of every corner and above it on the
+outside. ``widening`` gives the extra carriageway width at each point, in
+metres, for stretches built wider than the rest of the road.
+
+The chunks are cut from one road. The frames are swept once for the whole
+centreline and each chunk takes its own slice (:ref:`circuits, and roads built
+a stretch at a time <circuits>`), so neighbouring chunks meet exactly and
+share the same ring of vertices. ``closed=True`` says the road is a circuit,
+so the seam between the last point and the first is joined like any other.
+That matters on a race circuit, where the start line is usually at that seam.
+
+Barriers on bridges
+~~~~~~~~~~~~~~~~~~~
+
+A bridge deck or a causeway has nothing beside it but what it crosses.
+``barriers`` takes the stretches of road that are carried, as ``(from, to)``
+distances in metres along the centreline (the form a baked world writes
+them in), and puts a wall along both edges of each:
+
+.. code-block:: python
+
+   road = RoadColliders(physics_world, course.centreline, course.road_profile(),
+                        closed=True, bank=course.bank, barriers=course.edges())
+
+The drawn structure has a barrier at these edges. Without a matching collider,
+the car goes through the railing and off the deck. The collider wall is the
+drawn barrier's footprint, extended to the barrier's full height
+(``OpenGLContext.scenegraph.roadworks.barrier_wall``). It is solid: the gaps in
+a railing are there to see through, not to drive through. Leave bores
+(tunnels) out of ``barriers``; a tunnel has hillside on both sides.
+
+:ref:`HeightFieldColliders <fieldphysics>` does the same job for ground stored
+as a height field. With road colliders and height-field colliders, a game can
+turn tile colliders off entirely, as ``glisteel`` does.
+
+.. _physics-props:
+
+Props
+~~~~~
+
+A boulder beside the road is drawn from a tile, but its collider must not
+come from the tile, or the car drives through the rock when the tile behind
+it changes resolution. ``OpenGLContext.physics.props.PropColliders`` reads the
+:ref:`prop records <roads-props>` a baked world carries. It adds colliders for
+the props within reach (default 220 m) and removes the ones out of reach. A
+world has hundreds of boulders, and the broad phase pays for every body it
+holds.
+
+.. code-block:: python
+
+   from OpenGLContext.physics.props import PropColliders
+   obstacles = PropColliders(physics_world, world.props)
+   obstacles.update(car_position)           # once a frame
+
+A prop's collider is the simple shape its record names, at the size the
+record gives, not its render mesh. A triangle mesh per rock would cost both
+the broad phase and the narrow phase, for a difference nobody driving past at
+forty metres a second can see. ``Prop.shape`` is one of:
+
+- ``box`` - an obstacle: a boulder, a barrier, a broken-down car. The car
+  cannot pass through it.
+
+- ``dome`` - something to drive or walk over, such as a stone lying in the
+  grass. The collider is a sphere as wide as the stone, sunk until its top is
+  level with the stone's top, so a wheel rides over it and a walker steps onto
+  it. As a box, the same stone would be a kerb across the hillside.
+
+A world typically has thousands of stones and hundreds of boulders, and they
+need different reaches: a boulder must stop a car from a long way off, while a
+stone only matters under the wheel. Use two ``PropColliders``, one for each
+table, each with its own ``reach``.
 
 .. _physics-debug:
 
 The debug overlay
 -----------------
 
-Physics bugs are visual, so a wireframe overlay draws, per a bit-flag mask:
-collision **proxies**, broad-phase **AABBs**, **contact** points and normals,
-**joint** connections, and — to make motion legible — per-body **velocity**,
-**acceleration**, and **angular-velocity** vectors. The spin vectors are drawn
-at the body's corners so opposite corners point opposite ways, making rotation
-visible at a glance. Sleeping bodies are colour-coded.
+``OpenGLContext.physics.debugdraw.PhysicsDebugDraw`` draws the simulation as a
+wireframe overlay. A bit-flag mask selects what it draws: collision proxies,
+broad-phase AABBs, contact points and normals, joint connections, and each
+body's velocity, acceleration and angular-velocity vectors. Angular velocity
+is drawn at the body's corners, so opposite corners point opposite ways and
+the rotation is easy to see. Sleeping bodies are drawn in a different colour.
 
 .. rst-class:: technical
 
-``debugdraw.PhysicsDebugDraw`` builds an ``IndexedLineSet`` (per-vertex
-colour) each frame, so it renders in both the legacy and core profiles. Flags:
+``PhysicsDebugDraw`` builds an ``IndexedLineSet`` with per-vertex colour each
+frame, so it renders in both the legacy and the core profile. Flags:
 ``PROXIES | AABBS | CONTACTS | VELOCITY | ACCELERATION | ANGULAR | SLEEP |
 JOINTS``.
 
@@ -530,28 +567,37 @@ JOINTS``.
 Demos
 -----
 
-Every feature ships a runnable demo in ``tests/`` that doubles as its
-visual-regression test (auto-exit + screenshot capture):
+Each demo is a script in ``tests/``. The test suite also runs each one as a
+visual-regression test: it exits after a set number of frames, captures the
+frame, and compares it with a reference image.
 
-- ``physics_room_drop.py`` — objects fall into a room and stack; the core engine
-  + debug overlay.
+- :doc:`physics_room_drop.py <tutorials/physics_room_drop>` - objects fall
+  into a room and stack; the core engine and the debug overlay.
 
-- ``physics_bounce.py`` — a row of balls, restitution 0…1.
+- :doc:`physics_bounce.py <tutorials/physics_bounce>` - a row of balls with
+  restitution from 0 to 1.
 
-- ``physics_friction.py`` — boxes on ramps; the slide threshold.
+- :doc:`physics_friction.py <tutorials/physics_friction>` - boxes on ramps,
+  showing the friction at which they start to slide.
 
-- ``physics_gravity_zones.py`` — a point-gravity planet.
+- :doc:`physics_gravity_zones.py <tutorials/physics_gravity_zones>` - a planet
+  with point gravity.
 
-- ``physics_triggers.py`` — sensor volumes and events.
+- :doc:`physics_triggers.py <tutorials/physics_triggers>` - sensor volumes and
+  their events.
 
-- ``physics_joints.py`` — pendulum, chain and a motor.
+- :doc:`physics_joints.py <tutorials/physics_joints>` - a pendulum, a chain
+  and a motor.
 
-- ``physics_cook_view.py`` — cook a collider and compare it to the mesh.
+- :doc:`physics_cook_view.py <tutorials/physics_cook_view>` - cooks a collider
+  and draws it over the mesh.
 
-- ``physics_navigate.py`` — first-person walk through walls, a doorway, stairs
-  and a ramp.
+- :doc:`physics_navigate.py <tutorials/physics_navigate>` - a first-person
+  walk past walls, through a doorway, and up stairs and a ramp.
 
-- ``physics_stress.py`` — scaling under load.
+- :doc:`physics_stress.py <tutorials/physics_stress>` - performance as the
+  number of bodies grows.
 
 The :doc:`Add physics to a scene <tutorials/physics_getting_started>` tutorial
-walks through building the first of these from scratch.
+builds the first of these from scratch. :doc:`navmesh` builds a navigation
+mesh from the same collision world.

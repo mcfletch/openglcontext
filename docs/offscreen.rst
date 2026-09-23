@@ -3,20 +3,19 @@ Rendering offscreen
 
 .. rst-class:: introduction
 
-A build machine has no screen, a rendering service has no user, and a batch
-job that turns ten thousand models into ten thousand thumbnails has no reason
-to open a window for any of them. An offscreen context renders without one: it
-takes a GPU directly, draws, and gives the pixels back. There is one per
-platform — ``OpenGLContext.eglcontext.EGLContext`` on Linux and
-``OpenGLContext.wglcontext.WGLContext`` on Windows — and they behave the same
-way.
+An offscreen context renders without a window. It creates a GL context
+directly on a GPU, draws, and returns the pixels. Use it on a build machine
+with no screen, in a rendering service, or in a batch job such as making
+thumbnails for thousands of models. There is one offscreen context class per
+platform: ``OpenGLContext.eglcontext.EGLContext`` on Linux and
+``OpenGLContext.wglcontext.WGLContext`` on Windows. Both behave the same way.
 
-A context like any other
-------------------------
+Using an offscreen context
+--------------------------
 
-It is an ordinary context, so the scenegraph, the render passes, the caches,
-the screenshot machinery, the :doc:`video recorder <recording>` and the event
-model all work unchanged:
+An offscreen context is an ordinary context. The scenegraph, the render
+passes, the caches, screenshots, the :doc:`video recorder <recording>` and
+the :doc:`event model <eventmodel>` all work as they do in a window:
 
 .. code-block:: python
 
@@ -32,10 +31,9 @@ model all work unchanged:
 
    Offscreen.ContextMainLoop(size=(640, 480))
 
-``MainLoop`` renders ``frameCount`` frames (one by default) and returns,
-rather than waiting for a user who is not there. An animation being rendered
-frame by frame sets it higher. The context is also a context manager, which is
-usually what a script wants:
+``MainLoop`` renders ``frameCount`` frames and returns. The default is one
+frame; set it higher to render an animation frame by frame. The context is
+also a context manager, which suits most scripts:
 
 .. code-block:: python
 
@@ -43,23 +41,20 @@ usually what a script wants:
        context.OnDraw(force=1)
        pixels = glReadPixels(0, 0, 640, 480, GL_RGB, GL_UNSIGNED_BYTE)
 
-Selecting it by name works too, so an application that already chooses its
-backend needs no code change:
+An application that already selects its backend by name needs no code
+change. Set the backend in the environment:
 
 .. code-block:: bash
 
    OPENGLCONTEXT_BACKEND=egl python my_application.py     # Linux
    OPENGLCONTEXT_BACKEND=wgl python my_application.py     # Windows
 
-Rendering goes to a pbuffer, which is a real default framebuffer. Every pass
-that draws to framebuffer zero, reads it back or takes a screenshot behaves
-exactly as it does on a window, and nothing has to know it is offscreen. A
-pbuffer has a fixed size, so ``OnResize`` builds a replacement and drops the
-old one; the GL context survives, and the textures, buffers and programs in it
-survive with it.
+The context renders into a pbuffer, which is a real default framebuffer.
+Passes that draw to framebuffer zero, read it back or take a screenshot work
+as they do on a window, with no offscreen-specific code.
 
-Which backend a platform has
-----------------------------
+Platform support
+----------------
 
 .. list-table::
    :widths: auto
@@ -67,37 +62,33 @@ Which backend a platform has
 
    * - Platform
      - Backend
-     - What it needs
+     - Requirements
    * - Linux
-     - ``egl`` — ``OpenGLContext.eglcontext``
-     - An EGL device. No display server, no compositor, no session.
+     - ``egl``: ``OpenGLContext.eglcontext``
+     - An EGL device. No display server, compositor or login session is
+       needed.
    * - Windows
-     - ``wgl`` — ``OpenGLContext.wglcontext``
-     - A display driver offering ``WGL_ARB_pbuffer``, and a window station with a
-       desktop — which a service in session 0 has. Nothing on screen, no compositor,
-       and no remote-desktop connection that stays open.
+     - ``wgl``: ``OpenGLContext.wglcontext``
+     - A display driver with ``WGL_ARB_pbuffer``, and a window station with a
+       desktop. A service in session 0 has both. Nothing needs to be on
+       screen, and no compositor or open remote-desktop connection is needed.
    * - macOS
-     - —
-     - CGL gives a windowless context (``OpenGL.CGL``) but no default framebuffer, so
-       there is no OpenGLContext backend on it yet. Use a hidden window.
+     - none
+     - CGL can create a windowless context (``OpenGL.CGL``) but provides no
+       default framebuffer, so OpenGLContext has no offscreen backend for
+       macOS. Use a hidden window.
 
-**Where there is none, a hidden window is the fallback.**
-``OPENGLCONTEXT_HIDDEN=1`` on any windowing backend renders and reads back
-identically, and is what :doc:`the test suite <testing>` uses by default. What
-a hidden window cannot do is run with no display server or no desktop at all,
-which is the thing these backends are for.
+On a platform without an offscreen backend, use a hidden window: set
+``OPENGLCONTEXT_HIDDEN=1`` with any windowing backend. A hidden window
+renders and reads back the same pixels, and :doc:`the test suite <testing>`
+uses one by default. A hidden window still needs a display server and a
+desktop; the offscreen backends do not.
 
-Where the platform cannot provide one, constructing the context raises
-``EGLContextError`` or ``WGLContextError`` rather than failing obscurely, so
-an application can try it and fall back. On Windows,
-``OpenGLContext.wglcontext.available()`` answers before anything is created,
-naming the extensions the driver lacks.
+Choosing the offscreen backend at run time
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Asking for whichever one is here
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Both backends are registered on every platform, so code that runs on more than
-one asks for the offscreen context rather than naming a class:
+Both backends are registered on every platform. Code that runs on several
+platforms can ask for the offscreen context type instead of naming a class:
 
 .. code-block:: python
 
@@ -108,19 +99,33 @@ one asks for the offscreen context rather than naming a class:
        ...                            # nothing here renders without a window
    context = offscreen(size=(1920, 1080))
 
-``None`` covers both ways of not having one: a platform with no backend, and a
-backend whose bindings will not load — an EGL with no library behind it, say.
-For the caller those are the same answer, and the decision after it is the
-same one. ``Context.getOffscreenBackendName()`` gives the name alone
-(``'egl'`` or ``'wgl'``) for a caller that wants to say which in a message,
-and takes a platform to ask about another machine.
+``getOffscreenContextType()`` returns ``None`` when the platform has no
+offscreen backend, and also when the backend's bindings fail to load (for
+example, EGL with no library installed). The caller handles both cases the
+same way. ``Context.getOffscreenBackendName()`` returns only the name,
+``'egl'`` or ``'wgl'``, for use in a message. Pass a platform name to either
+method to ask about another platform.
 
-Which GPU it renders on (EGL)
------------------------------
+When construction fails
+~~~~~~~~~~~~~~~~~~~~~~~
 
-A machine may offer several EGL devices — a GPU and a CPU rasteriser, or
+Constructing the context raises ``EGLContextError`` or ``WGLContextError``
+when the machine cannot provide one: no devices, no pixel format matching
+the requested buffers, no desktop GL, or a driver without pbuffers. Catch the
+error to fall back to something else. A failed construction releases
+everything it had acquired, so an application can retry with another device
+or a smaller request without leaking resources.
+
+On Windows, ``OpenGLContext.wglcontext.available()`` checks before creating
+anything. It returns the names of the extensions the driver lacks, or an
+empty sequence.
+
+Choosing a GPU (EGL)
+--------------------
+
+A machine may offer several EGL devices: a GPU and a CPU rasteriser, or
 several GPUs. By default the engine renders on the first hardware device.
-``OpenGL.EGL.devices`` reports what is there:
+``OpenGL.EGL.devices`` lists the devices:
 
 .. code-block:: python
 
@@ -130,7 +135,7 @@ several GPUs. By default the engine renders on the first hardware device.
    <DeviceInfo 0 radeonsi (hardware)>
    <DeviceInfo 1 <unnamed driver> (software)>
 
-Two things change the choice:
+Two settings change the choice:
 
 .. list-table::
    :widths: auto
@@ -139,52 +144,77 @@ Two things change the choice:
    * - Variable
      - Effect
    * - ``OPENGLCONTEXT_EGL_DEVICE``
-     - An index into that list, which overrides everything else. Use it to pin a run
-       to one GPU of several. An index that is out of range, or not a number, is an
-       error naming the variable rather than a silent fallback.
+     - An index into that list. It overrides everything else; use it to pin a
+       run to one of several GPUs. An index that is out of range or not a
+       number raises an error naming the variable.
    * - ``LIBGL_ALWAYS_SOFTWARE``, ``GALLIUM_DRIVER``
-     - When the environment asks for software rendering, a software device is chosen.
+     - When either requests software rendering, the engine picks a software
+       device.
 
-A request for software rendering is honoured because Mesa crashes
-otherwise: asking it for a display on a *hardware* device while
-``LIBGL_ALWAYS_SOFTWARE`` demands software is a contradiction it detects,
-warns about, and then segfaults on rather than refusing cleanly.
+The engine follows a software-rendering request because Mesa crashes
+otherwise. If ``LIBGL_ALWAYS_SOFTWARE`` is set and a display is opened on a
+*hardware* device, Mesa prints a warning and then segfaults.
 
-Where no device of the preferred kind exists, the first device is used and a
-warning says so: rendering on the other sort beats not rendering.
+If no device of the preferred kind exists, the engine uses the first device
+and logs a warning.
 
-One window, created and never shown (Windows)
----------------------------------------------
+The helper window (Windows)
+---------------------------
 
-Windows has no device enumeration to choose from and no windowless context
-call. The calls that build a pbuffer — ``wglChoosePixelFormatARB``,
-``wglCreatePbufferARB``, ``wglCreateContextAttribsARB`` — are extensions, and
-an extension entry point is resolved through a context that already exists, so
-there is a chicken and egg. The way out of it is a 1×1 ``WS_POPUP`` window,
-never shown and never given a message loop, used for nothing but resolving
-those entry points. ``OpenGL.WGL.offscreen`` makes one per process and the
-pbuffer outlives it.
+Windows has no device list to choose from and no call that creates a context
+without a window. The functions that create a pbuffer
+(``wglChoosePixelFormatARB``, ``wglCreatePbufferARB`` and
+``wglCreateContextAttribsARB``) are extensions, and extension entry points
+can only be looked up through an existing context. To get one,
+``OpenGL.WGL.offscreen`` creates a 1×1 ``WS_POPUP`` window per process. The
+window is never shown and has no message loop; it is used only to look up
+those entry points. The pbuffer outlives it.
 
-What that needs is a window station and a desktop; what it does not need is
-anything on screen. The pbuffer is the driver's own memory, so it survives a
-remote-desktop disconnect that would take a window with it —
-``context.surface.lost`` reports the one case where Windows discards what a
-pbuffer held, and the answer to that is to draw the frame again.
+This needs a window station and a desktop, but nothing on screen. The
+pbuffer lives in driver memory, so it survives a remote-desktop disconnect
+that would destroy a window. In the one case where Windows discards a
+pbuffer's contents, ``context.surface.lost`` is true; draw the frame again.
 
-The pbuffer is created on the display driver bound to the process, and the
-pixel format is required to be one the GPU draws.
-``OPENGLCONTEXT_WGL_ANY_ACCELERATION=1`` accepts one that does not call itself
-fully accelerated, which is what an unusual or virtualised adapter may need:
-rendering slowly beats refusing.
+The pbuffer is created on the display driver bound to the process, with a
+pixel format the GPU draws in hardware. Set
+``OPENGLCONTEXT_WGL_ANY_ACCELERATION=1`` to accept a pixel format that does
+not report full acceleration. An unusual or virtualised adapter may need
+this; it renders more slowly instead of failing.
 
-Driving a scene with no one at the keyboard
--------------------------------------------
+Finishing a frame
+-----------------
 
-An offscreen context is still an interactive one — it has the camera, the
-event managers and the time manager — but nothing outside it will ever deliver
-a keystroke or a click. A test that wants to know what happens when the user
-picks an object or walks forward supplies the events itself, through :doc:`the
-event model <eventmodel>`'s record vocabulary:
+A pbuffer has no display to present to, so ``SwapBuffers`` on an offscreen
+context is a flush. After it, the frame's commands have been issued to the
+driver, which a following readback, capture or video encode relies on. The
+passes call ``SwapBuffers`` where they would on a window.
+
+The flush is not done with ``eglSwapBuffers``. The EGL specification gives
+``eglSwapBuffers`` no effect on a surface that is not a back-buffered window,
+so on a pbuffer it returns ``EGL_TRUE`` and does nothing.
+
+The surface is single-buffered, so the finished frame is in the *front*
+buffer, not the back buffer. Every capture path in the engine calls
+``OpenGLContext.capture.presented_buffer`` to find the buffer the framebuffer
+has, rather than naming ``GL_BACK``. Reading a buffer the framebuffer does
+not have raises ``GL_INVALID_OPERATION``.
+
+Resizing
+--------
+
+A pbuffer has a fixed size. ``OnResize`` creates a new pbuffer with the same
+config or pixel format and releases the old one. The GL context is kept, so
+textures, buffers and programs remain. A width or height of zero or less
+raises an error.
+
+Driving a scene without user input
+----------------------------------
+
+An offscreen context has the camera, the event managers and the time
+manager of an interactive context, but nothing delivers key presses or
+clicks to it. To test what happens when a user picks an object or walks
+forward, create the events with ``OpenGLContext.events.synthetic``, using
+the record format of :doc:`the event model <eventmodel>`:
 
 .. code-block:: python
 
@@ -200,76 +230,40 @@ event model <eventmodel>`'s record vocabulary:
    })
    context.OnDraw(force=1)     # a picked event arrives with the pass
 
-That is the same vocabulary a telemetry recording writes and its replay reads,
-and the same one the out-of-process event injector speaks, so a script written
-for one drives the others. The ``pick`` flag chooses the route: with it the
-event goes to the selection pass and is delivered once the buffer has resolved
-what is under the cursor, which is what a real click does and which needs a
-render; without it the event goes straight to its manager, reaching
-context-level handlers only, which needs no render at all.
+A :doc:`telemetry <telemetry>` recording and its replay use the same record
+format, as does the out-of-process event injector, so a script written for
+one works with the others.
 
-The pick readback is asynchronous by default (``pickAsync``), so a picked
-event is resolved a frame or so after the draw that scheduled it rather than
-within it. How many frames that takes is a property of how busy the machine
-is, so a caller that has to act on the click before it goes on asks for it
-rather than drawing on and hoping:
+The ``pick`` flag chooses how the event is delivered:
+
+- With ``pick``, the event goes to the selection pass and is delivered after
+  the pass has found what is under the cursor, as a real click is. This
+  needs a render.
+- Without ``pick``, the event goes straight to its event manager and reaches
+  only context-level handlers. No render is needed.
+
+Pick readback is asynchronous by default (``pickAsync``). A picked event is
+delivered a frame or so after the draw that scheduled it, and the number of
+frames depends on how busy the machine is. To act on the click before
+continuing, call ``flushPendingPicks()``:
 
 .. code-block:: python
 
    context.OnDraw(force=1)          # the frame that takes the event
    context.flushPendingPicks()      # the click has been delivered by here
 
-``flushPendingPicks`` waits for the readbacks still in flight and returns how
-many it waited for. A readback that landed *during* the frame counts zero and
-is delivered all the same: an event dispatched while the context is drawing
-goes on the event cascade queue rather than to its handler, and the flush
-empties that queue as the next frame would. It blocks, which is the cost of
-asking; a loop that is happy to hear about the click whenever it arrives
-should simply keep drawing.
-
-Finishing a frame
------------------
-
-A pbuffer has nothing to present to, so ``SwapBuffers`` is a flush: the point
-at which the frame's commands are guaranteed to have been issued to the
-driver, which is what a readback, a capture or an encode after it depends on.
-Every pass calls it where it would on a window, so nothing has to know.
-
-``eglSwapBuffers`` is not what does it. The EGL specification gives it no
-effect on any surface that is not a back-buffered window, so on a pbuffer it
-returns ``EGL_TRUE`` and issues nothing.
-
-The surface is single-buffered, since nothing presents it, so the finished
-frame is in the *front* buffer rather than the back one. Every capture path
-here asks the framebuffer which it has
-(``OpenGLContext.capture.presented_buffer``) rather than naming ``GL_BACK``,
-because naming a buffer a framebuffer does not have is
-``GL_INVALID_OPERATION`` and not a quiet fallback.
-
-Resizing
---------
-
-A pbuffer is created at a fixed size and cannot be resized, so ``OnResize``
-builds a replacement against the same config or pixel format and drops the old
-one. The GL context survives, so textures, buffers and programs are all still
-there afterwards. A width or a height of zero or less is not a surface and is
-refused by name.
-
-When construction fails
------------------------
-
-Constructing the context raises ``EGLContextError`` or ``WGLContextError``
-where this machine cannot provide one — no devices, no pixel format matching
-the buffers asked for, no desktop GL, a driver with no pbuffers — so an
-application can try it and fall back. A failure gives back whatever it had
-already taken, so an application that tries several devices or reduces its
-request and tries again leaks nothing per attempt.
+``flushPendingPicks`` waits for the readbacks still in flight and returns
+how many it waited for. A readback that completed during the frame counts as
+zero but is still delivered: an event dispatched while the context is
+drawing goes onto the event cascade queue, and the flush empties that queue
+as the next frame would. The call blocks. A loop that can handle the click
+whenever it arrives should keep drawing instead.
 
 Time
 ----
 
 The time manager runs as usual, so ``TimeSensor`` and ``Timer`` drive
-animation offscreen exactly as they do on screen. A bounded run puts the
-engine's clock on a fixed step (``OPENGLCONTEXT_CAPTURE_FPS``), so a sequence
-rendered here reaches the same point on every machine — see :doc:`Environment
-Variables <environment>`.
+animation offscreen as they do on screen. A bounded run advances the
+engine's clock by a fixed step per frame (``OPENGLCONTEXT_CAPTURE_FPS``), so
+a rendered sequence reaches the same point on every machine. See
+:doc:`Environment variables <environment>`.

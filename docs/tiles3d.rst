@@ -1,216 +1,205 @@
-Loading Tiles3D (Streamed)
-==========================
+Streamed 3D Tiles
+=================
 
 .. rst-class:: introduction
 
-A world too big to load streams as an **OGC 3D Tiles** octree of **glTF**
-tiles: a screen-space-error traversal refines detail toward the camera,
-frustum culling keeps the resident set a moving window around the view, and
-tiles page in and out under a memory budget on background threads. The same
-tiles carry per-tile collision meshes, so a character *walks on exactly what
-it sees* and a car drives on it. The indented technical notes point at the
-code, all under ``OpenGLContext/loaders/tiles3d/``.
+OpenGLContext streams worlds too large to load at once. Such a world is stored
+as an **OGC 3D Tiles** tileset: a tree of tiles, each a **glTF** model, with
+finer tiles below coarser ones. Each frame, the engine picks the tiles that
+give enough detail for the current view, loads missing tiles on background
+threads, and unloads tiles when their memory exceeds a budget. The tile meshes
+can also be added to a physics world as colliders, so a character walks on the
+same surface it sees and a car drives on it. The technical notes on this page
+refer to code under ``OpenGLContext/loaders/tiles3d/``.
 
-This is the path a large world takes. :doc:`GLinting Steel <glisteel>` drives
-one, and :doc:`Baking a World <baking>` is how one is written. A landscape
-that fits in memory whole needs none of it: see :ref:`Terrain & Landscapes
+Use this for a large world. :doc:`GLinting Steel <glisteel>` drives one, and
+:doc:`Baking a world <baking>` describes how to make one. A landscape that
+fits in memory does not need streaming: see :ref:`Terrain & Landscapes
 <terrain-heightfield>` for the height-field path, which the :doc:`forest demo
-<terrain>` runs on.
+<terrain>` uses.
 
 .. figure:: images/gallery/showcase/tiles-toronto.jpg
    :alt: A city of blocky buildings stretching to the horizon under a clear sky
    :class: shot
 
-   An OGC 3D Tiles dataset streamed from an octree, refined by screen-space error
+   An OGC 3D Tiles dataset streamed from an octree, refined by screen-space error
    as the camera moves. City of Toronto 3D massing, Open Government Licence.
 
-Quick start — walk a world
---------------------------
+Quick start: walk a generated world
+-----------------------------------
 
-The viewer is the ``oglc-terrain`` command (installed with the package) or,
-from a checkout, ``python -m OpenGLContext.bin.terrain_view``:
+``oglc-terrain`` is installed with the package. From a source checkout, run
+``python -m OpenGLContext.bin.terrain_view`` instead:
 
 .. code-block:: bash
 
    oglc-terrain                         # walk the default procedural world
    oglc-terrain --fly                   # start in free-fly
-   oglc-terrain --extent 4096 --levels 4   # a bigger, deeper-LOD world (85 tiles)
+   oglc-terrain --extent 4096 --levels 4   # a bigger world with a deeper tree (85 tiles)
    oglc-terrain --dem heightmap.png --height-scale 600   # a real heightmap
    oglc-terrain path/to/tileset.json    # view an existing 3D Tiles tileset
    oglc-terrain --size 1280x720 --sse 12 --memory 512    # window + quality/budget
 
-**Controls:** ``W A S D`` move, ``Q E`` turn, ``Shift`` (hold) sprint,
-``Space`` jump, ``G`` toggles walk / fly, ``R F`` rise / descend while flying,
-and ``-``\  / \ ``=`` slow down / speed up (fly & sprint). Fly is fast, for
-covering a big world quickly.
+Controls:
 
-A dense forest of instanced conifers and knee-high grass surrounds you,
-refreshed as you move so it stays dense wherever you walk, with the sun
-casting shadows through the canopy. Trees and grass are **alpha-cut textured
-cards** (procedural bark, pine-needle and grass-blade textures) rather than
-solid geometry, so they read as foliage. Tune density with ``--density``
-(lower is faster) or drop it with ``--no-vegetation``. :doc:`Vegetation
-<vegetation>` is the whole subject.
+- ``W A S D`` move, and ``Q E`` turn.
+- Hold ``Shift`` to sprint. ``Space`` jumps.
+- ``G`` switches between walking and flying. While flying, ``R`` rises and
+  ``F`` descends.
+- ``-`` and ``=`` decrease and increase the speed of flying and sprinting.
+  Flying is fast, for crossing a large world quickly.
 
-.. rst-class:: technical
-
-For a procedural/DEM world the close-up ground is a detailed camera-following
-**textured patch** (photographic CC0 material) rather than the coarse streamed
-tiles, so it can carry real detail; the streamed tiles are used only to view a
-raw ``tileset.json``. Materials come from **ambientCG** (CC0, cached under the
-per-user app-data directory with a provenance manifest) via
-``loaders/cc0.py``, with a procedural fallback offline. The download and each
-map taken out of its archive are size-capped (``cc0.MAX_ARCHIVE_BYTES``,
-``cc0.MAX_MEMBER_BYTES``). Foliage textures and textured glTF prototypes are
-in ``loaders/tiles3d/foliage.py`` (grass/bark/needle generators, CC0-bark
-option, alpha-MASK cards, instanced); shadows are the engine's cascaded shadow
-maps (``OPENGLCONTEXT_SHADOWS``, see :doc:`Shadow Mapping <shadows>`).
+The world is covered with instanced conifers and knee-high grass. The
+vegetation is regenerated around you as you move, and the sun casts shadows
+through the trees. Trees and grass are alpha-cut textured cards (procedural
+bark, pine-needle and grass-blade textures), not solid geometry.
+``--density`` sets how dense the vegetation is (lower is faster), and
+``--no-vegetation`` removes it. See :doc:`Vegetation <vegetation>`.
 
 .. rst-class:: technical
 
-The viewer is ``bin/terrain_view.py``. It needs the **PBR renderer** (it sets
-``OPENGLCONTEXT_RENDERER=pbr`` and the GLFW backend itself), because terrain
-tiles are PBR glTF and their per-vertex colours only render under the PBR
-pass. Input is bound on both key-down and character events (some Wayland/GLFW
-setups deliver only the latter), and the character controller drives the
-camera from ``OnIdle`` with the default free-fly navigator unbound so the two
-don't fight. **Ground collision is analytic**: the avatar is clamped to
-``height_fn(x, z)`` each frame — exact, matching the visible tiles, and
-impossible to tunnel through at any frame rate — so no separate collision mesh
-is needed for the floor. Vegetation is instanced (one shared prototype per
-layer) with a full-mesh-near / single-cone-far LOD, in two camera-following
-fields (frequent grass, occasional trees). Water is a translucent plane at the
-water level.
+For a procedural or DEM world, the ground near the camera is a detailed
+textured patch that follows the camera, using a photographic CC0 material. The
+coarse streamed tiles are used only when viewing a ``tileset.json``. Materials
+come from **ambientCG** (CC0) through ``loaders/cc0.py``, cached under the
+per-user app-data directory with a provenance manifest, with a procedural
+fallback when offline. The download and each map extracted from its archive
+are size-capped (``cc0.MAX_ARCHIVE_BYTES``, ``cc0.MAX_MEMBER_BYTES``). Foliage
+textures and textured glTF prototypes are in ``loaders/tiles3d/foliage.py``
+(grass, bark and needle generators, an optional CC0 bark, alpha-MASK cards,
+instanced). Shadows are the engine's cascaded shadow maps
+(``OPENGLCONTEXT_SHADOWS``; see :doc:`Shadow mapping <shadows>`).
+
+.. rst-class:: technical
+
+The viewer is ``bin/terrain_view.py``. It sets ``OPENGLCONTEXT_RENDERER=pbr``
+and the GLFW backend itself, because terrain tiles are PBR glTF and their
+per-vertex colours render only under the PBR pass. Keys are bound on both
+key-down and character events, because some Wayland/GLFW setups deliver only
+character events. The character controller moves the camera from ``OnIdle``,
+and the default free-fly navigator is unbound so that the two do not both
+move it. Ground collision is analytic: each frame the avatar is clamped to
+``height_fn(x, z)``, which matches the visible tiles exactly and cannot be
+passed through at any frame rate, so the floor needs no collision mesh.
+Vegetation is instanced (one shared prototype per layer) in two fields that
+follow the camera (dense grass, sparse trees), with the full mesh near the
+camera and a single cone far away. Water is a translucent plane at the water
+level.
 
 .. _tiles3d:
 
-Viewing real 3D Tiles datasets (experimental)
----------------------------------------------
+Viewing 3D Tiles datasets
+-------------------------
 
 .. rst-class:: technical
 
-**3D Tiles support is experimental.** A city-sized dataset loads, streams and
-is walkable, and the known faults are recorded in
-``plans/TILES3D-CITY-VIEWING.md``: tiles whose geometry floats above its
-ground, an initial load that fetches far more of the dataset at once than the
-view needs, and a frame rate around 30 fps at city scale. The APIs here may
-change while those are dealt with.
+**3D Tiles support is experimental.** A city-sized dataset loads, streams and
+can be walked. Known problems, recorded in ``plans/TILES3D-CITY-VIEWING.md``:
+some tiles' geometry floats above the ground, the initial load fetches much
+more of the dataset than the view needs, and the frame rate is around 30 fps
+at city scale. The APIs described here may change.
 
-``oglc-terrain`` above is the procedural/DEM playground. To load and stream a
-**real, third-party OGC 3D Tiles dataset** — a photogrammetry capture, a city
-model, a GIS terrain — open it with ``oglc-view``. It is the interactive front
-end for the ``loaders/tiles3d`` runtime and is built for the parts real data
-actually uses:
+``oglc-terrain`` works with generated and heightmap worlds. To open a
+third-party OGC 3D Tiles dataset, such as a photogrammetry capture, a city
+model or a GIS terrain, use ``oglc-view``:
 
 .. code-block:: bash
 
    oglc-view path/to/tileset.json           # a local tileset
-   oglc-view https://host/path/tileset.json     # stream a tileset straight from the web
+   oglc-view https://host/path/tileset.json     # stream a tileset from the web
    oglc-view tileset.json --sse 8           # more detail (lower screen-space error)
    oglc-view tileset.json --memory 1024     # bigger tile memory budget (MiB)
    oglc-view tileset.json --capture shot.png    # render one offscreen still, then exit
 
-The ``source`` is a local path *or* an ``http(s)://`` URL; with a URL the
-root, its tile content, and any external tilesets are fetched over the network
-and cached on disk (under ``~/.cache/openglcontext/tiles3d``, or
-``--cache-dir``), so each tile downloads once. It auto-frames the whole
-tileset at startup and lets you **free-fly** with the mouse and ``W A S D``/
-arrow keys; tiles stream in and out by screen-space error as you move.
-Supported today:
+The source is a local path or an ``http(s)://`` URL. For a URL, the root
+tileset, its tile content and any nested tilesets are fetched over the network
+and cached on disk, so each tile downloads once. The cache is
+``$XDG_CACHE_HOME/openglcontext/tiles3d`` (``~/.cache/openglcontext/tiles3d``
+by default); ``--cache-dir`` sets another. The viewer frames the whole tileset
+at startup. Fly with the mouse and ``W A S D`` or the arrow keys. Tiles load
+and unload by screen-space error as you move.
 
-What a tileset is allowed to reach
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+What the loader supports
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-A ``tileset.json`` names its own tile payloads and nested tilesets, so for a
-tileset from anywhere but this machine those URIs are chosen by whoever wrote
-it. They are held to the same rules as a glTF document's external references:
-
-- a tileset served over ``http(s)`` may reference only the **same origin** — the
-  scheme, host and port it was fetched from — re-checked on every redirect, so a
-  tile URI cannot name another host or an address on the local network;
-
-- a tileset loaded from disk may read only files **under its own directory**;
-  and
-
-- every payload is **size-capped** (``tiles3d.fetch.DEFAULT_MAX_TILE_BYTES``,
-  256 MiB by default; pass ``max_bytes`` to ``read_bytes`` for a dataset that
-  genuinely ships larger tiles).
-
-*\ *What is unrestricted is which URI you may *\ name\ *, not what the
-document at it may do.*\ * Naming a URL is a decision only you can make — the
-viewer fetches what you point it at, as ``curl`` would — and from there the
-file is untrusted like any other: the payload is size-capped, redirects on
-that first fetch are locked to the origin you named (so a server cannot bounce
-it to a link-local address), and every URI the document goes on to name is
-confined by the rules above. A dataset split across two hosts needs its own
-resolver passed to ``build_runtime_tileset``. The policy itself lives in
-``loaders/resolver.py``, which is the one place it is written down.
-
-.. rst-class:: technical
-
-Not yet bounded: the *number* of tiles a tileset may name. Each payload is
-capped and the resident set is held to the memory budget, but a hostile
-tileset can still name unboundedly many tiles and fill the on-disk fetch
-cache. Recorded in ``plans/TILES3D-CITY-VIEWING.md``.
-
-- local files and ``http(s)://`` URLs for the root, tile content and nested
+- Local files and ``http(s)://`` URLs for the root, tile content and nested
   tilesets, with an on-disk fetch cache.
 
-- glTF/GLB and ``b3dm`` tile content (the Batched-3D-Model wrapper is unwrapped
-  to its embedded GLB and rendered by the normal glTF loader).
+- glTF/GLB and ``b3dm`` tile content. The loader unwraps a Batched 3D Model
+  (``b3dm``) to its embedded GLB and renders it with the glTF loader.
 
-- box, sphere and geodetic ``region`` bounding volumes (regions convert to
-  WGS 84 ECEF, as used by Cesium ion / Google Photorealistic / most GIS
-  tilesets).
+- Box, sphere and geodetic ``region`` bounding volumes. Regions are converted
+  to WGS 84 ECEF coordinates, as used by Cesium ion, Google Photorealistic 3D
+  Tiles and most GIS tilesets.
 
-- **external (nested) tilesets** — a tile whose content is another ``.json`` is
-  loaded and grafted into the tree.
+- External (nested) tilesets. A tile whose content is another ``.json`` is
+  loaded and added to the tree.
 
-- **The dataset's own frame, brought into the viewer's.** 3D Tiles places tiles
-  in a Z-up frame and this renderer draws a Y-up world, so a dataset is turned
-  to match: an **Earth-centred** one is recentred to the origin (32-bit float
-  precision) and **levelled** at that reference point, so the ground lies in the
-  XZ plane instead of tilting off toward the globe's centre; a **local** one is
-  turned the same quarter turn its content is. Both are what ``--no-recenter``
-  switches off, which gives the dataset exactly as written. Non-identity tile
-  transforms are honoured.
+- Multiple contents per tile (3D Tiles 1.1 ``contents``), for example
+  buildings and trees as separate glTF files in one tile.
 
-- **The glTF up-axis convention**: 3D Tiles frames are Z-up while glTF content
-  is Y-up, so content is rotated a quarter turn into its tile's frame, as
-  ``asset.gltfUpAxis`` asks (``Y`` when a tileset does not say; ``Z`` means the
-  content is already in the tile frame, which is what the bakers here write).
-  Without this a conforming export renders on its side.
+- Tile transforms other than the identity.
 
-- **multiple contents per tile** (3D Tiles 1.1 ``contents``), e.g. buildings and
-  trees as separate glTF combined into one tile.
+- The glTF up axis. 3D Tiles frames are Z-up and glTF content is Y-up, so
+  content is rotated a quarter turn into its tile's frame, as
+  ``asset.gltfUpAxis`` specifies. The default is ``Y``. ``Z`` means the
+  content is already in the tile frame, which is what the bakers in this
+  project write. Without this rotation, a conforming export renders on its
+  side.
+
+The engine draws a Y-up world, so the viewer turns a Z-up dataset to match:
+
+- A dataset in Earth-centred (ECEF) coordinates is moved to the origin, for
+  32-bit float precision, and levelled at that point, so the ground lies in
+  the XZ plane instead of tilting toward the centre of the Earth.
+
+- A dataset in local coordinates is turned the same quarter turn as its
+  content.
+
+``--no-recenter`` turns off both, and shows the dataset in its own
+coordinates.
 
 .. rst-class:: technical
 
-Tested against Cesium's ``TilesetWithDiscreteLOD`` sample (a ``tileset.json``
-with an ECEF root transform and a ``low→medium→high`` ``b3dm`` LOD chain): the
-framed view selects the coarse tile and flying closer (or ``--sse 0.02``)
-refines to the finest. Like ``oglc-terrain`` it forces the core profile + PBR
-renderer. A known limitation: a hard camera teleport can hole for a few
-frames, because REPLACE refinement keeps no standing coarse-LOD fallback
-resident; gradual flight sharpens in cleanly.
+The loader is tested against Cesium's ``TilesetWithDiscreteLOD`` sample: a
+``tileset.json`` with an ECEF root transform and a ``low→medium→high``
+``b3dm`` chain of levels. The framed view selects the coarse tile, and flying
+closer (or ``--sse 0.02``) refines to the finest. Like ``oglc-terrain``, the
+viewer uses the core profile and the PBR renderer.
+
+Limits
+~~~~~~
+
+- Point clouds (``.pnts``), instanced models (``.i3dm``), composite tiles
+  (``.cmpt``) and implicit tiling (``.subtree``). The viewer skips these or
+  reports an error, so Cesium's ``TilesetWithTreeBillboards`` (i3dm),
+  ``TilesetWithRequestVolume`` (pnts) and ``SparseImplicit*`` samples do not
+  render.
+
+- Services that need an API key, such as Cesium ion and Google Photorealistic
+  3D Tiles. The loader does not send authentication headers or tokens. Export
+  or download the tiles first. Plain ``http(s)://`` tilesets stream without
+  this.
+
+- After a sudden camera jump, the view can have holes for a few frames. With
+  REPLACE refinement, the coarse tiles are not kept loaded as a fallback.
+  Gradual movement refines without holes.
 
 .. _samples:
 
 Sample datasets to try
 ~~~~~~~~~~~~~~~~~~~~~~
 
-The **CesiumGS 3D Tiles sample tilesets**
-(`github.com/CesiumGS/3d-tiles-samples
-<https://github.com/CesiumGS/3d-tiles-samples>`__, Apache 2.0) are small and
-self-contained, and served over raw GitHub with no authentication — so you can
-stream them **straight from the URL, no download step**. These are verified to
-load:
+The `CesiumGS 3D Tiles sample tilesets
+<https://github.com/CesiumGS/3d-tiles-samples>`__ (Apache 2.0) are small and
+self-contained, and GitHub serves them without authentication. Stream them
+directly from the URL, with no download step. These samples load:
 
-.. code-block:: python
+.. code-block:: bash
 
    # Cesium "dragon" — b3dm, an ECEF transform and a low/medium/high LOD chain
    oglc-view https://raw.githubusercontent.com/CesiumGS/3d-tiles-samples/main/1.0/TilesetWithDiscreteLOD/tileset.json
-   #   add --sse 0.02 to pull the finest LOD over the network
+   #   add --sse 0.02 to load the finest level of detail over the network
 
    # 1.1 glTF-native scene — houses and trees, several glTF contents per tile
    oglc-view https://raw.githubusercontent.com/CesiumGS/3d-tiles-samples/main/1.1/MetadataGranularities/tileset.json
@@ -218,81 +207,115 @@ load:
    # 1.1 multiple-contents plane
    oglc-view https://raw.githubusercontent.com/CesiumGS/3d-tiles-samples/main/1.1/MultipleContents/tileset.json
 
-Each tile is cached under ``~/.cache/openglcontext/tiles3d`` on first fetch,
-so re-runs are offline and instant. Prefer a local copy? Clone the repo (``git
-clone https://github.com/CesiumGS/3d-tiles-samples``) and pass a path to
-``…/1.0/TilesetWithDiscreteLOD/tileset.json`` instead — identical result. You
-can also point the viewer at any tileset you bake yourself with
-``oglc-terrain`` (see :ref:`Making a world <making>`), at a world :doc:`baked
-from an authored description <baking>`, at :doc:`a city exported from
-OpenStreetMap <osmcity>`, or at your own captures exported to 3D Tiles
-(RealityCapture, Cesium ion, py3dtiles, etc.).
+Each tile is cached on its first fetch, so later runs need no network. To use
+a local copy instead, clone the repository (``git clone
+https://github.com/CesiumGS/3d-tiles-samples``) and pass the path to
+``…/1.0/TilesetWithDiscreteLOD/tileset.json``; the result is the same.
+
+The viewer also opens a tileset you make with ``oglc-terrain`` (see
+:ref:`Making a world <making>`), a world :doc:`baked from an authored
+description <baking>`, :doc:`a city exported from OpenStreetMap <osmcity>`,
+or your own captures exported to 3D Tiles (RealityCapture, Cesium ion,
+py3dtiles, and others).
+
+.. _tiles3d-reach:
+
+What a tileset may reach
+------------------------
+
+A ``tileset.json`` names its own tile files and nested tilesets. For a tileset
+from anywhere other than this machine, whoever wrote it chose those URIs. They
+follow the same rules as a glTF document's external references:
+
+- A tileset served over ``http(s)`` may reference only its **own origin**: the
+  scheme, host and port it was fetched from. The check is repeated on every
+  redirect, so a tile URI cannot name another host or an address on the local
+  network.
+
+- A tileset loaded from disk may read only files **under its own directory**.
+
+- Every tile file is **size-capped**: ``tiles3d.fetch.DEFAULT_MAX_TILE_BYTES``,
+  256 MiB by default. For a dataset with larger tiles, pass ``max_bytes`` to
+  ``read_bytes``.
+
+The URL or path you give the viewer is not restricted: the viewer fetches what
+you name, as ``curl`` would. The file it fetches is untrusted like any other.
+Its size is capped, redirects of that first fetch must stay on the origin you
+named (so a server cannot redirect it to a link-local address), and every URI
+the file names follows the rules above. For a dataset split across two hosts,
+pass your own resolver to ``build_runtime_tileset``. The rules are defined in
+``loaders/resolver.py``; :doc:`Loading content you did not write <untrusted>`
+describes them for every loader.
 
 .. rst-class:: technical
 
-**Not yet loadable** (the viewer skips or errors on these): point clouds
-(``.pnts``), instanced models (``.i3dm``), composite tiles (``.cmpt``), and
-implicit tiling (``.subtree``) — so Cesium's ``TilesetWithTreeBillboards``
-(i3dm), ``TilesetWithRequestVolume`` (pnts) and the ``SparseImplicit*``
-samples don't render yet. Plain ``http(s)://`` tilesets stream fine (above);
-only **API-key services** (Cesium ion, Google Photorealistic 3D Tiles) need
-auth headers / token handling that isn't wired up — for those, export or
-download the tiles first.
+The *number* of tiles a tileset may name is not limited. Each tile is capped,
+and the loaded tiles are held to the memory budget, but a hostile tileset can
+name any number of tiles and fill the on-disk fetch cache. This is recorded in
+``plans/TILES3D-CITY-VIEWING.md``.
 
 How it works
 ------------
 
-Terrain is an OGC 3D Tiles dataset: a ``tileset.json`` bounding-volume
-hierarchy whose leaves are glTF meshes. Every frame the runtime walks the
-tree, converts each tile's *geometric error* to a *screen-space error*
-(pixels) against the live camera, and refines a tile into its children only
-while that error exceeds a threshold — so detail concentrates near the viewer.
-Frustum culling prunes tiles outside the view, which is what bounds the
-working set.
+A tileset is a ``tileset.json`` that describes a tree of bounding volumes,
+with glTF meshes as tile content. Every frame, the runtime walks the tree. For
+each tile it converts the tile's *geometric error* to a *screen-space error*
+in pixels for the current camera. It refines a tile into its children only
+while that error is above a threshold, so detail concentrates near the viewer.
+Frustum culling skips tiles outside the view, which limits the number of
+tiles in use.
 
 .. rst-class:: technical
 
-``screenspaceerror.py`` (the perspective SSE), ``tileset.py`` (the parsed
-world-space tree; we parse box/sphere ourselves because py3dtiles rejects
-sphere volumes), ``traversal.py`` (``select_tiles`` → a render set and a
-speculative *want* set), and ``frustum.py`` (Gribb-Hartmann plane extraction +
-``bounding_sphere`` tests).
+``screenspaceerror.py`` computes the perspective screen-space error.
+``tileset.py`` parses the tree into world space; it parses box and sphere
+volumes itself, because the py3dtiles reader rejects sphere volumes.
+``traversal.py`` (``select_tiles``) returns a render set and a set of tiles
+wanted soon. ``frustum.py`` extracts the frustum planes (Gribb-Hartmann) and
+tests bounding spheres against them.
 
-Streaming is what the traversal *decides*: wanted tiles that are not resident
-are queued for background loading (priority by distance); finished loads are
-uploaded to GL, throttled per frame; and tiles that fall out of the want set
-are evicted least-recently-wanted-first once the resident bytes exceed the
-budget. A tile still loading falls back to its nearest resident ancestor, so
-the world sharpens in rather than popping holes.
+The traversal decides which tiles to stream:
 
-.. rst-class:: technical
+- Wanted tiles that are not loaded are queued for loading in the background,
+  nearest first.
 
-``loadmanager.py`` (priority queue + worker pool, cancellable),
-``residency.py`` (lifecycle ``UNLOADED→LOADING→READY→RENDERABLE``, LRU
-eviction under a byte budget), and ``runtime.py`` (``TilesetRuntime.update``
-ties it together each frame). Loading and glTF parsing run off the render
-thread; only the cheap mount and draw are on the GL thread.
+- Finished loads are uploaded to GL, a limited number per frame.
 
-The runtime is mounted as a scenegraph node, ``TilesTerrain``, so it renders,
-shadows and picks like any other geometry. Each resident tile also registers
-its mesh as a static *trimesh* collider in a physics world, which is what
-makes the terrain walkable.
+- Tiles that are no longer wanted are unloaded, least recently wanted first,
+  once the loaded tiles exceed the memory budget.
+
+A tile that is still loading is replaced by its nearest loaded ancestor, so
+the world gains detail as tiles arrive rather than showing holes.
 
 .. rst-class:: technical
 
-``scenegraph/tilesterrain.py`` (the node; call ``update_for_camera(camera,
-viewport_height, view_projection=…)`` each frame before rendering) and
-``physics_colliders.py`` (streams colliders via the runtime's
-``on_renderable``/``on_evicted`` hooks). See :doc:`Physics & Collision
-<physics>` for the character controller.
+``loadmanager.py`` is the priority queue and worker pool; loads can be
+cancelled. ``residency.py`` tracks each tile's state
+(``UNLOADED→LOADING→READY→RENDERABLE``) and evicts least recently used tiles
+under a byte budget. ``runtime.py`` (``TilesetRuntime.update``) runs these
+steps each frame. Loading and glTF parsing run off the render thread; only
+mounting and drawing run on the GL thread.
+
+The runtime is mounted in the scene as a scenegraph node, ``TilesTerrain``, so
+it renders, casts shadows and can be picked like any other geometry. Each
+loaded tile can also add its mesh to a physics world as a static triangle-mesh
+collider, which makes the terrain walkable.
+
+.. rst-class:: technical
+
+``scenegraph/tilesterrain.py`` is the node; call
+``update_for_camera(camera, viewport_height, view_projection=…)`` each frame
+before rendering. ``physics_colliders.py`` adds and removes colliders through
+the runtime's ``on_renderable`` and ``on_evicted`` hooks. See
+:doc:`Physics & Collision <physics>` for the character controller.
 
 .. _making:
 
 Making a world
 --------------
 
-Three sources feed one baker. Each writes a ``tileset.json`` plus its ``.glb``
-tiles and returns the tileset path.
+The engine has three ways to generate a tileset. Each writes a
+``tileset.json`` with its ``.glb`` tiles and returns the tileset's path.
 
 .. code-block:: python
 
@@ -308,7 +331,7 @@ tiles and returns the tileset path.
    # 3. Your own function y = f(x, z) (numpy arrays in, heights out):
    procedural.build_terrain_tileset("world/", height_fn=my_height_fn)
 
-Mount the result and drive it from the camera each frame:
+Mount the result and update it from the camera each frame:
 
 .. code-block:: python
 
@@ -320,87 +343,91 @@ Mount the result and drive it from the camera each frame:
 
 .. rst-class:: technical
 
-A ``quadtree`` of depth *L* has ``sum(4**l)`` tiles; each is meshed at
-``tile_res`` vertices per edge, so deeper tiles cover less ground at the same
-vertex count (finer detail). The procedural field (value-noise fBM + ridged
-mountains + a carved canyon + a lake basin) is ``procedural.terrain_height``;
-colours come from height and slope in ``terrain_colors``. A **skirt** is
-dropped around every tile edge (``terrain_patch(skirt_depth=…)``) so seams
-between adjacent LOD tiles show no gaps.
+A quadtree of depth *L* has ``sum(4**l)`` tiles for ``l`` from 0 to *L*-1.
+Each tile is meshed at ``tile_res`` vertices per edge, so deeper tiles cover
+less ground with the same vertex count, giving finer detail. The procedural
+height field (value-noise fBM, ridged mountains, a carved canyon and a lake
+basin) is ``procedural.terrain_height``; ``terrain_colors`` colours it by
+height and slope. A skirt is dropped around every tile edge
+(``terrain_patch(skirt_depth=…)``) so that no gaps show between neighbouring
+tiles at different levels.
 
-What the shipped landscape is made of, and how to describe another one, is
-:ref:`a terrain profile <terrainprofile>`. A world with roads, water,
-vegetation tables and placed props in it is written by the octree baker
-instead — see :doc:`Baking a World <baking>`.
+:ref:`Terrain profiles <terrainprofile>` describe the shipped landscape and
+how to describe another. For a world with roads, water, vegetation and placed
+props, use the octree baker instead; see :doc:`Baking a world <baking>`.
 
-Refining & tuning
------------------
+Tuning detail and memory
+------------------------
 
 .. list-table::
    :widths: auto
    :header-rows: 1
 
-   * - Knob
+   * - Setting
      - Effect
    * - ``--sse`` / ``max_sse``
-     - screen-space-error target in pixels; *lower = more detail* (more tiles, higher
-       cost)
+     - Screen-space-error target in pixels (default 16). Lower gives more detail:
+       more tiles, at a higher cost.
    * - ``--memory`` / ``memory_budget``
-     - resident tile byte budget; smaller forces more aggressive eviction/streaming
+     - Budget for loaded tiles (default 256 MiB; ``--memory`` is in MiB,
+       ``memory_budget`` in bytes). A smaller budget unloads tiles sooner.
    * - ``--extent``, ``--levels``, ``--tile-res``
-     - world size, LOD depth (tile count), and per-tile mesh resolution
+     - World size in metres, tree depth (and so tile count), and vertices along
+       each tile edge.
    * - ``prefetch_factor``
-     - how far ahead finer tiles load before they are strictly needed (hides pop-in
-       when moving)
+     - How far ahead finer tiles load before they are needed (default 2.0).
+       Reduces tiles appearing late while you move.
    * - ``hysteresis``
-     - sticky refinement so LOD does not flicker at the threshold
+     - On ``TilesetRuntime`` (default 0). Keeps a tile refined until the error falls
+       further below the threshold, so the level does not flicker at the threshold.
    * - ``--dem``, ``--height-scale``, ``--base``
-     - ingest a real heightmap; ``base``\ <0 sinks low areas below the water level so
-       they read as lakes/sea
+     - Use a real heightmap. A negative ``--base`` lowers low areas below the water
+       level, so they show as lakes or sea.
 
 .. rst-class:: technical
 
-The runtime exposes these on ``TilesetRuntime``/ ``TilesTerrain``
-constructors. Frustum culling is enabled by passing a ``view_projection`` to
-``update_for_camera``; without it, tiles are considered by distance only
-(useful for tests, wasteful for a real view).
+``TilesetRuntime`` and ``TilesTerrain`` take these as constructor arguments.
+Frustum culling is on when you pass a ``view_projection`` to
+``update_for_camera``. Without it, tiles are chosen by distance only, which
+suits tests but loads more tiles than a real view needs.
 
-Caves, overhangs & arbitrary 3D
--------------------------------
+Caves, overhangs and other 3D shapes
+------------------------------------
 
-Because tiles are ordinary glTF meshes, terrain is not limited to a height
-surface: a cave, arch or overhang is just a tile with arbitrary geometry,
-placed in the octree and streamed, culled and collided like any other. A
-heightfield cannot express the solid-air-solid column of an overhang; a glTF
-tile can.
-
-.. rst-class:: technical
-
-``sample.build_overhang_tileset`` bakes an elevated slab over ground (genuine
-solid-air-solid) that streams, renders and yields a walkable collider — the
-pattern a procedural voxel/Transvoxel cave baker would follow.
-
-Demos & validation
-------------------
-
-- ``oglc-terrain`` — the procedural/DEM interactive viewer (above).
-
-- ``oglc-view`` — stream and fly a real OGC 3D Tiles ``tileset.json`` (b3dm,
-  region volumes, external + ECEF tilesets).
-
-- ``tests/tiles_landscape.py`` — aerial showcase (terrain + vegetation).
-
-- ``tests/tiles_walk.py`` — first-person walk/fly.
-
-- :doc:`GLinting Steel <glisteel>` — the path at full size: a baked world
-  streamed in around a car, its tiles becoming the surface it drives on.
+Tiles are ordinary glTF meshes, so terrain is not limited to a height surface.
+A cave, an arch or an overhang is a tile with arbitrary geometry, streamed,
+culled and collided like any other tile. A height field has one height per
+point, so it cannot represent an overhang with open air between two solid
+layers; a glTF tile can.
 
 .. rst-class:: technical
 
-The behaviour is pinned by ``tests/tiles3d/`` (SSE, traversal, residency, load
-manager, runtime, frustum, procedural terrain, DEM, scatter/vegetation,
-geomorph/skirts, and **navigation**: gravity settles the avatar on the
-surface, walking follows it, flying ascends, fly→walk drops to the surface —
-including on the actual streamed colliders) plus offscreen render regressions
-(``tests/test_tiles_*_render.py``). Run them with ``python -m pytest
-tests/tiles3d/``.
+``sample.build_overhang_tileset`` bakes a raised slab over the ground (solid,
+then air, then solid) that streams, renders and gives a walkable collider. A
+procedural cave baker (voxel or Transvoxel) would follow the same pattern.
+
+Demos and tests
+---------------
+
+- ``oglc-terrain`` - the procedural/DEM viewer (above).
+
+- ``oglc-view`` - stream and fly a real OGC 3D Tiles ``tileset.json`` (b3dm,
+  region volumes, nested and ECEF tilesets).
+
+- ``tests/tiles_landscape.py`` - an aerial view of terrain and vegetation.
+
+- ``tests/tiles_walk.py`` - a first-person walk/fly.
+
+- :doc:`GLinting Steel <glisteel>` - a full-size baked world streamed around a
+  car, with its tiles as the surface the car drives on.
+
+.. rst-class:: technical
+
+The tests in ``tests/tiles3d/`` cover screen-space error, traversal,
+residency, the load manager, the runtime, the frustum, procedural terrain,
+DEMs, scattering and vegetation, geomorphing and skirts, and navigation
+(gravity settles the avatar on the surface, walking follows it, flying
+rises, and switching from flying to walking drops to the surface, including
+on streamed colliders). Offscreen render regressions are in
+``tests/unit/test_tiles_*_render.py``. Run the tile tests with ``python -m
+pytest tests/tiles3d/``.

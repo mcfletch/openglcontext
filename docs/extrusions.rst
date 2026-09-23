@@ -1,21 +1,20 @@
 Swept Geometry
 ==============
 
-Six geometry nodes describe a shape by sweeping a 2D outline along a path: a
-lathe, a spiral, a screw, two kinds of tube, and VRML97's own ``Extrusion``.
-Each holds the parameters and generates its vertex arrays with
+Six geometry nodes build a shape by sweeping a 2D outline along a path: a
+lathe, a spiral, a screw, two kinds of tube, and VRML97's ``Extrusion``. Each
+node holds the parameters and generates its vertex arrays with
 `opengl_extrusions <https://github.com/mcfletch/opengl_extrusions>`__, a NumPy
-geometry generator with no OpenGL in it.
+geometry generator that makes no OpenGL calls.
 
-What comes back is an ordinary indexed triangle mesh, so these draw through
-the same path as every other piece of geometry in the scene: **core profile
-and compatibility profile alike**, lit, shadowed, textured, pickable,
-depth-sorted, and eligible for the pass-level instancing batcher.
+The result is an ordinary indexed triangle mesh, so these nodes draw through
+the same path as any other geometry, in both the **core and compatibility
+profiles**. They are lit, shadowed, textured, pickable and depth-sorted, and
+the pass can batch them with :doc:`instancing <instancing>`.
 
-An end cap is a filled outline rather than a fan, which is why an extrusion of
-a contour with holes gets a cap with the holes in it. What fills it is
-:doc:`the tessellator <tessellation>`, which is a call in its own right and
-has a page of its own.
+End caps are tessellated outlines, not triangle fans, so a contour with holes
+gets a cap with the same holes. The caps are filled by :doc:`the tessellator
+<tessellation>`, which you can also call directly.
 
 .. figure:: images/extrusions/shapes.png
    :alt: A lathe, a spiral, a screw, a torus, a pipe elbow and a tapering elbow
@@ -34,7 +33,7 @@ The nodes
 
    * - Node
      - What it sweeps
-     - Reach for it for
+     - Typical uses
    * - ``Lathe``
      - a contour around the z axis, its plane staying *radial*
      - screw threads, spiral ramps, washers, turned parts
@@ -54,8 +53,9 @@ The nodes
      - VRML97's cross-section along its spine
      - anything a ``.wrl`` file asks for
 
-The rotational sweeps read their contour in the **r-z plane**: x is distance
-out from the axis, added to the sweep radius, and y is height.
+``Lathe``, ``Spiral`` and ``Screw`` read their contour in the **r-z plane**:
+x is the distance out from the axis, added to the sweep radius, and y is
+height.
 
 .. figure:: images/extrusions/fig_lathe.png
    :alt: A lathe under six sets of parameters
@@ -84,7 +84,7 @@ out from the axis, added to the sweep radius, and y is height.
 .. figure:: images/extrusions/fig_polycone.png
    :alt: Six radius profiles along one path
 
-   What a per-point radius buys you. Top: a constant radius (which is
+   The effect of a per-point radius. Top: a constant radius (which is
    ``PolyCylinder``), a taper to nothing, and a barrel. Bottom: a waist, a
    stepped profile, and a taper following a curved path.
 
@@ -168,8 +168,8 @@ corner -- which is what a mitred pipe joint should look like -- and
 ``path_edge`` rounds the corner off visually as well, for something meant to
 bend smoothly.
 
-``edge`` is the default and usually the right answer: curves in the outline
-stay smooth, corners in the path stay sharp.
+``edge`` is the default. It keeps curves in the outline smooth and corners in
+the path sharp, which suits most shapes.
 
 Corners
 -------
@@ -198,12 +198,14 @@ Corners
      - a bevel: each run ends square and one flat band joins them. Does not reach as
        far past the corner as a mitre, and the band is shaded as the facet it is.
    * - ``'round'``
-     - an elbow: the ring is turned through the bend over ``roundSegments`` steps, so
-       the corner is the tube itself rotated and the contour keeps its size.
+     - an elbow: the ring is turned through the bend over ``roundSegments`` steps
+       (default 4), so the corner is the tube itself rotated and the contour keeps
+       its size.
 
-``miterLimit`` (default 4) bounds how far a mitre may stretch as a multiple of
-the tube's own reach. Without one, the outside of a nearly-reversed corner
-runs away to a spike.
+``PolyCylinder`` and ``PolyCone`` take a ``join`` field. ``miterLimit``
+(default 4) limits how far a mitre may stretch, as a multiple of the tube's
+own radius. Past the limit the mitre becomes a bevel; without a limit, the
+outside of a nearly reversed corner would stretch into a spike.
 
 Following a curve
 -----------------
@@ -215,9 +217,9 @@ Following a curve
    finely, a Bézier, a B-spline, a loop through the vertical, and a trefoil knot
    swept as a closed path.
 
-A path given as a list of points is a decision already made -- how many, and
-where. ``opengl_extrusions.curves`` samples a curve to a *chord-error
-tolerance* instead, so the samples land where the curvature is:
+A list of points fixes how many samples a path has and where they are.
+``opengl_extrusions.curves`` samples a curve to a *chord-error tolerance*
+instead, which places more samples where the curve bends more:
 
 .. code-block:: python
 
@@ -230,16 +232,18 @@ tolerance* instead, so the samples land where the curvature is:
 ``frames``: ``'up'`` or ``'rmf'``
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``'up'`` keeps the contour aligned to one fixed direction. Simple and
-predictable, and what a road or a railing wants. Where the path runs
-*parallel* to that direction there is nothing left to align to, and the node
-reports it rather than producing a frame that spins.
+``PolyCylinder`` and ``PolyCone`` orient the contour along the path in one of
+two ways, set by their ``frames`` field:
 
-``'rmf'`` carries each frame from the one before it by the smallest rotation
-that turns the old direction onto the new one. No reference direction means no
-direction that breaks it, so this is the one for a cable, a knot, a loop, or
-any path that might point anywhere. It is the default for ``PolyCylinder`` and
-``PolyCone``.
+- ``'up'`` keeps the contour aligned to the fixed direction in the ``up``
+  field (default ``(0, 1, 0)``). It is simple and predictable; use it for a
+  road or a railing. Where the path runs *parallel* to ``up`` there is no
+  direction to align to, and the node reports an error instead of producing a
+  frame that spins.
+- ``'rmf'`` (rotation-minimizing frames, the default) carries each frame from
+  the one before by the smallest rotation that turns the old direction onto the
+  new one. It uses no reference direction, so it works for any path direction.
+  Use it for a cable, a knot, a loop, or any path that may point anywhere.
 
 VRML97's Extrusion
 ------------------
@@ -251,7 +255,7 @@ VRML97's Extrusion
    orientation turning as it travels, a curved spine, a tube with no caps, and a
    closed spine.
 
-The node's own fields, to ISO/IEC 14772-1:1997 clause 6.23: ``crossSection``,
+``Extrusion`` has the fields of ISO/IEC 14772-1:1997 clause 6.23: ``crossSection``,
 ``spine``, ``scale``, ``orientation``, ``beginCap``, ``endCap``, ``ccw``,
 ``convex`` and ``creaseAngle``.
 
@@ -271,18 +275,18 @@ Texture coordinates
    The same checkerboard on six sweeps, from ``tests/extrusions_gallery.py
    texture_parameter``. Where the squares stretch is where the mapping stretches.
 
-Two families. ``'normalized'`` and ``'arc_length'`` describe the sweep's own
-parameterisation -- around the contour and along the path, in 0..1 or in model
-units. Beside them are the twelve *generated* modes the GLE tubing library
-offers, named ``vertex``/``normal``, optionally ``model``, then
-``flat``/``cyl``/``sph``:
+The ``texture`` field takes two kinds of value. ``'normalized'`` and
+``'arc_length'`` follow the sweep's own parameters: around the contour and
+along the path, in 0..1 or in model units. The other twelve are the
+*generated* modes of the GLE tubing library, named ``vertex`` or ``normal``,
+optionally ``model``, then ``flat``, ``cyl`` or ``sph``:
 
 .. figure:: images/extrusions/fig_texture_modes.png
    :alt: Twelve texture modes on one tube
 
-   All twelve on one tube. Two come out plain -- ``normal_sph`` and
-   ``normal_model_sph`` give a constant v on a straight tube, whose normals all
-   lie in the contour plane.
+   All twelve on one tube. ``normal_sph`` and ``normal_model_sph`` come out
+   plain: on a straight tube every normal lies in the contour plane, so v is
+   constant.
 
 .. figure:: images/extrusions/fig_texture_caps.png
    :alt: Textured end caps
@@ -294,8 +298,8 @@ offers, named ``vertex``/``normal``, optionally ``model``, then
 Generated geometry into the scenegraph
 --------------------------------------
 
-Any mesh with glTF-named vertex arrays becomes scenegraph nodes with no file
-and no parsing in between, through ``OpenGLContext.scenegraph.frommesh``:
+``OpenGLContext.scenegraph.frommesh`` turns any mesh with glTF-named vertex
+arrays into scenegraph nodes, with no file or parsing in between:
 
 .. code-block:: python
 
@@ -305,23 +309,22 @@ and no parsing in between, through ``OpenGLContext.scenegraph.frommesh``:
    pipe = extrude(circle(0.1, 16), [(0, 0, 0), (0, 1, 0), (1, 2, 0)])
    scene.children.append(shape_from_mesh(pipe, appearance=steel))
 
-**This is the form the glTF loader already produces.** A generated
-primitive is the same arrangement of arrays ``PBRMesh`` holds, which is the
-node ``loaders/gltf`` builds for every primitive of every ``.glb`` the engine
-reads. Attribute names, component types, index type and
-memory layout all line up, so generated geometry and loaded geometry arrive at
-the render pass indistinguishable from one another -- and shadow, instance,
-pick and sort by the same code.
+The result is a ``PBRMesh``, the same node the :doc:`glTF loader <gltf>`
+builds for each primitive of a ``.glb`` file. Attribute names, component
+types, index type and memory layout all match, so generated and loaded
+geometry reach the render pass in the same form, and are shadowed, instanced,
+picked and sorted by the same code.
 
-**Nothing is copied at the boundary.** ``PBRMesh`` normalises attributes with
+No data is copied. ``PBRMesh`` converts attributes with
 ``asarray(..., float32)`` and ``ascontiguousarray``, and indices with
-``asarray(..., uint32)``, every one of which is a no-op on an array that
-already holds that dtype and layout -- which is what these generators commit
-to producing. The array the generator filled is the array the VBO uploads.
+``asarray(..., uint32)``. Each of these returns its input unchanged when the
+array already has that dtype and layout, and ``opengl_extrusions`` produces
+arrays that do. The array the generator fills is the array uploaded to the
+VBO.
 
-The reading is structural, so this is not limited to one library: anything
-exposing ``attributes`` and ``indices`` works, whether it came from a
-procedural tool, an editor, or a script of your own.
+``shape_from_mesh`` accepts any object with ``attributes`` and ``indices``,
+not only meshes from ``opengl_extrusions``: a procedural tool, an editor or
+your own script can supply one.
 
 Demonstrations
 --------------
@@ -336,6 +339,6 @@ Demonstrations
 
 - ``tests/extrusions_normals.py`` -- the three shading modes on two subjects
 
-- ``tests/extrusions_gallery.py`` -- one figure per parameter, which is what the
-  figures above are captured from. Run ``python tests/extrusions_gallery.py
-  --list`` for the set, then name one to see it.
+- ``tests/extrusions_gallery.py`` -- one figure per parameter; the figures on
+  this page are captured from it. Run ``python tests/extrusions_gallery.py
+  --list`` for the list, then run it with a name to show that figure.

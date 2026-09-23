@@ -3,22 +3,21 @@ The viewer
 
 .. rst-class:: introduction
 
-``oglc-view`` opens a 3D scene — a glTF model, a VRML97 world, a Wavefront
-OBJ, a streamed 3D Tiles dataset — renders it with the :doc:`core-profile PBR
-renderer <pbr>` and lets you look around it or walk through it. **Which format
-a source is in is worked out from the source**, not from which command you
-typed, so there is one viewer and every format gets everything it can do.
+``oglc-view`` opens a 3D scene and renders it with the :doc:`core-profile PBR
+renderer <pbr>`. You can look around the scene or walk through it. It opens
+glTF models, VRML97 worlds, Wavefront OBJ files and streamed 3D Tiles
+datasets. The viewer identifies the format from the source itself, so one
+command opens all of them.
 
-Run it with nothing to open and it shows its menu: a :ref:`library <library>`
-of sample models and worlds with pictures to browse, and a box to type an
-address into — a viewer launched from a desktop has no command line to pass a
-URL on. The same class is a reusable component — see :ref:`Embedding
-<viewer-embedding>`.
+Run it with no arguments to get its menu. The menu offers a :ref:`library
+<library>` of sample models and worlds, shown by preview pictures, and a box
+for typing a path or URL. The viewer is also a reusable class: see
+:ref:`Embedding the viewer <viewer-embedding>`.
 
 .. _opening:
 
-Opening something
------------------
+Opening a scene
+---------------
 
 .. code-block:: bash
 
@@ -30,11 +29,11 @@ Opening something
    oglc-view https://example.com/model.glb
    GLTF=path/to/model.gltf oglc-view
 
-The viewer selects the core profile, the PBR renderer, the GLFW backend and
-shadows for you, so no environment variables are needed.
+The viewer turns on the core profile, the PBR renderer, the GLFW backend and
+shadows itself. No environment variables are needed.
 
-What it can open
-~~~~~~~~~~~~~~~~
+Supported formats
+~~~~~~~~~~~~~~~~~
 
 .. list-table::
    :widths: auto
@@ -42,100 +41,104 @@ What it can open
 
    * - Source
      - Adapter
-     - What it is
+     - Description
    * - ``.gltf`` ``.glb``
      - ``gltf``
-     - A glTF 2.0 *model*: centred and framed, with its own cameras and animations.
+     - A glTF 2.0 *model*: centred and framed, with its own cameras and animations.
        See :doc:`Loading glTF <gltf>`.
    * - ``.wrl`` ``.wrz`` ``.vrml`` ``.wrl.gz``
      - ``vrml97``
-     - A VRML97 *world*: shown where it was authored, keeping its own sky, its own
-       lights and its own ``Viewpoint`` nodes.
+     - A VRML97 *world*: shown where it was authored, with its own sky, lights
+       and ``Viewpoint`` nodes. See :doc:`VRML97 <vrml97>`.
    * - ``.obj``
      - ``obj``
-     - A Wavefront model. It carries no lights, cameras or sky, so the viewer
+     - A Wavefront model. OBJ has no lights, cameras or sky, so the viewer
        supplies all three.
    * - ``tileset.json``, or any JSON with both ``asset`` and ``root``
      - ``tiles3d``
-     - An OGC 3D Tiles dataset, streamed and refined as you move. See :doc:`Streamed
-       3D Tiles <tiles3d>`.
+     - An OGC 3D Tiles dataset, streamed and refined as you move. See :doc:`Streamed
+       3D Tiles <tiles3d>`.
 
-A source served from a path with no suffix — ``/download?id=3`` — can be named
-explicitly with ``--format gltf``.
+For a source whose path has no suffix, such as ``/download?id=3``, name the
+format with ``--format gltf``.
 
-A binary ``.glb`` is self-contained, so URLs to one work directly. A
-non-binary ``.gltf`` usually references external ``.bin`` and texture files,
-by URI relative to the document; a URL keeps the document's own location and
-resolves them against it, so a remote multi-file model opens with its geometry
-and textures intact. See :doc:`Loading glTF <gltf>`.
+A binary ``.glb`` file is self-contained, so a URL to one works directly. A
+text ``.gltf`` file usually refers to separate ``.bin`` and texture files by
+URIs relative to the document. The viewer resolves those against the
+document's URL, so a remote multi-file model opens with its geometry and
+textures. See :doc:`Loading glTF <gltf>`.
 
-The viewer narrates what it is doing as it goes — the file it is opening, the
-cameras and lights it found in it, the animation it is playing — on standard
-output. Those lines carry names from the file and from the command line, which
-are arbitrary Unicode, while a console holds only what its encoding has room
-for: a Windows console is a codepage of a couple of hundred characters. A
-character the console cannot show is written escaped — ``❤`` as ``\u2764`` —
-and the model opens regardless. Redirect the output to a UTF‑8 file, or run
-with ``PYTHONIOENCODING=utf-8``, to read the names as they are written.
+Streamed datasets take extra options:
 
-A streamed dataset has knobs the other formats do not, and they are on the one
-command line: ``--sse`` (screen-space error target in pixels; lower is more
-detail), ``--memory`` (resident tile budget in MiB), ``--no-recenter`` and
-``--cache-dir``. A format that is read once ignores them.
+- ``--sse`` - the screen-space error target, in pixels. Lower values load more
+  detail.
+- ``--memory`` - the budget for resident tiles, in MiB.
+- ``--no-recenter`` and ``--cache-dir``.
+
+Other formats ignore these options.
+
+Console output
+~~~~~~~~~~~~~~
+
+The viewer prints progress to standard output: the file it is opening, the
+cameras and lights it found, and the animation it is playing. These lines
+contain names from the file and the command line, which can be any Unicode
+text. A console can only show the characters its encoding supports; a Windows
+console uses a code page of a few hundred characters. The viewer writes any
+character the console cannot show as an escape (``❤`` becomes ``\u2764``),
+and the model still opens. To see the names as written, set
+``PYTHONIOENCODING=utf-8`` and redirect the output to a file.
 
 .. _framing:
 
-Framing a model, and parts left out of the frame
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Framing a model
+~~~~~~~~~~~~~~~
 
-A model with no camera of its own is centred and framed automatically: the
-camera backs off far enough for the model's bounding sphere to fill the field
-of view, raised a little and tilted down so it is seen from slightly above.
-``--margin``, ``--elevation`` and ``--tilt`` adjust that fit, and ``--eye
-X,Y,Z`` with ``--look-at X,Y,Z`` replaces it outright.
+The viewer centres and frames a model that has no camera of its own. The
+camera moves back until the model's bounding sphere fills the field of view,
+and sits a little above the model, tilted down. ``--margin``, ``--elevation``
+and ``--tilt`` (radians, default 0.10) adjust the fit. ``--eye X,Y,Z`` with
+``--look-at X,Y,Z`` places the camera explicitly instead.
 
-The sphere is fitted to *the model*, which is not always everything the file
-draws. Exported models quite often carry a part or two stranded far outside
-themselves — a decal left behind at a hundred times its scale, a duplicate
-forgotten at the far end of the file's coordinate space. Framing those too
-would stand the camera hundreds of model-widths back, and the model would be a
-speck in the middle of an empty frame. So a part is left out of the fit when
-both of two things are true: the file's whole extent is more than **four
-times** that of the nine-tenths of the model lying closest together, *and* the
-part sits beyond an empty shell — more than **twice** as far out as everything
-nearer than it. A model that merely thins out towards its edges fails the
-second test, and a scene that genuinely is two things far apart fails the
-first, so neither is cut.
+The bounding sphere is fitted to the model, which is not always everything in
+the file. Exported models sometimes contain stray parts far outside the
+model, such as a decal left at a hundred times its scale. Framing those as
+well would put the model as a speck in the middle of an empty frame. A part
+is left out of the fit when both of these are true:
 
-Nothing is hidden by this: a stray is still drawn, and walking or flying out
-to it reaches it as usual. It simply does not decide where the camera starts.
-When any part is left out the viewer says so on startup, with how many and how
-far out they are, so a file that looks incomplete can be recognised as one:
+- the file's whole extent is more than four times the extent of the 90% of
+  the model that lies closest together, and
+- the part lies more than twice as far out as everything nearer than it, with
+  empty space in between.
+
+A model that thins out towards its edges fails the second test. A scene made
+of two groups far apart fails the first. Neither is cut.
+
+Stray parts are still drawn, and you can walk or fly out to them. They only
+do not affect the starting camera. When parts are left out, the viewer prints
+how many and how far away they are:
 
 .. code-block:: python
 
    Framed on the model: 24 part(s) of this file sit up to 102 times its size
    away and start out of view.
 
-The rule is ``OpenGLContext.loaders.gltf.transforms.framing_bounds()``, and
-its three constants — ``STRAY_RATIO``, ``STRAY_CROWD`` and ``STRAY_GAP`` — are
-the numbers quoted above. It applies to glTF sources; the other formats frame
-their whole extent.
+The rule is ``OpenGLContext.loaders.gltf.transforms.framing_bounds()``. Its
+constants ``STRAY_RATIO`` (4), ``STRAY_CROWD`` (0.9) and ``STRAY_GAP`` (2)
+are the numbers above. It applies to glTF sources; other formats frame their
+whole extent.
 
 .. _commands:
 
-The old command names
-~~~~~~~~~~~~~~~~~~~~~
+Deprecated command names
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-``oglc-gltf``, ``oglc-vrml`` and ``oglc-tiles`` still work: each runs
-``oglc-view`` and prints a line saying so. They will be removed after one
-release cycle. Every option they took is still accepted.
+``oglc-gltf``, ``oglc-vrml`` and ``oglc-tiles`` are deprecated aliases. Each
+prints a notice and runs ``oglc-view`` with the same options.
 
-``oglc-vrml``'s ``--shaders`` / ``--no-shaders`` switches are gone. They
-reached into the render pass from inside ``Redraw`` to turn shader rendering
-on; the viewer renders through the core-profile PBR pass as a matter of
-course. A world that genuinely wants the compatibility pipeline gets it where
-every other renderer switch lives:
+``oglc-vrml`` does not accept ``--shaders`` or ``--no-shaders``. The viewer
+always renders through the core-profile PBR pass. To render a world with the
+compatibility pipeline, set the profile in the environment:
 
 .. code-block:: bash
 
@@ -149,64 +152,64 @@ Controls
 Moving
 ~~~~~~
 
-- Up / Down — walk forward / back; Left / Right — turn.
+- Up / Down - walk forward / back; Left / Right - turn.
 
-- Ctrl+Up / Ctrl+Down — look up / down.
+- Ctrl+Up / Ctrl+Down - look up / down.
 
-- Alt+Up / Alt+Down — move up / down; Alt+Left / Alt+Right — strafe.
+- Alt+Up / Alt+Down - move up / down; Alt+Left / Alt+Right - strafe.
 
 - ``-`` levels the horizon; right-mouse drag orbits.
 
-- ``g`` toggles walking (gravity and collision) against free-fly; ``f`` toggles
-  flying while walking; ``m`` steps through the declared :doc:`movement modes
-  <navigation>`.
+- ``g`` switches between walking (gravity and collision) and free flight;
+  ``f`` toggles flying while walking; ``m`` steps through the declared
+  :doc:`movement modes <navigation>`.
 
 .. _orbit:
 
-What a right-drag orbits
-~~~~~~~~~~~~~~~~~~~~~~~~
+The orbit pivot
+~~~~~~~~~~~~~~~
 
-The point you clicked on, when you clicked on the model: examining the thing
-you touched is the whole gesture. A click that hits *nothing* still resolves
-to a world point — the far plane, an order of magnitude further out than
-anything on screen — so a picked point is used only where it lies within reach
-of the scene's bounding sphere (one and a half times its radius, which is
-generous because a bounding sphere already overstates a model's extent).
+A right-drag orbits the camera around a pivot point:
 
-Otherwise the pivot comes from the scene itself. Looking at a model from
-outside, it is the middle of the model, whatever the model's size or where it
-sits; standing *inside* a scene — a building you are walking through —
-orbiting the far wall would swing you round the room, so the pivot is a point
-ahead of the camera instead, at half the scene's radius. A viewer with nothing
-loaded pivots a fixed distance ahead.
+- If the click lands on the scene, the pivot is the point clicked.
+- A click on empty space still gives a world point, on the far plane. The
+  viewer only uses a picked point within 1.5 times the scene's
+  bounding-sphere radius of its centre.
+- Otherwise, when the camera is outside the middle of the scene, the pivot
+  is the centre of the scene's bounding sphere.
+- When the camera is within a quarter of the radius of the centre, as when
+  walking through a building, the pivot is a point ahead of the camera at
+  half the scene's radius. Orbiting the far wall would swing the camera
+  around the room.
+- With nothing loaded, the pivot is 10 units ahead of the camera.
 
-A drag from one side of the window to the other is **half a turn**. The
-trackball measures a drag as the fraction of the way from where it started to
-the edge of the window, so a full turn per window made every small nudge a
-large swing; the distance to the pivot never changes, whatever the drag.
+The rotation is proportional to how far the pointer moves. A drag the height
+of the window turns the view half a turn, and horizontal drags turn at the
+same rate. The distance to the pivot stays the same throughout the drag.
 
 The scene
 ~~~~~~~~~
 
-- PgUp / PgDn (or ``p`` / ``n``) — the scene's own cameras.
+- PgUp / PgDn (or ``p`` / ``n``) - the scene's own cameras.
 
-- Ctrl + PgUp / PgDn — the previous / next entry in the :ref:`library <library>`
-  category this one was opened from. Nothing to step for a file named on the
-  command line or an address typed in: those are not part of a list.
+- Ctrl + PgUp / PgDn - the previous / next entry in the :ref:`library
+  <library>` category the scene was opened from. This does nothing for a
+  file named on the command line or an address typed in, since those are not
+  part of a list.
 
 - ``k`` pauses the animation; ``[`` and ``]`` switch between animations.
 
 - ``t`` starts and stops the turntable.
 
-Each of these does its thing once, on the key coming back up: a held key
-repeats around twenty times a second, which for these would be twenty models
-loaded or twenty cameras past the one wanted. They are declared as a table,
-``SceneViewerMixin.viewerKeys``, of ``KeyBinding(name, method, description,
-modifiers, state)`` — a subclass adding a key of its own extends that rather
-than overriding ``setupCallbacks``, and the description says what the key does
-in a form fit to list. Modifiers are ``(shift, control, alt)``, in that order;
-the ``F6`` controls screen rebinds the :doc:`navigation <navigation>`
-commands, which are a separate set.
+These keys act once, when the key is released. A held key repeats about
+twenty times a second, which would load twenty models or skip twenty cameras.
+
+The keys are listed in ``SceneViewerMixin.viewerKeys``, a table of
+``KeyBinding(name, method, description, modifiers, state)``. To add a key in
+a subclass, extend that table rather than overriding ``setupCallbacks``. The
+description is the text shown in key listings. Modifiers are ``(shift,
+control, alt)``, in that order. The :doc:`navigation <navigation>` commands
+are a separate set, rebound in the ``F6`` controls screen.
 
 Screens
 ~~~~~~~
@@ -216,77 +219,75 @@ Screens
    :header-rows: 1
 
    * - Key
-     - What it raises
+     - Opens
    * - ``F1``
-     - The :ref:`library <library>`: what there is to open.
+     - The :ref:`library <library>`.
    * - ``F10``
-     - :doc:`Settings <overlayui>` — the same page every program here shows.
+     - :doc:`Settings <overlayui>`, the same page as in every other program
+       built on OpenGLContext.
    * - ``F6``
      - Controls: rebind any key.
    * - ``F2``
-     - Save a screenshot — a PNG in the user’s picture folder, named for the window
-       title. Every context binds this, not just the viewer; see :ref:`the screenshot
+     - Saves a screenshot: a PNG in the user's pictures folder, named after the
+       window title. Every context binds this key; see :ref:`the screenshot
        key <screenshots>`.
    * - ``Escape``
-     - The menu, with **Resume** first and Quit below it. Escape never ends the
-       session by itself: it is the key people press to back out of something, and a
-       loaded world is too expensive to throw away without being asked. Escape again
-       resumes.
+     - The menu, with **Resume** first and Quit below it. Escape does not quit
+       on its own, so a loaded world is not lost by accident. Press Escape
+       again to resume.
    * - ``Alt+F``
-     - The :ref:`developer overlay <hud-debug>`. The viewer adds a **Scene** section
-       to it: the source, which adapter read it, the radius the framing came from,
-       which camera is bound, the animation and how you are moving.
+     - The :ref:`developer overlay <hud-debug>`. The viewer adds a **Scene**
+       section to it: the source, the adapter that read it, the radius used
+       for framing, the bound camera, the animation and the movement mode.
 
-These are the keys ``twig-bb`` uses, deliberately: someone who has used one of
-these programs knows the other.
+``twig-bb`` uses the same keys.
 
-Every screen is usable from the keyboard alone: the up/down arrows or
-Tab/Shift-Tab move between items, Space or Return presses the one focused,
-Return alone presses the screen's primary action, and Escape leaves it.
+Every screen works from the keyboard alone. The up and down arrows, or Tab
+and Shift-Tab, move between items. Space or Return presses the focused item,
+Return presses the screen's primary action, and Escape leaves the screen.
 
 .. _library:
 
 The library
 -----------
 
-``oglc-view`` with nothing named is not a usage message. It opens a menu, and
-from it a shelf of models and worlds shown by their own pictures, so that you
-can see what a sample is before opening it rather than reading a name like
-``MetalRoughSpheresNoTextures``.
+Run ``oglc-view`` with no source and it opens a menu. From there, the library
+shows sample models and worlds by their preview pictures, so you can see a
+sample before opening it.
 
-The shelf is *derived* from the demo roster the capture harness already uses
-(``OpenGLContext.loaders.gltf_demos``), so the library and the reference
-captures cannot drift on how a model has to be shown: the yaw it faces at, the
-backdrop its materials need, whether it is meant to be walked. It is grouped
-into **Models**, **Materials** (metals and glass, which need an environment),
-**Scenes** (authored cameras or an interior), **Local builds** and, last,
-**Feature tests**.
+The library is built from the demo table the reference captures use
+(``OpenGLContext.loaders.gltf_demos``). Each model is shown the same way in
+both: the direction it faces, the backdrop its materials need, and whether it
+is meant to be walked. The shelves are:
 
-This project ships no worlds of its own, so there is no **Worlds** shelf until
-an application adds one — ``tests/wrls`` is test data, not content.
-``world_entries()`` turns a directory of them into entries for an application
-that has some.
+- Models
+- Materials - metals and glass, which need an environment to reflect.
+- Scenes - models with authored cameras, or interiors.
+- Local builds
+- Feature tests - most of the Khronos sample set: entries that each
+  exercise one glTF feature (a bare triangle, a sparse accessor, the
+  ``Compare*`` grids) rather than being something to look at. The same field
+  in the demo table sets ``oglc-gltf-demo``'s browsing order.
 
-Preview pictures are the Khronos reference screenshots, fetched once and
-cached on disk. Being offline costs pictures and nothing else.
+OpenGLContext ships no worlds, so there is no **Worlds** shelf until an
+application adds one. ``tests/wrls`` holds test data, not content.
+``world_entries()`` turns a directory of world files into library entries.
 
-The **Feature tests** shelf is last and holds the bulk of the Khronos set:
-entries that exist to exercise one glTF feature — a bare triangle, a sparse
-accessor, the ``Compare*`` grids — rather than to be looked at. Which is which
-is a field on the shared demo table, so this shelf and ``oglc-gltf-demo``'s
-browsing order cannot disagree.
+The preview pictures are the Khronos reference screenshots. They are fetched
+once and cached on disk. Offline, the library shows no pictures but works
+otherwise.
 
-The band's arrows *look*; clicking a picture is what opens it.
+The arrows on the band scroll it. Click a picture to open that entry.
 
-Choosing something opens it **into the running window** — a new adapter, a new
-scenegraph, new framing — without tearing the context down. Loading happens in
-the background, and a load that a later one has overtaken is dropped, so
-clicking quickly through the shelf is safe.
+The entry opens in the running window, with a new adapter, scenegraph and
+framing; the GL context is kept. Loading runs in the background. When a later
+choice replaces a load still in progress, the earlier load is dropped, so it
+is safe to click quickly through the shelf.
 
-Your own shelf
+Adding entries
 ~~~~~~~~~~~~~~
 
-An application curates its own by overriding one method:
+An application sets its own library by overriding ``viewerLibrary()``:
 
 .. code-block:: python
 
@@ -306,17 +307,17 @@ An application curates its own by overriding one method:
                ),
            ])
 
-An entry's ``options`` are ``ViewerOptions`` field names, applied when it is
-opened and *not* carried over to the next one.
+An entry's ``options`` are ``ViewerOptions`` field names. They apply while
+that entry is open and are not carried over to the next one.
 
-Hundreds of entries
-~~~~~~~~~~~~~~~~~~~
+Large libraries
+~~~~~~~~~~~~~~~
 
-The band shows five at a time out of however many there are, wrapping, so a
-shelf of several hundred lays out as fast as one of three; the ``<<`` and
-``>>`` buttons move a bandful at a time. Pictures are decoded off the render
-thread and uploaded a couple per frame, and the least recently used are
-dropped once a texel budget is reached — see ``OpenGLContext.ui.pictures``.
+The band shows five entries at a time and wraps around, so a shelf of several
+hundred entries lays out as fast as a shelf of three. The ``<<`` and ``>>``
+buttons move by five. Pictures are decoded off the render thread and uploaded
+a few per frame. The least recently used pictures are dropped once a texel
+budget is reached; see ``OpenGLContext.ui.pictures``.
 
 .. _capture:
 
@@ -329,21 +330,18 @@ Capturing a frame
    oglc-view model.glb --camera aerial --capture-image shot.png --capture-delay 0.5
    oglc-view model.glb --list-cameras
 
-.. rst-class:: technical
+``--capture-image`` renders the scene, waits for it to settle, writes the PNG
+and exits. ``--capture`` is the same option under another name. The viewer
+waits for ``--capture-delay`` seconds (default 0.5) and at least ``--frames``
+frames (default 10), so the adaptive analytic-sky IBL has converged. The
+captured frame has no caption and no developer overlay.
 
-``--capture`` is the same flag under its older name, and stays.
-
-``--capture`` renders the scene, waits for it to settle — a wall-clock delay
-and a minimum frame count, so the adaptive analytic-sky IBL has converged —
-writes the PNG and exits. The captured frame carries no caption and no
-developer overlay.
-
-It also renders **without mapping a window** and with vsync off. A mapped
-surface throttles the buffer swap to the compositor's frame callback, and with
-nothing on screen consuming frames the swap never returns; a hidden window
-renders and reads back identically. Both are overridable
-(``OPENGLCONTEXT_HIDDEN=0``), since watching a capture happen is how you find
-out why it looks wrong.
+A capture renders in a hidden window with vsync off. A visible window
+throttles the buffer swap to the compositor's frame callback, and a window
+that nothing displays never gets one, so the swap would not return. A hidden
+window renders and reads back the same pixels. Set ``OPENGLCONTEXT_HIDDEN=0``
+to show the window while it captures, for example to see why a capture looks
+wrong.
 
 .. _video:
 
@@ -358,31 +356,32 @@ Recording a video
        --video-seconds 16 --video-fps 30 --size 1280x720
 
 ``--capture-video`` records the frames the viewer draws to an H.264 file and
-exits when it has enough of them. The encoder is the one in the graphics
-driver and the frame never leaves the GPU, so recording costs little more than
-drawing. Like a captured frame, a recorded one carries no caption and no
-developer overlay.
+exits when the recording is complete. ``--video-seconds`` sets the length
+(default 12) and ``--video-fps`` the frame rate (default 30). The encoder is
+in the graphics driver and frames stay on the GPU, so recording costs little
+more than drawing. Recorded frames have no caption and no developer overlay.
 
-The recording is a *fixed number of frames* rather than however many the
-machine managed in the time: the clock is advanced a frame at a time while it
-runs, so the result plays at the speed it says whatever the frame rate was
-while it was made. A slow machine takes longer to record; it does not record a
-slower world.
+The recording has a fixed number of frames. The clock advances by one frame
+at a time while recording, so the video plays at the right speed whatever
+frame rate the machine reached. A slow machine takes longer to record, but
+the world in the video does not move more slowly.
 
-**Something has to move.** A recording of a still is a picture with a file
-size, and there are two ways to give it motion. ``--turntable`` spins the
-model, which suits an object. ``--fly-through`` walks the camera along the
-*scene's own viewpoints*, in the order the file declares them, easing in and
-out of each leg — so the path is the one the author placed, and a world with
-two cameras in it is already a shot. It is what a scene too big to see at once
-wants: see :ref:`Levels of detail <lod-demo>`, where the walk from one end of
-a hall to a bust at the other is exactly the two cameras that world carries.
+Give the recording something that moves:
+
+- ``--turntable`` spins the model. Use it for a single object.
+- ``--fly-through`` moves the camera along the scene's own viewpoints, in the
+  order the file declares them, easing in and out of each leg. The path is
+  the one the author placed, so a world with two cameras already makes a
+  shot. Use it for a scene too large to see at once. See :ref:`Levels of
+  detail <lod-demo>`, where the walk from one end of a hall to a bust at the
+  other follows the two cameras in that world.
 
 .. rst-class:: technical
 
 Recording needs `pyopengl-video <https://pypi.org/project/pyopengl-video/>`__,
-which ``OpenGLContext[video]`` installs. Without it ``--capture-video`` says
-so rather than recording nothing.
+which ``OpenGLContext[video]`` installs. Without it, ``--capture-video``
+reports that the package is missing and does not record. See
+:doc:`Recording video <recording>` for recording from your own program.
 
 .. _viewer-embedding:
 
@@ -391,16 +390,15 @@ Embedding the viewer
 
 .. rst-class:: technical
 
-This is the viewer as a whole program. For the viewer as *one widget* in a Tk,
-Qt or wx application — a menu above it, a panel beside it, and the toolkit
-owning the loop — see :doc:`Embedding a view in an application <embedding>`.
+This section covers the viewer as a complete program. To use the viewer as
+one widget in a Tk, Qt or wx application, with the toolkit running the main
+loop, see :doc:`Embedding a view in an application <embedding>`.
 
-Everything the command does — loading without freezing the window, the default
-light rig, auto-framing, the scene's own cameras and animations, the caption,
-screenshots, the library, walking — is the reusable ``OpenGLContext.viewer``
-package, not the script. An application gets all of it by subclassing
-``ViewerContext`` and saying what it wants with a ``ViewerOptions``. There is
-no command line involved:
+The reusable ``OpenGLContext.viewer`` package provides everything the command
+does: background loading, the default light rig, auto-framing, the scene's
+own cameras and animations, the caption, screenshots, the library and
+walking. Subclass ``ViewerContext`` and configure it with ``ViewerOptions``.
+No command line is involved:
 
 .. code-block:: python
 
@@ -415,90 +413,96 @@ no command line involved:
 
    MyViewer.ContextMainLoop()
 
-``ViewerOptions`` is a dataclass holding every knob the viewer has, and it is
-the *same* object the command line fills in — ``argparse`` populates one as
-its namespace — so the defaults are written once and a flag can never mean
-something different from the field. The fields are grouped as: the source and
-``format``; the cameras (``camera``, ``no_cameras``); auto-framing (``yaw``,
-``margin``, ``elevation``, ``tilt``, ``eye``, ``look_at``); lighting and
-environment (``lights``, ``shadows``, ``ibl_intensity``, ``environment``,
-``background``); animation (``animate``, ``animation``, ``anim_time``,
-``turntable``, ``no_rotate``); ``physics``; and the window and frame
-(``size``, ``capture``, ``capture_delay``, ``frames``).
+``ViewerOptions`` is a dataclass holding every viewer setting. The command
+line fills in the same object, since ``argparse`` uses one as its namespace,
+so each flag and its field share one default. The fields, by group:
 
-The seams worth overriding
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+- the source and ``format``;
+- cameras: ``camera``, ``no_cameras``;
+- auto-framing: ``yaw``, ``margin``, ``elevation``, ``tilt``, ``eye``,
+  ``look_at``;
+- lighting and environment: ``lights``, ``shadows``, ``ibl_intensity``,
+  ``environment``, ``background``;
+- animation: ``animate``, ``animation``, ``anim_time``, ``turntable``,
+  ``no_rotate``;
+- ``physics``;
+- the window and capture: ``size``, ``capture``, ``capture_delay``,
+  ``frames``.
+
+Methods to override
+~~~~~~~~~~~~~~~~~~~
 
 .. list-table::
    :widths: auto
    :header-rows: 1
 
    * - Method
-     - What it decides
+     - Purpose
    * - ``prepareSource()``
-     - Where the scene comes from. A browser with no single source overrides this to
-       do nothing.
+     - Sets where the scene comes from. A browser with no single source
+       overrides it to do nothing.
    * - ``loadScene()``
-     - Produce the scene. **Runs on a worker thread, so it must not touch GL** — that
-       is what keeps the window drawing through a download.
+     - Produces the scene. **Runs on a worker thread, so it must not call
+       GL.** This keeps the window drawing during a download.
    * - ``requestInitialScene()``
-     - What to load first.
+     - Chooses what to load first.
    * - ``buildScenegraph( scene )``
-     - Turn a loaded scene into ``self.sg``. Called again for each new scene, which
-       is what makes swapping possible.
+     - Turns a loaded scene into ``self.sg``. Called again for each new scene,
+       which is how scenes are swapped.
    * - ``onSceneReady()``
-     - Just after a scene is built, on the render thread.
+     - Called on the render thread just after a scene is built.
    * - ``viewerLibrary()``
-     - What this viewer offers to open.
+     - Returns the library this viewer offers.
    * - ``buildPhysicsWorld()``
-     - Where the collision world comes from, if not from ``self.sg``. See
-       :ref:`Walking any scene <walking>`.
+     - Builds the collision world, when it should not come from ``self.sg``.
+       See :ref:`Walking any scene <walking>`.
 
-``openSource( source )`` and ``openEntry( entry )`` swap the scene in a
+``openSource( source )`` and ``openEntry( entry )`` replace the scene in a
 running viewer.
 
-The parts, separately
-~~~~~~~~~~~~~~~~~~~~~
+Modules
+~~~~~~~
 
 .. list-table::
    :widths: auto
    :header-rows: 1
 
    * - Module
-     - What it is
+     - Contents
    * - ``viewer.adapters``
-     - What a source is and how to read it, keyed by suffix and content type.
+     - One adapter per format, chosen by suffix and content type.
    * - ``viewer.options``
-     - Every knob, in one dataclass that ``argparse`` also fills in.
+     - ``ViewerOptions``, the dataclass ``argparse`` also fills in.
    * - ``viewer.library``
-     - The shelf: entries, categories and previews.
+     - The library: entries, categories and previews.
    * - ``viewer.menu``
      - The launch menu and the browse screen, as plain :doc:`panels <overlayui>`.
    * - ``viewer.screens``
-     - Which key raises which screen, and what happens when one is answered.
+     - The key that opens each screen, and the action taken when one closes.
    * - ``viewer.asyncscene``
-     - Loading off the render thread, format-neutral.
+     - Loading off the render thread, for any format.
    * - ``viewer.framing``
-     - Where to put a camera to see a thing — pure arithmetic, no GL.
+     - Camera placement to fit an object: arithmetic only, no GL.
    * - ``viewer.environment``
-     - The sky, and the skybox its metals reflect.
+     - The sky, and the skybox that metals reflect.
    * - ``viewer.caption``
-     - The line or two over the frame, as a :doc:`HUD layer <hud>`.
+     - The caption over the frame, as a :doc:`HUD layer <hud>`.
    * - ``viewer.capture``
-     - One settled frame to a file.
+     - Writing one settled frame to a file.
    * - ``viewer.debug``
      - The developer overlay's **Scene** section.
 
-Walking is not in this package at all: it is a capability of *every*
-interactive context, in ``OpenGLContext.move.physicswalk``.
+Walking is not part of this package. Every interactive context can walk,
+through ``OpenGLContext.move.physicswalk``; see :ref:`Walking any scene
+<walking>`.
 
 .. _adapters:
 
 Adding a format
 ---------------
 
-A format is an *adapter*: a class that reads one kind of source and answers
-the handful of questions asked of every scene. Nothing in the viewer changes.
+A format is an *adapter*: a class that reads one kind of source and returns a
+``ViewerScene``. The rest of the viewer does not change.
 
 .. code-block:: python
 
@@ -512,34 +516,40 @@ the handful of questions asked of every scene. Nothing in the viewer changes.
            # Runs on a worker thread: no GL here.
            return ViewerScene( group = ..., center = ..., radius = ... )
 
-Register it alongside the loader, context and node registries, against the
-suffixes and content types it handles:
+Register it in the plugin registry, with the suffixes and content types it
+handles, alongside the loader, context and node registrations:
 
 .. code-block:: python
 
    from OpenGLContext.plugins import Adapter
    Adapter( 'stl', 'mypackage.stl.STLAdapter', ['.stl', 'model/stl'] )
 
-What a ``ViewerScene`` answers: ``group`` (the renderable root), ``center``
-and ``radius`` (the bounding sphere the camera is framed against), ``strays``
-and ``stray_reach`` (how much the sphere leaves out and how far out it goes —
-see :ref:`Framing a model <framing>`; both 0 for a loader that frames
-everything), ``viewpoints`` and ``cameras``, ``animations`` and ``player()``,
-and ``exposure``. ``scene_bounds()`` in the same module works the bounding
-sphere out of a scenegraph for a format whose loader does not.
+A ``ViewerScene`` holds:
 
-The viewer asks two things *about* a format:
+- ``group`` - the renderable root;
+- ``center`` and ``radius`` - the bounding sphere the camera is framed on;
+- ``strays`` and ``stray_reach`` - how many parts the sphere leaves out and
+  how far out they are (see :ref:`Framing a model <framing>`); both 0 for a
+  loader that frames everything;
+- ``viewpoints`` and ``cameras``;
+- ``animations`` and ``player()``;
+- ``exposure``.
 
-- ``recentres`` — whether a scene with no camera of its own may be moved to the
-  origin to be framed. A *model* may: its coordinates are arbitrary. A *world*
-  may not: its ground plane is at y=0, its viewpoints are in its own space, and
-  moving it would put the avatar underground.
+``scene_bounds()`` in the same module computes the bounding sphere of a
+scenegraph, for a format whose loader does not supply one.
 
-- ``update( viewer )`` — per-frame work for a source that is still arriving. 3D
-  Tiles pages itself in against the current camera here; everything read once
-  from a file wants nothing.
+Two adapter members control how the viewer treats a format:
 
-A scene that brings its own ``Background`` does not get a second one — two of
-them is not two skies, it is a fight over which is bound — and one that brings
-its own lights is not re-lit. Both are detected from the scene rather than
-declared, so they are true of any format.
+- ``recentres`` - whether a scene with no camera of its own may be moved to
+  the origin for framing. A *model* may, because its coordinates are
+  arbitrary. A *world* may not: its ground is at y=0, its viewpoints are in
+  its own coordinates, and moving it would put the avatar underground.
+
+- ``update( viewer )`` - per-frame work for a source that is still loading.
+  The 3D Tiles adapter pages in tiles for the current camera here. Formats
+  read once from a file do nothing.
+
+The viewer adds no ``Background`` to a scene that has its own, since two
+bound backgrounds would conflict. It adds no lights to a scene that has its
+own lights. Both checks look at the loaded scene, so they apply to every
+format.

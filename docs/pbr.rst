@@ -3,78 +3,76 @@ Physically Based Rendering
 
 .. rst-class:: introduction
 
-Physically based rendering (PBR) is a way of describing materials by their
-physical properties -- how metallic a surface is, how rough or polished, what
-colour -- rather than by hand-tuned lighting numbers. Describe a material once
-and it looks right under any lighting. OpenGLContext's PBR renderer uses the
-same material model as glTF 2.0 and most modern engines, so models authored in
-tools like Blender look the way their authors intended. This document is about
-using it: what the material model lets you do, and how to build the look you
-want.
+Physically based rendering (PBR) describes a material by its physical
+properties: its colour, how metallic it is, and how rough or polished it is.
+You do not tune lighting numbers per material, so one material works under any
+lighting. OpenGLContext's PBR renderer uses the glTF 2.0 metallic/roughness
+material model, so models authored in tools such as Blender render with the
+materials their authors set. This page describes how to turn the renderer on,
+how the material model works, and how to light a scene for it.
 
 .. image:: images/gltf/DamagedHelmet.jpg
    :alt: PBR render of the glTF DamagedHelmet sample
 
 .. rst-class:: technical
 
-The helmet above uses every part of the model at once: a colour map, metal and
-roughness, surface-detail (normal) mapping, a glowing (emissive) display,
-environment reflections and a cast shadow -- all from a single material.
+The helmet above uses every part of the model in one material: a colour map,
+metal and roughness, surface-detail (normal) mapping, a glowing (emissive)
+display, environment reflections and a cast shadow.
 
 Turning It On
 -------------
 
-The easiest way to see the PBR renderer is the :doc:`oglc-view <viewer>`
-viewer, which switches everything on for you:
+The :doc:`oglc-view <viewer>` viewer turns the PBR renderer and its lighting
+on for you:
 
 .. code-block:: bash
 
    oglc-view path/to/model.glb
 
-To use PBR for your own scene, name the renderer:
+To use PBR for your own scene, set the renderer:
 
 .. code-block:: bash
 
    OPENGLCONTEXT_RENDERER=pbr python your_script.py
 
-The core profile it needs is already the default. If PBR cannot be started for
-any reason, the plain :doc:`core renderer <renderpasses>` is used instead.
+PBR needs the core profile, which is the default. If the PBR renderer cannot
+start, the plain :doc:`core renderer <renderpasses>` is used instead.
 
-The Material Model: Two Dials
------------------------------
+The Material Model: Colour, Metalness, Roughness
+------------------------------------------------
 
-Most of a PBR material comes down to a colour and two dials. The image below
-is the ``MetalRoughSpheres`` sample: metalness changes along one axis,
-roughness along the other.
+Most of a PBR material is a colour and two numbers. The image below is the
+``MetalRoughSpheres`` sample: metalness changes along one axis and roughness
+along the other.
 
 .. image:: images/gltf/MetalRoughSpheres.jpg
    :alt: A grid of spheres from metal to non-metal and smooth to rough
 
-- **Base colour** -- the surface's own colour. For an ordinary (non-metal)
-  surface this is the colour you see; for a metal it tints the reflection (gold
-  vs. silver vs. copper).
+- Base colour - the surface's own colour. On a non-metal surface this is the
+  colour you see. On a metal it tints the reflection (gold, silver, copper).
 
-- **Metalness** (0 to 1) -- is this a metal? Leave it at **0** for everyday
-  materials: plastic, wood, stone, skin, cloth. Set it to **1** for bare metal:
-  steel, gold, aluminium. Metals reflect their surroundings and have almost no
-  colour of their own except through their reflection; non-metals show their
-  base colour and a plain white highlight. Values in between are rare and
-  usually only appear where a metal meets a coating (rust, paint).
+- Metalness (0 to 1) - whether the surface is metal. Use **0** for everyday
+  materials such as plastic, wood, stone, skin and cloth. Use **1** for bare
+  metal such as steel, gold and aluminium. A metal reflects its surroundings
+  and shows its colour only through the reflection. A non-metal shows its base
+  colour and a white highlight. Values in between are rare; they appear mainly
+  where metal meets a coating such as rust or paint.
 
-- **Roughness** (0 to 1) -- how polished or matte the surface is. **0** is a
-  mirror or clear gloss with sharp reflections and a tight highlight; **1** is
-  fully matte, scattering light softly with no visible reflection. Most real
-  surfaces sit somewhere between.
+- Roughness (0 to 1) - how polished or matte the surface is. **0** is a mirror
+  or a clear gloss, with sharp reflections and a tight highlight. **1** is
+  fully matte: light scatters softly and there is no visible reflection. Most
+  real surfaces are in between.
 
-That is enough to describe a huge range of materials. A polished chrome ball
-is metalness 1, roughness 0. A rubber ball is metalness 0, roughness 0.9. A
-glossy plastic toy is metalness 0, roughness 0.2.
+For example, a polished chrome ball is metalness 1, roughness 0. A rubber ball
+is metalness 0, roughness 0.9. A glossy plastic toy is metalness 0, roughness
+0.2.
 
 Material Recipes
 ----------------
 
-Starting points for common looks. Adjust to taste, and add a :ref:`normal map
-<maps>` for fine surface detail.
+These are starting points for common looks. Adjust them to suit, and add a
+:ref:`normal map <maps>` for fine surface detail.
 
 .. list-table::
    :widths: auto
@@ -131,99 +129,99 @@ Starting points for common looks. Adjust to taste, and add a :ref:`normal map
 
 .. _maps:
 
-Texture Maps: Painting the Dials
---------------------------------
+Texture Maps
+------------
 
-A single colour and two numbers give a whole object one uniform look. To vary
-the look across the surface -- rust here, clean metal there, a label on a
-bottle -- you paint the properties into *texture maps*. A mesh carries texture
-coordinates (UVs) that say where each point of the surface lands on a flat
-image; the renderer looks up each map at those coordinates. Each map drives a
-specific role:
+A colour and two numbers give the whole object one look. To vary the look
+across the surface (rust here, clean metal there, a label on a bottle), paint
+the properties into *texture maps*. A mesh carries texture coordinates (UVs)
+that place each point of the surface on a flat image, and the renderer reads
+each map at those coordinates. Each map controls one property:
 
-- **Base colour map** -- the colour and pattern of the surface (the label, the
-  paint, the wood grain). Stored as an ordinary (sRGB) image.
+- Base colour map - the colour and pattern of the surface (the label, the
+  paint, the wood grain). Stored as an ordinary sRGB image.
 
-- **Metallic-roughness map** -- which parts are metal and how rough each part
-  is, packed into one image (roughness in the green channel, metalness in the
-  blue). This is how a single object can be shiny metal in one place and matte
-  paint in another.
+- Metallic-roughness map - which parts are metal and how rough each part is,
+  in one image: roughness in the green channel, metalness in the blue. With it,
+  one object can be shiny metal in one place and matte paint in another.
 
-- **Normal map** -- fine surface bumps (pores, scratches, brush lines, fabric
-  weave) faked without adding geometry. It makes a flat triangle catch light as
-  if it were textured.
+- Normal map - fine surface bumps (pores, scratches, brush lines, fabric
+  weave) without extra geometry. A flat triangle catches light as if it had
+  that relief.
 
-- **Occlusion map** -- baked soft shadow in creases and cavities, so recessed
-  areas read as darker.
+- Occlusion map - baked soft shadow in creases and cavities, so recessed areas
+  are darker.
 
-- **Emissive map** -- the parts that glow (a screen, an LED, hot metal).
-  Emissive areas are lit from within and do not depend on scene lights.
+- Emissive map - the parts that glow (a screen, an LED, hot metal). Emissive
+  areas do not depend on scene lights.
 
-You do not have to supply every map. A material can be just a base colour and
-two dials, or a full set of maps, or anything between. Any property with a map
-still has a plain factor too, and the two multiply -- so a white base-colour
+You do not have to supply every map. A material can be a base colour and two
+numbers, a full set of maps, or anything in between. A property that has a map
+also keeps its plain factor, and the two are multiplied: a white base-colour
 map with a red base-colour factor gives a red surface.
 
 .. rst-class:: technical
 
-Each map can name its own UV set. glTF gives every texture reference a
-``texCoord`` of 0 or 1; the loader records which channels asked for the second
+Each map can use its own UV set. glTF gives every texture reference a
+``texCoord`` of 0 or 1. The loader records the channels that use the second
 set in the material's ``texCoordMask``, and the shader samples each channel
-from the set it named. That is what lets a wall carry its brick pattern tiled
-many times over and its baked lighting stretched once across the whole
-surface. The mesh has to supply the second set (``TEXCOORD_1``) for the
-channels that ask for it; where it does not, those channels sample at the
-origin of their map and the surface comes out one flat colour.
+from the set it names. A wall can then tile its brick pattern many times while
+its baked lighting is stretched once across the whole surface. The mesh must
+supply the second set (``TEXCOORD_1``) for the channels that use it. Where it
+does not, those channels sample the origin of their map and the surface is one
+flat colour.
 
 .. rst-class:: technical
 
-``KHR_texture_transform`` (offset/scale/rotate of the coordinates) is
-honoured, including its own ``texCoord`` override. One transform is stored per
-material and applied to whichever channels carry the extension — see
-:ref:`Surfaces that move <animated-surfaces>` for how to choose them. A
-material giving two of its textures *different* transforms gets the last one
-for both.
+``KHR_texture_transform`` (offset, scale and rotation of the coordinates) is
+supported, including its own ``texCoord`` override. A material stores one
+transform and applies it to the channels that carry the extension; see
+:ref:`Surfaces that move <animated-surfaces>` for how to choose them. If a
+material gives two of its textures *different* transforms, both use the last
+one.
 
 Glass, Clearcoat and Fabric
 ---------------------------
 
 Three optional effects extend the basic model. They are always available; a
-material simply sets the relevant properties.
+material turns one on by setting its properties.
 
-- **Transmission (glass, water)** -- makes a thin surface let light through so
-  you can see the scene behind it, refracted. Set ``transmission`` toward 1,
-  keep ``metalness`` at 0, and use a low ``roughness`` for clear glass or a
-  higher one for frosted glass. ``ior`` (index of refraction, about 1.5 for
-  glass, 1.33 for water) controls how much the view bends. This is the effect in
-  the olive dish below.
+- Transmission (glass, water) - a thin surface lets light through, so you see
+  the scene behind it, refracted. Set ``transmission`` toward 1, keep
+  ``metallic`` at 0, and use a low ``roughness`` for clear glass or a higher
+  one for frosted glass. ``ior`` (index of refraction: about 1.5 for glass,
+  1.33 for water) sets how much the view bends. The glass cover on the olive
+  dish below uses this effect.
 
-- **Clearcoat** -- a thin glossy layer over the base material, like the lacquer
-  on car paint or varnish on wood. Set ``clearcoat`` toward 1 and
-  ``clearcoatRoughness`` low for a sharp second highlight on top of the material
-  underneath.
+- Clearcoat - a thin glossy layer over the base material, like the lacquer on
+  car paint or varnish on wood. Set ``clearcoat`` toward 1 and
+  ``clearcoatRoughness`` low for a sharp second highlight on top of the
+  material underneath.
 
-- **Sheen** -- the soft rim-glow of cloth: velvet, satin, brushed fabric. Set a
-  ``sheenColor`` and a ``sheenRoughness``.
+- Sheen - the soft glow at the edges of cloth such as velvet, satin and
+  brushed fabric. Set ``sheenColor`` and ``sheenRoughness``.
 
 .. image:: images/gltf/IridescentDishWithOlives.jpg
    :alt: A dish of olives under a glass cover, light passing through the glass
 
-Emissive (glow) is part of the basic model: set ``emissiveColor`` for a
-surface that gives off light of its own, and ``emissiveStrength`` to push it
-brighter than white for a bloomed, hot look.
+Emissive glow is part of the basic model. Set ``emissiveColor`` for a surface
+that gives off its own light, and raise ``emissiveStrength`` above 1 to make it
+brighter than white. With bloom on (``OPENGLCONTEXT_BLOOM=1``, off by
+default), those areas spread a glow.
 
 .. rst-class:: technical
 
 On software rasterizers, or with ``OPENGLCONTEXT_TRANSMISSION=blend``, glass
-falls back to simple alpha blending instead of true refraction.
+uses alpha blending instead of refraction. The variable takes ``auto`` (the
+default), ``full``, ``blend`` or ``off``.
 
 Where Materials Come From
 -------------------------
 
-Most PBR materials arrive ready-made inside a :doc:`glTF model <gltf>`
-authored in a tool such as Blender -- you load the file and the materials come
-with it. You can also build a material in Python with a ``PBRMaterial`` node
-and attach it to a ``Shape`` through an ``Appearance``:
+Most PBR materials come inside a :doc:`glTF model <gltf>` authored in a tool
+such as Blender: load the file and its materials come with it. You can also
+build a material in Python with a ``PBRMaterial`` node and attach it to a
+``Shape`` through an ``Appearance``:
 
 .. code-block:: python
 
@@ -256,39 +254,34 @@ and attach it to a ``Shape`` through an ``Appearance``:
 
    shape = Shape(appearance=Appearance(material=gold), geometry=my_geometry)
 
-The commonly used fields are ``baseColor``, ``metallic``, ``roughness``,
+The most used fields are ``baseColor``, ``metallic``, ``roughness``,
 ``emissiveColor``, ``emissiveStrength``, ``clearcoat`` /
 ``clearcoatRoughness``, ``sheenColor`` / ``sheenRoughness``, ``transmission``,
 ``ior``, and the transparency controls ``alphaMode`` (``OPAQUE``, ``MASK`` or
-``BLEND``) and ``alphaCutoff``. Legacy VRML97 ``Material`` nodes are converted
-to metallic/roughness automatically, so a mixed scene works without changes.
+``BLEND``) and ``alphaCutoff``. VRML97 ``Material`` nodes are converted to
+metallic/roughness automatically, so a scene can mix the two without changes.
 
 .. rst-class:: technical
 
-Textures are supplied through a ``textures`` dictionary keyed by channel
-(``baseColor``, ``metallicRoughness``, ``normal``, ``occlusion``,
-``emissive``), each a ``PBRTexture`` wrapping a PIL image; base colour and
-emissive images are sRGB, the rest linear. The glTF loader builds these for
-you when it imports a model.
+Textures go in a ``textures`` dictionary keyed by channel (``baseColor``,
+``metallicRoughness``, ``normal``, ``occlusion``, ``emissive``, ``lightmap``).
+Each value is a ``PBRTexture`` wrapping a PIL image. Base colour and emissive
+images are sRGB; the others are linear. The glTF loader builds these when it
+imports a model.
 
-What Feeds the Shader
----------------------
+Material Properties
+-------------------
 
-A ``PBRMaterial`` supplies the surface properties; the scene supplies the
-lighting. The shader combines them into the final colour of each pixel:
+A ``PBRMaterial`` supplies the surface properties and the scene supplies the
+lighting. The shader combines them into the colour of each pixel:
 
 .. image:: images/diagrams/pbr-1.svg
    :alt: Diagram: material properties and scene lighting feed the PBR shader, which produces the shaded pixel
    :class: diagram
 
-Each knob on the left changes one aspect of the surface; the scene's lights,
-environment and shadows do the rest. The table below lists every property you
-can set.
+The tables below list the ``PBRMaterial`` fields and their defaults.
 
-Every Knob
-~~~~~~~~~~
-
-**Surface basics**
+Surface basics:
 
 .. list-table::
    :widths: auto
@@ -302,16 +295,16 @@ Every Knob
      - the surface's own colour; tints a metal's reflection
    * - ``metallic``
      - 1.0
-     - metal (1) versus everyday material (0)
+     - metal (1) or everyday material (0)
    * - ``roughness``
      - 1.0
-     - polished/glossy (0) versus matte (1)
+     - polished (0) or matte (1)
    * - ``emissiveColor``
      - (0, 0, 0)
      - colour the surface gives off on its own
    * - ``emissiveStrength``
      - 1.0
-     - multiplier to push emissive brighter than white
+     - multiplier that makes emissive brighter than white
    * - ``normalScale``
      - 1.0
      - strength of the normal (bump) map
@@ -320,12 +313,13 @@ Every Knob
      - strength of the baked occlusion map
    * - ``ior``
      - 1.5
-     - index of refraction; base reflectivity and how much glass bends the view
+     - index of refraction; sets the base reflectivity and how much glass bends
+       the view
    * - ``specular`` / ``specularColor``
      - 1.0 / (1,1,1)
-     - fine control of the non-metal highlight strength and tint
+     - strength and tint of the non-metal highlight
 
-**Optional lobes** (each off at 0)
+Optional lobes, each off at 0:
 
 .. list-table::
    :widths: auto
@@ -342,21 +336,22 @@ Every Knob
      - how sharp the clearcoat's highlight is
    * - ``sheenColor``
      - (0, 0, 0)
-     - colour of the soft fabric rim-glow (velvet, satin)
+     - colour of the soft glow at the edges of fabric (velvet, satin)
    * - ``sheenRoughness``
      - 0.0
-     - how spread-out the sheen is
+     - how widely the sheen spreads
    * - ``transmission``
      - 0.0
      - how see-through the surface is (glass, water)
    * - ``thickness``
      - 0.0
-     - volume thickness for tinting transmitted light
+     - volume thickness, for tinting transmitted light
    * - ``attenuationColor`` / ``attenuationDistance``
      - (1,1,1) / 0
-     - colour picked up passing through the volume, and over what distance
+     - colour that light picks up passing through the volume, and over what
+       distance; 0 means no absorption
 
-**Transparency and rendering**
+Transparency and rendering:
 
 .. list-table::
    :widths: auto
@@ -373,95 +368,128 @@ Every Knob
      - threshold used in ``MASK`` mode
    * - ``transparency``
      - 0.0
-     - legacy opacity (1 = fully transparent)
+     - VRML97-style opacity control (1 = fully transparent)
    * - ``doubleSided``
      - false
-     - draw back faces as well as front
+     - draw back faces as well as front faces
    * - ``unlit``
      - false
-     - show the base colour flat, ignoring lighting
+     - show the base colour flat, without lighting
 
-**Texture maps** -- supplied through the ``textures`` dictionary, keyed by
-channel: ``baseColor``, ``metallicRoughness``, ``normal``, ``occlusion``,
-``emissive``. Each map paints its property across the surface (see
-:ref:`Texture Maps <maps>` above); where a map and a factor both exist, they
-multiply.
+Further glTF material extensions, each off at its default:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Property
+     - Default
+     - What it controls
+   * - ``diffuseTransmission`` / ``diffuseTransmissionColor``
+     - 0.0 / (1,1,1)
+     - thin translucency such as leaves, wax or skin
+       (``KHR_materials_diffuse_transmission``)
+   * - ``anisotropyStrength`` / ``anisotropyRotation``
+     - 0.0 / 0.0
+     - directional stretch of the highlight (``KHR_materials_anisotropy``)
+   * - ``dispersion``
+     - 0.0
+     - wavelength-dependent refraction, a coloured fringe
+       (``KHR_materials_dispersion``)
+   * - ``iridescence``, ``iridescenceIor``, ``iridescenceThicknessMin`` /
+       ``iridescenceThicknessMax``
+     - 0.0, 1.3, 100 / 400
+     - thin-film colour shift, as on a soap bubble; thickness in nanometres
+       (``KHR_materials_iridescence``)
+
+Texture maps go in the ``textures`` dictionary, keyed by channel:
+``baseColor``, ``metallicRoughness``, ``normal``, ``occlusion``, ``emissive``
+and ``lightmap``. Each map varies its property across the surface (see
+:ref:`Texture Maps <maps>` above). Where a map and a factor both exist, they
+are multiplied. ``texCoordMask`` and ``lightmapStrength`` are described under
+:ref:`bakedlight` and :ref:`animated-surfaces`.
 
 .. rst-class:: technical
 
-Defaults follow the glTF 2.0 spec, which is why ``metallic`` and ``roughness``
-default to 1.0: a bare material with no maps is a rough non-reflective metal
-until you set them. Authoring tools almost always set both.
+The defaults follow the glTF 2.0 specification, so ``metallic`` and
+``roughness`` both default to 1.0: a bare material with no maps is a rough,
+non-reflective metal until you set them. Authoring tools almost always set
+both.
 
-You can readily find PBR textures online with CC0 or similar licenses that you
-can use in your editor (e.g. Blender). PBR materials are pretty much a base
-feature of most 3D engines these days.
+PBR texture sets are widely available under CC0 and similar licences, and
+Blender and other editors can apply them to a model before you export it to
+glTF.
 
 Lighting the Scene
 ------------------
 
-A material only looks right if the scene is lit. The PBR renderer lights
-surfaces two ways at once: direct lights (sun, lamps, spotlights) and the
-surrounding environment.
+The PBR renderer lights surfaces in two ways at once: with direct lights (sun,
+lamps, spotlights) and with the surrounding environment.
 
 .. _environment-lighting:
 
 Environment Lighting (Reflections and Ambient)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Real surfaces reflect their surroundings and pick up soft colour from the
-whole scene, not just from direct lights. The renderer supplies this
-"image-based lighting" from a built-in studio environment, so metals have
-something to reflect and matte surfaces are softly lit even in shadow. It is
-on by default. You can adjust or disable it:
+Real surfaces reflect their surroundings and pick up soft light from the whole
+scene, not only from direct lights. The renderer supplies this "image-based
+lighting" from a built-in studio environment. Metals get something to reflect,
+and matte surfaces are softly lit even in shadow. It is on by default. Two
+environment variables adjust it:
 
-- ``OPENGLCONTEXT_IBL_INTENSITY`` -- scale the environment/ambient strength
-  (default 1.0). The viewer lowers it to 0.4 so cast shadows stay readable.
+- ``OPENGLCONTEXT_IBL_INTENSITY`` - scales the environment and ambient
+  strength (default 1.0). The viewer sets it to 0.4 so cast shadows stay
+  visible.
 
-- ``OPENGLCONTEXT_IBL`` -- force it ``full``, ``analytic`` (a cheaper
-  approximation), or ``off`` (flat ambient, no reflections).
+- ``OPENGLCONTEXT_IBL`` - ``auto`` (the default), ``full``, ``analytic`` (a
+  cheaper approximation) or ``off`` (flat ambient, no reflections).
 
-A scene that carries its own sky lights itself with it. ``HDRBackground``
-takes a Radiance ``.hdr`` equirectangular panorama — the usual HDRI
-interchange format — draws it as the sky, and registers the same panorama as
-the environment, so what a metal reflects is what is behind it. The panorama
-keeps its values above 1.0 where the sun and the sky are brighter than white,
-which is the reason to use one, and the visible sky is exposure-scaled and
-tone-mapped the way lit geometry is, so that the two agree. Six LDR JPEG faces
-in a ``CubeBackground`` are the cheaper alternative, and light nothing.
+Both are also ``ContextDefinition`` fields (``iblIntensity`` and ``ibl``),
+which a settings screen can change while the program runs; see
+:doc:`environment` and :ref:`overlayui-settings`.
 
-Left to itself, environment lighting steps down to the cheaper approximation
-when the frame rate sags and climbs back after sustained headroom, so it never
-pins a scene below sixty frames a second. That is a courtesy to somebody
-watching, and **a capture has nobody watching**: a run started with
-``--capture`` holds the mode it began with for the whole run, so what the
-image shows does not depend on where the climb had got to when the frame was
-taken. The shadow cascades are pinned for a capture for the same reason.
+A scene can supply its own environment. ``HDRBackground`` takes a Radiance
+``.hdr`` equirectangular panorama, the usual HDRI format. It draws the
+panorama as the sky and registers it as the lighting environment, so metals
+reflect the sky that is behind them. The panorama keeps values above 1.0 where
+the sun and sky are brighter than white, which an 8-bit image cannot store.
+The visible sky is exposure-scaled and
+tone-mapped in the same way as lit geometry, so the sky and the lit surfaces
+match. A ``CubeBackground`` of six LDR JPEG faces is cheaper, but it does not
+light the scene.
+
+In ``auto`` mode, environment lighting adapts to the frame rate. When the
+frame rate falls below 45 frames a second it steps down to ``analytic``, then
+to ``off``; after a sustained period above 75 it steps back up. Choosing a
+mode explicitly turns adaptation off. A run started with ``--capture`` also
+keeps the mode it started with, so the captured image does not depend on how
+far the mode had recovered when the frame was taken. Shadow cascades are fixed
+for a capture for the same reason.
 
 .. _bakedlight:
 
 Baked Lighting: Lightmaps and the Light Grid
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A world whose lighting was solved when it was built carries the answer with it
-rather than computing it again every frame. The renderer reads two records of
-such a solve, and a scene may use either or both.
+Some worlds have their lighting computed when they are built, and store the
+result instead of computing it every frame. The renderer reads two forms of
+that stored lighting, and a scene can use either or both.
 
-A **lightmap** is that light painted onto the surfaces themselves, addressed
-by a second UV set. Give the material a ``lightmap`` texture, set bit 32 of
-``texCoordMask`` so it samples ``TEXCOORD_1``, and scale its exposure with
-``lightmapStrength``. It is read as linear light, not as an sRGB colour: a
-baked solution is written straight to eight bits and decoding it would leave
-the level looking unlit.
+A **lightmap** stores the light painted onto the surfaces, addressed by a
+second UV set. Give the material a ``lightmap`` texture, set bit 32 of
+``texCoordMask`` so it samples ``TEXCOORD_1``, and set its exposure with
+``lightmapStrength`` (default 1.0). The lightmap is read as linear light, not
+as an sRGB colour, because baked lighting is written directly to eight bits.
+Decoding it as sRGB would make the level look unlit.
 
-That reaches only the surfaces that existed when the world was built. Anything
-that arrives afterwards — a character, a pickup, a door, a projectile —
-carries no lightmap coordinate, so in a level that bakes its lighting and
-places no lamps it has nothing lighting it at all. A **light grid** is the
-same solve recorded a second way for them: a regular grid of samples over the
-world, each holding the light arriving at that point as an ambient term and a
-directional one. The pass looks each object's own position up in it, so what
-an object is lit by is where it is standing.
+A lightmap covers only the surfaces that existed when the world was built.
+Objects added later, such as a character, a pickup, a door or a projectile,
+have no lightmap coordinates. In a level that uses baked lighting and has no
+lamps, nothing would light them. A **light grid** stores the same lighting for
+these objects: a regular grid of samples over the world, each holding the
+light at that point as an ambient term and a directional term. The pass looks
+up each object's position in the grid, so an object is lit by the light where
+it stands.
 
 .. code-block:: python
 
@@ -479,112 +507,50 @@ an object is lit by is where it is standing.
 
 The sample arrays are flat, with x varying fastest: ``index = ix + counts[0] *
 (iy + counts[1] * iz)``. Sampling is trilinear and clamps at the edges, so an
-object that walks past the last sample keeps the light of the nearest one
-instead of going dark at an invisible line. One grid lights a scene: the first
-one found with samples in it is used.
+object past the last sample keeps the light of the nearest one instead of
+going dark. A scene uses one grid: the first one found that has samples.
 
-What it costs is one interpolation and three uniforms per object per frame,
-and only for scenes that have a grid at all. What it does not cover:
+The grid costs one interpolation and three uniforms per object per frame, and
+only in scenes that have a grid. Its limits:
 
-- **A surface with its own lightmap is left alone.** The two are one solve, and
-  taking both would light the world's geometry twice.
+- A surface with its own lightmap does not read the grid. Both come from the
+  same lighting solution, and using both would light that geometry twice.
 
-- **One sample per object**, taken at the middle of its bounding volume, so the
-  light does not vary across a single object. For figures and props at the
-  spacing a baked grid uses, it does not need to.
+- Each object takes one sample, at the centre of its bounding volume, so the
+  light does not vary across one object. At the spacing of a typical baked
+  grid, this suits figures and props.
 
-- **Instanced draws are not grid-lit.** A group of shapes collapsed into one
-  draw could only share one sample, which would be the wrong answer for all but
-  one of them.
+- Instanced draws do not read the grid. A group of shapes drawn in one call
+  could share only one sample, which would be wrong for all but one of them.
 
-- The :doc:`VRML97 core shader <renderpasses>` does not read it, as it does not
-  read lightmaps either; baked lighting is a PBR path.
+- The :doc:`VRML97 core shader <renderpasses>` reads neither the grid nor
+  lightmaps. Baked lighting is PBR only.
 
-twig-bb builds one from a Quake 3 map's lightvol lump, in
-``twig_bb/lighting.py``, which is where the arrangement comes from.
+twig-bb builds a grid from a Quake 3 map's lightvol lump, in
+``twig_bb/lighting.py``, which shows the sample layout in use.
 
 .. _shadows:
 
 Shadows
 -------
 
-The PBR renderer casts dynamic shadows, on by default. Directional lights (a
-sun) shadow the whole scene, spot lights cast a cone, and point lights shadow
-in every direction; turn them off with ``OPENGLCONTEXT_SHADOWS=0`` or soften
-spot shadows with ``OPENGLCONTEXT_SHADOWS_SOFT=1``.
+The PBR renderer casts dynamic shadows, and they are on by default.
+Directional lights (a sun) shadow the whole scene, spot lights cast a cone of
+shadow, and point lights cast shadows in every direction. Turn shadows off
+with ``OPENGLCONTEXT_SHADOWS=0``, or soften spot-light shadows with
+``OPENGLCONTEXT_SHADOWS_SOFT=1``.
 
-Shadows are shared with the :doc:`VRML97 core lighting shader <renderpasses>`
--- the same system serves both -- so they have their own document: see
-:doc:`Shadows <shadows>` for the full discussion and controls.
-
-Under the Hood: the Shading Math
---------------------------------
-
-.. rst-class:: technical
-
-This section is a short overview for the curious; you do not need it to use
-the renderer. For a full line-by-line walkthrough of the fragment shader --
-every texture, uniform and buffer it reads, and how each lobe is sampled and
-combined -- see :doc:`the PBR uber-shader <ubershader>`.
-
-.. rst-class:: technical
-
-Direct light is evaluated with the Cook-Torrance microfacet model: a specular
-term plus a Lambertian diffuse term. The specular term is the product of three
-functions, ``D * V * F``:
-
-- **D** -- the GGX / Trowbridge-Reitz normal distribution: how microfacets are
-  oriented for a given roughness.
-
-- **V** -- the height-correlated Smith visibility term. It folds the geometric
-  shadowing/masking *and* the ``1 / (4·NdotL·NdotV)`` denominator into one
-  function, so the shader multiplies ``D * V * F`` with no separate denominator.
-
-- **F** -- the Fresnel-Schlick term: the rise in reflectance at grazing angles.
-
-.. rst-class:: technical
-
-The diffuse term is ``albedo / π``, scaled by ``(1 - F)`` to conserve energy
-and by ``(1 - metalness)`` because metals have no diffuse reflection. The BRDF
-works in terms of ``alpha = roughness²``; the perceptual roughness you set is
-squared exactly once, and the same convention is shared between the
-direct-lighting and environment-lighting paths (both use one include,
-``shaders/_brdf_inc.glsl``) so the two halves integrate the same lobe.
-
-.. rst-class:: technical
-
-Environment lighting uses the split-sum approximation: a prefiltered
-environment cube (one blur level per roughness), an irradiance cube for
-diffuse ambient, and a BRDF lookup table, all precomputed once from the studio
-environment.
-
-.. rst-class:: technical
-
-**Colour.** Lighting is computed in linear colour. Base-colour and emissive
-texels are decoded from sRGB on input; the final colour is tone-mapped with an
-ACES filmic curve and re-encoded to sRGB. Because the shader encodes sRGB
-itself, ``GL_FRAMEBUFFER_SRGB`` is left disabled (see :doc:`Core-Profile
-Rendering <renderpasses>`).
-
-.. rst-class:: technical
-
-**One shader for the scene.** Clearcoat, sheen and transmission are branches
-inside a single "uber-shader" driven by uniforms that are constant per draw
-call, so the whole scene binds one program rather than switching shaders per
-material -- the switches are coherent and cheap. The three optional lobes are
-gated by compile-time defines (all on today) as a designed-in place to build a
-leaner shader for a constrained platform: chosen once per platform, never per
-material. Material factors are packed into a std140 uniform buffer, built once
-per material and reused across frames.
+The :doc:`VRML97 core lighting shader <renderpasses>` uses the same shadow
+system. See :doc:`Shadows <shadows>` for how it works and all its controls.
 
 .. _fog:
 
-Fog: the medium the camera is standing in
------------------------------------------
+Fog
+---
 
-Put a ``Fog`` node in the scene and the view fades into its colour with
-distance. That is the whole of the interface — the pass finds the bound node
-while it is gathering the frame, exactly as it finds the background:
+Put a ``Fog`` node in the scene, and the view fades into its colour with
+distance. The pass finds the bound ``Fog`` node while it gathers the frame, in
+the same way it finds the background. No other setup is needed:
 
 .. code-block:: python
 
@@ -594,19 +560,20 @@ while it is gathering the frame, exactly as it finds the background:
        visibilityRange=18.0,          # metres to total obscurity; 0 is off
        fogType='EXPONENTIAL')         # or 'LINEAR', the default
 
-It is VRML97's own node, with the fields that specification gives it (`ISO/IEC
-14772-1 6.19
+``Fog`` is the VRML97 node, with the fields that specification defines
+(`ISO/IEC 14772-1 6.19
 <https://www.web3d.org/documents/specifications/14772/V2.0/part1/nodesRef.html#Fog>`__).
-Being a node rather than a number on the context is the point: fog is a
-property of a *place*, so it binds and stacks like a viewpoint, and being
-under water, inside a smoke-filled room and out in clear air are three fogs in
-one scene with one in force.
+Because fog is a node, it belongs to a place in the scene: it binds and stacks
+like a viewpoint. Under water, a smoke-filled room and clear air outside can
+be three ``Fog`` nodes in one scene, with one in force at a time.
 
-Why there are two curves
-~~~~~~~~~~~~~~~~~~~~~~~~
+Fog is applied by the PBR shader. The VRML97 core shader does not apply it.
 
-They reach total obscurity at the same range and fade differently on the way,
-so choosing between them is choosing the shape and not the extent:
+Choosing a fog curve
+~~~~~~~~~~~~~~~~~~~~
+
+Both curves reach total obscurity at ``visibilityRange``. They differ in how
+the fade progresses on the way:
 
 .. list-table::
    :widths: auto
@@ -616,54 +583,52 @@ so choosing between them is choosing the shape and not the extent:
      - Fades
      - Suits
    * - ``LINEAR``
-     - in proportion to distance, from the very first metre
-     - haze, aerial perspective, dissolving the far edge of a terrain patch
+     - in proportion to distance, from the first metre
+     - haze, aerial perspective, hiding the far edge of a terrain patch
    * - ``EXPONENTIAL``
-     - hangs back, then closes in
-     - a *medium* — water, smoke — where what is right in front of you is clear and
-       the far wall is not
+     - slowly at first, then quickly
+     - a medium such as water or smoke, where nearby objects are clear and the
+       far wall is not
 
-That difference matters more than it sounds. A linear fade tints the weapon in
-the player's hands as much as it tints the wall behind it, which reads as a
-coloured pane of glass laid over the screen rather than as being *inside*
-something. This is also why an underwater view should be a fog and not a
-full-screen overlay: an overlay has no depth in it at all.
+A linear fade tints a weapon in the player's hands as much as the wall behind
+it, so the view looks like a coloured pane of glass over the screen. Use
+``EXPONENTIAL`` for the look of being inside a medium. For an underwater view,
+use a fog rather than a full-screen overlay, because an overlay has no depth.
 
-Where it lands in the pipeline
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+How fog is applied
+~~~~~~~~~~~~~~~~~~
 
-The blend happens **in linear HDR, before tone mapping**, which is what keeps
-a fogged scene from posterising in the highlights. One uniform carries the
-scale for every mode: the reciprocal of the visible range, which the shader
-multiplies by the fragment's distance. A scene with no ``Fog`` in it — nearly
-every scene — is left pixel-identical, because the mode uniform stays at zero.
+The shader blends in the fog colour in linear HDR, before tone mapping, which
+keeps fogged highlights from posterising. One uniform carries the scale for
+every mode: the reciprocal of the visible range, which the shader multiplies by
+the fragment's distance. A scene with no ``Fog`` renders unchanged, because
+the fog mode uniform stays at zero.
 
-A transform above a ``Fog`` scales its ``visibilityRange``, since the
-specification puts the range in the node's local coordinates; a model authored
-with its own fog therefore carries it when placed at a different size.
+A transform above a ``Fog`` node scales its ``visibilityRange``, because the
+specification puts the range in the node's local coordinates. A model authored
+with its own fog keeps the right fog when placed at a different size.
 
 .. rst-class:: technical
 
-``OpenGLContext/scenegraph/fog.py`` holds the node and the mode codes; the
-pass reads it in ``flateffects._FlatEffectsMixin.applyFog`` and it reaches the
-shader through ``PBRShaderProgram.set_fog(density, color, mode)``.
+``OpenGLContext/scenegraph/fog.py`` holds the node and the mode codes. The
+pass reads the node in ``flateffects._FlatEffectsMixin.applyFog`` and passes
+it to the shader through ``PBRShaderProgram.set_fog(density, color, mode)``.
 
 .. _animated-surfaces:
 
 Surfaces that move
 ------------------
 
-Three things can move a PBR surface at run time, and they cost very different
-amounts. Reaching for the cheapest one that will do the job is most of the
-performance story for animated materials.
+Three things can move a PBR surface at run time, at very different costs. Use
+the cheapest one that does the job.
 
-1. The UV transform — one uniform
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1. The UV transform: one uniform
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``PBRMaterial.uv_transform`` is a 3×3 ``KHR_texture_transform`` matrix.
-Assigning it bumps the material's upload version, so the pass re-uploads its
-uniform block and nothing else happens. A scrolling conveyor belt, a rotating
-fan or a stretching liquid costs this and no more, however large the surface
+Assigning it bumps the material's upload version, so the pass uploads its
+uniform block again and does nothing else. A scrolling conveyor belt, a
+rotating fan or a stretching liquid costs only this, however large the surface
 is.
 
 .. code-block:: python
@@ -672,29 +637,29 @@ is.
                             [0, 1, v_offset],
                             [0, 0, 1]]        # translation in the last COLUMN
 
-Which channels it applies to is the high half of ``texCoordMask``: the
-channel's low bit shifted by 8. Set it for the base colour and leave it clear
-for the lightmap, or a scrolling texture drags the baked lighting along with
-it and takes the shadows off the walls.
+The high half of ``texCoordMask`` selects the channels the transform applies
+to: the channel's low bit, shifted left by 8. Set it for the base colour and
+leave it clear for the lightmap. Otherwise a scrolling texture moves the baked
+lighting with it, and the shadows slide off the walls.
 
 .. code-block:: python
 
    material.texCoordMask |= (1 << 8)     # baseColor transformed, lightmap not
 
-2. Colour, opacity and texture — one uniform or one bind
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+2. Colour, opacity and texture: one uniform or one bind
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``baseColor``, ``emissiveColor`` and ``transparency`` are ordinary material
-fields; assigning any of them re-uploads the block. Replacing
-``material.textures`` with a new dict swaps a map — assign, do not mutate, or
-the version is not bumped and the old texture set is served.
+fields. Assigning any of them uploads the block again. To swap a map, assign a
+new dict to ``material.textures``. Do not modify the existing dict in place:
+that does not bump the version, and the old texture set stays in use.
 
-3. The vertices — a per-frame CPU pass and a buffer re-upload
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+3. The vertices: a CPU pass and a buffer upload each frame
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-When the movement genuinely cannot be a matrix — a wave that heaves the
-geometry, a churn whose offset depends on where each vertex *is* — a mesh
-takes a **surface deformer**:
+When a matrix cannot express the movement, such as a wave that moves the
+geometry or a churn whose offset depends on each vertex's position, give the
+mesh a **surface deformer**:
 
 .. code-block:: python
 
@@ -703,32 +668,91 @@ takes a **surface deformer**:
 
    mesh.set_surface_deformer(churn)     # applies at once
    ...
-   mesh.refresh_surface()               # each frame; re-reads the deformer
+   mesh.refresh_surface()               # each frame; calls the deformer again
 
-This is a *third* stage on the same pipeline morph targets and skinning
-already use: rest arrays are kept, the deform chain is morph → skin → surface,
-a version counter bumps, and each per-context GPU object re-uploads the
-dynamic vertex buffers. Three properties are worth knowing:
+The deformer is the third stage of the pipeline that morph targets and
+skinning use. The mesh keeps its rest arrays and applies morph, then skin,
+then surface. A version counter is bumped, and each per-context GPU object
+uploads the dynamic vertex buffers again. Three rules apply:
 
-- **The deformer always sees the rest pose**, never its own last output.
-  Deforming the previous frame compounds, and a one-unit wave walks the surface
-  away over a few seconds.
+- The deformer always receives the rest pose (after morph and skin), never its
+  own previous output. Deforming the previous frame would compound, and a
+  one-unit wave would move the surface away within a few seconds.
 
-- **It is handed copies**, so a deformer that writes in place cannot corrupt the
-  rest arrays it will be handed next frame.
+- The deformer receives copies, so writing to them in place cannot corrupt the
+  rest arrays.
 
-- **UVs are only made dynamic if the mesh says they move**
-  (``deforms_texcoords``, true once a deformer is set). Morphing and skinning
-  never move UVs, so a skinned character does not pay to re-upload them — which
-  is why the deformer must be set *before* the mesh is first drawn.
+- UVs are uploaded as a dynamic buffer only if the mesh says they move
+  (``deforms_texcoords``, true once a deformer is set and the mesh has texture
+  coordinates). Morphing and skinning never move UVs, so a skinned character
+  does not upload them each frame. The dynamic buffers are chosen when the
+  mesh is first drawn, so set the deformer before that.
 
-A deformer that returns nothing usable leaves the mesh alone: content is not
-always well formed, and a bad effect should cost its effect rather than its
-surface.
+A deformer that returns nothing usable leaves the mesh unchanged, so malformed
+content loses its effect but keeps its surface.
 
 .. rst-class:: technical
 
-``scenegraph/pbrmesh.py``: ``set_surface_deformer``, ``refresh_surface``,
-``deforms_texcoords``, and stage 3 of ``_apply_deform``. The twig-bb drives
-all three of these from Quake 3 \`.shader\` scripts; ``twig_bb/animator.py``
-is a worked example.
+See ``scenegraph/pbrmesh.py``: ``set_surface_deformer``, ``refresh_surface``,
+``deforms_texcoords``, and stage 3 of ``_apply_deform``. twig-bb uses all three
+kinds of movement for Quake 3 ``.shader`` scripts; ``twig_bb/animator.py`` is
+a worked example.
+
+The Shading Math
+----------------
+
+.. rst-class:: technical
+
+This section is a short overview. You do not need it to use the renderer. For
+a walkthrough of the fragment shader, with every texture, uniform and buffer
+it reads and how each lobe is computed and combined, see :doc:`the PBR
+uber-shader <ubershader>`.
+
+.. rst-class:: technical
+
+Direct light uses the Cook-Torrance microfacet model: a specular term plus a
+Lambertian diffuse term. The specular term is the product of three functions,
+``D * V * F``:
+
+- D - the GGX / Trowbridge-Reitz normal distribution: how microfacets are
+  oriented for a given roughness.
+
+- V - the height-correlated Smith visibility term. It combines the geometric
+  shadowing/masking *and* the ``1 / (4·NdotL·NdotV)`` denominator, so the
+  shader multiplies ``D * V * F`` with no separate denominator.
+
+- F - the Fresnel-Schlick term: reflectance rising at grazing angles.
+
+.. rst-class:: technical
+
+The diffuse term is ``albedo / π``, scaled by ``(1 - F)`` to conserve energy
+and by ``(1 - metalness)`` because metals have no diffuse reflection. The BRDF
+works with ``alpha = roughness²``. The roughness you set is squared exactly
+once. The direct and environment lighting paths share the same convention
+through one include, ``shaders/_brdf_inc.glsl``, so both use the same lobe.
+
+.. rst-class:: technical
+
+Environment lighting uses the split-sum approximation: a prefiltered
+environment cube (one blur level per roughness), an irradiance cube for
+diffuse ambient, and a BRDF lookup table. All three are computed once from the
+environment, and computed again if the environment changes.
+
+.. rst-class:: technical
+
+Colour - lighting is computed in linear colour. Base-colour and emissive
+texels are decoded from sRGB when read. The final colour is tone-mapped with
+an ACES filmic curve and encoded to sRGB. Because the shader encodes sRGB
+itself, ``GL_FRAMEBUFFER_SRGB`` stays disabled (see :ref:`srgb-output`).
+
+.. rst-class:: technical
+
+One shader for the scene - clearcoat, sheen and transmission are branches in a
+single "uber-shader", controlled by uniforms that are constant for each draw
+call. The whole scene binds one program instead of switching shaders per
+material, and every fragment in a draw takes the same branch. The three
+optional lobes are also controlled by compile-time defines, all on by default.
+A constrained platform can compile a smaller shader without some of them; the
+choice is made once per platform, not per material. Material factors are
+packed into a std140 uniform buffer, built once per material and reused
+across frames.

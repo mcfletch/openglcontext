@@ -3,26 +3,29 @@ Baking a world
 
 .. rst-class:: introduction
 
-A world larger than memory is not loaded, it is *streamed*: partitioned into a
-tree of tiles, each holding the detail that suits the distance it is seen
-from, and paged in as the camera approaches. OpenGLContext streams such a
-world already (:doc:`Streamed 3D Tiles <tiles3d>`). This page is about
-producing one.
+Baking turns a world description into files the engine can stream. A world
+too large for memory is split into a tree of tiles. Each tile holds the detail
+that suits the distance it is seen from, and tiles load as the camera comes
+near. :doc:`Streamed 3D Tiles <tiles3d>` describes how OpenGLContext streams
+such a world. This page describes how to make one.
 
-Two halves, in two packages. The **glTF writer** is in the engine, because
-writing a model is engine machinery and a game's build step may well call it.
-The **baker** -- the spatial partition, the per-tile level of detail, the
-tileset -- is in `OpenGLContext-editor
-<https://github.com/mcfletch/openglcontext-editor>`__, a separate install,
-because no shipped game needs it in its dependency tree.
+The work is split across two packages:
 
-Bake one now
-------------
+- The **glTF writer** is in the engine, OpenGLContext, because writing a model
+  is engine machinery and a game's build step may call it.
 
-``glisteel-bake`` comes with :doc:`the track editor <glisteel-editor>` and
-bakes the world that toolkit ships with -- hills, a river canyon, a lake, a
-conifer forest and a circuit through them -- into a directory you can open
-with the viewer:
+- The **baker** (the spatial partition, the level of detail per tile, and the
+  tileset) is in `OpenGLContext-editor
+  <https://github.com/mcfletch/openglcontext-editor>`__, a separate install. A
+  shipped game does not need it.
+
+Bake a world now
+----------------
+
+``glisteel-bake`` comes with :doc:`the track editor <glisteel-editor>`. It
+bakes the world that the editor ships with (hills, a river canyon, a lake, a
+conifer forest and a circuit through them) into a directory you can open with
+the viewer:
 
 .. code-block:: bash
 
@@ -30,36 +33,37 @@ with the viewer:
    glisteel-bake --output /tmp/world
    oglc-view /tmp/world/tileset.json
 
-``glisteel-bake --view`` runs both steps. The world's size, its tile detail
-and how deep the tree refines are all on the command line:
+``glisteel-bake --view`` bakes the world and opens it in the viewer. Options
+on the command line set the world's size, the detail of each tile, and how
+deep the tree goes:
 
 .. code-block:: bash
 
    glisteel-bake --output /tmp/world --extent 8192 --depth 5 --resolution 65
 
 ``--extent``
-   how many metres across the world is, centred on the origin.
+   The width of the world in metres, centred on the origin.
 ``--depth``
-   how many times the tree subdivides. Each level is four times the tiles and
-   twice the ground detail, so depth is the main lever on both quality and bake
-   time.
+   How many times the tree subdivides. Each level has four times as many tiles
+   and twice the ground detail, so depth has the largest effect on both quality
+   and bake time.
 ``--resolution``
-   ground samples across each tile: the vertex budget one tile spends. Detail is
-   this divided by the tile's size, so raising it is an alternative to raising
-   ``--depth`` that costs bigger tiles rather than more of them.
+   Ground samples across each tile: the number of vertices one tile spends.
+   Detail is this divided by the tile's size. Raising it instead of
+   ``--depth`` gives larger tiles rather than more of them.
 ``--tree-density``, ``--max-instances``, ``--seed``
-   trees per square metre, the cap on instances written into any one tile, and
-   the seed that makes a world reproducible.
+   Trees per square metre, the maximum number of instances written into any one
+   tile, and the random seed. The same seed bakes the same world.
 
 .. _writing:
 
 Writing glTF from your own code
 -------------------------------
 
-``OpenGLContext.loaders.gltf.writer`` is the mirror of the loader: it takes
-the same ``PBRMesh`` geometry and ``PBRMaterial`` materials the loader
-produces, and writes a binary ``.glb``. A mesh written is the mesh that loads
-back.
+``OpenGLContext.loaders.gltf.writer`` is the counterpart of the :doc:`glTF
+loader <gltf>`. It takes the same ``PBRMesh`` geometry and ``PBRMaterial``
+materials the loader produces, and writes a binary ``.glb``. A written mesh
+loads back as the same mesh.
 
 .. code-block:: python
 
@@ -69,25 +73,29 @@ back.
    write_glb(PBRMesh(positions=points, normals=normals, indices=indices),
              path='tile.glb')
 
-``write_glb`` takes a mesh, a list of meshes, or ``SceneNode``\ s that add a
-name, a local transform and children. What is written is the subset the PBR
-renderer reads: position, normal, UV, tangent and colour attributes;
-metallic-roughness materials with their five texture channels and the
-``KHR_materials_*`` factors; embedded images with their samplers. Index
-buffers narrow to 16 bits where the vertex count allows. Skinning, animation
-and morph targets are not written.
+``write_glb`` takes a mesh, a list of meshes, or ``SceneNode`` objects. A
+``SceneNode`` adds a name, a local transform and children. The writer writes
+the parts of glTF that the PBR renderer reads:
 
-A material's ``DEF`` is written as its glTF material name, so a material an
-application finds by name in one document is found by that name in a document
-written from it — see :ref:`Driving a model by name <names>`.
-``GLTFWriter.add_material( material, name=... )`` names one explicitly.
+- position, normal, UV, tangent and colour attributes;
+- metallic-roughness materials with their five texture channels and the
+  ``KHR_materials_*`` factors;
+- embedded images with their samplers.
+
+Index buffers are written as 16-bit values when the vertex count allows.
+Skinning, animation and morph targets are not written.
+
+A material's ``DEF`` is written as its glTF material name, so an application
+that finds a material by name in one document finds it by the same name in a
+document written from it. See :ref:`Driving a model by name <names>`. To set
+the name yourself, call ``GLTFWriter.add_material( material, name=... )``.
 
 Many copies of one mesh
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 An ``InstanceSet`` on a node writes the standard ``EXT_mesh_gpu_instancing``
-extension, so thousands of placements of one mesh ride in a single document
-and arrive as one instanced draw:
+extension. Thousands of placements of one mesh fit in a single document and
+load as one instanced draw:
 
 .. code-block:: python
 
@@ -102,9 +110,10 @@ and arrive as one instanced draw:
 Textures
 ~~~~~~~~
 
-A material's ``textures`` dict is written channel by channel, its PIL images
-embedded as PNG. A map that is already a JPEG stays one -- re-encoding a
-photographic texture as PNG multiplies a tile's weight for no visible gain:
+A material's ``textures`` dictionary is written one channel at a time, with
+its PIL images embedded as PNG. To keep a JPEG as a JPEG, wrap it in an
+``EncodedImage``. Re-encoding a photographic texture as PNG makes a tile much
+larger with no visible gain:
 
 .. code-block:: python
 
@@ -114,22 +123,21 @@ photographic texture as PNG multiplies a tile's weight for no visible gain:
 
 .. _roundtrip:
 
-Seeing the round trip
+Example: a round trip
 ~~~~~~~~~~~~~~~~~~~~~
 
 .. figure:: images/demos/bake_demo.jpg
    :alt: A cairn of grey boulders under a gold capstone, ringed by twelve pebbles on green vertex-coloured ground
 
-   ``python tests/bake_demo.py`` — a scene built in code, written to a ``.glb``,
-   loaded back and mounted. What is drawn is the file: three of the boulders
-   reference one mesh, the twelve pebbles are one more mesh under an
+   ``python tests/bake_demo.py`` builds a scene in code, writes it to a
+   ``.glb``, loads it back and draws it. What you see is the loaded file. Three
+   of the boulders share one mesh, the twelve pebbles are one more mesh under an
    ``InstanceSet``, and the ground is a vertex-coloured ``terrain_patch`` placed
-   by its node's translation. Press ``r`` to print the counts again; the written
-   file is left on disk for opening in another viewer.
+   by its node's translation. Press ``r`` to print the counts again. The written
+   file stays on disk, so you can open it in another viewer.
 
-The demo counts what it wrote out of the document's JSON and what it got back
-out of the loaded scenegraph, so the two columns are separate measurements
-rather than two views of one number:
+The demo counts what it wrote from the document's JSON, and what it loaded
+from the resulting scenegraph. The two columns are separate measurements:
 
 .. code-block:: bash
 
@@ -147,12 +155,12 @@ rather than two views of one number:
    GLB headers. The loaded arrays weigh more because an index that is 16 bits
    in the file is 32 in the buffer the GPU is handed.
 
-Seven nodes over four meshes is the sharing arriving intact: the boulder is
-written once and placed three times, and it loads back as one ``PBRMesh``
-under three ``Shape``\ s. The stone material is shared by the boulders and the
-pebbles, so three materials cover the four meshes.
+Seven nodes over four meshes shows that sharing survives the round trip. The
+boulder mesh is written once and placed three times, and it loads back as one
+``PBRMesh`` under three ``Shape`` nodes. The boulders and the pebbles share
+the stone material, so three materials cover the four meshes.
 
-What an application writes to do the same:
+The same steps in an application:
 
 .. code-block:: python
 
@@ -170,69 +178,71 @@ What an application writes to do the same:
    print(len(document['meshes']), 'mesh,', len(document['nodes']), 'nodes')
    scene = load_gltf('/tmp/cairn.glb')                     # mount scene.group to draw
 
-That prints ``1 mesh, 4 nodes``. Everything it imports ships with
-OpenGLContext, and so does everything the demo imports: writing a document is
-the engine's half of the split. The baker, the half that turns a world into a
-streamable tileset, comes with `OpenGLContext-editor
+This prints ``1 mesh, 4 nodes``. Everything this code and the demo import
+ships with OpenGLContext. The baker, which turns a world into a streamable
+tileset, comes with `OpenGLContext-editor
 <https://github.com/mcfletch/openglcontext-editor>`__.
 
 What the baker produces
 -----------------------
 
-A directory holding one ``tileset.json``, a ``.glb`` per tile, and a
-``CREDITS.txt`` naming the sources the world was made from. The tileset is OGC
-3D Tiles 1.1, written so a 1.0 reader can load it too, and it is exactly what
-``OpenGLContext.loaders.tiles3d`` streams.
+The baker writes a directory holding one ``tileset.json``, a ``.glb`` per
+tile, and a ``CREDITS.txt`` that lists the sources the world was made from.
+The tileset is OGC 3D Tiles 1.1, written so that a 1.0 reader can also load
+it. ``OpenGLContext.loaders.tiles3d`` streams it.
 
 The partition
 ~~~~~~~~~~~~~
 
-The tree subdivides **in X and Z** by default. A world whose content sits on a
-surface has one ground per column, and splitting the empty air above it buys
-nothing but nodes. A world that is genuinely volumetric -- a city with levels,
-a road tunnelling under a hillside -- passes ``split_axes=VOLUME_AXES`` and
-gets the eight octants.
+By default the tree subdivides **in X and Z** only. A world whose content sits
+on a surface has one ground level per column, and splitting the empty air
+above it only adds tree nodes. For a world with content at several heights,
+such as a city with levels or a road tunnelling under a hill, pass
+``split_axes=VOLUME_AXES`` to split into eight octants.
 
-A tile's bounding volume is the box of what that tile actually wrote, unioned
-with its children's, rather than the partition cell it came from. That keeps
-the volume tight enough for the screen-space-error test to mean something, and
-it guarantees what the traversal rests on: a parent culled from the frustum
-has culled every descendant with it.
+A tile's bounding volume is the box around what that tile wrote, joined with
+its children's boxes, not the partition cell it came from. This keeps the
+volume small enough for the screen-space-error test to be accurate. It also
+guarantees what the traversal relies on: if a parent is outside the view,
+every descendant is outside it too.
 
 Level of detail
 ~~~~~~~~~~~~~~~
 
-Refinement is ``REPLACE``: a tile's content stands in for its whole subtree,
-so each level must be a coarser *version* of the same ground rather than a
-different part of it. Two mechanisms carry that:
+Refinement is ``REPLACE``: a tile's content is drawn instead of its whole
+subtree. Each level must therefore be a coarser *version* of the same ground,
+not a different part of it. Two mechanisms do this:
 
-- **Terrain is re-sampled per tile.** Every tile is meshed at the same vertex
-  count over its own footprint, so a child covers a quarter of the ground at the
-  same budget and the ground gets four times finer per level.
+- Terrain is re-sampled for each tile. Every tile is meshed with the same
+  vertex count over its own area. A child covers a quarter of its parent's
+  ground with the same vertex count, so the ground gets four times finer at
+  each level.
 
-- **Instances are thinned to a budget.** A tile writes at most ``max_instances``
-  placements, chosen by an even stride so a coarse tile carries a sparse, evenly
-  spread stand-in and the tiles beneath it fill the forest in. The stride is
-  deterministic, so a re-bake produces the same world.
+- Instances are thinned to a budget. A tile writes at most ``max_instances``
+  placements, chosen by an even stride. A coarse tile carries a sparse, even
+  sample of the forest, and the tiles below it fill it in. The stride is
+  deterministic, so baking again produces the same world.
 
-Each layer also picks its mesh by the tile's error: a detail ladder of
-``(error, mesh)`` pairs lets distant tiles carry a billboard impostor where
-near ones carry the real tree.
+Each layer also chooses its mesh by the tile's error. A detail ladder of
+``(error, mesh)`` pairs lets distant tiles carry a billboard impostor while
+near tiles carry the full tree.
 
 Geometric error
 ~~~~~~~~~~~~~~~
 
-The root's error defaults to its width over the terrain's sampling rate -- the
-scale at which drawing the root instead of its children is visibly wrong --
-and halves at every level. Leaves claim zero, which is how a tileset says
-nothing finer exists. The writer refuses a tree in which a child claims a
-larger error than its parent, or sits outside its parent's bounds.
+By default, the root's geometric error is its width divided by the terrain's
+sampling rate. That is the scale at which drawing the root instead of its
+children looks wrong. The error halves at every level. Leaf tiles have an
+error of zero, which tells a reader that nothing finer exists. The writer
+refuses a tree in which a child has a larger error than its parent, or lies
+outside its parent's bounds.
 
 Describing a world of your own
 ------------------------------
 
-A world is a list of *layers*. A layer answers one question -- what is in this
-region, at this error? -- and the baker asks every layer at every node:
+A world is a list of *layers*. For each node of the tree, the baker calls
+every layer with the node's region and error, and the layer returns its
+content for that region at that detail:
 
 .. code-block:: python
 
@@ -257,74 +267,88 @@ region, at this error? -- and the baker asks every layer at every node:
                        credits=['Elevation: SRTM, public domain'])
    print(result.summary())
 
-**Say how far apart, not how many, for anything you will thin afterwards.**
-Uniform random candidates later cut down to a minimum separation is
-dart-throwing: to saturate the packing it has to be handed several times the
-number of instances it will keep, and every one costs a height lookup, a
-distance-to-road query and four more lookups for the slope. A jittered grid at
-the spacing asks for the answer directly. On the shipped four-kilometre world
-that was eight million candidates for half a million trees and most of what a
-bake spent; at a spacing it is two and a half million, and the same forest.
+Scattering millions of points
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Two more things make the difference in a bake that asks about millions of
-points. The filters run **cheapest first, each on what the last one left**.
-And ``slope_fn`` lets a caller that has already sampled the ground — a bake
-builds a height field for the terrain before it scatters anything on it —
-answer "how steep is it here" with a lookup instead of four evaluations of a
-conformed height function. It answers better, too: a central difference over a
-metre reads every wrinkle of an earthwork as a cliff, and a tree cares about
-the hillside.
+Pass ``spacing`` (how far apart) rather than a density (how many) when the
+instances will be thinned to a minimum separation. With a density, the
+scatter places random candidates and then discards those too close together.
+To fill the area, it needs several times as many candidates as it keeps, and
+every candidate costs a height lookup, a distance-to-road query and four more
+lookups for the slope. With a spacing, the scatter places points on a
+jittered grid at that spacing. On the shipped four-kilometre world, half a
+million trees take eight million candidates by density and two and a half
+million by spacing, for the same forest.
+
+Two more things keep a large scatter fast:
+
+- The filters run cheapest first, and each one runs only on the points the
+  previous one kept.
+
+- ``slope_fn`` gives the slope from a height field that is already sampled. A
+  bake builds a height field for the terrain before it scatters anything, so
+  the slope is one lookup instead of four evaluations of the height function.
+  It is also a better slope for placing trees: a central difference over one
+  metre reads every small bump in an earthwork as a cliff, while a tree only
+  cares about the hillside.
+
+Layer types
+~~~~~~~~~~~
 
 ``HeightfieldLayer``
-   ground meshed from a height function, with a per-vertex colour function, an
+   Ground meshed from a height function, with a per-vertex colour function, an
    optional flat water level, and a skirt (in vertex spacings) that hides the
-   seam between a coarse tile and the finer ones beside it.
+   seam between a coarse tile and finer tiles beside it.
 ``InstanceLayer``
-   one mesh placed many times, with the detail ladder and the per-tile instance
+   One mesh placed many times, with the detail ladder and the per-tile instance
    budget described above.
 ``MeshLayer``
-   meshes at fixed positions -- a building, a bridge deck, a prop. Its
-   ``maximum_error`` holds content back from tiles too coarse to be worth the
-   bandwidth.
+   Meshes at fixed positions, such as a building, a bridge deck or a prop.
+   ``maximum_error`` leaves the content out of tiles too coarse for it to be
+   worth the bandwidth.
 ``RoadLayer``
-   a route through the world as a drivable surface (:doc:`Roads <roads>`), on the
-   embankments and in the cuttings it needs, with a deck or a bore where neither
-   will do, split so each tile owns the length of road inside it and re-sampled
-   coarser as the tiles coarsen.
+   A route through the world as a drivable surface (see :doc:`Roads <roads>`),
+   with the embankments and cuttings it needs, and a bridge deck or tunnel bore
+   where neither will do. The road is split so that each tile holds the length
+   of road inside it, and it is re-sampled more coarsely in coarser tiles.
 ``FieldTerrainLayer``
-   the ground as one field rather than a tree of tiles — see below.
+   The ground as one height field rather than a tree of tiles. See :ref:`Ground
+   as a field <field>` below.
 ``VegetationLayer``
-   the whole forest as one table beside the tileset — see below.
+   The whole forest as one table beside the tileset. See :ref:`A forest as a
+   table <vegetation>` below.
 
-A layer is anything with ``bounds()`` and ``content(region, error)``, so a
-world can add its own kind. Two further methods are optional:
+A layer is any object with ``bounds()`` and ``content(region, error)``
+methods, so a world can define its own layer types. Two more methods are
+optional:
 
 ``assets()``
-   ``{filename: bytes}`` written once beside the tileset, for anything the
-   content refers to rather than embeds. A road's surface texture is 440 KB, and
-   a road crosses a great many tiles; written once and referred to by name, it is
-   loaded once too.
+   Returns ``{filename: bytes}`` for files written once beside the tileset, for
+   anything the content refers to rather than embeds. A road's surface texture
+   is 440 KB and a road crosses many tiles. Written once and referred to by
+   name, the texture is also loaded once.
 ``metadata()``
-   a dictionary merged into the tileset's ``extras``, for what a consumer needs
-   to know about the world that its geometry cannot say. A road puts its
-   centreline here, because a game cannot find a track in a pile of triangles.
-   Two layers may fill the same channel when it is a *list* — the props a gantry
-   stands up and the boulders strewn over a landscape are one world's props, and
-   a game reading them wants all of them. Two layers answering the same question
-   stops the bake, because where a lap begins has one answer and taking the last
-   one silently would make it whichever layer was listed later.
+   Returns a dictionary that is merged into the tileset's ``extras``. Use it for
+   information about the world that its geometry does not carry. A road puts
+   its centreline here, because a game cannot find a track in a set of
+   triangles. Two layers may add to the same key when its value is a *list*:
+   the props a gantry sets up and the boulders scattered over a landscape are
+   all props of one world, and a game reading them wants all of them. If two
+   layers set the same key to anything else, the bake stops with an error.
+   A value such as where a lap begins has one correct answer, and the bake
+   does not pick one silently.
 
 .. _field:
 
-Ground as a field, not as tiles
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Ground as a field
+~~~~~~~~~~~~~~~~~
 
-A tiled ground gets finer as the tree refines, which is what a world larger
-than memory needs. A world of a few kilometres does not need it: the whole
-landscape fits in one height field, and drawing it as a :ref:`splat terrain
-<terrain-heightfield>` — one mesh, one draw, detail materials blended per
-pixel — costs less than a tree of vertex-coloured patches and carries crisp
-ground right up to the camera. So a world chooses:
+A tiled ground gets finer as the tree refines, which a world larger than
+memory needs. A world a few kilometres across does not: its whole landscape
+fits in one height field. Drawn as a :ref:`splat terrain
+<terrain-heightfield>` (one mesh, one draw, detail materials blended per
+pixel), it costs less than a tree of vertex-coloured tiles and shows sharp
+ground up to the camera. Use ``FieldTerrainLayer`` for such a world:
 
 .. code-block:: python
 
@@ -335,32 +359,34 @@ ground right up to the camera. So a world chooses:
                               layers=['grass', 'forest_floor', 'rock', 'dirt'],
                               rules=my_rules, road=circuit, road_layer=3)
 
-It puts geometry in no tile at all. What it writes beside the tileset is a
-16-bit height image and an RGBA :ref:`splat control map <controlmap>`, and
-what it puts in ``extras.terrain`` is the four numbers needed to read them
-back: ``extent``, ``base``, ``relief`` and ``resolution``, with the material
-names. ``TilesTerrain`` mounts the field from that and exposes it as
-``.field``, so a game builds its :ref:`colliders <fieldphysics>` from the same
-landscape it is looking at.
+This layer writes no geometry into the tiles. It writes a 16-bit height image
+and an RGBA :ref:`splat control map <controlmap>` beside the tileset. In
+``extras.terrain`` it writes the four numbers needed to read them back
+(``extent``, ``base``, ``relief`` and ``resolution``) and the material names.
+``TilesTerrain`` builds the field from these and exposes it as ``.field``, so
+a game builds its :ref:`colliders <fieldphysics>` from the same landscape it
+draws.
 
-``height_fn_at(spacing)`` is the same ground as a function of how far apart it
-will be sampled, and is what a world with a road in it should give. A cutting
-narrower than the grid is stepped straight over, however deep the height
-function says it is at its centre; told the spacing, the function holds a
-shelf that wide at the verge so a sample lands inside the corridor.
-``conform_terrain_at`` produces one.
+For a world with a road, also pass ``height_fn_at(spacing)``: the same ground
+as a function of the spacing it will be sampled at. A road cutting narrower
+than the sample grid would otherwise fall between samples and not appear,
+however deep the height function says it is at its centre. Given the spacing,
+the function widens the cutting's floor at its edges to that spacing, so at
+least one sample lands inside it. ``conform_terrain_at`` produces such a
+function.
 
 .. _vegetation:
 
-A forest as a table, not as tile content
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+A forest as a table
+~~~~~~~~~~~~~~~~~~~
 
-Trees written into tiles arrive and leave with the tile they stand in, which
-puts the level of detail in the tile's hands. A forest does not work that way:
-what a tree is drawn as depends on how far it is from the *camera*, and the
-tree a hundred metres ahead is the same tree whichever tile it happens to be
-over. Baked per tile it also carries its bark and its leaves in every copy of
-every tile it appears in.
+Trees written into tiles load and unload with their tile, and their level of
+detail follows the tile's. But how a tree should be drawn depends on its
+distance from the *camera*, whichever tile it stands in. Trees baked into
+tiles also repeat their bark and leaf data in every level of tile they appear
+in.
+
+``VegetationLayer`` writes the forest as a table instead:
 
 .. code-block:: python
 
@@ -371,30 +397,29 @@ every tile it appears in.
                             heights=heights, species=my_species,
                             species_id=which_kind)
 
-It writes the table as one compressed array file, copies each species' own
-files into the world under ``trees/``, and names them from
-``extras.vegetation``. A baked world is self-contained: it refers to no path
-on the machine that made it. ``TilesTerrain`` builds a :ref:`VegetationField
-<vegetationfield>` from it and feeds it the camera each tick.
+It writes the table as one compressed array file, copies each species' files
+into the world under ``trees/``, and lists them in ``extras.vegetation``. The
+baked world is self-contained: it refers to no path on the machine that baked
+it. ``TilesTerrain`` builds a :ref:`VegetationField <vegetationfield>` from
+the table and passes it the camera position each tick.
 
-The scatter is still decided at bake time. Where the trees stand, how tall
-they are and which kind each is are decisions about the world, made once with
-the road's corridor kept clear — not something a runtime should be re-rolling.
+The scatter is decided at bake time. Where each tree stands, how tall it is
+and which species it is are part of the world's design, decided once with the
+road's corridor kept clear, and are not re-generated at runtime.
 
-**Tree art carries its own licence.** The toolkit ships none, and a world
-baked from assets that require attribution must carry it: pass the
-attributions to ``bake_world``'s ``credits``, which writes them into the
-tileset's copyright and its ``CREDITS.txt``.
+Tree art carries its own licence. The toolkit ships no tree art. If a world is
+baked from assets that require attribution, pass the attributions to
+``bake_world``'s ``credits``. They are written into the tileset's copyright
+and its ``CREDITS.txt``.
 
 .. _cover:
 
 Ground cover as a recipe
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-What grows on the ground *between* the trees goes the other way. There is far
-too much ground to write a blade of grass for every square metre of it, and
-none of those blades is a decision anybody made, so what travels is the
-recipe:
+Plants on the ground *between* the trees are not written out one by one.
+There are far too many blades of grass to write each one, and none of them is
+a design decision, so the bake writes a recipe instead:
 
 .. code-block:: python
 
@@ -410,21 +435,22 @@ recipe:
                                              canopy=(3.0, 16.0))],
                             cover_on=['grass', 'forest_floor'])
 
-A *set* of plants, because a forest floor is grass and fern and nettle and
-shrub rather than one plant repeated; one species on its own is still accepted
-and means a set of one. Each says how densely it grows, how much it gathers
-into beds, and what depth of tree cover it grows under — so a world comes out
-with thickets where the trees thin and a bare floor where they do not.
-``oglc-bake-plants`` is what turns published scans into them; see :ref:`where
-the plants come from <coverassets>`.
+``cover`` takes a list of plants, because a forest floor has several: grass,
+fern, nettle, shrub. A single ``CoverSpecies`` is also accepted and means a
+list of one. Each species sets how densely it grows (``density``), how much it
+gathers into patches (``patchiness``), and the range of tree cover it grows
+under (``canopy``). The result has thickets where the trees thin out and a
+bare floor under dense trees. ``oglc-bake-plants`` makes cover species from
+published plant scans; see :ref:`where the plants come from <coverassets>`.
 
-Their files are copied in like a species' are, and a file two of them share —
-two variants baked from one scan — is copied once. ``cover_on`` names the
-ground layers they grow on. Where each clump stands is settled by the viewer
-as the camera moves — see :ref:`what grows between the trees <groundcover>`.
-Because the mask is the splat control map, **the control map has to be fine
-enough to resolve the road**: a corridor thinner than one of its pixels is a
-corridor the grass grows over. ``FieldTerrainLayer(control_size=…)``.
+Their files are copied into the world like a tree species' files. A file that
+two species share, such as two variants baked from one scan, is copied once.
+``cover_on`` names the ground layers the plants grow on. The viewer places the
+clumps around the camera as it moves; see :ref:`what grows between the trees
+<groundcover>`. The splat control map decides where cover grows, so **the
+control map must be fine enough to show the road**. Grass grows over a road
+corridor narrower than one control-map pixel. Set the map's size with
+``FieldTerrainLayer(control_size=…)``.
 
 .. _baking-props:
 
@@ -432,10 +458,10 @@ Obstacles
 ~~~~~~~~~
 
 ``OpenGLContext_editor.bake.props.PropLayer`` writes a world's obstacles
-twice: as one instanced node per kind into the tiles that hold them, and as a
-list in the tileset's ``extras``. Both, because the geometry comes and goes
-with a tile and the body must not — see :ref:`things in the way
-<roads-props>`.
+twice: as one instanced node per kind in the tiles that contain them, and as
+a list in the tileset's ``extras``. The geometry loads and unloads with its
+tile, but a physics body must stay in the world, so the body comes from the
+list. See :ref:`things in the way <roads-props>`.
 
 .. code-block:: python
 
@@ -445,10 +471,10 @@ with a tile and the body must not — see :ref:`things in the way
    PropLayer(props=[Prop.of(stone, kind='rock', position=at, scale=1.3)],
              prototypes={'rock': stone})
 
-``prototypes`` is the mesh each kind is drawn as, at the origin with its base
-at y=0; the placement scales and turns it. A prop measured with ``Prop.of``
-takes its radius and height from that mesh, which is what a physics world
-needs to stand a body up without being handed the geometry.
+``prototypes`` gives the mesh drawn for each kind, at the origin with its base
+at y=0. Each placement scales and turns it. ``Prop.of`` measures a prop's
+radius and height from that mesh, so a physics world can create a body for it
+without the geometry.
 
 .. _baking-gantry:
 
@@ -456,10 +482,10 @@ The start/finish line
 ~~~~~~~~~~~~~~~~~~~~~
 
 ``OpenGLContext_editor.bake.gantry.GantryLayer`` writes a circuit's
-start/finish marker: the frame and the line painted under it go into the tile
-that holds them as one mesh reading one picture, and the two legs go into the
-world's props so a car can hit them. Where it belongs comes off the road —
-``world.gantry.start_finish`` takes the crown at the line, spans the
+start/finish gantry. The frame and the line painted under it go into the tile
+that contains them, as one mesh with one texture. The two legs go into the
+world's props, so a car can hit them. ``world.gantry.start_finish`` places the
+gantry from the road: it finds the road's crown at the line, spans the
 carriageway and its shoulders, and measures the ground under each leg:
 
 .. code-block:: python
@@ -469,16 +495,16 @@ carriageway and its shoulders, and measures the ground under each leg:
 
    GantryLayer(placement=start_finish(circuit, ground=height_fn))
 
-``station`` is how far along the road the line is drawn, zero — where a lap
-begins — by default. See :ref:`the start/finish line <roads-gantry>` for the
-object itself.
+``station`` is the distance along the road at which the line is drawn. The
+default is zero, where a lap begins. See :ref:`the start/finish line
+<roads-gantry>` for the gantry itself.
 
 Bringing in authored assets
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``meshes_from_gltf`` reads a designer's ``.glb`` and hands back its meshes
-flattened into one frame -- transforms already applied -- ready to place.
-``combined_mesh`` merges them into one, so a whole prototype rides a single
+``meshes_from_gltf`` reads a designer's ``.glb`` and returns its meshes in one
+coordinate frame, with the file's transforms applied, ready to place.
+``combined_mesh`` merges them into one mesh, so a whole prototype is one
 instanced node:
 
 .. code-block:: python
@@ -488,23 +514,22 @@ instanced node:
    parts = meshes_from_gltf('assets/conifer.glb', scale=1.2)   # bark, needles
    crate = combined_mesh(meshes_from_gltf('assets/crate.glb'))  # one material
 
-``combined_mesh`` refuses meshes that disagree on their material, because the
-result can only wear one: a tree is a bark trunk and alpha-masked needles, and
-merging them paints the needles in bark. Keep them apart — a rung of an
-``InstanceLayer``'s ladder is however many meshes the prototype takes, written
-as a node each over the same placements — or say which material the result
-wears.
+``combined_mesh`` refuses meshes with different materials, because the result
+can have only one material. A tree has a bark trunk and alpha-masked needles,
+and merging them would paint the needles with bark. Either keep the meshes
+separate (a rung of an ``InstanceLayer``'s ladder can hold several meshes,
+each written as its own node over the same placements), or pass the material
+the merged mesh should use.
 
 .. _manifest:
 
-What a world *is*: the manifest
--------------------------------
+The world manifest
+------------------
 
-A tileset says how to draw a world and nothing about what it is. Anything
-offering somebody a **choice** of worlds needs more than that before it loads
-one — what it is called, how far round its road goes, how much of that road is
-carried on structures, and which picture shows it — and reading a tileset to
-find out means loading the world being chosen between.
+A tileset describes how to draw a world, not what the world is. A menu that
+offers a choice of worlds needs to show each world's name, the length of its
+road, how much of that road is on bridges and in tunnels, and a picture. It
+should not have to load each world to find those out.
 
 So a bake writes ``world.json`` beside the tileset, and a chooser reads a
 directory of them:
@@ -516,13 +541,12 @@ directory of them:
    found = read_manifest( '/worlds/ashdown-forest' )     # or its tileset, or the manifest
    print( found.summary() )                              # 'Ashdown Forest, 8.3 km'
 
-``name`` is the only required field, because it is the only one that cannot be
-done without: everything else is description, and a manifest written by an
-older bake that lacks a field is read rather than refused. ``tileset`` and
-``picture`` are named relative to the manifest, so a whole world is one
-directory that can be moved or copied. ``roadLength`` is in metres and
-``structures`` is how many metres of the road sit on each kind of structure —
-what tells a bridge-and-tunnel circuit from a road that lies on the land.
+``name`` is the only required field. Every other field is optional, so a
+manifest without a field still loads. ``tileset`` and ``picture`` are paths
+relative to the manifest, so a world is one directory that can be moved or
+copied. ``roadLength`` is in metres. ``structures`` gives the length of road,
+in metres, on each kind of structure, which distinguishes a circuit of bridges
+and tunnels from a road that follows the land.
 
 .. code-block:: json
 
@@ -538,30 +562,28 @@ what tells a bridge-and-tunnel circuit from a road that lies on the land.
      "tileset": "tileset.json"
    }
 
-It is written for a person as much as for a program — indented, keys spelled
-out — so a world can be renamed or given a picture by editing it. A manifest
-that will not parse reads as *absent* rather than raising: a chooser scanning
-a directory of worlds should skip the broken one and offer the rest.
+The file is indented with full key names, so you can rename a world or give it
+a picture by editing it. ``read_manifest`` returns ``None`` for a manifest
+that does not parse, rather than raising, so a chooser scanning a directory of
+worlds skips the broken one and offers the rest.
 
-``glisteel-bake`` writes one for every bake, naming the world after the output
-directory unless ``--name`` says otherwise.
+``glisteel-bake`` writes a manifest for every bake. The world's name is the
+output directory's name, unless ``--name`` sets another.
 
 Limits
 ------
 
-- **Content is written in world coordinates**, with no per-tile transform.
-  Positions are 32-bit floats, so a world within a few kilometres of the origin
-  holds sub-millimetre precision; a world placed at its true position on the
-  globe would not. Georeferenced placement is the terrain pipeline's next piece
-  of work.
+- Content is written in world coordinates, with no per-tile transform.
+  Positions are 32-bit floats, which gives sub-millimetre precision within a
+  few kilometres of the origin. A world placed at its true position on the
+  globe would lose that precision, so baked worlds are not georeferenced.
 
-- **Dense near-field grass is not baked.** Grass at the density the eye expects,
-  across a whole map, is orders of magnitude more geometry than a tileset can
-  hold; it belongs to the runtime's camera-following vegetation field, which
-  populates a radius around the player and reads baked 2D masks for its density.
-  What the baker writes for grass is those masks.
+- Dense grass near the camera is not baked. Grass at the density the eye
+  expects, over a whole map, is far more geometry than a tileset can hold. The
+  runtime's camera-following vegetation field draws it within a radius of the
+  player, reading baked 2D masks for its density. For grass, the baker writes
+  only those masks.
 
-- **A layer decides its own vertical extent.** The region a bake partitions
-  defaults to everything the layers cover, height included. Passing an explicit
-  ``bounds`` with no vertical extent partitions a slab of zero height and prunes
-  almost everything.
+- The region a bake partitions defaults to everything the layers cover,
+  including their height. If you pass an explicit ``bounds`` with no height,
+  the bake partitions a slab of zero height and discards almost all content.

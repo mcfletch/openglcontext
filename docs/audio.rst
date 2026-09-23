@@ -3,35 +3,33 @@ Spatial Audio
 
 .. rst-class:: introduction
 
-OpenGLContext plays sound that is *in* the scene: an emitter under a
-``Transform`` is heard from where that transform is, fades with distance, can
-be aimed like a spotlight, and pans as you walk past it. The data model is
-**not** a private format — it is glTF's `KHR_audio_emitter
+OpenGLContext plays sound from positions in the scene. An emitter under a
+``Transform`` is heard from that transform's position. Its volume falls with
+distance, it can be aimed like a spotlight, and it pans between the ears as
+the listener moves past it. The data model is glTF's `KHR_audio_emitter
 <https://github.com/omigroup/gltf-extensions/tree/main/extensions/2.0/KHR_audio_emitter>`__
-extension, which is the Web Audio ``PannerNode`` model, so a scene authored in
-Blender or Godot arrives with its sound intact and no translation layer.
-VRML97's own ``Sound`` node is implemented too, on the same machinery. The
-mixing is ours, in numpy, so nothing here depends on a copyleft audio library,
-and every gain curve is a testable function of geometry. The indented
-technical notes point at the code.
+extension, which follows the Web Audio ``PannerNode`` model, so a scene
+authored in Blender or Godot keeps its sound when loaded. VRML97's ``Sound``
+node plays through the same code. The mixing is done in numpy, so no copyleft
+audio library is needed, and each gain curve is a function of geometry that
+can be tested on its own. The indented technical notes point at the code.
 
-**The engine itself is a separate package, `omi_audio
-<https://github.com/mcfletch/omi_audio>`__**, which OpenGLContext depends on
-the way it depends on ``omi_physics``. It holds the data model, every gain
-curve, the clip cache, the mixer, the device seam and the engine, and it knows
-nothing about a scenegraph. What is in OpenGLContext is the two integrations:
-the ``AudioEmitter``, ``AudioSource`` and ``Sound`` nodes, and the per-context
-engine the render pass drives. The split means a project with no renderer — or
-a different one — can use the sound without taking OpenGLContext, and the
-mixer can be tested without one.
+The audio engine is a separate package, `omi_audio
+<https://github.com/mcfletch/omi_audio>`__, which OpenGLContext depends on in
+the same way as it depends on ``omi_physics``. ``omi_audio`` holds the data
+model, the gain curves, the clip cache, the mixer, the device interface and
+the engine, and has no scenegraph code. OpenGLContext adds the
+``AudioEmitter``, ``AudioSource`` and ``Sound`` nodes, and a per-context
+engine that the render pass drives. A project with no renderer, or with a
+different one, can use ``omi_audio`` without OpenGLContext.
 
 .. _audio-quickstart:
 
-The shortest thing that makes a noise
--------------------------------------
+Playing a sound in a scene
+--------------------------
 
-Put an ``AudioEmitter`` under a ``Transform``. That is the whole of it — there
-is no engine to create, no device to open and nothing to update per frame:
+Put an ``AudioEmitter`` under a ``Transform``. There is no engine to create,
+no device to open and nothing to update each frame:
 
 .. code-block:: python
 
@@ -48,27 +46,26 @@ is no engine to create, no device to open and nothing to update per frame:
        ),
    ])
 
-The render pass finds the emitter while it is collecting the frame's nodes,
-works out where it is from the transforms above it, and keeps it aimed at the
-camera. The camera *is* the listener.
+While the render pass collects the frame's nodes, it finds the emitter,
+computes its position from the transforms above it, and aims it relative to
+the camera. The camera is the listener.
 
 .. rst-class:: technical
 
-The nodes are in ``OpenGLContext/scenegraph/audio.py``; the pass calls
-``FlatPass.renderAudio()``, which is four lines and delegates to
+The nodes are in ``OpenGLContext/scenegraph/audio.py``. The pass calls
+``FlatPass.renderAudio()``, which delegates to
 ``OpenGLContext.audio.scene.update()``.
 
-**Sound costs nothing until a scene has some.** No device is opened, and no
-audio thread starts, until a frame is drawn containing something audible.
-Every existing OpenGLContext demo is untouched.
+No audio device is opened and no audio thread is started until a frame that
+contains something audible is drawn. A scene with no sound in it does no audio
+work.
 
-The three ways a sound recurs
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Repeating a sound
+~~~~~~~~~~~~~~~~~
 
-A source plays once, loops, or comes back on a timer, and the third is not the
-second. Ambience is full of sounds an author meant to be *occasional* — a
-distant rumble every half minute, a drip, a creak — and looping one of those
-gives a continuous noise where a sparse one was wanted.
+A source plays once, loops, or repeats after a pause. Use the repeat for
+occasional sounds, such as a distant rumble every half minute, a drip or a
+creak. A loop would make them continuous.
 
 .. list-table::
    :widths: auto
@@ -89,622 +86,74 @@ gives a continuous noise where a sparse one was wanted.
                repeatInterval=30.0,      # seconds of quiet between plays
                repeatVariance=5.0)       # ±5s, so two of them drift apart
 
-The interval is measured from the frame the clip was noticed to have *ended*,
-so a long clip and a short one leave the same gap of quiet. ``repeatVariance``
-is what keeps two speakers of the same sound from beating together for ever;
-the wait it produces is never negative. Both are ignored while ``loop`` is
-set, because a loop has no gaps to time.
-
-``repeatInterval``, ``repeatVariance`` and ``priority`` are the three fields
-that go beyond ``KHR_audio_emitter``. The extension has nowhere to say any of
-them and ambience wants all three.
-
-**A one-shot that has finished stays finished.** Without the fields above,
-nothing restarts it — not on the next frame, not on any later one. A *looping*
-source that stopped is a different matter: nothing ends a loop but voice
-stealing, so it may take a voice again once one frees, which is what ambience
-silenced by a busy moment should do.
-
-.. _audio-dataflow:
-
-How a sound gets from a file to your ears
------------------------------------------
-
-There are two threads and they meet in exactly one place. Everything
-expensive, everything that can fail, and everything that needs to know about
-the world happens on the **control thread**; the **audio thread** multiplies
-numbers and adds them up.
-
-.. figure:: images/diagrams/audio-1.svg
-   :alt: Data flow from a URL through decoding, spatialisation and mixing to the device
-   :class: diagram
-
-   Everything on the left happens once per frame, in the render loop. Everything
-   on the right happens on the device's own thread, tens of times a second, and
-   touches nothing but numpy arrays that already exist.
-
-The one thing crossing the boundary is **a pair of floats per playing sound**.
-A moving emitter is not restarted, re-resolved or re-decoded; its voice's
-target gains are overwritten, and the mixer ramps to them across the next
-block.
-
-.. rst-class:: technical
-
-``omi_audio/engine.py`` owns the left-hand side, ``omi_audio/mixer.py`` the
-right. The mixer imports no path, no matrix and no listener: it is handed
-gains and produces blocks.
-
-.. _pipeline:
-
-The module chain
-----------------
-
-The table below is divided by a marked row, *the package boundary*. Above it
-is the ``omi_audio`` package, which has no idea a scenegraph exists; below it
-is OpenGLContext's own code, which is where the two meet.
-
-.. list-table::
-   :widths: auto
-   :header-rows: 1
-
-   * - Module
-     - Answers
-     - Depends on
-   * - ``omi_audio/model.py``
-     - ``KHR_audio_emitter`` as typed records, with the extension's own field names
-       and defaults; glTF round-trips through ``from_gltf``/``to_gltf``
-     - ``spatial``
-   * - ``omi_audio/spatial.py``
-     - Every gain curve, and where the listener is
-     - numpy
-   * - ``omi_audio/clip.py``
-     - Files → mono float32 samples, decoded once
-     - ``miniaudio`` (optional)
-   * - ``omi_audio/synth.py``
-     - Tones, noise, chirps and impacts made out of arithmetic
-     - ``clip``
-   * - ``omi_audio/mixer.py``
-     - The voice pool and the block mixing
-     - ``clip``, ``spatial``
-   * - ``omi_audio/device.py``
-     - Where blocks go, and what to do when nowhere
-     - ``miniaudio`` (optional)
-   * - ``omi_audio/engine.py``
-     - The one object an application holds
-     - all of the above
-   * - *— the package boundary —*
-     -
-     -
-   * - ``OpenGLContext/audio/scene.py``
-     - Attaching an engine to a context and driving a frame
-     - ``omi_audio.engine``
-   * - ``OpenGLContext/audio/settings.py``
-     - The player's switch, volume and voice budget, as a ``ContextDefinition``
-       sub-node
-     - the field system
-   * - ``OpenGLContext/scenegraph/audio.py``
-     - The ``AudioEmitter``, ``AudioSource`` and ``Sound`` nodes
-     - ``omi_audio.model``, ``omi_audio.spatial``
-
-.. _curves:
-
-The gain curves, and why there are four of them
------------------------------------------------
-
-A sound's loudness at the listener is a **product of independent factors**,
-each a small pure function. Splitting them this way is what makes each of them
-testable in isolation and replaceable without touching the others.
-
-.. code-block:: bash
-
-   level = source.gain
-         × emitter.gain
-         × distance_gain(distance, model, refDistance, maxDistance, rolloff)
-         × cone_gain(angle, coneInnerAngle, coneOuterAngle, coneOuterGain)
-
-   left, right = equal_power_pan(azimuth)
-   voice.set_gain(level * left, level * right)
-
-Distance
-~~~~~~~~
-
-Three models, taken from ``KHR_audio_emitter``, which takes them from
-Web Audio. ``refDistance`` is the radius inside which nothing is attenuated;
-``maxDistance`` is where the fall stops (**zero means never**, which is the
-extension's default).
-
-.. list-table::
-   :widths: auto
-   :header-rows: 1
-
-   * - ``distanceModel``
-     - Gain
-     - Reaches silence?
-   * - ``inverse`` (default)
-     - ``ref / (ref + rolloff × (d − ref))``
-     - No — asymptotic. The physically natural one.
-   * - ``linear``
-     - ``1 − rolloff × (d − ref) / (max − ref)``
-     - Yes, at ``maxDistance``. Needs one set.
-   * - ``exponential``
-     - ``(d / ref) −rolloff``
-     - No — asymptotic, but falls faster than inverse.
-
-Reach for ``linear`` when a sound must be *gone* past a certain range — it is
-the only one that gets there — and ``inverse`` for anything meant to sound
-like a real object in a real room.
-
-Direction: the cone
-~~~~~~~~~~~~~~~~~~~
-
-Set ``shapeType='cone'`` and an emitter radiates like a spotlight. Both angles
-are **angular diameters**, side to side, so the boundary is at half of each.
-Inside the inner cone nothing is attenuated; outside the outer cone the gain
-is ``coneOuterGain``; between them it interpolates linearly. The defaults are
-a full turn, which is why an emitter that sets none of them is never
-attenuated by direction. The emitter points along its own **−Z**, as glTF
-cameras and ``KHR_lights_punctual`` do.
-
-Panning
-~~~~~~~
-
-The source is put into the listener's own frame — azimuth in the horizontal
-plane, 0 straight ahead and positive to the right — and the azimuth becomes a
-pair of ear gains that trace a quarter circle: ``left² + right² = 1`` at every
-angle. Panning therefore moves a sound across the stereo field without
-changing how loud it is. A sound dead ahead is −3 dB in each ear; that is not
-a bug, it is what constant power means.
-
-A source *behind* the listener folds onto its mirror image in front:
-behind-and-right pans right. Two loudspeakers cannot put a sound behind
-anybody, and the fold is what Web Audio specifies rather than something chosen
-here.
-
-.. _aim-rate:
-
-How often a playing sound is re-aimed
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-All of the above — the distance curve, the cone, the azimuth and the pan — is
-worked out for a *playing* sound fifteen times a second rather than once a
-frame. The interval is ``OpenGLContext.scenegraph.audio.AIM_INTERVAL``.
-
-What it produces is a pair of volumes that move continuously and slowly: a
-listener walking at a few metres a second changes them by a fraction over a
-frame, and the mixer ramps between values rather than stepping to them. What
-it costs is paid by every emitter in a level on every frame, so a level with a
-busy soundscape spends a measurable part of its frame there — about two
-milliseconds on the reference machine. Fifteen a second is faster than the
-result can audibly step and slow enough that the cost stops scaling with the
-frame rate.
-
-**Starting** a sound is not delayed by it: a source is aimed the first time it
-is seen, so a sound is placed before it is heard. The interval governs only
-how often one already playing is asked again. Emitters take staggered phases
-so a level's worth of them do not all re-aim on one frame, which would turn
-the saving into a stutter.
-
-VRML97's ellipsoids
-~~~~~~~~~~~~~~~~~~~
-
-The ``Sound`` node describes something none of the above can: **two ellipsoids
-sharing a focus at the sound**, with a ramp between them that is linear in
-*decibels*. It is implemented rather than approximated, because approximating
-a published specification is how a world stops sounding the way its author
-heard it.
-
-.. figure:: images/diagrams/audio-2.svg
-   :alt: Two nested ellipsoids around a sound location, with the ramp between them
-   :class: diagram
-
-   The sound sits at a *focus* of both ellipsoids, not at their centre, which is
-   why a forward-facing sound reaches much further ahead of itself than behind.
-   The reach at any angle collapses to ``2 f b / ((f+b) − (f−b) cos θ)`` — each
-   distance along the axis, and their harmonic mean at right angles.
-
-At the outer ellipsoid the ramp has reached −20 dB, which the specification
-calls inaudible, and beyond it the gain is zero. That step from 0.1 to 0 *is*
-a discontinuity — and it is left alone, because the mixer ramps every gain
-change across a block anyway. The curve stays the specification's own; the
-smoothing happens where smoothing belongs.
-
-.. _mixer:
-
-The mixer, and why it looks the way it does
--------------------------------------------
-
-Everything about the mixer's shape follows from one fact: it runs on the audio
-thread, and the audio thread must never be late. Miss a block and you do not
-get a slow frame, you get a click.
-
-- **The pool is fixed.** ``Voice`` slots are made once, at construction, and
-  reused for ever. Starting a sound configures a slot; it never allocates one. A
-  scene firing a thousand sounds a second costs what a scene firing ten does.
-
-- **The buffers are made once too.** ``Mixer.mix()`` writes through numpy's
-  ``out=`` parameters into pre-allocated arrays and returns a *view*. An
-  allocation on the audio thread is a garbage collection on the audio thread.
-
-- **Nothing there blocks, decodes, resolves a path or logs.** Those all happen
-  on the control thread, before a clip reaches a voice.
-
-- **The lock is control-side only.** ``Mixer.play()`` takes it so two *control*
-  threads cannot claim one slot. The mixing never takes it.
-
-Gain ramping
-~~~~~~~~~~~~
-
-A gain that jumps from one block to the next is a step, and a step is a click.
-Each ear's gain is therefore interpolated from where the last block left it to
-where the control thread has aimed it, reaching the target on the block's
-final sample. A *new* voice, by contrast, starts at its gain with no ramp —
-ramping in would soften the transient that makes a gunshot read as a gunshot.
-
-Voice stealing
-~~~~~~~~~~~~~~
-
-The pool has to be able to refuse, and to take back. When every voice is busy,
-the newcomer is ranked against the weakest one playing — by ``priority``
-first, then by how audible it currently is — and either steals it or is
-refused. Stealing the quietest sound of the lowest priority is the least
-audible theft available.
-
-Because a slot can be taken back, ``play()`` hands out a ``VoiceHandle``
-rather than the slot itself. A handle remembers *which* sound it was for, so a
-caller still steering a sound whose slot was recycled steers nothing instead
-of steering somebody else's explosion. That mistake is silent, intermittent
-and very hard to find, which is why it is designed out rather than documented.
-
-.. code-block:: python
-
-   handle = engine.play('explosion.wav', priority=0.9)
-   ...
-   handle.set_gain(0.2, 0.4)   # does nothing at all once the sound has gone
-   handle.stop()               # likewise; no caller ever has to test first
-
-Muffling
-~~~~~~~~
-
-``mixer.muffle`` runs from 0 (clear) to 1 (underwater) and blends the mix
-towards a low-passed copy of itself. Two cascaded moving averages, each taken
-as the difference of a running sum, so a window of any length costs one pass
-over the block.
-
-The corner is **a frequency** — 450 Hz — and not a fraction of the sample
-rate, which matters more than it looks: "muffled" is a judgement about the
-sound, so a corner set as a share of Nyquist would sit in the middle of the
-register at 8 kHz and above everything audible at 44.1 kHz. At 44.1 kHz:
-
-.. list-table::
-   :widths: auto
-
-   * - Frequency
-     - 100 Hz
-     - 330 Hz
-     - 450 Hz
-     - 660 Hz
-     - 1 kHz
-     - 2 kHz
-     - 4 kHz
-   * - Gain
-     - −0.1 dB
-     - −1.6 dB
-     - −3.0 dB
-     - −6.7 dB
-     - −17.6 dB
-     - −26.5 dB
-     - −59 dB
-
-The bass comes through and the top goes, which is what makes it a *timbre*
-change rather than a volume change. A pure sine has nothing above its
-fundamental, so a low-pass can only alter how loud it is; anything meant to
-show a filter off wants ``synth.tone(..., harmonics=N)``, which is what the
-demo below uses. It is a blend rather than a switch so an application can fade
-it in as a listener submerges.
-
-.. code-block:: python
-
-   engine.muffle = min(1.0, depth_below_surface / 0.5)
-
-.. _silence:
-
-Silence is a backend, not an error
-----------------------------------
-
-Sound can be unavailable two ways, and both end in the same place:
-
-- **The package is absent.** ``miniaudio`` is an optional dependency of
-  ``omi_audio``, pulled in by ``pip install OpenGLContext[audio]`` (or ``pip
-  install omi_audio[playback]`` on its own).
-
-- **No device opens.** A container with no ALSA or PulseAudio, a machine with no
-  sound card, a device something else holds exclusively — or the backend falling
-  back to its *own* null output, which means the same thing wearing a disguise.
-
-Each produces **one warning and a silent run**: never an exception that
-reaches the user, never a refusal to start. ``open_device()`` cannot raise. A
-machine with no sound is a normal machine, continuous integration is one, and
-audio must never be why an application will not start.
-
-That makes the fallback real code that has to keep working, so it is tested
-directly — including a test that forces the import to fail — rather than being
-assumed.
-
-.. rst-class:: technical
-
-In ``omi_audio``, ``tests/test_device.py`` covers the absent-package path, the
-will-not-open path and the backend's-own-null path; ``tests/test_clip.py``
-covers decoding with the backend forced away.
-
-.. _audio-settings:
-
-Settings, and whose volume is whose
------------------------------------
-
-Sound is a **sub-node** of the ``ContextDefinition`` — ``definition.audio``,
-an ``AudioSettings`` node — rather than loose fields, for the same reason the
-movement modes are: it has more than one knob, they belong together, and a
-node gets validation, defaults, serialisation and a generated settings page
-from the field system.
-
-.. list-table::
-   :widths: auto
-   :header-rows: 1
-
-   * - Field
-     - Environment
-     - Default
-     - Means
-   * - ``audio.enabled``
-     - ``OPENGLCONTEXT_AUDIO``
-     - on
-     - Off opens no device and starts no thread. What a capture run, a benchmark or a
-       headless build wants.
-   * - ``audio.volume``
-     - ``OPENGLCONTEXT_AUDIO_VOLUME``
-     - 1.0
-     - The *player's* volume, read every frame so a settings slider takes effect at
-       once.
-   * - ``audio.voices``
-     - —
-     - 32
-     - How many sounds may play at once. A quality setting as much as a budget: a
-       busy scene on a small pool loses its quietest sounds first.
-
-They appear in the F10 settings screen under *Sound*, generated from the
-node's fields like every other setting.
-
-Two volumes, and they multiply
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-This is the one thing here that is easy to get wrong, and the symptom of
-getting it wrong is a volume control that prints a new number and changes
-nothing:
-
-.. list-table::
-   :widths: auto
-   :header-rows: 1
-
-   * - 
-     - Who owns it
-     - Written by
-   * - ``definition.audio.volume`` → ``engine.volume``
-     - the **player**
-     - the settings screen, a volume key. Re-read every frame.
-   * - ``engine.master_gain``
-     - the **application**
-     - the application, once. How loud this scene is authored to be.
-
-The mixer sees their product. Writing one over the other every frame — the
-tempting shortcut — makes whichever loses last exactly one frame. A volume key
-should therefore write ``context.contextDefinition.audio.volume``, not
-``engine.master_gain``: that is the number the settings screen shows and the
-one that is saved.
-
-.. _formats:
-
-Clips, formats and the cache
-----------------------------
-
-A ``Clip`` is the only shape of audio the mixer knows: **one channel of
-float32 samples at one rate**. Everything is normalised to that on the way in,
-because the alternative is a mixer that branches on sample format, channel
-count and rate in its inner loop, sixty times a second, on the audio thread.
-
-Mono is not a simplification but a requirement: a stereo source has already
-decided where it sits in the stereo field, and a sound that has decided cannot
-then be panned to where it actually is in the world. A stereo file is mixed
-down as it is decoded.
-
-``miniaudio`` decodes ``.wav``, ``.mp3``, ``.ogg`` (Vorbis) and ``.flac``, and
-resamples and re-channels *while* decoding, so the normalising above is one
-pass rather than a decode followed by two conversions. It is MIT-licensed, as
-is every decoder it bundles — nothing in the chain is copyleft, which is the
-reason it is the only audio package this project takes.
-
-``ClipCache`` is keyed by name, so a sound fired sixty times a second decodes
-once. A name that fails to decode is remembered as a failure: a missing file
-warns once, not once per shot, and yields a silence rather than an exception.
-The cache does not normalise a name or test it against the filesystem —
-whatever a name means is settled before it gets there, which for a glTF
-document is the job of the resolver.
-
-``AudioSource.url`` is a *list*, most preferred first, and the first entry
-that decodes wins. That is how the glTF codec extensions are read: offer the
-better format, fall back to the one everything can play.
-
-Each entry is resolved against the document the source was read from, and is
-held to what that document may reach: a scene loaded from disk may play audio
-**under its own directory**, and one fetched over ``http(s)`` may play
-**same-origin** audio. An entry outside those bounds is skipped with a warning
-and the next one is tried, so a scene that also offers a clip it is allowed to
-reach still plays. A source built in application code has no document behind
-it and is not confined — that name came from the application. The rules are
-the same ones every other external reference follows; see
-``loaders/resolver.py``.
-
-A source built from a glTF document takes its samples from that document's
-``omi_audio.AudioLibrary`` instead, through ``AudioSource.useLibrary()``,
-which is handed the document's source record rather than an audio index —
-choosing between the encodings a source offers is the library's job. A
-document names its audio by index rather than by anything a node could open —
-audio inside a ``.glb`` has no name at all — so ``url`` there records *where
-the sound is*, for anything that displays it, while the library is what
-produces the bytes. It is empty for audio that has no location: a
-``bufferView``, a ``data:`` URI, or a reference the resolver refuses.
-
-.. _codecs:
-
-Codec extensions
-~~~~~~~~~~~~~~~~
-
-``KHR_audio_emitter`` guarantees only MP3. A document that wants a better
-encoding offers it through a codec extension on the *source*, naming a second
-entry in the same ``audio`` array that holds the same sound:
-
-.. code-block:: json
-
-   {"audio": 0, "extensions": {"OMI_audio_ogg_vorbis": {"audio": 1}}}
-
-The source's own ``audio`` stays as the fallback, so one document plays
-everywhere and sounds better where the codec is available. Both extensions are
-read, kept and written back unchanged; only decoding differs.
-
-.. list-table::
-   :widths: auto
-   :header-rows: 1
-
-   * - Extension
-     - Container / MIME
-     - Suffix
-     - Plays
-   * - ``OMI_audio_ogg_vorbis``
-     - Ogg, ``audio/ogg``
-     - ``.ogg``
-     - **yes**
-   * - ``OMI_audio_opus``
-     - Ogg or WebM, ``audio/opus``, ``audio/webm``
-     - ``.opus``, ``.webm``
-     - no — falls back to the MP3
-
-``omi_audio.formats.decodable()`` asks the backend which formats it reads
-rather than asserting a list, so this table follows the ``miniaudio`` that is
-installed: it reads Vorbis and not Opus, and a build that gained Opus would be
-used without any code changing. An Opus source therefore plays its MP3
-fallback, and a document that offers Opus with *no* fallback says so by
-putting the extension in ``extensionsRequired``.
-
-Every encoding a source offers goes into ``url``, better first, including one
-this build cannot decode — ``url`` says where the sound is. Which one is
-actually fetched is ``AudioLibrary.clip_for()``, and it asks only for codecs
-it can read. An encoding that will not resolve falls back to the MP3; one that
-is merely still downloading is waited for, since falling through on "not here
-yet" would play the worse encoding of every sound whose better one had not
-landed. An application with its own decoder sets ``library.encodings`` and the
-better encoding is asked for from then on.
-
-Sounds with no files
-~~~~~~~~~~~~~~~~~~~~
-
-``omi_audio.synth`` makes clips out of arithmetic — a tone, a swept chirp,
-white noise, a percussive impact. They cost nothing to redistribute, which is
-why the demo below ships no assets, and they are genuinely useful as
-placeholders: a game with a synthesised gunshot is a game that can be played
-and tuned.
-
-.. code-block:: python
-
-   from omi_audio import synth
-   engine.clips.put('ping', synth.impact(0.4, seed=1))
-   engine.play('ping', priority=1.0)
-
-To put one *in a scene* rather than play it directly, hand it to an
-``AudioSource`` with ``useClip()``. There is nothing to name and nothing to
-register: the source takes the clip, and everything after that is the path a
-decoded clip takes, so a synthesised sound is positioned, attenuated, panned
-and voiced exactly as any other.
-
-.. code-block:: python
-
-   source = AudioSource(loop=True, gain=0.0)
-   source.useClip(synth.tone(400.0, 2.0, harmonics=7, fade=0.0))
-   emitter = AudioEmitter(sources=[source])
-   ...
-   source.gain = 0.3            # every frame, from whatever is being simulated
-   source.playbackRate = 1.8
-
-That is how a sound a game *computes* is made — a motor note whose pitch is
-road speed, wind that goes as the square of it, a footstep varied so two in a
-row are not the same one twice. The clip arrives at the engine's own sample
-rate, resampled if it is not already there, because the mixer runs at the rate
-the device was opened at and a clip at another would play at the wrong pitch;
-that is the same courtesy ``ClipCache.put()`` does a clip registered by name.
-A clip handed over this way takes precedence over ``url`` and over a
-document's audio library — an application that hands one over has said which
-sound it means.
-
-A loop wants a clip whose end meets its beginning. A ramp at each end —
-``fade``, which every generator applies by default so a one-shot does not
-click — becomes a pulse at the loop rate, which is a sound of its own. Pass
-``fade=0.0`` and give ``tone()`` a whole number of cycles, or use ``rumble()``
-with ``decay=0.0`` and ``attack=0.0``, which holds its level throughout and
-joins noise to noise.
+The interval is measured from the frame in which the clip is found to have
+ended, so a long clip and a short one leave the same gap of quiet.
+``repeatVariance`` varies each wait, so two sources of the same sound drift
+apart instead of playing in step. The wait is never negative. Both fields are
+ignored while ``loop`` is set.
+
+``repeatInterval``, ``repeatVariance`` and ``priority`` are not part of
+``KHR_audio_emitter``; the extension has no fields for them.
+
+A one-shot that has finished stays finished. Without the repeat fields,
+nothing restarts it. A looping source that has stopped is different: a loop
+only stops when its voice is stolen, so it takes a voice again when one is
+free. Ambience silenced during a busy moment comes back afterwards.
 
 .. _gltf:
 
 Loading sound from glTF
 -----------------------
 
-A document's ``KHR_audio_emitter`` block is read into the native model and
-turned into scenegraph nodes as the scene is built. A node's emitters become
-children of that node's ``Transform``; a scene's emitters — which the
-extension requires to be ``global`` — hang off the root, where no transform
-reaches them.
+The :doc:`glTF loader <gltf>` reads a document's ``KHR_audio_emitter`` block
+into the ``omi_audio`` model and turns it into scenegraph nodes while it
+builds the scene. A node's emitters become children of that node's
+``Transform``. A scene's emitters, which the extension requires to be
+``global``, are attached to the root, where no transform applies.
 
 .. code-block:: python
 
    from OpenGLContext.loaders.gltf import loader
    scene = loader.load_gltf('room.gltf')   # its emitters are already in there
 
-Audio arrives the three ways glTF allows, and all three work: a ``uri`` beside
-the document, a ``data:`` URI inline, and a ``bufferView`` inside the file —
-which is what a ``.glb``, the dominant shipping format, uses.
+Audio can be stored in the three ways glTF allows, and all three are read: a
+``uri`` beside the document, an inline ``data:`` URI, and a ``bufferView``
+inside the file, as in a ``.glb``.
 
-Who decides what a ``uri`` means
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Resolving audio references
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-**This does.** ``omi_audio`` never resolves, opens or interprets a document's
-``uri``: a scene file comes from a third party, and a reference in one may be
-relative, absolute, percent-encoded, a ``data:`` URI, an ``http:`` URL or a
-deliberate attempt to escape the content directory. Only the loader knows
-where the document was and what it may reach.
+``omi_audio`` never resolves, opens or interprets a document's ``uri``. A
+scene file may come from a third party, and a reference in it may be
+relative, absolute, percent-encoded, a ``data:`` URI, an ``http:`` URL, or an
+attempt to escape the content directory. Only the loader has the document's
+location and the rules for what it may reach.
 
-So audio goes through the same security-hardened ``Resolver`` every other
-external reference does — same-origin http(s) only, or confined to the base
-directory, size-capped — and the bytes are handed to
-``omi_audio.AudioLibrary``, which decodes them and holds the result for the
-document. A sound is confined to the document's own origin exactly as a
-texture is, and a reference the resolver refuses costs that sound rather than
-the scene.
+Audio references therefore go through the same ``Resolver`` as every other
+external reference: same-origin http(s) only, or confined to the base
+directory, with a size limit (see :doc:`untrusted`). The resolved bytes go to
+``omi_audio.AudioLibrary``, which decodes them and keeps the result for the
+document. A reference the resolver refuses silences that one sound; the rest
+of the scene loads.
 
 .. rst-class:: technical
 
-``loaders/gltf/scene.py``: ``audio_library`` builds the ``AudioLibrary`` with
-``_fetch_audio`` as its fetch callback, and ``_audio_emitters`` resolves a
-node's or scene's references through
-``omi_audio.model.AudioDocument.emitters_for_node`` / ``emitters_for_scene`` —
-the latter enforcing the extension's rule that a scene, which has no
-transform, carries only ``global`` emitters. The model reader is
-``omi_audio.model.from_gltf``, and ``omi_audio.model.to_gltf`` writes it back
-out, omitting every field still at its default.
+In ``loaders/gltf/scene.py``, ``audio_library`` builds the ``AudioLibrary``
+with ``_fetch_audio`` as its fetch callback. ``_audio_emitters`` resolves a
+node's or a scene's references through
+``omi_audio.model.AudioDocument.emitters_for_node`` and
+``emitters_for_scene``; the latter enforces the extension's rule that a
+scene, which has no transform, carries only ``global`` emitters. The model
+reader is ``omi_audio.model.from_gltf``. ``omi_audio.model.to_gltf`` writes the
+model back out, leaving out every field that is at its default.
 
 .. _vrml:
 
 The VRML97 ``Sound`` node
 -------------------------
 
-VRML97's own ``Sound`` and ``AudioClip`` play, with the fields pyvrml97
-declares for them:
+:doc:`VRML97's <vrml97>` own ``Sound`` and ``AudioClip`` nodes play, with the
+fields pyvrml97 declares for them:
 
 .. code-block:: python
 
@@ -715,30 +164,31 @@ declares for them:
        intensity=0.8, priority=0.2, spatialize=True,
    )
 
-Of the time-dependent behaviour it honours what can be seen from outside:
-``startTime`` and ``stopTime`` bound when the clip sounds, ``loop`` repeats
-it, ``pitch`` sets the playback rate, and ``isActive`` and
-``duration_changed`` are sent. Fractional seeking into a clip that started
-before the scene did is not implemented; a clip whose ``startTime`` has passed
-begins at its start. ``spatialize=FALSE`` still fades with distance but sits
-in the middle of the stereo field, which is what the specification says.
+``startTime`` and ``stopTime`` bound when the clip plays, ``loop`` repeats
+it, and ``pitch`` sets the playback rate. The ``isActive`` and
+``duration_changed`` events are sent. A clip whose ``startTime`` has already
+passed starts from its beginning; seeking into a clip that started before the
+scene did is not supported. With ``spatialize=FALSE`` the sound still fades
+with distance but stays in the middle of the stereo field, as the
+specification says. The node's gain model is described under
+:ref:`audio-ellipsoids`.
 
 .. rst-class:: technical
 
 The geometry is ``omi_audio.spatial.ellipsoid_gain_at(location, direction,
-listener_position, ...)``, which takes three world-space vectors and works the
-distance and the angle out for itself. All the node does is put its
-``location`` and ``direction`` into world space, multiply by ``intensity``,
-and pan — a sound with a zero ``direction`` has no front to tell from its
-back, so its ``front`` distances reach in every direction.
+listener_position, ...)``, which takes three world-space vectors and computes
+the distance and the angle itself. The node transforms its ``location`` and
+``direction`` into world space, multiplies by ``intensity``, and pans. A
+sound with a zero ``direction`` has no front or back, so its ``front``
+distances apply in every direction.
 
 .. _api:
 
-Driving it directly
--------------------
+Playing sounds from code
+------------------------
 
-A game does not want to put a node in the scene for every gunshot. The engine
-is available directly, and it is the same engine the nodes use:
+To play a sound without adding a node to the scene, such as a gunshot, call
+the engine directly. It is the same engine the nodes use:
 
 .. code-block:: python
 
@@ -758,33 +208,583 @@ is available directly, and it is the same engine the nodes use:
    * - Call
      - Does
    * - ``engine.play(source, ...)``
-     - Starts a clip or a named file; returns a ``VoiceHandle`` or None. None is an
-       ordinary outcome, not an error.
+     - Starts a clip or a named file. Returns a ``VoiceHandle``, or None when
+       the clip does not resolve or the voice pool refuses it. None is not an
+       error.
    * - ``engine.aim(handle, emitter, position, forward)``
-     - Re-points a playing sound. Accepts a None handle.
+     - Re-aims a playing sound. Accepts a None handle.
    * - ``engine.gains_for(emitter, position, forward, gain)``
-     - The two numbers, without playing anything — useful for tests and for deciding
-       whether a sound is worth starting at all.
+     - Returns the two ear gains without playing anything. Use it in tests, or
+       to decide whether a sound is worth starting.
    * - ``engine.listen(view_platform)``
-     - Moves the listener. The render pass already does this each frame.
+     - Moves the listener. The render pass calls it every frame.
    * - ``engine.master_gain``
-     - The application's mix level. Set it once; it is not the player's volume and is
-       never overwritten by one.
+     - The application's mix level. Set it once. It is separate from the
+       player's volume and is never overwritten by it.
    * - ``engine.volume``
-     - The player's volume, refreshed each frame from ``definition.audio.volume``.
-       Write the field, not this.
+     - The player's volume, copied every frame from
+       ``definition.audio.volume``. Write the field, not this.
    * - ``engine.muffle``
-     - 0 clear to 1 underwater, on the whole mix.
+     - Low-pass blend on the whole mix, from 0 (clear) to 1 (underwater). See
+       :ref:`audio-muffle`.
    * - ``audioscene.describe(context)``
-     - A dict for a debug overlay: device, voice count, volume, muffle.
+     - Returns a dict for a debug overlay: device, voice count, volume, muffle.
+
+.. _audio-synth:
+
+Generated sounds
+~~~~~~~~~~~~~~~~
+
+``omi_audio.synth`` generates clips from arithmetic: tones, swept chirps,
+white noise, percussive impacts and rumble. They need no asset files, which is
+why the demo ships none, and they work as placeholders while a game is being
+built and tuned.
+
+.. code-block:: python
+
+   from omi_audio import synth
+   engine.clips.put('ping', synth.impact(0.4, seed=1))
+   engine.play('ping', priority=1.0)
+
+To put a generated clip in a scene, give it to an ``AudioSource`` with
+``useClip()``. It needs no name and no registration. From then on it follows
+the same path as a decoded clip: it is positioned, attenuated, panned and
+given a voice like any other sound.
+
+.. code-block:: python
+
+   source = AudioSource(loop=True, gain=0.0)
+   source.useClip(synth.tone(400.0, 2.0, harmonics=7, fade=0.0))
+   emitter = AudioEmitter(sources=[source])
+   ...
+   source.gain = 0.3            # every frame, from whatever is being simulated
+   source.playbackRate = 1.8
+
+Use this for sounds that the game computes: an engine note whose pitch
+follows road speed, wind whose level follows the square of the speed, or
+footsteps varied so that two in a row differ. The clip is resampled to the
+engine's sample rate if needed, because the mixer runs at the rate the device
+was opened at and a clip at another rate would play at the wrong pitch.
+``ClipCache.put()`` does the same for a clip registered by name. A clip given
+through ``useClip()`` takes precedence over ``url`` and over a document's audio
+library.
+
+A looped clip must end where it begins. By default every generator applies a
+short ``fade`` at each end so that a one-shot does not click; in a loop, that
+fade is heard as a pulse at the loop rate. For a loop, pass ``fade=0.0`` and
+give ``tone()`` a whole number of cycles, or use ``rumble()`` with
+``decay=0.0`` and ``attack=0.0``, which holds a constant level so the noise at
+the end joins the noise at the start.
+
+.. _audio-settings:
+
+Settings and volume
+-------------------
+
+Audio settings are an ``AudioSettings`` node at ``definition.audio`` on the
+``ContextDefinition``. As a node, it gets validation, defaults, serialisation
+and a generated settings page from the field system.
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Field
+     - Environment
+     - Default
+     - Means
+   * - ``audio.enabled``
+     - ``OPENGLCONTEXT_AUDIO``
+     - on
+     - Off opens no device and starts no thread. Use it for capture runs,
+       benchmarks and headless builds.
+   * - ``audio.volume``
+     - ``OPENGLCONTEXT_AUDIO_VOLUME``
+     - 1.0
+     - The *player's* volume. It is read every frame, so a settings slider
+       takes effect at once.
+   * - ``audio.voices``
+     - —
+     - 32
+     - How many sounds can play at once. When more sounds want to play, the
+       :ref:`least important are dropped first <audio-stealing>`.
+
+The fields appear under *Sound* in the F10 :ref:`settings screen
+<overlayui-settings>`. The environment variables are listed with the others
+in :doc:`environment`.
+
+Two volumes that multiply
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+There are two volume controls, and the mixer uses their product:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * -
+     - Who owns it
+     - Written by
+   * - ``definition.audio.volume`` → ``engine.volume``
+     - the **player**
+     - the settings screen, a volume key. Re-read every frame.
+   * - ``engine.master_gain``
+     - the **application**
+     - the application, once. How loud this scene is authored to be.
+
+Do not copy one into the other every frame. If code does that, a change to
+the overwritten value lasts one frame: the volume control shows a new number
+and the sound does not change. A volume key writes
+``context.contextDefinition.audio.volume``, not ``engine.master_gain``. That
+field is the number the settings screen shows and saves.
+
+.. _silence:
+
+Running without sound
+---------------------
+
+Sound can be unavailable in two ways, and both have the same result:
+
+- The package is missing - ``miniaudio`` is an optional dependency of
+  ``omi_audio``. ``pip install OpenGLContext[audio]`` installs it, as does
+  ``pip install omi_audio[playback]`` on its own.
+
+- No device opens - a container with no ALSA or PulseAudio, a machine with no
+  sound card, a device another program holds exclusively, or the backend
+  falling back to its own null output, which is treated the same way.
+
+In either case the engine logs one warning and the program runs silently. It
+never raises an exception to the user and never refuses to start;
+``open_device()`` does not raise. Many machines, including continuous
+integration runners, have no sound, and the application runs the same on
+them.
+
+.. rst-class:: technical
+
+In ``omi_audio``, ``tests/test_device.py`` covers the missing-package path, the
+device-will-not-open path and the backend's own null output, including a test
+that forces the import to fail. ``tests/test_clip.py`` covers decoding with
+the backend removed.
+
+.. _audio-dataflow:
+
+How sound reaches the device
+----------------------------
+
+Two threads are involved. Everything expensive, everything that can fail, and
+everything that needs to know about the world runs on the **control
+thread**, which is the render loop. The **audio thread** only multiplies and
+adds numbers.
+
+.. figure:: images/diagrams/audio-1.svg
+   :alt: Data flow from a URL through decoding, spatialisation and mixing to the device
+   :class: diagram
+
+   The left side runs once per frame, in the render loop. The right side runs
+   on the device's own thread, tens of times a second, and uses only numpy
+   arrays that already exist.
+
+The only data passed between the threads is **a pair of gains for each
+playing sound**. When an emitter moves, its sound is not restarted,
+re-resolved or re-decoded. The voice's target gains are overwritten, and the
+mixer ramps to them over the next block.
+
+.. rst-class:: technical
+
+``omi_audio/engine.py`` is the left side and ``omi_audio/mixer.py`` the
+right. The mixer imports no path, no matrix and no listener: it receives gains
+and produces blocks of samples.
+
+.. _pipeline:
+
+The module chain
+----------------
+
+The rows above *the package boundary* are the ``omi_audio`` package, which
+has no scenegraph code. The rows below it are OpenGLContext's integration.
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Module
+     - Provides
+     - Depends on
+   * - ``omi_audio/model.py``
+     - ``KHR_audio_emitter`` as typed records, with the extension's own field
+       names and defaults; glTF round-trips through ``from_gltf``/``to_gltf``
+     - ``spatial``
+   * - ``omi_audio/spatial.py``
+     - Every gain curve, and the listener's position
+     - numpy
+   * - ``omi_audio/clip.py``
+     - Files decoded once to mono float32 samples
+     - ``miniaudio`` (optional)
+   * - ``omi_audio/synth.py``
+     - Generated tones, noise, chirps and impacts
+     - ``clip``
+   * - ``omi_audio/mixer.py``
+     - The voice pool and the block mixing
+     - ``clip``, ``spatial``
+   * - ``omi_audio/device.py``
+     - The output device, and the silent fallback when there is none
+     - ``miniaudio`` (optional)
+   * - ``omi_audio/engine.py``
+     - The one object an application holds
+     - all of the above
+   * - *— the package boundary —*
+     -
+     -
+   * - ``OpenGLContext/audio/scene.py``
+     - Attaching an engine to a context and driving it each frame
+     - ``omi_audio.engine``
+   * - ``OpenGLContext/audio/settings.py``
+     - The player's switch, volume and voice budget, as a ``ContextDefinition``
+       sub-node
+     - the field system
+   * - ``OpenGLContext/scenegraph/audio.py``
+     - The ``AudioEmitter``, ``AudioSource`` and ``Sound`` nodes
+     - ``omi_audio.model``, ``omi_audio.spatial``
+
+.. _curves:
+
+Gain curves
+-----------
+
+A sound's level at the listener is the **product of independent factors**.
+Each is a small pure function, so each can be tested on its own and replaced
+without changing the others.
+
+.. code-block:: text
+
+   level = source.gain
+         × emitter.gain
+         × distance_gain(distance, model, refDistance, maxDistance, rolloff)
+         × cone_gain(angle, coneInnerAngle, coneOuterAngle, coneOuterGain)
+
+   left, right = equal_power_pan(azimuth)
+   voice.set_gain(level * left, level * right)
+
+Distance
+~~~~~~~~
+
+There are three distance models, taken from ``KHR_audio_emitter``, which
+takes them from Web Audio. ``refDistance`` is the radius inside which there is
+no attenuation. ``d`` below is never less than ``refDistance``.
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - ``distanceModel``
+     - Gain
+     - Reaches silence?
+   * - ``inverse`` (default)
+     - ``ref / (ref + rolloff × (d − ref))``
+     - No; it approaches zero. The closest to a real sound source.
+   * - ``linear``
+     - ``1 − rolloff × (d − ref) / (max − ref)``
+     - Yes, at ``maxDistance``.
+   * - ``exponential``
+     - ``(d / ref) ^ (−rolloff)``
+     - No; it approaches zero, faster than ``inverse``.
+
+Only the ``linear`` model uses ``maxDistance``: the gain reaches zero there
+and stays at zero beyond it. A ``linear`` emitter needs a ``maxDistance``
+greater than its ``refDistance``. With the default of 0, it is heard at full
+volume inside ``refDistance`` and not at all outside it. ``inverse`` and
+``exponential`` ignore ``maxDistance``, so an emitter using them is faintly
+audible at any distance. An application that wants ``maxDistance`` to act as a
+cut-off for every model can test ``omi_audio.model``'s
+``PositionalProperties.in_range()`` and not start sounds out of range; there, a
+``maxDistance`` of 0 means no limit.
+
+Use ``linear`` when a sound must be gone beyond a certain range, and
+``inverse`` for a sound that should behave like a real object in a real room.
+
+Direction: the cone
+~~~~~~~~~~~~~~~~~~~
+
+Set ``shapeType='cone'`` to make an emitter radiate like a spotlight. Both
+angles are **angular diameters**, measured side to side, so each boundary is
+at half its angle from the axis. Inside the inner cone there is no
+attenuation. Outside the outer cone the gain is ``coneOuterGain``. Between the
+two it changes linearly. Both angles default to a full turn (2π), so an
+emitter that sets neither is not attenuated by direction. The emitter points
+along its own **−Z**, as glTF cameras and ``KHR_lights_punctual`` lights do.
+
+Panning
+~~~~~~~
+
+The source's position is converted to the listener's frame, giving an azimuth
+in the horizontal plane: 0 straight ahead, positive to the right. The azimuth
+sets a pair of ear gains on a quarter circle, with ``left² + right² = 1`` at
+every angle. Panning therefore moves a sound across the stereo field without
+changing its loudness. A sound straight ahead is −3 dB in each ear, as
+constant-power panning requires.
+
+A source *behind* the listener is folded onto its mirror image in front, so a
+sound behind and to the right pans right. Two loudspeakers cannot place a
+sound behind the listener, and Web Audio specifies this fold.
+
+.. _aim-rate:
+
+How often a playing sound is re-aimed
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For a *playing* sound, the distance curve, the cone, the azimuth and the pan
+are recomputed fifteen times a second, not every frame. The interval is
+``OpenGLContext.scenegraph.audio.AIM_INTERVAL``.
+
+The gains change slowly and smoothly: a listener walking at a few metres a
+second changes them by a small fraction per frame, and the mixer ramps
+between values instead of stepping. The computation costs time for every
+emitter in a level, so a level with many sounds spends a measurable part of
+each frame on it, about two milliseconds on the reference machine. At fifteen
+times a second the steps are not audible, and the cost does not grow with the
+frame rate.
+
+The interval does not delay the **start** of a sound: a source is aimed the
+first time it is seen, so it is placed before it is heard. The interval only
+sets how often a playing sound is aimed again. Emitters are given staggered
+phases, so they do not all re-aim in the same frame, which would cause a
+stutter.
+
+.. _audio-ellipsoids:
+
+VRML97's ellipsoids
+~~~~~~~~~~~~~~~~~~~
+
+The ``Sound`` node uses a different model: **two ellipsoids sharing a focus at
+the sound**, with a ramp between them that is linear in *decibels*.
+OpenGLContext implements this model as the specification defines it, so a
+VRML97 world sounds the way its author heard it.
+
+.. figure:: images/diagrams/audio-2.svg
+   :alt: Two nested ellipsoids around a sound location, with the ramp between them
+   :class: diagram
+
+   The sound is at a *focus* of both ellipsoids, not at their centre, so a
+   forward-facing sound reaches much further ahead than behind. The reach at
+   angle θ is ``2 f b / ((f+b) − (f−b) cos θ)``: the front and back distances
+   along the axis, and their harmonic mean at right angles.
+
+At the outer ellipsoid the ramp has reached −20 dB, which the specification
+treats as inaudible, and beyond it the gain is zero. The step from 0.1 to 0 is
+a discontinuity in the curve, but the mixer ramps every gain change across a
+block, so it produces no click.
+
+.. _mixer:
+
+The mixer
+---------
+
+The mixer runs on the audio thread, which must never be late: a late block is
+heard as a click. This sets how the mixer is built:
+
+- Fixed voice pool - ``Voice`` slots are created once, when the mixer is
+  constructed, and reused. Starting a sound configures a slot and allocates
+  nothing, so a thousand sounds a second allocate no more than ten.
+
+- Buffers made once - ``Mixer.mix()`` writes into pre-allocated arrays through
+  numpy's ``out=`` parameters and returns a *view*. An allocation on the audio
+  thread can start a garbage collection on the audio thread.
+
+- No blocking work - the audio thread does not block, decode, resolve paths or
+  log. That work happens on the control thread before a clip reaches a voice.
+
+- Lock on the control side only - ``Mixer.play()`` takes a lock so that two
+  *control* threads cannot claim the same slot. Mixing never takes it.
+
+Gain ramping
+~~~~~~~~~~~~
+
+A gain that jumps between blocks makes a click. Each ear's gain is therefore
+interpolated from its value at the end of the last block to the target the
+control thread set, reaching the target on the block's last sample. A *new*
+voice starts at its gain without a ramp, so that the attack of a sound such as
+a gunshot stays sharp.
+
+.. _audio-stealing:
+
+Voice stealing
+~~~~~~~~~~~~~~
+
+When every voice is busy, a new sound is compared with the weakest sound
+playing, first by ``priority`` and then by how loud it currently is. The new
+sound either takes that voice or is refused. Stealing the quietest sound of
+the lowest priority is the least audible choice.
+
+Because a voice can be taken back, ``play()`` returns a ``VoiceHandle``, not
+the slot itself. The handle records which sound it was for. Once that sound's
+slot is reused, calls on the handle do nothing, so code still steering an old
+sound cannot change a different sound that now uses the slot.
+
+.. code-block:: python
+
+   handle = engine.play('explosion.wav', priority=0.9)
+   ...
+   handle.set_gain(0.2, 0.4)   # does nothing once the sound has ended
+   handle.stop()               # likewise; there is no need to check first
+
+.. _audio-muffle:
+
+Muffling
+~~~~~~~~
+
+``engine.muffle`` (the mixer's ``muffle``) runs from 0 (clear) to 1
+(underwater). It blends the mix towards a low-passed copy of itself. The
+filter is two cascaded moving averages, each computed as the difference of a
+running sum, so a window of any length costs one pass over the block.
+
+The filter's corner is a fixed frequency, **450 Hz**, not a fraction of the
+sample rate. A corner set as a fraction of the Nyquist frequency would sit in
+the middle of the audible range at 8 kHz and above everything audible at
+44.1 kHz. The response at 44.1 kHz:
+
+.. list-table::
+   :widths: auto
+
+   * - Frequency
+     - 100 Hz
+     - 330 Hz
+     - 450 Hz
+     - 660 Hz
+     - 1 kHz
+     - 2 kHz
+     - 4 kHz
+   * - Gain
+     - −0.1 dB
+     - −1.6 dB
+     - −3.0 dB
+     - −6.7 dB
+     - −17.6 dB
+     - −26.5 dB
+     - −59 dB
+
+The bass passes and the treble is removed, so the timbre changes, not only
+the volume. A pure sine wave has nothing above its fundamental, so a low-pass
+filter can only make it quieter. To hear the filter, use a sound with
+harmonics, such as ``synth.tone(..., harmonics=N)``, as the demo does. The
+muffle is a blend, not a switch, so an application can fade it in as the
+listener goes under water:
+
+.. code-block:: python
+
+   engine.muffle = min(1.0, depth_below_surface / 0.5)
+
+.. _formats:
+
+Clips, formats and the cache
+----------------------------
+
+A ``Clip`` is the only audio format the mixer accepts: **one channel of
+float32 samples at one sample rate**. Every sound is converted to that as it
+is loaded, so the mixer's inner loop never has to handle different sample
+formats, channel counts or rates.
+
+Clips are mono because a sound is panned by its position in the world. A
+stereo recording has already placed itself in the stereo field, so it could
+not also be panned to its position in the scene. A stereo file is mixed down
+to mono as it is decoded.
+
+``miniaudio`` decodes ``.wav``, ``.mp3``, ``.ogg`` (Vorbis) and ``.flac``. It
+resamples and converts channels while decoding, so the conversion takes one
+pass. ``miniaudio`` is MIT-licensed, as is every decoder it bundles, and
+``libopus``, used for :ref:`Opus <codecs>`, is BSD-licensed, so nothing in the
+chain is copyleft.
+
+``ClipCache`` is keyed by name, so a sound played many times is decoded once.
+A name that fails to decode is cached as a failure: a missing file logs one
+warning, not one per play, and plays as silence instead of raising an
+exception. The cache does not normalise a name or check it against the
+filesystem. The caller resolves the name before it reaches the cache; for a
+glTF document, the resolver does that.
+
+``AudioSource.url`` is a *list*, most preferred first, and the first entry
+that decodes is played. This is how the glTF codec extensions work: a document
+offers the better format first, then one that every player can decode.
+
+Each entry is resolved against the document the source was read from, and is
+limited to what that document may reach. A scene loaded from disk can play
+audio **under its own directory**. A scene fetched over ``http(s)`` can play
+**same-origin** audio. An entry outside those limits is skipped with a
+warning, and the next entry is tried. A source created in application code has
+no document behind it, so it is not limited. These are the same rules as for
+every other external reference; see ``loaders/resolver.py`` and
+:doc:`untrusted`.
+
+A source built from a glTF document gets its samples from that document's
+``omi_audio.AudioLibrary`` instead, through ``AudioSource.useLibrary()``.
+``useLibrary()`` takes the document's source record, not an audio index,
+because the library chooses between the encodings the source offers. A glTF
+document identifies audio by index, and audio inside a ``.glb`` has no name at
+all. For these sources, ``url`` records *where the sound is*, for display, and
+the library supplies the bytes. ``url`` is empty for audio that has no
+location: a ``bufferView``, a ``data:`` URI, or a reference the resolver
+refuses.
+
+.. _codecs:
+
+Codec extensions
+~~~~~~~~~~~~~~~~
+
+``KHR_audio_emitter`` guarantees only MP3. A document can offer a better
+encoding through a codec extension on the *source*. The extension names a
+second entry in the same ``audio`` array that holds the same sound:
+
+.. code-block:: json
+
+   {"audio": 0, "extensions": {"OMI_audio_ogg_vorbis": {"audio": 1}}}
+
+The source's own ``audio`` entry is the fallback, so the document plays
+everywhere and uses the better encoding where it can be decoded. Both
+extensions are read, kept, and written back unchanged; only decoding differs.
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Extension
+     - Container / MIME
+     - Suffix
+     - Plays
+   * - ``OMI_audio_ogg_vorbis``
+     - Ogg, ``audio/ogg``
+     - ``.ogg``
+     - **yes**
+   * - ``OMI_audio_opus``
+     - Ogg or WebM, ``audio/opus``, ``audio/webm``
+     - ``.opus``, ``.webm``
+     - **yes**, where ``libopus`` is available
+
+``omi_audio.formats.decodable()`` asks each decoder which formats it reads,
+so the answer follows what is installed. Vorbis is decoded by ``miniaudio``.
+Opus is decoded by ``libopus`` through ``omi_audio._opus``, which uses the
+library from the optional ``opuslib-next-bundled`` package
+(``pip install omi_audio[opus]``) or, without it, a ``libopus`` already on the
+system. Most Linux desktops have one; Windows and macOS need the package. The
+two are reported separately: a machine with ``libopus`` and no ``miniaudio``
+decodes Opus but not the MP3 fallback. Where the better encoding cannot be
+decoded, the source plays its MP3 fallback. A document that offers a codec
+with *no* fallback says so by listing the extension in ``extensionsRequired``.
+
+Every encoding a source offers goes into ``url``, better first, including
+encodings this build cannot decode, since ``url`` records where the sound is.
+``AudioLibrary.clip_for()`` chooses which encoding is fetched, and requests
+only codecs it can decode. If the better encoding cannot be resolved, it uses
+the MP3. If the better encoding is still downloading, it waits for it, so that
+a sound whose better encoding has not arrived yet does not play the MP3
+instead. An application with its own decoder adds that encoding to
+``library.encodings``, and the library requests it from then on.
 
 .. _audio-testing:
 
 Testing sound without a sound card
 ----------------------------------
 
-Nearly all of this is arithmetic over arrays, and an array can be asserted
-about. Build an engine on a ``NullDevice`` and read the mix:
+Most of the engine is arithmetic on arrays, and tests can check arrays
+directly. Build an engine on a ``NullDevice`` and read the mix:
 
 .. code-block:: python
 
@@ -798,25 +798,26 @@ about. Build an engine on a ``NullDevice`` and read the mix:
    assert block[:, 0].max() < 1e-9       # nothing in the left ear
    assert block[:, 1].max() > 0.1        # and plenty in the right
 
-``omi_audio``'s own suite covers the curves at known distances and angles,
-panning either side of the listener, voice stealing under pressure, the ramp,
-the muffle's frequency response, the glTF round-trip, both silent paths, and
-the level in dBFS at the device boundary for a source at a stated position.
-One test asserts that mixing a full pool for twenty blocks allocates nothing
-measurable, which is the property the whole design rests on. OpenGLContext's
-own ``tests/unit/test_audio_*.py`` cover what it adds: the nodes, the
-per-context engine, the pass wiring and the glTF import.
+``omi_audio``'s own suite tests the curves at known distances and angles,
+panning on each side of the listener, voice stealing under load, the gain
+ramp, the muffle's frequency response, the glTF round trip, both silent paths,
+and the level in dBFS at the device for a source at a given position. One test
+checks that mixing a full pool for twenty blocks allocates nothing
+measurable. OpenGLContext's ``tests/unit/test_audio_*.py`` test what
+OpenGLContext adds: the nodes, the per-context engine, the render-pass wiring
+and the glTF import.
 
 .. _audio-demos:
 
 Demo
 ----
 
-``tests/audio_spatial.py`` puts three sounds in a room and lets you walk
-around them: one orbits you (panning), one sits far off (distance), and one is
-a cone you can only hear from in front of. ``m`` muffles everything; the space
-bar fires a one-shot. Every clip is synthesised, so the demo ships no assets,
-and it runs identically — silently — on a machine with no sound.
+:doc:`tests/audio_spatial.py <tutorials/audio_spatial>` places three sounds in
+a room for you to walk around. One circles you (panning), one is far away
+(distance), and one is a cone you can hear only from in front. Press ``m`` to
+muffle everything, and the space bar to play a one-shot. Every clip is
+generated, so the demo ships no assets, and it runs silently on a machine with
+no sound device.
 
 .. code-block:: bash
 
