@@ -303,8 +303,8 @@ Two ways, and the loader reads both. **With no add-on:** give the material (or
 the object) a custom property called ``OGLC_hook`` in the Properties editor,
 holding the string ``water`` or a JSON object, and export with **Include ‣
 Custom Properties** ticked. Blender writes material custom properties to
-``material.extras`` and object custom properties to ``node.extras``, which is
-exactly what the loader reads. Blender 4.x is enough.
+``material.extras`` and object custom properties to ``node.extras``, and the
+loader reads both. Blender 4.x is enough.
 
 **With the add-on** in ``tools/blender/oglc_hook``: an **Engine Hook** panel on
 the material and object tabs, with fields for the ``water`` kind and a JSON
@@ -362,8 +362,8 @@ same name it would have found.
 
 ``shareable=False`` says the hook's result carries per-node state — a box round
 where this copy stands, a trigger's fired flag — so two nodes referencing one
-mesh each get their own, exactly as a morphed or skinned mesh already does. The
-default shares one result, as the loader always has.
+mesh each get their own, as each gets its own copy of a morphed or skinned mesh.
+The default shares one result between every node that references the mesh.
 
 What a hook records with ``ctx.collect()`` arrives on the scene as
 ``scene.hook_data[ kind ]``. A kind registered with an ``advance`` callable is
