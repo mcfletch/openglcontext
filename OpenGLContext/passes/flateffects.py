@@ -1,8 +1,8 @@
 """Environment and effects phases for the FlatPass shader render loop.
 
-Four cohesive rendering concerns that ``FlatPass.Render()`` sequences:
-image-based lighting, KHR transmission (glass), the HDR bloom wrap, and
-frustum/cluster visibility culling. Holding them in ``_FlatEffectsMixin`` keeps
+Five cohesive rendering concerns that ``FlatPass.Render()`` sequences:
+image-based lighting, KHR transmission (glass), the water's reflection of the
+scene, the HDR bloom wrap, and frustum/cluster visibility culling. Holding them in ``_FlatEffectsMixin`` keeps
 ``Render`` a thin phase list and each concern in one place. The mixin is composed
 into ``FlatPass``, so ``self`` is the pass and every ``self.matrix`` /
 ``self.shader_program`` / ``self._writeShapeId`` reference resolves through the
@@ -27,6 +27,7 @@ from OpenGLContext.scenegraph import fog as fognode
 if TYPE_CHECKING:
     from OpenGLContext.passes.bloom import BloomPass
     from OpenGLContext.passes.ibl import IBLController, IBLProbe
+    from OpenGLContext.passes.reflection import ReflectionBuffer
     from OpenGLContext.passes.transmission import TransmissionBuffer
 
 log = logging.getLogger(__name__)
@@ -60,6 +61,15 @@ class _FlatEffectsMixin:
     # GL renderer string; 'full' captures an opaque backdrop, 'blend' fakes it.
     _transmission_mode: Optional[str] = None
     _transmission_buffer: Optional["TransmissionBuffer"] = None
+
+    # The water's reflection of the scene: whether it is drawn, resolved once
+    # from ContextDefinition.waterReflection, and the target it is drawn into.
+    _water_reflection: Optional[bool] = None
+    _reflection_buffer: Optional["ReflectionBuffer"] = None
+    #: How far, in view widths, a unit of the water's tilt from flat pushes the
+    #: reflection lookup. The ripple tilts it by a tenth or so, which moves a
+    #: reflected edge by a few percent of the view: broken up, still legible.
+    REFLECTION_DISTORTION = 0.35
 
     # Image-based lighting (environment reflection for metals). Resolved once from
     # the GL renderer; the probe is built lazily on the first 'full' frame.
@@ -183,6 +193,97 @@ class _FlatEffectsMixin:
             return
         mode, density, color = path[-1].fogParameters(path.transformMatrix())
         shader.set_fog(density, color, mode=mode)
+
+    # -- the water's reflection of the scene ---------------------------------
+    def waterReflectionEnabled(self) -> bool:
+        """Whether water reflects the scene, resolved once.
+
+        ``ContextDefinition.waterReflection`` asks for it, and the PBR program
+        has to have compiled it in: a driver without the texture unit it reads
+        leaves the water reflecting the environment probe alone.
+        """
+        if self._water_reflection is None:
+            shader = self.shader_program
+            self._water_reflection = bool(
+                renderoptions.flag(self, 'waterReflection',
+                                   renderoptions.env_flag_once(
+                                       'OPENGLCONTEXT_WATER_REFLECTION', True))
+                and getattr(shader, 'planar_reflection_supported', False))
+        return self._water_reflection
+
+    def renderWaterReflection(self, frame: Any, lighting: Any = None) -> None:
+        """Draw ``frame``'s scene mirrored in its water, for the water to read.
+
+        Nothing where the view holds no water it looks down on
+        (:func:`~OpenGLContext.passes.reflection.plan`). Otherwise the frame's
+        walk is culled through the mirrored camera, and what is opaque and not
+        water is drawn in linear HDR into the reflection target, lit as the
+        view is lit. The view is looked through again afterwards; its lights
+        are the caller's to set up.
+        """
+        if not self.waterReflectionEnabled():
+            return
+        gathered = getattr(self, '_frameGather', None)
+        if gathered is None:
+            return
+        from dataclasses import replace
+        from OpenGL.GL import (
+            glBindFramebuffer, glFrontFace, glGetIntegerv,
+            GL_CCW, GL_CW, GL_DRAW_FRAMEBUFFER_BINDING, GL_FRAMEBUFFER,
+        )
+        from OpenGLContext import frustum
+        from OpenGLContext.passes import reflection
+        from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+        planned = reflection.plan(frame.toRender, frame.modelView,
+                                  frame.projection, frame.rect)
+        if planned is None:
+            return
+        buffer = self._reflection_buffer
+        if buffer is None:
+            buffer = self._reflection_buffer = reflection.ReflectionBuffer()
+        buffer.ensure_size(*planned.size)
+        mirrored = replace(
+            frame, rect=(0, 0) + planned.size, modelView=planned.modelView,
+            projection=planned.projection, modelproj=planned.modelproj,
+            frustum=frustum.Frustum.fromViewingMatrix(planned.modelproj,
+                                                     normalize=1),
+            toRender=[], visiblePlacements={})
+        previous = int(glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING))
+        shader = self.shader_program
+        self.applyViewFrame(mirrored, gl=False)
+        records = [record for record in
+                   self.renderSet(planned.modelView, gathered)
+                   if not record[0][0] and not reflection.is_water(record)]
+        mirrored.visiblePlacements = self.visiblePlacements or {}
+        buffer.begin()
+        try:
+            self.setupViewLighting(planned.modelView, lighting,
+                                   fitted=frame.fitted)
+            # Uniforms go to the bound program, and lighting setup can leave
+            # another one bound.
+            shader.use(lit=True)
+            shader.set_hdr_output(True)
+            # A mirror turns every triangle's winding over. PBRMesh follows its
+            # modelview's determinant; everything else follows this.
+            glFrontFace(GL_CW)
+            PBRMesh.reset_draw_state(self)
+            self.shaderRenderOpaque(records, None)
+        finally:
+            glFrontFace(GL_CCW)
+            PBRMesh.reset_draw_state(self)
+            glBindFramebuffer(GL_FRAMEBUFFER, previous)
+            shader.use(lit=True)
+            shader.set_hdr_output(bool(getattr(self, '_bloom_active', False)))
+            self.applyViewFrame(frame)
+        buffer.bind()
+        shader.set_planar_reflection(frame.rect, self.REFLECTION_DISTORTION)
+
+    def clearWaterReflection(self) -> None:
+        """Water reflects the environment probe alone until the next view's."""
+        shader = self.shader_program
+        if self._water_reflection and hasattr(shader, 'clear_planar_reflection'):
+            shader.use(lit=True)
+            shader.clear_planar_reflection()
 
     # -- transmission (KHR_materials_transmission) --------------------------
     def transmissionMode(self) -> str:

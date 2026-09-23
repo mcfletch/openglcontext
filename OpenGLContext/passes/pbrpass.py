@@ -34,6 +34,7 @@ from OpenGLContext.passes.shaderpass import (
     preprocess_shader,
 )
 from OpenGLContext.passes.transmission import TransmissionBuffer
+from OpenGLContext.passes.reflection import REFLECTION_UNIT, REFLECTION_UNITS_NEEDED
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, material_to_pbr
 from OpenGLContext.passes.ibl import IBL_UNITS, _IBL_SAMPLER
 from OpenGLContext.scenegraph.skinning import SKIN_PALETTE_UNIT, palette_supported
@@ -370,6 +371,8 @@ class PBRShaderProgram(VRML97ShaderProgram):
         # Per-instance so two programs (or two passes) never share transmission /
         # material-cache state through the class.
         self.transmission_mode = 'off'
+        # Set when the program is compiled, from the driver's texture units.
+        self.planar_reflection_supported = False
         self._appearance_material = _APPEARANCE_UNSET
         self._appearance_tmode = None
 
@@ -384,8 +387,15 @@ class PBRShaderProgram(VRML97ShaderProgram):
             # reporting more than the 16-unit GL 3.3 minimum (llvmpipe reports 16).
             self.texture_budget = int(glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS))
             self.ext_channels = ext_texture_channels(self.texture_budget)
+            # The water's reflection of the scene reads a unit past the joint
+            # palette; where the fragment stage stops short of it the water
+            # reflects the environment probe alone.
+            self.planar_reflection_supported = (
+                self.texture_budget >= REFLECTION_UNITS_NEEDED)
             ext_defines = ['#define PBR_EXT_TEXTURES %d'
-                           % (1 if ext_textures_supported(self.texture_budget) else 0)]
+                           % (1 if ext_textures_supported(self.texture_budget) else 0),
+                           '#define PBR_PLANAR_REFLECTION %d'
+                           % (1 if self.planar_reflection_supported else 0)]
             # Vertex-shader skinning needs a texture unit of its own for the
             # joint palette; a driver whose combined budget does not reach it
             # compiles the skinning out and the deform stays on the CPU.
@@ -485,6 +495,9 @@ class PBRShaderProgram(VRML97ShaderProgram):
             self._set_uniform1i(_IBL_SAMPLER[channel], unit, self.program)
         self._set_uniform1i('transmissionTexture', TransmissionBuffer.UNIT, self.program)
         self._set_uniform1i('hasTransmissionBackdrop', 0, self.program)
+        if self.planar_reflection_supported:
+            self._set_uniform1i('planarReflection', REFLECTION_UNIT, self.program)
+            self._set_uniform1i('hasPlanarReflection', 0, self.program)
         # A GLSL uniform starts at zero, which would make every lightmap black;
         # the neutral multiplier has to be uploaded once up front.
         self.set_lightmap_strength(1.0)
@@ -558,8 +571,31 @@ class PBRShaderProgram(VRML97ShaderProgram):
         self._set_uniform1i('hasTransmissionBackdrop', 1, self.program)
         self._set_uniform1f('transmissionMaxLod', buffer.max_lod, self.program)
 
+    def set_planar_reflection(self, viewport: Sequence[float],
+                              distortion: float) -> None:
+        """Have water read this view's reflection, bound on its unit.
+
+        ``viewport`` is the view's rectangle in window pixels, which is what a
+        fragment's screen position is measured against; ``distortion`` is how
+        far, in view widths, a unit of surface tilt pushes the lookup.
+        """
+        if not self.planar_reflection_supported:
+            return
+        self._set_uniform1i('hasPlanarReflection', 1, self.program)
+        self._set_uniform4f('planarViewport',
+                            tuple(float(value) for value in viewport), self.program)
+        self._set_uniform1f('planarDistortion', float(distortion), self.program)
+
+    def clear_planar_reflection(self) -> None:
+        """Water reflects the environment probe alone from here."""
+        if self.planar_reflection_supported:
+            self._set_uniform1i('hasPlanarReflection', 0, self.program)
+
     def clear_transmission_backdrop(self) -> None:
         self._set_uniform1i('hasTransmissionBackdrop', 0, self.program)
+        if self.planar_reflection_supported:
+            self._set_uniform1i('planarReflection', REFLECTION_UNIT, self.program)
+            self._set_uniform1i('hasPlanarReflection', 0, self.program)
 
     def set_lightmap_strength(self, strength: float = 1.0) -> None:
         """Scale the baked irradiance a lightmap contributes (1.0 = as authored).

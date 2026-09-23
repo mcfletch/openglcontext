@@ -1706,6 +1706,38 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         if frame.view.style.wireframe:
             glPolygonMode( GL_FRONT_AND_BACK, GL_FILL )
 
+    def setupViewLighting( self, matrix: Any, lighting: Any,
+                           fitted: bool = False ) -> None:
+        """Put the frame's lights, shadows and environment in ``matrix``'s eye space.
+
+        ``lighting`` is the frame's :meth:`iblPrepare`; ``fitted`` marks the
+        view the directional shadow cascades were fitted to.
+        """
+        shader_program = self.shader_program
+        self.setupShaderLights(matrix)
+        if self.use_shadows:
+            self.bindShadowUniforms(fitted=fitted)
+        self.iblSetup(matrix, lighting)
+        shader_program.set_default_material()
+        shader_program.set_scene_ambient(self.sceneAmbient())
+        self.setupLightGrid()
+
+    def sceneAmbient( self ) -> Tuple[float, float, float]:
+        """The flat fill light the shader adds to everything.
+
+        glTF lighting is IBL + punctual only -- a flat white fill is
+        non-physical and washes out self-lit scenes (DirectionalLight,
+        PointLightIntensityTest read pale grey instead of dark + crisp
+        lights). A glTF viewer sets context.gltf_scene_ambient low/zero;
+        legacy VRML scenes keep the 0.2 fill that stands in for no lights.
+        """
+        amb = getattr(getattr(self, 'context', None), 'gltf_scene_ambient', None)
+        if amb is None:
+            return (0.2, 0.2, 0.2)
+        if not isinstance(amb, (tuple, list)):
+            return (float(amb),) * 3
+        return (float(amb[0]), float(amb[1]), float(amb[2]))
+
     def renderViewShader( self, frame: 'ViewFrame', id_map: Optional[Dict[int, Any]],
                           lighting: Any = None, background: bool = True,
                           shared: Any = frozenset() ) -> None:
@@ -1724,24 +1756,11 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         matrix = frame.modelView
         self._beginView( frame, background )
         try:
-            self.setupShaderLights(matrix)
-            if self.use_shadows:
-                self.bindShadowUniforms(fitted=frame.fitted)
-            self.iblSetup(matrix, lighting)
-            shader_program.set_default_material()
-            # glTF lighting is IBL + punctual only -- a flat white fill is
-            # non-physical and washes out self-lit scenes (DirectionalLight,
-            # PointLightIntensityTest read pale grey instead of dark + crisp
-            # lights). A glTF viewer sets context.gltf_scene_ambient low/zero;
-            # legacy VRML scenes keep the 0.2 fill that stands in for no lights.
-            amb = getattr(getattr(self, 'context', None),
-                          'gltf_scene_ambient', None)
-            if amb is None:
-                amb = (0.2, 0.2, 0.2)
-            elif not isinstance(amb, (tuple, list)):
-                amb = (float(amb),) * 3
-            shader_program.set_scene_ambient(tuple(amb))
-            self.setupLightGrid()
+            # The water's reflection first: it is a whole draw of the scene
+            # through another camera, and leaves this view's lights to be set up
+            # after it.
+            self.renderWaterReflection(frame, lighting)
+            self.setupViewLighting(matrix, lighting, fitted=frame.fitted)
             toRender = ( [ record for record in frame.toRender
                            if id( record[4] ) not in shared ]
                          if shared else frame.toRender )
@@ -1765,7 +1784,12 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             except Exception:
                 pass
         finally:
+            self.clearWaterReflection()
             self._endView( frame )
+
+    #: This frame's walk of the scene, kept from :meth:`prepareViews` to
+    #: :meth:`finishViews` for the draws that cull it through another camera.
+    _frameGather: Optional[GatheredPaths] = None
 
     #: The cameras the shape being drawn is seen from, as points in the eye
     #: space it is drawn in, while one draw serves several views; None for a
@@ -2331,6 +2355,9 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             viewer_for( frame.camera, frame.modelView, frame.projection )
             for frame in frames ] )
         gathered = self.gatherPaths()
+        # Kept for the frame: a view's water is drawn again through a mirrored
+        # camera, which culls the same walk (renderWaterReflection).
+        self._frameGather = gathered
         for frame in frames:
             self.applyViewFrame( frame, gl=False )
             frame.toRender = self.renderSet( frame.modelView, gathered )
@@ -2372,6 +2399,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
 
     def finishViews( self ) -> None:
         """Give the whole window back once every view is drawn."""
+        self._frameGather = None
         if self._scissorViews:
             glDisable( GL_SCISSOR_TEST )
         width, height = self.context.getViewPort()

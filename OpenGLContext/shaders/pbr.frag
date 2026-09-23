@@ -43,6 +43,13 @@
 #define PBR_EXT_TEXTURES 0
 #endif
 
+// The water's reflection of the scene is read from a unit past the joint
+// palette; pbrpass sets this to 1 only where the fragment stage has that many.
+// At 0 the water reflects the environment probe alone.
+#ifndef PBR_PLANAR_REFLECTION
+#define PBR_PLANAR_REFLECTION 0
+#endif
+
 // Light/shadow enums, the scene light-uniform block, and encodeObjectId().
 #include "_lights_inc.glsl"
 // PI / INV_PI + piecewise sRGB transfer functions.
@@ -257,6 +264,16 @@ uniform bool  hasTransmissionBackdrop;
 uniform sampler2D transmissionTexture; // opaque backdrop (mipmapped)
 uniform float transmissionMaxLod;      // highest mip level of the backdrop
 
+#if PBR_PLANAR_REFLECTION
+// The scene mirrored in the water's plane, drawn this view in linear HDR with
+// alpha 1 wherever there was something to mirror (passes/reflection.py).
+uniform bool hasPlanarReflection;
+uniform sampler2D planarReflection;
+uniform vec4 planarViewport;     // the view's rectangle in window pixels: x, y, w, h
+uniform float planarDistortion;  // screen offset per unit of normal tilt
+#endif
+
+
 
 #if PBR_EXT_TEXTURES
 // KHR extension material textures (only compiled in when the sampler budget fits).
@@ -315,6 +332,27 @@ uniform float prefilterMaxLod;       // highest mip level of prefilterMap
 uniform mat4 eyeToWorld;
 
 uniform float exposure;           // camera exposure multiplier (default 1.0)
+
+// The environment a water surface reflects in the direction it reflects:
+// the mirrored scene where there was something to mirror, and ``probe`` --
+// the sky -- where there was not. The lookup is the fragment's own screen
+// position, pushed by how far the ripple and the swell tilt the surface from
+// flat, which is what breaks a reflection up on moving water.
+vec3 planarReflected(vec3 probe, vec3 N) {
+#if PBR_PLANAR_REFLECTION
+    if (!hasPlanarReflection || !waveEnabled) { return probe; }
+    vec3 level = normalize(cross(vSurfZ, vSurfX));
+    if (dot(level, N) < 0.0) { level = -level; }
+    vec2 uv = (gl_FragCoord.xy - planarViewport.xy) / planarViewport.zw;
+    uv = clamp(uv + (N - level).xy * planarDistortion, vec2(0.0), vec2(1.0));
+    vec4 mirrored = texture(planarReflection, uv);
+    // The target holds colour already multiplied by the camera's exposure,
+    // which the term this replaces has yet to be.
+    return mix(probe, mirrored.rgb / max(exposure, 1e-6), mirrored.a);
+#else
+    return probe;
+#endif
+}
 
 // Fog: aerial perspective over terrain, or a VRML97 Fog node the camera is
 // standing inside.  fogMode 0 (default) disables it, so a scene with no fog in
@@ -771,7 +809,8 @@ void main() {
     vec3 irrBack = vec3(0.0);
     if (iblMode == 2) {                // full IBL probe (split-sum)
         vec3 irr = texture(irradianceMap, Nw).rgb * iblIntensity;
-        vec3 pre = textureLod(prefilterMap, Rw, roughness * prefilterMaxLod).rgb * iblIntensity;
+        vec3 pre = planarReflected(
+            textureLod(prefilterMap, Rw, roughness * prefilterMaxLod).rgb * iblIntensity, N);
         vec2 ab  = texture(brdfLUT, vec2(NdotV, roughness)).rg;
         ambDiffuse  = irr * albedo * (1.0 - metallic) * ao;
         ambSpecular = pre * (F0 * ab.x + specF90 * ab.y) * ao;
@@ -786,8 +825,8 @@ void main() {
         // stops working mid-session wherever `auto` degrades full -> analytic.
         vec3 envDiffuse = envColor(Nw) * INV_PI * iblIntensity;
         // fade the reflection toward the average sky tone for rough surfaces
-        vec3 envSpec = mix(envColor(Rw), vec3(0.5, 0.52, 0.55),
-                           roughness * 0.8) * iblIntensity;
+        vec3 envSpec = planarReflected(mix(envColor(Rw), vec3(0.5, 0.52, 0.55),
+                                           roughness * 0.8) * iblIntensity, N);
         vec2 ab = envBRDFApprox(NdotV, roughness);
         ambDiffuse  = envDiffuse * albedo * (1.0 - metallic) * ao;
         ambSpecular = envSpec * (F0 * ab.x + specF90 * ab.y) * ao;
