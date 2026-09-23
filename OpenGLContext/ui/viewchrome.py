@@ -4,13 +4,13 @@ A window showing four views of one scene needs to say which view is which,
 which way each is looking, and how to work them. :class:`ViewChrome` draws
 that inside each view and takes the clicks:
 
-- the view's **name**, along its top;
+- the view's **name**, along its top, as a button that opens the view's menu:
+  which way it looks, the scene's own cameras, how it is drawn, fitting what
+  there is to see into it, and taking the window;
 - an **axis triad**, which says which way the world's axes run in this view
   and turns with the camera;
 - an **expand** button, which gives the view the whole window and gives it
   back;
-- a **navigation** button, which offers the gestures this view's camera can be
-  moved by and switches each on or off;
 - a **splitter** on each line the arrangement divides the window along, which
   a drag moves.
 
@@ -22,8 +22,15 @@ press that lands on none of its controls reaches the scene underneath::
                         on_arrange=context.placeViews)
     context.overlays.push(chrome)
 
-Every part is optional -- ``labels``, ``axes``, ``expand``, ``navigation`` and
-``splitters`` each switch a kind off for the whole window, and ``only`` gives
+``cameras`` offers the scene's cameras in that menu -- a list of
+:class:`~OpenGLContext.multiview.viewpoints.SceneCamera`, or a callable
+answering one, asked each time the menu opens::
+
+    ViewChrome(layout=layout, stack=context.overlays,
+               cameras=lambda: scene_cameras(context.getSceneGraph()))
+
+Every part is optional -- ``labels``, ``axes``, ``expand`` and ``splitters``
+each switch a kind off for the whole window, and ``only`` gives
 one view a set of its own::
 
     ViewChrome(layout=layout, axes=False,
@@ -37,18 +44,14 @@ from __future__ import annotations
 from dataclasses import replace
 
 from gettext import gettext as _
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from vrml import field
 
 from OpenGLContext.multiview.cameras import VIEW_KINDS, point_view, view_kind
-from OpenGLContext.multiview.navigation import (
-    examine_mode,
-    navigation_for,
-    plan_mode,
-)
 from OpenGLContext.multiview.views import View, ViewLayout
+from OpenGLContext.multiview.viewpoints import SceneCamera, look_through
 from OpenGLContext.multiview.viewset import fit_view
 from OpenGLContext.ui.geometry import Rect
 from OpenGLContext.ui.menu import Menu, MenuItem
@@ -58,7 +61,7 @@ from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.widgets import Widget
 
 __all__ = [
-    'ViewChrome', 'ViewLabel', 'AxisTriad', 'ExpandButton', 'NavigationButton',
+    'ViewChrome', 'ViewLabel', 'AxisTriad', 'ExpandButton',
     'Splitter', 'axis_directions', 'fitted', 'PARTS',
 ]
 
@@ -105,7 +108,9 @@ MAXIMISE_LABEL = _('Maximise')
 TILES_LABEL = _('Four tiles')
 SHADED_LABEL = _('Shaded')
 WIREFRAME_LABEL = _('Wireframe')
-POINTER_LABEL = _('What the pointer does')
+CAMERAS_LABEL = _('Cameras')
+VIEW_LABEL = _('View')
+RENDERING_LABEL = _('Rendering')
 
 #: What says a name was cut to fit the room it had.
 ELLIPSIS = '...'
@@ -159,23 +164,56 @@ class _ViewWidget(Widget):
 
 
 class ViewLabel(_ViewWidget):
-    """The view's name, and the menu of what it can be: a click opens it."""
+    """The view's name on a button, which opens the menu of what the view can be.
+
+    Drawn with the corner buttons' face and a caret after the name, which is
+    what says it opens a list.
+    """
 
     PROTO = 'ViewLabel'
     text = field.newField('text', 'SFString', 1, '')
     interactive = True
     focusable = True
     cursor = 'hand'
-    tooltip = _('Which way this view looks, how it is drawn, and what the '
-                'pointer does in it')
+    #: The skin's hover fill lights it.
+    hoverWash = False
+    tooltip = _('Which way this view looks, through which of the scene\'s '
+                'cameras, and how it is drawn')
+
+    def content_size(self, metrics: FontMetrics,
+                     available: Optional[int] = None) -> Tuple[int, int]:
+        """The name, the caret after it, and a button's padding round both."""
+        pad_x = self.activeSkin().buttonPadding(metrics)[0]
+        return (metrics.text_width(str(self.text)) + pad_x * 2
+                + _caret_width(metrics),
+                int(metrics.char_height * BUTTON_CHARS))
 
     def paint(self, renderer: Any) -> None:
-        name = fitted(str(self.text), self.rect.width, renderer.metrics)
-        if not name:
-            return
+        self.paintFocus(renderer)
         skin = renderer.skin
+        metrics = renderer.metrics
+        fill, image = skin.buttonState(hovered=self.hovered, down=self.armed,
+                                       enabled=bool(self.enabled))
+        renderer.frame(self.rect, fill, image)
+        pad_x = skin.buttonPadding(metrics)[0]
+        caret = _caret_width(metrics)
+        body = Rect(self.rect.x + pad_x, self.rect.y,
+                    max(self.rect.width - pad_x * 2 - caret, 0), self.rect.height)
         colour = skin.titleText if (self.hovered or self.armed) else skin.labelText
-        renderer.textIn(self.rect, name, colour, align='left')
+        name = fitted(str(self.text), body.width, metrics)
+        if name:
+            renderer.textIn(body, name, colour, align='left')
+        self._paintCaret(renderer, Rect(body.right, self.rect.y, caret,
+                                        self.rect.height), colour)
+
+    @staticmethod
+    def _paintCaret(renderer: Any, rect: Rect, colour: Any) -> None:
+        """A small chevron pointing down, in the middle of ``rect``."""
+        half = max(rect.width // 4, 2)
+        middle_x, middle_y = rect.centre
+        tip = (middle_x, middle_y - half // 2)
+        renderer.segment((middle_x - half, middle_y + half // 2), tip, 1.5, colour)
+        renderer.segment(tip, (middle_x + half, middle_y + half // 2), 1.5, colour)
 
     def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
         if name in ('<return>', ' ') and self.enabled:
@@ -187,6 +225,11 @@ class ViewLabel(_ViewWidget):
         if self.chrome is not None:
             self.chrome.open_names(self.view, self.rect)
         super(ViewLabel, self).activate()
+
+
+def _caret_width(metrics: FontMetrics) -> int:
+    """Room for the caret after a view's name: about a character and a half."""
+    return max(int(metrics.char_width * 1.5), 6)
 
 
 class AxisTriad(_ViewWidget):
@@ -219,6 +262,8 @@ class _ChromeButton(_ViewWidget):
 
     interactive = True
     focusable = True
+    #: The skin's hover fill lights it.
+    hoverWash = False
 
     def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
@@ -283,25 +328,6 @@ class ExpandButton(_ChromeButton):
         super(ExpandButton, self).activate()
 
 
-class NavigationButton(_ChromeButton):
-    """Opens what this view's camera can be moved by, to switch each on or off."""
-
-    PROTO = 'NavigationButton'
-
-    def glyph(self, renderer: Any, rect: Rect, colour: Any) -> None:
-        """A short list: what the button opens."""
-        bars = 3
-        gap = max((rect.height - bars) // (bars + 1), 1)
-        for row in range(bars):
-            renderer.rect(Rect(rect.x, rect.y + gap + row * (gap + 1),
-                               rect.width, 1), colour)
-
-    def activate(self) -> None:
-        if self.chrome is not None:
-            self.chrome.open_navigation(self.view, self.rect)
-        super(NavigationButton, self).activate()
-
-
 class Splitter(Widget):
     """A line an arrangement divides the window along, which a drag moves.
 
@@ -312,6 +338,9 @@ class Splitter(Widget):
 
     PROTO = 'ViewSplitter'
     interactive = True
+    #: The line lights itself, and it is dragged rather than clicked.
+    hoverWash = False
+    ripples = False
     tooltip = _('Drag to move the line between the views')
 
     vertical: Optional[bool] = True
@@ -377,7 +406,6 @@ class ViewChrome(Panel):
     labels = field.newField('labels', 'SFBool', 1, True)
     axes = field.newField('axes', 'SFBool', 1, True)
     expand = field.newField('expand', 'SFBool', 1, True)
-    navigation = field.newField('navigation', 'SFBool', 1, True)
     splitters = field.newField('splitters', 'SFBool', 1, True)
     #: Room something else has taken at each edge of the window -- top,
     #: right, bottom, left, in reference pixels, as a
@@ -392,6 +420,8 @@ class ViewChrome(Panel):
                  on_arrange: Optional[Callable[[], None]] = None,
                  only: Optional[Dict[str, Sequence[str]]] = None,
                  bounds: Optional[Callable[[], Optional[Tuple[Any, Any]]]] = None,
+                 cameras: Union[Sequence[SceneCamera],
+                                Callable[[], Sequence[SceneCamera]], None] = None,
                  **named: Any) -> None:
         named.setdefault('modal', False)
         named.setdefault('closeOnEscape', False)
@@ -408,6 +438,9 @@ class ViewChrome(Panel):
         #: What there is to see, as ``(minimum, maximum)``, for the menu's
         #: *zoom to fit*. A window that does not say offers no such item.
         self.bounds = bounds
+        #: The scene's cameras, or what answers them, for the menu's
+        #: *Cameras*. None, or none answered, offers no such item.
+        self.cameras = cameras
         self._splitters: List[Splitter] = []
 
     # -- what each view gets -----------------------------------------------
@@ -513,9 +546,13 @@ class ViewChrome(Panel):
                 cursor -= margin
             for child in self._parts_of(view, ViewLabel):
                 child.parent = self
-                child.arrange(Rect(room.x + margin, top,
-                                   max(cursor - room.x - margin, 1),
-                                   metrics.char_height), metrics)
+                width, side = (int(value) for value in child.content_size(metrics))
+                # The size of its name, and no wider than the room the
+                # buttons leave; hanging from the row as they do.
+                child.arrange(Rect(room.x + margin,
+                                   top + metrics.char_height - side,
+                                   max(min(width, cursor - room.x - margin), 1),
+                                   side), metrics)
             for child in self._parts_of(view, AxisTriad):
                 child.parent = self
                 child.arrange(Rect(room.x + margin, room.y + margin,
@@ -581,17 +618,25 @@ class ViewChrome(Panel):
     def open_names(self, view: View, at: Rect) -> Optional[Menu]:
         """Put up what this view can be: its menu; None with no stack to put it on.
 
-        Which way it looks, how it is drawn, what the pointer moves it with,
-        and the two things a view does: fit what there is to see into it, and
-        take the window or give it back.
+        Three lists a level down -- which way it looks (**View**), the scene's
+        own cameras (**Cameras**), how it is drawn (**Rendering**) -- and the
+        two things a view does: fit what there is to see into it, and take the
+        window or give it back. A view drawn through the window's own camera
+        has no ways of looking to offer, and a scene with no cameras no
+        cameras.
         """
         if self.stack is None:
             return None
-        items: List[Any] = [self._kind_item(view, kind) for kind in VIEW_KINDS
-                            if point_view is not None and view.camera is not None]
-        if items:
-            items.append(Separator())
-        items.extend(self._drawn_items(view))
+        items: List[Any] = []
+        if view.camera is not None:
+            items.append(MenuItem(text=VIEW_LABEL, submenu=[
+                self._kind_item(view, kind) for kind in VIEW_KINDS]))
+        cameras = self.sceneCameras()
+        if cameras:
+            items.append(MenuItem(text=CAMERAS_LABEL, submenu=[
+                self._camera_item(view, camera) for camera in cameras]))
+        items.append(MenuItem(text=RENDERING_LABEL,
+                              submenu=self._drawn_items(view)))
         items.append(Separator())
         if self.bounds is not None and view.camera is not None:
             def fit_it(widget: Any, view: View = view) -> None:
@@ -601,13 +646,31 @@ class ViewChrome(Panel):
         items.append(MenuItem(
             text=(TILES_LABEL if self._maximised(view) else MAXIMISE_LABEL),
             on_activate=lambda widget: self.maximise(view)))
-        navigation = navigation_for(view)
-        if navigation is not None:
-            items.append(Separator())
-            items.append(MenuItem(text=POINTER_LABEL,
-                                  submenu=[self._gesture_item(navigation, command)
-                                           for command in navigation.commands()]))
-        return self._put_up(Menu(items=items, anchor=(float(at.x), float(at.y))))
+        return self._put_up(Menu(items=items, anchor=(float(at.x), float(at.y)),
+                                 above=float(at.top), stack=self.stack))
+
+    def sceneCameras(self) -> List[SceneCamera]:
+        """The cameras the menu offers: what ``cameras`` is, or answers."""
+        found = self.cameras() if callable(self.cameras) else self.cameras
+        return list(found or ())
+
+    def _camera_item(self, view: View, camera: SceneCamera) -> MenuItem:
+        """One of the scene's cameras, which the view is pointed through when chosen."""
+        def chosen(widget: Any) -> None:
+            if look_through(view, camera, distance=self._ahead_of(camera)):
+                self._changed()
+
+        return MenuItem(text=camera.name, on_activate=chosen)
+
+    def _ahead_of(self, camera: SceneCamera) -> Optional[float]:
+        """How far ahead of ``camera`` the middle of what there is to see is, or None."""
+        found = self.bounds() if self.bounds is not None else None
+        if not found:
+            return None
+        low, high = (np.asarray(corner, 'd')[:3] for corner in found)
+        along = float(((low + high) / 2.0 - np.asarray(camera.position, 'd'))
+                      @ np.asarray(camera.forward, 'd'))
+        return max(along, float(np.linalg.norm(high - low)) * 0.05, 1e-6)
 
     def _kind_item(self, view: View, kind: str) -> MenuItem:
         """One way of looking, ticked where the view is looking that way."""
@@ -656,24 +719,6 @@ class ViewChrome(Panel):
             self._changed()
         return fitted_it
 
-    def _gesture_item(self, navigation: Any, command: str) -> MenuItem:
-        """One gesture, ticked where a button raises it."""
-        label = self._label_for(navigation, command)
-        item = MenuItem(text=label, checkable=True,
-                        checked=bool(navigation.keys_for(command)))
-
-        def chosen(widget: Any, command: str = command) -> None:
-            if widget.checked:
-                keys = _default_keys(navigation, command)
-                _take(navigation, command, keys)
-                navigation.rebind(command, keys)
-            else:
-                navigation.rebind(command, [])
-            self._changed()
-
-        item.on_activate = chosen
-        return item
-
     def _maximised(self, view: View) -> bool:
         layout = self.layout_of
         return layout is not None and layout.maximised is view
@@ -681,13 +726,6 @@ class ViewChrome(Panel):
     def _put_up(self, menu: Menu) -> Menu:
         pushed = self.stack.push(menu)
         return pushed if isinstance(pushed, Menu) else menu
-
-    @staticmethod
-    def _label_for(navigation: Any, command: str) -> str:
-        for _mode, binding in navigation.binding_table():
-            if str(binding.command) == command:
-                return str(binding.label) or command
-        return command
 
     def _changed(self) -> None:
         if self.on_arrange is not None:
@@ -714,38 +752,3 @@ def fitted(text: str, width: int, metrics: FontMetrics) -> str:
             return cut
     return ''
 
-
-def _take(navigation: Any, command: str, keys: Sequence[str]) -> None:
-    """Take these keys off whatever else in this view claims them.
-
-    A gesture switched on in a view where every button is already spoken for
-    has to take one, or switching it on would do nothing and say nothing.
-    """
-    wanted = set(keys)
-    for _mode, binding in navigation.binding_table():
-        if str(binding.command) == command:
-            continue
-        held = [key for key in binding.keys if key not in wanted]
-        if len(held) != len(binding.keys):
-            binding.keys = held
-
-
-def _default_keys(navigation: Any, command: str) -> List[str]:
-    """What a gesture is bound to when it is switched back on.
-
-    The keys the view's kind of navigation starts with, so switching something
-    off and on again puts it back where it was rather than somewhere a caller
-    has to look up.
-    """
-    fresh = examine_mode() if navigation.turns else plan_mode()
-    keys = list(fresh.keys_for(command))
-    if keys:
-        return keys
-    # A gesture the mode ships unbound -- dragging to zoom -- goes on the
-    # button nothing else in this view claims, or the middle one.
-    taken = {key for _mode, binding in navigation.binding_table()
-             for key in binding.keys}
-    for spare in ('<mouse-1>', '<mouse-2>', '<mouse-0>'):
-        if spare not in taken:
-            return [spare]
-    return ['<mouse-1>']

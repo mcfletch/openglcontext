@@ -21,9 +21,10 @@ in front of a view -- and what the furniture leaves reaches the views.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence, Tuple
 
 from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
+from OpenGLContext.multiview.viewpoints import SceneCamera, scene_cameras
 from OpenGLContext.multiview.views import View, ViewLayout, ViewStyle
 from OpenGLContext.multiview.viewset import ViewSet
 
@@ -119,7 +120,8 @@ class MultiViewMixin(_Host):
         from OpenGLContext.ui.viewchrome import ViewChrome
         self.viewChrome = ViewChrome(
             layout=self.views.layout, stack=stack,
-            on_arrange=self.viewsArranged, bounds=self._viewBounds)
+            on_arrange=self.viewsArranged, bounds=self._viewBounds,
+            cameras=self.sceneCameras)
         stack.push(self.viewChrome)
 
     # -- what the window draws ---------------------------------------------
@@ -138,6 +140,15 @@ class MultiViewMixin(_Host):
         if stack is not None:
             stack.invalidate()
         self.triggerRedraw(1)
+
+    def sceneCameras(self) -> List[SceneCamera]:
+        """The cameras the window's scene carries, as each view's menu offers them.
+
+        Choosing one in the window's own view binds its ``Viewpoint``; in an
+        elevation it gives that view a perspective camera standing there.
+        """
+        graph = getattr(self, 'getSceneGraph', None)
+        return scene_cameras(graph() if graph is not None else None)
 
     def boundsOfScene(self) -> Optional[Tuple[Any, Any]]:
         """The box round what the window is showing, or None where it shows nothing.

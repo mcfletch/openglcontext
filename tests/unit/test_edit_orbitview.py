@@ -134,6 +134,13 @@ class TestFramingABox:
 
 
 class TestItsLimits:
+    def test_the_pitch_limits_can_be_given_to_one_view(self) -> None:
+        view = OrbitView(lowest=10.0, highest=50.0)
+        view.orbit(0.0, -100.0)
+        assert view.pitch == pytest.approx(10.0)
+        view.orbit(0.0, 100.0)
+        assert view.pitch == pytest.approx(50.0)
+
     def test_the_limits_can_be_given_to_one_view(self) -> None:
         view = OrbitView(distance=5.0, nearest=1.0, furthest=10.0)
         view.dolly(0.01)
@@ -144,6 +151,43 @@ class TestItsLimits:
     def test_by_default_they_are_the_classs(self) -> None:
         view = OrbitView()
         assert (view.nearest, view.furthest) == (OrbitView.NEAREST, OrbitView.FURTHEST)
+        assert (view.lowest, view.highest) == (OrbitView.LOWEST, OrbitView.HIGHEST)
+
+    def test_a_view_of_an_object_can_be_tipped_to_look_up_at_it(self) -> None:
+        view = OrbitView(lowest=-80.0)
+        view.orbit(0.0, -60.0)
+        assert view.pitch == pytest.approx(DEFAULT_PITCH - 60.0)
+        view.orbit(0.0, -500.0)
+        assert view.pitch == pytest.approx(-80.0)
+
+
+class TestStandingWhereACameraStands:
+    """Taking the pose of a camera the scene carries."""
+
+    def test_it_stands_at_the_eye_and_looks_along_the_direction(self) -> None:
+        view = OrbitView(nearest=0.01, lowest=-89.0)
+        forward = np.array([1.0, -1.0, -1.0]) / np.sqrt(3.0)
+        view.stand_at((2.0, 5.0, 3.0), forward, 6.0)
+        assert view.position() == pytest.approx((2.0, 5.0, 3.0))
+        assert view.target() == pytest.approx(np.array([2.0, 5.0, 3.0]) + forward * 6.0)
+        assert view.distance == pytest.approx(6.0)
+
+    def test_a_camera_looking_up_is_looked_up_through(self) -> None:
+        view = OrbitView(nearest=0.01, lowest=-89.0)
+        view.stand_at((0.0, 0.0, 0.0), (0.0, 0.5, -1.0), 4.0)
+        assert view.pitch < 0.0
+        assert view.position() == pytest.approx((0.0, 0.0, 0.0), abs=1e-9)
+
+    def test_the_pitch_is_held_to_the_views_limits(self) -> None:
+        view = OrbitView(nearest=0.01)
+        view.stand_at((0.0, 0.0, 0.0), (0.0, 0.5, -1.0), 4.0)
+        assert view.pitch == pytest.approx(OrbitView.LOWEST)
+
+    def test_the_distance_is_held_to_the_views_limits(self) -> None:
+        view = OrbitView(nearest=1.0)
+        view.stand_at((0.0, 0.0, 0.0), (0.0, 0.0, -1.0), 0.1)
+        assert view.distance == pytest.approx(1.0)
+        assert view.position() == pytest.approx((0.0, 0.0, 0.0), abs=1e-9)
 
 
 class TestAsACamera:

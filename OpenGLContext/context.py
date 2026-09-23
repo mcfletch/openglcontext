@@ -802,6 +802,16 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         """Show or hide the developer overlay, where the frame rate is drawn"""
         self.toggleDebugOverlay()
 
+    def OnViewpointsChanged(self, paths: Any) -> None:
+        """The scene's ``Viewpoint`` nodes are now these node-paths.
+
+        Called by the render pass on the frame it first finds a different set
+        -- a world or model loaded, a camera added or removed -- with every path
+        in the order the pass found them; ``SceneGraph.viewpointPaths`` holds
+        the same. Does nothing here; a window that offers the scene's cameras
+        (:func:`OpenGLContext.multiview.viewpoints.scene_cameras`) overrides it.
+        """
+
     def OnNextViewpoint(self, event: Any = None) -> None:
         """Go to the next viewpoint for the scenegraph"""
         sg = self.getSceneGraph()

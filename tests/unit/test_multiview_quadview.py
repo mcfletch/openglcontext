@@ -213,3 +213,68 @@ class TestEngineEvents:
         from OpenGLContext.events.keyboardevents import KeypressEvent
         quad = _quad()
         assert not quad.handle(KeypressEvent())
+
+
+class TestWhatThePerspectiveViewOpensOn:
+    """Thirty degrees round from the front, or the scene's own camera."""
+
+    def _camera(self, name='cam', position=(3.0, 1.0, 4.0)):
+        from OpenGLContext.multiview.viewpoints import SceneCamera
+        forward = -np.asarray(position, 'd') / np.linalg.norm(position)
+        return SceneCamera(name=name, position=position, forward=tuple(forward),
+                           up=(0.0, 1.0, 0.0), fov=0.8)
+
+    def test_with_no_cameras_it_looks_from_thirty_degrees_off_the_front(self):
+        orbit = _quad().orbit
+        eye = orbit.position() - orbit.target()
+        across = np.degrees(np.arctan2(eye[0], eye[2]))
+        assert across == pytest.approx(30.0)
+
+    def test_it_is_not_looking_along_an_axis_the_other_views_show(self):
+        orbit = _quad().orbit
+        eye = orbit.position() - orbit.target()
+        assert abs(eye[0]) > 0.1 * np.linalg.norm(eye)
+        assert eye[1] > 0.1 * np.linalg.norm(eye)
+
+    def test_the_first_camera_found_is_the_one_it_opens_on(self):
+        quad = _quad()
+        chosen = quad.cameras_found([self._camera('a'), self._camera('b', (0, 2, 5))])
+        assert chosen.name == 'a'
+        assert quad.orbit.position() == pytest.approx((3.0, 1.0, 4.0))
+
+    def test_what_the_camera_looks_at_is_what_it_orbits(self):
+        quad = _quad()
+        quad.cameras_found([self._camera()])
+        assert _ndc(quad.view('perspective'), (0.0, 0.0, 0.0))[:2] == \
+            pytest.approx((0.0, 0.0), abs=1e-5)
+
+    def test_the_application_chooses_which_one(self):
+        quad = _quad(choose_camera=lambda cameras: cameras[-1])
+        chosen = quad.cameras_found([self._camera('a'), self._camera('b', (0, 2, 5))])
+        assert chosen.name == 'b'
+        assert quad.orbit.position() == pytest.approx((0.0, 2.0, 5.0))
+
+    def test_the_application_can_choose_none_of_them(self):
+        quad = _quad(choose_camera=lambda cameras: None)
+        before = quad.orbit.position().copy()
+        assert quad.cameras_found([self._camera()]) is None
+        assert quad.orbit.position() == pytest.approx(before)
+
+    def test_cameras_found_again_do_not_move_the_view(self):
+        quad = _quad()
+        quad.cameras_found([self._camera()])
+        quad.orbit.orbit(40.0, 0.0)
+        moved = quad.orbit.position().copy()
+        assert quad.cameras_found([self._camera(), self._camera('b')]) is None
+        assert quad.orbit.position() == pytest.approx(moved)
+        assert [camera.name for camera in quad.cameras] == ['cam', 'b']
+
+    def test_a_camera_can_be_looked_through_later(self):
+        quad = _quad()
+        assert quad.look_through(self._camera('b', (0.0, 2.0, 5.0)))
+        assert quad.orbit.position() == pytest.approx((0.0, 2.0, 5.0))
+
+    def test_a_model_can_be_looked_up_at(self):
+        quad = _quad()
+        quad.orbit.orbit(0.0, -120.0)
+        assert quad.orbit.pitch < 0.0

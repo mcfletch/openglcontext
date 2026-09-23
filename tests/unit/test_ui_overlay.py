@@ -108,6 +108,20 @@ class TestStack:
         assert stack.visible
         assert stack.top is stack.panels[0]
 
+    def test_a_panel_pushed_without_a_size_is_laid_out_on_the_next_frame(self):
+        """The stack already laid out for this window must not skip the newcomer."""
+        stack = OverlayStack()
+        stack.push(dialog())
+        stack.layout((640, 480), FontMetrics(8, 16, 2))
+        stack.push(dialog())
+        assert stack.laidOutFor is None
+
+    def test_a_panel_pushed_with_a_size_is_laid_out_at_once(self):
+        stack = OverlayStack()
+        panel = dialog()
+        stack.push(panel, (640, 480), FontMetrics(8, 16, 2))
+        assert stack.laidOutFor == (640, 480) and not panel.rect.empty
+
     def test_the_last_pushed_is_on_top(self):
         stack = OverlayStack()
         first, second = dialog(), dialog()
@@ -781,11 +795,53 @@ class TestTellingThePointerWhatIsUnderIt:
         button.tooltip = 'A tip long enough to run off the edge of a window'
         context.overlays.push(panel)
         context.layoutOverlays()
-        context.overlaySinks(FakeEvent('mousemove', pick=(795, 8)))
-        context.pointerRested(795, 8, now=0.0)
+        on = button.rect.centre
+        context.overlaySinks(FakeEvent('mousemove', pick=on))
+        context.pointerRested(*on, now=0.0)
         tip = context.tooltipTree(now=10.0)
-        if tip is None:
-            pytest.skip('the pointer did not land on the button')
-        tip.layout(context.getViewPort(), Metrics(8, 16, 2))
-        assert tip.rect.x >= 0 and tip.rect.right <= context.getViewPort()[0]
-        assert tip.rect.y >= 0 and tip.rect.top <= context.getViewPort()[1]
+        assert tip is not None
+        width, height = context.getViewPort()
+        for corner in ((width - 1.0, 1.0), (width - 1.0, height - 1.0),
+                       (1.0, height - 1.0), (1.0, 1.0)):
+            tip.anchor = corner
+            tip.layout((width, height), Metrics(8, 16, 2))
+            assert tip.rect.x >= 0 and tip.rect.right <= width, corner
+            assert tip.rect.y >= 0 and tip.rect.top <= height, corner
+
+
+class TestPanelsThatMoveOverTime:
+    def _chosen(self, context):
+        from OpenGLContext.ui.menu import Menu, MenuItem
+        menu = Menu(items=[MenuItem(text='Go')], linger=0.2)
+        context.overlays.push(menu)
+        context.layoutOverlays()
+        row = menu.items()[0]
+        menu.pointer_pressed(*row.rect.centre)
+        menu.pointer_released(*row.rect.centre)
+        return menu
+
+    def test_a_frame_puts_away_a_menu_whose_choice_has_lingered(self):
+        from OpenGLContext.events import systemtime
+        context = FakeContext()
+        menu = self._chosen(context)
+        context.screenTrees(FontMetrics(8, 16, 2), now=systemtime.systemTime() + 1.0)
+        assert menu.closed and not context.overlays.visible
+
+    def test_one_drawn_before_then_is_still_up(self):
+        from OpenGLContext.events import systemtime
+        context = FakeContext()
+        menu = self._chosen(context)
+        trees = context.screenTrees(FontMetrics(8, 16, 2), now=systemtime.systemTime())
+        assert not menu.closed and menu in trees
+
+    def test_the_stack_advances_every_panel(self):
+        stack = OverlayStack()
+        seen = []
+
+        class Timed(Panel):
+            def tick(self, now):
+                seen.append(now)
+        stack.push(Timed())
+        stack.push(dialog())
+        stack.tick(3.0)
+        assert seen == [3.0]

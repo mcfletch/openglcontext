@@ -81,29 +81,26 @@ class TestCoreViewpointBridge:
         sg = sceneGraph(children=list(vps))
         return sg, vps
 
-    def test_binds_first_by_default(self, monkeypatch):
+    def test_binds_first_by_default(self):
         sg, vps = self._scene()
-        monkeypatch.setattr(viewpointbinding.visitor, 'find',
-                            lambda ctx, types: [_Path(vp) for vp in vps])
+        sg.viewpointPaths = tuple(_Path(vp) for vp in vps)
         ctx = FakeContext(sg)
         viewpointbinding.bind_scene_viewpoint(ctx)
         assert sg.boundViewpoint is vps[0]
         assert ctx.platform.position == (0.0, 0.0, 0.0, 1.0)
 
-    def test_binds_preselected_isbound(self, monkeypatch):
+    def test_binds_preselected_isbound(self):
         sg, vps = self._scene()
         vps[2].isBound = True
-        monkeypatch.setattr(viewpointbinding.visitor, 'find',
-                            lambda ctx, types: [_Path(vp) for vp in vps])
+        sg.viewpointPaths = tuple(_Path(vp) for vp in vps)
         ctx = FakeContext(sg)
         viewpointbinding.bind_scene_viewpoint(ctx)
         assert sg.boundViewpoint is vps[2]
         assert ctx.platform.position == (2.0, 0.0, 0.0, 1.0)
 
-    def test_cycles_to_next_when_unbound(self, monkeypatch):
+    def test_cycles_to_next_when_unbound(self):
         sg, vps = self._scene()
-        monkeypatch.setattr(viewpointbinding.visitor, 'find',
-                            lambda ctx, types: [_Path(vp) for vp in vps])
+        sg.viewpointPaths = tuple(_Path(vp) for vp in vps)
         ctx = FakeContext(sg)
         viewpointbinding.bind_scene_viewpoint(ctx)          # binds cam0
         # emulate OnNextViewpoint: unbind current
@@ -111,9 +108,8 @@ class TestCoreViewpointBridge:
         viewpointbinding.bind_scene_viewpoint(ctx)          # advances to cam1
         assert sg.boundViewpoint is vps[1]
 
-    def test_no_viewpoints_is_noop(self, monkeypatch):
+    def test_no_viewpoints_is_noop(self):
         sg = sceneGraph(children=[])
-        monkeypatch.setattr(viewpointbinding.visitor, 'find', lambda ctx, types: [])
         ctx = FakeContext(sg)
         viewpointbinding.bind_scene_viewpoint(ctx)
         # `boundViewpoint` is an SFNode, so what it holds when it holds
@@ -121,6 +117,35 @@ class TestCoreViewpointBridge:
         # in `context.py` and `sceneviewer.py` test it for.
         assert not getattr(sg, 'boundViewpoint', None)
         assert ctx.platform.position is None             # platform untouched
+
+
+class TestTheRenderPassesPaths:
+    """Binding reads what the render pass found, as it goes on finding it."""
+
+    def test_a_viewpoint_nested_in_a_transform_is_bound_where_it_stands(self):
+        from OpenGLContext.passes.flatcore import FlatPass
+        from OpenGLContext.scenegraph.basenodes import Transform
+        inner = Viewpoint(position=(0, 0, 1), description='inner')
+        sg = sceneGraph(children=[Transform(translation=(4, 0, 0),
+                                            children=[inner])])
+        ctx = FakeContext(sg)
+        viewpointbinding.publish_viewpoints(ctx, FlatPass(sg, []))
+        viewpointbinding.bind_scene_viewpoint(ctx)
+        assert sg.boundViewpoint is inner
+        assert tuple(round(v, 5) for v in ctx.platform.position) == (4, 0, 1, 1)
+
+    def test_one_that_arrives_after_the_first_frame_can_be_bound(self):
+        from OpenGLContext.passes.flatcore import FlatPass
+        sg = sceneGraph(children=[])
+        found = FlatPass(sg, [])
+        ctx = FakeContext(sg)
+        viewpointbinding.publish_viewpoints(ctx, found)
+        viewpointbinding.bind_scene_viewpoint(ctx)
+        late = Viewpoint(position=(0, 3, 0), description='late')
+        sg.children.append(late)
+        viewpointbinding.publish_viewpoints(ctx, found)
+        viewpointbinding.bind_scene_viewpoint(ctx)
+        assert sg.boundViewpoint is late
 
 
 class _Path:

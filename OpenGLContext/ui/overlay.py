@@ -106,6 +106,11 @@ class OverlayStack:
              metrics: Any = None) -> Panel:
         """Put a panel on top, suspending whatever was there.
 
+        With a ``viewport`` and ``metrics`` it is laid out at once; without,
+        the whole stack is laid out again on the next frame, since the panels
+        under it being laid out for this window says nothing about the new
+        one.
+
         A panel that has already been closed is refused rather than accepted
         and then quietly ignored: it would never fire the listener that takes
         it back off, so it would sit on the stack sinking every event for the
@@ -118,9 +123,15 @@ class OverlayStack:
             self.panels[-1].suspend()
         self.panels.append(panel)
         panel.closeListeners.append(self._panelClosed)
+        # A panel that opens panels of its own -- a menu's submenus -- opens
+        # them where it was put, unless it was told somewhere else.
+        if panel.stack is None:
+            panel.stack = self
         if viewport is not None and metrics is not None:
             panel.layout(viewport, metrics)
             self.laidOutFor = viewport
+        else:
+            self.invalidate()
         self._changed()
         return panel
 
@@ -163,6 +174,17 @@ class OverlayStack:
     def _changed(self) -> None:
         if self.on_change is not None:
             self.on_change(self)
+
+    def tick(self, now: float) -> None:
+        """Advance whatever the panels do over time to ``now``.
+
+        A menu that has had something chosen goes away here once it has
+        lingered; a panel with nothing that moves is left alone.
+        """
+        for panel in list(self.panels):
+            tick = getattr(panel, 'tick', None)
+            if tick is not None:
+                tick(now)
 
     # -- layout -----------------------------------------------------------
     def layout(self, viewport: Tuple[int, int], metrics: Any) -> None:
@@ -544,9 +566,16 @@ class OverlayMixin(_Host):
 
     def screenTrees(self, metrics: FontMetrics,
                     now: Optional[float] = None) -> List[Any]:
-        """The HUD layers, the open panels, and any tip over the lot."""
+        """The HUD layers, the open panels, and any tip over the lot.
+
+        The panels are advanced to ``now`` first, so one whose time is up is
+        gone before it is drawn.
+        """
         trees = super(OverlayMixin, self).screenTrees(metrics, now)
         stack = self._overlays
+        if stack is not None and stack.visible:
+            from OpenGLContext.events import systemtime
+            stack.tick(systemtime.systemTime() if now is None else float(now))
         if stack is not None and stack.visible and self.layoutOverlays():
             trees.extend(stack.panels)
             tip = self.tooltipTree(now)

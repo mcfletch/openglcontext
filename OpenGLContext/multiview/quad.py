@@ -15,6 +15,17 @@ camera:
 - a wheel notch zooms the view under the pointer, an orthographic one about
   the pixel the pointer is on.
 
+The perspective view opens thirty degrees round from the front, above the
+model, so it shows a side the three elevations do not. A scene that carries
+cameras -- VRML97 ``Viewpoint`` nodes, or a glTF file's cameras -- is opened
+through the first of them instead; :meth:`QuadView.cameras_found` is told
+them, and ``choose_camera`` picks another or none::
+
+    quad = QuadView(choose_camera=lambda cameras: cameras[-1])
+    ...
+    def OnViewpointsChanged(self, paths):
+        quad.cameras_found(scene_cameras(self.sg))
+
 The gestures are :class:`~OpenGLContext.multiview.gestures.ViewGestures`, which
 a window laying out views of its own uses directly.
 
@@ -37,17 +48,25 @@ reads its pointer some other way.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Sequence, Tuple, Union
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
 from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
 from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform, Point
 from OpenGLContext.multiview.navigation import ROTATE_RATE, ZOOM_STEP
+from OpenGLContext.multiview.viewpoints import (
+    CameraChooser, SceneCamera, first_camera, look_through,
+)
 from OpenGLContext.multiview.views import View, ViewStyle
 from OpenGLContext.multiview.viewset import ViewSet
 
-__all__ = ['QuadView', 'ROTATE_RATE', 'ZOOM_STEP']
+__all__ = ['QuadView', 'OPENING_HEADING', 'ROTATE_RATE', 'ZOOM_STEP']
+
+#: The heading the perspective view opens on, in degrees: thirty round from
+#: the front towards the right, so it shows the side the left elevation does
+#: not.
+OPENING_HEADING = 330.0
 
 Colour = Union[Tuple[float, float, float], Tuple[float, float, float, float]]
 
@@ -60,18 +79,32 @@ class QuadView:
     is the plan, the front elevation and the view from the left. The
     orthographic views clear to ``background``; the perspective view draws the
     scene's own ``Background``.
+
+    ``choose_camera`` picks which of the scene's cameras the perspective view
+    opens on, given them in the order the scene declares them; it answers
+    None to keep the view it opened on. The first, unless given.
     """
 
     def __init__(self, directions: Sequence[str] = ('top', 'front', 'left'),
-                 background: Colour = (0.32, 0.33, 0.35)) -> None:
+                 background: Colour = (0.32, 0.33, 0.35),
+                 choose_camera: CameraChooser = first_camera) -> None:
         if len(directions) != 3:
             raise ValueError('a quad view has three orthographic views, not %d'
                              % len(directions))
         #: The orthographic views' cameras, by direction.
         self.orthographic: Dict[str, OrthoView] = {
             direction: OrthoView(direction) for direction in directions}
-        #: The perspective view's camera.
-        self.orbit = OrbitView()
+        #: The perspective view's camera. It may go below the model as well as
+        #: above it: an object, unlike the land, has an underside to look at.
+        self.orbit = OrbitView(heading=OPENING_HEADING,
+                               lowest=-OrbitView.HIGHEST)
+        #: Which of the scene's cameras to open on.
+        self.choose_camera = choose_camera
+        #: The scene's cameras, as :meth:`cameras_found` was last told them.
+        self.cameras: List[SceneCamera] = []
+        #: The box last framed, which is how far ahead a camera looked
+        #: through is orbited about.
+        self._framed: Optional[Tuple[np.ndarray, np.ndarray]] = None
         flat = ViewStyle(background=background)
         views = [View(OrthoViewPlatform(camera), name=direction, style=flat)
                  for direction, camera in self.orthographic.items()]
@@ -103,7 +136,48 @@ class QuadView:
         # far enough to see a thousand of them.
         self.orbit.nearest = radius * 0.01
         self.orbit.furthest = radius * 1000.0
+        self._framed = (low, high)
         self.views.frame(low, high)
+
+    # -- the scene's cameras -----------------------------------------------
+    def cameras_found(self, cameras: Sequence[SceneCamera]) -> Optional[SceneCamera]:
+        """The scene's cameras are these; the one the perspective view now looks through.
+
+        The first time a scene has any, the perspective view is pointed
+        through the one ``choose_camera`` picks. After that the list is only
+        kept, for a menu to offer, and the view stays where it has been
+        moved to. None where nothing was looked through.
+        """
+        opening = not self.cameras
+        self.cameras = list(cameras)
+        if not (opening and self.cameras):
+            return None
+        chosen = self.choose_camera(self.cameras)
+        if chosen is None or not self.look_through(chosen):
+            return None
+        return chosen
+
+    def look_through(self, camera: SceneCamera) -> bool:
+        """Point the perspective view through ``camera``.
+
+        It orbits the point ahead of the camera nearest the middle of the box
+        last framed, so an orbit afterwards turns about the model.
+        """
+        view = self.view('perspective')
+        if view is None:
+            return False
+        return look_through(view, camera, distance=self._ahead(camera))
+
+    def _ahead(self, camera: SceneCamera) -> Optional[float]:
+        """How far ahead of ``camera`` the middle of the framed box is, or None."""
+        if self._framed is None:
+            return None
+        low, high = self._framed
+        middle = (low + high) / 2.0
+        along = float((middle - np.asarray(camera.position, 'd'))
+                      @ np.asarray(camera.forward, 'd'))
+        radius = float(np.linalg.norm(high - low)) / 2.0
+        return max(along, radius * 0.1, 1e-6)
 
     # -- gestures ----------------------------------------------------------
     def handle(self, event: Any) -> bool:

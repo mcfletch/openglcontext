@@ -82,6 +82,10 @@ class Panel(RootWidget):
     _hovered: Optional[Widget] = None
     #: The widget to put focus back on when a child dialog closes.
     _resume_focus: Optional[Widget] = None
+    #: The overlay stack this panel opens panels of its own on -- a menu's
+    #: submenus, the view chrome's menus. The stack it is pushed on, unless it
+    #: was given one.
+    stack: Any = None
 
     def __init__(self, **named: Any) -> None:
         super(Panel, self).__init__(**named)
@@ -317,6 +321,8 @@ class Panel(RootWidget):
             self._armed = None
             return False
         self._armed = found if found.press(x, y) else None
+        if self._armed is not None:
+            found.ripple(x, y)
         # A click earns a focus ring only where the keyboard is about to be
         # used: typing into a field with no ring leaves you guessing where the
         # characters are going.

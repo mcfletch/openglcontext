@@ -57,7 +57,7 @@ repository, where the full legal notice for a model lives in its own `README.md`
 | Corset | &copy; 2017 UX3D &mdash; CC0 1.0 |
 | FlightHelmet | public domain &mdash; CC0 1.0 |
 | GlassVaseFlowers | public domain &mdash; CC0 1.0 |
-| Lantern (`using_gltf_model`) | &copy; 2017 Microsoft, &copy; 2018 Frank Galligan &mdash; CC0 1.0 |
+| Lantern (`using_gltf_model`, `multiview_quad`) | &copy; 2017 Microsoft, &copy; 2018 Frank Galligan &mdash; CC0 1.0 |
 | SciFiHelmet | public domain &mdash; CC0 1.0 |
 | ToyCar | public domain &mdash; CC0 1.0 |
 | WaterBottle | public domain &mdash; CC0 1.0 |

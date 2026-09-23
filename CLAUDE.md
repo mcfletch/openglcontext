@@ -102,6 +102,9 @@ OpenGLContext/
 │   ├── strategy.py   # How a frame reaches every view: vertex-stage routing,
 │   │                 # a geometry stage, or the scene drawn once per view
 │   ├── cameras.py    # OrthoView: a view along one axis at a scale
+│   ├── viewpoints.py # The scene's cameras (VRML97 Viewpoints, glTF cameras)
+│   │                 # as the render pass finds them, and a view looking
+│   │                 # through one
 │   ├── navigation.py # What the pointer does in one view: the gestures its
 │   │                 # camera offers, and the bindings that raise them
 │   ├── gestures.py   # Reading the pointer, and asking the view it is in

@@ -62,7 +62,10 @@ class OrbitView:
     how far off it stands, in metres. ``nearest`` and ``furthest`` are how
     near and how far it may be dollied, :attr:`NEAREST` and :attr:`FURTHEST`
     unless given; a view of one object rather than of the land wants them
-    fitted to that object.
+    fitted to that object. ``lowest`` and ``highest`` are the pitches it may
+    be orbited between, :attr:`LOWEST` and :attr:`HIGHEST` unless given; a
+    view of an object that may be looked up at from below gives a negative
+    ``lowest``.
     """
 
     #: How near and how far the camera may be dollied, in metres.
@@ -80,9 +83,12 @@ class OrbitView:
                  pitch: float = DEFAULT_PITCH, distance: float = 800.0,
                  fov: float = DEFAULT_FOV, nearest: float | None = None,
                  furthest: float | None = None,
-                 orthographic: bool = False) -> None:
+                 orthographic: bool = False, lowest: float | None = None,
+                 highest: float | None = None) -> None:
         self.nearest = float(self.NEAREST if nearest is None else nearest)
         self.furthest = float(self.FURTHEST if furthest is None else furthest)
+        self.lowest = float(self.LOWEST if lowest is None else lowest)
+        self.highest = float(self.HIGHEST if highest is None else highest)
         self.centre = (float(centre[0]), float(centre[1]))
         #: The height of the ground it is looking at, in metres.
         self.ground = float(ground)
@@ -124,8 +130,8 @@ class OrbitView:
         at would be a pan, and a designer inspecting a hill would lose it.
         """
         self.heading = (self.heading + float(turn)) % 360.0
-        self.pitch = min(max(self.pitch + float(rise), self.LOWEST),
-                         self.HIGHEST)
+        self.pitch = min(max(self.pitch + float(rise), self.lowest),
+                         self.highest)
 
     def dolly(self, factor: float) -> None:
         """Move in or out. Below 1 comes closer; above 1 draws back."""
@@ -138,6 +144,31 @@ class OrbitView:
         self.centre = (float(centre[0]), float(centre[1]))
         if ground is not None:
             self.ground = float(ground)
+
+    def stand_at(self, eye: Union[Sequence[float], np.ndarray],
+                 forward: Union[Sequence[float], np.ndarray],
+                 distance: float) -> None:
+        """Stand at ``eye`` looking along ``forward``, orbiting a point ``distance`` ahead.
+
+        How a view takes the pose of a camera the scene carries. The point
+        ahead is what an orbit then turns about. The camera stays at ``eye``
+        whatever the limits make of the rest: the distance is held to
+        ``nearest`` and ``furthest``, and the pitch to ``lowest`` and
+        ``highest``, by moving the point it orbits. There is no roll, since an
+        orbit keeps the world's up the screen's.
+        """
+        start = np.asarray(eye, dtype='d')[:3]
+        along = np.asarray(forward, dtype='d')[:3]
+        along = along / max(float(np.linalg.norm(along)), 1e-12)
+        rise = math.degrees(math.asin(min(max(-float(along[1]), -1.0), 1.0)))
+        self.pitch = min(max(rise, self.lowest), self.highest)
+        self.heading = math.degrees(math.atan2(float(along[0]),
+                                               -float(along[2]))) % 360.0
+        self.distance = float(min(max(float(distance), self.nearest),
+                                  self.furthest))
+        # Where the target has to be for position() to answer the eye.
+        target = start - (self.position() - self.target())
+        self.look_at((float(target[0]), float(target[2])), float(target[1]))
 
     def frame(self, minimum: Tuple[float, float], maximum: Tuple[float, float],
               viewport: Tuple[int, int]) -> None:

@@ -200,3 +200,31 @@ class TestDrawingOrder:
                 return (0, 0, 0)
 
         assert game.overlaySinks(Event()) is False
+
+
+class TestFramesWhileSomethingMoves:
+    """A ripple across a control needs frames until it has finished."""
+
+    def _rippling(self, now):
+        from OpenGLContext.ui.widgets import Button
+        button = Button(text='Go')
+        panel = Panel(children=[button])
+        panel.layout((800, 600), FontMetrics(8, 16, 2))
+        button.ripple(now=now)
+        return panel
+
+    def test_a_tree_that_is_moving_asks_for_another_frame(self):
+        screen = Screen()
+        screen.redrawWhileAnimating([self._rippling(1.0)], 1.1)
+        assert screen.redraws == 1
+
+    def test_one_that_has_stopped_does_not(self):
+        from OpenGLContext.ui.widgets import RIPPLE_SECONDS
+        screen = Screen()
+        screen.redrawWhileAnimating([self._rippling(1.0)], 1.0 + RIPPLE_SECONDS * 2)
+        assert screen.redraws == 0
+
+    def test_a_tree_with_nothing_to_say_about_it_is_still(self):
+        screen = Screen()
+        screen.redrawWhileAnimating([object()], 0.0)
+        assert screen.redraws == 0

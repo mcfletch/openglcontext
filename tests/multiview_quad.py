@@ -15,9 +15,12 @@ Give it a path to draw a model of your own:
 
 Without one it draws `Lantern` from the Khronos sample catalogue (CC0).
 
-Each view carries its own furniture: its name, an axis triad that turns
-with its camera, `[ ]` to give it the window, and `(o)` to say what the
-pointer does there.  The lines between the views drag, and where they
+The perspective view opens thirty degrees round from the front, or
+through the model's first camera where the file has any.
+
+Each view carries its own furniture: its name on a button that opens the
+view's menu, an axis triad that turns with its camera, and a button that
+gives it the window.  The lines between the views drag, and where they
 cross drags both.
 
 Mouse and keys:
@@ -26,8 +29,9 @@ Mouse and keys:
     middle-drag  pan any view
     wheel        zoom the view under the pointer
     drag a line  move the splitter between the views
-    click a name which way that view looks, how it is drawn, what the
-                 pointer does in it, and zoom to fit
+    click a name which way that view looks, the model's cameras, how it
+                 is drawn, and zoom to fit; the underlined letter of a
+                 row runs it
     the button   give that view the whole window, and give it back
     space        give the active view the whole window, and give it back
     f            frame the model in every view again
@@ -47,6 +51,7 @@ BaseContext = testingcontext.getInteractive()
 panning and zooming them, with no GL in it.  The layout it builds is what the
 context draws.'''
 from OpenGLContext.multiview.quad import QuadView
+from OpenGLContext.multiview.viewpoints import scene_cameras
 from OpenGLContext.loaders.gltf import load_gltf, sample_model_url
 from OpenGLContext.loaders.resolver import fetch_to_cache
 from OpenGLContext.passes import renderpass
@@ -78,11 +83,14 @@ def model_path(arguments):
 class TestContext(OverlayMixin, BaseContext):
     def OnInit(self):
         scene = load_gltf(model_path(sys.argv[1:]))
+        '''The loader makes a ``Viewpoint`` for each camera the file defines,
+        standing where that camera stands; mounted beside the model they are
+        the scene's cameras, as a VRML97 world's own Viewpoints would be.'''
         self.sg = sceneGraph(children=[
             Background(skyColor=[(0.15, 0.17, 0.2)]),
             DirectionalLight(direction=(-0.4, -0.6, -1.0), intensity=1.0),
             scene.group,
-        ])
+        ] + list(scene.viewpoints))
         '''The model is left in its own units and where the file put it; the
         views are fitted to it instead.  ``minimum`` and ``maximum`` are the
         corners of the box around what was loaded.'''
@@ -95,7 +103,9 @@ class TestContext(OverlayMixin, BaseContext):
         ``viewLayout`` is all it takes for the context to draw them.
 
         Framing fits each view to the size the layout gives it, so the layout
-        is arranged for the window first.'''
+        is arranged for the window first.  The perspective view opens thirty
+        degrees round from the front; ``QuadView(choose_camera=...)`` is where
+        an application says which of the scene's cameras to open on instead.'''
         self.quad = QuadView()
         self.viewLayout = self.quad.layout
         self.quad.layout.arrange(*self.getViewPort())
@@ -113,7 +123,8 @@ class TestContext(OverlayMixin, BaseContext):
         again and draws.'''
         self.chrome = ViewChrome(layout=self.quad.layout, stack=self.overlays,
                                  on_arrange=self.OnArranged,
-                                 bounds=lambda: self.bounds)
+                                 bounds=lambda: self.bounds,
+                                 cameras=lambda: self.quad.cameras)
         self.overlays.push(self.chrome)
 
         self.addEventHandler('keypress', name=' ', function=self.OnMaximise)
@@ -140,6 +151,14 @@ class TestContext(OverlayMixin, BaseContext):
             self.triggerRedraw(1)
             return None
         return super(TestContext, self).ProcessEvent(event)
+
+    def OnViewpointsChanged(self, paths):
+        '''*The scene's cameras.*  The render pass finds every ``Viewpoint``
+        in the scene and calls this when the set changes.  ``cameras_found``
+        points the perspective view through the first of them the first time
+        there are any, and keeps the list for each view's *Cameras* menu.'''
+        self.quad.cameras_found(scene_cameras(self.sg))
+        self.triggerRedraw(1)
 
     def hasMouseMoveHandlers(self):
         '''The drags are read in ``ProcessEvent``, which the handler registry

@@ -560,6 +560,49 @@ branch `pointer-lifetime` (3d9e8715, not yet merged): customisations belong to
 the chain that made them. `test_sphere_background_legacy.py` passes against
 it and fails against a PyOpenGL without it.
 
+## Landed: the view menu, the scene's cameras, and pointer feedback (2026-09-23)
+
+- The name menu drew as text at the bottom of the window: `ViewChrome` pushed
+  it without a size and `OverlayStack.push` left `laidOutFor` alone, so the
+  frame never laid the menu out. `push` without a size now invalidates the
+  stack. The menu was also built without its stack, so its submenus could not
+  open; the stack a panel is pushed on is now its stack unless it names one.
+- The name is a button (the corner buttons' face and a caret), and its menu is
+  View (the eight kinds), Cameras, Rendering (shaded / wireframe), Zoom to fit
+  and Maximise. "What the pointer does" and the never-built `NavigationButton`
+  (whose `open_navigation` did not exist) are gone; `ViewNavigation` itself is
+  unchanged and still rebinds per view from code and the bindings screen.
+- Menus: the row under the pointer takes the keyboard and draws
+  `skin.menuHighlight`; every row has an access letter (automatic, or
+  `mnemonic`), underlined one pixel under the baseline (`FontMetrics.baseline`
+  from the atlas); a menu with no room below opens on top of what opened it
+  (`above`); separators have room either side. Rows had their text 8 px above
+  centre -- the row was inset vertically by its horizontal padding.
+- Every interactive widget shows `skin.hoverWash` under the pointer (unless it
+  lights itself) and a ripple (`RIPPLE_SECONDS`) from the press point, or from
+  its middle when run from the keyboard. Roots track running effects and the
+  overlay asks for frames while any run; a chosen menu lingers `linger`
+  seconds so its ripple is seen.
+- Scene cameras: the render pass publishes its live Viewpoint paths as
+  `SceneGraph.viewpointPaths` each frame and calls
+  `Context.OnViewpointsChanged`; viewpoint binding reads the same table rather
+  than its own `visitor.find` walk, so a Viewpoint added after the first frame
+  (an async glTF load) is bindable. `multiview.viewpoints` turns the paths into
+  `SceneCamera`s (VRML97 Viewpoints and glTF cameras alike, nested transforms
+  applied) and `look_through` points a view through one -- an `OrbitView`
+  standing at the camera (`OrbitView.stand_at`), or the Viewpoint bound for a
+  view drawn through the window's camera.
+- `QuadView` opens its perspective view thirty degrees round from the front
+  (`OPENING_HEADING`) rather than straight down -z, or through the camera
+  `choose_camera` picks the first time `cameras_found` is told any; its orbit
+  may go below the model (`OrbitView(lowest=...)`).
+
+Still open: wiring a QuadView with its own orbiting camera into a window takes
+about forty lines the demo spells out (layout, framing, chrome, event routing,
+redraws, cameras), where `MultiViewMixin` over the window's own camera takes
+one call. A mixin option for an orbiting perspective view would make the two
+the same size.
+
 ## Revised: one submission without world-space shading
 
 Phase 2 as written moves every shader to world space so a draw carries no

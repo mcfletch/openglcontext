@@ -44,6 +44,10 @@ class ScrollViewport(Widget):
     showBar = field.newField('showBar', 'SFBool', 1, True)
 
     interactive = True
+    #: Interactive to take the wheel and the bar; the controls inside it are
+    #: what the pointer is shown.
+    hoverWash = False
+    ripples = False
 
     #: Set while the thumb is being dragged: how far down the thumb the pointer
     #: grabbed it, so the content does not jump on the first pixel of motion.

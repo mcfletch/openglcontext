@@ -9,7 +9,6 @@ import pytest
 from OpenGLContext.edit.mapview import MapView, MapViewPlatform
 from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
 from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
-from OpenGLContext.multiview.navigation import PAN, ZOOM_DRAG, navigation_for
 from OpenGLContext.multiview.views import View, ViewLayout
 from OpenGLContext.ui.menu import MenuItem
 from OpenGLContext.ui.metrics import REFERENCE_METRICS
@@ -51,6 +50,13 @@ def _items(menu):
     return [widget for widget in menu.walk() if isinstance(widget, MenuItem)]
 
 
+def _sub(items, text):
+    """The rows under the row that says ``text``."""
+    found = [item for item in items if str(item.text) == text]
+    assert found, '%r is not in the menu' % (text,)
+    return list(found[0].submenu)
+
+
 def _inside(widget, view):
     x, y, width, height = view.rect
     return (widget.rect.x >= x and widget.rect.y >= y
@@ -88,6 +94,24 @@ class TestWhatItPutsInEachView:
         chrome = _chrome(layout)
         for button in _of(chrome, ExpandButton):
             assert _inside(button, button.view)
+
+    def test_the_name_is_a_button_as_wide_as_what_it_says(self):
+        """A face the size of the name, so it reads as the thing to click."""
+        chrome = _chrome()
+        for label in _of(chrome, ViewLabel):
+            natural = label.content_size(REFERENCE_METRICS)[0]
+            assert label.rect.width == natural
+            assert natural > REFERENCE_METRICS.text_width(str(label.text))
+
+    def test_the_name_is_drawn_on_the_buttons_face(self):
+        chrome = _chrome()
+        label = _of(chrome, ViewLabel)[0]
+        renderer = _Recorder(label.activeSkin())
+        label.paint(renderer)
+        framed = [args for name, args in renderer.calls if name == 'frame']
+        assert framed and framed[0][0] == label.rect
+        assert [args[1] for name, args in renderer.calls if name == 'textIn'] \
+            == [str(label.text)]
 
     def test_the_name_is_the_views(self):
         chrome = _chrome()
@@ -322,6 +346,108 @@ class TestTheAxes:
         assert axis_directions(View(name='plain')) is None
 
 
+class _Recorder:
+    """Records the drawing calls a widget makes."""
+
+    def __init__(self, skin):
+        self.skin = skin
+        self.metrics = REFERENCE_METRICS
+        self.now = None
+        self.calls = []
+
+    def __getattr__(self, name):
+        def record(*arguments, **named):
+            self.calls.append((name, arguments))
+        return record
+
+
+class TestTheMenuOnScreen:
+    """What the name opens, as a real overlay stack puts it up."""
+
+    def _opened(self):
+        from OpenGLContext.ui.menu import Menu
+        from OpenGLContext.ui.overlay import OverlayStack
+        stack = OverlayStack()
+        chrome = ViewChrome(layout=_layout(), stack=stack)
+        stack.push(chrome, VIEWPORT, REFERENCE_METRICS)
+        label = _of(chrome, ViewLabel)[0]
+        stack.pointer_pressed(*label.rect.centre)
+        stack.pointer_released(*label.rect.centre)
+        menu = stack.top
+        assert isinstance(menu, Menu)
+        return stack, label, menu
+
+    def test_the_frame_after_it_opens_lays_it_out(self):
+        stack, _label, _menu = self._opened()
+        assert stack.laidOutFor is None
+
+    def test_it_hangs_below_the_name(self):
+        stack, label, menu = self._opened()
+        stack.layout(VIEWPORT, REFERENCE_METRICS)
+        assert menu.rect.top == label.rect.y
+        assert menu.rect.x == label.rect.x
+        for row in menu.items():
+            assert menu.rect.contains(*row.rect.centre)
+
+    def test_the_ways_of_looking_open_beside_it(self):
+        from OpenGLContext.ui.menu import Menu
+        stack, _label, menu = self._opened()
+        stack.layout(VIEWPORT, REFERENCE_METRICS)
+        item = [row for row in menu.items() if str(row.text) == 'View'][0]
+        item.activate()
+        assert isinstance(stack.top, Menu) and stack.top is not menu
+        assert stack.top.parentMenu is menu
+        assert 'Front' in [str(row.text) for row in stack.top.items()]
+
+
+class TestTheScenesCameras:
+    """The cameras the scene carries, offered by name in a view's menu."""
+
+    def _cameras(self):
+        from OpenGLContext.multiview.viewpoints import SceneCamera
+        return [SceneCamera(name='Porch', position=(0.0, 2.0, 10.0),
+                            forward=(0.0, 0.0, -1.0), up=(0.0, 1.0, 0.0), fov=0.8),
+                SceneCamera(name='Roof', position=(5.0, 9.0, 5.0),
+                            forward=(-0.5, -0.7, -0.5), up=(0.0, 1.0, 0.0), fov=0.8)]
+
+    def _menu(self, cameras, layout=None):
+        stack = TestTheViewsOwnMenu()._stack()
+        chrome = _chrome(layout, stack=stack, cameras=cameras)
+        label = _of(chrome, ViewLabel)[3]            # the angled view
+        chrome.pointer_pressed(*label.rect.centre)
+        chrome.pointer_released(*label.rect.centre)
+        return chrome, label.view, _items(stack.pushed[0])
+
+    def test_a_scene_with_cameras_offers_them(self):
+        _chrome_, _view, items = self._menu(self._cameras())
+        cameras = [one for one in items if str(one.text) == 'Cameras'][0]
+        assert [str(one.text) for one in cameras.submenu] == ['Porch', 'Roof']
+
+    def test_they_may_be_asked_for_each_time(self):
+        asked = []
+        self._menu(lambda: asked.append(True) or self._cameras())
+        assert asked
+
+    def test_a_scene_with_none_offers_no_cameras(self):
+        _chrome_, _view, items = self._menu([])
+        assert 'Cameras' not in [str(one.text) for one in items]
+
+    def test_choosing_one_looks_through_it(self):
+        changed = []
+        stack = TestTheViewsOwnMenu()._stack()
+        chrome = _chrome(stack=stack, cameras=self._cameras(),
+                         on_arrange=lambda: changed.append(True))
+        label = _of(chrome, ViewLabel)[3]
+        chrome.pointer_pressed(*label.rect.centre)
+        chrome.pointer_released(*label.rect.centre)
+        cameras = [one for one in _items(stack.pushed[0])
+                   if str(one.text) == 'Cameras'][0]
+        porch = list(cameras.submenu)[0]
+        porch.on_activate(porch)
+        assert label.view.camera.view.position() == pytest.approx((0.0, 2.0, 10.0))
+        assert changed
+
+
 class TestTheViewsOwnMenu:
     """What a click on the view's name opens."""
 
@@ -349,30 +475,40 @@ class TestTheViewsOwnMenu:
         _chrome_, _view, items = self._opened()
         assert items
 
-    def test_it_offers_every_way_of_looking(self):
+    def test_it_is_short(self):
+        """The ways of looking and of drawing are a level down, not in the list."""
         _chrome_, _view, items = self._opened()
-        texts = [str(item.text) for item in items]
-        for name in ('Top', 'Bottom', 'Front', 'Back', 'Left', 'Right',
-                     'Perspective', 'Ortho'):
-            assert name in texts, name
+        assert [str(item.text) for item in items] == ['View', 'Rendering', 'Maximise']
+
+    def test_it_offers_every_way_of_looking_under_view(self):
+        _chrome_, _view, items = self._opened()
+        texts = [str(item.text) for item in _sub(items, 'View')]
+        assert texts == ['Front', 'Back', 'Right', 'Left', 'Top', 'Bottom',
+                         'Perspective', 'Ortho']
 
     def test_the_way_this_view_looks_is_ticked(self):
         _chrome_, _view, items = self._opened()
-        ticked = [str(item.text) for item in items if item.checked]
-        assert 'Top' in ticked          # the quad's first view
+        ticked = [str(item.text) for item in _sub(items, 'View') if item.checked]
+        assert ticked == ['Top']          # the quad's first view
 
     def test_choosing_one_points_the_view_that_way(self):
         from OpenGLContext.multiview.cameras import view_kind
         _chrome_, view, items = self._opened()
-        item = [one for one in items if str(one.text) == 'Left'][0]
+        item = [one for one in _sub(items, 'View') if str(one.text) == 'Left'][0]
         item.on_activate(item)
         assert view_kind(view) == 'left'
 
-    def test_it_offers_shaded_and_wireframe(self):
+    def test_a_view_with_no_camera_of_its_own_has_no_ways_of_looking(self):
+        layout = ViewLayout.single()
+        layout.arrange(*VIEWPORT)
+        _chrome_, _view, items = self._opened(layout)
+        assert 'View' not in [str(item.text) for item in items]
+
+    def test_it_offers_shaded_and_wireframe_under_rendering(self):
         _chrome_, view, items = self._opened()
-        texts = [str(item.text) for item in items]
-        assert 'Shaded' in texts and 'Wireframe' in texts
-        wire = [one for one in items if str(one.text) == 'Wireframe'][0]
+        rendering = _sub(items, 'Rendering')
+        assert [str(item.text) for item in rendering] == ['Shaded', 'Wireframe']
+        wire = [one for one in rendering if str(one.text) == 'Wireframe'][0]
         assert not wire.checked
         wire.on_activate(wire)
         assert view.style.wireframe
@@ -409,18 +545,9 @@ class TestTheViewsOwnMenu:
             clip = np.append(np.asarray(corner, 'd'), 1.0) @ view.camera.matrix()
             assert np.all(np.abs(clip[:3] / clip[3]) <= 1.0 + 1e-5), corner
 
-    def test_what_the_pointer_does_is_a_menu_of_its_own(self):
-        from OpenGLContext.multiview.navigation import PAN
-        _chrome_, view, items = self._opened()
-        item = [one for one in items
-                if str(one.text) == 'What the pointer does'][0]
-        gestures = [str(one.text) for one in item.submenu]
-        assert 'Pan' in gestures and 'Zoom by dragging' in gestures
-        assert 'Rotate' not in gestures        # a plan view does not turn
-        pan = [one for one in item.submenu if str(one.text) == 'Pan'][0]
-        pan.checked = False
-        pan.on_activate(pan)
-        assert navigation_for(view).keys_for(PAN) == ()
+    def test_what_the_pointer_does_is_not_offered(self):
+        _chrome_, _view, items = self._opened()
+        assert 'What the pointer does' not in [str(item.text) for item in items]
 
 
 class TestTheButtonsGlyph:

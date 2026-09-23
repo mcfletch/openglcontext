@@ -140,6 +140,7 @@ class _defaultRenderPasses( object ):
             return built
 
         pass_ = cached_pass( sg, build )
+        viewpointbinding.publish_viewpoints( context, pass_ )
         if context.contextDefinition.profile == 'core':
             # The core FlatPass takes its camera from the view platform only, so
             # bind the scene's active Viewpoint into the platform here (the legacy

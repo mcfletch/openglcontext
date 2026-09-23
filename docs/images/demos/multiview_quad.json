@@ -1,0 +1,13 @@
+{
+  "credit": "Lantern, &copy; Microsoft (CC0)",
+  "frames": 60,
+  "git": "v3.0.0a4-106-g261ab87-dirty",
+  "id": "demos/multiview_quad",
+  "licence": "BSD-3-Clause; Lantern CC0",
+  "module": "multiview_quad",
+  "producer": "script",
+  "size": [
+    1100,
+    680
+  ]
+}
