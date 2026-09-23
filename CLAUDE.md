@@ -105,6 +105,8 @@ OpenGLContext/
 │   ├── navigation.py # What the pointer does in one view: the gestures its
 │   │                 # camera offers, and the bindings that raise them
 │   ├── gestures.py   # Reading the pointer, and asking the view it is in
+│   ├── grid.py       # The grid a view is measured against: how closely it
+│   │                 # is ruled, and where its lines are
 │   ├── viewset.py    # Several arrangements of one set of views, by name
 │   └── quad.py       # Three orthographic views around a perspective one
 ├── nav/              # Navigation mesh generated from a collision mesh
