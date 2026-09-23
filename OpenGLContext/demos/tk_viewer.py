@@ -53,6 +53,12 @@ SCENE_FILES = [('Scenes', '*.gltf *.glb *.wrl *.wrz *.obj *.json'),
 class SceneView(viewerFor('tk')):  # type: ignore[misc]  # base chosen at run time
     """The engine's viewer, as one widget in somebody else's window"""
 
+    #: Four views of the scene rather than one. A window with a tree of the
+    #: scene beside it is closer to an editor than to a viewer, and an editor
+    #: is read from the plan and the elevations as much as from the
+    #: three-quarter view. ``v`` gives it back to one view.
+    multiViewArrangement = 'quad'
+
     def hasSceneToShow(self) -> bool:
         """The host opens scenes, so the engine's launch screen stays down
 

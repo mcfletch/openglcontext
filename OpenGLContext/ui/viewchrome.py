@@ -391,7 +391,7 @@ class ViewChrome(Panel):
                  stack: Any = None,
                  on_arrange: Optional[Callable[[], None]] = None,
                  only: Optional[Dict[str, Sequence[str]]] = None,
-                 bounds: Optional[Callable[[], Tuple[Any, Any]]] = None,
+                 bounds: Optional[Callable[[], Optional[Tuple[Any, Any]]]] = None,
                  **named: Any) -> None:
         named.setdefault('modal', False)
         named.setdefault('closeOnEscape', False)
@@ -646,7 +646,10 @@ class ViewChrome(Panel):
         """
         if self.bounds is None:
             return False
-        minimum, maximum = self.bounds()
+        found = self.bounds()
+        if not found:
+            return False
+        minimum, maximum = found
         size = view.size if view.visible else (self.rect.width, self.rect.height)
         fitted_it = fit_view(view, minimum, maximum, size)
         if fitted_it:

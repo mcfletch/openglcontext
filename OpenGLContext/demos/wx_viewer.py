@@ -73,6 +73,12 @@ ID_OPEN_URL = wx.NewIdRef()
 class SceneView(viewerFor('wx')):  # type: ignore[misc]  # base chosen at run time
     """The engine's viewer, as one widget in somebody else's window"""
 
+    #: Four views of the scene rather than one. A window with a tree of the
+    #: scene beside it is closer to an editor than to a viewer, and an editor
+    #: is read from the plan and the elevations as much as from the
+    #: three-quarter view. ``v`` gives it back to one view.
+    multiViewArrangement = 'quad'
+
     #: Called on the GUI thread once a scene has been built, if a host set it.
     onScene: Optional[Callable[[], None]] = None
 

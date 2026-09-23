@@ -40,6 +40,11 @@ class ViewerOptions:
     #: this is for a URL that serves a scene from a path with no suffix.
     format: Optional[str] = None
 
+    #: Open with four views of the scene -- the plan, the front and left
+    #: elevations, and the camera the viewer would otherwise have had alone.
+    #: ``v`` switches between one view and four however this starts.
+    views: str = 'single'
+
     # -- cameras ----------------------------------------------------------
     #: Initial camera, by the glTF's own name or a 0-based index.
     camera: Optional[str] = None

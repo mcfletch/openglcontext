@@ -397,6 +397,40 @@ A whole set of bindings is a *mode*
 that turns are what a view starts with, and ``ViewNavigation(view, mode=...)``
 gives it another.
 
+Four views in a window that had one
+-----------------------------------
+
+A window that shows a scene can have the four views without knowing anything
+about layouts: ``OpenGLContext.multiview.mixin.MultiViewMixin`` brings the
+arrangements, the furniture and a key that switches between one view and four.
+
+.. code-block:: python
+
+   from OpenGLContext.multiview.mixin import MultiViewMixin
+
+   class Viewer(OverlayMixin, MultiViewMixin, BaseContext):
+       multiViewArrangement = 'quad'        # or 'single', and `v` switches
+
+       def OnInit(self):
+           self.startViews(bounds=lambda: (scene.minimum, scene.maximum))
+
+**The window's own camera stays the window's.** The perspective view has no
+camera of its own, so it draws through whatever ``getViewPlatform()`` answers
+-- the navigation, a bound ``Viewpoint``, a model's own cameras and a
+turntable all go on driving it exactly as they did with one view. The three
+orthographic views are the mixin's, framed on the bounds it is given, and a
+drag in one moves that view alone.
+
+It goes *after* ``OverlayMixin`` in the bases, so each event reaches the
+furniture first and the views get what the furniture leaves. ``startViews``
+takes ``elevations`` to choose which three ways the orthographic views look,
+and ``chrome=False`` for a window that draws its own.
+
+``oglc-view --views quad`` opens the scene viewer this way, and ``v`` switches
+either way from there; the Tk and wx embedding demos open in the quad, since a
+window with the scene's tree beside it is closer to an editor than to a
+viewer.
+
 The furniture of a window of views
 ----------------------------------
 

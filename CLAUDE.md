@@ -108,6 +108,8 @@ OpenGLContext/
 │   ├── grid.py       # The grid a view is measured against: how closely it
 │   │                 # is ruled, and where its lines are
 │   ├── viewset.py    # Several arrangements of one set of views, by name
+│   ├── mixin.py      # Four views in any context that wants them, over the
+│   │                 # camera it already had -- docs/multiview.rst
 │   └── quad.py       # Three orthographic views around a perspective one
 ├── nav/              # Navigation mesh generated from a collision mesh
 ├── packaging/        # Shipping an application: /opt environments, .deb -- docs/packaging.rst

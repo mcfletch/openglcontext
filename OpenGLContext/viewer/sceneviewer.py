@@ -67,6 +67,7 @@ from OpenGLContext.ui.overlay import OverlayMixin
 from OpenGLContext.viewer.asyncscene import AsyncSceneMixin
 from OpenGLContext.video.recorder import RecordingMixin
 from OpenGLContext.viewer.capture import SettleCaptureMixin
+from OpenGLContext.multiview.mixin import MultiViewMixin
 from OpenGLContext.viewer.options import ViewerOptions
 from OpenGLContext.viewer.caption import CaptionMixin
 from OpenGLContext.viewer.screens import ViewerScreensMixin
@@ -135,8 +136,15 @@ else:
 
 class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
                        SettleCaptureMixin, RecordingMixin,
-                       ViewerScreensMixin, _MovementHost):
-    """Showing one scene: assembly, cameras, animation and the caption."""
+                       ViewerScreensMixin, MultiViewMixin, _MovementHost):
+    """Showing one scene: assembly, cameras, animation and the caption.
+
+    Four views of it as well as one: ``MultiViewMixin`` puts the plan and two
+    elevations beside the camera this already had, and ``v`` switches between
+    them. The viewer's own camera is what the perspective view draws through,
+    so the model's cameras, the turntable and the fly-through go on working
+    whichever arrangement is up.
+    """
 
     #: What to show and how.  A class attribute so a subclass can simply set it.
     options: ViewerOptions = ViewerOptions()
@@ -218,6 +226,13 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         if not self.capturing:
             debug.install(self)
             self.setupScreens()
+        # The views before the first scene: they are fitted to whatever the
+        # window is showing each time one is loaded, and `v` switches between
+        # one view and four whether or not anything is loaded yet. A capture
+        # or a recording gets no furniture, for the reason the caption is left
+        # off one: what comes out is the scene, not the interface.
+        self.startViews(arrangement=str(self.options.views or 'single'),
+                        chrome=not (self.capturing or self.recording))
         if self.capturing:
             # A capture has to be deterministic, and the settle logic has to see
             # the model, so it is loaded before the loop starts rather than
@@ -474,7 +489,18 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         else:
             self.frameModel(self.radius)
             self.reportStrays(scene)
+        self.startSceneViews()
         self.updateOverlay()
+
+    def startSceneViews(self) -> None:
+        """Fit the plan and the elevations to what has just been loaded.
+
+        Called for each scene the window opens, so a catalogue browser moving
+        from model to model gets every view fitted to what is on screen now.
+        The views themselves are made in :meth:`OnInit`, where there is a
+        window to place them in.
+        """
+        self.frameViews()
 
     @staticmethod
     def reportStrays(scene: Any) -> None:
@@ -1046,6 +1072,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         KeyBinding('[', 'previousAnimation', 'Previous animation'),
         KeyBinding('t', 'toggleTurntable', 'Turntable on or off'),
         KeyBinding('m', 'cycleMovementMode', 'Next navigation mode'),
+        KeyBinding('v', 'toggleViews', 'One view of the scene, or four'),
     )
 
     # -- the frame --------------------------------------------------------
