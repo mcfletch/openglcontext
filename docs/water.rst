@@ -436,7 +436,9 @@ has to say what time it is. ``scene.advance( seconds )`` moves every body's
 surface and answers whether anything changed; the viewer calls it from its idle,
 and a game driving its own loop calls it itself. A scene of ponds answers
 ``False`` — still water carries its ripple in the normals, and there is nothing
-to redraw for.
+to redraw for. ``oglc-view --anim-time SECONDS`` holds the water at that time as
+it holds the animation, so a capture of a tagged lake is the same frame on every
+run.
 
 Limits
 ------

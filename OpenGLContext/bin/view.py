@@ -229,7 +229,8 @@ def build_parser(prog: str = 'oglc-view') -> argparse.ArgumentParser:
     parser.add_argument('--no-animation', dest='animate', action='store_false',
                         help='do not play embedded animations')
     parser.add_argument('--anim-time', type=float, metavar='SECONDS',
-                        help='pin the animation to this time (deterministic capture)')
+                        help='pin the animation, and any OGLC_hook water, to '
+                             'this time (deterministic capture)')
     parser.add_argument('--yaw', type=float,
                         help='initial model yaw (radians) when auto-framing '
                              '(default -0.62, or $OPENGLCONTEXT_VIEW_YAW)')

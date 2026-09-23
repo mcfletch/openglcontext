@@ -188,3 +188,33 @@ def test_each_body_keeps_its_own_surface():
     assert len(scene.hook_data['water']) == 2
     boxes = sorted(body.volume.minimum[2] for body in scene.hook_data['water'])
     assert boxes == pytest.approx([0.0, 50.0])
+
+
+def test_a_lake_with_coarser_levels_records_each_level_once():
+    """``MSFT_lod`` on a tagged node: the finest level drawn is the one recorded."""
+    import pygltflib
+    document = pygltflib.GLTF2.load_from_bytes(write_glb([
+        SceneNode(mesh=_sheet('water')),
+        SceneNode(mesh=_sheet({'kind': 'water'}, side=2.0))]))
+    finest, coarser = document.scenes[0].nodes
+    document.nodes[finest].extensions = {'MSFT_lod': {'ids': [coarser]}}
+    document.nodes[finest].extras = {'MSFT_screencoverage': [0.5, 0.1]}
+    document.scenes[0].nodes = [finest]
+    document.extensionsUsed = [*(document.extensionsUsed or []), 'MSFT_lod']
+    scene = gltf.load_gltf(b''.join(document.save_to_bytes()))
+    # The coarser level is water too, and is recorded as the level it is.
+    drawn = [shape.geometry for shape in _all_shapes(scene.group)]
+    bodies = scene.hook_data['water']
+    assert len(bodies) == len(drawn) == 2
+    assert all(any(body.mesh is mesh for mesh in drawn) for body in bodies)
+
+
+def _all_shapes(node, out=None):
+    """Every Shape, down through the levels of a switching node too."""
+    out = [] if out is None else out
+    if isinstance(node, Shape):
+        out.append(node)
+    for child in (getattr(node, 'children', None) or []) + \
+            list(getattr(node, 'level', None) or []):
+        _all_shapes(child, out)
+    return out

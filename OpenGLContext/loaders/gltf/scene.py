@@ -782,10 +782,11 @@ class _SceneBuilder:
         somewhere else is drawn here and said so, because the extension offers
         another *version* of a node rather than another place for it.
         """
-        levels: list = [Transform(children=[
-            shape for shape, _bounds in
-            self.mesh_shapes(node.mesh, world, node_casts)])]
-        for shape, bounds in self.mesh_shapes(node.mesh, world, node_casts):
+        # Asked for once: a mesh the cache does not hold is decoded, and its
+        # hooks run, on every call.
+        finest = self.mesh_shapes(node.mesh, world, node_casts)
+        levels: list = [Transform(children=[shape for shape, _bounds in finest])]
+        for shape, bounds in finest:
             self._record_part(world, shape, bounds)
         for index in ids:
             if not 0 <= index < len(self.g.nodes or []):

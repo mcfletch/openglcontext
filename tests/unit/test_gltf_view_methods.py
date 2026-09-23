@@ -518,6 +518,34 @@ class TestAnimationControl:
         assert inst.advanceAnimation() is False
         assert inst._player.evaluated == [1.5]
 
+    @staticmethod
+    def _hooked(anim_time, moved=True):
+        inst = _inst()
+        inst.options = _config(anim_time=anim_time)
+        inst._hooksStart = inst._now() - 3.0
+        inst.scene = types.SimpleNamespace(
+            advanced=[], advance=lambda when: inst.scene.advanced.append(when) or moved)
+        return inst
+
+    def test_advance_hooks_runs_from_when_the_scene_was_mounted(self):
+        inst = self._hooked(anim_time=None)
+        assert inst.advanceHooks() is True
+        when, = inst.scene.advanced
+        assert when == pytest.approx(3.0, abs=0.5)
+
+    def test_advance_hooks_with_a_pinned_time_is_static(self):
+        """A capture pinned to a time shows the water at that time, every run."""
+        inst = self._hooked(anim_time=1.5)
+        assert inst.advanceHooks() is False
+        assert inst.scene.advanced == [1.5]
+
+    def test_advance_hooks_passes_over_a_scene_with_nothing_to_advance(self):
+        inst = _inst()
+        inst.options = _config(anim_time=None)
+        inst._hooksStart = 0.0
+        inst.scene = types.SimpleNamespace()
+        assert inst.advanceHooks() is False
+
     def test_toggle_animation_flips_play_state(self):
         inst = _inst()
         inst._animationPlaying = True

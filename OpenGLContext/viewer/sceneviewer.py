@@ -929,9 +929,14 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         seconds since the scene was mounted, so the phase starts where the
         model was authored rather than at whatever the wall clock says.
         A scene with no timed hook -- and one that is not a glTF -- is a return.
+        A time pinned with ``--anim-time`` holds the hooks at that time as it
+        holds the animation, and a held frame has nothing to redraw for.
         """
         advance = getattr(self.scene, 'advance', None)
         if advance is None:
+            return False
+        if self.options.anim_time is not None:
+            advance(self.options.anim_time)
             return False
         return bool(advance(self._now() - self._hooksStart))
 
