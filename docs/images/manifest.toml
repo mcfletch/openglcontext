@@ -313,6 +313,20 @@ frames = 60
 timeout = 600
 
 [[image]]
+id = "demos/multiview_quad"
+out = "images/demos/multiview_quad.jpg"
+size = [1100, 680]
+licence = "BSD-3-Clause; Lantern CC0"
+credit = "Lantern, &copy; Microsoft (CC0)"
+alt = "One window split into four views of a lantern hanging from a wooden post: top, front and left orthographic views and a perspective view, each with its name at the top left and an axis triad at the bottom left"
+caption = "One scene in four views"
+producer = "script"
+module = "multiview_quad"
+render_size = [1600, 990]
+frames = 60
+timeout = 600
+
+[[image]]
 id = "demos/navmesh_demo"
 out = "images/demos/navmesh_demo.jpg"
 size = [1100, 680]
