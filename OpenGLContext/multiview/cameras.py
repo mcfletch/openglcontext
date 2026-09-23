@@ -22,6 +22,7 @@ terrain editor, with its centre given as a map's ``(x, z)``.
 """
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, Optional, Sequence, Tuple, Union
 
 import numpy as np
@@ -70,18 +71,33 @@ class OrthoView:
                  centre: Sequence[float] = (0.0, 0.0, 0.0), span: float = 10.0,
                  depth: float = 1000.0, smallest: float = 1e-4,
                  largest: float = 1e7) -> None:
-        if direction not in DIRECTIONS:
-            raise ValueError('%r is not one of %s' % (direction, ', '.join(DIRECTIONS)))
-        self.direction = direction
-        right, up, back = DIRECTIONS[direction]
-        self._right = np.array(right, dtype='d')
-        self._up = np.array(up, dtype='d')
-        self._back = np.array(back, dtype='d')
         self.centre = tuple(float(value) for value in centre[:3])
+        self.direction = direction
         self.depth = float(depth)
         self.smallest = float(smallest)
         self.largest = float(largest)
         self.span = float(span)
+
+    @property
+    def direction(self) -> str:
+        """Which way the view looks: a key of :data:`DIRECTIONS`.
+
+        Assigning another turns the camera to it and keeps where it is looking
+        and how much it shows, so a view swapped from the front to the side is
+        the same scene from another quarter rather than somewhere else.
+        """
+        return self._direction
+
+    @direction.setter
+    def direction(self, value: str) -> None:
+        if value not in DIRECTIONS:
+            raise ValueError('%r is not one of %s'
+                             % (value, ', '.join(DIRECTIONS)))
+        self._direction = value
+        right, up, back = DIRECTIONS[value]
+        self._right = np.array(right, dtype='d')
+        self._up = np.array(up, dtype='d')
+        self._back = np.array(back, dtype='d')
 
     @property
     def right(self) -> np.ndarray:
@@ -252,3 +268,89 @@ class OrthoViewPlatform(ViewPlatform):
             return np.linalg.inv(model @ projection).astype('f')
         combined: np.ndarray = model @ projection
         return combined.astype('f')
+
+
+#: A view drawn through a camera that turns, with distance making things
+#: smaller.
+PERSPECTIVE = 'perspective'
+
+#: The same camera drawn flat, so two things of a size measure the same
+#: wherever they stand.
+ORTHOGRAPHIC = 'ortho'
+
+#: Every kind a view can be pointed at: the six axes, and the two ways a
+#: turning camera is drawn. What a view-name menu offers.
+VIEW_KINDS: Tuple[str, ...] = tuple(DIRECTIONS) + (PERSPECTIVE, ORTHOGRAPHIC)
+
+
+def view_kind(view: Any) -> Optional[str]:
+    """Which of :data:`VIEW_KINDS` this view is looking through, or None."""
+    camera = getattr(view.camera, 'view', None)
+    if camera is None:
+        return None
+    direction = getattr(camera, 'direction', None)
+    if direction is not None:
+        return str(direction)
+    if hasattr(camera, 'orbit'):
+        return ORTHOGRAPHIC if getattr(camera, 'orthographic', False) else PERSPECTIVE
+    # A plan view of an editor: the top view, told its centre as a map's.
+    return 'top'
+
+
+def shown_by(camera: Any) -> Tuple[Tuple[float, float, float], float]:
+    """Where a camera is looking and how much it shows, whatever kind it is.
+
+    ``(centre, span)`` in world units: the point in the middle of the view,
+    and how much of the world fits down it. What a switch from one kind to
+    another is seeded with, so the new camera shows the same subject at the
+    same size.
+    """
+    if hasattr(camera, 'orbit'):
+        target = camera.target()
+        shown = 2.0 * camera.distance * math.tan(math.radians(camera.fov) / 2.0)
+        return ((float(target[0]), float(target[1]), float(target[2])),
+                float(shown))
+    centre = tuple(float(value) for value in camera.centre)
+    span = float(camera.span)
+    if len(centre) == 2:              # a plan view's centre is a map's (x, z)
+        return ((centre[0], 0.0, centre[1]), span)
+    return ((centre[0], centre[1], centre[2]), span)
+
+
+def point_view(view: Any, kind: str, **named: Any) -> bool:
+    """Point ``view`` at ``kind``; False for a view with no camera to point.
+
+    An axis name gives the view an orthographic camera looking along it;
+    ``'perspective'`` and ``'ortho'`` give it one that turns, drawn with and
+    without perspective. Where the camera it has is already of that family it
+    is turned in place, so whatever else holds that camera goes on working;
+    otherwise the view is given a new one, looking at what the old one looked
+    at, showing as much as it showed.
+    """
+    if kind not in VIEW_KINDS:
+        raise ValueError('%r is not one of %s' % (kind, ', '.join(VIEW_KINDS)))
+    camera = getattr(view.camera, 'view', None)
+    if camera is None:
+        return False
+    viewport = getattr(view.camera, 'viewport', (1, 1))
+    centre, span = shown_by(camera)
+    if kind in DIRECTIONS:
+        if isinstance(camera, OrthoView):
+            camera.direction = kind
+            return True
+        view.camera = OrthoViewPlatform(
+            OrthoView(kind, centre=centre, span=span, **named), viewport)
+        return True
+    from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
+    flat = kind == ORTHOGRAPHIC
+    if isinstance(camera, OrbitView):
+        camera.orthographic = flat
+        return True
+    orbit = OrbitView(centre=(centre[0], centre[2]), ground=centre[1],
+                      orthographic=flat, **named)
+    # As much of the world as the view was showing, so the switch keeps the
+    # subject the size it was.
+    orbit.distance = max(span / 2.0 / math.tan(math.radians(orbit.fov) / 2.0),
+                         orbit.nearest)
+    view.camera = OrbitViewPlatform(orbit, viewport)
+    return True

@@ -413,27 +413,45 @@ that, drawn inside each view and taking the clicks:
    self.overlays.push(self.chrome)
 
 It puts in each view its **name**, an **axis triad** that turns with the
-camera, an **expand** button that gives the view the whole window and gives it
-back, and a **navigation** button that offers the gestures this view's camera
-can be moved by and switches each on or off. Between the views it puts a
-**splitter** on each line the arrangement divides the window along -- and, in
-a quad, a handle where the two cross that moves both. ``on_arrange`` is called
-when a control changed what is on screen, for the window to place its views
-again and draw.
+camera, and one **button** that gives the view the whole window and gives it
+back -- an outline where it would take the window, the four tiles where it
+would give them back. Between the views it puts a **splitter** on each line
+the arrangement divides the window along, and, in a quad, a handle where the
+two cross that moves both. The glyphs are drawn rather than loaded, so an
+application that ships no artwork still gets buttons that say what they do.
+``on_arrange`` is called when a control changed what is on screen, for the
+window to place its views again and draw.
+
+**The view's name opens its menu**, which is everything that view can be told:
+
+- which way it looks -- top, bottom, front, back, left, right -- and, for a
+  camera that turns, ``perspective`` or ``ortho``, the same camera drawn flat
+  so two things of a size measure the same wherever they stand;
+- how what it holds is drawn: **shaded** or **wireframe**;
+- **zoom to fit**, where the window said what there is to see (``bounds``);
+- **maximise**, or **four tiles** where the view already has the window;
+- **what the pointer does**: the gestures this view's camera can be moved by,
+  each switched on or off, which binds or unbinds a button in that view alone.
+
+Pointing a view somewhere else replaces its camera where it has to
+(``multiview.cameras.point_view``), so a window holding a particular camera --
+an editor whose tools read its plan view -- leaves that view out of the menu
+with ``only``.
 
 It is a panel at the bottom of the overlay stack, like the tool palette, and
 it is not modal: a press that lands on none of its controls reaches the scene.
 It draws nothing of its own behind the furniture, so nothing is washed over.
 
-Every part is optional. ``labels``, ``axes``, ``expand``, ``navigation`` and
-``splitters`` switch a kind off for the window, and ``only`` gives one view a
-set of its own -- an editor whose plan view belongs to its drawing tools gives
-that view the expand button and nothing else:
+Every part is optional. ``labels``, ``axes``, ``expand`` and ``splitters``
+switch a kind off for the window, and ``only`` gives one view a set of its own
+-- an editor whose plan view belongs to its drawing tools gives that view the
+button and nothing else:
 
 .. code-block:: python
 
    ViewChrome(layout=layout, axes=False,
-              only={'map': ('expand',)})
+              only={'map': ('expand',)},
+              bounds=lambda: (scene.minimum, scene.maximum))
 
 ``reserved`` is room something else has taken at each edge of the window --
 top, right, bottom, left, in reference pixels, as a

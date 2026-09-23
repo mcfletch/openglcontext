@@ -34,19 +34,25 @@ new layout and the furniture follows.
 """
 from __future__ import annotations
 
+from dataclasses import replace
+
+from gettext import gettext as _
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 from vrml import field
 
+from OpenGLContext.multiview.cameras import VIEW_KINDS, point_view, view_kind
 from OpenGLContext.multiview.navigation import (
     examine_mode,
     navigation_for,
     plan_mode,
 )
 from OpenGLContext.multiview.views import View, ViewLayout
+from OpenGLContext.multiview.viewset import fit_view
 from OpenGLContext.ui.geometry import Rect
 from OpenGLContext.ui.menu import Menu, MenuItem
+from OpenGLContext.ui.widgets import Separator
 from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.widgets import Widget
@@ -57,7 +63,7 @@ __all__ = [
 ]
 
 #: The parts a view can be given, which is what ``only`` names.
-PARTS = ('label', 'axes', 'expand', 'navigation')
+PARTS = ('label', 'axes', 'expand')
 
 #: How the axes are coloured: the convention every 3D tool uses.
 AXIS_COLOURS = {
@@ -76,11 +82,27 @@ MARGIN = 6.0
 #: looks, because a line two pixels wide is not something a pointer can catch.
 SPLITTER_GRAB = 9.0
 
-#: What the expand button reads as, closed and open.
-EXPAND_TEXT, RESTORE_TEXT = '[ ]', '[x]'
+#: How wide a button in a view's corner is, in characters of the interface
+#: font: a square, with room round the glyph drawn in it.
+BUTTON_CHARS = 1.6
 
-#: What the navigation button reads as.
-NAVIGATION_TEXT = '(o)'
+#: What each kind a view can be pointed at is called in the name menu, in the
+#: order it is offered.
+KIND_LABELS = {
+    'top': _('Top'), 'bottom': _('Bottom'),
+    'front': _('Front'), 'back': _('Back'),
+    'left': _('Left'), 'right': _('Right'),
+    'perspective': _('Perspective'), 'ortho': _('Ortho'),
+}
+
+#: What the view's menu calls the things it does rather than the ways of
+#: looking, and the two ways what it holds is drawn.
+FIT_LABEL = _('Zoom to fit')
+MAXIMISE_LABEL = _('Maximise')
+TILES_LABEL = _('Four tiles')
+SHADED_LABEL = _('Shaded')
+WIREFRAME_LABEL = _('Wireframe')
+POINTER_LABEL = _('What the pointer does')
 
 #: What says a name was cut to fit the room it had.
 ELLIPSIS = '...'
@@ -134,16 +156,31 @@ class _ViewWidget(Widget):
 
 
 class ViewLabel(_ViewWidget):
-    """The view's name, along the top of it."""
+    """The view's name, and the menu of what it can be: a click opens it."""
 
     PROTO = 'ViewLabel'
     text = field.newField('text', 'SFString', 1, '')
+    interactive = True
+    focusable = True
 
     def paint(self, renderer: Any) -> None:
         name = fitted(str(self.text), self.rect.width, renderer.metrics)
-        if name:
-            renderer.textIn(self.rect, name, renderer.skin.labelText,
-                            align='left')
+        if not name:
+            return
+        skin = renderer.skin
+        colour = skin.titleText if (self.hovered or self.armed) else skin.labelText
+        renderer.textIn(self.rect, name, colour, align='left')
+
+    def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+        if name in ('<return>', ' ') and self.enabled:
+            self.activate()
+            return True
+        return False
+
+    def activate(self) -> None:
+        if self.chrome is not None:
+            self.chrome.open_names(self.view, self.rect)
+        super(ViewLabel, self).activate()
 
 
 class AxisTriad(_ViewWidget):
@@ -166,11 +203,21 @@ class AxisTriad(_ViewWidget):
 
 
 class _ChromeButton(_ViewWidget):
-    """A small button in a view's corner."""
+    """A small square button in a view's corner, drawn with a glyph on it.
 
-    text = field.newField('text', 'SFString', 1, '')
+    The glyphs are drawn rather than loaded: a window of views is furniture
+    every application built on the engine gets, and one that ships no artwork
+    at all still gets buttons that say what they do. They stay crisp at any
+    interface scale for the same reason.
+    """
+
     interactive = True
     focusable = True
+
+    def content_size(self, metrics: FontMetrics,
+                     available: Optional[int] = None) -> Tuple[int, int]:
+        side = int(metrics.char_height * BUTTON_CHARS)
+        return (side, side)
 
     def paint(self, renderer: Any) -> None:
         self.paintFocus(renderer)
@@ -178,8 +225,12 @@ class _ChromeButton(_ViewWidget):
         fill, image = skin.buttonState(hovered=self.hovered, down=self.armed,
                                        enabled=bool(self.enabled))
         renderer.frame(self.rect, fill, image)
-        renderer.textIn(self.rect, str(self.text), skin.labelText,
-                        align='center')
+        colour = skin.titleText if self.hovered else skin.labelText
+        self.glyph(renderer, self.rect.inset(max(self.rect.width // 4, 2)),
+                   colour)
+
+    def glyph(self, renderer: Any, rect: Rect, colour: Any) -> None:
+        """Draw what this button does, inside ``rect``."""
 
     def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
         if name in ('<return>', ' ') and self.enabled:
@@ -189,9 +240,30 @@ class _ChromeButton(_ViewWidget):
 
 
 class ExpandButton(_ChromeButton):
-    """Gives this view the whole window, and gives the arrangement back."""
+    """Gives this view the whole window, and gives the arrangement back.
+
+    One button, and which it is doing is what it draws: an outline where the
+    view would be given the window, and the tiles it would be given back to
+    where it already has it.
+    """
 
     PROTO = 'ExpandButton'
+
+    def maximised(self) -> bool:
+        """Whether this view already has the window."""
+        layout = getattr(self.chrome, 'layout_of', None)
+        return layout is not None and layout.maximised is self.view
+
+    def glyph(self, renderer: Any, rect: Rect, colour: Any) -> None:
+        if not self.maximised():
+            renderer.border(rect, colour, 1)
+            return
+        # Back to the tiles: four of them, with the gap the splitters make.
+        gap = max(rect.width // 8, 1)
+        side = (rect.width - gap) // 2, (rect.height - gap) // 2
+        for x in (rect.x, rect.x + side[0] + gap):
+            for y in (rect.y, rect.y + side[1] + gap):
+                renderer.rect(Rect(x, y, side[0], side[1]), colour)
 
     def activate(self) -> None:
         if self.chrome is not None:
@@ -203,6 +275,14 @@ class NavigationButton(_ChromeButton):
     """Opens what this view's camera can be moved by, to switch each on or off."""
 
     PROTO = 'NavigationButton'
+
+    def glyph(self, renderer: Any, rect: Rect, colour: Any) -> None:
+        """A short list: what the button opens."""
+        bars = 3
+        gap = max((rect.height - bars) // (bars + 1), 1)
+        for row in range(bars):
+            renderer.rect(Rect(rect.x, rect.y + gap + row * (gap + 1),
+                               rect.width, 1), colour)
 
     def activate(self) -> None:
         if self.chrome is not None:
@@ -277,6 +357,7 @@ class ViewChrome(Panel):
                  stack: Any = None,
                  on_arrange: Optional[Callable[[], None]] = None,
                  only: Optional[Dict[str, Sequence[str]]] = None,
+                 bounds: Optional[Callable[[], Tuple[Any, Any]]] = None,
                  **named: Any) -> None:
         named.setdefault('modal', False)
         named.setdefault('closeOnEscape', False)
@@ -290,6 +371,9 @@ class ViewChrome(Panel):
         self.on_arrange = on_arrange
         #: Views whose parts are not the window's, by view name.
         self.only = dict(only or {})
+        #: What there is to see, as ``(minimum, maximum)``, for the menu's
+        #: *zoom to fit*. A window that does not say offers no such item.
+        self.bounds = bounds
         self._splitters: List[Splitter] = []
 
     # -- what each view gets -----------------------------------------------
@@ -299,8 +383,7 @@ class ViewChrome(Panel):
         if named is not None:
             return tuple(part for part in PARTS if part in named)
         offered = {'label': bool(self.labels), 'axes': bool(self.axes),
-                   'expand': bool(self.expand),
-                   'navigation': bool(self.navigation)}
+                   'expand': bool(self.expand)}
         return tuple(part for part in PARTS if offered[part])
 
     def rebuild(self) -> None:
@@ -316,11 +399,7 @@ class ViewChrome(Panel):
             if 'axes' in parts and navigable:
                 children.append(AxisTriad(view=view, chrome=self))
             if 'expand' in parts:
-                children.append(ExpandButton(view=view, chrome=self,
-                                             text=self._expand_text(view)))
-            if 'navigation' in parts and navigable:
-                children.append(NavigationButton(view=view, chrome=self,
-                                                 text=NAVIGATION_TEXT))
+                children.append(ExpandButton(view=view, chrome=self))
         if self.splitters:
             self._splitters = self._split_widgets()
             children.extend(self._splitters)
@@ -331,11 +410,6 @@ class ViewChrome(Panel):
         if layout is None:
             return []
         return [view for view in layout.views if view.visible]
-
-    def _expand_text(self, view: View) -> str:
-        layout = self.layout_of
-        return (RESTORE_TEXT if layout is not None and layout.maximised is view
-                else EXPAND_TEXT)
 
     def _split_widgets(self) -> List[Splitter]:
         """One splitter per line this arrangement divides the window along."""
@@ -397,11 +471,11 @@ class ViewChrome(Panel):
             cursor = room.x + room.width - margin
             for child in self._parts_of(view, _ChromeButton):
                 child.parent = self
-                button = int(metrics.text_width(str(child.text))
-                             + metrics.char_height)
-                cursor -= button
-                child.arrange(Rect(cursor, top, button, metrics.char_height),
-                              metrics)
+                side = int(child.content_size(metrics)[0])
+                cursor -= side
+                # Square, and hanging from the row the name is on.
+                child.arrange(Rect(cursor, top + metrics.char_height - side,
+                                   side, side), metrics)
                 cursor -= margin
             for child in self._parts_of(view, ViewLabel):
                 child.parent = self
@@ -470,16 +544,80 @@ class ViewChrome(Panel):
         layout.split_at = (across, down)
         self._changed()
 
-    def open_navigation(self, view: View, at: Rect) -> Optional[Menu]:
-        """Offer what this view's camera can be moved by; None with no stack."""
-        navigation = navigation_for(view)
-        if navigation is None or self.stack is None:
+    def open_names(self, view: View, at: Rect) -> Optional[Menu]:
+        """Put up what this view can be: its menu; None with no stack to put it on.
+
+        Which way it looks, how it is drawn, what the pointer moves it with,
+        and the two things a view does: fit what there is to see into it, and
+        take the window or give it back.
+        """
+        if self.stack is None:
             return None
-        menu = Menu(items=[self._gesture_item(navigation, command)
-                           for command in navigation.commands()],
-                    anchor=(float(at.x), float(at.y)))
-        pushed = self.stack.push(menu)
-        return pushed if isinstance(pushed, Menu) else menu
+        items: List[Any] = [self._kind_item(view, kind) for kind in VIEW_KINDS
+                            if point_view is not None and view.camera is not None]
+        if items:
+            items.append(Separator())
+        items.extend(self._drawn_items(view))
+        items.append(Separator())
+        if self.bounds is not None and view.camera is not None:
+            def fit_it(widget: Any, view: View = view) -> None:
+                self.fit(view)
+
+            items.append(MenuItem(text=FIT_LABEL, on_activate=fit_it))
+        items.append(MenuItem(
+            text=(TILES_LABEL if self._maximised(view) else MAXIMISE_LABEL),
+            on_activate=lambda widget: self.maximise(view)))
+        navigation = navigation_for(view)
+        if navigation is not None:
+            items.append(Separator())
+            items.append(MenuItem(text=POINTER_LABEL,
+                                  submenu=[self._gesture_item(navigation, command)
+                                           for command in navigation.commands()]))
+        return self._put_up(Menu(items=items, anchor=(float(at.x), float(at.y))))
+
+    def _kind_item(self, view: View, kind: str) -> MenuItem:
+        """One way of looking, ticked where the view is looking that way."""
+        item = MenuItem(text=KIND_LABELS.get(kind, kind), checkable=True,
+                        checked=(view_kind(view) == kind))
+
+        def chosen(widget: Any, kind: str = kind) -> None:
+            point_view(view, kind)
+            self._changed()
+
+        item.on_activate = chosen
+        return item
+
+    def _drawn_items(self, view: View) -> List[MenuItem]:
+        """Shaded or wireframe: how what the view holds is drawn."""
+        wire = bool(view.style.wireframe)
+        items = []
+        for label, wanted in ((SHADED_LABEL, False), (WIREFRAME_LABEL, True)):
+            item = MenuItem(text=label, checkable=True, checked=(wire == wanted))
+
+            def chosen(widget: Any, wanted: bool = wanted) -> None:
+                # A style is a value, not a setting to be poked: the view is
+                # given another one.
+                view.style = replace(view.style, wireframe=wanted)
+                self._changed()
+
+            item.on_activate = chosen
+            items.append(item)
+        return items
+
+    def fit(self, view: View) -> bool:
+        """Fit what there is to see into this view; False with nothing to fit.
+
+        ``bounds`` is what the window says there is: the corners of the world,
+        or of what is loaded in it.
+        """
+        if self.bounds is None:
+            return False
+        minimum, maximum = self.bounds()
+        size = view.size if view.visible else (self.rect.width, self.rect.height)
+        fitted_it = fit_view(view, minimum, maximum, size)
+        if fitted_it:
+            self._changed()
+        return fitted_it
 
     def _gesture_item(self, navigation: Any, command: str) -> MenuItem:
         """One gesture, ticked where a button raises it."""
@@ -498,6 +636,14 @@ class ViewChrome(Panel):
 
         item.on_activate = chosen
         return item
+
+    def _maximised(self, view: View) -> bool:
+        layout = self.layout_of
+        return layout is not None and layout.maximised is view
+
+    def _put_up(self, menu: Menu) -> Menu:
+        pushed = self.stack.push(menu)
+        return pushed if isinstance(pushed, Menu) else menu
 
     @staticmethod
     def _label_for(navigation: Any, command: str) -> str:

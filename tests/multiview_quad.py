@@ -26,8 +26,9 @@ Mouse and keys:
     middle-drag  pan any view
     wheel        zoom the view under the pointer
     drag a line  move the splitter between the views
-    [ ]          give that view the whole window, and give it back
-    (o)          what the pointer does in that view, to switch on or off
+    click a name which way that view looks, how it is drawn, what the
+                 pointer does in it, and zoom to fit
+    the button   give that view the whole window, and give it back
     space        give the active view the whole window, and give it back
     f            frame the model in every view again
     i            print how this driver is drawing the views
@@ -111,7 +112,8 @@ class TestContext(OverlayMixin, BaseContext):
         view expanded, a splitter moved -- so the window places its views
         again and draws.'''
         self.chrome = ViewChrome(layout=self.quad.layout, stack=self.overlays,
-                                 on_arrange=self.OnArranged)
+                                 on_arrange=self.OnArranged,
+                                 bounds=lambda: self.bounds)
         self.overlays.push(self.chrome)
 
         self.addEventHandler('keypress', name=' ', function=self.OnMaximise)

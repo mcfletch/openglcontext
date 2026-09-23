@@ -16,7 +16,6 @@ from OpenGLContext.ui.metrics import REFERENCE_METRICS
 from OpenGLContext.ui.viewchrome import (
     AxisTriad,
     ExpandButton,
-    NavigationButton,
     Splitter,
     ViewChrome,
     ViewLabel,
@@ -60,18 +59,16 @@ def _inside(widget, view):
 
 
 class TestWhatItPutsInEachView:
-    def test_a_name_an_axis_triad_and_the_controls(self):
+    def test_a_name_an_axis_triad_and_the_button(self):
         chrome = _chrome()
         assert len(_of(chrome, ViewLabel)) == 4
         assert len(_of(chrome, AxisTriad)) == 4
         assert len(_of(chrome, ExpandButton)) == 4
-        assert len(_of(chrome, NavigationButton)) == 4
 
     def test_each_piece_sits_inside_the_view_it_belongs_to(self):
         chrome = _chrome()
         for widget in chrome.walk():
-            if isinstance(widget, (ViewLabel, AxisTriad, ExpandButton,
-                                   NavigationButton)):
+            if isinstance(widget, (ViewLabel, AxisTriad, ExpandButton)):
                 assert _inside(widget, widget.view), widget
 
     def test_the_name_stops_where_the_buttons_begin(self):
@@ -79,7 +76,7 @@ class TestWhatItPutsInEachView:
         chrome = _chrome()
         for label in _of(chrome, ViewLabel):
             buttons = [widget for widget in chrome.walk()
-                       if isinstance(widget, (ExpandButton, NavigationButton))
+                       if isinstance(widget, ExpandButton)
                        and widget.view is label.view]
             assert buttons
             for button in buttons:
@@ -104,19 +101,17 @@ class TestWhatItPutsInEachView:
         chrome = _chrome(layout)
         assert [label.view.name for label in _of(chrome, ViewLabel)] == ['front']
 
-    def test_a_view_with_no_camera_has_no_axes_and_nothing_to_navigate(self):
+    def test_a_view_with_no_camera_has_no_axes_to_draw(self):
         layout = ViewLayout([View(name='plain')])
         layout.arrange(*VIEWPORT)
         chrome = _chrome(layout)
         assert _of(chrome, ViewLabel)
         assert not _of(chrome, AxisTriad)
-        assert not _of(chrome, NavigationButton)
 
 
 class TestTheControlsCanBeTakenAway:
     @pytest.mark.parametrize('switch,kind', [
-        ('labels', ViewLabel), ('axes', AxisTriad),
-        ('expand', ExpandButton), ('navigation', NavigationButton),
+        ('labels', ViewLabel), ('axes', AxisTriad), ('expand', ExpandButton),
     ])
     def test_each_kind_can_be_switched_off(self, switch, kind):
         chrome = _chrome(**{switch: False})
@@ -327,7 +322,9 @@ class TestTheAxes:
         assert axis_directions(View(name='plain')) is None
 
 
-class TestTheNavigationControl:
+class TestTheViewsOwnMenu:
+    """What a click on the view's name opens."""
+
     def _stack(self):
         class _Stack:
             def __init__(self):
@@ -338,90 +335,109 @@ class TestTheNavigationControl:
                 return panel
         return _Stack()
 
-    def test_pressing_it_offers_what_this_view_can_be_moved_by(self):
-        layout = _layout()
+    def _opened(self, layout=None, **named):
+        layout = layout if layout is not None else _layout()
         stack = self._stack()
-        chrome = _chrome(layout, stack=stack)
-        button = _of(chrome, NavigationButton)[0]
-        chrome.pointer_pressed(*button.rect.centre)
-        chrome.pointer_released(*button.rect.centre)
-        assert stack.pushed
-        texts = [str(item.text) for item in _items(stack.pushed[0])]
-        assert 'Pan' in texts and 'Zoom by dragging' in texts
-        assert 'Rotate' not in texts        # a plan view does not turn
+        chrome = _chrome(layout, stack=stack, **named)
+        label = _of(chrome, ViewLabel)[0]
+        chrome.pointer_pressed(*label.rect.centre)
+        chrome.pointer_released(*label.rect.centre)
+        assert stack.pushed, 'the name opened no menu'
+        return chrome, label.view, _items(stack.pushed[0])
 
-    def test_a_camera_that_turns_offers_rotating(self):
-        layout = _layout()
-        stack = self._stack()
-        chrome = _chrome(layout, stack=stack)
-        button = [one for one in _of(chrome, NavigationButton)
-                  if one.view is layout.views[3]][0]
-        chrome.pointer_pressed(*button.rect.centre)
-        chrome.pointer_released(*button.rect.centre)
-        assert 'Rotate' in [str(item.text) for item in _items(stack.pushed[0])]
+    def test_the_name_opens_it(self):
+        _chrome_, _view, items = self._opened()
+        assert items
 
-    def test_choosing_one_binds_it_to_the_button_that_opened_the_menu(self):
-        layout = _layout()
-        stack = self._stack()
-        chrome = _chrome(layout, stack=stack)
-        button = _of(chrome, NavigationButton)[0]
-        chrome.pointer_pressed(*button.rect.centre)
-        chrome.pointer_released(*button.rect.centre)
-        navigation = navigation_for(button.view)
-        item = [one for one in _items(stack.pushed[0])
-                if str(one.text) == 'Zoom by dragging'][0]
-        item.checked = True
+    def test_it_offers_every_way_of_looking(self):
+        _chrome_, _view, items = self._opened()
+        texts = [str(item.text) for item in items]
+        for name in ('Top', 'Bottom', 'Front', 'Back', 'Left', 'Right',
+                     'Perspective', 'Ortho'):
+            assert name in texts, name
+
+    def test_the_way_this_view_looks_is_ticked(self):
+        _chrome_, _view, items = self._opened()
+        ticked = [str(item.text) for item in items if item.checked]
+        assert 'Top' in ticked          # the quad's first view
+
+    def test_choosing_one_points_the_view_that_way(self):
+        from OpenGLContext.multiview.cameras import view_kind
+        _chrome_, view, items = self._opened()
+        item = [one for one in items if str(one.text) == 'Left'][0]
         item.on_activate(item)
-        assert navigation.keys_for(ZOOM_DRAG)
-        assert navigation.command_for(navigation.keys_for(ZOOM_DRAG)[0]) == ZOOM_DRAG
+        assert view_kind(view) == 'left'
 
-    def test_switching_it_off_again_unbinds_it(self):
+    def test_it_offers_shaded_and_wireframe(self):
+        _chrome_, view, items = self._opened()
+        texts = [str(item.text) for item in items]
+        assert 'Shaded' in texts and 'Wireframe' in texts
+        wire = [one for one in items if str(one.text) == 'Wireframe'][0]
+        assert not wire.checked
+        wire.on_activate(wire)
+        assert view.style.wireframe
+
+    def test_it_maximises_and_gives_the_window_back(self):
         layout = _layout()
-        stack = self._stack()
-        chrome = _chrome(layout, stack=stack)
-        button = _of(chrome, NavigationButton)[0]
-        navigation = navigation_for(button.view)
-        navigation.rebind(ZOOM_DRAG, ['<mouse-1>'])
-        chrome.pointer_pressed(*button.rect.centre)
-        chrome.pointer_released(*button.rect.centre)
-        item = [one for one in _items(stack.pushed[0])
-                if str(one.text) == 'Zoom by dragging'][0]
-        assert item.checked
-        item.checked = False
+        _chrome_, view, items = self._opened(layout)
+        item = [one for one in items if str(one.text) == 'Maximise'][0]
         item.on_activate(item)
-        assert navigation.keys_for(ZOOM_DRAG) == ()
+        assert layout.maximised is view
 
-    def test_a_gesture_can_be_taken_off_a_view(self):
+    def test_a_maximised_view_is_offered_the_tiles_instead(self):
         layout = _layout()
-        stack = self._stack()
-        chrome = _chrome(layout, stack=stack)
-        button = _of(chrome, NavigationButton)[0]
-        navigation = navigation_for(button.view)
-        chrome.pointer_pressed(*button.rect.centre)
-        chrome.pointer_released(*button.rect.centre)
-        item = [one for one in _items(stack.pushed[0]) if str(one.text) == 'Pan'][0]
-        item.checked = False
+        layout.maximise(layout.views[0])
+        layout.arrange(*VIEWPORT)
+        _chrome_, _view, items = self._opened(layout)
+        texts = [str(item.text) for item in items]
+        assert 'Four tiles' in texts and 'Maximise' not in texts
+
+    def test_zooming_to_fit_needs_a_window_that_says_what_there_is(self):
+        _chrome_, _view, items = self._opened()
+        assert 'Zoom to fit' not in [str(item.text) for item in items]
+
+    def test_zooming_to_fit_frames_what_the_window_says_there_is(self):
+        import numpy as np
+        layout = _layout()
+        low, high = (-50.0, 0.0, -50.0), (50.0, 20.0, 50.0)
+        _chrome_, view, items = self._opened(layout, bounds=lambda: (low, high))
+        item = [one for one in items if str(one.text) == 'Zoom to fit'][0]
         item.on_activate(item)
-        assert navigation.keys_for(PAN) == ()
+        corners = [(x, y, z) for x in (low[0], high[0]) for y in (low[1], high[1])
+                   for z in (low[2], high[2])]
+        for corner in corners:
+            clip = np.append(np.asarray(corner, 'd'), 1.0) @ view.camera.matrix()
+            assert np.all(np.abs(clip[:3] / clip[3]) <= 1.0 + 1e-5), corner
+
+    def test_what_the_pointer_does_is_a_menu_of_its_own(self):
+        from OpenGLContext.multiview.navigation import PAN
+        _chrome_, view, items = self._opened()
+        item = [one for one in items
+                if str(one.text) == 'What the pointer does'][0]
+        gestures = [str(one.text) for one in item.submenu]
+        assert 'Pan' in gestures and 'Zoom by dragging' in gestures
+        assert 'Rotate' not in gestures        # a plan view does not turn
+        pan = [one for one in item.submenu if str(one.text) == 'Pan'][0]
+        pan.checked = False
+        pan.on_activate(pan)
+        assert navigation_for(view).keys_for(PAN) == ()
 
 
-class TestANameTooLongForItsCorner:
-    """Nothing clips what the overlay draws, so a name is cut before it is."""
+class TestTheButtonsGlyph:
+    def test_it_draws_an_outline_where_the_view_is_not_maximised(self):
+        layout = _layout()
+        chrome = _chrome(layout)
+        button = _of(chrome, ExpandButton)[0]
+        assert not button.maximised()
 
-    def _width(self, text):
-        return REFERENCE_METRICS.text_width(text)
+    def test_it_draws_the_tiles_where_the_view_has_the_window(self):
+        layout = _layout()
+        chrome = _chrome(layout)
+        button = _of(chrome, ExpandButton)[0]
+        layout.maximise(button.view)
+        assert button.maximised()
 
-    def test_a_name_that_fits_is_drawn_whole(self):
-        assert fitted('front', self._width('front'), REFERENCE_METRICS) == 'front'
-
-    def test_a_name_that_does_not_fit_is_cut_and_says_so(self):
-        cut = fitted('perspective', self._width('perspec'), REFERENCE_METRICS)
-        assert cut.endswith('...')
-        assert self._width(cut) <= self._width('perspec')
-        assert 'perspective'.startswith(cut[:-3])
-
-    def test_a_corner_with_no_room_draws_nothing(self):
-        assert fitted('perspective', 2, REFERENCE_METRICS) == ''
-
-    def test_nothing_to_draw_stays_nothing(self):
-        assert fitted('', 100, REFERENCE_METRICS) == ''
+    def test_the_button_is_a_square(self):
+        chrome = _chrome()
+        for button in _of(chrome, ExpandButton):
+            assert abs(button.rect.width - button.rect.height) <= 2

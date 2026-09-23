@@ -30,7 +30,7 @@ from typing import Any, Sequence, Tuple, Union
 import numpy as np
 
 from OpenGLContext.move.viewplatform import ViewPlatform
-from OpenGLContext.passes.shadowmath import perspective_matrix
+from OpenGLContext.passes.shadowmath import ortho_matrix, perspective_matrix
 
 __all__ = ['OrbitView', 'OrbitViewPlatform', 'DEFAULT_PITCH', 'DEFAULT_FOV']
 
@@ -79,7 +79,8 @@ class OrbitView:
                  ground: float = 0.0, heading: float = 0.0,
                  pitch: float = DEFAULT_PITCH, distance: float = 800.0,
                  fov: float = DEFAULT_FOV, nearest: float | None = None,
-                 furthest: float | None = None) -> None:
+                 furthest: float | None = None,
+                 orthographic: bool = False) -> None:
         self.nearest = float(self.NEAREST if nearest is None else nearest)
         self.furthest = float(self.FURTHEST if furthest is None else furthest)
         self.centre = (float(centre[0]), float(centre[1]))
@@ -90,6 +91,12 @@ class OrbitView:
         self.distance = float(distance)
         #: How wide the lens is, in degrees down the screen.
         self.fov = float(fov)
+        #: Whether the view is drawn flat: the same camera, with distance no
+        #: longer making a thing smaller, so two beams of the same size measure
+        #: the same on screen wherever they stand. What an editor's *ortho*
+        #: view is, as against its perspective one. The height of what is shown
+        #: is what the lens takes in at the target, so switching does not jump.
+        self.orthographic = bool(orthographic)
 
     # -- where it is -------------------------------------------------------
     def target(self) -> np.ndarray:
@@ -193,6 +200,17 @@ class OrbitView:
         aspect = (int(viewport[0]) or 1) / (int(viewport[1]) or 1)
         near = max(self.distance, self.nearest) * NEAR_SHARE
         far = max(self.distance * FAR_SHARE, near * 10.0)
+        if self.orthographic:
+            # As much as the lens takes in at what it is looking at, so the
+            # switch leaves the subject the size it was. The depth runs as far
+            # behind the camera as in front: a flat view has no eye point for
+            # anything to be behind, and clipping there would take away half
+            # of what an editor turned the perspective off to see.
+            half = max(self.distance, 1e-6) * math.tan(math.radians(self.fov) / 2.0)
+            return np.asarray(
+                ortho_matrix(-half * aspect, half * aspect, -half, half,
+                             -far, far),
+                dtype='d')
         return np.asarray(
             perspective_matrix(math.radians(self.fov), aspect, near, far),
             dtype='d')

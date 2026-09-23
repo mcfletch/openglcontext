@@ -190,3 +190,104 @@ class TestThePlatform:
         platform = OrthoViewPlatform(view, VIEWPORT)
         platform.setPosition((3.0, -1.0, 50.0))
         assert view.centre == pytest.approx((3.0, -1.0, 0.0))
+
+
+class TestPointingAViewSomewhereElse:
+    """What the view-name menu does: the kinds a view can be switched to."""
+
+    def _views(self):
+        from OpenGLContext.edit.mapview import MapView, MapViewPlatform
+        from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
+        from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
+        from OpenGLContext.multiview.views import View
+        plan = View(MapViewPlatform(MapView(centre=(10.0, -4.0), span=200.0),
+                                    (400, 300)), name='plan')
+        front = View(OrthoViewPlatform(OrthoView('front', centre=(1.0, 2.0, 3.0),
+                                                 span=50.0), (400, 300)),
+                     name='front')
+        angled = View(OrbitViewPlatform(OrbitView(centre=(5.0, 6.0), ground=1.0,
+                                                  distance=80.0), (400, 300)),
+                      name='angled')
+        return plan, front, angled
+
+    def test_it_says_what_kind_a_view_is(self):
+        from OpenGLContext.multiview.cameras import view_kind
+        plan, front, angled = self._views()
+        assert view_kind(plan) == 'top'
+        assert view_kind(front) == 'front'
+        assert view_kind(angled) == 'perspective'
+        angled.camera.view.orthographic = True
+        assert view_kind(angled) == 'ortho'
+
+    def test_an_elevation_turns_to_another_axis_in_place(self):
+        """The camera is the same object, so whatever holds it keeps working."""
+        from OpenGLContext.multiview.cameras import point_view, view_kind
+        _plan, front, _angled = self._views()
+        camera = front.camera
+        assert point_view(front, 'left')
+        assert front.camera is camera
+        assert view_kind(front) == 'left'
+        assert camera.view.centre == pytest.approx((1.0, 2.0, 3.0))
+        assert camera.view.span == pytest.approx(50.0)
+
+    def test_a_turning_camera_becomes_an_elevation_looking_at_the_same_place(self):
+        from OpenGLContext.multiview.cameras import point_view, view_kind
+        from OpenGLContext.multiview.cameras import OrthoViewPlatform
+        _plan, _front, angled = self._views()
+        target = angled.camera.view.target()
+        assert point_view(angled, 'front')
+        assert isinstance(angled.camera, OrthoViewPlatform)
+        assert view_kind(angled) == 'front'
+        assert angled.camera.view.centre == pytest.approx(tuple(target))
+        assert angled.camera.viewport == (400, 300)
+
+    def test_an_elevation_becomes_a_turning_camera_on_the_same_subject(self):
+        from OpenGLContext.edit.orbitview import OrbitViewPlatform
+        from OpenGLContext.multiview.cameras import point_view, view_kind
+        _plan, front, _angled = self._views()
+        assert point_view(front, 'perspective')
+        assert isinstance(front.camera, OrbitViewPlatform)
+        assert view_kind(front) == 'perspective'
+        assert front.camera.view.target() == pytest.approx((1.0, 2.0, 3.0))
+
+    def test_how_much_it_shows_survives_the_switch(self):
+        """A view of a 50-unit subject stays a view of a 50-unit subject."""
+        import math
+        from OpenGLContext.multiview.cameras import point_view
+        _plan, front, _angled = self._views()
+        point_view(front, 'perspective')
+        orbit = front.camera.view
+        shown = 2.0 * orbit.distance * math.tan(math.radians(orbit.fov) / 2.0)
+        assert shown == pytest.approx(50.0, rel=1e-6)
+
+    def test_flat_and_perspective_are_the_same_camera_switched(self):
+        from OpenGLContext.multiview.cameras import point_view, view_kind
+        _plan, _front, angled = self._views()
+        camera = angled.camera
+        assert point_view(angled, 'ortho')
+        assert angled.camera is camera
+        assert camera.view.orthographic
+        assert view_kind(angled) == 'ortho'
+        assert point_view(angled, 'perspective')
+        assert not camera.view.orthographic
+
+    def test_a_plan_view_of_an_editor_turns_like_any_other(self):
+        """A MapView is the top view; pointing it elsewhere gives it a camera."""
+        from OpenGLContext.multiview.cameras import point_view, view_kind
+        plan, _front, _angled = self._views()
+        assert point_view(plan, 'right')
+        assert view_kind(plan) == 'right'
+        assert plan.camera.view.centre == pytest.approx((10.0, 0.0, -4.0))
+
+    def test_a_kind_nobody_has_is_refused(self):
+        from OpenGLContext.multiview.cameras import point_view
+        _plan, front, _angled = self._views()
+        with pytest.raises(ValueError):
+            point_view(front, 'sideways')
+
+    def test_a_view_with_no_camera_cannot_be_pointed(self):
+        from OpenGLContext.multiview.cameras import point_view, view_kind
+        from OpenGLContext.multiview.views import View
+        plain = View(name='plain')
+        assert not point_view(plain, 'top')
+        assert view_kind(plain) is None

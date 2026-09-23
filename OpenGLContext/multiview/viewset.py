@@ -34,7 +34,7 @@ import numpy as np
 from OpenGLContext.multiview.gestures import ViewGestures
 from OpenGLContext.multiview.views import View, ViewLayout
 
-__all__ = ['ViewSet']
+__all__ = ['ViewSet', 'fit_view']
 
 #: How many views each named arrangement places.
 ARRANGEMENT_FOR = {1: 'single', 2: 'split', 4: 'quad'}
@@ -180,26 +180,9 @@ class ViewSet:
 
     # -- framing -----------------------------------------------------------
     def frame(self, minimum: Box, maximum: Box) -> None:
-        """Fit the box from ``minimum`` to ``maximum`` into every view.
-
-        Each camera is framed as its kind is: an orthographic view and a
-        perspective one take the box, and a plan view takes the ground it
-        stands on.
-        """
-        low = np.asarray(minimum[:3], 'd')
-        high = np.asarray(maximum[:3], 'd')
+        """Fit the box from ``minimum`` to ``maximum`` into every view."""
         for view in self.views:
-            camera = getattr(view.camera, 'view', None)
-            if camera is None:
-                continue
-            size = self.size(view)
-            box = getattr(camera, 'frame_box', None)
-            if box is not None:
-                box(low, high, size)
-            elif getattr(camera, 'direction', None) is not None:
-                camera.frame(low, high, size)
-            else:
-                camera.frame((low[0], low[2]), (high[0], high[2]), size)
+            fit_view(view, minimum, maximum, self.size(view))
 
     # -- the pointer -------------------------------------------------------
     def view_for(self, event: Any) -> Optional[View]:
@@ -216,3 +199,25 @@ class ViewSet:
         An event in a view the application drives is never taken.
         """
         return self.gestures.handle(event)
+
+
+def fit_view(view: View, minimum: Box, maximum: Box,
+             size: Tuple[int, int]) -> bool:
+    """Fit a box into one view; False for a view with no camera to fit it in.
+
+    Each camera is framed as its kind is: an orthographic view and one that
+    turns take the box, and a plan view takes the ground it stands on.
+    """
+    camera = getattr(view.camera, 'view', None)
+    if camera is None:
+        return False
+    low = np.asarray(minimum[:3], 'd')
+    high = np.asarray(maximum[:3], 'd')
+    box = getattr(camera, 'frame_box', None)
+    if box is not None:
+        box(low, high, size)
+    elif getattr(camera, 'direction', None) is not None:
+        camera.frame(low, high, size)
+    else:
+        camera.frame((low[0], low[2]), (high[0], high[2]), size)
+    return True
