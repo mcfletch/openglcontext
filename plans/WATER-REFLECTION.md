@@ -67,6 +67,12 @@ until `finishViews`.
 
 ## Limits
 
+2026-09-24: water is now one case of [PLANAR-MIRRORS.md](PLANAR-MIRRORS.md),
+which lifts the first, third and fourth of these: every sheet is its own
+mirror in its own plane, a mirror is never in a shared draw, and the distortion
+is `reflector.WATER`'s `distortion`, which a lake can vary. `waterReflection`
+became `planarReflections`.
+
 - One plane per view: several sheets at different levels reflect the scene as
   seen in the nearest one.
 - Transparent shapes — particles, glass — are not drawn into the reflection.

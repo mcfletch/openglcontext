@@ -1,6 +1,8 @@
 # Planar mirrors: a reflection is another view of the scene
 
-Status: **Planned** — 2026-09-24. Plan only, awaiting review.
+Status: **In progress** — 2026-09-24. Steps 1-7, 9 and 10 landed; step 8
+(terrain and vegetation in the shared draw) is open. See *What landed* at the
+end.
 
 ## Why
 
@@ -403,3 +405,72 @@ no GL.
 - Is half the window's pixels the right atlas default?
 - Should the `mirror` hook also be allowed on an object (every material of its
   mesh), as fire is, or only on a material, as water is?
+
+## Answers from review (2026-09-24)
+
+- `waterReflection` folds into `planarReflections`: water is one reflector,
+  and one switch turns every reflection off.
+- The atlas stays at half the window's pixels.
+- The `mirror` hook is allowed on a material and on an object. On a material
+  the material shades the reflection; on an object every surface shows only the
+  reflection (`PlanarReflector.replace`), its own materials set aside.
+
+## What landed (2026-09-24)
+
+Modules: `scenegraph/reflector.py` (`PlanarReflector`, `WATER`),
+`scenegraph/mirrorhooks.py`, `scenegraph/surfaces.py`, `passes/reflection.py`
+(arithmetic), `passes/reflectiontiles.py` (`TilePacker`, `ReflectionSchedule`),
+`passes/reflectionplanner.py` (`ReflectionPlanner`: the whole per-frame
+decision, no GL), `passes/reflectionatlas.py`, `passes/gputimer.py`, and
+`bin/mirrors_demo.py` (`oglc-mirrors`). The Blender hall is
+`tools/blender/demos/mirrors.py`. User page: `docs/reflections.rst`.
+
+Where it departs from the plan above, and why:
+
+- Rule 3 of the schedule measures the camera's *travel* over its distance to
+  the mirror, not its turn: a turn about the eye leaves every reprojected point
+  where it was, and the guard band covers what it brings into view. The plan's
+  "under a texel at walking pace over two frames" does not hold: walking at
+  1.5 m/s three metres from a mirror moves a half-scale tile's reflection about
+  four texels a frame, so a moving camera redraws the mirrors near it every
+  frame and `interval` pays off for a still or slow camera and far mirrors.
+- One bounce became two: a mirror seen in a mirror view shows the reflection it
+  had the frame before, read from a copy of the atlas through the previous
+  frame's lookups. With one bounce the floor's reflection of a wall mirror was
+  the mirror's bare metal, a gold smear.
+- The first `SETTLE_FRAMES` (2) frames' reflections are provisional: drawn
+  again before they are kept, and never passed on to another mirror. Their
+  colours can be far off while programs compile and textures upload, and
+  mirrors facing each other kept passing that on.
+- A still scene: the pass asks the context for another frame while any mirror
+  in view has a provisional reflection, none, one off by more than a texel, or
+  a view that left out a mirror now drawn. Reaching `interval` does not ask.
+  Without this a context that draws only on change showed the settling frames'
+  reflections, or the probe, for good.
+- The schedule takes mirrors with no usable reflection before those merely
+  due, and halves a mirror too large for the texel budget in its turn; set
+  aside until the end, the largest mirror (a floor) lost every view to smaller
+  ones and was never drawn.
+- A frame's texel budget is half the atlas (`reflectionatlas.FILL`): shelves
+  of power-of-two heights do not pack the whole of it. When drawn tiles still
+  do not fit, kept tiles give up their room, then drawn ones are halved.
+- A mirror's roughness is its factor times the mean of its roughness map. A
+  textured glTF material has factor 1, and was judged too rough to reflect.
+- The GPU timer runs whenever mirror views are drawn, so the overlay and
+  telemetry always have the number; the millisecond target only reads it.
+- `planarReflections` is read every frame (the driver's support once), so a
+  settings screen can switch it; `waterReflection` was read once.
+
+Found on the way and fixed: `OPENGLCONTEXT_MULTIVIEW` was never read by
+`requested_strategy` unless the field had been set; Blender's single-precision
+float properties wrote tags like `0.6000000238418579` (the lakeside demo is
+rebuilt from its script).
+
+Limits found: where a mirror reflects nothing it shows the environment probe,
+which is procedural unless the scene has an HDR or cubemap sky; a VRML97
+`Background`'s colours do not reach it (a RUNTIME-IBL question). Metals that
+are not flat still reflect only the probe.
+
+Still open: step 8, and the visual-regression baselines, which are checked by
+preflight on the main checkout once this is merged.
+
