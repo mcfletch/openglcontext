@@ -152,6 +152,10 @@ class GLTFScene(object):
         # repaints the model, since the Shape, its mesh and this index all hold
         # the one material object.
         self.materials: dict = {}
+        # sounds: each KHR_audio_emitter emitter's name -> the AudioEmitter node
+        # built for it, so an application can play an authored sound when
+        # something happens: ``scene.sounds['door'].play()``.
+        self.sounds: dict = {}
         # sceneGraph: a vrml SceneGraph whose defNames registry maps each glTF
         # node's DEF (its name, or ``node<index>`` when unnamed) to the Transform
         # created for it, so a caller can grab and manipulate one node by name.
@@ -557,6 +561,9 @@ class _SceneBuilder:
         self.audio_document = audiomodel.from_gltf(
             (top_ext.get(audiomodel.EXTENSION) or {}) if isinstance(top_ext, dict) else {})
         self._audio_library: Optional[AudioLibrary] = None
+        #: Each AudioEmitter node built, with its emitter's glTF name, in the
+        #: order built; named once every node has its DEF (see _name_sounds).
+        self.built_emitters: list = []
         # OMI_environment_sky: the document's skies[], from which the active
         # scene picks one. None where the document declares none.
         self.skies: list = environment_sky.read_skies(top_ext)
@@ -888,9 +895,32 @@ class _SceneBuilder:
                     else document.emitters_for_node(container))
         if not emitters:
             return []
-        return audionodes.emitters_from_document(
+        built = audionodes.emitters_from_document(
             document, emitters, library=self.audio_library,
             resolve=self.resolver.resolve)
+        self.built_emitters.extend(
+            (emitter.name, node) for emitter, node in zip(emitters, built))
+        return built
+
+    def _name_sounds(self) -> dict:
+        """Register every named emitter under a DEF, and index it by its glTF name.
+
+        The same rule as :meth:`_name_materials`: the index keeps the
+        document's own name, and the DEF yields to the names already taken, so
+        an emitter called ``Fountain`` on a node called ``Fountain`` is
+        ``Fountain_001`` to :meth:`GLTFScene.getDEF` and ``Fountain`` in
+        :attr:`GLTFScene.sounds`.  An emitter placed on several nodes is built
+        once for each; the index holds the first built, and each is registered
+        under its own DEF.  An unnamed emitter is placed and not indexed.
+        """
+        found: dict = {}
+        for index, (name, node) in enumerate(self.built_emitters):
+            if not name:
+                continue
+            self.scene_graph.regDefName(
+                _unique_def(_def_name(name, index), self.used_defs), node)
+            found.setdefault(name, node)
+        return found
 
     def _name_materials(self) -> dict:
         """Name every material the scene uses, and index it by that name.
@@ -977,6 +1007,7 @@ class _SceneBuilder:
         scene.node_names = {i: n.name for i, n in enumerate(g.nodes or [])
                             if getattr(n, 'name', None)}
         scene.materials = self._name_materials()
+        scene.sounds = self._name_sounds()
         scene.hook_data = self.hooks.scene_data
         top = getattr(g, 'extensions', None) or {}
         scene.extensions = top if isinstance(top, dict) else {}

@@ -151,6 +151,27 @@ class AudioSource(node.Node):
         self._made: Any = None
         self._source: Optional[model.AudioSource] = None
         self._record = model.AudioSource()
+        self._wanted = False
+
+    def play(self) -> None:
+        """Start this source from the beginning on the next frame.
+
+        For a sound that answers an event -- a door, a crash, a turret firing --
+        rather than one that starts with the scene.  It plays whether or not
+        :attr:`autoplay` is set and whether or not it has played before, and a
+        source that is still sounding starts again from the top, so one source
+        is one voice at a time.  A sound that should overlap itself, such as
+        rapid fire, is played through the engine instead.
+
+        A request made before the clip has resolved is dropped rather than held,
+        so a sound whose file is still arriving does not sound late.
+        """
+        self._wanted = True
+
+    def takeRequest(self) -> bool:
+        """Whether :meth:`play` was called since the last frame; clears it."""
+        wanted, self._wanted = self._wanted, False
+        return wanted
 
     def useClip(self, clip: Any) -> None:
         """Play a clip the application made, rather than one ``url`` names.
@@ -377,6 +398,16 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
                 setattr(record.positional, name, getattr(self, name))
         return record
 
+    def play(self) -> None:
+        """Start every source from the beginning on the next frame.
+
+        :meth:`AudioSource.play` for each of :attr:`sources`: the call for a
+        sound found by name, such as ``scene.sounds['door']`` from a glTF
+        document, whose emitter usually holds one source.
+        """
+        for source in self.sources:
+            source.play()
+
     def updateAudio(self, engine: Any, matrix: Any, now: float = 0.0) -> None:
         """Start what should be playing, and re-aim what already is.
 
@@ -426,8 +457,16 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
                       now: float = 0.0) -> None:
         """Keep one source of this emitter in step with the world."""
         handle = self._playing.get(id(source))
-        if handle is not None:
+        wanted = source.takeRequest()
+        if handle is not None and wanted:
+            handle.stop()
+            self._playing.pop(id(source), None)
+            self._repeats.pop(id(source), None)
+        elif handle is not None:
             if handle.playing:
+                # Every frame rather than at the aim interval: it is one float,
+                # and a pitch that moved fifteen times a second would step.
+                handle.set_rate(source.playbackRate)
                 if self._dueToAim(source, now):
                     engine.aim(handle, record, position, forward,
                                gain=source.gain)
@@ -439,7 +478,7 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
             # whose repeat has come round.  Both start again from here.
             self._playing.pop(id(source), None)
             self._repeats.pop(id(source), None)
-        if not source.autoplay:
+        if not (source.autoplay or wanted):
             return
         clip = source.clip(engine)
         if clip is None:

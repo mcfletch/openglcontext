@@ -344,6 +344,7 @@ Documentation
    navmesh
    physics
    audio
+   audio-internals
    overlayui
    hud
    eventmodel
