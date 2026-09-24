@@ -109,7 +109,11 @@ class AudioYard:
                                     position=(x, BALL_RADIUS, z),
                                     color=(0.9, 0.55, 0.2))
             for x, z in BALL_SPOTS]
-        self._ball_indices = {ball.index for ball in self.balls}
+        #: Blows the balls took since the last frame, from every physics step
+        #: of it. A pair of balls meeting is one entry, not two.
+        self.blows: List[Any] = []
+        self.physics.manager.events.subscribe(
+            self.blows.append, body=self.balls, above=IMPACT_FLOOR)
 
         self.thud = synth.rumble(0.3, sample_rate=sample_rate, decay=16.0,
                                  cutoff=320.0, pitch=95.0, pitch_end=50.0,
@@ -182,23 +186,16 @@ class AudioYard:
         return started
 
     def _collide(self, dt: float, engine: Any) -> int:
-        """Step the physics and thud for every ball that took a blow."""
+        """Step the physics and thud for every blow a ball took."""
         self.physics.advance(dt)
+        blows = self.blows[:]
+        self.blows.clear()
         if engine is None:
             return 0
-        world = self.physics.world
         started = 0
-        for ball in self.balls:
-            struck = world.impact_on(ball.index, above=IMPACT_FLOOR)
-            if struck is None:
-                continue
-            other, closing = struck
-            # Two balls meeting is reported for both; one of them sounds it.
-            if other in self._ball_indices and other < ball.index:
-                continue
-            handle = engine.play(self.thud, emitter=self.placed,
-                                 position=world.position[ball.index],
-                                 gain=min(1.0, closing / IMPACT_FULL),
+        for blow in blows:
+            handle = engine.play(self.thud, emitter=self.placed, position=blow.point,
+                                 gain=min(1.0, blow.approach / IMPACT_FULL),
                                  priority=0.3)
             started += handle is not None
         return started

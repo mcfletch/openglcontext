@@ -374,9 +374,9 @@ both are ordinary outcomes and need no check.
 Playing a sound when two things collide
 ---------------------------------------
 
-The :doc:`physics world <physics>` reports the hardest blow a body took in the
-step just run, with how fast the two were closing, which sets how loud the
-sound is:
+Subscribe to the bodies that should make a sound, and play one for each blow
+the :doc:`physics manager <physics>` delivers. ``approach`` is how fast the two
+were closing, in metres per second, which sets how loud the sound is:
 
 .. code-block:: python
 
@@ -386,29 +386,30 @@ sound is:
    PLACED = model.AudioEmitter(
        positional=model.PositionalProperties(refDistance=2.0))
 
+   def OnInit(self):
+       ...
+       self.blows = []
+       self.scene.manager.events.subscribe(
+           self.blows.append, body=self.crates, above=0.5)
+
    def OnIdle(self):
-       self.scene.advance(dt)
+       self.scene.advance(dt)                    # delivers this frame's blows
        engine = audioscene.engine_for(self)
-       world = self.scene.world
-       for body in self.crates:
-           struck = world.impact_on(body.index, above=0.5)
-           if struck is not None and engine is not None:
-               other, closing = struck             # closing speed, metres/second
-               engine.play(THUD, emitter=PLACED,
-                           position=world.position[body.index],
-                           gain=min(1.0, closing / 8.0), priority=0.3)
+       for blow in self.blows:
+           if engine is not None:
+               engine.play(THUD, emitter=PLACED, position=blow.point,
+                           gain=min(1.0, blow.approach / 8.0), priority=0.3)
+       self.blows.clear()
 
 ``above`` is the closing speed in metres per second below which a contact is
 not a blow. Leave it above about 0.1: a body resting on the floor closes on it
-slightly on every step, and at zero it would thud continuously. A blow between
-two bodies that are both watched is reported for each of them, so watch one
-side of a pair that should make one sound.
-
-``impact_on`` reports the step just run. ``advance()`` runs as many fixed
-60 Hz steps as the frame's time covers, so at frame rates below 60 a blow
-resolved in an earlier step of the same frame is not reported. A game that
-must hear every blow steps the world itself, one ``world.step(dt)`` at a time,
-and asks after each.
+slightly on every step. The world records every physics step, so a frame that
+ran four steps delivers the blows of all four, and a bounce is heard at any
+frame rate. Two watched bodies meeting are delivered once, not once for each.
+The subscription's callback runs inside ``advance()``; collecting the blows and
+playing them afterwards keeps the audio calls in one place.
+:ref:`physics-collisions` describes the subscription and every field of a
+blow.
 
 .. _audio-areas:
 

@@ -138,6 +138,8 @@ OpenGLContext/
 │   └── shaderpass.py # VRML97ShaderProgram -- compiles and holds the programs
 ├── __pyinstaller/    # PyInstaller hooks, found by entry point -- docs/packaging.rst
 ├── physics/          # Rigid bodies, colliders, gravity zones -- docs/physics.rst
+│   └── events.py     # Collision subscriptions: a callback per body, delivered
+│                     # once a frame -- docs/physics.rst#physics-collisions
 ├── resources/        # Generated Python modules holding icons and shader text
 ├── py.typed          # The engine's declarations are real -- docs/typing.rst
 ├── scenegraph/       # VRML97-style nodes

@@ -111,6 +111,11 @@ Installing the package puts these commands on your path:
 ``oglc-audio-demo``
    Demonstrates sound: collisions, events, fading areas and a pitch that
    follows the simulation. See :ref:`Sound <audio-demos>`.
+``oglc-physics-events``
+   Demonstrates collision subscriptions: crates that thud at any frame rate,
+   two panes of glass broken after and before the solve, a hitscan gun and a
+   pressure plate that opens a door. See :ref:`Responding to collisions
+   <physics-collisions>`.
 ``oglc-character-sheet``
    Draws every clip a rigged character plays as one picture, with a row per
    view and a column per moment of the cycle, plus an overview sheet and an
@@ -325,9 +330,10 @@ The application around it
   portals.
 
 - :doc:`Physics & Collision <physics>` -- rigid-body physics on the OMI glTF
-  model: collision, gravity zones, triggers, joints, shape cooking, a character
-  controller with viewpoint binding, a motion debug overlay, and
-  :ref:`walking <walking>` in every interactive context.
+  model: collision, :ref:`collision callbacks <physics-collisions>`, gravity
+  zones, triggers, joints, shape cooking, a character controller with
+  viewpoint binding, a motion debug overlay, and :ref:`walking <walking>` in
+  every interactive context. ``oglc-physics-events`` shows the callbacks.
 
 - :doc:`Sound <audio>` -- sound placed in the scene on glTF's
   ``KHR_audio_emitter`` model: file formats, sound in glTF files, and how to

@@ -245,7 +245,9 @@ zero, as OMI intends). `static`/`kinematic` ⇒ `invMass=0`, so infinite mass ne
 - **Triggers** (`OMI_physics_body.trigger`): a sensor shape that detects overlap but generates **no
   impulse**. The broad/narrow phase already computes the overlap; a trigger just emits enter/stay/exit
   events into the event system (a natural fit for VRML `TouchSensor`-style routing) instead of a
-  contact. Ghost/region volumes, pickups, gravity-zone bounds all use this.
+  contact. Ghost/region volumes, pickups, gravity-zone bounds all use this. The event system they
+  emit into is [COLLISION-EVENTS.md](COLLISION-EVENTS.md): trigger events share the per-step log with
+  contact events and reach `CollisionEvents` subscribers as `kind='trigger'`.
 - **Sleeping:** a body under the velocity threshold for `T_sleep` deactivates — skipped in integration
   and solving, kept in the broad phase so movers still collide and wake it.
 

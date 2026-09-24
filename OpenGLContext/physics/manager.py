@@ -2,11 +2,18 @@
 
 The manager registers :class:`~OpenGLContext.scenegraph.physicsbody.PhysicsBody`
 nodes into a world, advances the simulation with the fixed-timestep accumulator,
-and writes interpolated poses back to their Transforms.  A context's frame clock
-drives :meth:`advance` (see ``events``/``DoEventCascade`` wiring).
+writes interpolated poses back to their Transforms, and then delivers the
+frame's collisions to the callbacks subscribed through :attr:`PhysicsManager.events`
+(:mod:`OpenGLContext.physics.events`).  The application calls :meth:`advance`
+once a frame, usually from its ``OnIdle``.
 """
+from collections import OrderedDict
 from typing import Any, List, Optional
+
+from omi_physics.contactevents import BodyRef
 from omi_physics.world import PhysicsWorld
+
+from .events import CollisionEvents
 
 _ROT_FIELD_CACHE: dict = {}
 
@@ -45,17 +52,75 @@ class PhysicsManager:
                                  **world_kw)
         self.world = world
         self.bodies: List[Any] = []
+        #: Collision subscriptions: :meth:`CollisionEvents.subscribe
+        #: <OpenGLContext.physics.events.CollisionEvents.subscribe>`.
+        self.events = CollisionEvents(self)
+        self._handles: dict = {}
+        #: Bodies removed recently, so events about their last contacts still
+        #: name them. Bounded: only the events of the next frame or two need it.
+        self._retired: "OrderedDict[BodyRef, Any]" = OrderedDict()
+
+    #: Whether :meth:`advance` steps the world on the calling thread.
+    steps_on_this_thread = True
+    #: How many removed bodies :meth:`handle` still answers for.
+    RETIRED_KEPT = 4096
 
     def add(self, body: Any) -> Any:
         """Register a scenegraph ``PhysicsBody`` handle into the world and track it; returns the body."""
         body.register(self.world)
         self.bodies.append(body)
+        self._handles[self.world.ref(body.index)] = body
         return body
 
+    def remove(self, body: Any) -> None:
+        """Take ``body`` out of the world and stop writing its pose.
+
+        The pairs it was touching end with ``reason='removed'``, and the
+        subscriptions on it hear those ends at the next :meth:`advance` and
+        then finish. ``body.index`` is None afterwards.
+        """
+        if body.index is None:
+            return
+        ref = self.world.ref(body.index)
+        self._remove_body(body.index)
+        self._handles.pop(ref, None)
+        self._retired[ref] = body
+        while len(self._retired) > self.RETIRED_KEPT:
+            self._retired.popitem(last=False)
+        if body in self.bodies:
+            self.bodies.remove(body)
+        body.index = None
+
+    def _remove_body(self, index: int) -> None:
+        """Remove body ``index`` from the world."""
+        self.world.remove_body(index)
+
+    def handle(self, ref: BodyRef) -> Any:
+        """The ``PhysicsBody`` ``ref`` names, or ``ref`` itself for a body added without one."""
+        found = self._handles.get(ref)
+        if found is None:
+            found = self._retired.get(ref)
+        if found is None:
+            found = self.world.handle_of(ref)
+        return ref if found is None else found
+
+    def body_for(self, transform: Any) -> Any:
+        """The registered ``PhysicsBody`` driving ``transform``, or None."""
+        for body in self.bodies:
+            if body.transform is transform:
+                return body
+        return None
+
     def advance(self, real_dt: float) -> float:
-        """Step the world by ``real_dt`` seconds and sync poses; returns the interpolation alpha."""
+        """Step the world by ``real_dt`` seconds, sync poses and deliver collisions.
+
+        Returns the interpolation alpha. Collision callbacks run last, so they
+        see the scene in the pose this frame draws.
+        """
         alpha = self.world.advance(real_dt)
         self.sync(alpha)
+        if self.events.draining:
+            self.events.dispatch(self.world.contact_log.drain())
         return alpha
 
     def sync(self, alpha: float = 1.0) -> None:

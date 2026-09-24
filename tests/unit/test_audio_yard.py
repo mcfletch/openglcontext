@@ -51,18 +51,18 @@ def yard(engine):
 OUTSIDE = (0.0, 1.6, 12.0)
 
 
-def run(yard, engine, seconds, where=OUTSIDE):
+def run(yard, engine, seconds, where=OUTSIDE, frame=FRAME):
     """Frames of the demo, each with its share of mixing; sounds started.
 
     Each frame steps the yard, then drives its sound nodes as the render pass
     would, then mixes a frame's worth of samples as a device would pull them.
     """
     started = 0
-    for _ in range(max(1, int(round(seconds / FRAME)))):
-        started += yard.step(FRAME, where, engine)
-        yard.clock += FRAME
+    for _ in range(max(1, int(round(seconds / frame)))):
+        started += yard.step(frame, where, engine)
+        yard.clock += frame
         update_scene_audio(engine, yard.paths, yard.clock)
-        engine.mixer.mix(int(FRAME * RATE))
+        engine.mixer.mix(int(frame * RATE))
     return started
 
 
@@ -75,6 +75,18 @@ class TestCollisions:
         yard.drop()
         run(yard, engine, 10.0)
         assert run(yard, engine, 2.0) == 0
+
+    def test_a_slow_frame_rate_hears_every_bounce(self, engine):
+        def thuds(frame):
+            yard = AudioYard(sample_rate=RATE)
+            yard.paths = auditory_paths(yard.scene())
+            yard.clock = 0.0
+            yard.drop()
+            return run(yard, engine, 4.0, frame=frame)
+
+        at_120 = thuds(1.0 / 120.0)
+        assert at_120 > len(audio_demo.BALL_SPOTS)
+        assert thuds(1.0 / 20.0) == at_120
 
     def test_they_can_be_dropped_again(self, yard, engine):
         yard.drop()
