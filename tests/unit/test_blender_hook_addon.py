@@ -22,7 +22,7 @@ import pytest
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.gltf import hooks
 from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb
-from OpenGLContext.scenegraph import particlehooks, particles, water
+from OpenGLContext.scenegraph import mirrorhooks, particlehooks, particles, water
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
@@ -47,6 +47,7 @@ def settings(**named):
     """The panel's properties, as the add-on reads them off a datablock."""
     values = dict(enabled=True, kind='water', style='still', material='keep',
                   medium='water', depth=0.0, scale=1.0, density=1.0,
+                  mirror_scale=0.5, interval=3, priority=1.0, distortion=0.0,
                   parameters='')
     values.update(named)
     return SimpleNamespace(**values)
@@ -150,6 +151,7 @@ def test_the_effect_fields_belong_to_the_effects():
 
 @pytest.mark.parametrize('kind, on', [('fire', 'object'), ('sparks', 'object'),
                                       ('water', 'material'),
+                                      ('mirror', 'material'), ('mirror', 'object'),
                                       ('twigbb:teleporter', 'object'),
                                       ('twigbb:teleporter', 'material')])
 def test_a_kind_where_it_belongs_draws_no_warning(kind, on):
@@ -164,10 +166,52 @@ def test_a_kind_where_the_engine_ignores_it_says_where_it_goes(kind, on, belongs
     assert belongs in tag.misplaced(kind, on)
 
 
+def test_a_mirror_left_at_its_defaults_is_the_kind_alone():
+    assert tag.hook_block(settings(kind='mirror')) == {'kind': 'mirror'}
+
+
+def test_a_mirror_writes_what_it_is_worth():
+    assert tag.hook_block(settings(kind='mirror', mirror_scale=0.25, interval=1,
+                                   priority=3.0, distortion=0.1)) == {
+        'kind': 'mirror', 'scale': 0.25, 'interval': 1, 'priority': 3.0,
+        'distortion': 0.1,
+    }
+
+
+def test_the_mirror_fields_belong_to_the_mirror():
+    assert tag.hook_block(settings(kind='fire', interval=1, mirror_scale=0.2)) == {
+        'kind': 'fire'}
+
+
+def test_the_mirror_parameters_are_the_ones_the_engine_reads():
+    assert set(tag.MIRROR_PARAMETERS.values()) <= set(mirrorhooks.PARAMETERS)
+
+
+def test_the_mirror_defaults_are_the_engines():
+    from OpenGLContext.scenegraph.reflector import PlanarReflector
+    default = PlanarReflector()
+    for field, param in tag.MIRROR_PARAMETERS.items():
+        assert tag.DEFAULTS[field] == pytest.approx(getattr(default, param))
+
+
+def test_a_mirror_tagged_in_the_panel_loads_reflecting():
+    block = tag.hook_block(settings(kind='mirror', interval=2))
+    material = PBRMaterial(metallic=1.0, roughness=0.0)
+    material.hook = block
+    mesh = PBRMesh(
+        positions=np.array([(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)], 'f'),
+        normals=np.array([(0, 0, 1)] * 4, 'f'),
+        indices=np.array([0, 1, 2, 0, 2, 3], np.uint32), material=material)
+    scene = gltf.load_gltf(write_glb(SceneNode(mesh=mesh)))
+    shape = next(node for node in _walk(scene.group) if isinstance(node, Shape))
+    assert shape.appearance.material.reflector.interval == 2
+
+
 def test_the_kinds_are_offered_as_they_are_typed():
     """The kind field is free text with the engine's own kinds suggested."""
     assert tag.suggestions('') == sorted(tag.KINDS)
     assert tag.suggestions('SP') == ['sparks']
+    assert tag.suggestions('mi') == ['mirror']
     assert tag.suggestions('glisteel:rail') == []
 
 

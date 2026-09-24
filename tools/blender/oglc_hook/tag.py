@@ -7,15 +7,16 @@ comes back in the glTF, and a test drives this module directly.
 
 ``settings`` is anything with the panel's properties on it -- a Blender
 ``PropertyGroup`` at export time. The vocabularies below are the engine's: the
-kinds it ships, the five water styles, the three media, and the two ways to
-shade a surface.
+kinds it ships, the five water styles, the three media, the two ways to shade
+a surface, and what a mirror is worth.
 """
 from __future__ import annotations
 
 import json
 from typing import Any, Dict, List, Optional
 
-__all__ = ['EXTENSION', 'WATER', 'EFFECTS', 'KINDS', 'STYLES', 'MEDIA',
+__all__ = ['EXTENSION', 'WATER', 'MIRROR', 'MIRROR_PARAMETERS', 'EFFECTS',
+           'KINDS', 'STYLES', 'MEDIA',
            'SHADING', 'DEFAULTS', 'parameters', 'hook_block', 'preview',
            'misplaced', 'suggestions']
 
@@ -27,6 +28,11 @@ EXTENSION = 'OGLC_hook'
 #: The kind the panel has water fields for. It belongs on a material: it is
 #: what a surface is made of.
 WATER = 'water'
+
+#: The kind the panel has mirror fields for. It belongs on either holder: on a
+#: material the surface's own shading is applied to its reflection, and on an
+#: object every surface of it shows the reflection alone.
+MIRROR = 'mirror'
 
 #: The particle effects, which belong on an object: each stands where the
 #: object stands. The panel has the same two fields for all three.
@@ -40,6 +46,7 @@ EFFECTS: Dict[str, str] = {
 #: own kinds are typed in full.
 KINDS: Dict[str, str] = {
     WATER: 'A surface that moves as water, and a body you can be inside of',
+    MIRROR: 'A flat surface that reflects the scene in front of it',
     **EFFECTS,
 }
 
@@ -75,6 +82,14 @@ SHADING: Dict[str, str] = {
 DEFAULTS: Dict[str, Any] = {
     'style': 'still', 'material': 'keep', 'medium': 'water', 'depth': 0.0,
     'scale': 1.0, 'density': 1.0,
+    'mirror_scale': 0.5, 'interval': 3, 'priority': 1.0, 'distortion': 0.0,
+}
+
+#: The panel's mirror fields, and the parameter each is written as. The
+#: resolution is its own field because ``scale`` is already the effects'.
+MIRROR_PARAMETERS: Dict[str, str] = {
+    'mirror_scale': 'scale', 'interval': 'interval', 'priority': 'priority',
+    'distortion': 'distortion',
 }
 
 
@@ -114,6 +129,8 @@ def hook_block(settings: Any) -> Optional[Dict[str, Any]]:
         params = _water_parameters(settings)
     elif named in EFFECTS:
         params = _effect_parameters(settings)
+    elif named == MIRROR:
+        params = _mirror_parameters(settings)
     else:
         params = {}
     written = parameters(getattr(settings, 'parameters', ''))
@@ -149,6 +166,17 @@ def _effect_parameters(settings: Any) -> Dict[str, Any]:
         value = float(getattr(settings, name, DEFAULTS[name]))
         if value != DEFAULTS[name]:
             params[name] = value
+    return params
+
+
+def _mirror_parameters(settings: Any) -> Dict[str, Any]:
+    """The mirror fields that differ from what the loader assumes."""
+    params: Dict[str, Any] = {}
+    for name, written in MIRROR_PARAMETERS.items():
+        value = getattr(settings, name, DEFAULTS[name])
+        value = int(value) if name == 'interval' else float(value)
+        if value != DEFAULTS[name]:
+            params[written] = value
     return params
 
 

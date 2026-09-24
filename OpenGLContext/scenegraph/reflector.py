@@ -25,7 +25,7 @@ from vrml import field, node
 
 from OpenGLContext.scenegraph.varied import Varied
 
-__all__ = ['PlanarReflector']
+__all__ = ['PlanarReflector', 'WATER', 'WATER_DISTORTION']
 
 
 class PlanarReflector(Varied, node.Node):
@@ -67,3 +67,14 @@ class PlanarReflector(Varied, node.Node):
         'enabled': {'label': 'Reflects the scene'},
         'replace': {'label': 'Shows only the reflection'},
     }
+
+
+#: How far, in view widths, a unit of water's tilt from flat pushes its lookup.
+#: The ripple tilts it by a tenth or so, which moves a reflected edge by a few
+#: percent of the view: broken up, still legible.
+WATER_DISTORTION = 0.12
+
+#: What a body of water reflects by: redrawn every frame, since what stands on
+#: a shore moves and the eye is on it. Shared, as the water styles are; a lake
+#: of its own is ``WATER.varied(...)``.
+WATER = PlanarReflector(interval=1, distortion=WATER_DISTORTION)

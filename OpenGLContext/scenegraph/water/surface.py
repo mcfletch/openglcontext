@@ -44,6 +44,7 @@ from vrml import field, node
 
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.scenegraph.reflector import WATER
 from OpenGLContext.scenegraph.varied import Varied
 
 __all__ = ['WATER_ALBEDO', 'WATER_ROUGHNESS', 'WATER_TRANSPARENCY', 'WATER_IOR',
@@ -380,14 +381,16 @@ def _fine_ripple(x: np.ndarray, z: np.ndarray, steepness: float,
 def water_material() -> PBRMaterial:
     """What open water is made of.
 
-    Smooth, so it reflects; barely coloured, so what it reflects is what is
-    seen; transparent, so the bed shows through where it is shallow; and
-    two-sided, because a car that has gone in is looking up at it.
+    Smooth, and a mirror of the scene around it
+    (:data:`~OpenGLContext.scenegraph.reflector.WATER`); barely coloured, so
+    what it reflects is what is seen; transparent, so the bed shows through
+    where it is shallow; and two-sided, because a car that has gone in is
+    looking up at it.
     """
     return PBRMaterial(baseColor=WATER_ALBEDO, metallic=0.0,
                        roughness=WATER_ROUGHNESS,
                        transparency=WATER_TRANSPARENCY, alphaMode='BLEND',
-                       ior=WATER_IOR, doubleSided=True)
+                       ior=WATER_IOR, doubleSided=True, reflector=WATER)
 
 
 def water_surface(x0: float, x1: float, z0: float, z1: float,

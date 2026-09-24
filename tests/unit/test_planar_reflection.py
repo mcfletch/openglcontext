@@ -35,9 +35,9 @@ def _rotation(axis, angle):
     ])
 
 
-def _placement(rotation=np.identity(3), translate=(0.0, 0.0, 0.0), scale=1.0):
+def _placement(rotation=None, translate=(0.0, 0.0, 0.0), scale=1.0):
     matrix = np.identity(4)
-    matrix[:3, :3] = rotation * scale
+    matrix[:3, :3] = (np.identity(3) if rotation is None else rotation) * scale
     matrix[3, :3] = translate
     return matrix
 

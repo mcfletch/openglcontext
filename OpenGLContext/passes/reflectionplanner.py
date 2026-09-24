@@ -267,11 +267,11 @@ class ReflectionPlanner:
         packed = self.packer.place(sizes)
         spare = max(0, int(budget.views) - len(decisions))
         for key in packed.moved:
-            if key in decisions:
+            held_before = seen[key].held
+            if key in decisions or held_before is None or spare <= 0:
                 continue
-            if spare > 0:
-                decisions[key] = seen[key].held.scale if seen[key].held else 1.0
-                spare -= 1
+            decisions[key] = held_before.scale
+            spare -= 1
         plan = ReflectionPlan(frames, candidates=candidates)
         held: Dict[Hashable, _Held] = {}
         for key, entry in seen.items():
@@ -298,7 +298,8 @@ class ReflectionPlanner:
             matrix=tuple(float(value) for value in np.asarray(mirror.lookup, 'd').ravel()),
             transform=reflection.tile_transform(mirror.crop, held.tile.rect, atlas),
             bounds=reflection.tile_bounds(held.tile.rect, atlas),
-            normal=tuple(float(value) for value in mirror.normal),
+            normal=(float(mirror.normal[0]), float(mirror.normal[1]),
+                    float(mirror.normal[2])),
             distortion=float(seen.reflector.distortion),
             replace=bool(seen.reflector.replace),
             rough=seen.rough)

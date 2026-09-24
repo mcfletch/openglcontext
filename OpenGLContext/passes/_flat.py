@@ -1939,7 +1939,8 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             self.setupLightGrid()
             if mirrored:
                 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-                shader.set_hdr_output( True )
+                # Only the PBR program has one, and only it draws mirrors.
+                getattr( shader, 'set_hdr_output' )( True )
                 self.mirroredDraw = True
                 PBRMesh.reset_draw_state( self )
                 glFrontFace( GL_CW )

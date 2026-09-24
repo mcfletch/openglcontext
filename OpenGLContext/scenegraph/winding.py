@@ -38,8 +38,8 @@ def front_face(ccw: bool, mv: Any = None, mirrored: bool = False) -> int:
         except Exception:
             pass
     if flip:
-        return GL_CW if base == GL_CCW else GL_CCW
-    return base
+        return int(GL_CW if base == GL_CCW else GL_CCW)
+    return int(base)
 
 
 def apply_winding_cull(mode: Any, ccw: bool, solid: bool) -> None:

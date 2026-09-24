@@ -335,6 +335,20 @@ _TEXCOORD_BIT = {'baseColor': 1, 'metallicRoughness': 2, 'normal': 4,
 _HOOK_EXTENSION = _hooks.EXTENSION
 
 
+def _reflector_hook(material: Any) -> Any:
+    """The ``mirror`` hook a material's reflector loads back from, or None.
+
+    None for a material with no reflector, one switched off, and water's own,
+    which the water hook puts back.
+    """
+    from OpenGLContext.scenegraph.reflector import WATER
+    reflector = getattr(material, 'reflector', None)
+    if not reflector or not reflector.enabled or reflector is WATER:
+        return None
+    from OpenGLContext.scenegraph import mirrorhooks
+    return mirrorhooks.hook_for(reflector)
+
+
 def _close(value: Any, default: Any) -> bool:
     """Whether a material field still holds its glTF default."""
     if isinstance(default, tuple):
@@ -525,7 +539,8 @@ class GLTFWriter:
             entry['emissiveTexture'] = emissive_texture
 
         extensions = self._material_extensions(material, texture_info)
-        extensions.update(self._hook_extension(getattr(material, 'hook', None)))
+        extensions.update(self._hook_extension(
+            getattr(material, 'hook', None) or _reflector_hook(material)))
         if extensions:
             entry['extensions'] = extensions
             self._extensions_used.update(extensions)

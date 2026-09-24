@@ -3,9 +3,9 @@
 A panel on the material tab and one on the object tab, each naming a ``kind``
 and its parameters, and an exporter extension that writes them into the glTF as
 ``OGLC_hook``. OpenGLContext reads that tag at load and makes something of it --
-a tagged surface loads as moving water rather than as a flat blue sheet, and a
-tagged empty loads with a fire, a column of smoke or a fountain of sparks
-standing where it stands.
+a tagged surface loads as moving water rather than as a flat blue sheet, a
+tagged mirror reflects the room in front of it, and a tagged empty loads with a
+fire, a column of smoke or a fountain of sparks standing where it stands.
 
 The same tag can be written without this add-on, as a custom property called
 ``OGLC_hook`` on the material, exported with Include > Custom Properties ticked.
@@ -21,7 +21,8 @@ import logging
 
 import bpy
 from bpy.props import (
-    BoolProperty, EnumProperty, FloatProperty, PointerProperty, StringProperty,
+    BoolProperty, EnumProperty, FloatProperty, IntProperty, PointerProperty,
+    StringProperty,
 )
 from bpy.types import Panel, PropertyGroup
 
@@ -30,7 +31,7 @@ from . import tag
 bl_info = {
     'name': 'glTF engine hooks (OpenGLContext)',
     'author': 'Mike C. Fletcher',
-    'version': (1, 1, 0),
+    'version': (1, 2, 0),
     'blender': (4, 0, 0),
     'location': 'Properties > Material > Engine Hook, Properties > Object > Engine Hook',
     'description': 'Tag a material or an object with what it is, for a glTF loader to act on',
@@ -66,8 +67,9 @@ class OGLCHookSettings(PropertyGroup):
     kind: StringProperty(
         name='Kind',
         description='What the engine should make of this. The engine ships '
-                    '"water" for a material and "fire", "smoke" and "sparks" '
-                    'for an object; a game names its own, like "glisteel:rail"',
+                    '"water" for a material, "fire", "smoke" and "sparks" for '
+                    'an object, and "mirror" for either; a game names its '
+                    'own, like "glisteel:rail"',
         default=tag.WATER,
         search=_kind_search,
         search_options={'SUGGESTION'},
@@ -109,6 +111,30 @@ class OGLCHookSettings(PropertyGroup):
                     'most alive at once',
         default=tag.DEFAULTS['density'], min=0.0, soft_max=10.0,
     )
+    mirror_scale: FloatProperty(
+        name='Resolution',
+        description="The reflection's resolution as a share of the mirror's "
+                    'size on screen, each way',
+        default=tag.DEFAULTS['mirror_scale'], min=0.05, max=1.0,
+    )
+    interval: IntProperty(
+        name='Redraw Every',
+        description='The most frames the reflection goes without being drawn '
+                    'again. A moving object\'s reflection lags by up to this many',
+        default=tag.DEFAULTS['interval'], min=1, soft_max=30,
+    )
+    priority: FloatProperty(
+        name='Priority',
+        description='Weight against the other mirrors in view when a frame '
+                    'cannot draw them all',
+        default=tag.DEFAULTS['priority'], min=0.0, soft_max=10.0,
+    )
+    distortion: FloatProperty(
+        name='Distortion',
+        description='How far the normal map breaks the reflection up, in view '
+                    'widths per unit of tilt',
+        default=tag.DEFAULTS['distortion'], min=0.0, soft_max=1.0,
+    )
     parameters: StringProperty(
         name='Parameters',
         description='A JSON object of parameters, merged over the fields '
@@ -137,6 +163,9 @@ def _draw(layout, settings, on):
     elif kind in tag.EFFECTS:
         body.prop(settings, 'scale')
         body.prop(settings, 'density')
+    elif kind == tag.MIRROR:
+        for name in tag.MIRROR_PARAMETERS:
+            body.prop(settings, name)
     body.prop(settings, 'parameters')
     elsewhere = tag.misplaced(kind, on)
     if elsewhere:

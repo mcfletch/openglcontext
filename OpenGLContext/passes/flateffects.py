@@ -84,6 +84,7 @@ class _FlatEffectsMixin:
 
         multiviewStrategy: Optional[str]
         activeFrame: Any
+        view: Any
         stats: Any
         _scissorViews: bool
 
@@ -257,7 +258,6 @@ class _FlatEffectsMixin:
         of the scene. Settles the multi-view strategy where nothing has yet.
         """
         from OpenGLContext.multiview.strategy import MultiviewCapabilities
-        from OpenGLContext.passes.reflectionatlas import atlas_size
         from OpenGLContext.passes.reflectiontiles import Budget
         if self.multiviewStrategy is None:
             self.multiviewStrategy = self.chooseMultiview()
@@ -267,12 +267,18 @@ class _FlatEffectsMixin:
         if views <= 0:
             views = (MultiviewCapabilities.detect().max_views
                      if strategy in ('vertex', 'geometry') else 2)
-        width, height = atlas_size(*self.context.getViewPort(), self.reflectionShare())
+        width, height = self.reflectionAtlasSize()
         return Budget(views=views,
                       separate_views=int(renderoptions.number(
                           self, 'reflectionSeparateViews', renderoptions.env_number_once(
                               'OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS', 4, integer=True))),
                       texels=width * height)
+
+    def reflectionAtlasSize(self) -> Tuple[int, int]:
+        """The reflection atlas's size in texels, for this window."""
+        from OpenGLContext.passes.reflectionatlas import atlas_size
+        width, height = self.context.getViewPort()
+        return atlas_size(int(width), int(height), self.reflectionShare())
 
     def reflectionShare(self) -> float:
         """The atlas's share of the window's pixels."""
@@ -297,7 +303,7 @@ class _FlatEffectsMixin:
         gathered = getattr(self, '_frameGather', None)
         if gathered is None:
             return
-        from OpenGLContext.passes.reflectionatlas import ReflectionAtlas, atlas_size
+        from OpenGLContext.passes.reflectionatlas import ReflectionAtlas
         from OpenGLContext.passes.reflectionplanner import ReflectionPlanner
         if self._reflection_planner is None:
             self._reflection_planner = ReflectionPlanner()
@@ -308,7 +314,7 @@ class _FlatEffectsMixin:
         timer = self._reflection_timer
         if target > 0.0 and timer is not None and timer.milliseconds is not None:
             planner.schedule.measured(timer.milliseconds, target)
-        size = atlas_size(*self.context.getViewPort(), self.reflectionShare())
+        size = self.reflectionAtlasSize()
         plan = planner.plan(frames, size, self.reflectionBudget,
                             separate=self._separateShapes)
         self._reflection_lookups = plan.lookups

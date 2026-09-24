@@ -50,6 +50,7 @@ from typing import Any, Dict, List, Optional, Sequence
 
 from OpenGLContext.loaders.gltf import hooks
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.scenegraph.reflector import WATER as WATER_REFLECTOR
 from OpenGLContext.scenegraph.water.medium import WATER
 from OpenGLContext.scenegraph.water.surface import (
     BREEZE, CHOPPY, FLOWING, LAKE, STILL, WaterStyle, water_material,
@@ -155,6 +156,9 @@ def water_hook(ctx: "hooks.HookContext") -> None:
         engine = water_material()
         ctx.mesh.material = engine
         ctx.shape.appearance.material = engine
+    elif not getattr(ctx.material, 'reflector', None):
+        # Water mirrors the shore, whatever material the artist gave it.
+        ctx.material.reflector = WATER_REFLECTOR
     volume = _body_volume(ctx, str(ctx.params.get('medium') or WATER),
                           float(ctx.params.get('depth') or 0.0))
     if volume is not None:

@@ -37,7 +37,7 @@ from typing import Any, NamedTuple, Optional, Sequence, Tuple
 import numpy as np
 from numpy.typing import ArrayLike
 
-from OpenGLContext.scenegraph.reflector import PlanarReflector
+from OpenGLContext.scenegraph.reflector import WATER, WATER_DISTORTION, PlanarReflector
 
 log = logging.getLogger(__name__)
 
@@ -71,14 +71,8 @@ GUARD = 0.1
 #: blurred as that reflection would be.
 ROUGHEST = 0.6
 
-#: How far, in view widths, a unit of water's tilt from flat pushes its lookup.
-#: The ripple tilts it by a tenth or so, which moves a reflected edge by a few
-#: percent of the view: broken up, still legible.
-WATER_DISTORTION = 0.12
-
-#: The reflector a body of water is, where its material names none: redrawn
-#: every frame, since what stands on a shore moves and the eye is on it.
-WATER_REFLECTOR = PlanarReflector(interval=1, distortion=WATER_DISTORTION)
+#: The reflector a body of water is, where its material names none.
+WATER_REFLECTOR = WATER
 
 #: A plane in the world: a point on it and its unit normal, which points to
 #: the side the mirror is seen from.
@@ -206,7 +200,7 @@ def _geometry_points(geometry: Any) -> Tuple[Any, Any]:
 
 def _fan(polygons: Any) -> Optional[np.ndarray]:
     """``coordIndex`` polygons, each fanned into triangles."""
-    triangles = []
+    triangles: list = []
     face: list = []
     for index in list(polygons) + [-1]:
         if index >= 0:
@@ -301,7 +295,7 @@ def surface_plane(record: Any) -> Optional[Plane]:
 def world_corners(fitted: MeshPlane, tmatrix: Any) -> np.ndarray:
     """A mesh's bounding box corners, placed in the world by ``tmatrix``."""
     placed = np.c_[fitted.corners, np.ones(len(fitted.corners))] @ np.asarray(tmatrix, 'd')
-    return placed[:, :3] / placed[:, 3:]
+    return np.asarray(placed[:, :3] / placed[:, 3:])
 
 
 # --- the mirrored camera ------------------------------------------------------
@@ -503,7 +497,7 @@ def too_small(record: Any, eye: ArrayLike, texels_per_radian: float) -> bool:
     distance = float(np.linalg.norm(middle[:3] / middle[3] - np.asarray(eye, 'd')[:3]))
     if distance <= radius:
         return False
-    return 2.0 * np.arctan(radius / distance) * texels_per_radian < SMALLEST
+    return bool(2.0 * np.arctan(radius / distance) * texels_per_radian < SMALLEST)
 
 
 # --- reading a reflection -----------------------------------------------------
