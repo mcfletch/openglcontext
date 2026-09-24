@@ -22,7 +22,7 @@ import pytest
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.gltf import hooks
 from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb
-from OpenGLContext.scenegraph import water
+from OpenGLContext.scenegraph import particlehooks, particles, water
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
@@ -46,7 +46,8 @@ tag = _module('oglc_hook_tag', ADDON / 'tag.py')
 def settings(**named):
     """The panel's properties, as the add-on reads them off a datablock."""
     values = dict(enabled=True, kind='water', style='still', material='keep',
-                  medium='water', depth=0.0, parameters='')
+                  medium='water', depth=0.0, scale=1.0, density=1.0,
+                  parameters='')
     values.update(named)
     return SimpleNamespace(**values)
 
@@ -63,6 +64,14 @@ def test_the_styles_offered_are_the_ones_the_engine_knows():
 
 def test_the_media_offered_are_the_ones_the_engine_has():
     assert set(tag.MEDIA) == set(MEDIA)
+
+
+def test_the_kinds_offered_are_the_ones_the_engine_ships():
+    assert set(tag.KINDS) == set(hooks.BUILTIN)
+
+
+def test_the_effects_offered_are_the_engines_particle_kinds():
+    assert set(tag.EFFECTS) == set(particlehooks.KINDS)
 
 
 def test_the_tag_module_needs_no_blender():
@@ -121,6 +130,45 @@ def test_the_water_fields_belong_to_water():
                                     medium='lava', depth=6.0,
                                     parameters='{"target": "gate-2"}'))
     assert block == {'kind': 'twigbb:teleporter', 'target': 'gate-2'}
+
+
+def test_an_effect_left_at_its_defaults_is_the_kind_alone():
+    assert tag.hook_block(settings(kind='fire')) == {'kind': 'fire'}
+
+
+def test_an_effect_writes_the_scale_and_density_it_was_given():
+    assert tag.hook_block(settings(kind='smoke', scale=2.5, density=0.5)) == {
+        'kind': 'smoke', 'scale': 2.5, 'density': 0.5,
+    }
+
+
+def test_the_effect_fields_belong_to_the_effects():
+    assert tag.hook_block(settings(style='choppy', scale=3.0, density=2.0)) == {
+        'kind': 'water', 'style': 'choppy',
+    }
+
+
+@pytest.mark.parametrize('kind, on', [('fire', 'object'), ('sparks', 'object'),
+                                      ('water', 'material'),
+                                      ('twigbb:teleporter', 'object'),
+                                      ('twigbb:teleporter', 'material')])
+def test_a_kind_where_it_belongs_draws_no_warning(kind, on):
+    assert tag.misplaced(kind, on) == ''
+
+
+@pytest.mark.parametrize('kind, on, belongs', [('fire', 'material', 'object'),
+                                               ('smoke', 'material', 'object'),
+                                               ('water', 'object', 'material')])
+def test_a_kind_where_the_engine_ignores_it_says_where_it_goes(kind, on, belongs):
+    """A flame on a material, or water on an empty, loads as nothing at all."""
+    assert belongs in tag.misplaced(kind, on)
+
+
+def test_the_kinds_are_offered_as_they_are_typed():
+    """The kind field is free text with the engine's own kinds suggested."""
+    assert tag.suggestions('') == sorted(tag.KINDS)
+    assert tag.suggestions('SP') == ['sparks']
+    assert tag.suggestions('glisteel:rail') == []
 
 
 def test_the_parameters_field_outranks_the_panel():
@@ -189,6 +237,14 @@ def test_a_tagged_material_loads_as_moving_water():
     assert shapes[0].geometry.wave_style is water.CHOPPY
     body = scene.hook_data['water'][0]
     assert body.volume.minimum[1] == pytest.approx(-4.0)
+
+
+def test_a_tagged_object_loads_burning():
+    """The whole path: panel -> extension block -> written file -> an emitter."""
+    block = tag.hook_block(settings(kind='fire', scale=2.0))
+    scene = gltf.load_gltf(write_glb(SceneNode(name='torch', hook=block)))
+    emitter, = scene.hook_data['fire']
+    assert emitter.size == pytest.approx(2.0 * particles.PRESETS['fire']['size'])
 
 
 def _walk(node, out=None):

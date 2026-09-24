@@ -230,6 +230,11 @@ on the ``ContextDefinition``, and the settings screen offers all of them:
      - ``auto``/``full``/``blend``/``off``
      - Refraction through glass.
      - ``OPENGLCONTEXT_TRANSMISSION``
+   * - ``waterReflection``
+     - bool
+     - Water reflects the scene around it; costs a second opaque draw at a
+       quarter of the pixels in a frame with water in view.
+     - ``OPENGLCONTEXT_WATER_REFLECTION``
    * - ``instancing``
      - bool
      - Collapse shapes sharing a geometry into one instanced draw.

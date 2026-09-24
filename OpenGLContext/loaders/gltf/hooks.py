@@ -78,6 +78,9 @@ ENVIRONMENT = 'OPENGLCONTEXT_GLTF_HOOKS'
 #: module of its own.
 BUILTIN: Dict[str, str] = {
     'water': 'OpenGLContext.scenegraph.water.gltf',
+    'fire': 'OpenGLContext.scenegraph.particlehooks',
+    'smoke': 'OpenGLContext.scenegraph.particlehooks',
+    'sparks': 'OpenGLContext.scenegraph.particlehooks',
 }
 
 _OFF = ('0', 'no', 'false', 'off')

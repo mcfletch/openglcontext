@@ -3,15 +3,18 @@
 A Blender add-on that puts an **Engine Hook** panel on the material and the
 object tabs, and writes what it says into the exported glTF as an `OGLC_hook`
 extension. OpenGLContext reads that tag as the file loads and makes something of
-it: a tagged surface arrives as moving water rather than as a flat blue sheet.
-[docs/gltf.html#hooks](../../docs/gltf.html) is the mechanism, and
-[docs/water.html#authoring](../../docs/water.html) the `water` kind's parameters.
+it: a tagged surface arrives as moving water rather than as a flat blue sheet,
+and a tagged empty with a fire burning where it stands.
+[docs/gltf.html#hooks](../../docs/gltf.html) is the mechanism,
+[docs/water.html#authoring](../../docs/water.html) the `water` kind's parameters
+and [docs/particles.html#authored-particles](../../docs/particles.html) those of
+`fire`, `smoke` and `sparks`.
 
-The same tag can be written with no add-on at all, as a material custom property
-called `OGLC_hook` exported with **Include ‣ Custom Properties** ticked. This is
-for pipelines that would rather have the extension: it is a form rather than a
-JSON string, what it writes is checked as it is typed, and it needs no export
-option ticked.
+The same tag can be written with no add-on at all, as a custom property called
+`OGLC_hook` on the material or the object, exported with **Include ‣ Custom
+Properties** ticked. The add-on is for pipelines that would rather have the
+extension: it is a form rather than a JSON string, what it writes is checked as
+it is typed, and it needs no export option ticked.
 
 ## Installing it
 
@@ -27,26 +30,57 @@ and tick *glTF engine hooks (OpenGLContext)*. Blender 4.0 or newer.
 ## Using it
 
 On the material tab (or the object tab, for a tag on the node), open **Engine
-Hook** and tick it. `water` is the kind the panel has fields for — style,
-shading, medium and depth — and the line under the fields is what the file will
-carry:
+Hook** and tick it. **Kind** offers the engine's kinds as you type and takes
+any other name in full. Two groups of kinds have fields of their own, and the
+line under the fields is what the file will carry:
 
-```text
-OGLC_hook: {"depth": 6.0, "kind": "water", "style": "choppy"}
-```
+- `water`, on a material - style, shading, medium and depth:
 
-Any other kind is named in **Kind** and parameterised by **Parameters**, a JSON
-object merged over the fields above it: `{"target": "gate-2"}` for a
-`twigbb:teleporter`. Export with **File ‣ Export ‣ glTF 2.0** as usual; the
+  ```text
+  OGLC_hook: {"depth": 6.0, "kind": "water", "style": "choppy"}
+  ```
+
+- `fire`, `smoke` and `sparks`, on an object - scale and density, each
+  written only where it is not 1. An empty is the usual object to tag; a
+  tagged mesh keeps its mesh and has the effect standing in it too. The
+  object's own scale multiplies the effect's.
+
+A kind on the tab the engine does not read it from - a flame on a material,
+water on an empty - is drawn in red with where it belongs. Any other kind is
+parameterised by **Parameters**, a JSON object merged over the fields above it:
+`{"target": "gate-2"}` for a `twigbb:teleporter`, or `{"color": [0.3, 0.6,
+1.0]}` for a gas flame. Export with **File ‣ Export ‣ glTF 2.0** as usual; the
 add-on writes the block as each material and each node goes out.
 
 A kind is a name the *application* has bound to a factory, so the engine's own
-kinds — `water` — work in `oglc-view` unaided, and a game's own kinds work in
-that game. A file naming a kind nothing registered loads as an ordinary shape.
+kinds work in `oglc-view` unaided, and a game's own kinds work in that game. A
+file naming a kind nothing registered loads as an ordinary shape.
+[docs/particles.html#authored-particles](../../docs/particles.html) has the
+effects' parameters.
+
+## The lakeside demo
+
+`demos/lakeside.py` builds a small world with the panel: a lake tagged `water`
+in a grass basin, a jetty with a brazier (`fire` and `sparks`) and two torches,
+and a campfire (`fire` and `smoke`). `demos/lakeside.blend` is that world to
+open and look at with the add-on installed; `demos/lakeside.glb` is what it
+exports, and `oglc-view tools/blender/demos/lakeside.glb` shows it moving. To
+build both again:
+
+```bash
+blender -b --factory-startup --python tools/blender/demos/lakeside.py -- \
+    --glb tools/blender/demos/lakeside.glb --blend tools/blender/demos/lakeside.blend
+```
+
+Its sun is 5 lux (5/683 W/m² in Blender, whose exporter writes 683 lumens to
+the watt). `oglc-view` lights a model against a sky of unit brightness, and a
+sun at Blender's usual few watts per square metre arrives as thousands of lux
+and whites out every lit surface.
 
 ## What is in here
 
 | | |
 |---|---|
-| `oglc_hook/tag.py` | The rules: panel settings → the `OGLC_hook` block. No `bpy`, so it is ordinary testable code — `tests/unit/test_blender_hook_addon.py` drives it, and holds its vocabularies to the engine's. |
+| `oglc_hook/tag.py` | The rules: panel settings → the `OGLC_hook` block. No `bpy`, so it is ordinary testable code — `tests/unit/test_blender_hook_addon.py` drives it, and holds its vocabularies to the engine's; `test_blender_hook_addon_in_blender.py` runs the whole add-on in Blender. |
 | `oglc_hook/__init__.py` | The Blender half: the properties, the two panels, and the `gather_material_hook` / `gather_node_hook` exporter hooks. |
+| `demos/lakeside.py` | The demo world, built with the add-on. `tests/unit/test_lakeside_demo.py` loads the shipped `.glb`, and builds it again where Blender is installed. |

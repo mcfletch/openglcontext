@@ -3,7 +3,9 @@
 A panel on the material tab and one on the object tab, each naming a ``kind``
 and its parameters, and an exporter extension that writes them into the glTF as
 ``OGLC_hook``. OpenGLContext reads that tag at load and makes something of it --
-a tagged surface loads as moving water rather than as a flat blue sheet.
+a tagged surface loads as moving water rather than as a flat blue sheet, and a
+tagged empty loads with a fire, a column of smoke or a fountain of sparks
+standing where it stands.
 
 The same tag can be written without this add-on, as a custom property called
 ``OGLC_hook`` on the material, exported with Include > Custom Properties ticked.
@@ -28,7 +30,7 @@ from . import tag
 bl_info = {
     'name': 'glTF engine hooks (OpenGLContext)',
     'author': 'Mike C. Fletcher',
-    'version': (1, 0, 0),
+    'version': (1, 1, 0),
     'blender': (4, 0, 0),
     'location': 'Properties > Material > Engine Hook, Properties > Object > Engine Hook',
     'description': 'Tag a material or an object with what it is, for a glTF loader to act on',
@@ -40,6 +42,11 @@ log = logging.getLogger(__name__)
 
 #: Where the settings hang off a material and off an object alike.
 PROPERTY = 'oglc_hook'
+
+
+def _kind_search(settings, context, edit_text):
+    """The engine's kinds, offered as the kind field is typed."""
+    return tag.suggestions(edit_text)
 
 
 def _items(vocabulary):
@@ -59,8 +66,11 @@ class OGLCHookSettings(PropertyGroup):
     kind: StringProperty(
         name='Kind',
         description='What the engine should make of this. The engine ships '
-                    '"water"; a game names its own, like "glisteel:rail"',
+                    '"water" for a material and "fire", "smoke" and "sparks" '
+                    'for an object; a game names its own, like "glisteel:rail"',
         default=tag.WATER,
+        search=_kind_search,
+        search_options={'SUGGESTION'},
     )
     style: EnumProperty(
         name='Style',
@@ -87,6 +97,18 @@ class OGLCHookSettings(PropertyGroup):
                     'nothing can be inside of',
         default=0.0, min=0.0, unit='LENGTH',
     )
+    scale: FloatProperty(
+        name='Scale',
+        description='How big the effect is: the size, speed and rise of every '
+                    'particle. The object\'s own scale multiplies it',
+        default=tag.DEFAULTS['scale'], min=0.0, soft_max=10.0,
+    )
+    density: FloatProperty(
+        name='Density',
+        description='How much of it there is: particles per second and the '
+                    'most alive at once',
+        default=tag.DEFAULTS['density'], min=0.0, soft_max=10.0,
+    )
     parameters: StringProperty(
         name='Parameters',
         description='A JSON object of parameters, merged over the fields '
@@ -95,19 +117,32 @@ class OGLCHookSettings(PropertyGroup):
     )
 
 
-def _draw(layout, settings):
-    """The panel, and what it says the file will carry."""
+def _draw(layout, settings, on):
+    """The panel, and what it says the file will carry.
+
+    ``on`` is ``'material'`` or ``'object'``, the holder the panel is drawn
+    for; a kind the loader reads only from the other is drawn as a warning.
+    """
     layout.use_property_split = True
     layout.prop(settings, 'enabled')
     body = layout.column()
     body.enabled = settings.enabled
     body.prop(settings, 'kind')
-    if settings.kind.strip().lower() == tag.WATER:
+    kind = settings.kind.strip().lower()
+    if kind == tag.WATER:
         body.prop(settings, 'style')
         body.prop(settings, 'material')
         body.prop(settings, 'medium')
         body.prop(settings, 'depth')
+    elif kind in tag.EFFECTS:
+        body.prop(settings, 'scale')
+        body.prop(settings, 'density')
     body.prop(settings, 'parameters')
+    elsewhere = tag.misplaced(kind, on)
+    if elsewhere:
+        row = body.row()
+        row.alert = True
+        row.label(text=elsewhere, icon='ERROR')
     try:
         block = tag.hook_block(settings)
     except ValueError as error:
@@ -131,7 +166,7 @@ class OGLC_PT_material_hook(Panel):
         return context.material is not None
 
     def draw(self, context):
-        _draw(self.layout, getattr(context.material, PROPERTY))
+        _draw(self.layout, getattr(context.material, PROPERTY), 'material')
 
 
 class OGLC_PT_object_hook(Panel):
@@ -146,7 +181,7 @@ class OGLC_PT_object_hook(Panel):
         return context.object is not None
 
     def draw(self, context):
-        _draw(self.layout, getattr(context.object, PROPERTY))
+        _draw(self.layout, getattr(context.object, PROPERTY), 'object')
 
 
 def _extension_class():

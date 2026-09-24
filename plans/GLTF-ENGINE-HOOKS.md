@@ -1,9 +1,10 @@
 # glTF engine hooks: authoring what a material or an object *is*
 
-Status: **Complete** — 2026-09-20. Stages 1 to 4 have landed: the registry, both
-hook points, the writer's two spellings, the built-in `water` kind, the
-documentation, and the Blender add-on. Stage 5 is the registry formality and is
-untouched.
+Status: **Complete** — 2026-09-20; stages 6 and 7 2026-09-23. Stages 1 to 4
+landed the registry, both hook points, the writer's two spellings, the built-in
+`water` kind, the documentation, and the Blender add-on; 6 and 7 the `fire`,
+`smoke` and `sparks` kinds, the add-on run inside Blender, and the lakeside demo
+world. Stage 5 is the registry formality and is untouched.
 
 Three things the build settled that the design had not:
 
@@ -272,6 +273,40 @@ is loaded and re-saved keeps its tags and the editors
    mistyped brace would lose a session's work.
 5. *Optional:* reserve the `OGLC_` prefix in the Khronos registry, if the
    extension spelling is to be published rather than kept in-house.
+6. ~~**Particle kinds.** `fire`, `smoke` and `sparks` on an object.~~ Landed
+   2026-09-23 as `scenegraph/particlehooks.py`, in the `BUILTIN` table beside
+   `water`. What the build settled:
+   - The node hook returns `(node, False)`, and a tagged mesh keeps its mesh:
+     the emitter goes in a `Group` beside the children the loader gathered.
+   - `scale` multiplies every length of the effect (size, speed, gravity), and
+     the object's own scale — the cube root of the world matrix's determinant —
+     multiplies it, so an artist resizes a flame by resizing the empty. That
+     needed an engine fix first: a world-space emitter took its direction
+     through the whole world matrix, so a scaled parent threw particles faster
+     without making them bigger. `_pose` now turns the direction and keeps the
+     field's length.
+   - An authored `sparks` is a steady fountain (60/s), since the preset's single
+     burst has nobody to fire it in a world.
+   - Emitters step themselves on the engine clock as they are drawn, so the
+     kinds' `advance` only reports whether anything is burning; that is what
+     keeps the viewer's idle redrawing.
+7. ~~**The add-on run in Blender, and a demo world.**~~ Landed 2026-09-23. The
+   panel has Scale and Density for the particle kinds, suggests the engine's
+   kinds as the kind field is typed, and draws a kind on the holder the loader
+   ignores as a warning. `test_blender_hook_addon_in_blender.py` enables the
+   add-on in a headless Blender 4.5, draws its panels into a recording layout,
+   exports through Blender's own exporter and loads the file. The demo is
+   `tools/blender/demos/lakeside.py`, with the `.blend` and `.glb` it builds
+   shipped beside it. Building it found two authoring facts now in the docs: a
+   water sheet must be a grid for the wave to have vertices to move, and a
+   Blender sun at its usual few W/m² exports as thousands of lux and whites out
+   against `oglc-view`'s unit sky, so the demo's sun is 5 lux as the gallery
+   world's is.
+
+Open: whether `oglc-view`, shown a file whose sun is in absolute lux against
+its own sky, should scale the sky to the file's sun rather than leave the
+metered stop-down to black-background scenes. A Blender scene lit the way
+Blender's defaults light it arrives white today.
 
 ## Tests
 

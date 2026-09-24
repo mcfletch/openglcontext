@@ -68,7 +68,7 @@ def test_a_tagged_material_gives_the_mesh_a_wave():
 
 @pytest.mark.parametrize('name, style', [
     ('still', water.STILL), ('flowing', water.FLOWING),
-    ('choppy', water.CHOPPY), ('lake', water.LAKE),
+    ('choppy', water.CHOPPY), ('lake', water.LAKE), ('breeze', water.BREEZE),
 ])
 def test_the_named_styles_map(name, style):
     _scene, shape = _loaded({'kind': 'water', 'style': name})
@@ -85,6 +85,15 @@ def test_a_style_may_be_written_out_in_full():
     assert style.wavelength == pytest.approx(6.0)
     assert style.flow == pytest.approx((1.0, 0.5))
     assert style.moving()
+
+
+def test_a_written_out_style_may_say_how_fine_its_ripple_is():
+    """The scale the water reads at, from a hand's breadth to metres."""
+    _scene, shape = _loaded({'kind': 'water', 'style': {
+        'style': 'breeze', 'ripple': 0.3}})
+    style = shape.geometry.wave_style
+    assert style.ripple == pytest.approx(0.3)
+    assert style.wavelength == pytest.approx(water.BREEZE.wavelength)
 
 
 def test_an_unknown_style_name_is_still_water(caplog):

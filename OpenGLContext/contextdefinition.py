@@ -193,6 +193,12 @@ class ContextDefinition( node.Node ):
                                        renderoptions.CHOICES['transmission'],
                                        {'on': 'full', '1': 'full', 'fake': 'blend',
                                         'none': 'off', '0': 'off'}))
+    #: Water reflects the scene standing around it, at the cost of drawing the
+    #: opaque scene once more, at a quarter of the pixels, in a frame with
+    #: water in view (env: OPENGLCONTEXT_WATER_REFLECTION).
+    waterReflection = field.newField( "waterReflection", "SFBool", 1,
+                                      lambda: renderoptions.env_flag(
+                                          'OPENGLCONTEXT_WATER_REFLECTION', True))
     #: Collapse shapes sharing one geometry into a single instanced draw
     #: (env: OPENGLCONTEXT_INSTANCING).
     instancing = field.newField( "instancing", "SFBool", 1,
@@ -266,6 +272,7 @@ class ContextDefinition( node.Node ):
         'transmission': {'label': 'Glass refraction',
                          'options': renderoptions.CHOICES['transmission'],
                          'optionLabels': renderoptions.LABELS['transmission']},
+        'waterReflection': {'label': 'Water reflections'},
         'instancing': {'label': 'Instanced batching'},
         'gpuSkinning': {'label': 'Skinning on the GPU'},
         'tessellationLOD': {'label': 'Distance detail'},
@@ -289,7 +296,7 @@ class ContextDefinition( node.Node ):
     #: should read: the expensive things first, the diagnostics last.
     RENDERING_FIELDS = (
         'shadows', 'shadowsSoft', 'shadowCascades', 'maximumLights',
-        'bloom', 'ibl', 'iblIntensity', 'transmission',
+        'bloom', 'ibl', 'iblIntensity', 'transmission', 'waterReflection',
         'instancing', 'gpuSkinning', 'tessellationLOD',
         'multisampleSamples', 'vsync',
     )

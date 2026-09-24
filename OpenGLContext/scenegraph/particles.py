@@ -624,12 +624,20 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node):
         node entirely -- which is what lets a rocket's trail stay behind the
         rocket.  A local-space system emits at its own origin and is carried
         along by the transform like any other geometry.
+
+        The direction keeps the length the field gives it. Size and gravity are
+        world units the transform does not reach, so a direction stretched by a
+        scaled parent would throw the particles faster and leave them the size
+        and weight they were.
         """
         matrix = self._worldMatrix(mode) if self.worldSpace else None
         if matrix is None:
             return np.zeros(3), None
-        direction = np.dot(np.append(np.asarray(self.direction, dtype='d')[:3], 0.0),
-                           matrix)[:3]
+        authored = np.asarray(self.direction, dtype='d')[:3]
+        direction = np.dot(np.append(authored, 0.0), matrix)[:3]
+        turned = float(np.linalg.norm(direction))
+        if turned > 0.0:
+            direction *= float(np.linalg.norm(authored)) / turned
         return matrix[3, :3], direction
 
     def _init_gl(self) -> None:

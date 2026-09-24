@@ -46,7 +46,7 @@ from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 __all__ = ['WATER_ALBEDO', 'WATER_ROUGHNESS', 'WATER_TRANSPARENCY', 'WATER_IOR',
-           'LAKE', 'MESH_FLOOR', 'MESH_LIMIT', 'MESH_PER_WAVE', 'mesh_across',
+           'LAKE', 'BREEZE', 'MESH_FLOOR', 'MESH_LIMIT', 'MESH_PER_WAVE', 'mesh_across',
            'RIPPLE', 'RIPPLE_SCALE', 'water_material', 'water_surface',
            'WaterStyle', 'STILL', 'FLOWING', 'CHOPPY', 'wave_height',
            'wave_normal', 'water_ribbon', 'water_glints', 'bounds']
@@ -70,8 +70,9 @@ WATER_TRANSPARENCY = 0.10
 WATER_IOR = 1.33
 
 #: How far the ripple tilts the surface, in radians, and over how many metres it
-#: repeats. A long, shallow swell rather than chop: what it is for is breaking
-#: the highlight up, and a steep one reads as corrugated iron.
+#: repeats unless a style says otherwise. A long, shallow swell rather than
+#: chop: what it is for is breaking the highlight up on water seen from a
+#: distance, and a steep one reads as corrugated iron.
 RIPPLE = 0.045
 RIPPLE_SCALE = 11.0
 
@@ -84,8 +85,13 @@ class WaterStyle:
     crests, ``speed`` how fast the crests travel over the surface and
     ``steepness`` how far the normals tilt on top of whatever the displacement
     already tilts them -- which is what gives still water its glitter without
-    moving it. ``flow`` is metres a second the surface drifts, as ``(x, z)``,
-    and it is also the direction the crests travel where it is not zero.
+    moving it -- and ``ripple`` the metres that tilt repeats over. ``flow`` is
+    metres a second the surface drifts, as ``(x, z)``, and it is also the
+    direction the crests travel where it is not zero.
+
+    The ripple's length sets the scale the water reads at. Open water seen
+    from a distance wants it at metres; a pond seen from its own bank wants it
+    at a hand's breadth, or its glitter is a few dark bands across it.
 
     Three settings of it are named below. A caller who wants a fourth writes
     one: the point of the fields is that water is a continuum, and an
@@ -98,6 +104,7 @@ class WaterStyle:
     speed: float = 0.0
     steepness: float = RIPPLE
     flow: Tuple[float, float] = (0.0, 0.0)
+    ripple: float = RIPPLE_SCALE
 
     def moving(self) -> bool:
         """Whether anything about it changes with time."""
@@ -126,6 +133,14 @@ CHOPPY = WaterStyle(name='choppy', amplitude=0.42, wavelength=7.0, speed=2.4,
 #: scale.
 LAKE = WaterStyle(name='lake', amplitude=0.16, wavelength=9.0, speed=0.8,
                   steepness=RIPPLE * 1.3)
+
+#: Wind on sheltered water: a pond or a small lake seen from its bank. Waves a
+#: metre apart and about a centimetre high, and a ripple a hand's breadth
+#: across, which is the scale a breeze ruffles water at. Its wave wants a
+#: vertex every 25 cm or so to be carried; on a coarser sheet the ripple
+#: carries it.
+BREEZE = WaterStyle(name='breeze', amplitude=0.012, wavelength=1.1, speed=1.2,
+                    steepness=RIPPLE * 1.8, ripple=0.32)
 
 #: The most vertices across a sheet is meshed at. A sheet is one draw and this
 #: is what it costs -- in a baked world, in the file as well as in the frame --
@@ -183,6 +198,49 @@ _TRAINS = (
     (0.62, 0.55, 0.61),
     (-1.13, 0.34, 1.47),
 )
+
+
+#: The trains the fine ripple is made of, as turns from the style's heading,
+#: each one's share of the steepness, and each one's wavelength as a share of
+#: the style's ``ripple``. Six, of lengths no two of which divide evenly, over
+#: headings spread round the compass: two crossing trains tile the surface like
+#: hammered metal, and at a hand's breadth the tiling is what is seen.
+_RIPPLE_TRAINS = (
+    (0.00, 1.00, 1.00),
+    (0.90, 0.80, 0.73),
+    (-0.70, 0.60, 0.53),
+    (2.10, 0.50, 1.37),
+    (-1.90, 0.45, 0.41),
+    (0.35, 0.35, 1.83),
+)
+
+#: The gusts the ripple's strength varies with: two long trains, as a turn from
+#: the style's heading and a length in multiples of its ``ripple``. Wind comes
+#: over water in gusts, so a breeze ruffles it in patches that drift, and a
+#: ripple of one strength everywhere reads as a texture laid over the surface.
+_GUST_TRAINS = (
+    (0.40, 23.0),
+    (-1.30, 37.0),
+)
+
+#: The ripple's strength in the calmest patch and in the gustiest, as shares
+#: of the style's ``steepness``.
+GUST_CALM = 0.1
+GUST_PEAK = 1.6
+
+#: How fast the gusts drift, as a share of the style's ``speed``.
+GUST_DRIFT = 0.6
+
+#: A ripple train fades out as its wavelength falls from this many pixels
+#: across to half as many. Finer than that it cannot be drawn, only aliased
+#: into a grid: far water is a smooth mirror because its ripple is below what
+#: the eye resolves.
+PIXELS_PER_WAVE = 4.0
+
+#: Metres a second squared. Each ripple train travels at the speed water's own
+#: waves of its length do, sqrt(g / k), so the long ones outrun the short ones
+#: and the pattern changes as it moves rather than sliding as one sheet.
+GRAVITY = 9.81
 
 
 def _heading(style: 'WaterStyle') -> float:
@@ -250,27 +308,68 @@ def wave_normal(style: 'WaterStyle', x: Any, z: Any,
     return normals
 
 
+def _gust(x: np.ndarray, z: np.ndarray, heading: float, when: float,
+          style: 'WaterStyle') -> np.ndarray:
+    """How strongly the wind is ruffling the water at each point, as a
+    multiple of the style's ``steepness``, from :data:`GUST_CALM` to
+    :data:`GUST_PEAK`."""
+    scale = max(float(style.ripple), 1e-6)
+    drift = float(style.speed) * GUST_DRIFT * when
+    total = np.zeros(np.broadcast(x, z).shape, dtype='d')
+    for turn, stretch in _GUST_TRAINS:
+        angle = heading + turn
+        along = x * np.cos(angle) + z * np.sin(angle) - drift
+        total = total + np.sin(2.0 * np.pi * along / (scale * stretch))
+    return GUST_CALM + (GUST_PEAK - GUST_CALM) * (0.5 + 0.25 * total)
+
+
+def _resolved(wavelength: float, footprint: float) -> float:
+    """How much of a ripple train a pixel of ``footprint`` metres can show."""
+    if footprint <= 0.0:
+        return 1.0
+    across = wavelength / footprint
+    return float(np.clip((across - PIXELS_PER_WAVE / 2.0) / (PIXELS_PER_WAVE / 2.0),
+                         0.0, 1.0))
+
+
 def _fine_ripple(x: np.ndarray, z: np.ndarray, steepness: float,
                  heading: float, when: float,
-                 style: 'WaterStyle') -> Tuple[np.ndarray, np.ndarray]:
+                 style: 'WaterStyle',
+                 footprint: float = 0.0) -> Tuple[np.ndarray, np.ndarray]:
     """The ripple that lives in the normals rather than in the surface.
 
-    Finer than any mesh a caller will pay for, which is why it is a normal and
-    not a displacement: it exists to break the highlight into glitter, and a
-    mesh fine enough to carry it would cost more than the glitter is worth.
-    Carried downstream with the flow, so a river's light travels with it.
+    :data:`_RIPPLE_TRAINS` over the style's ``ripple`` metres, which is finer
+    than any mesh a caller will pay for, so it is a normal and not a
+    displacement: it exists to break the highlight into glitter, and a mesh
+    fine enough to carry it would cost more than the glitter is worth. Its
+    strength varies in drifting gusts (:func:`_gust`). Water that moves moves
+    its ripple too, carried downstream with the flow and each train at its own
+    speed; still water's ripple holds still.
+
+    ``footprint`` is the metres of surface one pixel covers; a train too fine
+    for it to show is faded out (:data:`PIXELS_PER_WAVE`). Zero draws them all.
     """
     if steepness <= 0.0:
         zero = np.zeros(np.broadcast(x, z).shape, dtype='d')
         return (zero, zero)
-    drift_x = x - float(style.flow[0]) * float(when)
-    drift_z = z - float(style.flow[1]) * float(when)
-    first = 2.0 * np.pi / RIPPLE_SCALE
-    second = 2.0 * np.pi / (RIPPLE_SCALE * 1.7)
-    slope_x = (steepness * np.cos(first * (drift_x + 0.6 * drift_z))
-               + steepness * 0.6 * np.cos(second * (drift_x - 1.3 * drift_z)))
-    slope_z = (steepness * 0.6 * np.sin(first * (drift_x + 0.6 * drift_z))
-               - steepness * np.sin(second * (drift_x - 1.3 * drift_z)))
+    when = float(when) if style.moving() else 0.0
+    drift_x = x - float(style.flow[0]) * when
+    drift_z = z - float(style.flow[1]) * when
+    scale = max(float(style.ripple), 1e-6)
+    strength = steepness * _gust(drift_x, drift_z, heading, when, style)
+    slope_x = np.zeros(np.broadcast(x, z).shape, dtype='d')
+    slope_z = np.zeros_like(slope_x)
+    for turn, share, stretch in _RIPPLE_TRAINS:
+        shown = _resolved(scale * stretch, float(footprint))
+        if not shown:
+            continue
+        angle = heading + turn
+        number = 2.0 * np.pi / (scale * stretch)
+        along = drift_x * np.cos(angle) + drift_z * np.sin(angle)
+        tilt = strength * share * shown * np.cos(
+            number * along - np.sqrt(GRAVITY * number) * when)
+        slope_x = slope_x + tilt * np.cos(angle)
+        slope_z = slope_z + tilt * np.sin(angle)
     return (slope_x, slope_z)
 
 

@@ -13,7 +13,7 @@ one, or flood a level whose water is never drawn.
 .. code-block:: python
 
    from OpenGLContext.scenegraph.water import (
-       STILL, FLOWING, CHOPPY,          # how a body of water moves
+       STILL, BREEZE, FLOWING, CHOPPY, LAKE,  # how a body of water moves
        water_surface, water_ribbon, water_glints,   # what it looks like
        wave_height, wave_normal,        # where the surface is, right now
        Volume, Volumes, submerge,       # where the water is, and being in it
@@ -22,7 +22,7 @@ one, or flood a level whose water is never drawn.
 How water moves: ``WaterStyle``
 -------------------------------
 
-One dataclass covers the range, and three settings of it are named:
+One dataclass covers the range, and five settings of it are named:
 
 .. list-table::
    :widths: auto
@@ -31,39 +31,67 @@ One dataclass covers the range, and three settings of it are named:
    * - Field
      - Unit
      - ``STILL``
+     - ``BREEZE``
      - ``FLOWING``
      - ``CHOPPY``
+     - ``LAKE``
    * - ``amplitude``
      - metres, trough to crest
      - 0.0
+     - 0.012
      - 0.09
      - 0.42
+     - 0.16
    * - ``wavelength``
      - metres between crests
      - 11.0
+     - 1.1
      - 4.5
      - 7.0
+     - 9.0
    * - ``speed``
      - metres a second the crests travel
      - 0.0
+     - 1.2
      - 1.6
      - 2.4
+     - 0.8
    * - ``steepness``
-     - how far the normals tilt on top of the displacement
+     - radians the ripple tilts the normals, on top of the displacement
      - 0.045
+     - 0.081
      - 0.063
      - 0.099
+     - 0.059
+   * - ``ripple``
+     - metres the ripple's longest train repeats over
+     - 11.0
+     - 0.32
+     - 11.0
+     - 11.0
+     - 11.0
    * - ``flow``
      - metres a second the surface drifts, ``(x, z)``
      - (0, 0)
+     - (0, 0)
      - (1, 0)
+     - (0, 0)
      - (0, 0)
 
 ``STILL`` is a pond: nothing moves, and the ripple is in the light on it.
-``FLOWING`` is a river, with small crests travelling downstream and the
-surface drifting with them. ``CHOPPY`` is weather, with enough height in it
-that a shoreline moves. A caller who wants a fourth writes one — water is a
-continuum, and the three names are settings rather than an enumeration.
+``BREEZE`` is a pond or a small lake seen from its bank, ruffled by wind:
+waves a metre apart and about a centimetre high, and a ripple a hand's breadth
+across. ``FLOWING`` is a river, with small crests travelling downstream
+and the surface drifting with them. ``CHOPPY`` is weather, with enough height
+in it that a shoreline moves. ``LAKE`` is open water seen from a distance: a
+long, low swell, sized for a sheet hundreds of metres across. A caller who
+wants another writes one — water is a continuum, and the five names are
+settings rather than an enumeration.
+
+``ripple`` sets the scale the water reads at, and the swell's ``wavelength``
+should agree with it. A 20 m pond drawn with ``LAKE`` shows two or three long
+rollers and glitter in bands metres wide, which reads as nothing at all; the
+same pond with ``BREEZE`` reads as water.
 
 Where ``flow`` is not zero it is also the direction the crests travel.
 ``style.moving()`` answers whether anything about it changes with time, which
@@ -172,6 +200,36 @@ the shadow of the shape it is in.
 Build the wave into the vertices *or* hand it to the card — not both, or the
 wave is applied twice. ``Shape`` answers the wave uniforms for every shape it
 draws, so the hillside beside a lake does not ripple.
+
+.. _water-reflection:
+
+What it reflects
+~~~~~~~~~~~~~~~~
+
+Water reflects the scene standing around it: the far bank, a jetty, a fire on
+the shore. Each view with water in it is drawn once more through the camera
+mirrored in the water's plane, and the water reads that picture at its own
+screen position, pushed by how far its ripple and swell tilt the surface from
+flat. Where nothing was mirrored — the sky — it reflects the environment probe
+as before. Water's Fresnel weights both, so the reflection is faint looking
+straight down and strong across the surface at a glance.
+
+Nothing has to be asked for: any geometry carrying a ``wave_style`` is water,
+whether ``water_surface`` built it or an ``OGLC_hook`` tag in a glTF did. The
+mirrored draw is of the opaque scene, at half the view's width and height, in
+a frame with water in view; ``ContextDefinition.waterReflection`` (env
+``OPENGLCONTEXT_WATER_REFLECTION``) turns it off, and the water then reflects
+the sky alone. It needs a fragment stage with more than 32 texture units, and a
+driver with fewer compiles it out.
+
+Its limits:
+
+- One plane a view. Where sheets stand at different levels, the one nearest
+  the camera is mirrored and the others reflect the scene as seen in it.
+- Transparent things — particles, glass — are not in the reflection.
+- A camera under the surface gets none: it is looking up through the water.
+- With several views drawing one scene, an opaque water surface drawn once for
+  all of them reflects the sky alone.
 
 .. _media:
 
@@ -313,7 +371,24 @@ lake and right on a pond.
 The fine ripple does not live in the mesh at all. It is ``waveRipple`` in the
 fragment shader, composed as a tilt of whatever normal the surface already
 has, so the glitter costs the same at any density and the mesh only has to
-carry the swell.
+carry the swell. It is six trains of lengths between 0.41 and 1.83 times the
+style's ``ripple``, at headings spread round the compass, so no two repeat
+together and the surface does not tile. On water that moves, each train
+travels at the speed water's own waves of its length do, √(g/k), so the long
+ones outrun the short and the glitter changes as it goes rather than sliding
+as one sheet; still water's ripple holds still.
+
+Its strength varies across the surface in gusts: two long, slow trains, 23 and
+37 times the ``ripple`` length, take it from a tenth of ``steepness`` in the
+calmest patch to 1.6 times it in the gustiest, and drift at 0.6 of the style's
+``speed``. Wind comes over water that way, and a ripple of one strength
+everywhere reads as a texture laid over the surface.
+
+Each train is also filtered by the pixel it lands in: it fades out as its
+wavelength falls from four pixels across to two, measured per fragment from
+the derivative of the surface position. Far water is a smooth mirror because
+its ripple is too fine to see, and drawing that ripple anyway draws a grid.
+``wave_normal`` is the unfiltered field.
 
 .. rst-class:: technical
 
@@ -398,10 +473,11 @@ register a kind of your own.
      - What it says
    * - ``style``
      - ``still``
-     - ``still``, ``flowing``, ``choppy`` or ``lake`` — or an object spelling
-       out the ``WaterStyle`` fields (``amplitude``, ``wavelength``, ``speed``,
-       ``steepness``, ``flow``) for water that is none of the four. A name
-       nothing answers to draws a pond and says so in the log.
+     - ``still``, ``breeze``, ``flowing``, ``choppy`` or ``lake`` — or an
+       object naming one as its ``style`` and overriding any ``WaterStyle``
+       field (``amplitude``, ``wavelength``, ``speed``, ``steepness``,
+       ``ripple``, ``flow``): ``{"style": "breeze", "ripple": 0.3}`` is a finer
+       ruffle. A name nothing answers to draws a pond and says so in the log.
    * - ``material``
      - ``keep``
      - ``keep`` shades the surface with the material the file carries, so what
@@ -439,6 +515,18 @@ and a game driving its own loop calls it itself. A scene of ponds answers
 to redraw for. ``oglc-view --anim-time SECONDS`` holds the water at that time as
 it holds the animation, so a capture of a tagged lake is the same frame on every
 run.
+
+The wave moves the sheet's vertices, so model the surface as a grid rather than
+a single quad: a grid add-mesh with a vertex every 30–50 cm moves as water, and
+a four-cornered plane only tilts at its corners. Give the shore a bank steeper
+than the swell is high, or the troughs uncover it and the crests flood it.
+
+``tools/blender/demos/lakeside.glb`` is a world authored this way, built by
+``tools/blender/demos/lakeside.py`` with the add-on's panel: a lake whose
+material is tagged ``{"kind": "water", "style": "breeze", "depth": 2.0}`` in a
+grass basin, with a jetty, a brazier and a campfire tagged as
+:ref:`particle effects <authored-particles>`. ``oglc-view
+tools/blender/demos/lakeside.glb`` opens it through its own camera, moving.
 
 Limits
 ------

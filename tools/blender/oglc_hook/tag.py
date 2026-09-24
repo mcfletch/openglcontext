@@ -6,32 +6,55 @@ properties off a datablock and hands them here, the exporter half puts what
 comes back in the glTF, and a test drives this module directly.
 
 ``settings`` is anything with the panel's properties on it -- a Blender
-``PropertyGroup`` at export time. The vocabularies below are the engine's:
-the four water styles, the three media, and the two ways to shade a surface.
+``PropertyGroup`` at export time. The vocabularies below are the engine's: the
+kinds it ships, the five water styles, the three media, and the two ways to
+shade a surface.
 """
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
-__all__ = ['EXTENSION', 'WATER', 'STYLES', 'MEDIA', 'SHADING', 'DEFAULTS',
-           'parameters', 'hook_block', 'preview']
+__all__ = ['EXTENSION', 'WATER', 'EFFECTS', 'KINDS', 'STYLES', 'MEDIA',
+           'SHADING', 'DEFAULTS', 'parameters', 'hook_block', 'preview',
+           'misplaced', 'suggestions']
 
 #: The key the block is written under, as an ``extensions`` block on a material
 #: or a node. The loader reads the same word out of ``extras``, which is what a
 #: custom property becomes, so a file may carry either.
 EXTENSION = 'OGLC_hook'
 
-#: The kind the panel has fields for. Every other kind is named in the ``kind``
-#: field and parameterised by the JSON object beside it.
+#: The kind the panel has water fields for. It belongs on a material: it is
+#: what a surface is made of.
 WATER = 'water'
+
+#: The particle effects, which belong on an object: each stands where the
+#: object stands. The panel has the same two fields for all three.
+EFFECTS: Dict[str, str] = {
+    'fire': 'A flame, standing where the object stands',
+    'smoke': 'A column of smoke, rising from the object',
+    'sparks': 'A fountain of sparks, thrown up from the object',
+}
+
+#: Every kind the engine ships, offered as the kind field is typed. A game's
+#: own kinds are typed in full.
+KINDS: Dict[str, str] = {
+    WATER: 'A surface that moves as water, and a body you can be inside of',
+    **EFFECTS,
+}
+
+#: Where each of the engine's kinds is read. On the other holder the loader
+#: passes it over, so the panel says so.
+_BELONGS: Dict[str, str] = {WATER: 'material', **{kind: 'object' for kind in EFFECTS}}
+_HOLDER = {'material': 'a material', 'object': 'an object'}
 
 #: How water moves, and what each motion is.
 STYLES: Dict[str, str] = {
     'still': 'A pond: the ripple is in the normals and the surface holds level',
+    'breeze': 'A pond or small lake seen from its bank: wind-ruffled, fine waves',
     'flowing': 'A river: a long swell carried in one direction',
     'choppy': 'Open water with a wind on it',
-    'lake': 'A sheltered lake: a slow, shallow swell',
+    'lake': 'Open water seen from a distance: a slow, long, low swell',
 }
 
 #: What being inside the body is like.
@@ -51,6 +74,7 @@ SHADING: Dict[str, str] = {
 #: these writes nothing for it, so a tag says what the artist changed.
 DEFAULTS: Dict[str, Any] = {
     'style': 'still', 'material': 'keep', 'medium': 'water', 'depth': 0.0,
+    'scale': 1.0, 'density': 1.0,
 }
 
 
@@ -85,7 +109,13 @@ def hook_block(settings: Any) -> Optional[Dict[str, Any]]:
     kind = str(getattr(settings, 'kind', '') or '').strip()
     if not kind:
         return None
-    params = _water_parameters(settings) if kind.lower() == WATER else {}
+    named = kind.lower()
+    if named == WATER:
+        params = _water_parameters(settings)
+    elif named in EFFECTS:
+        params = _effect_parameters(settings)
+    else:
+        params = {}
     written = parameters(getattr(settings, 'parameters', ''))
     written.pop('kind', None)
     params.update(written)
@@ -110,6 +140,36 @@ def _water_parameters(settings: Any) -> Dict[str, Any]:
     if depth > 0.0:
         params['depth'] = depth
     return params
+
+
+def _effect_parameters(settings: Any) -> Dict[str, Any]:
+    """``scale`` and ``density``, where either differs from 1."""
+    params: Dict[str, Any] = {}
+    for name in ('scale', 'density'):
+        value = float(getattr(settings, name, DEFAULTS[name]))
+        if value != DEFAULTS[name]:
+            params[name] = value
+    return params
+
+
+def misplaced(kind: Any, on: str) -> str:
+    """What to tell the artist when ``kind`` is on the holder the loader ignores.
+
+    ``on`` is ``'material'`` or ``'object'``. Empty where the kind belongs
+    there, and for a kind the engine does not ship, whose home is its game's
+    business.
+    """
+    belongs = _BELONGS.get(str(kind or '').strip().lower())
+    if belongs is None or belongs == on:
+        return ''
+    return '%s is read from %s, not from %s' % (
+        str(kind).strip(), _HOLDER[belongs], _HOLDER[on])
+
+
+def suggestions(typed: Any) -> List[str]:
+    """The engine's kinds that begin with what has been typed, in order."""
+    start = str(typed or '').strip().lower()
+    return sorted(kind for kind in KINDS if kind.startswith(start))
 
 
 def preview(block: Optional[Dict[str, Any]]) -> str:

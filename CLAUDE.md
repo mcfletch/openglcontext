@@ -123,6 +123,7 @@ OpenGLContext/
 │   ├── renderpass.py # Chooses between the two and caches the choice
 │   ├── pbrpass.py    # Metallic/roughness uber-shader -- docs/ubershader.rst
 │   ├── ibl.py        # Image-based lighting probe
+│   ├── reflection.py # Water's reflection: the scene mirrored in its plane -- docs/water.rst
 │   ├── shadow*.py    # Shadow mapping -- docs/shadows.rst
 │   ├── instancing.py # Collapsing repeated shapes -- docs/instancing.rst
 │   └── shaderpass.py # VRML97ShaderProgram -- compiles and holds the programs
@@ -146,6 +147,8 @@ OpenGLContext/
 │   ├── geometryarrays.py   # What a geometry offers a shader, and binding it
 │   ├── vertexsemantics.py  # Which attribute location each vertex array is read at
 │   ├── road*.py      # Roads, roadworks, signs -- docs/roads.rst
+│   ├── particles.py  # Emitters, presets, one instanced draw -- docs/particles.rst
+│   ├── particlehooks.py  # The fire, smoke and sparks OGLC_hook kinds
 │   ├── water/        # Wave field, surface, medium -- docs/water.rst
 │   ├── terrain/      # Height fields and splat materials -- docs/terrain.rst
 │   ├── vegetation/   # Instanced cover and fields -- docs/vegetation.rst
@@ -343,8 +346,8 @@ still pins a feature for a script or a CI run, while the settings screen
 (`OpenGLContext.ui.settings`) writes the field and takes precedence from then on.
 Passes read through `OpenGLContext.renderoptions`, never the environment
 directly. The fields are `shadows`, `shadowsSoft`, `shadowCascades`,
-`maximumLights`, `bloom`, `ibl`, `iblIntensity`, `transmission`, `instancing`,
-`tessellationLOD`, `vsync` and `uiScale`; see
+`maximumLights`, `bloom`, `ibl`, `iblIntensity`, `transmission`,
+`waterReflection`, `instancing`, `tessellationLOD`, `vsync` and `uiScale`; see
 [docs/overlayui.rst](docs/overlayui.rst).
 
 **These are start-up switches, and each is read once.** A pass that changed its
