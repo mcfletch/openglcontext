@@ -55,3 +55,23 @@ class TestMaterialTexture:
         assert any(u.endswith('brick.png') for u in joined), joined
         # the joined URL must be an absolute resolution of the sibling texture
         assert any(os.path.basename(u) == 'brick.png' and ('/' in u) for u in joined), joined
+
+
+class TestMaterialOpacity:
+    """MTL states opacity two ways; VRML97's Material holds its complement."""
+
+    def material(self, tmp_path, library):
+        (tmp_path / 'model.mtl').write_text('newmtl glass\nKd 1 0 0\n' + library)
+        materials = {}
+        OBJHandler().load_material_library(
+            'model.mtl', materials, baseURL=str(tmp_path / 'model.obj'))
+        return materials['glass'].material
+
+    def test_dissolve_is_the_opacity(self, tmp_path):
+        assert self.material(tmp_path, 'd 0.25\n').transparency == pytest.approx(0.75)
+
+    def test_tr_is_the_transparency(self, tmp_path):
+        assert self.material(tmp_path, 'Tr 0.25\n').transparency == pytest.approx(0.25)
+
+    def test_a_material_that_says_neither_is_opaque(self, tmp_path):
+        assert self.material(tmp_path, '').transparency == 0.0
