@@ -785,7 +785,11 @@ Where things are
        or the up/down arrows, and the focused item is pressed with Space or Return;
        Return with nothing focused presses the primary action, and Escape leaves a
        screen that can be left. Left and right are left to whatever is focused, since
-       a ``Select``, a ``Slider`` and a ``Carousel`` all use them.
+       a ``Select``, a ``Slider`` and a ``Carousel`` all use them. A modeless panel
+       — a tool palette, the :doc:`view chrome <multiview>` — shares the keyboard
+       with the scene under it, so up and down go past it to the camera until Tab
+       brings the keyboard into it; a click on one of its buttons does not.
+       ``Panel.walksWithArrows()`` answers which applies.
    * - ``ui.overlay``
      - The stack and the context mix-in.
    * - ``ui.toolpalette``

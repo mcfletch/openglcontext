@@ -104,7 +104,7 @@ KIND_LABELS = {
 #: What the view's menu calls the things it does rather than the ways of
 #: looking, and the two ways what it holds is drawn.
 FIT_LABEL = _('Zoom to fit')
-MAXIMISE_LABEL = _('Maximise')
+SINGLE_TILE_LABEL = _('Single tile')
 TILES_LABEL = _('Four tiles')
 SHADED_LABEL = _('Shaded')
 WIREFRAME_LABEL = _('Wireframe')
@@ -319,7 +319,7 @@ class ExpandButton(_ChromeButton):
 
     def paint(self, renderer: Any) -> None:
         self.tooltip = (_('Give the views back their tiles') if self.maximised()
-                        else _('Give this view the whole window'))
+                        else _('Single tile: this view alone in the window'))
         super(ExpandButton, self).paint(renderer)
 
     def activate(self) -> None:
@@ -465,7 +465,7 @@ class ViewChrome(Panel):
                                           chrome=self))
             if 'axes' in parts and navigable:
                 children.append(AxisTriad(view=view, chrome=self))
-            if 'expand' in parts:
+            if 'expand' in parts and self._can_maximise():
                 children.append(ExpandButton(view=view, chrome=self))
         if self.splitters:
             self._splitters = self._split_widgets()
@@ -621,7 +621,8 @@ class ViewChrome(Panel):
         Three lists a level down -- which way it looks (**View**), the scene's
         own cameras (**Cameras**), how it is drawn (**Rendering**) -- and the
         two things a view does: fit what there is to see into it, and take the
-        window or give it back. A view drawn through the window's own camera
+        window or give it back, where the arrangement has other views to
+        hide. A view drawn through the window's own camera
         has no ways of looking to offer, and a scene with no cameras no
         cameras.
         """
@@ -643,9 +644,10 @@ class ViewChrome(Panel):
                 self.fit(view)
 
             items.append(MenuItem(text=FIT_LABEL, on_activate=fit_it))
-        items.append(MenuItem(
-            text=(TILES_LABEL if self._maximised(view) else MAXIMISE_LABEL),
-            on_activate=lambda widget: self.maximise(view)))
+        if self._can_maximise():
+            items.append(MenuItem(
+                text=(TILES_LABEL if self._maximised(view) else SINGLE_TILE_LABEL),
+                on_activate=lambda widget: self.maximise(view)))
         return self._put_up(Menu(items=items, anchor=(float(at.x), float(at.y)),
                                  above=float(at.top), stack=self.stack))
 
@@ -718,6 +720,11 @@ class ViewChrome(Panel):
         if fitted_it:
             self._changed()
         return fitted_it
+
+    def _can_maximise(self) -> bool:
+        """Whether the arrangement has other views for one to be shown without."""
+        layout = self.layout_of
+        return layout is not None and layout.can_maximise
 
     def _maximised(self, view: View) -> bool:
         layout = self.layout_of

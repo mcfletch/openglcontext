@@ -367,6 +367,27 @@ class TestArrowKeysMoveBetweenItems:
         assert str(chooser.value) == 'b'
         assert panel.focused_widget is chooser, 'focus moved instead of choosing'
 
+    def test_a_modeless_panel_leaves_the_arrows_to_the_world(self):
+        """A palette or the view chrome sits over a scene the arrows walk."""
+        panel = self.menu()
+        panel.modal = False
+        assert not self.press(panel, '<down>')
+        assert panel.focused_widget is None
+
+    def test_a_click_does_not_bring_the_keyboard_into_a_modeless_panel(self):
+        panel = self.menu()
+        panel.modal = False
+        panel.focus(panel.find('one'), visible=False)   # as a click leaves it
+        assert not self.press(panel, '<down>')
+        assert panel.focused_widget is panel.find('one')
+
+    def test_tab_brings_the_keyboard_into_a_modeless_panel(self):
+        panel = self.menu()
+        panel.modal = False
+        self.press(panel, '<tab>')
+        assert self.press(panel, '<down>')
+        assert panel.focused_widget is panel.find('two')
+
     def test_the_focus_ring_is_shown_once_the_keyboard_is_in_use(self):
         """Moving by arrow with no visible ring leaves you guessing where you are."""
         panel = self.menu()

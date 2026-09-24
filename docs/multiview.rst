@@ -76,7 +76,8 @@ fractions of its width and of its height measured from the top: the line of a
 split or a stack, or the centre of a quad. It is what a splitter drag moves,
 and each fraction is held between 0 and 1. ``layout.maximise(view)`` gives one
 view the whole window and ``layout.maximise(view)`` again gives it back; with
-no argument it takes the active view.
+no argument it takes the active view. A layout of one view has nothing to
+hide, so ``layout.can_maximise`` is False and the call leaves it as it is.
 
 Any other arrangement is a function from the window's size to one rectangle
 per view, in the order of the views:
@@ -527,9 +528,10 @@ that, drawn inside each view and taking the clicks:
    self.overlays.push(self.chrome)
 
 It puts in each view its **name** on a button with a caret after it, an
-**axis triad** that turns with the camera, and one **button** that gives the
-view the whole window and gives it back -- an outline where it would take the window, the four tiles where it
-would give them back. Between the views it puts a **splitter** on each line
+**axis triad** that turns with the camera, and one **button** that shows the
+view on its own and gives the other views back -- an outline where it would
+take the window, the four tiles where it would give them back. An arrangement
+of one view has no such button. Between the views it puts a **splitter** on each line
 the arrangement divides the window along, and, in a quad, a handle where the
 two cross that moves both. The glyphs are drawn rather than loaded, so an
 application that ships no artwork still gets buttons that say what they do.
@@ -547,7 +549,8 @@ window to place its views again and draw.
   -- each pointing the view through that camera;
 - **Rendering**, how what it holds is drawn: shaded or wireframe;
 - **Zoom to fit**, where the window said what there is to see (``bounds``);
-- **Maximise**, or **Four tiles** where the view already has the window.
+- **Single tile**, or **Four tiles** where the view already has the window;
+  neither in an arrangement of one view.
 
 The first three are lists of their own, opening beside their row.
 

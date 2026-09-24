@@ -363,12 +363,20 @@ class ViewLayout:
         """Make ``view`` the active one: keyboard input, the cascades' camera."""
         self.active = self._member(view)
 
+    @property
+    def can_maximise(self) -> bool:
+        """Whether one view can be given the window: there are others to hide."""
+        return len(self.views) > 1
+
     def maximise(self, view: Optional[View] = None) -> None:
         """Give ``view`` (the active one, if None) the whole window, or give it back.
 
-        Maximising the view that is already maximised restores the layout.
+        Maximising the view that is already maximised restores the layout. A
+        layout of one view already gives it the window, and is left as it is.
         """
         chosen = self._member(view if view is not None else self.active)
+        if not self.can_maximise:
+            return
         self.maximised = None if chosen is self.maximised else chosen
 
     def view_at(self, x: float, y: float) -> Optional[View]:

@@ -71,6 +71,13 @@ class TestWhatItPutsInEachView:
         assert len(_of(chrome, AxisTriad)) == 4
         assert len(_of(chrome, ExpandButton)) == 4
 
+    def test_a_view_alone_in_the_window_has_no_single_tile_button(self):
+        layout = ViewLayout.single()
+        layout.arrange(*VIEWPORT)
+        chrome = _chrome(layout)
+        assert len(_of(chrome, ViewLabel)) == 1
+        assert not _of(chrome, ExpandButton)
+
     def test_each_piece_sits_inside_the_view_it_belongs_to(self):
         chrome = _chrome()
         for widget in chrome.walk():
@@ -199,6 +206,23 @@ class TestWhatTheSceneUnderneathStillHears:
 
     def test_it_is_not_modal(self):
         assert not _chrome().modal
+
+    @pytest.mark.parametrize('key', ['<up>', '<down>'])
+    def test_the_arrows_go_past_it_to_the_camera(self, key):
+        """Up and down walk the camera; the chrome is furniture over it."""
+        from OpenGLContext.ui.overlay import OverlayStack
+        chrome = _chrome()
+        stack = OverlayStack()
+        stack.push(chrome, viewport=VIEWPORT, metrics=REFERENCE_METRICS)
+        assert not stack.key(key, (0, 0, 0))
+        assert chrome.focused_widget is None
+
+    def test_the_arrows_still_go_past_it_after_a_view_s_name_is_clicked(self):
+        """Choosing from a view's menu leaves its name focused, not the keyboard."""
+        chrome = _chrome()
+        label = _of(chrome, ViewLabel)[0]
+        chrome.pointer_pressed(*label.rect.centre)
+        assert not chrome.key('<down>', (0, 0, 0))
 
 
 class TestRoomSomethingElseHasTaken:
@@ -478,7 +502,7 @@ class TestTheViewsOwnMenu:
     def test_it_is_short(self):
         """The ways of looking and of drawing are a level down, not in the list."""
         _chrome_, _view, items = self._opened()
-        assert [str(item.text) for item in items] == ['View', 'Rendering', 'Maximise']
+        assert [str(item.text) for item in items] == ['View', 'Rendering', 'Single tile']
 
     def test_it_offers_every_way_of_looking_under_view(self):
         _chrome_, _view, items = self._opened()
@@ -516,9 +540,16 @@ class TestTheViewsOwnMenu:
     def test_it_maximises_and_gives_the_window_back(self):
         layout = _layout()
         _chrome_, view, items = self._opened(layout)
-        item = [one for one in items if str(one.text) == 'Maximise'][0]
+        item = [one for one in items if str(one.text) == 'Single tile'][0]
         item.on_activate(item)
         assert layout.maximised is view
+
+    def test_a_view_alone_in_the_window_is_offered_neither(self):
+        layout = ViewLayout.single()
+        layout.arrange(*VIEWPORT)
+        _chrome_, _view, items = self._opened(layout)
+        texts = [str(item.text) for item in items]
+        assert 'Single tile' not in texts and 'Four tiles' not in texts
 
     def test_a_maximised_view_is_offered_the_tiles_instead(self):
         layout = _layout()
@@ -526,7 +557,7 @@ class TestTheViewsOwnMenu:
         layout.arrange(*VIEWPORT)
         _chrome_, _view, items = self._opened(layout)
         texts = [str(item.text) for item in items]
-        assert 'Four tiles' in texts and 'Maximise' not in texts
+        assert 'Four tiles' in texts and 'Single tile' not in texts
 
     def test_zooming_to_fit_needs_a_window_that_says_what_there_is(self):
         _chrome_, _view, items = self._opened()

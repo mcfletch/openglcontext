@@ -261,6 +261,19 @@ class Panel(RootWidget):
             self._scrollIntoView(widget)
         self.focusVisible = visible and widget is not None
 
+    def walksWithArrows(self) -> bool:
+        """Whether up and down move this panel's focus rather than pass it by.
+
+        A modal panel has the keyboard to itself.  A modeless one shares it
+        with the world under it -- the view chrome over a scene, a tool
+        palette beside one -- where the arrows walk and turn the camera, so it
+        takes them only once Tab has brought the keyboard into it and the focus
+        ring is showing.  A click on one of its buttons does not: that is the
+        pointer being used, and the arrows stay the world's.
+        """
+        return bool(self.modal) or (self._focused is not None
+                                    and self.focusVisible)
+
     def focusNext(self, step: int = 1) -> bool:
         """Move focus along the Tab order, wrapping at the ends.
 
@@ -376,7 +389,7 @@ class Panel(RootWidget):
         # is walked with them.  Up and down only -- left and right belong to
         # whatever is focused, and a row of controls read left to right is not
         # a list of choices.
-        if name in ('<down>', '<up>'):
+        if name in ('<down>', '<up>') and self.walksWithArrows():
             return self.focusNext(1 if name == '<down>' else -1)
         if name == '<return>':
             primary = self.primary()

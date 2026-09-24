@@ -182,6 +182,15 @@ class TestMaximise:
         layout.maximise()
         assert layout.maximised is b
 
+    def test_a_layout_of_one_view_has_nothing_to_maximise(self):
+        layout = ViewLayout.single()
+        assert not layout.can_maximise
+        layout.maximise(layout.views[0])
+        assert layout.maximised is None
+
+    def test_a_layout_of_several_views_can_maximise_one(self):
+        assert ViewLayout.split(View(), View()).can_maximise
+
     def test_only_a_view_of_this_layout_can_be_maximised(self):
         with pytest.raises(ValueError):
             ViewLayout.single().maximise(View())
