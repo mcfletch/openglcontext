@@ -247,8 +247,7 @@ class ContextDefinition( node.Node ):
                                 lambda: renderoptions.env_choice(
                                     'OPENGLCONTEXT_MULTIVIEW',
                                     renderoptions.CHOICES['multiview'],
-                                    {'vs': 'vertex', 'gs': 'geometry',
-                                     'loop': 'sequential'}))
+                                    renderoptions.SYNONYMS['multiview']))
     #: Wait for the display's refresh before presenting a frame. Off uncaps the
     #: frame rate and lets a benchmark measure it (env: OPENGLCONTEXT_NO_VSYNC).
     vsync = field.newField( "vsync", "SFBool", 1,

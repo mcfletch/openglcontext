@@ -285,6 +285,25 @@ class TestBuiltInProviders:
         assert rows['shapes'] == 120
         assert rows['draws'] == 33
         assert rows['instanced'] == '90 in 3 groups'
+        assert 'mirror views' not in rows
+
+    def test_the_render_provider_reports_the_mirror_views_a_frame_drew(self):
+        from OpenGLContext.contextdefinition import ContextDefinition
+        from OpenGLContext.passes.renderstats import RenderStats
+        from OpenGLContext.ui.debugoverlay import render_provider
+
+        stats = RenderStats()
+        stats.mirrorViews, stats.mirrorDraws, stats.mirrorTexels = 3, 5, 4096
+        stats.mirrorMilliseconds = 0.75
+
+        class Context:
+            contextDefinition = ContextDefinition()
+            coreProfile = True
+            renderStats = stats
+
+        rows = dict(render_provider(Context())())
+        assert rows['mirror views'] == '3, 5 draws, 4096 texels'
+        assert str(rows['mirror ms']) == '0.75'
 
     def test_the_platform_provider_reports_where_the_camera_is(self):
         from OpenGLContext.ui.debugoverlay import platform_provider

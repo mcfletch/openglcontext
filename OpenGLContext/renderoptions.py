@@ -184,6 +184,11 @@ CHOICES: Dict[str, Tuple[str, ...]] = {
     'multiview': ('auto', 'vertex', 'geometry', 'sequential'),
 }
 
+#: Other spellings an environment variable may give a choice by.
+SYNONYMS: Dict[str, Dict[str, str]] = {
+    'multiview': {'vs': 'vertex', 'gs': 'geometry', 'loop': 'sequential'},
+}
+
 #: What a settings screen shows for each of those values.
 LABELS: Dict[str, Tuple[str, ...]] = {
     'ibl': ('Automatic', 'Full probe', 'Analytic', 'Off'),

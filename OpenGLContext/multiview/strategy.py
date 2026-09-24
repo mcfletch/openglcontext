@@ -100,8 +100,14 @@ def _current_gl_context() -> Any:
 
 
 def requested_strategy(source: Any) -> str:
-    """The strategy ``source``'s ContextDefinition asks for; ``'auto'`` where none."""
-    return renderoptions.choice(source, 'multiview', 'auto')
+    """The strategy ``source``'s ContextDefinition asks for.
+
+    Where nothing set the field, ``OPENGLCONTEXT_MULTIVIEW`` does, and
+    ``'auto'`` where neither says.
+    """
+    return renderoptions.choice(source, 'multiview', renderoptions.env_choice(
+        'OPENGLCONTEXT_MULTIVIEW', renderoptions.CHOICES['multiview'],
+        renderoptions.SYNONYMS['multiview']))
 
 
 class MultiviewCapabilities:

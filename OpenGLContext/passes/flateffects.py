@@ -10,6 +10,7 @@ combined class.
 """
 from __future__ import annotations
 
+import contextlib
 import os
 import logging
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
@@ -261,19 +262,23 @@ class _FlatEffectsMixin:
         if self.multiviewStrategy is None:
             self.multiviewStrategy = self.chooseMultiview()
         strategy = self.multiviewStrategy
-        views = int(renderoptions.number(self, 'reflectionViews', 0))
+        views = int(renderoptions.number(self, 'reflectionViews', renderoptions.env_number_once(
+            'OPENGLCONTEXT_REFLECTION_VIEWS', 0, integer=True)))
         if views <= 0:
             views = (MultiviewCapabilities.detect().max_views
                      if strategy in ('vertex', 'geometry') else 2)
         width, height = atlas_size(*self.context.getViewPort(), self.reflectionShare())
         return Budget(views=views,
                       separate_views=int(renderoptions.number(
-                          self, 'reflectionSeparateViews', 4)),
+                          self, 'reflectionSeparateViews', renderoptions.env_number_once(
+                              'OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS', 4, integer=True))),
                       texels=width * height)
 
     def reflectionShare(self) -> float:
         """The atlas's share of the window's pixels."""
-        return max(0.05, float(renderoptions.number(self, 'reflectionAtlas', 0.5)))
+        return max(0.05, float(renderoptions.number(
+            self, 'reflectionAtlas',
+            renderoptions.env_number_once('OPENGLCONTEXT_REFLECTION_ATLAS', 0.5))))
 
     def renderReflections(self, frames: List[Any], lighting: Any = None) -> None:
         """Draw this frame's reflections into the atlas, for the mirrors to read.
@@ -297,7 +302,9 @@ class _FlatEffectsMixin:
         if self._reflection_planner is None:
             self._reflection_planner = ReflectionPlanner()
         planner = self._reflection_planner
-        target = float(renderoptions.number(self, 'reflectionMilliseconds', 0.0))
+        target = float(renderoptions.number(
+            self, 'reflectionMilliseconds',
+            renderoptions.env_number_once('OPENGLCONTEXT_REFLECTION_MS', 0.0)))
         timer = self._reflection_timer
         if target > 0.0 and timer is not None and timer.milliseconds is not None:
             planner.schedule.measured(timer.milliseconds, target)
@@ -316,18 +323,20 @@ class _FlatEffectsMixin:
             self._reflection_lookups = {}
             return
         if plan.draws:
-            if target > 0.0:
-                from OpenGLContext.passes.gputimer import GpuTimer
-                if timer is None:
-                    timer = self._reflection_timer = GpuTimer()
+            from OpenGLContext.passes.gputimer import GpuTimer
+            if timer is None:
+                timer = self._reflection_timer = GpuTimer()
+            trace = getattr(self.context, 'loopTrace', None)
+            with (trace.phase('reflections') if trace is not None
+                  else contextlib.nullcontext()):
                 timer.begin()
-            try:
-                self._drawMirrorViews(plan, lighting, gathered, atlas)
-            finally:
-                if target > 0.0 and timer is not None:
+                try:
+                    self._drawMirrorViews(plan, lighting, gathered, atlas)
+                finally:
                     timer.end()
         self.stats.mirrorViews = len(plan.draws)
         self.stats.mirrorTexels = plan.texels
+        self.stats.mirrorMilliseconds = None if timer is None else timer.milliseconds
         atlas.bind()
         from OpenGLContext.passes.reflectionatlas import LEVELS
         shader = self.shader_program

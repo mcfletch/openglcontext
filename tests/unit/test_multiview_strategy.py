@@ -130,6 +130,16 @@ class TestRequested:
         renderoptions.reset_env_cache()
         assert ContextDefinition().multiview == 'sequential'
 
+    def test_the_environment_is_what_a_pass_asks_for(self, monkeypatch):
+        """A definition whose field nobody set answers with the variable's pin."""
+        from OpenGLContext.contextdefinition import ContextDefinition
+
+        class Source:
+            contextDefinition = ContextDefinition()
+
+        monkeypatch.setenv('OPENGLCONTEXT_MULTIVIEW', 'gs')
+        assert multiview.requested_strategy(Source()) == 'geometry'
+
     def test_the_environment_variable_is_a_rendering_one(self):
         from OpenGLContext import renderoptions
 

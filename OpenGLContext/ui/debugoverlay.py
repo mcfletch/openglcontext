@@ -393,8 +393,8 @@ def render_provider(context: Any) -> Provider:
             ('profile', 'core' if getattr(context, 'coreProfile', False)
              else 'compatibility'),
         ]
-        for name in ('shadows', 'ibl', 'bloom', 'transmission', 'instancing',
-                     'vsync'):
+        for name in ('shadows', 'ibl', 'bloom', 'transmission',
+                     'planarReflections', 'instancing', 'vsync'):
             if definition is not None and hasattr(definition, name):
                 found.append((name, bool(getattr(definition, name))))
         stats = getattr(context, 'renderStats', None)
@@ -405,6 +405,14 @@ def render_provider(context: Any) -> Provider:
                 ('instanced', '%d in %d groups' % (stats.instances,
                                                    stats.instanceGroups)),
             ])
+            # Only where a frame drew mirror views: rows of zeroes in a scene
+            # with no mirror in it are rows nobody needs to read.
+            views = getattr(stats, 'mirrorViews', 0)
+            if views:
+                found.append(('mirror views', '%d, %d draws, %d texels' % (
+                    views, stats.mirrorDraws, stats.mirrorTexels)))
+                if stats.mirrorMilliseconds is not None:
+                    found.append(('mirror ms', Fixed(stats.mirrorMilliseconds)))
         return found
     return rows
 

@@ -19,6 +19,8 @@ these into rows on screen.
 
 from __future__ import annotations
 
+from typing import Optional
+
 __all__ = ['RenderStats']
 
 
@@ -31,7 +33,7 @@ class RenderStats:
 
     __slots__ = ('shapes', 'opaque', 'transparent', 'instanceGroups',
                  'instances', 'draws', 'mirrorViews', 'mirrorTexels',
-                 'mirrorDraws')
+                 'mirrorDraws', 'mirrorMilliseconds')
 
     def __init__(self) -> None:
         self.reset()
@@ -54,6 +56,9 @@ class RenderStats:
         self.mirrorViews = 0
         self.mirrorTexels = 0
         self.mirrorDraws = 0
+        #: GPU time of the mirror views, measured a frame or two late; None
+        #: until a measurement is back.
+        self.mirrorMilliseconds: Optional[float] = None
 
     def __repr__(self) -> str:
         return ('RenderStats(shapes=%d, draws=%d, instances=%d in %d groups)'
