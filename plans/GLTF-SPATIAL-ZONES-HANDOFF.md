@@ -54,9 +54,10 @@ picking it up again.
    (`ZoneTable.classify_many`, `refreshZones`, per-draw probe repacking)
    ran only the zone tests. Re-run the suite.
 3. Glisteel performance, in `full` IBL: zoned Tidewater ran ~43 fps against
-   61 without zones before `refreshZones`; a re-time was in progress
-   (scratch bakes in the session scratchpad: `tidewater/`,
-   `tidewater-plain/`). The remaining costs: zone captures (each is six
+   61 without zones before `refreshZones`, and ~39 against 60-69 after it
+   over a 40 s drive (scratch bakes in the session scratchpad: `tidewater/`,
+   `tidewater-plain/`). Profile again: the gap is expected to be the
+   captures, not classification. The remaining costs: zone captures (each is six
    whole-world draws; consider a capture far plane or fewer faces a frame
    for large worlds) and moving objects (now batched per draw list). Static
    objects hit the cache (verified: all misses were moving car shapes).
