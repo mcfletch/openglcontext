@@ -11,6 +11,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
+import numpy as np
 import pygltflib
 import pytest
 
@@ -65,7 +66,10 @@ def test_the_floor_is_polished_stone_that_gives_way_to_the_mirrors(scene):
     reflector, = _reflectors(scene.getDEF('Floor'))
     assert reflector.priority == pytest.approx(0.5)
     material, = [shape.appearance.material for shape in _shapes(scene.getDEF('Floor'))]
-    assert material.metallic == pytest.approx(0.0)
+    # Its metalness and roughness are in its map, as a baked glTF carries them.
+    packed = np.asarray(material.textures['metallicRoughness'].image.convert('RGB'))
+    assert packed[..., 2].max() == 0
+    assert reflection.surface_roughness(material) < 0.15
 
 
 def test_the_window_shows_only_its_reflection(scene):
