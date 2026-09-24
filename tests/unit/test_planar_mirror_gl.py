@@ -225,3 +225,73 @@ def test_a_reflection_reused_after_a_small_move_matches_a_fresh_one(
     assert (fresh[right][..., 0] > 120).sum() > 500      # the box, in the mirror
     differing = (np.abs(kept[right] - fresh[right]).max(axis=-1) > 24).mean()
     assert differing <= 0.001
+
+
+def _floor(**material):
+    """A polished floor, 20 metres square, at y = -1, facing up."""
+    half = 10.0
+    mesh = PBRMesh(
+        positions=np.array([(-half, 0, half), (half, 0, half),
+                            (half, 0, -half), (-half, 0, -half)], 'f'),
+        normals=np.array([(0, 1, 0)] * 4, 'f'),
+        indices=np.array([0, 1, 2, 0, 2, 3], np.uint32))
+    settings = dict(baseColor=(0.05, 0.05, 0.06), metallic=0.0, roughness=0.05)
+    settings.update(material)
+    return basenodes.Transform(translation=(0.0, -1.0, 0.0), children=[basenodes.Shape(
+        geometry=mesh, appearance=basenodes.Appearance(material=PBRMaterial(
+            reflector=PlanarReflector(), **settings)))])
+
+
+def _lamp_room():
+    """A camera looking down the floor at a lamp standing a metre above it."""
+    return [basenodes.Viewpoint(position=(0.0, 1.0, 6.0), orientation=(1, 0, 0, -0.25)),
+            basenodes.NavigationInfo(headlight=False),
+            basenodes.DirectionalLight(direction=(0.0, -1.0, 0.0), intensity=0.2),
+            basenodes.Transform(translation=(0.0, 1.0, 0.0), children=[
+                _box(0.0, -3.0, (1.0, 0.9, 0.2), size=1.0)]),
+            _floor()]
+
+
+def _yellow_rows(frame):
+    """Rows of the frame, top first, holding any of the lamp's yellow."""
+    pixels = frame.astype(int)
+    yellow = ((pixels[..., 0] > 90) & (pixels[..., 1] > 80)
+              & (pixels[..., 2] * 4 < pixels[..., 1] * 3))
+    return np.flatnonzero(yellow.any(axis=1))
+
+
+def test_a_polished_floor_reflects_the_lamp_standing_on_it(render_scene, env):
+    """A dielectric floor reflects faintly looking down, and it reflects the lamp."""
+    from OpenGLContext import renderoptions
+    lit = frames_of(render_scene, _lamp_room(), frames=3, size=SIZE)[-1]
+    env.setenv('OPENGLCONTEXT_PLANAR_REFLECTIONS', '0')
+    renderoptions.reset_env_cache()
+    plain = frames_of(render_scene, _lamp_room(), frames=3, size=SIZE)[-1]
+    # The lamp itself, and below it on screen its reflection in the floor.
+    assert _yellow_rows(lit).max() > _yellow_rows(plain).max() + 8
+
+
+def _twelve(render_scene, env, strategy):
+    env.setenv('OPENGLCONTEXT_MULTIVIEW', strategy)
+    env.setenv('OPENGLCONTEXT_REFLECTION_VIEWS', '16')
+    mirrors = [_mirror(x=x, z=-4.0 - 0.01 * index, size=1.6)
+               for index, x in enumerate(np.linspace(-5.0, 5.0, 12))]
+    frame = frames_of(render_scene, [
+        basenodes.Viewpoint(position=(0.0, 0.0, 6.0)),
+        basenodes.NavigationInfo(headlight=False),
+        basenodes.DirectionalLight(direction=(0.0, -1.0, 0.0)),
+        _wall(7.5, (0.2, 0.6, 0.2)), _wall(-7.5, (0.2, 0.2, 0.6)),
+        _box(0.0, 9.0, (1.0, 0.0, 0.0))] + mirrors, frames=3, size=(320, 120))[-1]
+    from OpenGLContext.passes import renderpass
+    if renderpass.FLAT.multiviewStrategy != strategy:
+        pytest.skip('this driver cannot draw with %s' % strategy)
+    assert renderpass.FLAT.stats.mirrorViews == 12
+    return frame.astype(int)
+
+
+@pytest.mark.parametrize('strategy', ['vertex', 'geometry'])
+def test_twelve_mirrors_draw_alike_whichever_way_they_are_drawn(render_scene, env, strategy):
+    shared = _twelve(render_scene, env, strategy)
+    in_turn = _twelve(render_scene, env, 'sequential')
+    differing = (np.abs(shared - in_turn).max(axis=-1) > 8).mean()
+    assert differing < 0.005
