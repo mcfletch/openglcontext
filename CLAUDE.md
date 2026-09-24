@@ -35,7 +35,11 @@ Key documentation files:
 
 - `docs/index.rst` - Main landing page, and the toctrees every page hangs from
 - `docs/documentation.rst` - Documentation index, annotated
-- `docs/structure.rst` - Structural overview of the codebase (contexts, rendering, events)
+- `docs/structure.rst` - Structural overview: the packages, and the page that describes each
+- `docs/backends.rst` - The windowing backends, what each runs on, the methods every one provides, and context teardown
+- `docs/profiles.rst` - Core vs. compatibility contexts, and declaring the one a program needs
+- `docs/loading.rst` - Loading each format from Python, and the background load pool
+- `docs/capturing.rst` - Screenshots, settled still captures, and video recording
 - `docs/tutorials/` - The code walkthroughs, written from `tests/*.py`
 
 Two directories beside them are **generated and not in version control**:
@@ -86,7 +90,7 @@ OpenGLContext/
 ├── events/           # Cross-backend event generation and dispatch -- docs/eventmodel.rst
 │   └── wheel.py      # Rotation reports into whole notches, for the backends
 │                     # whose toolkit states a detent size
-├── loaders/          # File formats into the scenegraph -- docs/gltf.rst, vrml97.rst
+├── loaders/          # File formats into the scenegraph -- docs/loading.rst, gltf.rst, vrml97.rst
 │   ├── background.py # The pool a url field hands its fetch to, and the rule
 │   │                 # that its imports are made by the submitting thread
 │   ├── gltf/         # glTF 2.0 / GLB
@@ -177,7 +181,7 @@ OpenGLContext/
 ├── outline.py        # The scenegraph as rows, for a tree control -- no GL, no
 │                     # toolkit -- docs/embedding.rst
 ├── renderoptions.py  # How a pass reads a rendering feature from the definition
-├── screenshot.py     # The F2 key every context binds -- docs/structure.rst
+├── screenshot.py     # The F2 key every context binds -- docs/capturing.rst
 ├── swapcontrol.py    # Waiting for the refresh, for backends that name nothing
 ├── contextresources.py   # Caches let go of a GL context's names as it dies
 ├── contextdefinition.py  # The fields a context is configured by
@@ -404,7 +408,7 @@ matrix stack, display lists, or GLSL's `gl_ModelViewProjectionMatrix` — none o
 which exist in core. `Context.resolveDefinition` is where the order is decided,
 and every backend calls it before it opens a window, since the profile, version
 and buffer formats are all window-creation parameters. See
-[docs/structure.rst](docs/structure.rst#core-profile).
+[docs/profiles.rst](docs/profiles.rst).
 
 **`scripts/profile_sweep.py` compares the two profiles by what they drew.** A
 fixed-function call in a core context raises `GLError(1282)`, and the render pass

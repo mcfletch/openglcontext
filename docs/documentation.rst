@@ -134,8 +134,8 @@ The documentation pages
 
 The pages are grouped as in the site's navigation. If you are new to OpenGL,
 start with the tutorials; the NeHe translations among them teach OpenGL
-directly. To understand how a frame is drawn, read :doc:`the structural
-overview <structure>` and then the Rendering pages.
+directly. To understand how a frame is drawn, read :doc:`Core-Profile
+Rendering <renderpasses>` and then the other Rendering pages.
 
 Getting started
 ~~~~~~~~~~~~~~~
@@ -165,9 +165,12 @@ Getting started
     directly
 
 - :doc:`Structural Overview <structure>` -- the packages the engine is built
-  on and the packages inside it, the backends and what each supports, the
-  render passes, loaders, events, and what happens when a context is
-  destroyed.
+  on and the packages inside it, each with the page that describes it.
+
+- :doc:`Windowing Backends <backends>` -- the six GUI toolkits and the two
+  windowless backends, what each runs on, the window-level methods every one
+  provides, filling the screen, adding a backend, and what happens when a
+  context is destroyed.
 
 Rendering
 ~~~~~~~~~
@@ -211,6 +214,10 @@ Rendering
   fields, six presets, bursts, and how the NumPy particle pool, the update step
   and the renderer work.
 
+- :doc:`Core vs. Compatibility Contexts <profiles>` -- the two OpenGL
+  profiles, which one a program gets, declaring the one it needs, and what
+  each pass does differently.
+
 Geometry and text
 ~~~~~~~~~~~~~~~~~
 
@@ -238,6 +245,10 @@ Geometry and text
 
 Worlds and content
 ~~~~~~~~~~~~~~~~~~
+
+- :doc:`Loading Content <loading>` -- loading VRML97, glTF, OBJ and 3D Tiles
+  from your own code, what each call returns, and waiting for the textures
+  and inlined files a scene names.
 
 - :doc:`Loading glTF <gltf>` -- the glTF 2.0 loader: what it supports, calling
   it from your own code, :ref:`driving a model by its authored names <names>`,
@@ -355,6 +366,10 @@ Shipping it
   (every input, every frame time, every exception with its traceback, and the
   application's own marks) and then reading it back with ``python -m
   OpenGLContext.telemetry`` or replaying it to reproduce a failure.
+
+- :doc:`Capturing the Render <capturing>` -- the screenshot key, writing one
+  settled frame to a PNG from the viewer or your own code, and recording
+  video with pyopengl-video.
 
 - :doc:`Recording Video <recording>` -- writing a context's frames to an H.264
   file, from the framebuffer to the GPU's video encoder, on a clock that

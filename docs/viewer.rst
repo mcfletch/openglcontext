@@ -459,13 +459,158 @@ so each flag and its field share one default. The fields, by group:
 
 The component opens the window its context class asks for, 300x300 unless
 the class says otherwise. ``options.window()`` returns the ``size`` and
-``fullscreen`` :doc:`definition fields <structure>` that ``oglc-view`` opens
+``fullscreen`` :ref:`definition fields <fullscreen>` that ``oglc-view`` opens
 with (full screen, or 1920x1080), for an application that wants the same::
 
    MyViewer.ContextMainLoop(**MyViewer.options.window())
 
 The component starts with the developer overlay hidden, by setting the
 ``debugOverlayStartsVisible`` attribute every context has.
+
+.. _viewer-toolkits:
+
+The viewer on each toolkit
+--------------------------
+
+``ViewerContext`` runs on the backend the environment and the user's
+configuration choose. ``viewerFor( name )`` returns the viewer class for a
+named :doc:`backend <backends>` instead: ``glfw``, ``glut``, ``pygame``,
+``tk``, ``qt`` or ``wx``. A backend whose toolkit is not installed raises
+``RuntimeError`` naming the ones that are available.
+
+The viewer in a window of its own
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+With the scene filling the window, the program is the same on every backend
+but for the name:
+
+.. code-block:: python
+
+   from OpenGLContext.viewer import ViewerOptions, viewerFor
+
+   class MyViewer( viewerFor('glfw') ):     # or 'glut', 'pygame', 'tk', 'qt', 'wx'
+       options = ViewerOptions( source='model.glb' )
+
+   if __name__ == '__main__':
+       MyViewer.ContextMainLoop()
+
+``ContextMainLoop`` opens the window and runs that toolkit's main loop until
+the viewer quits. GLUT and Tk need an X display (XWayland under Wayland), and
+Qt may need ``QT_QPA_PLATFORM=xcb``; :doc:`Windowing Backends <backends>` has
+what each needs.
+
+The viewer inside a Tk application
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In Tk the view draws into a frame of the application's window, and the
+application's loop calls ``loopIteration()`` for each frame:
+
+.. code-block:: python
+
+   import tkinter
+   from OpenGLContext.viewer import viewerFor
+
+   class SceneView( viewerFor('tk') ):
+       def hasSceneToShow( self ):
+           return True                     # the application opens its own scenes
+
+   root = tkinter.Tk()
+   view = SceneView( parent=root, size=(720, 560) )
+   view.deferRedraw = True                 # one frame per iteration, however many events
+   view.openSource( 'model.glb' )
+
+   def onFrame():
+       if not view.loopIteration():        # False once the view has quit
+           root.destroy()
+           return
+       root.after( 1, onFrame )
+
+   def onClose():
+       view.releaseWindow()
+       root.destroy()
+
+   root.protocol( 'WM_DELETE_WINDOW', onClose )
+   root.after( 1, onFrame )
+   root.mainloop()
+
+The viewer inside a Qt application
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The Qt backend is the separate ``OpenGLContext-qt`` distribution. The view is
+a ``QWindow``; ``container()`` wraps it in a widget for a layout, and
+``startRenderTimer()`` has Qt's own timer draw the frames:
+
+.. code-block:: python
+
+   import sys
+   from PySide6 import QtWidgets
+   from OpenGLContext.viewer import viewerFor
+
+   application = QtWidgets.QApplication( sys.argv )   # before the view
+
+   class SceneView( viewerFor('qt') ):
+       def hasSceneToShow( self ):
+           return True
+
+   class Window( QtWidgets.QMainWindow ):
+       def __init__( self, source ):
+           super().__init__()
+           self.view = SceneView( size=(720, 560) )
+           self.view.deferRedraw = True
+           self.setCentralWidget( self.view.container( self ) )
+           self.view.openSource( source )
+
+       def closeEvent( self, event ):
+           self.view.stopRenderTimer()
+           self.view.releaseWindow()
+           super().closeEvent( event )
+
+   window = Window( 'model.glb' )
+   window.show()
+   window.view.startRenderTimer()          # after the window is shown
+   application.exec()
+
+Create the ``QApplication`` before the view. The view creates an application
+object if none exists, Qt allows only one, and ``container()`` needs the
+widgets one.
+
+The viewer inside a wx application
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In wx the view *is* a ``wx.glcanvas.GLCanvas``, placed in the frame like any
+other window, and it draws from its own paint and idle events:
+
+.. code-block:: python
+
+   import wx
+   from OpenGLContext.viewer import viewerFor
+
+   class SceneView( viewerFor('wx') ):
+       def hasSceneToShow( self ):
+           return True
+
+   class Frame( wx.Frame ):
+       def __init__( self, source ):
+           wx.Frame.__init__( self, None, -1, 'Viewer', size=(960, 600) )
+           self.view = SceneView( self, size=(720, 560) )
+           self.view.openSource( source )
+           self.Bind( wx.EVT_CLOSE, self.onClose )
+
+       def onClose( self, event ):
+           self.view.releaseWindow()
+           self.Destroy()
+
+   application = wx.App( False )
+   Frame( 'model.glb' ).Show( True )
+   application.MainLoop()
+
+Under wx the viewer's Quit command and the Escape key end the application.
+
+:doc:`Embedding a view in an application <embedding>` explains each of these
+choices, and adds a scene tree that follows the loaded scene. The sample
+programs ``OpenGLContext.demos.tk_viewer``, ``OpenGLContext_qt.demos.qt_viewer``
+and ``OpenGLContext.demos.wx_viewer`` are complete applications built this
+way.
 
 Methods to override
 ~~~~~~~~~~~~~~~~~~~
@@ -500,6 +645,8 @@ running viewer.
 
 Modules
 ~~~~~~~
+
+Each of these can also be used by a context that is not a viewer.
 
 .. list-table::
    :widths: auto

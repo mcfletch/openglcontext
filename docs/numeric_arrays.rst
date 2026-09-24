@@ -301,6 +301,11 @@ stored as 4 items), ``normalise``, ``magnitude``, ``orientToXYZR`` and
 ``colinear``. Use these instead of a Python loop: each does the work in one
 array operation instead of one Python call per vector.
 
+``OpenGLContext.triangleutilities`` works on arrays of triangle vertices:
+``normalPerFace``, ``centers`` and ``basisVectors``.
+``OpenGLContext.quaternion`` holds a ``Quaternion`` class for rotations, built
+with ``fromXYZR``, ``fromEuler`` or ``fromMatrix``; its angles are in radians.
+
 Array-based Geometry
 --------------------
 

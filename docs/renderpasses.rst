@@ -8,79 +8,9 @@ OpenGL 3.3 core-profile context, or with the legacy fixed-function pipeline on
 a compatibility-profile context. This page describes the core-profile path:
 how to select it, the steps it runs each frame, the shader programs it
 manages, and the rules a geometry node follows to draw through it. The
-:doc:`physically based renderer <pbr>` is built on the same path.
-
-Choosing a Profile
-------------------
-
-The default profile is ``core``. It requests an OpenGL 3.3 core-profile
-context and renders through the shader-based pass. It is the only profile on
-platforms without fixed-function support, such as macOS, and the only one that
-draws the geometry nodes made by the glTF loader and the generators.
-
-The ``compatibility`` profile gives the fixed-function pipeline. Use it for a
-program that draws with ``glBegin``, the matrix stack, display lists,
-``glMaterial``/``glLight`` or GLSL's ``gl_ModelViewProjectionMatrix``. Declare
-it on the Context class, so the requirement stays with the code:
-
-.. code-block:: python
-
-   class MyContext( BaseContext ):
-       profile = 'compatibility'
-
-To set the profile for a whole run instead, for a CI job or a one-off
-comparison, use the environment variable:
-
-.. code-block:: bash
-
-   OPENGLCONTEXT_PROFILE=compatibility python your_script.py
-
-The profile is read once, before the window is created. Every backend can
-create a core context. See :ref:`Saying which profile your program needs
-<core-profile>` for how the class attribute, the variable and an explicit
-``ContextDefinition`` combine.
-
-.. rst-class:: technical
-
-The dispatch is in ``passes/renderpass.py``. When the context definition has
-``profile == 'core'``, the renderer creates the core ``FlatPass`` from
-``passes/flatcore.py``; otherwise it creates the compatibility ``FlatPass``
-from ``passes/flatcompat.py``. The choice is made once per context, not per
-frame.
-
-Compatibility and Core Compared
--------------------------------
-
-Both profiles render through a ``FlatPass`` (see :doc:`Flat Rendering
-<flat>`). The base class in ``passes/_flat.py`` holds both code paths, and the
-flag ``use_shaders`` selects one. The core pass sets ``use_shaders = True``;
-the compatibility pass leaves it ``False``.
-
-.. list-table::
-   :widths: auto
-   :header-rows: 1
-
-   * -
-     - Compatibility (``flatcompat.py``)
-     - Core (``flatcore.py``)
-   * - Selected by
-     - ``profile = 'compatibility'``, or ``OPENGLCONTEXT_PROFILE=compatibility``
-     - default
-   * - Lighting
-     - fixed-function ``glLight*``, ``glEnable(GL_LIGHTING)``
-     - VRML97 lighting model in GLSL; light properties uploaded as uniforms
-   * - Materials
-     - ``glMaterial*``, ``glColorMaterial``
-     - material uniforms set on the shader program
-   * - Matrices
-     - ``glMatrixMode`` / ``glLoadMatrixf`` / ``glPushMatrix``
-     - node-path matrices computed on the CPU and uploaded as ``mat4`` uniforms
-   * - Geometry
-     - vertex pointers, display lists
-     - VAOs and VBOs at fixed attribute locations
-   * - Selection / picking
-     - ``glColor4ubv`` back-buffer colour codes
-     - object id written to a second render target (MRT), or the unlit program
+:doc:`physically based renderer <pbr>` is built on the same path. How the
+profile is chosen, and how the two profiles differ, is in :doc:`Core vs.
+Compatibility Contexts <profiles>`.
 
 .. _frame-sequence:
 
@@ -139,6 +69,8 @@ On each visible frame the core ``FlatPass`` runs these steps in order:
 
 The compatibility pass runs the matching fixed-function steps for each view:
 legacy background, legacy lights, opaque, transparent.
+
+.. _shader-programs:
 
 Shader Programs
 ---------------
@@ -358,9 +290,7 @@ with VAOs and VBOs instead of fixed-function calls:
 The ``Shape`` node sets up the material and texture before it calls the
 geometry's ``render()``, so the geometry only supplies vertex data and issues
 the draw. To be drawn in batches, a geometry also provides ``instanceGPU()``
-and ``instanceContentKey()``; see :doc:`Instanced Geometry <instancing>`. See
-:doc:`the structural overview <structure>` for how Shape, Appearance and
-geometry work together.
+and ``instanceContentKey()``; see :doc:`Instanced Geometry <instancing>`.
 
 .. _srgb-output:
 
@@ -456,3 +386,42 @@ A pass reads ``record[5]``, and these hooks take the node rather than a path:
 ``applyLightGrid(shader, node, ...)``. The path stays in the record for code
 that needs the route rather than its end node, such as a stable pick id or a
 world transform.
+
+.. _passes:
+
+The passes package
+------------------
+
+``Context.renderPasses`` is the callable that draws a frame; by default it is
+``renderpass.defaultRenderPasses``. The modules of ``OpenGLContext/passes/``
+divide the work:
+
+- ``_flat.py`` -- the ``FlatPass`` base class, with both code paths.
+- ``flatcompat.py`` -- the compatibility-profile pass, using the
+  fixed-function pipeline (``glLight*``, ``glMaterial*``).
+- ``flatcore.py`` -- the core-profile pass described on this page.
+- ``renderpass.py`` -- chooses which ``FlatPass`` subclass renders a context
+  (by profile and renderer) and caches the choice across frames.
+- ``shaderpass.py`` -- ``VRML97ShaderProgram``, which compiles the
+  :ref:`shader programs <shader-programs>` from the GLSL sources in
+  ``shaders/``.
+- ``pbrpass.py`` -- the physically based (metallic/roughness) renderer, a
+  Cook-Torrance uber-shader. See :doc:`Physically Based Rendering <pbr>` and
+  the :doc:`shader walkthrough <ubershader>`.
+- ``ibl.py`` -- image-based (environment) lighting: the precomputed
+  irradiance, prefilter and BRDF lookup-table probe.
+- ``shadowmap.py``, ``shadowmixin.py``, ``shadowcaps.py``, ``shadowmath.py`` --
+  the shadow subsystem shared by the VRML97 and PBR lit shaders. See
+  :doc:`Shadows <shadows>`.
+- ``transmission.py`` -- the backdrop capture for glass
+  (``KHR_materials_transmission``).
+- ``instancing.py`` -- collapsing repeated shapes into one draw. See
+  :doc:`Instanced Geometry <instancing>`.
+- ``selection.py`` -- colour and object-id picking.
+- ``viewpointbinding.py`` -- binds the scene's active Viewpoint to the view
+  platform in the core-profile path.
+
+The views a frame is drawn for are in ``OpenGLContext/multiview/``: the layout,
+the drawing strategy the driver supports, and the ``ViewFrame`` holding one
+view's camera, frustum and draw list. The sequence above runs once for each
+view; see :doc:`Several views on one window <multiview>`.
