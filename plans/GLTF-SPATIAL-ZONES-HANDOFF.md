@@ -77,12 +77,22 @@ picking it up again.
    unverified against a Khronos sample; LDR faces are taken as linear, and the
    SH are taken as irradiance (divided by pi for the shader).
 
-**Next, as the user directed:** bake the places' environments instead of
-capturing at run time. The editor bake should render each zone's six faces
-offscreen, convolve (prefilter mips + SH), and write them as
-`EXT_lights_image_based` lights in `zones.gltf`, each zone naming its light;
-`zone_records` then stops asking for `capture`. Run-time capture stays for
-files that ask for it (the Parthenon).
+**Baked environments (done):** `OpenGLContext_editor/bake/probes.py`
+`bake_probes(directory)` opens the baked world in an EGL context, stands the
+camera at each zone's capture point, lets the engine capture it, reads the
+layer back (`IBLProbe.read_layer`), writes RGBD PNG faces under `probes/`
+and SH (`sh_fit`), and rewrites `zones.gltf` so each zone names an
+`EXT_lights_image_based` light and no longer captures. `glisteel-bake` runs
+it after the manifest and before the art moves (`--no-probes` skips it).
+Tidewater: 56 zones in ~35 s; the run then captures nothing.
+
+**Still open on performance:** the baked Tidewater runs ~40 fps against ~68
+without zones in `full` IBL, with zone CPU work only ~4% of samples. The gap
+is most likely GPU: straddled layers sample their probe layers in
+`envIrradiance` (twice: N and -N) and `envRadiance` per fragment, up to four
+layers. Measure with a GPU timer, then consider: skipping `irrBack` unless
+diffuse transmission is on, fewer straddled layers (2), one combined
+per-fragment probe weight fetch, or reading only the top layer's probe.
 
 **Also wanted:** events when an object or the camera enters or leaves a zone
 (a subscribe/callback API on the pass or on `Zone`, fed from the per-object

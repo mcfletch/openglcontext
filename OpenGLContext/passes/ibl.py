@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import os
 import logging
-from typing import Any, Callable, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 import numpy as np
 
@@ -822,6 +822,35 @@ class IBLProbe(object):
             return False
         finally:
             glBindTexture(target, 0)
+
+    def read_layer(self, layer: int = 0) -> Tuple[List[np.ndarray], List[List[np.ndarray]]]:
+        """The irradiance faces and the prefiltered mip chain of one layer, as float RGB.
+
+        What :meth:`upload_light` puts in, read back: six ``(n, n, 3)``
+        irradiance faces, and for each prefilter mip six faces. This is how a
+        bake keeps what a capture made (``OpenGLContext_editor.bake.probes``).
+        """
+        from OpenGL.GL import glGetTexImage, GL_PACK_ALIGNMENT, glPixelStorei
+        target = GL_TEXTURE_CUBE_MAP_ARRAY if self.arrayed else GL_TEXTURE_CUBE_MAP
+        glPixelStorei(GL_PACK_ALIGNMENT, 1)
+
+        def faces_of(texture: Optional[int], level: int, size: int) -> List[np.ndarray]:
+            glBindTexture(target, texture or 0)
+            try:
+                if self.arrayed:
+                    data = np.asarray(glGetTexImage(target, level, GL_RGB, GL_FLOAT),
+                                      dtype=np.float32).reshape(-1, size, size, 3)
+                    return [data[6 * layer + face].copy() for face in range(6)]
+                return [np.asarray(glGetTexImage(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face,
+                                                 level, GL_RGB, GL_FLOAT),
+                                   dtype=np.float32).reshape(size, size, 3)
+                        for face in range(6)]
+            finally:
+                glBindTexture(target, 0)
+        irradiance = faces_of(self.irradiance, 0, self.IRR_SIZE)
+        mips = [faces_of(self.prefilter, level, max(1, self.PRE_SIZE >> level))
+                for level in range(self.PRE_LEVELS)]
+        return irradiance, mips
 
     def _upload_face(self, target: int, level: int, layer: int, face: int,
                      pixels: np.ndarray) -> None:

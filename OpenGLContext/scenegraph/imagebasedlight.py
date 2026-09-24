@@ -27,7 +27,8 @@ import numpy as np
 from vrml import field, node
 from vrml.vrml97 import nodetypes
 
-__all__ = ['ImageBasedLight', 'face_directions', 'sh_irradiance', 'decode_rgbd']
+__all__ = ['ImageBasedLight', 'face_directions', 'sh_irradiance', 'sh_fit',
+           'encode_rgbd', 'decode_rgbd']
 
 #: The real spherical-harmonic basis constants up to l=2.
 _SH = (0.282095, 0.488603, 0.488603, 0.488603,
@@ -71,6 +72,46 @@ def sh_irradiance(coefficients: Any, directions: np.ndarray) -> np.ndarray:
     for weight, coefficient in zip(basis, c, strict=True):
         out += weight[..., None] * coefficient
     return np.maximum(out, 0.0)
+
+
+def sh_fit(faces: Sequence[np.ndarray]) -> np.ndarray:
+    """Nine RGB spherical-harmonic coefficients, l <= 2, fitted to a cube's six faces.
+
+    ``faces`` are ``(n, n, 3)`` in GL order; each texel is weighted by the
+    solid angle it covers, so the fit is the projection :func:`sh_irradiance`
+    evaluates back.
+    """
+    size = faces[0].shape[0]
+    t = (np.arange(size) + 0.5) / size * 2.0 - 1.0
+    u, v = np.meshgrid(t, t)
+    weight = (4.0 / (size * size)) / (1.0 + u * u + v * v) ** 1.5
+    found = np.zeros((9, 3), dtype='d')
+    for face in range(6):
+        directions = face_directions(face, size)
+        values = np.asarray(faces[face], dtype='d')[..., :3] * weight[..., None]
+        x, y, z = directions[..., 0], directions[..., 1], directions[..., 2]
+        bases = (np.full_like(x, _SH[0]), _SH[1] * y, _SH[2] * z, _SH[3] * x,
+                 _SH[4] * x * y, _SH[5] * y * z, _SH[6] * (3.0 * z * z - 1.0),
+                 _SH[7] * x * z, _SH[8] * (x * x - y * y))
+        for index, basis_values in enumerate(bases):
+            found[index] += (values * basis_values[..., None]).sum(axis=(0, 1))
+    return found
+
+
+def encode_rgbd(values: np.ndarray) -> np.ndarray:
+    """8-bit RGBA from linear float RGB: the colour times D, with D in the alpha.
+
+    D is one where the brightest channel is at most one and falls as the colour
+    brightens, so values up to 255 survive; :func:`decode_rgbd` divides back.
+    """
+    rgb = np.maximum(np.asarray(values, dtype='d')[..., :3], 0.0)
+    peak = np.maximum(rgb.max(axis=-1, keepdims=True), 1e-6)
+    d = np.clip(1.0 / peak, 1.0 / 255.0, 1.0)
+    d = np.maximum(np.floor(d * 255.0), 1.0) / 255.0
+    out = np.empty(rgb.shape[:-1] + (4,), dtype='u1')
+    out[..., :3] = np.clip(np.round(rgb * d * 255.0), 0, 255)
+    out[..., 3:] = np.round(d * 255.0)
+    return out
 
 
 def decode_rgbd(pixels: np.ndarray) -> np.ndarray:
