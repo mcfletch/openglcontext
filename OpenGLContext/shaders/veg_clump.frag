@@ -1,5 +1,7 @@
 #version 330 core
 in vec2 vUV; in vec3 vEyePos; in vec3 vEyeN; in float vShade;
+// The camera each fragment is drawn for, in a shared draw of several views.
+#include "_viewer_inc.glsl"
 uniform sampler2D atlas;
 uniform vec3 sunDirEye, sunColor, skyAmbient, groundAmbient;
 uniform float fogDensity; uniform vec3 fogColor;
@@ -11,7 +13,7 @@ vec3 aces(vec3 x){const float a=2.51,b=0.03,c=2.43,d=0.59,e=0.14;return clamp((x
 void main(){
     vec4 t=texture(atlas,vUV);
     if(t.a<0.33) discard;   // alpha CUTOUT (not blend) -> depth-correct, no foliage bleed
-    float d = length(vEyePos);
+    float d = length(toViewer(vEyePos));
     float dth=fract(gl_FragCoord.x*0.7548776662+gl_FragCoord.y*0.5698402909);  // R2 dither, no sin()
     // inner LOD boundary: a coarse far-clump node dithers IN across [uCutStart, uCutEnd]
     // on exactly the pixels a full-detail near-clump node (same window as its outer
@@ -29,7 +31,7 @@ void main(){
     // vShade is how much of the sun this instance stands in: the canopy
     // takes the key light, and leaves the ambient it does not block.
     vec3 col=alb*(amb*mix(0.55,1.0,vShade)+sunColor*ndl*vShade);
-    if(fogDensity>0.0){float f=1.-exp(-fogDensity*length(vEyePos));col=mix(col,fogColor,clamp(f,0.,1.));}
+    if(fogDensity>0.0){float f=1.-exp(-fogDensity*length(toViewer(vEyePos)));col=mix(col,fogColor,clamp(f,0.,1.));}
     col=aces(col);
     fragColor=vec4(pow(col,vec3(1.0/2.2)),1.0);
 }

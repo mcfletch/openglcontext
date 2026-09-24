@@ -36,6 +36,10 @@ from OpenGLContext.scenegraph.vegetation.base import (
 class InstancedBillboards(InstancedVegBase):
     """Instanced camera-facing billboards.
 
+    In a shared draw of several views every card faces the active view's
+    camera: the reflection of a card turned to the viewer, seen in a mirror,
+    is a card turned to the viewer.
+
     :param positions: (N, 3) world positions of the instance bases.
     :param yaws: (N,) yaw radians per instance.
     :param scales: (N,) height scale per instance (world units).
@@ -48,6 +52,8 @@ class InstancedBillboards(InstancedVegBase):
     :param bounds: (sx, sy, sz) node bounding box (kept large so a follow-field is
         never frustum-culled as a whole).
     """
+    INSTANCE_LOCATIONS = (2, 3, 4)
+
     def __init__(self, positions: np.ndarray, yaws: np.ndarray, scales: np.ndarray,
                  texture: str, width: float = 0.62, near_fade: bool = False,
                  far_fade: float = 0.0, near_cut: float = 0.0, sun_level: float = 0.5,
@@ -96,11 +102,10 @@ class InstancedBillboards(InstancedVegBase):
                   ("uModelView", "uProjection", "pine", "uWidth", "uNearFade", "uFarFade",
                    "uNearCut", "uSunLevel", "uLodStart", "uLodEnd", "sunColor",
                    "skyAmbient", "groundAmbient", "fogDensity", "fogColor")}
-        self._commit_constants()
+        self._commit_constants("veg_billboard.vert", "veg_billboard.frag")
         self._gl = self._prog
 
-    def _upload_constants(self) -> None:
-        U = self.U
+    def _upload_constants(self, U: "dict[str, int]") -> None:
         glUniform1i(U["pine"], 0)
         glUniform1f(U["uWidth"], self.width)
         glUniform1f(U["uNearFade"], 1.0 if self.near_fade else 0.0)
@@ -120,7 +125,7 @@ class InstancedBillboards(InstancedVegBase):
         if not self._gl:
             return
         delete_gl(vaos=[self._vao], buffers=[self._mvb, self._ibuf.id],
-                  textures=[self._tex], programs=[self._prog])
+                  textures=[self._tex], programs=list(self.programs.programs()))
         self._gl = None
 
     def update_instances(self, positions: np.ndarray, yaws: np.ndarray,
@@ -149,5 +154,6 @@ class InstancedBillboards(InstancedVegBase):
         glBindTexture(GL_TEXTURE_2D, self._tex)
         glEnable(GL_DEPTH_TEST)
         glBindVertexArray(self._vao)
-        glDrawArraysInstanced(GL_TRIANGLES, 0, 6, self._ibuf.count)
+        with self._instanced(mode) as copies:
+            glDrawArraysInstanced(GL_TRIANGLES, 0, 6, self._ibuf.count * copies)
         glBindVertexArray(0)

@@ -719,9 +719,12 @@ for this, the first time a layout of several views is drawn; the single-view
 programs are unchanged.
 
 A shape takes part when its geometry draws with the pass's lit programs
-alone. ``Box``, ``Sphere``, ``Cone``, ``Cylinder``, ``IndexedFaceSet`` and a
-glTF mesh of triangles do. Everything else is drawn once per view, as
-``sequential`` draws it:
+alone, or with a program of its own compiled for shared draws. ``Box``,
+``Sphere``, ``Cone``, ``Cylinder``, ``IndexedFaceSet``, a glTF mesh of
+triangles, terrain ground and the instanced vegetation (cards, clumps and near
+meshes) do. In a shared draw every vegetation card faces the active view's
+camera; its fades and fog are measured from each view's own. Everything else is
+drawn once per view, as ``sequential`` draws it:
 
 - transparent and glass shapes, which are sorted and refracted per view;
 - everything in a wireframe view, because polygon mode applies to every
@@ -730,7 +733,7 @@ glTF mesh of triangles do. Everything else is drawn once per view, as
 - an octahedral impostor;
 - point and line sets;
 - instanced sets that cull their own placements;
-- nodes that draw with their own programs, such as vegetation, terrain,
+- nodes that draw with programs of their own not compiled for it, such as
   particles and text;
 - mirrors, which read a different reflection in each view.
 
@@ -738,6 +741,14 @@ The same submission draws a frame's :doc:`reflections <reflections>`: each
 mirror seen from each view is a view of its own, drawn into a tile of the
 reflection atlas, and one shared submission reaches every mirror view that
 sees a shape, whatever the number of mirrors.
+
+A node with a program of its own joins by declaring ``multiviewShared = True``
+and drawing with the form of its program that
+``OpenGLContext.scenegraph.instancedgl.ViewPrograms`` answers for the draw in
+progress: its vertex shader includes ``_multiview_inc.glsl`` and ends with
+``routeToView`` under ``MULTIVIEW_VERTEX``, ``ViewPrograms.apply_views`` says
+which views the draw reaches, and an instanced draw multiplies its count by what
+``instancedgl.view_copies`` answers.
 
 A geometry node joins the shared submission by declaring
 ``multiviewShared = True`` and issuing its draw through

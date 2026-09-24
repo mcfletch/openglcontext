@@ -1,8 +1,7 @@
 # Planar mirrors: a reflection is another view of the scene
 
-Status: **In progress** — 2026-09-24. Steps 1-7, 9 and 10 landed; step 8
-(terrain and vegetation in the shared draw) is open. See *What landed* at the
-end.
+Status: **Complete** — 2026-09-24, visual baselines to be checked by
+preflight on the main checkout. See *What landed* at the end.
 
 ## Why
 
@@ -471,6 +470,21 @@ which is procedural unless the scene has an HDR or cubemap sky; a VRML97
 `Background`'s colours do not reach it (a RUNTIME-IBL question). Metals that
 are not flat still reflect only the probe.
 
-Still open: step 8, and the visual-regression baselines, which are checked by
-preflight on the main checkout once this is merged.
+Step 8: the billboard, clump, near-mesh and ground programs route through the
+view table (`_multiview_inc.glsl`, `routeToView`), measure fades and fog from
+each fragment's own view (`toViewer`), and are compiled per shared draw by
+`instancedgl.ViewPrograms`; an instanced draw is multiplied by
+`instancedgl.view_copies`. They are `multiviewShared`, so they share editor
+views and mirror views alike, and the separate-view cap now covers particles
+and text. Departure: in a shared draw every card faces the *active* view's
+camera, under both strategies, since the geometry strategy's vertex stage does
+not know its view; for a mirror view that is the mirror image of the card the
+viewer sees, which is right. The choice of which trees are meshes and which are
+cards stays the active camera's, as planned. Found on the way:
+`vertex_outputs` missed outputs declared several to a line, and the ground
+culled by counter-clockwise winding even when seen in a mirror, so water had
+never reflected terrain's ground.
+
+Still open: the visual-regression baselines, checked by preflight on the main
+checkout once this is merged.
 

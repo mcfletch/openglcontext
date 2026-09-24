@@ -1,5 +1,7 @@
 #version 330 core
 in vec3 vEyePos;
+// The camera each fragment is drawn for, in a shared draw of several views.
+#include "_viewer_inc.glsl"
 in vec3 vWorldPos;
 in vec3 vWorldNormal;
 
@@ -72,7 +74,7 @@ void main(){
     vec3 color = direct + ambient;
 
     if(fogDensity>0.0){
-        float fog = 1.0-exp(-fogDensity*length(vEyePos));
+        float fog = 1.0-exp(-fogDensity*length(toViewer(vEyePos)));
         color = mix(color, fogColor, clamp(fog,0.0,1.0));
     }
     color = aces(color);

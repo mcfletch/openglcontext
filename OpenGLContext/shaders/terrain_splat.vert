@@ -1,4 +1,6 @@
 #version 330 core
+// In a shared draw of several views, each copy is sent on to its view.
+#include "_multiview_inc.glsl"
 layout(location=2) in vec3 aPosition;   // required: the mesh's own vertex
 layout(location=1) in vec3 aNormal;     // required: the mesh's own normal
 uniform mat4 uModel;                    // where the world puts the mesh
@@ -18,4 +20,7 @@ void main(){
     vWorldPos = (uModel * vec4(aPosition,1.0)).xyz;
     vWorldNormal = normalize(mat3(uModel) * aNormal);
     gl_Position = uProjection * eye;
+#ifdef MULTIVIEW_VERTEX
+    routeToView(eye.xyz);
+#endif
 }

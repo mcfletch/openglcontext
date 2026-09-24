@@ -3,14 +3,17 @@
 These nodes drive raw core-profile GL inside their ``render()`` (VAOs, instanced
 draws, array textures) rather than going through the fixed-function/VRML97 shader
 path, so they need a couple of utilities the rest of the scenegraph doesn't:
-compile a standalone program from files under :data:`SHADER_DIR`, and upload a
-2D texture. Kept here so ``terrain`` and ``vegetation`` share one copy.
+compile a standalone program from files under :data:`SHADER_DIR`, upload a
+2D texture, and draw with the program in a shared draw of several views
+(:class:`ViewPrograms`, :func:`view_copies`). Kept here so ``terrain`` and
+``vegetation`` share one copy.
 """
 import os
 import ctypes
 import logging
-from collections.abc import Iterable
-from typing import Any
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
+from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 
 import numpy as np
 from PIL import Image
@@ -23,7 +26,8 @@ from OpenGL.GL import (
     glBindBuffer, glBindTexture, glBufferData, glBufferSubData,
     glDeleteBuffers, glDeleteProgram, glDeleteTextures, glDeleteVertexArrays,
     glEnableVertexAttribArray, glGenBuffers, glGenTextures,
-    glGenerateMipmap, glTexImage2D, glTexParameteri,
+    glGenerateMipmap, glGetUniformLocation, glTexImage2D, glTexParameteri,
+    glUniform1i, glUniform1ui, glUniform4iv, glUseProgram,
     glVertexAttribDivisor, glVertexAttribPointer,
 )
 from OpenGL.GL.shaders import compileProgram, compileShader
@@ -47,13 +51,121 @@ def load_program(vert_name: str, frag_name: str) -> int:
     draw with ``glUniform1i``, so validation only means anything right before a
     draw, not at link; a genuine link failure is still raised on ``GL_LINK_STATUS``.
     """
-    with open(os.path.join(SHADER_DIR, vert_name)) as f:
-        vs = f.read()
-    with open(os.path.join(SHADER_DIR, frag_name)) as f:
-        fs = f.read()
-    return compileProgram(compileShader(vs, GL_VERTEX_SHADER),
-                          compileShader(fs, GL_FRAGMENT_SHADER),
+    from OpenGLContext.passes.shadersource import preprocess_shader
+    return compileProgram(compileShader(preprocess_shader(vert_name), GL_VERTEX_SHADER),
+                          compileShader(preprocess_shader(frag_name), GL_FRAGMENT_SHADER),
                           validate=False)
+
+
+#: A program and its uniforms' locations, by name.
+Program = Tuple[int, Dict[str, int]]
+
+
+class ViewPrograms:
+    """A node's own program, and the same program compiled for shared draws.
+
+    A pass draws a shape once for several views by compiling the program for
+    that many views (:func:`OpenGLContext.passes.shaderpass.link_program`); a
+    node that brings its own program does the same with this. :meth:`for_mode`
+    answers the program the draw in progress wants: the one a single view
+    draws with, or the form for the views and strategy the pass's own programs
+    are compiled for at the moment. Each form is compiled the first time it is
+    asked for and kept. ``names`` are the uniforms to look up; ``setup`` is
+    called with the program bound and its locations whenever a form is made,
+    for the uniforms that are set once. ``position`` is the vertex stage's
+    eye-space position, which a geometry stage projects to each view.
+
+    The shaders include ``_multiview_inc.glsl`` and end their vertex stage by
+    calling ``routeToView`` under ``MULTIVIEW_VERTEX``.
+    """
+
+    def __init__(self, vert: str, frag: str, names: Sequence[str], base: int,
+                 setup: Optional[Callable[[Dict[str, int]], None]] = None,
+                 position: str = 'vEyePos') -> None:
+        self.vert, self.frag = vert, frag
+        self.names = tuple(names)
+        self.setup = setup
+        self.position = position
+        self._forms: Dict[Tuple[str, int], Optional[Program]] = {
+            ('', 0): (int(base), self._locations(int(base)))}
+
+    def _locations(self, program: int) -> Dict[str, int]:
+        return {name: int(glGetUniformLocation(program, name))
+                for name in self.names + ('viewCount', 'viewList', 'viewMask')}
+
+    @staticmethod
+    def shared(mode: Any) -> Tuple[str, int]:
+        """The strategy and view count the draw in progress is shared across."""
+        shader = getattr(mode, 'shader_program', None)
+        views = int(getattr(shader, 'program_set', 0) or 0)
+        return (str(getattr(shader, 'program_strategy', '') or ''), views) if views else ('', 0)
+
+    def for_mode(self, mode: Any) -> Optional[Program]:
+        """The program to draw with now, and its locations; None where it would not compile."""
+        key = self.shared(mode)
+        if key not in self._forms:
+            self._forms[key] = self._build(*key)
+        return self._forms[key]
+
+    def _build(self, strategy: str, views: int) -> Optional[Program]:
+        from OpenGLContext.passes.shaderpass import link_program
+        from OpenGLContext.passes.shadersource import preprocess_shader
+        try:
+            program = int(link_program(preprocess_shader(self.vert),
+                                       preprocess_shader(self.frag), False,
+                                       views, strategy, position=self.position))
+        except Exception as err:
+            log.error('%s/%s would not compile for %d views drawn by the %s strategy: %s',
+                      self.vert, self.frag, views, strategy, err)
+            return None
+        found = (program, self._locations(program))
+        if self.setup is not None:
+            glUseProgram(program)
+            self.setup(found[1])
+        return found
+
+    @staticmethod
+    def apply_views(mode: Any, locations: Dict[str, int]) -> None:
+        """Say which views the draw reaches, on the bound program, in a shared draw."""
+        shader = getattr(mode, 'shader_program', None)
+        if not getattr(shader, 'program_set', 0):
+            return
+        mask = int(getattr(shader, 'view_mask', 0))
+        if getattr(shader, 'program_strategy', '') == 'vertex':
+            from OpenGLContext.multiview.strategy import view_list
+            count, indices = view_list(mask)
+            glUniform1i(locations['viewCount'], count)
+            glUniform4iv(locations['viewList'], 4, np.asarray(indices, np.int32))
+        elif locations['viewMask'] != -1:
+            glUniform1ui(locations['viewMask'], mask)
+
+    def programs(self) -> Iterator[int]:
+        """Every form compiled, for disposal."""
+        for form in self._forms.values():
+            if form is not None:
+                yield form[0]
+
+
+@contextmanager
+def view_copies(mode: Any, locations: Sequence[int]) -> Iterator[int]:
+    """How many times over to instance a draw, with its instance data made to fit.
+
+    In a shared draw by the ``vertex`` strategy each instance is drawn once per
+    view, so each per-instance attribute (at ``locations``, on the bound
+    vertex array) advances once every that-many copies. Answers the
+    multiplier: 1 outside such a draw.
+    """
+    copies = int(getattr(mode, 'viewCopies', 0) or 0)
+    if copies <= 1:
+        yield 1
+        return
+    for location in locations:
+        glVertexAttribDivisor(location, copies)
+    try:
+        yield copies
+    finally:
+        for location in locations:
+            glVertexAttribDivisor(location, 1)
 
 
 def texture_rgba(source: Any, clamp: bool = True, mipmap: bool = True,

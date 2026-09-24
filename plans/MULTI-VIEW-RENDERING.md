@@ -627,6 +627,11 @@ Shapes that draw with a program the stage is not compiled into (vegetation,
 terrain, particles, text, point and line sets), transparent and transmissive
 shapes, and backgrounds stay per view.
 
+2026-09-24 ([PLANAR-MIRRORS.md](PLANAR-MIRRORS.md) step 8): terrain ground and
+the instanced vegetation now join the shared draw, through
+`instancedgl.ViewPrograms`; particles, text, point and line sets remain per
+view.
+
 ## Tests
 
 - Pure, no window: `ViewLayout` rectangles for each layout and window size,

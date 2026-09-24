@@ -198,10 +198,10 @@ them:
    between redraws.
 2. A schedule chooses which reflections to draw this frame (below).
 3. Each is a tile of one texture, the reflection atlas, in linear HDR.
-4. Every shape that can serve several views is drawn once for all the mirror
-   views that see it, through the ``vertex`` or ``geometry`` strategy. What a
-   shared draw refuses -- terrain, vegetation, particles -- is drawn per
-   mirror view.
+4. Every shape that can serve several views -- meshes, terrain and
+   vegetation among them -- is drawn once for all the mirror views that see
+   it, through the ``vertex`` or ``geometry`` strategy. What a shared draw
+   refuses, such as particles and text, is drawn per mirror view.
 5. A mirror seen in a mirror view shows the reflection it had the frame
    before, read from a copy of the atlas taken before the frame's mirror views
    are drawn.
@@ -266,8 +266,8 @@ The budget is for a whole frame, across every view.
    * - ``reflectionSeparateViews``
      - ``OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS``
      - 4
-     - Of those, the most that also draw the shapes a shared draw refuses,
-       each of which costs a draw per mirror view.
+     - Of those, the most that also draw the shapes a shared draw refuses
+       (particles, text), each of which costs a draw per mirror view.
    * - ``reflectionAtlas``
      - ``OPENGLCONTEXT_REFLECTION_ATLAS``
      - 0.5

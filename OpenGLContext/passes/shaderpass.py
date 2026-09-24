@@ -79,12 +79,15 @@ def _upload_view_list(location: int, indices: Tuple[int, ...]) -> None:
 
 
 def link_program(vert_source: str, frag_source: str, validate: bool = True,
-                 views: int = 0, strategy: str = 'geometry') -> Any:
+                 views: int = 0, strategy: str = 'geometry',
+                 position: str = 'vPosition') -> Any:
     """Compile and link a program from preprocessed sources.
 
     ``views`` of two or more compiles it for a shared draw of that many views,
     the fragment stage told ``MULTIVIEW_VIEWS`` and the ``ViewBlock`` pointed
-    at its binding. ``strategy`` says how a draw reaches them: ``'geometry'``
+    at its binding. ``position`` is the vertex stage's eye-space position,
+    which a geometry stage projects to each view. ``strategy`` says how a
+    draw reaches them: ``'geometry'``
     adds a geometry stage generated from the vertex shader, which sends each
     triangle to the views in ``viewMask`` (see
     :func:`OpenGLContext.passes.shadersource.geometry_stage_source`);
@@ -102,7 +105,8 @@ def link_program(vert_source: str, frag_source: str, validate: bool = True,
             vert_source = vertex_routing_source(
                 vert_source, views, capabilities.vertex_extension or '')
         else:
-            geometry = geometry_stage_source(vert_source, views, capabilities.gl_version)
+            geometry = geometry_stage_source(vert_source, views, capabilities.gl_version,
+                                             position=position)
             vert_source = inject_defines(
                 vert_source, geometry_input_defines(vert_source))
             shaders.append(GL_shaders.compileShader(geometry, GL_GEOMETRY_SHADER))
@@ -480,6 +484,11 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
             self._apply_view_mask(self._active_program)
 
     _view_mask: int = 0
+
+    @property
+    def view_mask(self) -> int:
+        """Which views the shared draws in progress reach, as a bit mask."""
+        return self._view_mask
 
     def _apply_view_mask(self, program: Optional[int]) -> None:
         """Set the mask on ``program``, which is bound: as a mask, or as a list."""

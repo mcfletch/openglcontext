@@ -192,7 +192,7 @@ def load_fragment_source(filename: str, max_shadow_lights: int,
 
 #: A vertex output declared at the top level: ``flat out uint vObjectId;``.
 _OUTPUT_RE = re.compile(
-    r'^[ \t]*(flat[ \t]+)?out[ \t]+(\w+)[ \t]+(\w+)[ \t]*;', re.MULTILINE)
+    r'(?:^|(?<=;))[ \t]*(flat[ \t]+)?out[ \t]+(\w+)[ \t]+(\w+)[ \t]*;', re.MULTILINE)
 
 #: The prefix a vertex output is renamed with when a geometry stage reads it.
 GEOMETRY_INPUT_PREFIX = 'gs_'

@@ -1,4 +1,6 @@
 #version 330 core
+// In a shared draw of several views, each copy is sent on to its view.
+#include "_multiview_inc.glsl"
 layout(location=0) in vec3 aPos;     // quad: x in [-0.5,0.5], y in [0,1]
 layout(location=1) in vec2 aUV;
 layout(location=2) in vec4 aInst;    // x,y,z, yaw
@@ -15,4 +17,7 @@ void main(){
     vec4 eye = uModelView*vec4(world,1.0);
     vEyePos=eye.xyz; vUV=aUV; vH=aPos.y; vShade=aShade;
     gl_Position=uProjection*eye;
+#ifdef MULTIVIEW_VERTEX
+    routeToView(eye.xyz);
+#endif
 }

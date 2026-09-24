@@ -20,7 +20,7 @@ from OpenGL.GL import (
 )
 from vrml.vrml97 import basenodes as vnodes
 from OpenGLContext.scenegraph import boundingvolume
-from OpenGLContext.scenegraph.instancedgl import ensure_gl
+from OpenGLContext.scenegraph.instancedgl import ViewPrograms, ensure_gl, view_copies
 
 #: node AABB kept large so a camera-following field is never frustum-culled whole.
 _BIG = (1.0e6, 1.0e6, 1.0e6)
@@ -38,10 +38,21 @@ class InstancedVegBase(vnodes.PointSet):
 
     A subclass sets ``self._prog`` (its program), ``self.U`` (uniform-name ->
     location), ``self.bounds``, and — for mesh nodes lit by an eye-space sun —
-    ``self.sun`` (a normalized world-space direction). It implements
-    :meth:`_upload_constants`, :meth:`_stream`, and :meth:`_draw`.
+    ``self.sun`` (a normalized world-space direction), then calls
+    :meth:`_commit_constants` with its two shader files. It implements
+    :meth:`_upload_constants`, :meth:`_stream`, and :meth:`_draw`, drawing each
+    instanced call as many times over as :func:`view_copies` says.
+
+    One draw of a node serves every view of a shared draw that sees it
+    (``multiviewShared``): it draws with its program compiled for those views,
+    which :attr:`programs` keeps.
     """
     _BIG = _BIG
+    #: One draw serves every view that sees the node.
+    multiviewShared = True
+    #: The locations of the per-instance attributes, which a shared draw by the
+    #: ``vertex`` strategy stretches across each instance's copies.
+    INSTANCE_LOCATIONS: "tuple[int, ...]" = (3, 4, 5)
     #: world-space sun direction, or None for the camera-faced billboards, which use
     #: a flat sun term rather than a per-fragment eye-space sun vector.
     sun: "Optional[np.ndarray]" = None
@@ -56,18 +67,26 @@ class InstancedVegBase(vnodes.PointSet):
         U: Dict[str, int]
         #: The node's axis-aligned extent, as an (x, y, z) size.
         bounds: Any
+        #: The node's program and its forms for shared draws.
+        programs: ViewPrograms
 
     def boundingVolume(self, mode: Any) -> "boundingvolume.AABoundingBox":
         return boundingvolume.AABoundingBox(size=self.bounds, center=(0, 0, 0))
 
-    def _commit_constants(self) -> None:
-        """Send the never-per-frame uniforms once, at GL init, program saved/restored."""
+    def _commit_constants(self, vert: str, frag: str) -> None:
+        """Send the never-per-frame uniforms once, at GL init, program saved/restored.
+
+        Every form of the program compiled later for a shared draw is sent them
+        as it is made.
+        """
+        self.programs = ViewPrograms(vert, frag, tuple(self.U), self._prog,
+                                     setup=self._upload_constants)
         prev = int(glGetIntegerv(GL_CURRENT_PROGRAM))
         glUseProgram(self._prog)
-        self._upload_constants()
+        self._upload_constants(self.U)
         glUseProgram(prev)
 
-    def _upload_constants(self) -> None:
+    def _upload_constants(self, U: Dict[str, int]) -> None:
         """Upload uniforms constant for this node's lifetime (program already bound)."""
 
     def _stream(self) -> bool:
@@ -77,6 +96,10 @@ class InstancedVegBase(vnodes.PointSet):
     def _draw(self, mode: Any) -> None:
         """Bind VAO(s)/textures + per-frame uniforms and issue the instanced draw."""
         raise NotImplementedError
+
+    def _instanced(self, mode: Any) -> Any:
+        """The instance-count multiplier for the draw about to be issued; see :func:`view_copies`."""
+        return view_copies(mode, self.INSTANCE_LOCATIONS)
 
     def render(self, mode: Any = None, **kw: Any) -> int:
         if getattr(mode, 'shadow_pass', False) or not getattr(mode, 'visible', True):
@@ -88,9 +111,13 @@ class InstancedVegBase(vnodes.PointSet):
         # Import here (not at module load) to avoid a passes<->scenegraph import cycle;
         # this is the same deferral PBRMesh._apply_draw_state uses.
         from OpenGLContext.passes.instancing import set_cull_state
-        U = self.U
+        form = self.programs.for_mode(mode)
+        if form is None:
+            return 1
+        program, U = form
         prev = mode.current_program() if hasattr(mode, "current_program") else 0
-        glUseProgram(self._prog)
+        glUseProgram(program)
+        ViewPrograms.apply_views(mode, U)
         glUniformMatrix4fv(U["uModelView"], 1, GL_FALSE, np.ascontiguousarray(mode.matrix, np.float32))
         glUniformMatrix4fv(U["uProjection"], 1, GL_FALSE, np.ascontiguousarray(mode.projection, np.float32))
         nm = np.asarray(mode.matrix)[:3, :3].T   # normal-matrix path shared by sun and up

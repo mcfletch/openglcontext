@@ -39,6 +39,7 @@ from vrml.vrml97 import basenodes as vnodes
 
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.instancedgl import (
+    ViewPrograms,
     delete_gl,
     ensure_gl,
     load_program,
@@ -146,24 +147,32 @@ class GroundShading:
                    sun=_shadow_texture(self.shading))
         self._gl = dict(prog=prog, tex=tex,
                         U={name: glGetUniformLocation(prog, name)
-                           for name in UNIFORMS})
+                           for name in UNIFORMS},
+                        views=ViewPrograms('terrain_splat.vert', 'terrain_splat.frag',
+                                           UNIFORMS, prog))
 
     def ready(self) -> bool:
         """Whether the ground can be drawn, building its GL objects if need be."""
         found: bool = ensure_gl(self)
         return found
 
-    def begin(self, mode: Any, model: Any) -> int:
+    def begin(self, mode: Any, model: Any) -> "Optional[int]":
         """Bind the program, the textures and everything but the geometry.
 
         ``model`` is where the world put the mesh about to be drawn, as a 4x4:
         the blend is read from world XZ, and a tile is placed by the tileset's
-        transform. Answers the program that was bound, for :meth:`end`.
+        transform. Answers the program that was bound, for :meth:`end`, or
+        None where the program for a shared draw of several views would not
+        compile and nothing should be drawn.
         """
         g = self._gl
-        U = g['U']
+        form = g['views'].for_mode(mode)
+        if form is None:
+            return None
+        program, U = form
         previous = mode.current_program() if hasattr(mode, 'current_program') else 0
-        glUseProgram(g['prog'])
+        glUseProgram(program)
+        ViewPrograms.apply_views(mode, U)
         glUniformMatrix4fv(U['uModel'], 1, GL_FALSE,
                            np.ascontiguousarray(model, np.float32))
         glUniformMatrix4fv(U['uModelView'], 1, GL_FALSE,
@@ -203,9 +212,12 @@ class GroundShading:
         glActiveTexture(GL_TEXTURE0)
         glEnable(GL_DEPTH_TEST)
         # Back-face cull the ground; through the pass's cull memo so the next
-        # mesh re-issues its own winding, with no glGet of live state.
+        # mesh re-issues its own winding, with no glGet of live state. Seen in a
+        # mirror the winding turns over, as it does for every other mesh.
         from OpenGLContext.passes.instancing import set_cull_state
-        set_cull_state(mode, True, GL_CCW)
+        from OpenGLContext.scenegraph.winding import front_face
+        set_cull_state(mode, True, front_face(True, getattr(mode, 'matrix', None),
+                                              bool(getattr(mode, 'mirroredDraw', False))))
         glCullFace(GL_BACK)
         return int(previous)
 
@@ -218,7 +230,7 @@ class GroundShading:
         g = self._gl
         if not g:
             return
-        delete_gl(textures=list(g['tex'].values()), programs=[g['prog']])
+        delete_gl(textures=list(g['tex'].values()), programs=list(g['views'].programs()))
         self._gl = None
 
 
@@ -250,8 +262,12 @@ class GroundPatch(vnodes.PointSet):
         the tileset's transform; a field sits at the origin.
 
     Subclasses ``PointSet`` only to inherit the scenegraph render hook: it draws
-    an indexed triangle mesh through the ground's program, not points.
+    an indexed triangle mesh through the ground's program, not points. One draw
+    serves every view of a shared draw that sees it.
     """
+
+    #: One draw serves every view that sees the patch.
+    multiviewShared = True
 
     def __init__(self, shading: GroundShading, vertices: Any, indices: Any,
                  model: Any = None) -> None:
@@ -300,9 +316,12 @@ class GroundPatch(vnodes.PointSet):
             return 1
         if not ensure_gl(self) or not self.shading.ready():
             return 1
+        from OpenGLContext.multiview.strategy import draw_elements
         previous = self.shading.begin(mode, self.model)
+        if previous is None:
+            return 1
         glBindVertexArray(self._gl['vao'])
-        glDrawElements(GL_TRIANGLES, self._gl['count'], GL_UNSIGNED_INT, None)
+        draw_elements(mode, GL_TRIANGLES, self._gl['count'], GL_UNSIGNED_INT, None)
         glBindVertexArray(0)
         self.shading.end(previous)
         return 1

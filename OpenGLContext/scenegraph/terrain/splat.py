@@ -122,6 +122,9 @@ class SplatTerrain(vnodes.PointSet):
         surface drawn and the surface collided against are the same surface; see
         :meth:`~OpenGLContext.scenegraph.terrain.HeightField.mesh`.
     """
+    #: One draw serves every view that sees the terrain; see GroundPatch.
+    multiviewShared = True
+
     def __init__(self, height_field: "HeightField", layers: "list[str]", control: Any,
                  sun: "tuple[float, float, float]" = DEFAULT_SUN,
                  material_fn: "Optional[Callable[..., dict[str, Any]]]" = None,

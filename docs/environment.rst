@@ -162,7 +162,8 @@ Lighting and shadows
    * - ``OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS``
      - integer
      - 4
-     - Of those, the most that also draw terrain, vegetation and particles.
+     - Of those, the most that also draw particles and text, which a shared
+       draw refuses.
    * - ``OPENGLCONTEXT_REFLECTION_ATLAS``
      - share
      - 0.5

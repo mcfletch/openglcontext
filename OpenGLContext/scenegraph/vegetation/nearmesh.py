@@ -148,11 +148,10 @@ class InstancedMeshLOD(InstancedVegBase):
                   ("uModelView", "uProjection", "atlas", "sunDirEye", "sunColor",
                    "skyAmbient", "groundAmbient", "fogDensity", "fogColor",
                    "uLodStart", "uLodEnd", "uUpEye")}
-        self._commit_constants()
+        self._commit_constants("veg_mesh.vert", "veg_mesh.frag")
         self._gl = self._prog
 
-    def _upload_constants(self) -> None:
-        U = self.U
+    def _upload_constants(self, U: "dict[str, int]") -> None:
         glUniform1i(U["atlas"], 0)
         glUniform3f(U["sunColor"], 1.25, 1.18, 1.02)
         glUniform3f(U["skyAmbient"], 0.5, 0.58, 0.66)
@@ -167,7 +166,7 @@ class InstancedMeshLOD(InstancedVegBase):
         if self._gl is None:
             return
         delete_gl(vaos=self._vaos, buffers=self._buffers,
-                  textures=self._textures, programs=[self._prog])
+                  textures=self._textures, programs=list(self.programs.programs()))
         self._vaos = []
         self._buffers = []
         self._textures = []
@@ -195,5 +194,7 @@ class InstancedMeshLOD(InstancedVegBase):
                 v, cnt, t = s[part]
                 glBindTexture(GL_TEXTURE_2D, t)
                 glBindVertexArray(v)
-                glDrawElementsInstanced(GL_TRIANGLES, cnt, GL_UNSIGNED_INT, None, n)
+                with self._instanced(mode) as copies:
+                    glDrawElementsInstanced(GL_TRIANGLES, cnt, GL_UNSIGNED_INT, None,
+                                            n * copies)
         glBindVertexArray(0)

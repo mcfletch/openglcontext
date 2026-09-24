@@ -208,8 +208,8 @@ class ContextDefinition( node.Node ):
                                           'OPENGLCONTEXT_REFLECTION_VIEWS', 0,
                                           integer=True)))
     #: Of those, the most that also draw the shapes a shared draw refuses --
-    #: terrain, vegetation, particles -- each of which costs a draw per mirror
-    #: view (env: OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS).
+    #: particles, text -- each of which costs a draw per mirror view
+    #: (env: OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS).
     reflectionSeparateViews = field.newField(
         "reflectionSeparateViews", "SFInt32", 1,
         lambda: int(renderoptions.env_number(

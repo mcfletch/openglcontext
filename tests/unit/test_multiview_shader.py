@@ -27,6 +27,14 @@ class TestWhatTheVertexStageHandsOn:
         names = [v.name for v in shadersource.vertex_outputs(PBR_VERTEX)]
         assert 'vPosition' in names and 'vMaterialIndex' in names
 
+    def test_several_outputs_declared_on_one_line_are_each_found(self):
+        source = ('#version 330 core\n'
+                  'out vec2 vUV; out vec3 vEyePos; flat out int vKind;\n'
+                  'out float vH;\n')
+        found = {v.name: v for v in shadersource.vertex_outputs(source)}
+        assert set(found) == {'vUV', 'vEyePos', 'vKind', 'vH'}
+        assert found['vKind'].flat and found['vEyePos'].type == 'vec3'
+
     def test_each_output_is_renamed_for_the_geometry_stage_to_read(self):
         defines = shadersource.geometry_input_defines(LIT_VERTEX)
         assert '#define vNormal gs_vNormal' in defines

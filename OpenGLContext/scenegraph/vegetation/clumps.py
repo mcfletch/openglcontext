@@ -261,11 +261,10 @@ class InstancedClumps(InstancedVegBase):
                   ("uModelView", "uProjection", "atlas", "sunDirEye", "sunColor",
                    "skyAmbient", "groundAmbient", "fogDensity", "fogColor",
                    "uFadeStart", "uFadeEnd", "uCutStart", "uCutEnd", "uUpEye")}
-        self._commit_constants()
+        self._commit_constants("veg_mesh.vert", "veg_clump.frag")
         self._gl = self._prog
 
-    def _upload_constants(self) -> None:
-        U = self.U
+    def _upload_constants(self, U: "dict[str, int]") -> None:
         glUniform1i(U["atlas"], 0)
         glUniform3f(U["sunColor"], 1.25, 1.18, 1.02)
         glUniform3f(U["skyAmbient"], 0.5, 0.58, 0.66)
@@ -282,7 +281,7 @@ class InstancedClumps(InstancedVegBase):
         if not self._gl:
             return
         delete_gl(vaos=[self._vao], buffers=[self._mvb, self._ib, self._ibuf.id],
-                  textures=[self._tex], programs=[self._prog])
+                  textures=[self._tex], programs=list(self.programs.programs()))
         self._gl = None
 
     def _stream(self) -> bool:
@@ -298,5 +297,7 @@ class InstancedClumps(InstancedVegBase):
         glDisable(GL_BLEND)
         glDepthMask(GL_TRUE)
         glBindVertexArray(self._vao)
-        glDrawElementsInstanced(GL_TRIANGLES, len(self.idx), GL_UNSIGNED_INT, None, self._ibuf.count)
+        with self._instanced(mode) as copies:
+            glDrawElementsInstanced(GL_TRIANGLES, len(self.idx), GL_UNSIGNED_INT, None,
+                                    self._ibuf.count * copies)
         glBindVertexArray(0)

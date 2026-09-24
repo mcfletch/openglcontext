@@ -103,6 +103,11 @@ Installing the package puts these commands on your path:
 ``oglc-ui-demo``
    Demonstrates the overlay UI: the settings screen, the key-binding editor,
    the console and a skin. See :doc:`The overlay UI <overlayui>`.
+``oglc-mirrors``
+   A hall of mirrors: a polished marble floor, a large wall mirror, a corridor
+   of small mirrors, a pool and a window that shows only its reflection, with
+   keys to switch reflections and change their budget. See
+   :doc:`Reflections <reflections>`.
 ``oglc-character-sheet``
    Draws every clip a rigged character plays as one picture, with a row per
    view and a column per moment of the cycle, plus an overview sheet and an
