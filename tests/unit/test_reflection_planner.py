@@ -114,7 +114,7 @@ def test_a_transparent_reflector_is_a_mirror_too():
 
 
 def test_a_fresh_tile_is_kept_until_its_interval():
-    planner = ReflectionPlanner()
+    planner = _settled_planner()
     record = _mirror(reflector=PlanarReflector(interval=3))
     first = planner.plan([_frame([record])], ATLAS, BIG)
     tight = Budget(views=0, separate_views=0, texels=0)
@@ -127,8 +127,16 @@ def test_a_fresh_tile_is_kept_until_its_interval():
 NOTHING = Budget(views=0, separate_views=0, texels=0)
 
 
-def test_a_mirror_at_its_interval_must_be_drawn_again():
+def _settled_planner():
+    """A planner past the frames a pass settles in, so what it draws is kept."""
+    from OpenGLContext.passes.reflectionplanner import SETTLE_FRAMES
     planner = ReflectionPlanner()
+    planner.frame = SETTLE_FRAMES
+    return planner
+
+
+def test_a_mirror_at_its_interval_must_be_drawn_again():
+    planner = _settled_planner()
     record = _mirror(reflector=PlanarReflector(interval=2))
     planner.plan([_frame([record])], ATLAS, BIG)
     must = [planner.plan([_frame([record])], ATLAS, NOTHING).candidates[0].must
@@ -154,7 +162,7 @@ def test_a_mirror_out_of_view_gives_its_tile_back():
 
 
 def test_moving_the_camera_far_redraws_even_inside_the_interval():
-    planner = ReflectionPlanner()
+    planner = _settled_planner()
     record = _mirror(reflector=PlanarReflector(interval=10))
     planner.plan([_frame([record], eye=(0.0, 1.6, 3.0))], ATLAS, BIG)
     still = planner.plan([_frame([record], eye=(0.0, 1.6, 3.0))], ATLAS, NOTHING)
@@ -204,3 +212,59 @@ def test_a_mirror_too_large_for_the_room_left_is_drawn_at_half_scale():
     plan = ReflectionPlanner().plan([_frame([first, second])], tight, BIG)
     assert len(plan.draws) == 2
     assert min(draw.tile.height for draw in plan.draws) < full.height
+
+
+# --- settling, and a frame that is not finished -------------------------------
+
+from OpenGLContext.passes.reflectionplanner import SETTLE_FRAMES  # noqa: E402
+
+
+def _settled(planner, records, budget=BIG):
+    for _ in range(SETTLE_FRAMES):
+        planner.plan([_frame(records)], ATLAS, budget)
+
+
+def test_a_reflection_drawn_while_the_pass_settles_is_drawn_again():
+    """Programs compile, textures upload and the probe builds in the first
+    frames, and what a mirror view draws then is not a picture to keep."""
+    planner = ReflectionPlanner()
+    record = _mirror(reflector=PlanarReflector(interval=100))
+    first = planner.plan([_frame([record])], ATLAS, BIG)
+    assert first.unfinished
+    later = planner.plan([_frame([record])], ATLAS, NOTHING)
+    assert later.candidates[0].must and not later.candidates[0].valid
+
+
+def test_once_settled_a_drawn_frame_is_finished():
+    planner = ReflectionPlanner()
+    record = _mirror(reflector=PlanarReflector(interval=100))
+    _settled(planner, [record])
+    plan = planner.plan([_frame([record])], ATLAS, BIG)
+    assert len(plan.draws) == 1 and not plan.unfinished
+    kept = planner.plan([_frame([record])], ATLAS, NOTHING)
+    assert not kept.candidates[0].must and not kept.unfinished
+
+
+def test_a_mirror_left_without_a_reflection_asks_for_another_frame():
+    """A still scene with room for one mirror a frame gets the rest drawn."""
+    planner = ReflectionPlanner()
+    records = [_mirror(x) for x in (-1.5, 0.0, 1.5)]
+    one = Budget(views=1, separate_views=1, texels=10 ** 9)
+    _settled(planner, records, one)
+    finished = []
+    for _ in range(6):
+        plan = planner.plan([_frame(records)], ATLAS, one)
+        finished.append(not plan.unfinished)
+    assert finished[-1]
+    assert len(planner._held) == 3
+
+
+def test_reaching_its_interval_does_not_ask_for_a_frame():
+    """Redrawing a reflection of a still scene changes nothing."""
+    planner = ReflectionPlanner()
+    records = [_mirror(x, reflector=PlanarReflector(interval=1)) for x in (-1.5, 1.5)]
+    one = Budget(views=1, separate_views=1, texels=10 ** 9)
+    _settled(planner, records, BIG)
+    planner.plan([_frame(records)], ATLAS, BIG)
+    plan = planner.plan([_frame(records)], ATLAS, one)
+    assert len(plan.draws) == 1 and not plan.unfinished

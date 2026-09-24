@@ -1,0 +1,16 @@
+{
+  "argv": [
+    "-m",
+    "OpenGLContext.bin.mirrors_demo"
+  ],
+  "credit": "oglc-mirrors",
+  "frames": 40,
+  "git": "v3.0.0a4-144-g65a3854-dirty",
+  "id": "demos/mirrors_demo",
+  "licence": "BSD-3-Clause",
+  "producer": "command",
+  "size": [
+    1280,
+    720
+  ]
+}

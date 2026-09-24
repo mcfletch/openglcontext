@@ -30,14 +30,20 @@ import numpy as np
 from OpenGLContext.passes import reflection
 from OpenGLContext.passes.reflection import MirrorView
 from OpenGLContext.passes.reflectiontiles import (
-    Budget, Candidate, Packed, ReflectionSchedule, Tile, TilePacker,
+    DRIFT_TEXELS, Budget, Candidate, Packed, ReflectionSchedule, Tile, TilePacker,
 )
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 
-__all__ = ['ROUGH', 'Lookup', 'MirrorDraw', 'ReflectionPlan', 'ReflectionPlanner']
+__all__ = ['ROUGH', 'SETTLE_FRAMES', 'Lookup', 'MirrorDraw', 'ReflectionPlan',
+           'ReflectionPlanner']
 
 #: Above this roughness a reflector reads blurred mip levels of its tile.
 ROUGH = 0.05
+
+#: The frames a pass takes to settle: its programs compile, its textures
+#: upload and its environment probe builds, and what a mirror view draws in
+#: them is not a picture to keep. A reflection drawn then is drawn again.
+SETTLE_FRAMES = 2
 
 
 class Lookup(NamedTuple):
@@ -80,6 +86,11 @@ class ReflectionPlan:
     draws: List[MirrorDraw] = field(default_factory=list)
     lookups: Dict[Hashable, Lookup] = field(default_factory=dict)
     candidates: List[Candidate] = field(default_factory=list)
+    #: Whether a mirror in view shows something it should not go on showing
+    #: in a still scene: a reflection drawn while the pass settled, none at
+    #: all, or one its camera has moved too far from. The pass asks for
+    #: another frame while this is so.
+    unfinished: bool = False
 
     @property
     def rough(self) -> bool:
@@ -113,6 +124,8 @@ class _Held:
     scale: float
     eye: np.ndarray
     drawn: int
+    #: Drawn while the pass was settling, so drawn again before it is kept.
+    provisional: bool = False
 
 
 @dataclass
@@ -172,7 +185,7 @@ class ReflectionPlanner:
         reflector = reflection.reflector_for(record)
         if reflector is None:
             return None
-        rough = float(getattr(_material(record), 'roughness', 0.0) or 0.0)
+        rough = reflection.surface_roughness(_material(record))
         if rough > reflection.ROUGHEST and not reflector.replace:
             return None
         local = reflection.local_plane(record)
@@ -197,7 +210,8 @@ class ReflectionPlanner:
                                         float(reflector.scale), crop=crop)
         if mirror is None:
             return None
-        valid = (held is not None and mirror.crop == held.mirror.crop
+        valid = (held is not None and not held.provisional
+                 and mirror.crop == held.mirror.crop
                  and _scaled(mirror.size, held.scale)
                  == (held.tile.width, held.tile.height))
         return _Seen(key, frame, record, reflector, mirror, eye, rough, held, valid)
@@ -267,6 +281,7 @@ class ReflectionPlanner:
             decisions[key] = held_before.scale
             spare -= 1
         plan = ReflectionPlan(frames, candidates=candidates)
+        settling = self.frame <= SETTLE_FRAMES
         held: Dict[Hashable, _Held] = {}
         for key, entry in seen.items():
             tile = packed.tiles.get(key)
@@ -274,7 +289,8 @@ class ReflectionPlanner:
                 continue
             if key in decisions:
                 held[key] = _Held(entry.frame.view, entry.record[4], entry.mirror,
-                                  tile, decisions[key], entry.eye, self.frame)
+                                  tile, decisions[key], entry.eye, self.frame,
+                                  provisional=settling)
                 plan.draws.append(MirrorDraw(key, entry.frame, entry.record,
                                              entry.mirror, tile, entry.reflector))
             elif key not in packed.moved and entry.held is not None:
@@ -284,6 +300,9 @@ class ReflectionPlanner:
             plan.lookups[key] = self._lookup(held[key], entry, atlas)
         self._held = held
         self.packer.place({key: (h.tile.width, h.tile.height) for key, h in held.items()})
+        plan.unfinished = settling and bool(plan.draws) or any(
+            key not in decisions and (not candidate.valid or candidate.drift > DRIFT_TEXELS)
+            for key, candidate in ((c.key, c) for c in candidates))
         return plan
 
     def _pack(self, seen: Dict[Hashable, _Seen], decisions: Dict[Hashable, float]) -> Packed:

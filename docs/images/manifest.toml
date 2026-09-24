@@ -379,6 +379,21 @@ frames = 60
 timeout = 600
 
 [[image]]
+id = "demos/mirrors_demo"
+out = "images/demos/mirrors_demo.jpg"
+size = [1280, 720]
+licence = "BSD-3-Clause"
+credit = "oglc-mirrors"
+alt = "A hall with a polished dark floor reflecting four coloured columns and the lamps over them, a large mirror on the far wall showing the room behind the viewer, small mirrors down the left wall, and a pool in a stone rim"
+caption = "<code>oglc-mirrors</code>: a floor, a wall mirror, a corridor of small mirrors and a pool, each reflecting the room."
+producer = "command"
+cwd = "openglcontext"
+harness = "auto-exit"
+frames = 40
+timeout = 300
+argv = ["-m", "OpenGLContext.bin.mirrors_demo"]
+
+[[image]]
 id = "demos/water_demo"
 out = "images/demos/water_demo.jpg"
 size = [1100, 680]

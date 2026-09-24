@@ -44,7 +44,7 @@ log = logging.getLogger(__name__)
 __all__ = [
     'REFLECTION_UNIT', 'REFLECTION_UNITS_NEEDED', 'FLATNESS', 'GUARD',
     'ROUGHEST', 'WATER_DISTORTION', 'WATER_REFLECTOR', 'Plane', 'MeshPlane',
-    'MirrorView', 'shape_reflector', 'reflector_for', 'is_reflector', 'is_water', 'fit_plane',
+    'MirrorView', 'shape_reflector', 'reflector_for', 'surface_roughness', 'is_reflector', 'is_water', 'fit_plane',
     'surface_plane', 'local_plane', 'place_plane', 'world_corners',
     'box_corners', 'guarded', 'contains', 'tile_bounds', 'mirror_matrix', 'eye_plane',
     'oblique_projection', 'screen_rect', 'crop_matrix', 'plan_mirror',
@@ -109,6 +109,28 @@ def shape_reflector(shape: Any) -> Optional[PlanarReflector]:
 def reflector_for(record: Any) -> Optional[PlanarReflector]:
     """The reflector a draw record's surface mirrors the scene by, or None."""
     return shape_reflector(record[5])
+
+
+def surface_roughness(material: Any) -> float:
+    """How rough a material's surface is on average: its factor times its map.
+
+    A glTF material commonly carries a factor of 1 and the roughness itself in
+    the green channel of its metallic-roughness map, so the factor alone says
+    nothing about how sharp a reflection it gives. The map's mean is worked
+    out once per image and kept on the texture.
+    """
+    factor = float(getattr(material, 'roughness', 0.0) or 0.0)
+    textures = getattr(material, 'textures', None) or {}
+    texture = textures.get('metallicRoughness')
+    image = getattr(texture, 'image', None)
+    if image is None:
+        return factor
+    known = getattr(texture, '_mean_roughness', None)
+    if known is None or known[0] is not image:
+        green = np.asarray(image.convert('RGB'))[..., 1]
+        known = (image, float(green.mean()) / 255.0)
+        texture._mean_roughness = known
+    return factor * known[1]
 
 
 def is_reflector(record: Any) -> bool:

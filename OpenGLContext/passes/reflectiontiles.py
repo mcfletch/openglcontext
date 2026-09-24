@@ -19,8 +19,9 @@ shapes a shared draw refuses, and of texels. Its rules, in order:
 4. Every other mirror is optional, scored by screen area times priority times
    age plus one, and drawn while the budget has room.
 
-Where the must-draw mirrors do not fit, they are taken by the same score, and
-those left over are drawn at half scale before any is left stale. Age raises a
+Where the must-draw mirrors do not fit, those with no reflection they can use
+go first, then the rest, each by the same score, and one that does not fit at
+full scale is drawn at half scale, in its turn, before any is left stale. Age raises a
 mirror's score every frame it is passed over, so none is left out indefinitely.
 """
 from __future__ import annotations
@@ -284,7 +285,9 @@ class ReflectionSchedule:
         texels = float(budget.texels) * self.time_scale
         chosen: List[Decision] = []
         ranked = sorted(candidates, key=lambda c: -c.score)
-        must = [c for c in ranked if c.must]
+        # A mirror with no reflection it can use goes before one that has an
+        # older one: showing nothing is the larger error.
+        must = sorted((c for c in ranked if c.must), key=lambda c: c.valid)
         optional = [c for c in ranked if not c.must]
 
         def room(candidate: Candidate) -> bool:
@@ -298,16 +301,12 @@ class ReflectionSchedule:
             texels -= candidate.texels * scale * scale
             chosen.append(Decision(candidate.key, scale))
 
-        halved = []
         for candidate in must:
             if not room(candidate):
                 continue
             if candidate.texels <= texels:
                 take(candidate, 1.0)
-            else:
-                halved.append(candidate)
-        for candidate in halved:
-            if room(candidate) and candidate.texels * 0.25 <= texels:
+            elif candidate.texels * 0.25 <= texels:
                 take(candidate, 0.5)
         for candidate in optional:
             if room(candidate) and candidate.texels <= texels:

@@ -308,3 +308,42 @@ def test_the_view_table_carries_a_mirror_view_exactly():
     record = view_records([mirror], reference)[0]
     world = np.array([0.4, 1.2, 1.0, 1.0])
     assert np.allclose((world @ view) @ record.refToClip, world @ planned.modelproj)
+
+
+# --- how rough a mirror is ---------------------------------------------------
+
+def _textured(roughness_texel, factor=1.0):
+    from PIL import Image
+    from OpenGLContext.scenegraph.pbrmaterial import PBRTexture
+    pixels = np.zeros((4, 4, 3), np.uint8)
+    pixels[..., 1] = int(roughness_texel * 255)
+    return PBRMaterial(roughness=factor, textures={
+        'metallicRoughness': PBRTexture(Image.fromarray(pixels, 'RGB'))})
+
+
+def test_a_mirrors_roughness_is_its_factor_where_it_has_no_map():
+    assert reflection.surface_roughness(PBRMaterial(roughness=0.2)) == pytest.approx(0.2)
+
+
+def test_a_roughness_map_scales_the_factor():
+    """glTF's way: factor 1, and the map says how rough the surface is."""
+    assert reflection.surface_roughness(_textured(0.1)) == pytest.approx(0.1, abs=0.01)
+    assert reflection.surface_roughness(_textured(0.5, 0.5)) == pytest.approx(0.25, abs=0.01)
+
+
+def test_a_polished_textured_floor_is_a_mirror():
+    from OpenGLContext.passes.reflectionplanner import ReflectionPlanner
+    from OpenGLContext.passes.reflectiontiles import Budget
+    from OpenGLContext.multiview.strategy import ViewFrame
+    from OpenGLContext.multiview.views import View
+    record = _mirror_record(placement=_placement(translate=(0.0, 1.5, -5.0)))
+    material = _textured(0.05)
+    material.reflector = reflection.reflector_for(record)
+    record[5].appearance.material = material
+    view = _look_at((1.0, 1.6, 3.0), (0.0, 1.5, -5.0))
+    projection = _perspective(aspect=2.0)
+    frame = ViewFrame(View(), None, VIEW_RECT, view, projection, view @ projection, None)
+    frame.toRender = [record]
+    plan = ReflectionPlanner().plan([frame], (512, 512),
+                                    Budget(views=4, separate_views=4, texels=10 ** 9))
+    assert len(plan.draws) == 1

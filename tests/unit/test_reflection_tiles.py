@@ -218,3 +218,21 @@ def test_the_time_scale_shrinks_the_texels_a_frame_draws():
     chosen = schedule.choose(candidates, Budget(views=16, separate_views=16,
                                                 texels=8000))
     assert sum(1000 * d.scale ** 2 for d in chosen) <= 2000
+
+
+def test_a_mirror_with_no_reflection_outranks_one_merely_due():
+    """Showing nothing is worse than showing a reflection a frame or two old."""
+    budget = Budget(views=1, separate_views=1, texels=10 ** 9)
+    chosen = ReflectionSchedule().choose(
+        [_candidate('due', age=5, area=10 ** 6), _candidate('empty', area=1.0)], budget)
+    assert [d.key for d in chosen] == ['empty']
+
+
+def test_a_mirror_too_large_for_the_budget_is_halved_in_its_turn():
+    """Not set aside while smaller mirrors behind it take every view."""
+    budget = Budget(views=2, separate_views=2, texels=5000)
+    chosen = ReflectionSchedule().choose(
+        [_candidate('floor', texels=8000, area=10 ** 6),
+         _candidate('a', texels=100, area=10.0), _candidate('b', texels=100, area=5.0)],
+        budget)
+    assert [(d.key, d.scale) for d in chosen] == [('floor', 0.5), ('a', 1.0)]

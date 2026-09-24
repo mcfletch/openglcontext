@@ -319,6 +319,13 @@ class _FlatEffectsMixin:
         plan = planner.plan(frames, size, self.reflectionBudget,
                             separate=self._separateShapes)
         self._reflection_lookups = plan.lookups
+        if plan.unfinished:
+            # A context that draws only when something changes would otherwise
+            # leave a still scene showing reflections drawn while the pass was
+            # settling, or none, until something else asked for a frame.
+            trigger = getattr(self.context, 'triggerRedraw', None)
+            if trigger is not None:
+                trigger(0)
         if not plan.lookups:
             return
         atlas = self._reflection_atlas

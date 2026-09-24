@@ -295,3 +295,22 @@ def test_twelve_mirrors_draw_alike_whichever_way_they_are_drawn(render_scene, en
     in_turn = _twelve(render_scene, env, 'sequential')
     differing = (np.abs(shared - in_turn).max(axis=-1) > 8).mean()
     assert differing < 0.005
+
+
+def test_a_still_scene_asks_for_frames_until_its_mirrors_settle(render_scene, env):
+    """Drawn only when asked, the hall asks until every mirror is settled, then stops."""
+    from OpenGLContext.bin.mirrors_demo import MirrorHall
+    from OpenGLContext.passes import renderpass
+    env.setenv('OPENGLCONTEXT_REFLECTION_VIEWS', '2')
+    rendered = render_scene(MirrorHall().children, frames=1, size=(320, 180))
+    context = rendered.context
+    drawn = []
+    for _ in range(20):
+        before = renderpass.FLAT._reflection_planner.frame
+        # What the main loop does: force a frame where one was asked for.
+        context.OnDraw(force=1 if context.redrawRequest.is_set() else 0)
+        drawn.append(renderpass.FLAT._reflection_planner.frame > before)
+    planner = renderpass.FLAT._reflection_planner
+    assert drawn[0] and not drawn[-1]
+    assert planner._held and not any(held.provisional for held in planner._held.values())
+    assert len(renderpass.FLAT._reflection_lookups) == len(planner._held)
