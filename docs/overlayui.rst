@@ -231,6 +231,10 @@ field on the ``ContextDefinition``, and the screen shows all of them:
      - int, 0-16
      - The most mirror views a frame draws; 0 is the strategy's own.
      - ``OPENGLCONTEXT_REFLECTION_VIEWS``
+   * - ``reflectionBounces``
+     - int, 1-3
+     - How many reflections deep a chain of mirrors is followed.
+     - ``OPENGLCONTEXT_REFLECTION_BOUNCES``
    * - ``instancing``
      - bool
      - Collapse shapes sharing a geometry into one instanced draw.

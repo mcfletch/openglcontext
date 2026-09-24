@@ -83,13 +83,14 @@ DEFAULTS: Dict[str, Any] = {
     'style': 'still', 'material': 'keep', 'medium': 'water', 'depth': 0.0,
     'scale': 1.0, 'density': 1.0,
     'mirror_scale': 0.5, 'interval': 3, 'priority': 1.0, 'distortion': 0.0,
+    'reflectance': 0.97,
 }
 
 #: The panel's mirror fields, and the parameter each is written as. The
 #: resolution is its own field because ``scale`` is already the effects'.
 MIRROR_PARAMETERS: Dict[str, str] = {
     'mirror_scale': 'scale', 'interval': 'interval', 'priority': 'priority',
-    'distortion': 'distortion',
+    'distortion': 'distortion', 'reflectance': 'reflectance',
 }
 
 

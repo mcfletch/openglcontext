@@ -22,8 +22,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import (
-    Any, Callable, Dict, Hashable, Iterable, List, Mapping, NamedTuple, Optional,
-    Sequence, Set, Tuple, Union,
+    Any, Callable, Dict, FrozenSet, Hashable, Iterable, List, Mapping, NamedTuple,
+    Optional, Sequence, Set, Tuple, Union, cast,
 )
 
 import numpy as np
@@ -35,8 +35,8 @@ from OpenGLContext.passes.reflectiontiles import (
 )
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 
-__all__ = ['ROUGH', 'SETTLE_FRAMES', 'Lookup', 'MirrorDraw', 'ReflectionPlan',
-           'ReflectionPlanner']
+__all__ = ['ROUGH', 'SETTLE_FRAMES', 'Lookup', 'MirrorDraw', 'ReflectedView',
+           'ReflectionPlan', 'ReflectionPlanner']
 
 #: Above this roughness a reflector reads blurred mip levels of its tile.
 ROUGH = 0.05
@@ -55,7 +55,8 @@ class Lookup(NamedTuple):
     device coordinates into the atlas (scale x, y, offset x, y) and ``bounds``
     is the tile in atlas coordinates, half a texel in. ``normal`` is the
     mirror's plane normal in the world, which the distortion is measured
-    from. ``rough`` is the material's roughness, which picks the mip level.
+    from. ``rough`` is the material's roughness, which picks the mip level,
+    and ``reflectance`` the share of the light the mirror reflects.
     ``provisional`` marks a reflection drawn while the pass settled, which a
     mirror view drawing this mirror does not read.
     """
@@ -68,11 +69,39 @@ class Lookup(NamedTuple):
     replace: bool
     rough: float
     provisional: bool = False
+    reflectance: float = 1.0
+
+
+class ReflectedView:
+    """A view of the scene through one mirror, from one view of it.
+
+    What a mirror view is drawn as, so that the mirrors seen in it are keyed
+    by it: kept by the planner for as long as its mirror stays in view, so
+    the reflections drawn for it one frame are read in it the next. Every
+    other attribute is the view it is seen from.
+    """
+
+    def __init__(self, source: Any, key: Hashable) -> None:
+        self.source = source
+        self.key = key
+
+    @property
+    def depth(self) -> int:
+        """The mirrors between this view and the camera: 1 for a mirror in view."""
+        return int(getattr(self.source, 'depth', 0)) + 1
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self.source, name)
 
 
 @dataclass
 class MirrorDraw:
-    """One mirror view to draw: whose view, which mirror, into which tile."""
+    """One mirror view to draw: whose view, which mirror, into which tile.
+
+    ``view`` is the :class:`ReflectedView` it is drawn as; its ``depth`` is
+    the reflections its camera has been through, and an even count turns the
+    winding back.
+    """
 
     key: Hashable
     frame: Any
@@ -80,6 +109,12 @@ class MirrorDraw:
     mirror: MirrorView
     tile: Tile
     reflector: PlanarReflector
+    view: Optional[ReflectedView] = None
+
+    @property
+    def depth(self) -> int:
+        """The reflections this mirror view's camera has been through."""
+        return self.view.depth if self.view is not None else 1
 
 
 @dataclass
@@ -132,6 +167,9 @@ class _Held:
     provisional: bool = False
     #: Drawn with a mirror left out of it, so drawn again.
     redo: bool = False
+    #: The reflections of mirrors in its view it was drawn without, which
+    #: those mirrors showed the probe in place of; drawn again once one is.
+    missing: FrozenSet[Hashable] = frozenset()
 
 
 @dataclass
@@ -167,6 +205,9 @@ class ReflectionPlanner:
         self.frame = 0
         self._held: Dict[Hashable, _Held] = {}
         self._crowded: Set[Hashable] = set()
+        self._views: Dict[Hashable, ReflectedView] = {}
+        #: The reflections in the atlas that a mirror view may read.
+        self._arrived: Set[Hashable] = set()
 
     def reset(self) -> None:
         """Forget every tile: the atlas they were in is gone."""
@@ -184,6 +225,16 @@ class ReflectionPlanner:
             held = self._held.get(key)
             if held is not None:
                 held.redo = True
+
+    def drawn_without(self, key: Hashable, missing: Iterable[Hashable]) -> None:
+        """Say that ``key``'s reflection was drawn without the reflections of
+        the mirrors in its view keyed ``missing``, which were not yet drawn.
+
+        It is drawn again the frame after one of them is.
+        """
+        held = self._held.get(key)
+        if held is not None:
+            held.missing = frozenset(missing)
 
     # -- finding the mirrors ----------------------------------------------
     def _seen(self, frames: Sequence[Any]) -> List[_Seen]:
@@ -230,10 +281,46 @@ class ReflectionPlanner:
         if mirror is None:
             return None
         valid = (held is not None and not held.provisional and not held.redo
+                 and not held.missing & self._arrived
                  and mirror.crop == held.mirror.crop
                  and _scaled(mirror.size, held.scale)
                  == (held.tile.width, held.tile.height))
         return _Seen(key, frame, record, reflector, mirror, eye, rough, held, valid)
+
+    def _view_for(self, entry: _Seen) -> ReflectedView:
+        """The view ``entry``'s mirror shows, the same one while it stays in view."""
+        view = self._views.get(entry.key)
+        if view is None or view.source is not entry.frame.view:
+            view = self._views[entry.key] = ReflectedView(entry.frame.view, entry.key)
+        return view
+
+    def _inside(self, entries: Sequence[_Seen],
+                inside: Callable[[Any], Sequence[Any]]) -> List[_Seen]:
+        """The mirrors seen in the views of ``entries``' mirrors.
+
+        ``inside(frame)`` is what a mirror view's frame would draw. A mirror's
+        own surface is left out of its own view. Each frame's ``modelproj`` is
+        the mirror's clipped camera, which is what it culls through, and its
+        ``projection`` the parent's own cropped to the mirror, which is what a
+        mirror in it is planned from: a near plane moved onto one mirror and
+        then onto another leaves a far plane that clips what the second shows.
+        """
+        from OpenGLContext.multiview.strategy import ViewFrame
+        from OpenGLContext.multiview.views import View
+        frames = []
+        for entry in entries:
+            mirror = entry.mirror
+            plain = np.asarray(entry.frame.projection, 'd') @ reflection.crop_matrix(mirror.crop)
+            # A ReflectedView answers every attribute as the View it is seen
+            # from does, which is what a frame's view is read for.
+            frame = ViewFrame(cast(View, self._view_for(entry)), entry.frame.camera,
+                              (0, 0, mirror.size[0], mirror.size[1]),
+                              mirror.modelView, plain, mirror.modelproj,
+                              None, fitted=False)
+            frame.toRender = [record for record in inside(frame)
+                              if record[4] is not entry.record[4]]
+            frames.append(frame)
+        return self._seen(frames)
 
     # -- weighing them ----------------------------------------------------
     def _drift(self, seen: _Seen) -> float:
@@ -264,29 +351,41 @@ class ReflectionPlanner:
     # -- the frame --------------------------------------------------------
     def plan(self, frames: Sequence[Any], atlas: Tuple[int, int],
              budget: Union[Budget, Callable[[], Budget]],
-             separate: Callable[[Any], bool] = lambda frame: False) -> ReflectionPlan:
+             separate: Callable[[Any], bool] = lambda frame: False,
+             inside: Optional[Callable[[Any], Sequence[Any]]] = None,
+             bounces: int = 2) -> ReflectionPlan:
         """This frame's mirror views and lookups.
 
         ``atlas`` is the atlas's size in texels; ``budget`` is the frame's
         :class:`~OpenGLContext.passes.reflectiontiles.Budget`, or what makes
         one, asked only where a view has a mirror in it. ``separate(frame)``
         says whether a view's mirrors would also draw shapes a shared draw
-        refuses.
+        refuses. ``inside(frame)`` answers the mirrors a mirror view's frame
+        can see; given it, each is planned from that mirror's camera, drawn as
+        its :class:`ReflectedView`, and read there a frame later. Every chain
+        of mirrors is followed with its own camera, up to ``bounces``
+        reflections deep: 1 plans only the mirrors the views see.
         """
         self.frame += 1
+        self._arrived = {key for key, held in self._held.items() if not held.provisional}
         if (self.packer.width, self.packer.height) != tuple(atlas):
             self.packer.resize(*atlas)
             self._held.clear()
         seen = {entry.key: entry for entry in self._seen(frames)}
+        if inside is not None:
+            level = list(seen.values())
+            for _depth in range(1, int(bounces)):
+                level = self._inside(level, inside)
+                seen.update((entry.key, entry) for entry in level)
+        self._views = {key: view for key, view in self._views.items() if key in seen}
         if not seen:
             self._held.clear()
             self.packer.place({})
             return ReflectionPlan(frames)
         if callable(budget):
             budget = budget()
-        mirrored = {id(entry.frame) for entry in seen.values()}
-        separates = {id(frame): bool(separate(frame)) for frame in frames
-                     if id(frame) in mirrored}
+        mirrored = {id(entry.frame): entry.frame for entry in seen.values()}
+        separates = {key: bool(separate(frame)) for key, frame in mirrored.items()}
         candidates = [self._candidate(entry, separates[id(entry.frame)])
                       for entry in seen.values()]
         decisions = {decision.key: decision.scale
@@ -312,7 +411,8 @@ class ReflectionPlanner:
                                   tile, decisions[key], entry.eye, self.frame,
                                   provisional=settling)
                 plan.draws.append(MirrorDraw(key, entry.frame, entry.record,
-                                             entry.mirror, tile, entry.reflector))
+                                             entry.mirror, tile, entry.reflector,
+                                             self._view_for(entry)))
             elif key not in packed.moved and entry.held is not None:
                 held[key] = entry.held
             else:
@@ -381,4 +481,5 @@ class ReflectionPlanner:
             distortion=float(seen.reflector.distortion),
             replace=bool(seen.reflector.replace),
             rough=seen.rough,
-            provisional=held.provisional)
+            provisional=held.provisional,
+            reflectance=float(seen.reflector.reflectance))

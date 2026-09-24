@@ -597,6 +597,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         self._set_uniform3f('planarNormal', lookup.normal, target)
         self._set_uniform1f('planarDistortion', lookup.distortion, target)
         self._set_uniform1i('planarReplace', 1 if lookup.replace else 0, target)
+        self._set_uniform1f('planarReflectance', float(lookup.reflectance), target)
 
     def set_planar_levels(self, levels: float) -> None:
         """How many blurred mip levels of the reflection atlas a rough mirror may read."""

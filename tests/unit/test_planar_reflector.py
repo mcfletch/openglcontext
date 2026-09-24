@@ -14,6 +14,7 @@ from OpenGLContext.scenegraph.reflector import PlanarReflector
 
 def test_a_reflector_defaults_to_half_scale_every_third_frame():
     reflector = PlanarReflector()
+    assert reflector.reflectance == pytest.approx(0.97)
     assert reflector.scale == pytest.approx(0.5)
     assert reflector.interval == 3
     assert reflector.priority == pytest.approx(1.0)

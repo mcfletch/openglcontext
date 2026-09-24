@@ -1892,7 +1892,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
     def renderShared( self, frames: Sequence['ViewFrame'],
                       id_map: Optional[Dict[int, Any]],
                       lighting: Any = None, mirrored: bool = False,
-                      capacity: int = 0 ) -> Optional[set]:
+                      capacity: int = 0, reflection: bool = False ) -> Optional[set]:
         """Draw every shape that can serve several views once, for all of them.
 
         The draw is made in the active view's eye space, exactly as that view
@@ -1904,9 +1904,10 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         leave out, or None where the programs for this many views did not
         compile and every view draws everything itself.
 
-        ``mirrored`` draws mirror views into the reflection atlas: every one
-        of them turns the winding over, which the reference camera's
-        modelviews do not say, and each writes linear HDR.
+        ``reflection`` draws mirror views into the reflection atlas, in linear
+        HDR. ``mirrored`` says every view's camera has been reflected an odd
+        number of times, which turns the winding over and which the reference
+        camera's modelviews do not say.
 
         ``capacity`` asks for programs compiled for at least that many views,
         for a caller whose count of views changes from frame to frame and
@@ -1944,11 +1945,12 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             shader.set_default_material()
             shader.set_scene_ambient( self.sceneAmbient() )
             self.setupLightGrid()
-            if mirrored:
-                from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+            if reflection:
                 hdr = getattr( shader, 'set_hdr_output', None )
                 if hdr is not None:
                     hdr( True )
+            if mirrored:
+                from OpenGLContext.scenegraph.pbrmesh import PBRMesh
                 self.mirroredDraw = True
                 PBRMesh.reset_draw_state( self )
                 glFrontFace( GL_CW )

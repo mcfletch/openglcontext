@@ -347,3 +347,27 @@ def test_a_polished_textured_floor_is_a_mirror():
     plan = ReflectionPlanner().plan([frame], (512, 512),
                                     Budget(views=4, separate_views=4, texels=10 ** 9))
     assert len(plan.draws) == 1
+
+
+# --- which shapes are mirrors ---------------------------------------------------
+
+def test_making_a_shape_a_mirror_moves_the_mirror_generation():
+    """A pass remembers which of the scene's shapes are mirrors until one of
+    the fields that decide it is set."""
+    from OpenGLContext.scenegraph import basenodes
+    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+    from OpenGLContext.scenegraph.reflector import PlanarReflector
+    material = PBRMaterial()
+    appearance = basenodes.Appearance(material=material)
+    shape = basenodes.Shape(appearance=appearance)
+    reflector = PlanarReflector()
+    seen = [reflection.mirror_generation()]
+    material.reflector = reflector
+    seen.append(reflection.mirror_generation())
+    reflector.enabled = False
+    seen.append(reflection.mirror_generation())
+    appearance.material = PBRMaterial()
+    seen.append(reflection.mirror_generation())
+    shape.appearance = basenodes.Appearance()
+    seen.append(reflection.mirror_generation())
+    assert all(later > earlier for earlier, later in zip(seen, seen[1:]))

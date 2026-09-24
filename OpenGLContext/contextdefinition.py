@@ -207,6 +207,13 @@ class ContextDefinition( node.Node ):
                                       lambda: int(renderoptions.env_number(
                                           'OPENGLCONTEXT_REFLECTION_VIEWS', 0,
                                           integer=True)))
+    #: How many reflections deep a chain of mirrors is followed: 1 is a mirror
+    #: in view, 2 a mirror seen in it, each drawn from its own camera
+    #: (env: OPENGLCONTEXT_REFLECTION_BOUNCES).
+    reflectionBounces = field.newField( "reflectionBounces", "SFInt32", 1,
+                                        lambda: int(renderoptions.env_number(
+                                            'OPENGLCONTEXT_REFLECTION_BOUNCES', 2,
+                                            integer=True)))
     #: Of those, the most that also draw the shapes a shared draw refuses --
     #: particles, text -- each of which costs a draw per mirror view
     #: (env: OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS).
@@ -301,6 +308,8 @@ class ContextDefinition( node.Node ):
         'planarReflections': {'label': 'Reflections'},
         'reflectionViews': {'label': 'Reflections per frame', 'minimum': 0,
                             'maximum': 16, 'step': 1},
+        'reflectionBounces': {'label': 'Mirrors seen in mirrors', 'minimum': 1,
+                              'maximum': 3, 'step': 1},
         'instancing': {'label': 'Instanced batching'},
         'gpuSkinning': {'label': 'Skinning on the GPU'},
         'tessellationLOD': {'label': 'Distance detail'},
@@ -325,7 +334,7 @@ class ContextDefinition( node.Node ):
     RENDERING_FIELDS = (
         'shadows', 'shadowsSoft', 'shadowCascades', 'maximumLights',
         'bloom', 'ibl', 'iblIntensity', 'transmission', 'planarReflections',
-        'reflectionViews', 'instancing', 'gpuSkinning', 'tessellationLOD',
+        'reflectionViews', 'reflectionBounces', 'instancing', 'gpuSkinning', 'tessellationLOD',
         'multisampleSamples', 'vsync',
     )
     #: Fields a settings screen shows under "Interface": how the overlay itself

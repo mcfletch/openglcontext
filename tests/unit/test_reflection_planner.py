@@ -172,10 +172,12 @@ def test_moving_the_camera_far_redraws_even_inside_the_interval():
 
 
 def test_the_lookup_carries_the_reflectors_own_settings():
-    record = _mirror(reflector=PlanarReflector(distortion=0.3, replace=True))
+    record = _mirror(reflector=PlanarReflector(distortion=0.3, replace=True,
+                                               reflectance=0.8))
     plan = ReflectionPlanner().plan([_frame([record])], ATLAS, BIG)
     lookup = plan.lookup(plan.frames[0], record)
     assert lookup.distortion == pytest.approx(0.3)
+    assert lookup.reflectance == pytest.approx(0.8)
     assert lookup.replace
     assert tuple(lookup.normal) == pytest.approx((0.0, 0.0, 1.0))
 
@@ -324,3 +326,104 @@ def test_a_reflection_that_left_out_a_mirror_is_drawn_again():
     planner.redo([first.draws[0].key])
     later = planner.plan([_frame([record])], ATLAS, NOTHING)
     assert later.candidates[0].must and later.unfinished
+
+
+# --- a mirror seen in a mirror ------------------------------------------------
+
+def _behind(z=6.0):
+    """A mirror behind the camera, facing the one in front of it: only that
+    mirror's reflection sees it."""
+    mesh = PBRMesh(positions=QUAD, indices=QUAD_INDICES)
+    material = PBRMaterial(metallic=1.0, roughness=0.0,
+                           reflector=PlanarReflector(interval=3))
+    tmatrix = np.diag([-2.0, 2.0, -2.0, 1.0]).astype('f')
+    tmatrix[3, :3] = (0.0, 1.5, z)
+    shape = Shape(geometry=mesh, appearance=Appearance(material=material))
+    return ((False,), None, tmatrix, None, _Path(('behind', z)), shape)
+
+
+def _by_path(plan, record):
+    return [draw for draw in plan.draws if draw.record[4] is record[4]]
+
+
+def test_a_mirror_seen_only_in_another_mirror_is_drawn_for_that_mirror():
+    """The mirror behind the camera shows in the front mirror's reflection with
+    a reflection of its own, drawn from the front mirror's camera."""
+    front, back = _mirror(), _behind()
+    plan = _settled_planner().plan([_frame([front])], ATLAS, BIG,
+                                   inside=lambda frame: [front, back])
+    [outer], [inner] = _by_path(plan, front), _by_path(plan, back)
+    assert inner.frame.view is outer.view
+    assert (outer.depth, inner.depth) == (1, 2)
+    assert plan.lookups[(id(outer.view), id(back[4]))] is not None
+    assert (id(outer.view), id(front[4])) not in plan.lookups
+
+
+def test_mirrors_are_looked_for_in_a_mirrors_view_and_no_deeper():
+    front, back = _mirror(), _behind()
+    looked = []
+
+    def inside(frame):
+        looked.append(frame)
+        return [front, back]
+
+    _settled_planner().plan([_frame([front])], ATLAS, BIG, inside=inside)
+    assert len(looked) == 1
+    assert looked[0].view.source is VIEW
+
+
+def test_a_mirrors_view_is_the_same_view_from_frame_to_frame():
+    """Its identity keys the reflections read inside it, a frame later."""
+    planner = _settled_planner()
+    front, back = _mirror(), _behind()
+    views = [_by_path(planner.plan([_frame([front])], ATLAS, BIG,
+                                   inside=lambda frame: [back]), front)[0].view
+             for _ in range(2)]
+    assert views[0] is views[1]
+    assert views[0].name == VIEW.name
+
+
+def test_mirrors_facing_each_other_are_followed_to_the_bounce_limit():
+    """Each chain of mirrors is looked through with its own camera."""
+    front, back = _mirror(), _behind()
+    looked = []
+
+    def inside(frame):
+        looked.append(frame)
+        return [front, back]
+
+    plan = _settled_planner().plan([_frame([front])], ATLAS, BIG, inside=inside,
+                                   bounces=3)
+    assert [frame.view.depth for frame in looked] == [1, 2]
+    assert not np.allclose(looked[0].modelView, looked[1].modelView)
+    assert sorted(draw.depth for draw in plan.draws) == [1, 2, 3]
+
+
+def test_one_bounce_looks_for_no_mirror_in_a_mirror():
+    looked = []
+    _settled_planner().plan([_frame([_mirror()])], ATLAS, BIG,
+                            inside=lambda frame: looked.append(frame) or [],
+                            bounces=1)
+    assert looked == []
+
+
+def test_a_view_drawn_without_a_mirrors_reflection_is_drawn_again_once_it_has_one():
+    """A reflection not yet drawn is shown as the probe meanwhile, and the view
+    showing it is not held back waiting for it."""
+    planner = _settled_planner()
+    front, back = _mirror(reflector=PlanarReflector(interval=100)), _behind()
+    one = Budget(views=1, separate_views=1, texels=10 ** 9)
+
+    def plan(budget):
+        return planner.plan([_frame([front])], ATLAS, budget, inside=lambda frame: [back])
+
+    first = plan(one)
+    [outer] = first.draws
+    inner_key = (id(outer.view), id(back[4]))
+    planner.drawn_without(outer.key, [inner_key])
+    second = plan(one)
+    assert [draw.key for draw in second.draws] == [inner_key]
+    waiting = {c.key: c for c in second.candidates}[outer.key]
+    assert waiting.valid
+    third = plan(NOTHING)
+    assert not {c.key: c for c in third.candidates}[outer.key].valid

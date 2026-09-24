@@ -278,6 +278,7 @@ uniform vec3 planarNormal;       // the mirror's plane normal, world space
 uniform float planarDistortion;  // view widths of offset per unit of normal tilt
 uniform float planarLevels;      // blurred mip levels a rough mirror may read
 uniform bool planarReplace;      // show the reflection in place of the shading
+uniform float planarReflectance; // the share of the light the mirror reflects
 // reflection.ROUGHEST: the roughness that reads the most blurred level.
 const float PLANAR_ROUGHEST = 0.6;
 #endif
@@ -367,13 +368,19 @@ vec4 planarSample(vec3 N, float rough) {
 #endif
 }
 
-// The environment a mirror reflects: the mirrored scene where there was
-// something to mirror, and ``probe`` -- the sky -- where there was not.
+// The environment a surface reflects. A mirror reflects the mirrored scene
+// where there was something to mirror and ``probe`` -- the sky -- where there
+// was not, less what it does not reflect; any other surface, the probe.
 vec3 planarReflected(vec3 probe, vec3 N, float rough) {
+#if PBR_PLANAR_REFLECTION
+    if (!hasPlanarReflection) { return probe; }
     vec4 mirrored = planarSample(N, rough);
     // The atlas holds colour already multiplied by the camera's exposure,
     // which the term this replaces has yet to be.
-    return mix(probe, mirrored.rgb / max(exposure, 1e-6), mirrored.a);
+    return planarReflectance * mix(probe, mirrored.rgb / max(exposure, 1e-6), mirrored.a);
+#else
+    return probe;
+#endif
 }
 
 // Fog: aerial perspective over terrain, or a VRML97 Fog node the camera is
