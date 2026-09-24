@@ -44,6 +44,24 @@ checkout beside this one. What is specific to this project — the commentary
 notation the tutorials are written in, and the tutorial paths — is `docbuild/`
 here.
 
+## The tutorial pages keep the script's indentation
+
+`docbuild/tutorials.py` cuts a script into pieces at its `'''` commentary, so a
+method, or the body of one, is a piece of its own that sits some columns in
+from the left of the file. docutils removes the indent common to a directive's
+content before the directive sees it, so a piece written into a `code-block` at
+its real indent is still shown flush left, and a method no longer reads as part
+of its class.
+
+The generator therefore writes each piece flush left in a `tutorial-code`
+directive, with an `:indent:` option giving the columns it sits at in the
+script (left out at the top level). `tutorial-code` is Sphinx's `code-block`
+with that option added, and puts the indent back on every non-blank line before
+highlighting; it is `docs/_ext/oglc_tutorials.py`, registered in
+`docs/conf.py`. A tab in a piece's indent counts as eight columns, as Python
+reads it. `tests/unit/test_docbuild.py` builds a generated page with Sphinx and
+checks the columns the code comes out at.
+
 ## What moved, and what the URLs do
 
 Every page keeps its name: `docs/pbr.html` was published at

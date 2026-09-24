@@ -43,6 +43,7 @@ extensions = [
     'sphinxcontrib.mermaid',
     'oglc_gallery',
     'oglc_sidebar',
+    'oglc_tutorials',
 ]
 
 #: The diagrams are drawn in the reader's browser, from the source written
