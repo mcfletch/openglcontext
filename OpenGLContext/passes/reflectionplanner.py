@@ -22,7 +22,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import (
-    Any, Callable, Dict, Hashable, List, NamedTuple, Optional, Sequence, Tuple, Union,
+    Any, Callable, Dict, Hashable, Iterable, List, NamedTuple, Optional, Sequence,
+    Tuple, Union,
 )
 
 import numpy as np
@@ -55,6 +56,8 @@ class Lookup(NamedTuple):
     is the tile in atlas coordinates, half a texel in. ``normal`` is the
     mirror's plane normal in the world, which the distortion is measured
     from. ``rough`` is the material's roughness, which picks the mip level.
+    ``provisional`` marks a reflection drawn while the pass settled, which a
+    mirror view drawing this mirror does not read.
     """
 
     matrix: Tuple[float, ...]
@@ -64,6 +67,7 @@ class Lookup(NamedTuple):
     distortion: float
     replace: bool
     rough: float
+    provisional: bool = False
 
 
 @dataclass
@@ -126,6 +130,8 @@ class _Held:
     drawn: int
     #: Drawn while the pass was settling, so drawn again before it is kept.
     provisional: bool = False
+    #: Drawn with a mirror left out of it, so drawn again.
+    redo: bool = False
 
 
 @dataclass
@@ -165,6 +171,18 @@ class ReflectionPlanner:
         """Forget every tile: the atlas they were in is gone."""
         self._held.clear()
         self.packer.resize(self.packer.width, self.packer.height)
+
+    def redo(self, keys: Iterable[Hashable]) -> None:
+        """Draw these mirrors' reflections again next frame.
+
+        For a reflection whose view had another mirror in it with nothing yet
+        to show: the next frame will have it. The reflection is still passed
+        on meanwhile, since what it does show is right.
+        """
+        for key in keys:
+            held = self._held.get(key)
+            if held is not None:
+                held.redo = True
 
     # -- finding the mirrors ----------------------------------------------
     def _seen(self, frames: Sequence[Any]) -> List[_Seen]:
@@ -210,7 +228,7 @@ class ReflectionPlanner:
                                         float(reflector.scale), crop=crop)
         if mirror is None:
             return None
-        valid = (held is not None and not held.provisional
+        valid = (held is not None and not held.provisional and not held.redo
                  and mirror.crop == held.mirror.crop
                  and _scaled(mirror.size, held.scale)
                  == (held.tile.width, held.tile.height))
@@ -342,4 +360,5 @@ class ReflectionPlanner:
                     float(mirror.normal[2])),
             distortion=float(seen.reflector.distortion),
             replace=bool(seen.reflector.replace),
-            rough=seen.rough)
+            rough=seen.rough,
+            provisional=held.provisional)

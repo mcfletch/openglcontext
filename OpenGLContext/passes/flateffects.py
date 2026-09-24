@@ -102,6 +102,11 @@ class _FlatEffectsMixin:
     #: What each mirror in each view reads this frame, by
     #: :func:`~OpenGLContext.passes.reflectionplanner.key_for`.
     _reflection_lookups: Dict[Any, "Lookup"] = {}
+    #: What each mirror read the frame before: what a mirror seen in a mirror
+    #: view reads, from the copy of the atlas that frame left.
+    _previous_lookups: Dict[Any, "Lookup"] = {}
+    #: The mirror views this frame drew with a mirror left out of them.
+    _incompleteMirrors: set = set()
     #: The lookup the program was last given, so a run of shapes that are
     #: not mirrors sets nothing.
     _reflection_applied: Any = None
@@ -297,6 +302,8 @@ class _FlatEffectsMixin:
         view at a time. The views' own camera is looked through again
         afterwards.
         """
+        previous = self._reflection_lookups
+        self._previous_lookups = {}
         self._reflection_lookups = {}
         self._reflection_applied = None
         if not self.planarReflectionsEnabled():
@@ -319,6 +326,7 @@ class _FlatEffectsMixin:
         plan = planner.plan(frames, size, self.reflectionBudget,
                             separate=self._separateShapes)
         self._reflection_lookups = plan.lookups
+        self._incompleteMirrors = set()
         if plan.unfinished:
             # A context that draws only when something changes would otherwise
             # leave a still scene showing reflections drawn while the pass was
@@ -331,11 +339,17 @@ class _FlatEffectsMixin:
         atlas = self._reflection_atlas
         if atlas is None:
             atlas = self._reflection_atlas = ReflectionAtlas()
-        if atlas.ensure_size(*size) and not plan.draws:
-            # A new atlas holds nothing any held tile says it does.
-            planner.reset()
-            self._reflection_lookups = {}
-            return
+        if atlas.ensure_size(*size):
+            # A new atlas holds nothing any tile says it does.
+            previous = {}
+            if not plan.draws:
+                planner.reset()
+                self._reflection_lookups = {}
+                return
+        # Only what was drawn once the pass settled is passed on to another
+        # mirror: a picture from those first frames is not one to keep.
+        self._previous_lookups = {key: lookup for key, lookup in previous.items()
+                                  if not lookup.provisional}
         if plan.draws:
             from OpenGLContext.passes.gputimer import GpuTimer
             if timer is None:
@@ -348,6 +362,13 @@ class _FlatEffectsMixin:
                     self._drawMirrorViews(plan, lighting, gathered, atlas)
                 finally:
                     timer.end()
+        if self._incompleteMirrors:
+            # Each is drawn again next frame, when the mirror it left out has
+            # a reflection of its own to show.
+            planner.redo(self._incompleteMirrors)
+            trigger = getattr(self.context, 'triggerRedraw', None)
+            if trigger is not None:
+                trigger(0)
         self.stats.mirrorViews = len(plan.draws)
         self.stats.mirrorTexels = plan.texels
         self.stats.mirrorMilliseconds = None if timer is None else timer.milliseconds
@@ -367,13 +388,20 @@ class _FlatEffectsMixin:
         """A :class:`~OpenGLContext.multiview.strategy.ViewFrame` per mirror view.
 
         Each is the mirror's camera, drawing into its tile, with what that
-        camera's frustum keeps of the frame's walk: opaque, not itself a
-        mirror, and large enough to cover two texels of the tile.
+        camera's frustum keeps of the frame's walk: opaque, and large enough
+        to cover two texels of the tile. A mirror in it shows the reflection
+        it had the frame before. One in view that had none yet is left out,
+        and the view noted in :attr:`_incompleteMirrors` to be drawn again once
+        it has; one no view shows has no reflection of its own and reflects
+        the environment probe.
         """
         from OpenGLContext import frustum
         from OpenGLContext.multiview.strategy import ViewFrame
         from OpenGLContext.passes.reflection import fov, is_reflector, too_small
         mirrors = []
+        self._incompleteMirrors = set()
+        earlier = self._previous_lookups
+        coming = {candidate.key for candidate in plan.candidates}
         for draw in plan.draws:
             mirror = draw.mirror
             modelproj = mirror.modelproj
@@ -387,10 +415,19 @@ class _FlatEffectsMixin:
                 (mirror.crop[3] - mirror.crop[1]) / 2.0 * fov(draw.frame.projection),
                 1e-6)
             eye = np.linalg.inv(np.asarray(mirror.modelView, 'd'))[3, :3]
-            frame.toRender = [
-                record for record in self.renderSet(mirror.modelView, gathered)
-                if not record[0][0] and not is_reflector(record)
-                and not too_small(record, eye, texels)]
+            kept = []
+            for record in self.renderSet(mirror.modelView, gathered):
+                if record[0][0] or too_small(record, eye, texels):
+                    continue
+                if is_reflector(record):
+                    if record[4] is draw.record[4]:
+                        continue
+                    key = (id(frame.view), id(record[4]))
+                    if key not in earlier and key in coming:
+                        self._incompleteMirrors.add(draw.key)
+                        continue
+                kept.append(record)
+            frame.toRender = kept
             frame.visiblePlacements = self.visiblePlacements or {}
             mirrors.append(frame)
         return mirrors
@@ -404,9 +441,20 @@ class _FlatEffectsMixin:
         )
         from OpenGLContext.multiview.strategy import MultiviewCapabilities
         from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+        from OpenGLContext.passes.reflection import is_reflector
         shader = self.shader_program
         active = self.activeFrame
         mirrors = self.mirrorFrames(plan, gathered)
+        # A mirror seen in a mirror view reads the reflection it had the frame
+        # before, from a copy: the atlas itself is being drawn into.
+        bounce = any(is_reflector(record) for frame in mirrors
+                     for record in frame.toRender)
+        if bounce:
+            atlas.keep()
+            atlas.bind_kept()
+            self._reflection_lookups = self._previous_lookups
+            shader.use(lit=True)
+            shader.set_planar_levels(0)
         previous = atlas.begin()
         drawn_before = self.stats.draws
         try:
@@ -451,6 +499,9 @@ class _FlatEffectsMixin:
                 glDisable(GL_SCISSOR_TEST)
             shader.use(lit=True)
             shader.set_hdr_output(bool(getattr(self, '_bloom_active', False)))
+            if bounce:
+                self.clearPlanarReflection()
+                self._reflection_lookups = plan.lookups
             if active is not None:
                 self.applyViewFrame(active)
 

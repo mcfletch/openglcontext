@@ -19,7 +19,7 @@ from tests.unit.glrender import base_env, frames_of  # noqa: E402
 SIZE = (160, 120)
 
 
-def _mirror(x=0.0, z=-4.0, size=6.0, reflector=None, **material):
+def _mirror(x=0.0, z=-4.0, size=6.0, reflector=None, y=0.0, **material):
     half = size / 2.0
     mesh = PBRMesh(
         positions=np.array([(-half, -half, 0), (half, -half, 0),
@@ -29,7 +29,7 @@ def _mirror(x=0.0, z=-4.0, size=6.0, reflector=None, **material):
         indices=np.array([0, 1, 2, 0, 2, 3], np.uint32))
     settings = dict(baseColor=(1.0, 1.0, 1.0), metallic=1.0, roughness=0.0)
     settings.update(material)
-    return basenodes.Transform(translation=(x, 0.0, z), children=[basenodes.Shape(
+    return basenodes.Transform(translation=(x, y, z), children=[basenodes.Shape(
         geometry=mesh, appearance=basenodes.Appearance(material=PBRMaterial(
             reflector=PlanarReflector() if reflector is None else reflector,
             **settings)))])
@@ -314,3 +314,51 @@ def test_a_still_scene_asks_for_frames_until_its_mirrors_settle(render_scene, en
     assert drawn[0] and not drawn[-1]
     assert planner._held and not any(held.provisional for held in planner._held.values())
     assert len(renderpass.FLAT._reflection_lookups) == len(planner._held)
+
+
+
+def test_a_mirror_seen_in_a_mirror_shows_its_own_reflection(render_scene, env):
+    """The floor reflects the wall mirror, and the wall mirror reflects the box.
+
+    The box stands behind the camera, so the only way red reaches the floor is
+    through the wall mirror's reflection, seen in the floor.
+    """
+    scene = [basenodes.Viewpoint(position=(0.0, 1.0, 6.0), orientation=(1, 0, 0, -0.2)),
+             basenodes.NavigationInfo(headlight=False),
+             basenodes.DirectionalLight(direction=(0.0, -1.0, 0.0)),
+             _box(0.0, 9.0, (1.0, 0.0, 0.0)),
+             _mirror(y=1.5, size=3.0),
+             _floor(baseColor=(0.9, 0.9, 0.9), metallic=1.0, roughness=0.02)]
+    frame = frames_of(render_scene, scene, frames=6, size=SIZE)[-1].astype(int)
+    height = frame.shape[0]
+    floor = frame[int(height * 0.7):]
+    red = (floor[..., 0] > 120) & (floor[..., 0] > floor[..., 1] + 60)
+    assert int(red.sum()) > 40
+
+
+def test_a_still_scene_settles_with_each_mirror_in_the_other(render_scene, env):
+    """Drawn only when asked, a floor reflecting a wall mirror ends up showing
+    what the wall mirror shows."""
+    scene = [basenodes.Viewpoint(position=(0.0, 1.0, 6.0), orientation=(1, 0, 0, -0.2)),
+             basenodes.NavigationInfo(headlight=False),
+             basenodes.DirectionalLight(direction=(0.0, -1.0, 0.0)),
+             _box(0.0, 9.0, (1.0, 0.0, 0.0)),
+             _mirror(y=1.5, size=3.0),
+             _floor(baseColor=(0.9, 0.9, 0.9), metallic=1.0, roughness=0.02)]
+    frames = []
+    from OpenGLContext import glfwcontext
+    from OpenGLContext.capture import read_back_buffer
+    original = glfwcontext.GLFWContext.SwapBuffers
+
+    def capturing(self):
+        frames.append(read_back_buffer()[0].astype(int))
+        return original(self)
+
+    env.setattr(glfwcontext.GLFWContext, 'SwapBuffers', capturing)
+    context = render_scene(scene, frames=1, size=SIZE).context
+    for _ in range(12):
+        context.OnDraw(force=1 if context.redrawRequest.is_set() else 0)
+    assert not context.redrawRequest.is_set()
+    floor = frames[-1][int(frames[-1].shape[0] * 0.7):]
+    red = (floor[..., 0] > 120) & (floor[..., 0] > floor[..., 1] + 60)
+    assert int(red.sum()) > 40

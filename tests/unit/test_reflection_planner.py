@@ -268,3 +268,24 @@ def test_reaching_its_interval_does_not_ask_for_a_frame():
     planner.plan([_frame(records)], ATLAS, BIG)
     plan = planner.plan([_frame(records)], ATLAS, one)
     assert len(plan.draws) == 1 and not plan.unfinished
+
+
+def test_a_reflection_drawn_while_settling_says_so_in_its_lookup():
+    """A mirror view drawing another mirror must not pass that picture on."""
+    planner = ReflectionPlanner()
+    record = _mirror()
+    first = planner.plan([_frame([record])], ATLAS, BIG)
+    assert first.lookup(first.frames[0], record).provisional
+    _settled(planner, [record])
+    later = planner.plan([_frame([record])], ATLAS, BIG)
+    assert not later.lookup(later.frames[0], record).provisional
+
+
+def test_a_reflection_that_left_out_a_mirror_is_drawn_again():
+    """It had nothing to show for the mirror in it; next frame it will."""
+    planner = _settled_planner()
+    record = _mirror(reflector=PlanarReflector(interval=100))
+    first = planner.plan([_frame([record])], ATLAS, BIG)
+    planner.redo([first.draws[0].key])
+    later = planner.plan([_frame([record])], ATLAS, NOTHING)
+    assert later.candidates[0].must and later.unfinished
