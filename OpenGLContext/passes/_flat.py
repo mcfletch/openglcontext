@@ -20,6 +20,7 @@ from typing import (
 )
 
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod,lightgrid
+from OpenGLContext.scenegraph import zone as zonenodes
 from OpenGL.GL import *
 from OpenGL.GL import (
     glEnable, glDisable, glDisablei, glBlendFunc, glDepthMask, glDepthFunc,
@@ -31,6 +32,8 @@ from OpenGL.GL import (
 from OpenGLContext.arrays import (
     arange, array, asarray, dot, flatnonzero, zeros,
 )
+import numpy
+
 from OpenGLContext import frustum
 from OpenGLContext.passes import reflection
 from OpenGLContext.debug.logs import getTraceback
@@ -83,6 +86,7 @@ from OpenGLContext.passes.selection import (
     SelectionMixin,
 )
 from OpenGLContext.passes.flateffects import _FlatEffectsMixin
+from OpenGLContext.passes.zonepass import ZonesMixin
 
 # MRT draw-buffer index carrying the packed object id (attachment 1).
 OBJECT_ID_ATTACHMENT = 1
@@ -431,7 +435,7 @@ def presentFrame( context: Any ) -> Any:
     return context.SwapBuffers()
 
 
-class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
+class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
     """Flat rendering pass with a single function to render scenegraph
 
     Uses structural scenegraph observations to allow the actual
@@ -653,6 +657,8 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         light_count = 0
         light_paths = self.paths.get(nodetypes.Light, ())
         ceiling = self.maxLights(shader.MAX_LIGHTS)
+        # Which light went into which slot, for the zones' per-draw light mask.
+        bound = []
 
         for path in light_paths:
             if light_count >= ceiling:
@@ -665,7 +671,9 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 # the light position/direction by the current modelview matrix
                 light_matrix = dot(tmatrix, matrix)
                 configure_light_from_node(shader, light_count, light_node, light_matrix)
+                bound.append(light_node)
                 light_count += 1
+        self.boundLights = bound
 
         if light_count == 0:
             # Set default VRML97 headlight (direction already in eye space)
@@ -792,6 +800,9 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
 
         self.stats.opaque += len(singles)
         self.stats.draws += len(singles)
+        # Whatever moved since it was last drawn is classified against the
+        # zones together, before the draws ask one at a time.
+        self.refreshZones([record for _obj_index, record in singles])
         for _obj_index, record in singles:
             _key, mvmatrix, tmatrix, bvolume, path, node = record
             self.matrix = mvmatrix
@@ -807,6 +818,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             # through to whatever is behind it.
             masked = self._writeShapeId(shader, path, node, prog, id_map)
             self.applyLightGrid(shader, node, tmatrix, bvolume, prog)
+            self.applyZones(shader, path, tmatrix, bvolume, prog)
             self.applyPlanarReflection(shader, record, prog)
 
             try:
@@ -863,6 +875,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         glDepthFunc(GL_LEQUAL)
         prog = shader.program
 
+        self.refreshZones([record for _obj_index, record in transparent])
         try:
             for _obj_index, record in transparent:
                 _key, mvmatrix, tmatrix, bvolume, path, node = record
@@ -877,6 +890,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 # or mask it for a non-pickable shape.
                 masked = self._writeShapeId(shader, path, node, prog, id_map)
                 self.applyLightGrid(shader, node, tmatrix, bvolume, prog)
+                self.applyZones(shader, path, tmatrix, bvolume, prog)
                 self.applyPlanarReflection(shader, record, prog)
 
                 try:
@@ -913,6 +927,9 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         # Likewise: the baked irradiance grid is looked up once a frame and
         # then sampled per object, so it is found the same way a light is.
         lightgrid.LightGrid,
+        # And the zones, which are placed once a frame and then decide the
+        # environment and lights of each object drawn.
+        zonenodes.Zone,
     ]
 
     #: The grid this frame's objects are lit from, or None where the scene
@@ -1107,7 +1124,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             return 0
         try:
             from OpenGLContext.audio import scene as audioscene
-            return audioscene.update( context, paths )
+            return audioscene.update( context, paths, zones=self.zones )
         except Exception as err:
             log.warning(
                 "Failure updating scene audio: %s", getTraceback( err ),
@@ -1274,8 +1291,11 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         modelviews = kept @ asarray( matrix, 'f' )
         toRender = []
         seen = self.visiblePlacements = {}
+        hidden = self._zoneHidden
         for at, index in enumerate( keep ):
             path = paths[index]
+            if hidden and not self.zoneVisible( path ):
+                continue
             tmatrix = own[index]
             node = gathered.nodes[index]
             # A declared set is one object to the test above, so its whole box
@@ -1617,6 +1637,9 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 # Asked once, before any view confines drawing to its rectangle:
                 # building the environment probe renders offscreen.
                 lighting = self.iblPrepare()
+                # The zone probes this frame's share of captures is for, drawn
+                # before anything is drawn that reads them.
+                self.renderZoneProbes(frames, lighting)
                 # Every mirror's reflection, for every view, before any view
                 # is drawn: they are views of their own, drawn into the
                 # reflection atlas, and a view reads them as it shades.
@@ -1734,6 +1757,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         shader_program.set_default_material()
         shader_program.set_scene_ambient(self.sceneAmbient())
         self.setupLightGrid()
+        self.setupZones(matrix)
 
     def sceneAmbient( self ) -> Tuple[float, float, float]:
         """The flat fill light the shader adds to everything.
@@ -1944,6 +1968,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             shader.set_default_material()
             shader.set_scene_ambient( self.sceneAmbient() )
             self.setupLightGrid()
+            self.setupZones( matrix )
             if mirrored:
                 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
                 hdr = getattr( shader, 'set_hdr_output', None )
@@ -2229,6 +2254,10 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         if attach is not None:
             attach( self )
 
+        # The zones, placed once for the frame: the audio below hears them,
+        # and every draw and capture after it is lit by them.
+        self.placeZones()
+
         # Here rather than in Render(): every concrete pass overrides Render()
         # and one of them would eventually forget, leaving a default install
         # silent while a sound played directly through the engine still worked.
@@ -2388,6 +2417,9 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         self._frameGather = gathered
         for frame in frames:
             self.applyViewFrame( frame, gl=False )
+            # Nodes the zones hide from this view's camera are left out of its
+            # cull; the active view's set stands for the frame's other draws.
+            self._zoneHidden = self.zoneHiddenAt( self.cameraPosition( frame ) )
             frame.toRender = self.renderSet( frame.modelView, gathered )
             frame.visiblePlacements = self.visiblePlacements or {}
             frame.maxDepth = self.greatestDepth( frame.toRender )
@@ -2395,7 +2427,16 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 frame.projection = frame.camera.viewMatrix( frame.maxDepth )
         active = self.activeFrame if self.activeFrame is not None else frames[0]
         self.applyViewFrame( active, gl=False )
+        self._zoneHidden = self.zoneHiddenAt( self.cameraPosition( active ) )
         return frames
+
+    @staticmethod
+    def cameraPosition( frame: 'ViewFrame' ) -> Any:
+        """Where ``frame``'s camera is in the world, or None."""
+        try:
+            return numpy.linalg.inv( asarray( frame.modelView, 'd' ) )[3, :3]
+        except numpy.linalg.LinAlgError:
+            return None
 
     def frameForEvent( self, event: Any ) -> Optional['ViewFrame']:
         """The view a pick event is resolved through.

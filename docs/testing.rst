@@ -509,7 +509,9 @@ Clone with the submodule, or fetch it into an existing checkout:
 The top level holds one frame per test script, named after the script.
 ``gltf_baseline/`` holds the glTF conformance baselines: one PNG and one JSON
 file of capture parameters per sample scene. ``oglc-gltf-regression``
-compares against them, and ``--bless`` replaces them after review. Set
+compares against them, and ``--bless`` replaces them after review. A scene
+whose ``SceneSpec`` sets ``shadows`` is captured with shadow maps; every other
+scene is captured without them. Set
 ``OPENGLCONTEXT_GLTF_BASELINE`` to use a copy stored elsewhere.
 
 Without the submodule the tests still run. A view with no reference image is

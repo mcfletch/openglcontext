@@ -1,0 +1,159 @@
+{
+  "asset": {
+    "version": "2.0"
+  },
+  "extensionsUsed": [
+    "OGLC_zone",
+    "KHR_implicit_shapes",
+    "KHR_lights_punctual",
+    "KHR_audio_emitter"
+  ],
+  "extensions": {
+    "KHR_lights_punctual": {
+      "lights": [
+        {
+          "name": "east-door",
+          "type": "spot",
+          "intensity": 400.0,
+          "spot": {
+            "innerConeAngle": 0.2,
+            "outerConeAngle": 1.2
+          }
+        }
+      ]
+    },
+    "KHR_audio_emitter": {
+      "audio": [
+        {
+          "uri": "room-tone.ogg"
+        }
+      ],
+      "sources": [
+        {
+          "name": "room-tone",
+          "audio": 0,
+          "loop": true,
+          "autoplay": true
+        }
+      ],
+      "emitters": [
+        {
+          "name": "west-chamber-tone",
+          "type": "global",
+          "gain": 0.5,
+          "sources": [
+            0
+          ]
+        }
+      ]
+    },
+    "KHR_implicit_shapes": {
+      "shapes": [
+        {
+          "type": "box",
+          "box": {
+            "size": [
+              29.6,
+              10.2,
+              19.06
+            ]
+          }
+        },
+        {
+          "type": "box",
+          "box": {
+            "size": [
+              13.6,
+              10.2,
+              19.06
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "nodes": [
+        0,
+        1,
+        2
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "naos-interior",
+      "translation": [
+        7.3,
+        6.6,
+        0.0
+      ],
+      "extensions": {
+        "OGLC_zone": {
+          "shape": 0,
+          "blend": 1.0,
+          "environment": {
+            "intensity": 0.12
+          },
+          "extensions": {
+            "KHR_lights_punctual": {
+              "nodes": [
+                2
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "west-chamber-interior",
+      "translation": [
+        -15.3,
+        6.6,
+        0.0
+      ],
+      "extensions": {
+        "OGLC_zone": {
+          "shape": 1,
+          "blend": 1.0,
+          "environment": {
+            "intensity": 0.12
+          },
+          "reverb": {
+            "level": 0.35,
+            "decay": 2.2,
+            "damping": 0.5
+          },
+          "extensions": {
+            "KHR_audio_emitter": {
+              "emitters": [
+                0
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "east-door-light",
+      "translation": [
+        22.75,
+        6.0,
+        0.0
+      ],
+      "rotation": [
+        0.0,
+        0.7071068,
+        0.0,
+        0.7071068
+      ],
+      "extensions": {
+        "KHR_lights_punctual": {
+          "light": 0
+        }
+      }
+    }
+  ]
+}

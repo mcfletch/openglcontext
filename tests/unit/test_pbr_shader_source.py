@@ -45,7 +45,7 @@ class TestAnalyticIBLEnergy:
         src = _read('pbr.frag')
         # the analytic env diffuse must be irradiance (radiance / PI == radiance *
         # INV_PI), not raw radiance
-        assert re.search(r'envColor\(Nw\)\s*(?:/\s*PI|\*\s*INV_PI)', src), \
+        assert re.search(r'envColor\((?:Nw|d)\)\s*(?:/\s*PI|\*\s*INV_PI)', src), \
             "analytic IBL diffuse must divide by PI (4.4)"
 
 

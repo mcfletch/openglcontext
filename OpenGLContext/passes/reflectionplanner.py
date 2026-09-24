@@ -166,6 +166,11 @@ class ReflectionPlanner:
         self.schedule = ReflectionSchedule()
         self.frame = 0
         self._held: Dict[Hashable, _Held] = {}
+        #: Whether a mirror's reflection may be drawn for a camera at ``eye``:
+        #: ``allowed(record, eye)``, or None where every mirror may. The pass
+        #: sets it from the scene's zones; see
+        #: :meth:`~OpenGLContext.passes.zonepass.ZonesMixin.mirrorAllowed`.
+        self.allowed: Optional[Callable[[Any, np.ndarray], bool]] = None
         self._crowded: Set[Hashable] = set()
 
     def reset(self) -> None:
@@ -203,6 +208,8 @@ class ReflectionPlanner:
     def _mirror(self, frame: Any, record: Any, eye: np.ndarray) -> Optional[_Seen]:
         reflector = reflection.reflector_for(record)
         if reflector is None:
+            return None
+        if self.allowed is not None and not self.allowed(record, eye):
             return None
         rough = reflection.surface_roughness(_material(record))
         if rough > reflection.ROUGHEST and not reflector.replace:

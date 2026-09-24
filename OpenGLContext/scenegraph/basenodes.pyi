@@ -110,6 +110,14 @@ from OpenGLContext.scenegraph.texturetransform import TextureTransform as Textur
 from OpenGLContext.scenegraph.timesensor import TimeSensor as TimeSensor
 from OpenGLContext.scenegraph.transform import Transform as Transform
 from OpenGLContext.scenegraph.viewpoint import Viewpoint as Viewpoint
+from OpenGLContext.scenegraph.zone import Zone as Zone
+from OpenGLContext.scenegraph.zone import ZoneAudio as ZoneAudio
+from OpenGLContext.scenegraph.zone import ZoneEnvironment as ZoneEnvironment
+from OpenGLContext.scenegraph.zone import ZoneGravity as ZoneGravity
+from OpenGLContext.scenegraph.zone import ZoneLights as ZoneLights
+from OpenGLContext.scenegraph.zone import ZoneMirrors as ZoneMirrors
+from OpenGLContext.scenegraph.zone import ZoneReverb as ZoneReverb
+from OpenGLContext.scenegraph.zone import ZoneVisibility as ZoneVisibility
 from vrml.route import IS as IS
 from vrml.route import ROUTE as ROUTE
 from vrml.vrml97.basenodes import Anchor as Anchor
@@ -237,5 +245,13 @@ __all__ = [
     'Viewpoint',
     'VisibilitySensor',
     'WorldInfo',
+    'Zone',
+    'ZoneAudio',
+    'ZoneEnvironment',
+    'ZoneGravity',
+    'ZoneLights',
+    'ZoneMirrors',
+    'ZoneReverb',
+    'ZoneVisibility',
     'sceneGraph',
 ]

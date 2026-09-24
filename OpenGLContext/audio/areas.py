@@ -1,18 +1,24 @@
 """How loud an area's sound is at the listener's position.
 
-An area's ambience is a looping ``global`` source whose ``gain`` the
-application sets each frame from the camera's position; the functions here
-give that gain, fading over a margin so that walking out of an area fades its
-sound rather than cutting it.  See ``docs/audio.rst``.
+An area's ambience is a looping ``global`` source heard only while the listener
+is in the area, fading over a margin so that walking out of an area fades its
+sound rather than cutting it. See ``docs/audio.rst``.
+
+A scene declares its areas as zones (:mod:`OpenGLContext.scenegraph.zone`),
+and :func:`apply_zones` is what the render pass calls each frame to set every
+zone-controlled emitter's gain and the reverb from where the listener is.
+:func:`box_gain` is the same idea for an application that keeps its areas in
+code: it gives the gain for an axis-aligned box, and the application sets its
+source's ``gain`` from it.
 """
 
 from __future__ import annotations
 
-from typing import Sequence
+from typing import Any, Sequence
 
 import numpy as np
 
-__all__ = ['box_gain']
+__all__ = ['box_gain', 'apply_zones']
 
 
 def box_gain(position: Sequence[float], centre: Sequence[float],
@@ -32,3 +38,40 @@ def box_gain(position: Sequence[float], centre: Sequence[float],
     if margin <= 0.0:
         return 0.0
     return float(min(1.0, max(0.0, 1.0 - outside / margin)))
+
+
+def apply_zones(engine: Any, emitters: Sequence[Any], zones: Sequence[Any],
+                position: Sequence[float]) -> None:
+    """Set each zone-controlled emitter's gain, and the reverb, for a listener at ``position``.
+
+    ``emitters`` are the scene's :class:`~OpenGLContext.scenegraph.audio.AudioEmitter`
+    nodes and ``zones`` the frame's placed zones. An emitter a zone names
+    plays at the share of the zones naming it that the listener is in, so it
+    fades over a zone's ``blend``; one no zone names is left at full gain. The
+    engine's reverb takes the level, decay and damping of the zones the
+    listener is in, mixed by their shares, and none outside every zone.
+    """
+    from OpenGLContext.passes import zonelayers
+    from OpenGLContext.scenegraph.zone import AUDIO
+
+    def named(setting: Any) -> Sequence[int]:
+        return [id(emitter) for emitter in getattr(setting, 'emitters', None) or ()]
+
+    controlled: set = set()
+    for zone in zones:
+        setting = zone.setting(AUDIO)
+        if setting is not None and bool(setting.enabled):
+            controlled.update(named(setting))
+    shares = (zonelayers.camera_shares(zones, position, AUDIO, named)
+              if controlled else {})
+    for emitter in emitters:
+        key = id(emitter)
+        wanted = float(shares.get(key, 0.0)) if key in controlled else 1.0
+        if getattr(emitter, 'zoneGain', 1.0) != wanted:
+            emitter.zoneGain = wanted
+    reverb = zonelayers.reverb_at(zones, position)
+    target = getattr(engine, 'reverb', None)
+    if target is not None:
+        target.level = reverb.level
+        target.decay = reverb.decay
+        target.damping = reverb.damping
