@@ -20,10 +20,15 @@ from typing import Tuple
 
 from OpenGLContext.passes.reflection import REFLECTION_UNIT
 
-__all__ = ['LEVELS', 'atlas_size', 'ReflectionAtlas']
+__all__ = ['LEVELS', 'FILL', 'atlas_size', 'ReflectionAtlas']
 
 #: Mip levels the atlas holds: the full texels and two blurred ones.
 LEVELS = 3
+
+#: The share of the atlas a frame's tiles are budgeted to fill. Shelves of
+#: power-of-two heights and a gutter round every tile leave the rest empty, so
+#: a budget of the whole atlas would ask for tiles the packer cannot place.
+FILL = 0.5
 
 #: Atlas sides are a multiple of this many texels.
 _STEP = 16

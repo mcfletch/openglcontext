@@ -11,6 +11,7 @@ import pytest
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.passes import reflection
 from OpenGLContext.passes.flateffects import _FlatEffectsMixin
+from OpenGLContext.passes.reflectionatlas import FILL
 from OpenGLContext.scenegraph.boundingvolume import AABoundingBox
 
 
@@ -41,7 +42,8 @@ def test_the_definition_sets_the_budget():
     budget = _pass(reflectionViews=5, reflectionSeparateViews=1,
                    reflectionAtlas=0.25).reflectionBudget()
     assert (budget.views, budget.separate_views) == (5, 1)
-    assert budget.texels == 208 * 160          # a quarter of 400 x 300, rounded up
+    # A quarter of 400 x 300, rounded up, and the share of that the shelves pack.
+    assert budget.texels == int(208 * 160 * FILL)
 
 
 def test_the_environment_sets_what_the_definition_leaves(monkeypatch):
@@ -50,7 +52,7 @@ def test_the_environment_sets_what_the_definition_leaves(monkeypatch):
     monkeypatch.setenv('OPENGLCONTEXT_REFLECTION_ATLAS', '1.0')
     budget = _pass().reflectionBudget()
     assert (budget.views, budget.separate_views) == (3, 0)
-    assert budget.texels == 400 * 304
+    assert budget.texels == int(400 * 304 * FILL)
 
 
 def test_every_setting_is_a_rendering_one():
@@ -116,3 +118,29 @@ def test_a_mirror_reads_its_own_lookup_and_the_next_shape_none():
     effects.applyPlanarReflection(shader, ((False,), None, None, None, mirror, None))
     effects.applyPlanarReflection(shader, ((False,), None, None, None, plain, None))
     assert shader.given == [lookup, None]
+
+
+# --- switching reflections -------------------------------------------------------
+
+class _Program:
+    planar_reflection_supported = True
+
+
+def test_the_setting_is_read_every_frame():
+    """A settings screen writes the field and the next frame follows it."""
+    effects = _pass()
+    effects.shader_program = _Program()
+    effects._planar_reflections = None
+    assert effects.planarReflectionsEnabled()
+    effects.context.contextDefinition.planarReflections = False
+    assert not effects.planarReflectionsEnabled()
+    effects.context.contextDefinition.planarReflections = True
+    assert effects.planarReflectionsEnabled()
+
+
+def test_a_driver_without_the_texture_unit_never_reflects():
+    effects = _pass(planarReflections=True)
+    program = _Program()
+    program.planar_reflection_supported = False
+    effects.shader_program = program
+    assert not effects.planarReflectionsEnabled()

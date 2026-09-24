@@ -93,8 +93,8 @@ class _FlatEffectsMixin:
     _transmission_mode: Optional[str] = None
     _transmission_buffer: Optional["TransmissionBuffer"] = None
 
-    # Planar reflections: whether they are drawn, resolved once from
-    # ContextDefinition.planarReflections, and what draws and holds them.
+    # Planar reflections: whether the program can read them, settled once,
+    # and what draws and holds them.
     _planar_reflections: Optional[bool] = None
     _reflection_atlas: Optional["ReflectionAtlas"] = None
     _reflection_planner: Optional["ReflectionPlanner"] = None
@@ -235,20 +235,20 @@ class _FlatEffectsMixin:
 
     # -- planar reflections --------------------------------------------------
     def planarReflectionsEnabled(self) -> bool:
-        """Whether mirrors and water reflect the scene, resolved once.
+        """Whether mirrors and water reflect the scene this frame.
 
-        ``ContextDefinition.planarReflections`` asks for it, and the PBR
-        program has to have compiled it in: a driver without the texture unit
-        it reads leaves every reflector reflecting the environment probe.
+        ``ContextDefinition.planarReflections`` asks for it, read every frame
+        so a settings screen switching it takes effect on the next one; and
+        the PBR program has to have compiled it in, which is settled once: a
+        driver without the texture unit it reads leaves every reflector
+        reflecting the environment probe.
         """
         if self._planar_reflections is None:
-            shader = self.shader_program
-            self._planar_reflections = bool(
-                renderoptions.flag(self, 'planarReflections',
-                                   renderoptions.env_flag_once(
-                                       'OPENGLCONTEXT_PLANAR_REFLECTIONS', True))
-                and getattr(shader, 'planar_reflection_supported', False))
-        return self._planar_reflections
+            self._planar_reflections = bool(getattr(
+                self.shader_program, 'planar_reflection_supported', False))
+        return self._planar_reflections and renderoptions.flag(
+            self, 'planarReflections',
+            renderoptions.env_flag_once('OPENGLCONTEXT_PLANAR_REFLECTIONS', True))
 
     def reflectionBudget(self) -> "Budget":
         """The most this frame's reflections may cost, from the definition.
@@ -267,12 +267,13 @@ class _FlatEffectsMixin:
         if views <= 0:
             views = (MultiviewCapabilities.detect().max_views
                      if strategy in ('vertex', 'geometry') else 2)
+        from OpenGLContext.passes.reflectionatlas import FILL
         width, height = self.reflectionAtlasSize()
         return Budget(views=views,
                       separate_views=int(renderoptions.number(
                           self, 'reflectionSeparateViews', renderoptions.env_number_once(
                               'OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS', 4, integer=True))),
-                      texels=width * height)
+                      texels=int(width * height * FILL))
 
     def reflectionAtlasSize(self) -> Tuple[int, int]:
         """The reflection atlas's size in texels, for this window."""

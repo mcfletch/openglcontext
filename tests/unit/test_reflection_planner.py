@@ -181,3 +181,26 @@ def test_a_short_budget_draws_the_second_mirror_at_half_scale():
     widths = sorted(d.tile.width for d in halved.draws)
     assert len(halved.draws) == 2
     assert widths[0] <= max(d.tile.width for d in full.draws) // 2 + reflection.TEXEL_STEP
+
+
+def test_a_mirror_being_drawn_takes_the_room_of_one_being_kept():
+    """An atlas with room for one tile: the new mirror's goes in, the old one's out."""
+    planner = ReflectionPlanner()
+    kept, new = _mirror(0.0), _mirror(2.5)
+    small = (64, 64)
+    planner.plan([_frame([kept])], small, BIG)
+    one = Budget(views=1, separate_views=1, texels=10 ** 9)
+    plan = planner.plan([_frame([kept, new])], small, one)
+    assert [draw.record for draw in plan.draws] == [new]
+    assert plan.lookup(plan.frames[0], kept) is None
+    assert plan.lookup(plan.frames[0], new) is not None
+
+
+def test_a_mirror_too_large_for_the_room_left_is_drawn_at_half_scale():
+    planner = ReflectionPlanner()
+    first, second = _mirror(-1.2), _mirror(1.2)
+    full = planner.plan([_frame([first])], ATLAS, BIG).draws[0].tile
+    tight = (full.width + 8, full.height * 2)     # one full tile, and one halved
+    plan = ReflectionPlanner().plan([_frame([first, second])], tight, BIG)
+    assert len(plan.draws) == 2
+    assert min(draw.tile.height for draw in plan.draws) < full.height

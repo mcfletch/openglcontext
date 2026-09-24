@@ -30,7 +30,7 @@ import numpy as np
 from OpenGLContext.passes import reflection
 from OpenGLContext.passes.reflection import MirrorView
 from OpenGLContext.passes.reflectiontiles import (
-    Budget, Candidate, ReflectionSchedule, Tile, TilePacker,
+    Budget, Candidate, Packed, ReflectionSchedule, Tile, TilePacker,
 )
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 
@@ -258,13 +258,7 @@ class ReflectionPlanner:
                       for entry in seen.values()]
         decisions = {decision.key: decision.scale
                      for decision in self.schedule.choose(candidates, budget)}
-        sizes: Dict[Hashable, Tuple[int, int]] = {}
-        for key, entry in seen.items():
-            if key in decisions:
-                sizes[key] = _scaled(entry.mirror.size, decisions[key])
-            elif entry.valid and entry.held is not None:
-                sizes[key] = (entry.held.tile.width, entry.held.tile.height)
-        packed = self.packer.place(sizes)
+        packed = self._pack(seen, decisions)
         spare = max(0, int(budget.views) - len(decisions))
         for key in packed.moved:
             held_before = seen[key].held
@@ -291,6 +285,33 @@ class ReflectionPlanner:
         self._held = held
         self.packer.place({key: (h.tile.width, h.tile.height) for key, h in held.items()})
         return plan
+
+    def _pack(self, seen: Dict[Hashable, _Seen], decisions: Dict[Hashable, float]) -> Packed:
+        """Place this frame's tiles, and settle the scale of each drawn one.
+
+        A tile being drawn outranks one being kept: where the two do not fit
+        together, the kept tiles give their room back, and a tile that still
+        does not fit is drawn at half scale before it is left out.
+        ``decisions`` is updated with the scale each drawn tile ends up at,
+        and loses any that found no room.
+        """
+        drawn = {key: _scaled(seen[key].mirror.size, scale)
+                 for key, scale in decisions.items()}
+        kept = {key: (entry.held.tile.width, entry.held.tile.height)
+                for key, entry in seen.items()
+                if key not in decisions and entry.valid and entry.held is not None}
+        packed = self.packer.place({**kept, **drawn})
+        if not packed.unplaced & drawn.keys():
+            return packed
+        packed = self.packer.place(drawn)
+        for key in list(packed.unplaced):
+            decisions[key] *= 0.5
+            drawn[key] = _scaled(seen[key].mirror.size, decisions[key])
+        if packed.unplaced:
+            packed = self.packer.place(drawn)
+        for key in packed.unplaced:
+            del decisions[key]
+        return packed
 
     def _lookup(self, held: _Held, seen: _Seen, atlas: Tuple[int, int]) -> Lookup:
         mirror = held.mirror
