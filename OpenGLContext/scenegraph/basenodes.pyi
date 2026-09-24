@@ -68,6 +68,7 @@ from OpenGLContext.scenegraph.pointset import PointSet as PointSet
 from OpenGLContext.scenegraph.quadrics import Cone as Cone
 from OpenGLContext.scenegraph.quadrics import Cylinder as Cylinder
 from OpenGLContext.scenegraph.quadrics import Sphere as Sphere
+from OpenGLContext.scenegraph.reflector import PlanarReflector as PlanarReflector
 from OpenGLContext.scenegraph.scenegraph import SceneGraph as sceneGraph
 class FloatUniform1f(_FloatUniform): ...
 class FloatUniform2f(_FloatUniform): ...
@@ -197,6 +198,7 @@ __all__ = [
     'OrientationInterpolator',
     'ParticleEmitter',
     'PixelTexture',
+    'PlanarReflector',
     'PlaneSensor',
     'PointLight',
     'PointSet',
