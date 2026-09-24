@@ -529,6 +529,22 @@ Still open:
   mass, which is a gameplay decision, and a trigger-shaped proxy is reported
   as a trigger itself. Wants a decision on how an avatar meets dynamic bodies.
 - Phase 5, authored events.
+- The games, as far as each could go:
+  - marble-demo: the controller listens to the marble's contact events and
+    keeps each pair's hardest blow over a frame's steps, so a lethal blow in
+    an early step of a slow frame is weighed
+    (`test_a_lethal_blow_in_an_early_step_of_a_slow_frame_still_destroys`).
+    The lever listens to its own paddle's contacts in-step; its trigger box is
+    gone.
+  - twig-bb: the jump pads' stand-in for the player is a kinematic body placed
+    each frame, not a dynamic one woken by hand. The separate sensor world
+    stays until the character controller has a proxy in the map's world.
+    Combat does not report through `report_hit`: its shots land on combatants
+    staged as capsules for one raycast, not on bodies anything subscribes to.
+  - glisteel is unchanged. It steps the world itself so its controls are
+    sampled per step, and asks `impact_on` after each step, so it already
+    hears every step; its crash and bump watches were also being edited in
+    the main checkout, uncommitted, at the time.
 - Dependency floors. OpenGLContext imports `omi_physics.contactevents`, which
   no released omi_physics has; its `omi_physics>=0.3.0` floor moves to the
   release that carries it, as do the games' floors on both.
