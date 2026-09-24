@@ -3,146 +3,139 @@ OpenGLContext Flat Rendering
 
 .. rst-class:: introduction
 
-This document describes OpenGLContext's "flat" rendering process.  This
-process uses client-side (not GL-side) calculations to produce composed
-transformation matrices which are directly loaded before rendering geometry.
- The rendering process is considerably less involved than the original design,
-in which a set of separate "RenderPass" objects each traversed the whole
-scenegraph; that system has since been removed.
+OpenGLContext renders a scenegraph with a "flat" pass. Instead of traversing
+the scenegraph every frame, the pass keeps a flat list of paths to the
+renderable nodes. It computes each path's combined transformation matrix on
+the CPU, not with the GL matrix stack, and loads that matrix before it draws
+the geometry. This page describes how the pass keeps that list, how it culls
+and sorts a frame, and how a redraw reaches it.
 
 .. rst-class:: technical
 
-The flat pass carries two implementations: a legacy fixed-function path (the
-compatibility profile) and a shader path (the core profile). For how the
-shader path works -- its passes, shader programs and the VRML97 lighting
-shaders -- read :doc:`Core-Profile Rendering <renderpasses>`; for the
-physically based renderer built on it, read :doc:`Physically Based Rendering
-<pbr>`.
-
-.. rst-class:: technical
-
-Both paths return a transformed normal to unit length, so a ``Transform`` with
-a ``scale`` lights what is under it the same in either profile. The shader
-path normalizes in the vertex shader; the fixed-function path asks the GL for
-it (``GL_NORMALIZE``, in ``FlatPass.legacyNormalRescale``), because the fixed
-function transforms a normal by the inverse transpose of the modelview and a
-scale of ``s`` divides the normal's length by ``s``. Without it a half-size
-shape is lit twice as brightly and a doubled one half as much. A caller that
-renders geometry on its own through ``renderGeometry`` gets the same state.
+The flat pass has two implementations: a fixed-function path for the
+compatibility profile and a shader path for the core profile. For the shader
+path's frame steps, shader programs and VRML97 lighting shaders, see
+:doc:`Core-Profile Rendering <renderpasses>`. For the physically based
+renderer built on it, see :doc:`Physically Based Rendering <pbr>`.
 
 Observables and Tree Updates
 ----------------------------
 
-PyVRML97 allows for watching updates to properties of nodes.  OpenGLContext
-uses this to watch for all updates to node fields within a scenegraph.  For
-each path to each node, it records a NodePath object which can calculate (and
-cache) the combined transform matrices for the path.
+PyVRML97 can report changes to node fields. OpenGLContext uses this to watch
+every field of every node in the scenegraph. For each path to each node it
+records a ``NodePath`` object, which computes and caches the combined
+transform matrices along that path.
 
-With this data structure (essentially a list of matrices and Render nodes),
-the scenegraph can be rendered with a number of simple iterations, rather than
-with a complex traversal mechanism (which traditionally was a significant
-factor of OpenGLContext run-time).
+With this list of matrices and renderable nodes, the pass renders the
+scenegraph with a few simple loops instead of a recursive traversal.
 
-The default flat render pass also includes "colour select" rendering.  That
-is, it can do a selection rendering pass which can be queried to process
-incoming mouse events to find the object under the mouse.  This avoids the use
-of the legacy select render mode.
+The flat pass also does colour-select rendering. It draws a selection pass
+whose result is read back to find the object under the mouse for incoming
+mouse events. It does not use the legacy GL select render mode.
 
-Gathering and culling a frame
+Gathering and Culling a Frame
 -----------------------------
 
-``renderSet()`` turns that flat set of paths into the ordered list a frame
-draws. Each path is asked for its world matrix, because a matrix is what the
-scenegraph may have changed since the last frame and the path is what knows.
-Everything after that is done to the whole scene at once: the corner points of
-every bounding volume are stacked into one ``(N,8,4)`` array, carried into
-world space by one matrix product, and tested against the frustum's clipping
-planes by one more. A shape is rejected when some plane has all eight of its
-corners behind it — the same decision the per-shape test makes, taken for the
-whole scene in two array operations rather than one Python call per object.
+``renderSet()`` turns the flat set of paths into the ordered list a frame
+draws. It first reads each path's world matrix, because the path's cache holds
+the current value and the scenegraph may have changed it since the last frame.
+The rest of the work runs on the whole scene at once:
 
-**Culling comes before the sort key**, which is what keeps the rest of the
-frame proportional to what is on screen. A sort key involves the appearance,
-its textures and, for transparent shapes, a projected depth; in a level most
-shapes are not visible, and the keys of shapes nobody can see are never worked
-out.
+#. The eight corner points of every bounding volume are stacked into one
+   ``(N,8,4)`` array.
+#. One matrix product carries them all into world space.
+#. One more product tests them against the frustum's clipping planes.
 
-Two kinds of bounding volume decline to give corners, and they are opposites.
-An *unbounded* volume is of unknown extent and is never culled: not knowing
-where a thing is has to mean drawing it. A volume with *no* extent bounds
-nothing — an :ref:`InstancedShape <instancedshape>` with nothing placed is the
-ordinary way one arises — and draws nothing whether it is kept or not.
+A shape is rejected when all eight of its corners are behind one plane. This
+is the same result as the per-shape test, reached with two array operations
+instead of one Python call per object.
+
+Culling happens before sort keys are computed, so the rest of the frame costs
+in proportion to what is on screen. A sort key reads the appearance and its
+textures, and for a transparent shape it needs a projected depth. In a typical
+level most shapes are off screen, and the pass never computes their keys.
+
+Two kinds of bounding volume have no corners:
+
+- An *unbounded* volume has an unknown extent. It is never culled, so the
+  shape is always drawn.
+- A volume with *no* extent bounds nothing. It draws nothing whether it is
+  kept or not. An :ref:`InstancedShape <instancedshape>` with no placements
+  has this kind of volume.
 
 .. rst-class:: technical
 
-Bounding volumes are asked of their nodes every frame rather than remembered
-by the pass. A volume is not a property of the shape alone: an instanced shape
-bounds all of its placements, so its extent changes whenever they do, and
-corners kept from an earlier frame would cull this frame's copies against
-where the last frame's were. The node's own volume cache is where that
-question is answered, with the dependency tracking to invalidate it.
+The pass reads bounding volumes from their nodes every frame and does not
+store them. A volume can change without the shape changing: an instanced
+shape's volume covers all of its placements, so it changes whenever they do.
+Corners kept from an earlier frame would cull this frame's copies against last
+frame's positions. The node's own volume cache holds the current value and
+tracks the dependencies that invalidate it.
 
-Triggering the RenderPass
--------------------------
+Normals Under Scaling
+---------------------
 
-How the rendering process is triggered, from the
-moment the GUI library sends the "OnPaint" or equivalent event to the Context
-through to the calling of an individual RenderPass.
+.. rst-class:: technical
 
-#. event handler for the Context object, such as wxOnPaint for the wxPython
-   Context sub-classes calls self.triggerRedraw(1) to force a redraw of the
-   Context
+Both profiles return a transformed normal to unit length, so a ``Transform``
+with a ``scale`` lights the shapes under it the same way in either profile.
+The shader path normalizes in the vertex shader. The fixed-function path
+enables ``GL_NORMALIZE`` (in ``FlatPass.legacyNormalRescale``), because the
+fixed function transforms a normal by the inverse transpose of the modelview,
+and a scale of ``s`` divides the normal's length by ``s``. Without it, a
+half-size shape is lit twice as brightly and a double-size one half as
+brightly. A caller that renders geometry on its own through
+``renderGeometry`` gets the same state.
 
-#. Context.triggerRedraw sets the "alreadyDrawn" flag to false, which tells the
-   context that it needs to be redrawn at the next available opportunity, if not
-   able to immediately draw, sets the redrawRequest event.
+How a Redraw Reaches the Pass
+-----------------------------
 
-   #. at the next available opportunity (which may be within the triggerRedraw
-      method, depending on the threading status and/or whether or not we are
-      currently in the middle of rendering), the context's OnDraw method will be
-      called
+This is the sequence from the GUI library's paint event (``OnPaint`` or its
+equivalent) to the flat pass drawing the frame.
 
-#. Context.OnDraw
+#. The Context's event handler for the paint event (for example ``wxOnPaint``
+   in the wxPython Context subclasses) calls ``self.triggerRedraw(1)`` to force
+   a redraw.
 
-   #. performs an event cascade (calls the DoEventCascade customization point while
-      the scenegraph lock is held (by default this does nothing))
+#. ``Context.triggerRedraw`` clears the ``alreadyDrawn`` flag, which marks the
+   context as needing a redraw. If the context can draw now, it calls
+   ``OnDraw`` directly. Otherwise it sets the ``redrawRequest`` event, and the
+   main loop calls ``OnDraw`` at the next opportunity. Whether it can draw now
+   depends on the threading state and on whether a frame is already being
+   drawn.
 
-   #. sets this Context instance as the current context
+#. ``Context.OnDraw``:
 
-      #. acquires the OpenGLContext contextLock
+   #. runs the event cascade (the ``DoEventCascade`` customization point,
+      which does nothing by default) while holding the scenegraph lock
 
-      #. does the appropriate GUI library set current call
+   #. makes this Context the current context: it acquires the OpenGLContext
+      ``contextLock`` and makes the GUI library's set-current call
 
-   #. clears the redrawRequest event
+   #. clears the ``redrawRequest`` event
 
-   #. calls the Context's renderPasses attribute receiving a flag specifying whether
-      there was a visible change (flat \*always\* returns True here)
+   #. calls the Context's ``renderPasses`` attribute, which returns whether
+      the frame changed visibly (the flat pass always returns ``True``); a
+      visible change is counted in the frame counter
 
-      #. if there was a change, swaps buffers
+   #. finally, releases the current context
 
-   #. finally, un-sets the current context
+#. ``defaultRenderPasses.__call__``:
 
-#. defaultRenderPasses.__call_\_
-
-   #. picks the FlatPass class for the Context's profile and renderer -- the
-      compatibility pass, the core pass, or the PBR pass -- and caches it,
-      rebuilding only when the scenegraph itself is replaced
+   #. picks the ``FlatPass`` class for the Context's profile and renderer (the
+      compatibility pass, the core pass or the PBR pass) and caches the pass.
+      It builds a new one only when the scenegraph itself is replaced.
 
    #. for the core profile, binds the scene's active Viewpoint into the view
       platform (the compatibility path does this inside its own traversal)
 
-   #. returns the result of calling that FlatPass with the Context
+   #. calls the ``FlatPass`` with the Context and returns its result
 
-#. FlatPass.Render
+#. ``FlatPass.Render``:
 
-   #. walks the paths it has observed on the scenegraph, sorting them into
-      background, opaque, transparent and (when there are pick events) selection
-      work
+   #. sorts the paths it observes on the scenegraph into background, opaque,
+      transparent and, when there are pick events, selection work
 
-   #. draws each group in turn, then swaps buffers
-
-.. rst-class:: technical
-
-Earlier versions instead built an OverallPass holding a set of sub-passes,
-each of which traversed the whole scenegraph in turn. That system was removed
-once the flat pass replaced it.
+   #. draws each group in turn, then presents the frame through
+      ``Context.presentFrame``, which takes any pending screenshot and swaps
+      the buffers

@@ -3,93 +3,112 @@ PBR Uber-Shader
 
 .. rst-class:: introduction
 
-This is a walkthrough of the PBR fragment shader (``shaders/pbr.frag``) as it
-actually runs: what data reaches it, what it reads from each texture, uniform
-and buffer, how each material lobe is computed and sampled, and how they
-combine into the final colour of one fragment. It assumes you have read
-:doc:`Physically Based Rendering <pbr>` for the concepts; here we ground those
-concepts in the real code. Theory is included where it helps, but always tied
-to the line that does it.
+This page walks through the PBR fragment shader, ``shaders/pbr.frag``: the
+data it receives, what it reads from each texture, uniform and buffer, how it
+computes each material lobe, and how it combines them into the colour of one
+fragment. It assumes you know the concepts in :doc:`Physically Based Rendering
+<pbr>`. Each piece of theory is tied to the shader code that implements it.
 
 .. rst-class:: technical
 
-The shader is one *program* used for the whole scene -- a single "uber-shader"
--- but it is not one file. ``shaders/pbr.frag`` is the top level; at compile
-time its ``#include`` directives splice in the shared files
-``_common_inc.glsl`` (sRGB + PI), ``_brdf_inc.glsl`` (the BRDF terms),
-``_lights_inc.glsl`` (the light uniforms) and ``_shadow_inc.glsl``
-(:doc:`shadows <shadows>`), and per-driver ``#define``\ s are injected, before
-it is compiled once. The vertex stage is ``shaders/pbr.vert``.
-Those includes are shared with other shaders -- ``_brdf_inc.glsl``, for
-instance, is also compiled into the IBL precompute shaders -- so there is one
-definition of the BRDF rather than several that could drift apart. (How the
-assembly works is described in :doc:`Core-Profile Rendering <renderpasses>`.)
-Optional lobes (clearcoat, sheen, transmission) are branches on uniforms that
-are constant for a draw call, so a GPU takes them coherently.
+The whole scene uses one shader *program*, the "uber-shader", built from
+several files. ``shaders/pbr.frag`` is the top level, and its ``#include``
+directives splice in shared files at compile time: ``_common_inc.glsl`` (sRGB
+conversion and PI), ``_brdf_inc.glsl`` (the BRDF terms), ``_lights_inc.glsl``
+(the light uniforms), ``_shadow_inc.glsl`` (:doc:`shadows <shadows>`),
+``_viewer_inc.glsl`` (the viewer position for each :doc:`view <multiview>`)
+and ``_wave_inc.glsl`` (the water ripple). Per-driver ``#define`` lines are
+injected, and the result is compiled once; see :ref:`shader-assembly`. The
+vertex stage is ``shaders/pbr.vert``. Other shaders share the same includes;
+for example, the IBL precompute shaders also compile ``_brdf_inc.glsl``, so
+the BRDF has one definition.
 
 What Reaches the Shader
 -----------------------
 
-Before the fragment shader runs a single line, the pass has set up five kinds
-of input. Knowing them makes the rest of the walkthrough concrete.
+Before the fragment shader runs, the pass sets up five kinds of input.
 
-1. Per-vertex data (from the vertex shader)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+1. Per-vertex data from the vertex shader
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``pbr.vert`` transforms each vertex into eye space and passes these varyings
-to the fragment stage:
+``pbr.vert`` transforms each vertex into eye space and passes these values to
+the fragment stage:
 
-- ``vPosition`` -- eye-space position (used for the view vector, distance
-  attenuation and the transmission projection).
+- ``vPosition`` -- eye-space position, used for the view vector, distance
+  attenuation and the transmission projection.
 
-- ``vNormal`` -- eye-space normal (via the ``normalMatrix``, the
-  inverse-transpose of the modelview upper 3×3).
+- ``vNormal`` -- eye-space normal, transformed by ``normalMatrix``, the
+  inverse transpose of the upper 3×3 of the modelview.
 
-- ``vTangent``, ``vTangentW`` -- eye-space tangent and its handedness, for
-  building the normal-map frame. The tangent transforms by the plain modelview
-  3×3, not the normal matrix; with no tangent attribute it is emitted as zero so
-  the fragment shader can detect its absence.
+- ``vTangent``, ``vTangentW`` -- eye-space tangent and its handedness, used to
+  build the normal-map frame. The tangent is transformed by the plain
+  modelview 3×3, not the normal matrix. When the mesh has no tangent it is
+  zero, and the fragment shader treats that as "no tangent".
 
-- ``vTexCoord`` -- the first UV set (``TEXCOORD_0``).
+- ``vTexCoord``, ``vTexCoord1`` -- the first and second UV sets
+  (``TEXCOORD_0`` and ``TEXCOORD_1``).
 
 - ``vColor`` -- per-vertex colour (glTF ``COLOR_0``).
 
-The vertex attributes arrive at fixed locations: 0 = texcoord, 1 = normal, 2 =
-position, 3 = tangent, 4 = colour.
+- ``vModelScale`` -- the object's world-space scale, which converts the
+  volume ``thickness`` from model units to world units.
+
+- ``vObjectId``, ``vMaterialIndex`` -- the picking id and material index of an
+  :doc:`instanced <instancing>` draw.
+
+The vertex attributes arrive at the engine's :ref:`fixed attribute locations
+<fixed-attribute-locations>`: 0 = texcoord, 1 = normal, 2 = position,
+3 = tangent, 4 = colour, 11 = second texcoord, 12 and 13 = skinning.
 
 2. The material, as a std140 uniform buffer
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Everything constant about a material for the frame is packed into one uniform
-buffer object, ``MaterialBlock``, and bound with a single call per shape. That
-is what keeps a heavy glTF scene off the CPU: the same data sent field by
-field is around twenty ``glUniform`` calls per shape, and a scene with
-hundreds of shapes spends its frame in them. Its members -- read directly by
-name in the shader -- are:
+All of a material's constant factors are packed into one uniform buffer
+object, ``MaterialBlock``, which the pass binds with one call per shape.
+Setting the same data field by field takes about twenty ``glUniform`` calls
+per shape, and in a scene with hundreds of shapes those calls take most of
+the frame's CPU time. The block holds an array of materials, so an instanced
+draw can give each instance its own factors; a non-instanced draw uses
+element 0. ``main()`` copies the active element into a local ``_M`` once, and
+the shader reads each factor by name:
 
-.. code-block:: python
+.. code-block:: glsl
 
-   vec3  baseColorFactor;      float metallicFactor;
-   vec3  emissiveFactor;       float roughnessFactor;
-   vec3  specularColorFactor;  float occlusionStrength;
-   vec3  sheenColorFactor;     float normalScale;
-   vec3  attenuationColor;     float alphaCutoff;
-   float emissiveStrength;     float specularFactor;
-   float clearcoatFactor;      float clearcoatRoughness;
-   float sheenRoughnessFactor; float ior;
-   float thicknessFactor;      float attenuationDistance;
-   bool  unlitMode;
-   mat3  uvTransform;
+   struct Material {
+       vec3  baseColorFactor;      float metallicFactor;
+       vec3  emissiveFactor;       float roughnessFactor;
+       vec3  specularColorFactor;  float occlusionStrength;
+       vec3  sheenColorFactor;     float normalScale;
+       vec3  attenuationColor;     float alphaCutoff;
+       float emissiveStrength;     float specularFactor;
+       float clearcoatFactor;      float clearcoatRoughness;
+       float sheenRoughnessFactor; float ior;
+       float thicknessFactor;      float attenuationDistance;
+       bool  unlitMode;
+       int   texCoordMask;
+       float anisotropyStrengthM;
+       float dispersionM;
+       mat3  uvTransform;
+       vec4  iridescence;          // factor, ior, thicknessMin, thicknessMax
+       vec4  diffuseTransmissionM; // rgb colour, a factor
+       vec4  anisotropyDirM;       // xy = (cos, sin) of the rotation
+   };
+   layout(std140) uniform MaterialBlock {
+       Material materials[MAX_INSTANCE_MATERIALS];
+   };
 
-The byte layout matches the Python packer (``pbrpass.pack_material_block``);
-the buffer is built once per material and reused across frames.
+One element is 224 bytes, and the byte layout matches the Python packer
+(``pbrpass.pack_material_block``). ``MAX_INSTANCE_MATERIALS`` is 73, which
+fits the 16 KB uniform-block size every driver guarantees. The pass builds the
+buffer once per material and reuses it across frames.
 
-3. Texture maps (samplers on fixed units)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+3. Texture maps on fixed units
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Each map is a sampler with a companion ``has…`` flag, so a material can omit
-any of them. The pass assigns fixed texture units so the samplers and
-shadow/IBL textures never collide within the 16-unit fragment budget:
+Each map is a sampler with a matching ``has…`` flag, so a material can omit
+any of them. The pass assigns fixed texture units so the material samplers
+never collide with the shadow and IBL textures inside the 16 units GL 3.3
+guarantees:
 
 .. list-table::
    :widths: auto
@@ -98,362 +117,445 @@ shadow/IBL textures never collide within the 16-unit fragment budget:
    * - Sampler
      - Unit
      - Read as
+   * - ``lightmapTexture``
+     - 0
+     - linear baked light (see :ref:`bakedlight`)
    * - ``baseColorTexture``
      - 1
-     - sRGB colour (decoded to linear)
+     - sRGB colour, decoded to linear
    * - ``metallicRoughnessTexture``
      - 2
      - linear; green = roughness, blue = metalness
    * - ``normalTexture``
      - 3
      - linear tangent-space normal
+   * - shadow samplers
+     - 4–9
+     - 4 and 5 for the spot/cascade array, 6 onward for point-light cubes; see
+       :doc:`Shadows <shadows>`
    * - ``occlusionTexture``
      - 10
      - linear; red channel
    * - ``emissiveTexture``
      - 11
-     - sRGB (decoded to linear)
+     - sRGB, decoded to linear
    * - ``transmissionTexture``
      - 12
      - the captured opaque backdrop (mipmapped)
    * - ``irradianceMap`` / ``prefilterMap`` / ``brdfLUT``
      - 13 / 14 / 15
      - the IBL probe (see below)
-   * - shadow samplers
-     - 4-6
-     - see :doc:`Shadows <shadows>`
+
+The textures of the further glTF extensions (clearcoat, sheen, specular,
+transmission, volume thickness, iridescence, anisotropy and diffuse
+transmission maps) use units 16 to 29. The pass compiles them in only when
+the driver reports at least 30 fragment texture units
+(``GL_MAX_TEXTURE_IMAGE_UNITS``); otherwise those materials use their plain
+factors.
 
 4. Scene lighting (plain uniforms)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-From ``_lights_inc.glsl``: ``numLights`` and, per light, ``lightType``,
-``lightColor``, ``lightPosition``, ``lightDirection``, ``lightAttenuation``,
-``lightBeamWidth``/``lightCutOffAngle`` (spot cone) and ``lightIntensity``,
-plus a flat ``sceneAmbient``. All are in eye space, matching the varyings.
+``_lights_inc.glsl`` declares ``numLights`` and, for each light,
+``lightType``, ``lightColor``, ``lightPosition``, ``lightDirection``,
+``lightAttenuation``, ``lightRange``, ``lightBeamWidth`` /
+``lightCutOffAngle`` (the spot cone) and ``lightIntensity``, plus a flat
+``sceneAmbient``. All are in eye space, like the vertex outputs. A scene with
+a :ref:`light grid <bakedlight>` also sets ``lightGridAmbient``,
+``lightGridDirectional`` and ``lightGridDirection`` for each object.
 
 5. Environment and frame state
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``iblMode`` and ``iblIntensity`` select and scale the environment lighting;
-``eyeToWorld`` rotates eye-space vectors into the world orientation of the
-probe cubes; ``projectionMatrix`` is reused for the transmission projection;
-``alphaMode``/``alphaValue`` and the ``transmission…`` uniforms come from the
-render mode, not the material. ``objectId`` is the pickable id for the
-selection buffer.
+- ``iblMode`` and ``iblIntensity`` select and scale the environment lighting.
+- ``eyeToWorld`` rotates eye-space vectors into the world orientation of the
+  probe cubes.
+- ``projectionMatrix`` is reused for the transmission projection.
+- ``alphaMode``, ``alphaValue`` and the ``transmission…`` uniforms come from
+  the render mode, not the material.
+- ``exposure`` is the camera exposure multiplier (default 1.0).
+- ``fogMode``, ``fogDensity`` and ``fogColor`` describe the :ref:`fog <fog>`.
+- ``hdrOutput`` is set while :ref:`bloom <frame-sequence>` is on.
+- ``objectId`` is the picking id for the selection buffer.
 
 The Fragment Shader, Top to Bottom
 ----------------------------------
 
-Here is ``main()`` in order, with what each step reads and produces.
+This section follows ``main()`` in order, with what each step reads and
+produces.
 
 Sampling the material
 ~~~~~~~~~~~~~~~~~~~~~
 
-The UV is transformed once by ``uvTransform`` (``KHR_texture_transform``).
-Base colour is sampled and, because it is an sRGB texture, decoded to linear;
-the material's ``baseColorFactor`` and any per-vertex colour multiply in.
-Alpha is assembled the same way, and in ``MASK`` mode a fragment below
-``alphaCutoff`` is ``discard``\ ed. An ``unlitMode`` material returns the base
-colour immediately, skipping all lighting.
+Each texture is sampled through ``uvFor(bit)``, where ``bit`` is the
+channel's bit in ``texCoordMask`` (1 base colour, 2 metallic-roughness, 4
+normal, 8 occlusion, 16 emissive, 32 lightmap). If the channel's bit is set,
+it samples ``TEXCOORD_1``. If the same bit shifted left by 8 is set, it also
+applies ``uvTransform`` (``KHR_texture_transform``).
+
+The base colour texel is decoded from sRGB to linear and multiplied by
+``baseColorFactor`` and by the per-vertex colour. Alpha is ``alphaValue``
+times the texel's alpha, and times the vertex colour's alpha. In ``MASK`` mode
+a fragment below ``alphaCutoff`` is discarded. An ``unlitMode`` material
+writes its base colour at this point and skips all lighting.
 
 Metalness and roughness start from their factors and are multiplied by the
 blue and green channels of the metallic-roughness texture. Roughness is
-clamped to ``[0.04, 1.0]``, then squared into the value the BRDF actually
-uses:
+clamped to ``[0.04, 1.0]``, then squared into the value the BRDF uses:
 
-.. code-block:: python
+.. code-block:: glsl
 
    float alphaR = roughness * roughness;   // glTF GGX uses alpha = roughness^2
 
 .. rst-class:: technical
 
-This squaring happens exactly once. The perceptual ``roughness`` is kept
-separately for indexing the environment map LOD and the BRDF lookup; the
-microfacet functions all take ``alphaR``. Keeping the two straight -- and
-identical between the direct and image-based paths -- is what stops a material
-looking subtly wrong.
+The squaring happens once. The shader keeps the perceptual ``roughness`` to
+pick the environment-map level and the BRDF lookup, and passes ``alphaR`` to
+the microfacet functions. The direct and image-based paths use the same
+convention. Feeding perceptual roughness into the microfacet functions would
+give the wrong lobe width.
 
-Occlusion (red channel, scaled by ``occlusionStrength``) and emissive
-(``emissiveFactor × emissiveStrength``, times the decoded emissive texel) are
-read next.
+Next the shader reads occlusion (the red channel, applied as ``1 +
+occlusionStrength * (o - 1)``), emissive (``emissiveFactor ×
+emissiveStrength``, times the decoded emissive texel) and the lightmap (the
+linear texel times ``lightmapStrength``). When the material's ``bakedLight``
+flag is set, the vertex colour is baked light rather than a tint: it is added
+to the emission instead of multiplying the base colour, and its alpha scales
+the occlusion.
 
 Building the shading normal
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The interpolated normal is normalized and flipped on back faces
-(``!gl_FrontFacing``) so two-sided surfaces light correctly. If a normal map
-and a valid tangent are present, a tangent-basis (TBN) matrix is built and the
-sampled normal (remapped from ``[0,1]`` to ``[-1,1]``, scaled by
-``normalScale``) is rotated into eye space:
+(``!gl_FrontFacing``), so two-sided surfaces light correctly. On a water
+surface the ripple from ``_wave_inc.glsl`` tilts it. If the material has a
+normal map and the mesh has a tangent, the shader builds a tangent-basis (TBN)
+matrix and rotates the sampled normal into eye space. The sampled normal is
+remapped from ``[0,1]`` to ``[-1,1]`` and scaled by ``normalScale``:
 
-.. code-block:: bash
+.. code-block:: glsl
 
    vec3 T = normalize(vTangent - N * dot(N, vTangent));
    vec3 B = cross(N, T) * (vTangentW == 0.0 ? 1.0 : vTangentW);
-   vec3 nTex = texture(normalTexture, uv).xyz * 2.0 - 1.0;
+   vec3 nTex = texture(normalTexture, uvFor(4)).xyz * 2.0 - 1.0;
    nTex.xy *= normalScale;
    N = normalize(mat3(T, B, N) * nTex);
 
-The view vector ``V`` is ``normalize(-vPosition)`` (the camera is at the
-origin in eye space), and ``NdotV`` is clamped away from zero.
+The clearcoat layer has its own normal, ``Nc``: the geometric normal, changed
+only by a clearcoat normal map. A normal map on the base layer does not affect
+the coat.
+
+The view vector ``V`` points from the fragment to the viewer. With a single
+view the camera is at the eye-space origin, so ``V`` is
+``normalize(-vPosition)``. ``NdotV`` is clamped away from zero.
 
 The reflectance at normal incidence (F0)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-How reflective a surface is head-on is ``F0``. For non-metals it comes from
-the index of refraction (with the ``KHR_materials_specular`` tint and weight);
-for metals it is the base colour. Metalness blends between them:
+``F0`` is how reflective a surface is when viewed head-on. For a non-metal it
+comes from the index of refraction, tinted by the ``KHR_materials_specular``
+colour. For a metal it is the base colour. Metalness blends between the two.
+The specular weight sets ``specF90``, the reflectance at grazing angles; a
+metal keeps ``specF90 = 1``:
 
-.. code-block:: python
+.. code-block:: glsl
 
    float iorF0 = pow((ior - 1.0) / (ior + 1.0), 2.0);
-   vec3 dielF0 = min(iorF0 * specularColorFactor * specularFactor, vec3(1.0));
+   vec3 dielF0 = min(iorF0 * specularColorEff, vec3(1.0));
    vec3 F0 = mix(dielF0, albedo, metallic);
+   float specF90 = mix(specularWeight, 1.0, metallic);
 
-This single value is why metalness changes a surface so completely: at
-``metallic = 1`` the reflection takes the base colour and the diffuse term
-(below) is switched off.
+At ``metallic = 1`` the reflection takes the base colour and the diffuse term
+(below) is zero, which is why metalness changes the look of a surface so
+much. An iridescent material then blends ``F0`` toward a thin-film Fresnel
+value that shifts hue with the view angle.
 
 Shadows
 ~~~~~~~
 
-Per-light shadow factors are resolved once into an array by
-``resolveShadows()`` from ``_shadow_inc.glsl``, shared verbatim with the
-VRML97 shader. Each factor (0 = fully shadowed, 1 = lit) multiplies that
-light's contribution in the loop below. The mechanism is covered in
-:doc:`Shadows <shadows>`.
+``resolveShadows()`` from ``_shadow_inc.glsl`` computes a shadow factor for
+each light into an array. The VRML97 shader uses the same function. Each
+factor (0 = fully shadowed, 1 = lit) multiplies that light's contribution in
+the loop below. See :doc:`Shadows <shadows>` for how the factors are made.
 
 Direct Lighting, Lobe by Lobe
 -----------------------------
 
-The shader loops over the scene lights, accumulating diffuse and specular
-separately (kept apart so a transmissive surface can later swap out its
-diffuse term). For each light it computes the light direction ``L`` and an
-attenuation: directional lights use ``-lightDirection``; point and spot lights
-use the vector to ``lightPosition`` with the constant/linear/quadratic
-``lightAttenuation``, and spot lights multiply in a smooth cone falloff
-(``spotAttenuation``, a ``smoothstep`` between the outer cutoff and inner
-beam).
+The shader loops over the scene lights and adds up diffuse and specular
+separately, so a transmissive surface can later replace its diffuse term. For
+each light it computes the light direction ``L`` and an attenuation:
+
+- A directional light uses ``-lightDirection`` and no attenuation.
+- Point and spot lights use the vector to ``lightPosition``, and
+  ``1 / (constant + linear·d + quadratic·d²)`` from ``lightAttenuation``.
+  Where a light has a ``lightRange``, the ``KHR_lights_punctual`` range window
+  ``clamp(1 - (d/range)⁴, 0, 1)`` also applies.
+- A spot light multiplies in a cone falloff (``spotAttenuation``): a linear
+  ramp from the outer cutoff to the inner beam, clamped to ``[0, 1]`` and
+  squared, as in the ``KHR_lights_punctual`` reference.
+
+The light's colour, intensity, attenuation and shadow factor combine into
+``radianceBase``.
 
 The specular lobe: Cook-Torrance
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 With the half-vector ``H = normalize(L + V)``, the specular reflection is the
-product of three functions (all defined in ``_brdf_inc.glsl``):
+product of three functions, all defined in ``_brdf_inc.glsl``:
 
-.. code-block:: python
+.. code-block:: glsl
 
-   float D   = D_GGX(NdotH, alphaR);
-   float Vis = V_SmithGGXCorrelated(NdotV, NdotL, alphaR);
-   vec3  F   = F_Schlick(VdotH, F0);
-   vec3  spec = D * Vis * F;
+   D   = D_GGX(NdotH, alphaR);
+   Vis = V_SmithGGXCorrelated(NdotV, NdotL, alphaR);
+   vec3 F = F_Schlick(VdotH, F0, specF90);
+   vec3 spec = D * Vis * F;
 
-- **D_GGX** -- the microfacet distribution ``a2 / (π ((NdotH²)(a2-1)+1)²)`` with
-  ``a2 = alphaR²``: how many microfacets point toward the half-vector. Low
-  roughness makes this a tight, bright spike.
+- ``D_GGX`` -- the microfacet distribution ``a2 / (π ((NdotH²)(a2-1)+1)²)``
+  with ``a2 = alphaR²``: the share of microfacets that face the half-vector.
+  Low roughness makes this a tight, bright peak.
 
-- **V_SmithGGXCorrelated** -- the height-correlated Smith visibility. It is the
-  geometry term *and* the ``1 / (4·NdotL·NdotV)`` denominator folded into one
-  function, which is why the code multiplies ``D * Vis * F`` with no separate
-  divisor.
+- ``V_SmithGGXCorrelated`` -- the height-correlated Smith visibility. It
+  combines the geometry term *and* the ``1 / (4·NdotL·NdotV)`` denominator,
+  so the code multiplies ``D * Vis * F`` with no separate divisor.
 
-- **F_Schlick** -- Fresnel: reflectance rising from ``F0`` toward 1 at grazing
-  angles.
+- ``F_Schlick`` -- Fresnel: reflectance rising from ``F0`` toward ``specF90``
+  at grazing angles.
+
+When the material has ``anisotropyStrength``, the shader uses anisotropic
+versions of ``D`` and ``Vis``. They split ``alphaR`` into different values
+along and across the anisotropy direction, which stretches the highlight into
+a band.
 
 The diffuse lobe: Lambert
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Energy not reflected specularly and not absorbed by metal is diffuse:
+Light that is neither reflected specularly nor absorbed by metal becomes
+diffuse:
 
-.. code-block:: python
+.. code-block:: glsl
 
    vec3 kd = (vec3(1.0) - F) * (1.0 - metallic);
-   vec3 diffuse = kd * albedo * INV_PI;
+   vec3 diffuse = kd * albedo * INV_PI * (1.0 - diffuseTransFactorEff);
 
-The ``(1 - F)`` factor takes only the light the specular term did not reflect;
-``(1 - metallic)`` removes diffuse for metals; ``INV_PI`` is the Lambertian
-normalization.
+The ``(1 - F)`` factor keeps only the light that the specular term did not
+reflect. ``(1 - metallic)`` removes diffuse for metals. ``INV_PI`` is the
+Lambertian normalization. The last factor gives part of the diffuse energy to
+diffuse transmission (``KHR_materials_diffuse_transmission``). That lobe is
+lit by the light arriving at the back of the surface, for thin translucent
+materials such as leaves or wax.
 
 The sheen lobe (fabric)
 ~~~~~~~~~~~~~~~~~~~~~~~
 
 .. rst-class:: technical
 
-When ``sheenColorFactor`` is non-zero, a Charlie distribution term is added to
-the specular for the soft grazing-angle glow of cloth. It is applied to the
-direct lobes only (not the ambient path), which is adequate for fabric demos:
+When ``sheenColor`` is non-zero, the shader adds a sheen lobe for the soft
+glow of cloth at grazing angles: the Charlie distribution ``D_Charlie`` times
+the sheen visibility ``V_Sheen``. The sheen is added up separately from the
+other specular light. After the ambient terms, the base layer is scaled down
+by the sheen's directional albedo, and the sheen is added back on top, lit by
+both the direct lights and the environment:
 
-.. code-block:: python
+.. code-block:: glsl
 
-   float sr = clamp(sheenRoughnessFactor, 0.07, 1.0);
-   float sheenD = (2.0 + 1.0/(sr*sr)) * pow(max(1.0 - NdotH*NdotH, 0.0), 0.5/(sr*sr)) / (2.0*PI);
-   spec += sheenColorFactor * sheenD;
+   float sr = clamp(sheenRoughEff, 0.0, 1.0);
+   float sheenD = D_Charlie(sr, NdotH);
+   float sheenVis = V_Sheen(NdotL, NdotV, sr);
+   LoSheen += sheenColorEff * sheenD * sheenVis * radianceBase * NdotL;
 
 The clearcoat lobe
 ~~~~~~~~~~~~~~~~~~
 
 .. rst-class:: technical
 
-When ``clearcoatFactor > 0``, a second smooth GGX lobe (fixed ``F0 = 0.04``,
-its own roughness) is computed and the layers beneath are attenuated by the
-clearcoat's Fresnel, so the base darkens where the coat reflects:
+When ``clearcoat`` is above 0, the shader computes a second GGX lobe with a
+fixed ``F0 = 0.04``, the coat's own roughness (clamped to ``[0.04, 1.0]``) and
+the coat normal ``Nc``. The layers beneath are scaled down by the coat's
+Fresnel, so the base is darker where the coat reflects:
 
-.. code-block:: python
+.. code-block:: glsl
 
-   float ccAlpha = clearcoatRoughness * clearcoatRoughness;
-   float ccSpec = D_GGX(NdotH, ccAlpha) * V_SmithGGXCorrelated(NdotV, NdotL, ccAlpha) * F_Schlick(VdotH, 0.04);
-   float ccAtt = 1.0 - clearcoatFactor * F_Schlick(VdotH, 0.04);
+   float ccSpec = ccD * ccVis * ccF * NcdotL;   // coat lobe with its own cosine
+   float ccAtt = 1.0 - ccFactorEff * ccF;
    diffuse *= ccAtt;
-   spec = spec * ccAtt + vec3(ccSpec * clearcoatFactor);
+   spec = spec * ccAtt + vec3(ccSpec * ccFactorEff / max(NdotL, 1e-4));
 
-Each light's contribution is finally scaled by its colour, intensity, distance
-attenuation, ``NdotL`` and its shadow factor, and added to the running diffuse
-and specular totals:
+Finally each light's contribution is multiplied by ``NdotL`` and added to the
+running diffuse and specular totals:
 
-.. code-block:: python
+.. code-block:: glsl
 
-   vec3 radiance = lightColor[i] * lightIntensity[i] * atten * NdotL * lightShadow[i];
+   vec3 radiance = radianceBase * NdotL;
    LoDiffuse  += diffuse * radiance;
    LoSpecular += spec    * radiance;
 
 Ambient and Environment (Image-Based Lighting)
 ----------------------------------------------
 
-Direct lights alone leave shadows pitch black and metals with nothing to
-reflect. The ambient term supplies light from the surrounding environment. The
-material's eye-space normal and reflection vector are first rotated into the
-probe's world orientation with ``eyeToWorld``, then one of three paths runs
-depending on ``iblMode``.
+Direct lights alone would leave shadows black and give metals nothing to
+reflect. The ambient term adds light from the surrounding environment. The
+shader first rotates the eye-space normal and reflection vector into the
+probe's world orientation with ``eyeToWorld``. It then runs one of three paths,
+chosen by ``iblMode``.
 
 iblMode 2 -- the prefiltered probe (split-sum)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The full path samples three precomputed textures and combines them by the
+The full path samples three precomputed textures and combines them with the
 split-sum approximation:
 
-.. code-block:: python
+.. code-block:: glsl
 
-   vec3 irr = texture(irradianceMap, Nw).rgb * iblIntensity;                       // diffuse
+   vec3 irr = texture(irradianceMap, Nw).rgb * iblIntensity;                                // diffuse
    vec3 pre = textureLod(prefilterMap, Rw, roughness * prefilterMaxLod).rgb * iblIntensity; // specular
-   vec2 ab  = texture(brdfLUT, vec2(NdotV, roughness)).rg;                          // scale, bias
+   vec2 ab  = texture(brdfLUT, vec2(NdotV, roughness)).rg;                                  // scale, bias
    ambDiffuse  = irr * albedo * (1.0 - metallic) * ao;
-   ambSpecular = pre * (F0 * ab.x + ab.y) * ao;
+   ambSpecular = pre * (F0 * ab.x + specF90 * ab.y) * ao;
 
-- ``irradianceMap`` (a cube) holds the environment already convolved over a
-  cosine hemisphere, so one lookup along the world normal gives the whole
-  diffuse ambient.
+- ``irradianceMap`` is a cube holding the environment already convolved over
+  a cosine hemisphere. One lookup along the world normal gives the diffuse
+  ambient.
 
-- ``prefilterMap`` (a cube with a mip chain) holds the environment pre-blurred
-  per roughness; ``textureLod`` at ``roughness × prefilterMaxLod`` picks the
-  right blur, so a rough surface reflects a soft environment and a smooth one a
-  sharp reflection.
+- ``prefilterMap`` is a cube with a mip chain, holding the environment blurred
+  for each roughness. ``textureLod`` at ``roughness × prefilterMaxLod`` picks
+  the matching blur, so a rough surface reflects a soft environment and a
+  smooth one a sharp reflection.
 
-- ``brdfLUT`` (a 2D table indexed by ``NdotV`` and roughness) returns the scale
-  and bias that turn the prefiltered colour into the correct specular energy for
-  this ``F0``.
+- ``brdfLUT`` is a 2D table indexed by ``NdotV`` and roughness. It returns the
+  scale and bias that turn the prefiltered colour into the correct specular
+  energy for this ``F0``.
 
 .. rst-class:: technical
 
-These three textures are built once, offline, by ``passes/ibl.py`` from a
-procedural studio environment (``ibl_env.frag``). The prefilter and LUT
-precomputes use the very same ``importanceSampleGGX`` / Hammersley machinery
-in ``_brdf_inc.glsl`` that the direct path's terms come from, so the baked
-probe and the real-time shading share one definition of the BRDF and cannot
-drift apart.
+``passes/ibl.py`` builds these three textures at run time, from the
+procedural studio environment (``ibl_env.frag``) or from the panorama of an
+``HDRBackground`` in the scene, and builds them again when that panorama
+changes. The prefilter and LUT precomputes use the same
+``importanceSampleGGX`` and Hammersley sampling in ``_brdf_inc.glsl`` as the
+direct path's terms, so the baked probe and the per-pixel shading use one
+definition of the BRDF.
 
 iblMode 1 -- analytic environment
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. rst-class:: technical
 
-A fallback (used on software rasterizers) with no probe: ``envColor()`` gives
-a cheap sky/ground gradient, divided by ``π`` for the diffuse irradiance, and
-``envBRDFApprox()`` (Karis' analytic fit) supplies the split-sum scale/bias
-without a LUT. It has the right energy and roughness response, just from a
-simpler environment.
+This path uses no probe, and ``auto`` selects it on software rasterizers.
+``envColor()`` gives a sky/ground gradient, divided by ``π`` for the diffuse
+irradiance, and ``envBRDFApprox()`` (Karis' analytic fit) supplies the
+split-sum scale and bias without a lookup table. It has the same energy and
+roughness response as the full path, with a simpler environment.
 
 iblMode 0 -- off
 ~~~~~~~~~~~~~~~~
 
 .. rst-class:: technical
 
-Flat ``sceneAmbient × albedo`` for diffuse and no specular reflection.
+Diffuse ambient is ``sceneAmbient × albedo``, and there is no specular
+reflection.
 
-When clearcoat is active it also reflects the environment: a second
-prefiltered/analytic sample scaled by the coat's Fresnel is added on top, and
-the layers beneath are attenuated, mirroring the direct-lighting case.
+Baked light and further ambient terms
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+After the chosen path, the shader adds these to the ambient terms:
+
+- A lightmap, if the material has one. It adds to diffuse ambient and, through
+  ``envBRDFApprox``, to specular ambient.
+- The light grid sample, if the scene has a grid and the surface has no
+  lightmap. Its directional part is shaded by the normal.
+- Diffuse transmission, lit by the environment behind the surface.
+- Clearcoat, which also reflects the environment: a second prefiltered or
+  analytic sample, scaled by the coat's Fresnel, is added on top, and the
+  layers beneath are scaled down as in the direct-lighting case.
 
 Transmission (Glass)
 --------------------
 
 .. rst-class:: technical
 
-If the material transmits and the pass has captured a backdrop
-(``hasTransmissionBackdrop``), the diffuse term is replaced by light coming
-*through* the surface. The view is refracted through the surface by the index
-of refraction, the exit point is projected to screen space with the shared
-``projectionMatrix``, and the captured opaque scene is sampled there --
-roughness choosing a blurrier mip for frosted glass:
+When the material transmits and the pass has captured a backdrop
+(``hasTransmissionBackdrop``), light coming *through* the surface replaces the
+diffuse term. The view ray is refracted through the surface by the index of
+refraction. The exit point is projected to screen space with the shared
+``projectionMatrix``, and the captured opaque scene is sampled there.
+Roughness selects a blurrier mip level for frosted glass:
 
-.. code-block:: python
+.. code-block:: glsl
 
    vec3 refr    = refract(-V, N, 1.0 / max(ior, 1.0001));
-   vec3 exitPos = vPosition + refr * max(thicknessFactor, 1e-3);
+   vec3 exitPos = vPosition + refr * max(thick, 1e-3);
    vec4 clip    = projectionMatrix * vec4(exitPos, 1.0);
    vec2 backUV  = clamp((clip.xy / clip.w) * 0.5 + 0.5, 0.0, 1.0);
-   vec3 bg      = toLinear(textureLod(transmissionTexture, backUV, roughness * transmissionMaxLod).rgb);
+   bg = toLinear(textureLod(transmissionTexture, backUV, mip).rgb);
 
 .. rst-class:: technical
 
-The transmitted colour is tinted by ``albedo`` and, if the material has volume
-(``attenuationDistance > 0``), by Beer-Lambert absorption over
-``thicknessFactor``. It is mixed into the diffuse term by
-``transmissionFactor``; the specular reflection stays on top, so glass still
-shows a highlight. The backdrop itself is the opaque scene copied into a
-mipmapped texture between the opaque and transmissive passes -- see :doc:`the
-pass sequence <renderpasses>`.
+``mip`` is ``roughness × clamp(ior·2 − 2, 0, 1) × transmissionMaxLod``, so
+low-IOR glass blurs less. With ``dispersion`` above 0, the red, green and blue
+channels are refracted with slightly different indices and sampled at their
+own exit points, which gives a coloured fringe. The transmitted colour is
+tinted by ``albedo`` and, when the material has a volume
+(``attenuationDistance > 0``), by Beer-Lambert absorption over the thickness.
+It is weighted by the light the specular reflection did not take, then mixed
+into the diffuse term by the transmission factor. The specular reflection
+stays on top, so glass still shows a highlight. The backdrop is the opaque
+scene, copied into a mipmapped texture between the opaque and transmissive
+steps; see :ref:`the frame sequence <frame-sequence>`.
 
 Producing the Final Fragment
 ----------------------------
 
-The three contributions are summed, tone-mapped and encoded:
+The three contributions are added up, then exposure, fog, tone mapping and
+encoding are applied:
 
-.. code-block:: python
+.. code-block:: glsl
 
    vec3 color = diffuseTerm + specularTerm + emissive;
-   color = acesToneMap(color);       // filmic curve: keeps highlight saturation
-   color = linearToSRGB(color);      // encode for a non-sRGB framebuffer
+   color *= exposure;
+   // ... fog, blended in linear HDR ...
+   if (!hdrOutput) {
+       color = acesToneMap(color);   // filmic curve: keeps highlight saturation
+       color = linearToSRGB(color);  // encode for a non-sRGB framebuffer
+   }
    fragColor    = vec4(color, alpha);
-   fragObjectId = encodeObjectId(objectId);
+   fragObjectId = encodeObjectId(effectiveObjectId());
 
-- All shading up to this point is in **linear** light. The ACES filmic curve
-  compresses the high dynamic range into displayable values while keeping
-  saturated colours (a gold highlight stays gold rather than going white/grey).
+- All shading up to this point is in linear light. ``exposure`` scales scenes
+  lit in absolute units, such as ``KHR_lights_punctual`` lights in candela or
+  lux.
 
-- ``linearToSRGB`` applies the sRGB transfer function in the shader, because the
-  framebuffer's own sRGB encoding is deliberately left off (turning it on would
-  double-encode). See the one-time setup in :doc:`Core-Profile Rendering
-  <renderpasses>`.
+- :ref:`Fog <fog>` is blended in before tone mapping.
 
-- The shader writes two render targets: the shaded colour to attachment 0, and
-  the packed object id to attachment 1 for mouse picking (``encodeObjectId``
-  spreads a 32-bit id across RGBA8).
+- The ACES filmic curve compresses the high dynamic range into displayable
+  values while keeping colours saturated; a gold highlight stays gold instead
+  of turning white or grey.
 
-Why One Shader for the Whole Scene
-----------------------------------
+- ``linearToSRGB`` applies the sRGB transfer function in the shader, because
+  the framebuffer's own sRGB encoding is off (see :ref:`srgb-output`).
+
+- While bloom is on (``hdrOutput``), the shader skips tone mapping and
+  encoding and writes linear HDR colour; the bloom composite applies them
+  afterwards.
+
+- The shader writes two render targets: the shaded colour to attachment 0,
+  and the packed object id to attachment 1 for mouse picking.
+  ``encodeObjectId`` spreads a 32-bit id across RGBA8.
+
+One Shader for the Whole Scene
+------------------------------
 
 .. rst-class:: technical
 
-Compiling a different shader per material means switching programs (and
-re-validating uniforms) many times per frame -- CPU work that dominates a
-naive renderer. Instead this is a single program: the material is a uniform
-buffer swapped with one bind, and clearcoat/sheen/transmission are branches on
-uniforms that hold the same value across a draw call, so every fragment in the
-draw takes the same path (a coherent branch, nearly free on desktop GPUs). The
-one cost is the register/uniform footprint every draw pays even when a
-material uses no optional lobe. On a weak GPU tier that can hurt occupancy, so
-the three lobes are also behind compile-time ``USE_CLEARCOAT`` / ``USE_SHEEN``
-/ ``USE_TRANSMISSION`` defines: a constrained platform can compile one leaner
-program with some lobes dropped for the entire scene. That is a per-platform
-build choice, never a per-material shader swap -- the scene always binds
-exactly one program.
+A separate shader per material would mean switching programs, and setting
+their uniforms again, many times per frame, and that CPU work grows with the
+number of materials. This renderer uses one program. A material is a uniform
+buffer switched with one bind. Clearcoat, sheen and transmission are branches
+on uniforms that have the same value for a whole draw call, so every fragment
+in the draw takes the same branch, which costs little on desktop GPUs. Every
+draw still pays for the registers and uniforms of the optional lobes, even
+when a material uses none of them. On a weak GPU this can lower occupancy, so
+the three lobes are also behind the compile-time defines ``USE_CLEARCOAT``,
+``USE_SHEEN`` and ``USE_TRANSMISSION``, all on by default. A constrained
+platform can compile one smaller program without some lobes, for the whole
+scene. The choice is made per platform, never per material; the scene always
+binds exactly one program.

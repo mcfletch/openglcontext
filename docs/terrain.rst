@@ -3,32 +3,35 @@ Terrain & Landscapes
 
 .. rst-class:: introduction
 
-A landscape reaches the screen one of two ways here, and which one it wants
-depends on whether it fits in memory.
+OpenGLContext draws a landscape in one of two ways. A landscape that fits in
+memory is a **height field**: one elevation grid, drawn as one mesh. A
+landscape too big for that is a **streamed 3D Tiles** world, paged in and out
+around the camera. This page covers the height field.
 
 .. list-table::
    :widths: auto
    :header-rows: 1
 
-   * - Path
+   * - Method
      - What it is
-     - Running on it
-   * - **:ref:`Height field <terrain-heightfield>`** (this page)
-     - An elevation grid over a centred world square, drawn as one splat-textured
-       mesh. A 4 km square at 513² samples is one draw, and the height under any
-       point is arithmetic rather than a ray cast. No tiles, no baking, no streaming.
-     - The `forest demo <https://pypi.org/project/openglcontext-forest-demo/>`__ —
-       real Great Smoky Mountains elevation, walked at eye height.
-   * - **:doc:`Streamed 3D Tiles <tiles3d>`**
-     - An octree of glTF tiles paged in and out around the camera by screen-space
-       error, under a memory budget, each tile carrying its own collision mesh. What
-       a world too big to load needs.
-     - :doc:`GLinting Steel <glisteel>` — a circuit :doc:`baked <baking>` into a
-       world and streamed in around the car.
+     - Example
+   * - :ref:`Height field <terrain-heightfield>` (this page)
+     - An elevation grid over a square centred on the origin, drawn as one
+       splat-textured mesh. A 4 km square at 513² samples is one draw. The height
+       under any point is computed from the grid, with no ray cast. There are no
+       tiles, no baking and no streaming.
+     - The `forest demo <https://pypi.org/project/openglcontext-forest-demo/>`__:
+       Great Smoky Mountains elevation data, walked at eye height.
+   * - :doc:`Streamed 3D Tiles <tiles3d>`
+     - An octree of glTF tiles, loaded and unloaded around the camera by
+       screen-space error within a memory budget. Each tile carries its own
+       collision mesh. Use it for a world too big to load at once.
+     - :doc:`GLinting Steel <glisteel>`: a circuit :doc:`baked <baking>` into a
+       world and streamed around the car.
 
-The two share what stands on the ground: the same :doc:`vegetation
-<vegetation>` nodes, the same :doc:`roads <roads>`, the same :doc:`water
-<water>`, and the same :doc:`movement modes <navigation>`.
+Both use the same :doc:`vegetation <vegetation>` nodes, the same :doc:`roads
+<roads>`, the same :doc:`water <water>` and the same :doc:`movement modes
+<navigation>`.
 
 .. figure:: images/gallery/showcase/forest-walk.jpg
    :alt: A hillside of firs over undergrowth, seen from standing height
@@ -39,79 +42,34 @@ The two share what stands on the ground: the same :doc:`vegetation
 
 .. _terrain-heightfield:
 
-Height-field terrain, walked
-----------------------------
+Height-field terrain
+--------------------
 
-A landscape that fits in memory whole needs none of the streaming above.
-``OpenGLContext.scenegraph.terrain`` holds it as a ``HeightField`` — an
-elevation grid over a centred world square — drawn by ``SplatTerrain``, which
-blends several ground materials per fragment from a control image. A 4 km
-square at 513² samples is one mesh and one draw, and the height under any
-point is arithmetic rather than a ray cast.
+``OpenGLContext.scenegraph.terrain`` holds the landscape as a ``HeightField``:
+a square elevation grid over a square of the world centred on the origin.
+``SplatTerrain`` draws it, blending several ground materials per fragment
+according to a control image. A 4 km square at 513² samples is one mesh and
+one draw.
 
-.. _onesurface:
+A ``HeightField`` has four numbers besides its grid:
 
-One surface, three readers
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-A height field answers about the same ground three ways, and every one of them
-gives the same answer:
-
-.. list-table::
-   :widths: auto
-   :header-rows: 1
-
-   * - Reader
-     - What asks it
-   * - ``field.mesh()``
-     - what ``SplatTerrain`` draws — the ground a player sees
-   * - ``HeightFieldColliders``
-     - the trimesh chunks a car drives on, cut from that same grid
-   * - ``field.sample(x, z)``
-     - everything analytic: the walker's floor, the seat of every scattered plant,
-       the slope a grass mask thins by
-
-Four corner samples do not lie in a plane, so each cell of the grid is drawn
-as *two triangles*, and the height inside a cell depends on which of the two a
-point falls in. ``sample`` reads that same triangulated surface, so a camera
-clamped with it stands on the ground that is drawn, and a plant seated on it
-meets that ground.
-
-.. rst-class:: technical
-
-Interpolating the four corners of a cell instead — a bilinear patch — names a
-height on a surface nothing draws: it rides a quarter of the cell's twist
-above the drawn ground on one diagonal and the same below it on the other.
-Over the eight-metre cells of a 4 km square at 513², that is metres — a camera
-under the hill looking out through it, and vegetation buried to the tips.
-``tests/unit/test_heightfield_is_the_drawn_surface.py`` holds the three
-readers to each other.
-
-**Where the ground has been cut away, a fourth thing has to be asked.**
-``sample`` answers with a height inside an :ref:`opening <holes>` as readily as
-outside one — it reads the grid, which has no notion of what was cut out of the
-mesh built from it. So a reader that seats something on the ground asks
-``holes`` as well, and the three agree again.
-
-**A height function is not the ground; the mesh built from it is.** The same
-rule applies wherever a surface is meshed by sampling a function at vertices —
-the :doc:`streamed tiles <tiles3d>`, ``terrain_patch``. What is drawn there is
-the triangles between those samples, so anything placed on that ground has to
-be placed against them: scatter over the tile mesh (``scatter_on_mesh``), or
-against a sampler that reads it. Feeding the original function to
-``scatter_disc`` seats plants on a surface that was never drawn.
+- ``extent`` - the side of the square, in world units. The grid spans
+  ``-extent/2`` to ``extent/2`` in x and z.
+- ``relief`` - the world height of a change from 0 to 1 in the grid.
+- ``base`` - the world height of the grid's zero (default 0).
+- ``res`` - the number of samples along each side, taken from the grid.
 
 .. _fromfunction:
 
-Where a height field comes from
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Building a height field from a function
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A landscape is *authored* as a function of ``(x, z)`` — procedural noise, a
-DEM reader, terrain with a road's earthworks cut into it — and rendered and
-collided against as a grid. ``HeightField.from_function(fn, res, extent)`` is
-the step between: it samples the function over the square and takes the datum
-and the relief from what the function actually does there, so the grid's whole
-0–1 range is spent on the ground that is present.
+A landscape is usually written as a function of ``(x, z)``: procedural noise, a
+DEM reader, or terrain with a road's earthworks cut into it. The renderer and
+the physics use a grid. ``HeightField.from_function(fn, res, extent)`` samples
+the function over the square to make that grid. By default it sets ``base``
+and ``relief`` from the lowest and highest heights the function produces, so
+the whole 0–1 range of the grid covers the ground that is there.
 
 .. code-block:: python
 
@@ -121,22 +79,25 @@ and the relief from what the function actually does there, so the grid's whole
    HeightField.from_image('terrain-height.png', 1025, 4096.0,
                           field.relief, base=field.base)
 
-``base`` is the world height the grid's zero stands at. A landscape's lowest
-point is rarely sea level, and the grid says only how far the ground rises,
-not where it sits; the two numbers travel with the image. Give ``base`` and
-``relief`` explicitly when two fields of one landscape have to agree, or they
-meet in a step.
+``save_image`` writes a 16-bit greyscale PNG. The image holds only how far the
+ground rises, not where it sits, so store ``base`` and ``relief`` with it and
+pass them back to ``from_image``. When two fields describe one landscape, give
+both the same ``base`` and ``relief`` explicitly. Otherwise they meet in a
+step.
 
 .. _terrainprofile:
 
-Landscapes of your own
-~~~~~~~~~~~~~~~~~~~~~~
+Procedural landscapes
+~~~~~~~~~~~~~~~~~~~~~
 
-The shipped field is four things added together, and a ``TerrainProfile`` is
-how much of each there is: broad rolling **hills**; ridged **mountains** under
-a mask, so they stand in ranges rather than everywhere; a meandering
-**canyon** cut into whatever is above it; and a broad **basin** dished out of
-one region, whose floor is where a lake sits.
+The procedural landscape is the sum of four shapes, and a ``TerrainProfile``
+sets how much of each there is:
+
+- ``hills`` - broad rolling hills;
+- ``mountains`` - ridged mountains under a mask, so they form ranges rather
+  than covering the map;
+- ``canyon`` - a meandering canyon cut into whatever is above it;
+- ``basin`` - a broad dish in one region, whose floor holds a lake.
 
 .. code-block:: python
 
@@ -146,33 +107,31 @@ one region, whose floor is where a lake sits.
                          mountain_cover=0.82, canyon=0.0, basin=0.0, datum=60.0)
    height_fn = terrain_height_for(alps)          # an ordinary height function
 
-Every amount is metres of relief and every scale is metres on the ground, so
-what a landscape is can be read off its profile. ``seed`` gives another
-landscape of the same description — another set of ranges, another course for
-the river — rather than another kind of landscape. ``SHIPPED_TERRAIN`` is the
-profile ``terrain_height`` is, and it does not move: worlds already baked came
-from those numbers.
+Every amount is in metres of relief, and every scale is in metres on the
+ground. ``seed`` produces a different landscape with the same description:
+different ranges, a different course for the river. ``SHIPPED_TERRAIN`` is the
+profile behind ``terrain_height``. Its values stay fixed, because baked worlds
+were made from them.
 
-``fbm`` and ``ridged`` are the noise the landscape is made of, exposed so that
-anything adding to it — a sculpted hill, a scatter mask, a splat weight — can
-be made of the same grain rather than of a second kind of noise that does not
-match.
+``fbm`` and ``ridged`` are the noise functions the landscape is built from.
+Use them for anything you add to it, such as a sculpted hill, a scatter mask
+or a splat weight, so that the addition has the same grain.
 
-The result is an ordinary height function, so it feeds
-``HeightField.from_function`` above or :ref:`a baked tileset <making>`
-equally.
+``terrain_height_for`` returns an ordinary height function. Pass it to
+``HeightField.from_function`` above, or use it to build :ref:`a baked tileset
+<making>`.
 
 .. _controlmap:
 
-Which ground material shows where
+Ground materials: the control map
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The splat's control map is an RGBA image: red is how much of the first
-material shows at that spot, green the second, and so on. Painting one is how
-a landscape artist works; deriving one from the land is how a generated world
-gets its ground. A ``LayerRule`` is an elevation band, a slope band and a
-weight, and ``control_map`` turns a height field and a list of them into the
-image:
+The splat's control map is an RGBA image. Red is the weight of the first
+material at that spot, green the second, and so on. An artist can paint one,
+or ``control_map`` can derive one from the height field. It takes a list of
+``LayerRule`` objects, one per layer. Each rule has an elevation band
+(``height``, in metres), a slope band (``slope``, as rise over run) and a
+``weight``:
 
 .. code-block:: python
 
@@ -183,25 +142,80 @@ image:
        LayerRule(weight=0.0),                         # dirt: painted, not derived
    ], size=512, painted=[(3, road_corridor)])
 
-The first layer is the fallback: ground no rule wants is made of it. Bands
-feather at their edges, because a hard edge between two ground materials reads
-as a painted line. ``painted`` forces a layer where the rules cannot know to —
-a road's corridor, a lake bed, a clearing — taking that fraction of the pixel
-away from everything else, so the weights still add to one.
+The first layer is the fallback: it covers any ground no other rule claims.
+Bands are feathered at their edges, because a hard edge between two ground
+materials looks like a painted line. ``painted`` is a list of ``(layer,
+mask)`` pairs that force a layer where no rule could place it, such as a
+road's corridor, a lake bed or a clearing. Each mask takes its share of the
+pixel from the other layers, so the weights still add up to one.
 
-**Size the map to the smallest thing it has to say.** The control map is also
-what decides where :ref:`ground cover <groundcover>` grows, so a corridor
-thinner than one of its pixels is a corridor the grass grows straight over.
-Over four kilometres, 512 pixels is eight metres each and 2048 is two.
+``size`` is the map's resolution in pixels (default 512). Choose it for the
+narrowest feature the map must show. The control map also decides where
+:ref:`ground cover <groundcover>` grows, and grass grows straight over a
+corridor narrower than one pixel. Over four kilometres, 512 pixels are eight
+metres each and 2048 pixels are two metres each.
+
+.. _onesurface:
+
+One surface for drawing, collision and placement
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Three parts of the engine read a height field, and all three get the same
+surface:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Call
+     - Used by
+   * - ``field.mesh()``
+     - ``SplatTerrain``, which draws the ground the player sees
+   * - ``HeightFieldColliders``
+     - the physics world: trimesh chunks cut from the same grid, for a car to
+       drive on
+   * - ``field.sample(x, z)``
+     - everything computed directly: the walker's floor, the base of every
+       scattered plant, the slope that thins a grass mask
+
+The four corners of a grid cell do not lie in a plane, so each cell is drawn
+as *two triangles*. The height inside a cell depends on which triangle a point
+falls in. ``sample`` reads that same triangulated surface. A camera clamped
+with it stands on the drawn ground, and a plant placed with it meets that
+ground.
+
+.. rst-class:: technical
+
+Bilinear interpolation of the four corners gives a different surface, one
+that nothing draws. It lies above the drawn ground on one diagonal of the cell
+and below it on the other, by a quarter of the cell's twist. On a 4 km square
+at 513² samples the cells are eight metres wide, and the error reaches metres:
+the camera sinks inside a hill, and plants are buried to their tips.
+``tests/unit/test_heightfield_is_the_drawn_surface.py`` checks that the three
+readers agree.
+
+``sample`` returns a height inside an :ref:`opening <holes>` in the ground as
+it does anywhere else, because it reads the grid and the grid has no record of
+what was cut from the mesh. Code that places something on the ground must
+check ``holes`` as well.
+
+The same rule applies to any surface meshed by sampling a function at its
+vertices, such as the :doc:`streamed tiles <tiles3d>` or ``terrain_patch``.
+The drawn surface is the triangles between the samples, not the function.
+Place objects against those triangles: scatter over the tile mesh with
+``scatter_on_mesh``, or use a sampler that reads the mesh. Plants placed by
+``scatter_disc`` from the original function sit on a surface that is not
+drawn.
 
 .. _fieldphysics:
 
-Standing on one
-~~~~~~~~~~~~~~~
+Colliding with a height field
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A field is a surface, so a vehicle needs triangles.
-``OpenGLContext.physics.heightfield.HeightFieldColliders`` cuts it into square
-chunks and keeps the ones near whatever is moving in the physics world:
+A vehicle needs triangles to collide with.
+``OpenGLContext.physics.heightfield.HeightFieldColliders`` cuts the field into
+square chunks and keeps only the chunks near a given position in the physics
+world:
 
 .. code-block:: python
 
@@ -209,23 +223,28 @@ chunks and keeps the ones near whatever is moving in the physics world:
    ground = HeightFieldColliders(physics_world, field, reach=320.0)
    ground.update(car_position)                        # once a frame
 
-A four-kilometre field at four-metre spacing is two million triangles and a
-car touches four of them at a time, so what is out of reach is removed again:
-an hour of driving costs what one view of the world costs. Chunks are cut on
-the field's own grid lines and share their edge rows, so two neighbours agree
-exactly where they meet.
+``reach`` is how far from the position ground is kept, in metres (default
+320). ``chunk`` is the side of one chunk, in metres (default 128), rounded to
+whole grid cells. A four-kilometre field at four-metre spacing is two million
+triangles, and a car touches about four of them at a time. Chunks that move
+out of reach are removed, so the physics cost stays at what one view of the
+world needs, however long the drive. Chunks are cut on the field's own grid
+lines and share their edge rows, so neighbouring chunks meet exactly.
 
 .. _holes:
 
-``holes`` is how something that passes *through* the ground says so. A
-tunnel's bore runs inside the hill and the hill's surface is still drawn over
-it; left in the physics world that surface is a wall across the road.
-``holes(x, z) -> mask`` is true where the ground is not there, and the bore's
-own lining is what the vehicle then drives through.
+Openings in the ground
+~~~~~~~~~~~~~~~~~~~~~~
 
-The same callable goes to ``HeightField.mesh()``, to the colliders and to
-whatever is seated on the ground, so the surface a player sees, the surface a
-car meets and the surface things stand on are one surface:
+A height field cannot represent a hole, such as the mouth of a tunnel. The
+hill's surface is still drawn over the bore, and in the physics world that
+surface is a wall across the road. ``holes`` is a callable,
+``holes(x, z) -> mask``, that is true where the ground is absent. Inside the
+opening, the vehicle drives on the bore's own lining.
+
+Pass the same callable to ``HeightField.mesh()``, to the colliders and to
+anything placed on the ground. The surface the player sees, the surface the
+car hits and the surface objects stand on then stay the same:
 
 .. code-block:: python
 
@@ -235,36 +254,39 @@ car meets and the surface things stand on are one surface:
    terrain.holes = mouth                              # what is drawn, and what grows
    ground = HeightFieldColliders(physics_world, field, holes=mouth)
 
-A ``TilesTerrain`` passes what it is given to its :ref:`ground cover
-<wheretheygrow>` as well. A height field answers with a height inside an
-opening as readily as outside one, so anything placed by asking it alone stands
-in the portal in mid-air; a reader that seats something on the ground asks
-``holes`` too.
+Setting ``holes`` on a ``TilesTerrain`` also passes it to that terrain's
+:ref:`ground cover <wheretheygrow>`. Anything you place yourself using only
+``field.sample`` stands in mid-air across the opening, so check ``holes`` for
+it too.
 
-``OpenGLContext.scenegraph.terrain.holes.cut`` is what both use to apply it.
-The triangles the opening's edge crosses are *cut on that edge* — the crossing
-is found by halving, to under a millimetre on a cell metres wide — so the
-ground stops where the opening starts rather than a cell either side of it,
-and a new corner carries the normal the surface already had there. A crossing
-belongs to the grid edge rather than to the triangle that asked for it, so the
-two triangles sharing an edge are handed the same corner and the cut leaves no
-crack. Detail finer than a cell — an opening smaller than one, or a corner
-where the edge turns inside one — is resolved to the triangle it falls in,
-which goes if its centre is in the opening.
+``OpenGLContext.scenegraph.terrain.holes.cut`` applies the mask to the mesh
+and to the colliders:
 
-:ref:`Roads <bores>` has what a bore's opening is, and why it is the mouth
-rather than the length of the tunnel.
+- A triangle that the opening's edge crosses is cut along that edge. The
+  crossing is found by repeated halving, to under a millimetre on a cell
+  metres wide. The ground stops where the opening starts, not a cell to either
+  side, and each new corner keeps the surface's normal at that point.
+- A crossing belongs to the grid edge, not to the triangle. The two triangles
+  that share an edge get the same new corner, so the cut leaves no crack.
+- Detail finer than a cell, such as an opening smaller than a cell or a corner
+  of the opening inside one, is resolved per triangle: a triangle is removed
+  if its centre is inside the opening.
+
+:ref:`Tunnel mouths in the ground <bore-openings>` describes how a road makes
+its openings, and why an opening covers only the mouth and not the whole
+length of the tunnel.
 
 .. _tiledground:
 
-Ground that arrives in the tiles
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Ground carried in the tiles
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A world can carry its ground in its *tiles* instead: meshed when the world was
-baked, refined by the streamer as the camera comes in, and drawn as it
-arrived. What makes it ground is the same shading — the same detail materials,
-the same control map, the same baked light — held apart from the mesh it is
-drawn on:
+A world can also carry its ground in its *tiles*. The ground is meshed when
+the world is baked, refined by the streamer as the camera approaches, and
+drawn as each tile arrives. It is shaded the same way as a height field, with
+the same detail materials, control map and baked light. ``GroundShading``
+holds that shading apart from the mesh, and ``GroundPatch`` draws one mesh
+with it:
 
 .. code-block:: python
 
@@ -274,26 +296,27 @@ drawn on:
                           shading=field.sun_shadow(sun))
    patch = GroundPatch(ground, vertices, indices, model=tile_transform)
 
-A bake says which primitive is ground by **naming its material** ``ground``,
-and the tile loader mounts those as patches of the world's own ground
-(``OpenGLContext.scenegraph.terrain.ground.mount_ground``); the material's
-vertex colours stay on it, so a viewer that has never heard of the convention
-still draws a landscape. ``extras.terrain.drawn`` in the tileset says which
-way round a world is: ``field`` for the one mesh above, ``tiles`` for ground
-that streams. Either way the height field is written beside the tileset,
-because it is what the world is collided against, clamped to and planted on —
-the surface that must not change resolution under a wheel as a tile refines.
+A bake marks a primitive as ground by **naming its material** ``ground``. The
+tile loader mounts those primitives as patches of the world's ground
+(``OpenGLContext.scenegraph.terrain.ground.mount_ground``). The material keeps
+its vertex colours, so a viewer that does not know this convention still draws
+a landscape.
+
+``extras.terrain.drawn`` in the tileset says which form a world uses:
+``field`` for one height-field mesh, ``tiles`` for ground that streams. In both
+cases the height field is written beside the tileset. The engine collides
+against it, clamps the camera to it and places plants on it, because its
+resolution does not change under a wheel as tiles refine.
 
 .. _relief:
 
-The grain in the ground
-~~~~~~~~~~~~~~~~~~~~~~~
+Small-scale relief
+~~~~~~~~~~~~~~~~~~
 
-A height function says where the hills are. What it does not say is what a
-hillside is made of — the hummocks, the ruts and the swells a metre or two
-across that someone standing on it sees. Sampling the function more finely
-does not produce them, because they are not in it.
-``OpenGLContext.scenegraph.terrain.Relief`` is:
+A height function sets where the hills are. It does not include the hummocks,
+ruts and swells a metre or two across that a person standing on a hillside
+sees, and sampling the function more finely does not add them.
+``OpenGLContext.scenegraph.terrain.Relief`` adds them:
 
 .. code-block:: python
 
@@ -302,71 +325,66 @@ does not produce them, because they are not in it.
    grain = Relief(coarsest=24.0, finest=0.75, roughness=0.09)
    ground = grain.over(height_fn, spacing=tile_spacing, error=tile_error)
 
-Relief is a band of noise per feature size, and a surface carries the bands it
-is sampled finely enough to show: a band is drawn only where a feature spans
-``samples_per_feature`` vertices or more, so a tile meshed every sixty metres
-carries none of them and one meshed every half metre carries them all. The
-grain therefore *arrives* as a 3D Tiles tree refines rather than aliasing into
-a coarse tile as speckle.
+``Relief`` is a set of noise bands, one per feature size, from ``coarsest`` to
+``finest`` metres (defaults 16 and 0.75). A surface carries only the bands it
+is sampled finely enough to show. A band is included only where a feature
+spans at least ``samples_per_feature`` vertices (default 8). A tile meshed
+every sixty metres carries none of the bands, and one meshed every half metre
+carries all of them. The grain therefore appears as a 3D Tiles tree refines,
+instead of aliasing into speckle on a coarse tile.
 
-**Keep the features small.** A band is as tall as ``roughness`` times its own
-width, so a coarse band is not grain but a dune: at 24 m and a roughness of a
-tenth it is two and a half metres of swell, which on a landscape a car drives
-over is terrain rather than texture. What a landscape is *shaped* like is the
-height function's job; this is what a hillside is made of.
+Each band is ``roughness`` times its own width in height. ``roughness`` is in
+metres of rise per metre of feature (default 0.03). Keep the coarse bands
+small: a 24 m band at a roughness of 0.1 is two and a half metres of swell,
+which a car feels as terrain rather than texture. Shape the landscape with the
+height function, and use ``Relief`` only for surface texture. ``seed`` selects
+a different grain. ``GROUND_RELIEF`` is the default relief for a baked
+landscape.
 
-The whole displacement is scaled to fit inside the tile's own geometric error
-— the distance the streamer is already willing for the drawn surface to stand
-from the real one. ``roughness`` is metres of rise per metre of feature;
-``seed`` chooses which grain. ``GROUND_RELIEF`` is the one a baked landscape
-carries by default.
+The total displacement is scaled to fit inside the tile's own geometric error,
+the distance the streamer already allows between the drawn surface and the
+true one.
 
-**What is drawn is what is collided against.** The height field is still the
-one surface every reader agrees about — the car, the camera, the seat of a
-scattered plant — so the grain goes into *it*, and the tiles are meshed from
-the same function. A band the field cannot hold would be relief a player sees
-and walks straight through, so ``no_finer_than(spacing)`` cuts those before
-anything draws them:
+The height field must carry the same grain, because the car, the camera and
+the plants all use it. ``no_finer_than(spacing)`` removes the bands the field's
+grid is too coarse to hold, so no band is drawn that a player would walk
+through:
 
 .. code-block:: python
 
    grain = GROUND_RELIEF.no_finer_than(field_spacing)   # what a grid that size can carry
    ground = grain.over(height_fn, spacing=finest_tile_spacing, error=finest_tile_error)
 
-The field is sampled from ``ground`` and so is the finest tile, so the two are
-one surface; the coarser tiles are that surface with its finer bands left off,
+Sample both the field and the finest tiles from ``ground``, so they are the
+same surface. Coarser tiles are that surface with its finer bands left off,
 which is ordinary level of detail.
 
-**How much can be felt is set by the field's own grid.** The grain goes into
-the landscape and the landscape is a grid, so ``no_finer_than`` cuts what it
-cannot hold: at a sample every two metres that leaves one swell of about half
-a metre across sixteen, which reads as modulation across a hillside. Ruts are
-a metre across, and feeling one wants a surface sampled a few tens of
-centimetres apart near the camera rather than a finer grid over the whole
-world.
+The field's grid sets how much grain the physics can feel. At one sample every
+two metres, ``no_finer_than`` leaves one band: a swell of about half a metre
+across sixteen metres. Ruts are about a metre across. Feeling them needs a
+surface sampled a few tens of centimetres apart near the camera, not a finer
+grid over the whole world.
 
-The other half of agreeing is ``where``: ground that was *worked* has no grain
-left in it. A road is a strip that was cleared and levelled to build it, and a
-hummock in the carriageway is one a grader took out — so a caller hands the
-relief a weight from 0 on the made ground to 1 clear of it, and the same
-weight reaches the tiles and the field alike.
+``where`` removes the grain from ground that was built on. A road is cleared
+and levelled before it is surfaced, so it has no hummocks. Pass ``where`` a
+weight that is 0 on the built ground and 1 clear of it. The same weight
+applies to both the tiles and the field.
 
-Baking it into a world is `openglcontext-editor
-<https://github.com/mcfletch/openglcontext-editor>`__'s
-``HeightfieldLayer(relief=...)``, which meshes each tile from the height
-function with the tile's own bands already in it, and
-``ProceduralWorld.grain``, which puts the same grain in the landscape beside
-the tileset.
+To bake relief into a world, use `openglcontext-editor
+<https://github.com/mcfletch/openglcontext-editor>`__:
+``HeightfieldLayer(relief=...)`` meshes each tile from the height function
+with that tile's bands in it, and ``ProceduralWorld.grain`` puts the same
+grain in the height field written beside the tileset.
 
-Walking it
-~~~~~~~~~~
+Walking on a height field
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``OpenGLContext.move.terrainwalk.TerrainWalkMixin`` is what walks it. It is
-the terrain form of :ref:`PhysicsWalkMixin <physics-heightfield>`: the same
-avatar, the same declared :doc:`movement modes <navigation>` and the same keys
-as a glTF model or an arena map, with the ground taken from the height field
-and the obstacles from a field of cylinders — tree trunks, rocks — resolved
-analytically.
+``OpenGLContext.move.terrainwalk.TerrainWalkMixin`` lets the player walk on a
+height field. It is the terrain form of :ref:`PhysicsWalkMixin
+<physics-heightfield>`. It uses the same avatar, the same :doc:`movement
+modes <navigation>` and the same keys as walking on a glTF model or an arena
+map. The ground comes from the height field. Obstacles such as tree trunks
+and rocks are a set of vertical cylinders, resolved analytically.
 
 .. code-block:: python
 
@@ -383,54 +401,57 @@ analytically.
    :widths: auto
    :header-rows: 1
 
-   * - Method
+   * - Method or attribute
      - What it does
    * - ``init_walk( field, positions, radii )``
-     - Bind the ground and the cylinders. The radii have ``player_radius`` added, and
-       the cylinders are bucketed into a hash grid, so a collision test looks at a
-       handful of neighbours rather than at a whole forest.
+     - Sets the ground and the obstacle cylinders. ``player_radius`` is added to
+       each radius. The cylinders are sorted into a hash grid, so a collision test
+       checks a few neighbours rather than the whole forest.
    * - ``setupPhysics( enable=True )``
-     - Stand the avatar up and give it the camera. From ``PhysicsWalkMixin``,
-       unchanged — :kbd:`g` hands the camera back to the free-fly navigator, :kbd:`f`
-       flies.
+     - Creates the avatar and gives it the camera. Inherited unchanged from
+       ``PhysicsWalkMixin``: :kbd:`g` returns the camera to the free-fly
+       navigator, and :kbd:`f` flies.
    * - ``add_stream( step, fn, turn=None )``
-     - Call ``fn(x, z)`` once the walker has moved ``step`` world units, or turned
-       ``turn`` radians. What refreshes the grass and the near-mesh trees that follow
-       the camera; use ``turn`` for a field that depends on the *facing*, such as a
-       view-cone cull.
+     - Calls ``fn(x, z)`` each time the walker moves ``step`` world units, or turns
+       ``turn`` radians. Use it to refresh the grass and near-mesh trees that
+       follow the camera. Give ``turn`` for anything that depends on the facing,
+       such as a view-cone cull.
    * - ``eye_height``, ``player_radius``
-     - The camera height and the body radius the scene was written against. They size
-       the avatar, rather than the physics defaults.
+     - The camera height (default 1.7) and body radius (default 0.25) the scene
+       was built for, in world units. They size the avatar in place of the
+       physics defaults.
 
-The surface is a **floor**, not a rail: the avatar is lifted to it from at or
-below and left alone above, so a jump rises, an arrival from the air falls,
-and flying over the canopy works. Trunks stop a walker and not a flier.
-Without ``setupPhysics`` the mix-in still holds a free-fly camera down on the
-terrain, which is what the offscreen capture and benchmark tools use.
+The surface is a **floor**, not a rail. The avatar is lifted onto it from
+below and is left alone above it, so a jump rises, a drop from the air falls,
+and flight over the canopy works. Trunks stop a walker but not a flier.
+Without ``setupPhysics``, the mix-in still holds a free-fly camera above the
+terrain. The offscreen capture and benchmark tools use that mode.
 
-Demos & validation
-------------------
+Demos and source
+----------------
 
-``oglc-forest`` — the `forest demo
-<https://pypi.org/project/openglcontext-forest-demo/>`__, a separate
-distribution — is this path at full size: real Great Smoky Mountains
-elevation, a four-layer splat ground, 230k GPU-instanced trees with impostor
-LOD, two layers of camera-following grass, and the overlay :doc:`settings and
-key-binding screens <overlayui>` on the same keys every other program here
-uses.
+``oglc-forest``, the `forest demo
+<https://pypi.org/project/openglcontext-forest-demo/>`__, is a separate
+distribution that uses this page's features at full size: Great Smoky
+Mountains elevation data, a four-layer splat ground, 230,000 GPU-instanced
+trees with impostor LOD, two layers of camera-following grass, and the
+overlay :doc:`settings and key-binding screens <overlayui>`, on the same keys
+as every other OpenGLContext program. :doc:`Vegetation <vegetation>` describes
+the trees and grass.
 
-- ``tests/tiles_terrain.py``, ``tests/tiles_vegetation.py`` — minimal
-  heightfield / instanced-vegetation demos.
+- ``tests/tiles_terrain.py``, ``tests/tiles_vegetation.py`` - small height-field
+  and instanced-vegetation demos.
 
-- ``tests/tiles_walk.py`` — first-person walk/fly.
+- ``tests/tiles_walk.py`` - first-person walking and flying.
 
 .. rst-class:: technical
 
-``scenegraph/terrain/`` (``heightfield.py``, ``splat.py``, ``control.py``),
+The code is in ``scenegraph/terrain/`` (``heightfield.py``, ``splat.py``,
+``control.py``, ``holes.py``, ``ground.py``, ``relief.py``),
 ``scenegraph/vegetation/`` (instanced clumps, billboards, near meshes and
 ``field.py``), ``physics/heightfield.py`` and ``move/terrainwalk.py``. The
-behaviour is pinned by ``tests/unit/test_terrainwalk_avatar.py`` (where the
-walker ends up, on a slope, against a trunk, mid-jump and in the air),
+tests are ``tests/unit/test_terrainwalk_avatar.py`` (where the walker ends
+up: on a slope, against a trunk, mid-jump and in the air),
 ``test_terrainwalk_broadphase.py``, ``test_terrain_vegetation.py``,
 ``test_heightfield_datum.py``, ``test_terrain_control.py``,
 ``test_heightfield_colliders.py`` and ``test_vegetation_field.py``.

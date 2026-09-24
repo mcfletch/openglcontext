@@ -3,55 +3,55 @@ HUD & developer overlay
 
 .. rst-class:: introduction
 
-A **HUD layer** draws over a live world and never takes an event: a reticule,
-a health bar, an ammunition count, a line of text that fades. The **developer
-overlay** is one of these, fed by registered providers, and it is where the
-frame rate is now drawn. Both are drawn beneath any :doc:`overlay panel
-<overlayui>` that is open, by the same batched renderer, in the same handful
-of draw calls.
+A **HUD layer** draws game information over the live world: a reticule, a
+health bar, an ammunition count, a message that fades. It never takes input.
+The **developer overlay** is a HUD layer that shows diagnostics, such as the
+frame rate, from registered providers. HUD layers are drawn under any open
+:doc:`overlay panel <overlayui>`, by the same batched renderer, in the same
+few draw calls.
 
 .. _difference:
 
-A HUD is not a panel
---------------------
+HUD layers and overlay panels
+-----------------------------
 
-The :ref:`overlay stack <overlayui-input>` is modal: while a panel is up,
-nothing under it hears anything. That is exactly right for a settings screen
-and exactly wrong for a health bar. So the two are different things:
+The :ref:`overlay stack <overlayui-input>` is modal: while a panel is open,
+nothing under it receives input. That suits a settings screen, but not a
+health bar, so HUD layers and panels are separate:
 
 .. list-table::
    :widths: auto
    :header-rows: 1
 
-   * - 
+   * -
      - HUD layer
      - Overlay panel
    * - Input
      - Never receives any
-     - The top one takes it; a modal one stops the world hearing it
+     - The top panel takes it; a modal panel keeps it from the world
    * - Focus
-     - None — nothing in it is focusable
+     - None; nothing in it is focusable
      - Tab order, accelerators, an Enter default
    * - Drawn
      - Every frame, under the panels
-     - When something is open, over the HUD
+     - While open, over the HUD
    * - Laid out
      - Every frame, because its values change
-     - When it opens or the window resizes
+     - When it opens or the window is resized
    * - Placed
-     - By anchor: a corner, an edge, the middle
+     - By anchor: a corner, an edge or the middle
      - Centred in the window
 
-Every context has HUD layers, because every context has a developer overlay. A
-context gains panels by mixing in ``OpenGLContext.ui.overlay.OverlayMixin``.
+Every context has HUD layers, because every context has a developer overlay.
+A context gets panels by mixing in ``OpenGLContext.ui.overlay.OverlayMixin``.
 
 .. _hud-quickstart:
 
-Putting a HUD on the frame
---------------------------
+Adding a HUD
+------------
 
-A layer is a tree of widgets, each carrying the corner it belongs in. Add it
-to the context and it is drawn from the next frame on:
+A layer is a tree of widgets, and each widget names the corner it belongs
+in. Add the layer to the context, and it is drawn from the next frame:
 
 .. code-block:: python
 
@@ -73,41 +73,12 @@ to the context and it is drawn from the next frame on:
    ])
    self.addHUDLayer(self.hud)
 
-After that it is data: write ``self.health.value = 40`` and the meter turns
-amber, ``self.messages.post('PICKED UP A SHOTGUN')`` and a line appears and
-fades. Nothing has to be redrawn by hand, because the layer is measured and
-painted afresh each frame.
+After that, update the widgets' fields. Setting ``self.health.value = 40``
+turns the meter amber. ``self.messages.post('PICKED UP A SHOTGUN')`` shows a
+line that fades. The layer is measured and drawn again every frame, so
+nothing has to be redrawn by hand.
 
-.. _hud-demo:
-
-Seeing it work
---------------
-
-.. figure:: images/demos/hud_demo.jpg
-   :alt: A reticule, two bar meters, a lamp row, a message, a mini-map and an ammunition read-out drawn over a dusk world of pillars
-
-   ``python tests/hud_demo.py`` — one ``HUDLayer`` holding a game's whole screen
-   furniture over a lit world, every element placed by the corner it names. A
-   ``Crosshair`` in the middle, whose ``spread`` opens and closes on the clock
-   the way a weapon's accuracy does; two ``BarMeter``\ s bottom left, one reading
-   green and one amber because that is where each value sits against its own
-   thresholds; a ``LampRow`` of five lives across the top with a ``MessageQueue``
-   fading out underneath it; a ``MiniMap`` of the pillar ring with the player
-   marked on it; a ``Readout`` bottom right, drawing a nine-slice icon beside its
-   number; the key legend top right in a ``TextBlock``; and a ``DamageIndicator``
-   washing the right-hand edge, which is the way the last hit came from. The
-   meters sweep their whole range on a clock, so each threshold colour comes up
-   in turn.
-
-Nothing on that screen is interactive, and the world underneath hears every
-event as though the HUD were not there. The keys fire the transient effects:
-``x`` takes a hit, ``v`` puts a ``ScreenWash`` over the viewport, ``space``
-puts a hit mark on the reticule, ``m`` posts a message, and ``alt-f`` brings
-up the developer overlay — where the demo registers a section of its own
-numbers, at the top of the plate.
-
-The demo at its smallest is two widgets, which is enough to be worth having on
-screen:
+The smallest useful HUD is two widgets:
 
 .. code-block:: python
 
@@ -123,14 +94,47 @@ screen:
    # and from then on, wherever the number changes
    self.health.value = 22          # red, from the meter's own thresholds
 
+.. _hud-demo:
+
+The HUD demo
+------------
+
+.. figure:: images/demos/hud_demo.jpg
+   :alt: A reticule, two bar meters, a lamp row, a message, a mini-map and an ammunition read-out drawn over a dusk world of pillars
+
+   ``python tests/hud_demo.py``: one ``HUDLayer`` over a lit world, with each
+   element placed by the corner it names.
+
+The demo shows every widget:
+
+- a ``Crosshair`` in the middle, whose ``spread`` opens and closes on a
+  timer, as a weapon's accuracy does;
+- two ``BarMeter`` widgets bottom left, one green and one amber, according
+  to where each value sits against its thresholds. The values sweep their
+  whole range, so each threshold colour appears in turn;
+- a ``LampRow`` of five lives across the top, with a ``MessageQueue`` under
+  it;
+- a ``MiniMap`` of the ring of pillars with the player marked on it;
+- a ``Readout`` bottom right, with a nine-slice icon beside its number;
+- the key legend top right, in a ``TextBlock``;
+- a ``DamageIndicator`` on the right-hand edge, the direction of the last
+  hit.
+
+Nothing on the screen is interactive, and the world receives every event as
+if the HUD were not there. The keys trigger the transient effects: :kbd:`x`
+takes a hit, :kbd:`v` puts a ``ScreenWash`` over the viewport, :kbd:`space`
+puts a hit mark on the reticule, :kbd:`m` posts a message, and
+:kbd:`alt`\ +\ :kbd:`f` shows the developer overlay, where the demo registers
+a section of its own at the top. :doc:`tutorials/hud_demo` walks through the
+code.
+
 .. _anchors:
 
-Placement is by anchor
-----------------------
+Placement by anchor
+-------------------
 
-Health in one corner, ammunition in another, the reticule in the middle: no
-row-and-column arithmetic describes that as well as naming the corner does.
-Every HUD widget carries two fields:
+HUD widgets are placed by naming a corner or edge rather than by rows and
+columns. Every HUD widget has two placement fields:
 
 .. list-table::
    :widths: auto
@@ -140,35 +144,39 @@ Every HUD widget carries two fields:
      - Meaning
    * - ``anchor``
      - One of ``top-left``, ``top``, ``top-right``, ``left``, ``center``, ``right``,
-       ``bottom-left``, ``bottom``, ``bottom-right``. Anything else is read as
-       ``center``, so a typo puts the element somewhere visible.
+       ``bottom-left``, ``bottom``, ``bottom-right``. Any other value is treated
+       as ``center``, so a misspelt anchor still puts the widget on screen.
    * - ``offset``
-     - Pixels away from that anchor, **+x right and +y up**, so an offset always
-       moves an element away from the corner it is anchored to whichever corner that
-       is.
+     - Pixels away from the anchor, **+x right and +y up**. The offset is applied
+       away from whichever corner the widget is anchored to.
 
-``HUDLayer.margin`` keeps everything clear of the window edge. A child with no
-``anchor`` at all — an ordinary ``Row`` or ``Column`` — is given the whole
-layer and lays itself out normally, so the ordinary layout containers work
-inside a HUD.
+``HUDLayer.margin`` (16 pixels) keeps everything clear of the window edge,
+and ``HUDLayer.reserved`` is room already taken at each edge (top, right,
+bottom, left), such as by a menu bar. A child with no ``anchor``, such as an
+ordinary ``Row`` or ``Column``, is given the whole layer and lays itself out
+normally, so the ordinary layout containers work inside a HUD.
 
-Every pixel measurement here — margins, offsets, a reticule's gap, a meter's
-height — is **at the reference font size** and is multiplied by the interface
-scale, exactly as the skin's are. A HUD authored on a 1080p display is the
-same size in the eye at 4K. See :ref:`Everything scales with the window
-<scale>`.
+Every pixel measurement here, including margins, offsets, a reticule's gap
+and a meter's height, is in pixels at the reference font size. It is
+multiplied by the interface scale, as the skin's measurements are, so a HUD
+designed on a 1080p display appears the same size at 4K. See
+:ref:`Everything scales with the window <scale>`.
 
 .. _widgets:
 
 The widgets
 -----------
 
-Crosshair — the reticule
-~~~~~~~~~~~~~~~~~~~~~~~~
+All the widgets are in ``OpenGLContext.ui.hudwidgets``.
 
-**The reticule belongs to the weapon, not to the game.** Everything about it
-is a field, so a table of weapons names one of these each and switching weapon
-is switching this node rather than branching in the drawing code.
+.. _crosshair:
+
+Crosshair: the reticule
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Every property of the reticule is a field. A game with several weapons can
+give each weapon its own ``Crosshair`` and switch the node when the weapon
+changes.
 
 .. list-table::
    :widths: auto
@@ -179,33 +187,31 @@ is switching this node rather than branching in the drawing code.
      - Default
      - Meaning
    * - ``shape``
-     - 
+     -
      - ``cross``
-     - ``cross``, ``dot``, ``cross-dot``, ``circle`` or ``none``. ``none`` is a real
-       choice: some weapons aim down their own sights.
+     - ``cross``, ``dot``, ``cross-dot``, ``circle`` or ``none``. Use ``none`` for a
+       weapon that aims down its own sights.
    * - ``gap``
      - px
      - 5
-     - Clear space in the middle. The gap is the point of a crosshair: it leaves what
-       is being aimed at visible.
+     - Clear space in the middle, so the target stays visible.
    * - ``length``
      - px
      - 7
-     - One arm.
+     - Length of one arm.
    * - ``thickness``
      - px
      - 2
-     - Arm width.
+     - Width of an arm.
    * - ``dotSize``
      - px
      - 2
-     - The centre dot, for the shapes that have one.
+     - Size of the centre dot, for the shapes that have one.
    * - ``spread``
      - px
      - 0
-     - Extra gap from the weapon's current accuracy. Widens the reticule rather than
-       moving it, so what the player sees is the size of the area a shot might land
-       in.
+     - Extra gap for the weapon's current accuracy. It widens the reticule rather
+       than moving it, so the reticule shows the area a shot may land in.
    * - ``hitDuration``
      - s
      - 0.35
@@ -213,35 +219,34 @@ is switching this node rather than branching in the drawing code.
    * - ``hitSize``
      - px
      - 4
-     - How big it is.
+     - Size of the hit mark.
 
-The shape is drawn from axis-aligned rectangles — four arms, or four arcs for
-a circle — because that is what the overlay renderer draws, and at the few
-pixels a reticule occupies the difference is invisible while the batch stays
-one draw call.
+The shape is drawn from axis-aligned rectangles: four arms, or four arcs for
+a circle. At the few pixels a reticule covers, this looks the same as a true
+curve, and the whole HUD stays in one draw call.
 
-BarMeter — health, armour, a charge
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. _barmeter:
 
-A value against a maximum, coloured by where it sits against two thresholds:
-``warnFraction`` (0.5) and ``criticalFraction`` (0.25) pick the skin's
-``hudGood``, ``hudWarn`` and ``hudCritical``. Three colours rather than a
-gradient, because what a player reads off a meter at speed is a state — fine,
-low, about to matter — and a continuous ramp says none of those clearly.
-Setting ``color`` overrides the thresholds entirely.
+BarMeter: health, armour, a charge
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``barWidth``/``barHeight`` are its natural size; the track stretches to
-whatever room the meter is given, so a meter in a stretched group stretches
-with it. A ``label`` is drawn to its left and takes room from the track;
-``showValue`` draws the number over it.
+A ``BarMeter`` shows a ``value`` against a ``maximum`` (100). Its colour
+depends on where the value sits against two thresholds: ``warnFraction``
+(0.5) and ``criticalFraction`` (0.25) select the skin's ``hudGood``,
+``hudWarn`` or ``hudCritical``. The meter uses three colours rather than a
+gradient, so a player can read its state (fine, low, critical) at a glance.
+Setting ``color`` overrides the thresholds.
 
-**A meter can react rather than merely update.** ``meter.flash(now)`` lights
-the whole track and fades over ``flashDuration`` (0.35 s) from
-``flashStrength`` (0.75). A number that changed silently in a corner nobody is
-looking at is not feedback, and the flash is what makes the change something a
-player notices out of the corner of an eye. *Whether* a change is worth
-flashing about is the game's rule and not the meter's — health lost matters
-and health gained from a pickup may not — so the game asks:
+``barWidth`` (140) and ``barHeight`` (14) are its natural size. The track
+stretches to fill the room the meter is given, so a meter in a stretched
+group stretches with it. A ``label`` is drawn to its left and takes room from
+the track. ``showValue`` (on by default) draws the number over it.
+
+``meter.flash(now)`` lights the whole track and fades it over
+``flashDuration`` (0.35 s) from ``flashStrength`` (0.75). A flash makes a
+change visible to a player who is not looking at the meter. The game decides
+which changes deserve a flash. For example, flash when health drops but not
+when a pickup raises it:
 
 .. code-block:: python
 
@@ -249,61 +254,55 @@ and health gained from a pickup may not — so the game asks:
        meter.flash(now)
    meter.value = value
 
-The whole track lights, not the filled part, so a meter that has just been
-emptied still flashes: the moment health reaches nothing is the one a player
-most needs to see.
+The flash lights the whole track, not only the filled part, so a meter that
+has just reached zero still flashes.
 
 .. _lamprow:
 
-LampRow — a count that is seen rather than read
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+LampRow: a count shown as lamps
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A row of lamps, ``lit`` of ``count`` of them burning from the left.
-``BarMeter`` and ``Readout`` both answer *how much* and a player has to read
-them to find out; some counts cannot afford that. A racing start rig is the
-case that names this widget — five lamps filling one a second, holding, and
-going out — because a driver reads it with their eyes on the road, and a
-numeral counting down would take them off it. A round counter, a life count
-and a lap tally are the same shape of question.
+A ``LampRow`` is a row of ``count`` lamps (5), of which the first ``lit``
+(0), from the left, are lit. A player sees the count without reading a
+number. A racing start sequence is the typical use: five lamps light one per
+second and then go out, and the driver watches them without looking away
+from the road. Round counters, lives and lap tallies work the same way.
 
 .. code-block:: python
 
-   self.lights = LampRow(anchor='top-center', offset=(0, -40))
+   self.lights = LampRow(anchor='top', offset=(0, -40))
    ...
    self.lights.count, self.lights.lit = 5, burning
    self.lights.visible = starting
 
-``lit`` is clamped rather than checked, so a game may hand it whatever it is
-counting without first working out whether the number fits. Every lamp is
-drawn in a housing whether it burns or not, so a rig with nothing lit still
-reads as a rig rather than as empty screen; a burning one gets a halo, kept
-inside the spacing so two lit lamps stay two.
+``lit`` is clamped to the range 0 to ``count``, so a game can assign any
+number. Every lamp is drawn in a housing whether it is lit or not, so a row
+with nothing lit is still visible. A lit lamp gets a halo, kept inside the
+spacing so two lit lamps stay distinct.
 
-``lampSize`` (26) and ``gap`` (12) are its natural size. ``color`` recolours
-the burning lamps and leaves the dark ones to the skin, which is what makes
-the same widget a start rig here and a fuel warning elsewhere; without it a
-burning lamp takes the skin's ``hudCritical``, which is red everywhere a start
-rig exists.
+``lampSize`` (26) and ``gap`` (12) set its natural size, and its ``anchor``
+defaults to ``top``. ``color`` recolours the lit lamps and leaves the unlit
+ones to the skin. Without ``color``, a lit lamp uses the skin's
+``hudCritical``, which is red in the default skin.
 
-DamageIndicator — which way the hit came from
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. _damageindicator:
 
-**The direction is what this adds.** How much health was lost is already on
-the meter and in the number beside it; what a player cannot see, and must act
-on within about a second, is *where the shooter is standing*. So a hit is
-washed onto the screen edge the player would turn towards to face it.
+DamageIndicator: the direction of a hit
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The health meter shows how much damage was taken. A ``DamageIndicator``
+shows where it came from, by washing colour onto the screen edge the player
+would turn towards to face the attacker.
 
 .. code-block:: python
 
    indicator.hurt(bearing=-math.pi / 2, intensity=0.6, now=now)   # from the left
 
-A bearing is radians from straight ahead, positive to the right, so ``+pi/2``
-is directly to the right and ``pi`` is directly behind — which is the bottom
-of the screen, because that is where a player looks for what they cannot see.
-Each of the four edges takes the share of a hit that faces it, so the wash
-*slides* from one edge to the next as an opponent circles rather than snapping
-between them; a flicker at the corner would read as a fault in the game and
-not as a shooter moving.
+``bearing`` is in radians from straight ahead, positive to the right. So
+``+pi/2`` is directly to the right, and ``pi`` is directly behind, which is
+drawn at the bottom of the screen. Each of the four edges takes the share of
+a hit that faces it. As an attacker circles, the wash slides from one edge to
+the next rather than jumping between them.
 
 .. list-table::
    :widths: auto
@@ -316,38 +315,39 @@ not as a shooter moving.
    * - ``duration``
      - s
      - 1.1
-     - How long one hit takes to fade to nothing. Long enough to be seen through the
-       flinch of being shot, short enough that it is not still up when the player has
-       already turned.
+     - How long one hit takes to fade to nothing.
    * - ``thickness``
      - px
-     - 56
+     - 48
      - How far in from the edge the wash reaches at full strength.
+   * - ``strength``
+     - 0–1
+     - 0.34
+     - How opaque the wash is at its strongest. The player can still see the
+       scene through it.
    * - ``steps``
-     - 
+     -
      - 4
-     - How many strips the wash is drawn from. It is a gradient rather than a band
-       because a hard-edged block over the world reads as a rendering fault.
+     - How many strips the wash is drawn from, so that it fades as a gradient
+       rather than ending in a hard edge.
    * - ``capacity``
-     - 
+     -
      - 8
-     - The most shown at once. A firefight can ask for dozens and the ones underneath
-       contribute nothing a player can see.
+     - The most hits shown at once.
 
-``intensity`` is 0 to 1 and an intensity of nothing draws nothing — a hit an
-armour absorbed entirely is not a hit to flash about. Several hits are shown
-at once and each fades on its own clock, so being caught in a crossfire looks
-like being caught in a crossfire. ``clear()`` drops them all, which is what a
-respawn wants: a fresh body is not still bleeding from the last one's wounds.
+``intensity`` runs from 0 to 1. An intensity of 0 draws nothing, so a hit
+that armour absorbed entirely shows no wash. Several hits can be shown at
+once, and each fades on its own timer. ``clear()`` removes them all, for
+example on respawn.
 
-ScreenWash — a colour over the whole viewport
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. _screenwash:
 
-The counterpart to ``DamageIndicator``, and what separates them is what each
-has to say. That one has a *direction* to give and washes the
-edge a player must turn towards. This one has none: it is for the states where
-the *view itself* has changed rather than where something has happened in it —
-being dead, being under water, the moment a screen fades.
+ScreenWash: a colour over the whole viewport
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A ``ScreenWash`` tints the whole view. Use ``DamageIndicator`` for an event
+with a direction, and ``ScreenWash`` for a change to the view as a whole:
+being dead, being under water, or a fade.
 
 .. code-block:: python
 
@@ -365,59 +365,58 @@ being dead, being under water, the moment a screen fades.
    * - ``colour``
      - rgb
      - (1, 0, 0)
-     - What colour the world is seen through.
+     - The colour of the tint.
    * - ``strength``
      - 0–1
      - 0.0
-     - How solid it is, and the whole of the design decision. A wash a player can
-       still read the room through is information; one they cannot is a curtain, and
-       the only state that earns a curtain is one where there is nothing left to
-       read.
+     - How opaque the tint is. Keep it low enough to see the scene through,
+       unless there is nothing left for the player to see.
 
-A strength of nothing draws nothing rather than a transparent rectangle: this
-covers the whole screen and is up on most frames of most games at zero, so
-being switched off has to cost a comparison and not a draw. Drive ``strength``
-per frame rather than switching it on at the event, so it can rise with
-whatever it accompanies — a wash that snapped on ahead of the camera movement
-it belongs to reads as a screen effect rather than as the thing that happened.
+A strength of 0 draws nothing at all, not a transparent rectangle, so a wash
+that is switched off costs a comparison rather than a draw. Change
+``strength`` every frame rather than switching it on at the event, so that
+it rises and falls with whatever it accompanies.
 
-Readout — an icon and a number
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. _readout:
 
-``label``, ``value`` and an optional ``icon`` (a ``NineSlice``, drawn at
-``iconSize``). ``critical`` is the game saying “this one matters now” — the
-last few rounds, the last seconds — and it is a flag rather than a colour so
-the skin still decides what that looks like.
+Readout: an icon and a number
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-TextBlock — several lines in a corner
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+A ``Readout`` has a ``label``, a ``value`` and an optional ``icon`` (a
+``NineSlice``, drawn at ``iconSize``, 20). Set ``critical`` when the value
+needs attention, such as the last few rounds or the last seconds. It is a
+flag rather than a colour, so the skin decides how it looks.
 
-The counterpart to ``Readout``, which is one line built from a label and a
-value. This is prose the application composed itself — what is loaded and what
-the keys do — and the lines are a field rather than one string with newlines
-in it, so a caller can rewrite one of them. ``critical`` marks the whole block
-as saying something has gone wrong.
+.. _textblock:
+
+TextBlock: several lines in a corner
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A ``TextBlock`` shows several lines of text the application writes, such as
+what is loaded and what the keys do. A ``Readout`` is a single line of label
+and value. ``lines`` is a list rather than one string with newlines, so a
+caller can change one line. ``critical`` marks the whole block as reporting
+a problem.
 
 .. code-block:: python
 
    caption = TextBlock(anchor='bottom-right', align='right',
                        lines=['model.glb', '[1/3] aerial'])
 
-:doc:`oglc-view <viewer>`'s caption is one of these: see
-``OpenGLContext.viewer.caption``. Note the corner — the developer overlay is
-anchored top-left and grows *down* the left edge as sections are registered,
-so a status line anywhere along that side is a status line written over it.
+The caption in :doc:`oglc-view <viewer>` is a ``TextBlock``; see
+``OpenGLContext.viewer.caption``. Avoid the left edge for status text: the
+developer overlay is anchored top left and grows down the left edge as
+sections are registered, and would cover it.
 
 .. _minimap:
 
-MiniMap — a route, and what is on it
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+MiniMap: a route and the positions on it
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A driver on an eight-kilometre circuit cannot see round the next bend and has
-no idea how much of the lap is left. A map answers both, and it is the same
-widget whether the route is a race circuit, a rally stage or a delivery round:
-it takes a polyline in world XZ and a list of marks, and knows nothing about
-either.
+A ``MiniMap`` draws a route and marks on it, such as a race circuit with the
+cars, so a player can see the next bend and how much of the lap is left. It
+takes a polyline in world XZ and a list of marks, and works the same for any
+kind of route.
 
 .. code-block:: python
 
@@ -425,55 +424,54 @@ either.
    self.map.route = course.centreline            # (N,2) or (N,3): XZ is read
    self.map.marks = [(car.x, car.z, 'crosshair')]   # each names a skin colour
 
-**The fitting is the whole of it.** The route is scaled to the box by
-whichever axis needs it more and centred in the other, so it keeps its shape:
-a map that stretches the circuit to fill its box is a map of a different
-circuit. A mark outside the route's extent is clamped to the edge rather than
-dropped, because a car that has left the road is somewhere and where it went
-off is worth seeing.
+The route is scaled to fit the box along whichever axis needs it more, and
+centred along the other, so it keeps its shape. A mark outside the route's
+extent is clamped to the edge of the map rather than dropped.
 
-A long route is thinned to ``detail`` segments. A circuit written down every
-six metres is two thousand quads for a line nobody can see the corners of.
+A long route is reduced to ``detail`` segments (150). ``size`` (150) is the
+width and height of the map in pixels.
 
-It is the one widget that draws something that is not axis-aligned, which is
-what ``Renderer.segment(start, end, width, colour)`` is for: a thick line as a
-single turned quad, in the same batch as everything else. A compass rose, a
-trajectory or a radar sweep wants the same primitive.
+``MiniMap`` is the one widget that draws lines that are not axis-aligned. It
+uses ``Renderer.segment(start, end, width, colour)``, which draws a thick
+line as one rotated quad in the same batch as everything else. A compass, a
+trajectory or a radar sweep can use the same call.
 
-MessageQueue — pickups, frags, warnings
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. _messagequeue:
 
-Newest first, each line carrying its own clock, so a warning posted with a
-long life is not cut short by a pickup posted after it:
+MessageQueue: pickups, frags, warnings
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A ``MessageQueue`` shows messages newest first. Each line has its own timer,
+so a warning posted with a long duration is not cut short by a message posted
+after it:
 
 .. code-block:: python
 
    queue.post('YOU HAVE THE FLAG', duration=6.0)
    queue.post('PICKED UP A SHOTGUN')          # the queue's own duration
 
-``duration`` is how long a line is shown and ``fade`` is how much of the end
-of that is spent fading out; the fade arrives in the colour's alpha, so
-nothing downstream has to know about time. ``capacity`` is how many are shown
-at once — older ones are dropped when a new one arrives, because a HUD that
-scrolls is a HUD nobody reads.
+- ``duration`` (4 s) is how long a line is shown.
+- ``fade`` (1 s) is how much of the end of that time is spent fading out. The
+  fade is applied to the colour's alpha.
+- ``capacity`` (5) is how many lines are shown at once. When a new line
+  arrives and the queue is full, the oldest is dropped.
 
 .. _hud-clock:
 
 The clock
 ---------
 
-Anything that fades, expires or flashes is driven by ``HUDLayer.tick(now)``,
-which the context calls once a frame before drawing. Passing the time in
-rather than reading a clock inside each widget is what makes all of this
-testable — and what lets a game drive its HUD from its own simulation clock
-rather than from the wall.
+Anything that fades, expires or flashes is driven by ``HUDLayer.tick(now)``.
+The context calls it once a frame, before drawing, with
+``time.monotonic()``. Because the time is passed in rather than read inside
+each widget, the widgets can be tested, and a game can drive its HUD from its
+own simulation clock.
 
-**One clock, and it must be the layer's.** The context ticks with
-``time.monotonic()``, so a game that marks a hit with ``time.time()`` and lets
-the layer expire it computes every fade from the difference between two clocks
-— about fifty years. On screen that is a hit mark and a damage wash that never
-go away, and an alpha of a hundred million. Give the widgets the same clock
-the layer gets, and give it from one place:
+Use the same clock as the layer. If a game marks a hit with ``time.time()``
+while the layer ticks with ``time.monotonic()``, every fade is computed from
+the difference between two clocks, which is about fifty years. The hit mark
+and the damage wash then never go away. Take every time the HUD uses from one
+function:
 
 .. code-block:: python
 
@@ -481,331 +479,22 @@ the layer gets, and give it from one place:
        """The clock every reading on this HUD is taken against."""
        return time.monotonic()
 
+In a test, pass the times explicitly:
+
 .. code-block:: python
 
    queue.post('PICKED UP A SHOTGUN', now=100.0)
    layer.tick(101.0);  assert queue.entries(101.0)      # still up
    layer.tick(105.0);  assert not queue.entries(105.0)  # gone
 
-.. _hud-debug:
-
-The developer overlay
----------------------
-
-One panel holding everything a developer wants to see and a player never
-should, so that a game's HUD can be built out of game information only. It is
-a HUD layer, so it can be left up while playing: it takes no input and blocks
-nothing.
-
-**It is fed by registered providers.** A provider is a callable returning
-name/value pairs and knowing nothing about drawing, so a new subsystem appears
-in the overlay by registering rather than by anyone editing the overlay:
-
-.. code-block:: python
-
-   context.debugOverlay.register('Map', lambda: [
-       ('name', loaded.name),
-       ('family', loaded.family),
-       ('position', tuple(camera.position[:3])),
-   ], order=40)
-
-Values are formatted by the overlay, so a provider hands over whatever it has:
-a float becomes ``0.33`` (and ``60`` rather than ``60.00``), a bool becomes
-``yes``/``no``, a vector becomes its components, ``None`` becomes ``-``.
-``order`` sorts the sections, low first; equal orders keep the order they
-registered in. Registering a title twice replaces it, so a reloaded subsystem
-does not grow a second copy of its section.
-
-A provider that raises becomes an ``error`` row rather than taking the frame
-down, and a provider with nothing to say is left out entirely rather than
-drawn as an empty heading. This is diagnostic equipment: a diagnostic that
-breaks the thing it is measuring is worse than none.
-
-What ships with it
-~~~~~~~~~~~~~~~~~~
-
-.. list-table::
-   :widths: auto
-   :header-rows: 1
-
-   * - Section
-     - Rows
-   * - Frame
-     - Frame rate (the *windowed median*, not the lifetime average), frame time in
-       milliseconds, frames drawn, the viewport.
-   * - Loop
-     - Wall-clock cost of the whole main loop, and where it went — see :ref:`below
-       <hud-loop>`. Left out by backends that run their own loop and never open an
-       iteration.
-   * - Render
-     - Profile, and whether shadows, IBL, bloom, transmission, instancing and vsync
-       are on; then what the last frame cost — shapes gathered, draw calls issued,
-       and how many shapes collapsed into how many instanced groups.
-   * - View
-     - Camera position, and a character controller's grounded state, velocity and
-       mode when there is one.
-
-``physics_provider(lambda: world)`` is also supplied, for body and contact
-counts, and ``simulation_provider(lambda: manager)`` for a background physics
-thread (``OpenGLContext.physics.threaded.ThreadedPhysicsManager``) — the rate
-it is achieving against the rate it asked for, its total ticks, and any it had
-to drop. A thread that is not getting the turns it asked for produces a world
-moving in slow motion, which is indistinguishable from wrong gravity or a
-wrong timestep until those two numbers are side by side. Both take a callable
-rather than the object because a world is replaced when the next level loads,
-and a provider holding the first would report on it forever. Neither is
-registered by default: a context does not necessarily have either.
-
-**Triangle counts are deliberately absent.** The render pass does not know
-them — a geometry node does — and instrumenting every ``render()`` in the
-system to find out would cost more than the answer is worth. A number that is
-not counted is not reported rather than guessed at. See
-``OpenGLContext/passes/renderstats.py``.
-
-.. _hud-loop:
-
-When the frame rate says everything is fine and it is not
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-**The frame rate answers a narrower question than it looks like it answers.**
-``FrameCounter`` times the inside of ``OnDraw``, it is only told about frames
-that produced a visible change, and the rate it publishes is a *median* over a
-window — deliberately outlier-proof, so that a first-frame shader compile or a
-synchronous model load does not drag the number down for ever. Each of those
-is right for “how fast is the renderer”, and each of them hides a stutter.
-
-A backend’s loop does more than draw. It pumps the window system’s events, it
-runs ``OnIdle`` — which is where an application’s whole simulation usually
-lives — and it waits for a redraw request. None of that is inside the frame
-counter’s stopwatch, so an application can crawl visibly at a few updates a
-second while the overlay reports sixty, with no number on the screen
-contradicting the other.
-
-``OpenGLContext.looptrace.LoopTrace`` measures the other thing: **wall-clock
-time per loop iteration**, divided among named phases. Every context has one
-as ``context.loopTrace``; the GLFW backend drives it from ``MainLoop`` and
-``OnDraw`` divides its share further. The Loop section reports:
-
-.. list-table::
-   :widths: auto
-   :header-rows: 1
-
-   * - Row
-     - What it says
-   * - ``loop fps``
-     - Iterations per second of wall clock — the rate the player’s hands feel. This
-       disagreeing with ``fps`` above is the diagnosis: the renderer is keeping up
-       and something outside it is not.
-   * - ``loop ms``, ``worst ms``
-     - Median and worst iteration in the window. A healthy median beside a worst ten
-       times larger is a loop that stutters, which is what the median alone can never
-       say.
-   * - ``stalls``
-     - How many iterations crossed the stall threshold, counted since the loop
-       started so it outlives the window it happened in.
-   * - ``last stall``
-     - The phase that ate the most recent one, as ``idle 812ms``.
-   * - ``poll``, ``repeats``, ``idle``, ``wait``, ``draw``, ``cascade``, ``render``
-     - Mean milliseconds per iteration in each phase, worst first.
-
-**Phases divide the iteration; they do not overlap it.** A phase is charged
-only its own time and the time inside a nested phase belongs to the child, so
-every phase of an iteration adds up to that iteration’s wall clock and the
-largest is the culprit by construction. ``wait`` is bounded by
-``drawPollTimeout``, so a large ``wait`` is a quiet loop and never a stalled
-one.
-
-An application should subdivide ``idle``. The engine’s phases can only ever
-name it, because ``OnIdle`` is where an application’s frame goes — true, and
-useless. ``context.tracePhase(name)`` opens a phase from anywhere, nests
-inside whatever is already open, and answers a do-nothing context manager when
-nothing is measuring, so the caller writes the ``with`` and not the branch:
-
-.. code-block:: python
-
-   def OnIdle(self):
-       with self.tracePhase('character'):
-           self.player.update(dt)
-       with self.tracePhase('match'):
-           self.arena.step(dt)
-
-Those divide ``idle`` rather than adding to it, so ``idle``\ ’s own row falls
-to whatever is left over. A phase that is always under a millisecond costs one
-clock read and earns its place the first time it is not.
-
-**Counting is always on** and costs a few clock reads per iteration. Reporting
-is opt-in:
-
-.. list-table::
-   :widths: auto
-   :header-rows: 1
-
-   * - Variable
-     - Effect
-   * - ``OPENGLCONTEXT_STALL_MS``
-     - What counts as a stall, in milliseconds; the default is ``50`` (twenty frames
-       a second). Setting it also switches logging on — asking for a threshold is
-       asking to be told when it is crossed. A value that is not a number is a
-       warning and the default, never a failure to start.
-   * - ``OPENGLCONTEXT_TRACE_STALLS``
-     - Log every stall’s phase breakdown at ``WARNING``, keeping the default
-       threshold.
-
-.. code-block:: bash
-
-   OPENGLCONTEXT_STALL_MS=40 python -m twig_bb
-   WARNING OpenGLContext.looptrace: main loop stalled 912ms: idle 901ms, render 9ms, poll 1ms
-
-Neither variable changes what a frame looks like, so both are inherited by a
-subprocess capture rather than cleared with the rendering variables — a
-diagnostic a subprocess silently dropped would be no diagnostic.
-
-.. _stalltrace:
-
-Recording a slow period, and reading it back
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The phase breakdown names a *subsystem*. It cannot name the code inside it,
-and it never will: by the time the iteration closes, the stack that would have
-said has already unwound. The overlay has the same limit from the other end —
-it shows the present, and a stutter is something you want to look at
-*afterwards*, from a recording.
-
-``OPENGLCONTEXT_STALL_TRACE=<path>`` records one. ``OpenGLContext.stalltrace``
-puts a watcher thread on the main thread’s Python stack, sampling it **only
-while an iteration is already overrunning** — a profiler that runs during the
-frames that are fine would be spending the one currency the question is about
-— and writes a JSON-lines file:
-
-.. code-block:: bash
-
-   OPENGLCONTEXT_STALL_TRACE=/tmp/stalls.jsonl python -m twig_bb
-   python -m OpenGLContext.stalltrace /tmp/stalls.jsonl
-
-*\ *The unit is an *\ episode\ *, not a frame.*\ * Consecutive slow iterations
-are gathered into one record, because “the game went unplayable for four
-seconds” is one thing that happened, not two hundred, and a file with a line
-per frame is a log rather than a diagnosis. A run of slow frames with the odd
-good one in it stays a single episode.
-
-.. list-table::
-   :widths: auto
-   :header-rows: 1
-
-   * - In each record
-     - What it says
-   * - ``at``, ``seconds``, ``iterations``, ``stalled``
-     - When the slow period began, how long it lasted, and how much of it was
-       actually slow.
-   * - ``worst_ms``, ``mean_ms``, ``baseline_ms``
-     - The worst and mean iteration, and **what the loop had been managing before it
-       went wrong** — without which “slow” has nothing to be slow compared to.
-   * - ``phases_ms``
-     - The breakdown, averaged over the episode.
-   * - ``functions``
-     - **The answer.** Per function, the share of samples where it was running
-       (``self``) and the share where it was anywhere on the stack (``cumulative``).
-   * - ``hot``
-     - The whole stacks that held the most samples — the evidence, and the route by
-       which the expensive function was reached.
-   * - ``context``
-     - Every section of the developer overlay at the moment the episode opened, so
-       the trace records the map, the player, the renderer’s counts and whatever the
-       game registered, without anyone writing a second description that can drift
-       from the first.
-   * - ``samples``
-     - How many were taken, and ``incomplete`` when the start of the episode fell out
-       of the sampler’s buffer. A truncated record that does not admit it reads as
-       the whole story.
-
-**Report per function, not per stack.** One expensive function is usually
-reached by a dozen routes and from a dozen lines; grouping only by whole stack
-splits it across all of them, so something holding sixty per cent of a stall
-reads as a dozen entries at five per cent and the trace looks like it found
-nothing. ``functions`` undoes that fragmentation, and ``hot`` keeps the routes
-as evidence:
-
-.. code-block:: python
-
-   where 28 samples were, by function:
-         self    cum  function
-        53.6%  53.6%  collide.py _closest_point_on_triangle
-        10.7%  75.0%  collide.py capsule_triangle
-        10.7%  10.7%  collide.py _closest_segment_segment
-
-**An episode is written as it closes, and flushed**, so a run that ends in a
-``kill -9`` keeps every episode before the last. A slow period is also cut and
-written every few seconds even while it continues (the next part is marked
-``continues``), because a session that ends *while* it is struggling is the
-commonest way for one to end — and that final episode is the one worth having.
-
-A path that cannot be written is a warning and a disabled journal. This is
-diagnostic equipment: it does not get to be the reason a game will not start.
-
-Showing and hiding it
-~~~~~~~~~~~~~~~~~~~~~
-
-:kbd:`Alt`+:kbd:`f` toggles it on every context;
-``context.toggleDebugOverlay()`` does the same in code, and can be bound to
-any key a game prefers.
-
-It is on screen when a context opens unless the context class says
-``debugOverlayStartsVisible = False``, as :doc:`the viewer <viewer>` does: a
-program that opens on its content alone says so there.
-
-``OPENGLCONTEXT_DISABLE_FPS_DISPLAY`` means what it always meant — no numbers
-over my screenshot — and now means it here: the overlay **starts hidden**,
-whatever the class says. The key still brings it up, because a capture run is
-not the only thing that sets the variable.
-
-.. rst-class:: technical
-
-``FrameCounter`` measures the frame rate and does not draw it: the provider
-reads its number and the HUD puts it on screen. Drawing it from there would
-mean ``glOrtho``/``glPushAttrib``, which mean nothing in a core profile.
-
-.. _viewpinned:
-
-Things pinned to the view
--------------------------
-
-A first-person weapon is *not* HUD: it is geometry, it wants the scene’s
-lighting and it should be occluded by the world. What it shares with the HUD
-is that it must not move on screen. Put it on a transform, and write that
-transform’s pose from the camera in ``placeViewAttachments``:
-
-.. code-block:: python
-
-   class Game(OverlayMixin, Context):
-       def placeViewAttachments(self, pass_):
-           "Called once the camera is settled, before any geometry is gathered."
-           aim_at_camera(self.hand, self.getViewPlatform())
-
-**The timing is the whole feature.** The render pass calls this from
-``__call__``, after the view platform is settled and before the scene is
-gathered — the only moment both are true. Posed from an idle callback or an
-event handler instead, the transform carries the *previous* frame’s camera:
-the weapon hangs back as the player walks and then slides forward to catch up,
-which is the most distracting thing a held model can do.
-
-**Written there it is pinned exactly, not approximately.** The renderer draws
-a node with ``modelview = view × model``. A node placed at the camera’s own
-pose carries ``model = cameraPose × local``, and the view matrix *is* that
-pose inverted — so the two cancel and what is left is ``local``, whatever the
-camera is doing. The object is fixed in view space by construction rather than
-by keeping up.
-
-The hook is optional and costs nothing: a context that does not define it is
-never asked.
-
 .. _hud-skinning:
 
 Colours
 -------
 
-A HUD is read at a glance over a world whose colours nobody controls, so its
-skin fields are brighter and more opaque than the panel ones. They live on the
-same :ref:`Skin <overlayui-skinning>` node:
+A HUD has to be readable over a world of any colour, so its skin fields are
+brighter and more opaque than the panel fields. They are on the same
+:ref:`Skin <overlayui-skinning>` node:
 
 .. list-table::
    :widths: auto
@@ -816,16 +505,319 @@ same :ref:`Skin <overlayui-skinning>` node:
    * - ``hudText``, ``hudFill``
      - HUD text and the plate behind it.
    * - ``hudGood``, ``hudWarn``, ``hudCritical``
-     - A meter reading normally, low, and about to matter.
+     - A meter reading normal, low and critical.
    * - ``hudTrack``
-     - Behind the filled part of a meter, so an empty bar is still a bar.
+     - The unfilled part of a meter, so an empty meter is still visible.
    * - ``crosshair``, ``crosshairHit``
-     - The reticule, and the mark that says a shot connected.
+     - The reticule, and the mark that shows a shot hit.
    * - ``debugFill``, ``debugTitle``, ``debugLabel``, ``debugValue``
-     - The developer overlay. Deliberately unlike the HUD's colours — the two must
-       never be mistaken for each other.
+     - The developer overlay. These differ from the HUD colours so the two are
+       not confused.
    * - ``hudPadding``, ``hudSpacing``
-     - Pixels inside a HUD element, and between one and the next.
+     - Pixels inside a HUD element, and between one element and the next.
+
+.. _viewpinned:
+
+Objects pinned to the view
+--------------------------
+
+A first-person weapon is not part of the HUD. It is geometry: it is lit by
+the scene and hidden behind nearer objects. Like the HUD, though, it must
+stay still on screen. Put it under a transform, and set that transform from
+the camera in ``placeViewAttachments``:
+
+.. code-block:: python
+
+   class Game(OverlayMixin, Context):
+       def placeViewAttachments(self, pass_):
+           "Called once the camera is settled, before any geometry is gathered."
+           aim_at_camera(self.hand, self.getViewPlatform())
+
+The render pass calls this method each frame after the view platform is
+settled and before the scene is gathered. A transform set anywhere else, such
+as in an idle callback or an event handler, uses the previous frame's camera:
+the weapon lags behind as the player moves and then catches up.
+
+Set here, the object is fixed exactly in view space. The renderer draws a
+node with ``modelview = view × model``. A node placed at the camera's pose
+has ``model = cameraPose × local``, and the view matrix is that pose
+inverted, so the two cancel and leave ``local``, whatever the camera does.
+
+The hook is optional. A context that does not define it is not called.
+
+.. _hud-debug:
+
+The developer overlay
+---------------------
+
+The developer overlay is one panel of diagnostics for developers, so that a
+game's own HUD holds only game information. It is a HUD layer, so it can stay
+up during play: it takes no input and blocks nothing.
+
+Showing and hiding it
+~~~~~~~~~~~~~~~~~~~~~
+
+:kbd:`alt`\ +\ :kbd:`f` toggles it in every context.
+``context.toggleDebugOverlay()`` does the same in code, and can be bound to
+any key.
+
+The overlay is on screen when a context opens, unless the context class sets
+``debugOverlayStartsVisible = False``, as :doc:`the viewer <viewer>` does.
+
+When ``OPENGLCONTEXT_DISABLE_FPS_DISPLAY`` is set, the overlay starts hidden
+whatever the class says, so screenshots have no numbers over them. The key still shows it, because a
+capture run is not the only thing that sets the variable.
+
+.. rst-class:: technical
+
+``FrameCounter`` measures the frame rate and does not draw it: the overlay's
+provider reads its number and the HUD puts it on screen. Drawing it from
+``FrameCounter`` would need ``glOrtho`` and ``glPushAttrib``, which do not
+exist in a core profile.
+
+Adding a section
+~~~~~~~~~~~~~~~~
+
+The overlay is filled by registered providers. A provider is a callable that
+returns name/value pairs and does no drawing. A subsystem adds its section by
+registering a provider, without changes to the overlay:
+
+.. code-block:: python
+
+   context.debugOverlay.register('Map', lambda: [
+       ('name', loaded.name),
+       ('family', loaded.family),
+       ('position', tuple(camera.position[:3])),
+   ], order=40)
+
+The overlay formats the values, so a provider can return what it has:
+
+- a float becomes ``0.33``, or ``60`` rather than ``60.00``;
+- a bool becomes ``yes`` or ``no``;
+- a vector becomes its components;
+- ``None`` becomes ``-``.
+
+``order`` sorts the sections, lowest first. Sections with equal ``order``
+keep the order they were registered in. Registering a title a second time
+replaces the section, so a subsystem that is reloaded does not add a second
+copy.
+
+A provider that raises an exception shows an ``error`` row instead of
+breaking the frame. A provider that returns nothing is left out, rather than
+drawn as an empty heading.
+
+The shipped sections
+~~~~~~~~~~~~~~~~~~~~
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Section
+     - Rows
+   * - Frame
+     - Frame rate (the median over a recent window, not the lifetime average),
+       frame time in milliseconds, frames drawn, the viewport.
+   * - Loop
+     - Wall-clock cost of the whole main loop, and where it went; see
+       :ref:`hud-loop`. Absent on backends that run their own loop.
+   * - Render
+     - The profile, and whether shadows, IBL, bloom, transmission, instancing and
+       vsync are on. Then what the last frame cost: shapes gathered, draw calls
+       issued, and how many shapes were collapsed into how many instanced
+       groups.
+   * - View
+     - Camera position, and a character controller's grounded state, velocity and
+       mode when there is one.
+
+Two more providers are available but not registered by default, because not
+every context has what they report on:
+
+- ``physics_provider(lambda: world)`` reports body and contact counts.
+- ``simulation_provider(lambda: manager)`` reports on a background physics
+  thread (``OpenGLContext.physics.threaded.ThreadedPhysicsManager``): the
+  rate it achieves against its target rate, its total ticks, and any
+  ticks it dropped. A physics thread that falls behind makes the world move
+  in slow motion, which looks like wrong gravity or a wrong timestep until
+  the two rates are compared.
+
+Both take a callable rather than the object, because a world is replaced when
+the next level loads, and a provider holding the old one would keep reporting
+on it.
+
+The overlay does not show triangle counts. Only each geometry node has its
+count, not the render pass, and counting them in every ``render()`` would
+cost more than the number is worth. See
+``OpenGLContext/passes/renderstats.py``.
+
+.. _hud-loop:
+
+The main loop timing
+~~~~~~~~~~~~~~~~~~~~
+
+The frame rate can look healthy while the application stutters.
+``FrameCounter`` times only the inside of ``OnDraw``, counts only frames that
+produced a visible change, and reports the median over a window. The median
+keeps a one-off shader compile or a synchronous model load from dragging the
+number down. All three choices suit the question "how fast is the renderer",
+and all three hide a stutter.
+
+A backend's loop also processes window-system events, runs ``OnIdle``, where
+an application usually runs its simulation, and waits for a redraw request.
+None of that is timed by the frame counter. An application can run at a few
+updates a second while the overlay reports sixty frames a second.
+
+``OpenGLContext.looptrace.LoopTrace`` measures wall-clock time per loop
+iteration, divided among named phases. Every context has one as
+``context.loopTrace``. The GLFW backend drives it from ``MainLoop``, and
+``OnDraw`` divides its own share further. The Loop section shows:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Row
+     - Meaning
+   * - ``loop fps``
+     - Loop iterations per second of wall-clock time: the rate the player feels.
+       If this is much lower than ``fps``, the renderer is keeping up and
+       something outside it is not.
+   * - ``loop ms``, ``worst ms``
+     - The median and the worst iteration in the window. A worst iteration ten
+       times the median means the loop stutters.
+   * - ``stalls``
+     - How many iterations took longer than the stall threshold, counted since
+       the loop started.
+   * - ``last stall``
+     - The phase that took the most time in the latest stall, for example
+       ``idle 812ms``.
+   * - ``poll``, ``repeats``, ``idle``, ``wait``, ``draw``, ``cascade``, ``render``
+     - Mean milliseconds per iteration in each phase, largest first.
+
+Phases do not overlap. Time inside a nested phase is charged to the nested
+phase only, so the phases of an iteration add up to its wall-clock time, and
+the largest phase is where the time went. ``wait`` is limited by
+``drawPollTimeout``, so a large ``wait`` means the loop is idle, not stalled.
+
+The engine's phases can only report that time went into ``idle``, because
+``OnIdle`` is where an application does its work. Divide ``idle`` with
+``context.tracePhase(name)``. It opens a phase from anywhere, nests inside
+whatever phase is open, and returns a context manager that does nothing when
+no trace is running, so the caller needs no ``if``:
+
+.. code-block:: python
+
+   def OnIdle(self):
+       with self.tracePhase('character'):
+           self.player.update(dt)
+       with self.tracePhase('match'):
+           self.arena.step(dt)
+
+These phases divide ``idle`` rather than adding to it, so the ``idle`` row
+shows only the time left over. A phase costs one clock read.
+
+Counting is always on and costs a few clock reads per iteration. Logging is
+switched on with an environment variable:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Variable
+     - Effect
+   * - ``OPENGLCONTEXT_STALL_MS``
+     - The stall threshold, in milliseconds. The default is ``50`` (twenty frames a
+       second). Setting it also switches logging on. A value that is not a number
+       logs a warning and uses the default.
+   * - ``OPENGLCONTEXT_TRACE_STALLS``
+     - Logs every stall's phase breakdown at ``WARNING``, with the default
+       threshold.
+
+.. code-block:: bash
+
+   OPENGLCONTEXT_STALL_MS=40 python -m twig_bb
+   WARNING OpenGLContext.looptrace: main loop stalled 912ms: idle 901ms, render 9ms, poll 1ms
+
+Neither variable changes what a frame looks like, so a subprocess capture
+inherits both, rather than clearing them with the rendering variables.
+
+.. _stalltrace:
+
+Recording slow periods
+~~~~~~~~~~~~~~~~~~~~~~
+
+The phase breakdown names a subsystem, but not the code inside it: by the
+time an iteration ends, the stack that was running has unwound. The overlay
+shows only the present. To see what happened during a stutter, record it.
+
+``OPENGLCONTEXT_STALL_TRACE=<path>`` switches on the recorder
+(``OpenGLContext.stalltrace``). A watcher thread samples the main thread's
+Python stack, but only while an iteration is already running long, so frames
+that are on time are not profiled. It writes a JSON-lines file. Read it with
+the module:
+
+.. code-block:: bash
+
+   OPENGLCONTEXT_STALL_TRACE=/tmp/stalls.jsonl python -m twig_bb
+   python -m OpenGLContext.stalltrace /tmp/stalls.jsonl
+
+Each record is an *episode*, not a frame. Consecutive slow iterations are
+gathered into one record, and a run of slow frames with an occasional fast
+one stays one episode.
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Field
+     - Meaning
+   * - ``at``, ``seconds``, ``iterations``, ``stalled``
+     - When the slow period began, how long it lasted, how many iterations it
+       covered, and how many of them were slow.
+   * - ``worst_ms``, ``mean_ms``, ``baseline_ms``
+     - The worst and mean iteration, and the loop's usual iteration time before
+       the episode, for comparison.
+   * - ``phases_ms``
+     - The phase breakdown, averaged over the episode.
+   * - ``functions``
+     - Per function, the share of samples in which it was running (``self``)
+       and the share in which it was anywhere on the stack (``cumulative``).
+       Start here.
+   * - ``hot``
+     - The whole stacks that held the most samples, showing how the expensive
+       functions were reached.
+   * - ``context``
+     - Every section of the developer overlay when the episode began: the map,
+       the player, the renderer's counts and whatever the game registered.
+   * - ``samples``
+     - How many samples were taken, and ``incomplete`` when the start of the
+       episode fell out of the sampler's buffer.
+
+The report groups samples by function as well as by whole stack. One
+expensive function is usually reached by many routes; grouped only by stack,
+a function holding sixty per cent of a stall would appear as a dozen entries
+of five per cent each. ``functions`` sums them, and ``hot`` keeps the
+routes:
+
+.. code-block:: text
+
+   where 28 samples were, by function:
+         self    cum  function
+        53.6%  53.6%  collide.py _closest_point_on_triangle
+        10.7%  75.0%  collide.py capsule_triangle
+        10.7%  10.7%  collide.py _closest_segment_segment
+
+Each episode is written and flushed as it closes, so a run ended with
+``kill -9`` keeps every episode before the last. A long slow period is also
+written in parts every few seconds while it continues, each later part marked
+``continues``, so the final episode of a session that ends while stalled is
+kept.
+
+If the path cannot be written, a warning is logged and recording is switched
+off. The game still starts.
+
+For a record of a whole session, including input, frame times, exceptions
+and these overlay sections, see :doc:`telemetry`.
 
 .. _hud-modules:
 
@@ -837,36 +829,37 @@ Where things are
    :header-rows: 1
 
    * - Module
-     - What is in it
+     - Contents
    * - ``ui.hudwidgets``
      - ``HUDLayer``, ``HUDGroup``, ``Crosshair``, ``BarMeter``, ``LampRow``,
-       ``Readout``, ``TextBlock``, ``MessageQueue``, ``MiniMap``, and ``place()``.
+       ``DamageIndicator``, ``ScreenWash``, ``Readout``, ``TextBlock``,
+       ``MessageQueue``, ``MiniMap``, and ``place()``.
    * - ``ui.debugoverlay``
-     - The overlay, the provider registry, value formatting and the providers shipped
-       with it.
+     - The developer overlay, the provider registry, value formatting and the
+       shipped providers.
    * - ``ui.screen``
-     - The context mix-in: ``hudLayers``, ``debugOverlay``, and the one drawing hook
+     - The context mix-in: ``hudLayers``, ``debugOverlay``, and the drawing hook
        both kinds of layer go through.
    * - ``ui.widgets``
-     - ``RootWidget``, which a HUD layer and a panel are both kinds of: the children,
-       the skin and the scaled copy of it.
+     - ``RootWidget``, the base of both HUD layers and panels: the children, the
+       skin and its scaled copy.
    * - ``telemetry``
-     - The whole session, not just its slow parts: input, frame times, exceptions and
-       this overlay's own sections, in a file that can be :doc:`read back or replayed
+     - A recording of a whole session: input, frame times, exceptions and this
+       overlay's sections, in a file that can be :doc:`read back or replayed
        <telemetry>`.
    * - ``stalltrace``
-     - The recording: a stack sampler gated on the stall itself, the episode journal
-       it writes, and the report that reads the file back.
+     - The slow-period recorder: a stack sampler that runs only during a stall,
+       the episode file it writes, and the report that reads the file.
    * - ``looptrace``
-     - ``LoopTrace``: wall-clock cost of a whole loop iteration, divided among named
-       phases, with the worst and the stall count a median throws away.
+     - ``LoopTrace``: wall-clock cost of each loop iteration, divided among named
+       phases, with the worst iteration and the stall count.
    * - ``framecounter``
-     - ``FrameCounter``: how long the frames inside ``OnDraw`` took. Measures; does
-       not draw.
+     - ``FrameCounter``: how long the frames inside ``OnDraw`` took. It measures
+       and does not draw.
    * - ``passes.renderstats``
-     - What one frame cost, counted where the pass knows the answer.
+     - What one frame cost, counted in the render pass.
    * - ``passes._flat``
-     - ``placeViewAttachments``: the one window in a frame where something can be
-       pinned to the camera.
+     - Calls ``placeViewAttachments``, the point in a frame where an object can
+       be pinned to the camera.
 
 The design and its reasoning are in ``plans/HUD-DEBUG-OVERLAY.md``.

@@ -2,17 +2,17 @@ NURBS Surfaces and Curves
 =========================
 
 A NURBS surface is a grid of control points with a knot vector along each
-parametric direction: a smooth shape described by a handful of numbers rather
-than by thousands of triangles. ``NurbsSurface`` holds one, ``TrimmedSurface``
-cuts pieces out of one, and ``NurbsCurve`` is the one-dimensional case.
+parametric direction. It describes a smooth shape with a few numbers instead
+of thousands of triangles. ``NurbsSurface`` holds one surface,
+``TrimmedSurface`` cuts pieces out of one, and ``NurbsCurve`` is the
+one-dimensional case.
 
-Each is evaluated into an indexed triangle mesh by `opengl_extrusions
-<https://github.com/mcfletch/opengl_extrusions>`__, a NumPy geometry generator
-with no OpenGL in it, and the mesh is what gets drawn: **core profile and
-compatibility profile alike**, lit, shadowed, textured and pickable.
-Evaluation touches no GL at all, so a surface can be built before there is a
-context to draw it in — on a worker thread while a scene loads, or in a test
-with no window.
+`opengl_extrusions <https://github.com/mcfletch/opengl_extrusions>`__, a NumPy
+geometry generator, evaluates each node into an indexed triangle mesh, and
+the mesh is drawn in both the **core and compatibility profiles**: lit,
+shadowed, textured and pickable. Evaluation makes no GL calls, so a surface
+can be built before a context exists to draw it: on a worker thread while a
+scene loads, or in a test with no window.
 
 .. figure:: images/nurbs/surfaces.jpg
    :alt: Four coloured NURBS surfaces meeting in a mound
@@ -47,8 +47,8 @@ The nodes
    * - ``NurbsToleranceSample``, ``NurbsDomainDistanceSample``
      - how finely a surface is sampled — see below
 
-The :py:mod:`Teapot <OpenGLContext.scenegraph.teapot>` is built the same way:
-its 32 Bezier patches are NURBS surfaces of order 4.
+The :py:mod:`Teapot <OpenGLContext.scenegraph.teapot>` uses the same code:
+its 32 Bézier patches are NURBS surfaces of order 4.
 
 .. code-block:: python
 
@@ -64,19 +64,19 @@ its 32 Bezier patches are NURBS surfaces of order 4.
    scene = sceneGraph(children=[Shape(geometry=surface,
                                       appearance=Appearance(material=Material()))])
 
-A knot vector holds ``dimension + degree + 1`` non-decreasing values, which is
-where the degree comes from: a 4-point direction with 8 knots is cubic.
-``controlPoint`` is *v-major* — u varies fastest, as the VRML97 NURBS proposal
-specifies.
+A knot vector holds ``dimension + degree + 1`` non-decreasing values, and the
+degree is taken from its length: a direction with 4 control points and 8 knots
+is cubic. ``controlPoint`` is *v-major*: u varies fastest, as the VRML97 NURBS
+proposal specifies.
 
-Weights: the rational in NURBS
-------------------------------
+Weights
+-------
 
-The ``weight`` field takes one positive number per control point. Weights are
-what let a NURBS circle be a circle rather than an approximation of one: a
-quarter circle is exact as a rational quadratic with the middle weight at
-√2/2, and inexact as any polynomial. Equal weights give the same surface as
-none, so a scene that sets no weights is unaffected.
+The ``weight`` field takes one positive number per control point. Weights
+make the curve *rational*, which lets it represent a circle exactly. A quarter
+circle is exact as a rational quadratic with a middle weight of √2/2, and no
+polynomial represents it exactly. Equal weights give the same surface as no
+weights.
 
 .. code-block:: python
 
@@ -89,18 +89,18 @@ none, so a scene that sets no weights is unaffected.
        weight=[1, root, 1, root, 1, root, 1, root, 1] * 2,
    )
 
-A direction may be degree 1, as the cylinder's length is here: a surface that
+A direction may be degree 1, as the cylinder's length is here. A surface that
 runs straight between two rows of control points is evaluated and shaded like
 any other.
 
 Sampling: how many triangles
 ----------------------------
 
-A sampling node states a **rate**: sample intervals per unit of the surface's
-knot range. A rate rather than a count, so two surfaces sampled at the same
-rate get triangles of the same size whatever their knots run over — a surface
-whose knots go 0 to 4 is sampled four times as often as one whose knots go 0
-to 1.
+A sampling node sets a **rate**: sample intervals per unit of the surface's
+knot range. Because it is a rate and not a count, two surfaces at the same
+rate get triangles of the same parametric size whatever their knot ranges. A
+surface whose knots run from 0 to 4 gets four times as many samples as one
+whose knots run from 0 to 1.
 
 .. list-table::
    :widths: auto
@@ -116,34 +116,38 @@ to 1.
      - ``tolerance`` (default 50)
      - a rate of 150/tolerance, held between 20 and 100
 
-A surface that names no ``sampling`` node gets a tolerance of 5, which is a
-rate of 30: a surface over the usual 0..1 knots comes out as a 30 by 30
-lattice, 1800 triangles. Its ``method`` and ``parametric`` fields are carried
-for scenes that set them; a tolerance is a distance on a surface nobody has
-drawn yet, so it asks for a finer mesh without promising a deviation. Where a
-scene wants a mesh of a stated size, ``NurbsDomainDistanceSample`` states it.
+A surface with no ``sampling`` node gets a tolerance of 5, which is a rate of
+30. A surface over the usual 0..1 knots then becomes a 30 by 30 lattice of
+1800 triangles.
 
-One direction is capped at 512 intervals, which is where an unusual knot range
-stops asking for more mesh than any rate intended.
+``NurbsToleranceSample`` keeps its ``method`` and ``parametric`` fields but
+does not use them: only ``tolerance`` sets the rate. A smaller tolerance gives
+a finer mesh, but it does not guarantee a maximum distance between the mesh
+and the surface. To get a mesh of a known size, use
+``NurbsDomainDistanceSample``.
+
+Each direction is limited to 512 intervals, so an unusually large knot range
+cannot produce an oversized mesh.
 
 Distance level of detail
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-A surface far from the camera is tessellated at a coarser rate and cached
-separately, so walking towards one rebuilds it once per level rather than
-every frame — the same :py:mod:`distance metric
-<OpenGLContext.scenegraph.tessellationlod>` the teapot and the quadrics use.
-Level 0 keeps the node's own sampling, so a close-up surface looks exactly as
-it was authored; the coarser levels use rates of 16, 8 and 4. Set
-``OPENGLCONTEXT_LOD=off`` for deterministic output.
+A surface far from the camera is tessellated at a coarser rate, and each
+level is cached separately, so walking towards a surface rebuilds it once per
+level rather than every frame. It uses the same :py:mod:`distance metric
+<OpenGLContext.scenegraph.tessellationlod>` as the teapot and the quadrics.
+Level 0 uses the node's own sampling, so a surface close to the camera looks
+exactly as authored. The coarser levels use rates of 16, 8 and 4. Set
+``OPENGLCONTEXT_LOD=off`` (see :doc:`environment`) for the same output at
+every distance, for example when comparing reference images.
 
 Trimming
 --------
 
-A trimming contour is a closed loop drawn in the surface's parameter square.
-**What lies to a loop's left is kept**, so a counter-clockwise loop is a
+A trimming contour is a closed loop in the surface's parameter square. **The
+area to the left of a loop is kept.** A counter-clockwise loop is therefore a
 boundary, a clockwise loop inside it is a hole, and a clockwise loop on its
-own encloses nothing at all.
+own keeps nothing.
 
 .. code-block:: python
 
@@ -163,30 +167,31 @@ own encloses nothing at all.
    ``NurbsCurve2D`` and whose point is a ``Polyline2D``. The colours are per
    control point.
 
-A ``Contour2D``'s children join end to end into one loop: where one ends on
-the point the next begins with, the point is kept once, and the loop closes
-from its last point back to its first. A ``NurbsCurve2D`` is evaluated at 32
-points unless its ``tessellation`` field says otherwise.
-
-The kept region is triangulated by the same constrained Delaunay tessellator
-the swept geometry's caps use, refined to the triangle size the sampling rate
-asks for — so a trimmed surface is sampled as finely across its middle as an
-untrimmed one, not only where its outline has vertices. The surface is then
-evaluated at the vertices that come out, which is why a trim follows the
-surface's curvature rather than cutting a flat hole in it.
+A ``Contour2D`` joins its children end to end into one loop. Where one child
+ends on the point the next begins with, that point is kept once. The loop
+closes from its last point back to its first. A ``NurbsCurve2D`` is evaluated
+at 32 points unless its ``tessellation`` field gives another count.
 
 Trim coordinates are in the surface's own knot ranges, in the order ``(v,
 u)``.
 
+The kept region is triangulated by the same constrained Delaunay
+:doc:`tessellator <tessellation>` that fills the caps of :doc:`swept geometry
+<extrusions>`, refined to the triangle size the sampling rate sets. A trimmed
+surface is therefore sampled as finely across its middle as an untrimmed one,
+not only along its outline. The surface is then evaluated at the resulting
+vertices, so a trimmed surface follows the surface's curvature rather than
+having a flat hole cut in it.
+
 Which way a surface faces
 -------------------------
 
-A surface's normal is ``∂p/∂v × ∂p/∂u``, and its triangles wind to match. A
-surface that comes out facing away from the camera has its two parametric
-directions the other way round: swap ``uDimension`` with ``vDimension`` and
-the knot vectors with them, or set ``solid=0`` to stop the back faces being
-culled. ``ccw=0`` reverses the winding the fixed-function pipeline treats as
-front-facing.
+A surface's normal is ``∂p/∂v × ∂p/∂u``, and its triangles are wound to
+match. If a surface faces away from the camera, its two parametric directions
+are the other way round. Swap ``uDimension`` with ``vDimension`` and swap the
+knot vectors with them, or set ``solid=0`` so the back faces are not culled.
+``ccw=0`` reverses which winding the fixed-function pipeline treats as front
+facing.
 
 ``geometryType`` takes ``polygon`` (the default), or ``edge`` / ``patch``,
 which draw the tessellation as its edges.
@@ -194,11 +199,11 @@ which draw the tessellation as its edges.
 Colour
 ------
 
-The ``color`` field takes one colour per control point. It is evaluated
-through the same basis as the surface, so a colour follows its control point
-across the tessellation however finely it is sampled, and the surface draws
-through the vertex-colour program with the material supplying everything but
-the diffuse term.
+The ``color`` field takes one colour per control point. Colours are evaluated
+with the same basis functions as the surface, so a colour follows its control
+point however finely the surface is sampled. A coloured surface is drawn with
+the vertex-colour program, and the material supplies everything except the
+diffuse colour.
 
 Where the code is
 -----------------
@@ -220,7 +225,10 @@ Where the code is
    * - ``scenegraph/teapot_nurbs.py``
      - the Utah Teapot's 32 patches
 
-Demonstrations: ``tests/molehill.py`` (four surfaces meeting),
-``tests/molehill_edit.py`` (dragging their control points),
-``tests/nurbsobject.py`` (a trimmed surface, animated) and
-``tests/teapot_nurbs.py``.
+Demonstrations:
+
+- ``tests/molehill.py`` - four surfaces meeting.
+- ``tests/molehill_edit.py`` - dragging their control points; see
+  :doc:`editing` for ``ControlNet``.
+- ``tests/nurbsobject.py`` - a trimmed surface, animated.
+- ``tests/teapot_nurbs.py`` - the Utah Teapot.

@@ -3,36 +3,37 @@ Session telemetry
 
 .. rst-class:: introduction
 
-A whole session written to one file: every input the platform delivered, every
-frame's time, every exception with its traceback, and the application's own
-description of itself sampled as it ran. The file is read back with a command,
-and it is **replayed** — the same keys and the same clicks in the same places
-arrive on the same frames, against the clock the recording kept, so a failure
-somebody else met can be run again here.
+Session telemetry records a whole session to one file: every input the
+platform delivered, every frame's time, every exception with its traceback,
+and samples of the application's state as it ran. A command prints a report
+from the file. The file can also be **replayed**: the same keys and clicks
+arrive on the same frames, against the recorded clock, so you can reproduce
+a failure that happened on someone else's machine.
 
 .. _switching-it-on:
 
 Switching it on
 ---------------
 
-From outside the application, which is what you ask a player to do:
+From outside the application, for example when asking a player to record a
+problem, set ``OPENGLCONTEXT_TELEMETRY`` to a file path:
 
 .. code-block:: bash
 
    OPENGLCONTEXT_TELEMETRY=/tmp/session.jsonl python -m twig_bb
 
-``1`` (or ``auto``) instead of a path writes a dated, process-stamped file
-under the user's application-data directory, so successive runs accumulate
-rather than overwriting each other:
+With ``1`` (or ``auto``) instead of a path, each run writes a new file named
+with the date, time and process id, under the user's application-data
+directory:
 
 .. code-block:: bash
 
    OPENGLCONTEXT_TELEMETRY=1 python -m twig_bb
    # ~/.config/OpenGLContext/telemetry/session-20260820-143011-4242.jsonl
 
-From inside it, which is what a “report a problem” menu item calls. Recording
-can begin at any point in a session; what it holds from then on is a complete
-session record less the part before it was asked for:
+From inside the application, for example from a "report a problem" menu
+item, call ``startTelemetry``. Recording can start at any point in a
+session, and the file then holds everything from that point on:
 
 .. code-block:: python
 
@@ -40,104 +41,103 @@ session record less the part before it was asked for:
    ...
    self.stopTelemetry()
 
-Nothing is recorded unless one of those happens, and the machinery that does
-the recording is not installed until then, so an application nobody has
-switched it on for pays nothing at all.
+Until one of these happens, nothing is recorded and the recording code is
+not installed, so an application that does not use telemetry pays no cost.
 
 .. _what-is-in-it:
 
 What the file holds
 -------------------
 
-JSON lines, one record to a line, each on disk before the next is offered — so
-a session killed outright, which is how a session being diagnosed usually
-ends, keeps everything up to the moment it went.
+The file is JSON lines, one record per line. Each record is written to disk
+before the next one is accepted, so a session that is killed keeps
+everything up to that moment.
 
 .. list-table::
    :widths: auto
    :header-rows: 1
 
    * - ``kind``
-     - What it says
+     - Contents
    * - ``header``
-     - When the session started, the command that started it, the process, the Python
-       and platform, the window that was asked for, and every rendering environment
-       variable that was set.
+     - When the session started, the command that started it, the process,
+       the Python version and platform, the requested window, and every
+       rendering environment variable that was set.
    * - ``input``
-     - One input the platform delivered — a key, a character, a button, a wheel
-       notch, pointer motion, a resize — stamped with the time it arrived and **the
-       frame that acted on it**.
+     - One input the platform delivered (a key, a character, a button, a
+       wheel notch, pointer motion or a resize), with the time it arrived
+       and **the frame that handled it**.
    * - ``frames``
-     - A block of frames: every frame's wall-clock time, the time inside the draw,
-       the loop's phase breakdown where the backend measures one (see :doc:`the loop
-       trace <hud>`), and how many crossed the stall threshold.
+     - A block of frames: each frame's wall-clock time, the time spent
+       drawing, the loop's phase breakdown where the backend measures one
+       (see :doc:`the loop trace <hud>`), and how many frames exceeded the
+       stall threshold.
    * - ``entropy``
-     - Where this session's randomness started: its :ref:`seed <randomness>`, and
-       where the ordinary ``random`` and ``numpy.random`` generators had got to.
+     - The session's :ref:`seed <randomness>`, and the state of the
+       ordinary ``random`` and ``numpy.random`` generators.
    * - ``exception``
-     - An exception and its traceback, from the main thread, from any other thread,
-       or from anything that logged one, with the frame the session had reached.
+     - An exception and its traceback, from the main thread, another thread
+       or a logged exception, with the frame the session had reached.
    * - ``log``
-     - A warning or error somebody logged, with its logger.
+     - A logged warning or error, with its logger name.
    * - ``state``
      - Every section of the :doc:`developer overlay <hud>`, sampled every few
-       seconds. The overlay already knows how to describe the application — the map,
-       the player, the renderer's counts, whatever the game registered — so the
-       recording gets all of it without a second description that can drift from the
-       first.
+       seconds: the map, the player, the renderer's counts and whatever else
+       the application registered there. The recording reuses the overlay's
+       description of the application rather than keeping a second one.
    * - ``mark``
-     - Something the application knows and the engine cannot; see below.
+     - An application event recorded with ``mark()``; see :ref:`marks`.
    * - ``end``
-     - How the session finished. A file with no ``end`` is one that was killed or is
-       still being written.
+     - How the session finished. A file with no ``end`` record was killed or
+       is still being written.
 
-A session at sixty frames a second writes a few kilobytes a minute. Past a
-ceiling — 128 MB by default, ``OPENGLCONTEXT_TELEMETRY_MAX_MB`` to change it —
-input and frame times stop while exceptions, marks and the ending still get
-through, and a ``truncated`` record says so. The ceiling is there to keep the
-failure, not to lose it.
+A session at sixty frames a second writes a few kilobytes a minute. The file
+has a size limit, 128 MB by default, set with
+``OPENGLCONTEXT_TELEMETRY_MAX_MB``. Past the limit, input and frame times
+are not written, but exceptions, marks and the ``end`` record still
+are, and a ``truncated`` record notes the cut. A failure at the end of a
+long session is therefore still recorded.
 
 .. _marks:
 
-Marking what the engine cannot know
------------------------------------
+Marking application events
+--------------------------
 
-The engine knows what was pressed and how long the frame took. It does not
-know that a level finished loading, that a match started, or that the player
-picked up the thing they were about to fall through the floor with. A mark is
-the line a reader looks for first when the file is four minutes long and the
-failure is at the end of it:
+The engine records what was pressed and how long each frame took. It has no
+record of game events such as a level finishing loading, a match starting,
+or the player picking up an item. Record these with ``mark()``. When a
+session is several minutes long and the failure is at the end, the marks
+are what a reader looks for first:
 
 .. code-block:: python
 
    self.mark('level-loaded', map='ztn3dm1', bots=4)
 
-Every context has it, and it is a call whatever the session is: nothing
-recording, a recording, or a replay of one. Nothing to ask first, so nothing
-to guard away — and the marks somebody guards away are exactly the ones that
-would have explained the failure nobody could reproduce. With nothing
-recording it costs an attribute read.
+Every context has ``mark()``, and it works whether the session is not
+recording, recording, or replaying. There is no need to check first, so
+there is no reason to guard the call. When nothing is recording it costs an
+attribute read.
 
-Fields are data: numbers, strings, and numpy’s numbers, which are written as
-theirs. A field may be called anything the game calls it, ``name`` included,
-since the mark’s own name is positional.
+Mark fields are data: numbers, strings and numpy numbers, which are written
+as plain numbers. A field can have any name, including ``name``, because the
+mark's own name is passed positionally.
 
-What to mark is whatever the engine cannot see for itself and a reader would
-look for: the level, the match, the pickups, the shots, what the opponents
-decided. ``twig_bb.telemetry`` is a whole game’s worth of it, made by reading
-the match’s own event stream a second time rather than by calling out of the
-rules.
+Mark whatever a reader would look for that the engine cannot record: the
+level, the match, pickups, shots, the opponents' decisions.
+``twig_bb.telemetry`` is a complete example for a game. It produces its
+marks from the match's own event stream rather than from calls inside the
+game rules.
 
 .. _randomness:
 
 Randomness
 ----------
 
-A game whose world, loot, weapon spread or bot decisions come out of a random
-number generator does not replay from its input alone: the same keys pressed
-against a different sequence of numbers give a different game. So a session
-has a **seed**, the engine owns it (``OpenGLContext.entropy``), and the
-recording keeps it.
+If a game's world, loot, weapon spread or bot decisions come from a random
+number generator, replaying the input alone does not reproduce the game: the
+same keys with different random numbers give a different game. So each
+session has a **seed**, owned by the engine in ``OpenGLContext.entropy``, and
+the recording stores it.
 
 The session seed
 ~~~~~~~~~~~~~~~~
@@ -149,55 +149,54 @@ The session seed
    entropy.seed()          # this session's seed, chosen once
    entropy.reseed(4242)    # start again from a number of your own
 
-Setting ``OPENGLCONTEXT_SEED=4242`` fixes a whole session, including the
-ordinary ``random`` and ``numpy.random`` generators a game reaches for without
-thinking about it. That is a reproducible run for a bug report, a regression
-test, or a level everyone can compare notes on.
+Setting ``OPENGLCONTEXT_SEED=4242`` fixes the whole session, including the
+ordinary ``random`` and ``numpy.random`` generators. Use it for a
+reproducible bug report, a regression test, or a level every player sees the
+same way.
 
-**Asking for a seed is what seeds those generators.** Left alone, the engine
-chooses a session seed for its own streams and does not touch them at all: a
-library that reseeded the process's generators behind its caller's back would
-silently undo an application's own ``random.seed(...)``. So a recording
-changes nothing about a session — it writes down *where those generators had
-got to*, and a replay puts them back.
+The ordinary generators are seeded only when a seed is set this way. Without
+one, the engine chooses a seed for its own streams and does not touch
+``random`` or ``numpy.random``, so an application's own ``random.seed(...)``
+stays in effect. A recording does not change the session either: it stores
+the state of those generators, and a replay restores it.
 
 Named streams
 ~~~~~~~~~~~~~
 
-Anything in the engine that would otherwise have drawn from nowhere in
-particular draws from a stream derived from the seed, and so should a game:
+The engine's own random draws come from named streams derived from the
+seed. A game should use them too:
 
 .. code-block:: python
 
    entropy.generator('loot')        # a numpy Generator, kept, advancing
    entropy.randomizer('bot-chat')   # the same idea, random.Random flavour
 
-Two subsystems drawing from differently-named streams cannot disturb each
-other's sequence, so adding a third does not change what the first two produce
-— which is what keeps a seeded world the same world as the engine grows.
-Asking twice for one name gets the stream, not the start of it: a bot picking
-somewhere to walk every few seconds would otherwise pick the same place for
-ever.
+Streams with different names do not affect each other, so adding a new
+stream does not change the numbers existing streams produce, and a seeded
+world stays the same as the engine grows. Asking again for the same name
+returns the same stream in its current state, not a fresh copy from the
+start; otherwise a bot choosing a destination every few seconds would choose
+the same place every time.
 
-Inside the engine, :doc:`particle emitters <particles>` with no ``seed`` of
-their own, ambient audio's repeat jitter, and ``NavMesh.random_point()`` all
-draw from session streams. Each still looks different every time the game is
-played, and each repeats exactly when a recorded session is replayed.
+In the engine, :doc:`particle emitters <particles>` without their own
+``seed``, the repeat jitter of ambient audio, and ``NavMesh.random_point()``
+all draw from session streams. Each looks different every time the game is
+played, and repeats exactly in a replay.
 
 .. _reading:
 
-Reading a session back
-----------------------
+Reading a session
+-----------------
 
-The file is not meant to be read by eye. The report answers the question
-somebody actually has — what happened in this session — in the order they want
-it:
+Read the file with the report command rather than by eye. The report
+summarises the session: how it ended, frame times, exceptions, marks and
+input:
 
 .. code-block:: bash
 
    python -m OpenGLContext.telemetry /tmp/session.jsonl
 
-.. code-block:: python
+.. code-block:: text
 
    2026-08-20T14:30:11+00:00  twig-bb ztn3dm1
      pid 4242, python 3.12.3, linux, 1280x720, core, seed 13097442885663472141
@@ -218,55 +217,59 @@ it:
 
    input: 41,207 events -- pointer 38,110, keyboard 2,984, mousebutton 113
 
-``--events`` lists every input in order rather than counting them by kind —
-the question you ask once a frame number has given you somewhere to look, and
-``--marks`` does the same for what the game said it was doing. ``--limit``
-sets how many exceptions, marks and distinct warnings are shown; past it the
-marks are counted by name and both ends of the list are printed, since a
-session is diagnosed from its end.
+Options:
+
+- ``--events`` lists every input in order instead of counting them by kind.
+  Use it once a frame number tells you where to look.
+- ``--marks`` lists every mark in order.
+- ``--limit`` sets how many exceptions, marks and distinct warnings are
+  shown (default 10). Beyond the limit, marks are counted by name and the
+  first and last entries are printed, because a session is usually
+  diagnosed from its end.
 
 .. _replaying:
 
-Running it again
-----------------
+Replaying a session
+-------------------
 
-This is what recording input against frames is *for*. Point a build at the
-journal and it takes its input from the file instead of from the player:
+To replay a session, point the application at the file. It then takes its
+input from the file instead of from the player:
 
 .. code-block:: bash
 
    OPENGLCONTEXT_TELEMETRY_REPLAY=/tmp/session.jsonl python -m twig_bb
 
-Each frame is given the input that was recorded against it — handed over as
-the frame before it ends, which is where the platform handed it over, so the
-frame's own work finds it exactly as it did — and the engine's time source
-(``OpenGLContext.events.systemtime``) reads the time the recording had reached
-at that frame. Everything time-driven follows: TimeSensors, the animation they
-drive, and any simulation that asks the engine what time it is. A frame that
-took 800 ms during the recording advances the world by 800 ms on replay
-however long it takes here.
+Each frame receives the input recorded for it, delivered just before the
+frame ends, at the same point where the platform delivered it during
+recording. The engine's time source (``OpenGLContext.events.systemtime``)
+returns the time the recording had reached at that frame. Everything driven
+by time follows: ``TimeSensor`` nodes, the animations they drive, and any
+simulation that reads the engine's time. A frame that took 800 ms during
+recording advances the world by 800 ms in the replay, however long it takes
+to draw.
 
-**A recorded session reads one instant per frame**, which is what makes that
-exact. A replay's clock is a step function — it holds the time the recording
-reached at a frame for the whole of that frame — so a recording whose game
-read the wall clock as it ran would have no matching shape: what it read would
-depend on how far into the frame it happened to ask, and the two runs would
-measure the same interval differently by however long a frame's work takes.
-Milliseconds of it, which is a fire rate, a respawn or an animation landing
-one frame out and everything after it out with them. So recording installs a
-clock of the same shape, moving at the end of each frame by exactly the
-duration the file records for it. It is still wall-clock time, read once a
-frame.
+How the clock is kept
+~~~~~~~~~~~~~~~~~~~~~
 
-A capture's clock has that shape already and is stricter about it — a fixed
-step from a fixed start, so the run repeats exactly — so a recording started
-while one is installed reads it and leaves it in place. Both are marked
-``counts_frames``, which is how each recognises the other; without that the
-two would take turns owning the world and a recorded capture would stop being
-repeatable.
+During a replay the clock holds one value for the whole of each frame. For
+the replay to match, the recording must use the same kind of clock.
+Otherwise a game that read the wall clock during recording would get a value
+that depended on how far into the frame it asked, and the two runs would
+measure the same interval differently by milliseconds. That is enough to put
+a fire rate, a respawn or an animation one frame out, and everything after it
+too. So while recording, the engine installs a clock that also reads the
+wall-clock time once per frame and advances at the end of each frame by the
+duration it writes to the file.
 
-Combine it with the auto-exit switches to get a screenshot of the frame
-something went wrong on:
+A capture's clock (a fixed step from a fixed start) already behaves this
+way, and is stricter. A recording started while a capture clock is
+installed uses that clock and leaves it in place. Both clocks are marked
+``counts_frames``, which is how each identifies the other. Without this, the
+two would take turns controlling time and a recorded capture would no longer
+be repeatable.
+
+To get a screenshot of the frame where something went wrong, combine the
+replay with the auto-exit variables:
 
 .. code-block:: bash
 
@@ -274,99 +277,97 @@ something went wrong on:
    OPENGLCONTEXT_AUTO_EXIT_FRAMES=14879 \
    OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR=/tmp/shots python -m twig_bb
 
-Past the end of the recording the replay stops feeding input, says so once in
-the log and on the overlay, and the session continues live.
+At the end of the recording the replay stops supplying input, reports this
+once in the log and on the overlay, and the session continues with live
+input.
 
-Did it play out the same way?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+A replay writes no recording of its own and does not modify the file, so a
+file replays the same way every time.
 
-The engine can say that it delivered the same input against the same clock. It
-cannot say what the game made of that — but the game can, because it is
-already :ref:`marking <marks>` what it did. So a replay answers each mark with
-the one the journal holds in its place, comparing the name, the fields and the
-frame, and says at the end how the two accounts compared:
+Checking that a replay matches
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. code-block:: python
+The engine can confirm that it delivered the same input against the same
+clock, but not what the game did with it. The game's :ref:`marks <marks>`
+record that. During a replay, each new mark is compared with the mark at the
+same position in the file, by name, fields and frame. At the end, the replay
+logs how they compared:
+
+.. code-block:: text
 
    WARNING OpenGLContext.telemetry.record: replay of session.jsonl: 199 marks, all as recorded
 
-A session that parted from its recording says where, once, since everything
-after the first difference follows from it:
+If the replay diverged, the log line gives the first difference only, since
+everything after it follows from it:
 
-.. code-block:: python
+.. code-block:: text
 
    WARNING OpenGLContext.telemetry.record: replay of session.jsonl: 74 of 199 marks as recorded,
      then death target=player by=bot2 where the recording has death target=bot2 by=player
 
-The same line is on the :ref:`Session <overlay>` section of the developer
-overlay while the replay runs, so a divergence can be watched for rather than
-waited for. Nothing needs switching on: a game that marks is a game whose
-replays are checked.
+The same line appears in the :ref:`Session <overlay>` section of the
+developer overlay during the replay, so a divergence is visible as it
+happens. This needs no setup: any game that records marks has its replays
+checked.
 
-What replays exactly, and what does not
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Limits of replay
+~~~~~~~~~~~~~~~~
 
-A session replays exactly to the extent that it was a function of its input
-and the engine's clock. Two things take an application outside that, and both
-are worth knowing before a replay is trusted:
+A session replays exactly as far as it depends only on its input and the
+engine's clock. These things fall outside that:
 
-- **Reading the wall clock directly.** Code that calls ``time.time()`` for
-  itself is not on the recorded clock. Reading
-  ``OpenGLContext.events.systemtime.systemTime()`` instead puts it on the same
-  clock as everything else in the scene, which is worth doing for :doc:`video
-  recording <recording>` as well.
+- Reading the wall clock directly - code that calls ``time.time()`` is not
+  on the recorded clock. Call
+  ``OpenGLContext.events.systemtime.systemTime()`` instead. This also keeps
+  the code in step during :doc:`video recording <recording>`.
 
-- **A generator the engine cannot reach.** The session's seed and the state of
-  ``random`` and ``numpy.random`` are recorded and put back, and so are the
-  :ref:`named streams <randomness>`. A generator an application makes for itself
-  — its own ``numpy.random.default_rng()``, seeded from the clock — is not any
-  of those; building it from ``entropy.generator('name')`` puts it on the
-  recording.
+- Private random generators - the session seed, the state of ``random`` and
+  ``numpy.random``, and the :ref:`named streams <randomness>` are recorded
+  and restored. A generator the application creates itself, such as a
+  ``numpy.random.default_rng()`` seeded from the clock, is not. Create it
+  with ``entropy.generator('name')`` to include it in the recording.
 
-- **The first frame.** A recording begins before the session draws anything —
-  while a level loads, while a menu is up — and the file holds no duration for
-  that gap. The interval a game measures across the very first recorded frame is
-  therefore the recording's own, and not reproduced.
+- The first frame - recording starts before the session draws anything,
+  while a level loads or a menu is shown, and the file has no duration for
+  that gap. An interval the game measures across the first recorded frame is
+  not reproduced.
 
-- **Anything else that differs between runs** — a thread whose scheduling
-  decides an order. A resource that streams in at a different moment is *not* in
-  this list any more: a scene loaded off the render thread (``AsyncSceneMixin``)
-  is mounted on the frame the recording mounted it on, held back if it is early
-  and waited for if it is late, since a level that appeared three frames sooner
-  is a world the recorded input from then on was never given to. A replay of
-  what is left is close rather than identical: close enough to walk into the
-  same wall, which is usually what is wanted.
+- Other differences between runs, such as thread scheduling that decides the
+  order of events. A replay of such a session is close rather than
+  identical, which is usually enough to reproduce the problem.
 
-A replay makes no recording of its own, and reads the journal without changing
-it, so the same file replays the same way as often as you like.
+Scenes loaded in the background are handled: a scene loaded off the render
+thread (``AsyncSceneMixin``) is added to the world on the same frame as in
+the recording. If it is ready early it is held back, and if it is late the
+replay waits for it.
 
 .. _telemetry-demo:
 
-Seeing it work
---------------
+Example: the telemetry demo
+---------------------------
 
 .. figure:: images/demos/telemetry_demo.jpg
    :alt: Four coloured spheres on dotted rings around a yellow lamp, each ring carrying a pale gate post, on a dark square plinth
 
-   ``python tests/telemetry_demo.py`` — a whole session recorded, read back and
-   run again. Four bodies circle the lamp at different periods, and each pass of
-   the pale gate post on its ring is a :ref:`mark <marks>` in the journal, so the
-   file says what the application did as well as what the engine measured. The
-   demo records itself: with no ``OPENGLCONTEXT_TELEMETRY`` set it calls
-   ``startTelemetry()`` for a dated file of its own, and on exit it closes the
-   journal, reads it back and prints the report. Press ``space`` to flare the
-   lamp, ``p`` to pause the orbits and ``m`` to mark a checkpoint — each of them
-   a mark to find in the file afterwards.
+   ``python tests/telemetry_demo.py``: a session recorded, read back and
+   replayed. Four bodies circle the lamp at different periods. Each time a
+   body passes the gate post on its ring, the demo records a :ref:`mark
+   <marks>`. With no ``OPENGLCONTEXT_TELEMETRY`` set, the demo calls
+   ``startTelemetry()`` to record to a dated file. On exit it closes the
+   file, reads it back and prints the report. Press ``space`` to flare the
+   lamp, ``p`` to pause the orbits and ``m`` to mark a checkpoint; each adds
+   a mark to the file.
 
-Recording a run of it with the auto-exit switches — so nobody was at the
-keyboard, and the file holds frames and marks rather than input — and reading
-that file back with the command:
+Record a run with the auto-exit variables, so no one is at the keyboard and
+the file holds frames and marks but no input, then read the file back:
 
 .. code-block:: bash
 
    OPENGLCONTEXT_TELEMETRY=/tmp/orrery.jsonl OPENGLCONTEXT_AUTO_EXIT_FRAMES=450 \
    python tests/telemetry_demo.py
    python -m OpenGLContext.telemetry /tmp/orrery.jsonl
+
+.. code-block:: text
 
    2026-08-21T03:14:15.667877+00:00  tests/telemetry_demo.py
      pid 1401636, python 3.12.3, linux, 300x300, core, seed 15227938117083888771
@@ -400,22 +401,24 @@ that file back with the command:
      View: position=0, 8.2, 10.8
      Audio: audio=idle
 
-The bodies take their positions from the engine's clock, which a :ref:`replay
-<replaying>` drives from the recorded frame times, so every lap falls on the
-frame it fell on the first time and each mark answers the one the journal
-holds in its place:
+The bodies take their positions from the engine's clock, which a
+:ref:`replay <replaying>` drives from the recorded frame times. Every lap
+falls on the same frame as in the recording, and each mark matches the
+recorded one:
 
 .. code-block:: bash
 
    OPENGLCONTEXT_TELEMETRY_REPLAY=/tmp/orrery.jsonl OPENGLCONTEXT_AUTO_EXIT_FRAMES=450 \
    python tests/telemetry_demo.py
 
+.. code-block:: text
+
    replayed /tmp/orrery.jsonl
      14 marks, all as recorded
 
-What the demo does for itself is these few lines — switch recording on unless
-the environment already asked for a session, and mark what the engine cannot
-see:
+The demo's own telemetry code is short. It starts recording unless the
+environment already started a session, and marks the events the engine
+cannot record:
 
 .. code-block:: python
 
@@ -444,24 +447,28 @@ On the developer overlay
 ------------------------
 
 A **Session** section appears on the :doc:`developer overlay <hud>` while a
-session is being recorded or replayed, and only then. Recording, it names the
-file, the session's :ref:`seed <randomness>`, the frame reached, how many
-records have been written and what the file weighs; replaying, it names the
-file, says how far through the recording it is, and — once the game has marked
-anything — whether what it is doing :ref:`matches what was recorded
-<replaying>`. A player told to “switch recording on and reproduce it” can see
-that it is on, and somebody watching a replay can see when it has run out.
+session is being recorded or replayed, and only then.
+
+- While recording, it shows the file name, the session's :ref:`seed
+  <randomness>`, the current frame, the number of records written and the
+  file size.
+- While replaying, it shows the file name and progress through the
+  recording. Once the game has recorded a mark, it also shows whether the
+  replay :ref:`matches the recording <replaying>`.
+
+A player asked to turn recording on can see that it is on, and someone
+watching a replay can see when it has reached the end.
 
 .. _telemetry-testing:
 
-The same vocabulary a test uses
--------------------------------
+Recorded input and tests
+------------------------
 
-An input is written down in the vocabulary of
-``OpenGLContext.events.synthetic``, which is also what
-``OpenGLContext.testing.event_injector`` speaks. A recorded session can
-therefore be driven by a test, and a script written by hand for a test is read
-by the same report that reads a session:
+Input is recorded in the record format of ``OpenGLContext.events.synthetic``,
+which ``OpenGLContext.testing.event_injector`` also uses. A test can
+therefore drive a recorded session, and a hand-written test script can be
+read by the same report command. See :doc:`offscreen` for dispatching these
+records in a test.
 
 .. code-block:: python
 
@@ -470,14 +477,14 @@ by the same report that reads a session:
    {"type": "pointer",     "x": 100, "y": 200}
    {"type": "resize",      "width": 800, "height": 600}
 
-``pick`` says the pointer event went through the selection pass, which is the
-route a real click takes: it is delivered once the buffer has resolved what is
-under the cursor, carrying the node paths with it.
+``pick`` means the pointer event went through the selection pass, as a real
+click does. It is delivered after the pass has found what is under the
+cursor, and carries the node paths.
 
 .. _environment:
 
-Environment
------------
+Environment variables
+---------------------
 
 .. list-table::
    :widths: auto
@@ -489,55 +496,59 @@ Environment
      - Record this session to the named file. ``1`` or ``auto`` writes a dated file
        under the user's application-data directory.
    * - ``OPENGLCONTEXT_TELEMETRY_REPLAY``
-     - Replay the named journal into this session instead of taking live input.
+     - Replay the named file into this session instead of taking live input.
    * - ``OPENGLCONTEXT_TELEMETRY_MAX_MB``
-     - The journal's ceiling, in megabytes (default 128).
+     - The file size limit, in megabytes (default 128).
    * - ``OPENGLCONTEXT_SEED``
-     - Fix this session's :ref:`randomness <randomness>`, the ordinary ``random`` and
-       ``numpy.random`` generators included.
+     - Fix this session's :ref:`randomness <randomness>`, including the
+       ordinary ``random`` and ``numpy.random`` generators.
 
 All four are in ``renderoptions.ENVIRONMENT``, so a subprocess capture does
-not inherit them: a journal names one file for one session and a child process
-that took the name over would overwrite its parent's; a replay drives the
-camera; and a seed decides where the scattered vegetation stands. A capture
-that wants a fixed sequence pins the seed itself.
+not inherit them. A recording names one file for one session, and a child
+process using the same name would overwrite its parent's file. A replay
+drives the camera. A seed decides where scattered vegetation is placed. A
+capture that needs a fixed random sequence sets the seed itself.
 
-A path that cannot be written is a warning and a session that is not recorded
-— never a reason an application will not start. The same goes for a value that
-is not a number, and for a replay file that holds no session.
+A file path that cannot be written produces a warning, and the session runs
+without recording; the application still starts. The same applies to a
+non-numeric value and to a replay file that contains no session.
+
+See :doc:`environment` for the other environment variables.
 
 .. _telemetry-modules:
 
-Where it lives
---------------
+Modules
+-------
 
 .. list-table::
    :widths: auto
    :header-rows: 1
 
    * - Module
-     - What is in it
+     - Contents
    * - ``telemetry.recorder``
-     - ``SessionRecorder``: every rule about what is worth writing down and when,
-       with no GL, no window and no file in it.
+     - ``SessionRecorder``: the rules for what is written and when, with no
+       GL, window or file.
    * - ``telemetry.journal``
-     - ``SessionJournal``: the file, its header, its ceiling, and what happens when
-       it cannot be written.
+     - ``SessionJournal``: the file, its header, its size limit, and handling
+       of write failures.
    * - ``telemetry.record``
-     - The wiring: the taps on a context's input entry points, the exception hooks,
-       the logging relay, and switching it all on.
+     - The connections to a context: hooks on its input entry points, the
+       exception hooks, the logging relay, and starting and stopping
+       recording.
    * - ``telemetry.replay``
-     - ``Recording``, ``RecordedClock`` and ``Replay``: a journal as data, the engine
-       clock driven from it, and the input delivered a frame at a time.
+     - ``Recording``, ``RecordedClock`` and ``Replay``: a recording as data,
+       the engine clock driven from it, and input delivered a frame at a
+       time.
    * - ``telemetry.report``
      - ``python -m OpenGLContext.telemetry``.
    * - ``entropy``
-     - The session seed, the named streams derived from it, and capturing and
-       restoring where the ordinary generators stand.
+     - The session seed, the named streams derived from it, and saving and
+       restoring the state of the ordinary generators.
    * - ``events.synthetic``
-     - An input event as a plain record and back again, shared with the test event
-       injector.
+     - Conversion between input events and plain records, shared with the
+       test event injector.
    * - ``ui.debugoverlay``
      - ``telemetry_provider``: the Session section.
 
-The design and its reasoning are in ``plans/SESSION-TELEMETRY.md``.
+The design is described in ``plans/SESSION-TELEMETRY.md``.

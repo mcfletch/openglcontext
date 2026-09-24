@@ -4,8 +4,9 @@ Several views on one window
 .. rst-class:: introduction
 
 A context can split its window into several views of one scene. Each view has
-its own camera and projection. A click in a view picks through that view's
-camera.
+its own camera and projection, and a click in a view picks through that
+view's camera. An editor uses this for the classic four views: top, front and
+side orthographic views around a perspective one.
 
 .. figure:: images/demos/multiview_quad.jpg
    :alt: One window split into four views of a lantern hanging from a wooden post: top, front and left orthographic views and a perspective view, each with its name at the top left and an axis triad at the bottom left
@@ -13,15 +14,82 @@ camera.
    ``python tests/multiview_quad.py``: top, front and left orthographic views
    and a perspective view of the same model.
 
+There are three ways to use it, from the most packaged to the most direct:
+
+- :ref:`MultiViewMixin <multiview-mixin>` adds one view or four to an
+  existing window, with the view controls and pointer gestures included.
+- :ref:`QuadView <quad-view>` and :ref:`ViewSet <view-set>` build the
+  views, frame a model in them and move their cameras with the pointer, for
+  an application that manages its own window.
+- :ref:`ViewLayout <view-layout>` places views in the window, and nothing
+  more. The application moves the cameras itself.
+
+.. _multiview-mixin:
+
+Four views in an existing window
+--------------------------------
+
+``OpenGLContext.multiview.mixin.MultiViewMixin`` gives a window that shows a
+scene a choice of one view or four, without the window handling layouts
+itself. It creates the views, the view controls and the pointer gestures.
+
+.. code-block:: python
+
+   from OpenGLContext.multiview.mixin import MultiViewMixin
+
+   class Viewer(OverlayMixin, MultiViewMixin, BaseContext):
+       multiViewArrangement = 'quad'        # the default is 'single'
+
+       def OnInit(self):
+           self.startViews(bounds=lambda: (scene.minimum, scene.maximum))
+
+The perspective view has no camera of its own. It draws through the window's
+camera, whatever ``getViewPlatform()`` returns, so the navigation, a bound
+``Viewpoint``, a model's own cameras and a turntable all drive it as they
+would drive a single view. The three orthographic views belong to the mixin.
+They are framed on the bounds given to ``startViews``, and a drag in one
+moves that view only.
+
+- ``bounds`` is ``(minimum, maximum)``, or a callable that returns it. With
+  no ``bounds``, the views are framed on the context's ``sceneBounds()``.
+- ``elevations`` chooses which three directions the orthographic views look
+  along. The default is ``('top', 'front', 'left')``.
+- ``chrome=False`` leaves out the view controls, for a window that draws its
+  own.
+- ``toggleViews()`` switches between one view and four, and
+  ``maximiseView()`` gives the active view the whole window or gives it
+  back. The application binds them to keys; ``oglc-view`` binds
+  ``toggleViews`` to :kbd:`v`.
+
+Put the mixin after ``OverlayMixin`` in the bases. Each event then reaches
+the view controls first, and the views get the events the controls do not
+take. The view controls need ``OverlayMixin``'s overlay stack; without it the
+views work but have no controls.
+
+Each view's menu lists the scene's cameras (``window.sceneCameras()``).
+Choosing one in the perspective view binds its ``Viewpoint``. Choosing one in
+an orthographic view gives that view a perspective camera at that position.
+
+``oglc-view --views quad`` opens the scene viewer this way. The Tk and wx
+:doc:`embedding demos <embedding>` open in the quad, because a window with
+the scene's tree beside it is used more like an editor than a viewer.
+
+.. _view-layout:
+
 Laying out views
 ----------------
 
-A :class:`~OpenGLContext.multiview.views.View` is a camera, a name, and a
-:class:`~OpenGLContext.multiview.views.ViewStyle`, which is how that view
-renders the scene: over the scene's own ``Background`` or a flat colour, and
-shaded or as wireframe. A
-:class:`~OpenGLContext.multiview.views.ViewLayout` is an ordered set of views and the
-rule that places them. Assign one to the context and every frame draws it:
+These classes are in ``OpenGLContext.multiview.views``:
+
+- A :class:`~OpenGLContext.multiview.views.View` is one camera drawn into
+  one rectangle of the window. It has a camera, a name, and a
+  :class:`~OpenGLContext.multiview.views.ViewStyle`.
+- A ``ViewStyle`` sets how the view draws the scene: over the scene's own
+  ``Background`` or over a flat colour, and shaded or as wireframe.
+- A :class:`~OpenGLContext.multiview.views.ViewLayout` is an ordered list of
+  views and an arrangement that places them in the window.
+
+Assign a layout to the context's ``viewLayout``, and every frame draws it:
 
 .. code-block:: python
 
@@ -37,17 +105,18 @@ rule that places them. Assign one to the context and every frame draws it:
                View(name='angled'),
            )
 
-A view's camera is anything with the view platform's matrix interface:
+A view's camera can be any object with the view platform's matrix interface:
 
-#. :class:`~OpenGLContext.move.viewplatform.ViewPlatform`
-#. :class:`~OpenGLContext.edit.mapview.MapViewPlatform`
-#. :class:`~OpenGLContext.multiview.cameras.OrthoViewPlatform`
-#. :class:`~OpenGLContext.edit.orbitview.OrbitViewPlatform`
+- :class:`~OpenGLContext.move.viewplatform.ViewPlatform`
+- :class:`~OpenGLContext.edit.mapview.MapViewPlatform`
+- :class:`~OpenGLContext.multiview.cameras.OrthoViewPlatform`
+- :class:`~OpenGLContext.edit.orbitview.OrbitViewPlatform`
 
-A view with no camera draws through the context's own view platform, whatever ``getViewPlatform()``
-answers that frame, so the navigation, the bound ``Viewpoint`` and any
-``self.platform = ...`` replacement keep driving it. A context that never
-assigns a layout draws one such view filling the window.
+A view with no camera draws through the context's own view platform, which
+is whatever ``getViewPlatform()`` returns that frame. The navigation, the
+bound ``Viewpoint`` and any ``self.platform = ...`` replacement then drive
+that view. A context that never assigns a layout draws one such view filling
+the window.
 
 The named arrangements are:
 
@@ -71,16 +140,18 @@ The named arrangements are:
      - ``'quad'``
      - four views around a centre
 
-``layout.split_at`` is where the named arrangements divide the window, as
-fractions of its width and of its height measured from the top: the line of a
-split or a stack, or the centre of a quad. It is what a splitter drag moves,
-and each fraction is held between 0 and 1. ``layout.maximise(view)`` gives one
-view the whole window and ``layout.maximise(view)`` again gives it back; with
-no argument it takes the active view. A layout of one view has nothing to
-hide, so ``layout.can_maximise`` is False and the call leaves it as it is.
+``layout.split_at`` holds where the named arrangements divide the window. It
+is a pair of fractions, of the width and of the height measured from the top,
+each clamped to 0 to 1. For a split or a stack it is the dividing line; for a
+quad it is the centre. Dragging a splitter changes it.
 
-Any other arrangement is a function from the window's size to one rectangle
-per view, in the order of the views:
+``layout.maximise(view)`` gives one view the whole window, and calling it
+again for the same view restores the layout. With no argument it acts on the
+active view. A layout of one view has nothing to hide, so
+``layout.can_maximise`` is False and the call leaves the layout unchanged.
+
+For any other arrangement, pass a function that takes the window's width and
+height and returns one rectangle per view, in the order of the views:
 
 .. code-block:: python
 
@@ -89,164 +160,73 @@ per view, in the order of the views:
 
    context.viewLayout = ViewLayout([main, inset], arrangement=picture_in_picture)
 
-Rectangles are ``(x, y, width, height)`` in window pixels, counted from the
-bottom left as ``glViewport`` counts them. Views are drawn in their order, so a
-view that overlaps another is drawn over it.
+Rectangles are ``(x, y, width, height)`` in window pixels, from the bottom
+left, as ``glViewport`` takes them. Views are drawn in order, so a later view
+is drawn over an earlier one it overlaps.
 
-A layout holds at most ``OpenGLContext.multiview.views.MAX_VIEWS`` views, which is 16.
-
-An editor's four views -- top, front and side orthographic views around a
-perspective one -- are ``OpenGLContext.multiview.quad.QuadView``, which builds
-the layout, frames a model in every view and moves each view's camera with the
-pointer; see :ref:`Top, front and side <quad-view>`. ``tests/multiview_quad.py``
-loads any glTF model into it. An application laying out its own views takes the
-gestures alone, as ``OpenGLContext.multiview.gestures.ViewGestures``, and names
-which views they drive.
+A layout holds at most ``OpenGLContext.multiview.views.MAX_VIEWS`` views,
+which is 16.
 
 How a view draws
-----------------
+~~~~~~~~~~~~~~~~
 
-``ViewStyle(background=True)`` draws the scene's bound ``Background`` behind the
-view; ``ViewStyle(background=(r, g, b))`` or an RGBA colour clears the view to
-that instead, as an orthographic editor view usually wants in place of a sky.
-``ViewStyle(wireframe=True)`` draws the view's geometry as lines.
+- ``ViewStyle(background=True)``, the default, draws the scene's bound
+  ``Background`` behind the view.
+- ``ViewStyle(background=(r, g, b))``, or an RGBA colour, clears the view to
+  that colour instead. An orthographic editor view usually uses a flat colour
+  rather than a sky.
+- ``ViewStyle(wireframe=True)`` draws the view's geometry as lines.
 
-A perspective camera is told the size of its view's rectangle whenever that
-changes, so its aspect ratio is the rectangle's rather than the window's. A
-:class:`~OpenGLContext.edit.mapview.MapViewPlatform` is told the same, and its
-scale is then metres per pixel of its own view.
+When a view's rectangle changes size, its camera is given the new size. A
+perspective camera then uses the rectangle's aspect ratio rather than the
+window's. A :class:`~OpenGLContext.edit.mapview.MapViewPlatform` is given the
+size too, and its scale is metres per pixel of its own view.
 
-A node that draws differently in each view reads ``mode.view``, the
-:class:`~OpenGLContext.multiview.views.View` being drawn, during its render.
+A node that draws differently in each view reads ``mode.view`` during its
+render. It holds the :class:`~OpenGLContext.multiview.views.View` being
+drawn.
 
-The pointer and the keyboard
-----------------------------
+Events in a view
+~~~~~~~~~~~~~~~~
 
-The context names the view each event belongs to and records it as
+The context assigns each event to a view and records that view as
 ``event.view``:
 
-- a pointer event belongs to the view under the pointer;
-- a press makes its view the *active* one, and every pointer event after it
-  belongs to that view until the last held button is released, so a drag that
-  leaves its view keeps talking to it;
-- a wheel notch belongs to the view under the pointer and holds nothing;
-- a key belongs to the active view.
+- A pointer event belongs to the view under the pointer.
+- A button press makes its view the *active* view. Every pointer event after
+  it belongs to that view until the last held button is released, so a drag
+  that leaves its view still goes to it.
+- A wheel notch belongs to the view under the pointer, and does not change
+  the active view.
+- A key belongs to the active view.
 
-A pick is resolved through the camera of the event's view, so
+A pick is resolved through the camera of the event's view.
 ``event.unproject()`` returns the world point under the pointer in that view,
-and ``event.modelViewMatrix``, ``event.projectionMatrix`` and ``event.viewport``
-are that view's. An asynchronous pick that resolves a frame later uses the
-camera as it was in the frame the click was drawn in. ``view.local(x, y)``
-turns a window pixel into the view's own pixels, the coordinates
+and ``event.modelViewMatrix``, ``event.projectionMatrix`` and
+``event.viewport`` are that view's. An asynchronous pick that resolves a
+frame later uses the camera as it was in the frame the click was drawn in.
+``view.local(x, y)`` converts a window pixel to the view's own pixels, which
+are the coordinates
 :meth:`~OpenGLContext.edit.mapview.MapView.world_from_screen` takes.
 
-``layout.active`` is the active view and ``layout.activate(view)`` changes it.
-``layout.view_at(x, y)`` names the view at a window pixel and
-``layout.route(event)`` is the routing the context applies.
-
-What a frame shares
--------------------
-
-The scene is walked once a frame. Each view then culls that walk against its
-own frustum, sorts what it kept, and draws it through its own camera. What
-depends only on the scene is done once for all of them:
-
-- Level of detail is one choice per frame, since choosing a level replaces part
-  of the scene. Each LOD node draws the finest level any view asks for. An
-  orthographic view judges coverage from the height of the world it shows
-  rather than from a distance, so zooming a map out coarsens what it shows and
-  moving its camera does not.
-- Shadow maps are rendered once and read by every view. Spot and point maps
-  depend only on their light. A directional light's cascades are fitted to the
-  active view; every other view reads the same cascades, choosing for each
-  fragment the finest cascade that holds it. Ground a non-active view shows
-  outside every cascade is drawn unshadowed.
-- A spot or point light keeps its shadow while any view can see its reach.
-- Bloom blurs and composites each view inside its own rectangle, so a bright
-  object at the edge of one view does not glow into the next.
-- Transparent shapes are sorted back to front for each view's own camera.
-
-Content that is kept resident around the viewer -- streamed 3D Tiles, a
-vegetation field -- has to serve every view. ``layout.cameras(default=
-context.getViewPlatform())`` lists each camera once for an application to hand
-to them.
-
-How the views are drawn
------------------------
-
-There are three ways to draw several views, and which a context uses depends
-on its driver. ``OpenGLContext.multiview.strategy.MultiviewCapabilities`` reads
-the GL version, the extension list and ``GL_MAX_VIEWPORTS`` once per GL
-context and decides:
-
-.. list-table::
-   :widths: auto
-   :header-rows: 1
-
-   * - Strategy
-     - Needs
-     - How a draw reaches its views
-   * - ``vertex``
-     - GL 4.1, and ``GL_ARB_shader_viewport_layer_array`` or
-       ``GL_AMD_vertex_shader_viewport_index``
-     - one instanced draw, the vertex shader writing ``gl_ViewportIndex``
-   * - ``geometry``
-     - viewport arrays (GL 4.1, or ``GL_ARB_viewport_array``) and
-       instanced geometry shaders (GL 4.0, or ``GL_ARB_gpu_shader5``)
-     - one draw, a geometry shader emitting each primitive to its views
-   * - ``sequential``
-     - GL 3.3
-     - the scene drawn once per view, the viewport and scissor set between
-
-``sequential`` runs on every driver the engine supports, on both profiles, and
-costs one submission of the scene per view. The other two submit the opaque
-scene once, whatever the number of views. A GL 4.1 driver without the
-vertex-shader extension, such as Apple silicon's, draws with ``geometry``. A
-driver's answer is logged at start-up.
-
-``scripts/multiview_bench.py`` draws a scene through one view and through the
-four-view quad under each strategy this driver runs, and reports the median
-frame time and the draw calls of each:
-
-.. code-block:: console
-
-   $ scripts/multiview_bench.py --model lantern.glb
-   $ scripts/multiview_bench.py --boxes 400 --frames 60
-
-At 1280x960 on a Radeon 8060S (Mesa radeonsi), four views of one glTF model
-cost 1.40x a single view under ``vertex``, 1.43x under ``geometry`` and 1.58x
-under ``sequential``. Four views of 400 separately drawn shapes -- the
-draw-bound case, 400 draws a view -- cost 1.21x, 1.24x and 2.41x; with those
-shapes batched into one instanced draw, 1.34x, 1.40x and 2.08x. A shared
-strategy issues one draw for four views where ``sequential`` issues four, so
-what it adds over a single view is the rasterising of three more views rather
-than three more submissions of the scene.
-
-``ContextDefinition.multiview`` (env: ``OPENGLCONTEXT_MULTIVIEW``) asks for one
-by name -- ``auto``, ``vertex``, ``geometry`` or ``sequential`` -- so each can be
-run and compared on one machine. ``auto`` takes the fastest that can run. A
-request that cannot be honoured is logged and the best strategy that can run is
-used instead.
-
-A driver can offer a strategy and then fail to compile its programs. The
-failure is logged, the frame in which it happens draws each view in turn, and
-from the next frame the context uses the next strategy in the table, never
-trying the failed one again. ``sequential`` compiles nothing of its own, so a
-context always has it to fall back on. A layout of more views than the
-driver's ``GL_MAX_VIEWPORTS`` is drawn with ``sequential`` for as long as it
-has that many; GL 4.1 and ``GL_ARB_viewport_array`` both provide at least 16.
+``layout.active`` is the active view, and ``layout.activate(view)`` changes
+it. ``layout.view_at(x, y)`` returns the view at a window pixel, and
+``layout.route(event)`` performs the assignment described above.
 
 .. _quad-view:
 
 Top, front and side
 -------------------
 
+Orthographic views
+~~~~~~~~~~~~~~~~~~
+
 ``OrthoView`` is a plan view that can look along any axis: ``'top'``,
-``'bottom'``, ``'front'``, ``'back'``, ``'left'`` or ``'right'``. The camera
-stands on the side the name gives -- ``'front'`` stands at +z looking down -z,
-the view a VRML or glTF scene opens on -- and ``'top'`` puts -z up the screen,
-as a map puts north. The projection is orthographic, and ``centre`` is a point
-in the world rather than on the ground:
+``'bottom'``, ``'front'``, ``'back'``, ``'left'`` or ``'right'``. The name
+gives the side the camera stands on. ``'front'`` stands at +z looking down
+-z, which is the view a VRML or glTF scene opens on. ``'top'`` puts -z up the
+screen, as a map puts north. The projection is orthographic, and ``centre``
+is a point in the world, not on the ground:
 
 .. code-block:: python
 
@@ -259,22 +239,30 @@ in the world rather than on the ground:
    front.zoom(0.8, at=view.local(x, y), viewport=view.size)
    point = front.world_from_screen(*view.local(x, y), view.size)
 
-``span`` is how many units fit down the view and ``depth`` how far along the
-axis it reaches, half in front of the centre and half behind. The pointer
-conversions work in the view's plane through the centre, so a point dragged in
-the front view moves in x and y and keeps its z. ``frame(minimum, maximum,
-viewport)`` fits a box, and ``MapView`` is the ``'top'`` view with its centre
-given as a map's ``(x, z)``.
+- ``span`` is how many world units fit down the view.
+- ``depth`` is how far the view reaches along its axis, half in front of the
+  centre and half behind.
+- The pointer conversions work in the view's plane through the centre. A
+  point dragged in the front view moves in x and y and keeps its z.
+- ``frame(minimum, maximum, viewport)`` fits a box in the view.
 
-``QuadView`` is the window of four an editor opens on: three orthographic views
--- by default the plan, the front and the view from the left -- around an
-``OrbitView`` in perspective. It builds the
-:class:`~OpenGLContext.multiview.views.ViewLayout`, frames a box in all four views, and
-turns the pointer into camera moves: a right or middle drag pans an
-orthographic view, a right drag orbits the perspective view and a middle drag
-pans it, and the wheel zooms the view under the pointer. The left button is
-left to the application (see :ref:`What the pointer does in a view
-<view-navigation>`).
+``MapView`` is the ``'top'`` view with its centre given as a map's
+``(x, z)``.
+
+The quad
+~~~~~~~~
+
+``OpenGLContext.multiview.quad.QuadView`` builds an editor's four views:
+three orthographic views around an ``OrbitView`` in perspective. By default
+the orthographic views are the top, the front and the left. ``QuadView``:
+
+- builds the :class:`~OpenGLContext.multiview.views.ViewLayout`,
+- frames a box in all four views,
+- and moves the cameras with the pointer. A right or middle drag pans an
+  orthographic view. In the perspective view a right drag orbits and a
+  middle drag pans. The wheel zooms the view under the pointer.
+
+The left button is left for the application; see :ref:`view-navigation`.
 
 .. code-block:: python
 
@@ -293,23 +281,32 @@ left to the application (see :ref:`What the pointer does in a view
                return None
            return super(Editor, self).ProcessEvent(event)
 
-``QuadView(directions=('front', 'right', 'bottom'))`` chooses other
-orthographic views, and ``background`` the flat colour they clear to; the
-perspective view draws the scene's own ``Background``. ``press``, ``drag``,
-``release`` and ``wheel`` are the same gestures for an application that reads
-its pointer another way. ``OrbitView`` takes ``nearest`` and ``furthest`` for
-how close and how far it may be dollied, and ``frame_box`` fits a whole object
-rather than a region of ground; ``QuadView.frame`` sets all three from the box.
-``lowest`` and ``highest`` are the pitches it may be orbited between, in
-degrees above the horizontal; ``QuadView``'s may go below the model as well as
-above it.
+- ``QuadView(directions=('front', 'right', 'bottom'))`` chooses other
+  orthographic views.
+- ``background`` is the flat colour the orthographic views clear to. The
+  perspective view draws the scene's own ``Background``.
+- ``press``, ``drag``, ``release`` and ``wheel`` perform the same gestures,
+  for an application that reads the pointer another way.
+- ``OrbitView`` takes ``nearest`` and ``furthest``, the closest and furthest
+  it can be dollied, and ``frame_box`` fits a whole object rather than an
+  area of ground. ``QuadView.frame`` sets all three from the box.
+- ``lowest`` and ``highest`` are the pitches the orbit is limited to, in
+  degrees above the horizontal. ``QuadView``'s perspective view can go below
+  the model as well as above it.
+
+``python tests/multiview_quad.py model.glb`` shows any glTF model in the four
+views; :doc:`tutorials/multiview_quad` walks through it.
+
+The perspective view's opening camera
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The perspective view opens thirty degrees round from the front
 (``quad.OPENING_HEADING``) and above the model, so it shows a side the three
-elevations do not. A scene that carries cameras opens through the first of
-them instead. ``cameras_found(cameras)`` is how the quad is told them -- from
-:ref:`the scene's cameras <scene-cameras>` -- and the first time there are any
-it points the perspective view through the one ``choose_camera`` picks:
+orthographic views do not. A scene that has cameras opens through one of
+them instead. Pass the scene's cameras (see :ref:`scene-cameras`) to
+``cameras_found(cameras)``. The first time the list is not empty, the quad
+points the perspective view through the camera that ``choose_camera``
+selects:
 
 .. code-block:: python
 
@@ -326,24 +323,26 @@ it points the perspective view through the one ``choose_camera`` picks:
        def OnViewpointsChanged(self, paths):
            self.quad.cameras_found(scene_cameras(self.getSceneGraph()))
 
-``choose_camera`` is given the cameras in the order the scene declares them and
-answers one, or None to keep the thirty-degree view; the default is the first,
-as VRML97 binds its first ``Viewpoint``. Later calls only keep the list, for
-the views' menus, so a view the user has moved stays where it was put.
-``quad.look_through(camera)`` points the perspective view through a camera at
-any time. The view stands where the camera stands with the camera's field of
-view, and orbits the point ahead of it nearest the middle of the framed box.
-An orbit keeps the world's up the screen's, so a camera's roll is not kept.
+``choose_camera`` receives the cameras in the order the scene declares them,
+and returns one, or None to keep the thirty-degree view. The default returns
+the first, as VRML97 binds its first ``Viewpoint``. Later calls to
+``cameras_found`` only store the list, for the views' menus, so a view the
+user has moved stays where it is.
 
-``python tests/multiview_quad.py model.glb`` puts any glTF model in the four
-views; :doc:`tutorials/multiview_quad` walks through it.
+``quad.look_through(camera)`` points the perspective view through a camera at
+any time. The view takes the camera's position and field of view, and orbits
+the point ahead of the camera that is nearest the middle of the framed box.
+The orbit keeps the world's up direction up the screen, so a camera's roll is
+dropped.
+
+.. _view-set:
 
 Arrangements of one set of views
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+--------------------------------
 
-A window that offers more than one way to look at a scene keeps one set of
-cameras and changes which of them are on screen. ``ViewSet`` holds the views,
-a layout per arrangement, the gestures and the framing:
+A window that offers several arrangements keeps one set of cameras and
+changes which of them are on screen. ``ViewSet`` holds the views, a layout
+per arrangement, the gestures and the framing:
 
 .. code-block:: python
 
@@ -357,37 +356,43 @@ a layout per arrangement, the gestures and the framing:
                    driven=('front', 'left', 'angled'))
    context.viewLayout = views.show('quad')
 
-An arrangement names the views it shows, in order, and is placed by how many
-there are: one fills the window, two go side by side, four around a centre.
-With no ``arrangements`` given, each view is offered on its own under its own
-name, the first two as ``'split'`` and the first four as ``'quad'``.
-``show(name)`` changes which is up and answers the layout to draw -- assign it
-to ``viewLayout``, since a layout is what the context draws.
+An arrangement lists the views it shows, in order. The number of views
+decides the placement: one fills the window, two go side by side, and four go
+around a centre. With no ``arrangements`` given, each view is offered alone
+under its own name, the first two as ``'split'``, and the first four as
+``'quad'``.
 
-The cameras are shared between the arrangements, so a switch shows what was
-already being looked at. ``arrange(width, height)`` places the views and tells
-each camera the size of its own rectangle; ``size(view)`` answers that size, or
-the window's for a view this arrangement hides, so a view can be framed before
-it is shown. ``frame(minimum, maximum)`` fits a box in every view, each camera
-as its kind is fitted: an orthographic or perspective camera takes the box and
-a plan camera the ground it stands on. ``maximise(view)`` gives one view the
-whole window and the same call gives it back.
+- ``show(name)`` switches arrangement and returns its layout. Assign that
+  layout to ``viewLayout``, because the context draws the layout it is
+  given.
+- The cameras are shared between arrangements, so after a switch each view
+  still shows what it showed before.
+- ``arrange(width, height)`` places the views and gives each camera the size
+  of its own rectangle.
+- ``size(view)`` returns that size, or the window's size for a view the
+  current arrangement hides, so a view can be framed before it is shown.
+- ``frame(minimum, maximum)`` fits a box in every view. An orthographic or
+  perspective camera fits the box; a plan camera fits the ground under it.
+- ``maximise(view)`` gives one view the whole window, and the same call
+  restores the arrangement.
+- ``driven`` names the views whose cameras the pointer moves. A window that
+  moves a view's camera itself, such as an editor whose drawing tools work in
+  its plan view, leaves that view out, and ``handle(event)`` ignores events
+  in it.
+- ``view_for(event)`` returns the view an event belongs to, for deciding
+  what else should receive it.
 
-``driven`` names the views whose cameras the pointer moves. A window that
-drives one itself -- an editor whose plan view is where its tools draw -- leaves
-that view out, and ``handle(event)`` never takes an event in it.
-``view_for(event)`` answers which view an event belongs to, for deciding what
-else should have it. glisteel-editor's four arrangements are built this way.
+glisteel-editor builds its four arrangements this way.
 
 .. _view-navigation:
 
 What the pointer does in a view
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-------------------------------
 
-Each view carries its own navigation: the gestures its camera can be moved by,
-and the bindings that say which button raises each. ``view.navigation`` is a
-:class:`~OpenGLContext.multiview.navigation.ViewNavigation`, made for the
-camera the first time something asks for it.
+Each view has its own navigation: the gestures that move its camera, and the
+bindings that map buttons to them. ``view.navigation`` is a
+:class:`~OpenGLContext.multiview.navigation.ViewNavigation`, created for the
+camera the first time it is read.
 
 .. list-table::
    :widths: auto
@@ -395,32 +400,30 @@ camera the first time something asks for it.
 
    * - Command
      - Does
-     - Bound to, by default
+     - Bound by default to
    * - ``pan``
-     - carries the world with the pointer; a camera that turns carries what it
+     - moves the world with the pointer. A camera that turns moves the point it
        is looking at
      - the right and middle buttons in a view with a scale; the middle button
-       in one that turns
+       in a view whose camera turns
    * - ``rotate``
-     - swings a camera that turns about what it is looking at
+     - swings a camera that turns around the point it is looking at
      - the right button, where the camera turns
    * - ``zoomin`` / ``zoomout``
-     - one notch towards the scene or away from it, about the pointer in a
-       view with a scale
+     - moves one notch towards the scene or away from it, about the pointer in
+       a view with a scale
      - the wheel
    * - ``zoomdrag``
-     - the same zoom, driven by a drag; dragging up comes closer
-     - nothing, until a view asks for it
+     - the same zoom, driven by a drag; dragging up moves closer
+     - nothing by default
 
-**The primary click is left unbound in every view.** It is what an editor's
-tools and its selection are reached with, and a camera that took it would take
-it from whatever the pointer is being used for; a window with no tools binds it
-in a line.
+**The primary (left) button is unbound in every view.** An editor's tools and
+its selection use it. A window with no tools can bind it with one call.
 
-The bindings are :class:`~OpenGLContext.move.modes.KeyBinding` nodes, the same
-ones the movement modes carry, and a mouse button is named as the event system
-names it. So they are rebound like any other command, saved in the same
-bindings file, and changed in a line:
+The bindings are :class:`~OpenGLContext.move.modes.KeyBinding` nodes, the
+same kind the :doc:`movement modes <navigation>` use, and a mouse button is
+named as the event system names it. They are rebound like any other command
+and saved in the same bindings file:
 
 .. code-block:: python
 
@@ -432,167 +435,26 @@ bindings file, and changed in a line:
    navigation.rebind(ZOOM_DRAG, ['<mouse-1>'])     # middle-drag zooms
    navigation.rebind(PAN, [])                      # this view does not pan
 
-``commands()`` answers what this view's camera can be moved by, so a control
-offering the gestures lists those rather than guessing; ``rebind`` refuses a
-command the camera has not got. ``binding_table()`` is what a settings screen
-reads. Where two bindings claim one button the first declared has it, which is
-the conflict a rebinding screen raises its "steal it?" question about.
+- ``commands()`` returns the commands this view's camera supports, so a
+  control can list those. ``rebind`` returns False for a command the
+  camera does not support.
+- ``binding_table()`` returns the bindings for a settings screen.
+- When two bindings claim one button, the first declared wins. A rebinding
+  screen asks the user whether to take the button from the other command.
 
-A whole set of bindings is a *mode*
-(:class:`~OpenGLContext.multiview.navigation.ViewNavigationMode`):
-``plan_mode()`` for a view with a scale and ``examine_mode()`` for a camera
-that turns are what a view starts with, and ``ViewNavigation(view, mode=...)``
-gives it another.
+A complete set of bindings is a *mode*
+(:class:`~OpenGLContext.multiview.navigation.ViewNavigationMode`). A view
+with a scale starts with ``plan_mode()``, and a view whose camera turns
+starts with ``examine_mode()``. ``ViewNavigation(view, mode=...)`` gives a
+view a different mode.
 
-.. _scene-cameras:
+Gestures without a view set
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The scene's cameras
--------------------
-
-A VRML97 world declares its cameras as ``Viewpoint`` nodes, and the glTF loader
-builds a ``Viewpoint`` for each camera a file defines (``scene.viewpoints``,
-mounted beside ``scene.group``), so a view treats the two alike. The render pass
-keeps a path to every ``Viewpoint`` in the scene as nodes are added and taken
-away, and each frame gives those paths to the scenegraph as
-``SceneGraph.viewpointPaths``. The frame on which the set changes -- a world
-loaded, a camera added -- it calls the context's
-``OnViewpointsChanged(paths)``, which does nothing unless a window overrides
-it.
-
-``OpenGLContext.multiview.viewpoints.scene_cameras(scenegraph)`` reads those
-paths as ``SceneCamera`` records, in the order the pass found them: ``name``
-(the ``description``, else the ``DEF``, else ``Camera 1``, ``Camera 2``...),
-``position``, ``forward`` and ``up`` in world coordinates, ``fov`` in radians
-down the screen, and the ``viewpoint`` node and its ``path``. A ``Viewpoint``
-inside a ``Transform`` is where that transform puts it. The list is empty until
-the first frame has been drawn, since the pass is what finds them.
-
-``look_through(view, camera)`` points a view through one. A view with a camera
-of its own is given a perspective ``OrbitView`` standing where the camera
-stands; a view drawn through the window's camera binds the ``Viewpoint``
-instead, which the render pass moves the window's camera to.
-``first_camera(cameras)`` is the first, which is what a VRML97 browser binds on
-loading a world.
-
-Four views in a window that had one
------------------------------------
-
-A window that shows a scene can have the four views without knowing anything
-about layouts: ``OpenGLContext.multiview.mixin.MultiViewMixin`` brings the
-arrangements, the furniture and a key that switches between one view and four.
-
-.. code-block:: python
-
-   from OpenGLContext.multiview.mixin import MultiViewMixin
-
-   class Viewer(OverlayMixin, MultiViewMixin, BaseContext):
-       multiViewArrangement = 'quad'        # or 'single', and `v` switches
-
-       def OnInit(self):
-           self.startViews(bounds=lambda: (scene.minimum, scene.maximum))
-
-**The window's own camera stays the window's.** The perspective view has no
-camera of its own, so it draws through whatever ``getViewPlatform()`` answers
--- the navigation, a bound ``Viewpoint``, a model's own cameras and a
-turntable all go on driving it exactly as they did with one view. The three
-orthographic views are the mixin's, framed on the bounds it is given, and a
-drag in one moves that view alone.
-
-Each view's menu offers the scene's cameras (``window.sceneCameras()``).
-Choosing one in the window's own view binds its ``Viewpoint``, and in an
-elevation gives that view a perspective camera standing there.
-
-It goes *after* ``OverlayMixin`` in the bases, so each event reaches the
-furniture first and the views get what the furniture leaves. ``startViews``
-takes ``elevations`` to choose which three ways the orthographic views look,
-and ``chrome=False`` for a window that draws its own.
-
-``oglc-view --views quad`` opens the scene viewer this way, and ``v`` switches
-either way from there; the Tk and wx embedding demos open in the quad, since a
-window with the scene's tree beside it is closer to an editor than to a
-viewer.
-
-The furniture of a window of views
-----------------------------------
-
-A window showing four views needs to say which view is which, which way each
-is looking, and how to work it. ``OpenGLContext.ui.viewchrome.ViewChrome`` is
-that, drawn inside each view and taking the clicks:
-
-.. code-block:: python
-
-   from OpenGLContext.ui.viewchrome import ViewChrome
-
-   self.chrome = ViewChrome(layout=views.layout, stack=self.overlays,
-                            on_arrange=self.placeViews)
-   self.overlays.push(self.chrome)
-
-It puts in each view its **name** on a button with a caret after it, an
-**axis triad** that turns with the camera, and one **button** that shows the
-view on its own and gives the other views back -- an outline where it would
-take the window, the four tiles where it would give them back. An arrangement
-of one view has no such button. Between the views it puts a **splitter** on each line
-the arrangement divides the window along, and, in a quad, a handle where the
-two cross that moves both. The glyphs are drawn rather than loaded, so an
-application that ships no artwork still gets buttons that say what they do.
-``on_arrange`` is called when a control changed what is on screen, for the
-window to place its views again and draw.
-
-**The view's name opens its menu**, which is everything that view can be told:
-
-- **View**, which way it looks -- front, back, right, left, top, bottom -- and
-  ``perspective`` or ``ortho``, a camera that turns drawn with and without
-  perspective, so two things of a size measure the same wherever they stand.
-  Absent for a view drawn through the window's own camera;
-- **Cameras**, the scene's own, where ``cameras`` gives any -- a list of
-  ``SceneCamera``, or a callable answering one, asked each time the menu opens
-  -- each pointing the view through that camera;
-- **Rendering**, how what it holds is drawn: shaded or wireframe;
-- **Zoom to fit**, where the window said what there is to see (``bounds``);
-- **Single tile**, or **Four tiles** where the view already has the window;
-  neither in an arrangement of one view.
-
-The first three are lists of their own, opening beside their row.
-
-The menu hangs from the name, or sits on top of it in a view with no room
-below, and each row has a letter that runs it (see :ref:`Menus <menus>`).
-
-Pointing a view somewhere else replaces its camera where it has to
-(``multiview.cameras.point_view``), so a window holding a particular camera --
-an editor whose tools read its plan view -- leaves that view out of the menu
-with ``only``.
-
-It is a panel at the bottom of the overlay stack, like the tool palette, and
-it is not modal: a press that lands on none of its controls reaches the scene.
-It draws nothing of its own behind the furniture, so nothing is washed over.
-
-Every part is optional. ``labels``, ``axes``, ``expand`` and ``splitters``
-switch a kind off for the window, and ``only`` gives one view a set of its own
--- an editor whose plan view belongs to its drawing tools gives that view the
-button and nothing else:
-
-.. code-block:: python
-
-   ViewChrome(layout=layout, axes=False,
-              only={'map': ('expand',)},
-              bounds=lambda: (scene.minimum, scene.maximum))
-
-``reserved`` is room something else has taken at each edge of the window --
-top, right, bottom, left, in reference pixels, as a
-:class:`~OpenGLContext.ui.hudwidgets.HUDLayer` is told it -- so a name drawn
-under a menu bar or behind a tool palette is not what a window with either
-gets.
-
-``axis_directions(view)`` is the arithmetic on its own: which way each world
-axis runs on screen in that view, as unit vectors in the view's own pixels.
-
-Gestures on their own
-~~~~~~~~~~~~~~~~~~~~~
-
-An application with a layout of its own, and no use for the rest of a view
-set, takes the gestures alone. ``ViewGestures`` moves the camera of whichever
-view an event lands in, and ``views`` names the ones it drives, so a view the
-application moves itself is left alone:
+An application with its own layout can use the gestures alone.
+``ViewGestures`` moves the camera of the view an event lands in, and
+``views`` lists the views it drives. Views the application moves itself are
+left out:
 
 .. code-block:: python
 
@@ -606,41 +468,277 @@ application moves itself is left alone:
            return None
        return super(Editor, self).ProcessEvent(event)
 
-Every event goes to the navigation of the view it lands in, so what a button
-does is that view's own. ``layout`` and ``views`` can both be assigned, so a
-window that rearranges its views hands over the new layout.
+Each event goes to the navigation of the view it lands in, so each view's
+own bindings apply. ``layout`` and ``views`` can both be reassigned, so a
+window that rearranges its views passes the new layout in.
+
+View controls
+-------------
+
+A window of several views needs to show which view is which, which way each
+one looks, and how to operate it.
+``OpenGLContext.ui.viewchrome.ViewChrome`` draws these controls inside each
+view and handles clicks on them:
+
+.. code-block:: python
+
+   from OpenGLContext.ui.viewchrome import ViewChrome
+
+   self.chrome = ViewChrome(layout=views.layout, stack=self.overlays,
+                            on_arrange=self.placeViews)
+   self.overlays.push(self.chrome)
+
+In each view it draws:
+
+- the view's name on a button with a caret, which opens the view's menu;
+- an axis triad that turns with the camera;
+- a button that shows the view on its own or restores the arrangement. It
+  shows an outline when it will show the view alone and four tiles when it
+  will restore. An arrangement of one view has no such button.
+
+Between the views it draws a splitter on each dividing line, and in a quad a
+handle where the two lines cross, which moves both. The icons are drawn in
+code, so an application needs no artwork for them. ``on_arrange`` is called
+when a control changes what is on screen, so the window can place its views
+again and redraw.
+
+The view's menu has these entries:
+
+- View - the direction the view looks (front, back, right, left, top,
+  bottom), and ``perspective`` or ``ortho``. ``ortho`` draws a camera that
+  turns without perspective, so two objects of one size measure the same
+  wherever they stand. Absent for a view drawn through the window's own
+  camera.
+- Cameras - the scene's own cameras, where ``cameras`` supplies them:
+  a list of ``SceneCamera``, or a callable that returns one and is called
+  each time the menu opens. Choosing one points the view through it.
+- Rendering - shaded or wireframe.
+- Zoom to fit - present when the window passed ``bounds``.
+- Single tile, or Four tiles when the view already fills the window.
+  Neither appears in an arrangement of one view.
+
+The first three open submenus beside their rows. The menu hangs below the
+name, or sits over it in a view with no room below. Each row has a letter
+that runs it (see :ref:`Menus <menus>`).
+
+Pointing a view in a new direction may replace its camera
+(``multiview.cameras.point_view``). A window that relies on a particular
+camera object, such as an editor whose tools read its plan view, should keep
+that view out of the menu with ``only``.
+
+``ViewChrome`` is a non-modal panel at the bottom of the overlay stack, like
+the tool palette. A press that misses its controls reaches the scene. It
+draws no background of its own, so nothing is washed over.
+
+Every part is optional. ``labels``, ``axes``, ``expand`` and ``splitters``
+turn one kind of control off for the whole window. ``only`` gives one view
+its own set. Here the ``map`` view gets the maximise button and nothing
+else:
+
+.. code-block:: python
+
+   ViewChrome(layout=layout, axes=False,
+              only={'map': ('expand',)},
+              bounds=lambda: (scene.minimum, scene.maximum))
+
+``reserved`` is the room other furniture takes at each edge of the window:
+top, right, bottom and left, in reference pixels, as for a
+:class:`~OpenGLContext.ui.hudwidgets.HUDLayer`. The controls are placed
+inside it, so a view's name is not drawn under a menu bar or behind a tool
+palette.
+
+``axis_directions(view)`` returns the screen direction of each world axis in
+a view, as unit vectors in the view's own pixels. The axis triad is drawn
+from it.
+
+.. _scene-cameras:
+
+The scene's cameras
+-------------------
+
+A VRML97 world declares its cameras as ``Viewpoint`` nodes. The glTF loader
+builds a ``Viewpoint`` for each camera a file defines (``scene.viewpoints``,
+mounted beside ``scene.group``), so views treat both formats the same way.
+
+The render pass keeps a path to every ``Viewpoint`` in the scene as nodes are
+added and removed. Each frame it stores those paths on the scenegraph as
+``SceneGraph.viewpointPaths``. On the frame the set changes, such as when a
+world loads or a camera is added, it calls the context's
+``OnViewpointsChanged(paths)``. The default implementation does nothing.
+
+``OpenGLContext.multiview.viewpoints.scene_cameras(scenegraph)`` returns
+those paths as ``SceneCamera`` records, in the order the pass found them.
+Each record has:
+
+- ``name`` - the ``description``, else the ``DEF`` name, else ``Camera 1``,
+  ``Camera 2`` and so on;
+- ``position``, ``forward`` and ``up``, in world coordinates;
+- ``fov``, the vertical field of view in radians;
+- ``viewpoint``, the node, and ``path``, its path.
+
+A ``Viewpoint`` inside a ``Transform`` is reported where that transform puts
+it. The list is empty until the first frame has been drawn, because the
+render pass finds the cameras.
+
+``look_through(view, camera)`` points a view through a camera. A view with a
+camera of its own is given a perspective ``OrbitView`` at the camera's
+position. A view drawn through the window's camera binds the ``Viewpoint``
+instead, and the render pass moves the window's camera to it.
+``first_camera(cameras)`` returns the first camera, which a VRML97 browser
+binds when it loads a world.
+
+Sharing between views
+---------------------
+
+The scene is walked once per frame. Each view then culls the walk's results
+against its own frustum, sorts what is left, and draws it through its own
+camera. Work that depends only on the scene is done once for all views:
+
+- Level of detail - one level is chosen per frame, because choosing a level
+  replaces part of the scene. Each LOD node draws the finest level any view
+  needs. An orthographic view measures coverage by the height of the world
+  it shows rather than by distance. Zooming a map out coarsens its detail;
+  moving its camera does not.
+- Shadow maps - rendered once and read by every view. Spot and point light
+  maps depend only on their light. A directional light's cascades are fitted
+  to the active view. Other views read the same cascades, using the finest
+  cascade that contains each fragment. Ground that a non-active view shows
+  outside every cascade is drawn unshadowed.
+- Shadowed lights - a spot or point light keeps its shadow while any view
+  can see its range.
+- Bloom - blurs and composites each view inside its own rectangle, so a
+  bright object at the edge of one view does not glow into the next.
+- Transparency - transparent shapes are sorted back to front for each view's
+  own camera.
+
+Content kept loaded around the viewer, such as streamed 3D Tiles or a
+vegetation field, has to cover every view.
+``layout.cameras(default=context.getViewPlatform())`` lists each camera
+once, for the application to pass to that content.
+
+Drawing strategies
+------------------
+
+There are three ways to draw several views. The one a context uses depends on
+its driver. ``OpenGLContext.multiview.strategy.MultiviewCapabilities`` reads
+the GL version, the extension list and ``GL_MAX_VIEWPORTS`` once per GL
+context and chooses:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Strategy
+     - Needs
+     - How a draw reaches its views
+   * - ``vertex``
+     - GL 4.1, and ``GL_ARB_shader_viewport_layer_array`` or
+       ``GL_AMD_vertex_shader_viewport_index``
+     - one instanced draw, the vertex shader writing ``gl_ViewportIndex``
+   * - ``geometry``
+     - viewport arrays (GL 4.1, or ``GL_ARB_viewport_array``) and
+       instanced geometry shaders (GL 4.0, or ``GL_ARB_gpu_shader5``)
+     - one draw, a geometry shader emitting each primitive to its views
+   * - ``sequential``
+     - GL 3.3
+     - the scene drawn once per view, with the viewport and scissor set between
+
+``sequential`` runs on every driver the engine supports, in both profiles,
+and submits the scene once per view. The other two submit the opaque scene
+once, whatever the number of views. A GL 4.1 driver without the vertex-shader
+extension, such as Apple silicon's, uses ``geometry``. The strategy chosen is
+logged at start-up.
+
+``ContextDefinition.multiview`` (env: ``OPENGLCONTEXT_MULTIVIEW``) selects a
+strategy by name: ``auto``, ``vertex``, ``geometry`` or ``sequential``. This
+lets each be run and compared on one machine. ``auto`` uses the fastest that
+can run. If the requested strategy cannot run, a warning is logged and the
+best strategy that can run is used.
+
+A driver can offer a strategy and then fail to compile its programs. The
+failure is logged, and the frame in which it happens draws each view in turn.
+From the next frame the context uses the next strategy in the table, and it
+does not try the failed one again. ``sequential`` compiles no programs of its
+own, so it is always available as the last fallback. A layout with more
+views than the driver's ``GL_MAX_VIEWPORTS`` is drawn with ``sequential``
+while it has that many views. GL 4.1 and ``GL_ARB_viewport_array`` both
+guarantee at least 16.
+
+Measuring the cost
+~~~~~~~~~~~~~~~~~~
+
+``scripts/multiview_bench.py`` draws a scene through one view and through
+the four-view quad, under each strategy the driver supports. It reports the
+median frame time and the draw calls for each:
+
+.. code-block:: console
+
+   $ scripts/multiview_bench.py --model lantern.glb
+   $ scripts/multiview_bench.py --boxes 400 --frames 60
+
+At 1280x960 on a Radeon 8060S (Mesa radeonsi), relative to a single view:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Four views of
+     - ``vertex``
+     - ``geometry``
+     - ``sequential``
+   * - one glTF model
+     - 1.40x
+     - 1.43x
+     - 1.58x
+   * - 400 separately drawn shapes (400 draws per view)
+     - 1.21x
+     - 1.24x
+     - 2.41x
+   * - the same 400 shapes as one instanced draw
+     - 1.34x
+     - 1.40x
+     - 2.08x
+
+A shared strategy issues one draw for four views where ``sequential`` issues
+four. The extra cost over a single view is rasterising three more views, not
+submitting the scene three more times.
 
 One submission for every view
 -----------------------------
 
-The shared submission is made as the active view would make it alone: the same
-modelviews, lights and shadow matrices, in that camera's eye space. What sends
-each triangle on to the other views is a table of views, one record each, that
-the programs read -- the matrix from the active camera's eye space to the
-view's clip space, where the view's camera is, and how it reads the shadow
-cascades. With ``geometry`` a geometry stage, generated from the lit vertex
-shader, emits each triangle once per view in the draw's mask; with ``vertex``
-the draw is instanced once per view and the vertex stage routes each copy. The
-lit programs are compiled a second time for this the first time a layout of
-several views is drawn, and the single-view programs are unchanged.
+The shared submission is made as the active view would make it alone: the
+same modelview matrices, lights and shadow matrices, in the active camera's
+eye space. A table of views, one record per view, carries each triangle on to
+the other views. Each record holds the matrix from the active camera's eye
+space to the view's clip space, the position of the view's camera, and how
+the view reads the shadow cascades. With ``geometry``, a geometry stage
+generated from the lit vertex shader emits each triangle once per view in the
+draw's mask. With ``vertex``, the draw is instanced once per view and the
+vertex stage routes each copy. The lit programs are compiled a second time
+for this, the first time a layout of several views is drawn; the single-view
+programs are unchanged.
 
-A shape takes part when its geometry says it draws with the pass's lit programs
-alone. ``Box``, ``Sphere``, ``Cone``, ``Cylinder``, ``IndexedFaceSet`` and a glTF
-mesh of triangles do. Everything else is drawn once per view, as ``sequential``
-draws it: transparent and glass shapes, which are sorted and refracted per
-view; everything in a wireframe view, since polygon mode holds for every
-viewport at once; an appearance with a GLSL program of its own; an octahedral
-impostor;
-point and line sets; instanced sets that cull their own placements; and nodes
-that draw with programs of their own, such as vegetation, terrain, particles
-and text.
+A shape takes part when its geometry draws with the pass's lit programs
+alone. ``Box``, ``Sphere``, ``Cone``, ``Cylinder``, ``IndexedFaceSet`` and a
+glTF mesh of triangles do. Everything else is drawn once per view, as
+``sequential`` draws it:
+
+- transparent and glass shapes, which are sorted and refracted per view;
+- everything in a wireframe view, because polygon mode applies to every
+  viewport at once;
+- an appearance with its own GLSL program;
+- an octahedral impostor;
+- point and line sets;
+- instanced sets that cull their own placements;
+- nodes that draw with their own programs, such as vegetation, terrain,
+  particles and text.
 
 A geometry node joins the shared submission by declaring
 ``multiviewShared = True`` and issuing its draw through
-``OpenGLContext.multiview.strategy.draw_arrays`` or ``draw_elements``, which
-instance it once per view while a ``vertex`` submission is being made.
-``OpenGLContext.scenegraph.geometryarrays.render_geometry`` does both for a node
-drawn from ``GeometryArrays``. A node that measures its detail by distance from
-the camera reads ``mode.viewerEyes`` during a shared draw: the cameras the draw
-serves, in the eye space it is drawn in; see
+``OpenGLContext.multiview.strategy.draw_arrays`` or ``draw_elements``. These
+instance the draw once per view while a ``vertex`` submission is being made.
+``OpenGLContext.scenegraph.geometryarrays.render_geometry`` does both for a
+node drawn from ``GeometryArrays``. A node that sets its detail by distance
+from the camera reads ``mode.viewerEyes`` during a shared draw: the positions
+of the cameras the draw serves, in the eye space it is drawn in. See
 ``OpenGLContext.scenegraph.tessellationlod.lod_level``.

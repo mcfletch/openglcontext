@@ -3,26 +3,33 @@ Water
 
 .. rst-class:: introduction
 
-Water is two things that meet at its surface. From outside it is a **surface**
-— a sheet on a lake, a ribbon running down a river, a wave field you can ask
-the height of. From inside it is a **medium** — what being in it does to the
-view, to the mix and to the body. ``OpenGLContext.scenegraph.water`` holds
-both, and they are independent: a game can have lakes and never put anybody in
-one, or flood a level whose water is never drawn.
+``OpenGLContext.scenegraph.water`` models water in two independent parts. The
+**surface** is what you see from outside: a sheet on a lake, a ribbon down a
+river, and a wave field you can query for its height. The **medium** is what
+being inside the water does to the view, to the sound mix and to the body. A
+game can use either part alone: it can have lakes that nobody enters, or flood
+a level whose water is never drawn.
+
+.. figure:: images/demos/water_demo.jpg
+   :alt: Three rectangular pools cut in sand, each carrying a grid of orange floats: the left grid flat, the middle gently uneven, the right thrown about by large waves, with a river running across behind them
+
+   ``python tests/water_demo.py``: three of the named styles side by side, with a
+   river behind them. See :ref:`water-demo`.
 
 .. code-block:: python
 
    from OpenGLContext.scenegraph.water import (
-       STILL, BREEZE, FLOWING, CHOPPY, LAKE,  # how a body of water moves
-       water_surface, water_ribbon, water_glints,   # what it looks like
-       wave_height, wave_normal,        # where the surface is, right now
+       STILL, BREEZE, FLOWING, CHOPPY, LAKE,   # how a body of water moves
+       water_surface, water_ribbon, water_glints,   # meshes to draw it
+       wave_height, wave_normal,        # the surface at a point and time
        Volume, Volumes, submerge,       # where the water is, and being in it
    )
 
 How water moves: ``WaterStyle``
 -------------------------------
 
-One node covers the range, and five of them are named:
+A ``WaterStyle`` node describes how a body of water moves. Five styles are
+predefined:
 
 .. list-table::
    :widths: auto
@@ -50,7 +57,7 @@ One node covers the range, and five of them are named:
      - 7.0
      - 9.0
    * - ``speed``
-     - metres a second the crests travel
+     - metres per second the crests travel
      - 0.0
      - 1.2
      - 1.6
@@ -71,28 +78,30 @@ One node covers the range, and five of them are named:
      - 11.0
      - 11.0
    * - ``flow``
-     - metres a second the surface drifts, ``(x, z)``
+     - metres per second the surface drifts, ``(x, z)``
      - (0, 0)
      - (0, 0)
      - (1, 0)
      - (0, 0)
      - (0, 0)
 
-``STILL`` is a pond: nothing moves, and the ripple is in the light on it.
-``BREEZE`` is a pond or a small lake seen from its bank, ruffled by wind:
-waves a metre apart and about a centimetre high, and a ripple a hand's breadth
-across. ``FLOWING`` is a river, with small crests travelling downstream
-and the surface drifting with them. ``CHOPPY`` is weather, with enough height
-in it that a shoreline moves. ``LAKE`` is open water seen from a distance: a
-long, low swell, sized for a sheet hundreds of metres across. A caller who
-wants another writes one — water is a continuum, and the five names are
-settings rather than an enumeration.
+- ``STILL`` is a pond. The surface does not move; the ripple is only in the
+  normals, so it shows in the reflected light.
+- ``BREEZE`` is a pond or small lake seen from its bank, ruffled by wind:
+  waves about a metre apart and a centimetre high, and a ripple a hand's
+  breadth across.
+- ``FLOWING`` is a river. Small crests travel downstream and the surface drifts
+  with them.
+- ``CHOPPY`` is water in wind, with waves high enough to move the shoreline.
+- ``LAKE`` is open water seen from a distance: a long, low swell, sized for a
+  sheet hundreds of metres across.
 
-A style is a scenegraph node, held in the mesh's ``waveStyle`` field. The five
-named ones are shared, as a VRML97 ``USE`` shares a node: every sheet built
-with ``LAKE`` moves by that one node, so setting ``LAKE.amplitude`` changes
-all of them. For a style of one's own, build a ``WaterStyle`` or start from a
-named one with ``varied``, which answers a copy and leaves the original alone:
+A style is held in a mesh's ``waveStyle`` field. The five predefined styles
+are shared nodes, as a VRML97 ``USE`` shares a node: every sheet built with
+``LAKE`` moves by that one node, so setting ``LAKE.amplitude`` changes all of
+them. For a style of your own, create a ``WaterStyle``, or start from a
+predefined one with ``varied``, which returns a copy and leaves the original
+unchanged:
 
 .. code-block:: python
 
@@ -101,30 +110,30 @@ named one with ``varied``, which answers a copy and leaves the original alone:
    storm = CHOPPY.varied(name='storm', amplitude=1.2)
    millpond = WaterStyle(name='millpond', steepness=0.02, ripple=0.2)
 
-``ripple`` sets the scale the water reads at, and the swell's ``wavelength``
-should agree with it. A 20 m pond drawn with ``LAKE`` shows two or three long
-rollers and glitter in bands metres wide, which reads as nothing at all; the
-same pond with ``BREEZE`` reads as water.
+``ripple`` sets the scale the water is seen at, and the swell's
+``wavelength`` should match it. A 20 m pond drawn with ``LAKE`` shows two or
+three long rollers and glitter in bands metres wide, which does not look like
+water; the same pond with ``BREEZE`` does.
 
-Where ``flow`` is not zero it is also the direction the crests travel.
-``style.moving()`` answers whether anything about it changes with time, which
-is what a caller advancing the clock only for water that needs it asks.
+Where ``flow`` is not zero, it also sets the direction the crests travel.
+``style.moving()`` returns whether the style changes with time. Use it to skip
+updating the clock for water that does not move.
 
-The field
-~~~~~~~~~
+The wave field
+~~~~~~~~~~~~~~
 
-The surface is the sum of **three crossing sine trains**, evaluated from
-*world* position and time rather than from a mesh's own coordinates. Two
-consequences follow, and they are the reason it is built this way:
+The surface is the sum of **three crossing sine waves**, computed from
+*world* position and time rather than from a mesh's own coordinates. This has
+two results:
 
-- **Sheets that meet agree.** A river running into a lake is at the same height
-  as the lake along the join, because both asked the same function about the
+- Sheets that meet stay joined. A river flowing into a lake has the same height
+  as the lake along the join, because both compute the same function at the
   same place.
 
-- **A height can be asked for.** ``wave_height(style, x, z, when)`` and
-  ``wave_normal(style, x, z, when)`` take scalars or numpy arrays and answer
-  what the surface is doing there — which is what buoyancy, a boat's waterline
-  or a splash reads.
+- You can query the surface. ``wave_height(style, x, z, when)`` and
+  ``wave_normal(style, x, z, when)`` take scalars or NumPy arrays and return the
+  surface's height and normal there. Use them for buoyancy, a boat's waterline
+  or a splash.
 
 .. code-block:: python
 
@@ -134,8 +143,8 @@ consequences follow, and they are the reason it is built this way:
 
 .. _surfaces:
 
-Drawing it
-----------
+Drawing water
+-------------
 
 A lake: ``water_surface``
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -145,11 +154,13 @@ A lake: ``water_surface``
    mesh = water_surface(x0, x1, z0, z1, level=12.0,
                         resolution=33, style=CHOPPY, on_gpu=True)
 
-A sheet over a footprint at ``level``. ``resolution`` is how many vertices
-across it is meshed at: for still water that carries the ripple in the
-normals, and for choppy water it is also how much of the wave the surface can
-hold — a sheet meshed coarsely against its own wavelength is a flat sheet with
-a strange normal, so keep at least a few vertices per ``wavelength``.
+``water_surface`` builds a flat sheet over a rectangle, at height ``level``.
+``resolution`` is the number of vertices along each side. For still water the
+ripple is in the normals, so resolution matters little. For choppy water it
+limits how much of the wave the mesh can show: a mesh that is coarse compared
+with the wavelength shows a flat sheet with odd normals. Use at least a few
+vertices per ``wavelength``, or let :ref:`mesh_across <water-mesh-density>`
+choose.
 
 A river: ``water_ribbon``
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -158,46 +169,45 @@ A river: ``water_ribbon``
 
    mesh = water_ribbon(course, width=8.0, style=FLOWING, lift=0.15)
 
-``course`` is ``(N,3)`` world points — where the water runs and how high it is
-there — and ``width`` is metres across, either one number or one per point so
-a river carrying more is wider further down. A lake is one flat plane and a
-river is not, which is why this exists: a sheet at a level cannot follow a
-course downhill. The surface lies *across the flow* at every point, so a bend
-is a bend in plan. ``lift`` raises it above the course, for a caller whose
-course is the bed rather than the surface.
+A sheet has one level, so it cannot follow a river downhill.
+``water_ribbon`` builds a strip along a course instead. ``course`` is an
+``(N, 3)`` array of world points giving where the water runs and how high it
+is there. ``width`` is the width in metres: one number, or one per point for a
+river that widens downstream. The surface lies *across the flow* at every
+point, so a bend in the course is a bend in the ribbon. ``lift`` raises the
+surface above the course, for a course that traces the river bed rather than
+the water surface.
 
 .. _glints:
 
-A river seen from far off: ``water_glints``
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+A distant river: ``water_glints``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
    mesh = water_glints(course, width=8.0, spacing=60.0, style=FLOWING)
 
-A river a kilometre away is two pixels wide and mostly hidden by whatever
-stands over it; what the eye gets is the surface flashing between the trees.
-``water_glints`` spends a handful of quads on that instead of a tile's whole
-budget on a line nobody can resolve — **this is what a river's level of detail
-is**.
+A river a kilometre away is two pixels wide and mostly hidden by trees. What
+the eye sees is flashes of light from the surface between them.
+``water_glints`` draws those flashes as a few small quads, in place of a full
+ribbon. It is the river's far level of detail.
 
-``spacing`` is how far apart the glints are, in metres, and it is the LOD
-dial: wider with distance. Because a coarser tile is also a bigger tile, a
-spacing that grows with the tile's geometric error keeps the number of glints
-in a tile roughly constant, which makes it a budget rather than a fade.
-``size`` is how much of the river's width each one covers. Where they fall is
-a function of position along the course rather than a random draw, so a world
-baked twice glints in the same places.
+``spacing`` is the distance between glints, in metres. Increase it with
+distance. A coarser tile also covers more ground, so a spacing that grows
+with the tile's geometric error keeps the number of glints per tile roughly
+constant. ``size`` is the fraction of the river's width each glint covers. The
+glint positions depend on distance along the course, not on random numbers,
+so a world baked twice has its glints in the same places.
 
 .. _on_gpu:
 
-Moving it: ``on_gpu``
-~~~~~~~~~~~~~~~~~~~~~
+Animating on the GPU: ``on_gpu``
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Every one of the three takes ``on_gpu``. Left out, the wave is built into the
-vertices at time ``when`` — right for a still sheet, or for a caller who wants
-the mesh to *be* the surface. Set, the mesh is built **flat** and the style is
-handed to the card:
+All three builders take ``on_gpu``. Without it, the wave is built into the
+vertices at time ``when``. Use that for still water, or when you need the
+mesh vertices to match the surface. With ``on_gpu=True``, the mesh is built
+**flat** and the style is passed to the vertex shader, which displaces it:
 
 .. code-block:: python
 
@@ -205,14 +215,58 @@ handed to the card:
    ...
    mesh.wave_time = context.time      # once a frame; nothing is re-uploaded
 
-The vertex shader displaces it, so the mesh is uploaded once and a frame costs
-a handful of uniforms. This is the same arrangement skinning uses for a pose,
-and the wave is applied in the shadow depth program too, so moving water casts
-the shadow of the shape it is in.
+The mesh is uploaded once, and each frame sets only a few uniforms. Skinning
+uses the same approach for a pose.
 
-Build the wave into the vertices *or* hand it to the card — not both, or the
-wave is applied twice. ``Shape`` answers the wave uniforms for every shape it
-draws, so the hillside beside a lake does not ripple.
+Do not use both methods on one mesh, or the wave is applied twice. ``Shape``
+sets the wave uniforms for every shape it draws, turning the wave off for
+shapes that are not water, so the ground beside a lake does not ripple.
+
+The shadow depth program applies the wave too, so moving water casts the
+shadow of its displaced shape.
+
+.. _water-mesh-density:
+
+How finely to mesh a sheet
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A sheet is meshed once across its whole area, so no single vertex count suits
+both a pond and a lake. ``mesh_across(side, style)`` returns a vertex count
+for a sheet ``side`` metres across, based on the style's *wavelength*:
+
+- ``MESH_PER_WAVE`` (4) samples per wavelength;
+- at most ``MESH_LIMIT`` (33) vertices across, because a sheet is one draw and
+  its size counts in the frame and in the file of a baked world;
+- at least ``MESH_FLOOR`` (9) vertices across for any style with a non-zero
+  amplitude.
+
+With too few vertices per wave, the wave aliases: it flattens, or shows up as
+a longer wave that is not in the field. Two samples per wave is the Nyquist
+limit. In practice, whether two samples land on the crests or on the zero
+crossings depends on where the sheet starts. Measured over a 12 m sheet, two
+samples per wave keep 73% of the wave's height and four keep 89%. Over 40 m,
+the figures are 84% and 96%. For large sheets both settings reach
+``MESH_LIMIT``, so the choice makes no difference there.
+
+The fine ripple is not in the mesh. The fragment shader's ``waveRipple`` tilts
+the surface normal, so the glitter looks the same at any mesh density and the
+mesh only needs to carry the swell. The ripple is six trains of waves, with
+lengths from 0.41 to 1.83 times the style's ``ripple`` and headings spread
+around the compass, so no two repeat together and the surface does not tile.
+On moving water each train travels at the speed a real water wave of its
+length does, √(g/k), so long trains outrun short ones and the glitter changes
+as it travels; still water's ripple does not move.
+
+The ripple's strength varies across the surface in gusts. Two long, slow
+trains, 23 and 37 times the ``ripple`` length, vary it from a tenth of
+``steepness`` in the calmest patch to 1.6 times it in the gustiest, and drift
+at 0.6 of the style's ``speed``. A ripple of one strength everywhere looks
+like a texture laid over the water.
+
+Each train also fades with the size of the pixel it lands in: it fades out as
+its wavelength falls from four pixels to two, measured per fragment from the
+derivative of the surface position. Far water is therefore a smooth mirror,
+not a grid. ``wave_normal`` returns the unfiltered field.
 
 .. _water-reflection:
 
@@ -246,12 +300,11 @@ Its limits:
 
 .. _media:
 
-Being in it: media and volumes
-------------------------------
+Being in the water: media and volumes
+-------------------------------------
 
-A ``Medium`` is one substance described from the inside. Three are in the
-table, and the numbers are the games' own — nothing in any specification says
-how far you can see through slime:
+A ``Medium`` describes one substance from the inside. Three are predefined.
+The values are chosen for games; no standard specifies them:
 
 .. list-table::
    :widths: auto
@@ -268,27 +321,29 @@ how far you can see through slime:
    * - ``slime``
      - 4.5 m
      - 0.85
-     - 12 health a second
+     - 12 health per second
    * - ``lava``
      - 2 m
      - 0.90
-     - 32 health a second
+     - 32 health per second
 
-``visibility`` is how many metres it takes the view to close to the medium's
-``color``, and both are **linear**: the fog blends in linear HDR before tone
-mapping, so the colours in the table are much darker than water looks from
-above. Water *absorbs* — it takes the light out of what you are looking at —
-where a pale, long-range fog would read as air with something in it.
-``muffle`` is how much of the mix's high end goes, and is never 1: total
-silence reads as the sound having broken. A name the table has never heard of
-is treated as water rather than as dry air, because whatever it is, the body is
-inside something.
+- ``visibility`` is the distance, in metres, over which the view fades to the
+  medium's ``color``.
+- ``color`` is in **linear** RGB. The fog blends in linear HDR before tone
+  mapping, so the colours are much darker than water looks from above. Water
+  *absorbs* light from what is behind it. A pale, long-range fog would look
+  like haze in air.
+- ``muffle`` is how much of the sound mix's high frequencies is removed, from
+  0 to 1. The predefined values stay below 1, because complete silence sounds
+  like a fault.
+- ``harm`` is damage per second, for a game to apply.
 
-A ``Medium`` is a scenegraph node, with ``name``, ``color``, ``visibility``,
-``muffle`` and ``harm`` as its fields, and ``MEDIA`` holds the three above by
-name. A volume names its substance, and every volume naming ``'lava'`` is
-inside the one ``MEDIA['lava']``, so tuning that node's fields tunes lava
-everywhere. A game adds a substance by putting a node of its own in the table:
+A ``Medium`` is a scenegraph node with ``name``, ``color``, ``visibility``,
+``muffle`` and ``harm`` fields. The substances are in the ``MEDIA`` dictionary
+in ``OpenGLContext.scenegraph.water.medium``, keyed by name. A volume names
+its substance, and every volume naming ``'lava'`` is inside the one
+``MEDIA['lava']`` node, so changing that node's fields changes lava
+everywhere. To add a substance, add a ``Medium`` to the dictionary:
 
 .. code-block:: python
 
@@ -296,6 +351,9 @@ everywhere. A game adds a substance by putting a node of its own in the table:
 
    MEDIA['acid'] = Medium(name='acid', color=(0.02, 0.05, 0.0),
                           visibility=3.0, muffle=0.8, harm=20.0)
+
+A name that is not in ``MEDIA`` is treated as water (``UNKNOWN``), not as dry
+air.
 
 Where the water is
 ~~~~~~~~~~~~~~~~~~
@@ -310,17 +368,21 @@ Where the water is
    ])
    volumes.medium_at(point)               # 'water', 'lava' or '' for dry air
 
-Boxes in world metres, with the boundary counted as inside so a body exactly
-at the waterline is in the water. A ``Volume`` is a node whose ``minimum``,
-``maximum`` and ``medium`` fields are the box and what fills it; its corners
-are world coordinates wherever the node is held. Where boxes overlap, ``rule`` picks the
-answer: ``'worst'`` (the default) gives the one that will hurt most, for a
-body half in a pool and half in the lava under it; ``'smallest'`` gives the
-most specific, which is what a world whose boxes are some partition's own
-bounds — a BSP leaf, a tile — wants.
+A ``Volume`` is an axis-aligned box in world metres. ``Volume.below`` makes the
+box under a water level. The boundary counts as inside, so a body exactly at
+the waterline is in the water. A ``Volume`` is a node whose ``minimum``,
+``maximum`` and ``medium`` fields are the box and what fills it; the corners
+are world coordinates wherever the node is held.
 
-Putting a context under
-~~~~~~~~~~~~~~~~~~~~~~~
+Where boxes overlap, ``medium_at(point, rule=...)`` chooses the result:
+
+- ``'worst'`` (the default) returns the most harmful medium, for a body half in
+  a pool and half in the lava beneath it;
+- ``'smallest'`` returns the medium of the smallest box. Use it when the boxes
+  are the bounds of a spatial partition, such as BSP leaves or tiles.
+
+Putting the camera under water
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
@@ -330,102 +392,73 @@ Putting a context under
    ...
    name = submerge(self, volumes, self.platform.position)   # once a frame
 
-``submerge`` sets the context's fog to what the medium looks like from inside
-and the audio engine's whole-mix low-pass to its muffle, then answers the
-substance it found so a caller can report it or charge ``harm`` for it. Being
-under water is not a coloured pane over the screen: it is a medium with depth
-in it, so what is in your hands stays clear while the far wall does not.
+``medium_fog()`` returns a :ref:`Fog <fog>` node that starts switched off.
+Call ``submerge`` once a frame with the viewer's position. It sets the
+context's ``fog`` to the medium's colour and visibility, and sets the audio
+engine's whole-mix :ref:`muffle <mixer>` to the medium's ``muffle``. It
+returns the name of the medium, or ``''`` for dry air, so the caller can report
+it or apply ``harm``. Because the effect is fog with depth, not a coloured
+overlay, nearby objects stay clear while distant ones fade.
 
-Every part is optional. ``volumes`` may be ``None`` for a world with no water;
-a context with no ``fog`` is left alone; and a machine with no sound is never
-opened just to muffle a silence. ``volumes`` is anything answering
-``medium_at(point)``, so a game whose water comes out of a BSP's contents
-flags passes its own object rather than converting.
+Every part is optional:
+
+- ``volumes`` may be ``None``, for a world with no water.
+- A context with no ``fog`` attribute gets no fog change.
+- On a machine with no sound, the audio device is not opened just to muffle
+  silence.
+
+``volumes`` can be any object with a ``medium_at(point)`` method. A game whose
+water comes from a BSP's content flags can pass its own object, with no
+conversion.
 
 .. _water-demo:
 
-Seeing it work
---------------
+Demo
+----
 
-.. figure:: images/demos/water_demo.jpg
-   :alt: Three rectangular pools cut in sand, each carrying a grid of orange floats: the left grid flat, the middle gently uneven, the right thrown about by large waves, with a river running across behind them
+``python tests/water_demo.py`` shows three of the named styles side by side over
+one bed, with a ``water_ribbon`` running behind them along a course that drops
+from one end to the other. Each pool holds a grid of floats placed on the
+surface with ``wave_height`` once a frame, so you can see the scale of the
+waves. Over one pool, ``STILL`` (left) is flat to the millimetre, ``FLOWING``
+(middle) spans 0.34 m from trough to crest, and ``CHOPPY`` (right) spans
+1.58 m. Every sheet is built with ``on_gpu=True``, so a frame costs four
+``wave_time`` writes and no uploads. Behind the river is a 180 m ``LAKE``,
+meshed by ``mesh_across``. The demo runs with ``OPENGLCONTEXT_SHADOWS=0``.
 
-   ``python tests/water_demo.py`` — the three named styles side by side over one
-   bed, with a ``water_ribbon`` running across behind them along a course that
-   loses height from end to end. Each pool carries a grid of floats put on the
-   surface by ``wave_height`` once a frame, which gives the wave field a scale
-   the eye can measure: over one pool’s footprint ``STILL`` on the left is flat
-   to the millimetre, ``FLOWING`` in the middle spans 0.34 m trough to crest, and
-   ``CHOPPY`` on the right spans 1.58 m. Every sheet is built with
-   ``on_gpu=True``, so a frame costs four ``wave_time`` writes and nothing is
-   re-uploaded. Press ``v`` to put the camera under the middle pool and ``h`` to
-   print what the surface is doing. Behind the river is a ``LAKE``: 180 m of open
-   water, meshed by ``mesh_across`` from its own wavelength.
+Keys:
 
-How finely a sheet is meshed
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+- :kbd:`v` moves the camera under the middle pool, and prints the medium
+  ``submerge`` found as the camera crosses the surface:
 
-A sheet is meshed once across its whole footprint, so a fixed vertex count
-cannot be right for both a pond and a lake: the lake samples its own ripple
-every few tens of metres, the wave aliases away, and what is left is a flat
-plate with a strange normal on it. ``mesh_across(side, style)`` takes the
-density from the *wavelength* instead, capped at ``MESH_LIMIT`` because a
-sheet is one draw and that is what it costs — in the file of a baked world as
-much as in the frame.
+  .. code-block:: text
 
-Press ``d`` in the demo to mesh its lake the way a sheet used to be and watch
-the swell go out of it. Both are measured against the wave field itself, not
-asserted:
+     medium under the camera: water
+     medium under the camera: air
 
-.. code-block:: python
+- :kbd:`h` prints the ``wave_height`` at each pool's centre:
 
-   lake 180 m across, meshed from its wavelength: 33 vertices, 1.6 samples per wave, keeps 98% of its swell
-   lake 180 m across, meshed the old way:          9 vertices, 0.4 samples per wave, keeps 47% of its swell
+  .. code-block:: text
 
-Nine vertices across 180 m is a vertex every 22 m against a 9 m wave — under
-one sample per wave, and so under the Nyquist limit: the wave flattens, and
-returns as a longer one that was never in the water.
+     STILL    surface at +0.000 m (t=0.05s)
+     FLOWING  surface at -0.020 m (t=0.05s)
+     CHOPPY   surface at -0.283 m (t=0.05s)
 
-``MESH_PER_WAVE`` is four. Two is the Nyquist limit itself: enough to
-represent a sine in principle, and in practice whether the vertices land on
-the crests or on the zero crossings is down to where the sheet happens to
-start. Measured over a 12 m sheet, two samples per wave keep 73% of the wave
-and four keep 89%; over 40 m, 84% against 96%. On the sheets where it matters
-most the two agree, because both are already held at ``MESH_LIMIT``.
-``MESH_FLOOR`` is the other end of it: a sheet carrying any swell is never
-meshed coarser than the fixed count this rule replaced, which was wrong on a
-lake and right on a pond.
+- :kbd:`d` switches the lake between ``mesh_across`` and a fixed nine vertices
+  across, and prints how much of the swell each keeps, measured against the
+  wave field:
 
-The fine ripple does not live in the mesh at all. It is ``waveRipple`` in the
-fragment shader, composed as a tilt of whatever normal the surface already
-has, so the glitter costs the same at any density and the mesh only has to
-carry the swell. It is six trains of lengths between 0.41 and 1.83 times the
-style's ``ripple``, at headings spread round the compass, so no two repeat
-together and the surface does not tile. On water that moves, each train
-travels at the speed water's own waves of its length do, √(g/k), so the long
-ones outrun the short and the glitter changes as it goes rather than sliding
-as one sheet; still water's ripple holds still.
+  .. code-block:: text
 
-Its strength varies across the surface in gusts: two long, slow trains, 23 and
-37 times the ``ripple`` length, take it from a tenth of ``steepness`` in the
-calmest patch to 1.6 times it in the gustiest, and drift at 0.6 of the style's
-``speed``. Wind comes over water that way, and a ripple of one strength
-everywhere reads as a texture laid over the surface.
+     lake 180 m across, meshed from its wavelength: 33 vertices, 1.6 samples per wave, keeps 98% of its swell
+     lake 180 m across, meshed the old way:          9 vertices, 0.4 samples per wave, keeps 47% of its swell
 
-Each train is also filtered by the pixel it lands in: it fades out as its
-wavelength falls from four pixels across to two, measured per fragment from
-the derivative of the surface position. Far water is a smooth mirror because
-its ripple is too fine to see, and drawing that ripple anyway draws a grid.
-``wave_normal`` is the unfiltered field.
+  Nine vertices across 180 m is one every 22 m against a 9 m wave. That is
+  less than one sample per wave, below the Nyquist limit, so the wave flattens
+  and reappears as a longer wave.
 
-.. rst-class:: technical
-
-The demo runs with ``OPENGLCONTEXT_SHADOWS=0``: a GPU-displaced sheet casts
-its shadow map from the flat mesh the CPU still holds, so a moved surface
-shadows itself in bands.
-
-What an application writes to get a body of water, and to know when something
-is inside it:
+A minimal application with a body of water, and a check for whether the
+camera is in it:
 
 .. code-block:: python
 
@@ -453,44 +486,27 @@ is inside it:
        sheet.wave_time = time.monotonic() - start
        return submerge(context, volumes, context.getViewPlatform().position)
 
-The demo’s ``h`` key answers the same ``wave_height`` call the floats ride on,
-at each pool’s centre:
-
-.. code-block:: python
-
-   STILL    surface at +0.000 m (t=0.05s)
-   FLOWING  surface at -0.020 m (t=0.05s)
-   CHOPPY   surface at -0.283 m (t=0.05s)
-
-and ``v`` reports what ``submerge`` found as the camera crosses the surface:
-
-.. code-block:: python
-
-   medium under the camera: water
-   medium under the camera: air
-
 .. _authoring:
 
 Authoring water in a model
 --------------------------
 
-Everything above builds water in Python. An artist can also mark it in the
-model: give the lake's material a custom property called ``OGLC_hook``, export,
-and the surface loads moving. Nothing registers anything — the ``water`` kind
-ships bound — so a tagged file opens in ``oglc-view`` as water.
+An artist can also mark water in the model. Give the lake's material a custom
+property called ``OGLC_hook`` and export it, and the surface loads moving. The
+``water`` kind is built in, so a tagged file opens in ``oglc-view`` as water
+with nothing registered.
 
 .. code-block:: javascript
 
    OGLC_hook = {"kind": "water", "style": "choppy", "depth": 6.0}
 
-In Blender that is a custom property on the material datablock, exported with
-**Include ‣ Custom Properties** ticked; no add-on, and Blender 4.x is enough.
+In Blender this is a custom property on the material, exported with
+**Include ‣ Custom Properties** ticked; Blender 4.x needs no add-on for it.
 The add-on in ``tools/blender/oglc_hook`` is the other way to author it: an
-**Engine Hook** panel with a field per parameter below, writing the extension
-spelling on export. The shorthand is the kind on its own, ``OGLC_hook =
-"water"``, which is a pond. :ref:`Engine hooks <hooks>` is the mechanism
-underneath, including how to tag a node rather than a material and how to
-register a kind of your own.
+**Engine Hook** panel with a field for each parameter below, which writes the
+extension form on export. ``OGLC_hook = "water"``, the kind on its own, is a
+pond. :ref:`Engine hooks <hooks>` describes the mechanism, including how to
+tag a node rather than a material and how to register a kind of your own.
 
 .. list-table::
    :widths: auto
@@ -498,80 +514,79 @@ register a kind of your own.
 
    * - Parameter
      - Default
-     - What it says
+     - Meaning
    * - ``style``
      - ``still``
-     - ``still``, ``breeze``, ``flowing``, ``choppy`` or ``lake`` — or an
+     - ``still``, ``breeze``, ``flowing``, ``choppy`` or ``lake``, or an
        object naming one as its ``style`` and overriding any ``WaterStyle``
        field (``amplitude``, ``wavelength``, ``speed``, ``steepness``,
        ``ripple``, ``flow``): ``{"style": "breeze", "ripple": 0.3}`` is a finer
-       ruffle. A name nothing answers to draws a pond and says so in the log.
+       ruffle. An unknown name draws a pond and logs a warning.
    * - ``material``
      - ``keep``
-     - ``keep`` shades the surface with the material the file carries, so what
-       the artist authored is what is drawn. ``engine`` takes
-       ``water_material()`` instead.
+     - ``keep`` shades the surface with the material in the file. ``engine``
+       uses ``water_material()`` instead.
    * - ``medium``
      - ``water``
      - ``water``, ``slime`` or ``lava``: what being inside it is like. Lava is
-       this kind with another medium and another material, which is why there
-       is no second one.
+       this kind with another medium and another material.
    * - ``depth``
      - ``0.0``
      - How far below the surface the body reaches, in metres. A surface has no
-       thickness, so a sheet with no ``depth`` bounds a box nothing is inside of
-       except exactly at the waterline.
+       thickness, so a sheet with no ``depth`` bounds a box that nothing is
+       inside except exactly at the waterline.
 
-Each tagged primitive arrives as one ``WaterBody`` in ``scene.hook_data[
-'water' ]`` — the mesh whose wave a frame advances, the style it moves with, and
-the ``Volume`` saying where it is, in world metres and round *this* copy of the
-surface. Two nodes sharing one tagged mesh are two bodies of water, with a box
-each.
+Each tagged primitive becomes one ``WaterBody`` in
+``scene.hook_data['water']``: the mesh whose wave a frame advances, the style
+it moves with, and the ``Volume`` it fills, in world metres around that copy
+of the surface. Two nodes sharing one tagged mesh are two bodies of water,
+each with its own box.
 
 .. code-block:: python
 
-   scene = gltf.load_gltf( "valley.glb" )
-   volumes = Volumes([ body.volume for body in scene.hook_data.get( 'water', () ) ])
+   scene = gltf.load_gltf("valley.glb")
+   volumes = Volumes([body.volume for body in scene.hook_data.get('water', ())])
    ...
-   submerge( self, volumes, self.platform.position )   # once a frame
+   submerge(self, volumes, self.platform.position)   # once a frame
 
-A wave costs nothing per frame because the card holds the field, but something
-has to say what time it is. ``scene.advance( seconds )`` moves every body's
-surface and answers whether anything changed; the viewer calls it from its idle,
-and a game driving its own loop calls it itself. A scene of ponds answers
-``False`` — still water carries its ripple in the normals, and there is nothing
-to redraw for. ``oglc-view --anim-time SECONDS`` holds the water at that time as
-it holds the animation, so a capture of a tagged lake is the same frame on every
-run.
+The card holds the wave field, but something has to set the time.
+``scene.advance(seconds)`` moves every body's surface and returns whether
+anything changed. The viewer calls it from its idle; a game driving its own
+loop calls it itself. A scene of still ponds returns ``False``, since their
+ripple is in the normals and nothing needs redrawing.
+``oglc-view --anim-time SECONDS`` holds the water at that time, as it holds the
+animation, so a capture of a tagged lake is the same frame on every run.
 
-The wave moves the sheet's vertices, so model the surface as a grid rather than
-a single quad: a grid add-mesh with a vertex every 30–50 cm moves as water, and
-a four-cornered plane only tilts at its corners. Give the shore a bank steeper
-than the swell is high, or the troughs uncover it and the crests flood it.
+The wave moves the sheet's vertices, so model the surface as a grid rather
+than a single quad: a grid with a vertex every 30 to 50 cm moves as water,
+while a four-cornered plane only tilts at its corners. Give the shore a bank
+steeper than the swell is high, or the troughs uncover it and the crests
+flood it.
 
 ``tools/blender/demos/lakeside.glb`` is a world authored this way, built by
 ``tools/blender/demos/lakeside.py`` with the add-on's panel: a lake whose
 material is tagged ``{"kind": "water", "style": "breeze", "depth": 2.0}`` in a
 grass basin, with a jetty, a brazier and a campfire tagged as
-:ref:`particle effects <authored-particles>`. ``oglc-view
-tools/blender/demos/lakeside.glb`` opens it through its own camera, moving.
+:ref:`particle effects <authored-particles>`.
+``oglc-view tools/blender/demos/lakeside.glb`` opens it through its own camera.
 
 Limits
 ------
 
-- **Not a simulation.** The wave field is analytic — three sine trains — which
-  is what makes it cheap, seamless and reproducible. There is no fluid solver,
-  and water does not find its own level or pour.
+- No fluid simulation. The wave field is analytic (three sine waves), so it is
+  cheap to evaluate and gives the same surface on every run. Water does not
+  find its own level or pour.
 
-- **Not a physics body.** Buoyancy and drag read ``wave_height``; what a body
-  does with that belongs to whatever moves it.
+- No physics body. Buoyancy and drag code can read ``wave_height``; the object
+  being moved decides what to do with it.
 
-- **Reflection and refraction are the material's.** Water is a PBR material with
-  transmission and an index of refraction of 1.33; there is no planar reflection
-  pass and no screen-space refraction.
+- Reflection and refraction come from the material. Water is a :doc:`PBR
+  <pbr>` material with transmission and an index of refraction of 1.33. Its
+  reflections come from the :ref:`environment lighting <environment-lighting>`.
+  There is no planar reflection pass and no screen-space refraction.
 
-- **A volume is a box.** A sloping river's medium is the boxes a caller cuts it
-  into.
+- A volume is a box. To give a sloping river a medium, cut it into several
+  boxes.
 
-- **Shoreline is the mesh's.** Nothing feathers the edge where water meets
-  ground, and a sheet that ends inside a hill ends visibly.
+- The shoreline is where the mesh meets the ground. Nothing blends the edge,
+  and a sheet that ends inside a hill shows its edge.

@@ -3,109 +3,116 @@ OpenGLContext Event Model
 
 .. rst-class:: introduction
 
-This document describes the mechanisms within OpenGLContext which allow for
-providing interactivity, both at the context and the scenegraph levels.  This
-includes keyboard and mouse events, as well as timers and routes.
+The event model is how OpenGLContext makes a scene interactive. It covers
+keyboard and mouse input, timers, the watching of node fields, cache
+invalidation and VRML97 routes.
 
-Features of the Event Model
----------------------------
+Parts of the event model
+------------------------
 
-There are a number of user-level features which are implemented by the "event
-model" within OpenGLContext:
+- Field watching - code registers a callback for changes to a given field of
+  a given node.
+- Cache invalidation - built on field watching. A cached value is discarded
+  when a field it was computed from changes.
+- Routing - VRML97 ``ROUTE`` statements and ``PROTO`` ``IS`` mappings link
+  fields, so that setting one field updates the fields linked to it.
+- Event handlers - code registers callbacks for keyboard, mouse and timer
+  events. Mouse handlers can also be registered on individual nodes, so an
+  interactive object carries its own handlers.
 
-- field "watching" -- allows code to register callbacks for changes to given
-  fields of given nodes
+Each of these is described below.
 
-- cache updates/invalidation -- uses field watching (with some other techniques)
-  to automatically update scenegraph caches to reflect updated content
-
-- VRML 97-style routing tables -- allows construction of linked node structures
-  so that updating fields of a particular node automatically update the linked
-  fields
-
-- mouse/keyboard/timer event-handler registration -- allows code to respond to
-  user interaction, mouse events also allow for per-node registration, allowing
-  composable interactive objects to be created
-
-each of these features will be discussed below.
-
-Dispatcher
-----------
-
-The PyDispatcher package is the primary mechanism used for event propagation
-within OpenGLContext 2.0.  This module allows you to register functions to be
-notified when "senders" send particular signals.  Each field of each node can
-generate signals when setting and/or deleting field values for the node. 
-Similarly, each event manager registers functions with the dispatcher which
-are to be called when a particular event is received, then sends those events
-when the event is actually received.
-
-Field Watching
+The dispatcher
 --------------
 
-Fields generate signals by default on set or delete. Nothing generated during
-parser-mediated instantiation save for prototyped nodes Normally not something
-you want to use directly, but it is what much of the rest of the interaction
-is built upon.
+All of these are built on the PyDispatcher package. A callback is registered
+for a signal from a sender, and is called whenever that sender sends that
+signal. Each field of each node sends a signal when its value is set or
+deleted. Each event manager registers the callbacks for its event type with
+the dispatcher, and sends each event through the dispatcher when it arrives.
 
-Cache Invalidation
+Field watching
+--------------
+
+A field sends a signal when its value is set or deleted. Fields set while the
+VRML97 parser builds a scene send no signal, except on prototyped nodes.
+Application code rarely watches fields directly; cache invalidation and
+routing are built on it.
+
+Cache invalidation
 ------------------
 
-Built upon field watching, nodes register dependencies on node, field pairs. 
-If the node sends an update signal for that field, then the cache object is
-invalidated, and the node regenerates its cache data during the next rendering
-pass.
+A node that caches derived data registers a dependency on each
+``(node, field)`` pair the data was computed from. When that field sends its
+change signal, the cache entry is discarded, and the node computes its data
+again on the next rendering pass.
 
-Routing Tables
+Routing
+-------
+
+There are two kinds of routing:
+
+- A ``ROUTE`` is a one-way channel from a field of one node to a field of
+  another. Setting the source field sets the destination field. A scene can
+  link its nodes this way, and code that changes one field does not have to
+  find and update the fields that depend on it.
+- A ``PROTO``'s ``IS`` mapping links a prototype node's fields to fields of
+  nodes inside the prototype's own scenegraph. The link works in both
+  directions: setting the prototype's field updates the internal node, and
+  setting the internal node's field updates the prototype's field.
+
+.. _event-handlers:
+
+Event handlers
 --------------
 
-Two major variants:
-
-The ROUTE is a simple unidirectional channel through which updates to a
-particular field of a particular node are propagated along the arc of the
-route to the destination node, field pair.  This allows you to create routing
-tables which tie together elements within a scenegraph so that code does not
-need to explicitly chase down dependent fields, it can simply allow route
-propagation to update the dependent fields.
-
-The PROTO's IS mapping, which maps from a prototype node's fields to fields on
-nodes within the prototype's internal scenegraph.  This is a bidirectional
-linkage, where changing the prototype's fields updates the internal nodes, and
-updating the internal node updates the prototype's corresponding field.
-
-Event Handlers
---------------
-
-Most contexts derive from the EventHandlerMixIn class, which provides a method
-addEventHandler, which allows for registering event handlers for given event
-types (specified as strings).  Individual EventHandler objects are responsible
-for each event type, and are responsible for processing events of their own
-type.  Most (currently all) EventHandler objects use the PyDispatcher module
-to maintain the internal structures required to provide the registration
-tables for the handler callbacks.
+Most contexts derive from ``EventHandlerMixin``, which provides
+``addEventHandler``. It registers a callback for one event type, named by a
+string, and the keyword arguments say which events of that type the callback
+receives. Each event type has its own event manager, which uses PyDispatcher
+to keep its table of callbacks.
 
 .. code-block:: python
 
-   self.addEventHandler( "mousein", function = self.OnMouseIn )self.addEventHandler( "mouseout", function = self.OnMouseOut )self.addEventHandler( 'keyboard', name='<up>', state=1, modifiers=(0,0,0), function=self.forward )self.addEventHandler( 'keypress', name='-', modifiers=(0,0,0), function=self.straighten)self.addEventHandler( 'mousebutton', button=1, state = 1, modifiers=(0,0,0), function=self.startExamineMode)self.addEventHandler( 'mousemove', buttons=(), modifiers=(0,0,0), function=self.RefreshTooltip)
+   self.addEventHandler("mousein", function=self.OnMouseIn)
+   self.addEventHandler("mouseout", function=self.OnMouseOut)
+   self.addEventHandler('keyboard', name='<up>', state=1,
+                        modifiers=(0, 0, 0), function=self.forward)
+   self.addEventHandler('keypress', name='-', modifiers=(0, 0, 0),
+                        function=self.straighten)
+   self.addEventHandler('mousebutton', button=1, state=1,
+                        modifiers=(0, 0, 0), function=self.startExamineMode)
+   self.addEventHandler('mousemove', buttons=(), modifiers=(0, 0, 0),
+                        function=self.RefreshTooltip)
 
-Callbacks are held weakly — you must keep them alive
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+``keyboard`` events are key transitions: ``state=1`` is a press and
+``state=0`` a release. ``keypress`` events are character input. A function
+key produces no character, so bind it on ``keyboard`` (see
+:ref:`overlayui-quickstart`). Passing ``function=None`` removes a handler and
+returns the one it replaces.
 
-PyDispatcher holds each registered callback by **weak** reference, and
-OpenGLContext relies on that: it is what lets a node or a context be garbage
-collected without first unbinding every handler it registered.
+Mouse events reach handlers after the selection pass has resolved what is
+under the pointer; :ref:`events-and-selection` describes that path, and
+:doc:`multiview` describes how an event is routed to one of several views.
+For held-key movement, the movement modes read an input sampler rather than
+single events; see :ref:`navigation-input`.
 
-The consequence is that **the caller owns the callback**. A function with no
-other reference to it is collected as soon as ``addEventHandler`` returns, and
-the binding then does nothing at all — the key or button is silently dead,
-with no error raised at registration or at dispatch. This is the usual
-explanation for “my handler never fires and nothing is logged”.
+Keep each callback alive
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-Pass something that outlives the binding. A bound method of a live object is
-the normal choice, and is what every example above uses. A bare closure, a
-``lambda``, a ``functools.partial`` or any other object created purely for the
-call will *not* survive it; if you need one, store it on something that lives
-as long as the binding should:
+PyDispatcher holds each registered callback by **weak** reference. This lets
+a node or a context be garbage collected without first unbinding every
+handler it registered.
+
+The caller must keep the callback alive. A function with no other reference
+to it is collected as soon as ``addEventHandler`` returns. The binding then
+does nothing, and no error is raised at registration or at dispatch. A handler
+that never runs and logs nothing usually has this cause.
+
+A bound method of a live object is the usual choice, and the examples above
+all use one. A closure, a ``lambda`` or a ``functools.partial`` created for
+the call is collected when the call returns. To use one, store it on an
+object that lives as long as the binding should:
 
 .. code-block:: python
 
@@ -114,21 +121,39 @@ as long as the binding should:
    self.handlers.append( handler )
    self.addEventHandler( 'keyboard', name='w', state=1, function=handler )
 
-A held key always comes back up
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Held keys and focus loss
+~~~~~~~~~~~~~~~~~~~~~~~~
 
-A control that acts for as long as a key is down — a throttle, a steering
-input, a movement mode — is written as a pair of ``keyboard`` handlers,
-``state=1`` to take the key and ``state=0`` to let go of it, with the
-application keeping the set of keys currently held.
+A control that acts while a key is down, such as a throttle, steering or a
+movement mode, is a pair of ``keyboard`` handlers: ``state=1`` records the
+key as held and ``state=0`` removes it. The application keeps the set of held
+keys.
 
-The window losing focus is the case that pair has to survive: the platform
-stops delivering key transitions to an unfocused window, so the release for a
-key that was down when focus went away never arrives from it. OpenGLContext
-sends that release itself as focus is lost, one ``state=0`` event per key it
-was holding, so the set an application keeps is emptied the same way an
-ordinary release empties it. Nothing special has to be written for the case:
-what reaches the handler is a release like any other.
+A window that loses focus receives no key releases from the platform. When
+focus is lost, OpenGLContext sends a ``state=0`` event for each key that was
+down (``clearHeldKeys()``). The handler receives an ordinary release, and the
+application's set of held keys empties as it does for any other release.
 
-Timer objects are also based on the same mechanism (with some significant
-extra machinery).
+Timers
+------
+
+A ``Timer`` (``OpenGLContext.events.timer``) is an event manager for time.
+It runs over an internal clock that can be started, stopped, paused, resumed
+and run faster or slower. Its event types are ``start``, ``stop``, ``pause``,
+``resume``, ``cycle`` and ``fraction``:
+
+.. code-block:: python
+
+   from OpenGLContext.events.timer import Timer
+
+   self.time = Timer(duration=8.0, repeating=1)
+   self.time.addEventHandler("fraction", self.OnTimerFraction)
+   self.time.register(self)      # attach it to this context's time manager
+   self.time.start()
+
+   def OnTimerFraction(self, event):
+       self.rotation = event.fraction() * -360
+
+``duration`` is the length of one cycle in seconds, and a ``fraction`` event
+carries how far through the cycle the timer is, from 0 to 1.
+:doc:`tutorials/nehe6_timer` walks through a complete example.

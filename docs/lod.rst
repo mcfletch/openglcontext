@@ -3,12 +3,13 @@ Levels of detail
 
 .. rst-class:: introduction
 
-LODs reduce the detail of a particular model based on distance or screen area,
-swapping a lower-detail mesh into the scene below a given threshold. Often an
-*impostor* mesh, such as a billboard or an octahedron, will be the
-lowest-detail level of the LOD. OpenGLContext supports both distance-based
-LODs (used in VRML97) and screen-coverage LODs (used in glTF's ``MSFT_lod``
-extension).
+A level-of-detail (LOD) node holds several versions of one model, from fine to
+coarse, and draws the version that suits how large the model appears. A model
+far from the camera then costs fewer triangles. The coarsest level can be an
+*impostor*: a flat card that shows a picture of the model. OpenGLContext has
+two LOD nodes. ``LOD`` chooses by distance, as VRML97 specifies.
+``ScreenCoverageLOD`` chooses by the share of the window the model covers, as
+glTF's ``MSFT_lod`` extension specifies.
 
 .. _lod-demo:
 
@@ -22,38 +23,38 @@ Walk through it
 .. figure:: images/demos/gallery.jpg
    :alt: A long hall of marble busts on plinths, two rows receding to a far wall under dark ceiling beams, on a parquet floor
 
-   The gallery from the near end of the hall. The busts by the camera are
-   drawn at 17,456 triangles each and the ones at the far end at 544, and the
-   switch between the six levels of the chain is what this page is about.
+   The gallery from the near end of the hall. The busts near the camera are
+   drawn at 17,456 triangles each, and the busts at the far end at 544. The
+   rest of this page describes how the six levels between those switch.
 
-A hall of a hundred and twenty marble busts on plinths. Each bust is a
-six-level chain — 17,456 triangles down to 544 — declared with ``MSFT_lod``,
-in a room with a polished parquet floor, white plaster walls and dark beams
-overhead. The world is CC0 art published as a :doc:`content pack
-<contentpacks>`; the viewer unpacks the archive once into a per-user directory
-and opens the world inside it, so the second run downloads nothing. The
-archive holds one scene, so nothing has to say which —
-``...tar.gz#gallery.glb`` names it where an archive holds several.
+The gallery is a hall of 120 marble busts on plinths. Each bust is a
+six-level chain, from 17,456 triangles down to 544, declared with
+``MSFT_lod``. The hall has a polished parquet floor, white plaster walls and
+dark beams overhead. The world is CC0 art published as a :doc:`content pack
+<contentpacks>`. The viewer unpacks the archive once into a per-user directory
+and opens the world inside it, so a second run downloads nothing. This archive
+holds one scene. For an archive with several, name the scene after ``#``, as
+in ``...tar.gz#gallery.glb``.
 
-The hall is lit by a pair of suns leaning in across it from above the roof,
-with a weak upward light standing in for what the floor throws back. The shell
-— floor, walls, ceiling — is marked as :ref:`no shadow caster <castsshadow>`,
-so the light reaches the room while the plinths and the busts still throw the
-shadows that give the hall its depth. Its lights are stated at the illuminance
-the engine reads as neutral, so it needs no exposure flag and looks the same
-with or without a sky behind its walls.
+Two suns shine into the hall at an angle from above the roof, and a weak
+upward light stands in for light reflected from the floor. The shell of the
+room (floor, walls, ceiling) is marked as :ref:`casting no shadow
+<castsshadow>`, so the light reaches the room while the plinths and busts
+still cast shadows. The lights are set at the illuminance the engine treats as
+neutral exposure, so the world needs no exposure flag and looks the same with
+or without a sky outside its walls.
 
 Walk down the hall with the arrow keys. The busts near you are at their finest
-level and the ones at the far end at their coarsest, and because the level is
-settled from how much of the window each one covers, the switch happens in the
-middle distance — where you can walk back and forth over it and watch it
-happen. ``PageUp``/``PageDown`` jumps between the two cameras the world
-carries: down the hall, and up against one bust.
+level and the busts at the far end at their coarsest. The level depends on how
+much of the window each bust covers, so the switches happen in the middle
+distance, where you can walk back and forth and watch them.
+``PageUp``/``PageDown`` switch between the world's two cameras: one looking
+down the hall and one close to a single bust.
 
-What it costs is the point. From the far end, with a hundred and eight busts
-on screen across four levels, the frame is **eleven draw calls**: one per
-level in use, one for the plinths, one for the beams, and the handful of room
-surfaces. Not one per bust.
+From the far end, with 108 busts on screen at four levels, the frame takes
+**eleven draw calls**: one for each level in use, one for the plinths, one for
+the beams, and a few for the room surfaces. The busts do not take a draw call
+each.
 
 .. list-table::
    :widths: auto
@@ -68,13 +69,13 @@ surfaces. Not one per bust.
      - 4
      - 11
 
-It is an ordinary glTF file — the chains as ``MSFT_lod``, the polished floor
-as ``KHR_materials_clearcoat``, the lamps as ``KHR_lights_punctual`` — so any
-glTF viewer opens it, and one that has never heard of ``MSFT_lod`` draws every
-bust at its finest level, which is the correct thing for it to do.
+The world is an ordinary glTF file. The chains use ``MSFT_lod``, the polished
+floor uses ``KHR_materials_clearcoat`` and the lamps use
+``KHR_lights_punctual``. Any glTF viewer opens it. A viewer that does not
+support ``MSFT_lod`` draws every bust at its finest level.
 
-**Record the walk.** The world carries the two cameras the walk is between, so
-a recording of it is one command:
+To record the walk, use the world's two cameras as the start and end of a
+fly-through:
 
 .. code-block:: bash
 
@@ -88,47 +89,46 @@ See :ref:`Recording a video <video>`.
 How a level is chosen
 ---------------------
 
-By **screen coverage**: the share of the window's *height* the object's
-bounding sphere spans, which is ``radius / (distance × tan(fov/2))``, clamped
-to one. A model twice the size holds its detail twice as far out, and so does
-the same model seen through a narrower field of view — because both are the
-same question about how many pixels the viewer is actually looking at.
+``ScreenCoverageLOD`` chooses by **screen coverage**: the share of the
+window's *height* that the object's bounding sphere spans. Coverage is
+``radius / (distance × tan(fov/2))``, clamped to one. A model twice the size
+keeps its detail twice as far away. A narrower field of view has the same
+effect, because both make the model cover more pixels.
 
-Each level names the coverage at which it takes over, decreasing. Level *i* is
-drawn from its own threshold up to the one before it, and below the last value
-nothing is drawn at all — so a chain that should stay on screen however small
-it gets ends its list with ``0``.
+Each level has the coverage at which it takes over, and the values decrease
+from level to level. Level *i* is drawn from its own threshold up to the
+threshold of the level before it. Below the last value, nothing is drawn. To
+keep a model on screen however small it gets, end its list with ``0``.
 
-The decision is made once a frame, before the scene is walked, by
-``FlatPass.selectLevels``: a level change replaces a subtree, and the
-flattened scenegraph the pass draws from has to be told about the new one
-before it walks it. Only the camera decides — a shadow pass draws the same
-scene from a lamp, and choosing detail by how far a *light* is from a figure
-would swap levels as the sun moved.
+``FlatPass.selectLevels`` chooses the levels once a frame, before the pass
+walks the scene. A level change replaces a subtree, and the pass has to update
+its flattened copy of the scenegraph before it walks it. Only the camera is
+used. The shadow pass draws the same levels from a light's point of view; if
+it chose levels by distance from the light, levels would change as the sun
+moved.
 
 .. _choosing-cost:
 
 What choosing costs
 ~~~~~~~~~~~~~~~~~~~
 
-A frame decides this for every level-of-detail node in the scene, so the
-decision is made for the whole set at once. The nodes' world matrices are
-stacked and put through the camera in one product, and the distances and the
-scales come out of two array expressions — because each decision on its own is
-a handful of four-by-four operations, and at that size a numpy call costs more
-than the arithmetic in it. What is left per node is the part that is that
-node's own: ``selectAt(distance, scale, tangent)`` asks which of its
-thresholds the coverage falls in, and announces a change only where there is
-one. ``selectFor(modelview, tangent)`` is the same decision for a single node,
-for a caller that has one to place.
+The pass chooses levels for all LOD nodes in the scene at once. It stacks the
+nodes' world matrices and multiplies them by the camera matrix in one
+operation, then computes all distances and scales with two array expressions.
+Each node's own calculation is a few 4×4 operations, and at that size one
+numpy call per node costs more than the arithmetic. After that, each node
+does only its own part: ``selectAt(distance, scale, tangent)`` finds which of
+its thresholds the coverage falls in and signals a change only when the level
+changes. ``selectFor(modelview, tangent)`` makes the same decision for a
+single node.
 
-A frame in which neither the camera nor any of those nodes has moved chooses
-what it chose last frame, so it does not choose again. The scenegraph's
-transform cache is what makes that cheap to establish: it hands back the same
-matrix object while a node is unmoved, so the question is one identity
-comparison per node. On the gallery above, a still camera leaves 120 nodes
-costing 0.40 ms a frame instead of 1.20; with the camera moving every frame,
-where the shortcut never applies, it is 0.93.
+If neither the camera nor any LOD node has moved since the last frame, the
+pass keeps last frame's choice and skips the calculation. The scenegraph's
+transform cache returns the same matrix object while a node does not move, so
+the check is one identity comparison per node. In the gallery above, with 120
+LOD nodes, choosing costs 0.40 ms a frame with a still camera and 1.20 ms
+without the shortcut. With the camera moving every frame, so the shortcut
+never applies, it costs 0.93 ms.
 
 .. _nodes:
 
@@ -143,19 +143,19 @@ The nodes
      - Chooses by
      - Fields
    * - ``LOD``
-     - Distance — VRML97's own
+     - Distance, as VRML97 specifies
      - ``level``, ``range``, ``center``
    * - ``ScreenCoverageLOD``
-     - Screen coverage — what ``MSFT_lod`` asks for
+     - Screen coverage, as ``MSFT_lod`` specifies
      - ``level``, ``screenCoverage``, ``center``, ``radius``
 
-Both live in ``OpenGLContext.scenegraph.lod`` and announce a change on the
-same signal a ``Switch`` uses. ``center`` is the point in the node's own
-coordinates that distance is measured to, so a figure's distance is measured
-to the figure and not to the world origin; ``radius`` is what its coverage is
-judged by, and the glTF loader takes it from the finest level's ``POSITION``
-accessor bounds — which the format requires a file to declare, so a level can
-be sized and placed without its geometry being read.
+Both nodes are in ``OpenGLContext.scenegraph.lod``, and both signal a level
+change the same way a ``Switch`` does. ``center`` is the point, in the node's
+own coordinates, that distance is measured to, so the distance is measured to
+the model rather than to the world origin. ``radius`` is the radius used for
+coverage. The glTF loader takes it from the finest level's ``POSITION``
+accessor bounds. glTF requires a file to declare those bounds, so a level can
+be sized and placed without reading its geometry.
 
 .. _placement:
 
@@ -163,13 +163,13 @@ Where a level is drawn
 ~~~~~~~~~~~~~~~~~~~~~~
 
 Every level of a chain is drawn where the node carrying the extension is. An
-alternative named in ``ids`` stands *in place of* that node, so whatever
-transform it states is in the same parent space rather than underneath —
-applying both would put a bust two metres down a hall four metres down it, and
-with a rotation in play somewhere else entirely. An alternative that asks to
-stand somewhere of its own is drawn at the node's place and a warning says so,
-because the extension offers another version of a node rather than another
-place for it.
+alternative named in ``ids`` replaces that node, so its own transform (if it
+has one) is in the same parent space, not below the node. Applying both
+transforms would draw a bust that is two metres down the hall at four metres,
+and with a rotation involved it could be anywhere. If an alternative has a
+transform of its own, the loader ignores it, draws the level at the node's
+place, and logs a warning. The extension offers another version of a node, not
+another place for it.
 
 .. _instancing:
 
@@ -177,40 +177,40 @@ Copies batch per level
 ----------------------
 
 The levels of a chain are decoded once and shared by every node that names
-them, and the pass groups a frame's draws by the geometry and appearance they
-share. So a field of copies of one model costs one instanced draw *per level
-in use*: the copies drawing their finest level are one draw, the copies at the
-coarsest are another, and a copy at a level of its own is drawn on its own.
-Nothing has to be declared for this — it follows from the levels being shared.
+them. The pass groups each frame's draws by the geometry and appearance they
+share. As a result, many copies of one model cost one instanced draw *per
+level in use*: the copies at the finest level are one draw, and the copies at
+the coarsest level are another. You do not have to declare anything for this.
 See :doc:`Instanced rendering <instancing>`.
 
 .. rst-class:: technical
 
-A group smaller than eight is drawn one shape at a time: instancing has a
-fixed per-batch cost, and a pair of shapes is cheaper drawn as a pair.
+A group smaller than ``OPENGLCONTEXT_INSTANCE_MIN`` copies (4 by default in
+the core-profile and PBR passes) is drawn one shape at a time. Instancing has
+a fixed cost per batch, and for a few shapes separate draws are cheaper.
 
 .. _impostors:
 
-Where a mesh stops being worth it
----------------------------------
+Impostors
+---------
 
-A chain's coarsest level is still a mesh, and past a certain distance a mesh
-is the wrong thing entirely: a bust twenty pixels tall spends five hundred
-triangles on a silhouette a picture would draw exactly. An **octahedral
-impostor** is that picture — one view of the model per direction, folded onto
-a single square texture, drawn on a card turned to the viewer that shows
-whichever view matches where they are standing.
+A chain's coarsest mesh still costs triangles. A bust twenty pixels tall
+spends 500 triangles on an outline that a picture would draw as well. An
+**octahedral impostor** is that picture. It stores one view of the model for
+each of a set of directions, packed into a single square texture (an atlas).
+It is drawn on a card that faces the viewer and shows the stored view closest
+to the viewer's direction.
 
-The fold is what makes it fit. Inflate an octahedron to the sphere of
-directions, cut it along its equator and unfold it flat, and every direction
-has a place on a unit square, with directions near each other in space landing
-near each other on it. ``OpenGLContext.scenegraph.octahedral`` is that
-arithmetic and holds no GL; ``pbr.vert`` is the same fold in GLSL, and the two
-are held to each other by a test that paints each tile with its own address
-and reads back which one the shader chose.
+The views are laid out by an octahedral mapping. Take an octahedron, inflate
+it to a sphere of directions, cut it along its equator and unfold it flat.
+Every direction then has a place on a unit square, and nearby directions land
+near each other. ``OpenGLContext.scenegraph.octahedral`` holds this mapping
+in Python, with no GL. ``pbr.vert`` has the same mapping in GLSL. A test holds
+the two in agreement: it paints each tile of an atlas with its own address and
+reads back which tile the shader chose.
 
-A material declares it, which is also what makes a field of them batch — they
-share a material, so they share a draw:
+A material declares an impostor. Because a field of impostors shares one
+material, they are drawn in one batch:
 
 .. code-block:: python
 
@@ -220,39 +220,38 @@ share a material, so they share a draw:
       "extras": {"octahedralViews": 8, "octahedralHemi": true}}
    ]
 
-``extras`` rather than an extension, because that is where the format puts
-what an application knows and a reader that does not is meant to step over —
-and only a reader that understood ``MSFT_lod`` reaches an impostor at all,
-since it is a chain's coarsest level and a reader without the extension draws
-the finest.
+``octahedralViews`` is the number of views along each side of the atlas.
+The settings are in ``extras`` rather than an extension. glTF uses
+``extras`` for application-specific data that other readers skip. A reader
+reaches an impostor only through ``MSFT_lod``, because it is a chain's
+coarsest level, and a reader without ``MSFT_lod`` draws the finest level.
 
-**hemi** holds the upper hemisphere and spends the whole square on it, which
-is what a thing standing on the ground wants: nobody walks under a bust, and
-the lower half would be half the resolution spent on views nobody takes.
-``"octahedralHemi": false`` holds the whole sphere, for something seen from
-any side.
+``"octahedralHemi": true`` (the default) stores only the upper hemisphere of
+directions and uses the whole atlas for it. Use it for an object that stands
+on the ground and is never seen from below. ``"octahedralHemi": false`` stores
+the whole sphere, for an object that can be seen from any side.
 
 .. _impostor-size:
 
 How big the atlas has to be
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-A question about how small the model will be on screen when the impostor takes
-over, and nothing else. At a threshold of three per cent of a 720-line window
-the model is twenty-odd pixels tall, so a **256-pixel atlas at eight views a
-side** — thirty-two pixels a view — covers it with room to spare. Twice as
-many views is four times the texture for angles a distant object does not
-resolve.
+The atlas size depends on how many pixels tall the model is when the impostor
+takes over. At a threshold of three per cent of a 720-line window, the model
+is about twenty pixels tall. A **256-pixel atlas with eight views a side**
+gives thirty-two pixels per view, which is enough. Doubling the views per side
+makes the texture four times larger, for angles too fine to see at that
+distance.
 
 .. _impostor-cost:
 
-What it buys, and when it buys nothing
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+When an impostor makes a frame faster
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-An impostor lets a chain **stop decimating early**: four mesh levels and a
-card carry a model further than six mesh levels do. On the gallery from its
-far end, with a hundred and eight busts on screen, that is 62% of the
-triangles and one draw call fewer:
+With an impostor, a chain can stop at fewer mesh levels: four mesh levels and
+an impostor carry a model further than six mesh levels. In the gallery, seen
+from the far end with 108 busts on screen, this removes 62% of the triangles
+and one draw call:
 
 .. list-table::
    :widths: auto
@@ -275,16 +274,16 @@ triangles and one draw call fewer:
      - 10
      - 4.93
 
-**And it makes that scene no faster at all.** Two hundred frames a second
-either way, on a discrete-class GPU, because the frame is not waiting on
-geometry: it is waiting on the engine. The same world renders in the same 5 ms
-at 640×360 and at 1920×1080, and a four-object scene renders in 0.59 ms where
-this three-hundred-object one takes 5.06 — about fifteen microseconds of
-processor time per object per frame, whatever is in it. Triangles are not what
-this costs.
+On a discrete GPU this does not make the scene faster. Both chains render at
+about 200 frames a second, because geometry is not what limits the frame. The
+engine's per-object processing is. The same world renders in the same 5 ms at
+640×360 and at 1920×1080. A four-object scene renders in 0.59 ms and this
+300-object scene in 5.06 ms: about fifteen microseconds of CPU time per object
+per frame, whatever the object contains.
 
-**Where it does pay is where geometry is the bottleneck.** The same two worlds
-on a software rasteriser, which is what a weak integrated part behaves like:
+An impostor helps where geometry does limit the frame. The table below shows
+the same two worlds on a software rasteriser, which behaves like a weak
+integrated GPU:
 
 .. list-table::
    :widths: auto
@@ -297,96 +296,93 @@ on a software rasteriser, which is what a weak integrated part behaves like:
    * - 4 mesh levels + an impostor
      - **19.1**
 
-Two and a half times faster, from the same change that bought nothing on the
-discrete card. That is the rule to take away: an impostor is worth reaching
-for when a frame is spending its time on vertices and fragments, and worth
-nothing when it is spending it somewhere else. Measure which before baking
-one.
+Here the impostor chain is two and a half times faster. Use an impostor when a
+frame spends its time on vertices and fragments. Measure where the frame's
+time goes before you bake one.
 
 .. rst-class:: technical
 
-On the gallery the largest single item is not geometry either: **shadows cost
-1.8 ms of the 4.96**, most of it gathering the casters. ``--no-shadows`` takes
-the same scene from 202 to 316 frames a second.
+In the gallery, the largest single cost is shadows, at **1.8 ms of the 4.96**,
+most of it spent gathering the shadow casters. ``--no-shadows`` raises the
+same scene from 202 to 316 frames a second.
 
 .. _lod-authoring:
 
 Authoring a chain
 -----------------
 
-Two routes, and they meet in the same file.
+There are two ways to make a chain: in Blender, or as a bake from Python. Both
+write the same kind of file.
 
 .. _blender:
 
 In Blender
 ~~~~~~~~~~
 
-It bakes the impostor too: ``--impostor 8`` renders the finest level from each
-of the atlas's directions in Blender and makes the card the chain's last
-level. The add-on in `openglcontext-editor
+The add-on in `openglcontext-editor
 <https://github.com/mcfletch/openglcontext-editor>`__
-(``OpenGLContext_editor/blender/openglcontext_lod``) adds an operator that
-cuts a chain from the selected mesh with Blender's own Decimate modifier, and
-a glTF export extension that writes the chain as ``MSFT_lod``. The ordinary
-*File > Export > glTF 2.0* then produces a file this engine switches levels
-in. That is how the gallery world is made, so what ships is what the add-on
-produces rather than a second path that might disagree with it.
+(``OpenGLContext_editor/blender/openglcontext_lod``) adds two things to
+Blender:
+
+- an operator that cuts a chain from the selected mesh with Blender's Decimate
+  modifier;
+
+- a glTF export extension that writes the chain as ``MSFT_lod``.
+
+With the add-on enabled, the ordinary *File > Export > glTF 2.0* writes a file
+in which this engine switches levels.
+
+The gallery world is built this way. ``oglce-gallery``, from
+openglcontext-editor, fetches the CC0 art, builds the hall in Blender and
+exports it with the add-on. ``--impostor 8`` also renders the finest level
+from each of the atlas's directions and makes the resulting impostor the
+chain's last level.
 
 .. _baking:
 
 As a bake
 ~~~~~~~~~
 
-Making a chain is not something a game does at startup, so the measured route
-lives in the editor too: ``OpenGLContext_editor.meshlod`` decimates a mesh
-into levels, *measures* what each one costs to look at, and writes them with
-the coarsest level inside the glb and each finer one a sidecar the operating
-system never opens until it is wanted. Thresholds derived from measurement are
-better than a halving series, and this is where they come from.
+``OpenGLContext_editor.meshlod`` decimates a mesh into levels, measures what
+each level costs to look at, and writes the chain. The coarsest level goes
+inside the ``.glb`` and each finer level goes in a sidecar file, which is read
+only when that level is needed. Measured thresholds give better switching
+points than the halving series the loader falls back on.
 
 .. _format:
 
 In the file
 -----------
 
-.. code-block:: python
-
-   "nodes": [
-       {"mesh": 0,
-        "extensions": {"MSFT_lod": {"ids": [1, 2]}},
-        "extras": {"MSFT_screencoverage": [0.5, 0.2, 0.01]}},
-       {"mesh": 1},
-       {"mesh": 2}
-   ]
-
-Coverage is a hint in the extension's own words, and a file may leave it out;
-the levels are then switched on a halving series ending at zero, so a
-threshold the *reader* guessed is never the reason something disappears. The
-full reading, including what the node's children and lights do, is in
-:ref:`glTF support <lod>`.
+A chain is ``MSFT_lod`` on a glTF node, with the switching thresholds in
+``MSFT_screencoverage``. :ref:`Levels of detail <lod>` on the glTF page gives
+an example and the rules the loader follows, including what happens to the
+node's children and lights and what happens when a file leaves out the
+thresholds.
 
 .. _lod-limits:
 
 Limits
 ------
 
-- **Every level is decoded at load.** A chain in one glb costs all of its levels
-  in memory, whichever are on screen. The sidecar layout the baking tools write
-  is what a streaming reader would need; the engine does not yet defer a level's
-  decode.
+- Every level is decoded at load. A chain in one ``.glb`` holds all of its
+  levels in memory, whichever are on screen. The sidecar layout the baking
+  tools write would allow a streaming reader to load levels on demand, but the
+  engine does not defer a level's decode.
 
-- **The switch is a pop.** There is no geomorphing between levels yet, so a
-  change of level is visible as one if you are looking for it. The
-  correspondence a morph needs is already recorded by the decimator.
+- The switch between levels is instant. Levels are not blended (no
+  geomorphing), so a level change can be visible if you look for it. The
+  decimator records the vertex correspondence that a morph between levels
+  would need.
 
-- **An impostor shows its nearest view, not a blend of the nearest few.**
-  Turning past the angle between two baked views swaps one picture for another.
-  At the sizes an impostor is drawn at that is hard to catch; blending the three
-  nearest views is what would remove it.
+- An impostor shows the single nearest stored view, not a blend of the nearest
+  few. Turning past the angle between two stored views swaps one picture for
+  the next. At the size an impostor is drawn, this is hard to see. Blending the
+  three nearest views would remove it.
 
-- **An impostor is lit as it was baked.** The card carries the lighting the bake
-  had -- an even white surround -- and does not respond to the lights around it.
-  A model that walks from daylight into a cellar keeps its daylight at the
-  distance the impostor takes over.
+- An impostor keeps the lighting it was baked with (an even white
+  surround) and does not respond to the lights around it. A model that walks
+  from daylight into a cellar keeps its daylight at the distances where the
+  impostor is drawn.
 
 - ``MSFT_lod`` on a *material*, which the extension also allows, is not read.

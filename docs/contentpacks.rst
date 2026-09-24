@@ -3,20 +3,23 @@ Content Packs
 
 .. rst-class:: introduction
 
-An application declares the data it needs in a **registry**, and
-``OpenGLContext.contentpacks`` offers it, fetches it, checks it and finds it
-again on the next run. Levels, worlds, art and audio are tens to hundreds of
-megabytes and belong somewhere that serves large files; the code that reads
-them is small and belongs on an index. The indented technical notes point at
-the code, all under ``OpenGLContext/contentpacks/``.
+A content pack is an archive of data that an application downloads rather
+than ships in its Python package: levels, worlds, art or audio. These files
+are often tens to hundreds of megabytes, so they belong on a server for large
+files, while the code that reads them is small and belongs on a package
+index. An application lists its packs in a **registry**.
+``OpenGLContext.contentpacks`` reads the registry, shows the user what is
+available, downloads and verifies the packs, unpacks them, and finds them
+again on the next run. The technical notes on this page refer to code under
+``OpenGLContext/contentpacks/``.
 
 .. _registry:
 
 The registry
 ------------
 
-A JSON document naming the namespace its keys sit under, and the packs it
-offers:
+A registry is a JSON document. It names a namespace and lists the packs under
+that namespace:
 
 .. code-block:: json
 
@@ -35,6 +38,8 @@ offers:
        "notes": "A 7.2 km forest circuit with viaducts and a bore."}
     ]}
 
+Load the registry and list the packs that are not on this machine yet:
+
 .. code-block:: python
 
    from OpenGLContext.contentpacks import ContentStore, catalog, fetch
@@ -44,8 +49,11 @@ offers:
    for pack in store.missing(packs):
        print(pack.title, pack.human_size(), pack.copyright)
 
-Every field
-~~~~~~~~~~~
+``ContentStore`` takes the application's name, which sets where its packs are
+stored (see :ref:`Where things are stored <contentpacks-where>`).
+
+Registry fields
+~~~~~~~~~~~~~~~
 
 .. list-table::
    :widths: auto
@@ -53,82 +61,89 @@ Every field
 
    * - Field
      - Required
-     - What it is
+     - Meaning
    * - ``key``
      - yes
-     - ``namespace/name``. A registry may declare only keys in its own namespace, so
-       one added to a build cannot answer for a pack the build shipped.
+     - ``namespace/name``. A registry may declare keys only in its own namespace, so
+       an added registry cannot replace a pack the application shipped.
    * - ``title``
      - yes
-     - What a chooser calls it.
+     - The name shown to the user.
    * - ``url``
      - yes
      - Where the archive is, over http or https.
    * - ``directory``
      - yes
-     - One path segment. What it unpacks into, under the store.
+     - The directory the pack unpacks into, under the store. One path segment.
    * - ``archive``
      - yes
-     - ``zip`` or ``tar``; the latter covers ``.tar``, ``.tar.gz``, ``.tar.bz2`` and
-       ``.tar.xz``, detected by the reader.
+     - ``zip`` or ``tar``. ``tar`` covers ``.tar``, ``.tar.gz``, ``.tar.bz2`` and
+       ``.tar.xz``; the reader detects the compression.
    * - ``approximate_bytes``
      - yes
-     - Bytes. What the user is shown before consenting, and what sets the fetch's
-       cap. Measure it — an HTTP ``HEAD`` gives ``Content-Length`` — since a cap
-       below the real size fails the download on its last megabyte.
+     - The archive's size in bytes. It is shown to the user before they agree to
+       the download, and it sets the download's size cap. Measure it: an HTTP
+       ``HEAD`` request returns it as ``Content-Length``. If the cap is below the
+       real size, the download fails near the end.
    * - ``copyright``
      - yes
-     - Who holds it and under what terms, then, after a semicolon, where it was
-       packaged. A notices screen is generated from this, so a pack that cannot state
-       its terms is refused.
+     - Who holds the copyright and under what terms, then a semicolon and where the
+       pack was packaged. A notices screen is generated from this field, so a pack
+       without it is refused.
    * - ``marker``
      - yes
-     - A path inside the pack whose presence proves it is unpacked. Empty means the
-       directory existing and holding something is proof enough.
+     - A path inside the pack. If that path exists, the pack is unpacked. If the
+       marker is empty, the pack counts as unpacked when its directory exists and
+       is not empty.
    * - ``sha256``
      - no
-     - The archive's digest, 64 hex digits. State one wherever you control the bytes.
+     - The archive's SHA-256 digest, 64 hex digits. Give one whenever you control
+       the archive's bytes (see :ref:`Publishing a pack <publishing>`).
    * - ``base``
      - no
-     - Whether the application cannot start without it. Must carry a ``sha256``, and
-       may not name a ``family``.
+     - True if the application cannot start without this pack. A base pack must have
+       a ``sha256`` and may not have a ``family``. See :ref:`The first run
+       <firstrun>`.
    * - ``family``
      - no
-     - Which group of alternatives it belongs to, for a chooser that groups them.
+     - The group of alternatives the pack belongs to, for a chooser that groups
+       them.
    * - ``needs``
      - no
-     - Keys of packs this one is incomplete without. Fetched with it, sized with it,
-       consented to with it, and unpacked *into* it.
+     - Keys of other packs this pack cannot be used without. They are downloaded,
+       sized and agreed to together with this pack, and unpacked *inside* it. See
+       :ref:`Packs from other publishers <needs>`.
    * - ``requires``
      - no
-     - A PEP 440 specifier on the application's version, so content built against a
-       later format is declined rather than loaded.
+     - A PEP 440 version specifier for the application. A pack built for a later
+       format is declined rather than loaded.
    * - ``preview``
      - no
-     - A picture of what the pack holds, relative to the registry. ``.png``, ``.jpg``
-       or ``.jpeg``.
+     - A picture of the pack's content, as a path relative to the registry. ``.png``,
+       ``.jpg`` or ``.jpeg``.
    * - ``notes``
      - no
      - A sentence for a download or notices screen.
    * - ``url_page``
      - no
-     - Where a human reads about it.
+     - A web page about the pack.
 
 .. rst-class:: technical
 
-Validation is strict: a field no field is called, a missing required one, a
-size of zero, a digest that is not 64 hex digits, a ``directory`` that is a
-path rather than a segment, or a key outside the namespace each refuse the
-whole registry with a reason. A pack skipped for a typo is one nobody can
-download and nobody can see the absence of. ``catalog.BadCatalog``.
+Validation is strict. Any of these rejects the whole registry, with a reason:
+an unknown field, a missing required field, a size of zero, a digest that is
+not 64 hex digits, a ``directory`` that is a path rather than one segment, or
+a key outside the registry's namespace. The loader rejects the whole registry
+rather than skipping the bad pack, because a skipped pack would silently
+disappear from the list. The exception is ``catalog.BadCatalog``.
 
 .. _previews:
 
-Pictures before the download
+Previews before the download
 ----------------------------
 
-Previews are bundled with the content-pack index: a registry carries
-thumbnails, and ``preview`` comes back as a path on this machine:
+A registry can carry a preview picture for each pack. ``pack.preview`` is then
+a path to the picture on this machine:
 
 .. code-block:: python
 
@@ -136,17 +151,16 @@ thumbnails, and ``preview`` comes back as a path on this machine:
        if pack.preview:
            show(pack.preview)                  # a file, ready to load
 
-A preview named but not present gives a pack with no picture rather than a
-registry that will not load: a chooser missing a plate still lets somebody
-choose, and one that refuses to open does not.
+If the registry names a preview that is not present, the pack loads with no
+picture. The registry still loads, so the user can still choose a pack.
 
 A registry as one file
 ~~~~~~~~~~~~~~~~~~~~~~
 
-Bundle the document and its pictures into a zip with ``packs.json`` at the
-top, and the whole registry is one thing to publish or hand around:
+To publish a registry with its pictures as one file, put them in a zip with
+``packs.json`` at the top level:
 
-.. code-block:: python
+.. code-block:: text
 
    packs.json
    previews/ashdown.jpg
@@ -156,75 +170,75 @@ top, and the whole registry is one thing to publish or hand around:
 
    packs = catalog.load_bundle('registry.zip', where_to_unpack_it)
 
-A bundle is small — a document and some thumbnails — so an application can be
-pointed at somebody else's set of content and show what is in it without
-downloading any of it:
+A bundle is small (a document and some thumbnails), so an application can
+fetch another publisher's registry and show its packs without downloading
+any content:
 
 .. code-block:: python
 
    packs = fetch.fetch_registry('https://example.org/tracks/registry.zip', store)
-   # every pack's title, size, terms and picture, and not one byte of content
+   # every pack's title, size, terms and picture, and no content
 
-The bundle is kept under the store, so a later run finds it without being
-pointed at it again. ``store.load_registries()`` reads everything added, in
-either form.
+The fetched bundle is kept in the store, so a later run finds it without the
+URL. ``store.load_registries()`` reads every added registry, bundled or not.
 
 .. rst-class:: technical
 
-A fetched registry is untrusted input: it is extracted through the same reader
-a content pack goes through, held to the same namespacing rule, and capped at
-``fetch.REGISTRY_LIMIT`` (16 MB) rather than at anything a content pack would
-get, since there is no declared size to judge it against.
+A fetched registry is untrusted input. It is extracted by the same reader as a
+content pack and must follow the same namespace rule. It is capped at
+``fetch.REGISTRY_LIMIT`` (16 MB), because a registry has no declared size to
+set a cap from.
 
 .. _isolation:
 
-What keeps publishers apart
----------------------------
+Keeping publishers apart
+------------------------
 
-A registry is a file somebody else wrote, naming URLs the application will
-fetch and paths it will write. Three rules keep one publisher's content out of
-another's, and each closes a way the others do not.
+A registry is a file someone else wrote. It names URLs the application will
+fetch and paths it will write. Three rules keep one publisher's content away
+from another's. Each rule closes a gap the other two leave open.
 
-**Keys are namespaced**, and a registry may declare only keys under the
-namespace it names. An added registry cannot declare ``glisteel/ashdown``, so
-it cannot be resolved in place of the pack a build shipped.
+Keys are namespaced. A registry may declare keys only under the namespace it
+names. An added registry cannot declare ``glisteel/ashdown``, so it cannot be
+loaded in place of the pack the application shipped.
 
-**Content is partitioned by namespace on disk** —
-``<store>/packs/<namespace>/<directory>``. Only the *key* is namespaced by the
-registry format; ``directory`` is a name a registry chooses freely, so without
-this an added registry could declare ``"directory": "ashdown"`` under a key it
-is entitled to and write over a shipped track's tiles. Partitioning makes that
-impossible rather than forbidden. Two packs in the *same* namespace may still
-share a directory on purpose, which is how a world and the art it needs arrive
-as one tree.
+Content is stored by namespace on disk, at
+``<store>/packs/<namespace>/<directory>``. The registry format namespaces
+only the *key*; a registry can choose any ``directory``. Without separate
+namespace directories, an added registry could declare ``"directory":
+"ashdown"`` under a key of its own and overwrite a shipped track's files.
+Packs in the *same* namespace may share a directory on purpose; that is how a
+world and the art it needs unpack into one tree.
 
-**One namespace comes from one registry.** Nothing proves who owns a namespace
-— there is no registrar, and a registry states its own. What is enforceable is
-that everything under a namespace came from one file, so ``merge()`` refuses
-two registries both claiming one. Trusting a second becomes a decision
-somebody makes rather than something that happens quietly.
+Each namespace comes from one registry. Nothing proves who owns a namespace:
+there is no central registrar, and a registry states its own namespace. What
+the loader can enforce is that everything under a namespace comes from one
+file. ``merge()`` refuses two registries that claim the same namespace, so
+trusting a second registry for a namespace is a decision someone makes
+explicitly.
 
 .. rst-class:: technical
 
-Registries themselves are kept by a key derived from the whole URL, not from
-its last segment: two sources both publishing ``registry.zip`` would otherwise
-be one file in the store, the second fetch replacing the first and every pack
-it had offered.
+Added registries are stored under a key derived from the whole URL, not only
+its last path segment. Two sources that both publish ``registry.zip`` are
+stored as two files, so one does not replace the other and its packs.
 
-Referring to another publisher's packs
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+.. _needs:
 
-``needs`` is resolved against every pack loaded, from any namespace, in either
-direction — a third-party track may name the shipped forest art rather than
-carry its own copy of it, and nothing privileges the shipped registry. A key
+Packs from other publishers
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``needs`` can name a pack in any loaded registry, from any namespace. A
+third-party track can name the application's forest art rather than carry its
+own copy, and the application's registry has no special status. A key always
 resolves to the entry in *its own* registry, so the URL fetched and the digest
 checked are that publisher's, whoever named the key.
 
-Needed content lands *under the pack that needs it*, not beside it. A baked
-world resolves every path inside it — tree meshes, impostors, ground cover —
-against its own root, so art shared by four tracks belongs under each of them.
-``within`` is how a caller says which pack is being fetched for, and every
-question about that content takes the same argument:
+A needed pack unpacks *inside the pack that needs it*, not beside it. A baked
+world resolves every path it contains (tree meshes, impostors, ground cover)
+against its own root, so art shared by four tracks is unpacked under each of
+them. Pass ``within`` to say which pack a download is for. Every call about
+that content takes the same argument:
 
 .. code-block:: python
 
@@ -232,25 +246,27 @@ question about that content takes the same argument:
    job = fetch.FetchJob(wanted, store, within=chosen) # all of it under `chosen`
    store.root_for(art, within=chosen)                 # is it under this one?
 
-The archive is downloaded once and cached, so a second track naming the same
-art pays for the extraction and not for the transfer. The cost is disk — a
-copy per track — and what it buys is that a world stays one directory that can
-be moved, copied or deleted whole.
+The archive is downloaded once and cached, so a second track that needs the
+same art unpacks it again but does not download it again. The cost is disk
+space, one copy per track. In return, each world is one directory that can be
+moved, copied or deleted as a whole.
 
-A pack that exists only to be needed is not something to offer on its own:
-``catalog.offered(packs)`` drops those, which is what a download screen should
-list. What ``needs`` does *not* do is grant access: a pack is fetched under
-whatever named it, and an application reading across publishers resolves
-against several roots rather than assuming one directory holds everything.
+A pack that exists only to be needed by others should not be offered on its
+own. ``catalog.offered(packs)`` leaves those packs out; use it for the list on
+a download screen. ``needs`` does not make a pack's content available to
+everything: a needed pack is unpacked only under the pack that named it. An
+application that reads content from several publishers therefore resolves
+paths against several roots, not one shared directory.
 
 .. _bombs:
 
-Size, and what an archive expands to
-------------------------------------
+Size limits
+-----------
 
-A cap on the download says nothing about the unpacking. A megabyte of zeroes
-deflates to almost nothing, so an archive well inside any transfer limit can
-write hundreds of gigabytes. Both limits are applied:
+A cap on the download does not limit what the archive unpacks to. A megabyte
+of zeroes compresses to almost nothing, so an archive well inside any
+download limit can write hundreds of gigabytes. The engine applies both
+limits:
 
 .. list-table::
    :widths: auto
@@ -259,26 +275,26 @@ write hundreds of gigabytes. Both limits are applied:
    * - Limit
      - What it bounds
    * - ``fetch.fetch_limit(approximate_bytes)``
-     - The transfer: the declared size with 1.5× headroom, floored at the resolver's
-       own default.
+     - The download: the declared size plus 50% (1.5×), and at least the
+       resolver's default cap.
    * - ``archive.unpacked_limit(approximate_bytes)``
-     - What it may write: ``MAX_EXPANSION`` (10) times the declared size, floored at
-       ``MINIMUM_UNPACKED`` (64 MB).
+     - What the archive may write: ``MAX_EXPANSION`` (10) times the declared size,
+       and at least ``MINIMUM_UNPACKED`` (64 MB).
    * - ``archive.MAX_ENTRIES``
-     - How many members one archive may hold (100,000). A million empty files costs
-       nothing to send and plenty to write.
+     - How many members one archive may hold (100,000). A million empty files are
+       cheap to send and costly to write.
 
-Ten is generous — content is mostly already compressed, so a real pack barely
-expands at all: a baked glisteel track is 57 MB unpacked against 48 MB
-compressed, a ratio of 1.2. It is also nowhere near what an archive of zeroes
-reaches, which is a thousandfold and upwards.
+A limit of ten times leaves plenty of room. Content is mostly compressed
+already, so a real pack expands very little: a baked glisteel track is 57 MB
+unpacked from 48 MB compressed, a ratio of 1.2. An archive of zeroes expands a
+thousandfold or more.
 
 .. rst-class:: technical
 
-The sizes come from the archive's own headers and are judged before anything
-is created, so a refusal costs no disk. Both readers extract bounded by those
-declared sizes, so a header that understates its member yields a short file or
-a checksum failure rather than an overrun.
+The sizes come from the archive's own headers and are checked before anything
+is written, so a refused archive uses no disk space. Both readers extract no
+more than those declared sizes. A header that understates its member's size
+produces a short file or a checksum failure, not an overrun.
 
 .. _fetching:
 
@@ -289,13 +305,15 @@ Fetching
 
    root = fetch.fetch_pack(pack, store, progress=bar, cancel=stopped)
 
-A pack already on this machine comes back without touching the network, with
-its progress reported as finished — so a bar fills whether or not anything was
-downloaded. The digest is checked before anything is written into the store.
+``fetch_pack`` returns the directory the pack unpacked into. A pack already on
+this machine returns without using the network, and its progress is reported
+as finished, so a progress bar fills either way. The digest is checked before
+anything is written into the store.
 
-For a window, use ``FetchJob`` and poll it once a frame. Fetching 450 MB on
-the frame loop's thread stops the window dead for minutes: no redraw, no
-cancel, and eventually a "not responding" from the window manager.
+In a windowed application, use ``FetchJob`` and poll it once a frame.
+Downloading 450 MB on the frame loop's thread would freeze the window for
+minutes: no redraw, no way to cancel, and eventually a "not responding"
+message from the window manager.
 
 .. code-block:: python
 
@@ -307,37 +325,34 @@ cancel, and eventually a "not responding" from the window manager.
        if job.finished and job.failed is None and not job.cancelled:
            self.play(job.roots)
 
-One bar spans the whole job, weighted by the sizes the user was shown: a user
-who consents to three packs agreed to one download, and a bar that fills and
-resets three times reads as three failures.
+One progress bar covers the whole job, weighted by the sizes the user was
+shown. A user who agreed to three packs sees one download, not a bar that
+fills and resets three times.
 
 .. rst-class:: technical
 
-The worker writes under a lock and ``poll()`` is the only place anything it
-wrote is read, which is the whole of the thread safety and why a caller needs
-no lock. Its visible consequence looks like a bug and is not: a job whose
-worker has finished still reports itself unfinished until polled, because
-there is nobody to tell.
+The worker thread writes its results under a lock, and ``poll()`` is the only
+place they are read, so the caller needs no lock. As a result, a job whose
+worker has finished reports itself as unfinished until the next ``poll()``.
 
-What can go wrong
-~~~~~~~~~~~~~~~~~
+Errors
+~~~~~~
 
-Every failure is an ``IOError``, so one ``except`` reports "the content did
-not arrive": ``TooLarge`` (the transfer, or what it would unpack to),
-``archive.DigestMismatch``, ``archive.UnsafeArchive``,
-``archive.UnreadableArchive``, and whatever the network raised.
-``fetch.Cancelled`` is deliberately outside that family — the user stopping a
-download is a decision, not an error, and telling somebody their own decision
-went wrong answers it badly. A ``FetchJob`` publishes both as ``failed`` and
-``cancelled`` rather than raising on the frame loop's thread.
+Every failure is an ``IOError``, so one ``except`` clause reports that the
+content did not arrive. The failures are ``TooLarge`` (for the download, or
+for what it would unpack to), ``archive.DigestMismatch``,
+``archive.UnsafeArchive``, ``archive.UnreadableArchive``, and any error the
+network raised. ``fetch.Cancelled`` is not an ``IOError``, because a user
+cancelling a download is not an error. A ``FetchJob`` does not raise on the
+frame loop's thread; it sets ``failed`` or ``cancelled`` instead.
 
 .. _firstrun:
 
 The first run
 -------------
 
-Art the application cannot start without is a pack like any other, marked
-``base``. Fetch it before the menu:
+Art the application cannot start without is an ordinary pack marked
+``base``. Fetch the base packs before showing the menu:
 
 .. code-block:: python
 
@@ -346,29 +361,28 @@ Art the application cannot start without is a pack like any other, marked
        ask_the_user(wanted)            # title, combined size, terms
        fetch.FetchJob(wanted, store)
 
-``missing_base`` answers with every base pack not already here and whatever
-those are incomplete without, since half a floor is not a floor. It is empty
-for an application that ships all of its own art, and for one whose base pack
-has already arrived.
+``missing_base`` returns every base pack that is not on this machine, together
+with the packs those need. It returns an empty list for an application that
+ships all of its own art, and for one whose base packs are already
+downloaded.
 
 .. _offline:
 
 Offline, packaged and CI runs
 -----------------------------
 
-``OPENGLCONTEXT_CONTENT`` names directories searched *before* the store,
-separated by the platform's path separator. A packaged build, an air-gapped
-machine or a CI job points it at a local copy and fetches nothing:
+``OPENGLCONTEXT_CONTENT`` names directories to search *before* the store,
+separated by the platform's path separator (``:`` on Linux and macOS, ``;`` on
+Windows). A packaged build, a machine with no network, or a CI job can point
+it at a local copy of the content and download nothing:
 
 .. code-block:: bash
 
    OPENGLCONTEXT_CONTENT=/opt/glisteel/content glisteel
 
-A searched directory is laid out as the store lays its packs out —
-``<namespace>/<directory>`` — since a flat one would be the collision the
-store partitions to avoid.
+Lay out a search directory the same way as the store: ``<namespace>/<directory>``.
 
-A packaged application with its own answer passes it instead of setting a
+A packaged application can pass its own search path instead of setting the
 variable:
 
 .. code-block:: python
@@ -377,8 +391,8 @@ variable:
 
 .. _contentpacks-where:
 
-Where things land
------------------
+Where things are stored
+-----------------------
 
 .. list-table::
    :widths: auto
@@ -388,55 +402,57 @@ Where things land
      - Where
    * - An application's packs
      - ``<app data>/<application>/content/packs/<namespace>/<directory>/``
-   * - What one of them needs
-     - under that pack's own directory, not a directory of its own
+   * - Packs that another pack needs
+     - Inside that pack's own directory
    * - Added registries
      - ``<app data>/<application>/content/registries/``
    * - Their unpacked thumbnails
      - ``.../registries/.unpacked/<name>/``
    * - Downloaded archives
-     - the engine's own cache, shared between applications
+     - The engine's download cache, shared between applications
 
-The application data directory is the platform's own — ``$XDG_CONFIG_HOME`` or
-``~/.config`` on Linux, ``%APPDATA%`` on Windows — through
-``OpenGLContext.userpaths``. Two applications share the download cache and not
-their content. Nothing creates a directory until something is written into it.
+``<app data>`` is the platform's application-data directory:
+``$XDG_CONFIG_HOME`` or ``~/.config`` on Linux, and ``%APPDATA%`` on Windows
+(see ``OpenGLContext.userpaths``). Applications share the download cache but
+not their content. No directory is created until something is written into
+it.
 
 .. _publishing:
 
 Publishing a pack
 -----------------
 
-``OpenGLContext.contentpacks.publish`` and ``archive.write`` are the
-publishing side: an application's own ``release-assets.py`` says what to build
-and what the registry should say about it, and the steps below are the same in
-all of them.
+``archive.write`` and ``OpenGLContext.contentpacks.publish`` build and publish
+packs. Each application has a ``release-assets.py`` script that says what to
+build and what the registry should say about it. The steps are the same for
+every application:
 
-#. Build the archive with ``archive.write(directory, path)``. Its bytes are a
-   function of the content and of nothing else — sorted entries, a fixed
-   timestamp on each and on the gzip container above them, no owner and one mode
-   — so the same content gives the same digest on any machine, and a rebuild from
-   a tag can be shown to be the release.
+#. Build the archive with ``archive.write(directory, path)``. The archive's
+   bytes depend only on the content: entries are sorted, every entry and the
+   gzip header have a fixed timestamp, and entries have no owner and one file
+   mode. The same content gives the same digest on any machine, so you can
+   rebuild from a tag and show that the result is the released archive.
 
-#. Measure it and take its digest: ``os.path.getsize(path)`` and
-   ``archive.digest(path)``. Write the registry entry from those, so no entry can
-   describe a file that was never built.
+#. Measure the archive and take its digest with ``os.path.getsize(path)`` and
+   ``archive.digest(path)``. Write the registry entry from those values, so
+   every entry describes an archive that was built.
 
-#. Install it here and drive the application against it: ``publish.install(pack,
-   store, archives)`` leaves exactly what a download would — digest checked,
-   unpacking bounded, content in the directory a first run looks in — with only
-   the transfer left out. This is how a content release is tested before it is a
-   release.
+#. Install the pack on this machine and test the application against it.
+   ``publish.install(pack, store, archives)`` leaves the same result as a
+   download: digest checked, unpacking size-limited, content in the directory a
+   first run looks in. Only the network transfer is skipped. Use this to test a
+   content release before publishing it.
 
-#. Attach it to a release: ``publish.push(publish.repository(pack.url), tag,
-   paths)``, which runs the GitHub CLI, creating the release at that tag the
-   first time and replacing the assets on it afterwards. A release asset is 2 GB
-   at most, with no count limit and no bandwidth billing, at a stable
-   ``https://github.com/<owner>/<repo>/releases/download/<tag>/<file>``. A tag
-   that carries content and nothing else keeps it clear of the code's tags.
+#. Attach the archive to a release with ``publish.push(publish.repository(pack.url),
+   tag, paths)``. This runs the GitHub CLI. It creates the release at that tag
+   the first time, and replaces the release's assets after that. A GitHub
+   release asset can be up to 2 GB, with no limit on the number of assets and
+   no bandwidth charge, at a stable URL of the form
+   ``https://github.com/<owner>/<repo>/releases/download/<tag>/<file>``. Use a
+   tag only for content, separate from the code's release tags.
 
-#. Ship the thumbnail beside the registry, since a chooser needs a picture before
-   anything is downloaded.
+#. Publish the preview pictures with the registry, because a chooser shows
+   them before anything is downloaded.
 
 .. code-block:: bash
 
@@ -445,28 +461,26 @@ all of them.
    ./release-assets.py --reinstall     # ...over whatever that store already holds
    ./release-assets.py --push          # ...and attach them to the release tag
 
-``--install`` leaves a pack that is already in the store where it is, so
-running it over a store is not a way to lose what is in one. While a world is
-still being authored that is the wrong answer — the store holds the build
-before the change, and the game opens that one — so ``--reinstall`` throws the
-installed copy away and unpacks the new build in its place. It removes
-everything under that pack's directory, including anything put there by hand,
-which is why it is a separate word.
+``--install`` does not replace a pack that is already in the store, so it
+never deletes installed content. While you are still authoring a world, the
+store then holds the build from before your change, and the game opens that
+build. ``--reinstall`` deletes the installed copy and unpacks the new build in
+its place. It removes everything under that pack's directory, including files
+added by hand, which is why it is a separate option.
 
-State a ``sha256`` wherever you control the bytes. An uncompressed tarball
-truncated at a member boundary reads as a valid shorter archive, with the
-files that never arrived simply absent and nothing raising anywhere; a
-compressed one at least fails to decompress. The digest is what turns a short
-download into a refusal rather than content that renders wrongly later.
+Give a ``sha256`` whenever you control the archive's bytes. An uncompressed
+tarball cut off at a member boundary reads as a valid, shorter archive: the
+missing files are simply absent, and no error is raised. A compressed one at
+least fails to decompress. With a digest, a short download is refused instead
+of producing content that renders wrongly later.
 
 .. _licensing:
 
 Licensing
 ---------
 
-``copyright`` is required because the notices a redistributor owes are
-generated from it. A pack that cannot state its terms is refused rather than
-offered and left out of the credits, which is the outcome the requirement
-exists for. Check the terms of anything you offer: content licensed for use
-only within its own engine may not be downloaded or read by another one,
-whatever its file format makes possible.
+``copyright`` is required because the notices a redistributor must show are
+generated from it. A pack without it is refused, so it cannot be offered and
+then left out of the credits. Check the terms of anything you offer: content
+licensed for use only within its own engine may not be downloaded or read by
+another engine, even when its file format would allow it.
