@@ -193,12 +193,39 @@ class ContextDefinition( node.Node ):
                                        renderoptions.CHOICES['transmission'],
                                        {'on': 'full', '1': 'full', 'fake': 'blend',
                                         'none': 'off', '0': 'off'}))
-    #: Water reflects the scene standing around it, at the cost of drawing the
-    #: opaque scene once more, at a quarter of the pixels, in a frame with
-    #: water in view (env: OPENGLCONTEXT_WATER_REFLECTION).
-    waterReflection = field.newField( "waterReflection", "SFBool", 1,
-                                      lambda: renderoptions.env_flag(
-                                          'OPENGLCONTEXT_WATER_REFLECTION', True))
+    #: Mirrors and water reflect the scene around them, each through a view
+    #: of its own drawn into the reflection atlas (env:
+    #: OPENGLCONTEXT_PLANAR_REFLECTIONS). Off, every reflector reflects the
+    #: environment probe. See OpenGLContext.passes.reflection.
+    planarReflections = field.newField( "planarReflections", "SFBool", 1,
+                                        lambda: renderoptions.env_flag(
+                                            'OPENGLCONTEXT_PLANAR_REFLECTIONS', True))
+    #: The most mirror views drawn in one frame. 0 takes the strategy's own:
+    #: 16 where one submission reaches several views, 2 where each costs a
+    #: draw of the scene (env: OPENGLCONTEXT_REFLECTION_VIEWS).
+    reflectionViews = field.newField( "reflectionViews", "SFInt32", 1,
+                                      lambda: int(renderoptions.env_number(
+                                          'OPENGLCONTEXT_REFLECTION_VIEWS', 0,
+                                          integer=True)))
+    #: Of those, the most that also draw the shapes a shared draw refuses --
+    #: terrain, vegetation, particles -- each of which costs a draw per mirror
+    #: view (env: OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS).
+    reflectionSeparateViews = field.newField(
+        "reflectionSeparateViews", "SFInt32", 1,
+        lambda: int(renderoptions.env_number(
+            'OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS', 4, integer=True)))
+    #: The reflection atlas's size as a share of the window's pixels, which
+    #: bounds the texels reflections draw in a frame
+    #: (env: OPENGLCONTEXT_REFLECTION_ATLAS).
+    reflectionAtlas = field.newField( "reflectionAtlas", "SFFloat", 1,
+                                      lambda: renderoptions.env_number(
+                                          'OPENGLCONTEXT_REFLECTION_ATLAS', 0.5))
+    #: A GPU time in milliseconds the reflections aim to stay under, measured
+    #: on the GPU; 0 sets no target (env: OPENGLCONTEXT_REFLECTION_MS). Off by
+    #: default: what it draws depends on the machine.
+    reflectionMilliseconds = field.newField(
+        "reflectionMilliseconds", "SFFloat", 1,
+        lambda: renderoptions.env_number('OPENGLCONTEXT_REFLECTION_MS', 0.0))
     #: Collapse shapes sharing one geometry into a single instanced draw
     #: (env: OPENGLCONTEXT_INSTANCING).
     instancing = field.newField( "instancing", "SFBool", 1,
@@ -272,7 +299,9 @@ class ContextDefinition( node.Node ):
         'transmission': {'label': 'Glass refraction',
                          'options': renderoptions.CHOICES['transmission'],
                          'optionLabels': renderoptions.LABELS['transmission']},
-        'waterReflection': {'label': 'Water reflections'},
+        'planarReflections': {'label': 'Reflections'},
+        'reflectionViews': {'label': 'Reflections per frame', 'minimum': 0,
+                            'maximum': 16, 'step': 1},
         'instancing': {'label': 'Instanced batching'},
         'gpuSkinning': {'label': 'Skinning on the GPU'},
         'tessellationLOD': {'label': 'Distance detail'},
@@ -296,8 +325,8 @@ class ContextDefinition( node.Node ):
     #: should read: the expensive things first, the diagnostics last.
     RENDERING_FIELDS = (
         'shadows', 'shadowsSoft', 'shadowCascades', 'maximumLights',
-        'bloom', 'ibl', 'iblIntensity', 'transmission', 'waterReflection',
-        'instancing', 'gpuSkinning', 'tessellationLOD',
+        'bloom', 'ibl', 'iblIntensity', 'transmission', 'planarReflections',
+        'reflectionViews', 'instancing', 'gpuSkinning', 'tessellationLOD',
         'multisampleSamples', 'vsync',
     )
     #: Fields a settings screen shows under "Interface": how the overlay itself

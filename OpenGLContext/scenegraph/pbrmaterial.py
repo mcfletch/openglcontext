@@ -106,6 +106,10 @@ class PBRMaterial(node.Node):
     #: surface whatever the scene is doing, and a light in the scene still
     #: shades that surface the way it shades any other.
     bakedLight = field.newField('bakedLight', 'SFBool', 1, False)
+    #: A :class:`~OpenGLContext.scenegraph.reflector.PlanarReflector` makes
+    #: every surface drawn with this material mirror the scene in its own
+    #: plane. Without one a smooth surface reflects the environment probe.
+    reflector = field.newField('reflector', 'SFNode', 1, node.NULL)
     emissiveStrength = field.newField('emissiveStrength', 'SFFloat', 1, 1.0)  # KHR_materials_emissive_strength
     specular = field.newField('specular', 'SFFloat', 1, 1.0)          # KHR_materials_specular factor
     specularColor = field.newField('specularColor', 'SFColor', 1, (1.0, 1.0, 1.0))

@@ -1,8 +1,8 @@
-"""The arithmetic of a planar water reflection, with no GL.
+"""Water is one planar reflector, with no GL.
 
-Which plane the frame's water gives, the matrix that mirrors the world in it,
-and the projection whose near plane is that water: the three things the
-reflection render is built from, asserted as numbers. Drawing one is
+Which plane a sheet of water gives, the matrix that mirrors the world in it,
+and the projection whose near plane is that water, asserted as numbers. What
+every mirror shares is ``test_planar_reflection.py``; drawing one is
 ``test_water_reflection_gl.py``.
 """
 import numpy as np
@@ -31,36 +31,39 @@ def _plain():
     return ((False,), None, np.identity(4, 'f'), None, (), Shape(geometry=mesh))
 
 
+def _view(eye=(0.0, 5.0, 10.0)):
+    """A camera standing at ``eye`` looking down -z, as a row-vector view."""
+    view = np.identity(4)
+    view[3, :3] = -np.asarray(eye, dtype='d')
+    return view
+
+
 # --- the plane ----------------------------------------------------------------
 
-def test_a_frame_without_water_has_no_plane():
-    assert reflection.water_plane([_plain()], eye=(0.0, 5.0, 0.0)) is None
+def test_water_is_a_reflector_without_a_reflector_node():
+    assert reflection.reflector_for(_record()) is reflection.WATER_REFLECTOR
+    assert reflection.reflector_for(_plain()) is None
 
 
 def test_the_plane_is_where_the_sheet_stands_in_the_world():
-    point, normal = reflection.water_plane(
-        [_plain(), _record(level=0.5, translate=(0.0, 2.0, 0.0))],
-        eye=(0.0, 10.0, 0.0))
+    point, normal = reflection.surface_plane(
+        _record(level=0.5, translate=(0.0, 2.0, 0.0)))
     assert point[1] == pytest.approx(2.5)
     assert tuple(normal) == pytest.approx((0.0, 1.0, 0.0))
 
 
 def test_a_scaled_sheet_still_faces_up():
-    _point, normal = reflection.water_plane(
-        [_record(scale=3.0)], eye=(0.0, 10.0, 0.0))
+    _point, normal = reflection.surface_plane(_record(scale=3.0))
     assert tuple(normal) == pytest.approx((0.0, 1.0, 0.0))
-
-
-def test_the_nearest_sheet_is_the_one_reflected():
-    point, _normal = reflection.water_plane(
-        [_record(translate=(0.0, -4.0, 0.0)), _record(translate=(0.0, 1.0, 0.0))],
-        eye=(0.0, 3.0, 0.0))
-    assert point[1] == pytest.approx(1.0)
 
 
 def test_a_camera_under_the_water_sees_no_reflection():
     """It is looking up through the surface, not at a mirror."""
-    assert reflection.water_plane([_record()], eye=(0.0, -1.0, 0.0)) is None
+    record = _record()
+    corners = reflection.world_corners(reflection.local_plane(record), record[2])
+    assert reflection.plan_mirror(reflection.surface_plane(record), corners,
+                                  _view(eye=(0.0, -1.0, 10.0)), _perspective(),
+                                  (0, 0, 200, 100), 0.5) is None
 
 
 # --- the mirror ---------------------------------------------------------------
@@ -140,37 +143,25 @@ def test_the_eye_space_plane_follows_the_view():
     assert float(np.dot(plane, below)) < 0.0
 
 
-# --- the plan for one view ----------------------------------------------------
+# --- the view of one sheet ----------------------------------------------------
 
-def _view(eye=(0.0, 5.0, 10.0)):
-    """A camera standing at ``eye`` looking down -z, as a row-vector view."""
-    view = np.identity(4)
-    view[3, :3] = -np.asarray(eye, dtype='d')
-    return view
-
-
-def test_a_view_with_no_water_plans_nothing():
-    assert reflection.plan([_plain()], _view(), _perspective(), (0, 0, 200, 100)) is None
-
-
-def test_the_plan_mirrors_the_camera_in_the_water():
+def test_the_mirrored_camera_sees_the_shore_reflected():
     """A point seen through the mirrored camera is its reflection seen through the real one."""
-    planned = reflection.plan([_record(translate=(0.0, 1.0, 0.0))], _view(),
-                              _perspective(), (0, 0, 200, 100))
+    record = _record(translate=(0.0, 1.0, 0.0))
+    corners = reflection.world_corners(reflection.local_plane(record), record[2])
+    planned = reflection.plan_mirror(reflection.surface_plane(record), corners,
+                                     _view(), _perspective(), (0, 0, 200, 100), 0.5)
     point = np.array([2.0, 4.0, -3.0, 1.0])
     reflected = np.array([2.0, -2.0, -3.0, 1.0])
     assert np.allclose(point @ planned.modelView, reflected @ _view())
 
 
-def test_the_plan_clips_below_the_water():
-    planned = reflection.plan([_record(translate=(0.0, 1.0, 0.0))], _view(),
-                              _perspective(), (0, 0, 200, 100))
-    above = np.array([0.0, 3.0, -20.0, 1.0]) @ planned.modelView @ planned.projection
-    below = np.array([0.0, 0.5, -20.0, 1.0]) @ planned.modelView @ planned.projection
+def test_what_is_under_the_water_is_clipped():
+    record = _record(translate=(0.0, 1.0, 0.0))
+    corners = reflection.world_corners(reflection.local_plane(record), record[2])
+    planned = reflection.plan_mirror(reflection.surface_plane(record), corners,
+                                     _view(), _perspective(), (0, 0, 200, 100), 0.5)
+    above = np.array([0.0, 3.0, -2.0, 1.0]) @ planned.modelproj
+    below = np.array([0.0, 0.5, -2.0, 1.0]) @ planned.modelproj
     assert -1.0 < above[2] / above[3] < 1.0
     assert below[2] / below[3] < -1.0
-
-
-def test_the_target_is_half_the_view_each_way():
-    planned = reflection.plan([_record()], _view(), _perspective(), (40, 20, 200, 100))
-    assert planned.size == (100, 50)

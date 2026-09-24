@@ -43,9 +43,9 @@
 #define PBR_EXT_TEXTURES 0
 #endif
 
-// The water's reflection of the scene is read from a unit past the joint
-// palette; pbrpass sets this to 1 only where the fragment stage has that many.
-// At 0 the water reflects the environment probe alone.
+// Reflections of the scene are read from a unit past the joint palette;
+// pbrpass sets this to 1 only where the fragment stage has that many. At 0
+// every mirror reflects the environment probe alone.
 #ifndef PBR_PLANAR_REFLECTION
 #define PBR_PLANAR_REFLECTION 0
 #endif
@@ -265,12 +265,21 @@ uniform sampler2D transmissionTexture; // opaque backdrop (mipmapped)
 uniform float transmissionMaxLod;      // highest mip level of the backdrop
 
 #if PBR_PLANAR_REFLECTION
-// The scene mirrored in the water's plane, drawn this view in linear HDR with
-// alpha 1 wherever there was something to mirror (passes/reflection.py).
+// The scene mirrored in this surface's plane: a tile of the reflection atlas,
+// drawn in linear HDR with alpha 1 wherever there was something to mirror
+// (passes/reflection.py). A fragment finds its texel by projecting its own
+// world position through the matrix the tile was drawn with.
 uniform bool hasPlanarReflection;
 uniform sampler2D planarReflection;
-uniform vec4 planarViewport;     // the view's rectangle in window pixels: x, y, w, h
-uniform float planarDistortion;  // screen offset per unit of normal tilt
+uniform mat4 planarMatrix;       // world to the mirrored camera's clip space, uncropped
+uniform vec4 planarTile;         // that camera's NDC to the atlas: xy scale, zw offset
+uniform vec4 planarBounds;       // the tile in atlas coordinates, half a texel in
+uniform vec3 planarNormal;       // the mirror's plane normal, world space
+uniform float planarDistortion;  // view widths of offset per unit of normal tilt
+uniform float planarLevels;      // blurred mip levels a rough mirror may read
+uniform bool planarReplace;      // show the reflection in place of the shading
+// reflection.ROUGHEST: the roughness that reads the most blurred level.
+const float PLANAR_ROUGHEST = 0.6;
 #endif
 
 
@@ -333,25 +342,38 @@ uniform mat4 eyeToWorld;
 
 uniform float exposure;           // camera exposure multiplier (default 1.0)
 
-// The environment a water surface reflects in the direction it reflects:
-// the mirrored scene where there was something to mirror, and ``probe`` --
-// the sky -- where there was not. The lookup is the fragment's own screen
-// position, pushed by how far the ripple and the swell tilt the surface from
-// flat, which is what breaks a reflection up on moving water.
-vec3 planarReflected(vec3 probe, vec3 N) {
+// The mirrored scene at this fragment, with alpha 0 where there was nothing
+// to mirror or the fragment falls outside the tile. The lookup is pushed by
+// how far ``N`` tilts from the mirror's plane -- water's ripple and swell, a
+// mirror's normal map -- which is what breaks a reflection up, and read from
+// a blurred level for a rough surface.
+vec4 planarSample(vec3 N, float rough) {
 #if PBR_PLANAR_REFLECTION
-    if (!hasPlanarReflection || !waveEnabled) { return probe; }
-    vec3 level = normalize(cross(vSurfZ, vSurfX));
+    if (!hasPlanarReflection) { return vec4(0.0); }
+    vec4 clip = planarMatrix * (eyeToWorld * vec4(vPosition, 1.0));
+    if (clip.w <= 0.0) { return vec4(0.0); }
+    vec2 uv = (clip.xy / clip.w) * planarTile.xy + planarTile.zw;
+    if (any(lessThan(uv, planarBounds.xy)) || any(greaterThan(uv, planarBounds.zw))) {
+        return vec4(0.0);
+    }
+    vec3 level = normalize(transpose(mat3(eyeToWorld)) * planarNormal);
     if (dot(level, N) < 0.0) { level = -level; }
-    vec2 uv = (gl_FragCoord.xy - planarViewport.xy) / planarViewport.zw;
-    uv = clamp(uv + (N - level).xy * planarDistortion, vec2(0.0), vec2(1.0));
-    vec4 mirrored = texture(planarReflection, uv);
-    // The target holds colour already multiplied by the camera's exposure,
+    uv = clamp(uv + (N - level).xy * planarDistortion * 2.0 * planarTile.xy,
+               planarBounds.xy, planarBounds.zw);
+    float lod = planarLevels * clamp(rough / PLANAR_ROUGHEST, 0.0, 1.0);
+    return textureLod(planarReflection, uv, lod);
+#else
+    return vec4(0.0);
+#endif
+}
+
+// The environment a mirror reflects: the mirrored scene where there was
+// something to mirror, and ``probe`` -- the sky -- where there was not.
+vec3 planarReflected(vec3 probe, vec3 N, float rough) {
+    vec4 mirrored = planarSample(N, rough);
+    // The atlas holds colour already multiplied by the camera's exposure,
     // which the term this replaces has yet to be.
     return mix(probe, mirrored.rgb / max(exposure, 1e-6), mirrored.a);
-#else
-    return probe;
-#endif
 }
 
 // Fog: aerial perspective over terrain, or a VRML97 Fog node the camera is
@@ -429,6 +451,43 @@ float spotAttenuation(int i, vec3 L) {
     // (t*t), not smoothstep -- a slightly crisper edge that matches the sample viewer.
     float t = clamp((cosA - cutoff) / max(beam - cutoff, 1e-4), 0.0, 1.0);
     return t * t;
+}
+
+// Linear HDR colour, times exposure, as it is written out: fogged, then
+// tone-mapped and encoded for the display unless bloom composites it later.
+vec3 displayed(vec3 color) {
+    // Fog in linear HDR (before tone map): distant geometry fades into the fog
+    // colour, which dissolves the far edge of a terrain patch and is what being
+    // under water looks like from inside it.
+    if (fogMode > 0 && fogDensity > 0.0) {
+        // How far through the fog this fragment lies: eye distance over the
+        // visible range for the VRML97 curves, or distance times density for
+        // the aerial-perspective one.  One number, read three ways.
+        float reach = fogDensity * length(toViewer(vPosition));
+        float fog;
+        if (fogMode == 1) {
+            fog = 1.0 - exp(-reach);                    // aerial perspective
+        } else if (fogMode == 2) {
+            fog = reach;                                // VRML97 LINEAR
+        } else {
+            // VRML97 EXPONENTIAL: hangs back, then closes in, and reaches
+            // total obscurity exactly at the visible range rather than only
+            // tending toward it.  Past the range the divisor would go
+            // negative, so it is clamped to fully fogged.
+            float clear = 1.0 - reach;
+            fog = clear > 0.0 ? 1.0 - exp(-reach / clear) : 1.0;
+        }
+        color = mix(color, fogColor, clamp(fog, 0.0, 1.0));
+    }
+
+    // filmic tone map (ACES) + sRGB encode for a non-sRGB framebuffer. Correct
+    // ONLY with GL_FRAMEBUFFER_SRGB disabled (the pass forces this); an sRGB draw
+    // target would double-encode. See pbrpass framebuffer setup.
+    if (!hdrOutput) {                 // default: tone-map + sRGB here
+        color = acesToneMap(color);
+        color = linearToSRGB(color);
+    }                                 // bloom pass: leave linear HDR for the composite
+    return color;
 }
 
 void main() {
@@ -539,6 +598,20 @@ void main() {
     vec3 V = normalize(toViewer(vPosition));
     float NdotV = max(dot(N, V), 1e-4);
     float NcdotV = max(dot(Nc, V), 1e-4);   // clearcoat normal · view
+
+#if PBR_PLANAR_REFLECTION
+    // A mirror that shows only its reflection: nothing of the material is
+    // applied, and where there was nothing to mirror it shows the sky.
+    if (hasPlanarReflection && planarReplace) {
+        vec3 Rs = normalize(mat3(eyeToWorld) * reflect(-V, N));
+        vec3 sky = iblMode == 2 ? textureLod(prefilterMap, Rs, 0.0).rgb * iblIntensity
+                 : iblMode == 1 ? envColor(Rs) * iblIntensity
+                 : sceneAmbient;
+        fragColor = vec4(displayed(planarReflected(sky, N, 0.0) * exposure), alpha);
+        fragObjectId = encodeObjectId(effectiveObjectId());
+        return;
+    }
+#endif
 
     // KHR_materials_anisotropy frame: a tangent-plane direction (the material
     // rotation, optionally rotated further per-texel by the anisotropyTexture)
@@ -810,7 +883,8 @@ void main() {
     if (iblMode == 2) {                // full IBL probe (split-sum)
         vec3 irr = texture(irradianceMap, Nw).rgb * iblIntensity;
         vec3 pre = planarReflected(
-            textureLod(prefilterMap, Rw, roughness * prefilterMaxLod).rgb * iblIntensity, N);
+            textureLod(prefilterMap, Rw, roughness * prefilterMaxLod).rgb * iblIntensity,
+            N, roughness);
         vec2 ab  = texture(brdfLUT, vec2(NdotV, roughness)).rg;
         ambDiffuse  = irr * albedo * (1.0 - metallic) * ao;
         ambSpecular = pre * (F0 * ab.x + specF90 * ab.y) * ao;
@@ -826,7 +900,7 @@ void main() {
         vec3 envDiffuse = envColor(Nw) * INV_PI * iblIntensity;
         // fade the reflection toward the average sky tone for rough surfaces
         vec3 envSpec = planarReflected(mix(envColor(Rw), vec3(0.5, 0.52, 0.55),
-                                           roughness * 0.8) * iblIntensity, N);
+                                           roughness * 0.8) * iblIntensity, N, roughness);
         vec2 ab = envBRDFApprox(NdotV, roughness);
         ambDiffuse  = envDiffuse * albedo * (1.0 - metallic) * ao;
         ambSpecular = envSpec * (F0 * ab.x + specF90 * ab.y) * ao;
@@ -973,37 +1047,7 @@ void main() {
     // job a real camera's aperture/ISO does. See gltf_view exposure handling.
     color *= exposure;
 
-    // Fog in linear HDR (before tone map): distant geometry fades into the fog
-    // colour, which dissolves the far edge of a terrain patch and is what being
-    // under water looks like from inside it.
-    if (fogMode > 0 && fogDensity > 0.0) {
-        // How far through the fog this fragment lies: eye distance over the
-        // visible range for the VRML97 curves, or distance times density for
-        // the aerial-perspective one.  One number, read three ways.
-        float reach = fogDensity * length(toViewer(vPosition));
-        float fog;
-        if (fogMode == 1) {
-            fog = 1.0 - exp(-reach);                    // aerial perspective
-        } else if (fogMode == 2) {
-            fog = reach;                                // VRML97 LINEAR
-        } else {
-            // VRML97 EXPONENTIAL: hangs back, then closes in, and reaches
-            // total obscurity exactly at the visible range rather than only
-            // tending toward it.  Past the range the divisor would go
-            // negative, so it is clamped to fully fogged.
-            float clear = 1.0 - reach;
-            fog = clear > 0.0 ? 1.0 - exp(-reach / clear) : 1.0;
-        }
-        color = mix(color, fogColor, clamp(fog, 0.0, 1.0));
-    }
-
-    // filmic tone map (ACES) + sRGB encode for a non-sRGB framebuffer. Correct
-    // ONLY with GL_FRAMEBUFFER_SRGB disabled (the pass forces this); an sRGB draw
-    // target would double-encode. See pbrpass framebuffer setup.
-    if (!hdrOutput) {                 // default: tone-map + sRGB here
-        color = acesToneMap(color);
-        color = linearToSRGB(color);
-    }                                 // bloom pass: leave linear HDR for the composite
+    color = displayed(color);
     fragColor = vec4(color, alpha);
     fragObjectId = encodeObjectId(effectiveObjectId());
 }

@@ -21,10 +21,10 @@ import numpy as np
 from OpenGL.GL import (
     GL_VERTEX_SHADER, GL_FRAGMENT_SHADER, GL_TEXTURE0, GL_TEXTURE_2D,
     GL_UNIFORM_BUFFER, GL_STATIC_DRAW, GL_DYNAMIC_DRAW, GL_INVALID_INDEX,
-    GL_MAX_TEXTURE_IMAGE_UNITS,
+    GL_MAX_TEXTURE_IMAGE_UNITS, GL_FALSE,
     glUseProgram, glActiveTexture, glBindTexture, glGetIntegerv,
     glGenBuffers, glBindBuffer, glBufferData, glBindBufferBase,
-    glGetUniformBlockIndex, glUniformBlockBinding,
+    glGetUniformBlockIndex, glUniformBlockBinding, glUniformMatrix4fv,
 )
 from OpenGL.GL import shaders as GL_shaders
 
@@ -34,6 +34,7 @@ from OpenGLContext.passes.shaderpass import (
     preprocess_shader,
 )
 from OpenGLContext.passes.transmission import TransmissionBuffer
+from OpenGLContext.passes import reflection
 from OpenGLContext.passes.reflection import REFLECTION_UNIT, REFLECTION_UNITS_NEEDED
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, material_to_pbr
 from OpenGLContext.passes.ibl import IBL_UNITS, _IBL_SAMPLER
@@ -387,9 +388,9 @@ class PBRShaderProgram(VRML97ShaderProgram):
             # reporting more than the 16-unit GL 3.3 minimum (llvmpipe reports 16).
             self.texture_budget = int(glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS))
             self.ext_channels = ext_texture_channels(self.texture_budget)
-            # The water's reflection of the scene reads a unit past the joint
-            # palette; where the fragment stage stops short of it the water
-            # reflects the environment probe alone.
+            # Reflections of the scene are read from a unit past the joint
+            # palette; where the fragment stage stops short of it every
+            # mirror reflects the environment probe alone.
             self.planar_reflection_supported = (
                 self.texture_budget >= REFLECTION_UNITS_NEEDED)
             ext_defines = ['#define PBR_EXT_TEXTURES %d'
@@ -571,31 +572,39 @@ class PBRShaderProgram(VRML97ShaderProgram):
         self._set_uniform1i('hasTransmissionBackdrop', 1, self.program)
         self._set_uniform1f('transmissionMaxLod', buffer.max_lod, self.program)
 
-    def set_planar_reflection(self, viewport: Sequence[float],
-                              distortion: float) -> None:
-        """Have water read this view's reflection, bound on its unit.
+    def set_planar_reflection(self, lookup: Any = None, program: Any = None) -> None:
+        """Have the next draws read a mirror's reflection, or none.
 
-        ``viewport`` is the view's rectangle in window pixels, which is what a
-        fragment's screen position is measured against; ``distortion`` is how
-        far, in view widths, a unit of surface tilt pushes the lookup.
+        ``lookup`` is a :class:`~OpenGLContext.passes.reflectionplanner.Lookup`:
+        the matrix a fragment's world position is projected through, the
+        tile it lands in, the mirror's normal, and how the reflection is
+        applied. None reads no reflection, which is every shape that is not
+        a mirror.
         """
         if not self.planar_reflection_supported:
             return
-        self._set_uniform1i('hasPlanarReflection', 1, self.program)
-        x, y, width, height = (float(value) for value in viewport)
-        self._set_uniform4f('planarViewport', (x, y, width, height), self.program)
-        self._set_uniform1f('planarDistortion', float(distortion), self.program)
+        target = program if program is not None else self.program
+        if lookup is None:
+            self._set_uniform1i('hasPlanarReflection', 0, target)
+            return
+        self._set_uniform1i('hasPlanarReflection', 1, target)
+        loc = self._get_location('planarMatrix', target)
+        if loc != -1:
+            glUniformMatrix4fv(loc, 1, GL_FALSE,
+                               np.asarray(lookup.matrix, 'f').reshape(4, 4))
+        self._set_uniform4f('planarTile', lookup.transform, target)
+        self._set_uniform4f('planarBounds', lookup.bounds, target)
+        self._set_uniform3f('planarNormal', lookup.normal, target)
+        self._set_uniform1f('planarDistortion', lookup.distortion, target)
+        self._set_uniform1i('planarReplace', 1 if lookup.replace else 0, target)
 
-    def clear_planar_reflection(self) -> None:
-        """Water reflects the environment probe alone from here."""
+    def set_planar_levels(self, levels: float) -> None:
+        """How many blurred mip levels of the reflection atlas a rough mirror may read."""
         if self.planar_reflection_supported:
-            self._set_uniform1i('hasPlanarReflection', 0, self.program)
+            self._set_uniform1f('planarLevels', float(levels), self.program)
 
     def clear_transmission_backdrop(self) -> None:
         self._set_uniform1i('hasTransmissionBackdrop', 0, self.program)
-        if self.planar_reflection_supported:
-            self._set_uniform1i('planarReflection', REFLECTION_UNIT, self.program)
-            self._set_uniform1i('hasPlanarReflection', 0, self.program)
 
     def set_lightmap_strength(self, strength: float = 1.0) -> None:
         """Scale the baked irradiance a lightmap contributes (1.0 = as authored).
@@ -948,6 +957,9 @@ class PBRPass(flatcore.FlatPass):
                 resolve(self, self.getShaderProgram())
             if not getattr(geometry, 'skin_on_gpu', False):
                 return False
+        # A mirror is drawn singly: each one reads a reflection of its own.
+        if reflection.shape_reflector(shape) is not None:
+            return False
         return hasattr(geometry, 'instanceGPU')
 
     def _instanceKey(self, shape: Any) -> Any:

@@ -871,7 +871,8 @@ class PBRMesh(node.Node):
         """
         from OpenGLContext.passes.instancing import set_cull_state
         set_cull_state(mode, self._wants_cull(mode),
-                       self._front_face(getattr(mode, 'matrix', None)))
+                       self._front_face(getattr(mode, 'matrix', None),
+                                        bool(getattr(mode, 'mirroredDraw', False))))
 
     @staticmethod
     def reset_draw_state(mode: Any) -> None:
@@ -884,19 +885,13 @@ class PBRMesh(node.Node):
         from OpenGLContext.passes.instancing import reset_cull_state
         reset_cull_state(mode)
 
-    def _front_face(self, mv: Any) -> int:
-        if mv is None:
-            return int(GL_CCW)
-        try:
-            a = mv.tolist() if hasattr(mv, 'tolist') else mv
-            # Sign of the modelview upper-3x3 determinant (a direct 3x3 solve, not
-            # a per-shape LAPACK det()); negative parity flips triangle winding.
-            det = (a[0][0] * (a[1][1] * a[2][2] - a[1][2] * a[2][1])
-                   - a[0][1] * (a[1][0] * a[2][2] - a[1][2] * a[2][0])
-                   + a[0][2] * (a[1][0] * a[2][1] - a[1][1] * a[2][0]))
-        except Exception:
-            return int(GL_CCW)
-        return int(GL_CW) if det < 0 else int(GL_CCW)
+    def _front_face(self, mv: Any, mirrored: bool = False) -> int:
+        """The front face for this mesh's counter-clockwise triangles under ``mv``.
+
+        See :func:`OpenGLContext.scenegraph.winding.front_face`.
+        """
+        from OpenGLContext.scenegraph.winding import front_face
+        return int(front_face(True, mv, mirrored))
 
     def sortKey(self, mode: Any, matrix: Any) -> tuple[Any, ...]:
         # Report transparency from the attached material so a mesh placed without a

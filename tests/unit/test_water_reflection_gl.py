@@ -21,7 +21,7 @@ os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
 os.environ['OPENGLCONTEXT_NO_VSYNC'] = '1'
 os.environ['OPENGLCONTEXT_HIDDEN'] = '1'
 os.environ['OPENGLCONTEXT_SHADOWS'] = '0'
-os.environ['OPENGLCONTEXT_WATER_REFLECTION'] = sys.argv[1]
+os.environ['OPENGLCONTEXT_PLANAR_REFLECTIONS'] = sys.argv[1]
 try:
     import glfw
     import numpy as np

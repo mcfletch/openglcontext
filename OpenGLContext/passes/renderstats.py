@@ -30,7 +30,8 @@ class RenderStats:
     """
 
     __slots__ = ('shapes', 'opaque', 'transparent', 'instanceGroups',
-                 'instances', 'draws')
+                 'instances', 'draws', 'mirrorViews', 'mirrorTexels',
+                 'mirrorDraws')
 
     def __init__(self) -> None:
         self.reset()
@@ -48,6 +49,11 @@ class RenderStats:
         #: Draw calls the pass issued for scene geometry -- one per shape it
         #: drew singly, plus one per instance group.
         self.draws = 0
+        #: Mirror views drawn into the reflection atlas, the texels they
+        #: filled, and the draws they took -- counted in ``draws`` as well.
+        self.mirrorViews = 0
+        self.mirrorTexels = 0
+        self.mirrorDraws = 0
 
     def __repr__(self) -> str:
         return ('RenderStats(shapes=%d, draws=%d, instances=%d in %d groups)'

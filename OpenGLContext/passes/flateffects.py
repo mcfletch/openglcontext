@@ -1,7 +1,7 @@
 """Environment and effects phases for the FlatPass shader render loop.
 
 Five cohesive rendering concerns that ``FlatPass.Render()`` sequences:
-image-based lighting, KHR transmission (glass), the water's reflection of the
+image-based lighting, KHR transmission (glass), planar reflections of the
 scene, the HDR bloom wrap, and frustum/cluster visibility culling. Holding them in ``_FlatEffectsMixin`` keeps
 ``Render`` a thin phase list and each concern in one place. The mixin is composed
 into ``FlatPass``, so ``self`` is the pass and every ``self.matrix`` /
@@ -27,7 +27,10 @@ from OpenGLContext.scenegraph import fog as fognode
 if TYPE_CHECKING:
     from OpenGLContext.passes.bloom import BloomPass
     from OpenGLContext.passes.ibl import IBLController, IBLProbe
-    from OpenGLContext.passes.reflection import ReflectionBuffer
+    from OpenGLContext.passes.gputimer import GpuTimer
+    from OpenGLContext.passes.reflectionatlas import ReflectionAtlas
+    from OpenGLContext.passes.reflectionplanner import Lookup, ReflectionPlanner
+    from OpenGLContext.passes.reflectiontiles import Budget
     from OpenGLContext.passes.transmission import TransmissionBuffer
 
 log = logging.getLogger(__name__)
@@ -69,19 +72,41 @@ class _FlatEffectsMixin:
         def shaderRenderOpaque(self, toRender: List, id_map: Optional[Dict] = None,
                                skip: Optional[set] = None) -> None: ...
 
+        def sharesViews(self, frames: Any) -> bool: ...
+
+        def sharesDraw(self, record: Any) -> bool: ...
+
+        def chooseMultiview(self) -> str: ...
+
+        def renderShared(self, frames: Any, id_map: Optional[Dict],
+                         lighting: Any = None, mirrored: bool = False) -> Optional[set]: ...
+
+        multiviewStrategy: Optional[str]
+        activeFrame: Any
+        stats: Any
+        _scissorViews: bool
+
     # Transmission (KHR_materials_transmission). Filled on the first frame from the
     # GL renderer string; 'full' captures an opaque backdrop, 'blend' fakes it.
     _transmission_mode: Optional[str] = None
     _transmission_buffer: Optional["TransmissionBuffer"] = None
 
-    # The water's reflection of the scene: whether it is drawn, resolved once
-    # from ContextDefinition.waterReflection, and the target it is drawn into.
-    _water_reflection: Optional[bool] = None
-    _reflection_buffer: Optional["ReflectionBuffer"] = None
-    #: How far, in view widths, a unit of the water's tilt from flat pushes the
-    #: reflection lookup. The ripple tilts it by a tenth or so, which moves a
-    #: reflected edge by a few percent of the view: broken up, still legible.
-    REFLECTION_DISTORTION = 0.12
+    # Planar reflections: whether they are drawn, resolved once from
+    # ContextDefinition.planarReflections, and what draws and holds them.
+    _planar_reflections: Optional[bool] = None
+    _reflection_atlas: Optional["ReflectionAtlas"] = None
+    _reflection_planner: Optional["ReflectionPlanner"] = None
+    _reflection_timer: Optional["GpuTimer"] = None
+    #: What each mirror in each view reads this frame, by
+    #: :func:`~OpenGLContext.passes.reflectionplanner.key_for`.
+    _reflection_lookups: Dict[Any, "Lookup"] = {}
+    #: The lookup the program was last given, so a run of shapes that are
+    #: not mirrors sets nothing.
+    _reflection_applied: Any = None
+    #: True while a draw is made in an unmirrored camera's eye space for
+    #: views that are mirrored, which turns every triangle's winding over
+    #: without the modelview's determinant saying so.
+    mirroredDraw = False
 
     # Image-based lighting (environment reflection for metals). Resolved once from
     # the GL renderer; the probe is built lazily on the first 'full' frame.
@@ -206,96 +231,229 @@ class _FlatEffectsMixin:
         mode, density, color = path[-1].fogParameters(path.transformMatrix())
         shader.set_fog(density, color, mode=mode)
 
-    # -- the water's reflection of the scene ---------------------------------
-    def waterReflectionEnabled(self) -> bool:
-        """Whether water reflects the scene, resolved once.
+    # -- planar reflections --------------------------------------------------
+    def planarReflectionsEnabled(self) -> bool:
+        """Whether mirrors and water reflect the scene, resolved once.
 
-        ``ContextDefinition.waterReflection`` asks for it, and the PBR program
-        has to have compiled it in: a driver without the texture unit it reads
-        leaves the water reflecting the environment probe alone.
+        ``ContextDefinition.planarReflections`` asks for it, and the PBR
+        program has to have compiled it in: a driver without the texture unit
+        it reads leaves every reflector reflecting the environment probe.
         """
-        if self._water_reflection is None:
+        if self._planar_reflections is None:
             shader = self.shader_program
-            self._water_reflection = bool(
-                renderoptions.flag(self, 'waterReflection',
+            self._planar_reflections = bool(
+                renderoptions.flag(self, 'planarReflections',
                                    renderoptions.env_flag_once(
-                                       'OPENGLCONTEXT_WATER_REFLECTION', True))
+                                       'OPENGLCONTEXT_PLANAR_REFLECTIONS', True))
                 and getattr(shader, 'planar_reflection_supported', False))
-        return self._water_reflection
+        return self._planar_reflections
 
-    def renderWaterReflection(self, frame: Any, lighting: Any = None) -> None:
-        """Draw ``frame``'s scene mirrored in its water, for the water to read.
+    def reflectionBudget(self) -> "Budget":
+        """The most this frame's reflections may cost, from the definition.
 
-        Nothing where the view holds no water it looks down on
-        (:func:`~OpenGLContext.passes.reflection.plan`). Otherwise the frame's
-        walk is culled through the mirrored camera, and what is opaque and not
-        water is drawn in linear HDR into the reflection target, lit as the
-        view is lit. The view is looked through again afterwards; its lights
-        are the caller's to set up.
+        ``reflectionViews`` of 0 takes the strategy's own: sixteen mirror
+        views where one submission reaches them all, two where each is a draw
+        of the scene. Settles the multi-view strategy where nothing has yet.
         """
-        if not self.waterReflectionEnabled():
+        from OpenGLContext.multiview.strategy import MultiviewCapabilities
+        from OpenGLContext.passes.reflectionatlas import atlas_size
+        from OpenGLContext.passes.reflectiontiles import Budget
+        if self.multiviewStrategy is None:
+            self.multiviewStrategy = self.chooseMultiview()
+        strategy = self.multiviewStrategy
+        views = int(renderoptions.number(self, 'reflectionViews', 0))
+        if views <= 0:
+            views = (MultiviewCapabilities.detect().max_views
+                     if strategy in ('vertex', 'geometry') else 2)
+        width, height = atlas_size(*self.context.getViewPort(), self.reflectionShare())
+        return Budget(views=views,
+                      separate_views=int(renderoptions.number(
+                          self, 'reflectionSeparateViews', 4)),
+                      texels=width * height)
+
+    def reflectionShare(self) -> float:
+        """The atlas's share of the window's pixels."""
+        return max(0.05, float(renderoptions.number(self, 'reflectionAtlas', 0.5)))
+
+    def renderReflections(self, frames: List[Any], lighting: Any = None) -> None:
+        """Draw this frame's reflections into the atlas, for the mirrors to read.
+
+        :class:`~OpenGLContext.passes.reflectionplanner.ReflectionPlanner`
+        says which mirror views to draw and where; each is culled from the
+        frame's walk through its own camera, and they are drawn together:
+        what can serve several views in one shared submission, the rest a
+        view at a time. The views' own camera is looked through again
+        afterwards.
+        """
+        self._reflection_lookups = {}
+        self._reflection_applied = None
+        if not self.planarReflectionsEnabled():
             return
         gathered = getattr(self, '_frameGather', None)
         if gathered is None:
             return
-        from dataclasses import replace
-        from OpenGL.GL import (
-            glBindFramebuffer, glFrontFace, glGetIntegerv,
-            GL_CCW, GL_CW, GL_DRAW_FRAMEBUFFER_BINDING, GL_FRAMEBUFFER,
-        )
-        from OpenGLContext import frustum
-        from OpenGLContext.passes import reflection
-        from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-        planned = reflection.plan(frame.toRender, frame.modelView,
-                                  frame.projection, frame.rect)
-        if planned is None:
+        from OpenGLContext.passes.reflectionatlas import ReflectionAtlas, atlas_size
+        from OpenGLContext.passes.reflectionplanner import ReflectionPlanner
+        if self._reflection_planner is None:
+            self._reflection_planner = ReflectionPlanner()
+        planner = self._reflection_planner
+        target = float(renderoptions.number(self, 'reflectionMilliseconds', 0.0))
+        timer = self._reflection_timer
+        if target > 0.0 and timer is not None and timer.milliseconds is not None:
+            planner.schedule.measured(timer.milliseconds, target)
+        size = atlas_size(*self.context.getViewPort(), self.reflectionShare())
+        plan = planner.plan(frames, size, self.reflectionBudget,
+                            separate=self._separateShapes)
+        self._reflection_lookups = plan.lookups
+        if not plan.lookups:
             return
-        buffer = self._reflection_buffer
-        if buffer is None:
-            buffer = self._reflection_buffer = reflection.ReflectionBuffer()
-        buffer.ensure_size(*planned.size)
-        mirrored = replace(
-            frame, rect=(0, 0) + planned.size, modelView=planned.modelView,
-            projection=planned.projection, modelproj=planned.modelproj,
-            frustum=frustum.Frustum.fromViewingMatrix(planned.modelproj,
-                                                     normalize=1),
-            toRender=[], visiblePlacements={})
-        previous = int(glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING))
+        atlas = self._reflection_atlas
+        if atlas is None:
+            atlas = self._reflection_atlas = ReflectionAtlas()
+        if atlas.ensure_size(*size) and not plan.draws:
+            # A new atlas holds nothing any held tile says it does.
+            planner.reset()
+            self._reflection_lookups = {}
+            return
+        if plan.draws:
+            if target > 0.0:
+                from OpenGLContext.passes.gputimer import GpuTimer
+                if timer is None:
+                    timer = self._reflection_timer = GpuTimer()
+                timer.begin()
+            try:
+                self._drawMirrorViews(plan, lighting, gathered, atlas)
+            finally:
+                if target > 0.0 and timer is not None:
+                    timer.end()
+        self.stats.mirrorViews = len(plan.draws)
+        self.stats.mirrorTexels = plan.texels
+        atlas.bind()
+        from OpenGLContext.passes.reflectionatlas import LEVELS
         shader = self.shader_program
-        self.applyViewFrame(mirrored, gl=False)
-        records = [record for record in
-                   self.renderSet(planned.modelView, gathered)
-                   if not record[0][0] and not reflection.is_water(record)]
-        mirrored.visiblePlacements = self.visiblePlacements or {}
-        buffer.begin()
+        shader.use(lit=True)
+        shader.set_planar_levels(LEVELS - 1 if atlas.mipmapped else 0)
+
+    def _separateShapes(self, frame: Any) -> bool:
+        """Whether a view's mirrors would draw shapes a shared draw refuses."""
+        from OpenGLContext.passes.reflection import is_reflector
+        return any(not record[0][0] and not is_reflector(record)
+                   and not self.sharesDraw(record) for record in frame.toRender)
+
+    def mirrorFrames(self, plan: Any, gathered: Any) -> List[Any]:
+        """A :class:`~OpenGLContext.multiview.strategy.ViewFrame` per mirror view.
+
+        Each is the mirror's camera, drawing into its tile, with what that
+        camera's frustum keeps of the frame's walk: opaque, not itself a
+        mirror, and large enough to cover two texels of the tile.
+        """
+        from OpenGLContext import frustum
+        from OpenGLContext.multiview.strategy import ViewFrame
+        from OpenGLContext.passes.reflection import fov, is_reflector, too_small
+        mirrors = []
+        for draw in plan.draws:
+            mirror = draw.mirror
+            modelproj = mirror.modelproj
+            frame = ViewFrame(
+                draw.frame.view, draw.frame.camera, draw.tile.rect,
+                mirror.modelView, mirror.projection, modelproj,
+                frustum.Frustum.fromViewingMatrix(modelproj, normalize=1),
+                fitted=False)
+            self.applyViewFrame(frame, gl=False)
+            texels = draw.tile.height / max(
+                (mirror.crop[3] - mirror.crop[1]) / 2.0 * fov(draw.frame.projection),
+                1e-6)
+            eye = np.linalg.inv(np.asarray(mirror.modelView, 'd'))[3, :3]
+            frame.toRender = [
+                record for record in self.renderSet(mirror.modelView, gathered)
+                if not record[0][0] and not is_reflector(record)
+                and not too_small(record, eye, texels)]
+            frame.visiblePlacements = self.visiblePlacements or {}
+            mirrors.append(frame)
+        return mirrors
+
+    def _drawMirrorViews(self, plan: Any, lighting: Any, gathered: Any,
+                         atlas: "ReflectionAtlas") -> None:
+        """Draw every mirror view of ``plan`` into its tile of ``atlas``."""
+        from OpenGL.GL import (
+            glDisable, glFrontFace, glScissor, glViewport,
+            GL_CCW, GL_CW, GL_SCISSOR_TEST,
+        )
+        from OpenGLContext.multiview.strategy import MultiviewCapabilities
+        from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+        shader = self.shader_program
+        active = self.activeFrame
+        mirrors = self.mirrorFrames(plan, gathered)
+        previous = atlas.begin()
+        drawn_before = self.stats.draws
         try:
-            self.setupViewLighting(planned.modelView, lighting,
-                                   fitted=frame.fitted)
-            # Uniforms go to the bound program, and lighting setup can leave
-            # another one bound.
-            shader.use(lit=True)
-            shader.set_hdr_output(True)
-            # A mirror turns every triangle's winding over. PBRMesh follows its
-            # modelview's determinant; everything else follows this.
-            glFrontFace(GL_CW)
-            PBRMesh.reset_draw_state(self)
-            self.shaderRenderOpaque(records, None)
+            for frame in mirrors:
+                atlas.clear(frame.rect)
+            shared: set = set()
+            if self.sharesViews(mirrors):
+                limit = max(1, MultiviewCapabilities.detect().max_views)
+                for start in range(0, len(mirrors), limit):
+                    chunk = mirrors[start:start + limit]
+                    found = self.renderShared(chunk, None, lighting, mirrored=True)
+                    if found is None:
+                        break
+                    shared |= found
+            for frame in mirrors:
+                records = [record for record in frame.toRender
+                           if id(record[4]) not in shared]
+                if not records:
+                    continue
+                self.applyViewFrame(frame, gl=False)
+                glViewport(*frame.rect)
+                glScissor(*frame.rect)
+                self.setupViewLighting(frame.modelView, lighting, fitted=False)
+                # Uniforms go to the bound program, and lighting setup can
+                # leave another one bound.
+                shader.use(lit=True)
+                shader.set_hdr_output(True)
+                # A mirrored camera turns every triangle's winding over. A
+                # mesh follows its modelview's determinant; everything else
+                # follows this.
+                glFrontFace(GL_CW)
+                PBRMesh.reset_draw_state(self)
+                self.shaderRenderOpaque(records, None)
+                glFrontFace(GL_CCW)
+                PBRMesh.reset_draw_state(self)
         finally:
+            self.stats.mirrorDraws = self.stats.draws - drawn_before
             glFrontFace(GL_CCW)
             PBRMesh.reset_draw_state(self)
-            glBindFramebuffer(GL_FRAMEBUFFER, previous)
+            atlas.end(previous, mipmap=plan.rough)
+            if not self._scissorViews:
+                glDisable(GL_SCISSOR_TEST)
             shader.use(lit=True)
             shader.set_hdr_output(bool(getattr(self, '_bloom_active', False)))
-            self.applyViewFrame(frame)
-        buffer.bind()
-        shader.set_planar_reflection(frame.rect, self.REFLECTION_DISTORTION)
+            if active is not None:
+                self.applyViewFrame(active)
 
-    def clearWaterReflection(self) -> None:
-        """Water reflects the environment probe alone until the next view's."""
+    def applyPlanarReflection(self, shader: Any, record: Any, program: Any = None) -> None:
+        """Have the shape about to be drawn read its reflection, or none.
+
+        A mirror's lookup is the one for the view being drawn; every other
+        shape reads none, and a run of them sets nothing.
+        """
+        lookups = self._reflection_lookups
+        lookup = lookups.get((id(self.view), id(record[4]))) if lookups else None
+        if lookup is self._reflection_applied:
+            return
+        apply = getattr(shader, 'set_planar_reflection', None)
+        if apply is None:
+            return
+        apply(lookup, program=program)
+        self._reflection_applied = lookup
+
+    def clearPlanarReflection(self) -> None:
+        """Nothing reads a reflection until the next view says what it reads."""
         shader = self.shader_program
-        if self._water_reflection and hasattr(shader, 'clear_planar_reflection'):
+        if self._reflection_applied is not None and hasattr(shader, 'set_planar_reflection'):
             shader.use(lit=True)
-            shader.clear_planar_reflection()
+            shader.set_planar_reflection(None)
+        self._reflection_applied = None
 
     # -- transmission (KHR_materials_transmission) --------------------------
     def transmissionMode(self) -> str:
@@ -379,12 +537,14 @@ class _FlatEffectsMixin:
         self.transparent = (mode == 'blend')
         debugFrustum = self.context.contextDefinition.debugBBox
         try:
-            for _obj_index, (_key, mvmatrix, tmatrix, bvolume, path, node) in records:
+            for _obj_index, record in records:
+                _key, mvmatrix, tmatrix, bvolume, path, node = record
                 self.matrix = mvmatrix
                 self.renderPath = path
                 shader.set_matrices(mvmatrix, self.projection, program=prog)
                 masked = self._writeShapeId(shader, path, node, prog, id_map)
                 self.applyLightGrid(shader, node, tmatrix, bvolume, prog)
+                self.applyPlanarReflection(shader, record, prog)
                 try:
                     if mode == 'blend':
                         node.RenderTransparent(mode=self)

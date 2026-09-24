@@ -32,6 +32,7 @@ from OpenGLContext.arrays import (
     arange, array, asarray, dot, flatnonzero, zeros,
 )
 from OpenGLContext import frustum
+from OpenGLContext.passes import reflection
 from OpenGLContext.debug.logs import getTraceback
 from OpenGLContext.passes.renderfailures import describe
 from vrml.vrml97 import nodetypes
@@ -767,6 +768,9 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         # program support the per-instance attributes. Everything not grouped
         # (unique geometry, sub-threshold batches) falls through to the loop.
         singles: List[Tuple[Optional[int], Any]] = opaque
+        # An instanced group is never a mirror (see PBRPass._instanceable),
+        # so it draws reading no reflection.
+        self.clearPlanarReflection()
         if getattr(self, 'instancing_enabled', False):
             from OpenGLContext.passes.instancing import build_instance_groups
             groups, single_recs = build_instance_groups(
@@ -788,7 +792,8 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
 
         self.stats.opaque += len(singles)
         self.stats.draws += len(singles)
-        for _obj_index, (_key, mvmatrix, tmatrix, bvolume, path, node) in singles:
+        for _obj_index, record in singles:
+            _key, mvmatrix, tmatrix, bvolume, path, node = record
             self.matrix = mvmatrix
             self.renderPath = path
 
@@ -802,6 +807,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             # through to whatever is behind it.
             masked = self._writeShapeId(shader, path, node, prog, id_map)
             self.applyLightGrid(shader, node, tmatrix, bvolume, prog)
+            self.applyPlanarReflection(shader, record, prog)
 
             try:
                 node.Render(mode=self)
@@ -858,7 +864,8 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         prog = shader.program
 
         try:
-            for _obj_index, (_key, mvmatrix, tmatrix, bvolume, path, node) in transparent:
+            for _obj_index, record in transparent:
+                _key, mvmatrix, tmatrix, bvolume, path, node = record
                 self.matrix = mvmatrix
                 self.renderPath = path
 
@@ -870,6 +877,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 # or mask it for a non-pickable shape.
                 masked = self._writeShapeId(shader, path, node, prog, id_map)
                 self.applyLightGrid(shader, node, tmatrix, bvolume, prog)
+                self.applyPlanarReflection(shader, record, prog)
 
                 try:
                     node.RenderTransparent(mode=self)
@@ -1609,6 +1617,10 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 # Asked once, before any view confines drawing to its rectangle:
                 # building the environment probe renders offscreen.
                 lighting = self.iblPrepare()
+                # Every mirror's reflection, for every view, before any view
+                # is drawn: they are views of their own, drawn into the
+                # reflection atlas, and a view reads them as it shades.
+                self.renderReflections(frames, lighting)
                 shared: Optional[set] = None
                 if self.sharesViews( frames ):
                     for frame in frames:
@@ -1757,10 +1769,6 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         matrix = frame.modelView
         self._beginView( frame, background )
         try:
-            # The water's reflection first: it is a whole draw of the scene
-            # through another camera, and leaves this view's lights to be set up
-            # after it.
-            self.renderWaterReflection(frame, lighting)
             self.setupViewLighting(matrix, lighting, fitted=frame.fitted)
             toRender = ( [ record for record in frame.toRender
                            if id( record[4] ) not in shared ]
@@ -1785,7 +1793,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             except Exception:
                 pass
         finally:
-            self.clearWaterReflection()
+            self.clearPlanarReflection()
             self._endView( frame )
 
     #: This frame's walk of the scene, kept from :meth:`prepareViews` to
@@ -1808,11 +1816,13 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         True for an opaque shape whose geometry says it draws with the pass's
         lit programs alone (``multiviewShared``) and whose appearance brings no
         program of its own. A transparent or glass shape is sorted and drawn
-        per view, and an instanced set that culls its own placements culls them
-        per view.
+        per view, an instanced set that culls its own placements culls them
+        per view, and a mirror reads a different reflection in each view.
         """
         key, node = record[0], record[5]
         if key[0] or getattr( node, 'visiblePlacements', None ) is not None:
+            return False
+        if reflection.is_reflector( record ):
             return False
         if not getattr( getattr( node, 'geometry', None ), 'multiviewShared', False ):
             return False
@@ -1879,7 +1889,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
 
     def renderShared( self, frames: Sequence['ViewFrame'],
                       id_map: Optional[Dict[int, Any]],
-                      lighting: Any = None ) -> Optional[set]:
+                      lighting: Any = None, mirrored: bool = False ) -> Optional[set]:
         """Draw every shape that can serve several views once, for all of them.
 
         The draw is made in the active view's eye space, exactly as that view
@@ -1890,6 +1900,10 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         once per view and the vertex stage routes each copy. Returns the ``id`` of every path drawn, for each view to
         leave out, or None where the programs for this many views did not
         compile and every view draws everything itself.
+
+        ``mirrored`` draws mirror views into the reflection atlas: every one
+        of them turns the winding over, which the reference camera's
+        modelviews do not say, and each writes linear HDR.
         """
         from OpenGL import GL
         shader = self.shader_program
@@ -1921,13 +1935,14 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
                 self.bindShadowUniforms( fitted=True )
             self.iblSetup( matrix, lighting )
             shader.set_default_material()
-            amb = getattr( self.context, 'gltf_scene_ambient', None )
-            if amb is None:
-                amb = ( 0.2, 0.2, 0.2 )
-            elif not isinstance( amb, ( tuple, list ) ):
-                amb = ( float( amb ), ) * 3
-            shader.set_scene_ambient( tuple( amb ) )
+            shader.set_scene_ambient( self.sceneAmbient() )
             self.setupLightGrid()
+            if mirrored:
+                from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+                shader.set_hdr_output( True )
+                self.mirroredDraw = True
+                PBRMesh.reset_draw_state( self )
+                glFrontFace( GL_CW )
             for mask, group in groups.items():
                 shader.set_view_mask( mask )
                 self.viewerEyes = [ record.eye for index, record in enumerate( records )
@@ -1944,6 +1959,9 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         finally:
             self.viewerEyes = None
             self.viewCopies = 0
+            if mirrored:
+                self.mirroredDraw = False
+                glFrontFace( GL_CCW )
             shader.select_program_set( 0 )
         return drawn
 
@@ -2356,8 +2374,8 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             viewer_for( frame.camera, frame.modelView, frame.projection )
             for frame in frames ] )
         gathered = self.gatherPaths()
-        # Kept for the frame: a view's water is drawn again through a mirrored
-        # camera, which culls the same walk (renderWaterReflection).
+        # Kept for the frame: each mirror view culls the same walk through its
+        # own camera (renderReflections).
         self._frameGather = gathered
         for frame in frames:
             self.applyViewFrame( frame, gl=False )
