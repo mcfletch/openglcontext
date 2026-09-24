@@ -266,7 +266,7 @@ subject, including impostors and a demo world to walk through.
 .. _hooks:
 
 Engine hooks: what a material or an object *is*
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 A glTF carries geometry and PBR factors and nothing that says a surface is
 *water*. The format has no ratified way to ask for a shader, and the one that
