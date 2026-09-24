@@ -513,8 +513,10 @@ OpenGLContext:
 - `bin/audio_demo.py` and `tests/physics_triggers.py` subscribe. The audio
   yard's test compares thuds at 20 and 120 fps.
 - `oglc-physics-events` (`bin/physics_events_demo.py`), with its yard tested
-  in `tests/unit/test_physics_events_demo.py`. Its visual twin in `tests/` is
-  not written.
+  in `tests/unit/test_physics_events_demo.py`, and `tests/physics_events.py`,
+  its twin in the visual suite, which plays a scripted opening in fixed steps
+  before the first frame so the capture shows the struck scene. The reference
+  is on the reference-images repository's `bless/physics-events` branch.
 - Documentation: `docs/physics.rst` *Responding to collisions*,
   `docs/audio.rst`, `docs/eventmodel.rst`, `docs/documentation.rst`, the
   omi_physics README, `docs/PIPELINE.md` and `docs/ARCHITECTURE.md`.

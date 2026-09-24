@@ -784,6 +784,11 @@ frame, and compares it with a reference image.
 - :doc:`physics_triggers.py <tutorials/physics_triggers>` - sensor volumes and
   a subscription to their ``enter`` and ``exit`` events.
 
+- :doc:`physics_events.py <tutorials/physics_events>` - the
+  ``oglc-physics-events`` yard, opening on a scene already struck: collision
+  subscriptions, a pane broken before the solve and one after, a hitscan
+  shot and a pressure plate.
+
 - :doc:`physics_joints.py <tutorials/physics_joints>` - a pendulum, a chain
   and a motor.
 
