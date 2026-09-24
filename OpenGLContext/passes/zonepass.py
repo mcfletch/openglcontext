@@ -27,6 +27,7 @@ from OpenGLContext.passes import zonelayers
 from OpenGLContext.passes.zonelayers import NO_ENVIRONMENT, SCENE_PROBE, ZonePack
 from OpenGLContext.passes.zoneprobes import FACES_PER_FRAME, CaptureSchedule, CaptureTarget
 from OpenGLContext.scenegraph import zone as zonenodes
+from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
 from OpenGLContext.scenegraph.zone import (
     AUDIO, ENVIRONMENT, LIGHTS, MIRRORS, REVERB, VISIBILITY, PlacedZone,
 )
@@ -98,6 +99,10 @@ class ZonesMixin:
     _zoneCapturing: Any = None
     _zoneLighting: Any = None
     _probeLost = 0
+    #: Image-based lights given a layer, by id, until each has been uploaded.
+    _imageLights: Dict[int, Any] = {}
+    #: What the scene's own image-based light was last uploaded against.
+    _sceneLightMark: Any = None
     _zoneWarned = False
     #: The environment zones stacked for testing all at once, remade when the
     #: zones move.
@@ -372,6 +377,9 @@ class ZonesMixin:
         environment, except inside that capture, where it reads none.
         """
         setting = zone.setting(ENVIRONMENT)
+        light = getattr(setting, 'light', None) if setting is not None else None
+        if isinstance(light, ImageBasedLight):
+            return self._lightLayer(light)
         if setting is None or not bool(getattr(setting, 'capture', False)):
             return SCENE_PROBE
         probe = getattr(self, '_ibl_probe', None)
@@ -391,6 +399,54 @@ class ZonesMixin:
             return NO_ENVIRONMENT if self._zoneCapturing is zone.zone else SCENE_PROBE
         return float(layer)
 
+    def _lightLayer(self, light: Any) -> float:
+        """The layer an image-based light is in, once it has been uploaded.
+
+        Its layer is reserved the first time it is asked for, and filled at
+        the start of the next frame (:meth:`uploadImageLights`); until then
+        the zone reads the scene's environment.
+        """
+        probe = getattr(self, '_ibl_probe', None)
+        lighting = self._zoneLighting
+        if probe is None or not probe.arrayed or lighting is None or lighting[0] != 'full':
+            return SCENE_PROBE
+        schedule = self._zoneCaptures
+        if schedule is None:
+            schedule = self._zoneCaptures = CaptureSchedule()
+        key = id(light)
+        if schedule.reserve(key):
+            self.__dict__.setdefault('_imageLights', {})[key] = light
+            self._askForFrame()
+        layer = schedule.layer(key)
+        return SCENE_PROBE if layer is None else float(layer)
+
+    def uploadImageLights(self, probe: Any) -> None:
+        """Put every image-based light waiting for its layer into it, and the scene's into layer 0."""
+        schedule = self._zoneCaptures
+        if schedule is not None and schedule.layers > probe.layers:
+            probe.grow(schedule.layers)
+        if schedule is not None:
+            for key, light in list(self._imageLights.items()):
+                if schedule.layer(key) is not None:
+                    continue
+                layer = schedule.layer_of(key)
+                if layer is None:
+                    del self._imageLights[key]
+                elif probe.upload_light(light, layer):
+                    schedule.finished(key)
+        scene = self.sceneImageLight()
+        mark = (id(scene), probe.lost, id(probe.prefilter))
+        if scene is not None and mark != self._sceneLightMark:
+            if probe.upload_light(scene, 0):
+                self._sceneLightMark = mark
+
+    def sceneImageLight(self) -> Any:
+        """The image-based light the scene itself is lit by, or None."""
+        for path in self.paths.get(ImageBasedLight, ()):
+            if not getattr(path, 'broken', False):
+                return path[-1]
+        return None
+
     def zoneCaptureFaces(self) -> int:
         """How many faces of a zone's cube may be drawn in one frame."""
         return max(1, min(6, int(renderoptions.number(
@@ -403,6 +459,9 @@ class ZonesMixin:
         self._zoneLighting = lighting
         schedule = self._zoneCaptures
         probe = getattr(self, '_ibl_probe', None)
+        if probe is not None and schedule is None and self.sceneImageLight() is not None \
+                and lighting is not None and lighting[0] == 'full' and probe.ready:
+            self.uploadImageLights(probe)
         if schedule is None or probe is None or not probe.arrayed:
             return
         if lighting is None or lighting[0] != 'full' or not probe.ready:
@@ -410,6 +469,8 @@ class ZonesMixin:
         if probe.lost != self._probeLost:
             self._probeLost = probe.lost
             schedule.lost()
+            self.__dict__.setdefault('_imageLights', {}).update(self._everyImageLight())
+        self.uploadImageLights(probe)
         camera = self._frameCamera(frames)
         if camera is not None:
             for zone in self._environmentZones:
@@ -443,6 +504,15 @@ class ZonesMixin:
         # The frame after this one draws what was captured, and the next
         # capture if one is waiting.
         self._askForFrame()
+
+    def _everyImageLight(self) -> Dict[int, Any]:
+        """Every zone's image-based light, by id, to upload again after a loss."""
+        found = {}
+        for zone in self._environmentZones:
+            light = getattr(zone.setting(ENVIRONMENT), 'light', None)
+            if isinstance(light, ImageBasedLight):
+                found[id(light)] = light
+        return found
 
     def _askForFrame(self) -> None:
         trigger = getattr(getattr(self, 'context', None), 'triggerRedraw', None)

@@ -59,7 +59,7 @@ from OpenGLContext.loaders.gltf.accessors import (
 )
 from OpenGLContext.loaders.gltf import environment_sky
 from OpenGLContext.loaders.gltf import hooks as hookreg
-from OpenGLContext.loaders.gltf import zoning
+from OpenGLContext.loaders.gltf import imagebased, zoning
 from OpenGLContext.loaders.gltf.meshes import _primitive_shape
 from OpenGLContext.loaders.gltf.transforms import (
     _transform_for, _local_matrix_rv, _world_box, framing_bounds,
@@ -175,6 +175,8 @@ class GLTFScene(object):
         # transform already; this is for an application that wants to find
         # one. See OpenGLContext.scenegraph.zone.
         self.zones: list = []
+        # environment: the scene's EXT_lights_image_based light, or None.
+        self.environment: Any = None
 
     def advance(self, when: float) -> bool:
         """Move whatever a hook asked to be moved to ``when``, in seconds.
@@ -585,6 +587,9 @@ class _SceneBuilder:
         # OGLC_zone: the regions this document declares, and what each emitter
         # index was built as, so a zone can name the emitters it plays.
         self.zoning = zoning.ZoneReader(g)
+        # EXT_lights_image_based: the document's prefiltered environments, for
+        # its scene and its zones to name.
+        self.image_lights = imagebased.read_lights(g, resolver)
         self.emitter_nodes: dict = {}
         self._zone_placed: list = []
 
@@ -924,6 +929,12 @@ class _SceneBuilder:
                 if declared is emitter:
                     self.emitter_nodes.setdefault(index, []).append(node)
 
+    def _image_light(self, index: int) -> Any:
+        """The ``EXT_lights_image_based`` light at ``index``, or None."""
+        if 0 <= index < len(self.image_lights):
+            return self.image_lights[index]
+        return None
+
     def _zone_emitters(self, index: int) -> list:
         """The emitter nodes a zone naming emitter ``index`` controls.
 
@@ -1016,8 +1027,15 @@ class _SceneBuilder:
         self.zoning.finish(node_transform=self.node_transforms.get,
                            light=self.node_light.get,
                            emitters=self._zone_emitters,
-                           place=self._zone_placed.append)
+                           place=self._zone_placed.append,
+                           image_light=self._image_light)
         root_children.extend(self._zone_placed)
+        # The scene's own image-based light is mounted at the root, where the
+        # render pass finds it and lights everything no zone covers with it.
+        environment = None if active is None else imagebased.scene_light(
+            _extension_holder(active)['extensions'], self.image_lights)
+        if environment is not None:
+            root_children.append(environment)
         # The scene's OMI_environment_sky, as a Background beside the model. The
         # ordinary Background pass finds and binds it, and a viewer that adds a
         # backdrop when a scene brought none leaves this one alone.
@@ -1063,6 +1081,7 @@ class _SceneBuilder:
         scene.sounds = self._name_sounds()
         scene.hook_data = self.hooks.scene_data
         scene.zones = list(self.zoning.zones)
+        scene.environment = environment
         top = getattr(g, 'extensions', None) or {}
         scene.extensions = top if isinstance(top, dict) else {}
         if self.skins:

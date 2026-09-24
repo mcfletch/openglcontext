@@ -72,6 +72,8 @@ class ZoneReading:
     emitters: Callable[[int], List[Any]]
     place: Callable[[Any], None]
     warn: Callable[[str], None]
+    #: The ``EXT_lights_image_based`` light at an index, or None.
+    image_light: Callable[[int], Any] = lambda index: None
     #: Settings other readers made for this zone, which a reader may extend
     #: rather than add a second of.
     settings: List[ZoneSetting] = field(default_factory=list)
@@ -193,6 +195,28 @@ def _read_gravity(block: Any, reading: ZoneReading) -> Optional[ZoneSetting]:
         replace=bool(block.get('replace', False)), stop=bool(block.get('stop', False)))
 
 
+@register_scoped('EXT_lights_image_based')
+def _read_image_light(block: Any, reading: ZoneReading) -> Optional[ZoneSetting]:
+    """``EXT_lights_image_based``: ``{"light": n}``, its scene form.
+
+    The light becomes the zone's environment probe; the zone's own
+    ``environment`` block, where it has one, still sets the intensity.
+    """
+    if block is False:
+        return ZoneEnvironment(enabled=False)
+    index = block.get('light') if isinstance(block, dict) else None
+    light = reading.image_light(index) if isinstance(index, int) else None
+    if light is None:
+        reading.warn('EXT_lights_image_based names light %r, which the document '
+                     'does not have' % (index,))
+        return None
+    for setting in reading.settings:
+        if isinstance(setting, ZoneEnvironment):
+            setting.light = light
+            return None
+    return ZoneEnvironment(light=light)
+
+
 #: The extensions the engine reads in a zone. Registered on import.
 BUILTIN = tuple(registered_scoped())
 
@@ -270,11 +294,12 @@ class ZoneReader:
     def finish(self, node_transform: Callable[[int], Any],
                light: Callable[[int], Any],
                emitters: Callable[[int], List[Any]],
-               place: Callable[[Any], None]) -> None:
+               place: Callable[[Any], None],
+               image_light: Callable[[int], Any] = lambda index: None) -> None:
         """Read every zone's borrowed extension blocks, now every node is built."""
         for zone, node_index, borrowed in self._pending:
             reading = ZoneReading(self.document, zone, node_index, node_transform,
-                                  light, emitters, place, self.warn,
+                                  light, emitters, place, self.warn, image_light,
                                   list(zone.settings))
             for name, block in borrowed.items():
                 reader = _READERS.get(name)

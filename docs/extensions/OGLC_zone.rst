@@ -317,5 +317,7 @@ to be flattened is best authored as a box.
 Known implementations
 ---------------------
 
-- OpenGLContext: every subject above but ``EXT_lights_image_based``, which it
-  reads as an unknown extension. See :doc:`../zones`.
+- OpenGLContext: every subject above. An ``EXT_lights_image_based`` light
+  named by a zone is uploaded into a layer of the probe arrays when the zone
+  is first needed, with nothing drawn; a scene's own light fills the scene's
+  layer. See :doc:`../zones`.

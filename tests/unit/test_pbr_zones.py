@@ -310,7 +310,7 @@ def _render(tmp_path_factory, mode):
 @pytest.fixture(scope='module')
 def renders(tmp_path_factory):
     return {mode: _render(tmp_path_factory, mode)
-            for mode in ('none', 'dim', 'capture', 'lights', 'nolights')}
+            for mode in ('none', 'dim', 'capture', 'lights', 'nolights', 'imagelight')}
 
 
 def _regions(image):
@@ -334,6 +334,12 @@ class TestRenders:
         captured_left, captured_right = _regions(renders['capture'])
         assert captured_left.mean() < 0.5 * plain_left.mean()
         assert abs(captured_right.mean() - plain_right.mean()) < 3.0
+
+    def test_an_image_based_light_lights_the_zone(self, renders):
+        _plain_left, plain_right = _regions(renders['none'])
+        left, right = _regions(renders['imagelight'])
+        assert left[0] > 1.5 * left[1] and left[0] > 1.5 * left[2]
+        assert abs(right.mean() - plain_right.mean()) < 3.0
 
     def test_a_zone_light_lights_nothing_outside_its_zone(self, renders):
         _left, zoned_right = _regions(renders['lights'])

@@ -210,7 +210,7 @@ class TestRegistry:
     def test_the_engine_reads_its_own_extensions(self):
         assert set(zoning.BUILTIN) == {
             'KHR_lights_punctual', 'KHR_audio_emitter', 'KHR_node_visibility',
-            'OGLC_hook', 'OMI_physics_gravity'}
+            'OGLC_hook', 'OMI_physics_gravity', 'EXT_lights_image_based'}
 
     def test_an_application_can_add_a_reader(self):
         from OpenGLContext.scenegraph.zone import ZoneReverb

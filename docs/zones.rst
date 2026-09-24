@@ -172,6 +172,14 @@ Captures need the ``full`` environment probe and a GL 4.0 driver (or
 cube-map array the scene's probe is kept in. Elsewhere a capturing zone scales
 the scene's environment by its ``intensity`` instead.
 
+A zone can also be lit by a probe the file ships already convolved: an
+``EXT_lights_image_based`` light, named in the zone's ``extensions`` block as
+``{"light": n}`` (``ZoneEnvironment(light=...)`` from code). It is uploaded
+into its layer the first time the zone is needed and nothing is drawn, which
+is how a baked world should carry its places' environments. A scene's own
+``{"light": n}`` lights everything no zone covers. A four-channel PNG face is
+read as RGBD HDR, other images as the values they hold.
+
 Lightmaps and light grids are not scaled by a zone: a bake already holds its
 own occlusion.
 

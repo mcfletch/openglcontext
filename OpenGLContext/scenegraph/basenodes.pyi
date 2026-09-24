@@ -36,6 +36,7 @@ from OpenGLContext.scenegraph.extrusions import PolyCylinder as PolyCylinder
 from OpenGLContext.scenegraph.fog import Fog as Fog
 from OpenGLContext.scenegraph.gear import Gear as Gear
 from OpenGLContext.scenegraph.group import Group as Group
+from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight as ImageBasedLight
 from OpenGLContext.scenegraph.imagetexture import ImageTexture as ImageTexture
 from OpenGLContext.scenegraph.imagetexture import MMImageTexture as MMImageTexture
 from OpenGLContext.scenegraph.imagetexture import PixelTexture as PixelTexture
@@ -181,6 +182,7 @@ __all__ = [
     'Gear',
     'Group',
     'IS',
+    'ImageBasedLight',
     'ImageTexture',
     'IndexedFaceSet',
     'IndexedLineSet',

@@ -122,6 +122,24 @@ class CaptureSchedule:
         self._captures[key] = _Capture(layer, wanted=self.bounces)
         return True
 
+    def reserve(self, key: Hashable) -> bool:
+        """Give ``key`` a layer that is filled some other way than a capture.
+
+        An image-based light a document ships is uploaded rather than drawn,
+        so it takes a layer with nothing to capture. Returns whether this is
+        the first time, so the caller knows an upload is waiting.
+        """
+        if key in self._captures:
+            return False
+        layer = self._free.pop(0) if self._free else self._claim()
+        self._captures[key] = _Capture(layer, wanted=0)
+        return True
+
+    def layer_of(self, key: Hashable) -> Optional[int]:
+        """The layer ``key`` holds, filled or not, or None where it has none."""
+        capture = self._captures.get(key)
+        return None if capture is None else capture.layer
+
     @property
     def waiting(self) -> bool:
         """Whether any capture is still to be drawn."""

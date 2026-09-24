@@ -67,8 +67,26 @@ picking it up again.
 5. Visual check of glisteel places in `full` mode (tunnel, forest,
    causeway) — captures at `--drive-seconds 12/22/32/42/52` looked right on
    the causeway and forest; the tunnel was not reached yet.
-6. `EXT_lights_image_based` (scene-level and zone `{"light": n}`) is not
-   implemented; `ZoneEnvironment.light` exists as an unused field.
+6. `EXT_lights_image_based` is read (`loaders/gltf/imagebased.py`,
+   `scenegraph/imagebasedlight.py`), uploaded into probe layers with no draw
+   (`IBLProbe.upload_light`, `ZonesMixin.uploadImageLights`), for zones
+   (`{"light": n}`) and the scene (layer 0). Tests:
+   `test_image_based_lights.py`, the `imagelight` render. Open checks: the
+   spec says face images "must be flipped about their vertical axis" -- the
+   upload uses them as `load_cubemap_faces` does (row 0 at the face's top),
+   unverified against a Khronos sample; LDR faces are taken as linear, and the
+   SH are taken as irradiance (divided by pi for the shader).
+
+**Next, as the user directed:** bake the places' environments instead of
+capturing at run time. The editor bake should render each zone's six faces
+offscreen, convolve (prefilter mips + SH), and write them as
+`EXT_lights_image_based` lights in `zones.gltf`, each zone naming its light;
+`zone_records` then stops asking for `capture`. Run-time capture stays for
+files that ask for it (the Parthenon).
+
+**Also wanted:** events when an object or the camera enters or leaves a zone
+(a subscribe/callback API on the pass or on `Zone`, fed from the per-object
+classification and the camera shares already computed).
 7. Plan document: set status to Implemented and record the departures
    (settings nodes named `Zone*` in a `settings` field; per-fragment world
    transform in the fragment shader with 4 layers; captures and cube-array

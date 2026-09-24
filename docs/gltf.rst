@@ -173,6 +173,9 @@ animation:
   array (glTF 2.1), and the extensions that apply inside it. See
   :doc:`zones` and the :doc:`specification <extensions/OGLC_zone>`.
 
+- Image-based lights - ``EXT_lights_image_based``: a scene's or a zone's
+  prefiltered environment and its irradiance coefficients. See :doc:`zones`.
+
 - Baked light - ``OGLC_materials_baked_light``, this project's own extension.
   It marks a mesh's ``COLOR_0`` as light calculated when the world was built,
   not as a tint on the surface. See :ref:`Baked light <baked-light-ext>` below.

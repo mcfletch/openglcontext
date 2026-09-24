@@ -21,6 +21,7 @@ from typing import (
 
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume,lod,lightgrid
 from OpenGLContext.scenegraph import zone as zonenodes
+from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
 from OpenGL.GL import *
 from OpenGL.GL import (
     glEnable, glDisable, glDisablei, glBlendFunc, glDepthMask, glDepthFunc,
@@ -928,8 +929,10 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         # then sampled per object, so it is found the same way a light is.
         lightgrid.LightGrid,
         # And the zones, which are placed once a frame and then decide the
-        # environment and lights of each object drawn.
+        # environment and lights of each object drawn, and a scene's own
+        # image-based light, which fills the scene's layer of the probe.
         zonenodes.Zone,
+        ImageBasedLight,
     ]
 
     #: The grid this frame's objects are lit from, or None where the scene

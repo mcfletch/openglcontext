@@ -43,7 +43,7 @@ from OpenGL.GL import (
     GL_VERTEX_SHADER, GL_FRAGMENT_SHADER,
     GL_RGB, GL_FLOAT,
     glGenTextures, glDeleteTextures, glBindTexture, glActiveTexture,
-    glTexStorage2D, glTexStorage3D, glTexSubImage2D, glTexParameteri,
+    glTexStorage2D, glTexStorage3D, glTexSubImage2D, glTexSubImage3D, glTexParameteri,
     glGenerateMipmap, glGenFramebuffers, glDeleteFramebuffers, glBindFramebuffer,
     glFramebufferTexture2D, glFramebufferTextureLayer, glCheckFramebufferStatus,
     glCopyImageSubData,
@@ -783,6 +783,56 @@ class IBLProbe(object):
             glViewport(int(prev_vp[0]), int(prev_vp[1]), int(prev_vp[2]), int(prev_vp[3]))
             glEnable(GL_DEPTH_TEST)
             glEnable(GL_CULL_FACE)
+
+    def upload_light(self, light: Any, layer: int = 0) -> bool:
+        """Fill ``layer`` from an already-convolved image-based light.
+
+        ``light`` is an :class:`~OpenGLContext.scenegraph.imagebasedlight.ImageBasedLight`:
+        its specular mip chain goes into the prefiltered map, resampled to
+        this probe's size, and its irradiance is evaluated from its
+        coefficients into the irradiance map. A light with fewer mips than
+        the probe repeats its roughest for the rest. Nothing is drawn. Layer
+        0 of a plain-cube probe is its only one. Returns whether it was filled.
+        """
+        if not self.ready or self.irradiance is None or self.prefilter is None:
+            return False
+        if layer and not (self.arrayed and 0 < layer < self.layers):
+            return False
+        from PIL import Image
+        target = GL_TEXTURE_CUBE_MAP_ARRAY if self.arrayed else GL_TEXTURE_CUBE_MAP
+        try:
+            glBindTexture(target, self.irradiance)
+            for face, pixels in enumerate(light.irradiance_faces(self.IRR_SIZE)):
+                self._upload_face(target, 0, layer, face, pixels)
+            glBindTexture(target, self.prefilter)
+            count = len(light.specular)
+            for level in range(self.PRE_LEVELS):
+                size = max(1, self.PRE_SIZE >> level)
+                for face, pixels in enumerate(
+                        light.specular_faces(min(level, count - 1))):
+                    if pixels.shape[0] != size:
+                        pixels = np.stack([np.asarray(Image.fromarray(
+                            np.ascontiguousarray(pixels[..., channel])).resize(
+                                (size, size), Image.BILINEAR))  # type: ignore[attr-defined]
+                            for channel in range(3)], -1)
+                    self._upload_face(target, level, layer, face, pixels)
+            return True
+        except Exception as err:
+            log.error("IBL layer %d could not take the image-based light: %s", layer, err)
+            return False
+        finally:
+            glBindTexture(target, 0)
+
+    def _upload_face(self, target: int, level: int, layer: int, face: int,
+                     pixels: np.ndarray) -> None:
+        data = np.ascontiguousarray(pixels, dtype=np.float32)
+        height, width = data.shape[0], data.shape[1]
+        if target == GL_TEXTURE_CUBE_MAP_ARRAY:
+            glTexSubImage3D(target, level, 0, 0, 6 * layer + face, width, height, 1,
+                            GL_RGB, GL_FLOAT, data)
+        else:
+            glTexSubImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, level, 0, 0,
+                            width, height, GL_RGB, GL_FLOAT, data)
 
     def grow(self, layers: int) -> None:
         """Make room for at least ``layers`` layers, keeping those already filled.

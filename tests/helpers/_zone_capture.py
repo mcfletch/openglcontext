@@ -14,6 +14,8 @@ Modes:
 ``lights``    a red point light over the left sphere is named by the zone, so
               it lights nothing outside it.
 ``nolights``  the same light and no zone, so it lights both halves.
+``imagelight`` the zone's environment is a red image-based light, as a
+              document's ``EXT_lights_image_based`` gives one.
 
 Usage:  python tests/helpers/_zone_capture.py OUTPUT.png MODE
 """
@@ -69,6 +71,13 @@ def main() -> int:
                 Transform(translation=where, children=[Shape(geometry=box, appearance=grey())])
                 for where, box in (((-4.6, 0.3, 0), wall), ((-0.4, 0.3, 0), wall),
                                    ((-2.5, 0.3, -2.1), side), ((-2.5, 0.3, 2.1), side)))
+        if mode == 'imagelight':
+            import numpy as np
+            from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
+            red = ImageBasedLight(
+                specular=[[np.full((8, 8, 3), (1.5, 0.05, 0.05), 'f4')] * 6],
+                irradianceCoefficients=[(5.0, 0.2, 0.2)] + [(0.0, 0.0, 0.0)] * 8)
+            settings = [ZoneEnvironment(light=red)]
         if mode in ('lights', 'nolights'):
             light = PointLight(location=(-2.5, 2.5, 0), color=(1.0, 0.1, 0.1),
                                intensity=4.0, attenuation=(1, 0, 0))
