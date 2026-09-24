@@ -191,17 +191,52 @@ def test_a_short_budget_draws_the_second_mirror_at_half_scale():
     assert widths[0] <= max(d.tile.width for d in full.draws) // 2 + reflection.TEXEL_STEP
 
 
-def test_a_mirror_being_drawn_takes_the_room_of_one_being_kept():
-    """An atlas with room for one tile: the new mirror's goes in, the old one's out."""
-    planner = ReflectionPlanner()
-    kept, new = _mirror(0.0), _mirror(2.5)
-    small = (64, 64)
-    planner.plan([_frame([kept])], small, BIG)
-    one = Budget(views=1, separate_views=1, texels=10 ** 9)
-    plan = planner.plan([_frame([kept, new])], small, one)
-    assert [draw.record for draw in plan.draws] == [new]
-    assert plan.lookup(plan.frames[0], kept) is None
-    assert plan.lookup(plan.frames[0], new) is not None
+def _minor_and_major():
+    """Two mirrors of one size, the second weighted four times the first."""
+    return (_mirror(x, reflector=PlanarReflector(interval=100, priority=priority))
+            for x, priority in ((2.5, 1.0), (0.0, 4.0)))
+
+
+def _one_tile_atlas(record):
+    """An atlas with room for ``record``'s tile and nothing beside it."""
+    tile = ReflectionPlanner().plan([_frame([record])], ATLAS, BIG).draws[0].tile
+    return tile.width + 8, tile.height + 8
+
+
+def test_a_mirror_being_drawn_takes_the_room_of_one_weighted_less():
+    """An atlas with room for one tile: the mirror weighted more has it."""
+    planner = _settled_planner()
+    minor, major = _minor_and_major()
+    atlas = _one_tile_atlas(major)
+    planner.plan([_frame([minor])], atlas, BIG)
+    plan = planner.plan([_frame([minor, major])], atlas, BIG)
+    assert [draw.record for draw in plan.draws] == [major]
+    assert plan.lookup(plan.frames[0], minor) is None
+
+
+def test_a_mirror_being_drawn_leaves_one_weighted_more_its_room():
+    planner = _settled_planner()
+    minor, major = _minor_and_major()
+    atlas = _one_tile_atlas(major)
+    planner.plan([_frame([major])], atlas, BIG)
+    plan = planner.plan([_frame([minor, major])], atlas, BIG)
+    assert [draw.record[4] for draw in plan.draws] in ([], [major[4]])
+    assert plan.lookup(plan.frames[0], major) is not None
+    assert plan.lookup(plan.frames[0], minor) is None
+
+
+def test_mirrors_the_atlas_cannot_hold_together_do_not_take_turns():
+    """A still scene with more mirrors than room settles on the ones it keeps:
+    trading tiles every frame shows each mirror reflecting and matte by turns."""
+    planner = _settled_planner()
+    minor, major = _minor_and_major()
+    atlas = _one_tile_atlas(major)
+    shown = []
+    for _ in range(6):
+        plan = planner.plan([_frame([minor, major])], atlas, BIG)
+        shown.append({key[1] for key in plan.lookups})
+    assert shown[-1] == shown[-2] == shown[-3]
+    assert not plan.unfinished
 
 
 def test_a_mirror_too_large_for_the_room_left_is_drawn_at_half_scale():

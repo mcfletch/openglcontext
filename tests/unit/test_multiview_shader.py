@@ -124,6 +124,14 @@ class TestTheViewTable:
         data = multiview.pack_view_table(frames, frames[0])
         assert len(data) == 2 * multiview.VIEW_RECORD_BYTES
 
+    def test_it_fills_every_view_a_program_was_compiled_for(self):
+        """A program compiled for four views reads a block four records long."""
+        frames = self.frames()
+        data = multiview.pack_view_table(frames, frames[0], capacity=4)
+        assert len(data) == 4 * multiview.VIEW_RECORD_BYTES
+        assert data[:2 * multiview.VIEW_RECORD_BYTES] == multiview.pack_view_table(
+            frames, frames[0])
+
     def test_the_reference_view_projects_its_own_eye_space_directly(self):
         frames = self.frames()
         records = multiview.view_records(frames, frames[0])
@@ -196,17 +204,39 @@ class TestOnTheDriver:
         shader.select_program_set(0)
         assert shader.program_strategy == ''
 
+    def test_a_set_compiled_for_more_views_serves_fewer(self, programs):
+        """Sets are compiled for a power of two of views, so a frame whose count
+        of views changes compiles a set only when it passes the next one."""
+        from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
+        shader = VRML97ShaderProgram()
+        assert shader.compile()
+        compiled = []
+        build = shader._compile_program_set
+
+        def counted(views, strategy='geometry'):
+            compiled.append(views)
+            return build(views, strategy)
+
+        shader._compile_program_set = counted
+        for views in (3, 4, 2, 3):
+            assert shader.select_program_set(views)
+            shader.select_program_set(0)
+        assert compiled == [4, 2]
+        assert shader.select_program_set(3) and shader.program_set == 4
+        shader.select_program_set(0)
+
     def test_the_table_layout_is_the_drivers(self, programs):
         from OpenGL import GL
         from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
         shader = VRML97ShaderProgram()
         assert shader.compile() and shader.select_program_set(3)
+        assert shader.program_set == 4
         offsets = multiview.driver_view_offsets(shader.program)
-        assert offsets == multiview.view_record_offsets(3)
+        assert offsets == multiview.view_record_offsets(4)
         size = np.zeros(1, 'i')
         GL.glGetActiveUniformBlockiv(
             shader.program,
             GL.glGetUniformBlockIndex(shader.program, 'ViewBlock'),
             GL.GL_UNIFORM_BLOCK_DATA_SIZE, size)
-        assert int(size[0]) == 3 * multiview.VIEW_RECORD_BYTES
+        assert int(size[0]) == 4 * multiview.VIEW_RECORD_BYTES
         shader.select_program_set(0)

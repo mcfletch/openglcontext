@@ -463,9 +463,13 @@ class _FlatEffectsMixin:
             shared: set = set()
             if self.sharesViews(mirrors):
                 limit = max(1, MultiviewCapabilities.detect().max_views)
+                # One set of programs for every count of mirror views the
+                # budget allows, compiled the first frame there are mirrors.
+                capacity = min(limit, max(1, self.reflectionBudget().views))
                 for start in range(0, len(mirrors), limit):
                     chunk = mirrors[start:start + limit]
-                    found = self.renderShared(chunk, None, lighting, mirrored=True)
+                    found = self.renderShared(chunk, None, lighting, mirrored=True,
+                                              capacity=capacity)
                     if found is None:
                         break
                     shared |= found

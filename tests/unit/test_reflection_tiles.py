@@ -67,6 +67,29 @@ def test_when_nothing_fits_the_packer_repacks_and_says_what_moved():
     assert placed.moved <= {'wide'}
 
 
+def test_shorter_tiles_use_the_room_beside_a_tall_one():
+    """A hall's floor tile takes most of the atlas's height; the wall mirrors'
+    tiles go in the width left beside it."""
+    packer = TilePacker(1328, 752)
+    sizes = {'floor': (560, 320), 'wall': (224, 112), 'tall': (112, 248),
+             'strip': (288, 32), 'a': (16, 48), 'b': (24, 56), 'c': (24, 64)}
+    placed = packer.place(sizes)
+    assert not placed.unplaced
+    assert set(placed.tiles) == set(sizes)
+    _assert_disjoint_and_inside(packer, placed.tiles)
+
+
+def test_a_tile_that_changes_shelf_class_still_finds_room():
+    packer = TilePacker(1328, 752)
+    sizes = {'floor': (560, 320), 'wall': (224, 112), 'tall': (96, 256),
+             'strip': (296, 32), 'a': (16, 48), 'b': (24, 56), 'c': (32, 64)}
+    packer.place(sizes)
+    placed = packer.place({**sizes, 'tall': (112, 248)})
+    assert not placed.unplaced
+    assert placed.tiles['floor'] == packer.tiles['floor']
+    _assert_disjoint_and_inside(packer, placed.tiles)
+
+
 def test_a_tile_larger_than_the_atlas_is_left_out():
     packer = TilePacker(128, 128)
     placed = packer.place({'huge': (400, 20), 'fits': (32, 32)})

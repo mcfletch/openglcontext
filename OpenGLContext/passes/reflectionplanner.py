@@ -22,8 +22,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import (
-    Any, Callable, Dict, Hashable, Iterable, List, NamedTuple, Optional, Sequence,
-    Tuple, Union,
+    Any, Callable, Dict, Hashable, Iterable, List, Mapping, NamedTuple, Optional,
+    Sequence, Set, Tuple, Union,
 )
 
 import numpy as np
@@ -166,6 +166,7 @@ class ReflectionPlanner:
         self.schedule = ReflectionSchedule()
         self.frame = 0
         self._held: Dict[Hashable, _Held] = {}
+        self._crowded: Set[Hashable] = set()
 
     def reset(self) -> None:
         """Forget every tile: the atlas they were in is gone."""
@@ -290,7 +291,8 @@ class ReflectionPlanner:
                       for entry in seen.values()]
         decisions = {decision.key: decision.scale
                      for decision in self.schedule.choose(candidates, budget)}
-        packed = self._pack(seen, decisions)
+        weights = {c.key: c.area * max(c.priority, 0.0) for c in candidates}
+        packed = self._pack(seen, decisions, weights)
         spare = max(0, int(budget.views) - len(decisions))
         for key in packed.moved:
             held_before = seen[key].held
@@ -318,36 +320,54 @@ class ReflectionPlanner:
             plan.lookups[key] = self._lookup(held[key], entry, atlas)
         self._held = held
         self.packer.place({key: (h.tile.width, h.tile.height) for key, h in held.items()})
+        # A mirror crowded out of the atlas finds no more room next frame.
         plan.unfinished = settling and bool(plan.draws) or any(
-            key not in decisions and (not candidate.valid or candidate.drift > DRIFT_TEXELS)
-            for key, candidate in ((c.key, c) for c in candidates))
+            candidate.key not in decisions and candidate.key not in self._crowded
+            and (not candidate.valid or candidate.drift > DRIFT_TEXELS)
+            for candidate in candidates)
         return plan
 
-    def _pack(self, seen: Dict[Hashable, _Seen], decisions: Dict[Hashable, float]) -> Packed:
+    def _pack(self, seen: Dict[Hashable, _Seen], decisions: Dict[Hashable, float],
+              weights: Mapping[Hashable, float]) -> Packed:
         """Place this frame's tiles, and settle the scale of each drawn one.
 
-        A tile being drawn outranks one being kept: where the two do not fit
-        together, the kept tiles give their room back, and a tile that still
-        does not fit is drawn at half scale before it is left out.
-        ``decisions`` is updated with the scale each drawn tile ends up at,
-        and loses any that found no room.
+        Where the tiles being drawn and the tiles being kept do not all fit,
+        they are placed one at a time by weight, screen area times priority,
+        heaviest first: a drawn tile without room is tried at half scale, and
+        one still without room is left out, drawn or kept. Weighing by what a
+        mirror shows, and not by how long it has gone without, lets a scene
+        with more mirrors than room settle on the ones it keeps. ``decisions``
+        is updated with the scale each drawn tile ends up at, and loses any
+        that found no room; those are recorded in ``_crowded``.
         """
+        self._crowded = set()
         drawn = {key: _scaled(seen[key].mirror.size, scale)
                  for key, scale in decisions.items()}
         kept = {key: (entry.held.tile.width, entry.held.tile.height)
                 for key, entry in seen.items()
                 if key not in decisions and entry.valid and entry.held is not None}
+        before = self.packer.tiles
         packed = self.packer.place({**kept, **drawn})
-        if not packed.unplaced & drawn.keys():
+        if not packed.unplaced:
             return packed
-        packed = self.packer.place(drawn)
-        for key in list(packed.unplaced):
-            decisions[key] *= 0.5
-            drawn[key] = _scaled(seen[key].mirror.size, decisions[key])
-        if packed.unplaced:
-            packed = self.packer.place(drawn)
-        for key in packed.unplaced:
+        placed: Dict[Hashable, Tuple[int, int]] = {}
+
+        def fits(key: Hashable, size: Tuple[int, int]) -> bool:
+            return not self.packer.place({**placed, key: size}).unplaced
+
+        for key in sorted({**kept, **drawn}, key=lambda key: -weights[key]):
+            size = drawn.get(key) or kept[key]
+            if not fits(key, size) and key in drawn:
+                decisions[key] *= 0.5
+                size = _scaled(seen[key].mirror.size, decisions[key])
+            if fits(key, size):
+                placed[key] = size
+        packed = self.packer.place(placed)
+        for key in drawn.keys() - packed.tiles.keys():
             del decisions[key]
+            self._crowded.add(key)
+        packed.moved = {key for key, tile in before.items()
+                        if key in packed.tiles and packed.tiles[key] != tile}
         return packed
 
     def _lookup(self, held: _Held, seen: _Seen, atlas: Tuple[int, int]) -> Lookup:

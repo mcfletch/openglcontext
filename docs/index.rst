@@ -9,7 +9,7 @@ A 3D engine for Python, on PyOpenGL.
 
 .. rst-class:: technical
 
-The engine rendered every picture on this site. `manifest.toml
+These are engine captures from various projects. `manifest.toml
 <https://github.com/mcfletch/openglcontext/blob/main/docs/images/manifest.toml>`__
 holds the recipe for each one, and ``tools/doc_images.py`` renders them again.
 `ATTRIBUTION.md

@@ -5,6 +5,8 @@ the camera cannot see it: red reaches the screen only through the mirror. The
 arithmetic is asserted without a window in ``test_planar_reflection.py`` and
 ``test_reflection_planner.py``; these are the claims that need one.
 """
+import os
+
 import numpy as np
 import pytest
 
@@ -141,7 +143,8 @@ def _mirror_draws(render_scene, env, strategy, mirrors):
     from OpenGLContext.multiview.strategy import MultiviewCapabilities
     from OpenGLContext.passes import renderpass
     env.setenv('OPENGLCONTEXT_MULTIVIEW', strategy)
-    env.setenv('OPENGLCONTEXT_REFLECTION_VIEWS', '16')
+    env.setenv('OPENGLCONTEXT_REFLECTION_VIEWS',
+               os.environ.get('OPENGLCONTEXT_REFLECTION_VIEWS') or '16')
     scene = [basenodes.Viewpoint(position=(0.0, 0.0, 6.0)),
              basenodes.NavigationInfo(headlight=False),
              basenodes.DirectionalLight(direction=(0.0, -1.0, 0.0)),
@@ -161,6 +164,18 @@ def test_one_draw_per_shape_serves_every_mirror(render_scene, env, strategy):
     four = _mirror_draws(render_scene, env, strategy, 4)
     assert (two[0], four[0]) == (2, 4)
     assert four[1] == two[1] == 2          # each wall once
+
+
+@pytest.mark.parametrize('strategy', ['vertex', 'geometry'])
+def test_mirror_views_share_one_set_of_programs_however_many_there_are(
+        render_scene, env, strategy):
+    """The count of mirror views changes as the camera turns; compiling a set
+    of programs for each count stalls the frame that first meets it."""
+    from OpenGLContext.passes import renderpass
+    env.setenv('OPENGLCONTEXT_REFLECTION_VIEWS', '8')
+    _mirror_draws(render_scene, env, strategy, 3)
+    sets = renderpass.FLAT.shader_program.__dict__.get('_program_sets', {})
+    assert sorted(views for _strategy, views in sets) == [0, 8]
 
 
 def test_drawn_in_turn_each_mirror_costs_its_own_draws(render_scene, env):

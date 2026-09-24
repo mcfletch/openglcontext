@@ -56,7 +56,7 @@ log = logging.getLogger(__name__)
 __all__ = [
     'IMPLEMENTED', 'MAX_VIEWS', 'MultiviewCapabilities', 'STRATEGIES',
     'VIEW_BLOCK_BINDING', 'VIEW_RECORD_BYTES', 'ViewFrame', 'ViewRecord',
-    'driver_view_offsets', 'pack_view_table', 'requested_strategy',
+    'driver_view_offsets', 'pack_view_table', 'program_views', 'requested_strategy',
     'reset_detected', 'view_mask', 'view_record_offsets', 'view_records',
     'draw_arrays', 'draw_elements', 'view_list',
 ]
@@ -311,18 +311,36 @@ def view_records(frames: Sequence[ViewFrame], reference: ViewFrame) -> List[View
     return records
 
 
-def pack_view_table(frames: Sequence[ViewFrame], reference: ViewFrame) -> bytes:
+def pack_view_table(frames: Sequence[ViewFrame], reference: ViewFrame,
+                    capacity: int = 0) -> bytes:
     """The ``ViewBlock`` contents for ``frames`` drawn in ``reference``'s eye space.
 
     A row-vector matrix's rows are the column vectors GLSL reads, so each
     matrix goes in as it is stored, as ``glUniformMatrix4fv`` takes it untransposed.
+    ``capacity`` is the views the program was compiled for; the records past
+    ``frames`` are zero, and no view mask names them.
     """
     parts = []
     for record in view_records(frames, reference):
         parts.append(np.ascontiguousarray(record.refToClip, '<f4').tobytes())
         parts.append(np.ascontiguousarray(record.eye, '<f4').tobytes())
         parts.append(np.array([record.cascadeByFit, 0, 0, 0], '<i4').tobytes())
+    parts.append(bytes(max(0, int(capacity) - len(frames)) * VIEW_RECORD_BYTES))
     return b''.join(parts)
+
+
+def program_views(views: int) -> int:
+    """The views a program for a shared draw of ``views`` views is compiled for.
+
+    The next power of two, and at least two: a program serves any draw of up
+    to as many views as it was compiled for, since a view mask names only the
+    views drawn, so a frame whose count of views changes compiles again only
+    when the count passes the next power of two.
+    """
+    count = 2
+    while count < int(views):
+        count *= 2
+    return count
 
 
 def view_record_offsets(count: int) -> Dict[str, int]:
