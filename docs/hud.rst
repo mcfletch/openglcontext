@@ -749,10 +749,14 @@ Showing and hiding it
 ``context.toggleDebugOverlay()`` does the same in code, and can be bound to
 any key a game prefers.
 
+It is on screen when a context opens unless the context class says
+``debugOverlayStartsVisible = False``, as :doc:`the viewer <viewer>` does: a
+program that opens on its content alone says so there.
+
 ``OPENGLCONTEXT_DISABLE_FPS_DISPLAY`` means what it always meant — no numbers
-over my screenshot — and now means it here: the overlay **starts hidden**. The
-key still brings it up, because a capture run is not the only thing that sets
-the variable.
+over my screenshot — and now means it here: the overlay **starts hidden**,
+whatever the class says. The key still brings it up, because a capture run is
+not the only thing that sets the variable.
 
 .. rst-class:: technical
 

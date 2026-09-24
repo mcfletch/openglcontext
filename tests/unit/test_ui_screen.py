@@ -170,6 +170,29 @@ class TestDebugOverlay:
         monkeypatch.setenv('OPENGLCONTEXT_DISABLE_FPS_DISPLAY', '1')
         assert not Screen().debugOverlay.visible
 
+    def test_a_context_class_can_start_it_hidden(self, monkeypatch):
+        monkeypatch.delenv('OPENGLCONTEXT_DISABLE_FPS_DISPLAY', raising=False)
+
+        class Quiet(Screen):
+            debugOverlayStartsVisible = False
+
+        assert not Quiet().debugOverlay.visible
+        assert Screen().debugOverlay.visible
+
+    def test_one_started_hidden_is_still_brought_up_by_the_key(self):
+        class Quiet(Screen):
+            debugOverlayStartsVisible = False
+
+        assert Quiet().toggleDebugOverlay() is True
+
+    def test_the_clean_frame_request_outranks_the_class(self, monkeypatch):
+        monkeypatch.setenv('OPENGLCONTEXT_DISABLE_FPS_DISPLAY', '1')
+
+        class Loud(Screen):
+            debugOverlayStartsVisible = True
+
+        assert not Loud().debugOverlay.visible
+
 
 class TestDrawingOrder:
     def test_the_hud_is_drawn_under_the_screens(self, gl_context, metrics):

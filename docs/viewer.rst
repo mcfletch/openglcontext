@@ -122,6 +122,30 @@ its three constants — ``STRAY_RATIO``, ``STRAY_CROWD`` and ``STRAY_GAP`` — a
 the numbers quoted above. It applies to glTF sources; the other formats frame
 their whole extent.
 
+.. _viewer-window:
+
+The window
+~~~~~~~~~~
+
+``oglc-view`` fills the screen, showing the scene alone. The :ref:`developer
+overlay <hud-debug>` starts hidden; :kbd:`Alt`+:kbd:`f` brings it up.
+
+.. code-block:: bash
+
+   oglc-view model.glb                     # full screen
+   oglc-view model.glb --no-fullscreen     # a 1920x1080 window
+   oglc-view model.glb --size 1280x720     # a 1280x720 window
+
+``--size WxH`` asks for a window of that size, and ``--fullscreen`` fills the
+screen whatever the size. Without ``--size`` the window is 1920x1080, which is
+also what leaving full screen from the Settings screen returns to.
+``OPENGLCONTEXT_FULLSCREEN=0`` makes a window the default for a shell, and the
+flags outrank it.
+
+A capture or a recording does not fill the screen. Its window is ``--size``,
+or the backend's default of 300x300, because that size is the resolution of
+the file it writes. See :ref:`Capturing a frame <capture>`.
+
 .. _commands:
 
 The old command names
@@ -198,6 +222,10 @@ The scene
 
 - ``t`` starts and stops the turntable.
 
+- ``v`` switches between one view of the scene and four: the plan, the front
+  and left elevations, and the camera. ``--views quad`` opens with four. See
+  :doc:`multiview`.
+
 Each of these does its thing once, on the key coming back up: a held key
 repeats around twenty times a second, which for these would be twenty models
 loaded or twenty cameras past the one wanted. They are declared as a table,
@@ -233,8 +261,8 @@ Screens
        loaded world is too expensive to throw away without being asked. Escape again
        resumes.
    * - ``Alt+F``
-     - The :ref:`developer overlay <hud-debug>`. The viewer adds a **Scene** section
-       to it: the source, which adapter read it, the radius the framing came from,
+     - The :ref:`developer overlay <hud-debug>`, hidden when the viewer opens. The
+       viewer adds a **Scene** section to it: the source, which adapter read it, the radius the framing came from,
        which camera is bound, the animation and how you are moving.
 
 These are the keys ``twig-bb`` uses, deliberately: someone who has used one of
@@ -424,7 +452,18 @@ something different from the field. The fields are grouped as: the source and
 environment (``lights``, ``shadows``, ``ibl_intensity``, ``environment``,
 ``background``); animation (``animate``, ``animation``, ``anim_time``,
 ``turntable``, ``no_rotate``); ``physics``; and the window and frame
-(``size``, ``capture``, ``capture_delay``, ``frames``).
+(``size``, ``fullscreen``, ``capture``, ``capture_delay``, ``frames``).
+
+The component opens the window its context class asks for, 300x300 unless
+the class says otherwise. ``options.window()`` returns the ``size`` and
+``fullscreen`` :doc:`definition fields <structure>` ``oglc-view`` opens its
+own with — full screen, or 1920x1080 — for an application that wants the
+same::
+
+   MyViewer.ContextMainLoop(**MyViewer.options.window())
+
+The component starts with the developer overlay hidden, through the
+``debugOverlayStartsVisible`` attribute every context has.
 
 The seams worth overriding
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

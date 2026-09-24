@@ -77,6 +77,55 @@ class TestUsableWithoutACommandLine:
         assert 'OPENGLCONTEXT_PHYSICS' in caplog.text
 
 
+class TestTheWindow:
+    """What ``oglc-view`` asks of the window it opens."""
+
+    @pytest.fixture(autouse=True)
+    def _no_fullscreen_pin(self, monkeypatch):
+        monkeypatch.delenv('OPENGLCONTEXT_FULLSCREEN', raising=False)
+
+    def test_an_interactive_viewer_fills_the_screen(self):
+        window = ViewerOptions(source='m.glb').window()
+        assert window['fullscreen'] is True
+
+    def test_leaving_full_screen_goes_to_a_1080p_window(self):
+        assert ViewerOptions().window()['size'] == (1920, 1080)
+
+    def test_a_size_asks_for_a_window_of_that_size(self):
+        window = ViewerOptions(size=(1280, 720)).window()
+        assert window == {'size': (1280, 720), 'fullscreen': False}
+
+    def test_a_size_can_still_be_full_screen_when_asked(self):
+        window = ViewerOptions(size=(1280, 720), fullscreen=True).window()
+        assert window == {'size': (1280, 720), 'fullscreen': True}
+
+    def test_full_screen_can_be_turned_off(self):
+        window = ViewerOptions(fullscreen=False).window()
+        assert window == {'size': (1920, 1080), 'fullscreen': False}
+
+    def test_the_environment_pins_the_default(self, monkeypatch):
+        monkeypatch.setenv('OPENGLCONTEXT_FULLSCREEN', '0')
+        assert ViewerOptions().window()['fullscreen'] is False
+        monkeypatch.setenv('OPENGLCONTEXT_FULLSCREEN', '1')
+        assert ViewerOptions(size=(640, 480)).window()['fullscreen'] is True
+
+    @pytest.mark.parametrize('output', [
+        {'capture': 'shot.png'}, {'capture_video': 'walk.mp4'},
+    ])
+    def test_a_capture_keeps_the_size_it_was_given(self, output):
+        """Its output's resolution is the size, and a reference image is
+        compared at the size it was made at."""
+        assert ViewerOptions(**output).window() == {}
+        assert ViewerOptions(size=(640, 480), **output).window() == {
+            'size': (640, 480)}
+
+    def test_the_command_line_says_whether_to_fill_the_screen(self):
+        from OpenGLContext.bin import view
+        assert view.parse_args(['m.glb', '--no-fullscreen']).fullscreen is False
+        assert view.parse_args(['m.glb', '--fullscreen']).fullscreen is True
+        assert view.parse_args(['m.glb']).fullscreen is None
+
+
 class TestTheCommandLineFillsIn:
     """``parse_args`` returns a ``ViewerOptions``, not a bare namespace."""
 

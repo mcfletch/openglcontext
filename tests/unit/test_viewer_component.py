@@ -81,6 +81,9 @@ class TestConfiguredByOptionsAlone:
         assert isinstance(SceneViewerMixin.options, ViewerOptions)
         assert SceneViewerMixin.options.animate is True
 
+    def test_it_opens_without_the_developer_overlay(self):
+        assert ViewerContext.debugOverlayStartsVisible is False
+
     def test_the_source_is_resolved_from_the_options(self):
         viewer = _viewer()
         viewer.prepareSource()
@@ -193,6 +196,7 @@ class TestTheMixinsComposeCleanly:
         'options',                      # the component's own configuration
         'setMovementManager',           # sizes free-fly stepping to the scene
         'physicsAvatarScale',           # a metric world gets a person, not a giant
+        'debugOverlayStartsVisible',    # a viewer opens on the scene alone
         # Answered by each mix-in that has an opinion and passed on rather than
         # replaced -- which is the distinction this gate is drawing. A viewer
         # may be capturing and recording at once, and the frames either still

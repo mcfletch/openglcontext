@@ -16,6 +16,10 @@ Every format gets everything the viewer can do. If the file contains no lights, 
 default sun + fill rig is added so the scene is never rendered in the dark;
 shadows are on by default. A scene that brings its own sky keeps it.
 
+The window fills the screen; ``--size WxH`` or ``--no-fullscreen`` opens a
+window instead, 1920x1080 unless a size is given. The developer overlay starts
+hidden; Alt + f brings it up.
+
 A model with no camera of its own is centred and auto-framed. The fit is on the
 *model*: a part the file stranded far outside the rest is still drawn but does
 not push the camera back to take it in, and the viewer prints a line saying how
@@ -201,7 +205,10 @@ def build_parser(prog: str = 'oglc-view') -> argparse.ArgumentParser:
     parser.add_argument('--background', metavar='SPEC',
                         help="background: 'sky' (default), 'none', or 'R,G,B'")
     parser.add_argument('--size', type=_parse_size, metavar='WxH',
-                        help='window size, e.g. 1100x680')
+                        help='window size, e.g. 1100x680 (default 1920x1080)')
+    parser.add_argument('--fullscreen', action=argparse.BooleanOptionalAction,
+                        help='fill the screen (default: on, unless --size '
+                             'names a window, or $OPENGLCONTEXT_FULLSCREEN)')
     # Streaming sources (3D Tiles): ignored by a format that is read once.
     parser.add_argument('--sse', type=float, metavar='PIXELS',
                         help='streamed datasets: max screen-space error in '
@@ -309,8 +316,7 @@ def main(argv: Optional[list[str]] = None, prog: str = 'oglc-view') -> Any:
             parser.error(str(error))
     apply_render_env(options)
     TestContext.options = options
-    return TestContext.ContextMainLoop(size=options.size) if options.size \
-        else TestContext.ContextMainLoop()
+    return TestContext.ContextMainLoop(**options.window())
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry point

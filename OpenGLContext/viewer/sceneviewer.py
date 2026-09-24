@@ -148,6 +148,8 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
 
     #: What to show and how.  A class attribute so a subclass can simply set it.
     options: ViewerOptions = ViewerOptions()
+    #: A viewer opens on the scene; :kbd:`Alt+f` brings up the overlay.
+    debugOverlayStartsVisible = False
 
     #: Resolved scene source (path or URL).
     source: Optional[str] = None

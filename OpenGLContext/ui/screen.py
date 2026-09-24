@@ -45,6 +45,12 @@ class ScreenMixin(object):
     getViewPlatform: Any
     triggerRedraw: Any
 
+    #: Whether the developer overlay is on screen when the context opens.  A
+    #: program that opens on its content alone says False; the overlay is
+    #: then one :kbd:`Alt+f` away.  ``OPENGLCONTEXT_DISABLE_FPS_DISPLAY``
+    #: hides it whatever this says.
+    debugOverlayStartsVisible: bool = True
+
     _hudLayers: Optional[List[Any]] = None
     _debugOverlay: Optional[Any] = None
 
@@ -82,7 +88,8 @@ class ScreenMixin(object):
             from OpenGLContext.ui.debugoverlay import (
                 DebugOverlay, install_default_providers,
             )
-            overlay = DebugOverlay(visible=DebugOverlay.startsVisible())
+            overlay = DebugOverlay(visible=(
+                self.debugOverlayStartsVisible and DebugOverlay.startsVisible()))
             install_default_providers(overlay, self)
             self._debugOverlay = overlay
             self.hudLayers.insert(0, overlay)

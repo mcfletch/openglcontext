@@ -371,7 +371,7 @@ class TestMainDispatch:
         monkeypatch.setattr(V, 'apply_render_env', lambda args: None)
         ran = []
         monkeypatch.setattr(V.TestContext, 'ContextMainLoop',
-                            classmethod(lambda cls, size=None: ran.append(True)))
+                            classmethod(lambda cls, **window: ran.append(True)))
         V.main([])
         assert ran == [True]
 
@@ -381,7 +381,7 @@ class TestMainDispatch:
         monkeypatch.setattr(V, 'apply_render_env', lambda args: None)   # no env leak
         ran = {}
         monkeypatch.setattr(V.TestContext, 'ContextMainLoop',
-                            classmethod(lambda cls, size=None: ran.setdefault('size', size)))
+                            classmethod(lambda cls, **window: ran.update(window)))
         V.main([str(model)])
         assert V.TestContext.options.source == str(model)
         assert 'size' in ran
@@ -392,7 +392,7 @@ class TestMainDispatch:
         monkeypatch.setattr(V, 'apply_render_env', lambda args: None)
         seen = {}
         monkeypatch.setattr(V.TestContext, 'ContextMainLoop',
-                            classmethod(lambda cls, size=None: seen.setdefault('size', size)))
+                            classmethod(lambda cls, **window: seen.update(window)))
         V.main([str(model), '--size', '640x480'])
         assert seen['size'] == (640, 480)
 

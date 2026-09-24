@@ -17,11 +17,15 @@ two places is a default that is eventually wrong in one of them.
         options = ViewerOptions(source='model.glb', physics=True)
 """
 from dataclasses import dataclass, field, fields
-from typing import Any, Optional, Sequence, Tuple
+from typing import Any, Dict, Optional, Sequence, Tuple
 
 from OpenGLContext import renderoptions
 
-__all__ = ['ViewerOptions']
+__all__ = ['ViewerOptions', 'WINDOW_SIZE']
+
+#: The window an interactive viewer opens when no size is given, and the one
+#: it returns to from full screen: 1080p.
+WINDOW_SIZE: Tuple[int, int] = (1920, 1080)
 
 
 @dataclass
@@ -120,8 +124,13 @@ class ViewerOptions:
     cache_dir: Optional[str] = None
 
     # -- the window and the frame -----------------------------------------
-    #: Window size as ``(width, height)``; None leaves the backend's default.
+    #: Window size as ``(width, height)``.  None is :data:`WINDOW_SIZE` for
+    #: an interactive viewer and the backend's default for a capture.
     size: Optional[Tuple[int, int]] = None
+    #: Fill the screen.  None fills it unless :attr:`size` names a window,
+    #: with ``OPENGLCONTEXT_FULLSCREEN`` pinning that default.  A hidden
+    #: window never fills the screen, so a capture never does.
+    fullscreen: Optional[bool] = None
     #: Render to this PNG once the scene has settled, then exit.
     capture: Optional[str] = None
     #: Seconds to let the scene settle before capturing.
@@ -136,6 +145,21 @@ class ViewerOptions:
     video_fps: int = 30
     #: Walk the camera along the scene's own viewpoints while recording.
     fly_through: bool = False
+
+    def window(self) -> Dict[str, Any]:
+        """The :class:`ContextDefinition` fields for the viewer's window.
+
+        ``size`` and ``fullscreen`` for an interactive viewer; for a capture or
+        a recording, ``size`` alone and only when one was given, since the size
+        is the resolution of what it writes.
+        """
+        if self.capture or self.capture_video:
+            return {'size': self.size} if self.size else {}
+        fullscreen = self.fullscreen
+        if fullscreen is None:
+            fullscreen = renderoptions.env_flag(
+                'OPENGLCONTEXT_FULLSCREEN', self.size is None)
+        return {'size': self.size or WINDOW_SIZE, 'fullscreen': fullscreen}
 
     def replace(self, **named: Any) -> 'ViewerOptions':
         """A copy with ``named`` changed -- for a caller who wants to keep the
