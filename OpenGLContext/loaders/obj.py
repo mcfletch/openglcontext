@@ -291,7 +291,10 @@ class OBJHandler(base.BaseHandler):
                 elif values[0] == "Ns":
                     material.material.shininess = float(values[1])
                 elif values[0] == "d":
-                    material.material.opacity = float(values[1])
+                    # "dissolve" is the opacity; VRML97 stores its complement
+                    material.material.transparency = 1.0 - float(values[1])
+                elif values[0] == "Tr":
+                    material.material.transparency = float(values[1])
                 elif values[0] == "map_Kd":
                     if "/" in values[1]:
                         img_url = [values[1], values[1].split("/")[-1]]

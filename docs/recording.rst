@@ -313,10 +313,9 @@ elsewhere.
 Stills
 ------
 
-A single frame is a separate job. ``OpenGLContext.capture`` reads the back
-buffer and writes a PNG, and ``SettleCapture`` waits for a scene to settle
-before it takes one. Use a recording for motion and a still capture for a
-picture. See :ref:`screenshots` and :ref:`pixels`.
+A single frame is a separate job. Use a recording for motion and a still
+capture for a picture; :doc:`Capturing the Render <capturing>` covers the
+screenshot key and writing one settled frame to a PNG.
 
 .. _recording-limits:
 

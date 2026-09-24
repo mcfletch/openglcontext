@@ -92,8 +92,7 @@ key produces no character, so bind it on ``keyboard`` (see
 returns the one it replaces.
 
 Mouse events reach handlers after the selection pass has resolved what is
-under the pointer; :ref:`events-and-selection` describes that path, and
-:doc:`multiview` describes how an event is routed to one of several views.
+under the pointer; :ref:`events-and-selection` below describes that path.
 For held-key movement, the movement modes read an input sampler rather than
 single events; see :ref:`navigation-input`.
 
@@ -133,6 +132,59 @@ A window that loses focus receives no key releases from the platform. When
 focus is lost, OpenGLContext sends a ``state=0`` event for each key that was
 down (``clearHeldKeys()``). The handler receives an ordinary release, and the
 application's set of held keys empties as it does for any other release.
+
+.. _structure-bindings:
+
+Which handler holds a key
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Each key has one handler: the last one registered. A key is identified by
+``(name, state, modifiers)``, and registering a second handler for the same
+triple replaces the first. ``Context.__init__`` binds keys in two steps, in
+this order:
+
+#. ``setupDefaultEventCallbacks`` binds the framework's defaults: Escape, the
+   arrow-key navigation, right-drag to examine, PageDown to cycle viewpoints,
+   ``Alt+F`` for the developer overlay, and :ref:`F2 or Alt+S <screenshots>`
+   for a screenshot.
+
+#. ``setupCallbacks`` binds the keys for *this* context. It runs second, so an
+   application that binds a key the framework also binds replaces the
+   framework's handler.
+
+Modifiers are a three-tuple in the order ``(shift, control, alt)``. A binding
+with a modifier in the wrong position registers without error, and the key
+never fires.
+
+.. _events-and-selection:
+
+Mouse events and selection
+--------------------------
+
+The :py:mod:`events <OpenGLContext.events>` package generates events the same
+way on every GUI library. Each backend defines subclasses of the event and
+event handler classes, which translate the toolkit's native events into
+OpenGLContext events. The event handler classes are mix-ins, included in each
+backend's Context class to provide the ``addEventHandler`` interface above.
+
+Mouse events reach the application through the pick queue. A backend adds an
+event with ``Context.addPickEvent``, and the selection pass dispatches it once
+it has found what is under the pick point. The queue is a mapping keyed by
+``Event.getPickKey``, so identical events within one frame are dispatched
+once.
+
+The mouse wheel is handled differently. Each notch arrives as a press and
+release of button 3 or 4 (``mouseevents.WHEEL_UP`` and ``WHEEL_DOWN``, the X11
+numbering). A notch is an increment rather than a state, so each notch has a
+distinct pick key and none is dropped. GLFW reports scrolling through its own
+callback as offsets, and the GLFW backend translates these into the button
+events; see :ref:`the overlay UI documentation <wheel>`.
+
+When an event arrives, ``Context.routeEvent`` sets ``event.view`` to the view
+it belongs to: the view under the pointer, the view where a held button was
+pressed, or, for a key, the active view. The selection pass resolves the pick
+through that view's camera. See :doc:`Several views on one window
+<multiview>`.
 
 Timers
 ------

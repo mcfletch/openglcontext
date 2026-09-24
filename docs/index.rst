@@ -293,6 +293,7 @@ Documentation
    viewer
    tutorials/index
    structure
+   backends
 
 .. toctree::
    :maxdepth: 2
@@ -309,6 +310,7 @@ Documentation
    lod
    multiview
    particles
+   profiles
 
 .. toctree::
    :maxdepth: 2
@@ -324,6 +326,7 @@ Documentation
    :maxdepth: 2
    :caption: Worlds and content
 
+   loading
    gltf
    vrml97
    tiles3d
@@ -357,6 +360,7 @@ Documentation
 
    testing
    telemetry
+   capturing
    recording
    packaging
    offscreen

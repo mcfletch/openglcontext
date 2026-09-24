@@ -298,6 +298,17 @@ keep turning behind the open panel. The position is still tracked while
 capture is suspended, so the movement across the panel does not arrive as
 one jump when capture resumes. See :ref:`overlayui-input`.
 
+.. _keyboard-navigation:
+
+Navigating without declared modes
+---------------------------------
+
+A context that declares no modes still moves. The :py:mod:`ViewPlatform
+<OpenGLContext.move.viewplatform>` and :py:mod:`ViewPlatformMixin
+<OpenGLContext.move.viewplatformmixin>` classes provide keyboard navigation:
+the arrow keys walk or fly, and Alt with the arrow keys pans or slides. They
+also provide the examine gestures below.
+
 .. _examine:
 
 Examining: orbit, pan and dolly

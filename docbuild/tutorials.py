@@ -20,7 +20,6 @@ import logging
 import os
 import re
 import sys
-import textwrap
 from typing import Iterable
 
 from docbuild import markup
@@ -315,14 +314,18 @@ def render(tutorial: Tutorial) -> str:
                     out.append(block.text)
                 started = True
             continue
-        code = _dedent(piece.text)
+        depth, code = _dedent(piece.text)
         if not started and _only_comments(code):
             # The shebang and the licence header at the top of the script are
             # not part of what the tutorial is teaching.
             continue
         started = True
-        options = '   :class: collapsed-code\n' if piece.kind == 'collapsed' else ''
-        out.append('.. code-block:: python\n%s\n%s' % (options, indent(code)))
+        options = ''
+        if piece.kind == 'collapsed':
+            options += '   :class: collapsed-code\n'
+        if depth:
+            options += '   :indent: %d\n' % (depth,)
+        out.append('.. tutorial-code:: python\n%s\n%s' % (options, indent(code)))
     out.append(
         '.. rst-class:: source-reference\n\n'
         'This walkthrough is written from ``tests/%s.py`` in the OpenGLContext '
@@ -338,13 +341,26 @@ def _only_comments(text: str) -> bool:
     )
 
 
-def _dedent(text: str) -> str:
-    """A code piece, with any indent common to all of it removed.
+def _dedent(text: str) -> tuple[int, str]:
+    """The indent common to a code piece, in columns, and the piece without it.
 
-    A piece cut from inside a class body carries that body's indent, which
-    would otherwise be in the page.
+    A piece cut from inside a class body carries that body's indent.  reST
+    takes the indent common to a directive's content off in any case, so the
+    page states it as the ``tutorial-code`` directive's ``:indent:`` option,
+    which puts it back (``docs/_ext/oglc_tutorials.py``).
     """
-    return textwrap.dedent(text).strip('\n')
+    lines = [_expand_indent(line) for line in text.strip('\n').split('\n')]
+    depth = min(
+        (len(line) - len(line.lstrip(' ')) for line in lines if line.strip()),
+        default=0,
+    )
+    return depth, '\n'.join(line[depth:].rstrip() for line in lines)
+
+
+def _expand_indent(line: str) -> str:
+    """``line`` with the tabs in its indent as the columns Python reads them as."""
+    body = line.lstrip()
+    return line[: len(line) - len(body)].expandtabs(8) + body
 
 
 def render_index(paths: Iterable[TutorialPath], written: Iterable[str]) -> str:

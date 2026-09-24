@@ -112,6 +112,12 @@ background into what each object sees. Ties into the HDRI-for-IBL survey noted i
 
 ## Ties into
 
+- [GLTF-SPATIAL-ZONES.md](GLTF-SPATIAL-ZONES.md) - a zone (`OGLC_zone`) can ask
+  for one probe captured inside its shape (`environment: {"capture": true}`) and
+  shared by everything it applies to. That makes a room, not an object, the
+  unit of capture, and gives box projection its proxy. The per-object capture
+  here remains the answer for objects in no zone. The zones plan's phase 5 is
+  where the two meet.
 - [PBR-MATERIALS.md](PBR-MATERIALS.md) — dual-mechanism IBL (`full`/`analytic`);
   per-object maps feed the same `full` uniforms.
 - [GLTF-COMPLETE-SUPPORT.md](GLTF-COMPLETE-SUPPORT.md) / [GLTF-DEMO-CONFORMANCE.md](GLTF-DEMO-CONFORMANCE.md)

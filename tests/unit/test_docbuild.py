@@ -297,11 +297,94 @@ class TestTheTutorialPage:
         assert 'A section\n---------' in page
 
     def test_the_code_is_a_python_block(self, page):
-        assert '.. code-block:: python' in page
+        assert '.. tutorial-code:: python' in page
         assert '   from OpenGLContext import testingcontext' in page
+
+    def test_code_at_the_top_level_is_not_indented(self, page):
+        assert ':indent:' not in page
 
     def test_it_says_which_script_it_came_from(self, page):
         assert '``tests/shader_1.py``' in page
+
+
+#: A method whose commentary sits between it and the class it belongs to.
+NESTED = '''\'\'\'=A title=\'\'\'
+class TestContext(BaseContext):
+    """The class."""
+    \'\'\'Commentary on the method.\'\'\'
+    def OnInit(self):
+        \'\'\'Commentary inside the method.\'\'\'
+        self.x = 1
+        if self.x:
+            self.y = 2
+'''
+
+
+class TestIndentation:
+    """Code cut from inside a class or a function stays where it sits in it."""
+
+    @pytest.fixture
+    def page(self, tmp_path):
+        path = tmp_path / 'nested.py'
+        path.write_text(NESTED, encoding='utf8')
+        return tutorials.render(tutorials.parse(str(path)))
+
+    def test_a_method_says_how_far_in_it_sits(self, page):
+        assert (
+            '.. tutorial-code:: python\n'
+            '   :indent: 4\n\n'
+            '   def OnInit(self):'
+        ) in page
+
+    def test_a_method_body_says_how_far_in_it_sits(self, page):
+        assert (
+            '.. tutorial-code:: python\n'
+            '   :indent: 8\n\n'
+            '   self.x = 1\n'
+            '   if self.x:\n'
+            '       self.y = 2'
+        ) in page
+
+    def test_the_built_page_shows_the_code_at_its_indent(
+        self, page, tmp_path, monkeypatch
+    ):
+        """docutils strips a directive's common indent; the directive puts it back."""
+        from docutils import nodes
+        from sphinx.application import Sphinx
+
+        from OpenGLContext.testing.paths import tests_root
+
+        monkeypatch.syspath_prepend(str(tests_root(__file__).parent / 'docs' / '_ext'))
+        source = tmp_path / 'source'
+        source.mkdir()
+        (source / 'conf.py').write_text(
+            "extensions = ['oglc_tutorials']\n", encoding='utf8'
+        )
+        (source / 'index.rst').write_text(page, encoding='utf8')
+        app = Sphinx(
+            str(source),
+            str(source),
+            str(tmp_path / 'out'),
+            str(tmp_path / 'doctrees'),
+            'dummy',
+            status=None,
+            warning=None,
+            freshenv=True,
+        )
+        app.build()
+        code = [
+            block.astext()
+            for block in app.env.get_doctree('index').findall(nodes.literal_block)
+        ]
+        assert code == [
+            'class TestContext(BaseContext):\n    """The class."""',
+            '    def OnInit(self):',
+            '        self.x = 1\n        if self.x:\n            self.y = 2',
+        ]
+        assert all(
+            block['language'] == 'python'
+            for block in app.env.get_doctree('index').findall(nodes.literal_block)
+        )
 
 
 class TestTheIndex:

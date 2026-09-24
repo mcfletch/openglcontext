@@ -175,31 +175,9 @@ scene is lit by the same pipeline as glTF content.
 Loading VRML97 files
 --------------------
 
-Load a file with the :py:mod:`loader <OpenGLContext.loaders.loader>`:
-
-.. code-block:: python
-
-   from OpenGLContext.loaders.loader import Loader
-
-   scenegraph = Loader.load( myurl, baseURL=None )
-
-``myurl`` is a single URL or a list of URLs to try in turn. If ``baseURL`` is
-not ``None``, relative URLs are resolved against it. For a file name, the
-loader opens the file, reads it, decompresses it if it is gzipped, parses it
-and converts it to a scenegraph.
-
-The VRML97 parser is built on `SimpleParse
-<https://github.com/mcfletch/simpleparse>`__, which is installed with
-OpenGLContext. A file that is not well formed raises ``SyntaxError``. A file
-that cannot be read raises ``IOError``. Catch both around the call to
-``load``.
-
-Some resources are loaded later, on the background loader pool: image
-textures, inlined scenes, shader sources and HDR panoramas. A failure there
-logs a message rather than raising. See :ref:`Loading without stopping the
-frame <background-loading>` for how to wait for those loads to finish.
-:doc:`Loading content you did not write <untrusted>` describes the limits on
-what a file's ``url`` fields can reach.
+``Loader.load( url )`` reads a world and returns its scenegraph.
+:doc:`Loading Content <loading>` describes the call, the errors it raises,
+and waiting for the textures and inlined scenes a world names.
 
 Working with the scenegraph
 ---------------------------
