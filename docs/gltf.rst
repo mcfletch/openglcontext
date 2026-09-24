@@ -382,7 +382,7 @@ present. Setting ``OPENGLCONTEXT_GLTF_HOOKS=0`` leaves every tag in every file
 unread.
 
 The engine claims the bare lowercase names it documents and ships — ``water``,
-``fire``, ``smoke`` and ``sparks`` — so an application naming its own keeps
+``mirror`` (:ref:`mirror-hook`), ``fire``, ``smoke`` and ``sparks`` — so an application naming its own keeps
 them out of that namespace: ``glisteel:rail``, ``twigbb:teleporter``. A
 convention, read by nothing, so that a kind a game invents today does not
 collide with one the engine ships later.

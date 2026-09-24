@@ -24,8 +24,13 @@ and open the result in the viewer::
 
 The ``.blend`` is the same room to open in Blender, with the add-on installed,
 to see how each mirror is tagged.
+
+The stone, brick, plaster and metal are baked from the engine's own procedural
+surfaces (``OpenGLContext/scenegraph/surfaces.py``), loaded here by path: that
+module needs nothing but NumPy, which Blender has.
 """
 import argparse
+import importlib.util
 import math
 import sys
 from pathlib import Path
@@ -54,6 +59,54 @@ def arguments():
                         help='the Blender file to save the room as, as well')
     after = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
     return parser.parse_args(after)
+
+
+def load_surfaces():
+    """The engine's procedural surfaces module, loaded without the engine."""
+    path = Path(__file__).resolve().parents[3] / 'OpenGLContext' / 'scenegraph' / 'surfaces.py'
+    spec = importlib.util.spec_from_file_location('oglc_surfaces', path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+surfaces = load_surfaces()
+
+
+def image(name, pixels, colour):
+    """A packed Blender image of an 8-bit RGB array whose first row is the top."""
+    height, width = pixels.shape[:2]
+    made = bpy.data.images.new(name, width, height, alpha=False)
+    made.colorspace_settings.name = 'sRGB' if colour else 'Non-Color'
+    rgba = surfaces.np.ones((height, width, 4), 'f')
+    rgba[..., :3] = pixels[::-1] / 255.0
+    made.pixels.foreach_set(rgba.ravel())
+    made.pack()
+    return made
+
+
+def surface_material(name, maps, relief=2.0):
+    """A material wearing a procedural surface, wired as the glTF exporter reads it."""
+    base, packed, normal = surfaces.images(maps, relief)
+    made = bpy.data.materials.new(name)
+    made.use_nodes = True
+    nodes, links = made.node_tree.nodes, made.node_tree.links
+    shader = nodes['Principled BSDF']
+    colour = nodes.new('ShaderNodeTexImage')
+    colour.image = image(name + 'Colour', base, True)
+    links.new(colour.outputs['Color'], shader.inputs['Base Color'])
+    rough = nodes.new('ShaderNodeTexImage')
+    rough.image = image(name + 'MetalRough', packed, False)
+    split = nodes.new('ShaderNodeSeparateColor')
+    links.new(rough.outputs['Color'], split.inputs['Color'])
+    links.new(split.outputs['Green'], shader.inputs['Roughness'])
+    links.new(split.outputs['Blue'], shader.inputs['Metallic'])
+    bumps = nodes.new('ShaderNodeTexImage')
+    bumps.image = image(name + 'Normal', normal, False)
+    mapped = nodes.new('ShaderNodeNormalMap')
+    links.new(bumps.outputs['Color'], mapped.inputs['Color'])
+    links.new(mapped.outputs['Normal'], shader.inputs['Normal'])
+    return made
 
 
 def enable_addon():
@@ -99,11 +152,18 @@ def placed(obj, name, material_=None):
     return obj
 
 
-def panel(name, size, location, rotation, material_):
-    """A flat rectangle, ``size`` = (width, height), facing where it is turned."""
+def panel(name, size, location, rotation, material_, texture=None):
+    """A flat rectangle, ``size`` = (width, height), facing where it is turned.
+
+    ``texture`` is the metres one repeat of its material covers; its texture
+    coordinates are scaled to match, so a wall repeats its brick at brick size.
+    """
     bpy.ops.mesh.primitive_plane_add(size=1.0, location=location, rotation=rotation)
     obj = placed(bpy.context.object, name, material_)
     obj.scale = (size[0], size[1], 1.0)
+    if texture is not None:
+        for loop in obj.data.uv_layers.active.data:
+            loop.uv = (loop.uv[0] * size[0] / texture, loop.uv[1] * size[1] / texture)
     return obj
 
 
@@ -114,31 +174,44 @@ def block(name, size, location, material_):
     return obj
 
 
-def room(stone, plaster):
-    """Four walls and a ceiling, so every mirror has a room to show."""
-    half_w, half_l = WIDTH / 2.0, LENGTH / 2.0
-    block('WallFar', (WIDTH, 0.2, HEIGHT), (0.0, half_l + 0.1, HEIGHT / 2), stone)
-    block('WallNear', (WIDTH, 0.2, HEIGHT), (0.0, -half_l - 0.1, HEIGHT / 2), stone)
-    block('WallLeft', (0.2, LENGTH, HEIGHT), (-half_w - 0.1, 0.0, HEIGHT / 2), stone)
-    block('WallRight', (0.2, LENGTH, HEIGHT), (half_w + 0.1, 0.0, HEIGHT / 2), stone)
-    block('Ceiling', (WIDTH + 0.4, LENGTH + 0.4, 0.2), (0.0, 0.0, HEIGHT + 0.1), plaster)
+def room(brick, plaster):
+    """Four brick walls and a plaster ceiling, faced into the room."""
+    half_w, half_l, middle = WIDTH / 2.0, LENGTH / 2.0, HEIGHT / 2.0
+    right_angle = math.radians(90.0)
+    # A plane faces +z; turned a right angle about x it faces -y, and each
+    # wall is then turned about z to face into the room.
+    panel('WallFar', (WIDTH, HEIGHT), (0.0, half_l, middle), (right_angle, 0.0, 0.0),
+          brick, texture=1.0)
+    panel('WallNear', (WIDTH, HEIGHT), (0.0, -half_l, middle), (right_angle, 0.0, math.pi),
+          brick, texture=1.0)
+    panel('WallLeft', (LENGTH, HEIGHT), (-half_w, 0.0, middle),
+          (right_angle, 0.0, right_angle), brick, texture=1.0)
+    panel('WallRight', (LENGTH, HEIGHT), (half_w, 0.0, middle),
+          (right_angle, 0.0, -right_angle), brick, texture=1.0)
+    panel('Ceiling', (WIDTH, LENGTH), (0.0, 0.0, HEIGHT), (math.pi, 0.0, 0.0),
+          plaster, texture=3.0)
 
 
 def mirrors():
     """The floor, the far mirror and the corridor: materials tagged ``mirror``."""
-    marble = mirror(material('Marble', (0.07, 0.07, 0.08), roughness=0.08),
+    marble = mirror(surface_material('Marble', surfaces.checkered_marble(512, tiles=2)),
                     interval=2, priority=0.5)
-    panel('Floor', (WIDTH, LENGTH), (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), marble)
+    panel('Floor', (WIDTH, LENGTH), (0.0, 0.0, 0.0), (0.0, 0.0, 0.0), marble, texture=2.0)
     silver = mirror(material('Silver', (0.95, 0.95, 0.96), roughness=0.02,
                              metallic=1.0), interval=2, priority=2.0)
     panel('FarMirror', (6.0, 3.0), (0.0, LENGTH / 2 - 0.1, 2.0),
           (math.radians(90.0), 0.0, 0.0), silver)
+    gilt = surface_material('Gilt', surfaces.brushed_metal(128, surfaces.GOLD, 0.22))
+    block('FarFrame', (6.4, 0.1, 3.4), (0.0, LENGTH / 2 - 0.03, 2.0), gilt)
     corridor = mirror(material('CorridorGlass', (0.9, 0.92, 0.95), roughness=0.03,
                                metallic=1.0), resolution=0.35)
+    bronze = surface_material('Bronze', surfaces.brushed_metal(128, surfaces.BRONZE, 0.35))
     for index in range(10):
         y = -9.0 + 2.0 * index
         panel('CorridorMirror%d' % index, (1.0, 1.4), (-WIDTH / 2 + 0.1, y, 1.8),
               (0.0, math.radians(90.0), 0.0), corridor)
+        block('CorridorFrame%d' % index, (0.08, 1.2, 1.6), (-WIDTH / 2 + 0.04, y, 1.8),
+              bronze)
 
 
 def window():
@@ -172,12 +245,14 @@ def pool(rim):
 
 
 def columns():
-    """Four coloured columns, each with a lamp over it that lights the room."""
-    colours = [(0.8, 0.2, 0.2), (0.2, 0.6, 0.9), (0.9, 0.7, 0.2), (0.3, 0.8, 0.4)]
-    for index, colour in enumerate(colours):
+    """Four columns of brushed metal, each with a lamp over it that lights the room."""
+    metals = [(surfaces.GOLD, 0.25), (surfaces.COPPER, 0.3), (surfaces.STEEL, 0.2),
+              (surfaces.BRONZE, 0.32)]
+    for index, (colour, rough) in enumerate(metals):
         x, y = -4.5 + 3.0 * index, 7.0 - 5.0 * (index % 2)
-        paint = material('Column%d' % index, colour, roughness=0.6)
-        block('Column%d' % index, (0.6, 0.6, 3.0), (x, y, 1.5), paint)
+        metal = surface_material('Column%d' % index,
+                                 surfaces.brushed_metal(128, colour, rough))
+        block('Column%d' % index, (0.6, 0.6, 3.0), (x, y, 1.5), metal)
         shade = material('Lamp%d' % index, (1.0, 0.95, 0.8), roughness=0.4)
         shade.node_tree.nodes['Principled BSDF'].inputs['Emission Color'].default_value = (
             1.0, 0.95, 0.8, 1.0)
@@ -202,10 +277,10 @@ def camera():
 
 def build():
     empty_scene()
-    stone = material('Stone', (0.55, 0.5, 0.45), roughness=0.9)
-    plaster = material('Plaster', (0.75, 0.73, 0.7), roughness=0.95)
-    rim = material('Rim', (0.8, 0.78, 0.72), roughness=0.7)
-    room(stone, plaster)
+    brick = surface_material('Brick', surfaces.brick(256))
+    plaster = surface_material('Plaster', surfaces.plaster(256), relief=0.5)
+    rim = surface_material('Sandstone', surfaces.sandstone(256))
+    room(brick, plaster)
     mirrors()
     window()
     pool(rim)
@@ -224,7 +299,8 @@ def main():
                                     compress=True)
     bpy.ops.export_scene.gltf(filepath=str(wanted.glb.resolve()),
                               export_format='GLB', export_cameras=True,
-                              export_lights=True, export_apply=True)
+                              export_lights=True, export_apply=True,
+                              export_tangents=True)
 
 
 main()

@@ -89,6 +89,23 @@ chimney.oglc_hook.enabled = True
 chimney.oglc_hook.kind = 'smoke'
 chimney.oglc_hook.density = 0.5
 
+bpy.ops.mesh.primitive_plane_add(size=2, location=(0.0, 5.0, 1.0), rotation=(1.5708, 0.0, 0.0))
+glass = bpy.context.object
+glass.name = 'Glass'
+silver = bpy.data.materials.new('Silver')
+glass.data.materials.append(silver)
+silver.oglc_hook.enabled = True
+silver.oglc_hook.kind = 'mirror'
+silver.oglc_hook.interval = 1
+silver.oglc_hook.mirror_scale = 0.25
+
+bpy.ops.mesh.primitive_plane_add(size=2, location=(4.0, 5.0, 1.0), rotation=(1.5708, 0.0, 0.0))
+window = bpy.context.object
+window.name = 'Window'
+window.data.materials.append(bpy.data.materials.new('Pane'))
+window.oglc_hook.enabled = True
+window.oglc_hook.kind = 'mirror'
+
 wrong = bpy.data.materials.new('Burning').oglc_hook
 wrong.enabled = True
 wrong.kind = 'fire'
@@ -97,6 +114,8 @@ result = {
     'fire on an object': drawn(torch.oglc_hook, 'object'),
     'water on a material': drawn(material.oglc_hook, 'material'),
     'fire on a material': drawn(wrong, 'material'),
+    'mirror on a material': drawn(silver.oglc_hook, 'material'),
+    'mirror on an object': drawn(window.oglc_hook, 'object'),
     'suggested for f': addon._kind_search(torch.oglc_hook, bpy.context, 'f'),
 }
 bpy.ops.export_scene.gltf(filepath=out, export_format='GLB')
@@ -176,3 +195,26 @@ def test_the_exported_chimney_loads_smoking(exported):
     scene = gltf.load_gltf(str(exported[1]))
     smoke, = scene.hook_data['smoke']
     assert smoke.rate == pytest.approx(0.5 * particles.PRESETS['smoke']['rate'])
+
+
+def test_a_mirror_panel_offers_the_mirror_fields_on_either_tab(exported):
+    for holder in ('mirror on a material', 'mirror on an object'):
+        record = exported[0][holder]
+        assert {'mirror_scale', 'interval', 'priority', 'distortion'} <= set(_props(record))
+        assert not [text for kind, text in record if kind == 'alert']
+
+
+def test_the_exported_mirrors_load_reflecting(exported):
+    from OpenGLContext.scenegraph.shape import Shape
+
+    def materials(node):
+        found = [node.appearance.material] if isinstance(node, Shape) else []
+        for child in getattr(node, 'children', None) or []:
+            found += materials(child)
+        return found
+
+    scene = gltf.load_gltf(str(exported[1]))
+    shaded, = [m.reflector for m in materials(scene.getDEF('Glass'))]
+    assert (shaded.interval, shaded.scale, bool(shaded.replace)) == (1, 0.25, False)
+    alone, = [m.reflector for m in materials(scene.getDEF('Window'))]
+    assert alone.replace

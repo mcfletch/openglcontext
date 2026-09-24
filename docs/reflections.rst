@@ -96,28 +96,90 @@ water whose material names no reflector reflects the same way. See
 
 .. _mirror-hook:
 
-Mirrors in a model: the ``mirror`` hook
----------------------------------------
+Authoring mirrors in a model
+----------------------------
 
-A glTF marks a mirror with the ``OGLC_hook`` tag
-(:ref:`hooks <gltf-hooks>`), and the tag means different things in its two
-places.
+A glTF marks a mirror with the ``OGLC_hook`` tag (:ref:`hooks`) naming the
+``mirror`` kind. The tag goes in one of two places, and they mean different
+things:
 
-On a **material**, every surface drawn with it is a mirror, shaded by the
-material the file carries. On an **object**, every surface of that object
-shows only its reflection (``replace``): its own materials are set aside.
+- On a **material**, every surface drawn with that material is a mirror, and
+  the material shades the reflection: its colour tints it, its metalness and
+  roughness weight it, its normal map breaks it up.
+- On an **object** (a glTF node), every surface of that object shows only its
+  reflection, with the sky where it reflects nothing. The object's own
+  materials are set aside.
 
-.. code-block:: text
+The parameters are the ``PlanarReflector`` fields above, all optional:
+``scale``, ``interval``, ``priority``, ``distortion``, and ``replace`` where
+the place's own default -- off on a material, on on an object -- is not the
+one wanted.
 
-   OGLC_hook = {"kind": "mirror", "scale": 0.5, "interval": 2, "priority": 1.0}
+In Blender
+~~~~~~~~~~
 
-``OGLC_hook = "mirror"`` is the shorthand with every default. The parameters
-are the node's fields above, all optional: ``scale``, ``interval``,
-``priority``, ``distortion``, and ``replace`` where the holder's default is
-not the one wanted. The Blender add-on's panel has a field for each
-(``tools/blender/README.md``). A material carrying a reflector is written back
-out with the tag by the glTF writer, so a world loaded and saved again keeps
-its mirrors.
+The ``oglc_hook`` add-on in ``tools/blender`` puts an **Engine Hook** panel on
+the material and object tabs (``tools/blender/README.md`` says how to install
+it).
+
+1. Model the mirror as a flat mesh: a plane, or any mesh whose faces all lie in
+   one plane. It reflects towards the side its faces' normals point, which is
+   the blue side in the viewport's *Face Orientation* overlay; flip the normals
+   of a mirror that shows red towards the room.
+2. Give it a material and shade it as the mirror should look. For a silvered
+   mirror, *Metallic* 1 and *Roughness* 0 to 0.05. For a polished floor, a
+   dark *Base Color*, *Metallic* 0 and *Roughness* below 0.15. For a mirror a
+   normal map breaks up, plug the map into *Normal* as usual and set the
+   panel's *Distortion*.
+3. On the **material** tab, open **Engine Hook**, tick it, and type ``mirror``
+   as the **Kind**. The panel offers *Resolution* (``scale``), *Redraw Every*
+   (``interval``), *Priority* and *Distortion*, and the line under them shows
+   the block the file will carry, for example
+   ``OGLC_hook: {"interval": 2, "kind": "mirror"}``. A field left at its default
+   is not written.
+4. For an object that is only a mirror, tag the **object** tab instead, with the
+   same kind and fields.
+5. Export with **File ‣ Export ‣ glTF 2.0**. The add-on writes the tag as each
+   material and node goes out; no export option has to be ticked.
+
+Without the add-on, add a custom property called ``OGLC_hook`` to the material
+or the object, of type *String*, holding the block as JSON --
+``{"kind": "mirror", "interval": 2}``, or just ``mirror`` -- and tick
+**Include ‣ Custom Properties** when exporting.
+
+``tools/blender/demos/mirrors.py`` builds a whole hall this way (see
+:ref:`reflections-demo`), and ``mirrors.blend`` beside it is that hall to open
+and look at.
+
+In the glTF itself
+~~~~~~~~~~~~~~~~~~
+
+A tool writing glTF directly puts the block in the material's or the node's
+``extensions`` and names ``OGLC_hook`` in ``extensionsUsed``. It is never
+required: a viewer that does not know it draws the surface as an ordinary one.
+
+.. code-block:: json
+
+   {
+     "extensionsUsed": ["OGLC_hook"],
+     "materials": [{
+       "name": "Silver",
+       "pbrMetallicRoughness": {"baseColorFactor": [0.97, 0.96, 0.91, 1.0],
+                                "metallicFactor": 1.0, "roughnessFactor": 0.02},
+       "extensions": {"OGLC_hook": {"kind": "mirror", "interval": 2, "priority": 2.0}}
+     }],
+     "nodes": [{
+       "name": "Window", "mesh": 3,
+       "extensions": {"OGLC_hook": {"kind": "mirror", "interval": 1}}
+     }]
+   }
+
+The same block may be written in ``extras`` instead, which is what a Blender
+custom property becomes; the extension wins where a holder carries both. A
+bare string, ``"OGLC_hook": "mirror"``, is the kind with every default.
+
+The engine's glTF writer (:doc:`baking`) writes a material's reflector back out
+as this block, so a world loaded, edited and saved again keeps its mirrors.
 
 How reflections are drawn
 -------------------------
