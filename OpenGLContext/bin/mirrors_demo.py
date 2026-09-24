@@ -255,7 +255,7 @@ def main() -> int:
 
     base: Any = testingcontext.getInteractive()
 
-    class MirrorContext(base):  # type: ignore[misc, valid-type]
+    class MirrorContext(base):
         def OnInit(self) -> None:
             self.hall = MirrorHall()
             self.sg = basenodes.sceneGraph(children=self.hall.children)

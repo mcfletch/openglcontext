@@ -123,7 +123,7 @@ def surface_roughness(material: Any) -> float:
     textures = getattr(material, 'textures', None) or {}
     texture = textures.get('metallicRoughness')
     image = getattr(texture, 'image', None)
-    if image is None:
+    if texture is None or image is None:
         return factor
     known = getattr(texture, '_mean_roughness', None)
     if known is None or known[0] is not image:

@@ -52,9 +52,10 @@ def load_program(vert_name: str, frag_name: str) -> int:
     draw, not at link; a genuine link failure is still raised on ``GL_LINK_STATUS``.
     """
     from OpenGLContext.passes.shadersource import preprocess_shader
-    return compileProgram(compileShader(preprocess_shader(vert_name), GL_VERTEX_SHADER),
-                          compileShader(preprocess_shader(frag_name), GL_FRAGMENT_SHADER),
-                          validate=False)
+    return int(compileProgram(
+        compileShader(preprocess_shader(vert_name), GL_VERTEX_SHADER),
+        compileShader(preprocess_shader(frag_name), GL_FRAGMENT_SHADER),
+        validate=False))
 
 
 #: A program and its uniforms' locations, by name.

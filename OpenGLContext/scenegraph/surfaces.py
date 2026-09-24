@@ -59,7 +59,7 @@ class Maps:
 
 
 def _smooth(t: np.ndarray) -> np.ndarray:
-    return t * t * (3.0 - 2.0 * t)
+    return np.asarray(t * t * (3.0 - 2.0 * t))
 
 
 def tileable_noise(size: int, cells: int, seed: int = 0) -> np.ndarray:
@@ -93,11 +93,11 @@ def fbm(size: int, cells: int, seed: int = 0, octaves: int = 4) -> np.ndarray:
 
 def _mix(a: Colour, b: Colour, t: np.ndarray) -> np.ndarray:
     first, second = np.asarray(a, 'd'), np.asarray(b, 'd')
-    return first + (second - first) * t[..., None]
+    return np.asarray(first + (second - first) * t[..., None])
 
 
 def _clip(value: np.ndarray) -> np.ndarray:
-    return np.clip(value, 0.0, 1.0)
+    return np.asarray(np.clip(value, 0.0, 1.0))
 
 
 def _grid(size: int) -> Tuple[np.ndarray, np.ndarray]:
@@ -237,7 +237,7 @@ def images(maps: Maps, relief: float = 2.0) -> Tuple[np.ndarray, np.ndarray, np.
     green channel and metalness in the blue, and the normal map linear.
     """
     def eight(value: np.ndarray) -> np.ndarray:
-        return (np.clip(value, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8)
+        return np.asarray((np.clip(value, 0.0, 1.0) * 255.0 + 0.5).astype(np.uint8))
 
     ones = np.ones_like(maps.roughness)
     packed = np.stack([ones, maps.roughness, maps.metallic], axis=-1)
