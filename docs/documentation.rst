@@ -103,6 +103,9 @@ Installing the package puts these commands on your path:
 ``oglc-ui-demo``
    Demonstrates the overlay UI: the settings screen, the key-binding editor,
    the console and a skin. See :doc:`The overlay UI <overlayui>`.
+``oglc-audio-demo``
+   Demonstrates sound: collisions, events, fading areas and a pitch that
+   follows the simulation. See :ref:`Sound <audio-demos>`.
 ``oglc-character-sheet``
    Draws every clip a rigged character plays as one picture, with a row per
    view and a column per moment of the cycle, plus an overview sheet and an
@@ -305,12 +308,15 @@ The application around it
   controller with viewpoint binding, a motion debug overlay, and
   :ref:`walking <walking>` in every interactive context.
 
-- :doc:`Spatial Audio <audio>` -- sound placed in the scene on glTF's
-  ``KHR_audio_emitter`` model: distance curves, directional cones, equal-power
-  panning, a fixed voice pool with priority stealing, underwater muffling, and
-  silence as a supported backend. The mixer is the separate ``omi_audio``
-  package; OpenGLContext supplies the scenegraph nodes and the per-context
-  engine.
+- :doc:`Sound <audio>` -- sound placed in the scene on glTF's
+  ``KHR_audio_emitter`` model: file formats, sound in glTF files, and how to
+  play a sound on a collision, on an event and for an area; volume, muffling
+  and running with no sound device. ``oglc-audio-demo`` shows each of them.
+
+- :doc:`Audio Engine Internals <audio-internals>` -- how ``omi_audio`` and
+  OpenGLContext's audio nodes work: the threads, the gain curves, the mixer
+  and voice stealing, the clip cache and codec selection, and testing sound
+  without a device.
 
 - :doc:`Overlay UI <overlayui>` -- panels drawn over the frame and driven by
   the pointer: a settings screen generated from the ``ContextDefinition``

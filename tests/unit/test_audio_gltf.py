@@ -99,6 +99,65 @@ def emitters_in(scene):
     return found
 
 
+def placed(*emitters, name='Speaker', scene_emitters=None):
+    """``EMITTERS`` with one node carrying ``emitters`` and, optionally, the
+    scene carrying ``scene_emitters``."""
+    body = dict(EMITTERS)
+    body['nodes'] = [{'name': name,
+                      'extensions': {'KHR_audio_emitter': {'emitters': list(emitters)}}}]
+    if scene_emitters is not None:
+        body['scenes'] = [{'nodes': [0], 'extensions': {
+            'KHR_audio_emitter': {'emitters': list(scene_emitters)}}}]
+    return loader.load_gltf(document(**body), base_url='http://example/scene.gltf')
+
+
+class TestSoundsByName:
+    """An authored sound is found by the name the author gave its emitter."""
+
+    def test_a_node_emitter_is_indexed_by_its_name(self):
+        scene = placed(0)
+        assert scene.sounds['Fountain'] is emitters_in(scene)[0]
+
+    def test_a_scene_emitter_is_indexed_too(self):
+        scene = placed(scene_emitters=[1])
+        assert scene.sounds['Music'].type == 'global'
+
+    def test_the_emitter_is_found_by_def_as_well(self):
+        scene = placed(0)
+        assert scene.getDEF('Fountain') is scene.sounds['Fountain']
+
+    def test_a_node_of_the_same_name_keeps_its_def(self):
+        """Nodes and emitters share VRML's one DEF namespace; the node wins."""
+        scene = placed(0, name='Fountain')
+        assert not isinstance(scene.getDEF('Fountain'), audionodes.AudioEmitter)
+        assert scene.sounds['Fountain'].DEF == 'Fountain_001'
+
+    def test_an_emitter_on_two_nodes_is_indexed_at_the_first(self):
+        body = dict(EMITTERS)
+        body['scenes'] = [{'nodes': [0, 1]}]
+        body['nodes'] = [
+            {'name': 'Left', 'extensions': {'KHR_audio_emitter': {'emitters': [0]}}},
+            {'name': 'Right', 'extensions': {'KHR_audio_emitter': {'emitters': [0]}}},
+        ]
+        scene = loader.load_gltf(document(**body), base_url='http://example/scene.gltf')
+        left, right = scene.getDEF('Left'), scene.getDEF('Right')
+        assert scene.sounds['Fountain'] in left.children
+        assert scene.getDEF('Fountain_001') in right.children
+
+    def test_an_unnamed_emitter_is_placed_and_not_indexed(self):
+        body = json.loads(json.dumps(EMITTERS))
+        del body['extensions']['KHR_audio_emitter']['emitters'][0]['name']
+        body['nodes'] = [{'name': 'Speaker',
+                          'extensions': {'KHR_audio_emitter': {'emitters': [0]}}}]
+        scene = loader.load_gltf(document(**body), base_url='http://example/scene.gltf')
+        assert len(emitters_in(scene)) == 1
+        assert scene.sounds == {}
+
+    def test_a_document_without_sound_has_an_empty_index(self):
+        scene = loader.load_gltf(document(), base_url='http://example/scene.gltf')
+        assert scene.sounds == {}
+
+
 class TestNodeEmitters:
     def test_a_node_with_an_emitter_gets_one_in_the_scenegraph(self):
         body = dict(EMITTERS)

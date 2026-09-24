@@ -395,7 +395,7 @@ Putting the camera under water
 ``medium_fog()`` returns a :ref:`Fog <fog>` node that starts switched off.
 Call ``submerge`` once a frame with the viewer's position. It sets the
 context's ``fog`` to the medium's colour and visibility, and sets the audio
-engine's whole-mix :ref:`muffle <mixer>` to the medium's ``muffle``. It
+engine's whole-mix :ref:`muffle <audio-muffle>` to the medium's ``muffle``. It
 returns the name of the medium, or ``''`` for dry air, so the caller can report
 it or apply ``harm``. Because the effect is fog with depth, not a coloured
 overlay, nearby objects stay clear while distant ones fade.

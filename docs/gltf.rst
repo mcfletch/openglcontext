@@ -651,7 +651,7 @@ Driving a model by name
 An application that changes a model at runtime (repaints a car, turns a dial,
 hides the shell for an interior view) should address its parts by the names
 the artist gave them. The code then keeps working when the art is
-re-exported. The scene has three lookups by name:
+re-exported. The scene has four lookups by name:
 
 .. code-block:: python
 
@@ -660,6 +660,7 @@ re-exported. The scene has three lookups by name:
    interior = scene.getDEF( "interior" )                     # a node, by its glTF name
    scene.materials[ "paint" ].baseColor = (0.1, 0.3, 0.6)    # a material, by its glTF name
    player = scene.player_named( "steer", loop=False )        # an animation clip, by its name
+   scene.sounds[ "horn" ].play()                             # a sound, by its emitter's name
 
 ``scene.materials`` maps each material name in the document to the
 ``PBRMaterial`` built for it. It lists only the materials that the scene's
@@ -669,6 +670,12 @@ model. glTF names need not be unique. A repeated name maps to the first
 material in the document with that name. A material without a name is drawn
 but not listed. The :ref:`writer <writing>` writes a material's ``DEF`` as its
 glTF name, so a name survives a round trip.
+
+``scene.sounds`` maps each ``KHR_audio_emitter`` emitter name to the
+``AudioEmitter`` node built for it; see :ref:`audio-gltf-names`. Nodes,
+materials and emitters share one DEF namespace, and a node keeps its name: an
+emitter called ``horn`` on a node called ``horn`` is ``getDEF("horn_001")`` and
+``scene.sounds["horn"]``.
 
 ``player_named()`` is ``player()`` with a clip name instead of an index. It
 returns ``None`` when no clip has that name. ``loop=False`` clamps the clip at

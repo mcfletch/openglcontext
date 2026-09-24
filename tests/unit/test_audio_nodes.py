@@ -137,6 +137,21 @@ class TestAudioSourceNode:
         emitter.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
         assert engine.active_voices == 1
 
+    def test_a_changed_playback_rate_reaches_the_playing_sound(self, engine):
+        """A motor note follows the speed it is being driven at.
+
+        On the next frame, not the next re-aim: a pitch that stepped fifteen
+        times a second would be heard as steps.
+        """
+        source = audionodes.AudioSource()
+        source.useClip(synth.tone(440.0, 0.01, sample_rate=8000, fade=0.0))
+        emitter = audionodes.AudioEmitter(type='global', sources=[source])
+        emitter.updateAudio(engine, translation(), 0.0)
+        source.playbackRate = 4.0
+        emitter.updateAudio(engine, translation(), 1.0 / 60.0)
+        engine.mixer.mix(24)                    # 96 of the clip's 80 frames
+        assert engine.active_voices == 0
+
     def test_the_settings_read_back_as_a_khr_source_record(self):
         source = audionodes.AudioSource(gain=0.5, loop=True, playbackRate=2.0)
         record = source.record()
@@ -317,6 +332,53 @@ class TestAudioEmitterNode:
         emitter.updateAudio(engine, translation(), 1.0)
         emitter.stopAudio()
         assert emitter.repeatsAt(source) is None
+
+    def test_a_source_that_does_not_autoplay_sounds_when_asked_to(self, engine):
+        source = audionodes.AudioSource(url=['blip'], autoplay=False)
+        emitter = self.make(sources=[source])
+        emitter.updateAudio(engine, translation(), 0.0)
+        source.play()
+        emitter.updateAudio(engine, translation(), 0.1)
+        assert engine.active_voices == 1
+
+    def test_asking_once_plays_once(self, engine):
+        source = audionodes.AudioSource(url=['blip'], autoplay=False)
+        emitter = self.make(sources=[source])
+        source.play()
+        emitter.updateAudio(engine, translation(), 0.0)
+        engine.mixer.mix(512)                               # runs the clip out
+        for frame in range(1, 5):
+            emitter.updateAudio(engine, translation(), frame)
+        assert engine.active_voices == 0
+
+    def test_a_finished_one_shot_plays_again_when_asked(self, engine):
+        """A crash, a door, a shot from a turret: the same sound, each time."""
+        source = audionodes.AudioSource(url=['blip'])
+        emitter = self.make(sources=[source])
+        emitter.updateAudio(engine, translation(), 0.0)
+        engine.mixer.mix(512)
+        emitter.updateAudio(engine, translation(), 1.0)     # finished
+        source.play()
+        emitter.updateAudio(engine, translation(), 2.0)
+        assert engine.active_voices == 1
+
+    def test_asking_a_playing_source_starts_it_again_from_the_top(self, engine):
+        source = audionodes.AudioSource(url=['beep'])
+        emitter = self.make(sources=[source])
+        emitter.updateAudio(engine, translation(), 0.0)
+        engine.mixer.mix(512)
+        source.play()
+        emitter.updateAudio(engine, translation(), 0.1)
+        assert engine.active_voices == 1
+        assert emitter._playing[id(source)].elapsed == 0.0
+
+    def test_playing_an_emitter_plays_every_source(self, engine):
+        sources = [audionodes.AudioSource(url=['blip'], autoplay=False),
+                   audionodes.AudioSource(url=['beep'], autoplay=False)]
+        emitter = self.make(sources=sources)
+        emitter.play()
+        emitter.updateAudio(engine, translation(), 0.0)
+        assert engine.active_voices == 2
 
     def test_an_emitter_with_no_sources_is_harmless(self, engine):
         audionodes.AudioEmitter(sources=[]).updateAudio(engine, translation(), 0.0)
