@@ -3,6 +3,8 @@
 A table and a box test, so none of it needs a window.
 """
 import pytest
+from vrml import node
+from vrml.protofunctions import getFields
 
 from OpenGLContext.scenegraph.water.medium import (
     LAVA,
@@ -14,6 +16,54 @@ from OpenGLContext.scenegraph.water.medium import (
     worst_of,
 )
 from OpenGLContext.scenegraph.water.volumes import Volume, Volumes
+
+
+class TestAMediumIsANode:
+    """A substance is scene content, held in fields like any other."""
+
+    def test_a_medium_is_a_scenegraph_node(self) -> None:
+        assert isinstance(MEDIA[WATER], node.Node)
+        assert {'name', 'color', 'visibility', 'muffle', 'harm'} \
+            <= {one.name for one in getFields(MEDIA[WATER])}
+
+    def test_a_medium_writes_itself_out(self) -> None:
+        written = MEDIA[LAVA].toString()
+        assert 'Medium' in written and 'visibility' in written
+
+    def test_every_standard_one_is_a_medium(self) -> None:
+        assert all(isinstance(one, Medium) for one in MEDIA.values())
+
+    def test_the_table_hands_out_its_own_nodes(self) -> None:
+        """So a game that tunes ``MEDIA[LAVA]`` tunes lava everywhere."""
+        assert medium_for(LAVA) is MEDIA[LAVA]
+
+    def test_a_game_can_make_one_of_its_own(self) -> None:
+        acid = Medium(name='acid', color=(0.1, 0.2, 0.0), visibility=3.0,
+                      muffle=0.8, harm=20.0)
+        assert acid.harm == 20.0 and tuple(acid.color) == pytest.approx(
+            (0.1, 0.2, 0.0))
+
+
+class TestAVolumeIsANode:
+    def test_a_volume_is_a_scenegraph_node(self) -> None:
+        box = Volume(minimum=(0.0, 0.0, 0.0), maximum=(1.0, 1.0, 1.0))
+        assert isinstance(box, node.Node)
+        assert {'minimum', 'maximum', 'medium'} \
+            <= {one.name for one in getFields(box)}
+
+    def test_a_volume_writes_itself_out(self) -> None:
+        written = Volume(minimum=(0.0, 0.0, 0.0), maximum=(1.0, 2.0, 3.0),
+                         medium=LAVA).toString()
+        assert 'Volume' in written and 'lava' in written
+
+    def test_it_is_water_unless_it_says_otherwise(self) -> None:
+        assert Volume().medium == WATER
+
+    def test_moving_a_corner_moves_the_box(self) -> None:
+        box = Volume(minimum=(0.0, 0.0, 0.0), maximum=(1.0, 1.0, 1.0))
+        assert not box.contains((2.0, 0.5, 0.5))
+        box.maximum = (3.0, 1.0, 1.0)
+        assert box.contains((2.0, 0.5, 0.5))
 
 
 class TestTheStandardMedia:

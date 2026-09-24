@@ -23,7 +23,7 @@ An application binds a kind to a factory::
 
     @hooks.register('lantern')
     def lantern(ctx: hooks.HookContext):
-        ctx.mesh.wave_style = None
+        ctx.mesh.waveStyle = None
         return None
 
 The factory is called at both hook points -- once per primitive of a tagged

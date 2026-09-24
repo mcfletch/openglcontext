@@ -62,7 +62,7 @@ def test_the_water_kind_is_bound_without_being_imported():
 def test_a_tagged_material_gives_the_mesh_a_wave():
     """The whole contract with the card: two attributes on the geometry."""
     _scene, shape = _loaded('water')
-    assert shape.geometry.wave_style is water.STILL
+    assert shape.geometry.waveStyle is water.STILL
     assert shape.geometry.wave_time == pytest.approx(0.0)
 
 
@@ -72,7 +72,7 @@ def test_a_tagged_material_gives_the_mesh_a_wave():
 ])
 def test_the_named_styles_map(name, style):
     _scene, shape = _loaded({'kind': 'water', 'style': name})
-    assert shape.geometry.wave_style is style
+    assert shape.geometry.waveStyle is style
 
 
 def test_a_style_may_be_written_out_in_full():
@@ -80,7 +80,7 @@ def test_a_style_may_be_written_out_in_full():
     _scene, shape = _loaded({'kind': 'water', 'style': {
         'amplitude': 0.3, 'wavelength': 6.0, 'speed': 2.0,
         'steepness': 0.1, 'flow': [1.0, 0.5]}})
-    style = shape.geometry.wave_style
+    style = shape.geometry.waveStyle
     assert style.amplitude == pytest.approx(0.3)
     assert style.wavelength == pytest.approx(6.0)
     assert style.flow == pytest.approx((1.0, 0.5))
@@ -91,7 +91,7 @@ def test_a_written_out_style_may_say_how_fine_its_ripple_is():
     """The scale the water reads at, from a hand's breadth to metres."""
     _scene, shape = _loaded({'kind': 'water', 'style': {
         'style': 'breeze', 'ripple': 0.3}})
-    style = shape.geometry.wave_style
+    style = shape.geometry.waveStyle
     assert style.ripple == pytest.approx(0.3)
     assert style.wavelength == pytest.approx(water.BREEZE.wavelength)
 
@@ -99,7 +99,7 @@ def test_a_written_out_style_may_say_how_fine_its_ripple_is():
 def test_an_unknown_style_name_is_still_water(caplog):
     """A misspelling loads a pond rather than failing the file."""
     _scene, shape = _loaded({'kind': 'water', 'style': 'stil'})
-    assert shape.geometry.wave_style is water.STILL
+    assert shape.geometry.waveStyle is water.STILL
 
 
 # --- which material shades it -------------------------------------------------
@@ -166,7 +166,7 @@ def test_lava_is_the_same_hook_with_another_medium(medium):
                             'style': 'flowing'})
     body, = scene.hook_data['water']
     assert body.volume.medium == medium
-    assert shape.geometry.wave_style is water.FLOWING
+    assert shape.geometry.waveStyle is water.FLOWING
 
 
 # --- moving it ----------------------------------------------------------------

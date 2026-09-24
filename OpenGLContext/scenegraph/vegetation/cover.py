@@ -50,12 +50,14 @@ from __future__ import annotations
 # Forward slashes are a path on every platform and a URL as well.
 import posixpath
 import zlib
-from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Union
 
 import numpy as np
+from vrml import field
+from vrml.node import Node
 
 from OpenGLContext.scenegraph.group import Group
+from OpenGLContext.scenegraph.varied import Varied
 from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
 from OpenGLContext.scenegraph.vegetation.grid import Patches, world_grid_scatter
 
@@ -148,8 +150,7 @@ CARD_SUN = 0.42
 CLUMP_SUN = (-0.5, -0.72, -0.48)
 
 
-@dataclass(frozen=True)
-class CoverSpecies:
+class CoverSpecies(Varied, Node):
     """What one kind of ground cover is drawn from.
 
     ``card`` is the billboard texture, and is what the far field is made of.
@@ -158,21 +159,23 @@ class CoverSpecies:
     acceptably from a moving vehicle.
 
     One ``.glb`` holds every rung of a plant against the one cutout texture they
-    share, so ``clump_mesh`` says which mesh in it is the full-detail geometry
-    and ``clump_far_mesh`` which is the decimated one. Named rather than
-    numbered, where the bake gave them names: the order meshes are written in is
-    the order the bake happened to walk the file's variants. With no
-    ``clump_far_mesh`` both rungs draw the same mesh, which costs what it costs.
+    share, so ``clumpMesh`` says which mesh in it is the full-detail geometry
+    and ``clumpFarMesh`` which is the decimated one: a mesh's name, or its
+    position in the file written as a number where no mesh has that name. Named
+    rather than numbered, where the bake gave them names: the order meshes are
+    written in is the order the bake happened to walk the file's variants. With
+    no ``clumpFarMesh`` both rungs draw the same mesh, which costs what it
+    costs.
 
     ``density`` is plants per square metre before the mask thins it, ``height``
-    how tall one is in metres, ``card_width`` how wide its card is as a fraction
-    of that, and ``sun_level`` how flatly the card is lit.
+    how tall one is in metres, ``cardWidth`` how wide its card is as a fraction
+    of that, and ``sunLevel`` how flatly the card is lit.
 
     **Where it grows, not just how much.** Undergrowth is not evenly spread:
     ferns stand in beds and shrubs in thickets, with grass through and between
     them. ``patchiness`` runs from 0 -- as likely here as anywhere, which is
     what a grass or a small flower wants -- to 1, gathered into beds with bare
-    ground between; ``patch_metres`` is how far across one bed is.
+    ground between; ``patchMetres`` is how far across one bed is.
 
     ``canopy`` is how much tree cover the plant grows under, as a band
     ``(least, most)`` of the terrain's own closure -- 0 on open ground, 1 with
@@ -180,26 +183,30 @@ class CoverSpecies:
     :meth:`~OpenGLContext.scenegraph.terrain.splat.SplatTerrain.canopy_cover`).
     It is what puts shrubs where the trees stand apart and along the edges of
     clearings and keeps them out of a closed stand, and what keeps a shade
-    plant off open ground. ``None`` grows anywhere. A plant near the edge of
-    its band grows, but smaller -- see :data:`STRAGGLER`.
+    plant off open ground. Empty, the plant grows anywhere. A plant near the
+    edge of its band grows, but smaller -- see :data:`STRAGGLER`.
 
     The *closure* rather than the shade, because the shade is clamped: past a
     certain density more trees take no more light, so a stand with gaps in it
     and a closed one are equally dark and not at all equally full.
+
+    The field names are the keys a baked world's JSON uses (:meth:`to_json`).
     """
 
-    name: str
-    card: str
-    clump: Optional[str] = None
-    clump_mesh: Union[int, str] = 0
-    clump_far_mesh: Optional[Union[int, str]] = None
-    density: float = 2.2
-    height: float = COVER_HEIGHT
-    card_width: float = CARD_WIDTH
-    sun_level: float = CARD_SUN
-    patchiness: float = 0.0
-    patch_metres: float = PATCH_METRES
-    canopy: Optional[tuple] = None
+    PROTO = 'CoverSpecies'
+
+    name = field.newField('name', 'SFString', 1, '')
+    card = field.newField('card', 'SFString', 1, '')
+    clump = field.newField('clump', 'SFString', 1, '')
+    clumpMesh = field.newField('clumpMesh', 'SFString', 1, '0')
+    clumpFarMesh = field.newField('clumpFarMesh', 'SFString', 1, '')
+    density = field.newField('density', 'SFFloat', 1, 2.2)
+    height = field.newField('height', 'SFFloat', 1, COVER_HEIGHT)
+    cardWidth = field.newField('cardWidth', 'SFFloat', 1, CARD_WIDTH)
+    sunLevel = field.newField('sunLevel', 'SFFloat', 1, CARD_SUN)
+    patchiness = field.newField('patchiness', 'SFFloat', 1, 0.0)
+    patchMetres = field.newField('patchMetres', 'SFFloat', 1, PATCH_METRES)
+    canopy = field.newField('canopy', 'MFFloat', 1, list)
 
     def __repr__(self) -> str:
         return 'CoverSpecies(%s)' % (self.name,)
@@ -215,39 +222,46 @@ class CoverSpecies:
         """
         return int(zlib.crc32(self.name.encode('utf-8')))
 
+    @property
+    def band(self) -> Optional[tuple]:
+        """The ``canopy`` band as ``(least, most)``, or None to grow anywhere."""
+        if len(self.canopy) < 2:
+            return None
+        return (float(self.canopy[0]), float(self.canopy[1]))
+
     def beside(self, directory: str) -> 'CoverSpecies':
-        """The same species with its files resolved against ``directory``."""
-        return replace(
-            self, card=posixpath.join(directory, self.card),
-            clump=(None if not self.clump
-                   else posixpath.join(directory, self.clump)))
+        """A copy of this species with its files resolved against ``directory``."""
+        return self.varied(
+            card=posixpath.join(directory, self.card),
+            clump=(posixpath.join(directory, self.clump) if self.clump else ''))
 
     def to_json(self) -> dict:
         """This species as a baked world carries it."""
-        return {'name': self.name, 'card': self.card, 'clump': self.clump,
-                'clumpMesh': self.clump_mesh,
-                'clumpFarMesh': self.clump_far_mesh,
+        return {'name': self.name, 'card': self.card,
+                'clump': self.clump or None,
+                'clumpMesh': self.clumpMesh,
+                'clumpFarMesh': self.clumpFarMesh or None,
                 'density': self.density, 'height': self.height,
-                'cardWidth': self.card_width, 'sunLevel': self.sun_level,
+                'cardWidth': self.cardWidth, 'sunLevel': self.sunLevel,
                 'patchiness': self.patchiness,
-                'patchMetres': self.patch_metres,
-                'canopy': None if self.canopy is None else list(self.canopy)}
+                'patchMetres': self.patchMetres,
+                'canopy': None if self.band is None else list(self.band)}
 
     @classmethod
     def from_json(cls, record: Any) -> 'CoverSpecies':
         """A species read back out of a baked world."""
+        far = record.get('clumpFarMesh')
         return cls(name=record['name'], card=record['card'],
-                   clump=record.get('clump') or None,
-                   clump_mesh=record.get('clumpMesh', 0),
-                   clump_far_mesh=record.get('clumpFarMesh'),
+                   clump=record.get('clump') or '',
+                   clumpMesh=str(record.get('clumpMesh', 0)),
+                   clumpFarMesh='' if far is None else str(far),
                    density=float(record.get('density', 2.2)),
                    height=float(record.get('height', COVER_HEIGHT)),
-                   card_width=float(record.get('cardWidth', CARD_WIDTH)),
-                   sun_level=float(record.get('sunLevel', CARD_SUN)),
+                   cardWidth=float(record.get('cardWidth', CARD_WIDTH)),
+                   sunLevel=float(record.get('sunLevel', CARD_SUN)),
                    patchiness=float(record.get('patchiness', 0.0)),
-                   patch_metres=float(record.get('patchMetres', PATCH_METRES)),
-                   canopy=(None if record.get('canopy') is None
-                           else tuple(record['canopy'])))
+                   patchMetres=float(record.get('patchMetres', PATCH_METRES)),
+                   canopy=list(record.get('canopy') or ()))
 
 
 def control_weight(image: Any, wanted: Sequence[str], layers: Sequence[str],
@@ -301,12 +315,12 @@ class CoverRung:
         #: them. The near cut is where the rung inside this one fades out.
         self.cards = InstancedBillboards(
             _nothing(), _none(), _none(), species.card,
-            width=species.card_width, sun_level=species.sun_level,
+            width=species.cardWidth, sun_level=species.sunLevel,
             far_fade=card_radius,
             near_cut=clump_radius if species.clump else 0.0)
         self.far_cards = InstancedBillboards(
             _nothing(), _none(), _none(), species.card,
-            width=species.card_width, sun_level=species.sun_level,
+            width=species.cardWidth, sun_level=species.sunLevel,
             far_fade=far_radius, near_cut=card_radius * CLUMP_FADE)
         #: Real geometry, when the species has a mesh to grow it from: full
         #: detail over the inner disc, decimated over the rest.
@@ -316,10 +330,10 @@ class CoverRung:
             from OpenGLContext.scenegraph.vegetation.clumps import (
                 InstancedClumps, load_clump_glb,
             )
-            near = load_clump_glb(species.clump, mesh=species.clump_mesh)
-            far = (near if species.clump_far_mesh is None
+            near = load_clump_glb(species.clump, mesh=species.clumpMesh)
+            far = (near if not species.clumpFarMesh
                    else load_clump_glb(species.clump,
-                                       mesh=species.clump_far_mesh))
+                                       mesh=species.clumpFarMesh))
             self.clumps_near = InstancedClumps(*near[:4], near[4], sun=sun)
             self.clumps_far = InstancedClumps(*far[:4], far[4], sun=sun)
         #: The geometry scatter, cached over a disc wider than the drawn one so
@@ -329,7 +343,7 @@ class CoverRung:
         #: Where this species gathers itself, and what that costs the grid it
         #: is scattered on -- see
         #: :class:`~OpenGLContext.scenegraph.vegetation.grid.Patches`.
-        self.patches = Patches(species.patchiness, species.patch_metres,
+        self.patches = Patches(species.patchiness, species.patchMetres,
                                species.salt)
 
     @property
@@ -371,7 +385,8 @@ class GroundCover(Group):
     """Cover around the camera: geometry near it, cards beyond, haze past those.
 
     ``field`` is the ground it sits on and ``species`` what it is made of --
-    one :class:`CoverSpecies` or a sequence of them.
+    one :class:`CoverSpecies` or a sequence of them, held in the node's
+    ``species`` field and read when the cover is built.
     ``mask(x, z) -> weight`` says where it grows; see :func:`control_weight`.
     ``holes(x, z) -> mask`` says where the ground is not there -- over a
     tunnel's bore, say. A height field answers with a height everywhere,
@@ -392,6 +407,8 @@ class GroundCover(Group):
     :meth:`apply_far` stage what they returned, and :meth:`select` is the cheap
     per-frame re-centring that must happen every frame either way.
     """
+
+    species = field.newField('species', 'MFNode', 1, list)
 
     def __init__(self, field: "HeightField",
                  species: "Union[CoverSpecies, Sequence[CoverSpecies]]",
@@ -473,7 +490,7 @@ class GroundCover(Group):
         scores 0 where any of them says no.
         """
         ground, patches, opened = self.mask, rung.patches, self.holes
-        band, closure = rung.species.canopy, self.canopy
+        band, closure = rung.species.band, self.canopy
 
         def at(x: Any, z: Any) -> Any:
             fit = patches.weight(x, z)
@@ -494,12 +511,13 @@ class GroundCover(Group):
             x, z, radius, rung.patches.density_for(density), self.field,
             scale_mul=height, jitter=COVER_JITTER, mask=self._suits(rung),
             salt=kind.salt, scale_range=SIZE_SPREAD)
-        if kind.canopy is not None and self.canopy is not None and len(points):
+        band = kind.band
+        if band is not None and self.canopy is not None and len(points):
             # A plant at the edge of the cover it wants is a straggler rather
             # than a full-sized one that happens to be there.
             fit = _band(
                 np.asarray(self.canopy(points[:, 0], points[:, 2]), 'd'),
-                kind.canopy)
+                band)
             scales = (scales * (STRAGGLER + (1.0 - STRAGGLER) * fit)
                       ).astype('f4')
         lit = (None if self.shade is None

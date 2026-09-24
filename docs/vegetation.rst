@@ -41,8 +41,8 @@ the camera moves far enough to change them.
    from OpenGLContext.scenegraph.vegetation import TreeSpecies, VegetationField
    forest = VegetationField(positions, yaws, heights,
                             [TreeSpecies(name='fir', mesh='fir.npz',
-                                         solid_texture='fir_bark.png',
-                                         foliage_texture='fir_branch.png',
+                                         solidTexture='fir_bark.png',
+                                         foliageTexture='fir_branch.png',
                                          impostor='fir_imp.png')],
                             species_id=kind)
    forest.update(camera_position, facing=where_it_looks)   # once a frame
@@ -53,6 +53,13 @@ part (alpha-masked cards), a texture for each, and the single card the tree
 becomes at a distance. The near mesh and the cards cross-fade in their own
 shaders over a window they share, so a tree turns from a card into branches
 without a step.
+
+A ``TreeSpecies`` is a scenegraph node, and the forest holds its kinds in its
+``species`` field, read when the forest is built. The field names are the keys
+a baked world's JSON uses (``to_json`` and ``from_json``). ``beside(directory)``
+answers a copy with its files resolved against a directory, and
+``varied(cardWidth=0.6)`` a copy with fields changed; neither touches the
+species it started from.
 
 **What is drawn far off is chosen against the view**, which is most of what a
 four-kilometre forest costs. Give ``update`` the camera's ``view`` matrix and
@@ -91,15 +98,20 @@ its own density, in beds and thickets with clear ground between.
    cover = GroundCover(
        field,
        [CoverSpecies(name='grass', card='grass_card.png', clump='grass.glb',
-                     clump_mesh='tuft_a', clump_far_mesh='tuft_a_far',
+                     clumpMesh='tuft_a', clumpFarMesh='tuft_a_far',
                      density=11.0, height=0.15, patchiness=0.25),
         CoverSpecies(name='shrub', card='shrub_card.png', clump='shrub.glb',
                      density=0.5, height=0.22, patchiness=0.8,
-                     patch_metres=34.0, canopy=(0.3, 5.0))],
+                     patchMetres=34.0, canopy=(0.3, 5.0))],
        mask=control_weight(control_image, ['grass', 'forest_floor'],
                            layers, field.extent),
        shade=terrain.shade, canopy=terrain.canopy_cover)
    cover.update(camera_position)                    # once a frame
+
+``CoverSpecies`` is a scenegraph node too, held in the cover's ``species``
+field. ``clumpMesh`` and ``clumpFarMesh`` name meshes in the ``.glb``; a string
+of digits that no mesh is named is the mesh at that position in the file, and
+an empty ``clumpFarMesh`` draws the near mesh at both rungs.
 
 The rungs
 ~~~~~~~~~
@@ -159,7 +171,7 @@ opening is not a kind of ground a plant does badly on.
 
 **How much it gathers is the species' own.** ``patchiness`` runs from 0 — as
 likely here as anywhere, which is what a grass or a small flower wants — to 1,
-gathered into beds with bare ground between, and ``patch_metres`` is how far
+gathered into beds with bare ground between, and ``patchMetres`` is how far
 across one bed is. The beds are a world-anchored field, so a stand of nettles
 is in the same place every time you walk past it, and no two species agree
 about where the beds are. Density keeps meaning plants per square metre either
@@ -172,7 +184,7 @@ on open ground, 1 with a crown's worth of tree over every square metre. A band
 that stops short of bare ground puts shrubs where the trees stand apart and
 along the edges of clearings, and keeps them out of a closed stand; one that
 starts above it keeps a shade plant off the open. A plant near the edge of its
-band still grows, but smaller.
+band still grows, but smaller. With no band, the default, it grows anywhere.
 
 The *closure* rather than the shade, because the shade is clamped: past a
 certain density more trees take no more light, so a stand with gaps in it and

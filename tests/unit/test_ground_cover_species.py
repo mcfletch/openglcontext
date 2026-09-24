@@ -14,6 +14,8 @@ import json
 
 import numpy as np
 import pytest
+from vrml import node
+from vrml.protofunctions import getFields
 
 from OpenGLContext.scenegraph.terrain import HeightField
 from OpenGLContext.scenegraph.vegetation.cover import (
@@ -38,6 +40,32 @@ def _cover(species=None, **named):
     named.setdefault('field', _field())
     named['species'] = species if species is not None else _species()
     return GroundCover(**named)
+
+
+class TestASpeciesIsANode:
+    def test_a_species_is_a_scenegraph_node(self) -> None:
+        one = _species()
+        assert isinstance(one, node.Node)
+        assert {'name', 'card', 'clump', 'clumpMesh', 'clumpFarMesh', 'density',
+                'height', 'cardWidth', 'sunLevel', 'patchiness', 'patchMetres',
+                'canopy'} <= {entry.name for entry in getFields(one)}
+
+    def test_a_species_writes_itself_out(self) -> None:
+        written = _species('fern', density=0.4).toString()
+        assert 'CoverSpecies' in written and 'fern' in written
+
+    def test_the_cover_holds_its_species_in_a_field(self) -> None:
+        cover = _cover([_species('grass'), _species('fern')])
+        assert 'species' in {entry.name for entry in getFields(cover)}
+        assert [one.name for one in cover.species] == ['grass', 'fern']
+
+    def test_with_no_canopy_band_it_grows_anywhere(self) -> None:
+        assert not len(_species().canopy)
+
+    def test_a_variation_leaves_the_species_it_came_from_alone(self) -> None:
+        one = _species()
+        wider = one.varied(cardWidth=2.0)
+        assert wider.cardWidth == 2.0 and one.cardWidth != 2.0
 
 
 class TestASetOfPlantsRatherThanOne:
@@ -175,7 +203,7 @@ class TestPlantsThatGrowInPatches:
 
     def test_a_patchy_species_is_thick_in_places_and_absent_in_others(self) -> None:
         cover = _cover([_species('fern', density=3.0, patchiness=1.0,
-                                 patch_metres=40.0)], card_radius=120.0)
+                                 patchMetres=40.0)], card_radius=120.0)
         counted = self._density_map(cover, 'fern')
         assert counted.std() > 0.9 * counted.mean()
         assert counted.min() < 0.25 * counted.max()
@@ -192,7 +220,7 @@ class TestPlantsThatGrowInPatches:
         def grown(patchiness):
             cover = _cover([_species('fern', density=2.0,
                                      patchiness=patchiness,
-                                     patch_metres=24.0)], card_radius=150.0)
+                                     patchMetres=24.0)], card_radius=150.0)
             total = 0
             for step in range(9):              # nine discs, a kilometre apart
                 cover.update((step * 1000.0, 0.0, step * 700.0))
@@ -202,7 +230,7 @@ class TestPlantsThatGrowInPatches:
 
     def test_a_bed_is_in_the_same_place_every_time_you_pass(self) -> None:
         cover = _cover([_species('fern', density=3.0, patchiness=1.0,
-                                 patch_metres=30.0)], card_radius=140.0)
+                                 patchMetres=30.0)], card_radius=140.0)
         cover.update((0.0, 0.0, 0.0))
         watched = {tuple(np.round(one, 3)) for one in cover.rungs[0].cards.pos
                    if abs(one[0]) < 25.0 and abs(one[2]) < 25.0}
@@ -213,9 +241,9 @@ class TestPlantsThatGrowInPatches:
     def test_two_species_do_not_cluster_in_the_same_places(self) -> None:
         """Or the wood would have bare ground and one heap of everything."""
         cover = _cover([_species('fern', density=3.0, patchiness=1.0,
-                                 patch_metres=40.0),
+                                 patchMetres=40.0),
                         _species('nettle', density=3.0, patchiness=1.0,
-                                 patch_metres=40.0)], card_radius=120.0)
+                                 patchMetres=40.0)], card_radius=120.0)
         fern = self._density_map(cover, 'fern').ravel()
         nettle = self._density_map(cover, 'nettle').ravel()
         agreement = np.corrcoef(fern, nettle)[0, 1]
@@ -223,9 +251,9 @@ class TestPlantsThatGrowInPatches:
 
     def test_a_bigger_patch_size_makes_bigger_beds(self) -> None:
         small = _cover([_species('fern', density=3.0, patchiness=1.0,
-                                 patch_metres=12.0)], card_radius=120.0)
+                                 patchMetres=12.0)], card_radius=120.0)
         large = _cover([_species('fern', density=3.0, patchiness=1.0,
-                                 patch_metres=60.0)], card_radius=120.0)
+                                 patchMetres=60.0)], card_radius=120.0)
         # Over a coarse grid, small beds average out within a square and large
         # ones do not, so the coarse map of the large one varies more.
         assert self._density_map(large, 'fern').std() \
@@ -366,7 +394,7 @@ class TestTheGeometryNearTheCamera:
     def _clumped(self, tmp_path, **named):
         named.setdefault('clump_radius', 30.0)
         species = _species('fern', clump=_plant_file(tmp_path),
-                           clump_mesh='near', clump_far_mesh='far', density=2.0)
+                           clumpMesh='near', clumpFarMesh='far', density=2.0)
         return _cover([species], **named)
 
     def test_a_species_with_no_clump_is_cards_all_the_way_in(self) -> None:
@@ -379,6 +407,15 @@ class TestTheGeometryNearTheCamera:
     def test_the_far_rung_is_the_cheaper_mesh(self, tmp_path) -> None:
         rung = self._clumped(tmp_path).rungs[0]
         assert len(rung.clumps_far.idx) < len(rung.clumps_near.idx)
+
+    def test_a_mesh_may_be_named_by_its_position(self, tmp_path) -> None:
+        """'1' is the second mesh in the file, since none is named '1'."""
+        by_name = self._clumped(tmp_path).rungs[0]
+        species = _species('fern', clump=_plant_file(tmp_path),
+                           clumpMesh='0', clumpFarMesh='1')
+        by_place = _cover([species]).rungs[0]
+        assert len(by_place.clumps_far.idx) == len(by_name.clumps_far.idx)
+        assert len(by_place.clumps_near.idx) == len(by_name.clumps_near.idx)
 
     def test_the_full_detail_rung_covers_only_the_inner_disc(self, tmp_path) -> None:
         cover = self._clumped(tmp_path, card_radius=90.0)
@@ -477,18 +514,27 @@ class TestTheHeavyHalfCanRunOffTheRenderThread:
 
 class TestWhatABakedWorldCarries:
     def test_a_species_survives_a_round_trip(self) -> None:
-        entry = _species('fern', clump='fern.glb', clump_mesh='fern_a_near',
-                         clump_far_mesh='fern_a_far', density=0.4, height=0.45,
-                         card_width=1.6)
-        assert CoverSpecies.from_json(
-            json.loads(json.dumps(entry.to_json()))) == entry
+        entry = _species('fern', clump='fern.glb', clumpMesh='fern_a_near',
+                         clumpFarMesh='fern_a_far', density=0.4, height=0.45,
+                         cardWidth=1.6, canopy=(0.2, 0.7))
+        back = CoverSpecies.from_json(json.loads(json.dumps(entry.to_json())))
+        assert back.to_json() == entry.to_json()
+
+    def test_a_world_baked_with_a_mesh_index_still_reads(self) -> None:
+        """A baked world may name its clump mesh by position, as a number."""
+        back = CoverSpecies.from_json({'name': 'grass', 'card': 'g.png',
+                                       'clump': 'g.glb', 'clumpMesh': 2,
+                                       'clumpFarMesh': None, 'canopy': None})
+        assert back.clumpMesh == '2'
+        assert not back.clumpFarMesh
+        assert not len(back.canopy)
 
     def test_a_whole_set_resolves_against_one_directory(self) -> None:
         found = [one.beside('/worlds/one')
                  for one in (_species('grass', clump='g.glb'), _species('fern'))]
         assert found[0].clump == '/worlds/one/g.glb'
         assert found[1].card == '/worlds/one/fern.png'
-        assert found[1].clump is None
+        assert not found[1].clump
 
 
 def _plant_file(tmp_path):

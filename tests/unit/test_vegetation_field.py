@@ -12,6 +12,8 @@ forest between them without drawing a tree twice.
 """
 import numpy as np
 import pytest
+from vrml import node
+from vrml.protofunctions import getFields
 
 from OpenGLContext.scenegraph.vegetation.field import (
     TreeSpecies,
@@ -21,9 +23,9 @@ from OpenGLContext.scenegraph.vegetation.field import (
 
 def _species(name='fir'):
     return TreeSpecies(name=name, mesh='%s.npz' % name,
-                       solid=('oP', 'oN', 'oU', 'oI'), solid_texture='bark.png',
+                       solid=('oP', 'oN', 'oU', 'oI'), solidTexture='bark.png',
                        foliage=('bP', 'bN', 'bU', 'bI'),
-                       foliage_texture='branch.png', impostor='%s_imp.png' % name)
+                       foliageTexture='branch.png', impostor='%s_imp.png' % name)
 
 
 def _forest(count=400, spread=800.0, kinds=1, seed=3):
@@ -42,6 +44,31 @@ def _field(count=400, kinds=1, spread=800.0, **named):
     species = [_species('kind%d' % i) for i in range(kinds)]
     return VegetationField(positions, yaws, heights, species,
                            species_id=kind, **named)
+
+
+class TestASpeciesIsANode:
+    """What a forest grows is scene content, held in fields like any other."""
+
+    def test_a_species_is_a_scenegraph_node(self) -> None:
+        one = _species()
+        assert isinstance(one, node.Node)
+        assert {'name', 'mesh', 'solidTexture', 'foliageTexture', 'impostor',
+                'solid', 'foliage', 'cardWidth'} \
+            <= {entry.name for entry in getFields(one)}
+
+    def test_a_species_writes_itself_out(self) -> None:
+        written = _species().toString()
+        assert 'TreeSpecies' in written and 'fir_imp.png' in written
+
+    def test_the_field_holds_its_species_in_a_field(self) -> None:
+        forest = _field(kinds=2)
+        assert 'species' in {entry.name for entry in getFields(forest)}
+        assert all(isinstance(one, TreeSpecies) for one in forest.species)
+
+    def test_a_variation_leaves_the_species_it_came_from_alone(self) -> None:
+        one = _species()
+        wider = one.varied(cardWidth=0.9)
+        assert wider.cardWidth == 0.9 and one.cardWidth == 0.55
 
 
 class TestWhatItHolds:
@@ -230,8 +257,8 @@ class TestTheSpeciesDescription:
         """A baked world carries its species list in the tileset."""
         import json
         entry = _species()
-        assert TreeSpecies.from_json(json.loads(json.dumps(entry.to_json()))) \
-            == entry
+        back = TreeSpecies.from_json(json.loads(json.dumps(entry.to_json())))
+        assert back.to_json() == entry.to_json()
 
 
 if __name__ == '__main__':

@@ -208,6 +208,11 @@ class PBRMesh(node.Node):
     PROTO = 'PBRMesh'
 
     solid = field.newField('solid', 'SFBool', 1, True)
+    #: What moves this mesh's surface on the card, for a mesh that is water: a
+    #: :class:`~OpenGLContext.scenegraph.water.surface.WaterStyle`. ``Shape``
+    #: reads it and :attr:`wave_time` off the geometry and hands them to the
+    #: shader; a mesh with no style is not water and pays nothing.
+    waveStyle = field.newField('waveStyle', 'SFNode', 1, node.NULL)
 
     #: The undeformed arrays, captured the first time anything wants to deform
     #: this mesh -- by morph targets, by skinning, or by a material's own
@@ -235,11 +240,9 @@ class PBRMesh(node.Node):
     _palette_peer: Any = None
     _palette_base: Optional[int] = None
 
-    #: What moves this mesh's surface on the card, for a mesh that is water: a
-    #: :class:`~OpenGLContext.scenegraph.water.styles.WaterStyle` and the time
-    #: to evaluate it at. ``Shape`` reads both off the geometry and hands them
-    #: to the shader; a mesh that has neither is not water and pays nothing.
-    wave_style: Any = None
+    #: The time, in seconds, :attr:`waveStyle` is evaluated at. A clock the
+    #: frame advances rather than something authored, so it is an attribute
+    #: and not a field.
     wave_time: float = 0.0
 
     @property

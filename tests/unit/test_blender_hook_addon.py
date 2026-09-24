@@ -234,7 +234,7 @@ def test_a_tagged_material_loads_as_moving_water():
     )
     scene = gltf.load_gltf(write_glb(SceneNode(mesh=mesh)))
     shapes = [node for node in _walk(scene.group) if isinstance(node, Shape)]
-    assert shapes[0].geometry.wave_style is water.CHOPPY
+    assert shapes[0].geometry.waveStyle is water.CHOPPY
     body = scene.hook_data['water'][0]
     assert body.volume.minimum[1] == pytest.approx(-4.0)
 

@@ -142,7 +142,7 @@ class Shape(basenodes.Shape):
             # only by water, or the hillside after a lake would ripple too.
             if hasattr(shader_program, 'set_wave'):
                 shader_program.set_wave(
-                    getattr(self.geometry, 'wave_style', None),
+                    getattr(self.geometry, 'waveStyle', None) or None,
                     float(getattr(self.geometry, 'wave_time', 0.0) or 0.0))
             self.geometry.render(textured=True, mode=mode)
             return

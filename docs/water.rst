@@ -22,7 +22,7 @@ one, or flood a level whose water is never drawn.
 How water moves: ``WaterStyle``
 -------------------------------
 
-One dataclass covers the range, and five settings of it are named:
+One node covers the range, and five of them are named:
 
 .. list-table::
    :widths: auto
@@ -87,6 +87,19 @@ in it that a shoreline moves. ``LAKE`` is open water seen from a distance: a
 long, low swell, sized for a sheet hundreds of metres across. A caller who
 wants another writes one — water is a continuum, and the five names are
 settings rather than an enumeration.
+
+A style is a scenegraph node, held in the mesh's ``waveStyle`` field. The five
+named ones are shared, as a VRML97 ``USE`` shares a node: every sheet built
+with ``LAKE`` moves by that one node, so setting ``LAKE.amplitude`` changes
+all of them. For a style of one's own, build a ``WaterStyle`` or start from a
+named one with ``varied``, which answers a copy and leaves the original alone:
+
+.. code-block:: python
+
+   from OpenGLContext.scenegraph.water import CHOPPY, WaterStyle
+
+   storm = CHOPPY.varied(name='storm', amplitude=1.2)
+   millpond = WaterStyle(name='millpond', steepness=0.02, ripple=0.2)
 
 ``ripple`` sets the scale the water reads at, and the swell's ``wavelength``
 should agree with it. A 20 m pond drawn with ``LAKE`` shows two or three long
@@ -214,7 +227,7 @@ flat. Where nothing was mirrored — the sky — it reflects the environment pro
 as before. Water's Fresnel weights both, so the reflection is faint looking
 straight down and strong across the surface at a glance.
 
-Nothing has to be asked for: any geometry carrying a ``wave_style`` is water,
+Nothing has to be asked for: any geometry with a ``waveStyle`` is water,
 whether ``water_surface`` built it or an ``OGLC_hook`` tag in a glTF did. The
 mirrored draw is of the opaque scene, at half the view's width and height, in
 a frame with water in view; ``ContextDefinition.waterReflection`` (env
@@ -267,9 +280,22 @@ mapping, so the colours in the table are much darker than water looks from
 above. Water *absorbs* — it takes the light out of what you are looking at —
 where a pale, long-range fog would read as air with something in it.
 ``muffle`` is how much of the mix's high end goes, and is never 1: total
-silence reads as the sound having broken. ``register(Medium(...))`` adds a
-substance; a name the table has never heard of is treated as water rather than
-as dry air, because whatever it is, the body is inside something.
+silence reads as the sound having broken. A name the table has never heard of
+is treated as water rather than as dry air, because whatever it is, the body is
+inside something.
+
+A ``Medium`` is a scenegraph node, with ``name``, ``color``, ``visibility``,
+``muffle`` and ``harm`` as its fields, and ``MEDIA`` holds the three above by
+name. A volume names its substance, and every volume naming ``'lava'`` is
+inside the one ``MEDIA['lava']``, so tuning that node's fields tunes lava
+everywhere. A game adds a substance by putting a node of its own in the table:
+
+.. code-block:: python
+
+   from OpenGLContext.scenegraph.water import MEDIA, Medium
+
+   MEDIA['acid'] = Medium(name='acid', color=(0.02, 0.05, 0.0),
+                          visibility=3.0, muffle=0.8, harm=20.0)
 
 Where the water is
 ~~~~~~~~~~~~~~~~~~
@@ -285,7 +311,9 @@ Where the water is
    volumes.medium_at(point)               # 'water', 'lava' or '' for dry air
 
 Boxes in world metres, with the boundary counted as inside so a body exactly
-at the waterline is in the water. Where boxes overlap, ``rule`` picks the
+at the waterline is in the water. A ``Volume`` is a node whose ``minimum``,
+``maximum`` and ``medium`` fields are the box and what fills it; its corners
+are world coordinates wherever the node is held. Where boxes overlap, ``rule`` picks the
 answer: ``'worst'`` (the default) gives the one that will hurt most, for a
 body half in a pool and half in the lava under it; ``'smallest'`` gives the
 most specific, which is what a world whose boxes are some partition's own

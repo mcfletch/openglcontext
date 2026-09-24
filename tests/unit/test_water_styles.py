@@ -6,8 +6,12 @@ same field wherever it is asked from, and that a caller can ask how high the
 water is at a point.
 """
 import numpy as np
+from vrml import node
+from vrml.protofunctions import getFields
 
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.water.surface import (
+    RIPPLE,
     CHOPPY,
     FLOWING,
     STILL,
@@ -53,8 +57,47 @@ class TestTheThreeMotions:
             > np.ptp(wave_height(FLOWING, x, z, 0.0))
 
     def test_a_river_drifts_and_a_pond_does_not(self) -> None:
-        assert FLOWING.flow != (0.0, 0.0)
-        assert STILL.flow == (0.0, 0.0)
+        assert tuple(FLOWING.flow) != (0.0, 0.0)
+        assert tuple(STILL.flow) == (0.0, 0.0)
+
+
+class TestAStyleIsANode:
+    """How water moves is scene content, held in fields like any other."""
+
+    def test_a_style_is_a_scenegraph_node(self) -> None:
+        assert isinstance(CHOPPY, node.Node)
+        names = {one.name for one in getFields(CHOPPY)}
+        assert {'name', 'amplitude', 'wavelength', 'speed', 'steepness',
+                'flow', 'ripple'} <= names
+
+    def test_a_style_writes_itself_out(self) -> None:
+        written = CHOPPY.toString()
+        assert 'WaterStyle' in written
+        assert 'amplitude' in written
+
+    def test_a_mesh_holds_its_style_in_a_field(self) -> None:
+        assert 'waveStyle' in {one.name for one in getFields(PBRMesh())}
+        assert not PBRMesh().waveStyle
+
+    def test_a_variation_leaves_the_style_it_came_from_alone(self) -> None:
+        rough = CHOPPY.varied(amplitude=1.0, name='storm')
+        assert rough is not CHOPPY
+        assert rough.amplitude == 1.0 and rough.name == 'storm'
+        assert rough.wavelength == CHOPPY.wavelength
+        assert CHOPPY.amplitude != 1.0 and CHOPPY.name == 'choppy'
+
+    def test_a_ripple_asked_of_a_sheet_does_not_reach_the_preset(self) -> None:
+        mesh = water_surface(-5.0, 5.0, -5.0, 5.0, ripple=0.2, on_gpu=True)
+        assert mesh.waveStyle.steepness == 0.2
+        assert STILL.steepness == RIPPLE
+
+    def test_several_sheets_can_share_one_style(self) -> None:
+        """As a VRML97 USE does: change the one node and every sheet
+        moving by it follows."""
+        mine = WaterStyle(name='mine', amplitude=0.1)
+        first = water_surface(0.0, 5.0, 0.0, 5.0, style=mine, on_gpu=True)
+        second = water_surface(5.0, 9.0, 0.0, 5.0, style=mine, on_gpu=True)
+        assert first.waveStyle is second.waveStyle is mine
 
 
 class TestMovingInTime:
@@ -151,7 +194,7 @@ class TestHandingItToTheCard:
     def test_it_carries_the_style_the_card_needs(self) -> None:
         mesh = water_surface(-20.0, 20.0, -20.0, 20.0, style=CHOPPY,
                              on_gpu=True, when=2.0)
-        assert mesh.wave_style is CHOPPY
+        assert mesh.waveStyle is CHOPPY
         assert mesh.wave_time == 2.0
 
     def test_its_normals_start_flat(self) -> None:
@@ -162,7 +205,7 @@ class TestHandingItToTheCard:
     def test_a_processor_sheet_says_nothing_to_the_card(self) -> None:
         """Or it would be moved twice: once here and once there."""
         mesh = water_surface(-20.0, 20.0, -20.0, 20.0, style=CHOPPY)
-        assert getattr(mesh, 'wave_style', None) is None
+        assert not mesh.waveStyle
 
     def test_the_two_agree_about_where_the_water_is(self) -> None:
         """Same field, so a boat floated by one is drawn by the other."""

@@ -37,14 +37,15 @@ says where it is. A walking context is submerged by handing those volumes to
 :class:`~OpenGLContext.scenegraph.water.volumes.Volumes`.
 
 The wave itself costs nothing per frame -- the card holds the field and reads
-two attributes off the geometry -- but something has to say what time it is.
+the style and the time off the geometry -- but something has to say what time
+it is.
 :meth:`~OpenGLContext.loaders.gltf.scene.GLTFScene.advance` is that, and the
 viewer calls it from its idle.
 """
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence
 
 from OpenGLContext.loaders.gltf import hooks
@@ -82,7 +83,7 @@ class WaterBody:
     @property
     def medium(self) -> str:
         """What being inside this body is like."""
-        return self.volume.medium
+        return str(self.volume.medium)
 
 
 def style_for(named: Any) -> WaterStyle:
@@ -115,7 +116,7 @@ def _written_out(fields: Dict[str, Any]) -> WaterStyle:
         values['flow'] = (float(flow[0]), float(flow[1]))
     if not values:
         return base
-    return replace(base, name=str(fields.get('name') or base.name), **values)
+    return base.varied(name=str(fields.get('name') or base.name), **values)
 
 
 def _body_volume(ctx: "hooks.HookContext", medium: str,
@@ -139,8 +140,8 @@ def water_hook(ctx: "hooks.HookContext") -> None:
     """Make a tagged primitive a body of water, and leave it where it is.
 
     The ``Shape`` the loader built is kept: water is not a different kind of
-    node, it is a surface that moves, and what moves it is two attributes the
-    render pass reads off the geometry.
+    node, it is a surface that moves, and what moves it is the style in the
+    mesh's ``waveStyle`` field and the time the render pass reads beside it.
     """
     if ctx.at != 'material':
         # A node-level tag says the *object* is a body of water. The surface is
@@ -148,7 +149,7 @@ def water_hook(ctx: "hooks.HookContext") -> None:
         # holds it; a game wanting more registers a kind of its own.
         return None
     style = style_for(ctx.params.get('style', 'still'))
-    ctx.mesh.wave_style = style
+    ctx.mesh.waveStyle = style
     ctx.mesh.wave_time = 0.0
     if str(ctx.params.get('material', 'keep')).strip().lower() == 'engine':
         engine = water_material()

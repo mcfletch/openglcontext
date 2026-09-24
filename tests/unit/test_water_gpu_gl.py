@@ -43,7 +43,7 @@ try:
                                   on_gpu=True)
             # Bright and unlit, so what the picture shows is the shape of the
             # surface rather than what a dark material reflects.
-            sheet.wave_style = CHOPPY
+            sheet.waveStyle = CHOPPY
             sheet.wave_time = 0.0
             self.sheet = sheet
             self.sg = sceneGraph(children=[

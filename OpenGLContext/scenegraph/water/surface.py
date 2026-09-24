@@ -37,13 +37,14 @@ the world. What being *inside* it is like is
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
 from typing import Any, Iterator, Optional, Tuple
 
 import numpy as np
+from vrml import field, node
 
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.scenegraph.varied import Varied
 
 __all__ = ['WATER_ALBEDO', 'WATER_ROUGHNESS', 'WATER_TRANSPARENCY', 'WATER_IOR',
            'LAKE', 'BREEZE', 'MESH_FLOOR', 'MESH_LIMIT', 'MESH_PER_WAVE', 'mesh_across',
@@ -77,8 +78,7 @@ RIPPLE = 0.045
 RIPPLE_SCALE = 11.0
 
 
-@dataclass(frozen=True)
-class WaterStyle:
+class WaterStyle(Varied, node.Node):
     """How a body of water moves.
 
     ``amplitude`` is metres from trough to crest, ``wavelength`` metres between
@@ -93,18 +93,22 @@ class WaterStyle:
     from a distance wants it at metres; a pond seen from its own bank wants it
     at a hand's breadth, or its glitter is a few dark bands across it.
 
-    Three settings of it are named below. A caller who wants a fourth writes
-    one: the point of the fields is that water is a continuum, and an
-    enumeration of three would be a lie about that.
+    A style is a node, held in a mesh's ``waveStyle`` field. The named styles
+    below are shared nodes, as a VRML97 ``USE`` shares one: every sheet built
+    with :data:`LAKE` moves by the one node, and changing a field of it changes
+    all of them. :meth:`varied` is a style of one's own that starts from one of
+    them.
     """
 
-    name: str = 'still'
-    amplitude: float = 0.0
-    wavelength: float = 11.0
-    speed: float = 0.0
-    steepness: float = RIPPLE
-    flow: Tuple[float, float] = (0.0, 0.0)
-    ripple: float = RIPPLE_SCALE
+    PROTO = 'WaterStyle'
+
+    name = field.newField('name', 'SFString', 1, 'still')
+    amplitude = field.newField('amplitude', 'SFFloat', 1, 0.0)
+    wavelength = field.newField('wavelength', 'SFFloat', 1, 11.0)
+    speed = field.newField('speed', 'SFFloat', 1, 0.0)
+    steepness = field.newField('steepness', 'SFFloat', 1, RIPPLE)
+    flow = field.newField('flow', 'SFVec2f', 1, (0.0, 0.0))
+    ripple = field.newField('ripple', 'SFFloat', 1, RIPPLE_SCALE)
 
     def moving(self) -> bool:
         """Whether anything about it changes with time."""
@@ -404,16 +408,16 @@ def water_surface(x0: float, x1: float, z0: float, z1: float,
     style's steepness, and is there because a caller that had one before this
     had styles still means it.
 
-    ``on_gpu`` meshes it **flat** and hands the style to the card instead: the
-    surface is uploaded once and moving it is a handful of uniforms a frame,
-    which is the only way a wave costs nothing. Set ``mesh.wave_time`` to
-    advance it. A mesh built with the wave already in it and then moved on the
+    ``on_gpu`` meshes it **flat** and puts the style in the mesh's
+    ``waveStyle`` field for the card instead: the surface is uploaded once and
+    moving it is a handful of uniforms a frame, which is the only way a wave
+    costs nothing. Set ``mesh.wave_time`` to advance it. A mesh built with the wave already in it and then moved on the
     card would have the wave applied twice, which is why this is one decision
     rather than two.
     """
     style = style if style is not None else STILL
     if ripple is not None:
-        style = replace(style, steepness=float(ripple))
+        style = style.varied(steepness=float(ripple))
     xs = np.linspace(float(x0), float(x1), max(2, int(resolution)))
     zs = np.linspace(float(z0), float(z1), max(2, int(resolution)))
     gx, gz = np.meshgrid(xs, zs, indexing='ij')
@@ -524,12 +528,12 @@ def _driven(mesh: PBRMesh, style: WaterStyle, when: float,
             on_gpu: bool) -> PBRMesh:
     """Tell a mesh what moves it, if anything does.
 
-    The two attributes are the whole contract with the card: a shape reads them
-    off its geometry and hands them to the shader, and a mesh that has neither
-    is not water and pays nothing.
+    The style and the time are the whole contract with the card: a shape reads
+    them off its geometry and hands them to the shader, and a mesh with no
+    style is not water and pays nothing.
     """
     if on_gpu:
-        mesh.wave_style = style
+        mesh.waveStyle = style
         mesh.wave_time = float(when)
     return mesh
 

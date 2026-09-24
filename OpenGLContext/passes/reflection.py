@@ -74,7 +74,7 @@ def water_plane(records: Iterable[Any], eye: ArrayLike) -> Optional[Plane]:
     """The plane of the water nearest ``eye`` that ``eye`` looks down on.
 
     ``records`` are a view's draw records; water is any whose geometry carries
-    a ``wave_style``, meshed flat in its own space. None where there is no
+    a ``waveStyle``, meshed flat in its own space. None where there is no
     water, and where the camera is under every sheet there is: looking up
     through a surface is not looking into a mirror.
     """
@@ -138,7 +138,7 @@ def oblique_projection(projection: Any, plane: ArrayLike) -> np.ndarray:
 
 def is_water(record: Any) -> bool:
     """Whether a draw record is a body of water: its geometry has a wave."""
-    return getattr(getattr(record[5], 'geometry', None), 'wave_style', None) is not None
+    return bool(getattr(getattr(record[5], 'geometry', None), 'waveStyle', None))
 
 
 @dataclass(frozen=True)

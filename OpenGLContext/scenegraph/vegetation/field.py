@@ -22,12 +22,15 @@ otherwise cost.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, replace
+import posixpath
 from typing import Any, Optional, Sequence
 
 import numpy as np
+from vrml import field
+from vrml.node import Node
 
 from OpenGLContext.scenegraph.group import Group
+from OpenGLContext.scenegraph.varied import Varied
 from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
 from OpenGLContext.scenegraph.vegetation.nearmesh import InstancedMeshLOD
 
@@ -83,34 +86,36 @@ SOLID_KEYS = ('oP', 'oN', 'oU', 'oI')
 FOLIAGE_KEYS = ('bP', 'bN', 'bU', 'bI')
 
 
-@dataclass(frozen=True)
-class TreeSpecies:
+class TreeSpecies(Varied, Node):
     """One kind of tree: what it is drawn from, near and far.
 
     ``mesh`` is a ``.npz`` holding the geometry as named arrays. A tree is drawn
     in two parts, because they are lit and blended differently: the ``solid``
     part is the trunk and branches, opaque and textured with
-    ``solid_texture``; the ``foliage`` part is the alpha-masked cards the leaves
-    or needles are on, textured with ``foliage_texture``. Each is named by the
+    ``solidTexture``; the ``foliage`` part is the alpha-masked cards the leaves
+    or needles are on, textured with ``foliageTexture``. Each is named by the
     four keys its positions, normals, texture coordinates and indices are stored
     under.
 
     ``impostor`` is the single card the tree becomes at a distance, and
-    ``card_width`` how wide that card is as a fraction of its height.
+    ``cardWidth`` how wide that card is as a fraction of its height.
 
     Paths are used as given, so a species can name files anywhere;
     :meth:`beside` resolves a set of them against one directory, which is how a
-    baked world's own trees are found.
+    baked world's own trees are found. The field names are the keys a baked
+    world's JSON uses (:meth:`to_json`).
     """
 
-    name: str
-    mesh: str
-    solid_texture: str
-    foliage_texture: str
-    impostor: str
-    solid: tuple[str, ...] = SOLID_KEYS
-    foliage: tuple[str, ...] = FOLIAGE_KEYS
-    card_width: float = 0.55
+    PROTO = 'TreeSpecies'
+
+    name = field.newField('name', 'SFString', 1, '')
+    mesh = field.newField('mesh', 'SFString', 1, '')
+    solidTexture = field.newField('solidTexture', 'SFString', 1, '')
+    foliageTexture = field.newField('foliageTexture', 'SFString', 1, '')
+    impostor = field.newField('impostor', 'SFString', 1, '')
+    solid = field.newField('solid', 'MFString', 1, list(SOLID_KEYS))
+    foliage = field.newField('foliage', 'MFString', 1, list(FOLIAGE_KEYS))
+    cardWidth = field.newField('cardWidth', 'SFFloat', 1, 0.55)
 
     def __repr__(self) -> str:
         return 'TreeSpecies(%s)' % (self.name,)
@@ -118,47 +123,48 @@ class TreeSpecies:
     def near_entry(self) -> dict:
         """This species as :class:`InstancedMeshLOD` wants to be told it."""
         return {'npz': self.mesh,
-                'o_keys': tuple(self.solid), 'o_tex': self.solid_texture,
-                'b_keys': tuple(self.foliage), 'b_tex': self.foliage_texture}
+                'o_keys': tuple(self.solid), 'o_tex': self.solidTexture,
+                'b_keys': tuple(self.foliage), 'b_tex': self.foliageTexture}
 
     def beside(self, directory: str) -> 'TreeSpecies':
-        """The same species with its files resolved against ``directory``.
+        """A copy of this species with its files resolved against ``directory``.
 
         posixpath, not os.path: this joins a reference rather than opening a
         file, and a baked world is as likely to be served over http as read
         off disk. Forward slashes are a path on every platform and a URL too.
         """
-        import posixpath
-        return replace(
-            self,
+        return self.varied(
             mesh=posixpath.join(directory, self.mesh),
-            solid_texture=posixpath.join(directory, self.solid_texture),
-            foliage_texture=posixpath.join(directory, self.foliage_texture),
+            solidTexture=posixpath.join(directory, self.solidTexture),
+            foliageTexture=posixpath.join(directory, self.foliageTexture),
             impostor=posixpath.join(directory, self.impostor))
 
     def to_json(self) -> dict:
         """This species as a baked world carries it."""
         return {'name': self.name, 'mesh': self.mesh,
-                'solidTexture': self.solid_texture,
-                'foliageTexture': self.foliage_texture,
+                'solidTexture': self.solidTexture,
+                'foliageTexture': self.foliageTexture,
                 'impostor': self.impostor,
                 'solid': list(self.solid), 'foliage': list(self.foliage),
-                'cardWidth': self.card_width}
+                'cardWidth': self.cardWidth}
 
     @classmethod
     def from_json(cls, record: Any) -> 'TreeSpecies':
         """A species read back out of a baked world."""
         return cls(name=record['name'], mesh=record['mesh'],
-                   solid_texture=record['solidTexture'],
-                   foliage_texture=record['foliageTexture'],
+                   solidTexture=record['solidTexture'],
+                   foliageTexture=record['foliageTexture'],
                    impostor=record['impostor'],
-                   solid=tuple(record.get('solid', SOLID_KEYS)),
-                   foliage=tuple(record.get('foliage', FOLIAGE_KEYS)),
-                   card_width=float(record.get('cardWidth', 0.55)))
+                   solid=list(record.get('solid', SOLID_KEYS)),
+                   foliage=list(record.get('foliage', FOLIAGE_KEYS)),
+                   cardWidth=float(record.get('cardWidth', 0.55)))
 
 
 class VegetationField(Group):
     """Every tree in a world, drawn near as geometry and far as cards.
+
+    ``species`` is a field holding the :class:`TreeSpecies` the forest is
+    grown from, one per kind of tree, read when the field is built.
 
     ``positions``, ``yaws`` and ``heights`` are the whole forest -- (N,3) world
     positions of the trunk bases, yaw in radians, and height in metres, which is
@@ -174,6 +180,8 @@ class VegetationField(Group):
     chosen in: submitting every card in a four-kilometre forest every frame is
     most of what a forest costs, and what is behind the camera is not seen.
     """
+
+    species = field.newField('species', 'MFNode', 1, list)
 
     def __init__(self, positions: Any, yaws: Any, heights: Any,
                  species: Sequence[TreeSpecies],
@@ -224,7 +232,7 @@ class VegetationField(Group):
                 continue
             self.impostors.append(InstancedBillboards(
                 self.positions[mine], self.yaws[mine], self.heights[mine],
-                entry.impostor, width=entry.card_width, near_fade=True))
+                entry.impostor, width=entry.cardWidth, near_fade=True))
             self._card_tables.append((self.positions[mine], self.yaws[mine],
                                       self.heights[mine], mine))
         self.children = ([_drawn(self.near)]

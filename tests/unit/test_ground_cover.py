@@ -62,8 +62,8 @@ class TestWhatItHolds:
     def test_it_survives_a_round_trip_through_json(self) -> None:
         import json
         entry = _species(clump='c.glb', density=2.5)
-        assert CoverSpecies.from_json(json.loads(json.dumps(entry.to_json()))) \
-            == entry
+        back = CoverSpecies.from_json(json.loads(json.dumps(entry.to_json())))
+        assert back.to_json() == entry.to_json()
 
     def test_its_files_resolve_against_a_directory(self) -> None:
         found = _species(clump='c.glb').beside('/worlds/one')
@@ -71,7 +71,7 @@ class TestWhatItHolds:
         assert found.clump == '/worlds/one/c.glb'
 
     def test_a_species_with_no_clump_resolves_anyway(self) -> None:
-        assert _species().beside('/worlds/one').clump is None
+        assert not _species().beside('/worlds/one').clump
 
 
 class TestWhereItGrows:

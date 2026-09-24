@@ -18,8 +18,9 @@ a :class:`~OpenGLContext.scenegraph.fog.Fog` rather than on an overlay.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Dict, Iterable, Optional, Tuple
+
+from vrml import field, node
 
 __all__ = ['Medium', 'MEDIA', 'WATER', 'SLIME', 'LAVA', 'UNKNOWN',
            'medium_for', 'worst_of', 'SEVERITY']
@@ -32,8 +33,7 @@ SLIME = 'slime'
 LAVA = 'lava'
 
 
-@dataclass(frozen=True)
-class Medium:
+class Medium(node.Node):
     """One substance, from the inside.
 
     ``color`` is what the view closes to and ``visibility`` how many metres it
@@ -48,13 +48,20 @@ class Medium:
     rather than as being under water. ``harm`` is health per second, and a
     substance that does not hurt says so with a zero rather than by being
     absent from the table.
+
+    A medium is a node. The ones in :data:`MEDIA` are shared: every volume of
+    lava is inside the one ``MEDIA[LAVA]``, so tuning its fields tunes lava
+    everywhere, and a game adds a substance of its own by putting a new node
+    in the table under its name.
     """
 
-    name: str
-    color: Tuple[float, float, float]
-    visibility: float
-    muffle: float
-    harm: float = 0.0
+    PROTO = 'Medium'
+
+    name = field.newField('name', 'SFString', 1, WATER)
+    color = field.newField('color', 'SFColor', 1, (0.004, 0.022, 0.030))
+    visibility = field.newField('visibility', 'SFFloat', 1, 9.0)
+    muffle = field.newField('muffle', 'SFFloat', 1, 0.75)
+    harm = field.newField('harm', 'SFFloat', 1, 0.0)
 
 
 #: What each substance does. These numbers are the games' own -- nothing in any

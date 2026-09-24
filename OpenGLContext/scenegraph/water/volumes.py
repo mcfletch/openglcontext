@@ -12,23 +12,30 @@ for the volumes worlds actually have.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any, Sequence, Tuple
 
 import numpy as np
+from vrml import field, node
 
 from OpenGLContext.scenegraph.water.medium import WATER, worst_of
 
 __all__ = ['Volume', 'Volumes']
 
 
-@dataclass(frozen=True)
-class Volume:
-    """One box of a substance, in world metres."""
+class Volume(node.Node):
+    """One box of a substance, in world metres.
 
-    minimum: Tuple[float, float, float]
-    maximum: Tuple[float, float, float]
-    medium: str = WATER
+    ``minimum`` and ``maximum`` are opposite corners and ``medium`` names what
+    fills it, as :data:`~OpenGLContext.scenegraph.water.medium.MEDIA` names
+    it. The corners are world coordinates wherever the node is held: a volume
+    is handed to :class:`Volumes`, which reads it as it stands.
+    """
+
+    PROTO = 'Volume'
+
+    minimum = field.newField('minimum', 'SFVec3f', 1, (0.0, 0.0, 0.0))
+    maximum = field.newField('maximum', 'SFVec3f', 1, (0.0, 0.0, 0.0))
+    medium = field.newField('medium', 'SFString', 1, WATER)
 
     def size(self) -> float:
         """How much space this box takes, for a caller choosing between two."""
@@ -106,7 +113,7 @@ class Volumes:
         inside = [volume for volume in self.volumes if volume.contains(point)]
         if not inside:
             return ''
-        return min(inside, key=lambda volume: volume.size()).medium
+        return str(min(inside, key=lambda volume: volume.size()).medium)
 
 
 #: How to choose between volumes a point is in. Declared rather than branched

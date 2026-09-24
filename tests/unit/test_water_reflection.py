@@ -5,29 +5,30 @@ and the projection whose near plane is that water: the three things the
 reflection render is built from, asserted as numbers. Drawing one is
 ``test_water_reflection_gl.py``.
 """
-import types
-
 import numpy as np
 import pytest
 
 from OpenGLContext.passes import reflection
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.scenegraph.water import STILL
+
+_TRIANGLE = np.array([0, 1, 2], np.uint32)
 
 
 def _record(level=0.0, translate=(0.0, 0.0, 0.0), style=STILL, scale=1.0):
     """A draw record for a flat sheet at ``level`` in its own space, placed."""
     positions = np.array([(-5, level, -5), (5, level, -5), (5, level, 5)], 'f')
-    geometry = types.SimpleNamespace(positions=positions, wave_style=style)
-    node = types.SimpleNamespace(geometry=geometry)
+    mesh = PBRMesh(positions=positions, indices=_TRIANGLE)
+    mesh.waveStyle = style
     tmatrix = np.identity(4, 'f') * scale
     tmatrix[3] = (*translate, 1.0)
-    return ((False,), None, tmatrix, None, (), node)
+    return ((False,), None, tmatrix, None, (), Shape(geometry=mesh))
 
 
 def _plain():
-    node = types.SimpleNamespace(geometry=types.SimpleNamespace(
-        positions=np.zeros((3, 3), 'f')))
-    return ((False,), None, np.identity(4, 'f'), None, (), node)
+    mesh = PBRMesh(positions=np.zeros((3, 3), 'f'), indices=_TRIANGLE)
+    return ((False,), None, np.identity(4, 'f'), None, (), Shape(geometry=mesh))
 
 
 # --- the plane ----------------------------------------------------------------
