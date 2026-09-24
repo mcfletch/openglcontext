@@ -223,11 +223,14 @@ field on the ``ContextDefinition``, and the screen shows all of them:
      - ``auto``/``full``/``blend``/``off``
      - Refraction through glass.
      - ``OPENGLCONTEXT_TRANSMISSION``
-   * - ``waterReflection``
+   * - ``planarReflections``
      - bool
-     - Water reflects the scene around it; costs a second opaque draw at a
-       quarter of the pixels in a frame with water in view.
-     - ``OPENGLCONTEXT_WATER_REFLECTION``
+     - Mirrors and water reflect the scene around them (:doc:`reflections`).
+     - ``OPENGLCONTEXT_PLANAR_REFLECTIONS``
+   * - ``reflectionViews``
+     - int, 0-16
+     - The most mirror views a frame draws; 0 is the strategy's own.
+     - ``OPENGLCONTEXT_REFLECTION_VIEWS``
    * - ``instancing``
      - bool
      - Collapse shapes sharing a geometry into one instanced draw.

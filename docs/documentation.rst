@@ -189,6 +189,11 @@ Rendering
 - :doc:`Shadows <shadows>` -- dynamic shadow mapping, shared by the core
   lighting and PBR passes.
 
+- :doc:`Reflections <reflections>` -- mirrors, polished floors and water that
+  reflect the scene: marking a surface in code, in Blender or in a glTF, how
+  the reflections are drawn as views of their own, the budget they are drawn
+  within, and the ``oglc-mirrors`` demo.
+
 - :doc:`Instanced Geometry <instancing>` -- drawing many copies of one shape in
   a single draw call: grouping, per-instance data, picking, caching and cluster
   culling.

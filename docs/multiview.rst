@@ -731,7 +731,13 @@ glTF mesh of triangles do. Everything else is drawn once per view, as
 - point and line sets;
 - instanced sets that cull their own placements;
 - nodes that draw with their own programs, such as vegetation, terrain,
-  particles and text.
+  particles and text;
+- mirrors, which read a different reflection in each view.
+
+The same submission draws a frame's :doc:`reflections <reflections>`: each
+mirror seen from each view is a view of its own, drawn into a tile of the
+reflection atlas, and one shared submission reaches every mirror view that
+sees a shape, whatever the number of mirrors.
 
 A geometry node joins the shared submission by declaring
 ``multiviewShared = True`` and issuing its draw through

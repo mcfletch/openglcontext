@@ -180,6 +180,53 @@ transform and applies it to the channels that carry the extension; see
 material gives two of its textures *different* transforms, both use the last
 one.
 
+.. _procedural-surfaces:
+
+Procedural surfaces
+~~~~~~~~~~~~~~~~~~~
+
+``OpenGLContext.scenegraph.surfaces`` makes a handful of the materials a room is
+built from as maps generated with NumPy, each repeating seamlessly both ways:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Function
+     - Surface
+   * - ``checkered_marble(size, tiles=2)``
+     - Alternating dark and light polished marble, ``tiles`` each way, with
+       matte grout set below the stone.
+   * - ``marble(size, base, vein, veins=3, polish=0.06)``
+     - Veined marble; the veins run diagonally and are slightly rougher.
+   * - ``brick(size, courses=8, bricks=4)``
+     - Running-bond brick, each brick its own shade, with recessed mortar.
+   * - ``plaster(size)``, ``sandstone(size)``
+     - A mottled, gently bumpy plaster; dressed stone with faint bedding.
+   * - ``brushed_metal(size, colour, roughness=0.28)``
+     - A metal brushed along one direction. ``GOLD``, ``COPPER``, ``STEEL``,
+       ``BRONZE`` and ``SILVER`` are metals' reflectance colours.
+
+Each returns ``Maps``: linear base colour, roughness, metalness and height, 0
+to 1, ``size`` texels square. ``pbr_material(maps, relief=2.0, **factors)``
+turns them into a ``PBRMaterial`` with base-colour, metallic-roughness and
+normal maps, the normal map derived from the height at ``relief``; the
+factors are the material's own fields, and multiply the maps.
+
+.. code-block:: python
+
+   from OpenGLContext.scenegraph import surfaces
+
+   floor = surfaces.pbr_material(surfaces.checkered_marble(512, tiles=2))
+   column = surfaces.pbr_material(surfaces.brushed_metal(128, surfaces.GOLD))
+
+A texture repeats where the geometry's texture coordinates run past 1, so a
+surface is sized by the coordinates it is given: coordinates in metres divided
+by the metres one repeat should cover. A normal map also needs tangents on the
+mesh. The module imports nothing but NumPy, so a Blender script can load it by
+path and bake the same surfaces into a model, as
+``tools/blender/demos/mirrors.py`` does.
+
 Glass, Clearcoat and Fabric
 ---------------------------
 

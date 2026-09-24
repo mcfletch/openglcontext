@@ -274,29 +274,25 @@ What it reflects
 ~~~~~~~~~~~~~~~~
 
 Water reflects the scene standing around it: the far bank, a jetty, a fire on
-the shore. Each view with water in it is drawn once more through the camera
-mirrored in the water's plane, and the water reads that picture at its own
-screen position, pushed by how far its ripple and swell tilt the surface from
-flat. Where nothing was mirrored — the sky — it reflects the environment probe
-as before. Water's Fresnel weights both, so the reflection is faint looking
-straight down and strong across the surface at a glance.
+the shore. Water is one of the engine's :doc:`planar reflections
+<reflections>`: each sheet in view is a mirror, drawn through the camera
+mirrored in its plane, and read pushed by how far the ripple and swell tilt
+the surface from flat. Where nothing was mirrored -- the sky -- it reflects the
+environment probe. Water's Fresnel weights both, so the reflection is faint
+looking straight down and strong across the surface at a glance.
 
-Nothing has to be asked for: any geometry with a ``waveStyle`` is water,
-whether ``water_surface`` built it or an ``OGLC_hook`` tag in a glTF did. The
-mirrored draw is of the opaque scene, at half the view's width and height, in
-a frame with water in view; ``ContextDefinition.waterReflection`` (env
-``OPENGLCONTEXT_WATER_REFLECTION``) turns it off, and the water then reflects
-the sky alone. It needs a fragment stage with more than 32 texture units, and a
-driver with fewer compiles it out.
+Nothing has to be asked for: any geometry with a ``waveStyle`` is water, and
+water is a mirror whatever its material. ``water_material()`` and the ``water``
+hook give the material ``reflector.WATER``, redrawn every frame with the
+ripple's distortion; a lake of one's own is ``WATER.varied(...)``.
+``ContextDefinition.planarReflections`` (env
+``OPENGLCONTEXT_PLANAR_REFLECTIONS``) switches every reflection off, water's
+included, and the budget it draws within is :doc:`reflections`'.
 
-Its limits:
+Its limits, beside the reflections' own:
 
-- One plane a view. Where sheets stand at different levels, the one nearest
-  the camera is mirrored and the others reflect the scene as seen in it.
-- Transparent things — particles, glass — are not in the reflection.
+- Transparent things -- particles, glass -- are not in the reflection.
 - A camera under the surface gets none: it is looking up through the water.
-- With several views drawing one scene, an opaque water surface drawn once for
-  all of them reflects the sky alone.
 
 .. _media:
 
@@ -580,10 +576,9 @@ Limits
 - No physics body. Buoyancy and drag code can read ``wave_height``; the object
   being moved decides what to do with it.
 
-- Reflection and refraction come from the material. Water is a :doc:`PBR
-  <pbr>` material with transmission and an index of refraction of 1.33. Its
-  reflections come from the :ref:`environment lighting <environment-lighting>`.
-  There is no planar reflection pass and no screen-space refraction.
+- Refraction comes from the material. Water is a :doc:`PBR <pbr>` material
+  with transmission and an index of refraction of 1.33; there is no
+  screen-space refraction.
 
 - A volume is a box. To give a sloping river a medium, cut it into several
   boxes.

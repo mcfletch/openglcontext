@@ -104,6 +104,10 @@ On each visible frame the core ``FlatPass`` runs these steps in order:
   into its map, once for every view (see :doc:`Shadows <shadows>`). Shadows
   are on by default in the core profile.
 
+- Reflections - draw the reflection of every mirror in every view into the
+  reflection atlas, each through its own mirrored camera, before any view is
+  drawn (see :doc:`Reflections <reflections>`).
+
 - Shared opaque - when the driver allows one submission for every view (the
   ``vertex`` or ``geometry`` strategy), draw each view's background, then draw
   once, for all the views that see them, the opaque shapes that can share a

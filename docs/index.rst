@@ -137,6 +137,9 @@ Features
   - :doc:`Dynamic shadows <shadows>` from cascaded shadow maps, shared by the
     core lighting and PBR passes
 
+  - :doc:`Planar reflections <reflections>`: mirrors, polished floors and water
+    that reflect the scene, a dozen in a frame within a budget
+
   - :doc:`Several views of one scene <multiview>` in one window, such as the
     split and quad layouts an editor uses
 
@@ -301,6 +304,7 @@ Documentation
    ubershader
    glslversions
    shadows
+   reflections
    instancing
    lod
    multiview

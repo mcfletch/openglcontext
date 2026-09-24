@@ -70,8 +70,9 @@ everything up to that moment.
    * - ``frames``
      - A block of frames: each frame's wall-clock time, the time spent
        drawing, the loop's phase breakdown where the backend measures one
-       (see :doc:`the loop trace <hud>`), and how many frames exceeded the
-       stall threshold.
+       (see :doc:`the loop trace <hud>`) -- including ``reflections``, the
+       frame's :doc:`mirror views <reflections>` -- and how many frames
+       exceeded the stall threshold.
    * - ``entropy``
      - The session's :ref:`seed <randomness>`, and the state of the
        ordinary ``random`` and ``numpy.random`` generators.

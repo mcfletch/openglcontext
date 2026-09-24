@@ -149,11 +149,28 @@ Lighting and shadows
      - ``auto``
      - Glass (``KHR_materials_transmission``). ``full`` captures the backdrop
        and refracts it; ``blend`` is a cheaper alpha-blended approximation.
-   * - ``OPENGLCONTEXT_WATER_REFLECTION``
+   * - ``OPENGLCONTEXT_PLANAR_REFLECTIONS``
      - yes/no
      - on
-     - Water reflects the scene around it (:ref:`water-reflection`). Off, it
-       reflects only the sky.
+     - Mirrors and water reflect the scene around them (:doc:`reflections`).
+       Off, they reflect only the sky.
+   * - ``OPENGLCONTEXT_REFLECTION_VIEWS``
+     - integer
+     - 0
+     - The most mirror views drawn in a frame; 0 is the multi-view strategy's
+       own, 16 or 2.
+   * - ``OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS``
+     - integer
+     - 4
+     - Of those, the most that also draw terrain, vegetation and particles.
+   * - ``OPENGLCONTEXT_REFLECTION_ATLAS``
+     - share
+     - 0.5
+     - The reflection atlas's size as a share of the window's pixels.
+   * - ``OPENGLCONTEXT_REFLECTION_MS``
+     - milliseconds
+     - 0 (none)
+     - A GPU time the reflections aim to stay under.
 
 How much work per frame
 -----------------------

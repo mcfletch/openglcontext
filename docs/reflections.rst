@@ -74,7 +74,9 @@ sky's reflection goes through. A silvered mirror is metallic 1, roughness 0.
 A polished floor is a dielectric with a low roughness, which reflects faintly
 looking straight down and strongly at a glance. Up to a roughness of 0.6 a
 rough mirror reads a blurred copy of its reflection; above it the surface
-reflects the probe, which is as blurred as that reflection would be.
+reflects the probe, which is as blurred as that reflection would be. The
+roughness weighed is the material's factor times the mean of its roughness
+map, so a textured material with a factor of 1 is judged by its map.
 
 With ``replace`` set, the surface shows the reflection as drawn and nothing of
 its material: no tint, no Fresnel. Where there is nothing to reflect it shows
@@ -200,17 +202,42 @@ them:
    views that see it, through the ``vertex`` or ``geometry`` strategy. What a
    shared draw refuses -- terrain, vegetation, particles -- is drawn per
    mirror view.
-5. Each mirror, drawn in each view, projects its own world position through
+5. A mirror seen in a mirror view shows the reflection it had the frame
+   before, read from a copy of the atlas taken before the frame's mirror views
+   are drawn.
+6. Each mirror, drawn in each view, projects its own world position through
    the matrix its tile was drawn with to find its texel.
 
-Step 5 is what lets a reflection be reused. A tile a frame or two old is read
+Step 6 is what lets a reflection be reused. A tile a frame or two old is read
 where the old mirrored camera saw each point, so a static object stays put in
 the mirror; only parallax between the old eye and the new is off, and a
 camera that has moved far enough for that to exceed a texel redraws the tile.
 
-A reflection does not contain other mirrors (one bounce), transparent shapes,
-or the sky: where the mirror view drew nothing, the surface reflects the
-probe.
+A reflection does not contain transparent shapes or the sky: where the mirror
+view drew nothing, the surface reflects the probe.
+
+A mirror in another mirror's view shows its own reflection as the main view
+saw it a frame ago, not as the first mirror sees it; the difference is a change
+of viewpoint across the second mirror, which reads as a reflection of the room
+where the bare metal would read as a smear. A mirror in view that has no
+reflection yet is left out of the other's view, and that view is drawn again on
+the next frame, once it has one. A mirror no view shows has no reflection of
+its own, and reflects the probe wherever a mirror view sees it.
+
+Settling and still scenes
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The first frames a pass draws are not a picture to keep: its programs compile,
+textures upload and the environment probe builds in them, and the colours they
+come out with can be far off. A reflection drawn in those frames is drawn again
+before it is kept, and never shown inside another mirror.
+
+A context that draws only when something changes would leave a still scene
+showing whatever its reflections were when it stopped. So while any mirror in
+view has a reflection drawn while the pass settled, has none at all, is off by
+more than a texel, or left out a mirror that now has one, the pass asks the
+context for another frame. Reaching a mirror's ``interval`` does not ask: a
+still scene redrawn is the same picture.
 
 The budget
 ----------
@@ -267,8 +294,9 @@ Each frame, the schedule weighs every mirror in view:
    one with the largest screen area times priority times frames since its last
    draw first.
 
-Where the mirrors that must be drawn do not fit, the highest-scoring go first
-and the rest are drawn at half scale before any is left out. A mirror left out
+Where the mirrors that must be drawn do not fit, those with no reflection they
+can use go first, then the rest, each by score. A mirror too large for what is
+left is drawn at half scale in its turn, and only then is one left out. A mirror left out
 keeps its old tile, or reflects the probe if it has none. The frames since a
 mirror's last draw raise its score every frame it is passed over, so none is
 left out for long. A tile being drawn outranks one being kept for later: where
@@ -323,7 +351,8 @@ Limits
 
 - Flat surfaces only. A curved mirror, a chrome sphere or a car body reflects
   the probe.
-- One bounce: a mirror seen in a mirror reflects the probe.
+- A mirror seen in a mirror shows its reflection a frame late, and from the
+  main view's side of it rather than the first mirror's.
 - A moving object's reflection lags by its tile's age, up to its ``interval``
   frames. ``interval=1`` on a reflector where that shows.
 - Transparent shapes are not drawn into any reflection.

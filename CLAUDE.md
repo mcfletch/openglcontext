@@ -123,7 +123,12 @@ OpenGLContext/
 │   ├── renderpass.py # Chooses between the two and caches the choice
 │   ├── pbrpass.py    # Metallic/roughness uber-shader -- docs/ubershader.rst
 │   ├── ibl.py        # Image-based lighting probe
-│   ├── reflection.py # Water's reflection: the scene mirrored in its plane -- docs/water.rst
+│   ├── reflection.py # Planar reflections' arithmetic: which surfaces are
+│   │                 # mirrors, their planes, a mirror's camera -- docs/reflections.rst
+│   ├── reflectionplanner.py  # A frame's mirrors: what to draw and read -- no GL
+│   ├── reflectiontiles.py    # The atlas packer and the schedule -- no GL
+│   ├── reflectionatlas.py    # The texture every reflection is a tile of
+│   ├── gputimer.py   # GPU time of a stretch of a frame, read without waiting
 │   ├── shadow*.py    # Shadow mapping -- docs/shadows.rst
 │   ├── instancing.py # Collapsing repeated shapes -- docs/instancing.rst
 │   └── shaderpass.py # VRML97ShaderProgram -- compiles and holds the programs
@@ -141,6 +146,10 @@ OpenGLContext/
 │   ├── nurbs*.py     # NURBS surfaces, curves, trims, sampling -- docs/nurbs.rst
 │   ├── frommesh.py   # Generated glTF-shaped arrays -> scenegraph nodes
 │   ├── pbrmaterial.py, pbrmesh.py   # The metallic/roughness material and mesh
+│   ├── reflector.py  # PlanarReflector: a material's surfaces are mirrors
+│   ├── mirrorhooks.py    # The mirror OGLC_hook kind -- docs/reflections.rst
+│   ├── surfaces.py   # Procedural PBR maps (marble, brick, metals); NumPy
+│   │                 # only, so Blender loads it too -- docs/pbr.rst
 │   ├── varied.py     # Varied: a node's copy with some fields changed
 │   ├── lightgrid.py  # Baked irradiance grid: lights what a lightmap cannot
 │   ├── octahedral.py # The fold an impostor's views are laid out by; the same
@@ -348,7 +357,9 @@ still pins a feature for a script or a CI run, while the settings screen
 Passes read through `OpenGLContext.renderoptions`, never the environment
 directly. The fields are `shadows`, `shadowsSoft`, `shadowCascades`,
 `maximumLights`, `bloom`, `ibl`, `iblIntensity`, `transmission`,
-`waterReflection`, `instancing`, `tessellationLOD`, `vsync` and `uiScale`; see
+`planarReflections` (with the reflection budget: `reflectionViews`,
+`reflectionSeparateViews`, `reflectionAtlas`, `reflectionMilliseconds`),
+`instancing`, `tessellationLOD`, `vsync` and `uiScale`; see
 [docs/overlayui.rst](docs/overlayui.rst).
 
 **These are start-up switches, and each is read once.** A pass that changed its
