@@ -42,7 +42,7 @@ def test_draw_is_abstract():
 
 
 def test_base_upload_constants_is_a_noop():
-    assert _node()._upload_constants() is None
+    assert _node()._upload_constants({}) is None
 
 
 if __name__ == '__main__':
