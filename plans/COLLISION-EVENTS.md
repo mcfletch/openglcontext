@@ -523,6 +523,16 @@ OpenGLContext:
 
 Still open:
 
+- Merge the `collision-events` branch into openglcontext's `develop`. It is
+  not merged because the main checkout holds other uncommitted and staged
+  work in the same files (`docs/audio.rst`, `docs/documentation.rst`,
+  `docs/physics.rst`). The branch also moves the `tests/reference_images`
+  gitlink to the reference repository's `bless/physics-events` branch
+  (`df06883`), which has to reach that repository's `main` and GitHub.
+  omi_physics, marble-demo and twig-bb have been fast-forwarded on `develop`;
+  nothing is pushed.
+- Preflight for openglcontext has to run once the branch is in `develop`.
+
 - Defect 5, the character controller. The broadphase now pairs kinematic
   bodies with triggers, which is half of it. The other half is the avatar's
   proxy body: a kinematic collider would push dynamic bodies with infinite
