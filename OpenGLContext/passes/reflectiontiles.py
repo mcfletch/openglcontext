@@ -3,7 +3,8 @@
 Every reflection a frame shows is a tile of one texture, the reflection atlas
 (:class:`~OpenGLContext.passes.reflectionatlas.ReflectionAtlas`).
 :class:`TilePacker` decides where each tile goes: shelves of power-of-two
-heights, a gutter round every tile so filtering and the mip levels a rough
+heights, with a shorter tile beside taller ones where its own class has no
+room, a gutter round every tile so filtering and the mip levels a rough
 mirror reads stay inside it, and a tile that is not drawn this frame keeping
 its place, so a reflection drawn a frame or two ago is still there to read.
 
@@ -27,7 +28,7 @@ mirror's score every frame it is passed over, so none is left out indefinitely.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Hashable, List, Mapping, Optional, Set, Tuple
+from typing import Dict, Hashable, Iterable, List, Mapping, Optional, Set, Tuple
 
 __all__ = [
     'GUTTER', 'DRIFT_TEXELS', 'Tile', 'Packed', 'TilePacker', 'Candidate',
@@ -127,28 +128,37 @@ class TilePacker:
         return size[0] + 2 * self.gutter, size[1] + 2 * self.gutter
 
     def _insert(self, key: Hashable, size: Tuple[int, int]) -> bool:
+        """Place one slot: on a shelf of its class, on a new shelf, or beside
+        taller slots on a taller shelf, the first of those with room."""
         width, height = self._slot(size)
         if width > self.width:
             return False
         shelf_height = _shelf_height(height)
-        for shelf in self._shelves:
-            if shelf.height != shelf_height:
-                continue
-            x = shelf.fit(width, self.width)
-            if x is not None:
-                self._occupy(shelf, x, width, key, size)
-                return True
+        if self._on_shelf(key, size, width,
+                          (shelf for shelf in self._shelves if shelf.height == shelf_height)):
+            return True
         top = max((shelf.y + shelf.height for shelf in self._shelves), default=0)
         if top + shelf_height > self.height:
             # The last shelf may be shorter than its class, to use the top of
             # the atlas; it then takes nothing taller than it is.
-            if top + height > self.height:
-                return False
             shelf_height = self.height - top
-        shelf = _Shelf(top, shelf_height)
-        self._shelves.append(shelf)
-        self._occupy(shelf, 0, width, key, size)
-        return True
+        if shelf_height >= height:
+            shelf = _Shelf(top, shelf_height)
+            self._shelves.append(shelf)
+            self._occupy(shelf, 0, width, key, size)
+            return True
+        taller = sorted((shelf for shelf in self._shelves if shelf.height > height),
+                        key=lambda shelf: shelf.height)
+        return self._on_shelf(key, size, width, taller)
+
+    def _on_shelf(self, key: Hashable, size: Tuple[int, int], width: int,
+                  shelves: Iterable[_Shelf]) -> bool:
+        for shelf in shelves:
+            x = shelf.fit(width, self.width)
+            if x is not None:
+                self._occupy(shelf, x, width, key, size)
+                return True
+        return False
 
     def _occupy(self, shelf: _Shelf, x: int, width: int, key: Hashable,
                 size: Tuple[int, int]) -> None:

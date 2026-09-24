@@ -68,6 +68,12 @@ class TestAvailability:
         assert caps().max_views == multiview.MAX_VIEWS
 
 
+class TestProgramViews:
+    def test_programs_are_compiled_for_a_power_of_two_of_views(self):
+        counts = [multiview.program_views(views) for views in range(1, 10)]
+        assert counts == [2, 2, 4, 4, 8, 8, 8, 8, 16]
+
+
 class TestChoice:
     def test_auto_takes_the_best_strategy_this_build_draws(self):
         found = caps({'GL_ARB_shader_viewport_layer_array'}, (4, 6))

@@ -716,7 +716,13 @@ generated from the lit vertex shader emits each triangle once per view in the
 draw's mask. With ``vertex``, the draw is instanced once per view and the
 vertex stage routes each copy. The lit programs are compiled a second time
 for this, the first time a layout of several views is drawn; the single-view
-programs are unchanged.
+programs are unchanged. They are compiled for the next power of two of views,
+at least two, and serve any draw of up to that many, since the mask names only
+the views drawn: a layout whose count of views changes compiles again only when
+the count passes the next power of two. The mirror views of
+:doc:`reflections` ask for programs compiled for as many views as their budget
+allows, so the count of mirrors in view never triggers a compile after the
+first frame with mirrors.
 
 A shape takes part when its geometry draws with the pass's lit programs
 alone, or with a program of its own compiled for shared draws. ``Box``,

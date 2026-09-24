@@ -1869,10 +1869,12 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
     _viewTable: Optional[int] = None
 
     def uploadViewTable( self, frames: Sequence['ViewFrame'],
-                         reference: 'ViewFrame' ) -> List[Any]:
+                         reference: 'ViewFrame', capacity: int = 0 ) -> List[Any]:
         """Fill and bind the ``ViewBlock`` for drawing ``frames`` in ``reference``'s space.
 
-        Returns the records, whose eyes the shapes measure their detail to.
+        ``capacity`` is the views the bound programs were compiled for, which
+        the block is filled out to. Returns the records, whose eyes the shapes
+        measure their detail to.
         """
         from OpenGL import GL
         from OpenGLContext.multiview.strategy import (
@@ -1880,7 +1882,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         )
         if self._viewTable is None:
             self._viewTable = int( GL.glGenBuffers( 1 ) )
-        data = pack_view_table( frames, reference )
+        data = pack_view_table( frames, reference, capacity )
         GL.glBindBuffer( GL.GL_UNIFORM_BUFFER, self._viewTable )
         GL.glBufferData( GL.GL_UNIFORM_BUFFER, len( data ), data, GL.GL_DYNAMIC_DRAW )
         GL.glBindBuffer( GL.GL_UNIFORM_BUFFER, 0 )
@@ -1889,7 +1891,8 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
 
     def renderShared( self, frames: Sequence['ViewFrame'],
                       id_map: Optional[Dict[int, Any]],
-                      lighting: Any = None, mirrored: bool = False ) -> Optional[set]:
+                      lighting: Any = None, mirrored: bool = False,
+                      capacity: int = 0 ) -> Optional[set]:
         """Draw every shape that can serve several views once, for all of them.
 
         The draw is made in the active view's eye space, exactly as that view
@@ -1904,6 +1907,10 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         ``mirrored`` draws mirror views into the reflection atlas: every one
         of them turns the winding over, which the reference camera's
         modelviews do not say, and each writes linear HDR.
+
+        ``capacity`` asks for programs compiled for at least that many views,
+        for a caller whose count of views changes from frame to frame and
+        would otherwise meet a compile at each new count.
         """
         from OpenGL import GL
         shader = self.shader_program
@@ -1913,7 +1920,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
         if not groups:
             return set()
         strategy = self.multiviewStrategy or 'geometry'
-        if not shader.select_program_set( len( frames ), strategy ):
+        if not shader.select_program_set( max( len( frames ), capacity ), strategy ):
             self.multiviewFailed( strategy )
             return None
         drawn: set = set()
@@ -1923,7 +1930,7 @@ class FlatPass( _FlatEffectsMixin, SelectionMixin, SGObserver ):
             GL.glViewportArrayv( 0, len( frames ), rects )
             GL.glScissorArrayv( 0, len( frames ), rects.astype( 'i' ) )
             glEnable( GL_SCISSOR_TEST )
-            records = self.uploadViewTable( frames, reference )
+            records = self.uploadViewTable( frames, reference, shader.program_set )
             matrix = reference.modelView
             self.matrix = matrix
             self.visible = True

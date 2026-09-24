@@ -416,14 +416,18 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         """Put the programs compiled for a shared draw of ``views`` views in place.
 
         ``strategy`` is ``'geometry'`` or ``'vertex'``; see :func:`link_program`.
-        0 views puts back the programs a single view draws with. A set is
+        The set is compiled for
+        :func:`~OpenGLContext.multiview.strategy.program_views` of ``views``,
+        which :attr:`program_set` then holds, and serves any draw of up to that
+        many. 0 views puts back the programs a single view draws with. A set is
         compiled the first time it is asked for and kept, with its uniform
         state, for the life of this object; everything that sets a uniform on
         ``program`` or ``vertex_color_program`` then sets it on the set in
         place. False where a set would not compile, which leaves the current
         one in place; a set that would not compile is not tried again.
         """
-        views = int(views)
+        from OpenGLContext.multiview.strategy import program_views
+        views = program_views(views) if int(views) > 0 else 0
         key = (strategy, views) if views else ('', 0)
         if key == (self.program_strategy, self.program_set):
             return True

@@ -299,8 +299,18 @@ can use go first, then the rest, each by score. A mirror too large for what is
 left is drawn at half scale in its turn, and only then is one left out. A mirror left out
 keeps its old tile, or reflects the probe if it has none. The frames since a
 mirror's last draw raise its score every frame it is passed over, so none is
-left out for long. A tile being drawn outranks one being kept for later: where
-the atlas cannot hold both, the kept one gives up its room.
+left out for long.
+
+The atlas packs tiles on shelves. A tile goes on a shelf of its own height
+class, on a new shelf where there is height left, or beside taller tiles on a
+taller shelf. Where the tiles being drawn and the tiles being kept still do not
+all fit, they are placed in order of screen area times priority, largest
+first: a drawn tile without room is tried at half scale, and a tile still
+without room, drawn or kept, is left out and reflects the probe. Placing by
+what each mirror shows, and not by how long it has gone without a reflection,
+settles a scene with more mirrors than room on the same mirrors every frame, so
+none of them alternates between reflecting and matte. A mirror left out for lack
+of room does not ask for another frame.
 
 With room to spare every mirror is redrawn every frame. ``interval`` is what a
 mirror is allowed when the budget is short, and what lets a corridor of small
