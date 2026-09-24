@@ -93,6 +93,12 @@ MIRROR_PARAMETERS: Dict[str, str] = {
 }
 
 
+def _typed(value: Any) -> float:
+    """A float as it was typed: Blender stores float properties in single
+    precision, and seven significant digits is all that holds."""
+    return float('%.7g' % float(value))
+
+
 def parameters(text: Any) -> Dict[str, Any]:
     """The JSON object in the parameters field, or ``{}`` where it is blank.
 
@@ -153,7 +159,7 @@ def _water_parameters(settings: Any) -> Dict[str, Any]:
     medium = str(getattr(settings, 'medium', '') or '').strip().lower()
     if medium and medium != DEFAULTS['medium']:
         params['medium'] = medium
-    depth = float(getattr(settings, 'depth', 0.0) or 0.0)
+    depth = _typed(getattr(settings, 'depth', 0.0) or 0.0)
     if depth > 0.0:
         params['depth'] = depth
     return params
@@ -163,7 +169,7 @@ def _effect_parameters(settings: Any) -> Dict[str, Any]:
     """``scale`` and ``density``, where either differs from 1."""
     params: Dict[str, Any] = {}
     for name in ('scale', 'density'):
-        value = float(getattr(settings, name, DEFAULTS[name]))
+        value = _typed(getattr(settings, name, DEFAULTS[name]))
         if value != DEFAULTS[name]:
             params[name] = value
     return params
@@ -174,7 +180,7 @@ def _mirror_parameters(settings: Any) -> Dict[str, Any]:
     params: Dict[str, Any] = {}
     for name, written in MIRROR_PARAMETERS.items():
         value = getattr(settings, name, DEFAULTS[name])
-        value = int(value) if name == 'interval' else float(value)
+        value = int(value) if name == 'interval' else _typed(value)
         if value != DEFAULTS[name]:
             params[written] = value
     return params

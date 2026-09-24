@@ -346,3 +346,15 @@ def test_the_key_is_spelled_in_one_place():
                if isinstance(node, ast.Constant) and isinstance(node.value, str)
                and node not in docstrings]
     assert hooks.EXTENSION not in written
+
+
+def test_a_number_is_written_as_it_was_typed():
+    """Blender holds a float property in single precision: 0.35 reads back as
+    0.3499999940395355, and a tag is text an artist reads."""
+    single = float(np.float32(0.35))
+    assert tag.hook_block(settings(kind='mirror', mirror_scale=single)) == {
+        'kind': 'mirror', 'scale': 0.35}
+    assert tag.hook_block(settings(kind='fire', scale=float(np.float32(1.1)))) == {
+        'kind': 'fire', 'scale': 1.1}
+    assert tag.hook_block(settings(depth=float(np.float32(0.3)))) == {
+        'kind': 'water', 'style': 'still', 'depth': 0.3}
