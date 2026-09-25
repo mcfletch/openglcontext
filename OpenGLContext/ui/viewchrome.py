@@ -357,8 +357,8 @@ class Splitter(Widget):
         self.chrome = chrome
         # What the pointer says about it: a line that drags one way asks for
         # the arrows that drag that way, and the crossing for either.
-        self.cursor = {True: 'resize-x', False: 'resize-y'}.get(
-            self.vertical, 'resize')
+        self.cursor = ('resize' if self.vertical is None
+                       else 'resize-x' if self.vertical else 'resize-y')
 
     def press(self, x: float, y: float) -> bool:
         self.armed = True
@@ -446,6 +446,8 @@ class ViewChrome(Panel):
         #: *Cameras*. None, or none answered, offers no such item.
         self.cameras = cameras
         self._splitters: List[Splitter] = []
+        #: What the furniture was last built for; see :meth:`furnitureKey`.
+        self._builtFor: Any = None
 
     # -- what each view gets -----------------------------------------------
     def parts_for(self, view: View) -> Tuple[str, ...]:
@@ -457,8 +459,28 @@ class ViewChrome(Panel):
                    'expand': bool(self.expand)}
         return tuple(part for part in PARTS if offered[part])
 
+    def furnitureKey(self) -> Tuple[Any, ...]:
+        """What decides which furniture there is: the views shown and their parts.
+
+        The views, by identity, with their names, their parts and whether each
+        has a camera to navigate; whether one is maximised; and which
+        splitters the arrangement divides the window with. Moving a splitter
+        changes none of it, so a drag keeps the controls it is dragging.
+        """
+        layout = self.layout_of
+        views = tuple(
+            (id(view), str(view.name), self.parts_for(view), view.camera is not None)
+            for view in self._shown())
+        arrangement = getattr(layout, 'arrangement', None)
+        if not isinstance(arrangement, str):
+            arrangement = id(arrangement)
+        maximised = getattr(layout, 'maximised', None) is not None
+        return (views, self._can_maximise(), bool(self.splitters),
+                arrangement, maximised)
+
     def rebuild(self) -> None:
         """Make the furniture for the views the arrangement is showing."""
+        self._builtFor = self.furnitureKey()
         children: List[Widget] = []
         self._splitters = []
         for view in self._shown():
@@ -501,7 +523,9 @@ class ViewChrome(Panel):
 
     # -- where it all goes --------------------------------------------------
     def layout(self, viewport: Tuple[int, int], metrics: FontMetrics) -> None:
-        self.rebuild()
+        """Place the furniture for this window, building it again only where it changed."""
+        if self.furnitureKey() != self._builtFor:
+            self.rebuild()
         self.link()
         self.scaleSkin(metrics)
         self._title_height = 0

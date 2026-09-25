@@ -619,3 +619,37 @@ class TestWhatTheSplittersAskThePointerFor:
 
     def test_the_quads_crossing_asks_for_either(self):
         assert Splitter(vertical=None).cursor == 'resize'
+
+
+class TestLayingOutAgain:
+    """A splitter drag relays the chrome out on every move; what is there stays."""
+
+    def test_the_controls_are_the_same_ones_after_a_relayout(self):
+        layout = _layout()
+        chrome = _chrome(layout)
+        before = list(chrome.walk())
+        layout.split_at = (0.3, 0.6)
+        layout.arrange(*VIEWPORT)
+        chrome.layout(VIEWPORT, REFERENCE_METRICS)
+        assert all(any(widget is now for now in chrome.walk()) for widget in before)
+
+    def test_a_splitter_being_dragged_stays_the_one_drawn(self):
+        layout = _layout()
+        chrome = _chrome(layout)
+        line = [splitter for splitter in _of(chrome, Splitter) if splitter.vertical][0]
+        line.press(*line.rect.centre)
+        line.drag(300, 300)
+        layout.arrange(*VIEWPORT)
+        chrome.layout(VIEWPORT, REFERENCE_METRICS)
+        assert any(line is splitter for splitter in _of(chrome, Splitter))
+        assert line.armed
+        assert line.rect.centre[0] == pytest.approx(300, abs=2)
+
+    def test_another_arrangement_gets_its_own_controls(self):
+        layout = _layout()
+        chrome = _chrome(layout)
+        layout.maximise(layout.views[0])
+        layout.arrange(*VIEWPORT)
+        chrome.layout(VIEWPORT, REFERENCE_METRICS)
+        assert not _of(chrome, Splitter)
+        assert len(_of(chrome, ViewLabel)) == 1
