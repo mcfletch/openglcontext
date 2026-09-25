@@ -74,6 +74,19 @@ def test_setLocalMatrix_invalidates_cache():
     assert np.allclose(_applied(mt), shift)
 
 
+def test_setLocalMatrix_moves_the_paths_below_it():
+    """A path whose matrix was already worked out follows the new matrix."""
+    from OpenGLContext.scenegraph.transform import Transform
+    mt = MatrixTransform(localMatrix=np.identity(4))
+    below = nodepath.NodePath([]) + [mt] + [Transform(translation=(0, 0, 1))]
+    below.transformMatrix()
+    shift = np.identity(4)
+    shift[3, :3] = [1.0, 2.0, 3.0]
+    mt.setLocalMatrix(shift)
+    origin = np.array([0.0, 0.0, 0.0, 1.0]) @ np.asarray(below.transformMatrix())
+    assert np.allclose(origin[:3], [1.0, 2.0, 4.0])
+
+
 # -- loader integration -----------------------------------------------------
 
 def test_loader_uses_matrix_transform_for_matrix_nodes():

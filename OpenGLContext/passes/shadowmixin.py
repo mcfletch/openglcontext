@@ -96,8 +96,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
 
         def getModelView(self) -> np.ndarray: ...
         def takeGather(self) -> Any: ...
-        def _instanceKey(self, record: Any) -> Any: ...
-        def _instanceable(self, record: Any) -> bool: ...
+        def batchingFunctions(self) -> Tuple[Any, Any]: ...
 
     use_shadows: bool = False
     shadow_pass: bool = False
@@ -983,10 +982,10 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         if hit is not None:
             return hit
         from OpenGLContext.passes.instancing import build_instance_groups
-        key, instanceable = self.batchingFunctions()
+        batch_key, instanceable = self.batchingFunctions()
         result = build_instance_groups(
             list(toRender), min_instances=self.instanceMinimum(),
-            key=key, instanceable=instanceable)
+            key=batch_key, instanceable=instanceable)
         # Only a few distinct caster sets exist per frame (one per shadow-casting
         # light); clear rather than grow unbounded if the scene churns.
         if len(cache) >= 8:

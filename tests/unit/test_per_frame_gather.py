@@ -263,3 +263,63 @@ class TestTheRecordCarriesItsNode:
 
         assert len(groups) + len(singles) >= 1
         assert walks == []
+
+
+class TestTheFrustumTest:
+    """The cull rejects exactly the shapes with all eight corners behind a plane.
+
+    That is the decision
+    :meth:`OpenGLContext.scenegraph.boundingvolume.BoundingBox.visible` makes
+    one shape at a time; the pass makes it for the whole scene at once, from
+    each box's centre and half-axes.
+    """
+
+    @staticmethod
+    def _corners(low, high):
+        corners = np.ones((8, 4), 'f')
+        for index in range(8):
+            for axis in range(3):
+                corners[index, axis] = (high if index >> axis & 1 else low)[axis]
+        return corners
+
+    @staticmethod
+    def _eight_corner_decision(matrices, points, planes):
+        world = np.array([p @ m for p, m in zip(points, matrices)])
+        distances = world @ planes.T
+        return ~(distances < 0).all(axis=1).any(axis=1)
+
+    def test_it_matches_the_eight_corner_test_under_any_transform(self):
+        rng = np.random.default_rng(7)
+        count = 400
+        points = np.empty((count, 8, 4), 'f')
+        matrices = np.empty((count, 4, 4), 'f')
+        for index in range(count):
+            low = rng.uniform(-3, 1, 3)
+            points[index] = self._corners(low, low + rng.uniform(0.1, 4, 3))
+            matrix = np.eye(4)
+            matrix[:3, :3] = rng.normal(size=(3, 3))
+            matrix[3, :3] = rng.uniform(-30, 30, 3)
+            matrices[index] = matrix
+        planes = rng.normal(size=(6, 4)).astype('f')
+        planes[:, 3] = rng.uniform(-10, 10, 6)
+        passing = FlatPass(basenodes.sceneGraph(), [])
+        passing.frustum = frustum.Frustum(planes=planes)
+        everything = np.ones(count, bool)
+
+        kept = passing._frustumSurvivors(matrices, points, everything, everything)
+
+        expected = np.flatnonzero(self._eight_corner_decision(matrices, points, planes))
+        assert 0 < len(expected) < count
+        assert list(kept) == list(expected)
+
+    def test_an_unbounded_or_empty_path_is_never_culled_nor_drawn(self):
+        points = np.zeros((2, 8, 4), 'f')
+        matrices = np.tile(np.eye(4, dtype='f'), (2, 1, 1))
+        passing = FlatPass(basenodes.sceneGraph(), [])
+        passing.frustum = frustum.Frustum(
+            planes=np.array([(0, 0, 1, -1000)], 'f'))
+
+        kept = passing._frustumSurvivors(matrices, points, np.array([False, False]),
+                                         np.array([True, False]))
+
+        assert list(kept) == [0]

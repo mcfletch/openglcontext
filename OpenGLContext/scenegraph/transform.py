@@ -151,6 +151,9 @@ class MatrixTransform( Transform ):
             self._inverse = np.identity(4, dtype='d')
         holder = cache.CACHE.getHolder( self, key=self._BAKED_KEY )
         if holder is not None:
+            # Cleared first, so the paths whose matrices were built on the
+            # old value are worked out again.
+            holder.clear()
             holder.data = (self._forward, self._inverse)
 
     def localMatrices( self, translate: bool = True, scale: bool = True,
