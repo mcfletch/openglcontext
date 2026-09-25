@@ -137,6 +137,175 @@ broad phase, narrow phase and solver run on the CPU with either backend. In
 ``tests/physics_stress.py``, the ``b`` key switches backends while the demo
 runs.
 
+.. _physics-collisions:
+
+Responding to collisions
+------------------------
+
+A game subscribes a callback to the collisions of one body, several bodies or
+every body, and the manager calls it once per collision:
+
+.. code-block:: python
+
+   events = scene.manager.events             # every PhysicsManager has one
+
+   def thud(hit):
+       engine.play(THUD, position=hit.point, gain=min(1.0, hit.approach / 8.0))
+
+   events.subscribe(thud, body=crate, above=0.5)          # the crate lands
+   events.subscribe(on_blow, body=crates, phases=('begin', 'persist'), above=1.0)
+   events.subscribe(on_any, phases=('begin', 'end'))      # every body
+   events.subscribe(on_plate, body=plate, kinds=('trigger',),
+                    phases=('enter', 'exit'))             # a pressure plate
+   subscription = events.subscribe(on_glass, body=pane, among=projectiles)
+   subscription.cancel()
+
+``body`` is a ``PhysicsBody``, the ``Transform`` it drives, a body index, an
+``omi_physics.contactevents.BodyRef``, or a list of any of them; left out, the
+subscription covers every body. ``among`` narrows the other side the same way:
+"did I hit one of these". ``skip_static=True`` leaves out static bodies, for a
+body that cares what it hit rather than what it landed on.
+
+Each callback receives a ``Collision``, turned to face the subscribed body:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Field
+     - Meaning
+   * - ``kind``
+     - ``'contact'``, ``'trigger'`` or ``'hit'``
+   * - ``phase``
+     - ``'begin'``, ``'persist'`` or ``'end'`` for a contact; ``'enter'``,
+       ``'stay'`` or ``'exit'`` for a trigger; ``'begin'`` for a hit
+   * - ``body``, ``other``
+     - The ``PhysicsBody`` on each side, or a ``BodyRef`` for a body added to
+       the world without one
+   * - ``node``, ``other_node``
+     - The ``Transform`` each side drives
+   * - ``point``
+     - World-space contact point, metres
+   * - ``normal``
+     - Unit vector from ``other`` into ``body``: the way ``body`` was pushed
+   * - ``approach``
+     - Closing speed along the normal before the solve, m/s
+   * - ``impulse``
+     - Normal impulse, N·s. It includes both masses, so a breaking strength
+       compares against this rather than against ``approach``
+   * - ``friction_impulse``, ``slip``
+     - Friction impulse (N·s) and sliding speed (m/s), for scraping sounds
+   * - ``depth``
+     - Deepest penetration, metres
+   * - ``time``
+     - Simulation time of the step it happened on, seconds
+   * - ``reason``
+     - On an ``'end'``: ``'separated'``, or ``'removed'``
+   * - ``solved``
+     - False where a contact filter let the pair pass through each other
+   * - ``payload``
+     - For a hit, what the shooter passed to ``report_hit``
+   * - ``event``
+     - The ``omi_physics`` event it was made from
+
+``phases`` defaults to ``'begin'`` and ``'enter'``. ``'persist'`` and
+``'stay'`` arrive on every step for as long as the pair touches. ``above`` is
+the closing speed, in m/s, a ``'begin'`` or ``'persist'`` must exceed to be
+delivered; an ``'end'`` always passes. A box resting on the floor closes on it
+by about ``g·dt`` on every step (0.08 m/s at 120 Hz), so ``above=0.5`` with
+``('begin', 'persist')`` hears every blow, including a box already on the floor
+tipping over onto an edge, and nothing while it rests.
+
+A pair whose two bodies are both covered by one subscription is delivered once,
+facing the lower-indexed body. Two bodies that fall asleep against each other
+are still touching: a crate that settles gets a ``'begin'`` and no ``'end'``
+until something moves it off. ``manager.remove(body)`` ends every pair it was
+in with ``reason='removed'``; its subscriptions hear those ends at the next
+``advance()`` and then finish.
+
+When callbacks run
+~~~~~~~~~~~~~~~~~~
+
+The world records its collisions on every fixed step, and
+``manager.advance(dt)`` delivers them after it has written the frame's poses,
+in step order, on the thread that called it. A frame that ran four steps
+delivers what happened on all four, so a bounce is heard at any frame rate.
+``ThreadedPhysicsManager`` delivers the events published with the snapshot it
+writes, so the two managers deliver the same events. A callback that raises is
+logged with the collision and does not stop the rest.
+
+Callbacks are held until cancelled, so a lambda can be subscribed.
+
+``subscribe(..., immediate=True)`` calls the callback inside the physics step
+instead, before the next step runs: a lever that must throw as it is struck, or
+a projectile removed on impact. It may change the world and must not touch the
+scenegraph. It hears contacts only, and a threaded manager refuses it, since
+its steps run on another thread.
+
+Hitscan weapons
+~~~~~~~~~~~~~~~
+
+A shot that is a raycast never touches the solver. The shooter reports what it
+hit, and the struck body's subscribers that ask for ``'hit'`` receive it like
+any other blow:
+
+.. code-block:: python
+
+   from omi_physics import model, raycast
+
+   SHOTS = model.CollisionFilter(collisionSystems=('shot',),
+                                 notCollideWithSystems=('red_team',))
+   hit = raycast.raycast(world, muzzle, aim, max_distance=200.0, filter=SHOTS)
+   if hit is not None:
+       events.report_hit(hit, source=player, direction=aim, impulse=4.0,
+                         speed=400.0, payload=weapon)
+
+   events.subscribe(on_struck, body=crate, kinds=('contact', 'hit'))
+
+``report_hit`` pushes the body by ``impulse`` (N·s) at the hit point, and the
+subscriber sees ``approach`` as the round's ``speed``, ``normal`` along its
+path and ``payload`` as it was passed. It is delivered with the next
+``advance()``, ahead of that frame's contacts. ``filter=`` on ``raycast``,
+``raycast_many`` and ``bodies_along`` is a collision filter for the ray, so what
+a weapon passes through is data rather than a list of bodies to skip.
+
+Breaking instead of bouncing
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A pane that shatters when ``hit.impulse`` passes its strength is removed by
+its callback and replaced by fragments; the ball has already bounced off it
+on that step. To let the ball carry on through, decide before the solve:
+
+.. code-block:: python
+
+   from omi_physics.contactevents import Verdict
+
+   def breaks(pair):                         # a PairPreview
+       if pane.index in (pair.a.index, pair.b.index) and pair.impulse > 5.0:
+           return Verdict.IGNORE_PAIR
+       return Verdict.SOLVE
+
+   world.set_contact_filter(breaks)
+
+The filter is asked once about each reported pair, on the step it would begin.
+``pair.impulse`` is ``approach`` times the pair's reduced mass, in N·s.
+``IGNORE_PAIR`` lets the two pass through each other until they part;
+``IGNORE_STEP`` leaves the pair out of this step and asks again on the next. An
+ignored pair is still delivered, with ``solved`` False, so the subscriber that
+spawns the fragments hears it. One-way platforms use the same hook.
+
+.. rst-class:: technical
+
+Recording is ``omi_physics``' contact tracker (``contactevents.py``). A
+subscription on a body flags it and sets ``world.contact_reporting`` to
+``'flagged'``; a subscription on every body sets ``'all'``. With nothing
+subscribed the world records nothing and the step costs what it did.
+Reporting every pair of a resting pile of 300 boxes adds about 2% to its step;
+asking for ``'persist'`` adds an object per touching pair per step, about 5% on
+the same pile. The world's own ``add_contact_listener``, ``contact_log`` and
+``set_contact_filter`` are there for an application without a manager; see
+omi_physics' README.
+
 .. _cooking:
 
 Cooking collision shapes from a mesh
@@ -568,7 +737,36 @@ JOINTS``.
 Demos
 -----
 
-Each demo is a script in ``tests/``. The test suite also runs each one as a
+``oglc-physics-events`` is an installed command that shows every use of
+:ref:`collision subscriptions <physics-collisions>` in one yard:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Key
+     - What it shows
+   * - ``d``
+     - Crates dropped on the floor, each landing thudding at a level set by
+       ``approach``
+   * - ``c``
+     - Caps the frame rate at 20 fps; every landing still thuds
+   * - ``l`` / ``L``
+     - A ball thrown at each pane of glass, hard or gently. The left pane
+       breaks after the solve, on ``impulse``; the right one before it,
+       through a contact filter, and the ball carries on through
+   * - ``m``
+     - Mends the glass
+   * - ``space``
+     - A hitscan shot from the camera, reported with ``report_hit``; a crate
+       it hits is knocked away and pings
+   * - ``w``
+     - Puts a weight on the pressure plate, a trigger that opens the door on
+       ``enter`` and closes it on ``exit``
+
+The rest are scripts in ``tests/``. The test suite also runs each one as a
+visual-regression test: it exits after a set number of frames, captures the
+frame, and compares it with a reference image. The test suite also runs each one as a
 visual-regression test: it exits after a set number of frames, captures the
 frame, and compares it with a reference image.
 
@@ -585,7 +783,12 @@ frame, and compares it with a reference image.
   with point gravity.
 
 - :doc:`physics_triggers.py <tutorials/physics_triggers>` - sensor volumes and
-  their events.
+  a subscription to their ``enter`` and ``exit`` events.
+
+- :doc:`physics_events.py <tutorials/physics_events>` - the
+  ``oglc-physics-events`` yard, opening on a scene already struck: collision
+  subscriptions, a pane broken before the solve and one after, a hitscan
+  shot and a pressure plate.
 
 - :doc:`physics_joints.py <tutorials/physics_joints>` - a pendulum, a chain
   and a motor.

@@ -10,7 +10,12 @@ all release the GIL, the physics tick and the render pass genuinely overlap, so 
 render loop can hold 60 fps while the simulation advances underneath.
 
 Structural changes to the world (adding/removing bodies) must be made with the
-loop stopped (:meth:`stop`) or while holding :meth:`with_world`.
+loop stopped (:meth:`stop`) or while holding :meth:`with_world`;
+:meth:`~ThreadedPhysicsManager.remove` takes the lock itself.
+
+Collision subscriptions (:attr:`~OpenGLContext.physics.manager.PhysicsManager.events`)
+are delivered on the render thread by :meth:`~ThreadedPhysicsManager.advance`,
+with the snapshot the events were published alongside.
 """
 from typing import Any
 
@@ -65,10 +70,25 @@ class ThreadedPhysicsManager(PhysicsManager):
         """
         return self._sim.rate()
 
+    #: Steps run on the simulation thread, so an immediate subscription is refused.
+    steps_on_this_thread = False
+
+    def _remove_body(self, index: int) -> None:
+        """Remove body ``index`` between two ticks of the simulation thread."""
+        with self.with_world():
+            self.world.remove_body(index)
+
     # -- render thread ---------------------------------------------------
     def advance(self, real_dt: float) -> float:
-        """Render-thread entry point: publish the latest poses (no stepping here)."""
-        self.sync()
+        """Render-thread entry point: publish the latest poses, then deliver collisions.
+
+        No stepping happens here. The events delivered are those published up
+        to the snapshot written.
+        """
+        snap, version, events = self._sim.latest_and_events()
+        self._write(snap, version)
+        if self.events.draining:
+            self.events.dispatch(events)
         return 1.0
 
     def sync(self, alpha: float = 1.0, force: bool = False) -> None:
@@ -81,6 +101,10 @@ class ThreadedPhysicsManager(PhysicsManager):
         starve the simulation thread.
         """
         snap, version = self._sim.latest()
+        self._write(snap, version, force)
+
+    def _write(self, snap: Any, version: int, force: bool = False) -> None:
+        """Write snapshot ``snap`` onto the Transforms, unless it is already written."""
         if snap is None or (version == self._synced_version and not force):
             return
         self._synced_version = version

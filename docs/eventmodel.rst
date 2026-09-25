@@ -19,6 +19,8 @@ Parts of the event model
 - Event handlers - code registers callbacks for keyboard, mouse and timer
   events. Mouse handlers can also be registered on individual nodes, so an
   interactive object carries its own handlers.
+- Collisions - code subscribes callbacks to the physics bodies it cares about,
+  and the physics manager calls them once a frame.
 
 Each of these is described below.
 
@@ -209,3 +211,17 @@ and run faster or slower. Its event types are ``start``, ``stop``, ``pause``,
 ``duration`` is the length of one cycle in seconds, and a ``fraction`` event
 carries how far through the cycle the timer is, from 0 to 1.
 :doc:`tutorials/nehe6_timer` walks through a complete example.
+
+Collisions
+----------
+
+Collisions are delivered by the physics manager rather than the dispatcher:
+``manager.events.subscribe(callback, body=crate)`` calls ``callback`` once per
+collision of that body, from inside ``manager.advance(dt)``, after the frame's
+poses are written. :ref:`physics-collisions` describes the subscription.
+
+A collision subscription holds its callback strongly, unlike the handlers
+above, and returns a ``Subscription`` whose ``cancel()`` lets it go. A collision
+is something that happened once and is not repeated, so a callback collected
+by the garbage collector would lose it with nothing to show it was lost. A
+subscription on a body also ends when that body is removed from the world.

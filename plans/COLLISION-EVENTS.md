@@ -1,6 +1,8 @@
 # Collision events: subscribe to a body's collisions and get a callback
 
-Status: **Planned** — 2026-09-24.
+Status: **Partial** — 2026-09-24. Phases 1, 2 and 4 have landed, with phase
+3's hits; the character controller, phase 5 and the games' migration are open.
+See [What landed](#what-landed).
 
 A game wants to be told when something hits something. Today the engine answers
 only questions asked after a step, and it only remembers the last one. This plan
@@ -465,6 +467,97 @@ the other physics demos do.
 - `plans/PHYSICS-COLLISION.md` §5: triggers "emit into the event system" points
   here.
 - `CLAUDE.md`'s directory map: `physics/events.py`.
+
+## What landed
+
+2026-09-24, on the `collision-events` branches of omi_physics and OpenGLContext.
+
+omi_physics (`contactevents.py`, and `world.py`, `solver.py`, `triggers.py`,
+`broadphase.py`, `raycast.py`, `threaded.py`, `omi_gltf.py`):
+
+- `ContactTracker`, `ContactEvent`, `ContactLog`, `TriggerEvent`,
+  `add_contact_listener` / `remove_contact_listener`, `contact_reporting`
+  (`'off'` / `'flagged'` / `'all'`), `report_contacts(i)` and `add_body(...,
+  report_contacts=True)`, `report_persist`, `step_count`. The phase 1 red test
+  is `test_a_slow_frame_rate_hears_every_bounce` in
+  `tests/test_contact_events.py`, run on both solver paths.
+- `BodyRef` is a frozen dataclass rather than a named tuple, since a tuple's
+  `index` method and the field of that name collide for a type checker.
+  `world.ref(i)`, `world.alive(ref)` and `world.handle_of(ref)`.
+- `remove_body` ends the body's pairs (`reason='removed'`), exits its triggers
+  at once, and drops its warm-start entries (`SequentialImpulseSolver.forget`).
+- The compiled solver writes impulses back without warm starting, records
+  `Contact.slip`, and hands the tracker its arrays (`last_batch`).
+- `Trigger.collisionFilter` is read from glTF, written back and honoured.
+- The broadphase pairs a kinematic body with a trigger, so a lift or a proxy
+  enters trigger volumes; a pair with no dynamic body is not solved.
+- `raycast`, `raycast_many` and `bodies_along` take `filter=`.
+- `ThreadedSimulation.latest_and_events()` and `drain_events()`.
+- Phase 4: `set_contact_filter`, `PairPreview`, `Verdict`, `solved=False`.
+  `IGNORE_STEP` leaves the pair untracked until a step it is solved on, so it
+  produces no event; the `'filtered'` end reason is not needed and does not
+  exist. `PairPreview.mass` is the linear reduced mass, with no rotational
+  term.
+- Cost, measured on a resting pile of 300 boxes kept awake: `'all'` adds 1.5%
+  to the step and `'all'` with persist 4.8%. `tests/test_contact_events_cost.py`
+  holds the 5% budget as a `serial` test, measured as the tracker's share of the
+  step rather than as a separate benchmark script.
+
+OpenGLContext:
+
+- `physics/events.py`: `CollisionEvents`, `Subscription`, `Collision`,
+  `HitEvent`, `report_hit`, `immediate=True` (contacts only). A subscription
+  raises the world's reporting level and never lowers it.
+- `PhysicsManager.events`, `remove(body)`, `handle(ref)`, `body_for(transform)`;
+  both managers dispatch after writing poses.
+- `bin/audio_demo.py` and `tests/physics_triggers.py` subscribe. The audio
+  yard's test compares thuds at 20 and 120 fps.
+- `oglc-physics-events` (`bin/physics_events_demo.py`), with its yard tested
+  in `tests/unit/test_physics_events_demo.py`, and `tests/physics_events.py`,
+  its twin in the visual suite, which plays a scripted opening in fixed steps
+  before the first frame so the capture shows the struck scene. The reference
+  is on the reference-images repository's `bless/physics-events` branch.
+- Documentation: `docs/physics.rst` *Responding to collisions*,
+  `docs/audio.rst`, `docs/eventmodel.rst`, `docs/documentation.rst`, the
+  omi_physics README, `docs/PIPELINE.md` and `docs/ARCHITECTURE.md`.
+
+Still open:
+
+- Merge the `collision-events` branch into openglcontext's `develop`. It is
+  not merged because the main checkout holds other uncommitted and staged
+  work in the same files (`docs/audio.rst`, `docs/documentation.rst`,
+  `docs/physics.rst`). The branch also moves the `tests/reference_images`
+  gitlink to the reference repository's `bless/physics-events` branch
+  (`aeefc92`), which has to reach that repository's `main` and GitHub.
+  omi_physics, marble-demo and twig-bb have been fast-forwarded on `develop`;
+  nothing is pushed.
+- Preflight for openglcontext has to run once the branch is in `develop`.
+
+- Defect 5, the character controller. The broadphase now pairs kinematic
+  bodies with triggers, which is half of it. The other half is the avatar's
+  proxy body: a kinematic collider would push dynamic bodies with infinite
+  mass, which is a gameplay decision, and a trigger-shaped proxy is reported
+  as a trigger itself. Wants a decision on how an avatar meets dynamic bodies.
+- Phase 5, authored events.
+- The games, as far as each could go:
+  - marble-demo: the controller listens to the marble's contact events and
+    keeps each pair's hardest blow over a frame's steps, so a lethal blow in
+    an early step of a slow frame is weighed
+    (`test_a_lethal_blow_in_an_early_step_of_a_slow_frame_still_destroys`).
+    The lever listens to its own paddle's contacts in-step; its trigger box is
+    gone.
+  - twig-bb: the jump pads' stand-in for the player is a kinematic body placed
+    each frame, not a dynamic one woken by hand. The separate sensor world
+    stays until the character controller has a proxy in the map's world.
+    Combat does not report through `report_hit`: its shots land on combatants
+    staged as capsules for one raycast, not on bodies anything subscribes to.
+  - glisteel is unchanged. It steps the world itself so its controls are
+    sampled per step, and asks `impact_on` after each step, so it already
+    hears every step; its crash and bump watches were also being edited in
+    the main checkout, uncommitted, at the time.
+- Dependency floors. OpenGLContext imports `omi_physics.contactevents`, which
+  no released omi_physics has; its `omi_physics>=0.3.0` floor moves to the
+  release that carries it, as do the games' floors on both.
 
 ## Open questions for the maintainer
 
