@@ -531,14 +531,19 @@ Still open:
   `loaders/gltf/imagebased.py`, `audio/scene.py`), which was being edited,
   uncommitted, when this merged. Nothing in this plan's files is in it.
 
-- Defect 5, the character controller, partly. 2026-09-25: the avatar's body
-  is a *sensor* (decided: it neither pushes nor is pushed).
+- Defect 5, the character controller: landed 2026-09-25. The avatar's body is
+  a *sensor* (decided: it neither pushes nor is pushed).
   `CharacterController(..., body=True)` and `PhysicsViewPlatform(...,
   body=True)` carry a kinematic sensor capsule that enters triggers and whose
-  touches with dynamic bodies are reported unsolved. Still open: the
-  controller's own collisions with static geometry are not reported as
-  events, and twig-bb's separate jump-pad world can now move onto the
-  avatar's body in the map's world.
+  touches with dynamic bodies are reported unsolved, and the controller
+  reports what the capsule begins and stops touching in the static world
+  (`world.report_contact_events`). Building it found an EPA defect, fixed in
+  omi_physics: a capsule 2 cm into a long flat box was reported as not
+  touching it, because GJK's simplex reached EPA wound either way and a face
+  through the origin had its normal turned round.
+  twig-bb's jump pads keep their own sensor world: its spec (§5.6) tests a
+  player-sized box against each volume, not the walking capsule, and its map
+  world is a static collision world that is never stepped.
 - Phase 5, authored events.
 - The games, as far as each could go:
   - marble-demo: the controller listens to the marble's contact events and
@@ -548,8 +553,7 @@ Still open:
     The lever listens to its own paddle's contacts in-step; its trigger box is
     gone.
   - twig-bb: the jump pads' stand-in for the player is a kinematic body placed
-    each frame, not a dynamic one woken by hand. The separate sensor world
-    stays until the character controller has a proxy in the map's world.
+    each frame, not a dynamic one woken by hand.
     Combat does not report through `report_hit`: its shots land on combatants
     staged as capsules for one raycast, not on bodies anything subscribes to.
   - glisteel is unchanged. It steps the world itself so its controls are
