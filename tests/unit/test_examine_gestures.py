@@ -362,8 +362,13 @@ class TestTheOrbitIsTheCustomisationPoint:
             def OnBuildOrbit(self, platform, centre, event, width, height):
                 self.orbit = _TurnOnly()
 
-        made = _Mine(_Context(), _platform(), (0.0, 0.0, 0.0), _Button())
+        context, platform = _Context(), _platform()
+        made = _Mine(context, platform, (0.0, 0.0, 0.0), _Button())
         made.ProcessEvent(_Button(button=WHEEL_UP, state=1))
+        made.ProcessEvent(_Button(button=WHEEL_UP, state=0))
+        assert np.allclose(platform.position[:3], (0.0, 0.0, 10.0))
+        assert context.redraws == 0
+        assert context.captured['mousebutton'] is made, 'the notch ended the drag'
 
     def test_the_arcball_still_fits_the_slot(self):
         """`Trackball` answers `rotate` and `cancel`, which is the whole of what

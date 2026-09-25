@@ -405,7 +405,10 @@ class TestTheProfileAskedForIsTheProfileGiven:
         from OpenGLContext.testing.glcontext import gl_available
         if not gl_available():
             pytest.skip('no GL target available')
-        from OpenGL.GL import GL_PROJECTION, glMatrixMode
+        from OpenGL.GL import (
+            GL_MATRIX_MODE, GL_NO_ERROR, GL_PROJECTION, glGetError,
+            glGetIntegerv, glMatrixMode,
+        )
 
         core = self._built('core')
         core.releaseWindow()
@@ -417,6 +420,8 @@ class TestTheProfileAskedForIsTheProfileGiven:
             compatibility.setCurrent()
             try:
                 glMatrixMode(GL_PROJECTION)
+                assert glGetError() == GL_NO_ERROR
+                assert glGetIntegerv(GL_MATRIX_MODE) == GL_PROJECTION
             finally:
                 compatibility.unsetCurrent()
         finally:

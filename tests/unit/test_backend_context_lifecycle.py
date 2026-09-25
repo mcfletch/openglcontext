@@ -206,9 +206,16 @@ class TestTheContractIsStatedOnce:
         context_module.Context.releaseContextResources(_AnyContext(), handle=None)
         assert told == ['engine']
 
-    def test_neither_half_raises_where_pyopengl_has_no_c_layer(self, monkeypatch):
+    def test_both_halves_work_where_pyopengl_has_no_c_layer(self, monkeypatch):
         from OpenGL import _dispatch
 
+        told = []
         monkeypatch.setattr(_dispatch, 'ACTIVE', False)
-        context_module.Context.bindContextResources(_AnyContext(), handle=1)
-        context_module.Context.releaseContextResources(_AnyContext(), handle=1)
+        monkeypatch.setattr(
+            contextresources, 'context_lost', lambda: told.append('engine')
+        )
+        bound = _AnyContext()
+        context_module.Context.bindContextResources(bound, handle=1)
+        assert bound._ownContext == 1
+        context_module.Context.releaseContextResources(bound, handle=1)
+        assert told == ['engine']
