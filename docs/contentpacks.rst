@@ -522,7 +522,9 @@ reason. The result stays on screen until the next download starts.
 ``on_fetch(pack)`` returns the job it made (the screen starts it), or None to
 start nothing. Stop cancels the job. ``on_finished(job)`` is called once when
 the job ends, however it ended, and ``on_close()`` once when the screen is
-closed. ``offer(packs)`` replaces what is on offer. For a first run,
+closed. ``offer(packs)`` replaces what is on offer. A download keeps running
+when its screen is closed; ``ContentScreen(..., job=screen.job)`` opens a new
+screen on it, which shows it and reports its end. For a first run,
 ``ContentScreen(CONTENT.needed_to_start(), together=True, on_fetch=lambda
 pack: CONTENT.base_job())`` offers the base packs as one set.
 

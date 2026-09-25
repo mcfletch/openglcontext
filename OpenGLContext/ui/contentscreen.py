@@ -72,7 +72,9 @@ class ContentScreen:
     chosen pack (the first, with ``together``), and returns the
     :class:`~OpenGLContext.contentpacks.fetch.FetchJob` it started, or None.
     ``on_finished(job)`` is called once when that job ends, however it ended,
-    and ``on_close()`` once when the screen is closed.
+    and ``on_close()`` once when the screen is closed. ``job`` is a download
+    already under way (one a closed screen started) to show from the start;
+    one that has already ended is shown and not reported again.
 
     The last job's result stays on the screen until the next download starts,
     so a failure and a stop are shown rather than replaced by an idle screen.
@@ -85,7 +87,8 @@ class ContentScreen:
                  on_finished: Optional[Callable[[FetchJob], None]] = None,
                  on_close: Optional[Callable[[], None]] = None,
                  title: str = '', together: bool = False,
-                 columns: int = COLUMNS) -> None:
+                 columns: int = COLUMNS,
+                 job: Optional[FetchJob] = None) -> None:
         self.packs: List[ContentPack] = []
         self.wanted = wanted
         self.together = together
@@ -93,8 +96,8 @@ class ContentScreen:
         self.on_finished = on_finished
         self.on_close = on_close
         #: The download under way, or the last one, until the next starts.
-        self.job: Optional[FetchJob] = None
-        self._reported = False
+        self.job: Optional[FetchJob] = job
+        self._reported = job is not None and job.finished
         self._closed = False
 
         self.chooser = Select(name='offered')
@@ -121,6 +124,9 @@ class ContentScreen:
                            children=[Column(spacing=4, children=body)])
         self.panel.on_close = lambda _panel: self._closing()
         self.offer(packs)
+        if job is not None:
+            self.progress.fraction = float(job.fraction)
+            self.progress.text = progress_text(job)
 
     # -- what is on offer ---------------------------------------------------
 

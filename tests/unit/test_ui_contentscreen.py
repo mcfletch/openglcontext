@@ -203,3 +203,32 @@ class TestTheWords:
 
     def test_no_pack_is_everything_here(self):
         assert contentscreen.offer_text(None) == contentscreen.ALL_HERE
+
+
+class TestReopening:
+    """A player may close the screen while a download runs and come back."""
+
+    def test_a_job_under_way_is_shown_and_reported_by_the_new_screen(
+            self, screen, gate):
+        screen.fetch_button.on_activate(screen.fetch_button)
+        screen.close_button.on_activate(screen.close_button)
+        finished = []
+        again = ContentScreen([ASHDOWN, BEACON], wanted=wanted,
+                              job=screen.job, on_finished=finished.append)
+        assert again.running and not again.fetch_button.enabled
+        gate.go.set()
+        finish(again)
+        assert again.progress.text == contentscreen.DONE
+        assert finished == [again.job]
+
+    def test_one_that_already_ended_is_shown_and_not_reported_again(
+            self, screen, gate):
+        screen.fetch_button.on_activate(screen.fetch_button)
+        gate.go.set()
+        finish(screen)
+        finished = []
+        again = ContentScreen([BEACON], job=screen.job,
+                              on_finished=finished.append)
+        again.poll()
+        assert again.progress.text == contentscreen.DONE
+        assert finished == []
