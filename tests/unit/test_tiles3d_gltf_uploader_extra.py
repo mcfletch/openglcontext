@@ -146,9 +146,9 @@ def test_dispose_material_textures_skips_missing_and_swallows_gl_errors(monkeypa
 
     ctx = object()
     no_ctx = types.SimpleNamespace(_per_context={})
-    zero_tid = types.SimpleNamespace(_per_context={id(ctx): _Tex(0)})
+    zero_tid = types.SimpleNamespace(_per_context={ctx: _Tex(0)})
     boom_tex = _Tex(9)
-    boom = types.SimpleNamespace(_per_context={id(ctx): boom_tex})
+    boom = types.SimpleNamespace(_per_context={ctx: boom_tex})
     material = types.SimpleNamespace(
         textures={"a": no_ctx, "b": zero_tid, "c": boom})
 

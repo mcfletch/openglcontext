@@ -118,6 +118,7 @@ from OpenGL.GL import (
     GL_TEXTURE_MAG_FILTER, GL_TEXTURE_WRAP_S, glBindTexture, glGetError,
     glGetTexParameteriv, GL_NO_ERROR,
 )
+import gc
 import types
 
 
@@ -126,12 +127,31 @@ def gl(gl_window):
     return gl_window('pbrtex', size=(32, 32), profile='any')
 
 
+class _Context:
+    """A render mode's context, as far as a texture's cache reads it."""
+
+
 class TestPBRTextureGL:
+    def test_a_context_that_has_gone_is_forgotten(self, gl):
+        """The textures are kept by context, not by where it was allocated.
+
+        A collected context's address is handed to the next object of its
+        size, so a table keyed on it would answer a new context with textures
+        whose names belong to the old one.
+        """
+        tex = PBRTexture(Image.new("RGBA", (2, 2), (1, 2, 3, 255)))
+        mode = types.SimpleNamespace(context=_Context())
+        tex.cached(mode)
+        assert len(tex._per_context) == 1
+        mode.context = None
+        gc.collect()
+        assert len(tex._per_context) == 0
+
     def test_cached_builds_once_and_applies_sampler(self, gl):
         img = Image.new("RGBA", (4, 4), (200, 100, 50, 255))
         tex = PBRTexture(img, srgb=True, wrap_s=GL_REPEAT, wrap_t=GL_CLAMP_TO_EDGE,
                          min_filter=GL_LINEAR, mag_filter=GL_NEAREST)
-        mode = types.SimpleNamespace(context=object())
+        mode = types.SimpleNamespace(context=_Context())
 
         built = tex.cached(mode)
         assert built is not None
@@ -150,7 +170,7 @@ class TestPBRTextureGL:
     def test_cached_defaults_without_sampler_overrides(self, gl):
         img = Image.new("RGBA", (2, 2), (10, 20, 30, 255))
         tex = PBRTexture(img)                      # no wrap/filter overrides
-        mode = types.SimpleNamespace(context=object())
+        mode = types.SimpleNamespace(context=_Context())
         built = tex.cached(mode)
         assert built is not None
         glBindTexture(GL_TEXTURE_2D, built.texture)
@@ -171,7 +191,7 @@ class TestPBRTextureGL:
         monkeypatch.setattr(GLmod, 'glGenerateMipmap', _boom)
         img = Image.new("RGBA", (4, 4), (1, 2, 3, 255))
         tex = PBRTexture(img)
-        mode = types.SimpleNamespace(context=object())
+        mode = types.SimpleNamespace(context=_Context())
         built = tex.cached(mode)
         glBindTexture(GL_TEXTURE_2D, built.texture)
         min_f = int(glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER))

@@ -167,12 +167,11 @@ def _dispose_material_textures(material: Any, context: Any) -> None:
     VRAM without disturbing anything still resident.
     """
     from OpenGL.GL import glDeleteTextures
-    ctx_key = id(context)
     for pbr_tex in (getattr(material, 'textures', None) or {}).values():
         per_context = getattr(pbr_tex, '_per_context', None)
         if not per_context:
             continue
-        tex = per_context.pop(ctx_key, None)
+        tex = per_context.pop(context, None)
         tid = getattr(tex, 'texture', None)
         if not tid:
             continue

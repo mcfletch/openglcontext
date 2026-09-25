@@ -90,7 +90,7 @@ class _FakeHolder:
         self._cache, self._client, self._key = cache, client, key
 
     def __call__(self, *a, **k):
-        self._cache._data.pop((id(self._client), self._key), None)
+        self._cache._data.pop((self._client, self._key), None)
 
 
 class _FakeCache:
@@ -98,13 +98,13 @@ class _FakeCache:
         self._data = {}
 
     def put(self, client, key, data):
-        self._data[(id(client), key)] = data
+        self._data[(client, key)] = data
 
     def getData(self, client, key="", default=None):
-        return self._data.get((id(client), key), default)
+        return self._data.get((client, key), default)
 
     def getHolder(self, client, key=""):
-        if (id(client), key) in self._data:
+        if (client, key) in self._data:
             return _FakeHolder(self, client, key)
         return None
 
@@ -121,7 +121,7 @@ class _FakeTexture:
 
 class _FakePBRTexture:
     def __init__(self, tex, context):
-        self._per_context = {id(context): tex}
+        self._per_context = {context: tex}
 
 
 class _FakeMaterial:

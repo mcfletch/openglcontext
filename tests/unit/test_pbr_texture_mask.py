@@ -100,6 +100,10 @@ class TestTheDraw:
         assert program.bound == []
 
 
+class _Drawing:
+    """The Context drawing the material, as far as a texture's cache reads it."""
+
+
 class TestTheUnits:
     """What each unit holds after a draw of a material, on a real context."""
 
@@ -123,7 +127,9 @@ class TestTheUnits:
         material.textures = {
             channel: PBRTexture(Image.new('RGB', (4, 4), (40 * index, 0, 0)))
             for index, channel in enumerate(channels)}
-        mode = SimpleNamespace(context=gl_context)
+        # What a texture's cache keys on is the Context drawing; the window
+        # handle makes the GL context current and stands for nothing else.
+        mode = SimpleNamespace(context=_Drawing())
         shader_program.use(lit=True)
         shader_program.bind_pbr_textures(material, mode)
         for channel in channels:

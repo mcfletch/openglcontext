@@ -95,10 +95,12 @@ def test_the_map_is_not_left_bound_for_the_next_shape(gl_context_compat):
     from vrml import cache
     from OpenGLContext.scenegraph.pbrmaterial import PBRTexture
 
-    class _Mode:
-        context = None
+    class _Context:
+        """What the texture's cache keys on: the context drawing."""
 
+    class _Mode:
         def __init__(self):
+            self.context = _Context()
             self.cache = cache.Cache()
 
     blue = (20, 40, 230)

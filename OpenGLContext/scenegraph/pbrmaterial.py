@@ -7,6 +7,7 @@ and colour factors are VRML fields; texture maps are held as light-weight
 ``baseColor``, ``metallicRoughness``, ``normal``, ``occlusion``, ``emissive``)
 so PIL-backed images need not be squeezed into VRML field types.
 """
+import weakref
 from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
@@ -31,7 +32,9 @@ class PBRTexture(object):
         self.wrap_t = wrap_t
         self.min_filter = min_filter
         self.mag_filter = mag_filter
-        self._per_context: dict[int, Any] = {}      # id(context) -> Texture
+        #: The texture built for each context, forgotten with the context.
+        self._per_context: "weakref.WeakKeyDictionary[Any, Any]" = \
+            weakref.WeakKeyDictionary()
         #: The image :meth:`mean_roughness` was worked out for, and its answer.
         self._mean_roughness: Optional[Tuple[Any, float]] = None
 
@@ -49,14 +52,13 @@ class PBRTexture(object):
         return known[1]
 
     def cached(self, mode: Any) -> Any:
-        ctx = getattr(mode, 'context', None)
-        key = id(ctx)
-        tex = self._per_context.get(key)
+        ctx = mode.context
+        tex = self._per_context.get(ctx)
         if tex is None:
             from OpenGLContext import texture as texture_module
             tex = texture_module.Texture(image=self.image)
             self._apply_sampler(tex)
-            self._per_context[key] = tex
+            self._per_context[ctx] = tex
         return tex
 
     def _apply_sampler(self, tex: Any) -> None:
