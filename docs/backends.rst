@@ -388,7 +388,10 @@ frame of every context would miss, rebuild what the other context displaced,
 and leave the displaced GL objects in a live context with no way to delete
 them. ``renderpass._passes``, ``shaderpass._shader_programs``,
 ``Teapot._buffers`` and ``shadertext._renderers`` are all mappings for this
-reason.
+reason, and so is the vertex array object each geometry node keeps
+(``scenegraph.shadergeometry.get_or_build_vao``): one per context it is drawn
+in, deleted in that context when the node is collected or the context is torn
+down.
 
 The test fixtures also send the notification. A test suite opens and closes
 several hundred windows in one process, which is when a driver is most likely

@@ -121,5 +121,39 @@ class TestBindingThem:
         replacement = a_buffer()
         bind_geometry(
             GeometryArrays.separate(count=3, positions=replacement), owner=owner)
-        cached_refs, _vao = owner._shader_vao_cache[0]
+        from OpenGLContext.contextresources import context_key
+        cached_refs, _vao = owner._shader_vao_cache.by_context[context_key()][0]
         assert replacement in cached_refs
+
+
+class TestLettingThemGo:
+    """A node's vertex array objects are released when the node is collected,
+    and forgotten when the context that issued them is torn down."""
+
+    class Owner:
+        pass
+
+    def test_a_collected_owner_s_object_is_deleted_at_the_next_bind(self, gl_context):
+        import gc
+        from OpenGL.GL import glIsVertexArray
+        keeper, kept = self.Owner(), GeometryArrays.separate(count=3, positions=a_buffer())
+        bind_geometry(kept, owner=keeper)
+        owner = self.Owner()
+        vao = bind_geometry(GeometryArrays.separate(count=3, positions=a_buffer()),
+                            owner=owner)
+        assert glIsVertexArray(vao)
+        del owner
+        gc.collect()
+        bind_geometry(kept, owner=keeper)          # builds nothing new
+        assert not glIsVertexArray(vao)
+
+    def test_a_lost_context_s_objects_are_deleted_and_forgotten(self, gl_context):
+        from OpenGL.GL import glIsVertexArray
+        from OpenGLContext import contextresources
+        owner = self.Owner()
+        arrays = GeometryArrays.separate(count=3, positions=a_buffer())
+        vao = bind_geometry(arrays, owner=owner)
+        contextresources.context_lost()
+        assert not glIsVertexArray(vao)
+        again = bind_geometry(arrays, owner=owner)
+        assert glIsVertexArray(again)

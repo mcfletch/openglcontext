@@ -3,7 +3,11 @@
 A Vertex Array Object records which buffer each attribute reads from, and it is
 the only place OpenGL keeps that description: a ``glVertexAttribPointer`` with
 none bound is an invalid operation. Building one per node per frame is wasteful,
-so :func:`get_or_build_vao` builds it once and keeps it on the node.
+so :func:`get_or_build_vao` builds it once and keeps it on the node, for each
+context it is drawn in. A node that is collected has its objects deleted the
+next time any is built or bound in their context, and a context that is torn
+down (:func:`OpenGLContext.contextresources.context_lost`) has every node's
+objects for it deleted and forgotten.
 
 What goes *into* one is described by
 :mod:`OpenGLContext.scenegraph.geometryarrays`, which is what a geometry node
@@ -17,12 +21,16 @@ interleaved layouts the engine's own geometry is built in:
 """
 from __future__ import annotations
 
+import threading
+import weakref
 from collections.abc import Callable, Sequence
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from OpenGL.GL import (
     glGenVertexArrays, glBindVertexArray, glDeleteVertexArrays,
 )
+
+from OpenGLContext import contextresources
 
 __all__ = ['VertexFormat', 'VBO_STRIDE', 'SHARED_LAYOUT', 'get_or_build_vao']
 
@@ -70,6 +78,77 @@ def _same_refs(a: Sequence[Any], b: Sequence[Any]) -> bool:
 #: the locations :mod:`OpenGLContext.scenegraph.vertexsemantics` declares.
 SHARED_LAYOUT = 0
 
+#: One layout's entry: the VBOs the VAO records, and the VAO's name.
+_Entry = Tuple[Sequence[Any], int]
+
+
+class _VertexArrays:
+    """The vertex array objects one node holds: by context, then by layout."""
+
+    def __init__(self) -> None:
+        self.by_context: Dict[Any, Dict[int, _Entry]] = {}
+
+
+#: Every node's vertex arrays, so a lost context's can be found and deleted.
+_HOLDERS: 'weakref.WeakSet[_VertexArrays]' = weakref.WeakSet()
+#: VAO names whose node was collected, by the context that issued them, waiting
+#: for that context to be current. Appended from a finalizer, which may run on
+#: any thread, so guarded.
+_ORPHANS: Dict[Any, List[int]] = {}
+_ORPHANS_LOCK = threading.Lock()
+
+
+def _orphaned(holder: _VertexArrays) -> None:
+    """Queue a collected node's names for deletion in their own contexts."""
+    with _ORPHANS_LOCK:
+        for context, entries in holder.by_context.items():
+            _ORPHANS.setdefault(context, []).extend(
+                vao for _refs, vao in entries.values())
+    holder.by_context.clear()
+
+
+def _delete(names: Sequence[int]) -> None:
+    for vao in names:
+        try:
+            glDeleteVertexArrays(1, [vao])
+        except Exception:                       # pragma: no cover - a dying driver
+            pass
+
+
+def _collect_orphans(context: Any) -> None:
+    """Delete the names collected nodes left in ``context``, which is current."""
+    if not _ORPHANS.get(context):
+        return
+    with _ORPHANS_LOCK:
+        names = _ORPHANS.pop(context, [])
+    _delete(names)
+
+
+@contextresources.on_context_lost
+def _context_lost() -> None:
+    """Delete and forget every node's vertex arrays in the context going away."""
+    context = contextresources.context_key()
+    _collect_orphans(context)
+    for holder in list(_HOLDERS):
+        entries = holder.by_context.pop(context, None)
+        if entries:
+            _delete([vao for _refs, vao in entries.values()])
+
+
+def _holder_of(owner: Any) -> Optional[_VertexArrays]:
+    """The vertex arrays ``owner`` holds, made on first use; None where it cannot hold any."""
+    holder: Optional[_VertexArrays] = getattr(owner, '_shader_vao_cache', None)
+    if holder is not None:
+        return holder
+    holder = _VertexArrays()
+    try:
+        owner._shader_vao_cache = holder
+        weakref.finalize(owner, _orphaned, holder)
+    except (AttributeError, TypeError):
+        return None
+    _HOLDERS.add(holder)
+    return holder
+
 
 def get_or_build_vao(owner: Any, program: Any, vbo_refs: Sequence[Any],
                      build: Callable[[], None],
@@ -91,16 +170,16 @@ def get_or_build_vao(owner: Any, program: Any, vbo_refs: Sequence[Any],
     ``build`` runs with the new VAO bound and must set up (and leave enabled) the
     vertex attributes; it must NOT draw or disable them. Returns the VAO name.
     Falls back to a transient VAO (returns None) if ``owner`` cannot hold a cache.
+
+    The VAO is kept for the context current now, and deleted in that context
+    once ``owner`` is collected or the context is torn down.
     """
-    #: key -> (the VBOs the VAO records, the VAO's name)
-    cache: Optional[Dict[int, tuple[Sequence[Any], int]]] = getattr(
-        owner, '_shader_vao_cache', None)
-    if cache is None:
-        try:
-            cache = {}
-            owner._shader_vao_cache = cache
-        except (AttributeError, TypeError):
-            return None
+    holder = _holder_of(owner)
+    if holder is None:
+        return None
+    context = contextresources.context_key()
+    _collect_orphans(context)
+    cache = holder.by_context.setdefault(context, {})
     key = int(program if layout_key is None else layout_key)
     entry = cache.get(key)
     if entry is not None:
