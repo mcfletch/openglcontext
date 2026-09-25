@@ -1,7 +1,7 @@
 """Abstract base-class for all font implementations"""
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Iterator
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, cast
 
 import weakref
 from OpenGLContext.arrays import *
@@ -9,9 +9,21 @@ from OpenGL.GL import *
 # PyOpenGL generates the type-inferring entry points at import time, so they
 # need naming to be seen.
 from OpenGL.GL import glTranslate, glVertex
-from OpenGLContext import doinchildmatrix
+from OpenGLContext import contextresources, doinchildmatrix
 import logging
 log = logging.getLogger( __name__ )
+
+
+def _list_of( entry: Any ) -> Iterable[int]:
+    """The display list a character's ``(list-or-None, metrics)`` entry holds."""
+    return (entry[0],) if entry[0] else ()
+
+
+#: Every font's characters, by context and then by character, kept on the font
+#: as ``_perContext``. A font is shared by every context drawing its style, and
+#: a display list is a name only in the context that compiled it.
+_LISTS = contextresources.ContextNames(
+    '_perContext', lambda name: glDeleteLists( name, 1 ), _list_of )
 
 if TYPE_CHECKING:
     class _FontHost:
@@ -48,9 +60,18 @@ class Font(object):
     """
     fontStyle: Any = None
     shader_compatible = False
-    #: character: (display-list-or-None, metrics), filled by getChar.  A
-    #: concrete font creates it in its own __init__.
-    _displayLists: dict[str, tuple[Any, CharacterMetrics]]
+
+    @property
+    def _displayLists( self ) -> dict[str, tuple[Any, CharacterMetrics]]:
+        """character: (display-list-or-None, metrics) in the current context.
+
+        Filled by :meth:`getChar`. Each context compiles its own lists, and
+        they are deleted in that context once the font is collected or the
+        context is torn down.
+        """
+        lists = _LISTS.entries( self )
+        assert lists is not None, 'a font holds attributes'
+        return cast( 'dict[str, tuple[Any, CharacterMetrics]]', lists )
 
     def render(
         self,
@@ -249,19 +270,6 @@ class Font(object):
             # baseline of the first line is the normal condition
             return 0.0
         return float( adjust )
-
-    def __del__( self ) -> None:
-        """Clean up our display lists on deletion"""
-        if __debug__:
-            log.debug( """Deleting font %s""", self)
-        displayLists = getattr(self, '_displayLists', None)
-        if displayLists is None:
-            return
-        for _key,(dl,_metrics) in displayLists.items():
-            try:
-                glDeleteLists( dl, 1 )
-            except Exception:
-                pass
 
 class RenderSelectMixIn( _FontHost ):
     """Mix-in providing quadrangle-based invisible-pass rendering

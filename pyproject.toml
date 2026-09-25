@@ -360,6 +360,12 @@ script = [
 # ignores. Tutorials are not edited for tooling.
 "tests/hud_demo.py" = ["OGC201"]
 
+# A tutorial (docs/tutorials/glprint.rst): the NeHe 13 port on WGL, whose
+# font deletes its display lists in __del__ as the original lesson does, and
+# which runs only on Windows under wxPython. Tutorials are not edited for
+# tooling.
+"tests/glprint.py" = ["OGC141"]
+
 # uv decides whether its cached metadata for a source tree is still current
 # from pyproject.toml, setup.py and setup.cfg alone. This project's version
 # lives in OpenGLContext/__init__.py, so name that file too: without it a

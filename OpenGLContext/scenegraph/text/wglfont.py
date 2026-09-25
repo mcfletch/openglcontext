@@ -55,7 +55,6 @@ class WGLFont(font.Font):
         deviation: float = 0.005,
         extrusion: float = 0.0,
     ) -> None:
-        self._displayLists = {}
         self.deviation = deviation
         self.extrusion = extrusion
         self.fontStyle = fontStyle or None

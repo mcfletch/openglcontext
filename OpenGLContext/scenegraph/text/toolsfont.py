@@ -33,7 +33,6 @@ if TYPE_CHECKING:
         fontClass: type[_toolsfont.Font]
         fontProvider: Any
         fontStyle: Any
-        _displayLists: dict[str, tuple[Any, font.CharacterMetrics]]
         def normalise( self, value: bytes | str ) -> str: ...
         def toLines( self, value: bytes | str, mode: Any = None ) -> list[font.Line]: ...
         def getChar( self, char: str, mode: Any = None ) -> tuple[Any, font.CharacterMetrics]: ...
@@ -383,7 +382,6 @@ class ToolsFontMixIn( _ToolsHost ):
             like.  Otherwise uses defaults for just about
             everything.
         """
-        self._displayLists = {}
         self.fontStyle = fontStyle or None
         if font is None:
             font,weight,italics = self.fontProvider.match( fontStyle )

@@ -32,7 +32,6 @@ class GLUTBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font )
         self.specifier = specifier
         self._lineHeight = int(charHeight * 1.2)
         self.charHeight = charHeight
-        self._displayLists: dict[str, tuple[int | None, font.CharacterMetrics]] = {}
 
     def createChar( self, char: str, mode: Any = None ) -> tuple[int | None, font.CharacterMetrics]:
         """Create the single-character display list

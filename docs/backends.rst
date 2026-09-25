@@ -388,10 +388,41 @@ frame of every context would miss, rebuild what the other context displaced,
 and leave the displaced GL objects in a live context with no way to delete
 them. ``renderpass._passes``, ``shaderpass._shader_programs``,
 ``Teapot._buffers`` and ``shadertext._renderers`` are all mappings for this
-reason, and so is the vertex array object each geometry node keeps
-(``scenegraph.shadergeometry.get_or_build_vao``): one per context it is drawn
-in, deleted in that context when the node is collected or the context is torn
-down.
+reason, and so are the GL names an object holds of its own: the vertex array
+objects each geometry node keeps (``scenegraph.shadergeometry.get_or_build_vao``)
+and the display lists a font compiles for its characters
+(``scenegraph.text.font.Font``). Those are kept one set per context the object
+is drawn in, and deleted in that context when the object is collected or the
+context is torn down.
+
+An object's names cannot be deleted from its ``__del__``: a finaliser runs on
+whichever thread the collector does, with whatever context is current there,
+or none. ``contextresources.ContextNames`` is the mechanism the engine uses for
+them, and application code holding GL names of its own can use it too. It is
+made once, at module level, naming the attribute it keeps an owner's names in
+and how one name is deleted; ``entries(owner)`` answers the owner's entries for
+the current context, made on first use, or ``None`` for an object that cannot
+take an attribute:
+
+.. code-block:: python
+
+   from OpenGL.GL import glDeleteBuffers
+   from OpenGLContext import contextresources
+
+   _BUFFERS = contextresources.ContextNames(
+       '_buffers', lambda name: glDeleteBuffers(1, [name]))
+
+   def buffer_for(owner):
+       buffers = _BUFFERS.entries(owner)
+       if 'vertices' not in buffers:
+           buffers['vertices'] = make_buffer(owner)
+       return buffers['vertices']
+
+When an owner is collected its names are queued by context and deleted the
+next time ``entries`` or ``collect()`` runs with that context current; a torn
+down context has every owner's names for it deleted and forgotten. By default
+an entry is a name; ``names=`` takes a function listing the names an entry
+holds, where an entry carries more than one or something besides.
 
 The test fixtures also send the notification. A test suite opens and closes
 several hundred windows in one process, which is when a driver is most likely

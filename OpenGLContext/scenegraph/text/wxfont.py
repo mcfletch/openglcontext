@@ -58,7 +58,6 @@ class wxBitmapFont(font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font):
             in which case we will find the appropriate font
             using the wx.FontProvider's match method.
         """
-        self._displayLists: dict[str, tuple[Any, CharacterMetrics]] = {}
         self.fontStyle = fontStyle or None
         if not font:
             if __debug__:

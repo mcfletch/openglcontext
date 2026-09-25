@@ -35,7 +35,6 @@ class ShaderBitmapFont(font.NoDepthBufferMixIn, font.Font):
         """
         self.fontStyle = fontStyle
         self._size = size
-        self._displayLists: dict[str, tuple[Any, font.CharacterMetrics]] = {}
         self._initialized = False
         self._texture: int | None = None
         self._atlas_module: Any = None

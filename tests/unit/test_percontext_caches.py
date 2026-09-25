@@ -297,3 +297,86 @@ class TestReplacingAPassLetsGoOfItsShadowMaps:
         renderpass.cached_pass(one, lambda: Awkward(one))
         replacement = renderpass.cached_pass(two, lambda: _StandInPass(two))
         assert replacement.scene is two
+
+
+class _ListFont:
+    """A font drawing each character from a display list of its own."""
+
+    @staticmethod
+    def make(lists=True):
+        """A font whose characters are lists, or with ``lists`` false are not."""
+        from OpenGLContext.scenegraph.text import font
+
+        class ListFont(font.Font):
+            made = 0
+
+            def createChar(self, char, mode=None):
+                from OpenGL.GL import glGenLists
+                ListFont.made += 1
+                name = int(glGenLists(1)) if lists else None
+                return name, font.CharacterMetrics(char, 1.0, 1.0)
+
+        return ListFont()
+
+
+@pytest.fixture
+def two_compatible_contexts(gl_window):
+    """Two live compatibility-profile contexts, where display lists exist."""
+    first = gl_window('lists-a', size=(32, 32), profile='compatibility')
+    second = gl_window('lists-b', size=(32, 32), profile='compatibility')
+
+    def current(handle):
+        glcontext.make_current(handle)
+        return contextresources.context_key()
+
+    keys = (current(first), current(second))
+    if keys[0] == keys[1] or not all(keys):
+        pytest.skip('this platform cannot tell two contexts apart')
+    yield first, second, current
+    glcontext.release_current()
+
+
+class TestAFontsDisplayListsAreHeldPerContext:
+    """A font is shared by every context drawing its style, and a display list
+    is a name only in the context that made it."""
+
+    def test_each_context_makes_its_own(self, two_compatible_contexts):
+        first, second, current = two_compatible_contexts
+        font = _ListFont.make()
+        current(first)
+        font.getChar('a')
+        current(second)
+        font.getChar('a')
+        font.getChar('a')
+        assert type(font).made == 2
+
+    def test_a_collected_font_s_lists_go_in_their_own_context(
+            self, two_compatible_contexts):
+        """Deleted where they were made, when that context is next current;
+        never in whichever context the collector happened to run under."""
+        import gc
+        from OpenGL.GL import glGenLists, glIsList
+        first, second, current = two_compatible_contexts
+        current(first)
+        font = _ListFont.make()
+        made, _metrics = font.getChar('a')
+        current(second)
+        theirs = int(glGenLists(1))
+        del font
+        gc.collect()
+        assert glIsList(theirs), 'a list of the context current at collection was deleted'
+        current(first)
+        assert glIsList(made)
+        _ListFont.make(lists=False).getChar('b')
+        assert not glIsList(made)
+
+    def test_a_lost_context_s_lists_are_deleted(self, two_compatible_contexts):
+        from OpenGL.GL import glIsList
+        first, second, current = two_compatible_contexts
+        current(first)
+        font = _ListFont.make()
+        made, _metrics = font.getChar('a')
+        contextresources.context_lost()
+        assert not glIsList(made)
+        again, _metrics = font.getChar('a')
+        assert glIsList(again)

@@ -35,7 +35,6 @@ class PyGameBitmapFont( font.NoDepthBufferMixIn, font.BitmapFontMixIn, font.Font
         Whichever of filename and size is not given is looked up from
         fontStyle through the provider's TTF registry.
         """
-        self._displayLists: dict[str, tuple[int | None, font.CharacterMetrics]] = {}
         self.fontStyle = fontStyle or None
         if filename is None or size is None:
             matchedFile, _weight, _italics, matchedSize = PyGameFontProvider.match(
