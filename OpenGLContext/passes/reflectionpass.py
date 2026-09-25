@@ -230,7 +230,9 @@ class ReflectionsMixin(PassResources):
             renderoptions.env_number_once('OPENGLCONTEXT_REFLECTION_MS', 0.0)))
         timer = self._reflection_timer
         if target > 0.0 and timer is not None and timer.milliseconds is not None:
-            planner.schedule.measured(timer.milliseconds, target)
+            # Named with the timer, whose count starts again when it is remade.
+            planner.schedule.measured(timer.milliseconds, target, scale=timer.tag,
+                                      reading=(timer, timer.reading))
         size = self.reflectionAtlasSize()
         bounces = int(renderoptions.number(
             self, 'reflectionBounces', renderoptions.env_number_once(
@@ -275,7 +277,7 @@ class ReflectionsMixin(PassResources):
             trace = getattr(self.context, 'loopTrace', None)
             with (trace.phase('reflections') if trace is not None
                   else contextlib.nullcontext()):
-                timer.begin()
+                timer.begin(tag=planner.schedule.time_scale)
                 try:
                     self._drawMirrorViews(plan, lighting, gathered, atlas)
                 finally:

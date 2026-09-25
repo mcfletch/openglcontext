@@ -21,18 +21,23 @@ shapes a shared draw refuses, and of texels. Its rules, in order:
    age plus one, and drawn while the budget has room.
 
 Where the must-draw mirrors do not fit, those with no reflection they can use
-go first, then the rest, each by the same score, and one that does not fit at
-full scale is drawn at half scale, in its turn, before any is left stale. Age raises a
-mirror's score every frame it is passed over, so none is left out indefinitely.
+go first, then the rest, each by the same score. One that does not fit at full
+scale is drawn at half scale in its turn, and one that does not fit at half at
+the largest scale the texels left allow, down to
+:attr:`ReflectionSchedule.SMALLEST_SCALE`. A mirror the whole texel budget
+cannot draw at that scale is unaffordable (:attr:`Chosen.unaffordable`), and
+reflects what it has, or the probe. Age raises an optional mirror's score every
+frame it is passed over, so it is drawn once the budget has room.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import math
 from typing import Dict, Hashable, Iterable, List, Mapping, Optional, Set, Tuple
 
 __all__ = [
     'GUTTER', 'DRIFT_TEXELS', 'Tile', 'Packed', 'TilePacker', 'Candidate',
-    'Budget', 'Decision', 'ReflectionSchedule',
+    'Budget', 'Decision', 'Chosen', 'ReflectionSchedule',
 ]
 
 #: Texels of empty atlas kept round every tile.
@@ -265,6 +270,43 @@ class Decision:
     scale: float
 
 
+@dataclass
+class Chosen:
+    """What :meth:`ReflectionSchedule.choose` decided, and what the budget has left.
+
+    ``decisions`` are the mirror views to draw, highest score first.
+    ``views``, ``separate_views`` and ``texels`` are what is left of the
+    budget after them, which :meth:`afford` spends. ``unaffordable`` holds the
+    must-draw mirrors the whole texel budget cannot draw at
+    :attr:`ReflectionSchedule.SMALLEST_SCALE`.
+    """
+
+    views: int
+    separate_views: int
+    texels: float
+    decisions: List[Decision] = field(default_factory=list)
+    unaffordable: Set[Hashable] = field(default_factory=set)
+
+    def room(self, candidate: Candidate) -> bool:
+        """Whether a view is left for ``candidate``, and a separate one where it needs one."""
+        return self.views > 0 and (not candidate.separate or self.separate_views > 0)
+
+    def take(self, candidate: Candidate, scale: float) -> None:
+        """Draw ``candidate`` at ``scale``, spending its view and texels."""
+        self.views -= 1
+        if candidate.separate:
+            self.separate_views -= 1
+        self.texels -= candidate.texels * scale * scale
+        self.decisions.append(Decision(candidate.key, scale))
+
+    def afford(self, candidate: Candidate, scale: float) -> bool:
+        """Draw ``candidate`` at ``scale`` if what is left allows it; whether it did."""
+        if not self.room(candidate) or candidate.texels * scale * scale > self.texels:
+            return False
+        self.take(candidate, scale)
+        return True
+
+
 class ReflectionSchedule:
     """Which mirror views each frame draws; see the module for the rules.
 
@@ -276,49 +318,62 @@ class ReflectionSchedule:
     FLOOR = 0.25
     #: How far one measurement moves the time scale toward what it asks for.
     SMOOTHING = 0.2
+    #: The smallest scale, each way, a mirror that must be drawn is drawn at.
+    SMALLEST_SCALE = 0.125
 
     def __init__(self) -> None:
         self.time_scale = 1.0
+        self._reading: Optional[Hashable] = None
 
-    def measured(self, milliseconds: float, target: float) -> None:
-        """Move the time scale toward what keeps the reflections under ``target``."""
+    def measured(self, milliseconds: float, target: float,
+                 scale: Optional[float] = None,
+                 reading: Optional[Hashable] = None) -> None:
+        """Move the time scale toward what keeps the reflections under ``target``.
+
+        ``milliseconds`` is what the reflections of a frame drawn at time scale
+        ``scale`` cost; the current time scale where not given. ``reading``
+        names the measurement: one already applied is not applied again, since
+        a timer answers its newest reading until another arrives.
+        """
+        if reading is not None:
+            if reading == self._reading:
+                return
+            self._reading = reading
         if milliseconds <= 0.0 or target <= 0.0:
             return
-        wanted = self.time_scale * float(target) / float(milliseconds)
+        drawn_at = self.time_scale if scale is None else float(scale)
+        wanted = drawn_at * float(target) / float(milliseconds)
         moved = self.time_scale + self.SMOOTHING * (wanted - self.time_scale)
         self.time_scale = min(1.0, max(self.FLOOR, moved))
 
-    def choose(self, candidates: List[Candidate], budget: Budget) -> List[Decision]:
-        """The mirror views to draw this frame, highest score first."""
-        views = int(budget.views)
-        separate = int(budget.separate_views)
-        texels = float(budget.texels) * self.time_scale
-        chosen: List[Decision] = []
+    def _scale(self, candidate: Candidate, texels: float) -> Optional[float]:
+        """The largest scale ``candidate`` fits ``texels`` at, or None: full,
+        half, or anything down to :attr:`SMALLEST_SCALE`."""
+        for scale in (1.0, 0.5):
+            if candidate.texels * scale * scale <= texels:
+                return scale
+        if candidate.texels <= 0:
+            return None
+        scale = math.sqrt(max(texels, 0.0) / candidate.texels)
+        return scale if scale >= self.SMALLEST_SCALE else None
+
+    def choose(self, candidates: List[Candidate], budget: Budget) -> Chosen:
+        """The mirror views to draw this frame, and what the budget has left."""
+        total = float(budget.texels) * self.time_scale
+        chosen = Chosen(int(budget.views), int(budget.separate_views), total)
         ranked = sorted(candidates, key=lambda c: -c.score)
         # A mirror with no reflection it can use goes before one that has an
         # older one: showing nothing is the larger error.
         must = sorted((c for c in ranked if c.must), key=lambda c: c.valid)
         optional = [c for c in ranked if not c.must]
-
-        def room(candidate: Candidate) -> bool:
-            return views > 0 and (not candidate.separate or separate > 0)
-
-        def take(candidate: Candidate, scale: float) -> None:
-            nonlocal views, separate, texels
-            views -= 1
-            if candidate.separate:
-                separate -= 1
-            texels -= candidate.texels * scale * scale
-            chosen.append(Decision(candidate.key, scale))
-
         for candidate in must:
-            if not room(candidate):
+            if not chosen.room(candidate):
                 continue
-            if candidate.texels <= texels:
-                take(candidate, 1.0)
-            elif candidate.texels * 0.25 <= texels:
-                take(candidate, 0.5)
+            scale = self._scale(candidate, chosen.texels)
+            if scale is not None:
+                chosen.take(candidate, scale)
+            elif self._scale(candidate, total) is None:
+                chosen.unaffordable.add(candidate.key)
         for candidate in optional:
-            if room(candidate) and candidate.texels <= texels:
-                take(candidate, 1.0)
+            chosen.afford(candidate, 1.0)
         return chosen

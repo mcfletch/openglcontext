@@ -209,3 +209,52 @@ def test_a_failing_reflection_pass_switches_reflections_off_and_keeps_the_frame(
     failures = [r for r in caplog.records if 'reflection' in r.getMessage().lower()]
     assert len(failures) == 1
     assert failures[0].exc_info is not None
+
+
+# --- the time target -------------------------------------------------------------
+
+class _Timer:
+    """A GPU timer's answer, as it stands between readings."""
+
+    def __init__(self, milliseconds, tag, reading):
+        self.milliseconds, self.tag, self.reading = milliseconds, tag, reading
+
+
+def _timed_pass(timer):
+    from OpenGLContext.passes.reflectionplanner import ReflectionPlanner
+    effects = _pass(reflectionMilliseconds=5.0)
+    effects.shader_program = _Program()
+    effects.frameGather = lambda: _Gathered()
+    effects.sceneMirrors = lambda: np.array([0])
+    effects.activeFrame = None
+    effects.mirrorsZoned = lambda: False
+    effects._reflection_planner = ReflectionPlanner()
+    effects._reflection_timer = timer
+    return effects
+
+
+def test_a_reading_moves_the_time_scale_once_however_many_frames_it_stands():
+    timer = _Timer(6.0, 1.0, 1)
+    effects = _timed_pass(timer)
+    schedule = effects._reflection_planner.schedule
+    effects.renderReflections([], None)
+    once = schedule.time_scale
+    assert once < 1.0
+    for _ in range(10):
+        effects.renderReflections([], None)
+    assert schedule.time_scale == once
+    timer.reading = 2
+    effects.renderReflections([], None)
+    assert schedule.time_scale < once
+
+
+def test_a_reading_is_weighed_by_the_scale_its_frame_was_drawn_at():
+    """6 ms for a frame drawn at a time scale of a half says a full budget
+    costs 12, whatever the scale has moved to since."""
+    timer = _Timer(6.0, 0.5, 1)
+    effects = _timed_pass(timer)
+    schedule = effects._reflection_planner.schedule
+    schedule.time_scale = 0.8
+    effects.renderReflections([], None)
+    wanted = 0.5 * 5.0 / 6.0
+    assert schedule.time_scale == pytest.approx(0.8 + schedule.SMOOTHING * (wanted - 0.8))

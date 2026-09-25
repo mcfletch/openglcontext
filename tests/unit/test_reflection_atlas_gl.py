@@ -62,3 +62,28 @@ def test_ending_a_timer_that_never_began_does_nothing(gl_context):
     timer = GpuTimer()
     timer.end()
     assert timer.milliseconds is None
+
+
+def test_each_reading_is_numbered_and_carries_what_its_frame_was_tagged(gl_context):
+    """The newest reading stays until another arrives; its number says when
+    one has, and its tag is what the measured frame was drawn with."""
+    from OpenGL import GL as gl
+    timer = GpuTimer()
+    try:
+        assert timer.reading == 0 and timer.tag is None
+        seen = []
+        for frame in range(8):
+            timer.begin(tag=frame)
+            gl.glClear(gl.GL_COLOR_BUFFER_BIT)
+            timer.end()
+            gl.glFinish()
+            seen.append((timer.reading, timer.tag))
+        numbers = [number for number, _tag in seen]
+        assert numbers == sorted(numbers) and numbers[-1] > 0
+        for number, tag in seen:
+            if number:
+                assert tag is not None and tag < 8
+        frames_later = [frame - tag for frame, (number, tag) in enumerate(seen) if number]
+        assert all(later >= 1 for later in frames_later)
+    finally:
+        timer.release()

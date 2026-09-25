@@ -532,3 +532,100 @@ def test_a_reflector_field_no_mirror_can_have_is_planned_within_bounds(field, va
     assert np.isfinite(lookup.distortion) and np.isfinite(lookup.reflectance)
     assert 0.0 <= lookup.reflectance <= 1.0
     assert draw.mirror.size[0] >= 8
+
+
+# --- a mirror the budget cannot draw -------------------------------------------------
+
+def _close_up():
+    """A mirror filling the view: its tile is the whole view and its guard band."""
+    record = _mirror(reflector=PlanarReflector(interval=3, scale=1.0))
+    return record, _frame([record], eye=(0.0, 1.5, -4.0))
+
+
+def test_a_mirror_filling_the_view_is_drawn_within_a_short_budget():
+    record, frame = _close_up()
+    planner = _settled_planner()
+    tight = Budget(views=16, separate_views=4, texels=5000)
+    plan = planner.plan([frame], ATLAS, tight)
+    draw, = plan.draws
+    assert draw.tile.width * draw.tile.height <= 5000 + 2 * 8 * max(draw.tile.rect[2:])
+    assert plan.lookup(frame, record) is not None
+    assert not planner.plan([_close_up()[1]], ATLAS, tight).unfinished
+
+
+def test_a_mirror_no_budget_can_draw_does_not_ask_for_frames_forever():
+    record, frame = _close_up()
+    planner = _settled_planner()
+    plan = planner.plan([frame], ATLAS, Budget(views=16, separate_views=4, texels=10))
+    assert plan.draws == [] and not plan.unfinished
+
+
+# --- tiles a repack moved --------------------------------------------------------------
+
+@pytest.mark.parametrize('atlas, texels', [((112, 64), 2304), ((144, 64), 4608)])
+def test_tiles_a_repack_moved_are_redrawn_only_within_the_budget(atlas, texels):
+    """A repack loses what the moved tiles held; redrawing them is charged to
+    the frame's texels like any other mirror view, and one left undrawn is
+    not read. Three mirrors, then one of them replaced by a larger one in an
+    atlas too small to take it without packing again."""
+    planner = _settled_planner()
+    a, b, c = (_mirror(x, reflector=PlanarReflector(interval=100)) for x in (-2.5, 0.0, 2.5))
+    planner.plan([_frame([a, b, c])], atlas, BIG)
+    before = planner.packer.tiles
+    newcomer = _mirror(0.0, reflector=PlanarReflector(interval=100, scale=1.0))
+    newcomer[2][3, 1] = 3.2
+    budget = Budget(views=16, separate_views=4, texels=texels)
+    plan = planner.plan([_frame([a, c, newcomer])], atlas, budget)
+    after = planner.packer.tiles
+    moved = {key for key in before if key in after and before[key] != after[key]}
+    drawn = {draw.key for draw in plan.draws}
+    assert plan.texels <= budget.texels
+    assert all(key in drawn or key not in plan.lookups for key in moved)
+
+
+# --- a held tile the budget passes over ------------------------------------------------
+
+def test_a_reflection_to_be_redone_is_read_until_it_is():
+    """The next frame with room redraws it; until then what it shows is right."""
+    planner = _settled_planner()
+    record = _mirror(reflector=PlanarReflector(interval=100))
+    first = planner.plan([_frame([record])], ATLAS, BIG)
+    planner.redo([first.draws[0].key])
+    later = planner.plan([_frame([record])], ATLAS, NOTHING)
+    assert later.lookup(later.frames[0], record) == first.lookup(first.frames[0], record)
+    assert later.unfinished
+
+
+def test_a_mirror_whose_crop_moved_reads_its_old_tile_until_redrawn():
+    planner = _settled_planner()
+    record = _mirror(reflector=PlanarReflector(interval=100))
+    first = planner.plan([_frame([record])], ATLAS, BIG)
+    later = planner.plan([_frame([record], eye=(2.5, 1.6, 1.0))], ATLAS, NOTHING)
+    assert not later.candidates[0].valid
+    assert later.lookup(later.frames[0], record).matrix == \
+        first.lookup(first.frames[0], record).matrix
+
+
+# --- how many mirror views a frame plans ---------------------------------------------------
+
+def test_facing_mirrors_stop_being_followed_at_a_multiple_of_the_view_budget():
+    """A hall of facing mirrors at six bounces plans no more than the views
+    the budget could draw several times over."""
+    from OpenGLContext.passes.reflectionplanner import CANDIDATES_PER_VIEW
+    records = [_mirror(x) for x in (-2.0, 0.0, 2.0)] + [_behind(6.0)]
+    records[3][2][3, 0] = 0.0
+    budget = Budget(views=2, separate_views=2, texels=10 ** 9)
+    plan = _settled_planner().plan([_frame(records[:3])], ATLAS, budget,
+                                   inside=lambda frame: records, bounces=6)
+    assert len(plan.candidates) <= CANDIDATES_PER_VIEW * budget.views + len(records)
+
+
+def test_planes_either_side_of_a_rounding_boundary_are_one_plane():
+    """Coplanar is a tolerance, not a rounding: a tenth of a millimetre apart
+    is one plane wherever it falls."""
+    shared = PlanarReflector(interval=3)
+    left, right = _mirror(-1.5, reflector=shared), _mirror(1.5, reflector=shared)
+    left[2][3, 2] = -5.00049
+    right[2][3, 2] = -5.00051
+    plan = _settled_planner().plan([_frame([left, right])], ATLAS, BIG)
+    assert len(plan.draws) == 1

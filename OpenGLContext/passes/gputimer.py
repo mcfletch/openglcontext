@@ -6,11 +6,17 @@ the work it brackets, and asking for it sooner stalls the CPU until then.
 slot, and the answer read is the newest one the driver reports ready, which is
 normally the one issued :data:`DEPTH` - 1 frames ago. Nothing waits on the GPU.
 
+The newest reading stays in :attr:`GpuTimer.milliseconds` until another
+arrives. :attr:`GpuTimer.reading` counts the readings, so a caller acting on
+each one acts once, and :attr:`GpuTimer.tag` is what :meth:`GpuTimer.begin`
+was given for the stretch it measured: the setting that stretch was drawn
+with, for a caller adjusting that setting by what it cost.
+
 GL allows one ``GL_TIME_ELAPSED`` query at a time, so timers do not nest.
 """
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any, List, Optional
 
 __all__ = ['DEPTH', 'GpuTimer']
 
@@ -26,18 +32,27 @@ class GpuTimer:
         self.depth = int(depth)
         self._queries: List[int] = []
         self._issued: List[bool] = [False] * self.depth
+        self._tags: List[Any] = [None] * self.depth
         self._next = 0
         self._open = False
         #: The newest measurement read back, in milliseconds, or None.
         self.milliseconds: Optional[float] = None
+        #: How many measurements have been read back; 0 before the first.
+        self.reading = 0
+        #: The ``tag`` the newest measurement's :meth:`begin` was given.
+        self.tag: Any = None
 
-    def begin(self) -> None:
-        """Start timing; everything issued until :meth:`end` is measured."""
+    def begin(self, tag: Any = None) -> None:
+        """Start timing; everything issued until :meth:`end` is measured.
+
+        ``tag`` comes back as :attr:`tag` with this stretch's measurement.
+        """
         from OpenGL import GL as gl
         if not self._queries:
             self._queries = [int(name) for name in gl.glGenQueries(self.depth)]
         self._collect()
         gl.glBeginQuery(gl.GL_TIME_ELAPSED, self._queries[self._next])
+        self._tags[self._next] = tag
         self._open = True
 
     def end(self) -> None:
@@ -63,6 +78,8 @@ class GpuTimer:
                 continue
             nanoseconds = gl.glGetQueryObjectui64v(query, gl.GL_QUERY_RESULT)
             self.milliseconds = int(nanoseconds) / 1.0e6
+            self.tag = self._tags[slot]
+            self.reading += 1
             self._issued[slot] = False
 
     def release(self) -> None:

@@ -545,21 +545,23 @@ class MirrorView:
 
 def plan_mirror(plane: Optional[Plane], corners: ArrayLike, view: Any,
                 projection: Any, view_rect: Sequence[int], scale: float,
-                crop: Optional[NDCRect] = None) -> Optional[MirrorView]:
+                crop: Optional[NDCRect] = None,
+                eye: Optional[ArrayLike] = None) -> Optional[MirrorView]:
     """The view of one mirror from one camera, or None where it shows nothing.
 
     ``corners`` are the mirror's bounding box in the world and ``view_rect``
     the view's rectangle in window pixels, which with ``scale`` sizes the
     tile. None where the camera stands behind the mirror or the mirror is off
     screen. ``crop`` keeps a crop the caller already has a tile for, where it
-    still holds the mirror.
+    still holds the mirror. ``eye`` is where the camera stands in the world,
+    worked out from ``view`` where not given.
     """
     if plane is None:
         return None
     point, normal = plane
     view = np.asarray(view, 'd')
     projection = np.asarray(projection, 'd')
-    eye = np.linalg.inv(view)[3, :3]
+    eye = np.linalg.inv(view)[3, :3] if eye is None else np.asarray(eye, 'd')[:3]
     if float(np.dot(eye - point, normal)) <= 0.0:
         return None
     rect = screen_rect(corners, view @ projection)

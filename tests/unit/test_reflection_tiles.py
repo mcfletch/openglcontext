@@ -120,14 +120,14 @@ BIG = Budget(views=16, separate_views=4, texels=10 ** 9)
 
 def test_a_mirror_without_a_tile_is_drawn():
     chosen = ReflectionSchedule().choose([_candidate('a')], BIG)
-    assert [(d.key, d.scale) for d in chosen] == [('a', 1.0)]
+    assert [(d.key, d.scale) for d in chosen.decisions] == [('a', 1.0)]
 
 
 def test_a_fresh_tile_is_not_drawn_again_before_its_interval_when_the_budget_is_spent():
     budget = Budget(views=1, separate_views=1, texels=10 ** 9)
     chosen = ReflectionSchedule().choose(
         [_candidate('fresh', age=1, area=10 ** 6), _candidate('new')], budget)
-    assert [d.key for d in chosen] == ['new']
+    assert [d.key for d in chosen.decisions] == ['new']
 
 
 def test_a_tile_at_its_interval_must_be_drawn():
@@ -135,7 +135,7 @@ def test_a_tile_at_its_interval_must_be_drawn():
     chosen = ReflectionSchedule().choose(
         [_candidate('due', age=3, area=1.0), _candidate('optional', age=1,
                                                         area=10 ** 6)], budget)
-    assert [d.key for d in chosen] == ['due']
+    assert [d.key for d in chosen.decisions] == ['due']
 
 
 def test_a_camera_that_moved_too_far_forces_a_draw():
@@ -143,20 +143,20 @@ def test_a_camera_that_moved_too_far_forces_a_draw():
     chosen = ReflectionSchedule().choose(
         [_candidate('moved', age=1, drift=3.0, area=1.0),
          _candidate('optional', age=1, area=10 ** 6)], budget)
-    assert [d.key for d in chosen] == ['moved']
+    assert [d.key for d in chosen.decisions] == ['moved']
 
 
 def test_with_room_to_spare_optional_tiles_are_drawn_too():
     chosen = ReflectionSchedule().choose(
         [_candidate('a', age=1), _candidate('b', age=2)], BIG)
-    assert {d.key for d in chosen} == {'a', 'b'}
+    assert {d.key for d in chosen.decisions} == {'a', 'b'}
 
 
 def test_the_view_budget_is_never_exceeded():
     candidates = [_candidate(n) for n in range(30)]
     chosen = ReflectionSchedule().choose(
         candidates, Budget(views=16, separate_views=16, texels=10 ** 9))
-    assert len(chosen) == 16
+    assert len(chosen.decisions) == 16
 
 
 def test_the_separate_view_budget_is_never_exceeded():
@@ -164,15 +164,15 @@ def test_the_separate_view_budget_is_never_exceeded():
                   + [_candidate(('p', n)) for n in range(6)])
     chosen = ReflectionSchedule().choose(
         candidates, Budget(views=16, separate_views=4, texels=10 ** 9))
-    assert sum(1 for d in chosen if d.key[0] == 's') == 4
-    assert sum(1 for d in chosen if d.key[0] == 'p') == 6
+    assert sum(1 for d in chosen.decisions if d.key[0] == 's') == 4
+    assert sum(1 for d in chosen.decisions if d.key[0] == 'p') == 6
 
 
 def test_the_texel_budget_is_never_exceeded():
     candidates = [_candidate(n, texels=1000, age=5) for n in range(20)]
     chosen = ReflectionSchedule().choose(
         candidates, Budget(views=16, separate_views=16, texels=5000))
-    assert sum(1000 * d.scale ** 2 for d in chosen) <= 5000
+    assert sum(1000 * d.scale ** 2 for d in chosen.decisions) <= 5000
 
 
 def test_a_short_budget_halves_scale_before_leaving_a_tile_stale():
@@ -180,7 +180,7 @@ def test_a_short_budget_halves_scale_before_leaving_a_tile_stale():
                   _candidate('small', texels=4000, area=1.0)]
     chosen = ReflectionSchedule().choose(
         candidates, Budget(views=16, separate_views=16, texels=5000))
-    assert {(d.key, d.scale) for d in chosen} == {('large', 1.0), ('small', 0.5)}
+    assert {(d.key, d.scale) for d in chosen.decisions} == {('large', 1.0), ('small', 0.5)}
 
 
 def test_a_candidate_passed_over_rises_until_it_is_drawn():
@@ -195,7 +195,7 @@ def test_a_candidate_passed_over_rises_until_it_is_drawn():
              for n, age in ages.items()], budget)
         for n in ages:
             ages[n] += 1
-        for decision in chosen:
+        for decision in chosen.decisions:
             ages[decision.key] = 1
             drawn_at[decision.key].append(frame)
     assert all(drawn_at[n] for n in ages)
@@ -214,7 +214,7 @@ def test_every_mirror_is_drawn_within_its_interval_while_the_budget_allows():
         chosen = schedule.choose(
             [_candidate(n, interval=intervals[n], age=ages[n]) for n in intervals],
             budget)
-        drawn = {d.key for d in chosen}
+        drawn = {d.key for d in chosen.decisions}
         if len(due) <= budget.views:
             fitted += 1
             assert due <= drawn
@@ -240,7 +240,7 @@ def test_the_time_scale_shrinks_the_texels_a_frame_draws():
     candidates = [_candidate(n, texels=1000, age=5) for n in range(8)]
     chosen = schedule.choose(candidates, Budget(views=16, separate_views=16,
                                                 texels=8000))
-    assert sum(1000 * d.scale ** 2 for d in chosen) <= 2000
+    assert sum(1000 * d.scale ** 2 for d in chosen.decisions) <= 2000
 
 
 def test_a_mirror_with_no_reflection_outranks_one_merely_due():
@@ -248,7 +248,7 @@ def test_a_mirror_with_no_reflection_outranks_one_merely_due():
     budget = Budget(views=1, separate_views=1, texels=10 ** 9)
     chosen = ReflectionSchedule().choose(
         [_candidate('due', age=5, area=10 ** 6), _candidate('empty', area=1.0)], budget)
-    assert [d.key for d in chosen] == ['empty']
+    assert [d.key for d in chosen.decisions] == ['empty']
 
 
 def test_a_mirror_too_large_for_the_budget_is_halved_in_its_turn():
@@ -258,4 +258,77 @@ def test_a_mirror_too_large_for_the_budget_is_halved_in_its_turn():
         [_candidate('floor', texels=8000, area=10 ** 6),
          _candidate('a', texels=100, area=10.0), _candidate('b', texels=100, area=5.0)],
         budget)
-    assert [(d.key, d.scale) for d in chosen] == [('floor', 0.5), ('a', 1.0)]
+    assert [(d.key, d.scale) for d in chosen.decisions] == [('floor', 0.5), ('a', 1.0)]
+
+
+# --- what a mirror too large for the budget is drawn at ------------------------------
+
+def test_a_mirror_too_large_at_half_scale_is_drawn_at_the_scale_that_fits():
+    """A mirror filling the view close up is drawn smaller, not left out."""
+    chosen = ReflectionSchedule().choose(
+        [_candidate('window', texels=167040)],
+        Budget(views=16, separate_views=16, texels=5000))
+    decision, = chosen.decisions
+    assert ReflectionSchedule.SMALLEST_SCALE <= decision.scale < 0.5
+    assert 167040 * decision.scale ** 2 == pytest.approx(5000)
+    assert not chosen.unaffordable
+
+
+def test_a_mirror_no_scale_can_afford_is_said_to_be_unaffordable():
+    chosen = ReflectionSchedule().choose(
+        [_candidate('huge', texels=10 ** 6), _candidate('small', texels=100)],
+        Budget(views=16, separate_views=16, texels=5000))
+    assert [d.key for d in chosen.decisions] == ['small']
+    assert chosen.unaffordable == {'huge'}
+
+
+def test_a_mirror_the_other_mirrors_left_no_room_for_waits_its_turn():
+    """Not unaffordable: the whole budget would draw it, this frame's does not."""
+    chosen = ReflectionSchedule().choose(
+        [_candidate('first', texels=5000, area=10.0 ** 6), _candidate('second', texels=5000)],
+        Budget(views=16, separate_views=16, texels=5000))
+    assert [d.key for d in chosen.decisions] == ['first']
+    assert not chosen.unaffordable
+
+
+def test_the_budget_left_is_what_the_chosen_mirror_views_did_not_spend():
+    chosen = ReflectionSchedule().choose(
+        [_candidate('a', texels=1000, separate=True), _candidate('b', texels=500)],
+        Budget(views=5, separate_views=2, texels=4000))
+    assert (chosen.views, chosen.separate_views, chosen.texels) == (3, 1, 2500)
+
+
+def test_a_mirror_view_is_afforded_only_within_what_is_left():
+    chosen = ReflectionSchedule().choose(
+        [_candidate('a', texels=3000)], Budget(views=2, separate_views=0, texels=4000))
+    assert not chosen.afford(_candidate('moved', texels=2000), 1.0)
+    assert not chosen.afford(_candidate('separate', texels=10, separate=True), 1.0)
+    assert chosen.afford(_candidate('halved', texels=2000), 0.5)
+    assert [d.key for d in chosen.decisions] == ['a', 'halved']
+    assert (chosen.views, chosen.texels) == (0, 500)
+    assert not chosen.afford(_candidate('more', texels=1), 1.0)
+
+
+# --- the time target -------------------------------------------------------------
+
+def test_one_reading_applied_again_leaves_the_scale_where_it_was():
+    """A timer's newest reading stays until another arrives; the frames
+    between it and the next are not new measurements."""
+    schedule = ReflectionSchedule()
+    schedule.measured(6.0, 5.0, scale=1.0, reading=1)
+    once = schedule.time_scale
+    for _ in range(20):
+        schedule.measured(6.0, 5.0, scale=1.0, reading=1)
+    assert schedule.time_scale == once
+
+
+def test_the_time_target_settles_where_the_reflections_cost_it():
+    """Reflections costing 6 ms at full scale against a 5 ms target settle near
+    5/6 of the budget, read two frames late as a GPU timer reads them."""
+    schedule = ReflectionSchedule()
+    drawn_at = [1.0, 1.0]
+    for reading in range(1, 80):
+        scale_then = drawn_at[-2]
+        schedule.measured(6.0 * scale_then, 5.0, scale=scale_then, reading=reading)
+        drawn_at.append(schedule.time_scale)
+    assert schedule.time_scale == pytest.approx(5.0 / 6.0, abs=0.01)

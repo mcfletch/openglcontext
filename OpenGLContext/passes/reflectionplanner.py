@@ -32,11 +32,11 @@ import numpy as np
 from OpenGLContext.passes import reflection
 from OpenGLContext.passes.reflection import MirrorView
 from OpenGLContext.passes.reflectiontiles import (
-    DRIFT_TEXELS, Budget, Candidate, Packed, ReflectionSchedule, Tile, TilePacker,
+    DRIFT_TEXELS, Budget, Candidate, Chosen, Packed, ReflectionSchedule, Tile, TilePacker,
 )
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 
-__all__ = ['ROUGH', 'SETTLE_FRAMES', 'Lookup', 'MirrorDraw', 'ReflectedView',
+__all__ = ['ROUGH', 'SETTLE_FRAMES', 'COPLANAR', 'CANDIDATES_PER_VIEW', 'Lookup', 'MirrorDraw', 'ReflectedView',
            'ReflectionPlan', 'ReflectionPlanner', 'key_for', 'view_key']
 
 #: Above this roughness a reflector reads blurred mip levels of its tile.
@@ -228,9 +228,36 @@ class _Surface(NamedTuple):
     corners: np.ndarray
 
 
-#: How near two mirrors' planes are to be one plane: a thousandth of their
-#: normals' length, and a millimetre.
-COPLANAR = 3
+#: How near two mirrors' planes are to be one plane: normals within a
+#: thousandth each way, and distances from the origin within a millimetre.
+COPLANAR = 1e-3
+
+#: Mirrors seen in mirrors are looked for, bounce by bounce, until a frame has
+#: this many candidates for each mirror view its budget can draw.
+CANDIDATES_PER_VIEW = 4
+
+
+@dataclass
+class _Group:
+    """Mirrors in one view sharing a reflector and lying in one plane."""
+
+    reflector: PlanarReflector
+    normal: np.ndarray
+    distance: float
+    members: List[_Surface]
+
+    @classmethod
+    def of(cls, surface: _Surface) -> '_Group':
+        point, normal = surface.plane
+        return cls(surface.reflector, normal, float(np.dot(normal, point)), [surface])
+
+    def holds(self, surface: _Surface) -> bool:
+        """Whether ``surface`` shares this group's reflector and, within
+        :data:`COPLANAR`, its plane."""
+        point, normal = surface.plane
+        return (surface.reflector is self.reflector
+                and float(np.abs(normal - self.normal).max()) <= COPLANAR
+                and abs(float(np.dot(normal, point)) - self.distance) <= COPLANAR)
 
 
 def _scaled(size: Tuple[int, int], scale: float) -> Tuple[int, int]:
@@ -299,17 +326,20 @@ class ReflectionPlanner:
                 continue
             modelview = np.asarray(frame.modelView, 'd')
             eye = np.linalg.inv(modelview)[3, :3]
-            groups: Dict[Hashable, List[_Surface]] = {}
+            groups: List[_Group] = []
             for record in (frame.toRender if shown is None else shown(frame)):
                 surface = self._surface(frame, record, eye)
-                if surface is not None:
-                    point, normal = surface.plane
-                    plane = (tuple(np.round(normal, COPLANAR)),
-                             round(float(np.dot(normal, point)), COPLANAR))
-                    groups.setdefault((id(surface.reflector), plane), []).append(surface)
-            for members in groups.values():
-                seen = self._mirror(frame, sorted(members, key=lambda m: id(m.record[4])),
-                                    eye)
+                if surface is None:
+                    continue
+                for group in groups:
+                    if group.holds(surface):
+                        group.members.append(surface)
+                        break
+                else:
+                    groups.append(_Group.of(surface))
+            for group in groups:
+                seen = self._mirror(frame, sorted(group.members,
+                                                  key=lambda m: id(m.record[4])), eye)
                 if seen is not None:
                     found.append(seen)
         return found
@@ -351,7 +381,7 @@ class ReflectionPlanner:
             held = None
         mirror = reflection.plan_mirror(plane, corners, frame.modelView,
                                         frame.projection, frame.rect,
-                                        reflector.bounded('scale'), crop=crop)
+                                        reflector.bounded('scale'), crop=crop, eye=eye)
         if mirror is None:
             return None
         valid = (held is not None and not held.provisional and not held.redo
@@ -445,7 +475,9 @@ class ReflectionPlanner:
         can see; given it, each is planned from that mirror's camera, drawn as
         its :class:`ReflectedView`, and read there a frame later. Every chain
         of mirrors is followed with its own camera, up to ``bounces``
-        reflections deep: 1 plans only the mirrors the views see.
+        reflections deep: 1 plans only the mirrors the views see. No deeper
+        bounce is looked into once the frame has :data:`CANDIDATES_PER_VIEW`
+        candidates for each view the budget draws.
         ``shown(frame)`` answers the records of a view's draw list that may be
         mirrors, so a scene of thousands of shapes and a few mirrors is not
         asked about every shape; all of the draw list where not given.
@@ -456,33 +488,31 @@ class ReflectionPlanner:
             self.packer.resize(*atlas)
             self._held.clear()
         seen = {entry.key: entry for entry in self._seen(frames, shown)}
-        if inside is not None:
-            level = list(seen.values())
-            for _depth in range(1, int(bounces)):
-                level = self._inside(level, inside)
-                seen.update((entry.key, entry) for entry in level)
-        self._views = {key: view for key, view in self._views.items() if key in seen}
         if not seen:
+            self._views = {}
             self._held.clear()
             self.packer.place({})
             return ReflectionPlan(frames)
         if callable(budget):
             budget = budget()
+        if inside is not None:
+            level = list(seen.values())
+            enough = CANDIDATES_PER_VIEW * max(1, int(budget.views))
+            for _depth in range(1, int(bounces)):
+                if not level or len(seen) >= enough:
+                    break
+                level = self._inside(level, inside)
+                seen.update((entry.key, entry) for entry in level)
+        self._views = {key: view for key, view in self._views.items() if key in seen}
         mirrored = {id(entry.frame): entry.frame for entry in seen.values()}
         separates = {key: bool(separate(frame)) for key, frame in mirrored.items()}
         candidates = [self._candidate(entry, separates[id(entry.frame)])
                       for entry in seen.values()]
-        decisions = {decision.key: decision.scale
-                     for decision in self.schedule.choose(candidates, budget)}
+        chosen = self.schedule.choose(candidates, budget)
+        decisions = {decision.key: decision.scale for decision in chosen.decisions}
         weights = {c.key: c.area * max(c.priority, 0.0) for c in candidates}
         packed = self._pack(seen, decisions, weights)
-        spare = max(0, int(budget.views) - len(decisions))
-        for key in packed.moved:
-            held_before = seen[key].held
-            if key in decisions or held_before is None or spare <= 0:
-                continue
-            decisions[key] = held_before.scale
-            spare -= 1
+        self._redraw_moved(packed, seen, decisions, candidates, chosen)
         plan = ReflectionPlan(frames, candidates=candidates)
         # Every group's, drawn or not: the pass names a mirror by its own key.
         plan.aliases = {key_for(entry.frame, member.record): key
@@ -513,11 +543,30 @@ class ReflectionPlanner:
         self._aliases = plan.aliases
         self.packer.place({key: (h.tile.width, h.tile.height) for key, h in held.items()})
         # A mirror crowded out of the atlas finds no more room next frame.
+        # So does one the whole budget cannot draw.
+        passed = self._crowded | chosen.unaffordable
         plan.unfinished = settling and bool(plan.draws) or any(
-            candidate.key not in decisions and candidate.key not in self._crowded
+            candidate.key not in decisions and candidate.key not in passed
             and (not candidate.valid or candidate.drift > DRIFT_TEXELS)
             for candidate in candidates)
         return plan
+
+    def _redraw_moved(self, packed: Packed, seen: Dict[Hashable, _Seen],
+                      decisions: Dict[Hashable, float], candidates: Sequence[Candidate],
+                      chosen: Chosen) -> None:
+        """Draw again, at the scale they were drawn at, the kept tiles a repack
+        moved, as far as what is left of the budget allows.
+
+        A moved tile holds nothing; one the budget cannot redraw is not read
+        this frame, and is drawn again as a mirror with no tile.
+        """
+        by_key = {candidate.key: candidate for candidate in candidates}
+        for key in packed.moved:
+            held = seen[key].held
+            if key in decisions or held is None:
+                continue
+            if chosen.afford(by_key[key], held.scale):
+                decisions[key] = held.scale
 
     def _pack(self, seen: Dict[Hashable, _Seen], decisions: Dict[Hashable, float],
               weights: Mapping[Hashable, float]) -> Packed:
@@ -535,9 +584,11 @@ class ReflectionPlanner:
         self._crowded = set()
         drawn = {key: _scaled(seen[key].mirror.size, scale)
                  for key, scale in decisions.items()}
+        # A held tile is read until it is drawn again, valid or not: one drawn
+        # for this view and plane is a right projection of what it showed.
         kept = {key: (entry.held.tile.width, entry.held.tile.height)
                 for key, entry in seen.items()
-                if key not in decisions and entry.valid and entry.held is not None}
+                if key not in decisions and entry.held is not None}
         before = self.packer.tiles
         packed = self.packer.place({**kept, **drawn})
         if not packed.unplaced:

@@ -316,7 +316,8 @@ The budget is for a whole frame, across every view.
      - How many reflections deep a chain of mirrors is followed. 1 is the
        mirrors in view only, and a mirror seen in one reflects the probe; each
        step past it multiplies the mirror views a frame may ask for by the
-       mirrors each can see.
+       mirrors each can see. No further step is taken once a frame has four
+       candidates for each mirror view it may draw.
    * - ``reflectionSeparateViews``
      - ``OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS``
      - 4
@@ -332,6 +333,8 @@ The budget is for a whole frame, across every view.
      - 0 (none)
      - A GPU time the reflections aim to stay under. The texels drawn are
        scaled by the measured time, between a quarter and all of the budget.
+       Each measurement arrives two frames late and is applied once, weighed
+       by the scale the frame it measured was drawn at.
 
 The first five are counts and sizes, so a capture or a visual baseline draws
 the same reflections every run. The time target adapts to the machine, which
@@ -350,10 +353,15 @@ Each frame, the schedule weighs every mirror in view:
 
 Where the mirrors that must be drawn do not fit, those with no reflection they
 can use go first, then the rest, each by score. A mirror too large for what is
-left is drawn at half scale in its turn, and only then is one left out. A mirror left out
-keeps its old tile, or reflects the probe if it has none. The frames since a
-mirror's last draw raise its score every frame it is passed over, so none is
-left out for long.
+left is drawn at half scale in its turn, and one too large for that at the
+scale the texels left allow, down to an eighth each way; only then is it left
+out of this frame. A mirror left out reads its old tile, drawn for this view
+and plane, until it is drawn again, or reflects the probe if it has none. An
+optional mirror's score rises every frame it is passed over, so a mirror the
+budget can draw is not left out for long. Two cases are left out for as long
+as they last: a mirror the whole texel budget cannot draw at an eighth scale,
+and a mirror crowded out of the atlas (below). Neither asks for another
+frame.
 
 The atlas packs tiles on shelves. A tile goes on a shelf of its own height
 class, on a new shelf where there is height left, or beside taller tiles on a
