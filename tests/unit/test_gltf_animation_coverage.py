@@ -80,14 +80,18 @@ class TestComputeWorldMatricesBaked:
 
 
 class TestPlayerPointerException:
-    def test_failing_setter_is_swallowed(self):
+    def test_a_failing_setter_costs_only_its_own_property(self):
         s = ga.Sampler(np.array([0.0, 1.0]), np.array([[0.0], [1.0]]))
+        written = []
 
         def boom(_value):
             raise RuntimeError("setter blew up")
 
-        anim = ga.Animation('a', [], [ga.PointerChannel(s, boom)])
-        ga.Player(anim, {}).evaluate(0.0)      # must not propagate
+        anim = ga.Animation('a', [], [ga.PointerChannel(s, boom),
+                                      ga.PointerChannel(s, written.append)])
+        ga.Player(anim, {}).evaluate(0.5)
+        assert len(written) == 1
+        assert np.allclose(written[0], [0.5])
 
 
 class TestSamplerValuesValidation:

@@ -161,17 +161,37 @@ class TestApplyLoadedAndFailed:
 
 
 class TestApplyPhysicsProfile:
-    def test_no_scenegraph_yet_is_a_noop(self):
+    """Each case loads a model whose profile asks for physics, so a guard that
+    let the call through would switch it on."""
+
+    def _inst(self, sg, capture):
         inst = _inst()
-        inst.sg = None
-        inst.options = argparse.Namespace(capture=None)
-        inst._apply_physics_profile()                       # returns without touching physics
+        inst.sg = sg
+        inst.options = argparse.Namespace(capture=capture)
+        inst._ref_current = 'VirtualCity'                   # profile: physics + fly
+        inst.physicsWalking = True
+        inst.physicsPlatform = platform = types.SimpleNamespace(
+            set_fly=lambda value: None)
+        inst.switched = []
+        inst.enablePhysics = lambda on: inst.switched.append(on) or True
+        return inst, platform
+
+    def test_a_physics_model_switches_physics_on(self):
+        inst, _platform = self._inst(object(), None)
+        inst._apply_physics_profile()
+        assert inst.switched == [True]
+
+    def test_no_scenegraph_yet_is_a_noop(self):
+        inst, platform = self._inst(None, None)
+        inst._apply_physics_profile()
+        assert inst.switched == []
+        assert inst.physicsPlatform is platform
 
     def test_capture_run_skips_physics(self):
-        inst = _inst()
-        inst.sg = object()
-        inst.options = argparse.Namespace(capture='shot.png')
-        inst._apply_physics_profile()                       # capture -> no physics rebuild
+        inst, platform = self._inst(object(), 'shot.png')
+        inst._apply_physics_profile()
+        assert inst.switched == []
+        assert inst.physicsPlatform is platform
 
 
 class TestResolveBackgroundCube:

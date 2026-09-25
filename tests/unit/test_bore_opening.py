@@ -168,8 +168,11 @@ class TestHowAWorldRecordsItsBores:
                     4.0, 6.5, 0.5, 0.2, 24.0)
 
     def test_a_record_is_plain_json(self):
+        """It survives a trip through JSON text unchanged: nothing in it is a
+        tuple, an array or an object JSON would turn into something else."""
         import json
-        json.dumps(self._cut().to_json())
+        record = self._cut().to_json()
+        assert json.loads(json.dumps(record)) == record
 
     def test_the_openings_are_the_mouths_it_describes(self):
         cut = self._cut()

@@ -586,7 +586,14 @@ class TestAnimationControl:
     def test_cycle_animation_is_a_noop_without_animations(self):
         inst = _inst()
         inst._animations = []
-        inst.previousAnimation()                           # must not raise
+        inst._animationIndex = 0
+        inst._player = player = _Player()
+        drawn = []
+        inst.triggerRedraw = lambda n=1: drawn.append(n)
+        inst.previousAnimation()
+        assert inst._animationIndex == 0
+        assert inst._player is player
+        assert drawn == []
 
 
 class TestTurntableToggle:
@@ -690,10 +697,17 @@ class TestPhysicsInputHandlers:
         assert inst.contextDefinition.movementMode.name == 'walk'
 
     def test_the_fly_key_does_nothing_before_physics_exists(self):
+        from OpenGLContext.contextdefinition import ContextDefinition
+        from OpenGLContext.move.modes import walk_fly_modes
         inst = _inst()
         inst.physicsPlatform = None
+        inst.contextDefinition = ContextDefinition(
+            movementModes=walk_fly_modes())
         inst.navigation = None
+        inst.getNavigation()
+        assert inst.contextDefinition.movementMode.name == 'walk'
         inst.togglePhysicsFly(None)
+        assert inst.contextDefinition.movementMode.name == 'walk'
 
 
 class TestFrameDegenerate:
@@ -975,11 +989,14 @@ class TestSwitchingAnimations:
         viewer.cycleAnimation(1)
         assert scene.asked == []
 
-    def test_a_viewer_with_no_scene_does_not_raise(self):
+    def test_a_viewer_with_no_scene_keeps_the_animation_it_has(self):
         """A host that produced its own scene may not have handed one over."""
         viewer = self._viewer(self._Scene())
         viewer.scene = None
         viewer.cycleAnimation(1)
+        assert viewer._animationIndex == 0
+        assert viewer._player is None
+        assert viewer._animationClock == 5.0
 
 
 class TestTheFlyThrough:

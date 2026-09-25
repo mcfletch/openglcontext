@@ -402,8 +402,12 @@ class TestScatteredInTheBackground:
     def test_waiting_on_an_inline_cover_is_immediate(self) -> None:
         assert _cover().wait(0.0)
 
-    def test_shutting_down_an_inline_cover_is_harmless(self) -> None:
-        _cover().shutdown()
+    def test_an_inline_cover_still_grows_after_a_shutdown(self) -> None:
+        cover = _cover(card_radius=100.0)
+        cover.shutdown()
+        cover.update((0.0, 0.0, 0.0))
+        assert cover.wait(0.0)
+        assert len(cover.rungs[0].cards.pos) > 100
 
 
 class TestTheWorkerIsLetGo:
