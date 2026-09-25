@@ -236,6 +236,10 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
             self._caster_points = occluder_points
 
         max_slots = min(caps.max_shadow_lights(), shader.MAX_SHADOW_LIGHTS)
+        # A light zones confine to their shapes has no shadow to draw while
+        # none of those shapes is in view.
+        zoned = getattr(self, 'zoneLightSeen', None)
+        frusta = self._shadowFrusta() if zoned is not None else None
         light_index = -1
         slot = 0
         # Save the render target once for the whole batch and restore it once
@@ -252,6 +256,9 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                 if light_index >= shader.MAX_LIGHTS:
                     break
                 if slot >= max_slots or not self._castsShadow(light_node, caps):
+                    continue
+                if frusta is not None and zoned is not None \
+                        and not zoned(light_node, frusta):
                     continue
                 binding = self._renderLight(
                     path, light_node, slot, light_index,
@@ -544,11 +551,9 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                 rng = None
         if rng is None:
             return True
-        reflects = getattr(self, 'reflectsScene', None)
-        if reflects is not None and reflects():
+        frusta = self._shadowFrusta()
+        if frusta is None:
             return True
-        frames = getattr(self, 'viewFrames', None) or ()
-        frusta = [frame.frustum for frame in frames] or [getattr(self, 'frustum', None)]
         center = np.array([world_pos[0], world_pos[1], world_pos[2], 1.0])
         for frust in frusta:
             planes = getattr(frust, 'planes', None)
@@ -558,6 +563,19 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                    for plane in planes):
                 return True   # the sphere reaches into this view
         return False
+
+    def _shadowFrusta(self) -> Optional[List[Any]]:
+        """Every view's frustum this frame, or None where every light is to be kept.
+
+        None where the frame may draw reflections (``reflectsScene``): the
+        mirror views are planned after the shadow maps are drawn, and a light
+        out of every view may be seen in one.
+        """
+        reflects = getattr(self, 'reflectsScene', None)
+        if reflects is not None and reflects():
+            return None
+        frames = getattr(self, 'viewFrames', None) or ()
+        return [frame.frustum for frame in frames] or [getattr(self, 'frustum', None)]
 
     def _cullOccluders(self, toRender: List, light_view: np.ndarray,
                        light_proj: np.ndarray) -> List:

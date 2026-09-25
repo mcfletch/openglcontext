@@ -231,6 +231,37 @@ class TestThePass:
         assert len([r for r in caplog.records if "'Box'" in r.getMessage()]) == 1
 
 
+class Planes:
+    """A frustum that keeps what is between ``low`` and ``high`` along x."""
+
+    def __init__(self, low, high):
+        self.planes = np.array([(1, 0, 0, -low), (-1, 0, 0, high)], dtype='d')
+
+
+class TestZoneLightShadows:
+    def zoned(self, blend=0.0):
+        lamp = PointLight()
+        zoned = ZonedPass([(Zone(size=(10, 10, 10), blend=blend,
+                                 settings=[ZoneLights(lights=[lamp])]), at(100))])
+        zoned.placeZones()
+        return lamp, zoned
+
+    def test_a_zone_light_is_seen_only_where_its_zone_is(self):
+        lamp, zoned = self.zoned()
+        assert zoned.zoneLightSeen(lamp, [Planes(80, 120)])
+        assert not zoned.zoneLightSeen(lamp, [Planes(-20, 20)])
+        assert zoned.zoneLightSeen(lamp, [Planes(-20, 20), Planes(90, 95)])
+
+    def test_the_blend_band_counts_as_the_zone(self):
+        lamp, zoned = self.zoned(blend=10.0)
+        assert zoned.zoneLightSeen(lamp, [Planes(110, 120)])
+
+    def test_a_light_no_zone_names_and_a_frustum_with_no_planes_rule_nothing_out(self):
+        lamp, zoned = self.zoned()
+        assert zoned.zoneLightSeen(PointLight(), [Planes(-20, 20)])
+        assert zoned.zoneLightSeen(lamp, [object()])
+
+
 class TestTheCamera:
     def test_a_shown_node_is_drawn_only_from_inside(self):
         secret = Transform()

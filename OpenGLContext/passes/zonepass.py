@@ -1064,6 +1064,29 @@ class ZonesMixin(PassResources):
         off = sum(layer.share for layer in stack if layer.block is None)
         return off < 1.0
 
+    def zoneLightSeen(self, light: Any, frusta: Sequence[Any]) -> bool:
+        """Whether ``light`` can light anything the views with ``frusta`` see.
+
+        A light a ``ZoneLights`` names lights only what reaches a zone naming
+        it, so where every such zone's shape and blend band is outside every
+        frustum, nothing it lights is seen and its shadow map is not drawn. A
+        light no zone names is not ruled out here, nor is any light where a
+        frustum has no planes.
+        """
+        naming = self._controlledLights.get(id(light))
+        if not naming:
+            return True
+        from OpenGLContext.frustum import boxes_outside
+        to_world = np.linalg.inv(np.array([zone.shape.to_local for zone in naming]))
+        halves = np.array([np.asarray(zone.shape.reach, 'd') + zone.blend for zone in naming])
+        for frustum in frusta:
+            planes = getattr(frustum, 'planes', None)
+            if planes is None:
+                return True
+            if not boxes_outside(np.zeros(3), halves, to_world, planes).all():
+                return True
+        return False
+
     def zoneWeightsAt(self, point: Any) -> Dict[int, float]:
         """Every zone's weight at ``point``, by ``id`` of its placement.
 

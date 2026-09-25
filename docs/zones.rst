@@ -233,6 +233,12 @@ inside or crossing a zone that names it, so a room's lamp does not light the
 far side of its wall. The decision is per object: a floor that runs from one
 room into another is lit by both rooms' lights.
 
+A shadow-casting light that zones name draws its shadow map only while one of
+those zones -- its shape and its blend band -- is inside some view's
+frustum, so a level with a lamp in every room pays for the shadows of the
+rooms in view. Every light keeps its shadow map on a frame that may draw
+planar reflections, since a mirror can show a room no view does.
+
 Sound
 -----
 
