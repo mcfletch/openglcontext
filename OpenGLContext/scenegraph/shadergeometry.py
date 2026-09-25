@@ -21,10 +21,8 @@ interleaved layouts the engine's own geometry is built in:
 """
 from __future__ import annotations
 
-import threading
-import weakref
 from collections.abc import Callable, Sequence
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from OpenGL.GL import (
     glGenVertexArrays, glBindVertexArray, glDeleteVertexArrays,
@@ -82,72 +80,14 @@ SHARED_LAYOUT = 0
 _Entry = Tuple[Sequence[Any], int]
 
 
-class _VertexArrays:
-    """The vertex array objects one node holds: by context, then by layout."""
-
-    def __init__(self) -> None:
-        self.by_context: Dict[Any, Dict[int, _Entry]] = {}
+def _entry_names(entry: _Entry) -> Tuple[int]:
+    return (entry[1],)
 
 
-#: Every node's vertex arrays, so a lost context's can be found and deleted.
-_HOLDERS: 'weakref.WeakSet[_VertexArrays]' = weakref.WeakSet()
-#: VAO names whose node was collected, by the context that issued them, waiting
-#: for that context to be current. Appended from a finalizer, which may run on
-#: any thread, so guarded.
-_ORPHANS: Dict[Any, List[int]] = {}
-_ORPHANS_LOCK = threading.Lock()
-
-
-def _orphaned(holder: _VertexArrays) -> None:
-    """Queue a collected node's names for deletion in their own contexts."""
-    with _ORPHANS_LOCK:
-        for context, entries in holder.by_context.items():
-            _ORPHANS.setdefault(context, []).extend(
-                vao for _refs, vao in entries.values())
-    holder.by_context.clear()
-
-
-def _delete(names: Sequence[int]) -> None:
-    for vao in names:
-        try:
-            glDeleteVertexArrays(1, [vao])
-        except Exception:                       # pragma: no cover - a dying driver
-            pass
-
-
-def _collect_orphans(context: Any) -> None:
-    """Delete the names collected nodes left in ``context``, which is current."""
-    if not _ORPHANS.get(context):
-        return
-    with _ORPHANS_LOCK:
-        names = _ORPHANS.pop(context, [])
-    _delete(names)
-
-
-@contextresources.on_context_lost
-def _context_lost() -> None:
-    """Delete and forget every node's vertex arrays in the context going away."""
-    context = contextresources.context_key()
-    _collect_orphans(context)
-    for holder in list(_HOLDERS):
-        entries = holder.by_context.pop(context, None)
-        if entries:
-            _delete([vao for _refs, vao in entries.values()])
-
-
-def _holder_of(owner: Any) -> Optional[_VertexArrays]:
-    """The vertex arrays ``owner`` holds, made on first use; None where it cannot hold any."""
-    holder: Optional[_VertexArrays] = getattr(owner, '_shader_vao_cache', None)
-    if holder is not None:
-        return holder
-    holder = _VertexArrays()
-    try:
-        owner._shader_vao_cache = holder
-        weakref.finalize(owner, _orphaned, holder)
-    except (AttributeError, TypeError):
-        return None
-    _HOLDERS.add(holder)
-    return holder
+#: Every node's vertex array objects, by context and then by layout, kept on
+#: the node as ``_shader_vao_cache``.
+_ARRAYS = contextresources.ContextNames(
+    '_shader_vao_cache', lambda vao: glDeleteVertexArrays(1, [vao]), _entry_names)
 
 
 def get_or_build_vao(owner: Any, program: Any, vbo_refs: Sequence[Any],
@@ -174,14 +114,11 @@ def get_or_build_vao(owner: Any, program: Any, vbo_refs: Sequence[Any],
     The VAO is kept for the context current now, and deleted in that context
     once ``owner`` is collected or the context is torn down.
     """
-    holder = _holder_of(owner)
-    if holder is None:
+    cache = _ARRAYS.entries(owner)
+    if cache is None:
         return None
-    context = contextresources.context_key()
-    _collect_orphans(context)
-    cache = holder.by_context.setdefault(context, {})
     key = int(program if layout_key is None else layout_key)
-    entry = cache.get(key)
+    entry: Optional[_Entry] = cache.get(key)
     if entry is not None:
         cached_refs, vao = entry
         if _same_refs(cached_refs, vbo_refs):

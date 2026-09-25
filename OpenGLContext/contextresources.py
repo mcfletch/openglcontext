@@ -22,11 +22,19 @@ objects registers a callback with :func:`on_context_lost` to hear about it.
 The engine's own caches -- the render pass, the VRML97 programs, the text
 renderers, the teapot's vertex arrays -- register themselves as they are
 imported, so a backend only has to make the announcement.
+
+Names that belong to an object rather than to a module -- a geometry node's
+vertex array objects, a font's display lists -- are kept in a
+:class:`ContextNames`, which holds each owner's names per context and deletes
+them in the context that issued them, both when the owner is collected and
+when the context is torn down.
 """
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, List
+import threading
+import weakref
+from typing import Any, Callable, Dict, Hashable, Iterable, List, Optional
 
 log = logging.getLogger(__name__)
 
@@ -35,6 +43,7 @@ __all__ = [
     'forget_context_lost',
     'context_lost',
     'context_key',
+    'ContextNames',
 ]
 
 #: Callables to run as a context is destroyed, in the order they registered.
@@ -105,3 +114,111 @@ def context_lost() -> None:
                 "Releasing GL resources for a closing context failed in %r: %s",
                 getattr(callback, '__qualname__', callback), err,
             )
+
+
+def _itself(entry: Any) -> Iterable[int]:
+    """An entry that is a GL name on its own."""
+    return (entry,)
+
+
+class _Held:
+    """What one owner holds: for each context, its entries by key."""
+
+    def __init__(self) -> None:
+        self.by_context: Dict[Any, Dict[Hashable, Any]] = {}
+
+
+class ContextNames:
+    """GL names objects hold in each context, deleted in the context that issued them.
+
+    An owner keeps its entries per context, since a name means nothing outside
+    the context that issued it: :meth:`entries` answers the owner's entries for
+    the context current now, and ``names(entry)`` lists the GL names one entry
+    holds (by default the entry is a name). The entries hang off the owner as
+    its attribute ``attribute``.
+
+    When an owner is collected its names are queued by context, since a
+    finaliser runs on whichever thread the collector does and with whatever
+    context is current there; ``delete(name)`` deletes each of them the next
+    time :meth:`entries` or :meth:`collect` runs with that context current.
+    When a context is torn down (:func:`context_lost`) every owner's names for
+    it are deleted and forgotten.
+
+    Made once per kind of name, at module level: it registers with
+    :func:`on_context_lost`, which holds it for the life of the process.
+
+        _LISTS = ContextNames('_displayLists', lambda name: glDeleteLists(name, 1))
+
+        lists = _LISTS.entries(font)          # this context's, made on first use
+    """
+
+    def __init__(self, attribute: str, delete: Callable[[int], None],
+                 names: Callable[[Any], Iterable[int]] = _itself) -> None:
+        self.attribute = attribute
+        self._delete = delete
+        self._names = names
+        #: Every owner's entries, so a lost context's can be found and deleted.
+        self._holders: 'weakref.WeakSet[_Held]' = weakref.WeakSet()
+        #: Names whose owner was collected, by the context that issued them,
+        #: waiting for that context to be current. Appended from a finaliser,
+        #: which may run on any thread, so guarded.
+        self._orphans: Dict[Any, List[int]] = {}
+        self._lock = threading.Lock()
+        on_context_lost(self._context_lost)
+
+    def entries(self, owner: Any) -> Optional[Dict[Hashable, Any]]:
+        """``owner``'s entries for the current context; None where it cannot hold any.
+
+        Made on first use. The names collected owners left in this context are
+        deleted first.
+        """
+        held: Optional[_Held] = getattr(owner, self.attribute, None)
+        if held is None:
+            held = _Held()
+            try:
+                setattr(owner, self.attribute, held)
+                weakref.finalize(owner, self._orphaned, held)
+            except (AttributeError, TypeError):
+                return None
+            self._holders.add(held)
+        context = context_key()
+        self.collect(context)
+        return held.by_context.setdefault(context, {})
+
+    def collect(self, context: Any = None) -> None:
+        """Delete the names collected owners left in ``context``, which is current.
+
+        ``context`` defaults to :func:`context_key`.
+        """
+        if context is None:
+            context = context_key()
+        if not self._orphans.get(context):
+            return
+        with self._lock:
+            names = self._orphans.pop(context, [])
+        self._delete_all(names)
+
+    def _orphaned(self, held: _Held) -> None:
+        """Queue a collected owner's names for deletion in their own contexts."""
+        with self._lock:
+            for context, entries in held.by_context.items():
+                self._orphans.setdefault(context, []).extend(
+                    name for entry in entries.values() for name in self._names(entry))
+        held.by_context.clear()
+
+    def _context_lost(self) -> None:
+        """Delete and forget every owner's names in the context going away."""
+        context = context_key()
+        self.collect(context)
+        for held in list(self._holders):
+            entries = held.by_context.pop(context, None)
+            if entries:
+                self._delete_all(
+                    [name for entry in entries.values() for name in self._names(entry)])
+
+    def _delete_all(self, names: Iterable[int]) -> None:
+        for name in names:
+            try:
+                self._delete(name)
+            except Exception:                   # pragma: no cover - a dying driver
+                log.debug("Deleting GL name %r failed", name, exc_info=True)

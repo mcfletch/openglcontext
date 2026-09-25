@@ -206,5 +206,73 @@ class TestUnregistering:
         contextresources.context_lost()
         assert called == ['keep']
 
+
+class _Owner:
+    """Something holding GL names of its own."""
+
+
+class TestContextNames:
+    """An owner's names, per context, deleted in the context that issued them."""
+
+    @pytest.fixture
+    def names(self, monkeypatch):
+        """A ContextNames deleting into a list, with the current context settable."""
+        deleted = []
+        current = {'context': 'first'}
+        monkeypatch.setattr(contextresources, 'context_key', lambda: current['context'])
+        kept = contextresources.ContextNames(
+            '_names', deleted.append, names=lambda entry: [entry[0]] if entry[0] else [])
+        return kept, deleted, current
+
+    def test_an_owner_holds_its_entries_per_context(self, names):
+        kept, _deleted, current = names
+        owner = _Owner()
+        kept.entries(owner)['a'] = (1, 'metrics')
+        current['context'] = 'second'
+        assert kept.entries(owner) == {}
+        current['context'] = 'first'
+        assert kept.entries(owner) == {'a': (1, 'metrics')}
+
+    def test_a_collected_owner_s_names_wait_for_their_own_context(self, names):
+        import gc
+        kept, deleted, current = names
+        owner = _Owner()
+        kept.entries(owner).update({'a': (1, None), 'b': (None, None)})
+        current['context'] = 'second'
+        kept.entries(owner)['a'] = (2, None)
+        del owner
+        gc.collect()
+        assert deleted == []
+        kept.collect()
+        assert deleted == [2]
+        current['context'] = 'first'
+        kept.entries(_Owner())
+        assert deleted == [2, 1]
+
+    def test_a_lost_context_s_names_are_deleted_and_forgotten(self, names):
+        kept, deleted, current = names
+        owner = _Owner()
+        kept.entries(owner)['a'] = (1, None)
+        current['context'] = 'second'
+        kept.entries(owner)['a'] = (2, None)
+        contextresources.context_lost()
+        assert deleted == [2]
+        assert kept.entries(owner) == {}
+        current['context'] = 'first'
+        assert kept.entries(owner) == {'a': (1, None)}
+
+    def test_an_owner_that_cannot_hold_them_is_answered_none(self, names):
+        kept, _deleted, _current = names
+        assert kept.entries(object()) is None
+
+    def test_by_default_an_entry_is_a_name(self, monkeypatch):
+        deleted = []
+        monkeypatch.setattr(contextresources, 'context_key', lambda: 'only')
+        kept = contextresources.ContextNames('_names', deleted.append)
+        owner = _Owner()
+        kept.entries(owner)['a'] = 7
+        contextresources.context_lost()
+        assert deleted == [7]
+
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
