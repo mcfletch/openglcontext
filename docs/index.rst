@@ -144,6 +144,10 @@ Features
   - :doc:`Planar reflections <reflections>`: mirrors, polished floors and water
     that reflect the scene, a dozen in a frame within a budget
 
+  - :doc:`Zones <zones>`: regions of a scene with their own image-based light,
+    lamps that light only their room, local ambience and reverb, visibility
+    and gravity
+
   - :doc:`Several views of one scene <multiview>` in one window, such as the
     split and quad layouts an editor uses
 

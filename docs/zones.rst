@@ -68,6 +68,28 @@ A setting whose ``enabled`` is false switches its kind off inside the zone:
 ``ZoneLights(enabled=False)`` turns off every light for what is inside,
 except a light a zone names.
 
+.. _zones-demo:
+
+The demo
+--------
+
+.. code-block:: bash
+
+   oglc-zones
+
+A marble courtyard under the sky, and two roofed rooms off it, each a zone.
+The west room's zone scales the sky's light to ``0.15`` and names the warm
+lamp hanging in it; the east room's zone captures a probe from inside the room
+and names a cool lamp. Each lamp lights its own room and nothing in the
+courtyard. A gold statue in the east room is shown only from inside that room:
+a ``ZoneVisibility`` in a zone covering the whole court hides it, and one in
+the room, at a higher priority, shows it. ``z`` takes the rooms' zones away and
+puts them back, and ``t`` shows the statue from everywhere.
+``OpenGLContext.bin.zones_demo.ZoneCourt`` builds the scene, and the
+:doc:`zones_demo tutorial <tutorials/zones_demo>` walks through it.
+``oglc-audio-demo`` uses zones for its areas' ambience and reverb (see
+:ref:`Sound <audio-demos>`).
+
 Zones from code
 ---------------
 

@@ -104,6 +104,7 @@ oglc-ui-demo = "OpenGLContext.bin.ui_demo:main"
 oglc-mirrors = "OpenGLContext.bin.mirrors_demo:main"
 oglc-audio-demo = "OpenGLContext.bin.audio_demo:main"
 oglc-physics-events = "OpenGLContext.bin.physics_events_demo:main"
+oglc-zones = "OpenGLContext.bin.zones_demo:main"
 oglc-character-sheet = "OpenGLContext.bin.character_sheet:main"
 # Ship an application built on the engine as a Debian package: a relocatable
 # CPython and the application on top of it, under /opt.

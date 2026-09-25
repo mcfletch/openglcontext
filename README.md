@@ -139,7 +139,7 @@ carries no environment, and a publisher that names one will not match.
   `docs/reflections.rst`.
 - Zones - regions of a scene that carry their own image-based light, local
   lamps, ambience and reverb, visibility and gravity, read from glTF's
-  `OGLC_zone` extension. `docs/zones.rst`.
+  `OGLC_zone` extension; `oglc-zones` is the demo. `docs/zones.rst`.
 - Several views of one scene - a plan, two elevations and a perspective view
   in one window, with splitters and per-view controls; `oglc-view --views
   quad`. `docs/multiview.rst`.

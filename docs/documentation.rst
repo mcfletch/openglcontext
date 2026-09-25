@@ -116,6 +116,11 @@ Installing the package puts these commands on your path:
    two panes of glass broken after and before the solve, a hitscan gun and a
    pressure plate that opens a door. See :ref:`Responding to collisions
    <physics-collisions>`.
+``oglc-zones``
+   Two rooms off a courtyard, each a zone: one shaded and lit by its own warm
+   lamp, one lit by a probe captured inside it and a cool lamp, and a statue
+   shown only from inside its room, with keys to take the zones away. See
+   :ref:`The zones demo <zones-demo>`.
 ``oglc-character-sheet``
    Draws every clip a rigged character plays as one picture, with a row per
    view and a column per moment of the cycle, plus an overview sheet and an
