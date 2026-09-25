@@ -487,6 +487,27 @@ class TestInstancedGroups:
         assert shader.zones[-1].kinds[0] == 1        # the group now crosses the edge
 
 
+class TestPassState:
+    def test_no_state_is_shared_between_passes_through_the_class(self):
+        for name, value in vars(ZonesMixin).items():
+            if not name.startswith('__'):
+                assert not isinstance(value, (list, dict, set)), name
+
+    def test_the_capture_faces_variable_is_read_once(self, monkeypatch):
+        zoned = ZonedPass([])
+        monkeypatch.setenv('OPENGLCONTEXT_ZONE_CAPTURE_FACES', '2')
+        assert zoned.zoneCaptureFaces() == 2
+        monkeypatch.setenv('OPENGLCONTEXT_ZONE_CAPTURE_FACES', '5')
+        assert zoned.zoneCaptureFaces() == 2
+
+    def test_the_definition_and_the_probes_agree_on_the_faces(self, monkeypatch):
+        from OpenGLContext.contextdefinition import ContextDefinition
+        from OpenGLContext.passes.zoneprobes import FACES_PER_FRAME
+        monkeypatch.delenv('OPENGLCONTEXT_ZONE_CAPTURE_FACES', raising=False)
+        assert ContextDefinition().zoneCaptureFaces == FACES_PER_FRAME
+        assert ZonedPass([]).zoneCaptureFaces() == FACES_PER_FRAME
+
+
 def test_an_object_with_no_bounds_crosses_every_zone():
     class Unbounded:
         def getPoints(self):

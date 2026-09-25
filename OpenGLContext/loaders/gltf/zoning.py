@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union, overload
 
 from OpenGLContext.loaders.documentvalues import DocumentValues
 from OpenGLContext.loaders.gltf import shapes as shapetable
@@ -89,11 +89,21 @@ Reader = Callable[[Any, ZoneReading], Optional[ZoneSetting]]
 _READERS: Dict[str, Reader] = {}
 
 
-def register_scoped(name: str, reader: Optional[Reader] = None) -> Any:
+@overload
+def register_scoped(name: str) -> Callable[[Reader], Reader]: ...
+
+
+@overload
+def register_scoped(name: str, reader: Reader) -> Reader: ...
+
+
+def register_scoped(name: str, reader: Optional[Reader] = None
+                    ) -> Union[Reader, Callable[[Reader], Reader]]:
     """Read extension ``name``'s block in a zone with ``reader``.
 
-    Usable as a call or as a decorator. Registering a name again replaces the
-    reader, which is how an application overrides one of the engine's.
+    Usable as a call, which returns ``reader``, or as a decorator. Registering
+    a name again replaces the reader, which is how an application overrides
+    one of the engine's.
     """
     def bind(function: Reader) -> Reader:
         _READERS[name] = function
@@ -275,8 +285,10 @@ class ZoneReader:
         self.document = document
         self.shapes = shapetable.document_shapes(document)
         self.zones: List[Zone] = []
-        self._pending: List[tuple] = []
-        self._warned: set = set()
+        #: Each zone with its glTF node index and the blocks it borrows,
+        #: read once every node is built.
+        self._pending: List[Tuple[Zone, int, Dict[str, Any]]] = []
+        self._warned: Set[str] = set()
         #: What the zones' own values are read through, reporting by :meth:`warn`.
         self.values = DocumentValues(warn=self.warn)
 

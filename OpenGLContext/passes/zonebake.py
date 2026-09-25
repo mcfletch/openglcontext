@@ -150,8 +150,8 @@ def bake_zone_lights(context: Any, frames_per_zone: int = FRAMES_PER_ZONE,
         raise RuntimeError('the context drew no render pass')
     plan = ZoneBakePlan(_capturing(flat), frames_per_zone)
     baked: List[BakedZoneLight] = []
-    while not plan.finished:
-        zone, eye = plan.current  # type: ignore[misc]
+    while plan.current is not None:
+        zone, eye = plan.current
         context.platform.setPosition(eye)
         if before_frame is not None:
             before_frame(eye)

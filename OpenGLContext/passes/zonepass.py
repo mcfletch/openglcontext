@@ -18,7 +18,11 @@ scene pays a dictionary lookup per draw. A scene with no zones pays one test.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
+from types import MappingProxyType
+from typing import (
+    TYPE_CHECKING, Any, Dict, FrozenSet, Hashable, List, Mapping, Optional,
+    Sequence, Set, Tuple,
+)
 
 import numpy as np
 
@@ -74,7 +78,7 @@ class _ObjectZones:
         self.version = -1
         #: :func:`~OpenGLContext.passes.zonelayers.light_decision`, and the
         #: slot version ``mask`` was made for.
-        self.lights: Any = (frozenset(), False)
+        self.lights: Tuple[FrozenSet[int], bool] = (frozenset(), False)
         self.slots = -1
 
 
@@ -94,7 +98,7 @@ class _GroupBox:
 class ZonesMixin(PassResources):
     """Zones for a render pass; see the module docstring."""
 
-    if False:  # pragma: no cover - attributes the pass supplies
+    if TYPE_CHECKING:  # pragma: no cover - what the pass supplies
         paths: Dict[type, List[Any]]
         shader_program: Any
         _ibl_probe: Any
@@ -113,13 +117,16 @@ class ZonesMixin(PassResources):
         def clearPlanarReflection(self) -> None: ...
         def currentBackground(self) -> Any: ...
 
+    # The defaults below are read-only or None: each pass makes its own
+    # containers, so nothing one pass does is seen by another.
+
     #: Every zone this frame, placed.
-    _zones: List[PlacedZone] = []
+    _zones: Sequence[PlacedZone] = ()
     #: The zones with an environment setting, and those with a lights one.
-    _environmentZones: List[PlacedZone] = []
-    _lightZones: List[PlacedZone] = []
+    _environmentZones: Sequence[PlacedZone] = ()
+    _lightZones: Sequence[PlacedZone] = ()
     #: Each light a zone names, by id, with the zones naming it.
-    _controlledLights: Dict[int, List[PlacedZone]] = {}
+    _controlledLights: Mapping[int, List[PlacedZone]] = MappingProxyType({})
     #: Bumped whenever what an object's zones give it may have changed.
     _zoneEpoch = 0
     #: What each object was last worked out to get, by id of its path.
@@ -131,7 +138,7 @@ class ZonesMixin(PassResources):
     _zoneApplied: Any = None
     _lightsOffApplied = 0
     #: The light node bound to each slot, in slot order, for the light mask.
-    boundLights: List[Any] = []
+    boundLights: Sequence[Any] = ()
     _boundLightKeys: Tuple[int, ...] = ()
     #: The camera the current view looks from, in the world.
     _zoneCamera: Optional[np.ndarray] = None
@@ -143,7 +150,7 @@ class ZonesMixin(PassResources):
     _zoneLighting: Any = None
     _probeLost = 0
     #: Image-based lights given a layer, by id, until each has been uploaded.
-    _imageLights: Dict[int, Any] = {}
+    _imageLights: Optional[Dict[int, Any]] = None
     #: What the scene's own image-based light was last uploaded against.
     _sceneLightMark: Any = None
     _zoneWarned = False
@@ -152,6 +159,11 @@ class ZonesMixin(PassResources):
     _environmentTable: Optional[zonelayers.ZoneTable] = None
     #: Every zone an object's classification depends on, for its slack.
     _slackTable: Optional[zonelayers.ZoneTable] = None
+    #: Every zone, stacked for weighing all at once at one point.
+    _allTable: Optional[zonelayers.ZoneTable] = None
+    #: Every environment zone's distance from this view's camera, made the
+    #: first time an object crossing too many zones asks.
+    _nearness: Optional[Dict[int, float]] = None
     #: Bumped whenever a probe layer's answer may have changed: a capture or
     #: an upload finishing, a capture starting or ending, a probe lost, the
     #: environment mode changing. A draw re-reads its layers only then.
@@ -204,16 +216,13 @@ class ZonesMixin(PassResources):
         self._controlledLights = zonelayers.controlled_lights(placed)
         return placed
 
-    #: Every zone, stacked for weighing all at once at one point.
-    _allTable: Optional[zonelayers.ZoneTable] = None
-
     @property
     def zoneTable(self) -> Optional[zonelayers.ZoneTable]:
         """This frame's zones as a :class:`~OpenGLContext.passes.zonelayers.ZoneTable`."""
         return self._allTable
 
     @property
-    def zones(self) -> List[PlacedZone]:
+    def zones(self) -> Sequence[PlacedZone]:
         """The zones placed for this frame."""
         return self._zones
 
@@ -438,10 +447,6 @@ class ZonesMixin(PassResources):
     #: zones than the shader holds has its nearest zones chosen again.
     CAMERA_CELL = 32.0
 
-    #: Every environment zone's distance from this view's camera, made the
-    #: first time an object crossing too many zones asks.
-    _nearness: Optional[Dict[int, float]] = None
-
     def _cameraNearness(self) -> Optional[Dict[int, float]]:
         if self._nearness is None and self._zoneCamera is not None \
                 and self._environmentTable is not None:
@@ -604,7 +609,7 @@ class ZonesMixin(PassResources):
             schedule = self._zoneCaptures = CaptureSchedule()
         key = id(light)
         if schedule.reserve(key):
-            self.__dict__.setdefault('_imageLights', {})[key] = light
+            self._waitingLights()[key] = light
             self._askForFrame()
         layer = schedule.layer(key)
         return SCENE_PROBE if layer is None else float(layer)
@@ -639,12 +644,13 @@ class ZonesMixin(PassResources):
         if schedule is not None and schedule.layers > probe.layers:
             probe.grow(schedule.layers)
         if schedule is not None:
-            for key, light in list(self._imageLights.items()):
+            waiting = self._waitingLights()
+            for key, light in list(waiting.items()):
                 if schedule.layer(key) is not None:
                     continue
                 layer = schedule.layer_of(key)
                 if layer is None:
-                    del self._imageLights[key]
+                    del waiting[key]
                 elif probe.upload_light(light, layer):
                     schedule.finished(key)
                     self._probeVersion += 1
@@ -653,6 +659,12 @@ class ZonesMixin(PassResources):
         if scene is not None and mark != self._sceneLightMark:
             if probe.upload_light(scene, 0):
                 self._sceneLightMark = mark
+
+    def _waitingLights(self) -> Dict[int, Any]:
+        """The image-based lights given a layer and not yet uploaded into it."""
+        if self._imageLights is None:
+            self._imageLights = {}
+        return self._imageLights
 
     def sceneImageLight(self) -> Any:
         """The image-based light the scene itself is lit by, or None."""
@@ -665,8 +677,8 @@ class ZonesMixin(PassResources):
         """How many faces of a zone's cube may be drawn in one frame."""
         return max(1, min(6, int(renderoptions.number(
             self, 'zoneCaptureFaces',
-            renderoptions.env_number('OPENGLCONTEXT_ZONE_CAPTURE_FACES',
-                                     float(FACES_PER_FRAME))))))
+            renderoptions.env_number_once('OPENGLCONTEXT_ZONE_CAPTURE_FACES',
+                                          FACES_PER_FRAME, integer=True)))))
 
     def renderZoneProbes(self, frames: Sequence[Any], lighting: Any) -> None:
         """Draw this frame's share of the zone captures, before any view is drawn."""
@@ -690,7 +702,7 @@ class ZonesMixin(PassResources):
             self._probeLost = probe.lost
             schedule.lost()
             self._probeVersion += 1
-            self.__dict__.setdefault('_imageLights', {}).update(self._everyImageLight())
+            self._waitingLights().update(self._everyImageLight())
         self.uploadImageLights(probe)
         camera = self._frameCamera(frames)
         if camera is not None:
@@ -718,9 +730,10 @@ class ZonesMixin(PassResources):
         if whole is None:
             return
         if schedule.drawn(key, len(faces)):
-            layer = schedule._captures[key].layer
+            layer = schedule.layer_of(key)
             target = self._captureTarget
-            if target is not None and target.cube is not None and probe.convolve(target.cube, layer):
+            if target is not None and target.cube is not None and layer is not None \
+                    and probe.convolve(target.cube, layer):
                 schedule.finished(key)
                 self._probeVersion += 1
                 log.info('zone %r captured into probe layer %d (capture %d)',
@@ -855,9 +868,9 @@ class ZonesMixin(PassResources):
 
     # -- what the camera sees ------------------------------------------------
     #: The ids of the nodes zones hide from the view being culled.
-    _zoneHidden: frozenset = frozenset()
+    _zoneHidden: FrozenSet[int] = frozenset()
 
-    def zoneHiddenAt(self, point: Optional[Any]) -> frozenset:
+    def zoneHiddenAt(self, point: Optional[Any]) -> FrozenSet[int]:
         """The ids of the nodes the zones hide from a camera at ``point``.
 
         A node a ``ZoneVisibility`` shows is drawn only for a camera inside a
@@ -878,7 +891,7 @@ class ZonesMixin(PassResources):
                     ((zone.priority, -zone.volume), bool(setting.visible), weight))
         if not named:
             return frozenset()
-        hidden = set()
+        hidden: Set[int] = set()
         for key, entries in named.items():
             inside = [entry for entry in entries if entry[2] > 0.0]
             if inside:

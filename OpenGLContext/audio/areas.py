@@ -14,7 +14,7 @@ source's ``gain`` from it.
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import Any, Sequence, Set
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -60,7 +60,7 @@ def apply_zones(engine: Any, emitters: Sequence[Any], zones: Sequence[Any],
     def named(setting: Any) -> Sequence[int]:
         return [id(emitter) for emitter in getattr(setting, 'emitters', None) or ()]
 
-    controlled: set = set()
+    controlled: Set[int] = set()
     for zone in zones:
         setting = zone.setting(AUDIO)
         if setting is not None and bool(setting.enabled):

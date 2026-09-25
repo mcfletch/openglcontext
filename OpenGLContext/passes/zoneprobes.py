@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Callable, Dict, Hashable, Iterable, List, Optional
+from typing import Callable, Dict, Hashable, Iterable, List, Optional, Tuple
 
 from OpenGL.GL import (
     GL_CLAMP_TO_EDGE, GL_COLOR_ATTACHMENT0, GL_COLOR_BUFFER_BIT,
@@ -225,7 +225,7 @@ class CaptureTarget:
         self._fbo: Optional[int] = None
         self._depth: Optional[int] = None
         self._previous = 0
-        self._viewport = (0, 0, 0, 0)
+        self._viewport: Tuple[int, int, int, int] = (0, 0, 0, 0)
 
     def _ensure(self) -> None:
         if self.cube is not None:
@@ -250,8 +250,8 @@ class CaptureTarget:
     def begin(self) -> None:
         """Draw into the capture from here on; :meth:`end` restores the caller's target."""
         self._previous = int(glGetIntegerv(GL_FRAMEBUFFER_BINDING))
-        viewport = glGetIntegerv(GL_VIEWPORT)
-        self._viewport = tuple(int(v) for v in viewport)  # type: ignore[assignment]
+        x, y, width, height = (int(v) for v in glGetIntegerv(GL_VIEWPORT))
+        self._viewport = (x, y, width, height)
         self._ensure()
         assert self._fbo is not None and self._depth is not None
         glBindFramebuffer(GL_FRAMEBUFFER, self._fbo)

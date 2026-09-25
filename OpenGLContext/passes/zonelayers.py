@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import (Any, Callable, Dict, Hashable, Iterable, List, Optional,
-                    Sequence, Tuple)
+from typing import (Any, Callable, Dict, FrozenSet, Hashable, Iterable, List,
+                    Mapping, Optional, Sequence, Set, Tuple)
 
 import numpy as np
 
@@ -119,6 +119,7 @@ class ZoneTable:
 
     def __init__(self, placed: Sequence[PlacedZone]) -> None:
         self.placed = list(placed)
+        self._ids = [id(zone) for zone in self.placed]
         count = len(self.placed)
         self.to_local = np.zeros((count, 4, 4), dtype='d')
         self.reach = np.zeros((count, 3), dtype='d')
@@ -282,8 +283,6 @@ class ZoneTable:
     def nearness(self, point: Any) -> Dict[int, float]:
         """Every zone's signed distance from ``point``, by ``id``, in one pass."""
         found = self.signed_distances(np.asarray(point, dtype='d')[:3])[0]
-        if '_ids' not in self.__dict__:
-            self._ids = [id(zone) for zone in self.placed]
         return dict(zip(self._ids, found.tolist(), strict=True))
 
     def distances(self, point: Any) -> Dict[int, float]:
@@ -454,7 +453,7 @@ def controlled_lights(placed: Iterable[PlacedZone]) -> Dict[int, List[PlacedZone
 
 
 def light_decision(placed: Sequence[PlacedZone], minimum: Any, maximum: Any
-                   ) -> Tuple[frozenset, bool]:
+                   ) -> Tuple[FrozenSet[int], bool]:
     """Which lights the zones switch on for an object, and whether they darken it.
 
     The first is the ``id`` of every light a zone reaching the object names,
@@ -470,7 +469,7 @@ def light_decision(placed: Sequence[PlacedZone], minimum: Any, maximum: Any
         where = zone.shape.classify(minimum, maximum, zone.blend)
         if where != zones.OUTSIDE:
             reaching.append((zone, where == zones.INSIDE))
-    on: set = set()
+    on: Set[int] = set()
     dark = False
     for zone, inside in stacked(reaching):
         setting = zone.setting(LIGHTS)
@@ -481,8 +480,8 @@ def light_decision(placed: Sequence[PlacedZone], minimum: Any, maximum: Any
     return frozenset(on), dark
 
 
-def light_mask(decision: Tuple[frozenset, bool], slots: Sequence[Any],
-               controlled: Dict[int, List[PlacedZone]]) -> int:
+def light_mask(decision: Tuple[FrozenSet[int], bool], slots: Sequence[Any],
+               controlled: Mapping[int, List[PlacedZone]]) -> int:
     """The ``lightsOff`` mask from :func:`light_decision`, for the lights in ``slots``."""
     on, dark = decision
     mask = 0
@@ -497,7 +496,7 @@ def light_mask(decision: Tuple[frozenset, bool], slots: Sequence[Any],
 
 
 def lights_off(placed: Sequence[PlacedZone], minimum: Any, maximum: Any,
-               slots: Sequence[Any], controlled: Dict[int, List[PlacedZone]]) -> int:
+               slots: Sequence[Any], controlled: Mapping[int, List[PlacedZone]]) -> int:
     """The ``lightsOff`` mask for an object: one bit per light slot that does not light it.
 
     ``slots`` is the light node bound to each slot, in slot order. A light a
