@@ -506,7 +506,9 @@ view and handles clicks on them:
 In each view it draws:
 
 - the view's name on a button with a caret, which opens the view's menu;
-- an axis triad that turns with the camera;
+- an axis triad that turns with the camera, in a view that has a camera of
+  its own. ``MultiViewMixin``'s perspective view draws through the window's
+  own camera and has no triad;
 - a button that shows the view on its own or restores the arrangement. It
   shows an outline when it will show the view alone and four tiles when it
   will restore. An arrangement of one view has no such button.
@@ -564,8 +566,8 @@ inside it, so a view's name is not drawn under a menu bar or behind a tool
 palette.
 
 ``axis_directions(view)`` returns the screen direction of each world axis in
-a view, as unit vectors in the view's own pixels. The axis triad is drawn
-from it.
+a view, as unit vectors in the view's own pixels, or None for a view with no
+camera. The axis triad is drawn from it.
 
 .. _scene-cameras:
 
