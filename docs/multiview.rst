@@ -240,7 +240,14 @@ The context assigns each event to a view and records that view as
   pressed again. ``layout.release_all()`` ends it from code.
 - A wheel notch belongs to the view under the pointer, and does not change
   the active view.
-- A key belongs to the active view.
+- A key belongs to the active view: ``event.view`` names it, for an
+  application's own key handling. The window's keyboard navigation (its
+  movement modes and the arrow keys) moves the window's own camera, which is
+  what a view with no camera of its own draws through, whichever view is
+  active; a view with a camera of its own is moved by the pointer.
+- An examine drag or a wheel notch through the window's own camera, in a view
+  that is one tile of several, is measured against that tile rather than the
+  whole window.
 
 A pick is resolved through the camera of the event's view.
 ``event.unproject()`` returns the world point under the pointer in that view,

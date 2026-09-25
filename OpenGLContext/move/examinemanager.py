@@ -33,6 +33,22 @@ DOLLY_STEP = 0.8
 NEAR_PLANE_MARGIN = 2.0
 
 
+def gestureArea(context: Any, event: Any) -> Tuple[int, int]:
+    """``(width, height)`` a drag that began with ``event`` is measured against.
+
+    The tile of the view the event was routed to, where the window shows
+    several (:mod:`OpenGLContext.multiview`); otherwise the whole window. A
+    drag across a quarter of the window then turns as far as one across a
+    window that size.
+    """
+    view = getattr(event, 'view', None)
+    if view is not None and getattr(view, 'visible', False):
+        width, height = view.size
+        return int(width), int(height)
+    width, height = context.getViewPort()
+    return int(width), int(height)
+
+
 def orbitFor(platform: Any, centre: Any, event: Any,
              width: float, height: float, **named: Any) -> orbit.TurntableOrbit:
     """Build a :class:`~OpenGLContext.move.orbit.TurntableOrbit` for a platform
@@ -80,7 +96,7 @@ class ExamineManager (eventmanager.EventManager):
         self.client = context
         self.gesture = gesture
         eventmanager.EventManager.__init__ (self)
-        width, height = self.client.getViewPort()
+        width, height = gestureArea(self.client, event)
         self.button = event.button
         self.OnBuildOrbit( platform, center, event, width, height )
         self.OnBind()

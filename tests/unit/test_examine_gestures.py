@@ -389,3 +389,34 @@ class TestTheOrientationSurvivesAsAQuaternion:
         _context, platform, made = _started()
         made.ProcessEvent(_Move((500, 300)))
         assert isinstance(platform.quaternion, quaternion.Quaternion)
+
+
+class TestInATileOfSeveralViews:
+    """A drag in a quarter of the window is measured against that quarter."""
+
+    def _tile(self):
+        from OpenGLContext.multiview.views import View
+        view = View(name='perspective')
+        view.rect = (400, 0, 400, 300)
+        return view
+
+    def _turned(self, context, start, end, view=None):
+        platform = _platform()
+        press = _Button(point=start)
+        press.view = view
+        made = examinemanager.ExamineManager(
+            context, platform, context.examineCenter(None), press)
+        made.ProcessEvent(_Move(end))
+        return np.asarray(platform.position, 'd')[:3]
+
+    def test_a_drag_across_the_tile_turns_as_one_across_a_window_that_size(self):
+        tiled = self._turned(_Context(size=(800, 600)), (600, 150), (600, 250),
+                             view=self._tile())
+        alone = self._turned(_Context(size=(400, 300)), (200, 150), (200, 250))
+        assert tiled == pytest.approx(alone)
+
+    def test_an_event_with_no_view_is_measured_against_the_window(self):
+        whole = self._turned(_Context(size=(800, 600)), (400, 300), (400, 400))
+        noted = self._turned(_Context(size=(800, 600)), (400, 300), (400, 400),
+                             view=None)
+        assert whole == pytest.approx(noted)

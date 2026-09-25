@@ -22,9 +22,9 @@ left, as ``glViewport`` and an event's pick point count them.
 The layout also routes the pointer. :meth:`ViewLayout.route` names the view an
 event belongs to: the one under the pointer, except while a button is held,
 when every event goes to the view the press began in, so a drag that leaves its
-tile keeps talking to it. A press makes its view the *active* one, which is
-where keyboard input goes and which camera the directional shadow cascades are
-fitted to.
+tile keeps talking to it. A press makes its view the *active* one: a key
+event is routed to it, and the directional shadow cascades are fitted to its
+camera.
 """
 from __future__ import annotations
 

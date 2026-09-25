@@ -110,7 +110,7 @@ class MovementManager(object):
         """
         from OpenGLContext.move import examinemanager
 
-        width, height = self.context.getViewPort()
+        width, height = examinemanager.gestureArea(self.context, event)
         gesture = examinemanager.orbitFor(
             self.platform, self.context.examineCenter(event), event,
             width, height,
