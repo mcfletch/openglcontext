@@ -309,8 +309,8 @@ class TestBuiltInProviders:
 
     def test_the_physics_provider_counts_bodies_and_contacts(self):
         class World:
-            bodies = [object(), object()]
-            contacts = [object()]
+            bodies = (object(), object())
+            contacts = (object(),)
 
         rows = dict(physics_provider(lambda: World())())
         assert rows['bodies'] == 2

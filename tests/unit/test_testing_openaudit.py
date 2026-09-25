@@ -12,7 +12,7 @@ from OpenGLContext.testing.openaudit import OpenAudit
 def _module(name, source):
     """Functions defined as if in the module ``name``."""
     space = {'__name__': name}
-    exec(textwrap.dedent(source), space)
+    exec(textwrap.dedent(source), space)  # noqa: S102 the audit names an open by its caller's module __name__, so the test needs functions whose globals carry a checked module's name
     return space
 
 

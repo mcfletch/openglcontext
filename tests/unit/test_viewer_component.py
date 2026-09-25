@@ -194,7 +194,7 @@ class TestTheMixinsComposeCleanly:
     """
 
     #: Names the viewing component deliberately overrides, and why.
-    DELIBERATE = {
+    DELIBERATE = frozenset({
         'OnInit', 'OnIdle', 'OnShutdown', 'presentFrame',    # the frame
         'setupCallbacks',
         'getNavigationPlatform',        # walking drives the avatar, not the camera
@@ -209,7 +209,7 @@ class TestTheMixinsComposeCleanly:
         # may be capturing and recording at once, and the frames either still
         # wants are frames an offscreen loop has to draw.
         'wantsMoreFrames',
-    }
+    })
 
     def _declared(self, klass):
         return {name for name in vars(klass) if not name.startswith('__')}

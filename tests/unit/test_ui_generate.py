@@ -1,5 +1,7 @@
 """A settings page built from a node's fields, with no per-setting code."""
 
+from typing import Any, ClassVar
+
 import pytest
 from vrml import field, node
 
@@ -34,7 +36,7 @@ class Tunable(node.Node):
     child = field.newField('child', 'SFNode', 1, node.NULL)
     secret = field.newField('secret', 'SFBool', 1, False)
 
-    UI_HINTS = {
+    UI_HINTS: ClassVar[dict[str, dict[str, Any]]] = {
         'lightCount': {'label': 'Lights', 'minimum': 0, 'maximum': 8, 'step': 1},
         'exposure': {'minimum': 0.0, 'maximum': 2.0, 'step': 0.1},
         'quality': {'options': ('low', 'high'), 'optionLabels': ('Low', 'High')},
@@ -45,7 +47,7 @@ class Tunable(node.Node):
 
 class Refined(Tunable):
     PROTO = 'UITestRefined'
-    UI_HINTS = {'exposure': {'label': 'Brightness'}}
+    UI_HINTS: ClassVar[dict[str, dict[str, Any]]] = {'exposure': {'label': 'Brightness'}}
 
 
 @pytest.fixture

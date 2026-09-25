@@ -115,8 +115,8 @@ def test_dispose_mesh_gpu_swallows_release_and_delete_errors():
     class _GPU:
         idx_vbo = _BadVBO('index')
         _instance_vbo = None
-        attr_layout = [(_BadVBO('attribute'), 2, 3)]
-        dyn = {}
+        attr_layout = ((_BadVBO('attribute'), 2, 3),)
+        dyn = types.MappingProxyType({})
 
         def release(self):
             attempted.append('vao')
