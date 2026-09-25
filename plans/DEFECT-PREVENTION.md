@@ -1,6 +1,6 @@
 # Defect prevention: gates for the defect classes the reviews keep finding
 
-Status: Planned (2026-09-25). Nothing below is built yet.
+Status: In progress. Item 1 of the order of work is done (see [Baseline, ruff rules](#baseline-ruff-rules)).
 
 ## Why
 
@@ -388,6 +388,71 @@ done:
 Each step lands with its tests, its documentation (a page in
 `openglcontext/docs/` for the checks and types, since users run them too) and
 its preflight declaration.
+
+## Baseline, ruff rules
+
+Item 1 of the order of work landed on 2026-09-25: PGH003, PGH004, PLE0604 and
+PLE0605 are in every project's ruff selection. The only hit was one blanket
+`type: ignore` in a glisteel test, now naming `method-assign` and why. F822 is
+part of the F family every project already selects. Under `--preview` it also
+reports the two names `OpenGLContext/viewer/__init__.py` serves through its
+module `__getattr__`; the stable rule does not, and the preview rule is not
+used. The workspace root and the two `accelerate` directories declare no ruff
+table and are not linted.
+
+Hit counts for the plan's other ruff rules on 2026-09-25, each rule measured
+alone over the project's lint paths with its own configuration (RUF100 against
+the project's own selection, since which `noqa` is unused depends on what is
+selected). The openglcontext row covers `tests/`, `scripts/` and `docbuild/`
+as well as the package, so it is larger than the package-only figures in
+[Tooling](#tooling-measured-on-this-tree).
+
+| Project | RUF100 | RUF012 | S110 | S112 | E722 | BLE001 | TRY400 | PLC0415 | SLF001 | ARG | DTZ | S102 | S202 | S301 | S307 | S310 | UP006 | UP007 | UP035 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| pyopengl-glut-binaries | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| pyopengl | 244 | 60 | 11 | 6 | 0 | 68 | 6 | 2136 | 354 | 393 | 3 | 2 | 0 | 6 | 1 | 0 | 14 | 0 | 11 |
+| simpleparse | 0 | 4 | 0 | 0 | 0 | 6 | 0 | 6 | 14 | 44 | 0 | 1 | 0 | 0 | 1 | 0 | 16 | 4 | 0 |
+| pydispatcher | 0 | 0 | 5 | 0 | 0 | 10 | 0 | 4 | 10 | 16 | 0 | 0 | 0 | 0 | 0 | 0 | 20 | 0 | 9 |
+| pyvrml97 | 0 | 3 | 3 | 0 | 0 | 6 | 0 | 48 | 11 | 55 | 0 | 0 | 0 | 0 | 0 | 0 | 27 | 0 | 17 |
+| ttfquery | 0 | 2 | 0 | 1 | 0 | 3 | 0 | 7 | 3 | 0 | 0 | 0 | 0 | 1 | 1 | 0 | 6 | 0 | 4 |
+| opengl_extrusions | 0 | 0 | 0 | 0 | 0 | 2 | 0 | 18 | 56 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| opengl_decimate | 0 | 0 | 0 | 0 | 0 | 3 | 0 | 33 | 16 | 0 | 0 | 0 | 0 | 0 | 0 | 2 | 0 | 0 | 0 |
+| omi_physics | 0 | 0 | 1 | 0 | 0 | 7 | 2 | 48 | 93 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| omi_audio | 4 | 8 | 0 | 0 | 0 | 1 | 0 | 18 | 24 | 53 | 0 | 0 | 0 | 0 | 0 | 1 | 0 | 0 | 0 |
+| pyopengl-video | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 114 | 18 | 111 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| openglcontext | 254 | 127 | 80 | 3 | 0 | 278 | 30 | 2806 | 1920 | 2442 | 8 | 1 | 1 | 0 | 2 | 8 | 2262 | 54 | 782 |
+| openglcontext-qt | 4 | 0 | 0 | 0 | 0 | 0 | 0 | 14 | 10 | 18 | 0 | 0 | 0 | 0 | 0 | 0 | 8 | 0 | 5 |
+| openglcontext-editor | 3 | 6 | 0 | 0 | 0 | 0 | 0 | 315 | 36 | 100 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| openglcontext-forest-demo | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 27 | 3 | 18 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| openglcontext-marble-demo | 0 | 2 | 0 | 0 | 0 | 0 | 0 | 82 | 61 | 39 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| openglcontext-marble-editor | 19 | 0 | 0 | 0 | 0 | 0 | 0 | 25 | 2 | 27 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| glisteel | 23 | 0 | 0 | 0 | 0 | 0 | 0 | 304 | 128 | 43 | 1 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| glisteel-editor | 21 | 0 | 0 | 0 | 0 | 0 | 0 | 89 | 9 | 36 | 2 | 0 | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| twig-bb | 69 | 9 | 1 | 1 | 0 | 7 | 0 | 302 | 146 | 238 | 0 | 0 | 0 | 0 | 0 | 0 | 412 | 2 | 152 |
+
+A project joins a rule the day its count is 0. Rules each project is clean of
+today, so could select now:
+
+- pyopengl-glut-binaries: all of them
+- pyopengl: E722, S202, S310, UP007
+- simpleparse: RUF100, S110, S112, E722, TRY400, DTZ, S202, S301, S310, UP035
+- pydispatcher: RUF100, RUF012, S112, E722, TRY400, DTZ, S102, S202, S301, S307, S310, UP007
+- pyvrml97: RUF100, S112, E722, TRY400, DTZ, S102, S202, S301, S307, S310, UP007
+- ttfquery: RUF100, S110, E722, TRY400, ARG, DTZ, S102, S202, S310, UP007
+- opengl_extrusions: RUF100, RUF012, S110, S112, E722, TRY400, ARG, DTZ, S102, S202, S301, S307, S310, UP006, UP007, UP035
+- opengl_decimate: RUF100, RUF012, S110, S112, E722, TRY400, ARG, DTZ, S102, S202, S301, S307, UP006, UP007, UP035
+- omi_physics: RUF100, RUF012, S112, E722, ARG, DTZ, S102, S202, S301, S307, S310, UP006, UP007, UP035
+- omi_audio: S110, S112, E722, TRY400, DTZ, S102, S202, S301, S307, UP006, UP007, UP035
+- pyopengl-video: RUF012, S110, S112, E722, BLE001, TRY400, DTZ, S102, S202, S301, S307, S310, UP006, UP007, UP035
+- openglcontext: E722, S301
+- openglcontext-qt: RUF012, S110, S112, E722, BLE001, TRY400, DTZ, S102, S202, S301, S307, S310, UP007
+- openglcontext-editor: S110, S112, E722, BLE001, TRY400, DTZ, S102, S202, S301, S307, S310, UP006, UP007, UP035
+- openglcontext-forest-demo: RUF100, RUF012, S110, S112, E722, BLE001, TRY400, DTZ, S102, S202, S301, S307, S310, UP006, UP007, UP035
+- openglcontext-marble-demo: RUF100, S110, S112, E722, BLE001, TRY400, DTZ, S102, S202, S301, S307, S310, UP006, UP007, UP035
+- openglcontext-marble-editor: RUF012, S110, S112, E722, BLE001, TRY400, DTZ, S102, S202, S301, S307, S310, UP006, UP007, UP035
+- glisteel: RUF012, S110, S112, E722, BLE001, TRY400, S102, S202, S301, S307, S310, UP006, UP007, UP035
+- glisteel-editor: RUF012, S110, S112, E722, BLE001, TRY400, S102, S202, S301, S307, S310, UP006, UP007, UP035
+- twig-bb: E722, TRY400, DTZ, S102, S202, S301, S307, S310
 
 ## Questions for the maintainer
 
