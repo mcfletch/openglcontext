@@ -368,3 +368,10 @@ def check_scaling(request: Any) -> Callable[..., Any]:
                         % (request.node.nodeid,))
         return scaling.check_scaling(*args, **named)
     return check
+
+
+@pytest.fixture
+def check_failing_layer() -> Callable[..., Any]:
+    """:func:`OpenGLContext.testing.layers.check_failing_layer`."""
+    from OpenGLContext.testing.layers import check_failing_layer as check
+    return check
