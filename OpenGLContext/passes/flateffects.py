@@ -22,6 +22,7 @@ from OpenGL.GL import (
 )
 
 from OpenGLContext import renderoptions
+from OpenGLContext.passes.disposal import PassResources, let_go
 from OpenGLContext.passes.layerguard import LayerGuard
 from OpenGLContext.debug.logs import getTraceback
 from OpenGLContext.scenegraph import fog as fognode
@@ -38,7 +39,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-class _FlatEffectsMixin:
+class _FlatEffectsMixin(PassResources):
     """IBL + transmission + bloom + visibility culling phases for FlatPass."""
 
     if TYPE_CHECKING:
@@ -151,6 +152,23 @@ class _FlatEffectsMixin:
     #: output is already display-referred says False and draws straight to
     #: the framebuffer.
     supports_bloom = True
+
+    def disposeResources(self) -> None:
+        """Release the reflection atlas and timer, the probe, bloom and the backdrop.
+
+        What mirrors read goes with the atlas, so the next frame plans its
+        reflections from nothing.
+        """
+        let_go(self, '_reflection_atlas')
+        let_go(self, '_reflection_timer')
+        let_go(self, '_ibl_probe')
+        let_go(self, '_bloom_pass')
+        let_go(self, '_transmission_buffer')
+        self._bloom_active = False
+        self._reflectionsOff()
+        if self._reflection_planner is not None:
+            self._reflection_planner.reset()
+        super().disposeResources()
 
     # -- image-based lighting ----------------------------------------------
     def iblPrepare(self) -> Tuple[str, Optional["IBLProbe"]]:

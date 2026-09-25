@@ -138,6 +138,10 @@ class SelectionFBO:
             glBindFramebuffer(GL_FRAMEBUFFER, 0)
             return False
 
+    def release(self) -> None:
+        """Give back the GL names; the next use allocates them again."""
+        self._cleanup()
+
     def _cleanup(self) -> None:
         """Clean up OpenGL resources."""
         if self.fbo is not None:
@@ -338,6 +342,10 @@ class SelectionBufferFBO:
             self._cleanup()
             glBindFramebuffer(GL_FRAMEBUFFER, 0)
             return False
+
+    def release(self) -> None:
+        """Give back the GL names; the next use allocates them again."""
+        self._cleanup()
 
     def _cleanup(self) -> None:
         """Clean up OpenGL resources."""

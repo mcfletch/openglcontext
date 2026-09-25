@@ -130,6 +130,8 @@ OpenGLContext/
 │   ├── flatcore.py   # Core-profile pass (GLSL)
 │   ├── flatcompat.py # Compatibility-profile pass (fixed function)
 │   ├── renderpass.py # Chooses between the two and caches the choice
+│   ├── disposal.py   # The chain that deletes a pass's GL objects on a scene
+│   │                 # swap or a context's teardown -- docs/renderpasses.rst
 │   ├── pbrpass.py    # Metallic/roughness uber-shader -- docs/ubershader.rst
 │   ├── ibl.py        # Image-based lighting probe
 │   ├── reflection.py # Planar reflections' arithmetic: which surfaces are

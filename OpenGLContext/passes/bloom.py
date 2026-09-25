@@ -18,6 +18,7 @@ it, so a bright object at the edge of one view does not glow into the next.
 """
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass
 from typing import Any, Optional, Sequence, Tuple
@@ -34,12 +35,14 @@ from OpenGL.GL import (
     glGenTextures, glBindTexture, glTexImage2D, glTexParameteri, glDeleteTextures,
     glGenRenderbuffers, glBindRenderbuffer, glRenderbufferStorage,
     glFramebufferRenderbuffer, glDeleteRenderbuffers,
-    glGenVertexArrays, glBindVertexArray,
+    glGenVertexArrays, glBindVertexArray, glDeleteVertexArrays, glDeleteProgram,
     glViewport, glClear, glClearColor, glUseProgram,
     glDrawArrays, glActiveTexture, glEnable, glDisable, glGetIntegerv,
     glGetUniformLocation, glUniform1i, glUniform1f, glUniform2f, glUniform4f,
 )
 from OpenGL.GL import shaders as GL_shaders
+
+log = logging.getLogger(__name__)
 
 
 def bloom_enabled(source: Any = None) -> bool:
@@ -355,6 +358,25 @@ class BloomPass(object):
             glUniform1i(loc, unit)
 
     # -- cleanup ----------------------------------------------------------
+    def release(self) -> None:
+        """Give back every GL object: the targets, the programs and the vertex array.
+
+        The next :meth:`begin` makes them again.
+        """
+        self._release_targets()
+        chain, self._chain = self._chain, None
+        if chain is None:
+            return
+        for program in (chain.bright, chain.blur, chain.composite):
+            try:
+                glDeleteProgram(program)
+            except Exception:
+                log.debug('deleting a bloom program failed', exc_info=True)
+        try:
+            glDeleteVertexArrays(1, [chain.vao])
+        except Exception:
+            log.debug('deleting the bloom vertex array failed', exc_info=True)
+
     def _release_targets(self) -> None:
         """Give the size-dependent objects back, whatever the driver says.
 

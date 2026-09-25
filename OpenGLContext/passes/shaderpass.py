@@ -15,7 +15,7 @@ import re
 import logging
 from math import cos, sin
 from typing import (
-    Any, Callable, Dict, FrozenSet, Iterable, List, Optional, Tuple, TYPE_CHECKING,
+    Any, Callable, Dict, FrozenSet, Iterable, List, Optional, Set, Tuple, TYPE_CHECKING,
 )
 
 from OpenGL.GL import (
@@ -557,6 +557,29 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         for name in self._PROGRAM_ATTRS:
             setattr(self, name, None)
         self._ok = False
+
+    def release(self) -> None:
+        """Delete every program this compiled, the multi-view sets included.
+
+        With the context that compiled them current. The next use compiles
+        them again.
+        """
+        from OpenGL.GL import glDeleteProgram
+        held: Set[Optional[int]] = {getattr(self, name, None) for name in self._PROGRAM_ATTRS}
+        for found in (self.__dict__.pop('_program_sets', None) or {}).values():
+            held.update((found or {}).values())
+        for program in (int(name) for name in held if name):
+            try:
+                glDeleteProgram(program)
+            except Exception:
+                log.debug('deleting program %s failed', program, exc_info=True)
+        self._clear_programs()
+        self._compiled = False
+        self.program_set, self.program_strategy = 0, ''
+        self._active_program = None
+        self._location_cache.clear()
+        self._uniform_value_cache.clear()
+        self._shadow_samplers_program = set()
 
     @staticmethod
     def _delete_shaders(*shaders: Any) -> None:

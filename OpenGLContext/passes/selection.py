@@ -25,6 +25,7 @@ import logging
 
 from OpenGLContext.passes.selectionbuffers import SelectionFBO, SelectionBufferFBO
 from OpenGLContext.passes.asyncpick import _AsyncPickMixin
+from OpenGLContext.passes.disposal import let_go
 
 if TYPE_CHECKING:
     from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
@@ -54,6 +55,12 @@ class SelectionMixin(_AsyncPickMixin):
     _selection_buffer: Optional['SelectionBufferFBO'] = None
     # Enable MRT-based selection (vs legacy per-pick rendering)
     use_mrt_selection: bool = True
+
+    def disposeResources(self) -> None:
+        """Release both selection framebuffers."""
+        let_go(self, '_selection_fbo')
+        let_go(self, '_selection_buffer')
+        super().disposeResources()
 
     def _getSelectionFBO(self) -> SelectionFBO:
         """Get or create the selection FBO for this pass instance."""

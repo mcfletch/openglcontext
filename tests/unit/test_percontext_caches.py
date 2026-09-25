@@ -94,14 +94,14 @@ class _StandInPass:
 
     A real ``FlatPass`` needs a scenegraph and a context; what is under test is
     the caching rule, so this carries only the two things that rule reads --
-    the scene it was built for, and whether its shadow maps were disposed of.
+    the scene it was built for, and whether its GL objects were disposed of.
     """
 
     def __init__(self, scene):
         self.scene = scene
         self.disposed = 0
 
-    def disposeShadowMaps(self):
+    def disposeResources(self):
         self.disposed += 1
 
 
@@ -297,7 +297,7 @@ class TestReplacingAPassLetsGoOfItsShadowMaps:
 
     def test_a_pass_that_raises_does_not_stop_the_replacement(self, gl_context):
         class Awkward(_StandInPass):
-            def disposeShadowMaps(self):
+            def disposeResources(self):
                 raise RuntimeError('the driver said no')
 
         one, two = object(), object()

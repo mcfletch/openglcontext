@@ -25,7 +25,7 @@ from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
 from OpenGL.GL import *
 from OpenGL.GL import (
     glEnable, glDisable, glDisablei, glBlendFunc, glDepthMask, glDepthFunc,
-    glClear, glClearColor, glPolygonMode, glScissor, glViewport,
+    glClear, glClearColor, glDeleteBuffers, glPolygonMode, glScissor, glViewport,
     GL_BLEND, GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_LEQUAL, GL_DEPTH_TEST,
     GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_FILL, GL_FRONT_AND_BACK,
     GL_LINE, GL_SCISSOR_TEST,
@@ -37,6 +37,7 @@ import numpy
 
 from OpenGLContext import frustum
 from OpenGLContext.passes import reflection
+from OpenGLContext.passes.disposal import let_go
 from OpenGLContext.debug.logs import getTraceback
 from OpenGLContext.passes.renderfailures import describe
 from vrml.vrml97 import nodetypes
@@ -1918,6 +1919,21 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         return groups
 
     _viewTable: Optional[int] = None
+
+    def disposeResources( self ) -> None:
+        """Release the view table and the programs, then what every mixin holds.
+
+        See :mod:`OpenGLContext.passes.disposal`.
+        """
+        table, self._viewTable = self._viewTable, None
+        if table is not None:
+            try:
+                glDeleteBuffers( 1, [table] )
+            except Exception:
+                log.debug( 'deleting the view table failed', exc_info=True )
+        let_go( self, '_shader_program_instance' )
+        self.shader_program = None
+        super().disposeResources()
 
     def uploadViewTable( self, frames: Sequence['ViewFrame'],
                          reference: 'ViewFrame', capacity: int = 0 ) -> List[Any]:

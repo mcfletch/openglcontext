@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional
 
 from OpenGLContext.passes.shadowmap import ShadowMapArray, ShadowMapCube, ShadowMapCubeArray
 from OpenGLContext.passes.shadowcaps import ShadowCapabilities
+from OpenGLContext.passes.disposal import PassResources
 
 log = logging.getLogger(__name__)
 
@@ -102,7 +103,7 @@ class _CascadeControllerMixin:
         return cur
 
 
-class _ShadowMapPoolMixin:
+class _ShadowMapPoolMixin(PassResources):
     """Lazy alloc + teardown of the shared depth array / cube-array / cube maps."""
 
     if TYPE_CHECKING:
@@ -118,6 +119,11 @@ class _ShadowMapPoolMixin:
     _shared_cube_array: Optional[ShadowMapCubeArray] = None
     _maps_cube: Optional[Dict[int, ShadowMapCube]] = None
 
+    def disposeResources(self) -> None:
+        """Release the shadow maps; see :meth:`disposeShadowMaps`."""
+        self.disposeShadowMaps()
+        super().disposeResources()
+
     def disposeShadowMaps(self) -> None:
         """Release every shadow FBO + depth texture this pass allocated.
 
@@ -126,8 +132,8 @@ class _ShadowMapPoolMixin:
         lifetime; nothing else frees them, so a context resize, a scenegraph
         swap that replaces the cached pass, or a context close would otherwise
         leak the GL objects (the pool classes have no finalizer -- deliberately,
-        so GC never touches GL). Call this from the pass/context teardown while
-        the owning context is still current. Idempotent.
+        so GC never touches GL). :meth:`disposeResources` calls this, with the
+        owning context current. Idempotent.
         """
         for pool in (self._shared_array, self._shared_cube_array):
             if pool is not None:

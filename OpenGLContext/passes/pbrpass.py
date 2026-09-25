@@ -23,7 +23,7 @@ from OpenGL.GL import (
     GL_UNIFORM_BUFFER, GL_STATIC_DRAW, GL_DYNAMIC_DRAW, GL_INVALID_INDEX,
     GL_MAX_TEXTURE_IMAGE_UNITS, GL_FALSE,
     glUseProgram, glActiveTexture, glBindTexture, glGetIntegerv,
-    glGenBuffers, glBindBuffer, glBufferData, glBindBufferBase,
+    glGenBuffers, glBindBuffer, glBufferData, glBindBufferBase, glDeleteBuffers,
     glGetUniformBlockIndex, glUniformBlockBinding, glUniformMatrix4fv,
     glUniform1iv, glUniform4fv,
 )
@@ -385,6 +385,21 @@ class PBRShaderProgram(VRML97ShaderProgram):
         self.planar_reflection_supported = False
         self._appearance_material = _APPEARANCE_UNSET
         self._appearance_tmode = None
+
+    def release(self) -> None:
+        """Delete the programs and every material's uniform buffer."""
+        buffers = [buffer for buffer, _version in self._material_ubos.values()]
+        if self._default_material_ubo is not None:
+            buffers.append(self._default_material_ubo)
+        self._material_ubos.clear()
+        self._default_material_ubo = None
+        self._appearance_material = _APPEARANCE_UNSET
+        if buffers:
+            try:
+                glDeleteBuffers(len(buffers), buffers)
+            except Exception:
+                log.debug('deleting the material buffers failed', exc_info=True)
+        super().release()
 
     def compile(self) -> bool:
         if self._compiled:
@@ -972,6 +987,18 @@ class PBRPass(flatcore.FlatPass):
     """Render pass using the PBR metallic/roughness shader."""
 
     use_shaders: bool = True
+    #: The one buffer every instanced group's material array is uploaded to.
+    _instance_material_ubo: Optional[int] = None
+
+    def disposeResources(self) -> None:
+        """Release the instanced groups' material buffer, then the rest."""
+        buffer, self._instance_material_ubo = self._instance_material_ubo, None
+        if buffer is not None:
+            try:
+                glDeleteBuffers(1, [buffer])
+            except Exception:
+                log.debug('deleting the instance material buffer failed', exc_info=True)
+        super().disposeResources()
 
     def instanceMinimum(self) -> int:
         """Smallest group worth collapsing into one instanced draw.
@@ -1112,7 +1139,7 @@ class PBRPass(flatcore.FlatPass):
         ``materials[i]`` for instance material i. Returns the buffer."""
         blocks = [pack_material_block(m) for m in materials]
         data = np.ascontiguousarray(np.concatenate(blocks), dtype=np.float32)
-        buf = getattr(self, '_instance_material_ubo', None)
+        buf = self._instance_material_ubo
         if buf is None:
             buf = int(glGenBuffers(1))
             self._instance_material_ubo = buf

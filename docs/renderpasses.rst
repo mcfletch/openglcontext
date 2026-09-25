@@ -391,6 +391,33 @@ A pass reads ``record[5]``, and these hooks take the node rather than a path:
 that needs the route rather than its end node, such as a stable pick id or a
 world transform.
 
+.. _pass-resources:
+
+A pass's GL objects
+-------------------
+
+A pass allocates what it draws with as it first needs it, and keeps it for its
+life: its shader programs, the shadow maps, the reflection atlas and its GPU
+timer, the multi-view ``ViewBlock`` buffer, the image-based lighting probe,
+the zone capture target, the bloom and transmission targets, the selection
+framebuffers and the pick readback buffers. None of these has a finalizer, so
+the garbage collector never makes a GL call.
+
+``FlatPass.disposeResources()`` deletes all of them, with the pass's context
+current. ``renderpass.cached_pass`` calls it on the pass a new scenegraph
+replaces, and the pass is disposed of the same way as its context is destroyed
+(``contextresources.context_lost``). What it deletes is made again by the next
+frame that needs it.
+
+.. rst-class:: technical
+
+Each class the pass is built from releases what it holds and calls
+``super().disposeResources()``, ending at
+``passes.disposal.PassResources``. A mixin that allocates GL objects of its own
+derives from ``PassResources`` and overrides the method the same way;
+``disposal.let_go(owner, attribute)`` releases one held object and clears the
+attribute, logging a failure rather than raising it.
+
 .. _passes:
 
 The passes package

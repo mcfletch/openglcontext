@@ -87,17 +87,19 @@ def _core_flatpass_class() -> type:
 
 
 def _dispose( pass_: Any, why: str ) -> None:
-    """Delete a pass's GPU-side shadow maps.
+    """Delete every GL object a pass holds (:mod:`~OpenGLContext.passes.disposal`).
 
     Only ever called with the pass's own context current, which is what makes
     deleting the names legitimate: an FBO name means something else in another
     context, and deleting it there takes that context's object instead.
     """
-    if hasattr( pass_, 'disposeShadowMaps' ):
-        try:
-            pass_.disposeShadowMaps()
-        except Exception as err:
-            log.debug( "shadow map disposal on %s failed: %s", why, err )
+    dispose = getattr( pass_, 'disposeResources', None )
+    if dispose is None:
+        return
+    try:
+        dispose()
+    except Exception as err:
+        log.debug( "disposing of a pass on %s failed: %s", why, err )
 
 
 def cached_pass( scene: Any, build: Callable[[], Any] ) -> Any:
@@ -118,7 +120,7 @@ def cached_pass( scene: Any, build: Callable[[], Any] ) -> Any:
         return existing
     if existing is not None:
         # Replacing this context's own pass, with this context current, so its
-        # shadow maps can go rather than be leaked.
+        # GL objects can go rather than be leaked.
         _dispose( existing, 'pass swap' )
     FLAT = _passes[key] = build()
     return FLAT
@@ -154,10 +156,10 @@ defaultRenderPasses = _defaultRenderPasses()
 def drop_pass() -> None:
     """Let go of this context's pass as the context dies.
 
-    The context is still current here, so its shadow maps can be deleted rather
-    than leaked; the pass itself goes because every other GL name it holds --
-    programs, buffers, textures -- dies with the context, and the next window
-    the driver hands the same address must not be given them to draw through.
+    The context is still current here, so the pass's GL objects are deleted
+    rather than left to the driver; the pass itself goes because the next
+    window the driver hands the same address must not be given its names to
+    draw through.
 
     Only this context's.  Another window's pass is another window's, and it is
     still drawing.

@@ -24,6 +24,7 @@ import numpy as np
 
 from OpenGLContext import renderoptions
 from OpenGLContext.passes import zonelayers
+from OpenGLContext.passes.disposal import PassResources, let_go
 from OpenGLContext.passes.zonelayers import NO_ENVIRONMENT, SCENE_PROBE, ZonePack
 from OpenGLContext.passes.zoneprobes import FACES_PER_FRAME, CaptureSchedule, CaptureTarget
 from OpenGLContext.scenegraph import zone as zonenodes
@@ -90,7 +91,7 @@ class _GroupBox:
         return self.points
 
 
-class ZonesMixin:
+class ZonesMixin(PassResources):
     """Zones for a render pass; see the module docstring."""
 
     if False:  # pragma: no cover - attributes the pass supplies
@@ -163,6 +164,11 @@ class ZonesMixin:
     #: The camera's cell for the view being drawn.
     _zoneCell: Tuple[int, ...] = ()
     _tableKeys: Tuple[int, ...] = ()
+
+    def disposeResources(self) -> None:
+        """Release the target zone probes are captured into."""
+        let_go(self, '_captureTarget')
+        super().disposeResources()
 
     # -- once a frame --------------------------------------------------------
     def placeZones(self) -> List[PlacedZone]:

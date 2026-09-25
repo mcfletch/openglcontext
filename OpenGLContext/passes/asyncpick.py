@@ -24,11 +24,12 @@ from OpenGL.GL import (
     GL_DEPTH_COMPONENT, GL_FLOAT, GL_MAP_READ_BIT, GL_PIXEL_PACK_BUFFER,
     GL_READ_FRAMEBUFFER, GL_READ_FRAMEBUFFER_BINDING, GL_RGBA, GL_STREAM_READ,
     GL_SYNC_FLUSH_COMMANDS_BIT, GL_SYNC_GPU_COMMANDS_COMPLETE, GL_UNSIGNED_BYTE,
-    glBindBuffer, glBindFramebuffer, glBufferData, glClientWaitSync, glDeleteSync,
-    glFenceSync, glGenBuffers, glGetIntegerv, glMapBufferRange, glReadBuffer,
+    glBindBuffer, glBindFramebuffer, glBufferData, glClientWaitSync, glDeleteBuffers,
+    glDeleteSync, glFenceSync, glGenBuffers, glGetIntegerv, glMapBufferRange, glReadBuffer,
     glReadPixels, glUnmapBuffer,
 )
 from OpenGLContext.arrays import frombuffer
+from OpenGLContext.passes.disposal import PassResources
 import logging
 
 if TYPE_CHECKING:
@@ -37,7 +38,7 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 
-class _AsyncPickMixin:
+class _AsyncPickMixin(PassResources):
     """Async PBO-fenced pick readback + the shared pick-event dispatch helper."""
 
     use_async_pick: bool = True
@@ -87,6 +88,28 @@ class _AsyncPickMixin:
         if frame is None:
             return self.modelView, self.projection, self.viewport
         return frame.modelView, frame.projection, frame.rect
+
+    def disposeResources(self) -> None:
+        """Delete the pooled pack buffers and the fences of picks in flight.
+
+        A pick still in flight is dropped rather than delivered: its ids
+        name paths of the scene the pass is being disposed of with.
+        """
+        batches, self._async_batches = self._async_batches or [], None
+        pool, self._pbo_free = self._pbo_free or [], None
+        buffers = [pid for pid, _capacity in pool]
+        for batch in batches:
+            buffers.extend((batch['id_pid'], batch['dz_pid']))
+            try:
+                glDeleteSync(batch['fence'])
+            except Exception:
+                log.debug('deleting a pick fence failed', exc_info=True)
+        if buffers:
+            try:
+                glDeleteBuffers(len(buffers), buffers)
+            except Exception:
+                log.debug('deleting the pick buffers failed', exc_info=True)
+        super().disposeResources()
 
     def _acquirePBO(self, nbytes: int) -> tuple[int, int]:
         """Get a pooled Pixel Pack Buffer of at least nbytes (id, capacity)."""
