@@ -29,7 +29,7 @@ no findings, 1 with findings and 2 for a configuration error or a file that
 does not parse.
 
 Results are cached per file in ``.oglc-check-cache/`` in the project root,
-keyed on the file's contents, the package version and the settings that
+keyed on the file's contents, the checker's own source and the settings that
 apply to it, so a second run parses only what changed. The directory carries
 its own ``.gitignore``.
 
