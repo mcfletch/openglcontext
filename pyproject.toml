@@ -354,6 +354,12 @@ script = [
     "docs/conf.py",
 ]
 
+[tool.openglcontext-checks.per-file-ignores]
+# A tutorial: its text is what docs/tutorials/hud_demo.rst shows, and its
+# imports carry `# noqa: E402` for a rule the project's ruff selection already
+# ignores. Tutorials are not edited for tooling.
+"tests/hud_demo.py" = ["OGC201"]
+
 # uv decides whether its cached metadata for a source tree is still current
 # from pyproject.toml, setup.py and setup.cfg alone. This project's version
 # lives in OpenGLContext/__init__.py, so name that file too: without it a
