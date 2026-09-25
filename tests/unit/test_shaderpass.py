@@ -79,11 +79,18 @@ class TestVRML97ShaderProgramNoGL(unittest.TestCase):
 
     def test_get_shader_program_singleton(self) -> None:
         """get_shader_program should return same instance"""
-        from OpenGLContext.passes.shaderpass import get_shader_program
+        from OpenGLContext.passes import shaderpass
 
-        prog1 = get_shader_program()
-        prog2 = get_shader_program()
-        self.assertIs(prog1, prog2)
+        # The programs are kept per context, and with none current this test
+        # adds an entry of its own; the next test finds the table as it was.
+        saved = dict(shaderpass._shader_programs)
+        try:
+            prog1 = shaderpass.get_shader_program()
+            prog2 = shaderpass.get_shader_program()
+            self.assertIs(prog1, prog2)
+        finally:
+            shaderpass._shader_programs.clear()
+            shaderpass._shader_programs.update(saved)
 
 
 class TestShaderRenderMode(unittest.TestCase):
