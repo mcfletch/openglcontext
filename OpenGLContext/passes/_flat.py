@@ -1668,17 +1668,19 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
                 # reflection atlas, and a view reads them as it shades.
                 self.renderReflections(frames, lighting)
                 shared: Optional[set] = None
-                if self.sharesViews( frames ):
+                try:
+                    if self.sharesViews( frames ):
+                        for frame in frames:
+                            self.applyViewFrame(frame)
+                            self._drawBackground(frame)
+                        shared = self.renderShared(frames, id_map, lighting)
                     for frame in frames:
-                        self.applyViewFrame(frame)
-                        self._drawBackground(frame)
-                    shared = self.renderShared(frames, id_map, lighting)
-                for frame in frames:
-                    joined = shared is not None and not frame.view.style.wireframe
-                    self.renderViewShader(frame, id_map, lighting,
-                                          background=shared is None,
-                                          shared=shared if joined else frozenset())
-                self.finishViews()
+                        joined = shared is not None and not frame.view.style.wireframe
+                        self.renderViewShader(frame, id_map, lighting,
+                                              background=shared is None,
+                                              shared=shared if joined else frozenset())
+                finally:
+                    self.finishViews()
 
                 try:
                     from OpenGLContext.scenegraph.pbrmesh import PBRMesh
@@ -1706,9 +1708,11 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
 
             else:
                 # Legacy fixed-function rendering path
-                for frame in frames:
-                    self.renderViewLegacy(frame)
-                self.finishViews()
+                try:
+                    for frame in frames:
+                        self.renderViewLegacy(frame)
+                finally:
+                    self.finishViews()
             self.applyViewFrame(active, gl=False)
             # The glow goes on before anything is drawn over the views, and
             # before the frame is presented, so what is on screen is finished.
@@ -2044,16 +2048,18 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         draws it whether or not it has an event to resolve.
         """
         grouped = { id( frame ): subset for frame, subset in self.eventsByView( events ) }
-        for frame in self.viewFrames:
-            subset = grouped.get( id( frame ) )
-            if subset is None and not debugSelection:
-                continue
-            self.applyViewFrame( frame )
-            if self.use_shaders:
-                self.shaderSelectRenderOptimized( mode, frame.toRender, subset or {} )
-            else:
-                self.selectRender( mode, frame.toRender, subset or {} )
-        self.finishViews()
+        try:
+            for frame in self.viewFrames:
+                subset = grouped.get( id( frame ) )
+                if subset is None and not debugSelection:
+                    continue
+                self.applyViewFrame( frame )
+                if self.use_shaders:
+                    self.shaderSelectRenderOptimized( mode, frame.toRender, subset or {} )
+                else:
+                    self.selectRender( mode, frame.toRender, subset or {} )
+        finally:
+            self.finishViews()
         if self.activeFrame is not None:
             self.applyViewFrame( self.activeFrame, gl=False )
 
@@ -2497,9 +2503,13 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
                  if id( frame ) in grouped ]
 
     def finishViews( self ) -> None:
-        """Give the whole window back once every view is drawn."""
+        """Give the whole window back once every view is drawn, or once one has failed.
+
+        The scissor test goes off whatever this frame's layout was, so a frame
+        that stopped part-way through its views leaves nothing confined to a
+        tile for the frame after it.
+        """
         self._frameGather = None
-        if self._scissorViews:
-            glDisable( GL_SCISSOR_TEST )
+        glDisable( GL_SCISSOR_TEST )
         width, height = self.context.getViewPort()
         glViewport( 0, 0, int(width), int(height) )

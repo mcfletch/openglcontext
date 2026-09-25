@@ -81,9 +81,11 @@ class FlatPass( _flat.FlatPass ):
             self.transparent = False
             self.lighting = True
             self.textured = True
-            for frame in frames:
-                self.renderViewLegacy( frame )
-            self.finishViews()
+            try:
+                for frame in frames:
+                    self.renderViewLegacy( frame )
+            finally:
+                self.finishViews()
         self.applyViewFrame( active, gl=False )
 
         # The HUD, the developer overlay and any screen that is open, drawn over

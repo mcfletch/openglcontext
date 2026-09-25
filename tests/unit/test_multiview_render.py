@@ -290,3 +290,56 @@ class TestAViewThroughTheWindowsCamera:
         rendered = render_scene(_scene(), frames=2, size=(WIDTH, HEIGHT), layout=layout)
         platform = rendered.context.getViewPlatform()
         assert platform.frustum[1] == pytest.approx(WIDTH / HEIGHT)
+
+
+class TestAViewThatRaises:
+    def test_the_next_frame_is_not_confined_to_its_tile(self, render_scene, env, monkeypatch):
+        """A view that fails part-way leaves no scissor rectangle behind it."""
+        from OpenGLContext.passes import _flat
+
+        original = _flat.FlatPass.renderViewShader
+        calls = []
+
+        def failing(self, frame, *args, **named):
+            calls.append(frame.view.name)
+            drawn = original(self, frame, *args, **named)
+            if len(calls) == 2:
+                raise RuntimeError('a view that fails')
+            return drawn
+
+        monkeypatch.setattr(_flat.FlatPass, 'renderViewShader', failing)
+        drawing = _flat.FlatPass.__call__
+
+        def surviving(self, context):
+            # What an application's loop does with a frame that raised: it
+            # reports it and draws the next one.
+            try:
+                return drawing(self, context)
+            except RuntimeError:
+                return False
+
+        monkeypatch.setattr(_flat.FlatPass, '__call__', surviving)
+
+        def layout(context):
+            drawn = []
+            green = ViewStyle(background=(0.0, 1.0, 0.0))
+
+            def arrangement(width, height):
+                drawn.append(1)
+                if len(drawn) < 2:
+                    return [(0, 0, width // 2, height), (width // 2, 0, width // 2, height),
+                            (0, 0, 0, 0)]
+                return [(0, 0, 0, 0), (0, 0, 0, 0), (0, 0, width, height)]
+
+            return ViewLayout([
+                View(_camera(-3.0), name='left', style=green),
+                View(_camera(3.0), name='right', style=green),
+                View(_camera(0.0), name='whole',
+                     style=ViewStyle(background=(1.0, 0.0, 0.0))),
+            ], arrangement=arrangement)
+
+        frames = frames_of(render_scene, _scene(), frames=3,
+                           layout=layout, size=(WIDTH, HEIGHT))
+        assert 'right' in calls
+        corner = frames[-1][2, 2].astype(int)
+        assert corner[0] > 200 and corner[1] < 30, corner
