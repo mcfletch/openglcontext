@@ -10,7 +10,7 @@ import pytest
 from OpenGLContext.multiview.strategy import ViewFrame
 from OpenGLContext.multiview.views import View
 from OpenGLContext.passes import reflection
-from OpenGLContext.passes.reflectionplanner import ReflectionPlanner
+from OpenGLContext.passes.reflectionplanner import ReflectedView, ReflectionPlanner, view_key
 from OpenGLContext.passes.reflectiontiles import Budget
 from OpenGLContext.scenegraph.appearance import Appearance
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
@@ -355,8 +355,8 @@ def test_a_mirror_seen_only_in_another_mirror_is_drawn_for_that_mirror():
     [outer], [inner] = _by_path(plan, front), _by_path(plan, back)
     assert inner.frame.view is outer.view
     assert (outer.depth, inner.depth) == (1, 2)
-    assert plan.lookups[(id(outer.view), id(back[4]))] is not None
-    assert (id(outer.view), id(front[4])) not in plan.lookups
+    assert plan.lookups[(view_key(outer.view), id(back[4]))] is not None
+    assert (view_key(outer.view), id(front[4])) not in plan.lookups
 
 
 def test_mirrors_are_looked_for_in_a_mirrors_view_and_no_deeper():
@@ -419,7 +419,7 @@ def test_a_view_drawn_without_a_mirrors_reflection_is_drawn_again_once_it_has_on
 
     first = plan(one)
     [outer] = first.draws
-    inner_key = (id(outer.view), id(back[4]))
+    inner_key = (view_key(outer.view), id(back[4]))
     planner.drawn_without(outer.key, [inner_key])
     second = plan(one)
     assert [draw.key for draw in second.draws] == [inner_key]
@@ -491,8 +491,22 @@ def test_a_view_waiting_on_a_group_is_drawn_again_when_any_of_it_arrives():
     one = Budget(views=1, separate_views=1, texels=10 ** 9)
     first = planner.plan([_frame([front])], ATLAS, one, inside=lambda frame: back)
     [outer] = first.draws
-    member = (id(outer.view), id(back[1][4]))
+    member = (view_key(outer.view), id(back[1][4]))
     planner.drawn_without(outer.key, [member])
     planner.plan([_frame([front])], ATLAS, one, inside=lambda frame: back)
     third = planner.plan([_frame([front])], ATLAS, NOTHING, inside=lambda frame: back)
     assert not {c.key: c for c in third.candidates}[outer.key].valid
+
+
+def test_a_mirror_view_is_never_keyed_as_one_that_came_before_it():
+    """A mirror's view is made as it comes into view and dropped as it leaves;
+    one made later must not read the reflections kept for one dropped, which
+    an address reused for the new object would hand it."""
+
+    keys = set()
+    for index in range(200):
+        view = ReflectedView(VIEW, index, np.zeros(3))
+        keys.add(view_key(view))
+        del view
+    assert len(keys) == 200
+    assert view_key(VIEW) == view_key(VIEW)

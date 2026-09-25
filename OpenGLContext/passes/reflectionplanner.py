@@ -20,6 +20,7 @@ The pass that draws the plan is
 """
 from __future__ import annotations
 
+import itertools
 from dataclasses import dataclass, field
 from typing import (
     Any, Callable, Dict, FrozenSet, Hashable, Iterable, List, Mapping, NamedTuple,
@@ -36,7 +37,7 @@ from OpenGLContext.passes.reflectiontiles import (
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 
 __all__ = ['ROUGH', 'SETTLE_FRAMES', 'Lookup', 'MirrorDraw', 'ReflectedView',
-           'ReflectionPlan', 'ReflectionPlanner']
+           'ReflectionPlan', 'ReflectionPlanner', 'key_for', 'view_key']
 
 #: Above this roughness a reflector reads blurred mip levels of its tile.
 ROUGH = 0.05
@@ -72,6 +73,9 @@ class Lookup(NamedTuple):
     reflectance: float = 1.0
 
 
+_SERIALS = itertools.count(1)
+
+
 class ReflectedView:
     """A view of the scene through one mirror, from one view of it.
 
@@ -86,6 +90,10 @@ class ReflectedView:
         self.source = source
         self.key = key
         self.viewer = viewer
+        #: What reflections seen in it are keyed by, never reused: a view made
+        #: later can be given a dropped one's address, and would then read the
+        #: reflections kept for it.
+        self.serial = next(_SERIALS)
 
     @property
     def depth(self) -> int:
@@ -159,9 +167,18 @@ class ReflectionPlan:
         return self.aliases.get(key, key)
 
 
-def key_for(frame: Any, record: Any) -> Tuple[int, int]:
+def view_key(view: Any) -> Hashable:
+    """What the mirrors seen in ``view`` are keyed by.
+
+    A mirror's own view is short-lived, so it is keyed by a serial number no
+    later view shares; the views of a context live as long as it does.
+    """
+    return ('reflected', view.serial) if isinstance(view, ReflectedView) else id(view)
+
+
+def key_for(frame: Any, record: Any) -> Tuple[Hashable, int]:
     """The key one mirror in one view is held by."""
-    return id(frame.view), id(record[4])
+    return view_key(frame.view), id(record[4])
 
 
 @dataclass

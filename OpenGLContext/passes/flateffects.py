@@ -490,6 +490,7 @@ class _FlatEffectsMixin:
         """
         from OpenGLContext.multiview.strategy import ViewFrame
         from OpenGLContext.passes.reflection import fov, is_reflector
+        from OpenGLContext.passes.reflectionplanner import view_key
         mirrors = []
         self._incompleteMirrors = set()
         earlier = self._previous_lookups
@@ -511,7 +512,7 @@ class _FlatEffectsMixin:
                 if is_reflector(record):
                     if id(record[4]) in own:
                         continue
-                    key = (id(frame.view), id(record[4]))
+                    key = (view_key(frame.view), id(record[4]))
                     # A mirror sharing its plane's reflection is drawn under
                     # its group's key.
                     group = canonical(key)
@@ -618,15 +619,15 @@ class _FlatEffectsMixin:
         a little way off, where the probe would read as a flash. Every other
         shape reads none, and a run of them sets nothing.
         """
-        from OpenGLContext.passes.reflectionplanner import ReflectedView
+        from OpenGLContext.passes.reflectionplanner import ReflectedView, view_key
         lookups = self._reflection_lookups
         lookup = None
         if lookups:
             view, path = self.view, id(record[4])
-            lookup = lookups.get((id(view), path))
+            lookup = lookups.get((view_key(view), path))
             while lookup is None and isinstance(view, ReflectedView):
                 view = view.source
-                lookup = lookups.get((id(view), path))
+                lookup = lookups.get((view_key(view), path))
         if lookup is self._reflection_applied:
             return
         apply = getattr(shader, 'set_planar_reflection', None)
