@@ -596,6 +596,7 @@ class _SceneBuilder:
         # its scene and its zones to name.
         self.image_lights = imagebased.read_lights(g, resolver)
         self.emitter_nodes: dict = {}
+        self._emitter_index: Optional[dict] = None
         self._zone_placed: list = []
 
     def mesh_shapes(self, mesh_index: int,
@@ -701,10 +702,11 @@ class _SceneBuilder:
                     self.g, gi_ext, self.resolver)
         lod_ids = lodext.level_ids(
             node_ext.get(lodext.EXTENSION) if isinstance(node_ext, dict) else None,
-            self.values)
+            self.values, own=node_index)
         if lod_ids and node.mesh is not None and node_visible and placements is None:
-            children.append(self._lod_node(node, lod_ids, world, ancestry,
-                                           node_visible, group, node_casts))
+            children.append(self._lod_node(node, node_index, lod_ids, world,
+                                           ancestry, node_visible, group,
+                                           node_casts))
         elif node.mesh is not None and node_visible:
             shapes = self.mesh_shapes(node.mesh, world, node_casts)
             if placements is not None:
@@ -797,9 +799,10 @@ class _SceneBuilder:
             placements=placements,
         )
 
-    def _lod_node(self, node: Any, ids: list, world: np.ndarray,
-                  ancestry: Tuple[int, ...], node_visible: bool,
-                  carrier: Any = None, node_casts: bool = True) -> Any:
+    def _lod_node(self, node: Any, node_index: int, ids: list,
+                  world: np.ndarray, ancestry: Tuple[int, ...],
+                  node_visible: bool, carrier: Any = None,
+                  node_casts: bool = True) -> Any:
         """One switching node for a node that carries ``MSFT_lod``.
 
         The node's own mesh is the finest level and the nodes ``ids`` names are
@@ -813,6 +816,9 @@ class _SceneBuilder:
         applied a second time on top of it. An alternative that asks to be
         somewhere else is drawn here and said so, because the extension offers
         another *version* of a node rather than another place for it.
+
+        The finest level is the node's own mesh, so the node's morph weights
+        and skin drive it as they would without the extension.
         """
         # Asked for once: a mesh the cache does not hold is decoded, and its
         # hooks run, on every call.
@@ -820,7 +826,10 @@ class _SceneBuilder:
         levels: list = [Transform(children=[shape for shape, _bounds in finest])]
         for shape, bounds in finest:
             self._record_part(world, shape, bounds)
-        for index in ids:
+        _register_morph(node, node_index, finest, self.g, self.node_morph)
+        _register_skin(node, node_index, finest, self.g, self.resolver, self.skins)
+        kept = [0]
+        for position, index in enumerate(ids, start=1):
             if not 0 <= index < len(self.g.nodes or []):
                 log.warning(
                     'MSFT_lod names node %d as a coarser level, which this file '
@@ -833,11 +842,13 @@ class _SceneBuilder:
                                          replacing=True, parent_casts=node_casts))
             finally:
                 self._coarser_levels -= 1
+            kept.append(position)
         measured = lodext.mesh_bounds(self.g, node.mesh)
         centre, radius = measured if measured else ((0.0, 0.0, 0.0), 0.0)
         return ScreenCoverageLOD(
             level=levels,
-            screenCoverage=lodext.screen_coverage(node, len(levels), self.values),
+            screenCoverage=lodext.screen_coverage(node, len(ids) + 1,
+                                                  self.values, kept=kept),
             center=centre,
             radius=radius,
         )
@@ -859,11 +870,9 @@ class _SceneBuilder:
         if np.allclose(alternative, _local_matrix_rv(carrier), atol=1e-6):
             return
         log.warning(
-            'MSFT_lod: node %d is a coarser level of %r and places itself '
-            'somewhere else; it is drawn where %r is, which is what the '
-            'extension offers alternatives for',
-            index, getattr(node, 'name', None) or '<unnamed>',
-            getattr(node, 'name', None) or '<unnamed>')
+            'MSFT_lod: node %d, a coarser level of %r, has a placement of its '
+            'own; it is drawn at the placement of the node it is a level of',
+            index, getattr(node, 'name', None) or '<unnamed>')
 
     @property
     def audio_library(self) -> AudioLibrary:
@@ -930,10 +939,16 @@ class _SceneBuilder:
 
     def _index_emitters(self, emitters: list, built: list) -> None:
         """Note which emitter index each built node plays, for the zones."""
+        if self._emitter_index is None:
+            # Each entry holds its emitter, so the id it is keyed on is that
+            # object's for as long as the entry is here.
+            self._emitter_index = {
+                id(declared): (declared, index)
+                for index, declared in enumerate(self.audio_document.emitters)}
         for emitter, node in zip(emitters, built):
-            for index, declared in enumerate(self.audio_document.emitters):
-                if declared is emitter:
-                    self.emitter_nodes.setdefault(index, []).append(node)
+            found = self._emitter_index.get(id(emitter))
+            if found is not None and found[0] is emitter:
+                self.emitter_nodes.setdefault(found[1], []).append(node)
 
     def _image_light(self, index: int) -> Any:
         """The ``EXT_lights_image_based`` light at ``index``, or None."""

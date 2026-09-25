@@ -158,6 +158,13 @@ def declared_bounds(acc: Any) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         corner = np.array([bounded(value, math.nan) for value in declared[:3]], 'd')
         if not np.all(np.isfinite(corner)):
             return None
+        if getattr(acc, 'normalized', False) and \
+                getattr(acc, 'componentType', None) in _COMPONENT_DTYPE and \
+                acc.componentType != _COMPONENT_FLOAT:
+            # KHR_mesh_quantization: min/max are in the accessor's integers,
+            # and the vertices are read normalized.
+            corner = _normalize_array(
+                corner.astype(_COMPONENT_DTYPE[acc.componentType])).astype('d')
         corners.append(corner)
     return corners[0], corners[1]
 

@@ -63,18 +63,21 @@ def alternative_ids(g: "pygltflib.GLTF2",
     """
     values = values if values is not None else DocumentValues(logger=log)
     found: set = set()
-    for node in (g.nodes or []):
+    for index, node in enumerate(g.nodes or []):
         extensions = getattr(node, 'extensions', None) or {}
         if isinstance(extensions, dict):
-            found.update(level_ids(extensions.get(EXTENSION), values))
+            found.update(level_ids(extensions.get(EXTENSION), values, own=index))
     return found
 
 
-def level_ids(extension: Any, values: Optional[DocumentValues] = None) -> list:
+def level_ids(extension: Any, values: Optional[DocumentValues] = None,
+              own: Optional[int] = None) -> list:
     """The coarser levels an ``MSFT_lod`` object names, in decreasing detail.
 
     An extension that is no object names none, and an id that is no node
-    index is reported and passed over.
+    index is reported and passed over. So is ``own``, the index of the node
+    carrying the extension: a node is not a coarser level of itself, and
+    counting it as one would take it out of the scene.
     """
     if extension is None:
         return []
@@ -95,21 +98,33 @@ def level_ids(extension: Any, values: Optional[DocumentValues] = None) -> list:
             values.warn('%s id %r is not a node index; that level is left out'
                         % (EXTENSION, raw))
             continue
+        if index == own:
+            values.warn('%s on node %d names the node itself as a coarser '
+                        'level; that id is left out' % (EXTENSION, own))
+            continue
         found.append(index)
     return found
 
 
 def screen_coverage(node: Any, levels: int,
-                    values: Optional[DocumentValues] = None) -> list:
-    """The coverage each of ``levels`` levels takes over at, decreasing.
+                    values: Optional[DocumentValues] = None,
+                    kept: Optional[Sequence[int]] = None) -> list:
+    """The coverage each of the levels drawn takes over at, decreasing.
+
+    ``levels`` is how many levels the file declares, the node's own and one
+    for each id. The file's figures are one per declared level, and may add
+    one more below which nothing is drawn. ``kept`` is which of the declared
+    levels were built (all of them by default): a level left out takes its
+    figure with it, so the others keep theirs.
 
     The file's own figures where it gave them. The extension calls them a hint
     and a file may leave them out, so a chain that named none is scheduled by
     halving -- ending at zero, because a level a *reader* guessed a threshold
     for must not be the reason something disappears. A figure that is no
-    finite number, or a value that is no list, is reported and the chain is
-    scheduled by halving; a negative figure is 0.
+    finite number, a value that is no list, or a list of any other length is
+    reported and the chain is scheduled by halving; a negative figure is 0.
     """
+    kept = list(range(levels)) if kept is None else list(kept)
     extras = getattr(node, 'extras', None) or {}
     stated = extras.get(COVERAGE) if isinstance(extras, dict) else None
     if stated:
@@ -117,11 +132,15 @@ def screen_coverage(node: Any, levels: int,
         # NaN stands for a figure DocumentValues reported as unusable.
         read = ([values.number(value, math.nan, COVERAGE, minimum=0.0)
                  for value in stated] if isinstance(stated, list) else [math.nan])
-        if all(math.isfinite(value) for value in read):
-            return read
-        values.warn('%s is %r, which is not a list of numbers; the levels are '
-                    'scheduled by halving' % (COVERAGE, stated))
-    return halving_coverage(levels)
+        if not all(math.isfinite(value) for value in read):
+            values.warn('%s is %r, which is not a list of numbers; the levels '
+                        'are scheduled by halving' % (COVERAGE, stated))
+        elif len(read) not in (levels, levels + 1):
+            values.warn('%s has %d figures for %d levels; the levels are '
+                        'scheduled by halving' % (COVERAGE, len(read), levels))
+        else:
+            return [read[index] for index in kept] + read[levels:]
+    return halving_coverage(len(kept))
 
 
 def halving_coverage(levels: int) -> list:

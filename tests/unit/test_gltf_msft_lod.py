@@ -347,3 +347,141 @@ class TestMalformedValues:
         node = _the_lod(scene)
         assert node.coverageRadius() == pytest.approx(np.sqrt(2.0) / 2.0)
         assert np.all(np.isfinite(scene.minimum)) and np.isfinite(scene.radius)
+
+
+class TestAnAnimatedFinestLevel:
+    """The finest level is the node's own mesh, so a morph or a skin on the
+    node drives it as it would without the extension."""
+
+    def _morphed(self):
+        document = _document(levels=2)
+        blob = base64.b64decode(document['buffers'][0]['uri'].split(',', 1)[1])
+        delta = np.array([(0, 0, 1)] * 3, dtype='<f4')
+        document['bufferViews'].append({'buffer': 0, 'byteOffset': len(blob),
+                                        'byteLength': delta.nbytes})
+        blob += delta.tobytes()
+        document['buffers'] = [{'byteLength': len(blob), 'uri': _b64(blob)}]
+        document['accessors'].append({
+            'bufferView': 2, 'componentType': 5126, 'count': 3, 'type': 'VEC3',
+            'min': [0, 0, 1], 'max': [0, 0, 1]})
+        mesh = document['meshes'][0]
+        mesh['primitives'][0]['targets'] = [{'POSITION': 2}]
+        mesh['weights'] = [1.0]
+        return document
+
+    def test_a_morph_on_the_node_drives_its_finest_level(self, tmp_path):
+        scene = _loaded(tmp_path, self._morphed())
+        node = _the_lod(scene)
+
+        assert 0 in scene.node_morph
+        positions = _shapes(node.level[0])[0].geometry.positions
+        assert positions[:, 2] == pytest.approx([1.0, 1.0, 1.0])
+
+    def test_a_skin_on_the_node_skins_its_finest_level(self, tmp_path):
+        document = _document(levels=2)
+        blob = base64.b64decode(document['buffers'][0]['uri'].split(',', 1)[1])
+        joints = np.zeros((3, 4), dtype='<u2')
+        weights = np.tile(np.array([1, 0, 0, 0], dtype='<f4'), (3, 1))
+        for data, kind in ((joints, 5123), (weights, 5126)):
+            document['bufferViews'].append({'buffer': 0, 'byteOffset': len(blob),
+                                            'byteLength': data.nbytes})
+            blob += data.tobytes()
+            document['accessors'].append({
+                'bufferView': len(document['bufferViews']) - 1,
+                'componentType': kind, 'count': 3, 'type': 'VEC4'})
+        document['buffers'] = [{'byteLength': len(blob), 'uri': _b64(blob)}]
+        document['meshes'][0]['primitives'][0]['attributes'].update(
+            {'JOINTS_0': 2, 'WEIGHTS_0': 3})
+        document['nodes'][0]['skin'] = 0
+        document['nodes'].append({'name': 'bone'})
+        document['skins'] = [{'joints': [2]}]
+        document['scenes'][0]['nodes'] = [0, 2]
+
+        scene = _loaded(tmp_path, document)
+
+        assert [skin.mesh_node for skin in scene.skins] == [0]
+
+
+class TestReconcilingTheCoverage:
+    def test_a_level_left_out_takes_its_coverage_with_it(self, tmp_path, caplog):
+        """Three thresholds for two levels would cull a level early."""
+        node = _the_lod(_loaded(tmp_path, _document(ids=[1, 99])))
+
+        assert len(node.level) == 2
+        assert list(node.screenCoverage) == pytest.approx([0.5, 0.2])
+
+    def test_a_list_of_the_wrong_length_is_reported(self, tmp_path, caplog):
+        document = _document()
+        document['nodes'][0]['extras'] = {'MSFT_screencoverage': [0.5]}
+
+        node = _the_lod(_loaded(tmp_path, document))
+
+        assert 'MSFT_screencoverage' in caplog.text
+        assert list(node.screenCoverage) == pytest.approx([0.5, 0.25, 0.0])
+
+    def test_one_more_threshold_than_levels_is_the_cull(self, tmp_path):
+        document = _document(coverage=[0.5, 0.2, 0.01, 0.001])
+
+        node = _the_lod(_loaded(tmp_path, document))
+
+        assert list(node.screenCoverage) == pytest.approx([0.5, 0.2, 0.01, 0.001])
+
+
+class TestAChainNamingItself:
+    def test_a_node_naming_itself_keeps_its_place(self, tmp_path, caplog):
+        """Its own index among the alternatives would take it out of the scene."""
+        scene = _loaded(tmp_path, _document(ids=[0, 1, 2]))
+
+        node = _the_lod(scene)
+
+        assert len(node.level) == 3
+        assert 'MSFT_lod' in caplog.text
+
+
+class TestQuantizedBounds:
+    def test_normalized_positions_are_measured_in_the_units_they_are_drawn_in(
+            self, tmp_path):
+        """KHR_mesh_quantization: a normalized accessor's min/max are integers."""
+        points = np.array([(0, 0, 0), (32767, 0, 0), (0, 32767, 0)], dtype='<i2')
+        padded = np.zeros((3, 4), dtype='<i2')
+        padded[:, :3] = points
+        blob = padded.tobytes()
+        document = {
+            'asset': {'version': '2.0'},
+            'extensionsUsed': ['MSFT_lod', 'KHR_mesh_quantization'],
+            'extensionsRequired': ['KHR_mesh_quantization'],
+            'buffers': [{'byteLength': len(blob), 'uri': _b64(blob)}],
+            'bufferViews': [{'buffer': 0, 'byteLength': len(blob),
+                             'byteStride': 8}],
+            'accessors': [{'bufferView': 0, 'componentType': 5122,
+                           'normalized': True, 'count': 3, 'type': 'VEC3',
+                           'min': [0, 0, 0], 'max': [32767, 32767, 0]}],
+            'meshes': [{'primitives': [{'attributes': {'POSITION': 0}}]}],
+            'nodes': [{'mesh': 0, 'extensions': {'MSFT_lod': {'ids': [1]}}},
+                      {'mesh': 0}],
+            'scenes': [{'nodes': [0]}],
+            'scene': 0,
+        }
+
+        scene = _loaded(tmp_path, document)
+        node = _the_lod(scene)
+
+        assert node.coverageRadius() == pytest.approx(np.sqrt(2.0) / 2.0)
+        assert scene.radius < 2.0
+
+
+class TestAnAlternativePlacedElsewhere:
+    def test_the_warning_names_the_node_once_and_says_where_it_is_drawn(
+            self, tmp_path, caplog):
+        document = _document()
+        document['nodes'][0]['name'] = 'bust'
+        document['nodes'][2]['translation'] = [5.0, 0.0, 0.0]
+
+        _loaded(tmp_path, document)
+
+        warned = [record.getMessage() for record in caplog.records
+                  if 'places itself' in record.getMessage()
+                  or 'placement of its own' in record.getMessage()]
+        assert len(warned) == 1
+        assert warned[0].count("'bust'") == 1
+        assert 'offers alternatives' not in warned[0]

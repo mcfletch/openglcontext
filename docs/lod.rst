@@ -186,10 +186,18 @@ be sized and placed without reading its geometry.
 A malformed ``MSFT_lod`` block costs the chain, not the file. An extension
 that is not an object, or ``ids`` that is not a list, leaves the node drawn at
 its finest level; an id that is no node index is logged and that level left
-out. ``MSFT_screencoverage`` that is not a list of finite numbers is logged
-and the levels are scheduled by halving, as for a file that gives none.
-Accessor bounds that are not three finite numbers are not read, and the level
-is measured from its points.
+out, and so is an id naming the node that carries the extension.
+``MSFT_screencoverage`` gives one figure for each level the file names, the
+node's own and one per id, and may add one more below which nothing is drawn.
+A level left out takes its figure with it. A list that is not finite numbers,
+or is of any other length, is logged and the levels are scheduled by halving,
+as for a file that gives none. Accessor bounds that are not three finite
+numbers are not read, and the level is measured from its points; the bounds of
+a normalized (``KHR_mesh_quantization``) accessor are normalized as its
+points are.
+
+The finest level is the node's own mesh, so the node's morph weights and skin
+drive it as they would without the extension.
 
 .. _placement:
 
