@@ -523,21 +523,22 @@ OpenGLContext:
 
 Still open:
 
-- Merge the `collision-events` branch into openglcontext's `develop`. It is
-  not merged because the main checkout holds other uncommitted and staged
-  work in the same files (`docs/audio.rst`, `docs/documentation.rst`,
-  `docs/physics.rst`). The branch also moves the `tests/reference_images`
-  gitlink to the reference repository's `bless/physics-events` branch
-  (`aeefc92`), which has to reach that repository's `main` and GitHub.
-  omi_physics, marble-demo and twig-bb have been fast-forwarded on `develop`;
-  nothing is pushed.
-- Preflight for openglcontext has to run once the branch is in `develop`.
+- The `tests/reference_images` gitlink names the reference repository's
+  `bless/physics-events` branch (`aeefc92`), which has to reach that
+  repository's `main` and GitHub. Nothing is pushed.
+- openglcontext's typecheck gate fails on the zone work (`zonepass.py`,
+  `zonelayers.py`, `zoneprobes.py`, `physics/zones.py`, `scenegraph/zone*.py`,
+  `loaders/gltf/imagebased.py`, `audio/scene.py`), which was being edited,
+  uncommitted, when this merged. Nothing in this plan's files is in it.
 
-- Defect 5, the character controller. The broadphase now pairs kinematic
-  bodies with triggers, which is half of it. The other half is the avatar's
-  proxy body: a kinematic collider would push dynamic bodies with infinite
-  mass, which is a gameplay decision, and a trigger-shaped proxy is reported
-  as a trigger itself. Wants a decision on how an avatar meets dynamic bodies.
+- Defect 5, the character controller, partly. 2026-09-25: the avatar's body
+  is a *sensor* (decided: it neither pushes nor is pushed).
+  `CharacterController(..., body=True)` and `PhysicsViewPlatform(...,
+  body=True)` carry a kinematic sensor capsule that enters triggers and whose
+  touches with dynamic bodies are reported unsolved. Still open: the
+  controller's own collisions with static geometry are not reported as
+  events, and twig-bb's separate jump-pad world can now move onto the
+  avatar's body in the map's world.
 - Phase 5, authored events.
 - The games, as far as each could go:
   - marble-demo: the controller listens to the marble's contact events and

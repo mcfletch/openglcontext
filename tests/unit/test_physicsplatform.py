@@ -241,3 +241,27 @@ def test_apply_impulse_launches_the_capsule_and_lifts_the_camera():
         plat.update(1 / 60)
     assert not plat.character.grounded
     assert plat.camera_position()[1] > before + 0.5
+
+
+def test_a_walker_with_a_body_is_heard_entering_a_trigger():
+    """The platform's body enters triggers, so a subscription on it hears a pad."""
+    from OpenGLContext.physics.manager import PhysicsManager
+    manager = PhysicsManager(world=_ground_world())
+    world = manager.world
+    world.fixed_dt = 1.0 / 60.0
+    shape = world.add_shape(model.Shape.box((1.0, 2.0, 1.0)))
+    pad = world.add_body(model.Motion(type=model.STATIC),
+                         trigger=model.Trigger(shape=shape), position=(2.0, 1.0, 0.0))
+    plat = PhysicsViewPlatform(world, CharacterCapabilities(), body=True)
+    plat.bind((0.0, 2.0, 0.0))
+    heard = []
+    manager.events.subscribe(heard.append, body=plat.body, kinds=('trigger',))
+    for _ in range(120):
+        plat.character.set_move((1.0, 0.0, 0.0))
+        plat.update(1.0 / 60.0)
+        manager.advance(1.0 / 60.0)
+    assert [(hit.phase, hit.other) for hit in heard] == [('enter', world.ref(pad))]
+
+
+def test_a_walker_has_no_body_unless_asked():
+    assert _platform().body is None

@@ -25,11 +25,23 @@ from omi_physics.character import CharacterController, CharacterCapabilities
 class PhysicsViewPlatform:
     def __init__(self, world: Any, capabilities: Optional[CharacterCapabilities] = None,
                  position: Any = (0, 0, 0), yaw: float = 0.0,
-                 gravity: float = 9.81) -> None:
+                 gravity: float = 9.81, body: bool = False) -> None:
+        """Walk a capsule of ``capabilities`` in ``world``, starting at ``position``.
+
+        ``body`` gives the walker a body in the world: a sensor capsule that
+        enters trigger volumes and whose touches with moving bodies are
+        reported, without pushing or being pushed (:attr:`body`).
+        """
         self.character = CharacterController(
-            world, capabilities or CharacterCapabilities(), position, gravity=gravity)
+            world, capabilities or CharacterCapabilities(), position, gravity=gravity,
+            body=body)
         self.yaw = yaw
         self.pitch = 0.0
+
+    @property
+    def body(self) -> Optional[int]:
+        """The walker's body index, for a collision subscription; None without one."""
+        return self.character.body
 
     # -- binding ---------------------------------------------------------
     def bind(self, position: Any) -> Any:

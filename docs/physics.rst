@@ -269,6 +269,21 @@ path and ``payload`` as it was passed. It is delivered with the next
 ``raycast_many`` and ``bodies_along`` is a collision filter for the ray, so what
 a weapon passes through is data rather than a list of bodies to skip.
 
+The walker
+~~~~~~~~~~
+
+A walking camera has a body in the world when its platform is built with
+``PhysicsViewPlatform(world, body=True)``. The body is a sensor capsule that
+follows the walker: it enters trigger volumes, and its touches with moving
+bodies arrive as contacts with ``solved`` False. It pushes nothing and nothing
+pushes it, and rays pass through it. The walker still collides with the static
+world through its own controller, and those collisions are not reported.
+
+.. code-block:: python
+
+   platform = PhysicsViewPlatform(world, body=True)
+   events.subscribe(on_pad, body=platform.body, kinds=('trigger',))
+
 Breaking instead of bouncing
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
