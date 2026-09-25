@@ -74,7 +74,7 @@ def _extractor(path: str) -> Optional[str]:
     return None
 
 
-def cache_dir() -> str:
+def archive_cache_dir() -> str:
     """Where archives are unpacked: per user, not in shared temp.
 
     The same reasoning as every other download this engine keeps -- no other
@@ -132,7 +132,7 @@ def _unpack(path: str, kind: str, into: Optional[str],
     local = (resolver.fetch_to_cache(path, max_bytes=max_bytes,
                                      redirects=resolver.PUBLIC_HOSTS)
              if is_url(path) else path)
-    root = into if into is not None else cache_dir()
+    root = into if into is not None else archive_cache_dir()
     # Named for what it holds rather than for where it came from, so the same
     # archive fetched twice is one directory and a changed archive is another.
     where = os.path.join(root, _digest(local))
@@ -206,11 +206,19 @@ def resolve_source(source: Optional[str],
 
     Answering rather than exiting, because what to do about a source that is not
     there depends on who asked: a viewer starting up has nothing else to do and
-    exits, while one already showing a scene keeps showing it and says so.
+    exits, while one already showing a scene keeps showing it and says so. A
+    local archive that is not there is None as well.
+
+    An archive that *is* there but does not say which scene to open -- it holds
+    several, or none, or not the member named -- raises :class:`UnknownMember`,
+    whose message lists what the archive holds, since that listing is what the
+    person needs to name one.
     """
     if source is None:
         return None
     if is_archive(source):
+        if not is_url(source) and not os.path.exists(split_member(source)[0]):
+            return None
         return open_archive(source, cache_dir=cache_dir)
     if is_url(source):
         return source

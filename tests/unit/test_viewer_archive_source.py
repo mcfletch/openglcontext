@@ -202,6 +202,18 @@ class TestTheViewersOwnResolution:
     def test_a_path_that_is_not_there_is_none(self, tmp_path):
         assert viewersource.resolve_source(str(tmp_path / 'absent.glb')) is None
 
+    def test_an_archive_that_is_not_there_is_none(self, tmp_path, cache):
+        """A typo in an archive's name is answered as one in a model's is."""
+        assert viewersource.resolve_source(
+            str(tmp_path / 'absent.zip') + '#gallery.glb', cache_dir=cache) is None
+        assert viewersource.resolve_source(
+            str(tmp_path / 'absent.tar.gz'), cache_dir=cache) is None
+
+    def test_an_archive_with_a_choice_in_it_says_what_it_holds(self, tmp_path, cache):
+        path = _zip(tmp_path / 'w.zip', ['a.glb', 'b.glb'])
+        with pytest.raises(viewersource.UnknownMember, match='b.glb'):
+            viewersource.resolve_source(path, cache_dir=cache)
+
 
 class TestAnUnpackingThatDidNotFinish:
     """A world is unpacked once and kept, so a half-unpacked one must not be."""

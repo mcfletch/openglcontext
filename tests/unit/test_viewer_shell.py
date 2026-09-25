@@ -82,6 +82,38 @@ class TestOpeningSomethingElse:
         assert '3shapes.wrl' in label
         assert produce().radius > 0, 'and the producer really loads it'
 
+    def test_an_archive_holding_a_choice_says_what_it_holds(self, tmp_path, monkeypatch):
+        """The listing is the answer to "then what", so the viewer shows it."""
+        import zipfile
+        from OpenGLContext.viewer import source as viewersource
+        monkeypatch.setattr(viewersource, 'archive_cache_dir',
+                            lambda: str(tmp_path / 'unpacked'))
+        path = str(tmp_path / 'two.zip')
+        with zipfile.ZipFile(path, 'w') as archive:
+            archive.writestr('a.glb', b'x')
+            archive.writestr('b.glb', b'x')
+        viewer = _viewer(GLTF_MODEL)
+        viewer.prepareSource()
+        assert viewer.openSource(path) is False
+        assert viewer.source == GLTF_MODEL
+        assert viewer.overlayError is True
+        assert 'b.glb' in viewer.overlayText
+
+    def test_starting_on_an_archive_holding_a_choice_exits_saying_so(
+            self, tmp_path, monkeypatch, capsys):
+        import zipfile
+        from OpenGLContext.viewer import source as viewersource
+        monkeypatch.setattr(viewersource, 'archive_cache_dir',
+                            lambda: str(tmp_path / 'unpacked'))
+        path = str(tmp_path / 'two.zip')
+        with zipfile.ZipFile(path, 'w') as archive:
+            archive.writestr('a.glb', b'x')
+            archive.writestr('b.glb', b'x')
+        viewer = _viewer(path)
+        with pytest.raises(SystemExit) as exited:
+            viewer.prepareSource()
+        assert exited.value.code == 2
+
     def test_a_source_that_cannot_be_opened_says_so_and_changes_nothing(self):
         viewer = _viewer(GLTF_MODEL)
         viewer.prepareSource()

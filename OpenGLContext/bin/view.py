@@ -97,7 +97,7 @@ from OpenGLContext.viewer.adapters import (  # noqa: E402
 )
 from OpenGLContext.viewer.sceneviewer import ViewerContext  # noqa: E402
 from OpenGLContext.viewer.options import ViewerOptions  # noqa: E402
-from OpenGLContext.viewer.source import resolve_source  # noqa: E402
+from OpenGLContext.viewer.source import UnknownMember, resolve_source  # noqa: E402
 
 
 # -- command line ---------------------------------------------------------
@@ -298,7 +298,7 @@ def main(argv: Optional[list[str]] = None, prog: str = 'oglc-view') -> Any:
             parser.error('nothing to list cameras for (pass a path or a URL)')
         try:
             return _list_cameras(resolve_source(source) or source, options.format)
-        except UnknownSourceType as error:
+        except (UnknownSourceType, UnknownMember) as error:
             parser.error(str(error))
 
     if getattr(options, 'capture_video', None):

@@ -71,7 +71,7 @@ from OpenGLContext.multiview.mixin import MultiViewMixin
 from OpenGLContext.viewer.options import ViewerOptions
 from OpenGLContext.viewer.caption import CaptionMixin
 from OpenGLContext.viewer.screens import ViewerScreensMixin
-from OpenGLContext.viewer.source import resolve_source
+from OpenGLContext.viewer.source import UnknownMember, resolve_source
 
 # ViewerContext is built by the module __getattr__ at the end of this file
 # rather than defined here, so that importing this module chooses no window
@@ -271,7 +271,11 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         overrides this.
         """
         named = self.options.source or os.environ.get('GLTF')
-        self.source = resolve_source(named)
+        try:
+            self.source = resolve_source(named)
+        except UnknownMember as error:
+            commentary.warn("ERROR: %s\n" % (error,))
+            raise SystemExit(2) from None
         if self.source is None:
             if named:
                 commentary.warn("ERROR: file not found: %s\n" % (named,))
@@ -307,7 +311,13 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         that a later one has overtaken -- which is what makes clicking quickly
         through a library safe.
         """
-        resolved = resolve_source(source)
+        try:
+            resolved = resolve_source(source)
+        except UnknownMember as error:
+            self.overlayError = True
+            self.overlayText = "%s" % (error,)
+            commentary.warn("ERROR: %s\n" % (error,))
+            return False
         if resolved is None:
             self.overlayError = True
             self.overlayText = "Not found: %s" % (source,)
