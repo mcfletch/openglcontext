@@ -165,7 +165,10 @@ the thread pool in ``OpenGLContext.loaders.background``. The pool has
 ``background.WORKERS`` daemon threads (four), started as work arrives, so a
 scene that names several hundred textures uses four threads. A load that
 raises an exception is logged with its url, and the worker continues with the
-next load.
+next load. That includes ``SystemExit`` or ``KeyboardInterrupt`` raised by a
+load's own code, since ending the worker would only stop the loads queued
+behind it; a worker that stops some other way is replaced by the next load
+submitted.
 
 To wait until the scene is complete, for example in a test or a tool, call
 ``wait_for_idle``:

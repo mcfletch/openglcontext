@@ -81,6 +81,10 @@ class LoadPool:
         started = []
         with self._state:
             self._pending += 1
+            # A thread that has run and stopped is no worker; one appended but
+            # not yet started (no ident) is about to be.
+            self._threads = [thread for thread in self._threads
+                             if thread.ident is None or thread.is_alive()]
             while len(self._threads) < min(self.workers, self._pending):
                 thread = threading.Thread(
                     target=self._work, daemon=True,
@@ -135,6 +139,13 @@ class LoadPool:
             except Exception:
                 log.warning('Background load of %s failed', description,
                             exc_info=True)
+            except BaseException:
+                # SystemExit or KeyboardInterrupt raised by the work itself: a
+                # signal's KeyboardInterrupt is delivered to the main thread,
+                # never here, so ending the worker would stop the loads queued
+                # behind this one and nothing else.
+                log.warning('Background load of %s tried to end its thread; the '
+                            'worker carries on', description, exc_info=True)
             finally:
                 with self._state:
                     self._pending -= 1

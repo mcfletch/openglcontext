@@ -157,6 +157,36 @@ class TestThePool:
         assert done == ['ran']
         assert 'a broken thing' in caplog.text
 
+    @pytest.mark.parametrize('ending', [SystemExit, KeyboardInterrupt])
+    def test_work_that_ends_its_thread_is_reported_and_the_worker_lives(
+            self, make_pool, caplog, ending):
+        """A callback's sys.exit() is not a reason to stop loading the world."""
+        pool = make_pool(workers=1)
+
+        def leave():
+            raise ending()
+
+        done = []
+        pool.submit('a thing that exits', leave)
+        pool.submit('a good thing', done.append, 'ran')
+        assert pool.wait_for_idle(PATIENCE)
+        assert done == ['ran']
+        assert 'a thing that exits' in caplog.text
+        assert len(pool_threads()) == 1
+
+    def test_a_worker_that_died_is_replaced(self, make_pool):
+        """However it went, the pool does not count a dead thread as a worker."""
+        pool = make_pool(workers=1)
+        pool.submit('a thing', lambda: None)
+        assert pool.wait_for_idle(PATIENCE)
+        pool._queue.put(None)                  # the worker's own way to stop
+        for thread in pool_threads():
+            thread.join(PATIENCE)
+        done = []
+        pool.submit('a later thing', done.append, 'ran')
+        assert pool.wait_for_idle(PATIENCE)
+        assert done == ['ran']
+
     def test_preparation_runs_on_the_thread_that_submits(self, make_pool):
         """Which is the whole point of it -- see the import rule below."""
         where = []
