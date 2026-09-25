@@ -29,6 +29,13 @@ CAPTURE = os.path.join(TESTS_DIR, 'helpers', '_zone_capture.py')
 COST = os.path.join(TESTS_DIR, 'helpers', '_zone_cost_harness.py')
 
 
+def _held(zoned, path):
+    """What the pass last worked out for ``path``, checked to be that path's."""
+    held = zoned._zoneObjects.get(id(path))
+    assert held is not None and held.path is path
+    return held
+
+
 def _source(name):
     with open(os.path.join(SHADER_DIR, name)) as handle:
         return handle.read()
@@ -198,7 +205,7 @@ class TestThePass:
         path = ('box',)
         pack, _mask = zoned.zoneState(path, where, Box(1))
         assert zoned.zoneState(path, where, Box(1))[0] is pack
-        assert zoned._zoneObjects[id(path)].matrix is where
+        assert _held(zoned, path).matrix is where
         moved = at(50)
         assert zoned.zoneState(path, moved, Box(1)) == (None, 0)
 
@@ -268,16 +275,16 @@ class TestTheCamera:
         zoned = ZonedPass([(Zone(size=(10, 10, 10), settings=[
             ZoneVisibility(nodes=[secret], visible=True)]), at(0))])
         zoned.placeZones()
-        assert id(secret) not in zoned.zoneHiddenAt(np.zeros(3))
-        assert id(secret) in zoned.zoneHiddenAt(np.array([50.0, 0, 0]))
+        assert secret not in zoned.zoneHiddenAt(np.zeros(3))
+        assert secret in zoned.zoneHiddenAt(np.array([50.0, 0, 0]))
 
     def test_a_hidden_node_is_hidden_only_from_inside(self):
         clutter = Transform()
         zoned = ZonedPass([(Zone(size=(10, 10, 10), settings=[
             ZoneVisibility(nodes=[clutter], visible=False)]), at(0))])
         zoned.placeZones()
-        assert id(clutter) in zoned.zoneHiddenAt(np.zeros(3))
-        assert id(clutter) not in zoned.zoneHiddenAt(np.array([50.0, 0, 0]))
+        assert clutter in zoned.zoneHiddenAt(np.zeros(3))
+        assert clutter not in zoned.zoneHiddenAt(np.array([50.0, 0, 0]))
 
     def test_a_named_mirror_draws_only_from_inside(self):
         mirror = Transform()
@@ -543,7 +550,7 @@ class TestManyZones:
 
         def reached():
             zoned.zoneState(path, where, everything)
-            return zoned._zoneObjects[id(path)].reach
+            return _held(zoned, path).reach
 
         first = reached()
         assert first.limited
@@ -565,11 +572,11 @@ class TestManyZones:
         zoned.zoneProbeLayer = lambda zone: layer[0]
         path, where = ('box',), at(0)
         first, _mask = zoned.zoneState(path, where, Box(1))
-        found = zoned._zoneObjects[id(path)].reach
+        found = _held(zoned, path).reach
         layer[0] = 2.0
         zoned._probeVersion += 1        # as a finished capture does
         second, _mask = zoned.zoneState(path, where, Box(1))
-        assert zoned._zoneObjects[id(path)].reach is found
+        assert _held(zoned, path).reach is found
         assert second is not first and second.light[0][2] == 2.0
 
 
@@ -590,12 +597,12 @@ class TestMovingObjectsTogether:
         assert calls == [1]
         zoned.refreshZones(records)
         assert calls == [1]
-        together = [zoned._zoneObjects[id(r[4])].reach for r in records]
+        together = [_held(zoned, r[4]).reach for r in records]
         for record, found in zip(records, together):
             alone = ZonedPass([(zone.zone, zone.matrix) for zone in zoned.zones])
             alone.placeZones()
             alone.refreshZones([record])
-            one = alone._zoneObjects[id(record[4])].reach
+            one = _held(alone, record[4]).reach
             assert (None if one is None else [(id(z.zone), i) for z, i in one.stack]) == \
                 (None if found is None else [(id(z.zone), i) for z, i in found.stack])
 
@@ -607,22 +614,22 @@ class TestSlack:
         zoned.placeZones()
         path = ('car',)
         zoned.zoneState(path, at(0), Box(1))
-        held = zoned._zoneObjects[id(path)]
+        held = _held(zoned, path)
         assert held.slack == pytest.approx(50.0 - 3 ** 0.5, abs=1e-6)
         zoned.zoneState(path, at(10), Box(1))
-        assert zoned._zoneObjects[id(path)] is held
+        assert _held(zoned, path) is held
         zoned.zoneState(path, at(49.5), Box(1))
-        assert zoned._zoneObjects[id(path)] is not held
+        assert _held(zoned, path) is not held
 
     def test_an_object_across_an_edge_has_none(self):
         zoned = ZonedPass([(Zone(size=(10, 10, 10), settings=[ZoneEnvironment()]), at(0))])
         zoned.placeZones()
         path = ('car',)
         zoned.zoneState(path, at(5), Box(1))
-        held = zoned._zoneObjects[id(path)]
+        held = _held(zoned, path)
         assert held.slack == 0.0
         zoned.zoneState(path, at(5.01), Box(1))
-        assert zoned._zoneObjects[id(path)] is not held
+        assert _held(zoned, path) is not held
 
 
 class TestInstancedGroups:
@@ -835,7 +842,7 @@ class TestOneZoneMoving:
         zoned.refreshZones(records)
         for record in records:
             x = record[2][3, 0]
-            reach = zoned._zoneObjects[id(record[4])].reach
+            reach = _held(zoned, record[4]).reach
             if abs(x - 300.0) < 4.0:
                 assert reach is None, x
             elif abs(x - 400.0) < 4.0:

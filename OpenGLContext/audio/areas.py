@@ -25,6 +25,7 @@ from OpenGLContext.scenegraph import zones as zonemath
 
 if TYPE_CHECKING:
     from OpenGLContext.passes.zonelayers import Reverb
+    from OpenGLContext.scenegraph.zone import PlacedZone
 
 __all__ = ['box_gain', 'apply_zones']
 
@@ -80,10 +81,10 @@ def apply_zones(engine: Any, emitters: Sequence[Any], zones: Sequence[Any],
     from OpenGLContext.passes import zonelayers
     from OpenGLContext.scenegraph.zone import AUDIO
 
-    def named(setting: Any) -> Sequence[int]:
-        return [id(emitter) for emitter in getattr(setting, 'emitters', None) or ()]
+    def named(setting: Any) -> Sequence[Any]:
+        return list(getattr(setting, 'emitters', None) or ())
 
-    controlled: Set[int] = set()
+    controlled: Set[Any] = set()
     for zone in zones:
         setting = zone.setting(AUDIO)
         if setting is not None and bool(setting.enabled):
@@ -92,15 +93,14 @@ def apply_zones(engine: Any, emitters: Sequence[Any], zones: Sequence[Any],
     shares = (zonelayers.camera_shares(zones, position, AUDIO, named, weights)
               if controlled else {})
     for emitter in emitters:
-        key = id(emitter)
-        wanted = float(shares.get(key, 0.0)) if key in controlled else 1.0
+        wanted = float(shares.get(emitter, 0.0)) if emitter in controlled else 1.0
         if getattr(emitter, 'zoneGain', 1.0) != wanted:
             emitter.zoneGain = wanted
     _lay_reverb(engine, zones, position, weights)
 
 
 def _lay_reverb(engine: Any, zones: Sequence[Any], position: ArrayLike,
-                weights: Optional[Dict[int, float]]) -> None:
+                weights: Optional[Dict[PlacedZone, float]]) -> None:
     """The zones' reverb over the application's, on ``engine``; see :func:`apply_zones`."""
     from OpenGLContext.passes import zonelayers
     from OpenGLContext.scenegraph.zone import REVERB

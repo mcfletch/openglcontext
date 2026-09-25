@@ -89,7 +89,7 @@ class _ObjectZones:
         self.version = -1
         #: :func:`~OpenGLContext.passes.zonelayers.light_decision`, and the
         #: slot version ``mask`` was made for.
-        self.lights: Tuple[FrozenSet[int], bool] = (frozenset(), False)
+        self.lights: Tuple[FrozenSet[Any], bool] = (frozenset(), False)
         self.slots = -1
         self.row: Optional[int] = None
 
@@ -148,12 +148,13 @@ class ZonesMixin(PassResources):
     #: The zones with an environment setting, and those with a lights one.
     _environmentZones: Sequence[PlacedZone] = ()
     _lightZones: Sequence[PlacedZone] = ()
-    #: Each light a zone names, by id, with the zones naming it.
-    _controlledLights: Mapping[int, List[PlacedZone]] = MappingProxyType({})
+    #: Each light node a zone names, with the zones naming it.
+    _controlledLights: Mapping[Any, List[PlacedZone]] = MappingProxyType({})
     #: Bumped when every object's answer is let go of at once.
     _zoneEpoch = 0
-    #: What each object was last worked out to get, by id of its path; the
-    #: entry holds the path, so the id is not reused while it is kept.
+    #: What each object was last worked out to get, by id of its path, which
+    #: is a list and not hashable. The entry holds the path, so the id is not
+    #: reused while it is kept, and a lookup checks the entry is the path's.
     _zoneObjects: Optional[Dict[int, '_ObjectZones']] = None
     #: Where each object's answer holds, to find those a changed zone reaches.
     _objectBoxes: Optional[ObjectBoxes] = None
@@ -190,10 +191,10 @@ class ZonesMixin(PassResources):
     _allTable: Optional[zonelayers.ZoneTable] = None
     #: Every environment zone's distance from this view's camera, made the
     #: first time an object crossing too many zones asks.
-    _nearness: Optional[Dict[int, float]] = None
+    _nearness: Optional[Dict[PlacedZone, float]] = None
     #: Every zone's weight at the last point asked about, with the table and
     #: the point it was worked out for.
-    _weightsAt: Optional[Tuple[Any, Tuple[float, ...], Dict[int, float]]] = None
+    _weightsAt: Optional[Tuple[Any, Tuple[float, ...], Dict[PlacedZone, float]]] = None
     #: Bumped whenever a probe layer's answer may have changed: a capture or
     #: an upload finishing, a capture starting or ending, a probe lost, the
     #: environment mode changing. A draw re-reads its layers only then.
@@ -344,7 +345,7 @@ class ZonesMixin(PassResources):
         if objects is None:
             objects = self._zoneObjects = {}
         held = objects.get(id(path))
-        if held is None or not self._current(held, tmatrix, bvolume):
+        if held is None or held.path is not path or not self._current(held, tmatrix, bvolume):
             self._classify([(path, tmatrix, bvolume)])
             held = objects[id(path)]
         if held.slots != self._slotVersion:
@@ -418,8 +419,8 @@ class ZonesMixin(PassResources):
         stale = []
         for record in records:
             held = found(id(record[4]))
-            if held is not None and held.matrix is record[2] and held.epoch == epoch \
-                    and held.bounds is record[3]:
+            if held is not None and held.path is record[4] and held.matrix is record[2] \
+                    and held.epoch == epoch and held.bounds is record[3]:
                 continue                        # the common case, inline
             if not current(held, record[2], record[3]):
                 stale.append((record[4], record[2], record[3]))
@@ -470,9 +471,9 @@ class ZonesMixin(PassResources):
                 held.scale = float(scales[index])
                 held.slack = float(slack[index])
             before = objects.get(id(path))
-            held.row = rows.place(before.row if before is not None else None, held,
-                                  lows[index], highs[index])
-            objects[id(path)] = held
+            reused = before.row if before is not None and before.path is path else None
+            held.row = rows.place(reused, held, lows[index], highs[index])
+            objects[id(path)] = held  # noqa: OGC131 held is _ObjectZones(path, ...), which holds path
 
     def _measure(self, items: Sequence[Tuple[Any, Any]]
                  ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -522,8 +523,14 @@ class ZonesMixin(PassResources):
 
     def _forgetObject(self, path: Any) -> None:
         """Let go of what ``path`` was worked out to get."""
-        held = self._zoneObjects.pop(id(path), None) if self._zoneObjects is not None else None
-        if held is not None and held.row is not None and self._objectBoxes is not None:
+        objects = self._zoneObjects
+        if objects is None:
+            return
+        held = objects.get(id(path))
+        if held is None or held.path is not path:
+            return
+        del objects[id(path)]  # noqa: OGC131 the entry under this id was just found to hold path
+        if held.row is not None and self._objectBoxes is not None:
             self._objectBoxes.drop(held.row)
 
     def _forgetObjects(self) -> None:
@@ -541,7 +548,7 @@ class ZonesMixin(PassResources):
     #: zones than the shader holds has its nearest zones chosen again.
     CAMERA_CELL = 32.0
 
-    def _cameraNearness(self) -> Optional[Dict[int, float]]:
+    def _cameraNearness(self) -> Optional[Dict[PlacedZone, float]]:
         if self._nearness is None and self._zoneCamera is not None \
                 and self._environmentTable is not None:
             self._nearness = self._environmentTable.nearness(self._zoneCamera)
@@ -559,8 +566,11 @@ class ZonesMixin(PassResources):
         if not self._zones:
             return
         objects = self._zoneObjects
-        held = objects.get(id(path)) if objects is not None else None
-        if (held is not None and held.matrix is tmatrix and held.epoch == self._zoneEpoch
+        held = None
+        if objects is not None:
+            held = objects.get(id(path))
+        if (held is not None and held.path is path and held.matrix is tmatrix
+                and held.epoch == self._zoneEpoch
                 and held.bounds is bvolume
                 and held.version == self._probeVersion and held.slots == self._slotVersion
                 and (held.pack is not None or held.reach is None)
@@ -808,7 +818,7 @@ class ZonesMixin(PassResources):
             for placed in self._environmentZones:
                 setting = placed.setting(ENVIRONMENT)
                 if bool(getattr(setting, 'capture', False)) \
-                        and weights.get(id(placed), 0.0) >= 1.0:
+                        and weights.get(placed, 0.0) >= 1.0:
                     schedule.camera_inside(placed.zone)
         by_key: Dict[Hashable, PlacedZone] = {
             zone.zone: zone for zone in self._environmentZones}
@@ -984,11 +994,11 @@ class ZonesMixin(PassResources):
             background.Render(mode=self, clear=True)
 
     # -- what the camera sees ------------------------------------------------
-    #: The ids of the nodes zones hide from the view being culled.
-    _zoneHidden: FrozenSet[int] = frozenset()
+    #: The nodes zones hide from the view being culled.
+    _zoneHidden: FrozenSet[Any] = frozenset()
 
-    def zoneHiddenAt(self, point: Optional[Any]) -> FrozenSet[int]:
-        """The ids of the nodes the zones hide from a camera at ``point``.
+    def zoneHiddenAt(self, point: Optional[Any]) -> FrozenSet[Any]:
+        """The nodes the zones hide from a camera at ``point``.
 
         A node a ``ZoneVisibility`` shows is drawn only for a camera inside a
         zone showing it, and one it hides is drawn only for a camera outside
@@ -997,29 +1007,29 @@ class ZonesMixin(PassResources):
         """
         if point is None or not self._zones:
             return frozenset()
-        named: Dict[int, List[Tuple[Tuple[int, float], bool, float]]] = {}
-        weights: Optional[Dict[int, float]] = None
+        named: Dict[Any, List[Tuple[Tuple[int, float], bool, float]]] = {}
+        weights: Optional[Dict[PlacedZone, float]] = None
         for zone in self._zones:
             setting = zone.setting(VISIBILITY)
             if not isinstance(setting, ZoneVisibility) or not bool(setting.enabled):
                 continue
             if weights is None:
                 weights = self.zoneWeightsAt(point)
-            weight = weights[id(zone)]
+            weight = weights[zone]
             for node in getattr(setting, 'nodes', None) or ():
-                named.setdefault(id(node), []).append(
+                named.setdefault(node, []).append(
                     ((zone.priority, -zone.volume), bool(setting.visible), weight))
         if not named:
             return frozenset()
-        hidden: Set[int] = set()
-        for key, entries in named.items():
+        hidden: Set[Any] = set()
+        for node, entries in named.items():
             inside = [entry for entry in entries if entry[2] > 0.0]
             if inside:
                 shown = max(inside, key=lambda entry: entry[0])[1]
             else:
                 shown = not max(entries, key=lambda entry: entry[0])[1]
             if not shown:
-                hidden.add(key)
+                hidden.add(node)
         return frozenset(hidden)
 
     def zoneVisible(self, path: Any) -> bool:
@@ -1027,7 +1037,7 @@ class ZonesMixin(PassResources):
         hidden = self._zoneHidden
         if not hidden:
             return True
-        return not any(id(node) in hidden for node in path)
+        return not any(node in hidden for node in path)
 
     def mirrorsZoned(self) -> bool:
         """Whether any zone has a say over which mirrors draw a reflection."""
@@ -1041,7 +1051,7 @@ class ZonesMixin(PassResources):
         except for a camera wholly inside a zone that switches mirrors off.
         """
         path = record[4]
-        ids = {id(node) for node in path}
+        on_path = set(path)
         candidates = []
         names: Dict[Any, List[Any]] = {}
         controlled = False
@@ -1050,11 +1060,11 @@ class ZonesMixin(PassResources):
             setting = zone.setting(MIRRORS)
             if setting is None:
                 continue
-            candidate = zone.candidate(MIRRORS, weights[id(zone)])
+            candidate = zone.candidate(MIRRORS, weights[zone])
             candidates.append(candidate)
             if candidate[1] is not None:
-                mine = [id(node) for node in getattr(setting, 'nodes', None) or ()
-                        if id(node) in ids]
+                mine = [node for node in getattr(setting, 'nodes', None) or ()
+                        if node in on_path]
                 if mine:
                     controlled = True
                     names[candidate[0]] = ['mirror']
@@ -1073,7 +1083,7 @@ class ZonesMixin(PassResources):
         light no zone names is not ruled out here, nor is any light where a
         frustum has no planes.
         """
-        naming = self._controlledLights.get(id(light))
+        naming = self._controlledLights.get(light)
         if not naming:
             return True
         from OpenGLContext.frustum import boxes_outside
@@ -1087,8 +1097,8 @@ class ZonesMixin(PassResources):
                 return True
         return False
 
-    def zoneWeightsAt(self, point: Any) -> Dict[int, float]:
-        """Every zone's weight at ``point``, by ``id`` of its placement.
+    def zoneWeightsAt(self, point: Any) -> Dict[PlacedZone, float]:
+        """Every zone's weight at ``point``, by its placement.
 
         Worked out for every zone at once, and kept for as long as the zones
         and the point are the same, so the questions a view asks from its

@@ -148,7 +148,6 @@ class ZoneTable:
 
     def __init__(self, placed: Sequence[PlacedZone]) -> None:
         self.placed = list(placed)
-        self._ids = [id(zone) for zone in self.placed]
         count = len(self.placed)
         self.to_local = np.zeros((count, 4, 4), dtype='d')
         self.reach = np.zeros((count, 3), dtype='d')
@@ -304,10 +303,10 @@ class ZoneTable:
         slack: np.ndarray = np.minimum(np.maximum(room.min(axis=1), 0.0), limit)
         return slack
 
-    def nearness(self, point: Any) -> Dict[int, float]:
-        """Every zone's signed distance from ``point``, by ``id``, in one pass."""
+    def nearness(self, point: Any) -> Dict[PlacedZone, float]:
+        """Every zone's signed distance from ``point``, by zone, in one pass."""
         found = self.signed_distances(np.asarray(point, dtype='d')[:3])[0]
-        return dict(zip(self._ids, found.tolist(), strict=True))
+        return dict(zip(self.placed, found.tolist(), strict=True))
 
 
 class ObjectBoxes:
@@ -431,7 +430,7 @@ def _reaching(placed: Sequence[PlacedZone], key: str, minimum: Any, maximum: Any
 def chosen(kept: Sequence[Tuple[PlacedZone, bool]], camera: Optional[Any] = None,
            warn: Optional[Callable[[str], None]] = None,
            table: Optional[ZoneTable] = None,
-           near: Optional[Dict[int, float]] = None) -> Optional[Reach]:
+           near: Optional[Dict[PlacedZone, float]] = None) -> Optional[Reach]:
     """The layers the shader is given from :func:`classified`'s answer.
 
     All of them where they fit. Where more zones reach the object than the
@@ -458,7 +457,7 @@ def chosen(kept: Sequence[Tuple[PlacedZone, bool]], camera: Optional[Any] = None
         if near is None and table is not None:
             near = table.nearness(point)
         if near is not None:
-            rest.sort(key=lambda item: near.get(id(item[0]), 0.0))
+            rest.sort(key=lambda item: near.get(item[0], 0.0))
         else:
             rest.sort(key=lambda item: float(item[0].shape.distance(point)))
     rest = rest[:room]
@@ -522,53 +521,52 @@ def environment_layers(placed: Sequence[PlacedZone], minimum: Any, maximum: Any,
     return pack_reach(found, probe_layers(found, probe_layer))
 
 
-def controlled_lights(placed: Iterable[PlacedZone]) -> Dict[int, List[PlacedZone]]:
-    """Each light a zone names, by ``id``, with the zones that name it."""
-    found: Dict[int, List[PlacedZone]] = {}
+def controlled_lights(placed: Iterable[PlacedZone]) -> Dict[Any, List[PlacedZone]]:
+    """Each light node a zone names, with the zones that name it."""
+    found: Dict[Any, List[PlacedZone]] = {}
     for zone in placed:
         setting = zone.setting(LIGHTS)
         if setting is None or not bool(setting.enabled):
             continue
         for light in getattr(setting, 'lights', None) or ():
-            found.setdefault(id(light), []).append(zone)
+            found.setdefault(light, []).append(zone)
     return found
 
 
 def light_decision(reaching: Sequence[Tuple[PlacedZone, bool]]
-                   ) -> Tuple[FrozenSet[int], bool]:
+                   ) -> Tuple[FrozenSet[Any], bool]:
     """Which lights the zones switch on for an object, and whether they darken it.
 
     ``reaching`` is each zone with a lights setting that reaches the object,
     with whether the object is wholly inside it, as
     :meth:`ZoneTable.classify` answers for a table of those zones. The first
-    part of the answer is the ``id`` of every light a zone reaching the
-    object names, among the zones at or above the topmost one it is wholly
+    part of the answer is every light node a zone reaching the object
+    names, among the zones at or above the topmost one it is wholly
     inside (that one covers the whole object); the second is whether the
     object is wholly inside a zone that switches the lights off. A zone the
     object only crosses switches no light off for it. Neither depends on
     which slot a light is bound to, so it holds until the object or a zone
     moves.
     """
-    on: Set[int] = set()
+    on: Set[Any] = set()
     dark = False
     for zone, inside in stacked(list(reaching)):
         setting = zone.setting(LIGHTS)
         if setting is None or not bool(setting.enabled):
             dark = dark or inside
             continue
-        on.update(id(light) for light in getattr(setting, 'lights', None) or ())
+        on.update(getattr(setting, 'lights', None) or ())
     return frozenset(on), dark
 
 
-def light_mask(decision: Tuple[FrozenSet[int], bool], slots: Sequence[Any],
-               controlled: Mapping[int, List[PlacedZone]]) -> int:
+def light_mask(decision: Tuple[FrozenSet[Any], bool], slots: Sequence[Any],
+               controlled: Mapping[Any, List[PlacedZone]]) -> int:
     """The ``lightsOff`` mask from :func:`light_decision`, for the lights in ``slots``."""
     on, dark = decision
     mask = 0
     for slot, light in enumerate(slots):
-        key = id(light)
-        if key in controlled:
-            if key not in on:
+        if light in controlled:
+            if light not in on:
                 mask |= 1 << slot
         elif dark:
             mask |= 1 << slot
@@ -576,7 +574,7 @@ def light_mask(decision: Tuple[FrozenSet[int], bool], slots: Sequence[Any],
 
 
 def lights_off(placed: Sequence[PlacedZone], minimum: Any, maximum: Any,
-               slots: Sequence[Any], controlled: Mapping[int, List[PlacedZone]]) -> int:
+               slots: Sequence[Any], controlled: Mapping[Any, List[PlacedZone]]) -> int:
     """The ``lightsOff`` mask for an object: one bit per light slot that does not light it.
 
     ``slots`` is the light node bound to each slot, in slot order. A light a
@@ -589,18 +587,18 @@ def lights_off(placed: Sequence[PlacedZone], minimum: Any, maximum: Any,
                       slots, controlled)
 
 
-def point_weights(table: ZoneTable, point: Any) -> Dict[int, float]:
-    """Every zone's weight at ``point``, by ``id`` of the zone, in one pass."""
+def point_weights(table: ZoneTable, point: Any) -> Dict[PlacedZone, float]:
+    """Every zone's weight at ``point``, by zone, in one pass."""
     if not table.placed:
         return {}
     d = table.signed_distances(np.asarray(point, dtype='d')[:3])[0]
     w = zones.weight(d, table.blend)
-    return {id(zone): float(value) for zone, value in zip(table.placed, w, strict=True)}
+    return dict(zip(table.placed, w.tolist(), strict=True))
 
 
 def camera_shares(placed: Sequence[PlacedZone], point: Any, key: str,
                   names: Callable[[Any], Iterable[Hashable]],
-                  weights: Optional[Dict[int, float]] = None) -> Dict[Hashable, float]:
+                  weights: Optional[Dict[PlacedZone, float]] = None) -> Dict[Hashable, float]:
     """How much each thing zones switch on for ``key`` is on, at ``point``.
 
     ``names`` gives the things a setting names -- emitters, nodes, mirrors.
@@ -615,7 +613,7 @@ def camera_shares(placed: Sequence[PlacedZone], point: Any, key: str,
         setting = zone.setting(key)
         if setting is None:
             continue
-        weight = weights[id(zone)] if weights is not None else zone.weight(point)
+        weight = weights[zone] if weights is not None else zone.weight(point)
         candidate = zone.candidate(key, weight)
         candidates.append(candidate)
         if candidate[1] is not None:
@@ -637,7 +635,7 @@ class Reverb:
 
 
 def reverb_at(placed: Sequence[PlacedZone], point: Any,
-              weights: Optional[Dict[int, float]] = None,
+              weights: Optional[Dict[PlacedZone, float]] = None,
               base: Optional[Reverb] = None) -> Reverb:
     """The reverb heard at ``point``, the zones it is in laid over ``base``.
 
@@ -648,7 +646,7 @@ def reverb_at(placed: Sequence[PlacedZone], point: Any,
     where it has a level -- so two places meet without a jump.
     """
     outside = Reverb() if base is None else base
-    candidates = [zone.candidate(REVERB, weights[id(zone)] if weights is not None
+    candidates = [zone.candidate(REVERB, weights[zone] if weights is not None
                                  else zone.weight(point))
                   for zone in placed if zone.setting(REVERB) is not None]
     stack = zones.layers(candidates)

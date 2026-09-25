@@ -268,7 +268,7 @@ class TestTheTable:
             assert kept == wanted
             near = table.nearness(low)
             for zone in zones:
-                assert near[id(zone)] == pytest.approx(float(zone.shape.distance(low)))
+                assert near[zone] == pytest.approx(float(zone.shape.distance(low)))
 
     def test_layers_through_the_table_are_the_same(self):
         zones = place((room(environment=ZoneEnvironment(intensity=0.3)), (0, 0, 0)),
@@ -290,7 +290,7 @@ def test_the_table_weighs_every_zone_at_a_point_as_each_would():
         point = rng.uniform(-30, 30, 3)
         found = zonelayers.point_weights(table, point)
         for zone in zones:
-            assert found[id(zone)] == pytest.approx(zone.weight(point), abs=1e-9)
+            assert found[zone] == pytest.approx(zone.weight(point), abs=1e-9)
 
 
 def _spread(rng, count=60, across=2000.0):
