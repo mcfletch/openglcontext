@@ -392,6 +392,10 @@ def decode_data_uri(uri: str, max_bytes: Optional[int] = None) -> bytes:
         raise ValueError("malformed data: URI (no comma): %r" % uri[:64])
     header, _, payload = uri.partition(',')
     if ';base64' in header.lower():
+        # Four characters of the alphabet decode to three bytes, so the size
+        # is known, and checked, before the bytes are allocated.
+        ignored = sum(payload.count(char) for char in '= \t\r\n')
+        check_size((len(payload) - ignored) * 3 // 4, max_bytes, 'data: URI')
         data = base64.b64decode(payload)
     else:
         data = urllib.parse.unquote_to_bytes(payload)

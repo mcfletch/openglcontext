@@ -928,6 +928,24 @@ class TestResourceSizeCap:
         with pytest.raises(ValueError):
             resolver.decode_data_uri(uri, max_bytes=10)
 
+    def test_data_uri_over_cap_is_rejected_before_it_is_decoded(self, monkeypatch):
+        """The payload's length says how large it decodes to, so an oversized
+        one is refused without allocating the decoded bytes."""
+        uri = 'data:;base64,' + resolver.base64.b64encode(b'x' * 100).decode()
+        decoded = []
+        real = resolver.base64.b64decode
+        monkeypatch.setattr(resolver.base64, 'b64decode',
+                            lambda payload: decoded.append(payload) or real(payload))
+        with pytest.raises(ValueError, match='limit'):
+            resolver.decode_data_uri(uri, max_bytes=10)
+        assert decoded == []
+
+    @pytest.mark.parametrize('size', [9, 10])
+    def test_data_uri_at_or_under_cap_with_line_breaks_decodes(self, size):
+        encoded = resolver.base64.encodebytes(b'x' * size).decode()
+        assert resolver.decode_data_uri('data:;base64,' + encoded,
+                                        max_bytes=10) == b'x' * size
+
 
 class TestDataUriParsing:
     """Robust data: URI decoding."""
