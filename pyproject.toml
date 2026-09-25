@@ -338,6 +338,55 @@ python_functions = ["test_*"]
 # independent of the custom subprocess runner's own per-script timeouts (whose
 # ceiling is 120s). The slowest test that legitimately runs to completion takes
 # about 25 seconds, so this is a wide margin rather than a deadline.
+# A test fails that opened a file from a module of OpenGLContext outside the
+# sanctioned openers (OpenGLContext.testing.openaudit). The list is the
+# engine's openers, then the modules whose paths come from their own user,
+# then the readers of document- and application-named files that open them
+# directly, each of which leaves the list when it opens through
+# loaders.resolver's checked paths.
+open_audit = "fail"
+open_audit_sanctioned = [
+    "OpenGLContext.loaders.resolver",
+    "OpenGLContext.contentpacks",
+    "OpenGLContext.atomicfiles",
+    "OpenGLContext.loaders.hdr",
+    "OpenGLContext.loaders.hdri",
+    "OpenGLContext.testing",
+    # Programs, tools and the files their user names: the command line, a
+    # screenshot, a recording, a session journal, the user's settings.
+    "OpenGLContext.bin",
+    "OpenGLContext.packaging",
+    "OpenGLContext.capture",
+    "OpenGLContext.contactsheet",
+    "OpenGLContext.debug",
+    "OpenGLContext.stalltrace",
+    "OpenGLContext.telemetry",
+    "OpenGLContext.video",
+    "OpenGLContext.userpaths",
+    "OpenGLContext.move.bindingstore",
+    # Readers of document- and application-named files.
+    "OpenGLContext.loaders.cc0",
+    "OpenGLContext.loaders.gltf.loader",
+    "OpenGLContext.loaders.gltf.lodasset",
+    "OpenGLContext.loaders.gltf.writer",
+    "OpenGLContext.loaders.loader",
+    "OpenGLContext.loaders.tiles3d.dem",
+    "OpenGLContext.loaders.tiles3d.foliage",
+    "OpenGLContext.loaders.tiles3d.manifest",
+    "OpenGLContext.passes.ibl",
+    "OpenGLContext.scenegraph.audio",
+    "OpenGLContext.scenegraph.instancedgl",
+    "OpenGLContext.scenegraph.terrain.ground",
+    "OpenGLContext.scenegraph.terrain.heightfield",
+    "OpenGLContext.scenegraph.text._toolsfont",
+    "OpenGLContext.scenegraph.tilesterrain",
+    "OpenGLContext.scenegraph.vegetation.clumps",
+    "OpenGLContext.scenegraph.vegetation.cover",
+    "OpenGLContext.scenegraph.vegetation.nearmesh",
+    "OpenGLContext.ui.pictures",
+    "OpenGLContext.viewer.adapters",
+    "OpenGLContext.viewer.source",
+]
 # Set via the ini keys rather than addopts so a checkout without pytest-timeout
 # only warns about unknown options instead of erroring on `--timeout`.
 timeout = 300

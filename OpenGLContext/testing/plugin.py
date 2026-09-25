@@ -63,6 +63,7 @@ from __future__ import annotations
 
 import contextlib
 import os
+import warnings
 from typing import Any, Callable, Iterator, Literal, Mapping, Tuple, get_args
 
 import pytest
@@ -177,6 +178,20 @@ def context_skip_reason(asked: Mapping[str, str],
     return None
 
 
+#: The engine's own openers: the resolver and its checked paths, content
+#: packs, whole-file writes, the image loaders, and this test machinery.
+SANCTIONED_OPENERS = (
+    'OpenGLContext.loaders.resolver',
+    'OpenGLContext.contentpacks',
+    'OpenGLContext.atomicfiles',
+    'OpenGLContext.loaders.hdr',
+    'OpenGLContext.loaders.hdri',
+    'OpenGLContext.testing',
+)
+
+#: What ``open_audit`` may say.
+OPEN_AUDIT_MODES = ('off', 'report', 'fail')
+
 NumpyErrorAction = Literal['raise', 'warn', 'ignore', 'call', 'print', 'log']
 
 #: What ``numpy_errors`` may say: the actions ``numpy.errstate`` takes.
@@ -189,6 +204,20 @@ def pytest_addoption(parser: Any) -> None:
         'What a division by zero, overflow or invalid operation in NumPy does '
         'during each test: raise, warn, ignore (numpy.errstate); unset leaves '
         'NumPy\'s own setting')
+    parser.addini(
+        'open_audit',
+        'off, report or fail: whether a file opened from a module of '
+        'open_audit_checked outside open_audit_sanctioned is listed at the end '
+        'of the run or fails the test that opened it',
+        default='off')
+    parser.addini('open_audit_checked', 'the packages whose opens are audited',
+                  type='linelist', default=['OpenGLContext'])
+    parser.addini('open_audit_sanctioned',
+                  'the modules and packages that may open files',
+                  type='linelist', default=list(SANCTIONED_OPENERS))
+    parser.addoption(
+        '--open-audit', choices=OPEN_AUDIT_MODES, default=None,
+        help='off, report or fail; overrides the open_audit ini setting')
     parser.addoption(
         '--numpy-errors', choices=NUMPY_ERROR_ACTIONS, default=None,
         help='what a floating-point error in NumPy does during each test; '
@@ -206,6 +235,61 @@ def numpy_errors(config: Any) -> NumpyErrorAction | None:
             return action
     raise ValueError('numpy_errors = %r is not one of %s'
                      % (named, ', '.join(NUMPY_ERROR_ACTIONS)))
+
+
+def open_audit_mode(config: Any) -> str:
+    """``'off'``, ``'report'`` or ``'fail'``: what the run does with an unsanctioned open."""
+    mode = (config.getoption('open_audit', None) or config.getini('open_audit')
+            or 'off').strip()
+    if mode not in OPEN_AUDIT_MODES:
+        raise ValueError('open_audit = %r is not one of %s'
+                         % (mode, ', '.join(OPEN_AUDIT_MODES)))
+    return mode
+
+
+class OpenAuditWarning(UserWarning):
+    """A file opened from outside the sanctioned openers, under ``open_audit = report``."""
+
+
+#: The session's open audit, where the run asked for one.
+_AUDIT: dict[str, Any] = {}
+
+
+def _start_open_audit(config: Any) -> None:
+    mode = open_audit_mode(config)
+    if mode == 'off':
+        return
+    from OpenGLContext.testing import openaudit
+    _AUDIT['audit'] = openaudit.installed(config.getini('open_audit_checked'),
+                                          config.getini('open_audit_sanctioned'))
+    _AUDIT['mode'] = mode
+
+
+@pytest.fixture(autouse=True)
+def open_audit(request: Any) -> Iterator[None]:
+    """Fail a test that opened a file from outside the sanctioned openers.
+
+    Under ``open_audit = fail``; under ``report`` each is an
+    :class:`OpenAuditWarning`, which the run's warnings summary lists. What each test opened is taken after it, so one test's
+    finding is not charged to the next.
+    """
+    audit = _AUDIT.get('audit')
+    if audit is None:
+        yield
+        return
+    audit.take()
+    yield
+    found = audit.take()
+    if not found:
+        return
+    if _AUDIT['mode'] == 'report':
+        for finding in dict.fromkeys(found):
+            warnings.warn(OpenAuditWarning(str(finding)), stacklevel=1)
+        return
+    pytest.fail('files were opened from outside the sanctioned openers '
+                '(open_audit_sanctioned):\n  ' + '\n  '.join(
+                    str(finding) for finding in dict.fromkeys(found)),
+                pytrace=False)
 
 
 @pytest.fixture(autouse=True)
@@ -252,6 +336,7 @@ def pytest_configure(config: Any) -> None:
     # child process to learn something it cannot act on.
     if glcontext.windowing() == 'glfw':
         _TEARDOWN['decided'] = glfwteardown.settle_for_session()
+    _start_open_audit(config)
 
 
 def glfw_teardown() -> str:
