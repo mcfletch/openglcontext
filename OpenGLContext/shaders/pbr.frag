@@ -282,7 +282,7 @@ uniform mat4 planarMatrix;       // world to the mirrored camera's clip space, u
 uniform vec4 planarTile;         // that camera's NDC to the atlas: xy scale, zw offset
 uniform vec4 planarBounds;       // the tile in atlas coordinates, half a texel in
 uniform vec3 planarNormal;       // the mirror's plane normal, world space
-uniform float planarDistortion;  // view widths of offset per unit of normal tilt
+uniform float planarDistortion;  // widths of the mirror's view per unit of normal tilt
 uniform float planarLevels;      // blurred mip levels a rough mirror may read
 uniform bool planarReplace;      // show the reflection in place of the shading
 uniform float planarReflectance; // the share of the light the mirror reflects

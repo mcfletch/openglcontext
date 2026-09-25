@@ -109,7 +109,7 @@ class ViewStyle:
                 'a view background is True or an RGB/RGBA colour, not %r'
                 % (self.background,))
 
-    def clearColour(self) -> Optional[Tuple[float, float, float, float]]:
+    def clear_colour(self) -> Optional[Tuple[float, float, float, float]]:
         """The RGBA colour this view clears to, or None to draw the scene's background."""
         if isinstance(self.background, bool):
             return None

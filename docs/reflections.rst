@@ -51,7 +51,9 @@ The node's fields are read every frame, so a change takes effect on the next.
    * - ``distortion``
      - 0.0
      - How far a unit of the surface normal's tilt from the plane pushes the
-       lookup, in view widths: the normal map breaking the reflection up.
+       lookup, in widths of the mirror's view across and heights of it up and
+       down: the normal map breaking the reflection up. The mirror's view is
+       its rectangle on screen and the guard band round it.
    * - ``reflectance``
      - 0.97
      - The share of the light the mirror reflects. A silvered mirror loses a

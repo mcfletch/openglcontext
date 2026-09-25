@@ -304,9 +304,9 @@ class TestStyle:
         assert ViewStyle().wireframe is False
 
     def test_a_flat_background_is_four_channels(self):
-        assert ViewStyle(background=(0.1, 0.2, 0.3)).clearColour() == (0.1, 0.2, 0.3, 1.0)
-        assert ViewStyle(background=(0, 0, 0, 0.5)).clearColour() == (0.0, 0.0, 0.0, 0.5)
-        assert ViewStyle().clearColour() is None
+        assert ViewStyle(background=(0.1, 0.2, 0.3)).clear_colour() == (0.1, 0.2, 0.3, 1.0)
+        assert ViewStyle(background=(0, 0, 0, 0.5)).clear_colour() == (0.0, 0.0, 0.0, 0.5)
+        assert ViewStyle().clear_colour() is None
 
     def test_a_background_is_the_scene_or_a_colour(self):
         with pytest.raises(ValueError):

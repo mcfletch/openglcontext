@@ -147,8 +147,9 @@ only where it is flat to within 1% of its size. See :doc:`../reflections`.
    * - ``distortion``
      - number
      - 0
-     - View widths of offset per unit of the surface normal's tilt from the
-       plane, which is how far a normal map breaks the reflection up; 0 to 1.
+     - Offset per unit of the surface normal's tilt from the plane, in widths
+       (and heights) of the mirror's view, which is how far a normal map
+       breaks the reflection up; 0 to 1.
    * - ``reflectance``
      - number
      - 0.97

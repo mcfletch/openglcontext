@@ -49,9 +49,10 @@ class PlanarReflector(Varied, node.Node):
     rectangle on screen, each way. ``interval`` is the most frames a visible
     reflection goes without being drawn again; a moving object's reflection
     lags by up to that many. ``priority`` weighs this mirror against the others
-    when the frame's budget is short. ``distortion`` is how far, in view
-    widths, a unit of the surface normal's tilt from the plane pushes the
-    lookup: water's ripple, or a mirror's normal map. ``enabled`` False keeps
+    when the frame's budget is short. ``distortion`` is how far a unit
+    of the surface normal's tilt from the plane pushes the lookup, in widths
+    of the mirror's view across and heights of it up and down: water's
+    ripple, or a mirror's normal map. ``enabled`` False keeps
     the node in place while the surface reflects the probe.
 
     ``reflectance`` is the share of the light the mirror reflects, 0.97 by
@@ -102,7 +103,8 @@ class PlanarReflector(Varied, node.Node):
         return documentvalues.bounded(getattr(self, name), default, minimum, maximum)
 
 
-#: How far, in view widths, a unit of water's tilt from flat pushes its lookup.
+#: How far, in widths of the mirror's view, a unit of water's tilt from flat
+#: pushes its lookup.
 #: The ripple tilts it by a tenth or so, which moves a reflected edge by a few
 #: percent of the view: broken up, still legible.
 WATER_DISTORTION = 0.12

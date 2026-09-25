@@ -33,7 +33,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import math
-from typing import Dict, Hashable, Iterable, List, Mapping, Optional, Set, Tuple
+from typing import Dict, Hashable, Iterable, List, Mapping, NamedTuple, Optional, Set, Tuple
 
 __all__ = [
     'GUTTER', 'DRIFT_TEXELS', 'Tile', 'Packed', 'TilePacker', 'Candidate',
@@ -88,12 +88,20 @@ def _shelf_height(height: int) -> int:
     return shelf
 
 
+class _Slot(NamedTuple):
+    """A tile and its gutter on a shelf: where it starts, how wide, and whose."""
+
+    x: int
+    width: int
+    key: Hashable
+
+
 @dataclass
 class _Shelf:
     y: int
     height: int
-    #: ``[x, width, key]`` of each slot, in order along the shelf.
-    slots: List[list] = field(default_factory=list)
+    #: Each slot, in order along the shelf.
+    slots: List[_Slot] = field(default_factory=list)
 
     def fit(self, width: int, limit: int) -> Optional[int]:
         """The first x a slot ``width`` wide fits at, or None."""
@@ -167,14 +175,14 @@ class TilePacker:
 
     def _occupy(self, shelf: _Shelf, x: int, width: int, key: Hashable,
                 size: Tuple[int, int]) -> None:
-        shelf.slots.append([x, width, key])
-        shelf.slots.sort(key=lambda slot: slot[0])
+        shelf.slots.append(_Slot(x, width, key))
+        shelf.slots.sort(key=lambda slot: slot.x)
         self._sizes[key] = size
         self._tiles[key] = Tile(x + self.gutter, shelf.y + self.gutter, *size)
 
     def _release(self, key: Hashable) -> None:
         for shelf in self._shelves:
-            shelf.slots = [slot for slot in shelf.slots if slot[2] != key]
+            shelf.slots = [slot for slot in shelf.slots if slot.key != key]
         # An empty shelf at the top gives its height back; one lower down is
         # kept for the next tile of its class.
         while self._shelves and not self._shelves[-1].slots:

@@ -1824,7 +1824,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         A view with a flat background clears to it; any other draws the
         scene's bound ``Background``, which clears as it draws.
         """
-        colour = frame.view.style.clearColour()
+        colour = frame.view.style.clear_colour()
         if colour is not None:
             glClearColor( *colour )
             glClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT )

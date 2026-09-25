@@ -32,8 +32,9 @@ optional:
     Weight against the other mirrors in view when the frame's budget is short.
     Default 1, at least 0.
 ``distortion``
-    View widths of offset per unit of the surface normal's tilt from the
-    plane: how far a normal map breaks the reflection up. Default 0, at most 1.
+    Offset per unit of the surface normal's tilt from the plane, in widths
+    (and heights) of the mirror's view: how far a normal map breaks the
+    reflection up. Default 0, at most 1.
 ``reflectance``
     The share of the light the mirror reflects. Default 0.97, from 0 to 1.
 ``replace``
