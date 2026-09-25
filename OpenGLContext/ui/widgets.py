@@ -44,7 +44,7 @@ from OpenGLContext.ui.skin import (
 __all__ = [
     'RIPPLE_SECONDS', 'Widget', 'RootWidget', 'BoundWidget', 'Label', 'Button', 'Toggle',
     'Select', 'Slider', 'TextField', 'NumberField', 'KeyCapture', 'Spacer',
-    'Separator',
+    'Separator', 'ProgressBar',
     'key_label',
     'PRIMARY', 'SECONDARY', 'DANGER',
 ]
@@ -129,11 +129,11 @@ class Widget(GUINode, node.Node):
     #: splitter asks for a resize cursor, so it reads as something to drag.
     #: Empty leaves the pointer as it is.
     cursor: str = ''
-    #: Whether the skin's ``hoverWash`` is drawn over this widget while the
-    #: pointer rests on it, which is what says an interactive widget can be
+    #: Whether the skin's ``hoverWash`` colour is drawn over this widget while
+    #: the pointer rests on it, which is what says an interactive widget can be
     #: clicked. Off for a widget whose own painting already changes under the
     #: pointer, and for a container that is interactive only to take the wheel.
-    hoverWash: bool = True
+    washOnHover: bool = True
     #: Whether pressing or activating this widget spreads a ripple across it.
     #: Off for what is dragged or typed into rather than clicked.
     ripples: bool = True
@@ -272,7 +272,7 @@ class Widget(GUINode, node.Node):
     def showsHover(self) -> bool:
         """Whether the hover wash is drawn over this widget right now."""
         return bool(self.hovered and self.interactive and self.enabled
-                    and self.hoverWash)
+                    and self.washOnHover)
 
     def ripple(self, x: Optional[float] = None, y: Optional[float] = None,
                now: Optional[float] = None) -> bool:
@@ -304,7 +304,6 @@ class Widget(GUINode, node.Node):
         start, x, y = self._ripple
         progress = (float(now) - start) / RIPPLE_SECONDS
         if progress >= 1.0:
-            self._ripple = None
             return None
         progress = max(progress, 0.0)
         rect = self.rect
@@ -313,6 +312,13 @@ class Widget(GUINode, node.Node):
                     for corner_y in (rect.y, rect.y + rect.height))
         radius = reach * (1.0 - (1.0 - progress) ** 3)
         return (x, y, radius, 1.0 - progress)
+
+    def rippleRunning(self, now: float) -> bool:
+        """Whether a ripple is still spreading at ``now``; one that has finished is let go."""
+        if self.rippleAt(now) is not None:
+            return True
+        self._ripple = None
+        return False
 
     def paintFeedback(self, renderer: Any) -> None:
         """Draw the hover wash and any ripple over what :meth:`paint` drew."""
@@ -421,7 +427,7 @@ class RootWidget(Widget):
     """
 
     PROTO = 'UIRootWidget'
-    hoverWash = False
+    washOnHover = False
     ripples = False
     children = field.newField('children', 'MFNode', 1, list)
     #: The artwork and colours this tree paints with; the default flat skin
@@ -454,7 +460,7 @@ class RootWidget(Widget):
         if not self._effects:
             return False
         self._effects = [widget for widget in self._effects
-                         if widget.rippleAt(now) is not None]
+                         if widget.rippleRunning(now)]
         return bool(self._effects)
 
     def layoutChildren(self) -> List[Widget]:
@@ -622,20 +628,11 @@ class Spacer(Widget):
 
 
 class ProgressBar(Widget):
-    """How far something has got, when the something takes long enough to say.
+    """How far a long job has got: a track, the part of it done, and a line of text.
 
-    A 450 MB download, a bake, a world streaming in: each is a wait somebody
-    sits through, and a wait with no end in sight is the one that feels broken.
-
-    **Not a disabled slider.** A :class:`Slider` is a control -- it takes focus,
-    it takes input, and its value is the user's. This reports: it takes no
-    focus, has no thumb to grab, and its value is somebody else's news. That is
-    also why ``fraction`` is clamped rather than validated: it comes from a job
-    measuring itself against a size it was told, and a bar is not the place to
-    raise about arithmetic somewhere else.
-
-    ``text`` is drawn over the bar where there is one -- "Ashdown — 40%" says
-    more than a bar alone, and a bar alone says more than a number.
+    It draws the track, fills it from the left by ``fraction``, and draws
+    ``text`` over it where there is any. ``fraction`` outside 0 to 1 is drawn
+    as none or all rather than refused. It takes no focus and no input.
     """
 
     PROTO = 'ProgressBar'
@@ -681,8 +678,8 @@ class Button(BoundWidget):
 
     interactive = True
     focusable = True
-    #: The skin's hover fill lights it; a wash as well would be two.
-    hoverWash = False
+    #: It paints the skin's button hover fill under the pointer instead.
+    washOnHover = False
 
     def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:

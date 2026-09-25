@@ -178,8 +178,8 @@ class ViewLabel(_ViewWidget):
     interactive = True
     focusable = True
     cursor = 'hand'
-    #: The skin's hover fill lights it.
-    hoverWash = False
+    #: It paints the skin's button hover fill under the pointer instead.
+    washOnHover = False
     tooltip = _('Which way this view looks, through which of the scene\'s '
                 'cameras, and how it is drawn')
 
@@ -265,8 +265,8 @@ class _ChromeButton(_ViewWidget):
 
     interactive = True
     focusable = True
-    #: The skin's hover fill lights it.
-    hoverWash = False
+    #: It paints the skin's button hover fill under the pointer instead.
+    washOnHover = False
 
     def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
@@ -320,10 +320,11 @@ class ExpandButton(_ChromeButton):
             for y in (rect.y, rect.y + side[1] + gap):
                 renderer.rect(Rect(x, y, side[0], side[1]), colour)
 
-    def paint(self, renderer: Any) -> None:
-        self.tooltip = (_('Give the views back their tiles') if self.maximised()
-                        else _('Single tile: this view alone in the window'))
-        super(ExpandButton, self).paint(renderer)
+    @property
+    def tooltip(self) -> str:  # type: ignore[override]  # read-only here: it follows the layout
+        """What pressing it would do: give the view the window, or give it back."""
+        return (_('Give the views back their tiles') if self.maximised()
+                else _('Single tile: this view alone in the window'))
 
     def activate(self) -> None:
         if self.chrome is not None:
@@ -342,7 +343,7 @@ class Splitter(Widget):
     PROTO = 'ViewSplitter'
     interactive = True
     #: The line lights itself, and it is dragged rather than clicked.
-    hoverWash = False
+    washOnHover = False
     ripples = False
     tooltip = _('Drag to move the line between the views')
 

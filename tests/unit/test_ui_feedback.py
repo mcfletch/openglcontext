@@ -129,6 +129,16 @@ class TestTheRipple:
         button.ripple(now=0.0)
         assert button.rippleAt(RIPPLE_SECONDS + 0.01) is None
 
+    def test_asking_where_it_is_does_not_end_it(self):
+        """A query is a query; the panel's frame is what puts a finished one away."""
+        button = Button(text='Apply')
+        panel = _panel(button)
+        button.ripple(now=0.0)
+        assert button.rippleAt(RIPPLE_SECONDS + 0.01) is None
+        assert button.rippleAt(0.1) is not None
+        panel.animating(RIPPLE_SECONDS + 0.01)
+        assert button.rippleAt(0.1) is None
+
     def test_a_click_in_a_panel_starts_one(self):
         button = Button(text='Apply')
         _panel_, start = self._pressed(button)

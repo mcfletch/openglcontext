@@ -683,7 +683,7 @@ fading as it grows over ``RIPPLE_SECONDS`` (0.45 s, in
 ``OpenGLContext.ui.widgets``). A control run from the keyboard, by an
 accelerator or by a menu letter ripples from its middle. The window keeps
 drawing frames while a ripple runs, and a capture's fixed clock times it like
-everything else. A widget class opts out with ``hoverWash = False`` or
+everything else. A widget class opts out with ``washOnHover = False`` or
 ``ripples = False``. Sliders, text fields, scrolling viewports and view
 splitters do not ripple.
 

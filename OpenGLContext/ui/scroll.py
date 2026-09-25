@@ -46,7 +46,7 @@ class ScrollViewport(Widget):
     interactive = True
     #: Interactive to take the wheel and the bar; the controls inside it are
     #: what the pointer is shown.
-    hoverWash = False
+    washOnHover = False
     ripples = False
 
     #: Set while the thumb is being dragged: how far down the thumb the pointer

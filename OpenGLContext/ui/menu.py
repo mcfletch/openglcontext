@@ -89,7 +89,7 @@ class MenuItem(Widget):
     interactive = True
     focusable = True
     #: A row paints the menu's highlight instead.
-    hoverWash = False
+    washOnHover = False
     #: The letter the menu gave this item, where it names none of its own.
     _assigned: str = ''
 

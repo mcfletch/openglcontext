@@ -599,3 +599,14 @@ class TestTheButtonsGlyph:
         chrome = _chrome()
         for button in _of(chrome, ExpandButton):
             assert abs(button.rect.width - button.rect.height) <= 2
+
+
+class TestWhatTheExpandButtonSays:
+    def test_its_tip_follows_what_it_would_do_without_being_drawn(self):
+        layout = _layout()
+        chrome = _chrome(layout)
+        button = _of(chrome, ExpandButton)[0]
+        alone = button.tooltip
+        assert alone
+        layout.maximise(button.view)
+        assert button.tooltip and button.tooltip != alone

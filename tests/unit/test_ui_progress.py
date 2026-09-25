@@ -119,3 +119,8 @@ class TestWhatItIsNot:
     def test_it_is_not_a_control(self):
         from OpenGLContext.ui.widgets import BoundWidget
         assert not isinstance(bar(), BoundWidget)
+
+
+def test_it_is_part_of_the_widget_set():
+    from OpenGLContext.ui import widgets
+    assert 'ProgressBar' in widgets.__all__
