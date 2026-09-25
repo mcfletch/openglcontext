@@ -517,7 +517,6 @@ def test_zones_cost_a_fill_bound_frame_little():
     own, where every fragment samples four probe layers. What this is here to
     catch is either growing into a large part of the frame.
     """
-    from OpenGLContext.testing.glcontext import gl_available
     if not gl_available():
         pytest.skip('no GL context can be made here')
 

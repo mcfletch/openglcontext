@@ -4,13 +4,14 @@
 does. The hall is held to what the page says is in it, and drawn once for
 real.
 """
+import tomllib
 from pathlib import Path
 import numpy as np
 import pytest
 
 from OpenGLContext.bin.mirrors_demo import BOUNCES, BUDGETS, INTERVALS, MirrorHall
 from OpenGLContext.contextdefinition import ContextDefinition
-from OpenGLContext.passes import reflection
+from OpenGLContext.passes import reflection, renderpass
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.bin import mirrors_demo
 
@@ -120,7 +121,6 @@ def test_the_help_names_every_key():
 
 
 def test_the_command_is_installed():
-    import tomllib
     project = tomllib.loads((Path(__file__).resolve().parents[2]
                              / 'pyproject.toml').read_text(encoding='utf-8'))
     assert project['project']['scripts']['oglc-mirrors'] == \
@@ -129,8 +129,7 @@ def test_the_command_is_installed():
 
 def test_the_hall_draws_its_mirrors(render_scene, monkeypatch):
     pytest.importorskip('glfw')
-    from tests.unit.glrender import base_env
-    from OpenGLContext.passes import renderpass
+    from tests.unit.glrender import base_env  # noqa: PLC0415 glrender skips its importer without glfw, and the rest of this module needs none
     base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0', OPENGLCONTEXT_REFLECTION_VIEWS='3')
     render_scene(MirrorHall().children, frames=3, size=(320, 180))
     stats = renderpass.FLAT.stats

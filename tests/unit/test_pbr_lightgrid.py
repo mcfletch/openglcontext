@@ -16,6 +16,7 @@ import sys
 
 import pytest
 import numpy as np
+from tests.unit.viewcapture import run_to_frame
 
 from OpenGLContext.passes.shaderpass import SHADER_DIR
 from OpenGLContext.testing.paths import tests_root
@@ -166,7 +167,6 @@ class TestWhereTheObjectIs:
 @pytest.fixture(scope="module")
 def lightgrid_image(tmp_path_factory):
     """Two identical spheres, lit only by a grid that is bright on the left."""
-    from tests.unit.viewcapture import run_to_frame
 
     out = str(tmp_path_factory.mktemp("lightgrid") / "lightgrid.png")
     return run_to_frame([sys.executable, CAPTURE, out, 'lightgrid'], out)

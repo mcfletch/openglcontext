@@ -16,7 +16,7 @@ import gc
 import pytest
 from OpenGL.GL import glGenLists, glIsList
 
-from OpenGLContext import contextresources
+from OpenGLContext import contextresources, testingcontext
 from OpenGLContext.passes import renderpass, shaderpass
 from OpenGLContext.testing import glcontext
 from OpenGLContext.scenegraph import teapot
@@ -190,7 +190,6 @@ class TestAContextReleasesItsOwnResources:
     @pytest.fixture
     def two_engine_contexts(self):
         """Two live :class:`GLFWContext` instances, both released afterwards."""
-        from OpenGLContext import testingcontext
 
         if glcontext.windowing() != 'glfw':
             pytest.skip('this run does not make GLFW windows')

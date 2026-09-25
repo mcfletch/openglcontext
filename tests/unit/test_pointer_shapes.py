@@ -16,6 +16,7 @@ glfw = pytest.importorskip('glfw')
 from OpenGLContext.glfwcontext import GLFWContext
 from OpenGLContext.testing import glcontext
 from OpenGLContext.context import Context, CURSORS
+from OpenGLContext.glutcontext import GLUTContext
 
 #: Every name the backend offers.
 NAMES = sorted(GLFWContext.CURSOR_SHAPES)
@@ -147,7 +148,6 @@ class TestMouseLookKeepsThePointerHidden:
     """A backend whose hidden pointer is itself a cursor shape refuses another."""
 
     def test_glut_refuses_a_shape_while_the_pointer_is_grabbed(self, monkeypatch):
-        from OpenGLContext.glutcontext import GLUTContext
         set_to = []
         monkeypatch.setattr(GLUT, 'glutSetWindow', lambda window: None)
         monkeypatch.setattr(GLUT, 'glutSetCursor', set_to.append)
@@ -165,7 +165,6 @@ class TestNoWrongPicture:
     """A backend with no "not allowed" pointer answers False rather than show another."""
 
     def test_glut_has_no_not_allowed_pointer(self, monkeypatch):
-        from OpenGLContext.glutcontext import GLUTContext
         set_to = []
         monkeypatch.setattr(GLUT, 'glutSetWindow', lambda window: None)
         monkeypatch.setattr(GLUT, 'glutSetCursor', set_to.append)
@@ -175,5 +174,5 @@ class TestNoWrongPicture:
         assert set_to == []
 
     def test_tk_has_no_not_allowed_pointer(self):
-        from OpenGLContext.tkcontext import TkContext
+        from OpenGLContext.tkcontext import TkContext  # noqa: PLC0415 tkinter is optional in a Python build
         assert 'no' not in TkContext.CURSOR_SHAPES

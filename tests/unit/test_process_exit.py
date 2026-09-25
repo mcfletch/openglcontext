@@ -10,6 +10,7 @@ import subprocess
 import sys
 import textwrap
 
+import coverage
 import pytest
 
 from OpenGLContext.processexit import flush_and_exit
@@ -28,7 +29,6 @@ def test_flush_and_exit_saves_active_coverage(monkeypatch):
 
     monkeypatch.setattr('os._exit', lambda code: exited.__setitem__('code', code))
 
-    import coverage
     monkeypatch.setattr(coverage.Coverage, 'current', staticmethod(lambda: FakeCov()))
 
     flush_and_exit(3)
@@ -42,7 +42,6 @@ def test_flush_and_exit_without_coverage(monkeypatch):
     exited = {'code': None}
     monkeypatch.setattr('os._exit', lambda code: exited.__setitem__('code', code))
 
-    import coverage
     monkeypatch.setattr(coverage.Coverage, 'current', staticmethod(lambda: None))
 
     flush_and_exit(0)
@@ -54,7 +53,6 @@ def test_flush_and_exit_survives_coverage_error(monkeypatch):
     exited = {'code': None}
     monkeypatch.setattr('os._exit', lambda code: exited.__setitem__('code', code))
 
-    import coverage
 
     def boom():
         raise RuntimeError('coverage save exploded')

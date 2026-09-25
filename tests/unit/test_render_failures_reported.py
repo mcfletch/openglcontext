@@ -16,6 +16,8 @@ import numpy as np
 
 pytest.importorskip("glfw")
 
+from tests.unit.glrender import base_env
+
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.passes import renderpass
 from OpenGLContext.scenegraph.frommesh import mesh_from_primitive
@@ -41,7 +43,6 @@ def failing_scene():
 
 @pytest.fixture(autouse=True)
 def shader_paths(monkeypatch):
-    from tests.unit.glrender import base_env
     base_env(monkeypatch)
 
 

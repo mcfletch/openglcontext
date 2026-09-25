@@ -8,6 +8,7 @@ reflection it reads, once per change.
 import types
 import numpy as np
 import pytest
+from tests.unit.test_reflection_planner import _frame, _mirror
 
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.passes import reflection
@@ -326,7 +327,6 @@ def _drawing_pass(records, **fields):
 
 
 def _mirror_frame():
-    from tests.unit.test_reflection_planner import _frame, _mirror
     record = _mirror()
     return record, _frame([record])
 
@@ -357,7 +357,6 @@ def test_switching_reflections_off_gives_back_the_atlas_and_every_tile():
 
 def test_a_new_atlas_is_read_only_where_this_frame_drew():
     """Tiles kept from before hold nothing in an atlas made this frame."""
-    from tests.unit.test_reflection_planner import _frame, _mirror
     kept, drawn = _mirror(-1.5), _mirror(1.5)
     effects = _drawing_pass([kept, drawn])
     planner = effects._reflection_planner

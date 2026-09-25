@@ -194,7 +194,6 @@ def test_drawn_in_turn_two_mirrors_a_frame_is_the_default(render_scene, env):
     env.setenv('OPENGLCONTEXT_MULTIVIEW', 'sequential')
     row = [_mirror(x=x, size=2.5) for x in np.linspace(-4.5, 4.5, 4)]
     render_scene(_room(*row), frames=2, size=(320, 120))
-    from OpenGLContext.passes import renderpass
     assert renderpass.FLAT.stats.mirrorViews == 2
 
 
@@ -232,7 +231,6 @@ def test_a_reflection_reused_after_a_small_move_matches_a_fresh_one(
     kept = frames[-1]
     stale.interval = 1
     env.setenv('OPENGLCONTEXT_REFLECTION_VIEWS', '2')
-    from OpenGLContext import renderoptions
     renderoptions.reset_env_cache()
     rendered.context.OnDraw(force=1)
     assert renderpass.FLAT.stats.mirrorViews == 2
@@ -297,7 +295,6 @@ def _twelve(render_scene, env, strategy):
         basenodes.DirectionalLight(direction=(0.0, -1.0, 0.0)),
         _wall(7.5, (0.2, 0.6, 0.2)), _wall(-7.5, (0.2, 0.2, 0.6)),
         _box(0.0, 9.0, (1.0, 0.0, 0.0))] + mirrors, frames=3, size=(320, 120))[-1]
-    from OpenGLContext.passes import renderpass
     if renderpass.FLAT.multiviewStrategy != strategy:
         pytest.skip('this driver cannot draw with %s' % strategy)
     assert renderpass.FLAT.stats.mirrorViews == 12

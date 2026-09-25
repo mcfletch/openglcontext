@@ -215,8 +215,8 @@ def test_a_small_atlas_reads_nothing_of_the_neighbouring_views(render_scene, mon
     The view the camera sees is green and every other view red, so any red on
     screen is the filter reaching across the tile's edge into a neighbour.
     """
-    from tests.unit.glrender import base_env, frames_of
 
+    from tests.unit.glrender import base_env, frames_of  # noqa: PLC0415 glrender skips its importer without glfw, and the subprocess tests here need none
     base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0', OPENGLCONTEXT_INSTANCE_MIN='999')
     row, column = expected_cell((0.0, 1.0, 0.0), 0.0)
     tile = ATLAS // GRID

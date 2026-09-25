@@ -96,7 +96,7 @@ def test_a_wall_the_hall_does_not_have_is_refused(hall):
 # --- what breaks the room up -------------------------------------------------------
 
 from OpenGLContext.bin.mirrorhall import BAYS, PILASTERS, STEPS, WINDOWS
-from OpenGLContext.scenegraph.basenodes import Background, DirectionalLight
+from OpenGLContext.scenegraph.basenodes import Background, DirectionalLight, Transform, Zone
 
 
 def _pieces(hall, material):
@@ -166,7 +166,6 @@ def test_the_sun_comes_in_through_the_windows_well_onto_the_floor(hall):
 
 def test_the_room_is_lit_by_what_can_be_seen_inside_it(hall):
     """A zone round the whole room takes its environment from a capture."""
-    from OpenGLContext.scenegraph.basenodes import Transform, Zone
     [holder] = [node for node in hall.room() if isinstance(node, Transform)
                 and any(isinstance(child, Zone) for child in node.children)]
     [zone] = holder.children
