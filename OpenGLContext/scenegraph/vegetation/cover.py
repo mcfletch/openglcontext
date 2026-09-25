@@ -63,7 +63,7 @@ from vrml.node import Node
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.varied import Varied
 from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
-from OpenGLContext.scenegraph.vegetation.grid import Patches, ScatterBlocks
+from OpenGLContext.scenegraph.vegetation.grid import BLOCK_METRES, Patches, ScatterBlocks
 
 if TYPE_CHECKING:
     from OpenGLContext.scenegraph.terrain.heightfield import HeightField
@@ -86,6 +86,9 @@ FAR_RADIUS = 700.0
 #: metres and is not worth re-scattering every few paces.
 SETTLED_METRES = 10.0
 FAR_SETTLED_METRES = 40.0
+#: How many scatter blocks a disc is across, at least: a wide disc is scattered
+#: in wide blocks.
+BLOCKS_ACROSS = 8.0
 
 #: Which fraction of the clump disc the full-detail geometry covers. The outer
 #: ``1 - FRAC**2`` of the area -- most of the plants -- is drawn with the coarse
@@ -562,7 +565,10 @@ class GroundCover(Group):
         everything again.
         """
         slot = (id(rung), role)
-        key = (float(density), float(height))
+        # A block a fraction of the disc's width, so a disc is a few dozen
+        # of them however far it reaches.
+        metres = max(BLOCK_METRES, radius / BLOCKS_ACROSS)
+        key = (float(density), float(height), metres)
         held = self._blocks.get(slot)
         if held is None or held[0] != key:
             if held is not None:
@@ -572,7 +578,7 @@ class GroundCover(Group):
                 rung.patches.density_for(density), self.field,
                 scale_mul=height, jitter=COVER_JITTER, mask=self._suits(rung),
                 salt=kind.salt, scale_range=SIZE_SPREAD,
-                finish=self._finisher(rung)))
+                finish=self._finisher(rung), metres=metres))
             self._blocks[slot] = held
         found = held[1].disc(x, z, radius)
         return found if len(found) == 4 else (*found, None)

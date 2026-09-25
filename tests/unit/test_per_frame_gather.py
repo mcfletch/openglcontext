@@ -323,3 +323,38 @@ class TestTheFrustumTest:
                                          np.array([True, False]))
 
         assert list(kept) == [0]
+
+
+class TestBoxesOutside:
+    """``frustum.boxes_outside``: the one plane test every cull shares."""
+
+    def test_it_is_the_eight_corner_decision(self):
+        from OpenGLContext.frustum import boxes_outside
+        rng = np.random.default_rng(11)
+        count = 300
+        low = rng.uniform(-3, 1, (count, 3))
+        high = low + rng.uniform(0.1, 4, (count, 3))
+        matrices = np.tile(np.eye(4), (count, 1, 1))
+        matrices[:, :3, :3] = rng.normal(size=(count, 3, 3))
+        matrices[:, 3, :3] = rng.uniform(-30, 30, (count, 3))
+        planes = rng.normal(size=(6, 4))
+        planes[:, 3] = rng.uniform(-10, 10, 6)
+        corners = np.ones((count, 8, 4))
+        for index in range(8):
+            for axis in range(3):
+                corners[:, index, axis] = np.where(index >> axis & 1, high[:, axis], low[:, axis])
+        world = np.einsum('nci,nij->ncj', corners, matrices)
+        expected = ((world @ planes.T) < 0).all(axis=1).any(axis=1)
+
+        found = boxes_outside((low + high) / 2, (high - low) / 2, matrices, planes)
+
+        assert 0 < expected.sum() < count
+        assert list(found) == list(expected)
+
+    def test_one_box_under_many_matrices(self):
+        from OpenGLContext.frustum import boxes_outside
+        matrices = np.tile(np.eye(4), (3, 1, 1))
+        matrices[:, 3, 0] = (0.0, 50.0, -50.0)
+        planes = np.array([(1.0, 0.0, 0.0, 10.0), (-1.0, 0.0, 0.0, 10.0)])
+        found = boxes_outside(np.zeros(3), np.ones(3), matrices, planes)
+        assert list(found) == [False, True, True]

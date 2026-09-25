@@ -496,3 +496,45 @@ class TestWhereACallerSetsTheOptOut:
             _record(np.identity(4, 'd'), None,
                     self.shape(castsShadow=False))])
         assert mixin._shadow_bindings == []
+
+
+class TestCullOccludersTogether:
+    """Box casters are culled against the light in one test of all of them; the
+    answer is each box's own ``visible`` answer."""
+
+    def _light(self):
+        view = shadowmath.look_at_matrix((0, 5, 0), (0, -1, 0))
+        proj = shadowmath.perspective_matrix(1.0, 1.0, 0.5, 20.0)
+        return view, proj
+
+    def _box(self, size=1.0):
+        from OpenGLContext.scenegraph.boundingvolume import AABoundingBox
+        return AABoundingBox(center=(0, 0, 0), size=(size, size, size))
+
+    def test_it_agrees_with_each_box_asked_alone(self):
+        from OpenGLContext import frustum as frustum_module
+        view, proj = self._light()
+        rng = np.random.default_rng(3)
+        records = []
+        for _ in range(120):
+            moved = np.eye(4)
+            moved[:3, :3] = rng.normal(size=(3, 3))
+            moved[3, :3] = rng.uniform(-15, 15, 3)
+            records.append(_record(moved, self._box(rng.uniform(0.2, 3.0))))
+        frust = frustum_module.Frustum.fromViewingMatrix(
+            np.dot(np.asarray(view, 'd'), np.asarray(proj, 'd')).astype('f'), normalize=1)
+        expected = [r for r in records if r[3].visible(frust, r[2].astype('f'))]
+        kept = ShadowMapMixin()._cullOccluders(records, view, proj)
+        assert 0 < len(expected) < len(records)
+        assert kept == expected
+
+    def test_a_volume_of_another_kind_answers_for_itself(self):
+        from OpenGLContext.scenegraph.boundingvolume import BoundingVolume, UnboundedVolume
+        view, proj = self._light()
+        far = np.eye(4)
+        far[3, :3] = (500.0, 0.0, 0.0)
+        empty, everywhere, gone = (_record(np.eye(4), BoundingVolume()),
+                                   _record(np.eye(4), UnboundedVolume()),
+                                   _record(far, self._box()))
+        kept = ShadowMapMixin()._cullOccluders([empty, everywhere, gone], view, proj)
+        assert kept == [everywhere]

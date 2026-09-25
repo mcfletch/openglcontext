@@ -270,7 +270,8 @@ class ScatterBlocks:
     """:func:`world_grid_scatter` kept by the block, so each place is scattered once.
 
     The world's grid is cut into square blocks of whole cells, about
-    :data:`BLOCK_METRES` wide. :meth:`disc` answers the scatter of a disc from the blocks it
+    ``metres`` wide (:data:`BLOCK_METRES` by default); a caller asking for
+    wide discs asks for wide blocks, so a disc is a few dozen of them. :meth:`disc` answers the scatter of a disc from the blocks it
     reaches, scattering a block the first time it is reached and keeping it,
     so a camera moving over the ground pays for the ground it newly reaches
     and nothing it has already passed over. The answer is the same set of
@@ -299,11 +300,12 @@ class ScatterBlocks:
                  mask: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None,
                  salt: int = 0,
                  scale_range: "tuple[float, float]" = (0.5, 1.0),
-                 finish: Optional[Callable[..., tuple]] = None) -> None:
+                 finish: Optional[Callable[..., tuple]] = None,
+                 metres: float = BLOCK_METRES) -> None:
         self.density = float(density)
         self.cell = 1.0 / math.sqrt(self.density)
         #: How many cells along a side a block holds, and how wide that is.
-        self.cells = max(BLOCK_CELLS_LEAST, int(round(BLOCK_METRES / self.cell)))
+        self.cells = max(BLOCK_CELLS_LEAST, int(round(float(metres) / self.cell)))
         self.span = self.cells * self.cell
         self.height_field = height_field
         self.scale_mul = scale_mul

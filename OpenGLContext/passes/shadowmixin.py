@@ -74,6 +74,17 @@ def light_depth_bias(light: Any) -> float:
     return SHADOW_DEPTH_BIAS if bias is None else float(bias)
 
 
+def _local_box(volume: Any, box_visible: Any) -> Optional[Tuple[Any, Any]]:
+    """``(centre, half-extents)`` of a volume whose visibility is its box's; else None."""
+    if type(volume).visible is not box_visible:
+        return None
+    points = np.asarray(volume.getPoints(), dtype='d')
+    if points.shape != (8, 4):
+        return None
+    low, high = points[:, :3].min(axis=0), points[:, :3].max(axis=0)
+    return (low + high) * 0.5, (high - low) * 0.5
+
+
 class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
     """Adds shadow-map depth pre-pass + uniform binding to a FlatPass."""
 
@@ -125,6 +136,11 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
     _caster_sig: Optional[tuple] = None
     _caster_points_raw: Optional[np.ndarray] = None
     _caster_aabb: Optional[np.ndarray] = None
+    #: Each box volume's own centre and half-extents, by ``id``, with the
+    #: volume held so a reused address is not mistaken for it. A volume is
+    #: the same object while its shape is unchanged, so this is worked out
+    #: once per shape rather than once per light per frame.
+    _local_boxes: Optional[Dict[int, Tuple[Any, Any]]] = None
     #: What each individual caster's geometry came out as, so that one thing
     #: moving does not re-derive the rest. Two frames' worth, turned over by
     #: :meth:`_turnOverCasterGeometry`. See :meth:`_casterWorldGeometry`.
@@ -521,24 +537,50 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
 
         Shrinks the depth pass: an occluder outside the light frustum cannot cast
         into this shadow map. Falls back to the full list if anything is unsure.
+        A box's decision is its own ``visible`` answer, made for every box at
+        once by :func:`OpenGLContext.frustum.boxes_outside`; any other kind of
+        volume is asked itself.
         """
         try:
             mp = dot(np.asarray(light_view, dtype='d'), np.asarray(light_proj, dtype='d'))
             frust = frustum_module.Frustum.fromViewingMatrix(mp.astype('f'), normalize=1)
         except Exception:
             return toRender
-        out = []
-        for record in toRender:
+        from OpenGLContext.scenegraph.boundingvolume import BoundingBox
+        box_visible = BoundingBox.visible
+        known = self._local_boxes
+        if known is None or len(known) > 4 * len(toRender) + 64:
+            known = self._local_boxes = {}
+        keep = [True] * len(toRender)
+        boxed: List[int] = []
+        centres: List[Any] = []
+        halves: List[Any] = []
+        matrices: List[Any] = []
+        for index, record in enumerate(toRender):
             bvolume = record[3]
-            tmatrix = record[2]
             if bvolume is None:
-                out.append(record)
                 continue
             try:
-                if bvolume.visible(frust, tmatrix.astype('f')):
-                    out.append(record)
+                entry = known.get(id(bvolume))
+                if entry is None or entry[0] is not bvolume:
+                    entry = known[id(bvolume)] = (bvolume, _local_box(bvolume, box_visible))
+                box = entry[1]
+                if box is not None:
+                    boxed.append(index)
+                    centres.append(box[0])
+                    halves.append(box[1])
+                    matrices.append(record[2])
+                    continue
+                keep[index] = bool(bvolume.visible(frust, record[2].astype('f')))
             except Exception:
-                out.append(record)
+                keep[index] = True
+        if boxed:
+            outside = frustum_module.boxes_outside(
+                np.asarray(centres), np.asarray(halves),
+                np.asarray(matrices, dtype='d'), np.asarray(frust.planes, dtype='d'))
+            for index, gone in zip(boxed, outside.tolist()):
+                keep[index] = not gone
+        out = [record for record, kept in zip(toRender, keep) if kept]
         return out if out else toRender
 
     def _castsShadow(self, light_node: Any, caps: ShadowCapabilities) -> bool:

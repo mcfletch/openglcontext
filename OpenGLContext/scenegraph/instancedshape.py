@@ -146,7 +146,7 @@ class InstancedShape(Shape):
         the frustum and every copy is drawn. This is that culling given back,
         without giving up the single draw -- the geometry's eight corners are
         carried through every placement at once and tested against the clipping
-        planes in one product, and what comes back is the subset to draw.
+        planes, and what comes back is the subset to draw.
 
         ``None`` means "no answer": no placements, no frustum, or geometry whose
         extent is not known. A caller that gets it draws the whole set, which is
@@ -172,12 +172,15 @@ class InstancedShape(Shape):
             return None
         if corners.shape != (8, 4):
             return None
-        # Corners into world space for every placement at once: (M,8,4).
-        world = np.matmul(np.matmul(corners[None, :, :], placements),
-                          np.asarray(matrix, dtype='f'))
-        world[:, :, 3] = 1.0
-        distances = world @ planes.T
-        rejected = (distances < 0).all(axis=1).any(axis=1)
+        # The planes carried into the set's own space, and the geometry's
+        # corners under every placement side by side: two two-dimensional
+        # products, where a product per placement is a stack of small ones
+        # numpy makes one at a time.
+        own = np.asarray(matrix, dtype='f') @ planes.T
+        count = len(placements)
+        placed = corners @ placements.transpose(1, 0, 2).reshape(4, -1)
+        distances = (placed.reshape(-1, 4) @ own).reshape(8, count, -1)
+        rejected = (distances < 0).all(axis=0).any(axis=1)
         if not rejected.any():
             return placements
         return np.asarray(placements[~rejected])

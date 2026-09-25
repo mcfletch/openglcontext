@@ -1454,14 +1454,8 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         A shape is rejected when some clipping plane has all eight of its
         corners behind it, which is the same decision
         :meth:`OpenGLContext.scenegraph.boundingvolume.BoundingBox.visible`
-        makes one shape at a time.
-
-        The corners are not transformed. A box is its centre and three
-        half-axes in world space, and the corner furthest in front of a plane
-        is the centre's distance plus the sum of the half-axes' lengths along
-        the plane's normal. Those are ordinary two-dimensional products
-        against the planes, where transforming eight corners by each path's
-        own matrix is a stack of small products numpy makes one at a time.
+        makes one shape at a time, made for the whole scene by
+        :func:`OpenGLContext.frustum.boxes_outside`.
         """
         planes = asarray( self.frustum.planes, 'f' )
         if not len(planes):
@@ -1471,20 +1465,8 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         corners = numpy.ascontiguousarray( points[:, :, :3].transpose( 1, 0, 2 ) )
         low = corners.min( axis=0 )
         high = corners.max( axis=0 )
-        centres = (low + high) * 0.5
-        halves = (high - low) * 0.5
-        # Row vectors: a point p lands at p @ M.
-        world = (
-            centres[:, 0, None] * matrices[:, 0, :3]
-            + centres[:, 1, None] * matrices[:, 1, :3]
-            + centres[:, 2, None] * matrices[:, 2, :3]
-            + matrices[:, 3, :3]
-        )
-        axes = halves[:, :, None] * matrices[:, :3, :3]
-        normals = planes[:, :3].T
-        reach = abs( axes.reshape( -1, 3 ) @ normals ).reshape( len(axes), 3, -1 ).sum( axis=1 )
-        nearest = world @ normals + planes[:, 3] + reach
-        outside = (nearest < 0).any( axis=1 ) & bounded
+        outside = frustum.boxes_outside(
+            (low + high) * 0.5, (high - low) * 0.5, matrices, planes ) & bounded
         return flatnonzero( drawing & ~outside )
 
     def greatestDepth( self, toRender: Sequence[Any] ) -> float:
