@@ -332,3 +332,16 @@ def gl_context_compat(gl_window: Callable[..., Any]) -> Any:
     would work in one.
     """
     return gl_window('gl_context_compat', profile='compatibility')
+
+
+# --- the test conventions -----------------------------------------------------
+#
+# Each is an ordinary function in its own module of OpenGLContext.testing, and a
+# fixture here as well, so a test takes it by name the way it takes gl_context.
+
+
+@pytest.fixture
+def check_memo_inputs() -> Callable[..., None]:
+    """:func:`OpenGLContext.testing.memo.check_memo_inputs`."""
+    from OpenGLContext.testing.memo import check_memo_inputs as check
+    return check

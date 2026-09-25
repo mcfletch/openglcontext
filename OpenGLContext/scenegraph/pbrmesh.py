@@ -24,6 +24,7 @@ from OpenGL.GL import (
     glDrawElements, glDrawArrays,
 )
 from OpenGL.arrays import vbo
+from pydispatch import dispatcher
 from vrml import node, field
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph import vertexsemantics
@@ -222,6 +223,11 @@ class _MeshGPU(object):
                         pass
 
 
+#: Sent from a :class:`PBRMesh` when its own :attr:`~PBRMesh.material` is set,
+#: with the new material as ``value``.
+MATERIAL_CHANGE_SIGNAL = 'PBRMesh.material'
+
+
 class PBRMesh(node.Node):
     """Indexed triangle mesh with PBR vertex attributes."""
     PROTO = 'PBRMesh'
@@ -265,6 +271,22 @@ class PBRMesh(node.Node):
     wave_time: float = 0.0
 
     @property
+    def material(self) -> Any:
+        """The mesh's own material, drawn with where its shape's appearance has none.
+
+        A mesh placed without an appearance material (water, a mesh drawn on
+        its own) carries it here, and ``sortKey`` classifies transparency from
+        it. Setting it sends :data:`MATERIAL_CHANGE_SIGNAL` from the mesh, so
+        a memo of which shapes are mirrors sees the change.
+        """
+        return self._material
+
+    @material.setter
+    def material(self, value: Any) -> None:
+        self._material = value
+        dispatcher.send(signal=MATERIAL_CHANGE_SIGNAL, sender=self, value=value)
+
+    @property
     def multiviewShared(self) -> bool:
         """Whether one draw of this mesh can serve every view that sees it.
 
@@ -284,11 +306,8 @@ class PBRMesh(node.Node):
         # GL primitive mode (glTF primitive.mode == the GL enum): GL_TRIANGLES for the
         # common case, or GL_POINTS/GL_LINES/GL_LINE_LOOP/GL_LINE_STRIP.
         self.draw_mode = int(draw_mode)
-        # The owning material, when the mesh is placed without a Shape wrapper, so
-        # sortKey can classify transparency directly. The normal
-        # glTF/scenegraph path wraps the mesh in a Shape whose Appearance carries
-        # the material; there Shape.sortKey/Appearance.sortKey drives sorting.
-        self.material = material
+        # Set without the signal: nothing has remembered a mesh being made.
+        self._material = material
         self.positions = self._farray(positions, 3)
         self.normals = self._farray(normals, 3)
         self.texcoords = self._farray(texcoords, 2)

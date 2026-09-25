@@ -90,9 +90,12 @@ def is_water(record: Any) -> bool:
 
 
 def shape_material(shape: Any) -> Any:
-    """The material a shape is drawn with: its appearance's, else its mesh's own."""
+    """The material a shape is drawn with: its appearance's, else its mesh's own.
+
+    An appearance with no material holds the null node, which is false.
+    """
     material = getattr(getattr(shape, 'appearance', None), 'material', None)
-    if material is None:
+    if not material:
         material = getattr(getattr(shape, 'geometry', None), 'material', None)
     return material
 
@@ -146,8 +149,9 @@ def mirror_generation() -> int:
     """A count that moves whenever a field deciding which shapes are mirrors is set.
 
     Those are a shape's ``appearance`` and ``geometry``, an appearance's
-    ``material``, a material's ``reflector``, a reflector's ``enabled`` and a
-    mesh's ``waveStyle``, which makes it water. A
+    ``material``, a material's ``reflector``, a reflector's ``enabled``, a
+    mesh's ``waveStyle``, which makes it water, and a mesh's own
+    :attr:`~OpenGLContext.scenegraph.pbrmesh.PBRMesh.material`. A
     pass that remembers which of the scene's shapes are mirrors keeps the
     answer while this and its set of paths stay as they were.
     """
@@ -163,13 +167,14 @@ def _watch_mirror_fields() -> None:
     from pydispatch import dispatcher
     from OpenGLContext.scenegraph.appearance import Appearance
     from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
-    from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+    from OpenGLContext.scenegraph.pbrmesh import MATERIAL_CHANGE_SIGNAL, PBRMesh
     from OpenGLContext.scenegraph.shape import Shape
     for owner, name in ((Shape, 'appearance'), (Shape, 'geometry'),
                         (Appearance, 'material'), (PBRMaterial, 'reflector'),
                         (PlanarReflector, 'enabled'), (PBRMesh, 'waveStyle')):
         dispatcher.connect(_mirrors_changed, signal=('set', getattr(owner, name)),
                            weak=False)
+    dispatcher.connect(_mirrors_changed, signal=MATERIAL_CHANGE_SIGNAL, weak=False)
 
 
 _watch_mirror_fields()

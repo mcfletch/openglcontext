@@ -219,7 +219,22 @@ class LOD(basenodes.LOD):
     #: keeps one level rather than changing every frame. 0 switches at the
     #: thresholds exactly; values are held to [0, :data:`MAXIMUM_HYSTERESIS`].
     #: Not a VRML field, so a node's own setting is not written to a file.
-    hysteresis: float = 0.1
+    _hysteresis: float = 0.1
+
+    @property
+    def hysteresis(self) -> float:
+        """How far past a threshold a viewer goes before a coarser level is drawn.
+
+        A fraction of the threshold; see :meth:`band` for the range it is held
+        to. Setting it moves :func:`level_generation`, since a viewer inside
+        the old band can be outside the new one.
+        """
+        return self._hysteresis
+
+    @hysteresis.setter
+    def hysteresis(self, value: float) -> None:
+        self._hysteresis = value
+        _levels_changed()
 
     #: Whether a level has been chosen yet. The first choice has no level to
     #: hold on to, and is the plain answer.
@@ -494,8 +509,9 @@ _level_changes = 0
 def level_generation() -> int:
     """A count that moves whenever a field deciding a node's level is set.
 
-    Those are a node's ``level``, ``range`` and ``center``, and a
-    :class:`ScreenCoverageLOD`'s ``screenCoverage`` and ``radius``. A pass that
+    Those are a node's ``level``, ``range``, ``center`` and
+    :attr:`~LOD.hysteresis`, and a :class:`ScreenCoverageLOD`'s
+    ``screenCoverage`` and ``radius``. A pass that
     remembers the levels it chose keeps them while this, the nodes' places
     and the viewers stay as they were.
     """

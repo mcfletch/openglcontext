@@ -166,11 +166,12 @@ changes. ``selectFor(modelview, tangent)`` makes the same decision for a
 single node.
 
 If neither the camera nor any LOD node has moved since the last frame, and no
-node's ``level``, ``range``, ``center``, ``screenCoverage`` or ``radius`` has
-been set, the pass keeps last frame's choice and skips the calculation. The
+node's ``level``, ``range``, ``center``, ``hysteresis``, ``screenCoverage``
+or ``radius`` has been set, the pass keeps last frame's choice and skips the calculation. The
 scenegraph's transform cache returns the same matrix object while a node does
-not move, so the check is one identity comparison per node; a field set on any
-LOD node moves ``lod.level_generation()``, and the next frame chooses again. In the gallery above, with 120
+not move, so the check is one identity comparison per node; any of those set
+on an LOD node moves ``lod.level_generation()``, and the next frame chooses
+again. In the gallery above, with 120
 LOD nodes, choosing costs 0.40 ms a frame with a still camera and 1.20 ms
 without the shortcut. With the camera moving every frame, so the shortcut
 never applies, it costs 0.93 ms.
