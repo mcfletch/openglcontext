@@ -164,6 +164,7 @@ def water_hook(ctx: "hooks.HookContext") -> None:
     The ``Shape`` the loader built is kept: water is not a different kind of
     node, it is a surface that moves, and what moves it is the style in the
     mesh's ``waveStyle`` field and the time the render pass reads beside it.
+    Each tagged primitive is given its own copy of the style it names.
     """
     if ctx.at != 'material':
         # A node-level tag says the *object* is a body of water. The surface is
@@ -174,7 +175,9 @@ def water_hook(ctx: "hooks.HookContext") -> None:
     if mesh is None or shape is None or material is None:  # pragma: no cover - the loader passes all three
         return None
     values = ctx.values
-    style = style_for(ctx.params.get('style', 'still'), values)
+    # The document's own copy: a named style is a node every sheet built with
+    # it shares, and a loaded model's water is changed without changing it.
+    style = style_for(ctx.params.get('style', 'still'), values).varied()
     mesh.waveStyle = style
     mesh.wave_time = 0.0
     if values.choice(ctx.params.get('material'), 'keep', 'the water material',

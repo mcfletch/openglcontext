@@ -543,7 +543,8 @@ written-out style's ``amplitude`` and ``steepness`` are at least 0 and its
 Each tagged primitive becomes one ``WaterBody`` in
 ``scene.hook_data['water']``: the mesh whose wave a frame advances, the style
 it moves with, and the ``Volume`` it fills, in world metres around that copy
-of the surface. Two nodes sharing one tagged mesh are two bodies of water,
+of the surface. The style is the primitive's own copy of the one it names, so
+changing a loaded model's water changes neither ``CHOPPY`` nor another model. Two nodes sharing one tagged mesh are two bodies of water,
 each with its own box.
 
 .. code-block:: python

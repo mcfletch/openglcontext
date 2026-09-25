@@ -48,6 +48,14 @@ def _loaded(tag, **named):
     return scene, _shapes(scene.group)[0]
 
 
+def _copy_of(style, preset):
+    """Whether ``style`` is a document's own copy of ``preset``."""
+    return style is not preset and all(
+        np.allclose(getattr(style, name), getattr(preset, name))
+        for name in ('amplitude', 'wavelength', 'speed', 'steepness', 'ripple', 'flow')
+    ) and style.name == preset.name
+
+
 # --- the kind ships registered ------------------------------------------------
 
 def test_the_water_kind_is_bound_without_being_imported():
@@ -62,7 +70,7 @@ def test_the_water_kind_is_bound_without_being_imported():
 def test_a_tagged_material_gives_the_mesh_a_wave():
     """The whole contract with the card: two attributes on the geometry."""
     _scene, shape = _loaded('water')
-    assert shape.geometry.waveStyle is water.STILL
+    assert _copy_of(shape.geometry.waveStyle, water.STILL)
     assert shape.geometry.wave_time == pytest.approx(0.0)
 
 
@@ -72,7 +80,18 @@ def test_a_tagged_material_gives_the_mesh_a_wave():
 ])
 def test_the_named_styles_map(name, style):
     _scene, shape = _loaded({'kind': 'water', 'style': name})
-    assert shape.geometry.waveStyle is style
+    assert _copy_of(shape.geometry.waveStyle, style)
+
+
+def test_a_loaded_document_s_water_is_its_own():
+    """Changing the water of one loaded model changes neither the named style
+    nor the water of another model."""
+    _first, one = _loaded({'kind': 'water', 'style': 'choppy'})
+    _second, other = _loaded({'kind': 'water', 'style': 'choppy'})
+    amplitude = water.CHOPPY.amplitude
+    one.geometry.waveStyle.amplitude = amplitude * 3.0
+    assert water.CHOPPY.amplitude == pytest.approx(amplitude)
+    assert other.geometry.waveStyle.amplitude == pytest.approx(amplitude)
 
 
 def test_a_style_may_be_written_out_in_full():
@@ -99,7 +118,7 @@ def test_a_written_out_style_may_say_how_fine_its_ripple_is():
 def test_an_unknown_style_name_is_still_water(caplog):
     """A misspelling loads a pond rather than failing the file."""
     _scene, shape = _loaded({'kind': 'water', 'style': 'stil'})
-    assert shape.geometry.waveStyle is water.STILL
+    assert _copy_of(shape.geometry.waveStyle, water.STILL)
 
 
 # --- which material shades it -------------------------------------------------
@@ -166,7 +185,7 @@ def test_lava_is_the_same_hook_with_another_medium(medium):
                             'style': 'flowing'})
     body, = scene.hook_data['water']
     assert body.volume.medium == medium
-    assert shape.geometry.waveStyle is water.FLOWING
+    assert _copy_of(shape.geometry.waveStyle, water.FLOWING)
 
 
 # --- moving it ----------------------------------------------------------------
