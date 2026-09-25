@@ -407,6 +407,11 @@ Shipping it
   window, running a whole application in a child process, and comparing the
   pixels it produced.
 
+- :doc:`Static Checks <checks>` -- the ``oglc-check`` command and pytest
+  plugin from openglcontext-checks: configuring the OGC rules for an
+  application, suppressing a finding with its reason, and the engine API each
+  rule points to.
+
 - :doc:`Session Telemetry <telemetry>` -- recording a session to one file
   (every input, every frame time, every exception with its traceback, and the
   application's own marks) and then reading it back with ``python -m

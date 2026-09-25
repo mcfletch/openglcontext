@@ -75,6 +75,7 @@ SIBLING_COMMANDS = {
     'oglc-forest': 'openglcontext-forest-demo',
     'oglc-marble': 'openglcontext-marble-demo',
     'oglc-bake-plants': 'openglcontext-editor',
+    'oglc-check': 'openglcontext-checks',
 }
 
 #: Paths the documentation names inside a sibling package's own checkout, in a
@@ -97,12 +98,13 @@ class TestDocsNameCommandsThatExist:
         broken = {}
         for page in sorted(DOCS.glob('*.rst')):
             text = page.read_text(encoding='utf-8', errors='replace')
-            # Not inside a filesystem path, and not a prefix of a longer
-            # hyphenated word: a page quoting a run whose temporary directory
-            # was named after the command would otherwise look like a page
+            # Not inside a filesystem path, not a dot-file's name, and not a
+            # prefix of a longer hyphenated word: a page quoting a run whose
+            # temporary directory was named after the command, or naming the
+            # `.oglc-check-cache` directory, would otherwise look like a page
             # naming a command that does not exist.
             for name in set(re.findall(
-                    r'(?<![\w/-])oglc-[a-z]+(?:-[a-z]+)*(?![\w-])', text)):
+                    r'(?<![\w/.-])oglc-[a-z]+(?:-[a-z]+)*(?![\w-])', text)):
                 if name not in scripts and name not in SIBLING_COMMANDS:
                     broken.setdefault(page.name, set()).add(name)
         assert not broken, (

@@ -370,6 +370,7 @@ Documentation
    :caption: Shipping it
 
    testing
+   checks
    telemetry
    capturing
    recording

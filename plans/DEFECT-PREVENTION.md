@@ -1,6 +1,6 @@
 # Defect prevention: gates for the defect classes the reviews keep finding
 
-Status: In progress. Item 1 of the order of work is done (see [Baseline, ruff rules](#baseline-ruff-rules)).
+Status: In progress. Items 1 and 2 of the order of work are done (see [Baseline, ruff rules](#baseline-ruff-rules) and [Baseline, OGC rules](#baseline-ogc-rules)).
 
 ## Why
 
@@ -453,6 +453,108 @@ today, so could select now:
 - glisteel: RUF012, S110, S112, E722, BLE001, TRY400, S102, S202, S301, S307, S310, UP006, UP007, UP035
 - glisteel-editor: RUF012, S110, S112, E722, BLE001, TRY400, S102, S202, S301, S307, S310, UP006, UP007, UP035
 - twig-bb: E722, TRY400, DTZ, S102, S202, S301, S307, S310
+
+## Baseline, OGC rules
+
+Item 2 of the order of work landed on 2026-09-25 as the sibling project
+`openglcontext-checks` (its own repository, not yet on GitHub): the
+`oglc-check` command, `[tool.openglcontext-checks]` configuration, `# noqa:
+CODE reason` suppression, a per-project result cache, the opt-in pytest entry
+point `-p openglcontext_checks.pytest_plugin`, a preflight gate for every
+project declaring the table, and the rules OGC131, OGC141, OGC161, OGC201,
+OGC221, OGC222 and OGC223. The user documentation is the project's README and
+[docs/checks.rst](../docs/checks.rst).
+
+Decisions made while building it, against the design above:
+
+- OGC161 reports a closed set (`os.environ`, `os.environb`, `sys.argv`,
+  `os.getenv` and its siblings, `locale.setlocale`, `open`, the `os`
+  file-system changes, `shutil`, `subprocess`) rather than every call at
+  import, which reported ordinary module setup.
+- OGC221 reports every `pytest.skip`, `xfail` and `importorskip` in an
+  `except` body, not only an `importorskip` of a first-party module.
+- OGC222 also counts a `raise` of an exception, `pytest.deprecated_call`, and
+  helpers named `fail` or starting `expect` or `verify`, and takes a test to be
+  what pytest collects by default: a name starting `test`.
+- Files and directories whose names start with a dot are not checked unless
+  named. Agents' git worktrees under `.claude/worktrees` inside several
+  projects, and PyOpenGL's `directdocs/.samples`, otherwise put thousands of
+  files that are not the project's into the counts; ruff leaves them out by
+  reading `.gitignore`, which this package does not.
+- The pytest items are added only to a run of the suite (no paths named) or
+  with `--oglc-check`, so running one test file does not run the rules.
+- On Python 3.10 the package depends on `tomli`, which stands in for
+  `tomllib`; from 3.11 it needs only the standard library.
+
+Speed over `OpenGLContext/` (514 files, 138,000 lines, 32 cores): 0.24 s with
+nothing cached, 0.87 s in one process, 0.06 s from the cache. The oglc-check
+gate across the whole workspace takes 2.2 s.
+
+Findings per project on 2026-09-25, every rule, run from each project's root
+over its whole tree less dot-directories and build output (workspace-tools
+is the root's `tools/`, `verify-everything.py` and `.claude/skills`):
+
+| Project | OGC131 | OGC141 | OGC161 | OGC201 | OGC221 | OGC222 | OGC223 |
+|---|---|---|---|---|---|---|---|
+| workspace-tools | 0 | 0 | 0 | 3 | 0 | 1 | 0 |
+| openglcontext-checks | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| pyopengl-glut-binaries | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| pyopengl | 0 | 0 | 58 | 218 | 12 | 159 | 8 |
+| pyopengl-accelerate | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| simpleparse | 0 | 0 | 1 | 2 | 0 | 233 | 0 |
+| pydispatcher | 4 | 0 | 0 | 0 | 0 | 6 | 0 |
+| pyvrml97 | 22 | 0 | 0 | 5 | 0 | 5 | 0 |
+| ttfquery | 0 | 0 | 4 | 0 | 0 | 1 | 1 |
+| opengl_extrusions | 0 | 0 | 1 | 1 | 1 | 4 | 0 |
+| opengl_decimate | 0 | 0 | 2 | 2 | 0 | 0 | 0 |
+| omi_physics | 2 | 0 | 0 | 7 | 0 | 3 | 0 |
+| omi_audio | 0 | 0 | 2 | 3 | 0 | 6 | 1 |
+| pyopengl-video | 0 | 0 | 0 | 0 | 0 | 7 | 1 |
+| openglcontext | 216 | 2 | 135 | 301 | 66 | 95 | 14 |
+| openglcontext-qt | 0 | 0 | 3 | 6 | 0 | 0 | 0 |
+| openglcontext-editor | 7 | 0 | 0 | 10 | 2 | 1 | 0 |
+| openglcontext-forest-demo | 0 | 0 | 11 | 0 | 2 | 1 | 0 |
+| openglcontext-marble-demo | 0 | 0 | 4 | 0 | 0 | 0 | 0 |
+| openglcontext-marble-editor | 0 | 0 | 3 | 20 | 0 | 0 | 0 |
+| glisteel | 5 | 0 | 2 | 24 | 0 | 3 | 0 |
+| glisteel-editor | 0 | 0 | 2 | 22 | 0 | 0 | 0 |
+| twig-bb | 9 | 0 | 16 | 68 | 1 | 12 | 0 |
+| total | 265 | 2 | 244 | 692 | 84 | 537 | 25 |
+
+Every project whose count is 0 for a rule declares the table selecting it,
+and preflight's `oglc-check` gate holds it there. The rules each project
+left out, which join as its count reaches 0:
+
+- workspace-tools: OGC201, OGC222
+- openglcontext-checks, pyopengl-glut-binaries, pyopengl-accelerate: none
+- pyopengl: OGC161, OGC201, OGC221, OGC222, OGC223
+- simpleparse: OGC161, OGC201, OGC222
+- pydispatcher: OGC131, OGC222
+- pyvrml97: OGC131, OGC201, OGC222
+- ttfquery: OGC161, OGC222, OGC223
+- opengl_extrusions: OGC161, OGC201, OGC221, OGC222
+- opengl_decimate: OGC161, OGC201
+- omi_physics: OGC131, OGC201, OGC222
+- omi_audio: OGC161, OGC201, OGC222, OGC223
+- pyopengl-video: OGC222, OGC223
+- openglcontext: all seven; it declares no table until it is clean of one,
+  and its `preflight.toml` entry says so
+- openglcontext-qt: OGC161, OGC201
+- openglcontext-editor: OGC131, OGC201, OGC221, OGC222
+- openglcontext-forest-demo: OGC161, OGC221, OGC222
+- openglcontext-marble-demo: OGC161
+- openglcontext-marble-editor: OGC161, OGC201
+- glisteel: OGC131, OGC161, OGC201, OGC222
+- glisteel-editor: OGC161, OGC201
+- twig-bb: OGC131, OGC161, OGC201, OGC221, OGC222
+
+Most of the OGC161 findings outside the packages are demo and helper scripts
+that set `os.environ` before importing OpenGL, which a project can exempt by
+`per-file-ignores` once it decides they are entry points. The largest OGC222
+counts are simpleparse, whose tests assert inside a helper not named for it
+(`doBasicTest`), and pyopengl, whose acceptance tests pass by not raising,
+some with the check in a decorator; renaming the helper, or an explicit
+assertion, clears them.
 
 ## Questions for the maintainer
 
