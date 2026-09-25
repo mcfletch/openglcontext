@@ -410,8 +410,9 @@ reflector is set to, the materials carrying them, and where they go.
      - The round window on the right wall between ``replace`` and a shaded
        glass mirror.
 
-``tools/blender/demos/mirrors.glb`` is the same kind of hall authored in
-Blender, every mirror tagged with the add-on's panel: the floor, the far mirror
+``tools/blender/demos/mirrors.glb``, in a checkout of the OpenGLContext
+repository (``tools/`` is not in the installed package), is the same kind of
+hall authored in Blender, every mirror tagged with the add-on's panel: the floor, the far mirror
 and the corridor as materials, the pool as ``water``, the window as an object.
 Open it with ``oglc-view tools/blender/demos/mirrors.glb``;
 ``tools/blender/demos/mirrors.py`` builds it again.

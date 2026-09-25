@@ -566,7 +566,9 @@ while a four-cornered plane only tilts at its corners. Give the shore a bank
 steeper than the swell is high, or the troughs uncover it and the crests
 flood it.
 
-``tools/blender/demos/lakeside.glb`` is a world authored this way, built by
+``tools/blender/demos/lakeside.glb``, in a checkout of the OpenGLContext
+repository (``tools/`` is not in the installed package), is a world authored
+this way, built by
 ``tools/blender/demos/lakeside.py`` with the add-on's panel: a lake whose
 material is tagged ``{"kind": "water", "style": "breeze", "depth": 2.0}`` in a
 grass basin, with a jetty, a brazier and a campfire tagged as
