@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 import logging
 import weakref
-from typing import Any, Dict, Iterator, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -75,6 +75,7 @@ _PBR_SAMPLER = {
     'normal': 'normalTexture', 'occlusion': 'occlusionTexture',
     'emissive': 'emissiveTexture', 'lightmap': 'lightmapTexture',
 }
+# The shader's name for each map's bit of ``materialTextures``.
 _PBR_HAS = {
     'baseColor': 'hasBaseColor', 'metallicRoughness': 'hasMetallicRoughness',
     'normal': 'hasNormal', 'occlusion': 'hasOcclusion', 'emissive': 'hasEmissive',
@@ -125,6 +126,12 @@ _PBR_EXT_HAS = {
     'diffuseTransmissionColor': 'hasDiffuseTransmissionColorMap',
     'diffuseTransmission': 'hasDiffuseTransmissionMap',
 }
+
+#: The bit of the shader's ``materialTextures`` mask that says a map is
+#: sampled. The core maps take the bits ``uvFor`` in pbr.frag numbers them by,
+#: and the extension maps follow in the order of :data:`PBR_EXT_UNITS`.
+PBR_TEXTURE_BITS = {channel: 1 << index for index, channel in
+                    enumerate(list(PBR_UNITS) + list(PBR_EXT_UNITS))}
 
 # Highest unit any extension texture wants; the program needs a budget past it.
 _EXT_UNITS_MAX = max(PBR_EXT_UNITS.values()) if PBR_EXT_UNITS else 15
@@ -518,10 +525,10 @@ class PBRShaderProgram(VRML97ShaderProgram):
         # the neutral multiplier has to be uploaded once up front.
         self.set_lightmap_strength(1.0)
         # Extension-texture samplers exist only when the budget admitted them
-        # (PBR_EXT_TEXTURES). Assign each to its unit and clear its presence flag.
+        # (PBR_EXT_TEXTURES).
         for channel, unit in getattr(self, 'ext_channels', {}).items():
             self._set_uniform1i(_PBR_EXT_SAMPLER[channel], unit, self.program)
-            self._set_uniform1i(_PBR_EXT_HAS[channel], 0, self.program)
+        self._set_uniform1i('materialTextures', 0, self.program)
 
     # -- per-material uniform block (UBO) ----------------------------------
     def _init_material_block(self) -> None:
@@ -796,26 +803,29 @@ class PBRShaderProgram(VRML97ShaderProgram):
         # compile time (see _init_pbr_samplers in compile), so don't re-set them
         # per draw.
         textures = getattr(material, 'textures', {}) or {}
-        for channel, unit in PBR_UNITS.items():
+        # Which maps are sampled is one uniform, a bit per map, rather than a
+        # uniform per map: a draw of a new material sets one value.
+        sampled = 0
+        for channel, unit in self._textureUnits():
             holder = textures.get(channel)
-            tex = holder.cached(mode) if holder is not None else None
+            if holder is None:
+                continue
+            tex = holder.cached(mode)
             if tex is not None and getattr(tex, 'texture', None):
                 glActiveTexture(GL_TEXTURE0 + unit)
                 glBindTexture(GL_TEXTURE_2D, tex.texture)
-                self._set_uniform1i(_PBR_HAS[channel], 1, self.program)
-            else:
-                self._set_uniform1i(_PBR_HAS[channel], 0, self.program)
-        # Extension textures, only on a GPU whose budget admitted their units.
-        for channel, unit in getattr(self, 'ext_channels', {}).items():
-            holder = textures.get(channel)
-            tex = holder.cached(mode) if holder is not None else None
-            has = tex is not None and getattr(tex, 'texture', None)
-            if has:
-                assert tex is not None
-                glActiveTexture(GL_TEXTURE0 + unit)
-                glBindTexture(GL_TEXTURE_2D, tex.texture)
-            self._set_uniform1i(_PBR_EXT_HAS[channel], 1 if has else 0, self.program)
+                sampled |= PBR_TEXTURE_BITS[channel]
+        self._set_uniform1i('materialTextures', sampled, self.program)
         glActiveTexture(GL_TEXTURE0)
+
+    def _textureUnits(self) -> List[Tuple[str, int]]:
+        """Every material map this program samples, and its unit."""
+        found = self.__dict__.get('_texture_units')
+        if found is None or found[0] is not self.__dict__.get('ext_channels'):
+            units = list(PBR_UNITS.items()) + list(
+                getattr(self, 'ext_channels', {}).items())
+            found = self._texture_units = (self.__dict__.get('ext_channels'), units)
+        return found[1]
 
     def configure_appearance(self, appearance: Any, mode: Any) -> None:
         """Configure PBR material + textures from a Shape's appearance.

@@ -292,36 +292,60 @@ const float PLANAR_ROUGHEST = 0.6;
 
 
 
+// Which of the material's maps this draw samples, a bit each: the map is
+// there and its image has loaded. The core bits are the ones uvFor numbers.
+uniform int materialTextures;
+#define hasBaseColor ((materialTextures & 1) != 0)
+#define hasMetallicRoughness ((materialTextures & 2) != 0)
+#define hasNormal ((materialTextures & 4) != 0)
+#define hasOcclusion ((materialTextures & 8) != 0)
+#define hasEmissive ((materialTextures & 16) != 0)
+#define hasLightmap ((materialTextures & 32) != 0)
+#define hasTransmissionMap ((materialTextures & 64) != 0)
+#define hasIridescenceThicknessMap ((materialTextures & 128) != 0)
+#define hasClearcoatMap ((materialTextures & 256) != 0)
+#define hasClearcoatRoughnessMap ((materialTextures & 512) != 0)
+#define hasThicknessMap ((materialTextures & 1024) != 0)
+#define hasAnisotropyMap ((materialTextures & 2048) != 0)
+#define hasSpecularMap ((materialTextures & 4096) != 0)
+#define hasSpecularColorMap ((materialTextures & 8192) != 0)
+#define hasSheenColorMap ((materialTextures & 16384) != 0)
+#define hasSheenRoughnessMap ((materialTextures & 32768) != 0)
+#define hasIridescenceMap ((materialTextures & 65536) != 0)
+#define hasClearcoatNormalMap ((materialTextures & 131072) != 0)
+#define hasDiffuseTransmissionColorMap ((materialTextures & 262144) != 0)
+#define hasDiffuseTransmissionMap ((materialTextures & 524288) != 0)
+
 #if PBR_EXT_TEXTURES
 // KHR extension material textures (only compiled in when the sampler budget fits).
-uniform sampler2D transmissionMap;          uniform bool hasTransmissionMap;         // .r scales transmissionFactor
-uniform sampler2D iridescenceThicknessMap;  uniform bool hasIridescenceThicknessMap; // .g -> thickness min..max
-uniform sampler2D thicknessMap;             uniform bool hasThicknessMap;            // .g scales volume thickness
-uniform sampler2D clearcoatMap;             uniform bool hasClearcoatMap;            // .r scales clearcoatFactor
-uniform sampler2D clearcoatRoughnessMap;    uniform bool hasClearcoatRoughnessMap;   // .g scales clearcoatRoughness
-uniform sampler2D anisotropyMap;            uniform bool hasAnisotropyMap;           // .rg direction, .b strength
-uniform sampler2D specularMap;              uniform bool hasSpecularMap;             // .a scales specularFactor
-uniform sampler2D specularColorMap;         uniform bool hasSpecularColorMap;        // .rgb tints specularColor (sRGB)
-uniform sampler2D sheenColorMap;            uniform bool hasSheenColorMap;           // .rgb sheen colour (sRGB)
-uniform sampler2D sheenRoughnessMap;        uniform bool hasSheenRoughnessMap;       // .a sheen roughness
-uniform sampler2D iridescenceMap;           uniform bool hasIridescenceMap;          // .r scales iridescence factor
-uniform sampler2D clearcoatNormalMap;       uniform bool hasClearcoatNormalMap;      // tangent-space coat normal
-uniform sampler2D diffuseTransmissionColorMap; uniform bool hasDiffuseTransmissionColorMap; // .rgb transmitted colour (sRGB)
-uniform sampler2D diffuseTransmissionMap;   uniform bool hasDiffuseTransmissionMap;  // .a scales transmission factor
+uniform sampler2D transmissionMap; // .r scales transmissionFactor
+uniform sampler2D iridescenceThicknessMap; // .g -> thickness min..max
+uniform sampler2D thicknessMap; // .g scales volume thickness
+uniform sampler2D clearcoatMap; // .r scales clearcoatFactor
+uniform sampler2D clearcoatRoughnessMap; // .g scales clearcoatRoughness
+uniform sampler2D anisotropyMap; // .rg direction, .b strength
+uniform sampler2D specularMap; // .a scales specularFactor
+uniform sampler2D specularColorMap; // .rgb tints specularColor (sRGB)
+uniform sampler2D sheenColorMap; // .rgb sheen colour (sRGB)
+uniform sampler2D sheenRoughnessMap; // .a sheen roughness
+uniform sampler2D iridescenceMap; // .r scales iridescence factor
+uniform sampler2D clearcoatNormalMap; // tangent-space coat normal
+uniform sampler2D diffuseTransmissionColorMap; // .rgb transmitted colour (sRGB)
+uniform sampler2D diffuseTransmissionMap; // .a scales transmission factor
 #endif
 uniform mat4  projectionMatrix;        // shared with the vertex stage
 
-// PBR texture maps + presence flags
-uniform sampler2D baseColorTexture;          uniform bool hasBaseColor;
-uniform sampler2D metallicRoughnessTexture;  uniform bool hasMetallicRoughness;
-uniform sampler2D normalTexture;             uniform bool hasNormal;
-uniform sampler2D occlusionTexture;          uniform bool hasOcclusion;
-uniform sampler2D emissiveTexture;           uniform bool hasEmissive;
+// PBR texture maps
+uniform sampler2D baseColorTexture;
+uniform sampler2D metallicRoughnessTexture;
+uniform sampler2D normalTexture;
+uniform sampler2D occlusionTexture;
+uniform sampler2D emissiveTexture;
 // Baked static irradiance (the BSP/Quake lightmap workflow): the map compiler
 // solved the static lights offline into a texture on a second UV set. Treated as
 // an extra ambient irradiance source, so normal mapping, IBL reflection and
 // dynamic lights still apply on top of it.
-uniform sampler2D lightmapTexture;           uniform bool hasLightmap;
+uniform sampler2D lightmapTexture;
 uniform float lightmapStrength;              // exposure of the baked levels
 
 // The same baked solution, sampled for an object that has no lightmap because
