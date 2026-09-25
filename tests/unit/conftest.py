@@ -88,3 +88,15 @@ def posix_modes(tmp_path_factory):
     probe = tmp_path_factory.mktemp('modes') / 'private'
     os.makedirs(str(probe), mode=0o700, exist_ok=True)
     return not stat.S_IMODE(os.stat(str(probe)).st_mode) & (stat.S_IRWXG | stat.S_IRWXO)
+
+
+@pytest.fixture(scope='session')
+def blender():
+    """The ``blender`` executable on the path; a test asking for it is skipped
+    where there is none, since Blender is an optional tool here."""
+    import shutil
+
+    found = shutil.which('blender')
+    if found is None:
+        pytest.skip('Blender is not installed')
+    return found

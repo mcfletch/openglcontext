@@ -11,7 +11,6 @@ Blender is an optional tool here; a machine without ``blender`` on its path
 skips these.
 """
 import json
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -21,9 +20,6 @@ from OpenGLContext.loaders import gltf
 from OpenGLContext.scenegraph import particles
 
 ADDONS = Path(__file__).resolve().parents[2] / 'tools' / 'blender'
-BLENDER = shutil.which('blender')
-
-pytestmark = pytest.mark.skipif(BLENDER is None, reason='Blender is not installed')
 
 SCRIPT = r'''
 import json, sys
@@ -126,14 +122,14 @@ with open(report, 'w') as written:
 
 
 @pytest.fixture(scope='module')
-def exported(tmp_path_factory):
+def exported(tmp_path_factory, blender):
     """The report of what the panels drew, and the file Blender wrote."""
     where = tmp_path_factory.mktemp('blender')
     script = where / 'drive.py'
     script.write_text(SCRIPT, encoding='utf-8')
     glb, report = where / 'scene.glb', where / 'report.json'
     proc = subprocess.run(
-        [BLENDER, '-b', '--factory-startup', '--python-exit-code', '1',
+        [blender, '-b', '--factory-startup', '--python-exit-code', '1',
          '--python', str(script), '--', str(ADDONS), str(glb), str(report)],
         capture_output=True, text=True, timeout=300)
     assert proc.returncode == 0 and report.exists(), proc.stdout + proc.stderr

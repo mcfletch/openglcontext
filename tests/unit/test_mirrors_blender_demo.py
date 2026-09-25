@@ -7,7 +7,6 @@ demo says it is; where Blender is installed, they build it again and hold the
 shipped file to the script.
 """
 import json
-import shutil
 import subprocess
 from pathlib import Path
 
@@ -121,12 +120,10 @@ def test_the_tags_are_the_ones_the_panel_writes():
     }
 
 
-@pytest.mark.skipif(shutil.which('blender') is None,
-                    reason='Blender is not installed')
-def test_the_shipped_file_is_what_the_script_builds(tmp_path):
+def test_the_shipped_file_is_what_the_script_builds(tmp_path, blender):
     built = tmp_path / 'mirrors.glb'
     proc = subprocess.run(
-        [shutil.which('blender'), '-b', '--factory-startup', '--python-exit-code',
+        [blender, '-b', '--factory-startup', '--python-exit-code',
          '1', '--python', str(DEMOS / 'mirrors.py'), '--', '--glb', str(built)],
         capture_output=True, text=True, timeout=300)
     assert proc.returncode == 0, proc.stdout + proc.stderr
