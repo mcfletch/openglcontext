@@ -387,6 +387,25 @@ class TestWhichPlatformsRenderWithoutAWindow:
             with glcontext.offscreen_window('nope'):
                 pass                                   # pragma: no cover - never runs
 
+    def test_no_egl_binding_is_a_reason(self, monkeypatch):
+        monkeypatch.setattr(glcontext, 'offscreen_backend', lambda: 'egl')
+        monkeypatch.setitem(sys.modules, 'OpenGL.EGL', None)
+        with pytest.raises(GLUnavailable, match='no EGL here'):
+            with glcontext.offscreen_window('nope'):
+                pass                                   # pragma: no cover - never runs
+
+    def test_an_engine_module_that_does_not_import_is_not_a_reason(
+            self, monkeypatch):
+        """The EGL binding is here, so the failure is a defect in the engine,
+        and reads as one rather than as a machine without EGL."""
+        pytest.importorskip('OpenGL.EGL')
+        monkeypatch.setattr(glcontext, 'offscreen_backend', lambda: 'egl')
+        monkeypatch.setitem(sys.modules, 'OpenGLContext.eglcontext', None)
+        with pytest.raises(ImportError) as raised:
+            with glcontext.offscreen_window('nope'):
+                pass                                   # pragma: no cover - never runs
+        assert not isinstance(raised.value, GLUnavailable)
+
 
 @pytest.mark.skipif(glcontext.offscreen_backend() is None,
                     reason='no windowless GL backend on this platform')

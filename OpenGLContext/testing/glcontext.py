@@ -427,10 +427,13 @@ def _egl_pbuffer(size: Sequence[int], profile: str, version: Sequence[int],
     GLFW window the suite otherwise uses needs a windowing library and a
     display server.
     """
+    # The binding alone is asked about: an engine module that fails to import
+    # where the binding is here is a defect, not a machine without EGL.
     try:
-        from OpenGLContext.eglcontext import EGLContextError, PbufferContext
+        import OpenGL.EGL  # noqa: F401
     except ImportError as err:
         raise GLUnavailable('no EGL here: %s' % (err,)) from err
+    from OpenGLContext.eglcontext import EGLContextError, PbufferContext
     width, height = size
     try:
         context = PbufferContext(

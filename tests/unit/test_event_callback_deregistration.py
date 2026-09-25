@@ -151,23 +151,16 @@ class TestTwoContextsInSequence:
         The windowed backends share one GLFW window across the suite, so a
         second *context* is what this needs and the offscreen one is where a
         test can have it.  Which of the two that is depends on the machine, so
-        the registry is asked rather than a module named -- and a backend whose
-        bindings this platform cannot load says so at the import.
+        the registry is asked rather than a module named.
         """
-        pytest.importorskip('glfw')
-        from OpenGLContext.testing.glcontext import gl_available
+        from OpenGLContext.testing.glcontext import offscreen_unavailable
 
-        if not gl_available():
-            pytest.skip('no GL context can be created in this process')
-        try:
-            offscreen = plugins.Context.match(OFFSCREEN_BACKEND).load()
-        except ImportError as error:
-            pytest.skip('no %s bindings here: %s' % (OFFSCREEN_BACKEND, error))
+        reason = offscreen_unavailable('core')
+        if reason:
+            pytest.skip(reason)
+        offscreen = plugins.Context.match(OFFSCREEN_BACKEND).load()
 
-        try:
-            first = offscreen(size=(32, 32))
-        except RuntimeError as error:
-            pytest.skip('no offscreen context available here: %s' % (error,))
+        first = offscreen(size=(32, 32))
         first.close()
         del first
         gc.collect()
