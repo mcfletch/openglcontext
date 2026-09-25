@@ -272,10 +272,14 @@ class TestCommands:
         assert done == [button]
 
     def test_an_unknown_action_is_ignored(self, metrics):
+        done = []
         button = Button(text='Apply', action='nosuch')
         screen = Panel(children=[Column(children=[button])])
+        screen.commands['commit'] = lambda dialog, widget: done.append(widget)
         screen.layout((400, 200), metrics)
         button.activate()
+        assert done == []
+        assert not screen.closed and not screen.dirty
 
     def test_close_is_a_command_every_panel_has(self, metrics):
         button = Button(text='Close', action='close')

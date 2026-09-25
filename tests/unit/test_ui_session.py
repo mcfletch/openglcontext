@@ -342,5 +342,10 @@ class TestASessionCanBeClosed:
 
     def test_closing_twice_is_harmless(self):
         session = SettingsSession(Settings())
+        seen = []
+        session.on_dirty = seen.append
         session.close()
         session.close()
+        session.draft.lights = 2
+        assert session.draft.lights == 2      # the draft is still an ordinary record
+        assert not seen and session.on_dirty is None

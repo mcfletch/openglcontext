@@ -506,12 +506,20 @@ class TestClosingReleasesTheProgram:
         assert not glIsProgram(program), "the GL program was leaked"
 
     def test_closing_twice_is_harmless(self, gl_context):
+        """The second close deletes nothing, not whatever reused the old names."""
+        from OpenGL.GL import glCreateProgram, glDeleteProgram, glIsProgram
         from OpenGLContext.ui.draw import OverlayRenderer
         made = OverlayRenderer(16)
         if not made.initialize():
             pytest.skip("no font atlas / program on this driver")
         made.close()
-        made.close()
+        other = glCreateProgram()        # a driver may hand back the freed name
+        try:
+            made.close()
+            assert glIsProgram(other), "a second close deleted another program"
+            assert made._program is None and made._vao is None
+        finally:
+            glDeleteProgram(other)
 
 
 class TestSkinArtworkUrls:

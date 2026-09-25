@@ -654,12 +654,14 @@ class TestPictureLifetime:
         assert cache.get(path, blocking=True) is not None
         assert cache.resident == 1
 
-    def test_a_context_that_never_drew_an_overlay_is_unbothered(self, png):
+    def test_a_context_that_never_drew_an_overlay_is_unbothered(self):
         """No renderer means no cache to give back, not an error."""
         bare = FakeContext()
         panel = dialog()
         bare.pushOverlay(panel)
-        panel.close()          # must not raise
+        panel.close()
+        assert not bare.overlays.visible and not bare._overlayActive
+        assert getattr(bare, '_overlayRenderer', None) is None   # none made to clear
 
 
 class TestTheWorldIsToldToLetGoWhenAPanelOpens:
