@@ -178,6 +178,7 @@ select = [
     "B",   # flake8-bugbear
     "PGH003", "PGH004",  # a type: ignore or noqa names the codes it silences
     "PLE0604", "PLE0605",  # __all__ is a list or tuple of strings
+    "TID251",  # the raw forms the engine has an API for (banned-api, below)
 ]
 ignore = [
     "E501",  # line too long (handled by formatter)
@@ -215,6 +216,30 @@ ignore = [
     # per-site audit, not a lint fix.
     "B905",
 ]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# The workspace's banned-api list (plans/DEFECT-PREVENTION.md): the raw form,
+# and the engine API that replaces it. `os.environ`/`os.getenv` and
+# `urllib.request.urlopen` are not on it yet: the engine's own reads of the
+# environment outside renderoptions and the loaders' remaining opener are
+# still to be routed through their readers (the plan's baseline says where).
+"urllib.request.urlretrieve".msg = "fetch through OpenGLContext.loaders.resolver: fetch_to_cache, or AllowedHosts.open_url for a service's own hosts"
+"tarfile.TarFile.extractall".msg = "unpack through OpenGLContext.contentpacks.archive.extract, which refuses a member that leaves the directory and caps the size"
+"zipfile.ZipFile.extractall".msg = "unpack through OpenGLContext.contentpacks.archive.extract, which refuses a member that leaves the directory and caps the size"
+"shutil.rmtree".msg = "replace or remove a directory through OpenGLContext.atomicfiles: staged_directory, replace_directory or remove_directory"
+"shutil.move".msg = "move a finished file or directory into place through OpenGLContext.atomicfiles: staged_file, staged_directory or replace_directory"
+"os.rename".msg = "os.rename refuses an existing target on Windows; use os.replace, or OpenGLContext.atomicfiles"
+"os._exit".msg = "exit through OpenGLContext.testing.process_exit.flush_and_exit, which flushes what was written first"
+
+[tool.ruff.lint.per-file-ignores]
+# The modules that implement a replacement use the raw form, and the tests,
+# the scripts and the documentation build are programs that clean up after
+# themselves and end their own processes.
+"OpenGLContext/atomicfiles.py" = ["TID251"]
+"OpenGLContext/testing/process_exit.py" = ["TID251"]
+"tests/**" = ["TID251"]
+"scripts/**" = ["TID251"]
+"build-docs.py" = ["TID251"]
 
 [tool.mypy]
 # Matches the interpreter the project is developed and tested against.  The
@@ -341,7 +366,7 @@ markers = [
 # The OGC rules (openglcontext-checks) this project is clean of, held by the
 # workspace preflight. A rule joins the list once the engine is clean of it.
 [tool.openglcontext-checks]
-select = ["OGC131", "OGC141", "OGC161", "OGC201", "OGC221", "OGC222", "OGC223"]
+select = ["OGC101", "OGC102", "OGC121", "OGC131", "OGC141", "OGC161", "OGC201", "OGC221", "OGC222", "OGC223"]
 
 # The modules the test rules (OGC221 to OGC223) read: the unit tests and the
 # modules beside them that they import, and the pytest modules of tests/.
@@ -363,6 +388,24 @@ script = [
     "scripts/*.py",
     "docs/conf.py",
 ]
+# The modules that read a document's values, sizes and file names -- the
+# format loaders, the handlers a document's hooks name, and the readers of
+# baked props, cover, zones, content-pack registries, key bindings and
+# session journals -- which OGC101, OGC102 and OGC111 hold to DocumentValues,
+# a size check and the resolver.
+loader = [
+    "OpenGLContext/loaders/**",
+    "OpenGLContext/scenegraph/*hooks.py",
+    "OpenGLContext/scenegraph/props.py",
+    "OpenGLContext/scenegraph/tilesterrain.py",
+    "OpenGLContext/scenegraph/vegetation/clumps.py",
+    "OpenGLContext/scenegraph/vegetation/cover.py",
+    "OpenGLContext/contentpacks/catalog.py",
+    "OpenGLContext/contentpacks/pack.py",
+    "OpenGLContext/move/bindingstore.py",
+    "OpenGLContext/events/synthetic.py",
+    "OpenGLContext/telemetry/replay.py",
+]
 
 [tool.openglcontext-checks.per-file-ignores]
 # A tutorial: its text is what docs/tutorials/hud_demo.rst shows, and its
@@ -375,6 +418,10 @@ script = [
 # which runs only on Windows under wxPython. Tutorials are not edited for
 # tooling.
 "tests/glprint.py" = ["OGC141"]
+
+# The modules that implement the sanctioned APIs do what the rules report:
+# the resolver decodes a data URI once check_size has passed it.
+"OpenGLContext/loaders/resolver.py" = ["OGC102"]
 
 # uv decides whether its cached metadata for a source tree is still current
 # from pyproject.toml, setup.py and setup.cfg alone. This project's version

@@ -275,8 +275,9 @@ def get_image() -> "Any":
     return Image.open(io.BytesIO(get_png_data()))
 '''
 
-    with open(output_path, 'w') as f:
+    with open(output_path + '.partial', 'w') as f:
         f.write(module_content)
+    os.replace(output_path + '.partial', output_path)
 
     return len(png_data)
 
@@ -352,8 +353,9 @@ def get_available_sizes() -> List[int]:
     return list(SIZES)
 '''
 
-    with open(output_path, 'w') as f:
+    with open(output_path + '.partial', 'w') as f:
         f.write(module_content)
+    os.replace(output_path + '.partial', output_path)
 
 
 def main(argv=None):

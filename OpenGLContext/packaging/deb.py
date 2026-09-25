@@ -44,6 +44,8 @@ import tarfile
 import time
 from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 
+from OpenGLContext import atomicfiles
+
 __all__ = [
     'control_paragraph', 'debian_architecture', 'debian_name', 'debian_version',
     'describe', 'desktop_entry', 'have_dpkg', 'installed_size', 'maintainer_field',
@@ -389,7 +391,7 @@ def write_deb(data_root: str, control_files: Mapping[str, str], path: str) -> st
         ('control.tar.gz', _tarball(add_control, when, 'gz')),
         ('data.tar.xz', _tarball(_add_tree(data_root), when, 'xz')),
     ]
-    with open(path, 'wb') as stream:
+    with atomicfiles.staged_file(path, 'wb') as stream:
         stream.write(b'!<arch>\n')
         for name, data in members:
             stream.write(_ar_member(name, data, when))
@@ -560,8 +562,7 @@ def _write(root: str, at: str, text: str, mode: int = 0o644) -> str:
     """Write a text file at *at* (inside *root*)"""
     path = os.path.join(root, at.lstrip('/'))
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, 'w', encoding='utf-8') as stream:
-        stream.write(text)
+    atomicfiles.write_text(path, text)
     os.chmod(path, mode)
     return path
 
@@ -625,7 +626,7 @@ def build(project: str = '.', runtime: Optional[str] = None,
     build_directory = build_directory or os.path.join('build', 'deb', package)
     root = os.path.join(build_directory, 'root')
     if os.path.isdir(build_directory):
-        shutil.rmtree(build_directory)
+        atomicfiles.remove_directory(build_directory)
     os.makedirs(root)
 
     installed = os.path.join(prefix, package)
@@ -707,7 +708,7 @@ def _compressed(root: str, at: str, text: str) -> str:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     # mtime=0: the timestamp inside a gzip header is the one thing that would
     # differ between two builds of the same input.
-    with open(path, 'wb') as stream:
+    with atomicfiles.staged_file(path, 'wb') as stream:
         with gzip.GzipFile(fileobj=stream, mode='wb', mtime=0) as compressed:
             compressed.write(text.encode('utf-8'))
     return path
@@ -729,7 +730,7 @@ def _install_icon(root: str, package: str, icon: str) -> str:
                       'apps', package + '.png')
     path = os.path.join(root, at.lstrip('/'))
     os.makedirs(os.path.dirname(path), exist_ok=True)
-    shutil.copyfile(icon, path)
+    atomicfiles.copy_file(icon, path)
     return package
 
 

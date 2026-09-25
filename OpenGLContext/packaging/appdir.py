@@ -38,6 +38,8 @@ import subprocess
 import tarfile
 from typing import Any, Dict, List, Sequence, Tuple
 
+from OpenGLContext import atomicfiles
+
 log = logging.getLogger(__name__)
 
 __all__ = ['BACKEND_RUNTIME', 'PRUNE', 'build', 'interpreter_platform',
@@ -273,7 +275,10 @@ def build(runtime: str, staging: str, installed: str,
 
     log.info('copying the interpreter into %s', python_home)
     os.makedirs(staging, exist_ok=True)
-    shutil.copytree(source, python_home, symlinks=True)
+    # Copied beside its place and renamed into it, so an interrupted copy
+    # leaves no interpreter that is missing part of its library.
+    shutil.copytree(source, python_home + '.partial', symlinks=True)
+    os.replace(python_home + '.partial', python_home)
     base = os.path.join(python_home, 'bin', 'python3')
 
     # `--without-pip`, and installed with the interpreter's own pip pointed at
@@ -325,7 +330,7 @@ def prune(prefix: str, patterns: Sequence[str] = PRUNE) -> List[str]:
     for pattern in patterns:
         for path in sorted(glob.glob(os.path.join(prefix, pattern))):
             if os.path.isdir(path) and not os.path.islink(path):
-                shutil.rmtree(path)
+                atomicfiles.remove_directory(path)
             else:
                 os.unlink(path)
             removed.append(path)
@@ -414,7 +419,6 @@ def _relocate_text(path: str, source: str, target: str) -> bool:
     if wanted not in data:
         return False
     mode = stat.S_IMODE(os.lstat(path).st_mode)
-    with open(path, 'wb') as stream:
-        stream.write(data.replace(wanted, target.encode('utf-8')))
+    atomicfiles.write_bytes(path, data.replace(wanted, target.encode('utf-8')))
     os.chmod(path, mode)
     return True

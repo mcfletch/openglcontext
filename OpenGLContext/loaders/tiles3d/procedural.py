@@ -17,6 +17,7 @@ from typing import Any, Optional
 
 import numpy as np
 
+from OpenGLContext import atomicfiles
 from OpenGLContext.noise import fbm, ridged, smoothstep, value_noise
 
 HeightFn = Callable[[np.ndarray, np.ndarray], np.ndarray]
@@ -365,8 +366,7 @@ def build_terrain_tileset(
                                            tile_res, height_fn=height_fn,
                                            skirt_depth=size / tile_res * 2.0)
         name = "t_%d_%d_%d.glb" % (level, int(cx), int(cz))
-        with open(os.path.join(directory, name), "wb") as fh:
-            fh.write(_glb(pos, nrm, col, idx))
+        atomicfiles.write_bytes(os.path.join(directory, name), _glb(pos, nrm, col, idx))
         node = {
             "boundingVolume": {"box": _bounding_box(pos)},
             "geometricError": size / tile_res * 1.5,
@@ -388,6 +388,5 @@ def build_terrain_tileset(
     tileset = {"asset": {"version": "1.1"},
                "geometricError": extent / tile_res * 3.0, "root": root}
     path = os.path.join(directory, "tileset.json")
-    with open(path, "w") as fh:
-        json.dump(tileset, fh)
+    atomicfiles.write_text(path, json.dumps(tileset))
     return path

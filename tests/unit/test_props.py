@@ -119,6 +119,12 @@ class TestWhatAPropCarries:
                    radius=1.2, height=1.6)
         assert Prop.from_json(json.loads(json.dumps(one.to_json()))) == one
 
+    def test_a_figure_a_world_gets_wrong_takes_its_default(self) -> None:
+        one = Prop.from_json({'kind': 'rock', 'at': [1, 2, 'x'], 'yaw': 'north',
+                              'scale': -3, 'radius': float('inf')})
+        assert tuple(one.position) == (0.0, 0.0, 0.0)
+        assert (one.yaw, one.scale, one.radius) == (0.0, 0.0, 0.5)
+
     def test_it_reads_as_what_it_is(self) -> None:
         assert 'rock' in repr(Prop(kind='rock', position=(0.0, 0.0, 0.0)))
 

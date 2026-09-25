@@ -206,3 +206,23 @@ class TestWhatAContextCannotTake:
         context.getEventManager = lambda kind: None
         assert synthetic.dispatch(
             context, {'type': 'mousemove', 'x': 1, 'y': 2}) is False
+
+
+def test_a_record_with_a_figure_that_is_not_a_number_still_makes_its_event(caplog):
+    """A journal is diagnostic equipment: one bad field costs that field."""
+    event = synthetic.build({'type': 'mousebutton', 'x': 'left', 'y': 5,
+                             'button': 'primary', 'state': float('nan')})
+    assert event.pickPoint == (0.0, 5.0)
+    assert (event.button, event.state) == (0, 1)
+    assert 'button' in caplog.text
+
+
+def test_a_resize_with_a_size_that_is_not_one_is_delivered_as_nothing():
+    sizes = []
+
+    class Context:
+        def OnResize(self, width, height):
+            sizes.append((width, height))
+
+    assert synthetic.dispatch(Context(), {'type': 'resize', 'width': 'wide', 'height': 3})
+    assert sizes == [(0, 3)]

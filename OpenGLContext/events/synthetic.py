@@ -42,6 +42,7 @@ from typing import Any, Dict, Optional
 
 from OpenGLContext.events.keyboardevents import KeyboardEvent, KeypressEvent
 from OpenGLContext.events.mouseevents import MouseButtonEvent, MouseMoveEvent
+from OpenGLContext.loaders.documentvalues import DocumentValues
 
 log = logging.getLogger(__name__)
 
@@ -100,17 +101,19 @@ def build(record: Dict[str, Any]) -> Optional[Any]:
     factory = _CLASSES.get(str(record.get('type', '')))
     if factory is None:
         return None
+    values = DocumentValues(logger=log)
     event: Any = factory()
     event.modifiers = tuple(record.get('modifiers') or (0, 0, 0))
     if factory in (KeyboardEvent, KeypressEvent):
         event.name = record.get('key', '')
         if factory is KeyboardEvent:
-            event.state = int(record.get('state', 1))
+            event.state = values.integer(record.get('state'), 1, 'key state')
         return event
-    event.pickPoint = (float(record.get('x', 0)), float(record.get('y', 0)))
+    event.pickPoint = (values.number(record.get('x'), 0.0, 'pointer x'),
+                       values.number(record.get('y'), 0.0, 'pointer y'))
     if factory is MouseButtonEvent:
-        event.button = int(record.get('button', 0))
-        event.state = int(record.get('state', 1))
+        event.button = values.integer(record.get('button'), 0, 'mouse button', minimum=0)
+        event.state = values.integer(record.get('state'), 1, 'mouse button state')
     else:
         event.buttons = tuple(record.get('buttons') or ())
     return event
@@ -131,8 +134,10 @@ def dispatch(context: Any, record: Dict[str, Any]) -> bool:
     if kind == 'pointer-origin':
         return _call(context, 'forgetPointerOrigin')
     if kind == 'resize':
+        values = DocumentValues(logger=log)
         return _call(context, 'OnResize',
-                     int(record.get('width', 0)), int(record.get('height', 0)))
+                     values.integer(record.get('width'), 0, 'resize width', minimum=0),
+                     values.integer(record.get('height'), 0, 'resize height', minimum=0))
     event = build(record)
     if event is None:
         log.debug('no input event for %r', kind)

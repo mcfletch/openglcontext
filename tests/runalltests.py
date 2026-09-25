@@ -105,7 +105,10 @@ def main(scripts):
             success = 'succeeded'
         rows.append( row_template%locals())
     rows = "\n".join( rows )
-    open( os.path.join('test-results','index.html'), 'w').write( examine_file %locals())
+    index = os.path.join('test-results','index.html')
+    with open( index + '.partial', 'w') as handle:
+        handle.write( examine_file %locals())
+    os.replace( index + '.partial', index )
     if failures or skips:
         if failures:
             sys.stderr.write( 'FAILED:\n' )

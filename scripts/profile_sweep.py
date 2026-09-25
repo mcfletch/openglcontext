@@ -221,8 +221,10 @@ def main() -> int:
     os.makedirs(options.out, exist_ok=True)
     results = sweep(options.out, scripts(options.scripts), options.backend,
                     options.frames, options.timeout, options.jobs)
-    with open(os.path.join(options.out, 'results.json'), 'w') as handle:
+    where = os.path.join(options.out, 'results.json')
+    with open(where + '.partial', 'w') as handle:
         json.dump(results, handle, indent=1)
+    os.replace(where + '.partial', where)
     return 1 if report(results) else 0
 
 

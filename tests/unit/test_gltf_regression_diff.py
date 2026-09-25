@@ -571,8 +571,7 @@ class TestFetchHelpers:
 
             def read(self):
                 return b'payload'
-        monkeypatch.setattr(R.resolver, 'safe_url', lambda u: u)
-        monkeypatch.setattr(R.urllib.request, 'urlopen', lambda url, timeout=0: _Resp())
+        monkeypatch.setattr(R.resolver, 'open_url', lambda url, timeout=0: _Resp())
         dst = tmp_path / 'sub' / 'a.bin'
         R._dl('https://x/a.bin', str(dst))
         assert dst.read_bytes() == b'payload'

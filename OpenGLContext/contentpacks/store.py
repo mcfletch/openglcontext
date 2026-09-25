@@ -198,7 +198,7 @@ class ContentStore:
                 os.replace(os.path.join(staging, *name.split('/')), target)
             _write_record(where, pack, files=files)
         finally:
-            shutil.rmtree(staging, ignore_errors=True)
+            shutil.rmtree(staging, ignore_errors=True)  # noqa: TID251 the private staging directory, emptied into place above; nothing reads it
 
     def remove(self, pack: ContentPack,
                within: ContentPack | None = None) -> None:

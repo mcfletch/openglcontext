@@ -12,6 +12,7 @@ habit.  ``--check`` reports without writing, for a shell that wants the exit
 status.
 """
 import argparse
+import os
 import sys
 
 from OpenGLContext.scenegraph import _basenodes_stub
@@ -37,8 +38,9 @@ def main(argv=None):
     if options.check:
         print('%s is out of date; run scripts/write_basenodes_stub.py' % (path,))
         return 1
-    with open(path, 'w', encoding='utf-8') as handle:
+    with open(path + '.partial', 'w', encoding='utf-8') as handle:
         handle.write(text)
+    os.replace(path + '.partial', path)
     print('wrote %s' % (path,))
     return 0
 

@@ -10,6 +10,8 @@ import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from OpenGLContext import atomicfiles
+
 
 def _encode_image_base64(image_path: str) -> Optional[str]:
     """Encode an image file as base64 data URI.
@@ -566,8 +568,7 @@ class TestReportGenerator:
         base_dir = None if embed_images else os.path.dirname(os.path.abspath(output_path))
         html_content = self.generate_html(embed_images, base_dir=base_dir)
         os.makedirs(os.path.dirname(output_path) or '.', exist_ok=True)
-        with open(output_path, 'w', encoding='utf-8') as f:
-            f.write(html_content)
+        atomicfiles.write_text(output_path, html_content)
 
 
 def generate_report(

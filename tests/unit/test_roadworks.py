@@ -932,9 +932,11 @@ class TestBakedLightSurvivesABake:
         assert b'OGLC_materials_baked_light' not in path.read_bytes()
 
     def test_and_a_reader_takes_it_back_off_the_file(self) -> None:
+        from OpenGLContext.loaders.documentvalues import DocumentValues
         from OpenGLContext.loaders.gltf.materials import _MATERIAL_EXT_HANDLERS
         handler = _MATERIAL_EXT_HANDLERS['OGLC_materials_baked_light']
-        assert handler({}, lambda *args, **named: None) == {'bakedLight': True}
+        assert handler({}, lambda *args, **named: None, DocumentValues()) == {
+            'bakedLight': True}
 
 
 class TestABoreIsDarkBecauseItIsEnclosed:

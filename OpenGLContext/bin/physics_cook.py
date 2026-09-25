@@ -14,6 +14,8 @@ from typing import Any
 
 from omi_physics import model
 
+from OpenGLContext import atomicfiles
+
 
 def cook_document(
     gltf: dict[str, Any], motion_type: str = model.STATIC, mass: float = 1.0
@@ -71,8 +73,7 @@ def main(argv: list[str] | None = None) -> int:
         gltf = json.load(f)
     gltf, count = cook_document(gltf, motion_type=args.motion, mass=args.mass)
     out = args.output or args.input
-    with open(out, 'w') as f:
-        json.dump(gltf, f, indent=2)
+    atomicfiles.write_text(out, json.dumps(gltf, indent=2))
     print('physics-cook: added %d collider(s) -> %s' % (count, out))
     return 0
 

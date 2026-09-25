@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from OpenGLContext import atomicfiles
 from OpenGLContext.capture import ensure_pillow
 
 __all__ = ['LABEL', 'MARGIN', 'GUTTER', 'tile', 'index']
@@ -123,11 +124,10 @@ def index(out: str, caption: str = '', title: Optional[str] = None,
             body.append('<h2 id="%s">%s</h2>\n<img src="%s" alt="%s">'
                         % (anchor, label, name, label))
     path = os.path.join(out, 'index.html')
-    with open(path, 'w') as page:
-        page.write(PAGE % {
-            'title': title or os.path.basename(os.path.abspath(out)),
-            'caption': caption,
-            'links': ' '.join(links),
-            'sheets': '\n'.join(body),
-        })
+    atomicfiles.write_text(path, PAGE % {
+        'title': title or os.path.basename(os.path.abspath(out)),
+        'caption': caption,
+        'links': ' '.join(links),
+        'sheets': '\n'.join(body),
+    })
     return path

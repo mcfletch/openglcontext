@@ -21,7 +21,7 @@ import urllib.request
 import zipfile
 from typing import Optional
 
-from OpenGLContext import userpaths
+from OpenGLContext import atomicfiles, userpaths
 from OpenGLContext.loaders import resolver
 from OpenGLContext.loaders.documentvalues import (
     parse_object, require_array, require_object, require_text,
@@ -138,8 +138,7 @@ def material(name: str, resolution: str = "1K",
                 # The declared size is checked before extracting, so a bomb is
                 # refused rather than expanded onto the disk and measured after.
                 resolver.check_size(z.getinfo(n).file_size, max_member_bytes, n)
-                with open(paths[kind], "wb") as fh:
-                    fh.write(z.read(n))
+                atomicfiles.write_bytes(paths[kind], z.read(n))
                 written[kind] = paths[kind]
                 break
     _write_manifest(asset, resolution)

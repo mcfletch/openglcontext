@@ -43,8 +43,18 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional
 
 from OpenGLContext.events import systemtime
+from OpenGLContext.loaders.documentvalues import DocumentValues
 
 log = logging.getLogger(__name__)
+
+#: The reader of a journal's numbers: a journal can be cut short or edited,
+#: and one bad field costs that field rather than the replay.
+_values = DocumentValues(logger=log)
+
+
+def _whole(record: Dict[str, Any], key: str, default: int) -> int:
+    """A record's whole-number field, or ``default`` where it holds none."""
+    return _values.integer(record.get(key), default, 'journal %s' % (key,))
 
 __all__ = ['MarkComparison', 'Recording', 'RecordedClock', 'Replay',
            'read_records']
@@ -127,7 +137,7 @@ class Recording:
         """Each frame's input, in the order it arrived, keyed by frame."""
         grouped: Dict[int, List[Dict[str, Any]]] = {}
         for record in self.inputs:
-            grouped.setdefault(int(record.get('frame', 0)), []).append(record)
+            grouped.setdefault(_whole(record, 'frame', 0), []).append(record)
         return grouped
 
     def frame_times(self) -> List[float]:
@@ -139,7 +149,7 @@ class Recording:
         """
         times: List[float] = []
         for block in self.blocks:
-            when = float(block.get('t', 0.0))
+            when = _values.number(block.get('t'), 0.0, 'journal block time')
             for milliseconds in block.get('ms', ()):
                 times.append(when)
                 when += float(milliseconds) / 1000.0
@@ -163,7 +173,7 @@ class Recording:
             'fps': round(len(milliseconds) / total, 1) if total else 0.0,
             'median_ms': milliseconds[len(milliseconds) // 2] if milliseconds else 0.0,
             'worst_ms': milliseconds[-1] if milliseconds else 0.0,
-            'stalls': sum(int(block.get('stalls', 0)) for block in self.blocks),
+            'stalls': sum(_whole(block, 'stalls', 0) for block in self.blocks),
             'inputs': len(self.inputs),
             'exceptions': len(self.exceptions),
             'marks': len(self.marks),
@@ -411,7 +421,7 @@ class MarkComparison:
         """The frame the next unanswered recorded ``name`` was made on."""
         for expected in self.expected[self.made:]:
             if str(expected.get('name', '')) == name:
-                return int(expected.get('frame', 0))
+                return _whole(expected, 'frame', 0)
         return None
 
     # -- what came of it --------------------------------------------------
@@ -465,9 +475,10 @@ def _difference(expected: Optional[Dict[str, Any]], frame: int, name: str,
         return '%s where the recording has %s' % (
             _describe(name, written),
             _describe(name, expected.get('fields') or {}))
-    if int(expected.get('frame', -1)) != int(frame):
+    recorded = _whole(expected, 'frame', -1)
+    if recorded != int(frame):
         return '%s on frame %d where the recording has frame %d' % (
-            _describe(name, written), frame, int(expected.get('frame', -1)))
+            _describe(name, written), frame, recorded)
     return None
 
 

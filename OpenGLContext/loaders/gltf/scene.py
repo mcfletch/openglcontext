@@ -483,9 +483,11 @@ def _light_node(light_def: Any, world: np.ndarray, casts: bool = True
     """
     if not isinstance(light_def, dict):
         return None
+    values = DocumentValues(logger=log)
     kind = (light_def.get('type') or 'point').lower()
-    color = tuple(light_def.get('color', (1.0, 1.0, 1.0)))[:3]
-    intensity = float(light_def.get('intensity', 1.0))
+    color = values.vector(light_def.get('color'), (1.0, 1.0, 1.0), 'light color')
+    intensity = values.number(light_def.get('intensity'), 1.0, 'light intensity',
+                              minimum=0.0)
     # The light is mounted as a child of its glTF node's Transform, so the render
     # pass applies that node's world matrix to these coordinates. Keep them LOCAL
     # -- the KHR light sits at its node origin (0,0,0) pointing down local -Z.
@@ -493,7 +495,8 @@ def _light_node(light_def: Any, world: np.ndarray, casts: bool = True
     # left off-centre lights displaced past their targets.)
     pos = (0.0, 0.0, 0.0)
     direction = (0.0, 0.0, -1.0)
-    shadows = casts and bool(light_def.get('castShadows', kind == 'directional'))
+    shadows = casts and values.flag(light_def.get('castShadows'), kind == 'directional',
+                                    'light castShadows')
     if kind == 'directional':
         # Directional intensity is illuminance (lux); no distance falloff.
         return DirectionalLight(direction=direction, color=color,
@@ -503,8 +506,8 @@ def _light_node(light_def: Any, world: np.ndarray, casts: bool = True
     # (constant, linear, quadratic) expresses that as pure quadratic (0,0,1); the
     # `range` is stashed for the shader's range-window (`_gltf_range` -> lightRange).
     # An explicit `attenuation` (non-standard bake field) still overrides.
-    atten = tuple(float(v) for v in light_def.get('attenuation', (0, 0, 1)))[:3]
-    rng = float(light_def.get('range', 0.0) or 0.0)
+    atten = values.vector(light_def.get('attenuation'), (0.0, 0.0, 1.0), 'light attenuation')
+    rng = values.number(light_def.get('range'), 0.0, 'light range', minimum=0.0)
     if kind == 'spot':
         # KHR spot.*ConeAngle are half-angles measured from the axis, which is
         # exactly the VRML SpotLight.cutOffAngle/beamWidth convention (the outer
@@ -512,8 +515,10 @@ def _light_node(light_def: Any, world: np.ndarray, casts: bool = True
         # cos(cutOffAngle) directly and the shadow projection uses the full cone FOV
         # = 2*cutOffAngle.
         spot = light_def.get('spot') or {}
-        outer = float(spot.get('outerConeAngle', np.pi / 4.0))
-        inner = float(spot.get('innerConeAngle', 0.0))
+        outer = values.number(spot.get('outerConeAngle'), np.pi / 4.0,
+                              'spot outerConeAngle', minimum=0.0, maximum=np.pi / 2.0)
+        inner = values.number(spot.get('innerConeAngle'), 0.0, 'spot innerConeAngle',
+                              minimum=0.0, maximum=outer)
         light: Union[PointLight, SpotLight] = SpotLight(
             location=pos, direction=direction, color=color,
             intensity=intensity, castShadows=shadows, attenuation=atten,
@@ -701,7 +706,8 @@ class _SceneBuilder:
         if isinstance(node_ext, dict):
             nv = node_ext.get('KHR_node_visibility')
             if isinstance(nv, dict):
-                node_visible = node_visible and bool(nv.get('visible', True))
+                node_visible = node_visible and self.values.flag(
+                    nv.get('visible'), True, 'KHR_node_visibility visible')
             gi_ext = node_ext.get('EXT_mesh_gpu_instancing')
             if gi_ext:
                 placements = gpu_instance_placements(

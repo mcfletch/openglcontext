@@ -100,6 +100,19 @@ class TestLightNodeGuard:
     def test_non_dict_light_def_is_none(self):
         assert gs._light_node("not-a-dict", np.eye(4)) is None
 
+    def test_a_shadow_flag_written_as_a_word_reads_as_the_word_says(self):
+        light = gs._light_node({'type': 'directional', 'castShadows': 'false'}, np.eye(4))
+        assert not light.castShadows
+
+    def test_a_figure_that_is_not_a_number_takes_the_default(self, caplog):
+        light = gs._light_node({'type': 'spot', 'intensity': 'bright', 'range': 'far',
+                                'spot': {'outerConeAngle': 'wide', 'innerConeAngle': -1}},
+                               np.eye(4))
+        assert light.intensity == 1.0
+        assert abs(light.cutOffAngle - np.pi / 4.0) < 1e-6
+        assert light.beamWidth == 0.0
+        assert 'intensity' in caplog.text
+
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))

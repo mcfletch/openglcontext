@@ -20,6 +20,7 @@ from vrml.vrml97 import basenamespaces, parser, linearise
 from vrml import protofunctions
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.loaders import base
+from OpenGLContext import atomicfiles
 from vrml.vrml97 import parseprocessor
 from OpenGL._bytes import as_str
 import threading
@@ -116,8 +117,7 @@ class VRML97Handler(base.BaseHandler):
         """
         data = cls.dumps(node)
         if isinstance(file, str):
-            with open(file, "w", encoding="utf-8") as handle:
-                handle.write(data)
+            atomicfiles.write_text(file, data)
         else:
             file.write(data)
         return data

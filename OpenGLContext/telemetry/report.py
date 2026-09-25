@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
+from OpenGLContext.loaders.documentvalues import bounded
 from OpenGLContext.telemetry.replay import Recording
 
 __all__ = ['describe', 'main']
@@ -219,7 +220,7 @@ def _state(recording: Recording) -> List[str]:
 
 def _stamp(record: Dict[str, Any]) -> str:
     """A record's time as minutes and seconds into the session."""
-    seconds = float(record.get('t', 0.0))
+    seconds = bounded(record.get('t'), 0.0)
     return '%2d:%06.3f' % (int(seconds // 60), seconds % 60)
 
 

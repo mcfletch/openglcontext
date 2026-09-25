@@ -197,3 +197,12 @@ class TestSayingWhereARecordedClockIs:
         clock = RecordedClock([0.0, 0.5], start=0.0)
         clock.frame(1)
         assert '1 of 2' in repr(clock)
+
+
+def test_a_record_whose_frame_is_not_a_number_is_kept_on_frame_zero(caplog):
+    """A journal edited by hand, or cut short mid-record, still replays."""
+    recording = Recording([{'kind': 'input', 'frame': 'third', 'type': 'pointer'},
+                           {'kind': 'frames', 't': 'soon', 'ms': [], 'stalls': 'many'}])
+    assert list(recording.inputs_by_frame()) == [0]
+    assert recording.summary()['stalls'] == 0
+    assert 'frame' in caplog.text

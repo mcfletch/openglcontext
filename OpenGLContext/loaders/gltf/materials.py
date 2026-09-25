@@ -62,6 +62,7 @@ class _TextureCollector:
         self.tex_coord_mask = 0
         self.uv_transform: Optional[List[List[float]]] = None
         self.uv_params: Optional[dict] = None
+        self._values = DocumentValues(logger=log)
 
     def add(self, channel: str, info: Any, srgb: bool) -> None:
         if info is None or getattr(info, 'index', None) is None:
@@ -74,13 +75,15 @@ class _TextureCollector:
         # UV set: the texture's texCoord, unless KHR_texture_transform overrides it.
         tex_coord = int(getattr(info, 'texCoord', 0) or 0)
         if tt and tt.get('texCoord') is not None:
-            tex_coord = int(tt.get('texCoord'))
+            tex_coord = self._values.integer(tt.get('texCoord'), tex_coord,
+                                             'KHR_texture_transform texCoord', minimum=0)
         if tex_coord == 1:
             self.tex_coord_mask |= _TEXCOORD_BIT.get(channel, 0)
         if tt:
             self.uv_params = {
                 'offset': list(tt.get('offset', [0, 0])),
-                'rotation': float(tt.get('rotation', 0.0)),
+                'rotation': self._values.number(tt.get('rotation'), 0.0,
+                                                'KHR_texture_transform rotation'),
                 'scale': list(tt.get('scale', [1, 1]))}
             self.uv_transform = uv_transform_matrix(
                 offset=tuple(self.uv_params['offset']),
@@ -95,11 +98,11 @@ class _TextureCollector:
 # no longer inlines ~15 near-identical blocks. Absent extensions fall back to
 # _MATERIAL_EXT_DEFAULTS.
 
-def _ext_unlit(ext: dict, add: AddTexture) -> dict:
+def _ext_unlit(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
     return {'unlit': True}
 
 
-def _ext_baked_light(ext: dict, add: AddTexture) -> dict:
+def _ext_baked_light(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
     """Ours: ``COLOR_0`` on this material is light, not a tint.
 
     Written by a baker that worked the light out when the world was built --
@@ -111,79 +114,87 @@ def _ext_baked_light(ext: dict, add: AddTexture) -> dict:
     return {'bakedLight': True}
 
 
-def _ext_emissive_strength(ext: dict, add: AddTexture) -> dict:
-    return {'emissiveStrength': float(ext.get('emissiveStrength', 1.0))}
+def _ext_emissive_strength(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
+    return {'emissiveStrength': _factor(values, ext, 'emissiveStrength', 1.0, minimum=0.0)}
 
 
-def _ext_ior(ext: dict, add: AddTexture) -> dict:
-    return {'ior': float(ext.get('ior', 1.5))}
+def _ext_ior(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
+    return {'ior': _factor(values, ext, 'ior', 1.5, minimum=0.0)}
 
 
-def _ext_dispersion(ext: dict, add: AddTexture) -> dict:
-    return {'dispersion': float(ext.get('dispersion', 0.0))}
+def _ext_dispersion(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
+    return {'dispersion': _factor(values, ext, 'dispersion', 0.0, minimum=0.0)}
 
 
-def _ext_specular(ext: dict, add: AddTexture) -> dict:
+def _ext_specular(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
     add('specular', _info(ext.get('specularTexture')), srgb=False)          # .a
     add('specularColor', _info(ext.get('specularColorTexture')), srgb=True)  # .rgb
-    return {'specular': float(ext.get('specularFactor', 1.0)),
+    return {'specular': _factor(values, ext, 'specularFactor', 1.0, minimum=0.0, maximum=1.0),
             'specularColor': tuple(ext.get('specularColorFactor', [1, 1, 1]))}
 
 
-def _ext_clearcoat(ext: dict, add: AddTexture) -> dict:
+def _ext_clearcoat(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
     add('clearcoat', _info(ext.get('clearcoatTexture')), srgb=False)
     add('clearcoatRoughness', _info(ext.get('clearcoatRoughnessTexture')), srgb=False)
     add('clearcoatNormal', _info(ext.get('clearcoatNormalTexture')), srgb=False)
-    return {'clearcoat': float(ext.get('clearcoatFactor', 0.0)),
-            'clearcoatRoughness': float(ext.get('clearcoatRoughnessFactor', 0.0))}
+    return {'clearcoat': _factor(values, ext, 'clearcoatFactor', 0.0, minimum=0.0, maximum=1.0),
+            'clearcoatRoughness': _factor(values, ext, 'clearcoatRoughnessFactor', 0.0, minimum=0.0, maximum=1.0)}
 
 
-def _ext_sheen(ext: dict, add: AddTexture) -> dict:
+def _ext_sheen(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
     add('sheenColor', _info(ext.get('sheenColorTexture')), srgb=True)          # .rgb
     add('sheenRoughness', _info(ext.get('sheenRoughnessTexture')), srgb=False)  # .a
     return {'sheenColor': tuple(ext.get('sheenColorFactor', [0, 0, 0])),
-            'sheenRoughness': float(ext.get('sheenRoughnessFactor', 0.0))}
+            'sheenRoughness': _factor(values, ext, 'sheenRoughnessFactor', 0.0, minimum=0.0, maximum=1.0)}
 
 
-def _ext_iridescence(ext: dict, add: AddTexture) -> dict:
+def _ext_iridescence(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
     add('iridescence', _info(ext.get('iridescenceTexture')), srgb=False)
     add('iridescenceThickness', _info(ext.get('iridescenceThicknessTexture')), srgb=False)
-    return {'iridescence': float(ext.get('iridescenceFactor', 0.0)),
-            'iridescenceIor': float(ext.get('iridescenceIor', 1.3)),
-            'iridescenceThicknessMin': float(ext.get('iridescenceThicknessMinimum', 100.0)),
-            'iridescenceThicknessMax': float(ext.get('iridescenceThicknessMaximum', 400.0))}
+    return {'iridescence': _factor(values, ext, 'iridescenceFactor', 0.0, minimum=0.0, maximum=1.0),
+            'iridescenceIor': _factor(values, ext, 'iridescenceIor', 1.3, minimum=1.0),
+            'iridescenceThicknessMin': _factor(values, ext, 'iridescenceThicknessMinimum', 100.0, minimum=0.0),
+            'iridescenceThicknessMax': _factor(values, ext, 'iridescenceThicknessMaximum', 400.0, minimum=0.0)}
 
 
-def _ext_transmission(ext: dict, add: AddTexture) -> dict:
+def _ext_transmission(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
     add('transmission', _info(ext.get('transmissionTexture')), srgb=False)
-    return {'transmission': float(ext.get('transmissionFactor', 0.0))}
+    return {'transmission': _factor(values, ext, 'transmissionFactor', 0.0, minimum=0.0, maximum=1.0)}
 
 
-def _ext_diffuse_transmission(ext: dict, add: AddTexture) -> dict:
+def _ext_diffuse_transmission(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
     # Colour texture (.rgb, sRGB) tints transmitted light; factor texture (.a)
     # modulates the factor.
     add('diffuseTransmissionColor',
         _info(ext.get('diffuseTransmissionColorTexture')), srgb=True)
     add('diffuseTransmission',
         _info(ext.get('diffuseTransmissionTexture')), srgb=False)
-    return {'diffuseTransmission': float(ext.get('diffuseTransmissionFactor', 0.0)),
+    return {'diffuseTransmission': _factor(values, ext, 'diffuseTransmissionFactor', 0.0, minimum=0.0, maximum=1.0),
             'diffuseTransmissionColor': tuple(
                 ext.get('diffuseTransmissionColorFactor', [1.0, 1.0, 1.0]))[:3]}
 
 
-def _ext_volume(ext: dict, add: AddTexture) -> dict:
+def _ext_volume(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
     add('thickness', _info(ext.get('thicknessTexture')), srgb=False)
     ad = ext.get('attenuationDistance')
     # attenuationDistance defaults to +inf (no absorption); 0.0 is our sentinel.
-    return {'thickness': float(ext.get('thicknessFactor', 0.0)),
+    return {'thickness': _factor(values, ext, 'thicknessFactor', 0.0, minimum=0.0),
             'attenuationColor': tuple(ext.get('attenuationColor', [1, 1, 1])),
-            'attenuationDistance': float(ad) if ad is not None else 0.0}
+            'attenuationDistance': (0.0 if ad is None else values.number(
+                ad, 0.0, 'KHR_materials_volume attenuationDistance', minimum=0.0))}
 
 
-def _ext_anisotropy(ext: dict, add: AddTexture) -> dict:
+def _ext_anisotropy(ext: dict, add: AddTexture, values: DocumentValues) -> dict:
     add('anisotropy', _info(ext.get('anisotropyTexture')), srgb=False)
-    return {'anisotropyStrength': float(ext.get('anisotropyStrength', 0.0)),
-            'anisotropyRotation': float(ext.get('anisotropyRotation', 0.0))}
+    return {'anisotropyStrength': _factor(values, ext, 'anisotropyStrength', 0.0, minimum=0.0, maximum=1.0),
+            'anisotropyRotation': _factor(values, ext, 'anisotropyRotation', 0.0)}
+
+
+def _factor(values: DocumentValues, ext: dict, key: str, default: float,
+            minimum: Optional[float] = None, maximum: Optional[float] = None) -> float:
+    """One of an extension's numbers, checked: the default where it is not one."""
+    return values.number(ext.get(key), default, 'material %s' % (key,),
+                         minimum=minimum, maximum=maximum)
 
 
 _MATERIAL_EXT_HANDLERS = {
@@ -217,9 +228,10 @@ _MATERIAL_EXT_DEFAULTS = dict(
 def _read_material_extensions(exts: dict, add: AddTexture) -> dict:
     """Merge every present KHR material extension into PBRMaterial kwargs (5d)."""
     kwargs = dict(_MATERIAL_EXT_DEFAULTS)
+    values = DocumentValues(logger=log)
     for name, handler in _MATERIAL_EXT_HANDLERS.items():
         if name in exts:
-            kwargs.update(handler(exts[name] or {}, add))
+            kwargs.update(handler(exts[name] or {}, add, values))
     return kwargs
 
 

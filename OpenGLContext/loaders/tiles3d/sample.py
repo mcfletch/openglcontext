@@ -12,6 +12,8 @@ from collections.abc import Sequence
 
 import numpy as np
 
+from OpenGLContext import atomicfiles
+
 
 def _height(x: float, z: float, amp: float = 6.0) -> float:
     return amp * math.sin(x * 0.06) * math.cos(z * 0.05)
@@ -139,12 +141,12 @@ def build_overhang_tileset(
     os.makedirs(directory, exist_ok=True)
     s = span
     g_pos, g_nrm, g_idx = _grid_mesh(-s, s, -s, s, ground_res)
-    with open(os.path.join(directory, "ground.glb"), "wb") as fh:
-        fh.write(_glb(g_pos, g_nrm, g_idx, color=(0.15, 0.45, 0.10, 1.0)))
+    atomicfiles.write_bytes(os.path.join(directory, "ground.glb"),
+                            _glb(g_pos, g_nrm, g_idx, color=(0.15, 0.45, 0.10, 1.0)))
 
     o_pos, o_nrm, o_idx = _box_mesh(center=(0, 25.0, 0), size=(80.0, 6.0, 80.0))
-    with open(os.path.join(directory, "overhang.glb"), "wb") as fh:
-        fh.write(_glb(o_pos, o_nrm, o_idx, color=(0.4, 0.32, 0.24, 1.0)))
+    atomicfiles.write_bytes(os.path.join(directory, "overhang.glb"),
+                            _glb(o_pos, o_nrm, o_idx, color=(0.4, 0.32, 0.24, 1.0)))
 
     tileset = {
         "asset": {"version": "1.1"},
@@ -163,8 +165,7 @@ def build_overhang_tileset(
         },
     }
     path = os.path.join(directory, "tileset.json")
-    with open(path, "w") as fh:
-        json.dump(tileset, fh, indent=2)
+    atomicfiles.write_text(path, json.dumps(tileset, indent=2))
     return path
 
 
@@ -179,16 +180,15 @@ def build_sample_tileset(
     s = span
     root_pos, root_nrm, root_idx = _grid_mesh(-s, s, -s, s, root_res)
     root_bytes = _glb(root_pos, root_nrm, root_idx, color=(0.15, 0.45, 0.10, 1.0))
-    with open(os.path.join(directory, "root.glb"), "wb") as fh:
-        fh.write(root_bytes)
+    atomicfiles.write_bytes(os.path.join(directory, "root.glb"), root_bytes)
 
     quadrants = [(-s, 0, -s, 0), (0, s, -s, 0), (-s, 0, 0, s), (0, s, 0, s)]
     child_defs = []
     for i, (x0, x1, z0, z1) in enumerate(quadrants):
         pos, nrm, idx = _grid_mesh(x0, x1, z0, z1, child_res)
         name = "c%d.glb" % i
-        with open(os.path.join(directory, name), "wb") as fh:
-            fh.write(_glb(pos, nrm, idx, color=(0.13, 0.5, 0.09, 1.0)))
+        atomicfiles.write_bytes(os.path.join(directory, name),
+                                _glb(pos, nrm, idx, color=(0.13, 0.5, 0.09, 1.0)))
         child_defs.append({
             "boundingVolume": {"box": _bounding_box(pos)},
             "geometricError": 1.5,
@@ -207,6 +207,5 @@ def build_sample_tileset(
         },
     }
     path = os.path.join(directory, "tileset.json")
-    with open(path, "w") as fh:
-        json.dump(tileset, fh, indent=2)
+    atomicfiles.write_text(path, json.dumps(tileset, indent=2))
     return path

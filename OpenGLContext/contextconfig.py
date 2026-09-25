@@ -17,7 +17,7 @@ from typing import Any, List, Optional, Type
 
 from OpenGL.plugins import Plugin
 
-from OpenGLContext import plugins
+from OpenGLContext import atomicfiles, plugins
 
 log = logging.getLogger(__name__)
 
@@ -86,7 +86,7 @@ class ContextConfigMixin:
                 return True
         else:
             try:
-                open(filename, "w").write(name)
+                atomicfiles.write_text(filename, name)
             except IOError:
                 return False
             return True
@@ -225,7 +225,7 @@ class ContextConfigMixin:
                 return True
         else:
             try:
-                open(filename, "w").write(name)
+                atomicfiles.write_text(filename, name)
             except IOError:
                 return False
             return True

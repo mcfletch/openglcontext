@@ -33,10 +33,9 @@ import os
 import subprocess
 import sys
 import urllib.parse
-import urllib.request
 from typing import Any, cast
 
-from OpenGLContext import renderoptions
+from OpenGLContext import atomicfiles, renderoptions
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders import resolver
 from OpenGLContext.loaders import gltf_demos
@@ -176,9 +175,8 @@ def _dl(url: str, dst: str) -> None:
     if os.path.exists(dst) and os.path.getsize(dst) > 0:
         return
     os.makedirs(os.path.dirname(dst), exist_ok=True)
-    with urllib.request.urlopen(resolver.safe_url(url), timeout=60) as r, \
-            open(dst, 'wb') as f:
-        f.write(r.read())
+    with resolver.open_url(url, timeout=60) as response:
+        atomicfiles.write_bytes(dst, response.read())
 
 
 def resolve_model(spec: gltf_demos.SceneSpec, parthenon: str | None = None) -> str | None:
@@ -477,7 +475,6 @@ def render_scenes(scenes: list[gltf_demos.SceneSpec], out_dir: str, baseline_roo
     """Render each selected view to ``out_dir`` (``<slug>.png`` + ``<slug>.json``),
     blessing to ``baseline_root`` when asked. Overwrites only the rendered views, so
     prior renders of other scenes survive for the report."""
-    import shutil
     bless_names = None if args.bless in (None, []) else set(args.bless)
     bless_all = args.bless == []
     os.makedirs(out_dir, exist_ok=True)
@@ -499,12 +496,13 @@ def render_scenes(scenes: list[gltf_demos.SceneSpec], out_dir: str, baseline_roo
             metadata = _view_metadata(spec, camera, url, args, provenance, stats)
             do_bless = bless_all or (bless_names and spec.name in bless_names)
             try:
-                with open(os.path.join(out_dir, slug + '.json'), 'w') as fh:
-                    json.dump(metadata, fh, indent=2)
+                atomicfiles.write_text(os.path.join(out_dir, slug + '.json'),
+                                       json.dumps(metadata, indent=2))
                 if do_bless:
-                    shutil.copyfile(new_path, os.path.join(baseline_root, slug + '.png'))
-                    with open(os.path.join(baseline_root, slug + '.json'), 'w') as fh:
-                        json.dump(metadata, fh, indent=2)
+                    atomicfiles.copy_file(new_path,
+                                          os.path.join(baseline_root, slug + '.png'))
+                    atomicfiles.write_text(os.path.join(baseline_root, slug + '.json'),
+                                           json.dumps(metadata, indent=2))
             except OSError:
                 pass
             print('  %-5s %s' % ('BLESS' if do_bless else 'OK', slug))
@@ -516,7 +514,6 @@ def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: 
     (each ``<slug>.json`` + ``<slug>.png``), diffed against the baseline. Decoupled
     from rendering, so re-rendering one scene then rebuilding keeps every other row.
     Returns the regression count."""
-    import shutil
     from OpenGLContext.testing.report_generator import TestReportGenerator
     gen = TestReportGenerator(title='glTF Demo Regression -- our reference vs new')
     report_dir = os.path.dirname(os.path.abspath(report_path))
@@ -533,7 +530,7 @@ def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: 
             return src
         dst = os.path.join(out_dir, name)
         try:
-            shutil.copyfile(src, dst)
+            atomicfiles.copy_file(src, dst)
             return dst
         except OSError:
             return src

@@ -19,15 +19,19 @@ Where a prop belongs is authoring, and lives in
 """
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
+from OpenGLContext.loaders.documentvalues import DocumentValues
 from OpenGLContext.loaders.gltf.meshes import estimate_normals
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+
+log = logging.getLogger(__name__)
 
 __all__ = ['Prop', 'RockProfile', 'rock_mesh', 'rock_material', 'SHAPES',
            'props_table', 'props_from_table']
@@ -174,12 +178,15 @@ class Prop:
     @classmethod
     def from_json(cls, record: Any) -> 'Prop':
         """A prop read back out of a baked world."""
+        values = DocumentValues(logger=log)
         return cls(kind=record['kind'],
-                   position=tuple(float(v) for v in record['at']),
-                   yaw=float(record.get('yaw', 0.0)),
-                   scale=float(record.get('scale', 1.0)),
-                   radius=float(record.get('radius', 0.5)),
-                   height=float(record.get('height', 1.0)),
+                   position=values.vector(record.get('at'), (0.0, 0.0, 0.0), 'prop at'),
+                   yaw=values.number(record.get('yaw'), 0.0, 'prop yaw'),
+                   scale=values.number(record.get('scale'), 1.0, 'prop scale', minimum=0.0),
+                   radius=values.number(record.get('radius'), 0.5, 'prop radius',
+                                        minimum=0.0),
+                   height=values.number(record.get('height'), 1.0, 'prop height',
+                                        minimum=0.0),
                    shape=str(record.get('shape', 'box')))
 
 

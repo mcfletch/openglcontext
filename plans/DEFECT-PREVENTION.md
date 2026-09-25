@@ -655,6 +655,51 @@ the rules its table selects):
 | glisteel-editor | 0 | 0 | 2 | 22 | 0 | 0 | 0 |
 | twig-bb | 5 | 0 | 16 | 68 | 1 | 12 | 0 |
 
+## Baseline, sanctioned-API rules
+
+Item 3 of the order of work. In openglcontext-checks: OGC101, OGC102, OGC111,
+OGC121 and OGC151, the `loader` and `pass` scopes (empty until a project names
+its modules) and the `sanctioned` key, by which a project names its own API
+for the rules that point at one. Decisions against the design above:
+
+- One `loader` scope rather than `loader` and `hook`: a hook factory reading
+  a document's values is a loader for these rules.
+- OGC101's document field is a subscript or `.get` by a string literal on a
+  table the module does not itself hold; an index by number or variable is a
+  sequence or the program's own table. OGC102 shares that test for sizes.
+- OGC111 reports a path the function builds (join, `+`, `/`, `%`, format,
+  f-string) from a part the source does not fix, or reads from a named field;
+  a parameter, attribute or another call's result opened as it is is left to
+  the checked types of layer 3.
+- OGC121 does not run in the `test` scope, does not report a stream opened to
+  append (a log, a journal, a lock file: there is no staged form), and
+  accepts `tempfile` directories, the sanctioned stagers and a write followed
+  by `os.replace`, so a library below the engine satisfies it on its own.
+- OGC151 has no default sanctioned managers: the engine has none yet.
+
+Adoption on 2026-09-25: every project selects OGC121, and those with document
+readers declare a `loader` scope and select OGC101, OGC102 and OGC111
+(pyvrml97, omi_physics, omi_audio, twig-bb, glisteel, glisteel-editor,
+openglcontext-editor, forest, marble-demo). pyopengl-video names its library
+as the `pass` scope and selects OGC151. openglcontext selects OGC101, OGC102
+and OGC121; its OGC111 hits belong to item 4's checked types. OGC151 is not
+selected in openglcontext: its `pass` scope would hold about 85 findings in
+`passes/` and 170 in the scenegraph's own GL renderers, most of them frame
+set-up that wants the state context managers the per-class plan names
+(`gl_state.enabled`, `bound_framebuffer`, a program and a scissor manager, and
+a frame-baseline reset) before the calls can be moved onto them.
+
+TID251 holds the banned-api list in the projects built on the engine
+(openglcontext, -qt, -editor, forest, marble-demo, marble-editor, glisteel,
+glisteel-editor, twig-bb), `time.time` in the demos and games only. The
+libraries below the engine do not take it: the replacements live in the
+engine above them, and `pickle` is already S301 there. openglcontext's list
+leaves out `os.environ`, `os.getenv` and `urllib.request.urlopen` for now:
+about 40 reads of the environment in the engine outside `renderoptions`
+(the passes' own `OPENGLCONTEXT_INSTANCE_COLLAPSE`, `_CLUSTER_CULL`,
+`_TRANSMISSION`, `_IBL` and `_RENDERER` reads among them) and cc0's opener,
+which waits on item 4's `open_url(CheckedURL)`.
+
 ## The post-edit gates
 
 Item 5 landed on 2026-09-25. `tools/editcheck.py` in the workspace root takes
@@ -689,10 +734,9 @@ is to be committed as it stands without its tests passing.
   catalog and viewer (item 4, which also owns openglcontext's OGC111 hits and
   the mypy plugin, whose first commit is in openglcontext-checks as 192e7ba);
   `OpenGLContext/testing/layers.py` and `testing/scenes.py`, new and
-  untracked (item 6's failing-layer driver and still-frame scenes). Item 3's
-  rules OGC101, OGC102, OGC111, OGC121 and OGC151 are committed in
-  openglcontext-checks; openglcontext's `select` does not yet name them, and
-  its hits (OGC121 has about 40) are unresolved. The edits to
+  untracked (item 6's failing-layer driver and still-frame scenes). Item 3
+  has resumed and is recorded under
+  [Baseline, sanctioned-API rules](#baseline-sanctioned-api-rules). The edits to
   `docs/_static/oglc.css` and `docs/structure.rst` predate this work and are
   not the agents'.
 - Item 7, ruff ratchets. Done and committed: opengl_extrusions, ttfquery,

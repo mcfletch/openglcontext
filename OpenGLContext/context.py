@@ -789,7 +789,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             except Exception:
                 pass            # a closed or broken pipe is not worth dying on
 
-        os._exit(0)
+        os._exit(0)  # noqa: TID251 the streams are flushed above; the testing package's exit helper is not imported by a shipped context
 
     def wantsMoreFrames(self) -> bool:
         """Whether anything in this context still needs another frame drawn.

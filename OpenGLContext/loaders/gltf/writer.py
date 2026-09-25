@@ -40,6 +40,7 @@ from typing import Any, Iterable, Optional, Sequence, Union
 import numpy as np
 
 from OpenGLContext import __version__ as _engine_version
+from OpenGLContext.loaders.documentvalues import bounded
 from OpenGLContext.loaders.gltf import hooks as _hooks
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
@@ -716,7 +717,7 @@ class GLTFWriter:
         if not params or not (mask & (_TEXCOORD_BIT.get(channel, 0) << 8)):
             return None
         transform = {'offset': [float(v) for v in params.get('offset', (0, 0))],
-                     'rotation': float(params.get('rotation', 0.0)),
+                     'rotation': bounded(params.get('rotation'), 0.0),
                      'scale': [float(v) for v in params.get('scale', (1, 1))]}
         if mask & _TEXCOORD_BIT.get(channel, 0):
             transform['texCoord'] = 1

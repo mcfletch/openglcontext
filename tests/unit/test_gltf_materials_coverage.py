@@ -144,3 +144,38 @@ class TestSpecularGlossiness:
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class TestAMalformedMaterialExtension:
+    """A factor a document gets wrong costs that factor, reported, not the material."""
+
+    def _built(self, extensions):
+        g = GLTF2()
+        g.materials = [Material(extensions=extensions)]
+        return gmat._build_material(g, 0, _R(), {})
+
+    def test_a_factor_that_is_not_a_number_takes_the_default(self, caplog):
+        mat = self._built({'KHR_materials_ior': {'ior': 'glass'},
+                           'KHR_materials_iridescence': {'iridescenceIor': float('nan')}})
+        assert abs(mat.ior - 1.5) < 1e-6
+        assert abs(mat.iridescenceIor - 1.3) < 1e-6
+        assert 'ior' in caplog.text
+
+    def test_a_factor_outside_its_range_is_held_to_it(self):
+        mat = self._built({'KHR_materials_clearcoat': {'clearcoatFactor': 5.0,
+                                                       'clearcoatRoughnessFactor': -1},
+                           'KHR_materials_volume': {'thicknessFactor': -2,
+                                                    'attenuationDistance': 'far'}})
+        assert (float(mat.clearcoat), float(mat.clearcoatRoughness)) == (1.0, 0.0)
+        assert (float(mat.thickness), float(mat.attenuationDistance)) == (0.0, 0.0)
+
+    def test_a_texture_transform_with_a_bad_uv_set_uses_the_texture_s(self):
+        g, r = _g_with_images([_png()])
+        info = TextureInfo(index=0)
+        info.extensions = {'KHR_texture_transform': {'texCoord': 'second',
+                                                     'rotation': 'quarter'}}
+        g.materials = [Material(pbrMetallicRoughness=PbrMetallicRoughness(
+            baseColorTexture=info))]
+        mat = gmat._build_material(g, 0, r, {})
+        assert not mat._tex_coord_mask & 1
+        assert mat.uv_transform is not None

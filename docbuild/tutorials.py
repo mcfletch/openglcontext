@@ -421,14 +421,17 @@ def write(
                 log.warning('no such tutorial script: %s', source)
                 continue
             tutorial = parse(source)
-            with open(
-                os.path.join(output, '%s.rst' % (name,)), 'w', encoding='utf8'
-            ) as handle:
-                handle.write(render(tutorial))
+            _replace(os.path.join(output, '%s.rst' % (name,)), render(tutorial))
             written.append(name)
-    with open(os.path.join(output, 'index.rst'), 'w', encoding='utf8') as handle:
-        handle.write(render_index(paths, written))
+    _replace(os.path.join(output, 'index.rst'), render_index(paths, written))
     return written
+
+
+def _replace(path: str, text: str) -> None:
+    """Replace the file at ``path`` with ``text``, renamed into place once written."""
+    with open(path + '.partial', 'w', encoding='utf8') as handle:
+        handle.write(text)
+    os.replace(path + '.partial', path)
 
 
 def main(argv: list[str] | None = None) -> int:

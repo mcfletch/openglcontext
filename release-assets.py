@@ -39,6 +39,7 @@ import argparse
 import os
 import shutil
 
+from OpenGLContext import atomicfiles
 from OpenGLContext.contentpacks import publish
 
 #: Where a release's artefacts are fetched from.
@@ -77,8 +78,8 @@ def build_world(into: str, bays: int, levels: int) -> str:
     print("content: %s" % (content,))
     world = os.path.join(into, "gallery.glb")
     build.build(content, world, bays=bays, levels=levels)
-    shutil.copyfile(os.path.join(content, "CREDITS.txt"),
-                    os.path.join(into, "CREDITS.txt"))
+    atomicfiles.copy_file(os.path.join(content, "CREDITS.txt"),
+                          os.path.join(into, "CREDITS.txt"))
     return into
 
 
@@ -92,8 +93,8 @@ def stage(world: str, into: str) -> str:
     if not os.path.exists(beside):
         raise SystemExit("no CREDITS.txt beside %s; the pack carries the art's "
                          "attribution, so put it there" % (world,))
-    shutil.copyfile(world, os.path.join(into, MARKER))
-    shutil.copyfile(beside, os.path.join(into, "CREDITS.txt"))
+    atomicfiles.copy_file(world, os.path.join(into, MARKER))
+    atomicfiles.copy_file(beside, os.path.join(into, "CREDITS.txt"))
     return into
 
 

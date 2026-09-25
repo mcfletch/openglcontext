@@ -180,3 +180,8 @@ class _Path:
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+def test_a_closed_flag_written_as_a_word_reads_as_the_word_says():
+    """``bool('false')`` is true: a point-to-point road would read as a circuit."""
+    assert WorldManifest.from_json({'name': 'hill climb', 'closed': 'false'}).closed is False

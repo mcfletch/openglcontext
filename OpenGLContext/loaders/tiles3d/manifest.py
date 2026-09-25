@@ -29,8 +29,9 @@ import os
 from dataclasses import dataclass, field
 from typing import Any, Callable, TypeVar
 
+from OpenGLContext import atomicfiles
 from OpenGLContext.loaders.documentvalues import (
-    JSONObject, parse_object, require_number, require_object, require_text,
+    DocumentValues, JSONObject, parse_object, require_number, require_object, require_text,
 )
 
 __all__ = ['MANIFEST', 'WorldManifest', 'carried', 'read_manifest',
@@ -118,7 +119,8 @@ class WorldManifest:
             road_length=_or_none(document, 'roadLength', number),
             structures={kind: require_number(metres, 'the metres on %s' % (kind,))
                         for kind, metres in structures.items()},
-            closed=bool(document.get('closed', True)),
+            closed=DocumentValues(logger=log).flag(document.get('closed'), True,
+                                                   'the world manifest closed'),
             baked=_or_none(document, 'baked', text))
 
 
@@ -140,9 +142,8 @@ def carried(path: Any) -> dict[str, float]:
 def write_manifest(directory: str, manifest: WorldManifest) -> str:
     """Write one beside a tileset; answer where it went."""
     where = os.path.join(directory, MANIFEST)
-    with open(where, 'w', encoding='utf-8') as handle:
-        json.dump(manifest.to_json(), handle, indent=2, sort_keys=True)
-        handle.write('\n')
+    atomicfiles.write_text(
+        where, json.dumps(manifest.to_json(), indent=2, sort_keys=True) + '\n')
     return where
 
 

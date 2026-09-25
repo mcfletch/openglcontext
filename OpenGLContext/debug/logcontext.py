@@ -17,7 +17,7 @@ def _file() -> IO[str]:
     """The open log, made on the first call rather than at import"""
     global _log
     if _log is None:
-        _log = open(LOG_NAME, 'w')
+        _log = open(LOG_NAME, 'w')  # noqa: OGC121 a log written line by line as the session runs; a cut-short one is a shorter log
     return _log
 
 
