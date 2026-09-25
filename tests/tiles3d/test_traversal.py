@@ -4,6 +4,7 @@
 (the ideal visible tiles) and a want set (render set plus a speculative prefetch
 margin). REPLACE hides the parent when children are shown; ADD keeps it.
 """
+import os
 import math
 import pytest
 
@@ -37,7 +38,7 @@ def _nested(refine="REPLACE", mid_ge=40.0):
 
 
 def _uris(tiles):
-    return [t.content_uri for t in tiles]
+    return [os.path.basename(t.content_uri) for t in tiles]
 
 
 def test_distant_camera_renders_only_root():

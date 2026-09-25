@@ -14,6 +14,7 @@ specification requires (the root, a tile's bounding volume and geometric
 error, a content's URI) that is missing or of the wrong type is a
 :class:`~OpenGLContext.loaders.documentvalues.DocumentError` naming it.
 """
+import os
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from typing import Optional, Union
 
@@ -23,6 +24,7 @@ from OpenGLContext.loaders.documentvalues import (
     JSONObject, bounded, parse_object, require_array, require_number,
     require_numbers, require_object, require_text,
 )
+from OpenGLContext.loaders.resolver import Located
 from OpenGLContext.loaders.tiles3d import fetch
 from OpenGLContext.loaders.tiles3d.boundingvolume import (
     SphereBV, BoxBV, RegionBV, WGS84_A, WGS84_B,
@@ -95,7 +97,7 @@ class RuntimeTile:
         bounding_volume: BoundingVolume,
         geometric_error: float,
         refine: str,
-        content_uris: Optional[Iterable[str]],
+        content_uris: Optional[Iterable[Located]],
         world_transform: np.ndarray,
         children: "list[RuntimeTile]",
         up_axis_matrix: np.ndarray = _IDENTITY,
@@ -119,7 +121,7 @@ class RuntimeTile:
             node = node.parent
 
     @property
-    def content_uri(self) -> Optional[str]:
+    def content_uri(self) -> Optional[Located]:
         return self.content_uris[0] if self.content_uris else None
 
     @property
@@ -221,8 +223,10 @@ def _raw_content_uris(tile_dict: JSONObject) -> list[str]:
     return uris
 
 
-def _resolve_uri(uri: Optional[str], base_uri: str) -> Optional[str]:
-    return fetch.resolve_uri(base_uri, uri) if uri else uri
+def _resolve_uri(uri: Optional[str], base_uri: str) -> Optional[Located]:
+    """A URI the document names, held to its base; with no base, the directory
+    the process is in, since a document's name is never the caller's."""
+    return fetch.resolve_uri(base_uri or os.curdir + os.sep, uri) if uri else None
 
 
 def _is_external_tileset(uri: Optional[str]) -> bool:
@@ -238,7 +242,7 @@ def _build_tile(
     parent_transform: np.ndarray,
     parent_refine: str,
     recenter_offset: np.ndarray,
-    resolve_external: "Optional[Callable[[str], JSONObject]]",
+    resolve_external: "Optional[Callable[[Located], JSONObject]]",
     depth: int,
     up_axis_matrix: np.ndarray = _IDENTITY,
     recenter_rotation: Optional[np.ndarray] = None,
@@ -262,7 +266,7 @@ def _build_tile(
     # Content URIs split two ways: an external tileset (`.json`) is grafted in as a
     # subtree to refine into, while glTF/b3dm URIs become this tile's drawable content
     # (1.1 lets a tile hold several, e.g. buildings and trees in one tile).
-    content_uris: list[str] = []
+    content_uris: list[Located] = []
     for raw in _raw_content_uris(tile_dict):
         resolved = _resolve_uri(raw, base_uri)
         if resolved is None:  # pragma: no cover - _raw_content_uris yields only
@@ -338,7 +342,7 @@ def _recenter_offset(root_dict: JSONObject) -> np.ndarray:
     return np.zeros(3, dtype="d")
 
 
-def _default_external_resolver(uri: str) -> JSONObject:
+def _default_external_resolver(uri: Located) -> JSONObject:
     """Read and parse an external tileset (`.json`), local path or http(s) URL."""
     return parse_object(fetch.read_bytes(uri), uri)
 
@@ -347,7 +351,7 @@ def build_runtime_tileset(
     tileset_dict: JSONObject,
     base_uri: str = "",
     recenter: bool = False,
-    resolve_external: "Optional[Callable[[str], JSONObject]]" = (
+    resolve_external: "Optional[Callable[[Located], JSONObject]]" = (
         _default_external_resolver
     ),
 ) -> RuntimeTileset:

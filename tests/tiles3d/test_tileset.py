@@ -138,7 +138,7 @@ def test_single_and_plural_content_combine():
         "content": {"uri": "a.b3dm"},
         "contents": [{"uri": "b.glb"}],
     }))
-    assert ts.root.content_uris == ["a.b3dm", "b.glb"]
+    assert [os.path.basename(uri) for uri in ts.root.content_uris] == ["a.b3dm", "b.glb"]
 
 
 def test_plural_contents_split_external_json_from_geometry():
@@ -155,9 +155,9 @@ def test_plural_contents_split_external_json_from_geometry():
         ],
     }), resolve_external=lambda uri: external)
     # Geometry stays as content; the .json is grafted as a child subtree.
-    assert ts.root.content_uris == ["building.glb"]
+    assert [os.path.basename(uri) for uri in ts.root.content_uris] == ["building.glb"]
     assert len(ts.root.children) == 1
-    assert ts.root.children[0].content_uri == "leaf.glb"
+    assert os.path.basename(ts.root.children[0].content_uri) == "leaf.glb"
 
 
 def test_external_tileset_unexpanded_when_resolver_is_none():
@@ -167,7 +167,7 @@ def test_external_tileset_unexpanded_when_resolver_is_none():
         "content": {"uri": "child.json"},
     }), resolve_external=None)
     # Without a resolver the .json stays as the tile's content, unexpanded.
-    assert ts.root.content_uri == "child.json"
+    assert os.path.basename(ts.root.content_uri) == "child.json"
     assert ts.root.children == []
 
 
@@ -596,3 +596,13 @@ def test_an_up_axis_that_is_no_axis_is_the_default():
     assert np.array_equal(ts.root.content_transform, default.root.content_transform)
     assert ts.root_geometric_error == 0.0
     assert ts.root.refine == 'REPLACE'
+
+
+def test_a_tileset_with_no_base_holds_its_content_to_the_working_directory():
+    root = {"boundingVolume": {"sphere": [0, 0, 0, 1]}, "geometricError": 1.0,
+            "content": {"uri": "../../etc/passwd"}}
+    with pytest.raises(IOError, match="escapes the base directory"):
+        build_runtime_tileset(_tileset(root))
+    root["content"] = {"uri": "tile.glb"}
+    assert build_runtime_tileset(_tileset(root)).root.content_uri == os.path.join(
+        os.path.realpath(os.curdir), "tile.glb")

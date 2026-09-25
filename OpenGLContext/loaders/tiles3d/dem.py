@@ -11,6 +11,7 @@ from typing import Any
 
 import numpy as np
 
+from OpenGLContext.loaders.resolver import contained_source
 from OpenGLContext.loaders.tiles3d.procedural import build_terrain_tileset
 
 HeightFn = Callable[[Any, Any], np.ndarray]
@@ -51,7 +52,7 @@ def height_function_from_image(
 ) -> HeightFn:
     """A world-space height_fn from a grayscale DEM image at `path`."""
     from PIL import Image
-    img = Image.open(path).convert("F")
+    img = Image.open(contained_source(path)).convert("F")
     arr = np.asarray(img, dtype="d")
     if arr.max() > 1.0:                     # 8/16-bit rasters -> normalise to 0..1
         arr = arr / arr.max()

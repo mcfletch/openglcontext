@@ -30,6 +30,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, TypeVar
 
 from OpenGLContext import atomicfiles
+from OpenGLContext.loaders.resolver import contained_source
 from OpenGLContext.loaders.documentvalues import (
     DocumentValues, JSONObject, parse_object, require_number, require_object, require_text,
 )
@@ -155,8 +156,8 @@ def read_manifest(where: str) -> WorldManifest | None:
     not parse is *absent* rather than an error: a chooser scanning a directory
     of worlds should skip the broken one and offer the rest.
     """
-    path = where if os.path.basename(where) == MANIFEST else os.path.join(
-        where if os.path.isdir(where) else os.path.dirname(where), MANIFEST)
+    path = contained_source(where if os.path.basename(where) == MANIFEST else os.path.join(
+        where if os.path.isdir(where) else os.path.dirname(where), MANIFEST))
     try:
         with open(path, encoding='utf-8') as handle:
             return WorldManifest.from_json(parse_object(handle.read(), path))

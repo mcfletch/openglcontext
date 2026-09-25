@@ -5,6 +5,7 @@ exercised directly: async load then upload, coarse-parent fallback while a finer
 child streams, upload throttling, memory-budget eviction with resource release, and
 graceful handling of a failed load.
 """
+import os
 import math
 import threading
 import pytest
@@ -54,7 +55,7 @@ def _nested():
 
 
 def _uris(drawables):
-    return [d.tile.content_uri for d in drawables]
+    return [os.path.basename(d.tile.content_uri) for d in drawables]
 
 
 def test_far_camera_loads_and_draws_root():

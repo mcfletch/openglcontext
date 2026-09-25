@@ -903,20 +903,20 @@ class TestLocalPathConfinement:
 
     def test_traversal_rejected(self, tmp_path):
         with pytest.raises(IOError):
-            resolver._resolve_local(str(tmp_path), '../../etc/passwd')
+            resolver.contain(str(tmp_path), '../../etc/passwd')
 
     def test_absolute_rejected(self, tmp_path):
         with pytest.raises(IOError):
-            resolver._resolve_local(str(tmp_path), '/etc/passwd')
+            resolver.contain(str(tmp_path), '/etc/passwd')
 
     def test_url_scheme_rejected(self, tmp_path):
         with pytest.raises(IOError):
-            resolver._resolve_local(str(tmp_path), 'http://evil/x')
+            resolver.contain(str(tmp_path), 'http://evil/x')
 
     def test_relative_reference_ok(self, tmp_path):
         (tmp_path / 'sub').mkdir()
         (tmp_path / 'sub' / 'buf.bin').write_bytes(b'x')
-        p = resolver._resolve_local(str(tmp_path), 'sub/buf.bin')
+        p = resolver.contain(str(tmp_path), 'sub/buf.bin')
         assert p == os.path.realpath(str(tmp_path / 'sub' / 'buf.bin'))
 
 

@@ -14,6 +14,7 @@ from typing import Any, Optional
 import numpy as np
 
 from OpenGLContext.loaders import gltf
+from OpenGLContext.loaders.resolver import contained_source, read_contained
 
 # Terrain height sampler: height_fn(x, z) -> height (scalar or array, matching x/z).
 HeightFn = Callable[..., Any]
@@ -267,8 +268,7 @@ def conifer_glb(height: float = 9.0, seed: int = 11,
         Image.fromarray(arr, mode).save(b, format="PNG")
         return b.getvalue()
     if bark_path:
-        with open(bark_path, "rb") as fh:
-            bark = fh.read()
+        bark = read_contained(contained_source(bark_path))
         bark_mime = "image/jpeg" if bark_path.lower().endswith((".jpg", ".jpeg")) \
             else "image/png"
     else:
@@ -349,7 +349,7 @@ def _pbr_glb(positions: np.ndarray, uvs: np.ndarray, indices: np.ndarray,
         blob += raw
     img_spans = {}
     for k in present:
-        data = open(maps[k], "rb").read()
+        data = read_contained(contained_source(maps[k]))
         img_spans[k] = (len(blob), len(data))
         blob += data
 
@@ -432,7 +432,7 @@ def _scene_glb(positions: np.ndarray, uvs: np.ndarray,
             p = (prim.get("maps") or {}).get(k)
             if p:
                 if p not in img_data:
-                    img_data[p] = open(p, "rb").read()
+                    img_data[p] = read_contained(contained_source(p))
 
     g = GLTF2()
     g.scene = 0
@@ -534,7 +534,7 @@ def ground_patch_split(center: Sequence[float], radius: float, height_fn: Height
 
 def _load_rgb(path: str, size: int) -> np.ndarray:
     from PIL import Image
-    return np.asarray(Image.open(path).convert("RGB").resize((size, size)),
+    return np.asarray(Image.open(contained_source(path)).convert("RGB").resize((size, size)),
                       np.float32)
 
 

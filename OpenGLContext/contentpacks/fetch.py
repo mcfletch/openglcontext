@@ -145,7 +145,7 @@ def fetch_registry(url: str, store: ContentStore,
     log.info('fetching the registry at %s', resolver.safe_url(url))
     try:
         downloaded = resolver.fetch_to_cache(
-            url, cache_dir=cache_dir, max_bytes=REGISTRY_LIMIT,
+            resolver.checked_url(url), cache_dir=cache_dir, max_bytes=REGISTRY_LIMIT,
             progress=progress, cancel=cancel,
             redirects=resolver.PUBLIC_HOSTS)
     except resolver.FetchCancelled as error:
@@ -231,7 +231,7 @@ def _download(pack: ContentPack, cache_dir: str | None,
     """The pack's archive in the download cache, fetched if it is not there."""
     try:
         return resolver.fetch_to_cache(
-            pack.url, cache_dir=cache_dir,
+            resolver.checked_url(pack.url), cache_dir=cache_dir,
             max_bytes=fetch_limit(pack.approximate_bytes),
             progress=progress, cancel=cancel,
             redirects=resolver.PUBLIC_HOSTS)

@@ -192,13 +192,14 @@ class _HDRBackground(object):
         registered as the IBL environment and every live context is redrawn.
         """
         from OpenGLContext.loaders import hdr
-        from OpenGLContext.loaders.resolver import fetch_to_cache
+        from OpenGLContext.loaders.resolver import checked_url, fetch_to_cache
 
         urls = [url] if isinstance(url, str) else list(url)
         for u in urls:
             try:
+                path: str
                 if u.startswith(('http://', 'https://')):
-                    path = fetch_to_cache(u)
+                    path = fetch_to_cache(checked_url(u))
                 else:
                     path = os.path.abspath(u)
                 image = hdr.load_hdr(path)

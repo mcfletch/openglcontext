@@ -140,7 +140,7 @@ def _unpack(path: str, kind: str, into: Optional[str],
     """
     # An archive the user named follows redirects to any public host, as a
     # content pack does: release hosts serve every asset through a CDN.
-    local = (resolver.fetch_to_cache(path, max_bytes=max_bytes,
+    local = (resolver.fetch_to_cache(resolver.checked_url(path), max_bytes=max_bytes,
                                      redirects=resolver.PUBLIC_HOSTS)
              if is_url(path) else path)
     root = into if into is not None else archive_cache_dir()

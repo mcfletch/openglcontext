@@ -76,13 +76,13 @@ class TestAFileBesideATileset:
             fetch.beside('', 'zones.gltf')
 
     def test_a_local_file_is_its_own_copy(self, tmp_path):
-        path = str(tmp_path / 'a.png')
-        assert fetch.local_copy(path) == path
+        path = fetch.resolve_uri('', str(tmp_path / 'a.png'))
+        assert fetch.local_copy(path) is path
 
     def test_a_remote_file_is_fetched_to_the_cache(self, served, tmp_path):
         world, url = served
         (world / 'a.bin').write_bytes(b'payload')
-        copy = fetch.local_copy(url + 'a.bin', cache_dir=str(tmp_path / 'cache'))
+        copy = fetch.local_copy(fetch.resolve_uri('', url + 'a.bin'), cache_dir=str(tmp_path / 'cache'))
         assert not fetch.is_url(copy)
         with open(copy, 'rb') as handle:
             assert handle.read() == b'payload'

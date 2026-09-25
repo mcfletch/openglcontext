@@ -20,6 +20,8 @@ import os
 import tempfile
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
+from OpenGLContext.loaders.resolver import contained_source
+
 log = logging.getLogger(__name__)
 
 __all__ = ['bindings_path', 'save_bindings', 'load_bindings', 'reset_bindings',
@@ -75,7 +77,7 @@ def save_bindings(navigation: Any, path: Optional[str] = None) -> str:
 
 def load_bindings(navigation: Any, path: Optional[str] = None) -> bool:
     """Apply a saved file; False if there was nothing usable to apply."""
-    path = path or bindings_path()
+    path = contained_source(path or bindings_path())
     if not os.path.exists(path):
         return False
     try:

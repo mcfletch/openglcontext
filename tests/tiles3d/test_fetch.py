@@ -58,7 +58,7 @@ def test_dir_of_url_and_path():
 def test_read_bytes_local(tmp_path):
     p = tmp_path / "data.bin"
     p.write_bytes(b"hello-tile")
-    assert fetch.read_bytes(str(p)) == b"hello-tile"
+    assert fetch.read_bytes(fetch.resolve_uri("", str(p))) == b"hello-tile"
 
 
 def test_read_bytes_url_caches_and_reuses(tmp_path, monkeypatch):
@@ -92,8 +92,8 @@ def test_read_bytes_url_caches_and_reuses(tmp_path, monkeypatch):
     cache = str(tmp_path / "cache")
     url = "https://host.example/set/tile.b3dm"
 
-    assert fetch.read_bytes(url, cache_dir=cache) == b"remote-bytes"
-    assert fetch.read_bytes(url, cache_dir=cache) == b"remote-bytes"
+    assert fetch.read_bytes(fetch.resolve_uri("", url), cache_dir=cache) == b"remote-bytes"
+    assert fetch.read_bytes(fetch.resolve_uri("", url), cache_dir=cache) == b"remote-bytes"
     assert calls["n"] == 1                     # second read served from cache
     # The cache file exists and holds the payload.
     files = os.listdir(cache)

@@ -17,7 +17,7 @@ import os
 from typing import TYPE_CHECKING, Optional, Union, cast
 
 from OpenGLContext.loaders.resolver import (
-    check_size, Resolver, fetch_url, DEFAULT_MAX_RESOURCE_BYTES,
+    check_size, checked_url, contained_source, read_contained, Resolver, fetch_url, DEFAULT_MAX_RESOURCE_BYTES,
 )
 from OpenGLContext.loaders.gltf import fastdecode
 from OpenGLContext.loaders.gltf.scene import _build_scene, GLTFScene
@@ -74,11 +74,8 @@ def _source_bytes(source: Union[bytes, bytearray, str],
         data = bytes(source)
         check_size(len(data), max_resource_bytes, 'glTF document')
         return data, base_dir
-    if max_resource_bytes is not None and os.path.exists(source):
-        check_size(os.path.getsize(source), max_resource_bytes, source)
-    with open(source, 'rb') as handle:
-        data = handle.read()
-    return data, os.path.dirname(os.path.abspath(source))
+    path = contained_source(source)
+    return read_contained(path, max_resource_bytes), os.path.dirname(path)
 
 
 class SharedDocument:
@@ -164,7 +161,7 @@ def load_gltf_url(url: str, cache_dir: Optional[str] = None,
     External buffers/images referenced by a ``.gltf`` are resolved relative to the
     URL and confined to its origin. ``.glb`` files are self-contained.
     """
-    data = fetch_url(url, cache_dir, max_resource_bytes)
+    data = fetch_url(checked_url(url), cache_dir, max_resource_bytes)
     if data[:4] == b'glTF':
         return load_gltf(data, max_resource_bytes=max_resource_bytes)  # GLB
     g = _decode_document(data)

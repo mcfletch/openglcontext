@@ -34,7 +34,7 @@ import threading
 from collections import OrderedDict
 from typing import Any, Callable, List, Optional, Tuple
 
-from OpenGLContext.loaders.resolver import fetch_to_cache, is_url
+from OpenGLContext.loaders.resolver import checked_url, fetch_to_cache, is_url
 
 log = logging.getLogger(__name__)
 
@@ -207,8 +207,9 @@ class PictureCache(object):
         """
         from PIL import Image, ImageOps
         from OpenGLContext.loaders.loader import local_path
+        path: str
         if is_url(url):
-            path = fetch_to_cache(url, cache_dir=self.cacheDirectory)
+            path = fetch_to_cache(checked_url(url), cache_dir=self.cacheDirectory)
         else:
             path = local_path(url)
         decoder = decoderFor(path)

@@ -25,6 +25,20 @@ containment core, kept in one auditable place. It enforces:
 :func:`safe_url`, :func:`fetch_url` and :func:`decode_data_uri` are the
 fetch/decode primitives; :class:`Resolver` ties them to one document's origin.
 
+What passed a check is said by its type. A :class:`ContainedPath` is a local
+path held to a directory (:func:`contain`, :meth:`Resolver.resolve` for a
+document read from a file, a cache entry); a :class:`CheckedURL` is an
+http(s) URL checked against a policy (:func:`checked_url`,
+:func:`require_host`, :meth:`AllowedHosts.check`, :meth:`Resolver.resolve`
+for a served document). Both are made only here: their constructor takes a
+key this module holds, and the ``openglcontext_checks`` mypy plugin reports
+a construction written anywhere else. The functions below the checks --
+:func:`open_contained`, :func:`read_contained`, :func:`open_url`,
+:func:`fetch_url`, :func:`fetch_to_cache` -- take only the checked types. A
+string a caller names at the top (a path or URL handed to a load) passes
+through :func:`checked_source` (or :func:`contained_source`, where only a
+local file will do) once, and what it answers is handed down.
+
 These names are public. A loader in another distribution --
 ``OpenGLContext_editor`` reading a baked level's sidecar, an application
 reading its own format -- imports them to be held to the same policy rather
@@ -32,6 +46,8 @@ than implementing containment again.
 """
 
 __all__ = [
+    'ContainedPath', 'CheckedURL', 'Located', 'contain', 'checked_url',
+    'checked_source', 'contained_source', 'open_contained', 'read_contained',
     'Resolver', 'FetchCancelled', 'ResourceTooLarge', 'Progress', 'Cancel',
     'RedirectPolicy', 'SameOrigin', 'PublicHosts', 'AllowedHosts',
     'SAME_ORIGIN', 'PUBLIC_HOSTS', 'open_url',
@@ -50,11 +66,63 @@ import threading
 import urllib.parse
 import urllib.request
 import urllib.error
-from typing import Any, Callable, List, Optional, Sequence, Tuple
+from typing import Any, BinaryIO, Callable, List, Optional, Sequence, Tuple, TypeVar, Union
 
 from OpenGLContext import atomicfiles
 
 log = logging.getLogger(__name__)
+
+#: What the checked types' constructor is handed by the functions here that
+#: check a value, and by nothing else.
+_CHECKED = object()
+
+_Self = TypeVar('_Self', bound='_Checked')
+
+
+class _Checked(str):
+    """A string that has been through one of this module's checks."""
+
+    __slots__ = ()
+
+    def __new__(cls: type[_Self], value: str, key: object) -> _Self:
+        if key is not _CHECKED:
+            raise TypeError(
+                '%s is made by the checks in %s (contain, checked_url, '
+                'checked_source, Resolver.resolve), not directly'
+                % (cls.__name__, __name__))
+        return super().__new__(cls, value)
+
+    def __reduce__(self) -> Tuple[type, Tuple[str]]:
+        # Unpickled, it has been through no check in this process.
+        return (str, (str(self),))
+
+
+class ContainedPath(_Checked):
+    """A local path held to a directory: under it, no ``..``, no link out.
+
+    Made by :func:`contain`, :meth:`Resolver.resolve` for a document read from
+    a file, :func:`checked_source` for a path a caller names, and
+    :func:`cached_path` for a cache entry. A path built from one (joined,
+    concatenated) is a plain ``str`` again.
+    """
+
+    __slots__ = ()
+
+
+class CheckedURL(_Checked):
+    """An http(s) URL checked against the policy of whoever named it.
+
+    Made by :func:`checked_url` (the scheme), :func:`require_host` and
+    :meth:`AllowedHosts.check` (a service's hosts), :meth:`Resolver.resolve`
+    for a served document (its origin) and :func:`checked_source`. The
+    redirects a fetch follows are checked again as they arrive.
+    """
+
+    __slots__ = ()
+
+
+#: Where a checked reference leads: a file on this machine or a URL.
+Located = Union[ContainedPath, CheckedURL]
 
 
 def safe_url(url: str) -> str:
@@ -117,8 +185,8 @@ def _origin(url: str) -> Tuple[str, str]:
     return (parts.scheme.lower(), parts.netloc.lower())
 
 
-def require_host(url: str, allowed: Sequence[str]) -> str:
-    """``url`` unchanged, or ``IOError`` unless it is https on an allowed host.
+def require_host(url: str, allowed: Sequence[str]) -> CheckedURL:
+    """``url`` checked, or ``IOError`` unless it is https on an allowed host.
 
     For a URL a *service* handed back rather than one a person typed: a
     catalogue is asked where an asset lives and answers with a link, and that
@@ -153,7 +221,93 @@ def require_host(url: str, allowed: Sequence[str]) -> str:
         raise IOError("%r does not name a usable port" % (url,)) from err
     if port not in (None, 443):
         raise IOError("%r names port %s rather than the https port" % (url, port))
-    return url
+    return CheckedURL(url, _CHECKED)
+
+
+def checked_url(url: str) -> CheckedURL:
+    """``url``, which must be http(s), as a :class:`CheckedURL`; else ``IOError``.
+
+    The check for a URL a caller or a trusted registry names: the scheme. Its
+    redirects are put to the fetch's :class:`RedirectPolicy` as they arrive.
+    """
+    if not is_url(url):
+        raise IOError('%r is not an http(s) URL, and only those are fetched'
+                      % (_without_query(url),))
+    return CheckedURL(url, _CHECKED)
+
+
+def contain(base_dir: str, name: str) -> ContainedPath:
+    """``name``, a relative path, resolved under ``base_dir``; else ``IOError``.
+
+    A ``name`` like ``../../../etc/passwd``, an absolute path, or one carrying
+    a URL scheme would otherwise let a document read arbitrary files. The
+    realpath of the result must stay within the realpath of ``base_dir``, so
+    a symbolic link leading out is refused too. ``name`` is percent-decoded,
+    as a URI reference is.
+    """
+    parsed = urllib.parse.urlsplit(name)
+    if parsed.scheme or parsed.netloc:
+        raise IOError("local load may only reference local files, not %r" % name)
+    rel = urllib.parse.unquote(parsed.path)
+    if os.path.isabs(rel):
+        raise IOError("uri must be a relative path, not %r" % name)
+    base_real = os.path.realpath(base_dir)
+    full = os.path.realpath(os.path.join(base_real, rel))
+    if full != base_real and not full.startswith(base_real + os.sep):
+        raise IOError("uri %r escapes the base directory" % name)
+    return ContainedPath(full, _CHECKED)
+
+
+def checked_source(source: str) -> Located:
+    """A path or URL a caller names, checked once for the loaders below.
+
+    An http(s) URL is a :class:`CheckedURL`; anything else with a scheme
+    (``file:``, ``data:``) is ``IOError``; a local path is a
+    :class:`ContainedPath` of its real path, contained by its own directory.
+    A value already checked is answered as it is.
+    """
+    if isinstance(source, (ContainedPath, CheckedURL)):
+        return source
+    if not source:
+        raise IOError('no source was named')
+    if is_url(source):
+        return checked_url(source)
+    return contained_source(source)
+
+
+def contained_source(source: str) -> ContainedPath:
+    """A local path a caller names, as a :class:`ContainedPath` of its real path.
+
+    For an entry point that reads only local files. A value already contained
+    is answered as it is; a URL or anything else with a scheme is ``IOError``.
+    """
+    if isinstance(source, ContainedPath):
+        return source
+    if not source:
+        raise IOError('no file was named')
+    scheme = urllib.parse.urlsplit(source).scheme
+    if len(scheme) > 1:              # a drive letter is a path, not a scheme
+        raise IOError('%r is not a local path' % (_without_query(source),))
+    real = os.path.realpath(source)
+    return contain(os.path.dirname(real), os.path.basename(real))
+
+
+def open_contained(path: ContainedPath) -> BinaryIO:
+    """``path`` opened for reading bytes."""
+    return open(path, 'rb')
+
+
+def read_contained(path: ContainedPath, max_bytes: Optional[int] = None,
+                   what: str = '') -> bytes:
+    """The bytes at ``path``, its size checked against ``max_bytes`` first.
+
+    Checked on disk before anything is read, so a file over the cap is
+    refused (:class:`ResourceTooLarge`) rather than read into memory and then
+    measured. ``what`` names it in that refusal (``path`` by default).
+    """
+    check_size(os.path.getsize(path), max_bytes, what or path)
+    with open(path, 'rb') as handle:
+        return handle.read()
 
 
 def check_pixels(width: int, height: int,
@@ -307,6 +461,10 @@ class AllowedHosts(RedirectPolicy):
     def __init__(self, hosts: Sequence[str]) -> None:
         self.hosts = tuple(hosts)
 
+    def check(self, url: str) -> CheckedURL:
+        """``url``, checked against these hosts (:func:`require_host`)."""
+        return require_host(url, self.hosts)
+
     def refusal(self, original: str, target: str) -> Optional[str]:
         try:
             require_host(target, self.hosts)
@@ -386,7 +544,7 @@ def user_agent() -> str:
             % (__version__,))
 
 
-def open_url(url: str, redirects: RedirectPolicy = SAME_ORIGIN,
+def open_url(url: CheckedURL, redirects: RedirectPolicy = SAME_ORIGIN,
              timeout: int = 30, agent: Optional[str] = None) -> Any:
     """The open response for ``url``, having followed only the redirects
     ``redirects`` allows.
@@ -401,31 +559,11 @@ def open_url(url: str, redirects: RedirectPolicy = SAME_ORIGIN,
     return opener.open(request, timeout=timeout)
 
 
-def _open_url(url: str, redirects: RedirectPolicy = SAME_ORIGIN,
+def _open_url(url: CheckedURL, redirects: RedirectPolicy = SAME_ORIGIN,
               timeout: int = 30) -> Any:
     """:func:`open_url` as this module's fetches call it, one name to replace
     in a test that serves them."""
     return open_url(url, redirects, timeout)
-
-
-def _resolve_local(base_dir: str, uri: str) -> str:
-    """Resolve a relative ``uri`` under ``base_dir``, refusing to escape it.
-
-    A ``uri`` like ``../../../etc/passwd``, an absolute path, or one carrying a URL
-    scheme would otherwise let a local document read arbitrary files.
-    The realpath of the result must stay within the realpath of ``base_dir``.
-    """
-    parsed = urllib.parse.urlsplit(uri)
-    if parsed.scheme or parsed.netloc:
-        raise IOError("local load may only reference local files, not %r" % uri)
-    rel = urllib.parse.unquote(parsed.path)
-    if os.path.isabs(rel):
-        raise IOError("uri must be a relative path, not %r" % uri)
-    base_real = os.path.realpath(base_dir)
-    full = os.path.realpath(os.path.join(base_real, rel))
-    if full != base_real and not full.startswith(base_real + os.sep):
-        raise IOError("uri %r escapes the base directory" % uri)
-    return full
 
 
 class ResourceTooLarge(ValueError):
@@ -485,14 +623,14 @@ class Resolver:
         self.max_resource_bytes = max_resource_bytes
         self._cache: dict[str, bytes] = {}
         self._buffers: dict[int, bytes] = {}   # decoded buffer bytes, keyed by buffer index
-        self._resolved: dict[str, str] = {}    # resolved absolute location, keyed by raw uri
+        self._resolved: dict[str, Located] = {}  # resolved location, keyed by raw uri
         self._draco_warned = False   # the "install DracoPy" warning fired once
         #: Arrays already decoded, keyed by (kind, accessor index), which every
         #: build of one shared glTF document reads from; None for a resolver
         #: serving a single load.  See ``loaders.gltf.loader.SharedDocument``.
         self.shared_reads: Optional[dict[Tuple[str, int], Any]] = None
 
-    def resolve(self, uri: str) -> str:
+    def resolve(self, uri: str) -> Located:
         """Return the absolute location ``uri`` resolves to under the policy.
 
         For a URL-based document this is the same-origin absolute http(s) URL; for
@@ -511,7 +649,7 @@ class Resolver:
         self._resolved[uri] = target
         return target
 
-    def _resolve(self, uri: str) -> str:
+    def _resolve(self, uri: str) -> Located:
         if self.base_url is not None:
             full = urllib.parse.urljoin(self.base_url, uri)
             # Same-origin http(s) only: an external ref must share the exact origin
@@ -522,10 +660,23 @@ class Resolver:
                 raise IOError(
                     "external reference %r is not same-origin as %r"
                     % (full, self.base_url))
-            return full
+            return CheckedURL(full, _CHECKED)
         if self.base_dir is not None:
-            return _resolve_local(self.base_dir, uri)
+            return contain(self.base_dir, uri)
         raise IOError("Cannot resolve external resource %r" % uri)
+
+    def contain(self, uri: str) -> ContainedPath:
+        """``uri`` resolved under a document read from a file: :meth:`resolve`,
+        for a caller that opens a local file and nothing else.
+
+        Raises ``IOError`` where the document was fetched from a URL, or the
+        reference leaves its directory.
+        """
+        found = self.resolve(uri)
+        if not isinstance(found, ContainedPath):
+            raise IOError('%r is a reference in a served document, not a local file'
+                          % (uri,))
+        return found
 
     def fetch(self, uri: str) -> bytes:
         """Return the bytes of an external reference, enforcing the policy.
@@ -547,15 +698,10 @@ class Resolver:
         if uri in self._cache:
             return self._cache[uri]
         target = self.resolve(uri)
-        if self.base_url is not None:
+        if isinstance(target, CheckedURL):
             data = fetch_url(target, max_bytes=self.max_resource_bytes)
         else:
-            # Size-check the file's size on disk before reading it, so a confined
-            # but huge local sibling cannot be slurped past the cap into RAM first.
-            if self.max_resource_bytes is not None:
-                check_size(os.path.getsize(target), self.max_resource_bytes, uri)
-            with open(target, 'rb') as f:
-                data = f.read()
+            data = read_contained(target, self.max_resource_bytes, uri)
         self._cache[uri] = data
         return data
 
@@ -577,7 +723,7 @@ def default_cache_dir() -> str:
     return os.path.join(base, 'OpenGLContext', 'asset_cache')
 
 
-def cached_path(url: str, cache_dir: Optional[str] = None) -> str:
+def cached_path(url: str, cache_dir: Optional[str] = None) -> ContainedPath:
     """Local cache path a fetch of ``url`` uses, whether or not it is cached yet.
 
     The single definition of the on-disk key (a sha1 of the URL, keeping the URL's
@@ -587,7 +733,7 @@ def cached_path(url: str, cache_dir: Optional[str] = None) -> str:
     import hashlib
     cache_dir = cache_dir or default_cache_dir()
     key = hashlib.sha1(url.encode('utf-8')).hexdigest() + os.path.splitext(url)[1]
-    return os.path.join(cache_dir, key)
+    return contain(cache_dir, urllib.parse.quote(key, safe=''))
 
 
 def _touch(path: str) -> bool:
@@ -634,7 +780,7 @@ def _release_download_slot(path: str) -> None:
                 del _INFLIGHT[path]
 
 
-def fetch_url(url: str, cache_dir: Optional[str] = None,
+def fetch_url(url: CheckedURL, cache_dir: Optional[str] = None,
                max_bytes: Optional[int] = DEFAULT_MAX_RESOURCE_BYTES,
                progress: Optional[Progress] = None,
                cancel: Optional[Cancel] = None,
@@ -656,8 +802,7 @@ def fetch_url(url: str, cache_dir: Optional[str] = None,
     """
     path = fetch_to_cache(url, cache_dir, max_bytes, progress=progress,
                           cancel=cancel, redirects=redirects)
-    with open(path, 'rb') as handle:
-        return handle.read()
+    return read_contained(path)
 
 
 def _content_length(response: Any) -> Optional[int]:
@@ -731,11 +876,11 @@ def stream_capped(response: Any, max_bytes: Optional[int],
     return held.getvalue()
 
 
-def fetch_to_cache(url: str, cache_dir: Optional[str] = None,
+def fetch_to_cache(url: CheckedURL, cache_dir: Optional[str] = None,
                    max_bytes: Optional[int] = DEFAULT_MAX_RESOURCE_BYTES,
                    progress: Optional[Progress] = None,
                    cancel: Optional[Cancel] = None,
-                   redirects: RedirectPolicy = SAME_ORIGIN) -> str:
+                   redirects: RedirectPolicy = SAME_ORIGIN) -> ContainedPath:
     """Fetch ``url`` into the cache (once) and return its local file path.
 
     The body is streamed into a temporary file beside its cache entry and

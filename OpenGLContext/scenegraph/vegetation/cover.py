@@ -62,6 +62,7 @@ from vrml import field
 from vrml.node import Node
 
 from OpenGLContext.loaders.documentvalues import DocumentValues, JSONObject, require_text
+from OpenGLContext.loaders.resolver import contained_source
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.varied import Varied
 from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
@@ -335,7 +336,7 @@ def control_weight(image: Any, wanted: Sequence[str], layers: Sequence[str],
     from PIL import Image
     pixels = np.asarray(
         (image if isinstance(image, Image.Image)
-         else Image.open(image)).convert('RGBA'), dtype='d') / 255.0
+         else Image.open(contained_source(image))).convert('RGBA'), dtype='d') / 255.0
     channels = [index for index, name in enumerate(layers)
                 if name in set(wanted) and index < pixels.shape[2]]
     weight = (pixels[..., channels].sum(axis=-1) if channels

@@ -30,6 +30,8 @@ from OpenGLContext.loaders.documentvalues import (
     DocumentValues, JSONObject, parse_object, require_number, require_object,
     require_text,
 )
+from OpenGLContext.loaders import resolver
+from OpenGLContext.loaders.resolver import ContainedPath, Located
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.loaders.tiles3d import fetch
 from OpenGLContext.loaders.tiles3d.tileset import build_runtime_tileset
@@ -75,8 +77,8 @@ class TilesTerrain(Group):
         if fovy is None:
             fovy = math.radians(45.0)
         self.fovy = fovy
-        doc = parse_object(fetch.read_bytes(tileset_path, cache_dir=cache_dir),
-                           tileset_path)
+        source = resolver.checked_source(tileset_path)
+        doc = parse_object(fetch.read_bytes(source, cache_dir=cache_dir), tileset_path)
         if fetch.is_url(tileset_path):
             base_uri = fetch.dir_of(tileset_path)
         else:
@@ -85,11 +87,11 @@ class TilesTerrain(Group):
         #: through, once for the whole world.
         self.values = DocumentValues(logger=log)
 
-        def resolver(uri: str) -> JSONObject:
+        def external(uri: Located) -> JSONObject:
             return parse_object(fetch.read_bytes(uri, cache_dir=cache_dir), uri)
 
         tileset = build_runtime_tileset(doc, base_uri=base_uri, recenter=recenter,
-                                        resolve_external=resolver)
+                                        resolve_external=external)
         self.tileset = tileset
         on_drawn = on_evicted = None
         self.colliders = None
@@ -398,7 +400,7 @@ def _facing(view_projection: Any) -> Any:
     return None if length < 1e-9 else forward / length
 
 
-def _beside(base_uri: str, name: str, cache_dir: Optional[str]) -> str:
+def _beside(base_uri: str, name: str, cache_dir: Optional[str]) -> ContainedPath:
     """The path of a file a world names beside its tileset.
 
     Held to the tileset's containment (:func:`fetch.beside`); a served world's

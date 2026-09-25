@@ -26,6 +26,7 @@ from OpenGL.GL import (
     glEnable, glEnableVertexAttribArray, glGenBuffers, glGenVertexArrays,
     glGetUniformLocation, glUniform1f, glUniform1i, glUniform3f, glVertexAttribPointer,
 )
+from OpenGLContext.loaders.resolver import contained_source
 from OpenGLContext.loaders.documentvalues import (
     DocumentError, JSONObject, parse_object, require_array, require_index,
     require_item, require_object, require_text, require_whole,
@@ -150,7 +151,7 @@ def load_clump_glb(path: str, normalize_height: bool = True,
     texture they share -- a 1k RGBA texture is about a megabyte, and a file per
     rung would carry it over and over.
     """
-    with open(path, 'rb') as fh:
+    with open(contained_source(path), 'rb') as fh:
         d = fh.read()
     _, _, ln = struct.unpack('<III', d[:12])
     off = 12

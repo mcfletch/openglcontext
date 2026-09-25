@@ -571,10 +571,17 @@ class TestFetchHelpers:
 
             def read(self):
                 return b'payload'
-        monkeypatch.setattr(R.resolver, 'open_url', lambda url, timeout=0: _Resp())
+        asked = []
+
+        def opened(url, timeout=0):
+            asked.append(url)
+            return _Resp()
+        monkeypatch.setattr(R.resolver, 'open_url', opened)
         dst = tmp_path / 'sub' / 'a.bin'
         R._dl('https://x/a.bin', str(dst))
         assert dst.read_bytes() == b'payload'
+        assert asked == ['https://x/a.bin']
+        assert isinstance(asked[0], R.resolver.CheckedURL)
 
 
 class TestResolveModelMirror:

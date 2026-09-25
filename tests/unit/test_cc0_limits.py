@@ -23,10 +23,18 @@ def _archive(members):
 
 
 class TestTheUserAgent:
-    def test_it_names_the_project_rather_than_a_browser(self):
-        agent = cc0._UA["User-Agent"]
-        assert "OpenGLContext" in agent
-        assert "Mozilla" not in agent
+    def test_it_names_the_project_rather_than_a_browser(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(cc0, "cache_dir", lambda: str(tmp_path))
+        sent = []
+
+        def opened(url, redirects=None, timeout=30, agent=None):
+            sent.append(agent or cc0.resolver.user_agent())
+            raise OSError("offline")
+
+        monkeypatch.setattr(cc0.resolver, "open_url", opened)
+        assert cc0.try_material("bark") is None
+        assert "OpenGLContext" in sent[0]
+        assert "Mozilla" not in sent[0]
 
 
 class TestTheDownloadIsBounded:

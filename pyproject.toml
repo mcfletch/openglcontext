@@ -219,11 +219,11 @@ ignore = [
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 # The workspace's banned-api list (plans/DEFECT-PREVENTION.md): the raw form,
-# and the engine API that replaces it. `os.environ`/`os.getenv` and
-# `urllib.request.urlopen` are not on it yet: the engine's own reads of the
-# environment outside renderoptions and the loaders' remaining opener are
+# and the engine API that replaces it. `os.environ`/`os.getenv` are not on it
+# yet: the engine's own reads of the environment outside renderoptions are
 # still to be routed through their readers (the plan's baseline says where).
-"urllib.request.urlretrieve".msg = "fetch through OpenGLContext.loaders.resolver: fetch_to_cache, or AllowedHosts.open_url for a service's own hosts"
+"urllib.request.urlretrieve".msg = "fetch through OpenGLContext.loaders.resolver: fetch_to_cache or fetch_url with a CheckedURL"
+"urllib.request.urlopen".msg = "open through OpenGLContext.loaders.resolver.open_url with a CheckedURL (checked_url, require_host, AllowedHosts.check), which puts every redirect to a policy"
 "tarfile.TarFile.extractall".msg = "unpack through OpenGLContext.contentpacks.archive.extract, which refuses a member that leaves the directory and caps the size"
 "zipfile.ZipFile.extractall".msg = "unpack through OpenGLContext.contentpacks.archive.extract, which refuses a member that leaves the directory and caps the size"
 "shutil.rmtree".msg = "replace or remove a directory through OpenGLContext.atomicfiles: staged_directory, replace_directory or remove_directory"
@@ -257,6 +257,11 @@ python_version = "3.12"
 # so every sibling resolves to ``Any`` there and the run reports thousands of
 # ``name-defined`` errors that say nothing about this code.
 files = ["OpenGLContext"]
+# The checked types (openglcontext-checks): a ContainedPath, CheckedURL or
+# ContextKey is made only by the module that checks it, and a module in the
+# `loader` scope of [tool.openglcontext-checks.scopes] opens only a
+# ContainedPath. See docs/checks.rst.
+plugins = ["openglcontext_checks.mypy_plugin"]
 # A function with no annotations is not skipped: its body is checked with the
 # parameters implicitly ``Any``, which is where most of the engine's code lives.
 check_untyped_defs = true
@@ -311,6 +316,8 @@ commands = [
 # mypy cannot follow, and every sibling then resolves to `Any`.
 [tool.tox.env.typecheck]
 extras = ["dev"]
+# The mypy plugin `[tool.mypy] plugins` names.
+deps = ["openglcontext-checks"]
 pip_pre = true
 package = "wheel"
 commands = [["mypy", { replace = "posargs", extend = true }]]
@@ -415,7 +422,7 @@ markers = [
 # The OGC rules (openglcontext-checks) this project is clean of, held by the
 # workspace preflight. A rule joins the list once the engine is clean of it.
 [tool.openglcontext-checks]
-select = ["OGC101", "OGC102", "OGC121", "OGC131", "OGC141", "OGC161", "OGC201", "OGC221", "OGC222", "OGC223"]
+select = ["OGC101", "OGC102", "OGC111", "OGC121", "OGC131", "OGC141", "OGC161", "OGC201", "OGC221", "OGC222", "OGC223"]
 
 # The modules the test rules (OGC221 to OGC223) read: the unit tests and the
 # modules beside them that they import, and the pytest modules of tests/.

@@ -5,6 +5,7 @@ refined if it was refined last frame (until the error drops well below), while a
 tile that was not refined should not refine at the same error. Without hysteresis
 the decision is a hard threshold.
 """
+import os
 import math
 
 from OpenGLContext.loaders.tiles3d.tileset import build_runtime_tileset
@@ -29,7 +30,7 @@ def _nested():
 
 
 def _uris(tiles):
-    return [t.content_uri for t in tiles]
+    return [os.path.basename(t.content_uri) for t in tiles]
 
 
 # root sse = 86600 / distance; pick distances for target errors.

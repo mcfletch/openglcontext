@@ -127,7 +127,7 @@ def load(path: str) -> list[ContentPack]:
     it, so a chooser has a picture of each pack before anything is downloaded.
     """
     try:
-        with open(path, 'rb') as handle:
+        with open(resolver.contained_source(path), 'rb') as handle:
             text = handle.read()
     except OSError as error:
         raise BadCatalog('cannot read the content registry %s: %s'
@@ -168,7 +168,7 @@ def load_bundle(path: str, into: str) -> list[ContentPack]:
     from . import archive             # here: archive has no use for a catalogue
     from OpenGLContext import atomicfiles
     digest = archive.digest(path)
-    recorded = os.path.join(into, BUNDLE_DIGEST)
+    recorded = resolver.contain(into, BUNDLE_DIGEST)
     with atomicfiles.file_lock(into + '.lock'):
         if _read_text(recorded) != digest:
             with atomicfiles.staged_directory(into) as staging:
@@ -183,7 +183,7 @@ def load_bundle(path: str, into: str) -> list[ContentPack]:
     return load(os.path.join(into, MANIFEST))
 
 
-def _read_text(path: str) -> str | None:
+def _read_text(path: resolver.ContainedPath) -> str | None:
     try:
         with open(path, 'r', encoding='utf-8') as handle:
             return handle.read()

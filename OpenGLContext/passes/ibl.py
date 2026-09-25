@@ -148,8 +148,8 @@ def load_equirect_hdr(source: str) -> np.ndarray:
     """
     from OpenGLContext.loaders import hdr
     if source.startswith(('http://', 'https://')):
-        from OpenGLContext.loaders.resolver import fetch_to_cache
-        source = fetch_to_cache(source)
+        from OpenGLContext.loaders.resolver import checked_url, fetch_to_cache
+        source = fetch_to_cache(checked_url(source))
     return hdr.load_hdr(source)
 
 

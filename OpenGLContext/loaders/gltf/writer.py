@@ -42,6 +42,7 @@ import numpy as np
 from OpenGLContext import __version__ as _engine_version
 from OpenGLContext.loaders.documentvalues import bounded
 from OpenGLContext.loaders.gltf import hooks as _hooks
+from OpenGLContext.loaders.resolver import contained_source
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 GENERATOR = "OpenGLContext %s glTF writer" % _engine_version
@@ -119,7 +120,7 @@ class EncodedImage:
         suffix = path.lower().rsplit('.', 1)[-1]
         mime = {'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
                 'png': 'image/png', 'webp': 'image/webp'}.get(suffix, 'image/png')
-        with open(path, 'rb') as handle:
+        with open(contained_source(path), 'rb') as handle:
             return cls(handle.read(), mime_type=mime, **kwargs)
 
 

@@ -52,6 +52,7 @@ from OpenGLContext.loaders.resolver import (
     DEFAULT_MAX_RESOURCE_BYTES,
     Resolver,
     check_size,
+    contained_source,
     decode_data_uri,
 )
 
@@ -98,7 +99,7 @@ class LODAsset:
     def __init__(self, path: str, document: JSONObject, binary_offset: int,
                  max_resource_bytes: Optional[int] = DEFAULT_MAX_RESOURCE_BYTES
                  ) -> None:
-        self.path = path
+        self.path = contained_source(path)
         self.document = document
         self._binary_offset = binary_offset
         self.max_resource_bytes = max_resource_bytes
@@ -116,6 +117,7 @@ class LODAsset:
              ) -> 'LODAsset':
         """The chain in the ``.glb`` at ``path``, having read its JSON chunk
         and nothing else."""
+        path = contained_source(path)
         with open(path, 'rb') as handle:
             header = handle.read(12)
             if len(header) != 12 or struct.unpack('<I', header[:4])[0] != _GLB_MAGIC:
@@ -259,7 +261,7 @@ class LODAsset:
                                  'binary chunk' % (buffer_index, self.path))
             source, start = self.path, start + self._binary_offset
         else:
-            source = self.resolver.resolve(uri)
+            source = self.resolver.contain(uri)
         with open(source, 'rb') as handle:
             handle.seek(start)
             return handle.read(length), source

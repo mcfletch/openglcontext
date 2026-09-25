@@ -16,8 +16,6 @@ map taken out of it.
 """
 import io
 import os
-import ssl
-import urllib.request
 import zipfile
 from typing import Optional
 
@@ -27,8 +25,6 @@ from OpenGLContext.loaders.documentvalues import (
     parse_object, require_array, require_object, require_text,
 )
 
-_UA = {"User-Agent": resolver.user_agent()}
-_CTX = ssl.create_default_context()
 _API = "https://ambientcg.com/api/v2/full_json?id=%s&type=Material&include=downloadData"
 
 #: Ceiling on one downloaded material archive. A 1K four-map set is a few MB.
@@ -68,14 +64,17 @@ def cache_dir() -> str:
     return d
 
 
-def _read_capped(url: str, max_bytes: int) -> bytes:
-    """Read a URL, refusing a body over ``max_bytes`` as it arrives."""
-    request = urllib.request.Request(url, headers=_UA)
-    with urllib.request.urlopen(request, timeout=60, context=_CTX) as response:
+def _read_capped(url: resolver.CheckedURL, max_bytes: int) -> bytes:
+    """Read a URL, refusing a body over ``max_bytes`` as it arrives.
+
+    Every redirect is held to :data:`DOWNLOAD_HOSTS`, as the URL itself was.
+    """
+    with resolver.open_url(url, resolver.AllowedHosts(DOWNLOAD_HOSTS),
+                           timeout=60) as response:
         return resolver.stream_capped(response, max_bytes)
 
 
-def _require_download_host(link: str) -> str:
+def _require_download_host(link: str) -> resolver.CheckedURL:
     """``link``, unless it is somewhere ambientCG does not publish from.
 
     The library is asked where an archive is and answers with a URL. That
@@ -88,9 +87,10 @@ def _require_download_host(link: str) -> str:
     return resolver.require_host(link, DOWNLOAD_HOSTS)
 
 
-def _api_download_link(asset: str, resolution: str) -> str:
+def _api_download_link(asset: str, resolution: str) -> resolver.CheckedURL:
     """The JPG download URL ambientCG offers for ``asset`` at ``resolution``."""
-    data = parse_object(_read_capped(_API % asset, MAX_API_BYTES), 'the ambientCG reply')
+    data = parse_object(_read_capped(_require_download_host(_API % asset), MAX_API_BYTES),
+                        'the ambientCG reply')
     found = require_array(data.get("foundAssets"), "the ambientCG assets")
     if not found:
         raise RuntimeError("ambientCG has no asset %s" % (asset,))
@@ -146,7 +146,7 @@ def material(name: str, resolution: str = "1K",
 
 
 def _write_manifest(asset: str, resolution: str) -> None:
-    path = os.path.join(cache_dir(), "CREDITS.txt")
+    path = resolver.contain(cache_dir(), "CREDITS.txt")
     line = "%s (%s) — CC0, https://ambientcg.com/view?id=%s\n" % (
         asset, resolution, asset)
     try:

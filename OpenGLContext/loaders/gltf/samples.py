@@ -10,7 +10,7 @@ security-hardened :mod:`resolver`; :func:`load_sample` defers to the package's
 import urllib.parse
 from typing import TYPE_CHECKING, Optional
 
-from OpenGLContext.loaders.resolver import fetch_url, fetch_to_cache
+from OpenGLContext.loaders.resolver import checked_url, fetch_url, fetch_to_cache
 
 if TYPE_CHECKING:
     from OpenGLContext.loaders.gltf.scene import GLTFScene
@@ -63,7 +63,7 @@ def fetch_sample_catalog(cache_dir: Optional[str] = None) -> list[dict[str, Opti
     relative to the Models/ directory, so it is joined onto ``SAMPLE_MODELS_BASE``.
     """
     import re
-    text = fetch_url(SAMPLE_README_URL, cache_dir).decode('utf-8', 'replace')
+    text = fetch_url(checked_url(SAMPLE_README_URL), cache_dir).decode('utf-8', 'replace')
     link = re.compile(r'\|\s*\[([^\]]+)\]\(([^)]+?)/README\.md\)')
     shot_res = (
         re.compile(r'!\[[^\]]*\]\(([^)]+?/screenshot/[^)]+)\)'),
@@ -114,7 +114,7 @@ def cache_reference_screenshot(name: str, cache_dir: Optional[str] = None) -> Op
     url = reference_screenshot_url(name, cache_dir)
     if not url:
         return None
-    return fetch_to_cache(url, cache_dir)
+    return fetch_to_cache(checked_url(url), cache_dir)
 
 
 #: The variants a Khronos sample may publish, in the order to prefer them.  The

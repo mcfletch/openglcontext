@@ -166,7 +166,7 @@ _MIRROR_DIR = os.path.join(resolver.default_cache_dir(), 'gltf_mirror')
 
 def _cached_url_path(url: str, cache_dir: str) -> str:
     """Fetch ``url`` into the resolver's cache (once) and return its local path."""
-    return resolver.fetch_to_cache(url, cache_dir)
+    return resolver.fetch_to_cache(resolver.checked_url(url), cache_dir)
 
 
 def _dl(url: str, dst: str) -> None:
@@ -175,7 +175,7 @@ def _dl(url: str, dst: str) -> None:
     if os.path.exists(dst) and os.path.getsize(dst) > 0:
         return
     os.makedirs(os.path.dirname(dst), exist_ok=True)
-    with resolver.open_url(url, timeout=60) as response:
+    with resolver.open_url(resolver.checked_url(url), timeout=60) as response:
         atomicfiles.write_bytes(dst, response.read())
 
 

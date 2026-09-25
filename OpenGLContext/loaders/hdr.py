@@ -243,7 +243,7 @@ def load_hdr(source: Union[str, BinaryIO]) -> np.ndarray:
     """
     if hasattr(source, 'read'):
         return _load(cast(BinaryIO, source))
-    with open(cast(str, source), 'rb') as fh:
+    with open(resolver.contained_source(cast(str, source)), 'rb') as fh:
         return _load(fh)
 
 

@@ -109,12 +109,12 @@ class TestReadBytesIsSizeCapped:
         path = tmp_path / "big.glb"
         path.write_bytes(b"x" * 4096)
         with pytest.raises(ValueError):
-            fetch.read_bytes(str(path), max_bytes=1024)
+            fetch.read_bytes(fetch.resolve_uri("", str(path)), max_bytes=1024)
 
     def test_a_local_file_under_the_cap_is_read(self, tmp_path):
         path = tmp_path / "small.glb"
         path.write_bytes(b"abc")
-        assert fetch.read_bytes(str(path), max_bytes=1024) == b"abc"
+        assert fetch.read_bytes(fetch.resolve_uri("", str(path)), max_bytes=1024) == b"abc"
 
     def test_a_remote_payload_goes_through_the_capped_fetch(self, tmp_path, monkeypatch):
         seen = {}
@@ -124,7 +124,7 @@ class TestReadBytesIsSizeCapped:
             return b"glb"
 
         monkeypatch.setattr(resolver, "fetch_url", fake)
-        got = fetch.read_bytes(REMOTE + "0.glb", cache_dir=str(tmp_path),
+        got = fetch.read_bytes(fetch.resolve_uri("", REMOTE + "0.glb"), cache_dir=str(tmp_path),
                                max_bytes=99)
         assert got == b"glb"
         assert seen["url"] == REMOTE + "0.glb"
@@ -157,7 +157,7 @@ class TestTheCacheTheTilesRuntimeUses:
         monkeypatch.setattr(resolver, "_open_url",
                             lambda url, base, timeout=30: _FakeResponse(b"glb"))
         cache = tmp_path / "tiles3d"
-        assert fetch.read_bytes(REMOTE + "0.glb", cache_dir=str(cache)) == b"glb"
+        assert fetch.read_bytes(fetch.resolve_uri("", REMOTE + "0.glb"), cache_dir=str(cache)) == b"glb"
         assert (os.stat(cache).st_mode & 0o077) == 0
 
     def test_a_second_read_of_one_tile_does_not_refetch(self, tmp_path, monkeypatch):
@@ -169,12 +169,12 @@ class TestTheCacheTheTilesRuntimeUses:
 
         monkeypatch.setattr(resolver, "_open_url", once)
         for _ in range(2):
-            fetch.read_bytes(REMOTE + "0.glb", cache_dir=str(tmp_path))
+            fetch.read_bytes(fetch.resolve_uri("", REMOTE + "0.glb"), cache_dir=str(tmp_path))
         assert len(calls) == 1
 
     def test_a_remote_payload_over_the_cap_is_refused(self, tmp_path, monkeypatch):
         monkeypatch.setattr(resolver, "_open_url",
                             lambda url, base, timeout=30: _FakeResponse(b"x" * 4096))
         with pytest.raises(ValueError):
-            fetch.read_bytes(REMOTE + "0.glb", cache_dir=str(tmp_path),
+            fetch.read_bytes(fetch.resolve_uri("", REMOTE + "0.glb"), cache_dir=str(tmp_path),
                              max_bytes=1024)

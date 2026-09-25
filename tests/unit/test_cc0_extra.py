@@ -69,13 +69,14 @@ class _Resp:
 
 
 def _install_fake_net(monkeypatch, api_json, zip_bytes=None):
-    def fake_urlopen(request, timeout=None, context=None):
-        url = request.full_url
+    def fake_open_url(url, redirects=None, timeout=None):
+        assert isinstance(url, cc0.resolver.CheckedURL)
+        assert isinstance(redirects, cc0.resolver.AllowedHosts)
         if "api/v2" in url:
             return _Resp(json.dumps(api_json).encode("utf-8"))
         return _Resp(zip_bytes if zip_bytes is not None else _fake_zip())
 
-    monkeypatch.setattr(cc0.urllib.request, "urlopen", fake_urlopen)
+    monkeypatch.setattr(cc0.resolver, "open_url", fake_open_url)
 
 
 def test_material_downloads_extracts_and_caches(tmp_path, monkeypatch):
@@ -99,7 +100,7 @@ def test_material_reuses_cache_without_redownloading(tmp_path, monkeypatch):
     def explode(*a, **k):
         raise AssertionError("must not hit the network on a cache hit")
 
-    monkeypatch.setattr(cc0.urllib.request, "urlopen", explode)
+    monkeypatch.setattr(cc0.resolver, "open_url", explode)
     maps = cc0.material("bark")             # color+normal exist -> cached path
     assert "color" in maps and "normal" in maps
 
@@ -136,7 +137,7 @@ def test_try_material_returns_none_on_failure(tmp_path, monkeypatch):
     def boom(*a, **k):
         raise OSError("offline")
 
-    monkeypatch.setattr(cc0.urllib.request, "urlopen", boom)
+    monkeypatch.setattr(cc0.resolver, "open_url", boom)
     assert cc0.try_material("bark") is None
 
 

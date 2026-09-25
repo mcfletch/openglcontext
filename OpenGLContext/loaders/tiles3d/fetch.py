@@ -18,15 +18,23 @@ same containment as a glTF document's external references
   directory**; and
 * every payload is **size-capped** (:data:`DEFAULT_MAX_TILE_BYTES`).
 
-The root tileset is the exception, and deliberately so: that URI came from the
-command line or from application code, not from a document, so :func:`resolve_uri`
-with no base returns it untouched.
+The root tileset is the exception: that URI came from the command line or
+from application code, not from a document, so :func:`resolve_uri` with no base
+checks only that it is a local path or an http(s) URL
+(:func:`~OpenGLContext.loaders.resolver.checked_source`).
+
+What these answer is a checked location
+(:data:`~OpenGLContext.loaders.resolver.Located`): a
+:class:`~OpenGLContext.loaders.resolver.ContainedPath` or a
+:class:`~OpenGLContext.loaders.resolver.CheckedURL`, and :func:`local_copy` and
+:func:`read_bytes` take nothing else.
 """
 import os
 import urllib.parse
 from typing import Optional
 
 from OpenGLContext.loaders import resolver
+from OpenGLContext.loaders.resolver import CheckedURL, ContainedPath, Located
 
 #: Ceiling on a single tile payload or sub-tileset. Generous enough for a dense
 #: b3dm/glb tile, small enough that one hostile tile cannot exhaust memory;
@@ -39,7 +47,7 @@ def is_url(uri: str) -> bool:
     return bool(uri) and urllib.parse.urlparse(uri).scheme in ("http", "https")
 
 
-def resolve_uri(base: str, uri: str) -> str:
+def resolve_uri(base: str, uri: str) -> Located:
     """Resolve `uri` against `base`, enforcing the untrusted-asset policy.
 
     `base` is the tileset the reference was found in -- a URL or a local
@@ -48,19 +56,19 @@ def resolve_uri(base: str, uri: str) -> str:
     disk access, so a refused reference never touches the resource.
 
     An empty `base` means the caller named this URI itself rather than reading it
-    out of a document; it is returned unchanged.
+    out of a document; it is checked as a caller's source is.
 
     Raises:
         IOError: where the reference is outside what `base` permits.
     """
     if not base:
-        return uri
+        return resolver.checked_source(uri)
     if is_url(base):
         return resolver.Resolver(base_url=base).resolve(uri)
     return resolver.Resolver(base_dir=base).resolve(uri)
 
 
-def beside(base: str, name: str) -> str:
+def beside(base: str, name: str) -> Located:
     """Where a file named in a tileset's extras is, within what the tileset may reach.
 
     `base` is the tileset's directory or URL directory (:func:`dir_of`), and
@@ -81,8 +89,8 @@ def beside(base: str, name: str) -> str:
     return resolve_uri(base, name)
 
 
-def local_copy(uri: str, cache_dir: Optional[str] = None,
-               max_bytes: Optional[int] = DEFAULT_MAX_TILE_BYTES) -> str:
+def local_copy(uri: Located, cache_dir: Optional[str] = None,
+               max_bytes: Optional[int] = DEFAULT_MAX_TILE_BYTES) -> ContainedPath:
     """A path on this machine holding the file at `uri`.
 
     A local path is returned as it is. An http(s) URL is fetched into the
@@ -90,10 +98,9 @@ def local_copy(uri: str, cache_dir: Optional[str] = None,
     the cached file's path is returned, for readers that open only paths:
     ``numpy.load``, ``PIL.Image.open``, a ``.glb`` clump.
 
-    `uri` is expected to have been through :func:`beside` or
-    :func:`resolve_uri` already.
+    `uri` has been through :func:`beside` or :func:`resolve_uri`.
     """
-    if not is_url(uri):
+    if isinstance(uri, ContainedPath):
         return uri
     return resolver.fetch_to_cache(uri, cache_dir or default_cache_dir(),
                                    max_bytes=max_bytes)
@@ -115,7 +122,7 @@ def default_cache_dir() -> str:
     return os.path.join(root, "openglcontext", "tiles3d")
 
 
-def read_bytes(uri: str, cache_dir: Optional[str] = None,
+def read_bytes(uri: Located, cache_dir: Optional[str] = None,
                max_bytes: Optional[int] = DEFAULT_MAX_TILE_BYTES) -> bytes:
     """Return the bytes at `uri` (local path or http/https URL), size-capped.
 
@@ -124,18 +131,14 @@ def read_bytes(uri: str, cache_dir: Optional[str] = None,
     tile's own origin and writes the entry atomically -- so a tile is fetched once
     however many worker threads want it, and a reader never sees a partial file.
 
-    `uri` is expected to have been through :func:`resolve_uri` already, which is
-    what decided the reference was one this tileset may reach.
+    `uri` has been through :func:`resolve_uri`, which is what decided the
+    reference was one this tileset may reach. A local file's size is checked
+    on disk before it is read.
 
     Raises:
         ValueError: where the payload exceeds `max_bytes`.
     """
-    if is_url(uri):
+    if isinstance(uri, CheckedURL):
         return resolver.fetch_url(uri, cache_dir or default_cache_dir(),
                                    max_bytes=max_bytes)
-    # Size-check on disk before reading, so a huge local tile is refused rather
-    # than slurped into RAM and then measured.
-    if max_bytes is not None:
-        resolver.check_size(os.path.getsize(uri), max_bytes, uri)
-    with open(uri, "rb") as fh:
-        return fh.read()
+    return resolver.read_contained(uri, max_bytes)
