@@ -233,6 +233,8 @@ field on the ``ContextDefinition``, and the screen shows all of them:
    * - ``planarReflections``
      - bool
      - Mirrors and water reflect the scene around them (:doc:`reflections`).
+       The developer overlay's Render section shows what they cost
+       (:doc:`hud`).
      - ``OPENGLCONTEXT_PLANAR_REFLECTIONS``
    * - ``reflectionViews``
      - int, 0-16

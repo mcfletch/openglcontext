@@ -149,6 +149,8 @@ OpenGLContext/
 │   ├── reflectiontiles.py    # The atlas packer and the schedule -- no GL
 │   ├── reflectionatlas.py    # The texture every reflection is a tile of
 │   ├── gputimer.py   # GPU time of a stretch of a frame, read without waiting
+│   ├── renderstats.py # What a frame cost in shapes and draws, for the
+│   │                 # developer overlay -- docs/hud.rst
 │   ├── layerguard.py # An optional frame layer, switched off at its first
 │   │                 # failure while the frame is drawn without it
 │   ├── shadow*.py    # Shadow mapping -- docs/shadows.rst
@@ -178,6 +180,8 @@ OpenGLContext/
 │   │                 # so Blender loads it too -- docs/surfaces.rst
 │   ├── varied.py     # Varied: a node's copy with some fields changed
 │   ├── lightgrid.py  # Baked irradiance grid: lights what a lightmap cannot
+│   ├── imagebasedlight.py  # A document's own convolved environment
+│   │                 # (EXT_lights_image_based) -- docs/pbr.rst
 │   ├── octahedral.py # The fold an impostor's views are laid out by; the same
 │   │                 # arithmetic is in pbr.vert -- docs/lod.rst#impostors
 │   ├── geometryarrays.py   # What a geometry offers a shader, and binding it

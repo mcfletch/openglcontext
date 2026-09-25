@@ -42,13 +42,17 @@ the current value and the scenegraph may have changed it since the last frame.
 The rest of the work runs on the whole scene at once:
 
 #. The eight corner points of every bounding volume are stacked into one
-   ``(N,8,4)`` array.
-#. One matrix product carries them all into world space.
-#. One more product tests them against the frustum's clipping planes.
+   ``(N,8,4)`` array, and reduced to each box's centre and half-extents in
+   its own coordinates.
+#. The frustum's clipping planes are carried into each box's coordinates by
+   its world matrix, as products over the whole stack
+   (``frustum.boxes_outside``).
+#. Each box is tested against each carried plane by its centre and the
+   extent of its half-extents along that plane's normal.
 
-A shape is rejected when all eight of its corners are behind one plane. This
-is the same result as the per-shape test, reached with two array operations
-instead of one Python call per object.
+A shape is rejected when its box lies wholly behind one plane, which is when
+all eight of its corners are behind it: the same result as the per-shape
+test, reached with array operations instead of one Python call per object.
 
 Culling happens before sort keys are computed, so the rest of the frame costs
 in proportion to what is on screen. A sort key reads the appearance and its

@@ -625,7 +625,11 @@ The shipped sections
      - The profile, and whether shadows, IBL, bloom, transmission, instancing and
        vsync are on. Then what the last frame cost: shapes gathered, draw calls
        issued, and how many shapes were collapsed into how many instanced
-       groups.
+       groups. A shape two views see counts twice. On a frame that drew
+       mirror views (:doc:`reflections`), ``mirror views`` gives how many,
+       the draws they took (counted in the draw calls as well) and the atlas
+       texels they filled, and ``mirror ms`` their GPU time, measured a frame
+       or two late through a query and absent until one has come back.
    * - View
      - Camera position, and a character controller's grounded state, velocity and
        mode when there is one.
