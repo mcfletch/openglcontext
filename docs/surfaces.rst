@@ -160,6 +160,10 @@ along. Triangles wind counter-clockwise seen from the side the normals face.
        ``math.pi`` is a half column with its flat back on the plane z = 0.
    * - ``moved(geometry, offset)``
      - ``geometry`` shifted by ``offset`` metres.
+   * - ``placed(geometry, translation, rotation)``
+     - ``geometry`` turned and moved into its parent's space, as a
+       ``Transform`` with that translation and rotation would place it; its
+       normals and tangents turn with it.
    * - ``merge(parts)``
      - One mesh of several, for one shape.
    * - ``shape(geometry, material, translation=(0, 0, 0), rotation=(0, 1, 0, 0))``
@@ -182,9 +186,12 @@ where it sits on the wall, so the courses of brick run straight across:
        scene.append(surfaces.shape(panel, brick,
                                    ((left + right) / 2, (bottom + top) / 2, 0.0)))
 
-``merge`` makes several pieces one shape, which matters for a mirror: pieces
-in one plane that share a material are then one mesh. The four strips of a
-floor's border, for example:
+``merge`` makes several pieces one shape. Each shape costs a draw in every
+view that sees it, so scenery built from many small pieces -- moldings, column
+bases, window surrounds -- is best placed with ``placed`` and merged by
+material, as the hall of ``oglc-mirrors`` merges each wall's pieces. For a
+mirror, pieces in one plane that share a material are then one mesh. The four
+strips of a floor's border, for example:
 
 .. code-block:: python
 

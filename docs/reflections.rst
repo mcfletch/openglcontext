@@ -10,10 +10,11 @@ the sky. Marking a surface is how an application opts into the cost, and each
 mirror says how much it is worth, so a level can hold a dozen of them.
 
 .. figure:: images/demos/mirrors_demo.jpg
-   :alt: A hall with a polished dark floor reflecting four coloured columns and the lamps over them, a large mirror on the far wall showing the room behind the viewer, small mirrors down the left wall, and a pool in a stone rim
+   :alt: A hall of red brick broken by pale half columns and white moldings, a checkered marble floor reflecting gold, copper and steel columns, a gilt-framed mirror over marble steps at the far end, a corridor of small framed mirrors down the left wall, a tall window onto a blue sky on the right, and a stone-rimmed pool
 
-   ``oglc-mirrors``: a floor, a wall mirror, a corridor of small mirrors and a
-   pool, each reflecting the room. See :ref:`reflections-demo`.
+   ``oglc-mirrors``: a polished floor, a mirror over the dais, a corridor of
+   mirrors sharing one reflector, and a rippling pool, each reflecting the
+   room. See :ref:`reflections-demo`.
 
 .. code-block:: python
 
