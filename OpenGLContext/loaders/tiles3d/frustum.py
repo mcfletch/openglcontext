@@ -25,13 +25,27 @@ def perspective(fovy: float, aspect: float, near: float, far: float) -> np.ndarr
 
 
 def look_at(eye: Any, center: Any, up: Any) -> np.ndarray:
+    """The view matrix of a camera at ``eye`` looking at ``center``.
+
+    ``up`` says which way the top of the picture faces. Looking along ``up``
+    itself (straight down at a map, say) leaves that unsaid, and the world axis
+    least aligned with the view is taken instead. Raises ValueError when
+    ``eye`` is ``center``, which names no direction to look in.
+    """
     eye = np.asarray(eye, dtype="d")
     center = np.asarray(center, dtype="d")
     up = np.asarray(up, dtype="d")
     f = center - eye
-    f = f / np.linalg.norm(f)
+    distance = np.linalg.norm(f)
+    if distance == 0.0:
+        raise ValueError("look_at: the eye is at the point looked at")
+    f = f / distance
     s = np.cross(f, up)
-    s = s / np.linalg.norm(s)
+    length = np.linalg.norm(s)
+    if length < 1e-9 * max(1.0, float(np.linalg.norm(up))):
+        s = np.cross(f, np.eye(3)[int(np.argmin(np.abs(f)))])
+        length = np.linalg.norm(s)
+    s = s / length
     u = np.cross(s, f)
     m = np.identity(4, dtype="d")
     m[0, :3] = s

@@ -5,7 +5,9 @@ is what lets streaming hold a small resident set instead of the whole world. The
 tests pin the perspective/look-at matrices and the sphere-in-frustum classification.
 """
 import math
+
 import numpy as np
+import pytest
 
 from OpenGLContext.loaders.tiles3d.frustum import (
     perspective, look_at, view_projection, Frustum,
@@ -44,3 +46,22 @@ def test_looking_the_other_way_flips_visibility():
     f_back = Frustum.from_matrix(_vp((0, 0, 0), (0, 0, 1)))
     assert f_fwd.contains_sphere(ahead, 1.0)
     assert not f_back.contains_sphere(ahead, 1.0)
+
+
+def test_looking_straight_down_along_up_gives_a_rotation():
+    """A camera looking along its own up has no right from them; one is chosen."""
+    m = look_at((0.0, 100.0, 0.0), (0.0, 0.0, 0.0), (0.0, 1.0, 0.0))
+    rotation = m[:3, :3]
+    assert np.allclose(rotation @ rotation.T, np.eye(3))
+    assert np.allclose(rotation[2], (0.0, 1.0, 0.0))      # the view is along -y
+    assert np.allclose(m @ (0.0, 0.0, 0.0, 1.0), (0.0, 0.0, -100.0, 1.0))
+
+
+def test_looking_straight_up_gives_a_rotation():
+    m = look_at((0.0, 0.0, 0.0), (0.0, 5.0, 0.0), (0.0, 1.0, 0.0))
+    assert np.allclose(m[:3, :3] @ m[:3, :3].T, np.eye(3))
+
+
+def test_an_eye_at_the_point_looked_at_is_refused():
+    with pytest.raises(ValueError):
+        look_at((1.0, 2.0, 3.0), (1.0, 2.0, 3.0), (0.0, 1.0, 0.0))
