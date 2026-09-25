@@ -163,6 +163,10 @@ class TestVisibility:
         monkeypatch.setenv('OPENGLCONTEXT_DISABLE_FPS_DISPLAY', '1')
         assert DebugOverlay.startsVisible() is False
 
+    def test_a_spelled_out_no_leaves_it_visible(self, monkeypatch):
+        monkeypatch.setenv('OPENGLCONTEXT_DISABLE_FPS_DISPLAY', '0')
+        assert DebugOverlay.startsVisible() is True
+
     def test_it_starts_visible_otherwise(self, monkeypatch):
         monkeypatch.delenv('OPENGLCONTEXT_DISABLE_FPS_DISPLAY', raising=False)
         assert DebugOverlay.startsVisible() is True

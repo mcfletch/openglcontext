@@ -2,6 +2,7 @@
 
 from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
+from OpenGLContext import renderoptions
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
 from OpenGLContext.events.mouseevents import (
     WHEEL_BUTTONS, WHEEL_DOWN, WHEEL_UP,
@@ -140,7 +141,7 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         nothing in the interface scrolls sideways.
         """
         notches = self._wheelNotches(yoffset)
-        if os.environ.get(WHEEL_DEBUG_ENV):
+        if renderoptions.env_flag(WHEEL_DEBUG_ENV, False):
             log.info('wheel: reported %+.4f, carrying %+.4f, sending %d notch(es)',
                      float(yoffset), self._wheelRemainder, len(notches))
         for button in notches:

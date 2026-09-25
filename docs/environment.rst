@@ -31,17 +31,24 @@ Booleans
    example, image-based lighting and transmission reduce their own cost on a
    software rasteriser when set to ``auto``.
 
-Read once
-   These are start-up settings. Each is read the first time it is needed and
-   then kept, so a later change to ``os.environ`` does not change a running
-   program. To change a feature while the program runs, set the
-   ``ContextDefinition`` field, which takes precedence over the variable.
+When they are read
+   These are start-up settings: set them before the program starts. Some are
+   read the first time they are needed and then kept
+   (``renderoptions.env_flag_once`` and ``env_number_once``); others, such as
+   ``OPENGLCONTEXT_BLOOM``, ``OPENGLCONTEXT_LOD``,
+   ``OPENGLCONTEXT_GPU_SKINNING`` and ``OPENGLCONTEXT_SHADOW_CASCADES``, are
+   read each time the setting is asked for while its ``ContextDefinition``
+   field is unset. A change to ``os.environ`` in a running program therefore
+   reaches some settings and not others. To change a feature while the
+   program runs, set the ``ContextDefinition`` field, which takes precedence
+   over the variable.
 
 Reproducible renders
    To start a subprocess whose render must be reproducible, build its
    environment with ``renderoptions.clean_environment()``. It removes every
-   variable in the tables below except the two marked *presentation* and those
-   under :ref:`Sound and diagnostics <env-diagnostics>`, then sets the values
+   variable in the tables below except the two marked *presentation*, those
+   under :ref:`Sound and diagnostics <env-diagnostics>` and
+   ``OPENGLCONTEXT_CONTENT``, then sets the values
    you pass it. A reference image then does not depend on what the parent
    process had set.
 
@@ -333,7 +340,7 @@ The window, capture and the interface
        wall clock. See :ref:`The clock a recording runs on <recording-clock>`.
    * - ``OPENGLCONTEXT_GLTF_BASELINE``
      - path
-     - ``tests/reference_images``
+     - ``tests/reference_images/gltf_baseline``
      - Where ``oglc-gltf-regression`` finds the images it compares against.
 
 Recording a session, and making one repeatable
@@ -429,6 +436,30 @@ switched on for a run therefore also applies to the subprocesses it starts.
      - yes/no
      - off
      - Log each scroll notch as the GLFW backend translates it.
+
+.. _env-content:
+
+Content packs
+-------------
+
+``clean_environment()`` passes this one to a subprocess unchanged, so a run
+pointed at a local copy of the content points its subprocesses there too.
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Variable
+     - Values
+     - Default
+     - What it does
+   * - ``OPENGLCONTEXT_CONTENT``
+     - directories, separated by ``:`` (``;`` on Windows)
+     - unset
+     - Directories searched for content packs before the application's store,
+       laid out as ``<namespace>/<directory>``. A packaged build, a machine
+       with no network or a CI job points it at a local copy and downloads
+       nothing. See :ref:`Offline, packaged and CI runs <offline>`.
 
 PyOpenGL's variable
 -------------------

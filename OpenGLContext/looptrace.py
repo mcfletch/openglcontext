@@ -315,5 +315,6 @@ def _configured_stall_ms() -> float:
 
 def _configured_trace() -> bool:
     """Whether stalls should be logged as well as counted."""
-    return bool(os.environ.get(TRACE_STALLS_ENV)
-                or os.environ.get(STALL_MS_ENV))
+    from OpenGLContext import renderoptions
+    return (renderoptions.env_flag(TRACE_STALLS_ENV, False)
+            or bool(os.environ.get(STALL_MS_ENV, '').strip()))

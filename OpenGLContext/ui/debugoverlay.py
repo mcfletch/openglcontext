@@ -304,7 +304,9 @@ class DebugOverlay(HUDLayer):
         screenshot"; here it means the overlay starts hidden.  A key still
         brings it up, because a capture run is not the only thing that sets it.
         """
-        return not os.environ.get('OPENGLCONTEXT_DISABLE_FPS_DISPLAY')
+        from OpenGLContext import renderoptions
+        return not renderoptions.env_flag('OPENGLCONTEXT_DISABLE_FPS_DISPLAY',
+                                          False)
 
     def toggle(self) -> bool:
         """Show it if it is hidden, hide it if it is up; True if now shown."""

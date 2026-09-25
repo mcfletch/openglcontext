@@ -293,6 +293,11 @@ class TestConfiguration:
         monkeypatch.setenv('OPENGLCONTEXT_TRACE_STALLS', '1')
         assert LoopTrace().trace is True
 
+    def test_a_spelled_out_no_leaves_tracing_off(self, monkeypatch):
+        monkeypatch.delenv('OPENGLCONTEXT_STALL_MS', raising=False)
+        monkeypatch.setenv('OPENGLCONTEXT_TRACE_STALLS', '0')
+        assert LoopTrace().trace is False
+
     def test_by_default_it_counts_but_says_nothing(self, monkeypatch):
         monkeypatch.delenv('OPENGLCONTEXT_STALL_MS', raising=False)
         monkeypatch.delenv('OPENGLCONTEXT_TRACE_STALLS', raising=False)

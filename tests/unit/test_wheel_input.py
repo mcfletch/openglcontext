@@ -416,6 +416,13 @@ class TestSayingWhatTheWheelReported:
             made.glfwOnScroll(object(), 0.0, 1.0)
         assert not [r for r in caplog.records if 'wheel' in r.getMessage()]
 
+    def test_a_spelled_out_no_is_silent(self, monkeypatch, caplog):
+        monkeypatch.setenv(glfwevents.WHEEL_DEBUG_ENV, '0')
+        made = self.recorder(monkeypatch)
+        with caplog.at_level('INFO', logger=glfwevents.log.name):
+            made.glfwOnScroll(object(), 0.0, 1.0)
+        assert not [r for r in caplog.records if 'wheel' in r.getMessage()]
+
     def test_asked_it_reports_the_offset_and_the_notches(self, monkeypatch,
                                                           caplog):
         monkeypatch.setenv(glfwevents.WHEEL_DEBUG_ENV, '1')
