@@ -17,10 +17,7 @@ def _widgets_with_an_anchor():
         cls = getattr(hudwidgets, name)
         if not isinstance(cls, type) or 'anchor' not in getattr(cls, '__dict__', {}):
             continue
-        try:
-            yield name, cls().anchor
-        except Exception:               # pragma: no cover - needs no instance
-            continue
+        yield name, cls().anchor
 
 
 class TestTheDefaultsAreRecognised:

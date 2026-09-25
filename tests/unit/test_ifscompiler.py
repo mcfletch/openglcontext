@@ -8,6 +8,7 @@ lookup edge cases in :class:`IndexedValueSource`. The display-list path needs a
 real GL context and is driven through a hidden GLFW window.
 """
 import types
+from typing import ClassVar
 
 import numpy as np
 import pytest
@@ -306,7 +307,7 @@ class TestExpandedArraysDefensive:
         # build_normalPerVertex keys vertices by coordIndex; a non-hashable
         # coordIndex is a real corruption and must surface, not be swallowed.
         class _BadVertex:
-            coordIndex = [1, 2]              # unhashable -> TypeError on setdefault
+            coordIndex: ClassVar[list[int]] = [1, 2]  # unhashable -> TypeError on setdefault
 
         vertexArray = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], 'f')
         with pytest.raises(TypeError):

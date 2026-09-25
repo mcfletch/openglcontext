@@ -318,13 +318,13 @@ class TestTheCatalogueOrder:
     The shared table already says which is which.
     """
 
-    CATALOGUE = [
+    CATALOGUE = (
         {'name': 'Triangle', 'display': 'Triangle', 'screenshot_url': None},
         {'name': 'DamagedHelmet', 'display': 'Damaged Helmet',
          'screenshot_url': None},
         {'name': 'Box', 'display': 'Box', 'screenshot_url': None},
         {'name': 'Sponza', 'display': 'Sponza', 'screenshot_url': None},
-    ]
+    )
 
     def test_the_demos_come_first(self):
         ordered = [entry['name'] for entry in D.demos_first(self.CATALOGUE)]

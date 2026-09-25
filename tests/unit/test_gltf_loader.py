@@ -1,5 +1,6 @@
 """Unit tests for the glTF loader using an in-memory synthetic GLB (no GL, no net)."""
 import os
+from typing import ClassVar
 
 import numpy as np
 import pytest
@@ -647,7 +648,7 @@ class TestAccessorValidation:
         g.buffers = [Buffer(byteLength=12)]
 
         class _R:
-            _buffers = {0: b'\x00' * 12}
+            _buffers: ClassVar[dict[int, bytes]] = {0: b'\x00' * 12}
         with pytest.raises(ValueError, match='accessor 0'):
             gltf.accessors._accessor_base(g, acc, _R(), 0)
 
@@ -970,9 +971,9 @@ class TestSceneRoots:
             nodes = None
 
         class _G:
-            scenes = [_S()]
+            scenes = (_S(),)
             scene = 0
-            nodes = [object(), object()]
+            nodes = (object(), object())
         assert gltf.scene._scene_root_indices(_G()) == []
 
     def test_no_scenes_excludes_child_nodes(self):
@@ -983,7 +984,7 @@ class TestSceneRoots:
         class _G:
             scenes = None
             scene = None
-            nodes = [_N(children=[1]), _N()]
+            nodes = (_N(children=[1]), _N())
         # node 0 parents node 1, so only node 0 is a true root
         assert gltf.scene._scene_root_indices(_G()) == [0]
 

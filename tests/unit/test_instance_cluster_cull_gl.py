@@ -10,6 +10,7 @@ happened and the test is meaningful).
 
 Skips (not fails) when no usable GL context can be created.
 """
+import ast
 import os
 import subprocess
 import sys
@@ -107,8 +108,8 @@ def test_cluster_cull_matches_per_object_cull():
     on = _run('1')
     assert off.returncode == 0 and on.returncode == 0, (
         'driver failed\noff:\n%s\non:\n%s' % (off.stderr, on.stderr))
-    total_off, drawn_off = eval(off.stdout)
-    total_on, drawn_on = eval(on.stdout)
+    total_off, drawn_off = ast.literal_eval(off.stdout)
+    total_on, drawn_on = ast.literal_eval(on.stdout)
     # Equivalence: cluster culling draws exactly the per-object-culled set.
     assert drawn_on == drawn_off, (
         'cluster cull drew a different instance set than per-object cull\n'

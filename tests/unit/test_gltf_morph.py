@@ -16,6 +16,7 @@ from pygltflib import (
 
 from OpenGLContext.loaders import gltf
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.testing.network import unreachable
 
 
 class TestPBRMeshMorph:
@@ -142,16 +143,12 @@ class TestLoaderMorph:
         assert np.allclose(mesh.positions[1], [1, 0, 4], atol=1e-5)
 
 
-def _has_network():
-    import urllib.request
-    try:
-        urllib.request.urlopen(gltf.SAMPLE_MODELS_BASE + '/README.md', timeout=6).close()
-        return True
-    except Exception:
-        return False
+#: Why the Khronos sample models cannot be fetched here, or ``None``.
+_SAMPLES_OFFLINE = unreachable(gltf.SAMPLE_MODELS_BASE + '/README.md')
 
 
-@pytest.mark.skipif(not _has_network(), reason="needs network for sample models")
+@pytest.mark.skipif(_SAMPLES_OFFLINE is not None,
+                    reason=_SAMPLES_OFFLINE or 'needs network for sample models')
 class TestOfficialMorphSample:
     def test_animated_morph_cube_deforms(self):
         scene = gltf.load_sample('AnimatedMorphCube')

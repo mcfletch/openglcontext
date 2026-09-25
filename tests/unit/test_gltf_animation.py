@@ -141,6 +141,7 @@ from pygltflib import (
 )
 
 from OpenGLContext.loaders import gltf
+from OpenGLContext.testing.network import unreachable
 
 
 def _pack(arrays):
@@ -225,16 +226,12 @@ class TestLoaderAnimation:
         assert np.allclose(xform.translation, [5, 0, 0], atol=1e-5)
 
 
-def _has_network():
-    import urllib.request
-    try:
-        urllib.request.urlopen(gltf.SAMPLE_MODELS_BASE + '/README.md', timeout=6).close()
-        return True
-    except Exception:
-        return False
+#: Why the Khronos sample models cannot be fetched here, or ``None``.
+_SAMPLES_OFFLINE = unreachable(gltf.SAMPLE_MODELS_BASE + '/README.md')
 
 
-@pytest.mark.skipif(not _has_network(), reason="needs network for sample models")
+@pytest.mark.skipif(_SAMPLES_OFFLINE is not None,
+                    reason=_SAMPLES_OFFLINE or 'needs network for sample models')
 class TestOfficialSampleAnimation:
     """Drive a real Khronos animated sample end-to-end (loader + player)."""
 
