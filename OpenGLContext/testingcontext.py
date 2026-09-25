@@ -7,12 +7,13 @@ unlikely that nontrivial code will be completely stable across
 all interactive context classes."""
 
 import optparse
-from typing import Any, Type
+from typing import Any, Optional, Type
 
 from OpenGLContext import plugins, context, contextdefinition
 
-# Test-runner can specify the base-class explicitly...
-CONFIGURED_BASE = None
+#: The context class a test runner has every test context built on, where it
+#: names one; None leaves the choice to the backend preference.
+CONFIGURED_BASE: Optional[Type[context.Context]] = None
 REQUIRED_EXTENSION_MISSING = 3 # process return-code for a missing extension
 
 

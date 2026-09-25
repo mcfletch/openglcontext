@@ -178,7 +178,7 @@ def _shared(resolver: Resolver, kind: str, index: int) -> Optional[np.ndarray]:
     array an earlier build already decoded -- the immutable vertex and keyframe
     data every instance of one asset holds in common.
     """
-    cache = getattr(resolver, '_reads', None)
+    cache = getattr(resolver, 'shared_reads', None)
     return None if cache is None else cache.get((kind, index))
 
 
@@ -189,7 +189,7 @@ def _keep(resolver: Resolver, kind: str, index: int, arr: np.ndarray) -> np.ndar
     it on its own copy (the deform already reads the base through ``astype``); an
     in-place write to shared vertex data would move every instance at once.
     """
-    cache = getattr(resolver, '_reads', None)
+    cache = getattr(resolver, 'shared_reads', None)
     if cache is not None:
         arr.flags.writeable = False
         cache[(kind, index)] = arr

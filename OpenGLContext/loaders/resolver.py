@@ -487,6 +487,10 @@ class Resolver:
         self._buffers: dict[int, bytes] = {}   # decoded buffer bytes, keyed by buffer index
         self._resolved: dict[str, str] = {}    # resolved absolute location, keyed by raw uri
         self._draco_warned = False   # the "install DracoPy" warning fired once
+        #: Arrays already decoded, keyed by (kind, accessor index), which every
+        #: build of one shared glTF document reads from; None for a resolver
+        #: serving a single load.  See ``loaders.gltf.loader.SharedDocument``.
+        self.shared_reads: Optional[dict[Tuple[str, int], Any]] = None
 
     def resolve(self, uri: str) -> str:
         """Return the absolute location ``uri`` resolves to under the policy.

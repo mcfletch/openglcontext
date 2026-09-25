@@ -104,9 +104,7 @@ def _specgloss_textures_to_metalrough(diffuse_pil: "Optional[Image.Image]",
         if pil is None:
             return np.full((h, w, 4), default, dtype='f')
         if (pil.width, pil.height) != (w, h):
-            # Pillow keeps BILINEAR as a module-level alias at runtime; its inline
-            # types only expose it under Image.Resampling, so mypy can't see it.
-            pil = pil.resize((w, h), Image.BILINEAR)  # type: ignore[attr-defined]
+            pil = pil.resize((w, h), Image.Resampling.BILINEAR)
         return np.asarray(pil, dtype='f') / 255.0
 
     diff = as_array(diffuse_pil, 1.0)

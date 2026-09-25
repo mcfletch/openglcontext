@@ -152,9 +152,7 @@ def main(argv: Optional[List[str]] = None) -> int:
         log.error("""Couldn't load a context type to render in""")
         return 1
 
-    # A checker reads CONFIGURED_BASE as None, which is what it holds until a
-    # runner puts the class it wants every test context built on into it.
-    testingcontext.CONFIGURED_BASE = saveAndExitClass(  # type: ignore[assignment]
+    testingcontext.CONFIGURED_BASE = saveAndExitClass(
         cls, options.frame_count, template, script_name,
     )
     # now, execute the script...

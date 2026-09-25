@@ -107,7 +107,7 @@ class SharedDocument:
     def _resolver(self) -> Resolver:
         resolver = Resolver(base_url=self.base_url, base_dir=self.base_dir,
                             max_resource_bytes=self.max_resource_bytes)
-        resolver._reads = self.reads       # type: ignore[attr-defined]
+        resolver.shared_reads = self.reads
         return resolver
 
 

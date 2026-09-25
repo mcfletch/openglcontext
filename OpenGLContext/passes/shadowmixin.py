@@ -139,11 +139,8 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
     shadow_soft: bool = False
 
     # Cascade-count control (fps-adaptive) lives in _CascadeControllerMixin; the
-    # depth-array / cube-array / cube-map pools + _shadow_caps in _ShadowMapPoolMixin.
-    # _ShadowMapPoolMixin.disposeShadowMaps assigns None to this attribute with no
-    # class-level annotation, so mypy infers its base type as None; the precise
-    # type is declared here (hence the assignment-override ignore).
-    _shadow_bindings: Optional[List[dict]] = None  # type: ignore[assignment]
+    # depth-array / cube-array / cube-map pools, _shadow_caps and
+    # _shadow_bindings in _ShadowMapPoolMixin.
 
     # Camera-independent caster geometry, cached across frames. The world
     # points and per-caster AABB corners depend only on the casters' transforms
