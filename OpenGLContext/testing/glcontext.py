@@ -430,7 +430,7 @@ def _egl_pbuffer(size: Sequence[int], profile: str, version: Sequence[int],
     # The binding alone is asked about: an engine module that fails to import
     # where the binding is here is a defect, not a machine without EGL.
     try:
-        import OpenGL.EGL  # noqa: F401
+        import OpenGL.EGL
     except ImportError as err:
         raise GLUnavailable('no EGL here: %s' % (err,)) from err
     from OpenGLContext.eglcontext import EGLContextError, PbufferContext
