@@ -44,15 +44,17 @@ The settings are a table in the application's ``pyproject.toml``:
    paths = ["src", "tests"]
    select = ["OGC131", "OGC141", "OGC161"]
 
-   [tool.openglcontext-checks.per-file-ignores]
-   "src/mygame/__main__.py" = ["OGC161"]
+   [tool.openglcontext-checks.scopes]
+   script = ["src/mygame/__main__.py", "tools/*.py", "!tools/_*.py"]
 
 ``select`` defaults to every rule, and ``paths`` to the whole project less
 dot-directories and build output. The rules OGC221 to OGC223 run on the
 ``test`` scope, which defaults to ``tests/**``, ``**/test_*.py``,
-``**/*_test.py`` and ``**/conftest.py`` and can be redefined under
-``[tool.openglcontext-checks.scopes]``. An unknown key or rule code is an
-error.
+``**/*_test.py`` and ``**/conftest.py``. The ``script`` scope names the
+programs run by path, whose module level is their start-up; OGC161 does not
+run on them, and it is empty until the application names them. Both are set
+under ``[tool.openglcontext-checks.scopes]``, where a glob with a leading
+``!`` takes paths out of a scope. An unknown key or rule code is an error.
 
 A project with findings already in it can start by selecting only the rules
 it is clean of and add the others as it reaches zero of each; the engine's
@@ -106,7 +108,9 @@ The rules and what to use instead
    class level. A value read at import is fixed before an application or test
    can set it. Read it on first use; the engine's own switches go through
    ``renderoptions.env_flag_once`` and ``env_number_once`` (see
-   :doc:`environment`).
+   :doc:`environment`). A command whose console-script entry point imports
+   the module and calls ``main()`` sets its defaults in ``main()``; a program
+   run by path is named in the ``script`` scope.
 
 ``OGC201`` -- a suppression without a reason
    A ``# noqa`` or ``# type: ignore`` that names no code, or gives no reason

@@ -354,8 +354,10 @@ whole run:
 session and to every child process, and the result depends on collection
 order. For example, ``PYOPENGL_PLATFORM=egl`` set by one module reaches every
 script the suite starts; on Windows, which has no EGL, every GL entry point
-is then undefined. ``tests/unit/test_no_configuration_at_import.py`` enforces
-this rule.
+is then undefined. OGC161 of the :doc:`static checks <checks>` enforces this
+rule on every module's source, and
+``tests/unit/test_no_configuration_at_import.py`` on what a program imported
+during collection settles.
 
 Instead, from the least to the most specific:
 

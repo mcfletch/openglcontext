@@ -337,8 +337,22 @@ markers = [
 # modules beside them that they import, and the pytest modules of tests/.
 # The other scripts in tests/ are the demos and tutorials the visual suite
 # runs in subprocesses; pytest collects nothing from them.
+#
+# The programs OGC161 does not read: files run by path, whose module level is
+# their start-up and settles the renderer before anything imports OpenGL. They
+# are the demos and tutorials in tests/ (less the pytest modules, conftest.py
+# and the underscored modules the demos import), the subprocess drivers the
+# unit tests start (less _crowd_asset.py, which tests import), the scripts/
+# tools and Sphinx's conf.py.
 [tool.openglcontext-checks.scopes]
 test = ["tests/unit/**", "OpenGLContext/tests/**", "**/test_*.py", "**/conftest.py"]
+script = [
+    "tests/[!_]*.py", "!tests/test_*.py", "!tests/conftest.py",
+    "tests/_gltf_toggle_driver.py",
+    "tests/helpers/*.py", "!tests/helpers/_crowd_asset.py",
+    "scripts/*.py",
+    "docs/conf.py",
+]
 
 # uv decides whether its cached metadata for a source tree is still current
 # from pyproject.toml, setup.py and setup.cfg alone. This project's version

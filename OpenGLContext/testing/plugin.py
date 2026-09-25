@@ -249,12 +249,12 @@ def pytest_collection_finish(session: Any) -> None:
     """Put the configuration back to the run's, and record what moved it.
 
     A test module must not configure the renderer as it is imported, and
-    ``tests/unit/test_no_configuration_at_import.py`` holds this project's own
-    to that. What no reading of a test module can catch is a module that
-    *imports a program* -- ``OpenGLContext.bin.terrain_view`` settles the
-    renderer as it loads, reasonably, because it is about to draw one. Left
-    standing, that program's choice would be the run's, and every child process
-    launched afterwards would render under it.
+    OGC161 of ``openglcontext-checks`` holds this project's own to that. What
+    no reading of a test module can catch is a module that *imports a
+    program* -- ``OpenGLContext.bin.view`` settles the renderer as it loads,
+    because it is about to draw one. Left standing, that program's choice
+    would be the run's, and every child process launched afterwards would
+    render under it.
     """
     _COLLECTION_CHANGED.clear()
     settled = gl_env.run_configuration()
