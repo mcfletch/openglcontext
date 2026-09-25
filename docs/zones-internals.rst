@@ -117,6 +117,16 @@ dictionary lookup per draw. Uploads happen only when the pack differs from the
 last draw's, and draws are sorted by material, so a run of objects in the same
 room uploads once.
 
+The objects that did move are classified together
+(``ZoneTable.classify_many``). The table keeps each zone's reach -- its shape
+and blend band -- as a world box in an ``omi_physics`` dynamic AABB tree, the
+physics engine's broad phase, so a batch of boxes is carried only into the
+frames of the zones whose reach it overlaps. A moved object keeps its answer
+while it stays within its slack: the room its bounding sphere has before it
+could cross a zone's surface or the edge of its blend band
+(``ZoneTable.sphere_slack``). Only the zones within ``slack_reach`` (60 m) are
+measured, so the slack is never more than that less the sphere's radius.
+
 ``lights_off`` gives the object a mask of light slots to skip, read by the
 light loop in ``pbr.frag`` as ``lightsOff``. ``setupShaderLights`` records
 which light went into which slot (``boundLights``).

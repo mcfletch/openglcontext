@@ -132,8 +132,8 @@ class ZoneTable:
                 self.box[index] = True
                 self.half[index] = zone.shape.params
         # Each zone's reach -- its shape and its blend band -- as a box in the
-        # world, so the zones a query could touch are found with a comparison
-        # of boxes before any point is carried into a zone's frame.
+        # world, so the zones a query could touch are found before any point
+        # is carried into a zone's frame.
         if count:
             to_world = np.linalg.inv(self.to_local)
             middle = to_world[:, 3, :3]
@@ -141,14 +141,18 @@ class ZoneTable:
             self.world_low, self.world_high = middle - spread, middle + spread
         else:
             self.world_low = self.world_high = np.zeros((0, 3))
+        # The physics engine's broad phase: a query costs the depth of the
+        # tree rather than a comparison with every zone.
+        from omi_physics.broadphase import DynamicAABBTree
+        self._tree = DynamicAABBTree(fatten=0.0)
+        for index in range(count):
+            self._tree.insert(index, self.world_low[index], self.world_high[index])
 
     def near(self, minimum: Any, maximum: Any) -> np.ndarray:
-        """The indices of the zones whose reach overlaps the world box given."""
-        low = np.asarray(minimum, dtype='d')
-        high = np.asarray(maximum, dtype='d')
-        found: np.ndarray = np.flatnonzero(np.all(self.world_low <= high, axis=1)
-                                           & np.all(self.world_high >= low, axis=1))
-        return found
+        """The indices of the zones whose reach overlaps the world box given, in order."""
+        found = self._tree.query(np.asarray(minimum, dtype='d'),
+                                 np.asarray(maximum, dtype='d'))
+        return np.array(sorted(found), dtype=np.intp)
 
     def _local_to(self, which: Any, points: np.ndarray) -> np.ndarray:
         """``(N, 3)`` world points in the frames of the zones ``which``, as ``(W, N, 3)``.
