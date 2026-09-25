@@ -22,48 +22,48 @@ The decisions below are the review's proposals, and each is the maintainer's to 
 | Code | Severity | Summary | Decision | Remediation | Status |
 |---|---|---|---|---|---|
 | REF-C1 | Critical | Bad reflector values abort a load or fail every frame; reflection pass has no failure isolation | Fix | Catch `OverflowError` and reject non-finite values in `reflector_for`, clamp `scale` and `interval`; sanitise fields in the planner; wrap `renderReflections` to log once and disable planar reflections. | Fixed 2b39a0e |
-| REF-M1 | Major | Object `mirror` hook mutates cached shared Shapes, so every node on that mesh mirrors | Fix | Build new `Shape`/`Appearance` per shape sharing the geometry and return them as `(node, True)`, or make `hooks.node` honour `shareable=False`. Test two nodes on one mesh. | Open |
-| REF-M2 | Major | Mirror over the texel budget is never drawn and forces redraws forever | Fix | Draw an unaffordable must-draw candidate at the largest scale that fits (floored near 1/8); record unaffordable candidates so `unfinished` stops spinning. Add a tight-budget planner test. | Open |
-| REF-M3 | Major | Millisecond target re-applies one stale GPU reading every frame, compounding | Fix | Expose a fresh flag or sequence number on `GpuTimer`, call `measured` once per new reading using the scale that frame drew with. Test that repeated readings leave the scale unchanged. | Open |
-| REF-M4 | Major | `too_small` and `_separateShapes` run per-record Python in every mirror view | Fix | Vectorise `too_small` over the gather's arrays per mirror view; cache `_separateShapes` per frame and path generation, or precompute a per-gather "refused by shared draw" array. | Open |
-| REF-M5 | Major | Separate-view budget ignores nested mirror views and approximates top-level ones | Fix | Decide `separate` from the mirror view's own contents, testing a per-gather "refused by shared draw" array against the mirror view's frustum survivors. | Open |
-| REF-M6 | Major | Tiles redrawn after a repack bypass texel and separate-view budgets | Fix | Return remaining texels and separate views from `choose`, charge moved tiles against them and drop a moved tile's lookup when it does not fit. Add a repack test. | Open |
-| REF-M7 | Major | Plane-fit cache keyed on `id()` of an array it does not hold | Fix | Store the positions array itself in `_FITS` and compare with `is`; for in-place edits key on a geometry change counter. | Open |
-| REF-M8 | Major | `IndexedFaceSet` mirrors ignore `ccw`, and the VRML97 path is untested | Fix | Negate the fitted normal when `ccw` is false; optionally vectorise `_fan`. Add tests for both windings and polygons with more than three corners. | Open |
-| REF-m1 | Minor | Rough-mirror mip levels sample the uncleared gutter at tile edges | Fix | Clear the tile's slot including `GUTTER`, clipped to the atlas; optionally inset `planarBounds` by half a texel of the level read. | Open |
-| REF-m2 | Minor | `screen_rect` gives any mirror with a corner behind the camera the whole view | Fix | Clip the box edges against the near plane before projecting and take the rect of what survives; keep `WHOLE` only as fallback. | Open |
-| REF-m3 | Minor | Default schedule redraws every mirror every frame in a still scene | Maintainer decision | Options: redraw optional valid low-drift candidates only from leftover budget; add a `reflectionIdleRedraw` setting (default off) with `interval` as idle rate; or document the GPU cost. | Open |
-| REF-m4 | Minor | Invalid held tile is dropped when unchosen, so the mirror flips to the probe | Fix | Keep an invalid but readable held tile in `kept` with its lookup when not chosen; treat only other-view, plane or size tiles as unreadable. | Open |
-| REF-m5 | Minor | Planning is Python per mirror per view, growing as mirrors^bounces; bounces unbounded | Fix | Clamp `bounces`, stop descending once candidates exceed a multiple of `budget.views`, and pass the per-view eye into `plan_mirror` instead of recomputing inverses. | Open |
-| REF-m6 | Minor | `surface_roughness` converts the whole roughness image on the render thread | Fix | Use `getchannel('G')` and `ImageStat` on a reduced copy, or compute at `PBRTexture` build; declare a `mean_roughness` cache on `PBRTexture`. | Open |
-| REF-m7 | Minor | `_water_plane` recomputes mean level and bounds every frame | Fix | Cache it in `_FITS` as `mesh_plane` does, keyed on the positions array (see REF-M7). | Open |
+| REF-M1 | Major | Object `mirror` hook mutates cached shared Shapes, so every node on that mesh mirrors | Fix | Build new `Shape`/`Appearance` per shape sharing the geometry and return them as `(node, True)`, or make `hooks.node` honour `shareable=False`. Test two nodes on one mesh. | Fixed f9051d6 |
+| REF-M2 | Major | Mirror over the texel budget is never drawn and forces redraws forever | Fix | Draw an unaffordable must-draw candidate at the largest scale that fits (floored near 1/8); record unaffordable candidates so `unfinished` stops spinning. Add a tight-budget planner test. | Fixed d6cc1c7 |
+| REF-M3 | Major | Millisecond target re-applies one stale GPU reading every frame, compounding | Fix | Expose a fresh flag or sequence number on `GpuTimer`, call `measured` once per new reading using the scale that frame drew with. Test that repeated readings leave the scale unchanged. | Fixed d6cc1c7 |
+| REF-M4 | Major | `too_small` and `_separateShapes` run per-record Python in every mirror view | Fix | Vectorise `too_small` over the gather's arrays per mirror view; cache `_separateShapes` per frame and path generation, or precompute a per-gather "refused by shared draw" array. | Fixed b05e7f8 |
+| REF-M5 | Major | Separate-view budget ignores nested mirror views and approximates top-level ones | Fix | Decide `separate` from the mirror view's own contents, testing a per-gather "refused by shared draw" array against the mirror view's frustum survivors. | Fixed b05e7f8 |
+| REF-M6 | Major | Tiles redrawn after a repack bypass texel and separate-view budgets | Fix | Return remaining texels and separate views from `choose`, charge moved tiles against them and drop a moved tile's lookup when it does not fit. Add a repack test. | Fixed d6cc1c7 |
+| REF-M7 | Major | Plane-fit cache keyed on `id()` of an array it does not hold | Fix | Store the positions array itself in `_FITS` and compare with `is`; for in-place edits key on a geometry change counter. | Fixed c2bf4ee |
+| REF-M8 | Major | `IndexedFaceSet` mirrors ignore `ccw`, and the VRML97 path is untested | Fix | Negate the fitted normal when `ccw` is false; optionally vectorise `_fan`. Add tests for both windings and polygons with more than three corners. | Fixed c2bf4ee |
+| REF-m1 | Minor | Rough-mirror mip levels sample the uncleared gutter at tile edges | Fix | Clear the tile's slot including `GUTTER`, clipped to the atlas; optionally inset `planarBounds` by half a texel of the level read. | Fixed 63ebd9c (the gutter is cleared with the tile; planarBounds is not inset further) |
+| REF-m2 | Minor | `screen_rect` gives any mirror with a corner behind the camera the whole view | Fix | Clip the box edges against the near plane before projecting and take the rect of what survives; keep `WHOLE` only as fallback. | Fixed 9eb8117 |
+| REF-m3 | Minor | Default schedule redraws every mirror every frame in a still scene | Maintainer decision | Options: redraw optional valid low-drift candidates only from leftover budget; add a `reflectionIdleRedraw` setting (default off) with `interval` as idle rate; or document the GPU cost. | Needs input |
+| REF-m4 | Minor | Invalid held tile is dropped when unchosen, so the mirror flips to the probe | Fix | Keep an invalid but readable held tile in `kept` with its lookup when not chosen; treat only other-view, plane or size tiles as unreadable. | Fixed d6cc1c7 |
+| REF-m5 | Minor | Planning is Python per mirror per view, growing as mirrors^bounces; bounces unbounded | Fix | Clamp `bounces`, stop descending once candidates exceed a multiple of `budget.views`, and pass the per-view eye into `plan_mirror` instead of recomputing inverses. | Fixed d6cc1c7 (descent stops at four candidates per budgeted view rather than a hard clamp on bounces; eye passed to plan_mirror) |
+| REF-m6 | Minor | `surface_roughness` converts the whole roughness image on the render thread | Fix | Use `getchannel('G')` and `ImageStat` on a reduced copy, or compute at `PBRTexture` build; declare a `mean_roughness` cache on `PBRTexture`. | Fixed c2bf4ee |
+| REF-m7 | Minor | `_water_plane` recomputes mean level and bounds every frame | Fix | Cache it in `_FITS` as `mesh_plane` does, keyed on the positions array (see REF-M7). | Fixed c2bf4ee |
 | REF-m8 | Minor | `mirror_generation` does not watch `PBRMesh.waveStyle` | Fix | Add `(PBRMesh, 'waveStyle')` to `_watch_mirror_fields`; document that `PBRMesh.material` is read at load time, or make it a field. | Fixed 12d087e |
-| REF-m9 | Minor | Atlas and held tiles stay allocated while reflections are off | Fix | On the transition to off, `release()` the atlas and `reset()` the planner. | Open |
-| REF-m10 | Minor | New atlas with draws keeps lookups into undefined texels | Investigate | Confirm reachability; then on `ensure_size() == True` always reset the planner and filter `plan.lookups` to keys in `plan.draws`. | Open |
-| REF-m11 | Minor | `keep()` blits the whole atlas every frame with a nested mirror | Fix | Blit only the tiles `_previous_lookups` refer to, grown by the gutter. | Open |
-| REF-m12 | Minor | Atlas leaves clear colour, texture binding and read framebuffer changed | Fix | Save and restore the clear colour; bind through the atlas's own `REFLECTION_UNIT`; save both framebuffer bindings in `keep` and `begin`. | Open |
-| REF-m13 | Minor | Atlas stays bound on unit 31 while it is the draw target | Investigate | Confirm the feedback-loop case; then bind 0 or the `kept` copy on `REFLECTION_UNIT` before `atlas.begin()` when `bounce` is False. | Open |
-| REF-m14 | Minor | Mirror-view content selection lives in the window-bound pass, untestable without GL | Fix | Move per-draw selection into a planner method returning `(kept, missing, incomplete)`; `mirrorFrames` only builds `ViewFrame`s. Test it without GL. | Open |
-| REF-m15 | Minor | Surfaces normal maps may invert vertical relief; images upside down on walls | Investigate | Render a ramp height map on a `panel` lit from +y and assert the brighter half; if confirmed, flip `dy` (or tangent w) and flip v in the surface geometries. | Open |
-| REF-m16 | Minor | Reflection code has untested branches across planner, pass, atlas and hook | Fix | Add GL-free planner tests for missing branches, an `IndexedFaceSet` mirror test, a GL test forcing program-set failure, and hook tests for string-bool, bool-number and `LOD`/`Switch`. | Open |
-| REF-n1 | Nit | Planner calls private `_texels`; `reflection.__all__` incomplete | Fix | Make `texels` public and add `NDCRect`, `WHOLE`, `TEXEL_STEP`, `TileRect` and `mesh_plane` to `__all__`. | Open |
-| REF-n2 | Nit | Draw records are untyped tuples indexed by position | Fix | Introduce a `DrawRecord` `NamedTuple` or `Protocol` (placement, volume, path, node) so mypy checks it. | Open |
-| REF-n3 | Nit | `_Shelf.slots` holds raw `[x, width, key]` lists | Fix | Replace with a small `NamedTuple` or dataclass. | Open |
+| REF-m9 | Minor | Atlas and held tiles stay allocated while reflections are off | Fix | On the transition to off, `release()` the atlas and `reset()` the planner. | Fixed b05e7f8 |
+| REF-m10 | Minor | New atlas with draws keeps lookups into undefined texels | Investigate | Confirm reachability; then on `ensure_size() == True` always reset the planner and filter `plan.lookups` to keys in `plan.draws`. | Fixed b05e7f8 (reachable only where the atlas is remade without the planner being reset; every release now resets it, and a new atlas keeps only this frame's tiles and lookups) |
+| REF-m11 | Minor | `keep()` blits the whole atlas every frame with a nested mirror | Fix | Blit only the tiles `_previous_lookups` refer to, grown by the gutter. | Fixed 63ebd9c |
+| REF-m12 | Minor | Atlas leaves clear colour, texture binding and read framebuffer changed | Fix | Save and restore the clear colour; bind through the atlas's own `REFLECTION_UNIT`; save both framebuffer bindings in `keep` and `begin`. | Fixed 63ebd9c |
+| REF-m13 | Minor | Atlas stays bound on unit 31 while it is the draw target | Investigate | Confirm the feedback-loop case; then bind 0 or the `kept` copy on `REFLECTION_UNIT` before `atlas.begin()` when `bounce` is False. | Fixed b05e7f8 |
+| REF-m14 | Minor | Mirror-view content selection lives in the window-bound pass, untestable without GL | Fix | Move per-draw selection into a planner method returning `(kept, missing, incomplete)`; `mirrorFrames` only builds `ViewFrame`s. Test it without GL. | Fixed b05e7f8 |
+| REF-m15 | Minor | Surfaces normal maps may invert vertical relief; images upside down on walls | Investigate | Render a ramp height map on a `panel` lit from +y and assert the brighter half; if confirmed, flip `dy` (or tangent w) and flip v in the surface geometries. | Fixed d93daab (confirmed by render: images were upside down on walls; the normal map was right for the maps' row-0-top convention, so v was flipped in the geometry and normal_map left alone) |
+| REF-m16 | Minor | Reflection code has untested branches across planner, pass, atlas and hook | Fix | Add GL-free planner tests for missing branches, an `IndexedFaceSet` mirror test, a GL test forcing program-set failure, and hook tests for string-bool, bool-number and `LOD`/`Switch`. | Fixed 3390cf2 (with the tests in c2bf4ee, f9051d6, d6cc1c7, b05e7f8: IndexedFaceSet mirrors, the hook's string-bool, bool-as-number and LOD/Switch cases, the moved-tile redraw, the millisecond target in the pass, a GL test where select_program_set fails, and the planner's refusal branches) |
+| REF-n1 | Nit | Planner calls private `_texels`; `reflection.__all__` incomplete | Fix | Make `texels` public and add `NDCRect`, `WHOLE`, `TEXEL_STEP`, `TileRect` and `mesh_plane` to `__all__`. | Fixed c2bf4ee |
+| REF-n2 | Nit | Draw records are untyped tuples indexed by position | Fix | Introduce a `DrawRecord` `NamedTuple` or `Protocol` (placement, volume, path, node) so mypy checks it. | Needs input |
+| REF-n3 | Nit | `_Shelf.slots` holds raw `[x, width, key]` lists | Fix | Replace with a small `NamedTuple` or dataclass. | Fixed 2213c93 |
 | REF-n4 | Nit | Mutable class-level defaults on `_FlatEffectsMixin` | Duplicate of PASS-n4 | Fixed with PASS-n4: initialise per instance or default to `None`. | Fixed with PASS-n4 |
-| REF-n5 | Nit | `ReflectedView.__getattr__` recurses forever when `source` is unset | Fix | Raise `AttributeError` when the name is `source`. | Open |
-| REF-n6 | Nit | Coplanar grouping rounds to three decimals; docs say "within a millimetre" | Maintainer decision | Options: cluster planes by tolerance, or change the docs to say "rounded to a millimetre". | Open |
-| REF-n7 | Nit | Planner `_material` ignores `geometry.material`, reading roughness as 0 | Fix | Fall back to `geometry.material` as `shape_reflector` does. | Open |
-| REF-n8 | Nit | `renderReflections` may call `triggerRedraw(0)` twice per frame | Fix | Call `triggerRedraw(0)` at most once per frame. | Open |
-| REF-n9 | Nit | `reflectionBudget()` evaluated twice per frame | Fix | Compute the budget once and reuse it for `capacity`. | Open |
-| REF-n10 | Nit | `ReflectionPlan.rough` docstring uses a perception verb ("wants") | Fix | Say the mirror "reads" the blurred mip levels. | Open |
-| REF-n11 | Nit | `bin/mirrorhall.py` is scenery in the commands package | Fix | Move it beside the demo data or into a `demos`/`scenes` module. | Open |
-| REF-d1 | Minor | Docs say 32 texture units compiles reflections out; 32 is enough | Duplicate of DOC-07 | Fixed with DOC-07: say "fewer than 32". | Open |
-| REF-d2 | Minor | Reflectance missing from `mirrorhooks` docstring and the Blender panel docs | Duplicate of DOC-08 | Fixed with DOC-08 for the Blender step; also add `reflectance` to the `mirrorhooks` module docstring. | Open |
-| REF-d3 | Minor | Docs say no mirror is left out for long, contradicted by crowding and REF-M2 | Fix | State which case "none is left out for long" covers in `docs/reflections.rst`. | Open |
-| REF-d4 | Nit | `distortion` described in "view widths" but applied in the mirror's crop | Fix | Say "widths of the mirror's view" in the docstring and docs. | Open |
-| REF-d5 | Nit | Bold-leader list in `docs/reflections.rst:119-124` | Fix | Rewrite as plain words or hyphenated definitions. | Open |
-| REF-d6 | Minor | No mirrors tutorial | Fix | Add a short `tests/*.py` walkthrough: a room, one `PlanarReflector`, `varied()`, water and the budget overlay. | Open |
-| REF-d7 | Nit | Limits omit that `IndexedFaceSet` mirrors must be counter-clockwise | Duplicate of REF-M8 | Fixing REF-M8 removes the limit; until then state it in the limits section. | Open |
+| REF-n5 | Nit | `ReflectedView.__getattr__` recurses forever when `source` is unset | Fix | Raise `AttributeError` when the name is `source`. | Fixed b05e7f8 |
+| REF-n6 | Nit | Coplanar grouping rounds to three decimals; docs say "within a millimetre" | Maintainer decision | Options: cluster planes by tolerance, or change the docs to say "rounded to a millimetre". | Fixed d6cc1c7 (settled by correctness: grouped by tolerance, as the docs already say) |
+| REF-n7 | Nit | Planner `_material` ignores `geometry.material`, reading roughness as 0 | Fix | Fall back to `geometry.material` as `shape_reflector` does. | Fixed c2bf4ee |
+| REF-n8 | Nit | `renderReflections` may call `triggerRedraw(0)` twice per frame | Fix | Call `triggerRedraw(0)` at most once per frame. | Fixed b05e7f8 |
+| REF-n9 | Nit | `reflectionBudget()` evaluated twice per frame | Fix | Compute the budget once and reuse it for `capacity`. | Fixed b05e7f8 |
+| REF-n10 | Nit | `ReflectionPlan.rough` docstring uses a perception verb ("wants") | Fix | Say the mirror "reads" the blurred mip levels. | Fixed b05e7f8 |
+| REF-n11 | Nit | `bin/mirrorhall.py` is scenery in the commands package | Fix | Move it beside the demo data or into a `demos`/`scenes` module. | Needs input |
+| REF-d1 | Minor | Docs say 32 texture units compiles reflections out; 32 is enough | Duplicate of DOC-07 | Fixed with DOC-07: say "fewer than 32". | Fixed with DOC-07 |
+| REF-d2 | Minor | Reflectance missing from `mirrorhooks` docstring and the Blender panel docs | Duplicate of DOC-08 | Fixed with DOC-08 for the Blender step; also add `reflectance` to the `mirrorhooks` module docstring. | Fixed with DOC-08; the mirrorhooks module docstring already lists `reflectance` |
+| REF-d3 | Minor | Docs say no mirror is left out for long, contradicted by crowding and REF-M2 | Fix | State which case "none is left out for long" covers in `docs/reflections.rst`. | Fixed d6cc1c7 |
+| REF-d4 | Nit | `distortion` described in "view widths" but applied in the mirror's crop | Fix | Say "widths of the mirror's view" in the docstring and docs. | Fixed 2213c93 |
+| REF-d5 | Nit | Bold-leader list in `docs/reflections.rst:119-124` | Fix | Rewrite as plain words or hyphenated definitions. | Fixed f9051d6 |
+| REF-d6 | Minor | No mirrors tutorial | Fix | Add a short `tests/*.py` walkthrough: a room, one `PlanarReflector`, `varied()`, water and the budget overlay. | Fixed 7e9a516 |
+| REF-d7 | Nit | Limits omit that `IndexedFaceSet` mirrors must be counter-clockwise | Duplicate of REF-M8 | Fixing REF-M8 removes the limit; until then state it in the limits section. | Fixed with REF-M8 (c2bf4ee): the limit is gone, and docs/reflections.rst says an IndexedFaceSet mirror faces the side ccw names |
 | ZON-M1 | Major | Runtime edits to a zone's settings are ignored until zones are re-keyed | Fix | Observe the `settings` field and each setting's fields; bump `_zoneEpoch` and rebuild tables on change. Test editing `intensity`, toggling `enabled`, adding a setting. | Open |
 | ZON-M2 | Major | Object scaled in place, or with changed bounds, keeps its old zones | Fix | Store the scale and bounds identity in `_ObjectZones`; apply the slack shortcut only when the upper 3x3 is unchanged. | Open |
 | ZON-M3 | Major | Instanced group compares member matrices by reused `id()`, missing moves | Fix | Hold the matrix objects and compare with `is` (or compare translations); key the group by its stable identity, not the visible subset, and evict with the group. | Open |
@@ -210,56 +210,56 @@ The decisions below are the review's proposals, and each is the maintainer's to 
 | SG-M2 | Major | `LOD.boundingVolume` stays cached for the first level drawn | Fix | Clear the cached volume in `show()` when the level changes, or bound the node by the union of all levels; add a test. | Fixed f63b296 |
 | SG-M3 | Major | LOD level selection has no hysteresis, so threshold jitter flips levels | Fix | Add a `hysteresis` fraction (default about 0.1) to coverage and distance selection; test with coverage oscillating across a threshold. | Fixed f63b296 (`hysteresis` attribute, default 0.1) |
 | SG-M4 | Major | MSFT_lod path skips skin and morph registration for the finest level | Fix | Call `_register_morph` and `_register_skin` in `_lod_node`, passing `node_index`; test with `RiggedSimple` wrapped in MSFT_lod. | Fixed ab5e85c |
-| SG-M5 | Major | Streamed tile ground receives its model matrix in the wrong convention | Fix | Pass `model=m.T` as `MatrixTransform` does, or state and test `GroundPatch.model`'s convention; GL test reading back the sampled control-map texel. | Open |
-| SG-M6 | Major | Every ground tile re-uploads constant uniforms and rebinds five textures per frame | Fix | Move constants into a `ViewPrograms` `setup` callback; keep only per-draw matrices and sun per patch; ideally one begin/end for all ground per frame. | Open |
+| SG-M5 | Major | Streamed tile ground receives its model matrix in the wrong convention | Fix | Pass `model=m.T` as `MatrixTransform` does, or state and test `GroundPatch.model`'s convention; GL test reading back the sampled control-map texel. | Fixed 39bd94d (the uploader passes the transpose; a GL test reads back the layer a placed tile is drawn with) |
+| SG-M6 | Major | Every ground tile re-uploads constant uniforms and rebinds five textures per frame | Fix | Move constants into a `ViewPrograms` `setup` callback; keep only per-draw matrices and sun per patch; ideally one begin/end for all ground per frame. | Fixed 39bd94d (constants set by a ViewPrograms setup callback per program form; per patch only placement, view, light and the texture binds) |
 | SG-M7 | Major | Tileset-named files (zones, clumps, cards, meshes) joined without containment | Fix | Resolve through `Resolver` containment or a `tiles3d.fetch.beside()` rejecting absolute and `..` names and keeping URLs same-origin; test both. | Fixed 1d665f3 |
 | SG-M8 | Major | Remote world's cover clumps and cards are opened as local files | Fix | Fetch species files through `fetch.read_bytes` or `_beside`; let `load_clump_glb` accept bytes; test with a served tileset. | Fixed 1d665f3 |
-| SG-M9 | Major | `GroundCover` raises `ZeroDivisionError` at zero density | Fix | Return empty arrays from `_scatter` and `world_grid_scatter` when density is zero or less; add a test. | Open |
-| SG-m1 | Minor | `control_weight` assumes a square control map | Fix | Use `shape[1]` for u and `shape[0]` for v; refuse or resample non-square maps with a clear error. | Open |
-| SG-m2 | Minor | Portal-face degenerate filter compares indices and removes nothing | Fix | Test for zero area or equal positions, or have `_portal_face` share the index; correct the comment. | Open |
-| SG-m3 | Minor | `merged_mesh` normals wrong under non-uniform scale; mirrored instances inverted | Fix | Use the inverse-transpose for normals, swap index columns when det < 0, and document what `_merge` skips. | Open |
+| SG-M9 | Major | `GroundCover` raises `ZeroDivisionError` at zero density | Fix | Return empty arrays from `_scatter` and `world_grid_scatter` when density is zero or less; add a test. | Fixed 97f90f9 |
+| SG-m1 | Minor | `control_weight` assumes a square control map | Fix | Use `shape[1]` for u and `shape[0]` for v; refuse or resample non-square maps with a clear error. | Fixed 97f90f9 (each axis read by its own size; a non-square map is valid, so it is read rather than refused) |
+| SG-m2 | Minor | Portal-face degenerate filter compares indices and removes nothing | Fix | Test for zero area or equal positions, or have `_portal_face` share the index; correct the comment. | Fixed dae49f6 |
+| SG-m3 | Minor | `merged_mesh` normals wrong under non-uniform scale; mirrored instances inverted | Fix | Use the inverse-transpose for normals, swap index columns when det < 0, and document what `_merge` skips. | Fixed ff2ca33 (inverse transpose, winding swapped under det < 0, LOD finest level, Switch's chosen child, InstancedShape per placement; one pose test with bounds(); what is left out is documented) |
 | SG-m4 | Minor | Stated `MSFT_screencoverage` not reconciled with levels actually built | Fix | Build the coverage list from surviving ids; check its length is levels or levels+1 and warn otherwise. | Fixed ab5e85c |
 | SG-m5 | Minor | Screen-coverage definition (height) may differ from MSFT_lod's (area) | Investigate | Quote the MSFT_lod README definition in `gltf/lod.py`; convert if the spec means area. | Needs input (lod.rst corrected in f63b296: the README does not define coverage, and how the engine's height definition differs from Babylon.js's area) |
 | SG-m6 | Minor | `ScreenCoverageLOD` discards measured centre, measures distance to origin `center` | Investigate | When `center` is unset and the radius is measured, take the measured centre too. | Fixed f63b296 (radius and center both unset: distance to the measured centre; the pass asks `distanceCentre()`) |
 | SG-m7 | Minor | `mesh_bounds` ignores KHR_mesh_quantization | Investigate | Apply the normalization or dequantization to `min`/`max` before use, as the mesh decoder does. | Fixed ab5e85c (in `declared_bounds`, which also fixes the framing bounds in meshes.py) |
-| SG-m8 | Minor | Shareable hook result built with the first referencing node's world matrix | Maintainer decision | Either document `world_matrix` as valid only for unshareable hooks or pass `world=None` to shareable ones; run unshareable hooks per instancing placement, or warn. | Open |
-| SG-m9 | Minor | `GLTFScene.advance` looks up kinds in the global registry at advance time | Fix | Record each kind's `Registration` in `HookRunner` and store it with `hook_data`; consider a `registry=` argument to `load_gltf`. | Open |
-| SG-m10 | Minor | Zone naming a hook-replaced node controls a detached `Transform` | Investigate | Have `node_transform` return what stands in the slot, or warn when a zone names a replaced node. | Open |
+| SG-m8 | Minor | Shareable hook result built with the first referencing node's world matrix | Maintainer decision | Either document `world_matrix` as valid only for unshareable hooks or pass `world=None` to shareable ones; run unshareable hooks per instancing placement, or warn. | Fixed 92a9b04 (decided on correctness: a shareable material hook gets no world matrix; an unshareable one under EXT_mesh_gpu_instancing runs per placement, each copy placed on its own; documented) |
+| SG-m9 | Minor | `GLTFScene.advance` looks up kinds in the global registry at advance time | Fix | Record each kind's `Registration` in `HookRunner` and store it with `hook_data`; consider a `registry=` argument to `load_gltf`. | Fixed 92a9b04 (registrations recorded per load, advance uses them; a per-load `registry=` argument was not added, the process-wide registry being the documented design) |
+| SG-m10 | Minor | Zone naming a hook-replaced node controls a detached `Transform` | Investigate | Have `node_transform` return what stands in the slot, or warn when a zone names a replaced node. | Fixed 92a9b04 (zones resolve what stands in the slot; skins and animation keep the document's Transform) |
 | SG-m11 | Minor | `imagebased` skips face validation, decodes eagerly, lets some errors escape | Fix | Validate face sizes, decode only referenced lights lazily, cache per image index, widen the guard to `Exception` with a warning. | Fixed 8dd4a91 (faces checked square, alike and halving; a light decoded when a scene or zone names it; each image decoded once; the guard was already widened in 69e59f9) |
 | SG-m12 | Minor | `decode_data_uri` decodes before checking the size cap | Fix | Check `len(payload) * 3 // 4` against the cap before `b64decode`. | Fixed 942b27d |
-| SG-m13 | Minor | Resolver private names renamed without aliases | Maintainer decision | Keep deprecated aliases for one release, or note the rename in the changelog; update `_default_cache_dir` users. | Open |
-| SG-m14 | Minor | `GroundCover._told` swaps `_blocks` while a background scatter may write | Investigate | Guard `_blocks`/`_retired` with a lock, or a generation counter bumped in `_told` and checked before storing. | Open |
-| SG-m15 | Minor | `BackgroundCompute` drops failed requests; unshut cover leaks its thread | Fix | Reset `_near_at`/`_far_at` on failure; hold the owner weakly or add `dispose`; document `shutdown()` in `docs/vegetation.rst`. | Open |
-| SG-m16 | Minor | `GroundCover.select` copies and uploads instance arrays every moving frame | Fix | Keep the cache sorted and upload once with shader-side fade/cut, or re-select only after moving a fraction of the fade band. | Open |
-| SG-m17 | Minor | Without `clumpFarMesh` the mesh uploads twice and the inner disc draws twice | Fix | When near and far are the same mesh, build one node with the far fade window and no near overlay. | Open |
-| SG-m18 | Minor | `holes` set after the first draw does not change the drawn ground | Fix | Make `holes` a property that disposes and drops `_patch` so the mesh is re-cut on next draw. | Open |
-| SG-m19 | Minor | Sun direction documented backwards in ground and canopy code | Fix | Correct the comments and docstrings; rename to `light_direction`. | Open |
-| SG-m20 | Minor | `splat.py` keeps dead imports, duplicate constants and a stale docstring | Fix | Import constants from `ground.py`, delete unused imports, rewrite the module docstring. | Open |
-| SG-m21 | Minor | `PBRMesh._render_legacy` changes cull and texture-env state without restoring | Fix | Route culling through `set_cull_state`; restore the texture env mode in `renderPost`. | Open |
+| SG-m13 | Minor | Resolver private names renamed without aliases | Maintainer decision | Keep deprecated aliases for one release, or note the rename in the changelog; update `_default_cache_dir` users. | Needs input |
+| SG-m14 | Minor | `GroundCover._told` swaps `_blocks` while a background scatter may write | Investigate | Guard `_blocks`/`_retired` with a lock, or a generation counter bumped in `_told` and checked before storing. | Fixed 97f90f9 (a scatter keeps the table it began with; one locked block counter) |
+| SG-m15 | Minor | `BackgroundCompute` drops failed requests; unshut cover leaks its thread | Fix | Reset `_near_at`/`_far_at` on failure; hold the owner weakly or add `dispose`; document `shutdown()` in `docs/vegetation.rst`. | Fixed 97f90f9 (failures handed back through `failed` in drain and asked for again; the worker holds the cover weakly and a finalizer stops it; documented) |
+| SG-m16 | Minor | `GroundCover.select` copies and uploads instance arrays every moving frame | Fix | Keep the cache sorted and upload once with shader-side fade/cut, or re-select only after moving a fraction of the fade band. | Fixed 97f90f9 (subsets chosen with a 1 m margin and re-chosen after 1 m of movement; the shader's live fade hides the margin) |
+| SG-m17 | Minor | Without `clumpFarMesh` the mesh uploads twice and the inner disc draws twice | Fix | When near and far are the same mesh, build one node with the far fade window and no near overlay. | Fixed 97f90f9 |
+| SG-m18 | Minor | `holes` set after the first draw does not change the drawn ground | Fix | Make `holes` a property that disposes and drops `_patch` so the mesh is re-cut on next draw. | Fixed 39bd94d (`SplatTerrain.holes` is a property; the replaced mesh is released at the next draw, on the GL thread; `TilesTerrain.holes` delegates to it) |
+| SG-m19 | Minor | Sun direction documented backwards in ground and canopy code | Fix | Correct the comments and docstrings; rename to `light_direction`. | Fixed 39bd94d (comments and docstrings corrected in ground, splat, heightfield, cover, clumps; the local renamed; the public `sun` parameters keep their names, documented as the direction the light travels) |
+| SG-m20 | Minor | `splat.py` keeps dead imports, duplicate constants and a stale docstring | Fix | Import constants from `ground.py`, delete unused imports, rewrite the module docstring. | Fixed 39bd94d |
+| SG-m21 | Minor | `PBRMesh._render_legacy` changes cull and texture-env state without restoring | Fix | Route culling through `set_cull_state`; restore the texture env mode in `renderPost`. | Fixed 44a73c5 (culling through the pass's record in the legacy path, which also fixes a mirrored solid mesh; the compatibility pass resets the record per view; apply_winding_cull and IndexedPolygons go through it too. The GL_MODULATE texture env is GL's initial mode and the only one the engine uses, so it is left set) |
 | SG-m22 | Minor | mypy reports three errors in imagebased, cover and field | Fix | Annotate `image` as `Image.Image`; fix `children` assignment per other `Group` subclasses or fix the `ChildrenTypedField` stub. | Fixed 50e2944 (the three ChildrenTypedField errors, and the others like them in tilesterrain.py) and 8dd4a91 (imagebased's image typed; mypy was already clean there) |
-| SG-m23 | Minor | Seven new `type: ignore`s carry no reason | Fix | Use explicit-length tuple types, a `Protocol` with `copy()` for `Varied`, and give any remaining ignore a reason. | Open |
-| SG-m24 | Minor | Hooks API typed loosely (`Any` returns and fields) | Fix | `@overload` `register`/`registered`, type `HookContext` fields, split the two factory return shapes, use `set[str]`. | Open |
-| SG-m25 | Minor | Presets moved to Nodes: renamed kwargs, lost hashability, mutable global presets | Maintainer decision | Record renames in the changelog; choose between mutable shared presets and frozen ones (e.g. `style_for` returning `.varied()` copies). | Open |
+| SG-m23 | Minor | Seven new `type: ignore`s carry no reason | Fix | Use explicit-length tuple types, a `Protocol` with `copy()` for `Varied`, and give any remaining ignore a reason. | Fixed 92a9b04 (shapes, zone, zones, varied; imagebased in 8dd4a91; zoning's was already gone) |
+| SG-m24 | Minor | Hooks API typed loosely (`Any` returns and fields) | Fix | `@overload` `register`/`registered`, type `HookContext` fields, split the two factory return shapes, use `set[str]`. | Fixed 92a9b04 |
+| SG-m25 | Minor | Presets moved to Nodes: renamed kwargs, lost hashability, mutable global presets | Maintainer decision | Record renames in the changelog; choose between mutable shared presets and frozen ones (e.g. `style_for` returning `.varied()` copies). | Fixed 1bd7ba4 (decided: a loaded document's water gets its own copy of the style, so documents never alias the presets; code-built sheets keep sharing presets as documented. The conversion to Nodes follows the maintainer's own "scene state is a node" rule, so the renames and lost hashability stand; openglcontext has no changelog file to record the renames in) |
 | SG-m26 | Minor | Water hook does not validate `medium` or `depth` | Fix | Clamp depth to non-negative; map unknown media to `WATER` with a warning, as the mirror hook does. | Fixed 69e59f9 |
-| SG-m27 | Minor | `LoadPool` may run `prepare` on a worker; slow fetches starve loads | Investigate | Call `prepare` eagerly for known kinds at import or context start; consider a per-fetch timeout or separate network pool. | Open |
-| SG-n1 | Nit | Docstrings break writing rules: history, bold leaders, maxims, selling | Fix | Run `/ai-isms --fix` over the listed files; move the Beacon narrative to the roads plan. | Open |
-| SG-n2 | Nit | `loaders/assets.py` reformatted wholesale to double quotes in a feature commit | Maintainer decision | Either restore the package's single-quote style in `assets.py` or keep the reformat as is. | Open |
+| SG-m27 | Minor | `LoadPool` may run `prepare` on a worker; slow fetches starve loads | Investigate | Call `prepare` eagerly for known kinds at import or context start; consider a per-fetch timeout or separate network pool. | Fixed b615b32 (a load that submits loads prepares them with `background.prepare`, and the Inline does so for textures, shaders and panoramas; a preparation reached on a worker is logged. Starvation: a stalled fetch is bounded by the resolver's existing 30 s per-operation timeout; documented, with a separate LoadPool for loads that should not wait. PASS-m17 (0f2b557) was the SystemExit case, a different defect) |
+| SG-n1 | Nit | Docstrings break writing rules: history, bold leaders, maxims, selling | Fix | Run `/ai-isms --fix` over the listed files; move the Beacon narrative to the roads plan. | Fixed 5f21b22 (every listed passage rewritten by hand; the Beacon account moved to plans/GLISTEEL-STRUCTURE-COLLISION.md; background.py's bold leaders went with b615b32; the ai-isms scanner reports nothing in those files) |
+| SG-n2 | Nit | `loaders/assets.py` reformatted wholesale to double quotes in a feature commit | Maintainer decision | Either restore the package's single-quote style in `assets.py` or keep the reformat as is. | Needs input |
 | SG-n3 | Nit | `octahedralHemi` reads the string `"false"` as true | Fix | Parse string booleans as the mirror hook does. | Fixed c69d33b |
-| SG-n4 | Nit | glTF 2.1 `shapes` handling targets an unratified version; `read_shape` unchecked | Investigate | Cite the draft followed or keep it behind the extension; check `size` has three positive components. | Open |
+| SG-n4 | Nit | glTF 2.1 `shapes` handling targets an unratified version; `read_shape` unchecked | Investigate | Cite the draft followed or keep it behind the extension; check `size` has three positive components. | Needs input (the `read_shape` part -- three positive sizes -- was already done in 69e59f9) |
 | SG-n5 | Nit | `_warn_if_displaced` prints the node name twice and reads oddly | Fix | Format the name once and rewrite the message plainly. | Fixed ab5e85c |
 | SG-n6 | Nit | `_index_emitters` is O(built x declared) | Fix | Use an `id(emitter)` to index dict. | Fixed ab5e85c |
 | SG-n7 | Nit | MSFT_lod listing its own node or a root empties the scene | Investigate | Warn and ignore self-references in `alternative_ids`. | Fixed ab5e85c |
-| SG-n8 | Nit | `load_clump_glb` index path accepts negatives, raises `IndexError` not `KeyError` | Fix | Range-check `_mesh_index` and raise `KeyError` as the name path does. | Open |
-| SG-n9 | Nit | `GroundCover.species`/`VegetationField.species` writable but never re-read | Maintainer decision | Make `species` read-only, or rebuild the rungs when it changes. | Open |
-| SG-n10 | Nit | `CoverRung.retune` uses another class's private state; lambda properties | Fix | Give the renderer a public retune method and replace the lambda properties with `@property` definitions. | Open |
-| SG-n11 | Nit | `scenegraph/terrain/relief.py` imports from the loaders layer | Fix | Move `fbm` to a neutral module such as `arrays` or `noise`. | Open |
-| SG-n12 | Nit | `wait_for_loads` can wait up to twice the timeout | Fix | Share one deadline between the runtime and cover waits. | Open |
-| SG-n13 | Nit | Octahedral docstring says the arithmetic is in one place; `pbr.vert` copies it | Fix | Say the Python and GLSL copies are tested against each other. | Open |
-| SG-n14 | Nit | `PBRMesh.unchecked` keys on program ids, which GL reuses | Fix | Clear the entry when a program is deleted, or key on the program object rather than its id. | Open |
+| SG-n8 | Nit | `load_clump_glb` index path accepts negatives, raises `IndexError` not `KeyError` | Fix | Range-check `_mesh_index` and raise `KeyError` as the name path does. | Fixed 97f90f9 |
+| SG-n9 | Nit | `GroundCover.species`/`VegetationField.species` writable but never re-read | Maintainer decision | Make `species` read-only, or rebuild the rungs when it changes. | Needs input |
+| SG-n10 | Nit | `CoverRung.retune` uses another class's private state; lambda properties | Fix | Give the renderer a public retune method and replace the lambda properties with `@property` definitions. | Fixed 97f90f9 (also a real defect: `retune` called `_commit_constants()` with no arguments on a drawn node, and skipped it for single-mesh species; `refresh_constants`/`ViewPrograms.resend`) |
+| SG-n11 | Nit | `scenegraph/terrain/relief.py` imports from the loaders layer | Fix | Move `fbm` to a neutral module such as `arrays` or `noise`. | Fixed 39bd94d (`OpenGLContext.noise`, top level so that procedural.py stays numpy-only rather than importing the terrain package's GL modules) |
+| SG-n12 | Nit | `wait_for_loads` can wait up to twice the timeout | Fix | Share one deadline between the runtime and cover waits. | Fixed 39bd94d |
+| SG-n13 | Nit | Octahedral docstring says the arithmetic is in one place; `pbr.vert` copies it | Fix | Say the Python and GLSL copies are tested against each other. | Fixed 5ca00aa |
+| SG-n14 | Nit | `PBRMesh.unchecked` keys on program ids, which GL reuses | Fix | Clear the entry when a program is deleted, or key on the program object rather than its id. | Fixed 44a73c5 (checked per shader-program set, held weakly) |
 | SG-d1 | Minor | `docs/untrusted.rst` omits `OGLC_hook`, `OGLC_zone` and `EXT_lights_image_based` | Fix | State what a downloaded file can make built-in kinds do, give the limits, and point to `OPENGLCONTEXT_GLTF_HOOKS=0`. | Documented 87a45d0 |
 | SG-d2 | Minor | `docs/gltf.rst` "never names code" ignores resource paths; kinds table omits `mirror` | Fix | Qualify the guarantee for resources such as particle `texture`; add `mirror` to the engine-kinds table. | Documented 87a45d0 |
-| SG-d3 | Minor | `merged_mesh`, `merged_by_material`, `grid.Patches`, `world_noise` are public but undocumented | Fix | Document the functions and exports in the assets and vegetation docs. | Open |
-| SG-d4 | Minor | No installed demo for ground cover, MSFT_lod/impostors, holes/bores, zones/IBL | Fix | Add installed `oglc-*` demos, at least for MSFT_lod and ground cover, covering the documented use cases. | Open |
+| SG-d3 | Minor | `merged_mesh`, `merged_by_material`, `grid.Patches`, `world_noise` are public but undocumented | Fix | Document the functions and exports in the assets and vegetation docs. | Documented ff2ca33 (merged_mesh and merged_by_material in docs/gltf.rst; Patches and world_noise in docs/vegetation.rst; ScatterBlocks and world_grid_scatter were already described there) |
+| SG-d4 | Minor | No installed demo for ground cover, MSFT_lod/impostors, holes/bores, zones/IBL | Fix | Add installed `oglc-*` demos, at least for MSFT_lod and ground cover, covering the documented use cases. | Fixed 0a48375, ba67172, ed1ed79 (oglc-lod: LOD, ScreenCoverageLOD, MSFT_lod read from a file, hysteresis; oglc-cover: species, clumps, beds, control-map mask, holes cut live, density; oglc-zones covers zones/IBL (DOC-13). Impostors are left to the pack gallery, since an octahedral atlas is baked by the editor. Tutorials tests/lod_hall.py and tests/cover_meadow.py with baselines in the reference_images submodule, 206636a) |
 | CP-1 | Critical | Resolver refuses GitHub's cross-origin redirect, so no shipped pack downloads | Fix | Give content packs their own redirect policy: allow https to public hosts, refuse private addresses and non-https; test with two servers; push `content-v1` before release. | Fixed a9a8616 (pushing the `content-v1` release: Needs input) |
 | CP-2 | Major | No installed-version record; URL-keyed cache fails for ever on a changed digest | Fix | Write an install record (key, sha256, url) and compare it in `root_for`; evict and re-download once on `DigestMismatch`; key cache by digest; new URL per rebuild. | Fixed 99b0959 (install record compared in root_for; cached archive evicted and fetched once more on DigestMismatch; cache stays keyed by URL, since the record plus the retry make a rebuild under the same URL work) |
 | CP-3 | Major | Extraction not atomic: partial pack counts as installed, concurrent installs interleave | Fix | Extract into a sibling `.partial-<pid>` directory, write the install record, `os.replace` under a lock file; marker last for `within`; remove partial on failure. | Fixed 99b0959 (helper ed05f72) |
@@ -394,16 +394,16 @@ The decisions below are the review's proposals, and each is the maintainer's to 
 | LIB-W2 | Minor | Rounded default frame duration drifts against exact timestamps | Investigate | Confirm the drift; then derive durations from the next timestamp or carry the remainder, using `frame_duration` only for the last frame. | Fixed 7149e50 (pyopengl-video): drift confirmed (1000 ticks over 4000 frames at 24000/1001) |
 | LIB-W3 | Nit | Zero frame-rate numerator raises `ZeroDivisionError` in `frame_duration` | Fix | Raise `EncoderError` instead. | Fixed 7149e50 (pyopengl-video) |
 | LIB-W4 | Nit | `test_mp4` asserts on the private `writer._durations` | Fix | Assert on the written container's durations instead of the private attribute. | Fixed 7149e50 (pyopengl-video) |
-| ED-M1 | Major | Leaf tiles meshed with zero grain; the collided landscape has grain | Fix | Build leaf relief at the leaf's nominal error, or pass nominal error to `content()` and write `leaf_error` only to the tileset; test leaf mesh against `landscape().height_fn`. | Open |
+| ED-M1 | Major | Leaf tiles meshed with zero grain; the collided landscape has grain | Fix | Build leaf relief at the leaf's nominal error, or pass nominal error to `content()` and write `leaf_error` only to the tileset; test leaf mesh against `landscape().height_fn`. | Fixed f41ac70 (openglcontext-editor) |
 | ED-M2 | Major | `bake_card` leaves z unscaled, so plants deeper than tall are clipped | Fix | Scale z into [-1, 1] by the plant's depth extent; choose card width from x extent or horizontal radius explicitly; test a plant deep in z. | Fixed 8bc393d (openglcontext-editor) |
-| ED-M3 | Major | Loose stone puts 8 MB of JSON into `tileset.json` extras | Fix in engine | Write stones as a binary npz asset with only name and count in extras; the engine, not glisteel, reads it and builds `PropColliders`. | Open |
-| ED-M4 | Major | Blender add-on manifest missing from the wheel; `--package` fails | Fix | Add `blender/openglcontext_lod/blender_manifest.toml` to package-data and test it loads through `importlib.resources`. | Open |
+| ED-M3 | Major | Loose stone puts 8 MB of JSON into `tileset.json` extras | Fix in engine | Write stones as a binary npz asset with only name and count in extras; the engine, not glisteel, reads it and builds `PropColliders`. | Fixed 434ba80 (engine props_table, loaders/tiles3d/props.baked_props, PropColliders.baked), 73fa5f8 (openglcontext-editor), 20cc2bf and 0f56a4f (glisteel) |
+| ED-M4 | Major | Blender add-on manifest missing from the wheel; `--package` fails | Fix | Add `blender/openglcontext_lod/blender_manifest.toml` to package-data and test it loads through `importlib.resources`. | Fixed 01151a3 (openglcontext-editor) |
 | ED-M5 | Major | Zones call omi_audio synth functions no release carries; no floor declared | Fix | omi_audio half is a duplicate of BIN-3. For the opengl_decimate half, bump its version and raise the editor's floor together. | omi_audio half fixed 064b328 (openglcontext-editor); the opengl_decimate half is not in this assignment |
-| ED-M6 | Major | Bake and game derive bore openings with different parameters | Fix in engine | One engine function deriving bore openings from the world record (profile, approach, ground), called by bake and game; or record mouth outlines in the world. | Open |
-| ED-M7 | Major | `bake_probes` sets process env, reads engine privates, loop untestable | Fix in engine | Engine API on the zones pass returning zone lights, scheduling in a plain object, options instead of `os.environ`; module only writes files. | Open |
+| ED-M6 | Major | Bake and game derive bore openings with different parameters | Fix in engine | One engine function deriving bore openings from the world record (profile, approach, ground), called by bake and game; or record mouth outlines in the world. | Fixed 08da2ef (engine roadworks.BoreCut: the cut as a road record, openings() for every run), 91a9737 (openglcontext-editor: bore_cut() recorded as roads[].bores and used for the tiles), 42135d9 (glisteel: collider cut from the recorded BoreCut) |
+| ED-M7 | Major | `bake_probes` sets process env, reads engine privates, loop untestable | Fix in engine | Engine API on the zones pass returning zone lights, scheduling in a plain object, options instead of `os.environ`; module only writes files. | Fixed c1a4439 (engine: passes/zonebake.py bake_zone_lights + ZoneBakePlan, zonepass.zoneCaptureSettled/zoneLightImage, Context.renderer), 7446988 (openglcontext-editor) |
 | ED-M8 | Major | glTF read and written by hand in four places beside engine loader/writer | Fix in engine | Read plants through the engine loader or pygltflib; move sidecar reader and zone/emitter writer into the engine; write LOD glb via `GLTFWriter`. | Fixed: plant reader 42b2a66 (openglcontext-editor, engine load_gltf); LOD chain 542cfcf (engine GLTFWriter.add_lod, external buffers, LODAsset in loaders/gltf/lodasset.py) + 5ae19e4 (openglcontext-editor); zone/emitter writer b563ce0 (engine GLTFWriter.add_zone) + e55f0df (openglcontext-editor). The Blender add-on keeps its own writer (it cannot import the engine) |
 | ED-M9 | Major | `--canopy` help describes light; the engine reads tree closure | Fix | Rename metavars to LEAST MOST, describe as the engine does, cite `SplatTerrain.canopy_cover` for units. | Fixed 42b2a66 (openglcontext-editor) |
-| ED-M10 | Major | `oglce-gallery` accepts a stale glB when Blender fails | Fix | Remove target before running, require the `WROTE:` line from `build.py`, and make `with_sky` replace an existing sky. | Open |
+| ED-M10 | Major | `oglce-gallery` accepts a stale glB when Blender fails | Fix | Remove target before running, require the `WROTE:` line from `build.py`, and make `with_sky` replace an existing sky. | Fixed 8b50e29 (openglcontext-editor) |
 | ED-M11 | Major | Editor HEAD uses old species dataclass API; engine HEAD has nodes | Fix | Commit the working-tree rename with or right after the engine change, noting the coupling in the message. | Fixed c7a5de6 (openglcontext-editor) |
 | ED-m1 | Minor | Poly Haven cache treats any non-empty file as complete | Fix | Write to a temporary name and `os.replace` into place. | Fixed f585d88 (openglcontext-editor) |
 | ED-m2 | Minor | Downloaded `.gltf` URIs can read arbitrary local files into assets | Fix | Confine buffer URIs through `Resolver` as `polyhaven._under` and `meshlod.asset` do. | Fixed 42b2a66 (openglcontext-editor) |
@@ -412,44 +412,44 @@ The decisions below are the review's proposals, and each is the maintainer's to 
 | ED-m5 | Minor | Two MSFT_lod writers disagree on the coarsest level's coverage | Maintainer decision | Options: coarsest culled below `0.5/2**i` (`meshlod.asset`) or never culled with 0.0 (`msftlod.coverage_series`); align both with the engine reader. | Fixed 542cfcf (engine halving_coverage, add_lod default), 5ae19e4 (openglcontext-editor): settled by the engine reader and the Blender add-on, which both end the series at 0 |
 | ED-m6 | Minor | `write_chain(embed_coarsest=0)` writes an invalid glB buffer 0 | Fix | Emit no zero-length buffer 0, or give it a valid BIN chunk. | Fixed 542cfcf, 5ae19e4 (openglcontext-editor) |
 | ED-m7 | Minor | `LODAsset` reads any non-float component type as uint32 | Fix | Handle each component type, or raise on unsupported ones. | Fixed 542cfcf (engine LODAsset decodes every component type, refuses unknown), 5ae19e4 (openglcontext-editor) |
-| ED-m8 | Minor | `_rewrite` matches zones to nodes by position; reruns append images | Investigate | Confirm against foreign documents; key by node name and replace earlier images. | Open |
+| ED-m8 | Minor | `_rewrite` matches zones to nodes by position; reruns append images | Investigate | Confirm against foreign documents; key by node name and replace earlier images. | Fixed 7446988 (openglcontext-editor): keyed by zone node name; a re-bake replaces a zone's light and its images |
 | ED-m9 | Minor | `KHR_audio_emitter` use (wav MIME, emitters in OGLC_zone) is outside the extension | Document | State the departure in the engine's OGLC_zone spec. | Documented b563ce0 (OGLC_zone spec) |
-| ED-m10 | Minor | Impostor bake names `BLENDER_EEVEE_NEXT`, removed in Blender 5 | Fix | Pick whichever EEVEE identifier the running Blender offers. | Open |
-| ED-m11 | Minor | `tomllib` used under a Python 3.10 floor | Fix | Fall back to `tomli` on 3.10, or raise `requires-python`. | Open |
+| ED-m10 | Minor | Impostor bake names `BLENDER_EEVEE_NEXT`, removed in Blender 5 | Fix | Pick whichever EEVEE identifier the running Blender offers. | Fixed 79056d6 (openglcontext-editor) |
+| ED-m11 | Minor | `tomllib` used under a Python 3.10 floor | Fix | Fall back to `tomli` on 3.10, or raise `requires-python`. | Fixed 01151a3 (openglcontext-editor): tomli fallback and conditional dependency |
 | ED-m12 | Minor | Card bake renders through the engine's test fixture window | Fix | Use `EGLContext` as `probes.py` does and check framebuffer completeness before drawing. | Fixed 8bc393d (openglcontext-editor): framebuffer completeness checked; hidden_window kept (the engine's cross-platform bare-context helper; EGLContext is a Linux-only full context class) |
 | ED-m13 | Minor | `--no-cards` manifest names card files it did not write | Fix | Set `card` only when a card is baked. | Fixed 42b2a66 (openglcontext-editor) |
 | ED-m14 | Minor | Variant and species basenames collide across assets | Investigate | Confirm collisions; key cards and `cover.json` by slug and variant, and keep species paths distinct. | Fixed 42b2a66 (openglcontext-editor) |
-| ED-m15 | Minor | Grain produces no bands at the shipped defaults | Document | State in the README the depth and field resolution at which grain appears. | Open |
-| ED-m16 | Minor | Tree depth configured in world and bake with no agreement check | Investigate | Confirm the mismatch in practice; have the bake take depth from the world. | Open |
-| ED-m17 | Minor | Portal funnel height taken from nearest road, possibly another stretch | Investigate | Confirm on a hairpin or spiral; measure from the portal's own run. | Open |
-| ED-m18 | Minor | A bore across a closed circuit's seam becomes two bores | Investigate | Confirm; join runs across the index 0/n-1 seam on closed circuits. | Open |
+| ED-m15 | Minor | Grain produces no bands at the shipped defaults | Document | State in the README the depth and field resolution at which grain appears. | Documented f41ac70 (openglcontext-editor) |
+| ED-m16 | Minor | Tree depth configured in world and bake with no agreement check | Investigate | Confirm the mismatch in practice; have the bake take depth from the world. | Fixed a653588 (openglcontext-editor): ProceduralWorld.bake() bakes at the world's own depth and refuses another |
+| ED-m17 | Minor | Portal funnel height taken from nearest road, possibly another stretch | Investigate | Confirm on a hairpin or spiral; measure from the portal's own run. | Fixed 91a9737 (openglcontext-editor): the portal funnel measures from the nearest point of the portal's own bore run |
+| ED-m18 | Minor | A bore across a closed circuit's seam becomes two bores | Investigate | Confirm; join runs across the index 0/n-1 seam on closed circuits. | Fixed 91a9737 (openglcontext-editor): RoadPath.runs joins a run across a closed circuit's start; portals, bore openings and lamps use it |
 | ED-m19 | Minor | `flatten` centres a plant on its vertex mean | Fix | Use the bounding-box centre, as `meshlod.chain.bounding_sphere` does. | Fixed 42b2a66 (openglcontext-editor) |
-| ED-m20 | Minor | Stone docs say both "no collider" and solid dome | Fix | Correct the `procedural.py` docstring to match the dome colliders. | Open |
-| ED-m21 | Minor | `SHIPPED` and `COVER` are shared mutable module-level nodes | Investigate | Confirm mutation leaks; build them in a function, or document `varied()` as the way to change one. | Open |
-| ED-m22 | Minor | `rewrap` rasterises per triangle in Python with nearest sampling | Fix | Vectorise rasterisation and use filtered sampling where the atlas is denser than the source. | Open |
-| ED-m23 | Minor | Tile content boxes closed on both sides, duplicating boundary items | Investigate | Confirm; make the package-wide box test half-open across stones, props and scatter. | Open |
-| ED-m24 | Minor | `with_sky` embeds JPEG as base64 data URI in a glB | Fix | Store the image in the BIN chunk through a bufferView. | Open |
-| ED-m25 | Minor | Public editor APIs typed as `Any` | Fix | Use the existing concrete types (`Scatter`, `StoneLayer \| None`, `Holes \| None`, `HeightFn`, a `Literal`). | Open |
-| ED-m26 | Minor | `_SEARCH` comment describes something else | Fix | Say it is the executable name searched on PATH. | Open |
-| ED-n1 | Nit | Bold-leader lists and bold-sentence paragraphs in docstrings | Fix | Rewrite as plain definitions per the workspace rule. | Open |
-| ED-n2 | Nit | History note ("Measured on Beacon") in a structures docstring | Fix | Keep the present-tense reason and drop the narrative. | Open |
-| ED-n3 | Nit | History phrasing in species docstrings | Fix | Remove the "before there were sets" wording. | Open |
+| ED-m20 | Minor | Stone docs say both "no collider" and solid dome | Fix | Correct the `procedural.py` docstring to match the dome colliders. | Fixed 73fa5f8 (openglcontext-editor) |
+| ED-m21 | Minor | `SHIPPED` and `COVER` are shared mutable module-level nodes | Investigate | Confirm mutation leaks; build them in a function, or document `varied()` as the way to change one. | Fixed 3e7a6a8 (openglcontext-editor): shipped_trees()/default_cover() build fresh nodes per call |
+| ED-m22 | Minor | `rewrap` rasterises per triangle in Python with nearest sampling | Fix | Vectorise rasterisation and use filtered sampling where the atlas is denser than the source. | Fixed 46c199c (openglcontext-editor) |
+| ED-m23 | Minor | Tile content boxes closed on both sides, duplicating boundary items | Investigate | Confirm; make the package-wide box test half-open across stones, props and scatter. | Fixed 73fa5f8 (openglcontext-editor): BoundingBox.holds is half-open, used by stones, props, signs, gantry and instance layers; the root cell is widened one ulp on its high faces |
+| ED-m24 | Minor | `with_sky` embeds JPEG as base64 data URI in a glB | Fix | Store the image in the BIN chunk through a bufferView. | Fixed 8b50e29 (openglcontext-editor) |
+| ED-m25 | Minor | Public editor APIs typed as `Any` | Fix | Use the existing concrete types (`Scatter`, `StoneLayer \| None`, `Holes \| None`, `HeightFn`, a `Literal`). | Fixed cf35d34 (openglcontext-editor) |
+| ED-m26 | Minor | `_SEARCH` comment describes something else | Fix | Say it is the executable name searched on PATH. | Fixed 01151a3 (openglcontext-editor) |
+| ED-n1 | Nit | Bold-leader lists and bold-sentence paragraphs in docstrings | Fix | Rewrite as plain definitions per the workspace rule. | Fixed f585d88, 42b2a66, 5ae19e4, 01151a3, 73fa5f8, 37a3fc6 (openglcontext-editor): every passage the finding names |
+| ED-n2 | Nit | History note ("Measured on Beacon") in a structures docstring | Fix | Keep the present-tense reason and drop the narrative. | Fixed 37a3fc6 (openglcontext-editor) |
+| ED-n3 | Nit | History phrasing in species docstrings | Fix | Remove the "before there were sets" wording. | Fixed 3e7a6a8 (openglcontext-editor) |
 | ED-n4 | Nit | Commentary on the fact in polyhaven docstrings | Fix | State the rate limit and attribution facts plainly. | Fixed f585d88 (openglcontext-editor) |
-| ED-n5 | Nit | Anecdote and character verbs in rewrap docstrings | Fix | Remove the anecdote and describe the unwrapper's output. | Open |
+| ED-n5 | Nit | Anecdote and character verbs in rewrap docstrings | Fix | Remove the anecdote and describe the unwrapper's output. | Fixed 46c199c (openglcontext-editor) |
 | ED-n6 | Nit | Comment explaining a `raise` sits after it | Fix | Move the comment above the `raise`. | Fixed f585d88 (openglcontext-editor) |
 | ED-n7 | Nit | `import io` inside `bake()` | Fix | Move to module imports. | Fixed 42b2a66 (openglcontext-editor) |
 | ED-n8 | Nit | `del path` silences an unused parameter | Fix | Drop the parameter. | Fixed 5ae19e4 (openglcontext-editor) |
-| ED-n9 | Nit | `LevelReport` exposes `_share` as a constructor argument | Fix | Make the field public or compute it privately. | Open |
+| ED-n9 | Nit | `LevelReport` exposes `_share` as a constructor argument | Fix | Make the field public or compute it privately. | Fixed 2498953 (openglcontext-editor) |
 | ED-n10 | Nit | Console scripts use both `oglce-` and `oglc-` prefixes | Maintainer decision | Options: rename `oglce-gallery` to `oglc-gallery`, or move the editor's bake commands to `oglce-`. | Open |
-| ED-n11 | Nit | Docstring summaries narrate instead of naming the return | Fix | Name what `fetch`, `bake` and `main` return. | Open |
-| ED-n12 | Nit | Per-kind stone filtering re-reads attributes per stone per kind | Fix | Keep a kind index array beside `_plan`. | Open |
+| ED-n11 | Nit | Docstring summaries narrate instead of naming the return | Fix | Name what `fetch`, `bake` and `main` return. | Fixed f585d88 (polyhaven.fetch), 42b2a66 (plants.bake, bin/plants.main) (openglcontext-editor) |
+| ED-n12 | Nit | Per-kind stone filtering re-reads attributes per stone per kind | Fix | Keep a kind index array beside `_plan`. | Fixed 73fa5f8 (openglcontext-editor) |
 | ED-n13 | Nit | `wav_bytes` lives in the editor although omi_audio owns audio | Fix in engine | Move `wav_bytes` into omi_audio and import it from there. | Fixed cc3f824 (omi_audio Clip.wav_bytes), e55f0df (openglcontext-editor) |
 | ED-d1 | Minor | README omits zones, places, ambient sound and probe bake | Fix | Add README sections for them and document `ProceduralWorld.places`. | Open |
 | ED-d2 | Minor | No README section for `oglc-bake-plants`, `cover.json`, Poly Haven | Fix | Add a section and list `oglc-bake-plants` in the Layout table's `bin/` row. | Open |
 | ED-d3 | Minor | "What a bake writes" lists only `world.json` | Fix | Add `zones.gltf`, `audio/*.wav`, `probes/`, the stones record and `terrain.drawn`. | Open |
-| ED-d4 | Minor | pyproject and blender module point to `docs/blender.html`; file is `.md` | Fix | Point both references at `docs/blender.md`. | Open |
+| ED-d4 | Minor | pyproject and blender module point to `docs/blender.html`; file is `.md` | Fix | Point both references at `docs/blender.md`. | Fixed 01151a3 (openglcontext-editor) |
 | ED-d5 | Minor | README says funnel keeps `PORTAL_SOIL`; code never reads it | Fix | Describe the funnel with `tunnel.clearance + tunnel.portal_border`, or make the code use `PORTAL_SOIL`. | Open |
-| ED-d6 | Nit | README calls stone module constants knobs on the world | Fix | Call them module constants, or make them `ProceduralWorld` fields. | Open |
+| ED-d6 | Nit | README calls stone module constants knobs on the world | Fix | Call them module constants, or make them `ProceduralWorld` fields. | Fixed f41ac70 (openglcontext-editor) |
 | ED-t1 | Minor | No round-trip test of `ZonesLayer.document()` through `ZoneReader` | Fix | Add a test reading the written document back with the engine's `ZoneReader`. | Fixed b563ce0: tests/unit/test_gltf_zone_writer.py reads every written zone back through the loader's ZoneReader; the editor's test_world_places already loads ZonesLayer's document through the loader |
 | ED-t2 | Minor | Interleaved, normalized and strip branches of `plants._accessor` untested | Fix | Add tests for interleaved, quantized/normalized accessors and strip primitives. | Fixed 42b2a66 (openglcontext-editor) |
 | GAME-X1 | Major | release-assets.py build, install, push and parser copied across three games | Fix in engine | Add `publish.main(spec, argv)` owning flags, install, push and `bundle_registry`; each script keeps only `declare()`. Move `refuse_pointers` into `archive.write()`. | Fixed 4253ba8 (publish.Release/publish.main/bundle_registry; engine's own release-assets.py), 3cb8d1a (openglcontext-forest), 0f74834 (twig-bb), b7144f9 (glisteel); LFS check in archive.write b4d9a22 |
@@ -471,12 +471,12 @@ The decisions below are the review's proposals, and each is the maintainer's to 
 | GAME-G15 | Minor | `_pulled_off` and `_room_beside` use different car widths | Fix | Use `self.kind.width` in both. | Fixed 55fe664 (glisteel) |
 | GAME-G16 | Minor | Nearest-point queries scan the whole centreline at physics rate | Fix | Windowed search around a per-caller previous index, full scan only on teleport; compute `road_speed` once in `controls`. | Fixed f52f33e (openglcontext: windowed search in RoadCourse/Tracker), eb87f4f (glisteel: Course uses it; road_speed once per step) |
 | GAME-G17 | Minor | Refusal-stretch logic implemented twice, in `Autopilot` and `StandIn` | Fix | One small `Stretch` recorder object used by both classes. | Fixed 66d72f7 (glisteel) |
-| GAME-G18 | Major | Content download consent and progress UI lives in both games | Fix in engine | Add `OpenGLContext.ui.contentscreen` taking registry and store and returning a panel; glisteel and twig-bb call it. | Fixed 43dc4fb (OpenGLContext.ui.contentscreen.ContentScreen); games call it in their own commits (glisteel GAME-G1/G2, twig-bb) |
-| GAME-G19 | Minor | Vehicle sound synthesis lives in glisteel | Fix in engine | Move synthesis into `omi_audio` or the scene nodes into `OpenGLContext.audio`; glisteel supplies its constants. | Open |
+| GAME-G18 | Major | Content download consent and progress UI lives in both games | Fix in engine | Add `OpenGLContext.ui.contentscreen` taking registry and store and returning a panel; glisteel and twig-bb call it. | Fixed 43dc4fb, 2bffa2f, 62f1ecd (OpenGLContext.ui.contentscreen.ContentScreen); glisteel calls it in 471f1bc, twig-bb in 0a651ab |
+| GAME-G19 | Minor | Vehicle sound synthesis lives in glisteel | Fix in engine | Move synthesis into `omi_audio` or the scene nodes into `OpenGLContext.audio`; glisteel supplies its constants. | Fixed 36ab752 (omi_audio: omi_audio.vehicle), ea7e869 (openglcontext: OpenGLContext.audio.vehicle.VehicleSoundtrack), b6a9a9f (glisteel: sound.py is the car's tuning over them) |
 | GAME-G20 | Minor | Runtime road-course queries live in glisteel `Course` | Fix in engine | Add an engine `RoadCourse` query object beside `road.py`, hosting the GAME-G16 windowed search. | Fixed f52f33e (openglcontext: OpenGLContext.scenegraph.roadcourse.RoadCourse, docs/roads.rst#roadcourse), eb87f4f (glisteel) |
 | GAME-G21 | Minor | glisteel carries its own in-memory recorder and atomic JSON writer | Fix in engine | Add `telemetry.Keeping` and a `userpaths.write_json_atomically` or settings-document helper. | Fixed 1017d6d (openglcontext: telemetry.Keeping, telemetry.Tee), cf4ba16 and 34bfeef (glisteel: preferences and records write through OpenGLContext.atomicfiles, diagnose uses Keeping/Tee) |
-| GAME-G22 | Major | glisteel docstrings and comments narrate history and journal anecdotes | Fix | Run `/ai-isms --fix` over glisteel; move measurements and journal evidence into `plans/DRIVING-AND-PLACE.md`. | Open |
-| GAME-G23 | Minor | glisteel README omits diagnose, telemetry, preferences; two wrong claims | Fix | Add a "Recording and diagnosing a run" section, correct the impacts and first-run claims, convert bold leads to plain headings or prose. | Open |
+| GAME-G22 | Major | glisteel docstrings and comments narrate history and journal anecdotes | Fix | Run `/ai-isms --fix` over glisteel; move measurements and journal evidence into `plans/DRIVING-AND-PLACE.md`. | Fixed 84e56c9 (glisteel), with the sound.py docstring in b6a9a9f; journal evidence moved to plans/DRIVING-AND-PLACE.md section 8; ai-isms scan of glisteel/ clean |
+| GAME-G23 | Minor | glisteel README omits diagnose, telemetry, preferences; two wrong claims | Fix | Add a "Recording and diagnosing a run" section, correct the impacts and first-run claims, convert bold leads to plain headings or prose. | Fixed 6548223 (glisteel); the impacts claim was corrected with GAME-G8 (2dcc045) and the first-run claim by the GAME-G3 agent (ab0314c) |
 | GAME-G24 | Minor | Every release-assets.py run rewrites the shipped registry | Fix | Write the shipped registry only with `--push` or `--write-registry`; local installs use a registry under `--into`. | Fixed 4253ba8 (registry written under --into; shipped one only with --push/--write-registry), applied in 3cb8d1a (openglcontext-forest), 0f74834 (twig-bb), b7144f9 (glisteel) |
 | GAME-G25 | Nit | Markdown relative link in an in-game copyright string | Fix | Strip the Markdown link when `_credits()` copies the credit into `packs.json`. | Fixed cb056ab (glisteel) |
 | GAME-G26 | Nit | Three blank lines after `passable_count` in traffic.py | Fix | Remove the extra blank lines. | Fixed 55fe664 (glisteel) |
@@ -488,21 +488,21 @@ The decisions below are the review's proposals, and each is the maintainer's to 
 | GAME-E3 | Minor | `--no-probes`, `--no-places` and zone probes missing from the README | Fix | Document the flags and the bake's GPU requirement, including for `glisteel/release-assets.py`. | Documented 2645089 (glisteel-editor), 3a860fe (glisteel) |
 | GAME-E4 | Minor | Bake date in `world.json` makes release archives date-dependent | Fix | Take the date from `SOURCE_DATE_EPOCH` when set, or leave it out of the packed manifest. | Fixed e1d2bf1 (glisteel-editor), 3a860fe (glisteel) |
 | GAME-E5 | Nit | `WHEEL_BUTTONS` redefined although the engine exports it | Fix | Import `OpenGLContext.events.mouseevents.WHEEL_BUTTONS`. | Fixed e1d2bf1 (glisteel-editor) |
-| GAME-E6 | Minor | `WORLD_SETTINGS` restates `ProceduralWorld` parameters in the game editor | Fix in engine | Have `ProceduralWorld` declare a `SETTINGS` table in openglcontext-editor and have `recipe.py` read it. | Open |
+| GAME-E6 | Minor | `WORLD_SETTINGS` restates `ProceduralWorld` parameters in the game editor | Fix in engine | Have `ProceduralWorld` declare a `SETTINGS` table in openglcontext-editor and have `recipe.py` read it. | Fixed c3bcb71 (openglcontext-editor: ProceduralWorld.SETTINGS), 92091a9 (glisteel-editor: recipe.WORLD_SETTINGS built from it) |
 | GAME-F1 | Critical | First forest run from the wheel cannot find its art | Fix | Resolve asset paths at use time or fetch before importing `scene`; test import with an empty store then install and build paths. Engine fix is GAME-X2. | Fixed 725ab76 (openglcontext-forest) |
 | GAME-F2 | Minor | `fetch_art` downloads 66 MB unasked; network failure is a traceback | Fix | Prompt with a `--yes` for scripts, catch fetch errors, and print the `OPENGLCONTEXT_CONTENT` hint. | Fixed 20e4c89 (openglcontext-forest; engine ask_on_console/console_progress in f358383, 55ca54c) |
 | GAME-F3 | — | Pointer to the release-assets and content duplication | Duplicate of GAME-X1 | See GAME-X1 and GAME-X2. | Fixed with GAME-X1 (3cb8d1a, openglcontext-forest) |
-| GAME-F4 | Nit | `--reinstall` README sentence contradicts itself, in all three games | Fix | Use "`--install` keeps a pack that is already installed; `--reinstall` replaces it with the one just built." | Fixed 3cb8d1a (openglcontext-forest); the same sentence in twig-bb and glisteel is fixed in their GAME-X1 commits |
+| GAME-F4 | Nit | `--reinstall` README sentence contradicts itself, in all three games | Fix | Use "`--install` keeps a pack that is already installed; `--reinstall` replaces it with the one just built." | Fixed 3cb8d1a (openglcontext-forest), 0f74834 (twig-bb), b7144f9 (glisteel); the engine docs and script in 4253ba8 |
 | GAME-F5 | Nit | History in forest configuration and workflow comments | Fix | Drop the "57 LFS pointers reached PyPI" narrative from pyproject, `refuse_pointers` and the workflows. | Fixed 3cb8d1a (openglcontext-forest) |
 | GAME-F6 | Minor | Git LFS pointer check is local to the forest | Duplicate of GAME-X1 | Fold `refuse_pointers` into `OpenGLContext.contentpacks.archive.write`. | Fixed b4d9a22 (archive.write refuses LFS pointers), 3cb8d1a (openglcontext-forest drops its own check) |
 | GAME-d1 | Minor | Forest README omits the 66 MB first-run download and offline behaviour | Document | State in the README that a first run downloads 66 MB and what happens offline, with the `OPENGLCONTEXT_CONTENT` route. | Documented 20e4c89 (openglcontext-forest README, "The first run") |
 | GAME-T1 | Critical | Legacy adoption moves the player's downloads into any cache_dir store | Fix | Adopt only for the default per-user store or a legacy tree under the same root; never move into a caller root; test legacy tree untouched. | Fixed a6c8b26 (twig-bb) |
-| GAME-T2 | Minor | Legacy adoption runs as an import side effect | Fix | Resolve the asset root lazily and run adoption from the application's start-up path. | Open |
-| GAME-T3 | Minor | twig-bb base pack documented as fetched; nothing fetches it | Fix | Fetch the base pack before the first match and resolve `ASSETS` lazily (GAME-X2), or correct the README. | Open |
+| GAME-T2 | Minor | Legacy adoption runs as an import side effect | Fix | Resolve the asset root lazily and run adoption from the application's start-up path. | Fixed 0a651ab (twig-bb: download.adopt_on_start() from twig-bb/twig-bb-fetch start-up; store() and import write nothing) |
+| GAME-T3 | Minor | twig-bb base pack documented as fetched; nothing fetches it | Fix | Fetch the base pack before the first match and resolve `ASSETS` lazily (GAME-X2), or correct the README. | Fixed 0a651ab (twig-bb: art resolved per use; first-run fetch with consent when neither pack nor package copy is present) |
 | GAME-T4 | Nit | `release-assets.py install()` gives `AttributeError` on a missing entry | Fix | Check the `pack_for_key` result and raise a message naming the key. | Fixed 0f74834 (twig-bb: install() is gone; publish.main installs from the entries the build wrote) |
-| GAME-T5 | Minor | Level target short name resolves only in the twig-bb namespace | Investigate | Confirm added registries serve maps; if so keep the full key quoted, or shorten only `twig-bb/` keys. | Open |
-| GAME-T6 | Nit | `CONTENT_SUBDIR` and `LEGACY_CONTENT` share one value | Fix | Keep one constant, or make the distinction between the two explicit. | Open |
-| GAME-T7 | Nit | History in twig-bb docstrings | Fix | Rewrite the art.py, download.py and fetcher.py docstrings in the present tense. | Open |
+| GAME-T5 | Minor | Level target short name resolves only in the twig-bb namespace | Investigate | Confirm added registries serve maps; if so keep the full key quoted, or shorten only `twig-bb/` keys. | Fixed d309076 (twig-bb: valid but latent, since the game offers only its own registry; targets keep the whole key for another namespace, and a registered whole key parses) |
+| GAME-T6 | Nit | `CONTENT_SUBDIR` and `LEGACY_CONTENT` share one value | Fix | Keep one constant, or make the distinction between the two explicit. | Fixed 0a651ab (twig-bb: CONTENT_SUBDIR removed; purge() clears the store's packs and LEGACY_CONTENT) |
+| GAME-T7 | Nit | History in twig-bb docstrings | Fix | Rewrite the art.py, download.py and fetcher.py docstrings in the present tense. | Fixed 0a651ab (twig-bb) |
 | GAME-M1 | Major | Touches recorded while the marble is lost destroy it on respawn | Fix | Clear `_touched` and `_last_touches` in `destroy()`, `_begin_fall()` and `_respawn()`, or ignore events unless ACTIVE; add the reproduction as a test. | Fixed da2d769 (marble-demo) |
 | GAME-M2 | Major | `world.contact_log` grows to 65 536 events and is never drained | Fix in engine | Give omi_physics listener delivery without logging (`log_events=False`); meanwhile drain the log once per frame in `MarbleGame.advance`. | Fixed in engine: omi_physics 010ef09 (`log_events`), openglcontext e10a78b (the manager drains every frame) and 4ee44f4 (the manager keeps no log until a subscription); marble-demo f2ea92f holds it with a test |
 | GAME-M3 | Minor | Listeners set world-wide persist reporting; lever fires on any body | Fix | Filter on the marble's index in `struck`; scope persist reporting per body if omi_physics can. | Fixed f2ea92f (marble-demo): the lever answers only the marble. Persist reporting stays world-wide (omi_physics has no per-body persist); under the 'flagged' reporting marble-demo uses it covers only the flagged marble's and paddles' pairs. A reset also left a thrown paddle lying over for good; fixed in the same commit |
@@ -1109,6 +1109,21 @@ while the frame has budget left after the main views' expected cost, or add a
 when nothing asks for more. At the least, the docs could state the GPU cost
 of the default.
 
+Question for the maintainer (REF-m3): With room in the budget, every mirror in view is redrawn every frame, even in a
+still scene; `interval` only matters when the budget is short. Should optional
+redraws stay the default? The options: (a) keep it and state the GPU cost in
+docs/reflections.rst (a moving object's reflection is never stale while the
+budget has room); (b) add a `reflectionIdleRedraw` setting, default off, under
+which a mirror is redrawn only when rules 1-3 ask (no tile, its `interval`
+reached, or its camera moved a texel) - reflections of moving objects then lag
+by up to `interval` frames (3 by default), and the GPU time a game would spend
+on identical redraws is left free; (c) the same as (b) but spending optional
+redraws only while `reflectionMilliseconds` shows time to spare. I recommend
+(b), for the headroom rule: the budget is a ceiling, and a still scene spending
+all of it on redraws that produce the same picture leaves a game nothing. It
+changes what every mirror looks like around moving objects, so it is yours to
+choose.
+
 #### REF-m4. `redo()` says the old reflection "is still passed on meanwhile", but an invalid tile is dropped when the budget skips it
 
 References: `OpenGLContext/passes/reflectionplanner.py:270-280`,
@@ -1348,6 +1363,17 @@ tagged `LOD`/`Switch`.
   `record[4]` and `record[5]` across `reflection.py`, `reflectionplanner.py`
   and `flateffects.py`. A `DrawRecord` `NamedTuple` or `Protocol` (placement,
   volume, path, node) would make this code readable and let mypy check it.
+
+Question for the maintainer (REF-n2): Draw records are 6-tuples read by position across the passes. A `DrawRecord`
+NamedTuple (sortKey, modelview, tmatrix, volume, path, node) made in
+`FlatPass.renderSet` would let mypy check them and let code say `record.node`.
+It is an engine-wide change: every pass and many tests build or index these
+tuples, and constructing a NamedTuple costs about 0.05-0.1 us more per record
+per view than a tuple (measured: 0.10-0.16 us against 0.05 us), on the hottest
+loop of the frame. Positional reads keep working, so the change can be made
+module by module. Do you want records to become a NamedTuple engine-wide (my
+recommendation, built with `tuple.__new__` to keep the cost to ~0.05 us), or
+kept as tuples with a documented layout?
 - REF-n3. `_Shelf.slots: List[list]` holding `[x, width, key]`
   (`reflectiontiles.py:90-91`) is C-style. Use a small `NamedTuple`/dataclass.
 - REF-n4. `_FlatEffectsMixin` declares mutable class-level defaults
@@ -1377,6 +1403,20 @@ tagged `LOD`/`Switch`.
   demo data, or in a `demos`/`scenes` module, so `bin/` stays commands.
 
 ---
+
+Question for the maintainer (REF-n11): `OpenGLContext/bin/mirrorhall.py` is the room `oglc-mirrors` hangs its mirrors
+in; the directory map in CLAUDE.md already describes it as scenery in the
+commands package. `OpenGLContext/demos/` is described as embedding samples
+(a view inside a Tk or wx window), so moving it there would widen that
+package's purpose. Options: leave it in `bin/` as documented; move it to
+`OpenGLContext/demos/` and widen that package's docstring to "sample
+applications and the scenery they share"; or add a `bin/scenery/` (or
+`OpenGLContext/scenes/`) package for demo scenery (the mirror hall, and the
+zones court in `bin/zones_demo.py` if wanted). I recommend leaving it in
+`bin/` unless a second piece of shared scenery appears, at which point a
+`scenes` package earns its place. Imports to update if moved:
+`bin/mirrors_demo.py`, `tests/unit/test_mirror_hall.py`, docs/reflections.rst,
+docs/surfaces.rst, CLAUDE.md.
 
 ### Documentation, demos and tutorials
 
@@ -3784,6 +3824,17 @@ downstream users. `bin/gltf_regression.py` and `userpaths.py` still reach
 `resolver._default_cache_dir`. Confirmed. Fix: keep deprecated aliases for one
 release, or note the rename in the changelog.
 
+Question for the maintainer (SG-m13): 3.0.0a4 shipped `resolver._fetch_url`, `_decode_data_uri`, `_check_size`,
+`_resolver_max`, `_stream`, `_user_agent` and `_default_cache_dir`; they are now
+public (`fetch_url`, `decode_data_uri`, ..., `default_cache_dir`) with no
+underscore aliases. Every caller in this workspace (including
+`bin/gltf_regression.py` and `userpaths.py`, which the review named) already
+uses the public names. Options: (a) leave it: the old names were private by
+convention and the release was an alpha; (b) keep underscore aliases for one
+release with a DeprecationWarning; (c) note the rename in release notes, of
+which openglcontext has none yet. Recommendation: (a), and (c) if a changelog
+is started for 3.0.
+
 #### SG-m14. `GroundCover._told` swaps `_blocks` while a background scatter may be writing to it
 
 - `OpenGLContext/scenegraph/vegetation/cover.py:475-484, 555-584`
@@ -4012,6 +4063,14 @@ roads plan.
 The rest of the package uses single quotes, and the reformat buries the change
 to merged meshes in style noise. Confirmed.
 
+Question for the maintainer (SG-n2): `loaders/assets.py` is in double quotes (a formatter pass in d6ee031) while the
+rest of the package uses single quotes. Options: (a) keep it as it is;
+(b) convert it back to single quotes in a commit of its own that changes
+nothing else. Either is a whole-file change to style only. Recommendation:
+(a) unless the package is to be held to one quote style by a formatter, in
+which case the formatter's choice, applied package-wide, settles it. The fixes
+to assets.py in ff2ca33 follow the file's current style.
+
 #### SG-n3. `octahedralHemi` reads the string `"false"` as true
 
 `loaders/gltf/materials.py:251-252`: `bool(extras.get(IMPOSTOR_HEMI, True))`,
@@ -4023,6 +4082,16 @@ while the mirror hook parses such strings. Confirmed.
 version with no published specification. Cite the draft it follows, or keep it
 behind the extension until 2.1 is ratified. `read_shape` does not check that
 `size` has three components or that dimensions are positive. Possible.
+
+Question for the maintainer (SG-n4): `loaders/gltf/shapes.py` and `fastdecode.py` read a core top-level `shapes`
+array when `asset.version` is 2.1 or later, and docs/extensions/OGLC_zone.rst
+specifies zones against that. There is no ratified glTF 2.1 specification this
+code can cite. Options: (a) keep the 2.1 path and cite the draft or proposal
+it follows in shapes.py and OGLC_zone.rst (which document is it?); (b) read
+only `KHR_implicit_shapes` until 2.1 is published, dropping the 2.1 example
+from the OGLC_zone specification. Recommendation: (a), citing the draft by
+name and date, since the 2.0 path is unaffected and a 2.1 file would otherwise
+lose its zones.
 
 #### SG-n5. `_warn_if_displaced` prints the node name twice and reads oddly
 
@@ -4052,6 +4121,18 @@ raises `IndexError` instead of the `KeyError` the name path raises. Confirmed.
 the same: the rungs are built once. Setting `species` after construction does
 nothing, and the docstring says only "read when the cover is built". Make it
 read-only, or rebuild the rungs on change.
+
+Question for the maintainer (SG-n9): `GroundCover.species` and `VegetationField.species` are writable MFNode fields,
+read only when the node is built. Options: (a) rebuild on change: a field
+observer rebuilds the rungs (cover) or the near mesh and cards (field) from
+the new species; the replaced nodes' GL objects then need releasing on the GL
+thread at the next draw, as SplatTerrain.holes now does, and for
+VegetationField the new list must still match `species_id`; (b) make the
+fields read-only after construction (a custom field whose set raises once
+built), so a caller learns at once that a new set of species means a new
+node. Recommendation: (b) for VegetationField, whose species are tied to the
+table's species_id, and (a) for GroundCover, whose rungs depend on nothing
+else.
 
 #### SG-n10. `CoverRung.retune` reaches into private state, and properties are built from lambdas
 
