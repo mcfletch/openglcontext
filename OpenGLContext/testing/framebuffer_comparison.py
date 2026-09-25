@@ -30,6 +30,7 @@ import sys
 import time
 from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
 import numpy as np
+from OpenGLContext import renderoptions
 from OpenGLContext.capture import ensure_pillow, read_back_buffer, save_png
 from OpenGLContext.testing.process_exit import flush_and_exit
 
@@ -44,11 +45,21 @@ DEFAULT_REFERENCE_DIR = os.path.join(
     'tests', 'reference_images'
 )
 
-# Default capture delay in seconds (allow scene to stabilize). Overridable via
-# the environment so a slow/headless CI runner can be more generous without
-# editing source; the capture also waits for a minimum frame
-# count, so this is a floor on wall-clock time, not the sole readiness signal.
-DEFAULT_CAPTURE_DELAY = float(os.environ.get('OPENGLCONTEXT_CAPTURE_DELAY', '0.5'))
+#: Seconds a capture waits for the scene to settle where
+#: ``OPENGLCONTEXT_CAPTURE_DELAY`` does not say otherwise. The capture also
+#: waits for a minimum frame count, so this is a floor on wall-clock time, not
+#: the only readiness signal.
+DEFAULT_CAPTURE_DELAY = 0.5
+
+
+def capture_delay() -> float:
+    """Seconds a capture waits for the scene to settle.
+
+    ``OPENGLCONTEXT_CAPTURE_DELAY`` lets a slow or headless CI runner be more
+    generous; read once, on first use, through :mod:`OpenGLContext.renderoptions`.
+    """
+    return renderoptions.env_number_once(
+        'OPENGLCONTEXT_CAPTURE_DELAY', DEFAULT_CAPTURE_DELAY)
 
 # Default region to exclude from bottom of frame (for any HUD elements)
 # Set to 0 since we disable the frame counter for regression tests
@@ -342,7 +353,7 @@ class AutomatedRegressionContext(_ContextHost):
                           default=DEFAULT_REFERENCE_DIR,
                           help='Directory for output images')
         group.add_argument('--capture-delay', type=float,
-                          default=DEFAULT_CAPTURE_DELAY,
+                          default=capture_delay(),
                           help='Delay in seconds before capture')
         group.add_argument('--hud-height', type=int,
                           default=DEFAULT_HUD_HEIGHT,

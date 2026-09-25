@@ -6,7 +6,7 @@ X DISPLAY. 4.33: the capture delay must be tunable so CI can be generous without
 editing source.
 """
 
-import importlib
+import argparse
 import sys
 from pathlib import Path
 
@@ -45,12 +45,23 @@ def test_no_display_no_offscreen_is_skip(monkeypatch):
 
 
 def test_capture_delay_env_override(monkeypatch):
-    """OPENGLCONTEXT_CAPTURE_DELAY tunes the stabilization wait (4.33)."""
+    """OPENGLCONTEXT_CAPTURE_DELAY tunes the stabilization wait (4.33).
+
+    Set after the module is imported, as a harness sets it for the program it
+    is about to run, and it is still the delay a regression parser offers.
+    """
+    from OpenGLContext.testing import framebuffer_comparison as fbc
+
     monkeypatch.setenv('OPENGLCONTEXT_CAPTURE_DELAY', '2.5')
-    import OpenGLContext.testing.framebuffer_comparison as fbc
-    importlib.reload(fbc)
-    try:
-        assert fbc.DEFAULT_CAPTURE_DELAY == 2.5
-    finally:
-        monkeypatch.delenv('OPENGLCONTEXT_CAPTURE_DELAY', raising=False)
-        importlib.reload(fbc)
+    parser = fbc.AutomatedRegressionContext.add_regression_arguments(
+        argparse.ArgumentParser())
+    assert parser.parse_args([]).capture_delay == 2.5
+
+
+def test_capture_delay_defaults_to_half_a_second(monkeypatch):
+    from OpenGLContext.testing import framebuffer_comparison as fbc
+
+    monkeypatch.delenv('OPENGLCONTEXT_CAPTURE_DELAY', raising=False)
+    parser = fbc.AutomatedRegressionContext.add_regression_arguments(
+        argparse.ArgumentParser())
+    assert parser.parse_args([]).capture_delay == fbc.DEFAULT_CAPTURE_DELAY == 0.5
