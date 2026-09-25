@@ -23,15 +23,17 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, NamedTuple, Sequence, Tuple
+from typing import Any, List, NamedTuple, Sequence, Tuple
 
 import numpy as np
 
 __all__ = [
     'GOLD', 'COPPER', 'STEEL', 'BRONZE', 'SILVER', 'Maps', 'tileable_noise',
-    'fbm', 'marble', 'checkered_marble', 'brick', 'plaster', 'sandstone',
+    'fbm', 'marble', 'checkered_marble', 'marble_tiles', 'tiles', 'brick', 'plaster',
+    'sandstone',
     'brushed_metal', 'normal_map', 'to_srgb', 'images', 'pbr_material',
-    'Geometry', 'panel', 'polygon', 'block', 'shape',
+    'Geometry', 'panel', 'polygon', 'block', 'prism', 'cylinder', 'moved', 'merge',
+    'shape',
 ]
 
 #: Metals' reflectance at normal incidence, linear, which is a metal's base
@@ -124,6 +126,28 @@ def marble(size: int = 256, base: Colour = (0.86, 0.85, 0.82),
                 np.zeros((size, size)), np.full((size, size), 0.6))
 
 
+def _laid(size: int, count: int, faces: Sequence[Maps], choose: np.ndarray,
+          grout: Colour, joint_width: float = 0.012, joint_rough: float = 0.75) -> Maps:
+    """Square tiles ``count`` each way, each face from ``faces`` as ``choose`` says,
+    in grout that is matte and set below the tiles."""
+    x, y = _grid(size)
+    column, row = np.floor(x * count), np.floor(y * count)
+    picked = choose[row.astype(int) % choose.shape[0], column.astype(int) % choose.shape[1]]
+    colour = np.zeros((size, size, 3))
+    rough = np.zeros((size, size))
+    for index, face in enumerate(faces):
+        chosen = picked == index
+        colour[chosen] = face.base[chosen]
+        rough[chosen] = face.roughness[chosen]
+    within = np.minimum(np.minimum(x * count - column, 1 - (x * count - column)),
+                        np.minimum(y * count - row, 1 - (y * count - row)))
+    joint = _clip(1.0 - within / joint_width)
+    colour = colour * (1 - joint[..., None]) + np.asarray(grout) * joint[..., None]
+    rough = rough * (1 - joint) + joint_rough * joint
+    height = 0.6 * _clip(within / (joint_width * 1.7))
+    return Maps(_clip(colour), _clip(rough), np.zeros((size, size)), height)
+
+
 def checkered_marble(size: int = 512, tiles: int = 2,
                      dark: Colour = (0.025, 0.028, 0.032),
                      light: Colour = (0.80, 0.79, 0.75),
@@ -131,24 +155,53 @@ def checkered_marble(size: int = 512, tiles: int = 2,
                      polish: float = 0.05, seed: int = 2) -> Maps:
     """A floor of alternating dark and light marble tiles, ``tiles`` each way.
 
-    The grout between tiles is matte and set below the polished stone.
+    ``tiles`` is even, so the checker repeats. The grout between tiles is
+    matte and set below the polished stone.
     """
-    x, y = _grid(size)
-    column, row = np.floor(x * tiles), np.floor(y * tiles)
-    checker = ((column + row) % 2).astype(bool)
     white = marble(size, light, (0.45, 0.45, 0.47), veins=2 * tiles, polish=polish,
                    seed=seed)
     black = marble(size, dark, (0.55, 0.52, 0.45), veins=3 * tiles, polish=polish,
                    seed=seed + 7)
-    colour = np.where(checker[..., None], black.base, white.base)
-    rough = np.where(checker, black.roughness, white.roughness)
-    within = np.minimum(np.minimum(x * tiles - column, 1 - (x * tiles - column)),
-                        np.minimum(y * tiles - row, 1 - (y * tiles - row)))
-    joint = _clip(1.0 - within / 0.012)
-    colour = colour * (1 - joint[..., None]) + np.asarray(grout) * joint[..., None]
-    rough = rough * (1 - joint) + 0.75 * joint
-    height = 0.6 * _clip(within / 0.02)
-    return Maps(_clip(colour), _clip(rough), np.zeros((size, size)), height)
+    checker = (np.add.outer(np.arange(tiles), np.arange(tiles)) % 2).astype(int)
+    return _laid(size, tiles, [white, black], checker, grout)
+
+
+def marble_tiles(size: int = 512, tiles: int = 2,
+                 colour: Colour = (0.025, 0.028, 0.032),
+                 vein: Colour = (0.62, 0.60, 0.56),
+                 grout: Colour = (0.12, 0.12, 0.12),
+                 polish: float = 0.05, seed: int = 11) -> Maps:
+    """Tiles of one marble, ``tiles`` each way: by default black, veined white.
+
+    Each tile is cut from its own part of the stone, so the veins do not run
+    on from one tile to the next. The grout is matte and set below them.
+    """
+    faces = [marble(size, colour, vein, veins=2 + tiles, polish=polish, seed=seed + index)
+             for index in range(2)]
+    pattern = (np.add.outer(np.arange(tiles), 2 * np.arange(tiles)) % 2).astype(int)
+    return _laid(size, tiles, faces, pattern, grout)
+
+
+def tiles(size: int = 256, count: int = 8, colour: Colour = (0.12, 0.42, 0.48),
+          grout: Colour = (0.78, 0.78, 0.74), glaze: float = 0.12, spread: float = 0.08,
+          seed: int = 12) -> Maps:
+    """Glazed square tiles, ``count`` each way, in pale grout: a pool, a bathroom.
+
+    Each tile is its own shade within ``spread`` of ``colour``, as a batch of
+    glazed tiles is; the glaze has ``glaze`` roughness and the grout is matte.
+    """
+    rng = np.random.default_rng(seed)
+    shades = rng.uniform(1.0 - spread, 1.0 + spread, (count, count))
+    grain = fbm(size, 8, seed + 1, octaves=2)
+    faces = []
+    for shade in np.unique(shades):
+        faces.append(Maps(np.broadcast_to(np.asarray(colour) * shade, (size, size, 3))
+                          * (0.97 + 0.03 * grain)[..., None],
+                          np.full((size, size), glaze) + 0.03 * grain,
+                          np.zeros((size, size)), np.zeros((size, size))))
+    which = np.searchsorted(np.unique(shades), shades)
+    return _laid(size, count, faces, which, grout, joint_width=0.02 * count / 2.0,
+                 joint_rough=0.85)
 
 
 def brick(size: int = 256, courses: int = 8, bricks: int = 4,
@@ -287,26 +340,32 @@ class Geometry(NamedTuple):
 
 
 def _facing_z(positions: np.ndarray, indices: Sequence[int], repeat: float,
-              origin: Tuple[float, float]) -> Geometry:
-    """Points in the xy plane, facing +z, textured by the metre from ``origin``."""
+              origin: Tuple[float, float],
+              start: Tuple[float, float] = (0.0, 0.0)) -> Geometry:
+    """Points in the xy plane, facing +z, textured by the metre from ``origin``,
+    which falls ``start`` metres into the surface."""
     count = len(positions)
     at = np.asarray(positions, 'f')
-    texcoords = ((at[:, :2] - np.asarray(origin, 'f')) / float(repeat)).astype('f')
+    texcoords = ((at[:, :2] - np.asarray(origin, 'f') + np.asarray(start, 'f'))
+                 / float(repeat)).astype('f')
     return Geometry(at, np.tile(np.array([0.0, 0.0, 1.0], 'f'), (count, 1)), texcoords,
                     np.tile(np.array([1.0, 0.0, 0.0, 1.0], 'f'), (count, 1)),
                     np.asarray(indices, np.uint32))
 
 
-def panel(width: float, height: float, repeat: float = 1.0) -> Geometry:
+def panel(width: float, height: float, repeat: float = 1.0,
+          start: Tuple[float, float] = (0.0, 0.0)) -> Geometry:
     """A ``width`` by ``height`` rectangle centred in its own xy plane, facing +z.
 
-    The surface repeats every ``repeat`` metres, starting at the bottom-left
-    corner.
+    The surface repeats every ``repeat`` metres. Its bottom-left corner sits
+    ``start`` metres (across, up) into the surface, so pieces cut from one
+    wall -- round a window, say -- carry its pattern on in line.
     """
     half_w, half_h = width / 2.0, height / 2.0
     corners = [(-half_w, -half_h, 0.0), (half_w, -half_h, 0.0),
                (half_w, half_h, 0.0), (-half_w, half_h, 0.0)]
-    return _facing_z(np.array(corners), [0, 1, 2, 0, 2, 3], repeat, (-half_w, -half_h))
+    return _facing_z(np.array(corners), [0, 1, 2, 0, 2, 3], repeat, (-half_w, -half_h),
+                     (float(start[0]), float(start[1])))
 
 
 def polygon(radius: float, sides: int = 8, repeat: float = 1.0) -> Geometry:
@@ -343,14 +402,23 @@ def _about(axis: int, angle: float) -> np.ndarray:
     return turn
 
 
-def block(size: Sequence[float], repeat: float = 1.0) -> Geometry:
+def block(size: Sequence[float], repeat: float = 1.0, chamfer: float = 0.0) -> Geometry:
     """A box of ``size`` (x, y, z) centred on its own origin, each face outward.
 
     Every face is textured by the metre from its own corner, so a slab or a
     column wears its surface at the surface's size on every side, where a
-    ``Box`` stretches one texture across each face.
+    ``Box`` stretches one texture across each face. ``chamfer`` cuts the four
+    upright edges back by that many metres each way, as a machined column's
+    are; the box is then a :func:`prism` of the cut outline.
     """
     x, y, z = (float(value) for value in size)
+    if chamfer > 0.0:
+        cut, half_x, half_z = float(chamfer), x / 2.0, z / 2.0
+        outline = [(-half_x + cut, -half_z), (half_x - cut, -half_z),
+                   (half_x, -half_z + cut), (half_x, half_z - cut),
+                   (half_x - cut, half_z), (-half_x + cut, half_z),
+                   (-half_x, half_z - cut), (-half_x, -half_z + cut)]
+        return prism(outline, y, repeat)
     half_pi = math.pi / 2.0
     faces = (
         (panel(x, y, repeat), np.identity(3), (0.0, 0.0, z / 2)),
@@ -368,6 +436,110 @@ def block(size: Sequence[float], repeat: float = 1.0) -> Geometry:
         np.concatenate([part.tangents for part in parts]),
         np.concatenate([part.indices + 4 * index for index, part in enumerate(parts)]
                        ).astype(np.uint32))
+
+
+def prism(outline: Sequence[Tuple[float, float]], height: float,
+          repeat: float = 1.0) -> Geometry:
+    """A convex ``outline`` of (x, z) points stood ``height`` high, centred, and capped.
+
+    The outline may run either way round. Each side is flat, and the surface
+    runs on round the sides without a break, so a pattern wraps the corners;
+    the caps are textured by the metre in x and z. It repeats every
+    ``repeat`` metres.
+    """
+    points = np.asarray(outline, 'd')
+    area = 0.5 * float(np.sum(points[:, 0] * np.roll(points[:, 1], -1)
+                              - np.roll(points[:, 0], -1) * points[:, 1]))
+    if area < 0.0:
+        points = points[::-1]
+    count, half = len(points), height / 2.0
+    following = np.roll(points, -1, axis=0)
+    lengths = np.linalg.norm(following - points, axis=1)
+    walked = np.concatenate([[0.0], np.cumsum(lengths)])
+    perimeter = walked[-1]
+    positions: List[Tuple[float, float, float]] = []
+    normals: List[Tuple[float, float, float]] = []
+    texcoords: List[Tuple[float, float]] = []
+    tangents: List[Tuple[float, float, float, float]] = []
+    indices: List[int] = []
+    for side in range(count):
+        (x0, z0), (x1, z1) = points[side], following[side]
+        dx, dz = (x1 - x0) / lengths[side], (z1 - z0) / lengths[side]
+        # u runs against the walk, so that it, v up and the outward normal
+        # make a right-handed frame.
+        u0, u1 = perimeter - walked[side], perimeter - walked[side + 1]
+        base = len(positions)
+        positions += [(x1, -half, z1), (x0, -half, z0), (x0, half, z0), (x1, half, z1)]
+        normals += [(dz, 0.0, -dx)] * 4
+        texcoords += [(u1, 0.0), (u0, 0.0), (u0, height), (u1, height)]
+        tangents += [(-dx, 0.0, -dz, 1.0)] * 4
+        indices += [base + index for index in (0, 1, 2, 0, 2, 3)]
+    centre = points.mean(axis=0)
+    for y, facing, flip in ((half, 1.0, -1.0), (-half, -1.0, 1.0)):
+        base = len(positions)
+        ring = [(centre[0], y, centre[1])] + [(px, y, pz) for px, pz in points]
+        positions += ring
+        normals += [(0.0, facing, 0.0)] * len(ring)
+        texcoords += [(px, flip * pz) for px, _y, pz in ring]
+        tangents += [(1.0, 0.0, 0.0, 1.0)] * len(ring)
+        for side in range(count):
+            first, second = base + 1 + side, base + 1 + (side + 1) % count
+            indices += [base, second, first] if facing > 0 else [base, first, second]
+    return Geometry(np.asarray(positions, 'f'), np.asarray(normals, 'f'),
+                    (np.asarray(texcoords, 'd') / float(repeat)).astype('f'),
+                    np.asarray(tangents, 'f'), np.asarray(indices, np.uint32))
+
+
+def moved(geometry: Geometry, offset: Sequence[float]) -> Geometry:
+    """``geometry`` shifted by ``offset`` metres, its texture where it was."""
+    return geometry._replace(
+        positions=(geometry.positions + np.asarray(offset, 'f')).astype('f'))
+
+
+def merge(parts: Sequence[Geometry]) -> Geometry:
+    """One mesh of every part, for one shape: a floor's border, a frame's four sides."""
+    offsets = np.cumsum([0] + [len(part.positions) for part in parts[:-1]])
+    return Geometry(
+        np.concatenate([part.positions for part in parts]),
+        np.concatenate([part.normals for part in parts]),
+        np.concatenate([part.texcoords for part in parts]),
+        np.concatenate([part.tangents for part in parts]),
+        np.concatenate([part.indices + offset for part, offset in zip(parts, offsets)]
+                       ).astype(np.uint32))
+
+
+def cylinder(radius: float, height: float, sides: int = 16, arc: float = 2.0 * math.pi,
+             repeat: float = 1.0) -> Geometry:
+    """The curved face of an upright cylinder, centred on its own origin, facing out.
+
+    ``arc`` is how much of the way round it goes, in radians: ``math.pi`` is a
+    half column, which runs from -x to +x through +z and so stands with its
+    flat back on the plane z = 0. ``sides`` flat faces make up the whole
+    circle, and a part of it has its share. The surface repeats every
+    ``repeat`` metres round the curve and up it. The ends are open.
+    """
+    steps = max(1, int(math.ceil(sides * arc / (2.0 * math.pi))))
+    columns = steps + 1
+    # u runs from -x round through +z, which is angle arc down to 0; that way
+    # round a tangent and the up direction make a right-handed frame.
+    angles = arc * (1.0 - np.arange(columns) / float(steps))
+    around = np.stack([np.cos(angles), np.zeros(columns), np.sin(angles)], axis=-1)
+    half = height / 2.0
+    positions = np.concatenate([around * radius + (0.0, -half, 0.0),
+                                around * radius + (0.0, half, 0.0)])
+    normals = np.concatenate([around, around])
+    tangent = np.stack([np.sin(angles), np.zeros(columns), -np.cos(angles),
+                        np.ones(columns)], axis=-1)
+    distance = np.arange(columns) * (arc * radius / steps)
+    texcoords = np.concatenate([np.stack([distance, np.zeros(columns)], axis=-1),
+                                np.stack([distance, np.full(columns, height)], axis=-1)])
+    indices = [index for step in range(steps)
+               for index in (step, step + 1, columns + step + 1,
+                             step, columns + step + 1, columns + step)]
+    return Geometry(positions.astype('f'), normals.astype('f'),
+                    (texcoords / float(repeat)).astype('f'),
+                    np.concatenate([tangent, tangent]).astype('f'),
+                    np.asarray(indices, np.uint32))
 
 
 def shape(geometry: Geometry, material: Any,

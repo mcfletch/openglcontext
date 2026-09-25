@@ -49,7 +49,7 @@ def _using(records, reflector):
 def test_the_hall_holds_each_kind_of_mirror(hall, records):
     assert len(_using(records, hall.mirror)) == 1
     assert len(_using(records, hall.corridor)) == 10
-    assert len(_using(records, hall.floor)) == 1
+    assert len(_using(records, hall.floor)) == 2          # the tiled field and its border
     assert len(_using(records, hall.window)) == 1
     assert hall.window.replace
     assert any(reflection.is_water(record) for record in records)
@@ -58,7 +58,9 @@ def test_the_hall_holds_each_kind_of_mirror(hall, records):
 def test_every_mirror_is_flat_and_faces_into_the_hall(records):
     middle = np.array([0.0, 1.7, 0.0])
     mirrors = [record for record in records if reflection.is_reflector(record)]
-    assert len(mirrors) == 14
+    # The far mirror, ten in the corridor, the window, the floor's field and
+    # its border, and the pool.
+    assert len(mirrors) == 15
     for record in mirrors:
         point, normal = reflection.surface_plane(record)
         assert float(np.dot(middle - point, normal)) > 0.0
@@ -97,6 +99,14 @@ def test_o_turns_the_window_to_glass_and_back():
     assert hall.press('o', ContextDefinition()) == 'window: shaded glass'
     assert not hall.window.replace
     assert hall.press('o', ContextDefinition()) == 'window: only its reflection'
+
+
+def test_the_pool_ripples_as_time_passes():
+    """Small moving ripples tell water from glass."""
+    hall = MirrorHall()
+    style = hall.pool.waveStyle
+    assert style.moving() and 0.0 < style.amplitude < 0.01
+    assert hall.tick(2.5) and hall.pool.wave_time == pytest.approx(2.5)
 
 
 def test_a_key_the_hall_does_not_use_says_nothing():

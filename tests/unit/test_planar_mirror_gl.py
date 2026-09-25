@@ -320,7 +320,9 @@ def test_a_still_scene_asks_for_frames_until_its_mirrors_settle(render_scene, en
     rendered = render_scene(MirrorHall().children, frames=1, size=(320, 180))
     context = rendered.context
     drawn = []
-    for _ in range(20):
+    # Two mirror views a frame, and the hall's mirrors and the mirrors seen in
+    # them come to a few dozen reflections: settled within twenty-odd frames.
+    for _ in range(40):
         before = renderpass.FLAT._reflection_planner.frame
         # What the main loop does: force a frame where one was asked for.
         context.OnDraw(force=1 if context.redrawRequest.is_set() else 0)

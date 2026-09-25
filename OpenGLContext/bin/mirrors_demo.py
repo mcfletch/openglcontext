@@ -39,21 +39,26 @@ import logging
 import sys
 from typing import Any, Dict, List, Tuple
 
-from OpenGLContext.bin.mirrorhall import Hall
+from OpenGLContext.bin.mirrorhall import BAYS, Hall
 from OpenGLContext.scenegraph import basenodes, surfaces
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.reflector import PlanarReflector
-from OpenGLContext.scenegraph.water import STILL, water_surface
+from OpenGLContext.scenegraph.water import BREEZE, RIPPLE, water_surface
 
 log = logging.getLogger(__name__)
 
-__all__ = ['BOUNCES', 'BUDGETS', 'INTERVALS', 'MirrorHall', 'main']
+__all__ = ['BOUNCES', 'BUDGETS', 'INTERVALS', 'POOL', 'MirrorHall', 'main']
 
 #: The ``reflectionViews`` the ``b`` key steps through; 0 is the strategy's own.
 BUDGETS: Tuple[int, ...] = (0, 1, 2, 4)
 
 #: The ``reflectionBounces`` the ``m`` key steps through.
 BOUNCES: Tuple[int, ...] = (2, 3, 1)
+
+#: The pool's water: ripples a few millimetres high and a few centimetres
+#: across, moving slowly, which is what tells indoor water from glass.
+POOL = BREEZE.varied(name='pool', amplitude=0.004, wavelength=0.45, speed=0.35,
+                     steepness=RIPPLE * 1.2, ripple=0.14)
 
 #: The corridor intervals the ``i`` key steps through.
 INTERVALS: Tuple[int, ...] = (3, 1, 6)
@@ -96,22 +101,25 @@ class MirrorHall:
                              reflector=self.mirror)
         corridor = PBRMaterial(baseColor=surfaces.SILVER, metallic=1.0, roughness=0.03,
                                reflector=self.corridor)
-        marble = surfaces.pbr_material(hall.finish.floor, reflector=self.floor)
+        # The floor's field and its black border share one reflector.
+        field = surfaces.pbr_material(hall.finish.floor, reflector=self.floor)
+        border = surfaces.pbr_material(hall.finish.border, reflector=self.floor)
         window = PBRMaterial(baseColor=(0.6, 0.8, 0.9), metallic=0.0, roughness=0.05,
                              reflector=self.window)
-        # Water is a mirror whatever it is made of.
-        pool = water_surface(1.5, 5.5, -6.0, -2.0, level=0.25, resolution=9,
-                             style=STILL, on_gpu=True)
-        scene = hall.room() + [hall.floor(marble)]
-        scene += hall.hang(surfaces.panel(6.0, 3.0), silver, 'far', along=0.0, height=2.0,
+        scene = hall.room() + hall.floor(field, border)
+        scene += hall.hang(surfaces.panel(6.0, 3.0), silver, 'far', along=0.0, height=2.3,
                            frame=hall.finish.gilt, border=0.2)
-        scene += hall.hang(surfaces.polygon(1.5), window, 'right', along=0.0, height=2.0)
-        for index in range(10):
-            scene += hall.hang(surfaces.panel(1.0, 1.4), corridor, 'left',
-                               along=-9.0 + 2.0 * index, height=1.8,
-                               frame=hall.finish.bronze)
-        scene.append(basenodes.Shape(geometry=pool,
-                                     appearance=basenodes.Appearance(material=pool.material)))
+        scene += hall.hang(surfaces.polygon(1.5), window, 'right', along=BAYS['right'][1],
+                           height=2.2)
+        for bay in BAYS['left']:
+            scene += hall.hang(surfaces.panel(1.0, 1.4), corridor, 'left', along=bay,
+                               height=1.8, frame=hall.finish.bronze)
+        # Water is a mirror whatever it is made of. Its ripple is carried by a
+        # vertex every 10 cm or so.
+        self.pool = water_surface(1.5, 5.5, -6.0, -2.0, level=0.25, resolution=41,
+                                  style=POOL, on_gpu=True)
+        scene.append(basenodes.Shape(geometry=self.pool, appearance=basenodes.Appearance(
+            material=self.pool.material)))
         scene += hall.basin(1.5, 5.5, -6.0, -2.0)
         return scene
 
@@ -149,6 +157,11 @@ class MirrorHall:
                                    else 'shaded glass')
         return ''
 
+    def tick(self, when: float) -> bool:
+        """Move the pool's ripples to ``when``, in seconds; whether anything moved."""
+        self.pool.wave_time = float(when)
+        return True
+
     @classmethod
     def help(cls) -> str:
         """The keys, one to a line."""
@@ -172,6 +185,12 @@ def main() -> int:
             for key in MirrorHall.KEYS:
                 self.addEventHandler('keypress', name=key, function=self.OnKey)
             print('oglc-mirrors\n' + MirrorHall.help())
+
+        def OnIdle(self, *arguments: Any) -> Any:
+            from OpenGLContext.events.systemtime import systemTime
+            if self.hall.tick(systemTime()):
+                self.triggerRedraw(True)
+            return super().OnIdle(*arguments)
 
         def OnKey(self, event: Any) -> None:
             said = self.hall.press(event.name, self.contextDefinition)
