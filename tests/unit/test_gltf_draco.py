@@ -272,8 +272,8 @@ class TestWarnOnceWithoutResolver:
         # warning must still fire only once across repeated primitives.
         monkeypatch.setattr(draco_mod, '_warned_missing_no_resolver', False)
         with caplog.at_level('WARNING'):
-            draco_mod._warn_missing_once(None)
-            draco_mod._warn_missing_once(None)
+            draco_mod._warn_missing_once(None)  # noqa: SLF001 the no-resolver branch of the warning, which a document load never reaches
+            draco_mod._warn_missing_once(None)  # noqa: SLF001 the no-resolver branch of the warning, which a document load never reaches
         draco_warnings = [r for r in caplog.records
                           if 'draco' in r.getMessage().lower()]
         assert len(draco_warnings) == 1

@@ -71,12 +71,12 @@ class TestNotificationsThatDescribeAnotherList:
     def signal_new(self, node, child):
         """The notification a list sends when it gains ``child``."""
         field = type(node).children
-        grouping._cacheClear(('set', field), node, subsignal='new',
+        grouping._cacheClear(('set', field), node, subsignal='new',  # noqa: SLF001 the field-observer callback, sent the list notifications a live field sends
                              subvalue=child)
 
     def signal_del(self, node, child):
         field = type(node).children
-        grouping._cacheClear(('set', field), node, subsignal='del',
+        grouping._cacheClear(('set', field), node, subsignal='del',  # noqa: SLF001 the field-observer callback, sent the list notifications a live field sends
                              subvalue=child)
 
     def test_being_told_twice_about_one_child_does_not_double_it(self):

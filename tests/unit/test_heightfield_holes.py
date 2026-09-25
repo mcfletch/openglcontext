@@ -131,9 +131,9 @@ class TestTheDrawnSurfaceAndTheCollidedOneAgree:
         colliders = HeightFieldColliders(world, field, chunk=field.extent,
                                          holes=holes)
         found = []
-        for i in range(colliders._across):
-            for j in range(colliders._across):
-                points, indices = colliders._patch(i, j)
+        for i in range(colliders._across):  # noqa: SLF001 the collider's patch grid, walked to list every triangle it would build
+            for j in range(colliders._across):  # noqa: SLF001 the collider's patch grid, walked to list every triangle it would build
+                points, indices = colliders._patch(i, j)  # noqa: SLF001 the collider's patch grid, walked to list every triangle it would build
                 if len(indices):
                     found.append(points[indices].mean(axis=1))
         return np.concatenate(found) if found else np.zeros((0, 3))

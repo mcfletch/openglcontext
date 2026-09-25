@@ -316,13 +316,13 @@ class TestTheSamplerIsFedTheMouseToo:
 
     def test_a_button_press_reaches_the_sampler(self):
         fed = self.mixin()
-        fed._recordInput(self.button(0, 1))
+        fed._recordInput(self.button(0, 1))  # noqa: SLF001 the sampler's feed, driven without a dispatch chain
         assert fed.getInputState().held(mouseevents.button_name(0))
 
     def test_and_its_release_reaches_it_as_well(self):
         fed = self.mixin()
-        fed._recordInput(self.button(0, 1))
-        fed._recordInput(self.button(0, 0))
+        fed._recordInput(self.button(0, 1))  # noqa: SLF001 the sampler's feed, driven without a dispatch chain
+        fed._recordInput(self.button(0, 0))  # noqa: SLF001 the sampler's feed, driven without a dispatch chain
         assert not fed.getInputState().held(mouseevents.button_name(0))
 
     def test_the_ordinary_dispatch_records_it(self):
@@ -348,7 +348,7 @@ class TestTheSamplerIsFedTheMouseToo:
     def test_a_wheel_notch_is_never_held(self):
         """A wheel is not a button anybody can hold down, and must not stick."""
         fed = self.mixin()
-        fed._recordInput(self.button(mouseevents.WHEEL_UP, 1))
+        fed._recordInput(self.button(mouseevents.WHEEL_UP, 1))  # noqa: SLF001 the sampler's feed, driven without a dispatch chain
         assert not fed.getInputState().held(
             mouseevents.button_name(mouseevents.WHEEL_UP))
 

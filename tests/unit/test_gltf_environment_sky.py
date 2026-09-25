@@ -260,8 +260,8 @@ class TestThePanoramaSky:
         block = [{'type': 'panorama', 'panorama': {'equirectangular': 0}}]
         node = background_of(document(block, images=1))
         assert isinstance(node, HDRBackground)
-        assert node._equirect is not None
-        assert node._equirect.shape[2] == 3
+        assert node._equirect is not None  # noqa: SLF001 the decoded panorama the node holds; no public field carries the pixels
+        assert node._equirect.shape[2] == 3  # noqa: SLF001 the decoded panorama the node holds; no public field carries the pixels
 
     def test_the_panorama_is_linear_light_not_srgb(self):
         """The IBL probe and the PBR pass both work in linear light; handing
@@ -269,7 +269,7 @@ class TestThePanoramaSky:
         block = [{'type': 'panorama', 'panorama': {'equirectangular': 0}}]
         node = background_of(document(block, images=1, colors=[(188, 188, 188)]))
         # 188/255 is ~0.737 encoded, ~0.5 linear.
-        assert float(node._equirect.mean()) == pytest.approx(0.5, abs=0.02)
+        assert float(node._equirect.mean()) == pytest.approx(0.5, abs=0.02)  # noqa: SLF001 the decoded panorama the node holds; no public field carries the pixels
 
     def test_a_cubemap_becomes_a_six_face_cube_background(self):
         faces = [(255, 0, 0), (0, 255, 0), (0, 0, 255),

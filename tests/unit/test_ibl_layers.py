@@ -49,7 +49,7 @@ class TestATurnedLight:
         size = 16
         turn = (0.0, math.sin(0.15), 0.0, math.cos(0.15))
         light = ImageBasedLight(specular=[_faces(size)], rotation=turn)
-        matrix = imagebasedlight._rotation_matrix(turn)
+        matrix = imagebasedlight._rotation_matrix(turn)  # noqa: SLF001 the light's rotation as a matrix, to rotate the expected faces by
         errors = np.concatenate([
             np.abs(got[..., 0] - _smooth(
                 imagebasedlight.face_directions(face, size) @ matrix)).ravel()

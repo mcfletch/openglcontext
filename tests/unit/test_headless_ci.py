@@ -21,7 +21,7 @@ import test_all_scripts as tas
 def test_display_detected_from_x11(monkeypatch):
     monkeypatch.setenv('DISPLAY', ':0')
     monkeypatch.delenv('PYOPENGL_PLATFORM', raising=False)
-    assert tas._check_display_available() is True
+    assert tas._check_display_available() is True  # noqa: SLF001 test_all_scripts' display check, under each environment it reads
 
 
 def test_headless_egl_counts_as_display(monkeypatch):
@@ -29,7 +29,7 @@ def test_headless_egl_counts_as_display(monkeypatch):
     monkeypatch.delenv('DISPLAY', raising=False)
     monkeypatch.delenv('WAYLAND_DISPLAY', raising=False)
     monkeypatch.setenv('PYOPENGL_PLATFORM', 'egl')
-    assert tas._check_display_available() is True
+    assert tas._check_display_available() is True  # noqa: SLF001 test_all_scripts' display check, under each environment it reads
 
 
 def test_no_display_no_offscreen_is_skip(monkeypatch):
@@ -42,7 +42,7 @@ def test_no_display_no_offscreen_is_skip(monkeypatch):
     monkeypatch.delenv('DISPLAY', raising=False)
     monkeypatch.delenv('WAYLAND_DISPLAY', raising=False)
     monkeypatch.delenv('PYOPENGL_PLATFORM', raising=False)
-    assert tas._check_display_available(platform='linux') is False
+    assert tas._check_display_available(platform='linux') is False  # noqa: SLF001 test_all_scripts' display check, under each environment it reads
 
 
 def test_capture_delay_env_override(monkeypatch):

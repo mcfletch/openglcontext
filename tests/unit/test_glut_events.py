@@ -156,9 +156,9 @@ class TestHeldKeys:
     def test_glut_repeating_a_key_stops_the_synthetic_repeat(self):
         handler = _Handler()
         handler.glutOnKeyDown(b'w', 0, 0)
-        assert handler._nativeRepeat is False
+        assert handler._nativeRepeat is False  # noqa: SLF001 whether the mixin has seen the platform's own repeat is its internal switch
         handler.glutOnKeyDown(b'w', 0, 0)
-        assert handler._nativeRepeat is True
+        assert handler._nativeRepeat is True  # noqa: SLF001 whether the mixin has seen the platform's own repeat is its internal switch
 
     def test_a_synthetic_release_carries_the_modifiers_the_press_had(self):
         """A binding that wants ctrl must match on the way up as on the way

@@ -60,16 +60,16 @@ class TestIBLController:
         """Adaptation must never reach 'off' -- analytic is nearly free and keeps
         metals reflecting; only an explicit off selects off."""
         c = ibl.IBLController('full')
-        for _ in range(ibl.IBLController.DOWN_FRAMES * 3):
-            c.effective_mode(10.0)
-        assert c._effective == 'analytic'
+        seen = [c.effective_mode(10.0)
+                for _ in range(ibl.IBLController.DOWN_FRAMES * 3)]
+        assert seen[-1] == 'analytic'
+        assert 'off' not in seen
 
     def test_re_upgrades_after_sustained_headroom(self):
         c = ibl.IBLController('full')
         for _ in range(ibl.IBLController.DOWN_FRAMES):
-            c.effective_mode(20.0)                 # drop to analytic
-        assert c._effective == 'analytic'
-        last = 'analytic'
+            last = c.effective_mode(20.0)          # drop to analytic
+        assert last == 'analytic'
         for _ in range(ibl.IBLController.UP_FRAMES + ibl.IBLController.COOLDOWN + 5):
             last = c.effective_mode(200.0)
         assert last == 'full'
@@ -174,22 +174,22 @@ class TestGLContextPresent:
             raise RuntimeError("no current context")
 
         monkeypatch.setattr(ibl, 'glGetString', boom)
-        assert ibl._gl_context_present() is False
+        assert ibl._gl_context_present() is False  # noqa: SLF001 the context check the capability probe defers on
 
 
 class TestFloatRenderProbe:
     def test_missing_immutable_storage_fails_probe(self, monkeypatch):
         """No glTexStorage2D entry point -> the 'full' path cannot run."""
         monkeypatch.setattr(ibl, 'glTexStorage2D', None)
-        assert ibl._run_float_render_capability_probe() is False
+        assert ibl._run_float_render_capability_probe() is False  # noqa: SLF001 the capability probe with its entry point missing
 
     def test_no_context_defers_and_reports_capable(self, monkeypatch):
         """With no current context the probe is deferred (returns True, uncached)
         so headless mode resolution stays on the renderer-name path."""
         monkeypatch.setattr(ibl, '_gl_context_present', lambda: False)
-        ibl._FLOAT_RENDER_CAP['checked'] = False
+        ibl._FLOAT_RENDER_CAP['checked'] = False  # noqa: SLF001 the probe's once-per-process memo, which a deferred probe must leave unset
         assert ibl.probe_float_render_capability(force=True) is True
-        assert ibl._FLOAT_RENDER_CAP['checked'] is False
+        assert ibl._FLOAT_RENDER_CAP['checked'] is False  # noqa: SLF001 the probe's once-per-process memo, which a deferred probe must leave unset
 
 
 class TestSpecGlossFactorConversion:

@@ -314,27 +314,27 @@ class TestTextureSource:
             self.extensions = extensions
 
     def test_plain_source_used_directly(self):
-        assert gltf.textures._texture_source(self._Tex(source=4)) == 4
+        assert gltf.textures._texture_source(self._Tex(source=4)) == 4  # noqa: SLF001 the texture source fallbacks, one extension block each
 
     def test_webp_extension_fills_in_missing_source(self):
         tex = self._Tex(source=None,
                         extensions={'EXT_texture_webp': {'source': 7}})
-        assert gltf.textures._texture_source(tex) == 7
+        assert gltf.textures._texture_source(tex) == 7  # noqa: SLF001 the texture source fallbacks, one extension block each
 
     def test_base_source_wins_over_webp_extension(self):
         tex = self._Tex(source=2,
                         extensions={'EXT_texture_webp': {'source': 7}})
-        assert gltf.textures._texture_source(tex) == 2
+        assert gltf.textures._texture_source(tex) == 2  # noqa: SLF001 the texture source fallbacks, one extension block each
 
     def test_basisu_is_not_consulted(self):
         # KTX2/Basis needs a transcoder Pillow lacks, so it must NOT be treated
         # as a usable source -- resolve to None instead of a KTX2 image index.
         tex = self._Tex(source=None,
                         extensions={'KHR_texture_basisu': {'source': 3}})
-        assert gltf.textures._texture_source(tex) is None
+        assert gltf.textures._texture_source(tex) is None  # noqa: SLF001 the texture source fallbacks, one extension block each
 
     def test_no_source_no_extension_is_none(self):
-        assert gltf.textures._texture_source(self._Tex()) is None
+        assert gltf.textures._texture_source(self._Tex()) is None  # noqa: SLF001 the texture source fallbacks, one extension block each
 
 
 class TestPunctualLight:
@@ -344,7 +344,7 @@ class TestPunctualLight:
     def test_point_light_is_local_with_inverse_square_and_range(self):
         world = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0],
                           [-2.25, 0.0, 0.2, 1]], dtype='d')   # off-centre node
-        light = gltf.scene._light_node(
+        light = gltf.scene._light_node(  # noqa: SLF001 one KHR_lights_punctual entry built without a document around it
             {'type': 'point', 'intensity': 1.0, 'range': 1.125,
              'color': [1, 0, 0]}, world)
         # Local origin: the world position lives on the parent Transform, not here,
@@ -352,19 +352,19 @@ class TestPunctualLight:
         assert tuple(light.location) == (0.0, 0.0, 0.0)
         # Pure quadratic attenuation == glTF inverse-square.
         assert tuple(float(a) for a in light.attenuation) == (0.0, 0.0, 1.0)
-        assert light._gltf_range == 1.125
+        assert light._gltf_range == 1.125  # noqa: SLF001 the light range the loader records beside the node's fields for the shader
 
     def test_spot_light_local_and_carries_range(self):
-        light = gltf.scene._light_node(
+        light = gltf.scene._light_node(  # noqa: SLF001 one KHR_lights_punctual entry built without a document around it
             {'type': 'spot', 'intensity': 5.0, 'range': 5.0,
              'spot': {'outerConeAngle': 0.7, 'innerConeAngle': 0.3}},
             np.eye(4))
         assert tuple(light.location) == (0.0, 0.0, 0.0)
         assert tuple(light.direction) == (0.0, 0.0, -1.0)
-        assert light._gltf_range == 5.0
+        assert light._gltf_range == 5.0  # noqa: SLF001 the light range the loader records beside the node's fields for the shader
 
     def test_directional_has_no_falloff_and_no_range(self):
-        light = gltf.scene._light_node({'type': 'directional', 'intensity': 512.0},
+        light = gltf.scene._light_node({'type': 'directional', 'intensity': 512.0},  # noqa: SLF001 one KHR_lights_punctual entry built without a document around it
                                  np.eye(4))
         # Directional lights are placeless; they must not carry a point-light range.
         assert not hasattr(light, '_gltf_range')
@@ -379,25 +379,25 @@ class TestMeterExposure:
             self.intensity = intensity
 
     def test_no_lights_is_neutral(self):
-        assert gltf.scene._meter_exposure([], (0, 0, 0)) == 1.0
+        assert gltf.scene._meter_exposure([], (0, 0, 0)) == 1.0  # noqa: SLF001 the exposure metering on its own, without a scene to light
 
     def test_normalized_intensities_stay_neutral(self):
         # A 1-cd point light 1 unit away delivers ~1 lux -- below target, no stop-down.
         meter = [(self._L(1.0), (1.0, 0.0, 0.0))]
-        assert gltf.scene._meter_exposure(meter, (0, 0, 0)) == 1.0
+        assert gltf.scene._meter_exposure(meter, (0, 0, 0)) == 1.0  # noqa: SLF001 the exposure metering on its own, without a scene to light
 
     def test_bright_directional_stops_down(self):
         # 512 lux directional -> exposure well below 1 so it can't clip to white.
-        e = gltf.scene._meter_exposure([(self._L(512.0), None)], (0, 0, 0))
+        e = gltf.scene._meter_exposure([(self._L(512.0), None)], (0, 0, 0))  # noqa: SLF001 the exposure metering on its own, without a scene to light
         assert 0.0 < e < 0.05
 
     def test_modest_lights_stay_neutral(self):
         # A few lux (e.g. the Parthenon rig) must not be stopped down, or its
         # baseline shifts. 4-5 lux is below the overexposure threshold.
-        assert gltf.scene._meter_exposure([(self._L(4.4), None)], (0, 0, 0)) == 1.0
+        assert gltf.scene._meter_exposure([(self._L(4.4), None)], (0, 0, 0)) == 1.0  # noqa: SLF001 the exposure metering on its own, without a scene to light
 
     def test_never_brightens(self):
-        e = gltf.scene._meter_exposure([(self._L(0.01), None)], (0, 0, 0))
+        e = gltf.scene._meter_exposure([(self._L(0.01), None)], (0, 0, 0))  # noqa: SLF001 the exposure metering on its own, without a scene to light
         assert e == 1.0
 
 
@@ -554,7 +554,7 @@ class TestSparseAccessor:
     def test_no_bufferview_and_no_sparse_raises(self):
         acc = Accessor(bufferView=None, componentType=5126, count=3, type='VEC3')
         with pytest.raises(NotImplementedError):
-            gltf.accessors._read_accessor(_FakeGLTF([acc]), 0, None)
+            gltf.accessors._read_accessor(_FakeGLTF([acc]), 0, None)  # noqa: SLF001 an accessor read with no document buffer behind it
 
 
 class _FakeGLTF:
@@ -583,7 +583,7 @@ class TestQuaternionNormalization:
         s = np.sin(np.pi / 4)
         q = [0.0, s, 0.0, np.cos(np.pi / 4)]
         q = [2.0 * v for v in q]  # denormalize
-        xyzr = gltf.transforms._quat_to_xyzr(q)
+        xyzr = gltf.transforms._quat_to_xyzr(q)  # noqa: SLF001 the quaternion conversion on an input no document carries
         assert abs(xyzr[3] - np.pi / 2) < 1e-4
         assert abs(xyzr[1] - 1.0) < 1e-4  # axis +Y
 
@@ -591,12 +591,12 @@ class TestQuaternionNormalization:
 class TestNormalizedComponents:
     def test_signed_normalized_clamped_to_minus_one(self):
         # int8 -128 normalizes to -1.0 (not -128/127) per glTF spec
-        assert abs(gltf.accessors._normalize_component(np.int8(-128)) - (-1.0)) < 1e-6
-        assert abs(gltf.accessors._normalize_component(np.int8(127)) - 1.0) < 1e-6
+        assert abs(gltf.accessors._normalize_component(np.int8(-128)) - (-1.0)) < 1e-6  # noqa: SLF001 the normalized-integer scale at each end of its range
+        assert abs(gltf.accessors._normalize_component(np.int8(127)) - 1.0) < 1e-6  # noqa: SLF001 the normalized-integer scale at each end of its range
 
     def test_unsigned_normalized(self):
-        assert abs(gltf.accessors._normalize_component(np.uint8(255)) - 1.0) < 1e-6
-        assert abs(gltf.accessors._normalize_component(np.uint8(0)) - 0.0) < 1e-6
+        assert abs(gltf.accessors._normalize_component(np.uint8(255)) - 1.0) < 1e-6  # noqa: SLF001 the normalized-integer scale at each end of its range
+        assert abs(gltf.accessors._normalize_component(np.uint8(0)) - 0.0) < 1e-6  # noqa: SLF001 the normalized-integer scale at each end of its range
 
 
 class TestBufferDecodeCache:
@@ -651,7 +651,7 @@ class TestAccessorValidation:
         class _R:
             _buffers: ClassVar[dict[int, bytes]] = {0: b'\x00' * 12}
         with pytest.raises(ValueError, match='accessor 0'):
-            gltf.accessors._accessor_base(g, acc, _R(), 0)
+            gltf.accessors._accessor_base(g, acc, _R(), 0)  # noqa: SLF001 an accessor whose view overruns its buffer, which pygltflib refuses to build
 
     def test_out_of_range_index_raises(self):
         pos = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float32)
@@ -821,8 +821,8 @@ class TestComponentConstants:
     """The float componentType enum is named, not an inline 5126."""
 
     def test_float_component_constant(self):
-        assert gltf.accessors._COMPONENT_FLOAT == 5126
-        assert gltf.accessors._COMPONENT_DTYPE[gltf.accessors._COMPONENT_FLOAT] == np.float32
+        assert gltf.accessors._COMPONENT_FLOAT == 5126  # noqa: SLF001 the loader's float componentType and its dtype
+        assert gltf.accessors._COMPONENT_DTYPE[gltf.accessors._COMPONENT_FLOAT] == np.float32  # noqa: SLF001 the loader's float componentType and its dtype
 
 
 class TestSameOriginFetch:
@@ -830,14 +830,14 @@ class TestSameOriginFetch:
     (scheme + host + port) as the document it came from."""
 
     def test_origin_is_scheme_host_port(self):
-        assert resolver._origin('https://a.com:8443/x') == ('https', 'a.com:8443')
+        assert resolver._origin('https://a.com:8443/x') == ('https', 'a.com:8443')  # noqa: SLF001 the origin comparison the same-origin fetch rule is built on
 
     def test_same_origin_distinctions(self):
         base = 'https://a.com/x/model.gltf'
-        assert resolver._same_origin(base, 'https://a.com/x/buf.bin')     # same
-        assert not resolver._same_origin(base, 'https://a.com:8443/y')    # port differs
-        assert not resolver._same_origin(base, 'http://a.com/y')          # scheme differs
-        assert not resolver._same_origin(base, 'https://b.com/y')         # host differs
+        assert resolver._same_origin(base, 'https://a.com/x/buf.bin')     # same  # noqa: SLF001 the origin comparison the same-origin fetch rule is built on
+        assert not resolver._same_origin(base, 'https://a.com:8443/y')    # port differs  # noqa: SLF001 the origin comparison the same-origin fetch rule is built on
+        assert not resolver._same_origin(base, 'http://a.com/y')          # scheme differs  # noqa: SLF001 the origin comparison the same-origin fetch rule is built on
+        assert not resolver._same_origin(base, 'https://b.com/y')         # host differs  # noqa: SLF001 the origin comparison the same-origin fetch rule is built on
 
     def test_cross_origin_and_file_rejected_without_fetching(self, monkeypatch):
         called = {'n': 0}
@@ -971,7 +971,7 @@ class TestSceneRoots:
             scenes = (_S(),)
             scene = 0
             nodes = (object(), object())
-        assert gltf.scene._scene_root_indices(_G()) == []
+        assert gltf.scene._scene_root_indices(_G()) == []  # noqa: SLF001 the scene-root rule on documents pygltflib will not build
 
     def test_no_scenes_excludes_child_nodes(self):
         class _N:
@@ -983,7 +983,7 @@ class TestSceneRoots:
             scene = None
             nodes = (_N(children=[1]), _N())
         # node 0 parents node 1, so only node 0 is a true root
-        assert gltf.scene._scene_root_indices(_G()) == [0]
+        assert gltf.scene._scene_root_indices(_G()) == [0]  # noqa: SLF001 the scene-root rule on documents pygltflib will not build
 
 
 def _glb_with_material(material, extra_nodes=None, animations=None,
@@ -1043,7 +1043,7 @@ class TestJsonPointer:
     def test_resolves_node_visibility_dict(self):
         g = GLTF2()
         g.nodes = [Node(extensions={'KHR_node_visibility': {'visible': True}})]
-        parent, last, kind = gltf.animation._resolve_json_pointer(
+        parent, last, kind = gltf.animation._resolve_json_pointer(  # noqa: SLF001 the JSON-pointer walk on its own, one pointer per case
             g, ['nodes', '0', 'extensions', 'KHR_node_visibility', 'visible'])
         assert kind == 'dict' and last == 'visible'
         assert parent is g.nodes[0].extensions['KHR_node_visibility']
@@ -1051,7 +1051,7 @@ class TestJsonPointer:
     def test_missing_path_returns_none(self):
         g = GLTF2()
         g.nodes = [Node()]
-        assert gltf.animation._resolve_json_pointer(
+        assert gltf.animation._resolve_json_pointer(  # noqa: SLF001 the JSON-pointer walk on its own, one pointer per case
             g, ['nodes', '0', 'extensions', 'nope', 'x']) is None
 
 

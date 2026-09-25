@@ -136,7 +136,7 @@ class TestContentSignature:
 
     def test_cached_content_id_reused(self):
         g = Geom(content_key='__missing__')
-        g._instance_content_id = 'CACHED'
+        g._instance_content_id = 'CACHED'  # noqa: SLF001 the content id the instancer caches on a geometry
         key = geometry_content_key(node(Shape(g)))
         assert key[0] == 'CACHED'
 

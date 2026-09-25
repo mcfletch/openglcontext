@@ -42,7 +42,7 @@ def _mock_sizes(monkeypatch, window_size, fb_size, cursor):
 def test_cursor_scaled_to_framebuffer_2x(monkeypatch):
     _mock_sizes(monkeypatch, (800, 600), (1600, 1200), (100.0, 50.0))
     ctx = FakeContext((1600, 1200))
-    x, y = ctx._cursorToFramebuffer(object(), 100.0, 50.0)
+    x, y = ctx._cursorToFramebuffer(object(), 100.0, 50.0)  # noqa: SLF001 the cursor-to-framebuffer scaling, which only a live GLFW callback reaches
     assert (x, y) == (200.0, 100.0)
 
 
@@ -80,5 +80,5 @@ def test_zero_window_size_does_not_divide(monkeypatch):
     """A degenerate/minimized window (0 size) must not raise ZeroDivisionError."""
     _mock_sizes(monkeypatch, (0, 0), (0, 0), (10.0, 10.0))
     ctx = FakeContext((0, 0))
-    x, y = ctx._cursorToFramebuffer(object(), 10.0, 10.0)
+    x, y = ctx._cursorToFramebuffer(object(), 10.0, 10.0)  # noqa: SLF001 the cursor-to-framebuffer scaling, which only a live GLFW callback reaches
     assert (x, y) == (10.0, 10.0)

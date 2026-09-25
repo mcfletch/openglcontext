@@ -190,27 +190,29 @@ class TestWhereItDoesNot:
         assert float(cover.rungs[0].cards.pos[:, 0].min()) < -150.0
 
 
+def _round_hole(radius=60.0):
+    """A hole field: an opening of ``radius`` metres around the origin."""
+    def holes(x, z):
+        return np.hypot(np.asarray(x, 'd'),
+                        np.asarray(z, 'd')) < radius
+    return holes
+
+
 class TestWhereTheGroundIsNotThere:
     """A bore's mouth is a hole cut in the ground, and the height field under
     it still answers with a height. What is seated on that answer without
     asking whether the ground is there stands in the opening, in mid-air, in
     plain view through the portal."""
 
-    def _hole(self, radius=60.0):
-        def holes(x, z):
-            return np.hypot(np.asarray(x, 'd'),
-                            np.asarray(z, 'd')) < radius
-        return holes
-
     def test_nothing_grows_in_the_opening(self) -> None:
-        cover = _cover(card_radius=300.0, holes=self._hole())
+        cover = _cover(card_radius=300.0, holes=_round_hole())
         cover.update((0.0, 0.0, 0.0))
         away = np.hypot(cover.rungs[0].cards.pos[:, 0],
                         cover.rungs[0].cards.pos[:, 2])
         assert float(away.min()) >= 60.0
 
     def test_and_it_grows_everywhere_else(self) -> None:
-        cover = _cover(card_radius=300.0, holes=self._hole())
+        cover = _cover(card_radius=300.0, holes=_round_hole())
         cover.update((0.0, 0.0, 0.0))
         assert len(cover.rungs[0].cards.pos) > 100
 
@@ -218,7 +220,7 @@ class TestWhereTheGroundIsNotThere:
         """A game stands the ground up from a tileset and finds out where the
         bores are from the roads, which it reads second."""
         cover = _cover(card_radius=300.0)
-        cover.holes = self._hole()
+        cover.holes = _round_hole()
         cover.update((0.0, 0.0, 0.0))
         away = np.hypot(cover.rungs[0].cards.pos[:, 0],
                         cover.rungs[0].cards.pos[:, 2])
@@ -227,7 +229,7 @@ class TestWhereTheGroundIsNotThere:
     def test_a_hole_told_to_it_after_it_has_grown_clears_the_opening(self) -> None:
         cover = _cover(card_radius=300.0)
         cover.update((0.0, 0.0, 0.0))
-        cover.holes = self._hole()
+        cover.holes = _round_hole()
         cover.update((0.0, 0.0, 0.0))
         away = np.hypot(cover.rungs[0].cards.pos[:, 0],
                         cover.rungs[0].cards.pos[:, 2])
@@ -238,7 +240,7 @@ class TestWhereTheGroundIsNotThere:
         this plant grows on, the hole says whether there is ground at all."""
         grew = _cover(card_radius=300.0, mask=lambda x, _z: np.where(
             np.asarray(x, 'd') > 0.0, 1.0, 0.0))
-        grew.holes = self._hole()
+        grew.holes = _round_hole()
         grew.update((0.0, 0.0, 0.0))
         placed = grew.rungs[0].cards.pos
         assert float(placed[:, 0].min()) > 0.0
@@ -359,14 +361,14 @@ class TestToldWhileScattering:
         at any point. What it made from the old ground must not be kept for
         the new."""
         cover = _cover(card_radius=60.0)
-        opening = TestWhereTheGroundIsNotThere()._hole()
-        finisher = cover._finisher
+        opening = _round_hole()
+        finisher = cover._finisher  # noqa: SLF001 the step a background scatter ends with, wrapped to change the holes mid-scatter
 
         def told_meanwhile(rung):
             if cover.holes is None:
                 cover.holes = opening        # as the render thread would
             return finisher(rung)
-        cover._finisher = told_meanwhile
+        cover._finisher = told_meanwhile  # noqa: SLF001 the step a background scatter ends with, wrapped to change the holes mid-scatter
         cover.compute_near(0.0, 0.0)
         cards = cover.compute_near(0.0, 0.0)[0][0][0]
         assert not opening(cards[:, 0], cards[:, 2]).any()
@@ -435,7 +437,7 @@ class TestTheWorkerIsLetGo:
         cover = _cover(card_radius=100.0, background=True)
         cover.update((0.0, 0.0, 0.0))
         assert cover.wait(5.0)
-        thread = cover._worker._thread
+        thread = cover._worker._thread  # noqa: SLF001 the cover's scatter thread, to see it end with the cover
         gone = weakref.ref(cover)
         del cover
         gc.collect()

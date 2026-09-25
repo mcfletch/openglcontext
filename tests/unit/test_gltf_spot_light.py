@@ -19,7 +19,7 @@ WORLD = np.eye(4)
 def test_spot_cone_half_angles_map_directly():
     light = {'type': 'spot', 'intensity': 3.0,
              'spot': {'innerConeAngle': 0.30, 'outerConeAngle': 0.90}}
-    node = gltf.scene._light_node(light, WORLD)
+    node = gltf.scene._light_node(light, WORLD)  # noqa: SLF001 one KHR_lights_punctual entry built without a document around it
     assert isinstance(node, SpotLight)
     # KHR half-angles are the VRML cutOffAngle/beamWidth convention: no scaling.
     assert node.cutOffAngle == pytest.approx(0.90)
@@ -27,21 +27,21 @@ def test_spot_cone_half_angles_map_directly():
 
 
 def test_spot_defaults_to_quarter_pi_cone_when_unspecified():
-    node = gltf.scene._light_node({'type': 'spot'}, WORLD)
+    node = gltf.scene._light_node({'type': 'spot'}, WORLD)  # noqa: SLF001 one KHR_lights_punctual entry built without a document around it
     assert isinstance(node, SpotLight)
     assert node.cutOffAngle == pytest.approx(np.pi / 4.0)   # outer defaults to pi/4
 
 
 def test_spot_does_not_cast_shadows_by_default():
-    node = gltf.scene._light_node({'type': 'spot'}, WORLD)
+    node = gltf.scene._light_node({'type': 'spot'}, WORLD)  # noqa: SLF001 one KHR_lights_punctual entry built without a document around it
     assert not node.castShadows
-    lit = gltf.scene._light_node({'type': 'spot', 'castShadows': True}, WORLD)
+    lit = gltf.scene._light_node({'type': 'spot', 'castShadows': True}, WORLD)  # noqa: SLF001 one KHR_lights_punctual entry built without a document around it
     assert lit.castShadows
 
 
 def test_point_and_directional_unaffected_by_spot_handling():
-    p = gltf.scene._light_node({'type': 'point'}, WORLD)
+    p = gltf.scene._light_node({'type': 'point'}, WORLD)  # noqa: SLF001 one KHR_lights_punctual entry built without a document around it
     assert isinstance(p, PointLight)
-    d = gltf.scene._light_node({'type': 'directional'}, WORLD)
+    d = gltf.scene._light_node({'type': 'directional'}, WORLD)  # noqa: SLF001 one KHR_lights_punctual entry built without a document around it
     assert isinstance(d, DirectionalLight)
     assert d.castShadows          # directionals still default to shadow casters

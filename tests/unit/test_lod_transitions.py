@@ -53,7 +53,7 @@ def _coords(kind, level):
     """(coords, indices) for a unit quadric of ``kind`` at LOD ``level``."""
     if kind == 'sphere':
         return Sphere(radius=1.0).compileArrays(level)
-    phi = lod_phi(Cone._BASE_PHI, level, 2 * PI)
+    phi = lod_phi(Cone._BASE_PHI, level, 2 * PI)  # noqa: SLF001 the cone's finest step, the level the instancer draws at
     if kind == 'cone':
         return Cone.cone(3.0, 1.0, True, True, phi=phi)
     return Cone.cone(3.0, 1.0, True, True, phi=phi, top=True, cylinder=True)

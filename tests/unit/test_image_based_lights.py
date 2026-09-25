@@ -172,7 +172,7 @@ class TestReadWhenNamed:
     @pytest.fixture
     def reads(self, monkeypatch):
         seen = []
-        original = textures._image_bytes
+        original = textures._image_bytes  # noqa: SLF001 the loader's image read, wrapped to count what is decoded
 
         def counting(g, index, resolver):
             seen.append(index)

@@ -86,7 +86,7 @@ class TestScenePublishedElsewhere:
 
 class TestSharedDerivations:
     def test_demo_env_background_roster_comes_from_shared_module(self):
-        assert set(gltf_demo._ENV_BACKGROUND) == set(gltf_demos.ENV_BACKGROUND_MODELS)
+        assert set(gltf_demo._ENV_BACKGROUND) == set(gltf_demos.ENV_BACKGROUND_MODELS)  # noqa: SLF001 the demo's own roster, held equal to the shared table
         # and a representative reflective model still resolves to a lit background
         cfg = gltf_demo.demo_config([])
         assert gltf_demo.resolve_background(cfg, 'MetalRoughSpheres') == 'sky'

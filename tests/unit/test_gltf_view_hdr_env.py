@@ -41,11 +41,11 @@ def _clean_env():
 
 
 def test_is_hdr_environment():
-    assert environment._is_hdr_environment('/x/sky.hdr')
-    assert environment._is_hdr_environment('https://ex.com/a/sky.hdr?token=1')
-    assert environment._is_hdr_environment('foo.pic')
-    assert not environment._is_hdr_environment('/env/pimbackground_')
-    assert not environment._is_hdr_environment('')
+    assert environment._is_hdr_environment('/x/sky.hdr')  # noqa: SLF001 the viewer's rule for which --environment values are HDR panoramas
+    assert environment._is_hdr_environment('https://ex.com/a/sky.hdr?token=1')  # noqa: SLF001 the viewer's rule for which --environment values are HDR panoramas
+    assert environment._is_hdr_environment('foo.pic')  # noqa: SLF001 the viewer's rule for which --environment values are HDR panoramas
+    assert not environment._is_hdr_environment('/env/pimbackground_')  # noqa: SLF001 the viewer's rule for which --environment values are HDR panoramas
+    assert not environment._is_hdr_environment('')  # noqa: SLF001 the viewer's rule for which --environment values are HDR panoramas
 
 
 def test_hdr_url_routes_to_env_hdr():

@@ -305,12 +305,12 @@ class TestEyeLookAtCamera:
     """Explicit interior camera: --eye / --look-at bypass auto-framing (Sponza)."""
 
     def test_parse_vec3(self):
-        assert view._parse_vec3('12,0,2') == (12.0, 0.0, 2.0)
-        assert view._parse_vec3('-14.0,4,-3') == (-14.0, 4.0, -3.0)
+        assert view._parse_vec3('12,0,2') == (12.0, 0.0, 2.0)  # noqa: SLF001 the --eye/--look-at value parser on its own
+        assert view._parse_vec3('-14.0,4,-3') == (-14.0, 4.0, -3.0)  # noqa: SLF001 the --eye/--look-at value parser on its own
 
     def test_bad_vec3_rejected(self):
         with pytest.raises(argparse.ArgumentTypeError):
-            view._parse_vec3('1,2')
+            view._parse_vec3('1,2')  # noqa: SLF001 the --eye/--look-at value parser on its own
 
     def test_eye_lookat_args(self):
         a = view.parse_args(['m.glb', '--eye=12,0,2', '--look-at=-14,4,-3'])

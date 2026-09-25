@@ -215,8 +215,8 @@ def test_a_sound_stack_is_left_to_release_its_own_contexts(probe_result):
         pytest.skip('this run pins the teardown rather than asking')
     if probe_result:
         pytest.skip('this stack aborts on GLFW teardown; the workaround is in')
-    assert glfw.destroy_window is not glfwteardown._NOTHING_TO_DO
-    assert glfw.terminate is not glfwteardown._NOTHING_AT_ALL
+    assert glfw.destroy_window is not glfwteardown._NOTHING_TO_DO  # noqa: SLF001 the stand-in glfwteardown installs, the only thing to compare against
+    assert glfw.terminate is not glfwteardown._NOTHING_AT_ALL  # noqa: SLF001 the stand-in glfwteardown installs, the only thing to compare against
 
 
 def test_the_session_settled_this_the_same_way(probe_result):

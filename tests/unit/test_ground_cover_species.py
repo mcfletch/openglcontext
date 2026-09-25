@@ -444,7 +444,7 @@ class TestTheGeometryNearTheCamera:
         cover = self._clumped(tmp_path, card_radius=90.0)
         cover.update((0.0, 0.0, 0.0))
         rung = cover.rungs[0]
-        drawn = rung.clumps_near._instance_rows()
+        drawn = rung.clumps_near._instance_rows()  # noqa: SLF001 the rows the clump layer uploads, read without a GL context
         assert len(drawn)
         reach = np.hypot(drawn[:, 0], drawn[:, 2]).max()
         assert reach <= 30.0 * CLUMP_LOD_FRAC + 1.0
@@ -452,7 +452,7 @@ class TestTheGeometryNearTheCamera:
     def test_the_coarse_rung_covers_the_whole_disc(self, tmp_path) -> None:
         cover = self._clumped(tmp_path, card_radius=90.0)
         cover.update((0.0, 0.0, 0.0))
-        drawn = cover.rungs[0].clumps_far._instance_rows()
+        drawn = cover.rungs[0].clumps_far._instance_rows()  # noqa: SLF001 the rows the clump layer uploads, read without a GL context
         assert float(np.hypot(drawn[:, 0], drawn[:, 2]).max()) > 30.0 * 0.8
 
     def test_the_geometry_tracks_the_camera_without_rescattering(
@@ -464,7 +464,7 @@ class TestTheGeometryNearTheCamera:
         scattered = cover.selections
         cover.update((5.0, 0.0, 0.0))
         assert cover.selections == scattered          # too small a step to re-scatter
-        drawn = cover.rungs[0].clumps_near._instance_rows()
+        drawn = cover.rungs[0].clumps_near._instance_rows()  # noqa: SLF001 the rows the clump layer uploads, read without a GL context
         assert float(np.hypot(drawn[:, 0] - 5.0, drawn[:, 2]).max()) \
             <= 30.0 * CLUMP_LOD_FRAC + 1.0            # ...yet centred on the camera
 
@@ -481,7 +481,7 @@ class TestTheGeometryNearTheCamera:
         counted = []
         for step in np.arange(0.0, 36.0, 1.0):    # across three re-scatters
             cover.update((0.0, 0.0, float(step)))
-            drawn = cover.rungs[0].clumps_far._instance_rows()
+            drawn = cover.rungs[0].clumps_far._instance_rows()  # noqa: SLF001 the rows the clump layer uploads, read without a GL context
             ahead = drawn[:, 2] - step
             counted.append(int(((ahead > 18.0) & (ahead < 28.0)).sum()))
         counted = np.asarray(counted)
@@ -498,7 +498,7 @@ class TestTheGeometryNearTheCamera:
                   if type(node).__name__ == 'InstancedClumps']
         assert len(clumps) == 1
         cover.update((0.0, 0.0, 0.0))
-        drawn = clumps[0]._instance_rows()
+        drawn = clumps[0]._instance_rows()  # noqa: SLF001 the rows the clump layer uploads, read without a GL context
         assert float(np.hypot(drawn[:, 0], drawn[:, 2]).max()) > 30.0 * 0.8
 
     def test_a_small_step_draws_from_what_is_already_up(self, tmp_path) -> None:
@@ -528,7 +528,7 @@ class TestTheGeometryNearTheCamera:
         points = cover.rungs[0].cache[0]
         wanted = np.hypot(points[:, 0] - 0.6, points[:, 2]) < 30.0
         drawn = {tuple(row) for row in
-                 np.round(cover.rungs[0].clumps_far._instance_rows()[:, :3], 4)}
+                 np.round(cover.rungs[0].clumps_far._instance_rows()[:, :3], 4)}  # noqa: SLF001 the rows the clump layer uploads, read without a GL context
         assert {tuple(row) for row in np.round(points[wanted], 4)} <= drawn
 
     def test_retuning_moves_the_fade_windows_with_the_radius(self, tmp_path) -> None:

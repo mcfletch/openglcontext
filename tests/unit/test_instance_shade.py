@@ -37,33 +37,33 @@ def _clumps():
 
 class TestWhatAnInstanceCarries:
     def test_a_row_is_position_yaw_scale_and_shade(self) -> None:
-        assert _cards()._instance_rows().shape == (COUNT, 6)
+        assert _cards()._instance_rows().shape == (COUNT, 6)  # noqa: SLF001 the rows the layer uploads, read without a GL context
 
     def test_full_sun_unless_told_otherwise(self) -> None:
-        assert np.allclose(_cards()._instance_rows()[:, 5], 1.0)
+        assert np.allclose(_cards()._instance_rows()[:, 5], 1.0)  # noqa: SLF001 the rows the layer uploads, read without a GL context
 
     def test_a_shade_can_be_given_with_the_rest(self) -> None:
         cards = _cards()
         cards.update_instances(*_points(), shades=np.full(COUNT, 0.25, 'f4'))
-        assert np.allclose(cards._instance_rows()[:, 5], 0.25)
+        assert np.allclose(cards._instance_rows()[:, 5], 0.25)  # noqa: SLF001 the rows the layer uploads, read without a GL context
 
     def test_it_survives_the_next_update(self) -> None:
         cards = _cards()
         cards.update_instances(*_points(), shades=np.full(COUNT, 0.25, 'f4'))
         cards.update_instances(*_points())
-        assert np.allclose(cards._instance_rows()[:, 5], 1.0)
+        assert np.allclose(cards._instance_rows()[:, 5], 1.0)  # noqa: SLF001 the rows the layer uploads, read without a GL context
 
     def test_an_empty_field_has_the_same_shape(self) -> None:
         empty = InstancedBillboards(np.zeros((0, 3), 'f4'), np.zeros(0, 'f4'),
                                     np.zeros(0, 'f4'), 'grass.png')
-        assert empty._instance_rows().shape == (0, 6)
+        assert empty._instance_rows().shape == (0, 6)  # noqa: SLF001 the rows the layer uploads, read without a GL context
 
     def test_clumps_carry_it_too(self) -> None:
         clumps = _clumps()
         clumps.update_instances(np.zeros((2, 3), 'f4'), np.zeros(2, 'f4'),
                                 np.ones(2, 'f4'), shades=np.array([0.3, 0.7],
                                                                   'f4'))
-        assert np.allclose(clumps._instance_rows()[:, 5], [0.3, 0.7])
+        assert np.allclose(clumps._instance_rows()[:, 5], [0.3, 0.7])  # noqa: SLF001 the rows the layer uploads, read without a GL context
 
     def test_a_wrong_length_is_reported(self) -> None:
         cards = _cards()

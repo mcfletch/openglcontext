@@ -50,7 +50,7 @@ class TestIndexedFaceSetInstancing:
         assert a.instanceContentKey() != b.instanceContentKey()
 
     def test_instance_arrays_expand_to_triangle_soup(self):
-        positions, normals, texcoords = _quad_ifs()._instanceArrays()
+        positions, normals, texcoords = _quad_ifs()._instanceArrays()  # noqa: SLF001 the triangle soup a geometry offers the instancer, read without a GL context
         # A quad tessellates to two triangles = six expanded vertices.
         assert positions.shape == (6, 3)
         assert normals.shape == (6, 3)
@@ -59,7 +59,7 @@ class TestIndexedFaceSetInstancing:
 
     def test_empty_ifs_has_no_instance_arrays(self):
         empty = basenodes.IndexedFaceSet(coordIndex=[])
-        assert empty._instanceArrays() is None
+        assert empty._instanceArrays() is None  # noqa: SLF001 the triangle soup a geometry offers the instancer, read without a GL context
 
 
 class TestTeapotInstancing:
@@ -83,7 +83,7 @@ class TestTeapotInstancing:
             != self._teapot(lid=False).instanceContentKey()
 
     def test_instance_arrays_expand_to_triangle_soup(self):
-        positions, normals, texcoords = self._teapot(size=1.0)._instanceArrays()
+        positions, normals, texcoords = self._teapot(size=1.0)._instanceArrays()  # noqa: SLF001 the triangle soup a geometry offers the instancer, read without a GL context
         # Non-indexed triangle soup: a multiple of three vertices, matched arrays.
         assert positions.shape[0] > 0
         assert positions.shape[0] % 3 == 0
@@ -91,15 +91,15 @@ class TestTeapotInstancing:
         assert texcoords.shape == (positions.shape[0], 2)
 
     def test_size_scales_baked_positions(self):
-        small = self._teapot(size=0.5)._instanceArrays()[0]
-        big = self._teapot(size=1.0)._instanceArrays()[0]
+        small = self._teapot(size=0.5)._instanceArrays()[0]  # noqa: SLF001 the triangle soup a geometry offers the instancer, read without a GL context
+        big = self._teapot(size=1.0)._instanceArrays()[0]  # noqa: SLF001 the triangle soup a geometry offers the instancer, read without a GL context
         # Same tessellation, positions scaled by the size ratio.
         assert small.shape == big.shape
         assert np.allclose(big * 0.5, small, atol=1e-5)
 
     def test_omitting_lid_drops_vertices(self):
-        with_lid = self._teapot(lid=True)._instanceArrays()[0]
-        without_lid = self._teapot(lid=False)._instanceArrays()[0]
+        with_lid = self._teapot(lid=True)._instanceArrays()[0]  # noqa: SLF001 the triangle soup a geometry offers the instancer, read without a GL context
+        without_lid = self._teapot(lid=False)._instanceArrays()[0]  # noqa: SLF001 the triangle soup a geometry offers the instancer, read without a GL context
         assert without_lid.shape[0] < with_lid.shape[0]
 
 

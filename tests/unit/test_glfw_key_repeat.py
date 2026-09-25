@@ -43,7 +43,7 @@ def ctx():
     ]
     c.addEventHandler('keyboard', name='<right>', state=1, function=handlers[0])
     c.addEventHandler('keyboard', name='<right>', state=0, function=handlers[1])
-    c._handlers = handlers
+    c.handlers = handlers
     c.counts = counts
     try:
         yield c
@@ -88,7 +88,7 @@ def test_release_stops_repeat(ctx):
 def test_native_repeat_disables_software_repeat(ctx):
     _press(ctx)
     ctx.glfwOnKey(None, glfw.KEY_RIGHT, 0, glfw.REPEAT, 0)  # native repeat
-    assert ctx._nativeRepeat is True
+    assert ctx._nativeRepeat is True  # noqa: SLF001 whether the mixin has seen the platform's own repeat is its internal switch
     down_before = ctx.counts['down']
     for _ in range(5):
         ctx.pumpKeyRepeats()

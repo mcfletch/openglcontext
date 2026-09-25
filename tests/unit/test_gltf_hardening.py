@@ -17,17 +17,17 @@ from OpenGLContext.loaders import gltf
 class TestAccessorEnumErrors:
     def test_unknown_component_type_is_valueerror(self):
         with pytest.raises(ValueError) as exc:
-            gltf.accessors._component_dtype(9999)
+            gltf.accessors._component_dtype(9999)  # noqa: SLF001 the componentType table's refusal, which pygltflib's own validation reaches first in a whole document
         assert 'componentType' in str(exc.value)
 
     def test_unknown_accessor_type_is_valueerror(self):
         with pytest.raises(ValueError) as exc:
-            gltf.accessors._type_count('VEC7')
+            gltf.accessors._type_count('VEC7')  # noqa: SLF001 the accessor type table's refusal, which pygltflib's own validation reaches first in a whole document
         assert 'type' in str(exc.value)
 
     def test_known_values_still_resolve(self):
-        assert gltf.accessors._component_dtype(gltf.accessors._COMPONENT_FLOAT) is not None
-        assert gltf.accessors._type_count('VEC3') == 3
+        assert gltf.accessors._component_dtype(gltf.accessors._COMPONENT_FLOAT) is not None  # noqa: SLF001 the componentType table's refusal, which pygltflib's own validation reaches first in a whole document
+        assert gltf.accessors._type_count('VEC3') == 3  # noqa: SLF001 the accessor type table's refusal, which pygltflib's own validation reaches first in a whole document
 
 
 class TestPrimaryDocumentSizeCap:
@@ -47,7 +47,7 @@ class TestPrimaryDocumentSizeCap:
         # The cap must trip before pygltflib touches the (malformed) payload, so a
         # decompression-bomb style document is rejected without being parsed.
         called = {'n': 0}
-        real = gltf.loader._require_pygltflib()
+        real = gltf.loader._require_pygltflib()  # noqa: SLF001 the loader's lazy pygltflib import, wrapped to see when parsing starts
 
         class Guard:
             @staticmethod

@@ -128,7 +128,7 @@ class TestBindingThem:
         replacement = a_buffer()
         bind_geometry(
             GeometryArrays.separate(count=3, positions=replacement), owner=owner)
-        cached_refs, _vao = owner._shader_vao_cache.by_context[context_key()][0]
+        cached_refs, _vao = owner._shader_vao_cache.by_context[context_key()][0]  # noqa: SLF001 the owner's per-context VAO cache is what a rebind is meant to refresh
         assert replacement in cached_refs
 
 

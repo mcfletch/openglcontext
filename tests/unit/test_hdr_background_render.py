@@ -39,29 +39,14 @@ from OpenGLContext.scenegraph.hdrbackground import HDRBackground
 
 @pytest.fixture
 def gl_context(gl_window):
-    yield from _with_a_fresh_program(gl_window('hdr-bg', size=(128, 128)))
+    return gl_window('hdr-bg', size=(128, 128))
 
 
 @pytest.fixture
 def gl_context_compat(gl_window):
     """Compatibility *and* 3.3, so the fixed-function enums the non-shader
     render arm touches (``GL_LIGHTING``) are valid while GLSL 330 compiles."""
-    yield from _with_a_fresh_program(
-        gl_window('hdr-bg-compat', size=(128, 128), profile='compatibility'))
-
-
-def _with_a_fresh_program(window):
-    """Forget the program cached against a context that has just gone.
-
-    The node caches its compiled program at class level -- one persistent
-    context, in the real application -- and a per-test context makes that id
-    meaningless.
-    """
-    HDRBackground._shader = None
-    HDRBackground._shader_locations = None
-    yield window
-    HDRBackground._shader = None
-    HDRBackground._shader_locations = None
+    return gl_window('hdr-bg-compat', size=(128, 128), profile='compatibility')
 
 
 def _perspective(fovy, aspect, near, far):

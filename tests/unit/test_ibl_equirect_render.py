@@ -98,18 +98,11 @@ def test_irradiance_carries_the_environment_hue():
 def test_shared_include_compiles_both_shaders():
     """Both hdr_background.frag (skybox) and ibl_equirect.frag (reflection) compile
     through the shared _cubemap_inc.glsl dirToEquirect, so they can't desync."""
-
-    HDRBackground._shader = None
-    HDRBackground._shader_locations = None
-    try:
-        reflection = _compile('ibl_equirect.frag')
-        assert reflection, "reflection env shader failed to compile"
-        program, locations = HDRBackground._compile_shader()
-        assert program, "skybox shader failed to compile"
-        assert locations['equirectMap'] != -1
-    finally:
-        HDRBackground._shader = None
-        HDRBackground._shader_locations = None
+    reflection = _compile('ibl_equirect.frag')
+    assert reflection, "reflection env shader failed to compile"
+    program, locations = HDRBackground._compile_shader()  # noqa: SLF001 the skybox shader's compile, which only the node's first draw reaches
+    assert program, "skybox shader failed to compile"
+    assert locations['equirectMap'] != -1
 
 
 if __name__ == '__main__':
