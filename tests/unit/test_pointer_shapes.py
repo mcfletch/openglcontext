@@ -92,7 +92,7 @@ def test_a_context_with_no_window_sets_nothing():
 def test_a_context_that_cannot_change_it_says_so():
     """The base class answers for every backend that has no cursors."""
     from OpenGLContext.context import Context
-    assert not Context.setPointerShape(object(), 'hand')      # type: ignore[arg-type]
+    assert not Context.setPointerShape(object(), 'hand')
 
 
 
@@ -138,7 +138,7 @@ class TestEveryBackendSpeaksTheSameWords:
 
     def test_a_backend_that_offers_none_answers_no(self):
         from OpenGLContext.context import Context
-        assert not Context.setPointerShape(object(), 'hand')  # type: ignore[arg-type]
+        assert not Context.setPointerShape(object(), 'hand')
 
     def test_the_backend_this_run_uses_offers_them(self):
         assert 'glfwcontext' in self._backends()

@@ -213,7 +213,10 @@ def test_a_wireframe_view_beside_shared_ones_draws_its_own_lines(render_scene, e
                        size=(WIDTH, HEIGHT), layout=build)
     frame = frames[-1]
     sky = np.array([0.2 * 255, 0.3 * 255, 0.5 * 255])
-    drawn = lambda tile: (abs(tile.astype(int) - sky).max(axis=-1) > 30).mean()  # noqa: E731
+
+    def drawn(tile):
+        return (abs(tile.astype(int) - sky).max(axis=-1) > 30).mean()
+
     front = drawn(frame[:HEIGHT // 2, :WIDTH // 2])
     side = drawn(frame[:HEIGHT // 2, WIDTH // 2:])
     assert side > 0

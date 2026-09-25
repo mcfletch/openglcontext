@@ -180,8 +180,8 @@ def test_kill_process_tree_tolerates_vanished_processes(monkeypatch):
         def children(self, recursive=False):
             return [_Vanished(1), _Vanished(2)]
 
-    fake.NoSuchProcess = NoSuchProcess  # type: ignore[attr-defined]
-    fake.Process = _Process  # type: ignore[attr-defined]
+    fake.NoSuchProcess = NoSuchProcess
+    fake.Process = _Process
     monkeypatch.setitem(sys.modules, 'psutil', fake)
 
     assert kill_process_tree(4242) is None

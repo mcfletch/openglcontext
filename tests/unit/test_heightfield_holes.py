@@ -54,7 +54,10 @@ class TestAFieldWithNothingMissing:
 
     def test_a_hole_that_catches_nothing_changes_nothing(self) -> None:
         field = flat()
-        nowhere = lambda x, z: np.zeros(np.shape(x), dtype=bool)  # noqa: E731
+
+        def nowhere(x, z):
+            return np.zeros(np.shape(x), dtype=bool)
+
         assert np.array_equal(field.mesh(holes=nowhere)[1], field.mesh()[1])
 
     def test_the_whole_field_is_two_triangles_a_cell(self) -> None:

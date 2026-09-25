@@ -61,7 +61,10 @@ def test_a_handler_with_no_owner_is_collected(manager):
 
 def test_keeping_a_reference_is_what_rescues_a_closure(manager):
     seen = []
-    handler = lambda event=None: seen.append(event)  # noqa: E731
+
+    def handler(event=None):
+        seen.append(event)
+
     kept = [handler]                                 # the caller's strong reference
     manager.registerCallback('k', function=handler)
     del handler

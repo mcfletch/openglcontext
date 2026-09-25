@@ -37,7 +37,7 @@ def served(tmp_path):
     world.mkdir()
     handler = functools.partial(http.server.SimpleHTTPRequestHandler,
                                 directory=str(world))
-    handler.log_message = lambda *args: None       # type: ignore[attr-defined]
+    handler.log_message = lambda *args: None
     server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()

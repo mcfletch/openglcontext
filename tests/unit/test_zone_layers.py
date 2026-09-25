@@ -319,7 +319,10 @@ class TestManyBoxesAtOnce:
         pieces.chunk = 7
         lows = rng.uniform(-900, 900, (100, 3)) * (1, 0.01, 1)
         highs = lows + rng.uniform(0.5, 40, (100, 3))
-        ids = lambda found: [[(id(z), inside) for z, inside in row] for row in found]  # noqa: E731
+
+        def ids(found):
+            return [[(id(z), inside) for z, inside in row] for row in found]
+
         assert ids(whole.classify_many(lows, highs)) == ids(pieces.classify_many(lows, highs))
 
     def test_a_first_frame_of_many_objects_over_many_zones_stays_small(self):

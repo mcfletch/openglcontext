@@ -147,7 +147,7 @@ class TestAFirstRun:
         assert asked == []
 
     def test_a_download_that_fails_raises_an_ioerror(self, tmp_path,
-                                                     served) -> None:  # noqa: F811
+                                                     served) -> None:  # noqa: F811 the fixture imported above
         _, base = served
         game = Application('racer', a_registry(tmp_path, base + '/gone.tar.gz',
                                               sha256='0' * 64),

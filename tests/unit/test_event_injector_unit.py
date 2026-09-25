@@ -162,7 +162,7 @@ def test_read_from_socket_handles_connection_reset():
             pass
 
     try:
-        inj._conn = _ResettingConn()  # type: ignore[assignment]
+        inj._conn = _ResettingConn()
         assert inj._read_from_socket() == ''
         assert inj._conn is None
     finally:
@@ -239,8 +239,8 @@ def test_close_swallows_teardown_errors():
         def close(self):
             raise OSError('cannot close')
 
-    inj._conn = _Boom()  # type: ignore[assignment]
-    inj._socket = _Boom()  # type: ignore[assignment]
+    inj._conn = _Boom()
+    inj._socket = _Boom()
     inj.socket_path = '/no/such/dir/never.sock'  # unlink will raise OSError
     inj.close()  # must not propagate
 
@@ -348,7 +348,7 @@ def test_dispatch_exit_prefers_onquit():
             self.closed = True
 
     fake = _FakeInjector()
-    ctx._event_injector = fake  # type: ignore[assignment]
+    ctx._event_injector = fake
     ctx._dispatch_injected_event({'type': 'exit'})
 
     assert fake.closed is True
@@ -421,7 +421,7 @@ def test_poll_injected_events_dispatches_each(monkeypatch):
                 {'type': 'mousemove', 'x': 1, 'y': 2},
             ]
 
-    ctx._event_injector = _StubInjector()  # type: ignore[assignment]
+    ctx._event_injector = _StubInjector()
     ctx.poll_injected_events()
 
     assert len(ctx._managers['keyboard'].events) == 1
@@ -514,7 +514,7 @@ def test_sender_close_swallows_socket_error():
         def close(self):
             raise OSError('cannot close')
 
-    sender._socket = _Boom()  # type: ignore[assignment]
+    sender._socket = _Boom()
     sender.close()
     assert sender._socket is None
 

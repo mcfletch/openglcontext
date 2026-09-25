@@ -86,7 +86,10 @@ class TestDraft:
     def test_watchers_of_a_field_hear_the_commit(self, session, target):
         seen = []
         from vrml import protofunctions
-        receiver = lambda *args, **named: seen.append(args)   # noqa: E731
+
+        def receiver(*args, **named):
+            seen.append(args)
+
         protofunctions.getField(target, 'lights').watch(target, receiver)
         target._test_receiver = receiver     # dispatcher holds receivers weakly
         session.draft.lights = 2

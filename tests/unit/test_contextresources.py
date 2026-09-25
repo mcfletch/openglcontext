@@ -193,8 +193,13 @@ class TestUnregistering:
 
     def test_the_others_are_left_alone(self):
         called = []
-        keep = lambda: called.append('keep')          # noqa: E731
-        drop = lambda: called.append('drop')          # noqa: E731
+
+        def keep():
+            called.append('keep')
+
+        def drop():
+            called.append('drop')
+
         contextresources.on_context_lost(keep)
         contextresources.on_context_lost(drop)
         contextresources.forget_context_lost(drop)

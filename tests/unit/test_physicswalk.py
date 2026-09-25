@@ -567,8 +567,10 @@ class TestZoneGravity:
         host = _started(self.scene(zone))
         assert host.enablePhysics(True)
         world = host.gravityZones.world
-        mine = lambda: [v for v in world.gravity_volumes  # noqa: E731
-                        if isinstance(v.region, ZoneRegion)]
+
+        def mine():
+            return [v for v in world.gravity_volumes if isinstance(v.region, ZoneRegion)]
+
         assert len(mine()) == 1 and mine()[0].contains(np.array([0.0, 5.0, 0.0]))
         moved = np.identity(4)
         moved[3, :3] = (30.0, 5.0, 0.0)
