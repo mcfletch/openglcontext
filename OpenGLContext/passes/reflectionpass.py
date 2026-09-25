@@ -502,7 +502,9 @@ class ReflectionsMixin(PassResources):
         bounce = any(is_reflector(record) for frame in mirrors
                      for record in frame.toRender)
         if bounce:
-            atlas.keep()
+            from OpenGLContext.passes.reflection import bounds_tile
+            atlas.keep(bounds_tile(lookup.bounds, atlas.size)
+                       for lookup in self._previous_lookups.values())
             atlas.bind_kept()
             self._reflection_lookups = self._previous_lookups
             shader.use(lit=True)

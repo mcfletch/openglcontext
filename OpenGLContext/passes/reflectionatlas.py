@@ -11,21 +11,33 @@ is a share of the window's pixels (``ContextDefinition.reflectionAtlas``,
 The colour is linear HDR (``RGBA16F``) with alpha 0 wherever a mirror view
 drew nothing, which is where a mirror shows the environment probe. Three mip
 levels are allocated for rough mirrors, which read a blurred level; the
-four-texel gutter round each tile keeps those levels inside it.
+four-texel gutter round each tile keeps those levels inside it, and is cleared
+with the tile, so what they blur in at the edge is nothing rather than
+whatever a tile there held before.
 
 A mirror seen in another mirror shows the reflection it had the frame before.
-:meth:`ReflectionAtlas.keep` copies the atlas aside before a frame's mirror
-views are drawn, and they read the copy, since a draw may not read the texture
-it is drawing into.
+:meth:`ReflectionAtlas.keep` copies the tiles those reflections are in aside
+before a frame's mirror views are drawn, and they read the copy, since a draw
+may not read the texture it is drawing into.
+
+Each call leaves the GL state it found: the clear colour, the texture on the
+active unit and both framebuffer bindings. The atlas's texture is worked on
+through :data:`~OpenGLContext.passes.reflection.REFLECTION_UNIT`, the unit it
+is read from.
 """
 from __future__ import annotations
 
+import contextlib
 import math
-from typing import Tuple
+from typing import Iterable, Iterator, Tuple
 
-from OpenGLContext.passes.reflection import REFLECTION_UNIT
+from OpenGLContext.passes.reflection import REFLECTION_UNIT, TileRect
+from OpenGLContext.passes.reflectiontiles import GUTTER
 
 __all__ = ['LEVELS', 'FILL', 'atlas_size', 'ReflectionAtlas']
+
+#: The draw and read framebuffers bound when the atlas was asked to draw.
+Bindings = Tuple[int, int]
 
 #: Mip levels the atlas holds: the full texels and two blurred ones.
 LEVELS = 3
@@ -51,6 +63,18 @@ def atlas_size(width: int, height: int, share: float) -> Tuple[int, int]:
         return max(_STEP, int(math.ceil(extent * side / _STEP)) * _STEP)
 
     return texels(width), texels(height)
+
+
+def _bindings() -> Bindings:
+    from OpenGL import GL as gl
+    return (int(gl.glGetIntegerv(gl.GL_DRAW_FRAMEBUFFER_BINDING)),
+            int(gl.glGetIntegerv(gl.GL_READ_FRAMEBUFFER_BINDING)))
+
+
+def _restore(bindings: Bindings) -> None:
+    from OpenGL import GL as gl
+    gl.glBindFramebuffer(gl.GL_DRAW_FRAMEBUFFER, bindings[0])
+    gl.glBindFramebuffer(gl.GL_READ_FRAMEBUFFER, bindings[1])
 
 
 class ReflectionAtlas:
@@ -81,21 +105,20 @@ class ReflectionAtlas:
             return False
         self.release()
         self.texture = int(gl.glGenTextures(1))
-        gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
-        gl.glTexStorage2D(gl.GL_TEXTURE_2D, LEVELS, gl.GL_RGBA16F, width, height)
-        for name, value in ((gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR_MIPMAP_LINEAR),
-                            (gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR),
-                            (gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE),
-                            (gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE),
-                            (gl.GL_TEXTURE_MAX_LEVEL, LEVELS - 1)):
-            gl.glTexParameteri(gl.GL_TEXTURE_2D, name, value)
-        gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
+        with self._on_unit(self.texture):
+            gl.glTexStorage2D(gl.GL_TEXTURE_2D, LEVELS, gl.GL_RGBA16F, width, height)
+            for name, value in ((gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR_MIPMAP_LINEAR),
+                                (gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR),
+                                (gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE),
+                                (gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE),
+                                (gl.GL_TEXTURE_MAX_LEVEL, LEVELS - 1)):
+                gl.glTexParameteri(gl.GL_TEXTURE_2D, name, value)
         self.depth = int(gl.glGenRenderbuffers(1))
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self.depth)
         gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24,
                                  width, height)
         gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, 0)
-        previous = int(gl.glGetIntegerv(gl.GL_DRAW_FRAMEBUFFER_BINDING))
+        previous = _bindings()
         self.framebuffer = int(gl.glGenFramebuffers(1))
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.framebuffer)
         gl.glFramebufferTexture2D(gl.GL_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0,
@@ -104,28 +127,36 @@ class ReflectionAtlas:
                                      gl.GL_RENDERBUFFER, self.depth)
         gl.glDrawBuffers(1, [gl.GL_COLOR_ATTACHMENT0])
         status = gl.glCheckFramebufferStatus(gl.GL_FRAMEBUFFER)
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, previous)
+        _restore(previous)
         if status != gl.GL_FRAMEBUFFER_COMPLETE:
             self.release()
             raise RuntimeError('the reflection atlas is incomplete (0x%x)' % int(status))
         self.size = (width, height)
         return True
 
-    def keep(self) -> None:
-        """Copy the atlas aside, for the mirror views about to be drawn to read."""
+    def _slot(self, rect: TileRect) -> TileRect:
+        """``rect`` grown by the gutter each side, within the atlas."""
+        x, y, width, height = rect
+        x0, y0 = max(0, x - GUTTER), max(0, y - GUTTER)
+        x1 = min(self.size[0], x + width + GUTTER)
+        y1 = min(self.size[1], y + height + GUTTER)
+        return x0, y0, max(0, x1 - x0), max(0, y1 - y0)
+
+    def keep(self, tiles: Iterable[TileRect]) -> None:
+        """Copy ``tiles`` of the atlas aside, each with its gutter, for the
+        mirror views about to be drawn to read."""
         from OpenGL import GL as gl
         width, height = self.size
-        previous = int(gl.glGetIntegerv(gl.GL_DRAW_FRAMEBUFFER_BINDING))
+        previous = _bindings()
         if not self.kept:
             self.kept = int(gl.glGenTextures(1))
-            gl.glBindTexture(gl.GL_TEXTURE_2D, self.kept)
-            gl.glTexStorage2D(gl.GL_TEXTURE_2D, 1, gl.GL_RGBA16F, width, height)
-            for name, value in ((gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR),
-                                (gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR),
-                                (gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE),
-                                (gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)):
-                gl.glTexParameteri(gl.GL_TEXTURE_2D, name, value)
-            gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
+            with self._on_unit(self.kept):
+                gl.glTexStorage2D(gl.GL_TEXTURE_2D, 1, gl.GL_RGBA16F, width, height)
+                for name, value in ((gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR),
+                                    (gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR),
+                                    (gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE),
+                                    (gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE)):
+                    gl.glTexParameteri(gl.GL_TEXTURE_2D, name, value)
             self._kept_framebuffer = int(gl.glGenFramebuffers(1))
             gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self._kept_framebuffer)
             gl.glFramebufferTexture2D(gl.GL_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0,
@@ -133,47 +164,51 @@ class ReflectionAtlas:
         gl.glBindFramebuffer(gl.GL_READ_FRAMEBUFFER, self.framebuffer)
         gl.glBindFramebuffer(gl.GL_DRAW_FRAMEBUFFER, self._kept_framebuffer)
         gl.glDisable(gl.GL_SCISSOR_TEST)
-        gl.glBlitFramebuffer(0, 0, width, height, 0, 0, width, height,
-                             gl.GL_COLOR_BUFFER_BIT, gl.GL_NEAREST)
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, previous)
+        for x, y, w, h in {self._slot(tile) for tile in tiles}:
+            if w and h:
+                gl.glBlitFramebuffer(x, y, x + w, y + h, x, y, x + w, y + h,
+                                     gl.GL_COLOR_BUFFER_BIT, gl.GL_NEAREST)
+        _restore(previous)
 
     def bind_kept(self) -> None:
         """Put the copy :meth:`keep` made on :data:`REFLECTION_UNIT`."""
-        from OpenGL import GL as gl
-        gl.glActiveTexture(gl.GL_TEXTURE0 + self.UNIT)
-        gl.glBindTexture(gl.GL_TEXTURE_2D, self.kept)
-        gl.glActiveTexture(gl.GL_TEXTURE0)
+        self._bind_unit(self.kept)
 
-    def begin(self) -> int:
-        """Draw into the atlas from here; answers the framebuffer to go back to."""
+    def begin(self) -> Bindings:
+        """Draw into the atlas from here; answers the bindings to go back to."""
         from OpenGL import GL as gl
-        previous = int(gl.glGetIntegerv(gl.GL_DRAW_FRAMEBUFFER_BINDING))
+        previous = _bindings()
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.framebuffer)
         gl.glEnable(gl.GL_SCISSOR_TEST)
         self.mipmapped = False
         return previous
 
-    def clear(self, rect: Tuple[int, int, int, int]) -> None:
-        """Clear one tile to nothing: alpha 0, the far plane."""
+    def clear(self, rect: TileRect) -> None:
+        """Clear one tile and its gutter to nothing: alpha 0, the far plane.
+
+        The viewport is left on the tile, for its mirror view to draw in.
+        """
         from OpenGL import GL as gl
         gl.glViewport(*rect)
-        gl.glScissor(*rect)
+        gl.glScissor(*self._slot(rect))
+        colour = [float(value) for value in gl.glGetFloatv(gl.GL_COLOR_CLEAR_VALUE)]
         gl.glClearColor(0.0, 0.0, 0.0, 0.0)
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
+        gl.glClearColor(*colour)
+        gl.glScissor(*rect)
 
-    def end(self, previous: int, mipmap: bool = False) -> None:
+    def end(self, previous: Bindings, mipmap: bool = False) -> None:
         """Stop drawing into the atlas, blurring its levels where ``mipmap``."""
         from OpenGL import GL as gl
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, previous)
+        _restore(previous)
         if mipmap:
-            gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
-            gl.glGenerateMipmap(gl.GL_TEXTURE_2D)
-            gl.glBindTexture(gl.GL_TEXTURE_2D, 0)
+            with self._on_unit(self.texture):
+                gl.glGenerateMipmap(gl.GL_TEXTURE_2D)
             self.mipmapped = True
 
     def bind(self) -> None:
         """Put the atlas on :data:`REFLECTION_UNIT` for the mirrors to read."""
-        self._on_unit(self.texture)
+        self._bind_unit(self.texture)
 
     def unbind(self) -> None:
         """Leave nothing on :data:`REFLECTION_UNIT`, while the atlas is drawn into.
@@ -181,13 +216,29 @@ class ReflectionAtlas:
         A program that could sample the texture it draws into makes a feedback
         loop, which GL leaves undefined.
         """
-        self._on_unit(0)
+        self._bind_unit(0)
 
-    def _on_unit(self, texture: int) -> None:
+    def _bind_unit(self, texture: int) -> None:
+        """Leave ``texture`` on :data:`REFLECTION_UNIT`, and unit 0 active."""
         from OpenGL import GL as gl
         gl.glActiveTexture(gl.GL_TEXTURE0 + self.UNIT)
         gl.glBindTexture(gl.GL_TEXTURE_2D, texture)
         gl.glActiveTexture(gl.GL_TEXTURE0)
+
+    @contextlib.contextmanager
+    def _on_unit(self, texture: int) -> Iterator[None]:
+        """``texture`` bound on :data:`REFLECTION_UNIT` to be worked on, and
+        what that unit held and which unit was active put back after."""
+        from OpenGL import GL as gl
+        active = int(gl.glGetIntegerv(gl.GL_ACTIVE_TEXTURE))
+        gl.glActiveTexture(gl.GL_TEXTURE0 + self.UNIT)
+        held = int(gl.glGetIntegerv(gl.GL_TEXTURE_BINDING_2D))
+        gl.glBindTexture(gl.GL_TEXTURE_2D, texture)
+        try:
+            yield
+        finally:
+            gl.glBindTexture(gl.GL_TEXTURE_2D, held)
+            gl.glActiveTexture(active)
 
     def release(self) -> None:
         """Give back the atlas's GL names; the next use allocates again."""

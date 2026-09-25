@@ -552,3 +552,9 @@ def test_the_public_names_are_the_ones_other_modules_use():
                  'shape_material', 'fan'):
         assert name in reflection.__all__
     assert 'WATER_DISTORTION' not in reflection.__all__
+
+
+@pytest.mark.parametrize('tile', [(4, 4, 48, 48), (0, 0, 8, 8), (100, 36, 24, 200)])
+def test_a_tiles_bounds_name_the_tile_they_were_made_from(tile):
+    atlas = (1360, 768)
+    assert reflection.bounds_tile(reflection.tile_bounds(tile, atlas), atlas) == tile

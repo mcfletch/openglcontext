@@ -234,8 +234,8 @@ them:
    it, through the ``vertex`` or ``geometry`` strategy. What a shared draw
    refuses, such as particles and text, is drawn per mirror view.
 5. A mirror seen in a mirror view shows the reflection drawn for that view
-   the frame before, read from a copy of the atlas taken before the frame's
-   mirror views are drawn.
+   the frame before, read from a copy of the tiles those reflections are in,
+   taken before the frame's mirror views are drawn.
 6. Each mirror, drawn in each view, projects its own world position through
    the matrix its tile was drawn with to find its texel.
 

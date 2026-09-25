@@ -50,7 +50,7 @@ __all__ = [
     'surface_plane', 'local_plane', 'place_plane', 'world_corners',
     'box_corners', 'guarded', 'contains', 'tile_bounds', 'mirror_matrix', 'eye_plane',
     'oblique_projection', 'screen_rect', 'crop_matrix', 'texels', 'plan_mirror',
-    'tile_transform', 'atlas_lookup', 'fov', 'too_small', 'too_small_mask', 'reach',
+    'tile_transform', 'bounds_tile', 'atlas_lookup', 'fov', 'too_small', 'too_small_mask', 'reach',
     'SMALLEST',
 ]
 
@@ -676,6 +676,14 @@ def tile_bounds(tile: TileRect, atlas: Tuple[int, int]) -> Tuple[float, float, f
     """
     return ((tile[0] + 0.5) / atlas[0], (tile[1] + 0.5) / atlas[1],
             (tile[0] + tile[2] - 0.5) / atlas[0], (tile[1] + tile[3] - 0.5) / atlas[1])
+
+
+def bounds_tile(bounds: Sequence[float], atlas: Tuple[int, int]) -> TileRect:
+    """The tile :func:`tile_bounds` made ``bounds`` from, in texels."""
+    x = int(round(bounds[0] * atlas[0] - 0.5))
+    y = int(round(bounds[1] * atlas[1] - 0.5))
+    return (x, y, int(round(bounds[2] * atlas[0] + 0.5)) - x,
+            int(round(bounds[3] * atlas[1] + 0.5)) - y)
 
 
 def atlas_lookup(world: ArrayLike, mirror: MirrorView, tile: TileRect,
