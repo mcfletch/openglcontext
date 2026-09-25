@@ -33,7 +33,8 @@ for Qt in ``OpenGLContext_qt.demos.qt_viewer``.
 import sys
 import tkinter
 from tkinter import filedialog, simpledialog, ttk
-from typing import Any, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from pydispatch import dispatcher
 
@@ -75,7 +76,7 @@ def rowId(path: Sequence[int]) -> str:
     return 'row:' + '.'.join(str(index) for index in path)
 
 
-def pathOf(itemId: str) -> Optional[Tuple[int, ...]]:
+def pathOf(itemId: str) -> Optional[tuple[int, ...]]:
     """The outline path an item id stands for, or None where it stands for none
 
     Not every item in the tree is a row of the outline: a row waiting to be
@@ -294,7 +295,7 @@ class ViewerApplication:
         """Redraw the panel: what the selected node is, and what it holds"""
         row = self.outline.selectedRow
         if row is None:
-            lines: List[str] = ['Nothing selected']
+            lines: list[str] = ['Nothing selected']
         else:
             lines = ['%s %s' % (row.nodeType, row.defName) if row.defName
                      else row.nodeType]
@@ -308,7 +309,7 @@ class ViewerApplication:
         self.root.mainloop()
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: Optional[list[str]] = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     ViewerApplication(source=argv[0] if argv else None).run()
     return 0

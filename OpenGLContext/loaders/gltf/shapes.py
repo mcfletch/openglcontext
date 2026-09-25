@@ -15,7 +15,8 @@ core array, since that is the one its version defines.
 from __future__ import annotations
 
 import logging
-from typing import Any, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from OpenGLContext.loaders.documentvalues import bounded
 from OpenGLContext.scenegraph.zones import BOX, CAPSULE, CYLINDER, SPHERE, ShapeSpec
@@ -91,13 +92,13 @@ def _dimension(value: Any) -> Optional[float]:
     return length if length >= 0.0 else None
 
 
-def document_shapes(g: Any) -> List[Optional[ShapeSpec]]:
+def document_shapes(g: Any) -> list[Optional[ShapeSpec]]:
     """Every shape the document declares, by index; None where one is unusable."""
     return [read_shape(entry) for entry in (_raw_table(g) or ())]
 
 
 def shape_at(g: Any, index: Any,
-             table: Optional[List[Optional[ShapeSpec]]] = None) -> Optional[ShapeSpec]:
+             table: Optional[list[Optional[ShapeSpec]]] = None) -> Optional[ShapeSpec]:
     """The shape at ``index``, or None where the index names nothing usable."""
     shapes = document_shapes(g) if table is None else table
     if not isinstance(index, int) or isinstance(index, bool):

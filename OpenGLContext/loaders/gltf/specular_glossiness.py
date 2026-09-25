@@ -20,7 +20,8 @@ declare the spec/gloss extension are routed through it by :mod:`materials`.
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 
@@ -56,7 +57,7 @@ def _solve_metallic(diffuse_b: float, specular_b: float,
 
 
 def _specgloss_to_metalrough(diffuse_rgb: Sequence[float], spec_rgb: Sequence[float],
-                             glossiness: float) -> Tuple[list, float, float]:
+                             glossiness: float) -> tuple[list, float, float]:
     """Convert (diffuse, specular, glossiness) -> (baseColor, metallic, roughness)."""
     eps = 1e-6
     one_minus_spec_strength = 1.0 - max(spec_rgb[0], spec_rgb[1], spec_rgb[2])
@@ -86,7 +87,7 @@ def _specgloss_textures_to_metalrough(diffuse_pil: "Optional[Image.Image]",
                                       sg_pil: "Optional[Image.Image]",
                                       diffuse_factor: Sequence[float],
                                       spec_factor: Sequence[float],
-                                      gloss_factor: float) -> "Tuple[Image.Image, Image.Image]":
+                                      gloss_factor: float) -> "tuple[Image.Image, Image.Image]":
     """Per-pixel spec/gloss -> (baseColorTexture, metallicRoughnessTexture) PILs.
 
     The metalness of texture-driven spec/gloss assets (e.g. SpecGlossVsMetalRough)

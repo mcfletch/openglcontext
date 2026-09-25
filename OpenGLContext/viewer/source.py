@@ -15,7 +15,7 @@ unpacked whole rather than one member at a time.
 """
 import hashlib
 import os
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Optional
 
 from OpenGLContext import atomicfiles, userpaths
 from OpenGLContext.contentpacks import ContentPack, ContentStore
@@ -60,7 +60,7 @@ class UnknownMember(ValueError):
     """The archive does not say, or does not hold, which scene to open."""
 
 
-def split_member(source: str) -> Tuple[str, Optional[str]]:
+def split_member(source: str) -> tuple[str, Optional[str]]:
     """``('world.tar.gz', 'gallery.glb')`` for ``'world.tar.gz#gallery.glb'``.
 
     Only the last ``#`` counts, and only where something follows it. A Windows

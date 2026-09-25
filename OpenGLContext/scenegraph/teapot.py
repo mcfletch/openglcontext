@@ -17,7 +17,8 @@ the frame costs far fewer triangles.  A scene that wants a particular density --
 a coarse mesh whose facets are meant to be seen, or one sized to match a
 technique's tolerances -- sets the ``steps`` field and takes distance out of it.
 """
-from typing import Any, Callable, Optional, Tuple
+from collections.abc import Callable
+from typing import Any, Optional
 
 from OpenGL.GL import *
 from vrml.vrml97 import nodetypes
@@ -151,7 +152,7 @@ class Teapot(nodetypes.Geometry, node.Node):
     # field of instanced teapots pays the same vertex detail at every distance,
     # trading that for one draw call. The quadrics make the same trade; see
     # plans/INSTANCED-GEOMETRY.md.
-    def instanceContentKey(self) -> Tuple[Any, ...]:
+    def instanceContentKey(self) -> tuple[Any, ...]:
         """Teapots of the same size/lid/solid/steps share one mesh -> one draw.
 
         ``size`` is folded into the instance mesh (the per-instance modelview
@@ -175,7 +176,7 @@ class Teapot(nodetypes.Geometry, node.Node):
         from OpenGLContext.scenegraph.teapot_nurbs import steps_for_level
         return steps_for_level(0)
 
-    def _instanceArrays(self) -> Optional[Tuple[Any, Any, Any]]:
+    def _instanceArrays(self) -> Optional[tuple[Any, Any, Any]]:
         """Baked (positions, normals, texcoords) for the instanced mesh, or None.
 
         The mesh at :meth:`_instance_steps` with ``size`` folded into the
@@ -346,7 +347,7 @@ class Teapot(nodetypes.Geometry, node.Node):
             )
             stride = FLOATS_PER_VERTEX * 4
 
-            def make(array: Any) -> Tuple[Any, Any, int]:
+            def make(array: Any) -> tuple[Any, Any, int]:
                 count = len(array) // FLOATS_PER_VERTEX
                 if count == 0:
                     return None, None, 0
@@ -465,7 +466,7 @@ class Teapot(nodetypes.Geometry, node.Node):
         glBindVertexArray(0)
 
     # -- bounding volume ---------------------------------------------------
-    def _mesh_aabb(self) -> Optional[Tuple[Any, Any]]:
+    def _mesh_aabb(self) -> Optional[tuple[Any, Any]]:
         """(min, max) corner of the tessellated unit teapot, or None.
 
         Computed from the T2F_N3F_V3F vertex arrays already in memory rather than

@@ -1,5 +1,5 @@
 """VRML97-style Transform node"""
-from typing import Any, List, Optional, Tuple
+from typing import Any, Optional
 
 import numpy as np
 from OpenGL.GL import *
@@ -72,8 +72,8 @@ class Transform(grouping.Grouping, basenodes.Transform):
             return current
         # need to create a new volume and make it depend
         # on the appropriate fields...
-        volumes: List[Any] = []
-        dependencies: List[Tuple[Any, Optional[str]]] = [
+        volumes: list[Any] = []
+        dependencies: list[tuple[Any, Optional[str]]] = [
             (self,'children'),
             (self,'translation'),
             (self,'rotation'),

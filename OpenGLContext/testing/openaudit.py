@@ -36,7 +36,8 @@ import sys
 import threading
 from dataclasses import dataclass
 from types import FrameType
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from collections.abc import Iterable
+from typing import Any, Optional
 
 __all__ = ['OpenAudit', 'OpenFinding', 'installed']
 
@@ -47,7 +48,7 @@ _ON_BEHALF = ('importlib', '_frozen_importlib', '_frozen_importlib_external',
               'zipimport', 'linecache', 'traceback', 'tokenize', 'inspect')
 
 
-def _within(name: str, prefixes: Tuple[str, ...]) -> bool:
+def _within(name: str, prefixes: tuple[str, ...]) -> bool:
     return any(name == prefix or name.startswith(prefix + '.') for prefix in prefixes)
 
 
@@ -75,11 +76,11 @@ class OpenAudit:
         self.checked = tuple(checked)
         self.sanctioned = tuple(sanctioned)
         self.enabled = False
-        self._found: List[OpenFinding] = []
+        self._found: list[OpenFinding] = []
         self._lock = threading.Lock()
         self._roots = self._package_roots()
 
-    def _package_roots(self) -> Tuple[str, ...]:
+    def _package_roots(self) -> tuple[str, ...]:
         roots = []
         for name in self.checked:
             module = sys.modules.get(name.split('.')[0])
@@ -88,7 +89,7 @@ class OpenAudit:
                 roots.append(os.path.dirname(os.path.realpath(where)) + os.sep)
         return tuple(roots)
 
-    def hook(self, event: str, args: Tuple[Any, ...]) -> None:
+    def hook(self, event: str, args: tuple[Any, ...]) -> None:
         """The audit hook: record an ``open`` the rules do not allow."""
         if event != 'open' or not self.enabled:
             return
@@ -106,7 +107,7 @@ class OpenAudit:
         with self._lock:
             self._found.append(OpenFinding(module, line, text, mode))
 
-    def opener(self, frame: Optional[FrameType]) -> Optional[Tuple[str, int]]:
+    def opener(self, frame: Optional[FrameType]) -> Optional[tuple[str, int]]:
         """The unsanctioned checked module an open is attributed to, and its line.
 
         None where the innermost checked frame is sanctioned, where the open is
@@ -124,14 +125,14 @@ class OpenAudit:
             frame = frame.f_back
         return None
 
-    def take(self) -> List[OpenFinding]:
+    def take(self) -> list[OpenFinding]:
         """What was found since the last take, and forget it."""
         with self._lock:
             found, self._found = self._found, []
         return found
 
 
-_INSTALLED: Dict[str, OpenAudit] = {}
+_INSTALLED: dict[str, OpenAudit] = {}
 
 
 def installed(checked: Iterable[str], sanctioned: Iterable[str]) -> OpenAudit:

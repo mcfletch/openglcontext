@@ -33,7 +33,8 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -51,7 +52,7 @@ __all__ = ['VIEWS', 'CharacterSheet', 'main']
 
 #: The four ways round a figure worth looking at, as a yaw in degrees and the
 #: name of what it shows. Front is the way the model faces.
-VIEWS: Tuple[Tuple[str, float], ...] = (
+VIEWS: tuple[tuple[str, float], ...] = (
     ('front', 0.0),
     ('three-quarter', 40.0),
     ('side', 90.0),
@@ -67,7 +68,7 @@ CELL = (240, 340)
 BACKDROP = '0.15,0.16,0.19'
 
 
-def _yaw(degrees: float) -> Tuple[float, float, float, float]:
+def _yaw(degrees: float) -> tuple[float, float, float, float]:
     """A rotation about the vertical, as VRML97 states one."""
     return (0.0, 1.0, 0.0, np.radians(degrees))
 
@@ -76,8 +77,8 @@ class CharacterSheet:
     """What to draw: one model, its clips, its views and where they go."""
 
     def __init__(self, source: str, out: str, clips: Optional[Sequence[str]] = None,
-                 phases: int = 6, views: Sequence[Tuple[str, float]] = VIEWS,
-                 hold: Optional[Dict[str, str]] = None) -> None:
+                 phases: int = 6, views: Sequence[tuple[str, float]] = VIEWS,
+                 hold: Optional[dict[str, str]] = None) -> None:
         self.source = source
         self.out = out
         self.wanted = list(clips) if clips else None
@@ -95,7 +96,7 @@ class CharacterSheet:
         """
         return index / max(self.phases - 1, 1)
 
-    def clips_of(self, model: CharacterModel) -> List[str]:
+    def clips_of(self, model: CharacterModel) -> list[str]:
         """The clips to draw, in the order asked for or the order they are in."""
         available = list(model.clips)
         if self.wanted is None:
@@ -107,7 +108,7 @@ class CharacterSheet:
                                 ', '.join(available) or 'none'))
         return list(self.wanted)
 
-    def plan(self, model: CharacterModel) -> List[Tuple[str, float, float]]:
+    def plan(self, model: CharacterModel) -> list[tuple[str, float, float]]:
         """Every cell to draw, in the order they are drawn and tiled.
 
         The per-clip sheets first, then the overview's one row per clip, so the
@@ -147,10 +148,10 @@ class SheetContext(ViewerContext):
         super(SheetContext, self).OnInit()
         self.model: Optional[CharacterModel] = None
         #: One entry per cell to draw: the clip, where in it, and the turn.
-        self.plan: List[Tuple[str, float, float]] = []
-        self.taken: List[np.ndarray] = []
+        self.plan: list[tuple[str, float, float]] = []
+        self.taken: list[np.ndarray] = []
         self.warmed = 0
-        self.written: List[str] = []
+        self.written: list[str] = []
         # A sheet is a picture of the model, so the viewer's own caption stays
         # off it.
         self.showCaption(False)

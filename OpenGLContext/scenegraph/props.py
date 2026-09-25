@@ -22,7 +22,8 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -165,7 +166,7 @@ class Prop:
                    height=float(np.ptp(points[:, 1])) * float(scale),
                    shape=shape)
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """This prop as a baked world carries it."""
         return {'kind': self.kind,
                 'at': [round(float(v), 3) for v in self.position],
@@ -225,7 +226,7 @@ def props_table(props: Sequence[Prop]) -> bytes:
     return buffer.getvalue()
 
 
-def props_from_table(data: bytes) -> List[Prop]:
+def props_from_table(data: bytes) -> list[Prop]:
     """The props a :func:`props_table` holds.
 
     Raises ``ValueError`` for bytes that are not such a table, or whose
@@ -273,12 +274,12 @@ _FACES = np.array([
     (4, 9, 5), (2, 4, 11), (6, 2, 10), (8, 6, 7), (9, 8, 1)], dtype=np.int64)
 
 
-def _icosphere(facets: int) -> Tuple[np.ndarray, np.ndarray]:
+def _icosphere(facets: int) -> tuple[np.ndarray, np.ndarray]:
     """A unit sphere as a subdivided icosahedron: even facets, no poles."""
     points = list(_CORNERS / np.linalg.norm(_CORNERS, axis=1, keepdims=True))
     faces = [tuple(face) for face in _FACES]
     for _round in range(facets):
-        middles: Dict[Tuple[int, int], int] = {}
+        middles: dict[tuple[int, int], int] = {}
         split = []
         for a, b, c in faces:
             ab = _between(points, middles, a, b)
@@ -289,7 +290,7 @@ def _icosphere(facets: int) -> Tuple[np.ndarray, np.ndarray]:
     return np.asarray(points, dtype='d'), np.asarray(faces, dtype=np.uint32)
 
 
-def _between(points: list, middles: Dict[Tuple[int, int], int],
+def _between(points: list, middles: dict[tuple[int, int], int],
              a: int, b: int) -> int:
     """The index of the point halfway along an edge, made once per edge.
 

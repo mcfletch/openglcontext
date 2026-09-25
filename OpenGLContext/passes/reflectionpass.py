@@ -16,9 +16,8 @@ from __future__ import annotations
 import contextlib
 import logging
 from types import MappingProxyType
-from typing import (
-    TYPE_CHECKING, AbstractSet, Any, Dict, List, Mapping, Optional, Set, Tuple,
-)
+from collections.abc import Mapping, Set
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
@@ -53,7 +52,7 @@ class ReflectionsMixin(PassResources):
         shader_program: Any
         context: Any
         frustum: Any
-        visiblePlacements: Optional[Dict[int, Any]]
+        visiblePlacements: Optional[dict[int, Any]]
         multiviewStrategy: Optional[str]
         _pathGeneration: int
         activeFrame: Optional["ViewFrame"]
@@ -69,18 +68,18 @@ class ReflectionsMixin(PassResources):
         frameState: Optional["FrameState"]
 
         def renderSet(self, matrix: Any, gathered: Any = None,
-                      among: Optional[np.ndarray] = None) -> List[Any]: ...
+                      among: Optional[np.ndarray] = None) -> list[Any]: ...
         def setupViewLighting(self, matrix: Any, lighting: Optional["Lighting"],
                               fitted: bool = False) -> None: ...
-        def shaderRenderOpaque(self, toRender: List, id_map: Optional[Dict] = None,
+        def shaderRenderOpaque(self, toRender: list, id_map: Optional[dict] = None,
                                skip: Optional[set] = None) -> None: ...
         def sharesViews(self, frames: Any) -> bool: ...
         def sharesDraw(self, record: Any) -> bool: ...
         def chooseMultiview(self) -> str: ...
-        def renderShared(self, frames: Any, id_map: Optional[Dict],
+        def renderShared(self, frames: Any, id_map: Optional[dict],
                          lighting: Optional["Lighting"] = None, mirrored: bool = False,
                          capacity: int = 0, into_atlas: bool = False
-                         ) -> Optional[Dict[int, Any]]: ...
+                         ) -> Optional[dict[int, Any]]: ...
         def _frustumSurvivors(self, matrices: Any, points: Any, bounded: Any,
                               drawing: Any) -> Any: ...
         def mirrorsZoned(self) -> bool: ...
@@ -101,9 +100,9 @@ class ReflectionsMixin(PassResources):
     #: view reads, from the copy of the atlas that frame left.
     _previous_lookups: Mapping[Any, "Lookup"] = _NO_LOOKUPS
     #: The mirror views this frame drew with a mirror left out of them.
-    _incompleteMirrors: AbstractSet[Any] = frozenset()
+    _incompleteMirrors: Set[Any] = frozenset()
     #: :meth:`sceneMirrors`' answer, and what it was worked out for.
-    _sceneMirrors: Optional[Tuple[Any, Any]] = None
+    _sceneMirrors: Optional[tuple[Any, Any]] = None
     #: The lookup the program was last given, so a run of shapes that are
     #: not mirrors sets nothing.
     _reflection_applied: Any = None
@@ -177,7 +176,7 @@ class ReflectionsMixin(PassResources):
                               'OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS', 4, integer=True))),
                       texels=int(width * height * FILL))
 
-    def reflectionAtlasSize(self) -> Tuple[int, int]:
+    def reflectionAtlasSize(self) -> tuple[int, int]:
         """The reflection atlas's size in texels, for this window."""
         from OpenGLContext.passes.reflectionatlas import atlas_size
         width, height = self.context.getViewPort()
@@ -189,7 +188,7 @@ class ReflectionsMixin(PassResources):
             self, 'reflectionAtlas',
             renderoptions.env_number_once('OPENGLCONTEXT_REFLECTION_ATLAS', 0.5))))
 
-    def renderReflections(self, frames: List[Any],
+    def renderReflections(self, frames: list[Any],
                           lighting: Optional[Lighting] = None) -> None:
         """Draw this frame's reflections into the atlas, for the mirrors to read.
 
@@ -217,7 +216,7 @@ class ReflectionsMixin(PassResources):
         self._reflection_applied = None
         self._incompleteMirrors = frozenset()
 
-    def _renderReflections(self, frames: List[Any], lighting: Optional[Lighting]) -> None:
+    def _renderReflections(self, frames: list[Any], lighting: Optional[Lighting]) -> None:
         previous = self._reflection_lookups
         self._previous_lookups = {}
         self._reflection_lookups = {}
@@ -235,7 +234,7 @@ class ReflectionsMixin(PassResources):
             if trigger is not None:
                 trigger(0)
 
-    def _drawReflections(self, frames: List[Any], lighting: Optional[Lighting],
+    def _drawReflections(self, frames: list[Any], lighting: Optional[Lighting],
                          previous: Mapping[Any, "Lookup"]) -> bool:
         """Plan and draw this frame's reflections; whether the plan is unfinished."""
         gathered = self.frameGather()
@@ -402,7 +401,7 @@ class ReflectionsMixin(PassResources):
                  if shape_reflector(node) is not None], dtype=int))
         return known[1]
 
-    def mirrorsIn(self, frame: Any) -> List[Any]:
+    def mirrorsIn(self, frame: Any) -> list[Any]:
         """The scene's mirrors inside a mirror view's frustum, as draw records.
 
         Only the mirrors are tested, against the frustum of ``frame``'s own
@@ -420,7 +419,7 @@ class ReflectionsMixin(PassResources):
                  gathered.volumes[index], gathered.paths[index], gathered.nodes[index])
                 for index in keep]
 
-    def mirrorContents(self, frame: Any, texels: float = 0.0) -> List[Any]:
+    def mirrorContents(self, frame: Any, texels: float = 0.0) -> list[Any]:
         """What a mirror view's ``frame`` draws, of the frame's walk of the scene.
 
         What its camera's frustum keeps, opaque, and large enough to cover two
@@ -452,7 +451,7 @@ class ReflectionsMixin(PassResources):
         frame.visiblePlacements = self.visiblePlacements or {}
         return records
 
-    def mirrorFrames(self, plan: Any) -> List[Any]:
+    def mirrorFrames(self, plan: Any) -> list[Any]:
         """A :class:`~OpenGLContext.multiview.strategy.ViewFrame` per mirror view.
 
         Each is the mirror's camera, drawing into its tile as the draw's
@@ -466,7 +465,7 @@ class ReflectionsMixin(PassResources):
         planner = self._reflection_planner
         assert planner is not None, 'a plan comes from the pass\'s planner'
         mirrors = []
-        incomplete: Set[Any] = set()
+        incomplete: set[Any] = set()
         self._incompleteMirrors = incomplete
         earlier = self._previous_lookups
         for draw in plan.draws:

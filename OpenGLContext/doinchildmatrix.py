@@ -4,7 +4,8 @@ XXX Should add versions for perspective and/or texture
     matrices (use a parameterized base function and
     provide top-level convenience functions to call it).
 """
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from OpenGL.GL import *
 from OpenGL.error import GLError

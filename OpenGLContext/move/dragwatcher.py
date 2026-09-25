@@ -1,5 +1,4 @@
 """Semantics for fractional and absolute dragging"""
-from typing import Tuple
 
 
 class DragWatcher(object):
@@ -18,7 +17,7 @@ class DragWatcher(object):
         """
         self.start = startX, startY
         self.total = totalX, totalY
-    def uniformFractions(self, newX: float, newY: float) -> Tuple[float, float]:
+    def uniformFractions(self, newX: float, newY: float) -> tuple[float, float]:
         """Calculate fractional delta measured against the whole window
 
         newX, newY -- new selection point from which to calculate
@@ -37,7 +36,7 @@ class DragWatcher(object):
             (newX - self.start[0]) / float(totalX) if totalX else 0.0,
             (newY - self.start[1]) / float(totalY) if totalY else 0.0,
         )
-    def fractions(self, newX: float, newY: float) -> Tuple[float, float]:
+    def fractions(self, newX: float, newY: float) -> tuple[float, float]:
         """Calculate fractional delta from the start point toward the edge
 
         newX, newY -- new selection point from which to calculate
@@ -60,7 +59,7 @@ class DragWatcher(object):
             values.append(delta / span if span else 0.0)
         return values[0], values[1]
 
-    def distances(self, newX: float, newY: float) -> Tuple[float, float]:
+    def distances(self, newX: float, newY: float) -> tuple[float, float]:
         """Calculate absolute distances from start point
 
         newX, newY -- new selection point from which to calculate

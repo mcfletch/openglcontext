@@ -14,7 +14,7 @@ during the pass via the ``mode.shadow_pass`` flag.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
@@ -65,7 +65,7 @@ SHADOW_MIN_RESOLUTION = 256
 SHADOW_MAX_RESOLUTION = 8192
 
 
-def per_light_shadow_resolution(lights: List[Any], default_resolution: int) -> int:
+def per_light_shadow_resolution(lights: list[Any], default_resolution: int) -> int:
     """Resolution for the shadow maps, from the casting lights.
 
     They share one physical depth array, so one resolution serves every slot:
@@ -90,7 +90,7 @@ def light_depth_bias(light: Any) -> float:
     return SHADOW_DEPTH_BIAS if bias is None else float(bias)
 
 
-def _local_box(volume: Any, box_visible: Any) -> Optional[Tuple[Any, Any]]:
+def _local_box(volume: Any, box_visible: Any) -> Optional[tuple[Any, Any]]:
     """``(centre, half-extents)`` of a volume whose visibility is its box's; else None."""
     if type(volume).visible is not box_visible:
         return None
@@ -153,12 +153,12 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
     #: volume held so a reused address is not mistaken for it. A volume is
     #: the same object while its shape is unchanged, so this is worked out
     #: once per shape rather than once per light per frame.
-    _local_boxes: Optional[Dict[int, Tuple[Any, Any]]] = None
+    _local_boxes: Optional[dict[int, tuple[Any, Any]]] = None
     #: What each individual caster's geometry came out as, so that one thing
     #: moving does not re-derive the rest. Two frames' worth, turned over by
     #: :meth:`_turnOverCasterGeometry`. See :meth:`_casterWorldGeometry`.
-    _caster_geometry_cache: Optional[Dict[tuple, tuple]] = None
-    _caster_geometry_previous: Optional[Dict[tuple, tuple]] = None
+    _caster_geometry_cache: Optional[dict[tuple, tuple]] = None
+    _caster_geometry_previous: Optional[dict[tuple, tuple]] = None
 
     # Per-light depth-map reuse. Maps id(light_node) -> the key describing
     # what the light's cached depth map was last rendered from. A spot/point map
@@ -176,7 +176,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
     _depth_grouping_cache: Optional[dict] = None  # type: ignore[assignment]  # base infers None (assigned in disposeShadowMaps); precise type here
 
     # -- public hooks ------------------------------------------------------
-    def renderShadowMaps(self, toRender: List) -> None:
+    def renderShadowMaps(self, toRender: list) -> None:
         """Render depth maps for all shadow-casting lights this frame.
 
         ``toRender`` is the active view's draw list, which the directional
@@ -561,7 +561,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                 return True   # the sphere reaches into this view
         return False
 
-    def _shadowFrusta(self) -> Optional[List[Any]]:
+    def _shadowFrusta(self) -> Optional[list[Any]]:
         """Every view's frustum this frame, or None where every light is to be kept.
 
         None where the frame may draw reflections (``reflectsScene``): the
@@ -574,8 +574,8 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         frames = getattr(self, 'viewFrames', None) or ()
         return [frame.frustum for frame in frames] or [getattr(self, 'frustum', None)]
 
-    def _cullOccluders(self, toRender: List, light_view: np.ndarray,
-                       light_proj: np.ndarray) -> List:
+    def _cullOccluders(self, toRender: list, light_view: np.ndarray,
+                       light_proj: np.ndarray) -> list:
         """Keep only occluders whose bounds intersect the light's frustum.
 
         Shrinks the depth pass: an occluder outside the light frustum cannot cast
@@ -595,10 +595,10 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         if known is None or len(known) > 4 * len(toRender) + 64:
             known = self._local_boxes = {}
         keep = [True] * len(toRender)
-        boxed: List[int] = []
-        centres: List[Any] = []
-        halves: List[Any] = []
-        matrices: List[Any] = []
+        boxed: list[int] = []
+        centres: list[Any] = []
+        halves: list[Any] = []
+        matrices: list[Any] = []
         for index, record in enumerate(toRender):
             bvolume = record[3]
             if bvolume is None:
@@ -640,7 +640,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
     @staticmethod
     def _spotViewProjection(pos: np.ndarray, direction: np.ndarray, cutoff: float,
                             occluder_points: np.ndarray
-                            ) -> Tuple[np.ndarray, np.ndarray]:
+                            ) -> tuple[np.ndarray, np.ndarray]:
         """Spot light shadow (view, projection), fitting near/far to occluders.
 
         Delegates the frustum construction to
@@ -700,7 +700,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         return float(np.clip(0.5 * (clip[2] / clip[3]) + 0.5, 0.0, 1.0))
 
     def _scene_depth_range(self, camera_view: np.ndarray,
-                           occluder_points: np.ndarray) -> Tuple[float, float]:
+                           occluder_points: np.ndarray) -> tuple[float, float]:
         """Eye-space near/far distances spanning the occluders (for CSM)."""
         h = np.concatenate([occluder_points, np.ones((occluder_points.shape[0], 1))], axis=1)
         eye = h @ camera_view
@@ -709,7 +709,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         far = max(near + 1.0, float(depths.max()))
         return near, far
 
-    def _shadowCasterRecords(self) -> List:
+    def _shadowCasterRecords(self) -> list:
         """Renderable shadow-caster nodes, WITHOUT camera-frustum culling.
 
         A shadow caster behind the camera still casts into the visible scene, so
@@ -739,7 +739,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         return records
 
     @staticmethod
-    def _casterSignature(records: List) -> tuple:
+    def _casterSignature(records: list) -> tuple:
         """A cheap change-detector for the caster set.
 
         ``transformMatrix()`` and ``boundingVolume()`` are dependency-cached, so
@@ -764,7 +764,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         """
         return tuple((id(r[2]), id(r[3])) for r in records)
 
-    def _refreshCasterData(self) -> List:
+    def _refreshCasterData(self) -> list:
         """Rebuild the caster records and (re)derive their camera-independent
         world geometry, reusing the previous frame's world points / AABB corners
         when no caster has moved.
@@ -828,7 +828,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         self._depth_map_cache[array_key] = (id(light_node), id(transform),
                                             self._caster_sig)
 
-    def _occluderPoints(self, toRender: List) -> Optional[np.ndarray]:
+    def _occluderPoints(self, toRender: list) -> Optional[np.ndarray]:
         """World points of the camera-visible set, for fitting the cascades.
 
         Shares the frame's per-caster memo with :meth:`_casterWorldGeometry`:
@@ -857,8 +857,8 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         return np.asarray(pts, dtype='d')
 
     @classmethod
-    def _casterGeometryBatch(cls, records: List
-                             ) -> List[Optional[Tuple[np.ndarray, np.ndarray]]]:
+    def _casterGeometryBatch(cls, records: list
+                             ) -> list[Optional[tuple[np.ndarray, np.ndarray]]]:
         """Every caster's world points and AABB corners, derived together.
 
         One entry per record, in the records' own order: ``(world points, eight
@@ -873,12 +873,12 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         (:func:`~OpenGLContext.passes.shadowmath.world_bounds`). A scene of
         boxes is one group.
         """
-        grouped: Dict[int, List[Tuple[int, np.ndarray]]] = {}
+        grouped: dict[int, list[tuple[int, np.ndarray]]] = {}
         for index, record in enumerate(records):
             points = cls._casterLocalPoints(record[3])
             if points is not None:
                 grouped.setdefault(len(points), []).append((index, points))
-        found: List[Optional[Tuple[np.ndarray, np.ndarray]]] = [None] * len(records)
+        found: list[Optional[tuple[np.ndarray, np.ndarray]]] = [None] * len(records)
         for members in grouped.values():
             world, corners = shadowmath.world_bounds(
                 np.stack([points for _index, points in members]),
@@ -891,7 +891,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
 
     @classmethod
     def _casterGeometry(cls, tmatrix: Any, bvolume: Any
-                        ) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+                        ) -> Optional[tuple[np.ndarray, np.ndarray]]:
         """One caster's world points and the eight corners of their AABB.
 
         Returns ``None`` for a caster that has no bounding volume, or whose
@@ -903,7 +903,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
             [(None, None, tmatrix, bvolume, None, None)])[0]
 
     @classmethod
-    def _worldPointsFromRecords(cls, records: List) -> Optional[np.ndarray]:
+    def _worldPointsFromRecords(cls, records: list) -> Optional[np.ndarray]:
         """World-space bounding points of a set of render/caster records.
 
         Each record is a ``(sortKey, mvmatrix, tmatrix, bvolume, path, node)`` tuple;
@@ -916,7 +916,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         return np.concatenate(chunks, axis=0)
 
     @classmethod
-    def _casterWorldAABBCorners(cls, records: List) -> Optional[np.ndarray]:
+    def _casterWorldAABBCorners(cls, records: list) -> Optional[np.ndarray]:
         """Per-caster world-space AABB corners as a (K,8,3) array.
 
         One axis-aligned box per caster (not a merged point cloud) so
@@ -929,8 +929,8 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
             return None
         return np.asarray(boxes, dtype='d')
 
-    def _casterWorldGeometry(self, records: List
-                             ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray]]:
+    def _casterWorldGeometry(self, records: list
+                             ) -> tuple[Optional[np.ndarray], Optional[np.ndarray]]:
         """``(world points, per-caster AABB corners)``, computed once per caster.
 
         A caster's world geometry depends on its bounding volume and its world
@@ -952,7 +952,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
             current = self._caster_geometry_cache = {}
         previous = self._caster_geometry_previous or {}
         missing = []
-        entries: List[Optional[tuple]] = []
+        entries: list[Optional[tuple]] = []
         for record in records:
             key = (id(record[2]), id(record[3]))
             entry = current.get(key)
@@ -974,8 +974,8 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                 continue
             entries[at] = current[key] = (record[2], record[3],
                                           found[0], found[1])
-        points: List[np.ndarray] = []
-        boxes: List[np.ndarray] = []
+        points: list[np.ndarray] = []
+        boxes: list[np.ndarray] = []
         for entry in entries:
             if entry is None:
                 continue
@@ -995,7 +995,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         self._caster_geometry_cache = {}
 
     @staticmethod
-    def _lightSpaceModelviews(members: List, light_view: np.ndarray) -> np.ndarray:
+    def _lightSpaceModelviews(members: list, light_view: np.ndarray) -> np.ndarray:
         """Per-instance light-space modelviews (tmatrix * light_view), (N,4,4) f32.
 
         One batched matmul instead of a Python loop of per-member dots, which
@@ -1049,7 +1049,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                 # reads a per-instance joint base nothing has bound.
                 skinning(None, program=depth_prog)
 
-    def _depthGrouping(self, toRender: List) -> Tuple[List, List]:
+    def _depthGrouping(self, toRender: list) -> tuple[list, list]:
         """Partition depth casters into instanced groups + singles.
 
         Returns ``(groups, singles)``; with instancing disabled every caster is a
@@ -1068,7 +1068,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         cache = self._depth_grouping_cache
         if cache is None:
             cache = self._depth_grouping_cache = {}
-        hit: Optional[Tuple[List, List]] = cache.get(key)
+        hit: Optional[tuple[list, list]] = cache.get(key)
         if hit is not None:
             return hit
         from OpenGLContext.passes.instancing import build_instance_groups
@@ -1083,9 +1083,9 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         cache[key] = result
         return result
 
-    def _renderDepth(self, toRender: List, light_view: np.ndarray,
+    def _renderDepth(self, toRender: list, light_view: np.ndarray,
                      light_proj: np.ndarray,
-                     grouping: Optional[Tuple[List, List]] = None) -> None:
+                     grouping: Optional[tuple[list, list]] = None) -> None:
         shader = self.shader_program
         # Position-only program: a shadow pass is just a vertex transform + depth
         # write, not the full PBR fragment shader (which ran ~22x per frame here).

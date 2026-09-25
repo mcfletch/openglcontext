@@ -42,7 +42,8 @@ import re
 import shutil
 import tarfile
 import time
-from typing import Any, Callable, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
+from collections.abc import Callable, Iterator, Mapping, Sequence
+from typing import Any, Optional
 
 from OpenGLContext import atomicfiles
 
@@ -177,7 +178,7 @@ def summarise(description: str, lines: int = DESCRIPTION_LINES) -> str:
     the text is taken up to the first heading, fence or table, and to at most
     *lines* lines.
     """
-    kept: List[str] = []
+    kept: list[str] = []
     for line in description.strip().splitlines():
         stripped = line.strip()
         if not kept and (not stripped or stripped.startswith('#')):
@@ -225,7 +226,7 @@ def control_paragraph(fields: Mapping[str, Any]) -> str:
     return ''.join('%s: %s\n' % (name, given[name]) for name in ordered)
 
 
-def _files(root: str) -> List[str]:
+def _files(root: str) -> list[str]:
     """Every regular file and symlink in *root*, as sorted relative paths
 
     Separated by ``/`` whatever the build host separates paths with: these name
@@ -398,7 +399,7 @@ def write_deb(data_root: str, control_files: Mapping[str, str], path: str) -> st
     return path
 
 
-def read_deb(path: str) -> Iterator[Tuple[str, bytes]]:
+def read_deb(path: str) -> Iterator[tuple[str, bytes]]:
     """Read back the members of a package, as ``(name, bytes)`` pairs
 
     Enough of the ``ar`` format to check what was written, without asking the

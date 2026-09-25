@@ -12,7 +12,8 @@ with no sound has no engine, and neither is a reason for a frame to fail.
 """
 from __future__ import annotations
 
-from typing import Any, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from OpenGLContext.scenegraph.fog import Fog
 from OpenGLContext.scenegraph.water.medium import Medium, medium_for

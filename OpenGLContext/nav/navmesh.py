@@ -51,7 +51,8 @@ import heapq
 import logging
 import math
 import random
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from collections.abc import Sequence
+from typing import Any, Optional, Union
 
 import numpy as np
 
@@ -97,18 +98,18 @@ _TINY = 1e-12
 #: rather than the odd one.
 _INSIDE = 1e-9
 
-Point = Tuple[float, float, float]
+Point = tuple[float, float, float]
 
 #: Anything three numbers long: a :data:`Point`, or a row of an array of them.
 #: The mesh keeps its geometry in arrays and does its arithmetic in floats, so
 #: both turn up wherever a place is wanted.
-Spot = Union[Point, np.ndarray]
+Spot = Point | np.ndarray
 
 #: A cell **and the cell it was entered from**, which is what the search walks
 #: over: where a walker stands on arriving is what the next step is measured
 #: from, and that is a property of the portal rather than of the cell.  The
 #: starting cell is entered from ``-1``.
-State = Tuple[int, int]
+State = tuple[int, int]
 
 
 class NavMesh:
@@ -122,8 +123,8 @@ class NavMesh:
     """
 
     def __init__(self, points: np.ndarray, cells: np.ndarray,
-                 neighbours: Dict[int, List[int]],
-                 portals: Dict[Tuple[int, int], Tuple[Point, Point]]
+                 neighbours: dict[int, list[int]],
+                 portals: dict[tuple[int, int], tuple[Point, Point]]
                  ) -> None:
         self.points = points
         #: ``(N, 3)`` vertex indices, one row per walkable cell.
@@ -265,7 +266,7 @@ class NavMesh:
         return False
 
     def _onward(self, index: int, origin: Point,
-                target: Point) -> List[int]:
+                target: Point) -> list[int]:
         """The cells the line from ``origin`` to ``target`` leads on into.
 
         A portal carries the line when ``target`` lies beyond it and the line
@@ -286,7 +287,7 @@ class NavMesh:
 
     # -- getting there ---------------------------------------------------
     def path(self, start: Sequence[float],
-             goal: Sequence[float]) -> List[Point]:
+             goal: Sequence[float]) -> list[Point]:
         """A route from ``start`` to ``goal``, or an empty list.
 
         Empty when either end is off the mesh or nothing connects them —
@@ -307,7 +308,7 @@ class NavMesh:
         return self._straightened(self._pull(origin, target, cells))
 
     def corridor(self, start: Sequence[float],
-                 goal: Sequence[float]) -> List[int]:
+                 goal: Sequence[float]) -> list[int]:
         """The cells a route from ``start`` to ``goal`` crosses, in order.
 
         What the search answers before the line is pulled taut through it.
@@ -325,7 +326,7 @@ class NavMesh:
         return self._search(first, last, _point(start), _point(goal))
 
     def _search(self, first: int, last: int, start: Point,
-                goal: Point) -> List[int]:
+                goal: Point) -> list[int]:
         """A* over the cells, costed along the line a walker would take.
 
         A step costs how much further the walker has to go to reach the portal
@@ -343,10 +344,10 @@ class NavMesh:
         measured from.
         """
         begin: State = (first, -1)
-        standing: Dict[State, Point] = {begin: start}
-        best: Dict[State, float] = {begin: 0.0}
-        came: Dict[State, State] = {}
-        queue: List[Tuple[float, State]] = [(math.dist(start, goal), begin)]
+        standing: dict[State, Point] = {begin: start}
+        best: dict[State, float] = {begin: 0.0}
+        came: dict[State, State] = {}
+        queue: list[tuple[float, State]] = [(math.dist(start, goal), begin)]
         seen: set[State] = set()
         while queue:
             _estimate, state = heapq.heappop(queue)
@@ -371,7 +372,7 @@ class NavMesh:
                         queue, (cost + math.dist(gate, goal), step))
         return []
 
-    def _straightened(self, corners: List[Point]) -> List[Point]:
+    def _straightened(self, corners: list[Point]) -> list[Point]:
         """Drop the corners the mesh lets the route see past.
 
         A corner the funnel planted stands either against the geometry or
@@ -382,14 +383,14 @@ class NavMesh:
         """
         if len(corners) < 3:
             return corners
-        kept: List[Point] = [corners[0]]
+        kept: list[Point] = [corners[0]]
         index = 0
         while index < len(corners) - 1:
             index = self._furthest_seen(corners, index)
             kept.append(corners[index])
         return kept
 
-    def _furthest_seen(self, corners: List[Point], index: int) -> int:
+    def _furthest_seen(self, corners: list[Point], index: int) -> int:
         """The last corner after ``index`` that can be walked to straight.
 
         The next one along always can -- the funnel put it there -- so this
@@ -403,7 +404,7 @@ class NavMesh:
                     return step
         return index + 1
 
-    def _pull(self, start: Point, goal: Point, cells: List[int]) -> List[Point]:
+    def _pull(self, start: Point, goal: Point, cells: list[int]) -> list[Point]:
         """Pull the line taut through the portals the cells share.
 
         The simple stupid funnel: two edges of a cone are narrowed by each
@@ -420,7 +421,7 @@ class NavMesh:
         """
         gates = [self.portals[(cells[index], cells[index + 1])]
                  for index in range(len(cells) - 1)]
-        corners: List[Point] = [start]
+        corners: list[Point] = [start]
         apex = left = right = start
         left_at = right_at = 0
         index = 0
@@ -520,8 +521,8 @@ def from_world(world: Any, max_slope: float = DEFAULT_MAX_SLOPE,
 
 # -- joining the cells up ----------------------------------------------------
 
-def _join(points: np.ndarray, cells: np.ndarray) -> Tuple[
-        Dict[int, List[int]], Dict[Tuple[int, int], Tuple[Point, Point]]]:
+def _join(points: np.ndarray, cells: np.ndarray) -> tuple[
+        dict[int, list[int]], dict[tuple[int, int], tuple[Point, Point]]]:
     """Neighbours and portals, by shared edge.
 
     Two cells are joined when they share two vertices **by position**, not by
@@ -541,14 +542,14 @@ def _join(points: np.ndarray, cells: np.ndarray) -> Tuple[
     """
     welded = _welded(points)
     centres = points[cells].mean(axis=1) if len(cells) else np.zeros((0, 3))
-    edges: Dict[Tuple[int, int], List[int]] = {}
+    edges: dict[tuple[int, int], list[int]] = {}
     for index, cell in enumerate(cells):
         for first, second in ((0, 1), (1, 2), (2, 0)):
             key = _edge(int(welded[int(cell[first])]),
                         int(welded[int(cell[second])]))
             edges.setdefault(key, []).append(index)
-    neighbours: Dict[int, List[int]] = {index: [] for index in range(len(cells))}
-    portals: Dict[Tuple[int, int], Tuple[Point, Point]] = {}
+    neighbours: dict[int, list[int]] = {index: [] for index in range(len(cells))}
+    portals: dict[tuple[int, int], tuple[Point, Point]] = {}
     for _key, sharing in edges.items():
         if len(sharing) != 2:
             continue
@@ -613,12 +614,12 @@ def _welded(points: np.ndarray) -> np.ndarray:
     return identity.reshape(-1)
 
 
-def _edge(one: int, other: int) -> Tuple[int, int]:
+def _edge(one: int, other: int) -> tuple[int, int]:
     return (one, other) if one < other else (other, one)
 
 
 def _shared_edge(points: np.ndarray, left: np.ndarray, right: np.ndarray,
-                 welded: np.ndarray) -> Tuple[Point, Point]:
+                 welded: np.ndarray) -> tuple[Point, Point]:
     """The two corners two cells have in common, as positions.
 
     Taken from the cells rather than from the edge key, because the key is a
@@ -632,8 +633,8 @@ def _shared_edge(points: np.ndarray, left: np.ndarray, right: np.ndarray,
     return (_point(points[int(left[0])]), _point(points[int(left[1])]))
 
 
-def _walk_back(came: Dict[State, State], first: State,
-               last: State) -> List[int]:
+def _walk_back(came: dict[State, State], first: State,
+               last: State) -> list[int]:
     """The cells of a finished search, from ``first`` to ``last``."""
     route = [last]
     while route[-1] != first:
@@ -642,7 +643,7 @@ def _walk_back(came: Dict[State, State], first: State,
     return [cell for cell, _entered in route]
 
 
-def _nearest_on(gate: Tuple[Point, Point], where: Spot) -> Point:
+def _nearest_on(gate: tuple[Point, Point], where: Spot) -> Point:
     """The point of a portal a walker at ``where`` reaches soonest."""
     one, other = gate
     run = (other[0] - one[0], other[1] - one[1], other[2] - one[2])
@@ -669,7 +670,7 @@ def _area(apex: Spot, one: Spot, other: Spot) -> float:
                  - (other[0] - apex[0]) * (one[2] - apex[2]))
 
 
-def _oriented(apex: Spot, gate: Tuple[Point, Point]) -> Tuple[Point, Point]:
+def _oriented(apex: Spot, gate: tuple[Point, Point]) -> tuple[Point, Point]:
     """A portal's endpoints as (left, right) seen from ``apex``."""
     one, other = gate
     if _area(apex, one, other) < 0.0:
@@ -682,9 +683,9 @@ def _same(one: Spot, other: Spot) -> bool:
     return math.dist(one, other) <= _INSIDE
 
 
-def _tidied(corners: List[Point]) -> List[Point]:
+def _tidied(corners: list[Point]) -> list[Point]:
     """Drop the corners that repeat, which a funnel plants at its own apex."""
-    kept: List[Point] = []
+    kept: list[Point] = []
     for corner in corners:
         if not kept or not _same(kept[-1], corner):
             kept.append(corner)

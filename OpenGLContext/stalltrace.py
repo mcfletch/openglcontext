@@ -52,8 +52,8 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import (Any, Callable, Deque, Dict, Iterable, List, Optional,
-                    Sequence, Tuple)
+from collections.abc import Callable, Iterable, Sequence
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 
@@ -64,9 +64,9 @@ __all__ = ['StackSampler', 'StallJournal', 'TRACE_ENV', 'describe_episode',
 TRACE_ENV = 'OPENGLCONTEXT_STALL_TRACE'
 
 #: One level of a sampled stack: file, line, function.
-Level = Tuple[str, int, str]
-Stack = Tuple[Level, ...]
-Sample = Tuple[float, Stack]
+Level = tuple[str, int, str]
+Stack = tuple[Level, ...]
+Sample = tuple[float, Stack]
 
 #: How deep a sampled stack is kept. Deep enough to cross the engine into the
 #: application, short enough that a runaway recursion cannot put ten thousand
@@ -84,7 +84,7 @@ def stack_of(frame: Any, depth: int = STACK_DEPTH) -> Stack:
     ``None`` -- a thread that has already gone -- is an empty stack, because a
     sampler that raced a shutdown must not be an error.
     """
-    found: List[Level] = []
+    found: list[Level] = []
     while frame is not None and len(found) < depth:
         code = frame.f_code
         found.append((code.co_filename, frame.f_lineno, code.co_name))
@@ -92,7 +92,7 @@ def stack_of(frame: Any, depth: int = STACK_DEPTH) -> Stack:
     return tuple(found)
 
 
-def hot_stacks(stacks: Iterable[Stack], keep: int = 5) -> List[Dict[str, Any]]:
+def hot_stacks(stacks: Iterable[Stack], keep: int = 5) -> list[dict[str, Any]]:
     """The stacks that held the most samples, worst first.
 
     Grouped by the *whole* stack rather than by the innermost function: two
@@ -125,7 +125,7 @@ def _function_key(level: Level) -> str:
 
 
 def hot_functions(stacks: Iterable[Stack],
-                  keep: int = 8) -> List[Dict[str, Any]]:
+                  keep: int = 8) -> list[dict[str, Any]]:
     """Where the samples were, per **function**, worst first.
 
     The tally that survives a function being reached a dozen ways.  Grouping by
@@ -201,7 +201,7 @@ class StackSampler:
             thread_id = threading.main_thread().ident
         self.thread_id: int = -1 if thread_id is None else thread_id
         self._clock = clock
-        self._samples: Deque[Sample] = collections.deque(maxlen=keep)
+        self._samples: collections.deque[Sample] = collections.deque(maxlen=keep)
         self._lock = threading.Lock()
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
@@ -256,7 +256,7 @@ class StackSampler:
         with self._lock:
             return len(self._samples)
 
-    def between(self, start: float, end: float) -> List[Sample]:
+    def between(self, start: float, end: float) -> list[Sample]:
         """Every retained sample stamped within ``[start, end]``."""
         with self._lock:
             return [sample for sample in self._samples
@@ -280,18 +280,18 @@ class _Episode:
     """One slow period being accumulated, before it is written out."""
 
     def __init__(self, started: float, wall: float, baseline_ms: float,
-                 context: Dict[str, Any], continues: bool = False) -> None:
+                 context: dict[str, Any], continues: bool = False) -> None:
         self.started = started
         self.wall = wall
         self.baseline_ms = baseline_ms
         self.context = context
         self.continues = continues
         self.ended = started
-        self.durations: List[float] = []
+        self.durations: list[float] = []
         self.stalled = 0
-        self.phases: Dict[str, float] = {}
+        self.phases: dict[str, float] = {}
 
-    def add(self, duration: float, phases: Dict[str, float], stalled: bool,
+    def add(self, duration: float, phases: dict[str, float], stalled: bool,
             now: float) -> None:
         self.durations.append(duration)
         self.ended = now
@@ -314,7 +314,7 @@ class StallJournal:
 
     def __init__(self, path: Any,
                  sampler: Any = None,
-                 context: Optional[Callable[[], Dict[str, Any]]] = None,
+                 context: Optional[Callable[[], dict[str, Any]]] = None,
                  gap: int = 4,
                  hot: int = 5,
                  max_seconds: float = 5.0,
@@ -334,7 +334,7 @@ class StallJournal:
         self._episode: Optional[_Episode] = None
         self._good = 0
         self._written = 0
-        self._recent: Deque[float] = collections.deque(maxlen=60)
+        self._recent: collections.deque[float] = collections.deque(maxlen=60)
         #: True once a write has failed; nothing is attempted afterwards.
         self.disabled = False
         self._open(stall_ms)
@@ -359,7 +359,7 @@ class StallJournal:
                         'no trace will be recorded', self.path, error)
             self.disabled = True
 
-    def _write(self, record: Dict[str, Any]) -> None:
+    def _write(self, record: dict[str, Any]) -> None:
         """Append one record, flushed, so a kill -9 keeps what came before."""
         if self.disabled:
             return
@@ -372,7 +372,7 @@ class StallJournal:
             self.disabled = True
 
     # -- the listener -----------------------------------------------------
-    def __call__(self, duration: float, phases: Dict[str, float],
+    def __call__(self, duration: float, phases: dict[str, float],
                  stalled: bool) -> None:
         """Take one iteration from the loop trace."""
         now = self._clock()
@@ -412,7 +412,7 @@ class StallJournal:
         ordered = sorted(self._recent)
         return ordered[len(ordered) // 2] * 1000.0
 
-    def _context(self) -> Dict[str, Any]:
+    def _context(self) -> dict[str, Any]:
         """Whatever the application wants recorded alongside the stacks."""
         if self.context is None:
             return {}
@@ -430,11 +430,11 @@ class StallJournal:
         self._written += 1
         self._write(self._describe(episode))
 
-    def _describe(self, episode: _Episode) -> Dict[str, Any]:
+    def _describe(self, episode: _Episode) -> dict[str, Any]:
         durations = episode.durations
         count = len(durations) or 1
         seconds = episode.ended - episode.started
-        record: Dict[str, Any] = {
+        record: dict[str, Any] = {
             'kind': 'episode',
             'episode': self._written,
             'at': _isoformat(episode.wall),
@@ -454,7 +454,7 @@ class StallJournal:
         record.update(self._stacks(episode))
         return record
 
-    def _stacks(self, episode: _Episode) -> Dict[str, Any]:
+    def _stacks(self, episode: _Episode) -> dict[str, Any]:
         """The hot stacks of this episode, and honesty about the sampling."""
         if self.sampler is None:
             return {'functions': [], 'hot': [],
@@ -487,7 +487,7 @@ def _isoformat(when: float) -> str:
         when, tz=datetime.timezone.utc).isoformat()
 
 
-def overlay_context(context: Any) -> Callable[[], Dict[str, Any]]:
+def overlay_context(context: Any) -> Callable[[], dict[str, Any]]:
     """Every section of the developer overlay, as the episode's context.
 
     The overlay already knows how to describe this application -- the map, the
@@ -496,7 +496,7 @@ def overlay_context(context: Any) -> Callable[[], Dict[str, Any]]:
     from the first.  Read once when an episode opens, which is after the frame
     it belongs to has already been lost.
     """
-    def rows() -> Dict[str, Any]:
+    def rows() -> dict[str, Any]:
         overlay = getattr(context, 'debugOverlay', None)
         if overlay is None:
             return {}
@@ -529,14 +529,14 @@ def install(trace: Any, path: Optional[str] = None,
 
 # -- reading it back --------------------------------------------------------
 
-def read_episodes(path: Any) -> List[Dict[str, Any]]:
+def read_episodes(path: Any) -> list[dict[str, Any]]:
     """Every episode in a trace file, skipping the header.
 
     A line that will not parse is skipped rather than fatal: a run that was
     killed mid-write leaves a partial last line, and every episode before it is
     still worth having.
     """
-    found: List[Dict[str, Any]] = []
+    found: list[dict[str, Any]] = []
     try:
         text = Path(path).read_text()
     except OSError as error:
@@ -556,7 +556,7 @@ def read_episodes(path: Any) -> List[Dict[str, Any]]:
     return found
 
 
-def describe_episode(episode: Dict[str, Any], hot: int = 3) -> str:
+def describe_episode(episode: dict[str, Any], hot: int = 3) -> str:
     """One episode as text, for a terminal."""
     lines = [
         '%s  %.1fs, %d iterations (%d slow)' % (

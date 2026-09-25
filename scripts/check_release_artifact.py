@@ -24,7 +24,6 @@ import os
 import sys
 import tarfile
 import zipfile
-from typing import List
 
 #: Artifact members that legitimately have no counterpart in the source tree.
 #: Wheel metadata is generated at build time; an sdist's root files are the
@@ -32,7 +31,7 @@ from typing import List
 _GENERATED_DIR_SUFFIXES = ('.dist-info', '.egg-info')
 
 
-def _members(artifact: str) -> List[str]:
+def _members(artifact: str) -> list[str]:
     """Every file in a wheel or sdist, as paths relative to the package root.
 
     An sdist wraps everything in one ``name-version/`` directory; a wheel does
@@ -51,7 +50,7 @@ def _is_generated(name: str) -> bool:
     return any(head.endswith(suffix) for suffix in _GENERATED_DIR_SUFFIXES)
 
 
-def stale_members(artifact: str, source_root: str) -> List[str]:
+def stale_members(artifact: str, source_root: str) -> list[str]:
     """Artifact members with no counterpart in ``source_root``, sorted.
 
     Only files inside a top-level directory that exists in the tree are judged --
@@ -71,7 +70,7 @@ def stale_members(artifact: str, source_root: str) -> List[str]:
     return sorted(stale)
 
 
-def main(argv: List[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument('artifacts', nargs='+',
                         help='wheel and/or sdist paths to check')

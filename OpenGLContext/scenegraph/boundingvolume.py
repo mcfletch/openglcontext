@@ -23,7 +23,8 @@ Notes regarding general implementation:
     the Flat renderer.
 """
 
-from typing import Any, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
@@ -308,7 +309,7 @@ class _Measure(object):
 
 def boundingSphere(
     nodes: Sequence[Any],
-) -> Optional[Tuple[Tuple[float, ...], float]]:
+) -> Optional[tuple[tuple[float, ...], float]]:
     """``(centre, radius)`` around a run of nodes, or None if none can be measured.
 
     Nodes with no extent -- a ``Background``, a light, a sensor -- are skipped

@@ -12,7 +12,7 @@ per-driver instance ``MAX_SHADOW_LIGHTS``) that these methods read.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGL.GL import (
     GL_FALSE, GL_TEXTURE0, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_CUBE_MAP,
@@ -64,7 +64,7 @@ class _ShadowUniformMixin:
     def _shadow_prog(self) -> Optional[int]:
         return self._shadow_program if self._shadow_program is not None else self.program
 
-    def shadow_receiver_programs(self) -> List[int]:
+    def shadow_receiver_programs(self) -> list[int]:
         """Programs whose shadow uniforms bindShadowUniforms must set.
 
         The lit program (or the PBR program) plus the vertex-colour program, which

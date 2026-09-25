@@ -8,7 +8,7 @@ and colour factors are VRML fields; texture maps are held as light-weight
 so PIL-backed images need not be squeezed into VRML field types.
 """
 import weakref
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 
 import numpy as np
 
@@ -36,7 +36,7 @@ class PBRTexture(object):
         self._per_context: "weakref.WeakKeyDictionary[Any, Any]" = \
             weakref.WeakKeyDictionary()
         #: The image :meth:`mean_roughness` was worked out for, and its answer.
-        self._mean_roughness: Optional[Tuple[Any, float]] = None
+        self._mean_roughness: Optional[tuple[Any, float]] = None
 
     def mean_roughness(self) -> float:
         """The mean of the image's green channel, from 0 to 1.
@@ -97,7 +97,7 @@ def _green_mean(image: Any) -> float:
     return float(ImageStat.Stat(green).mean[0]) / 255.0
 
 
-class TextureChannels(Dict[str, Any]):
+class TextureChannels(dict[str, Any]):
     """A material's texture maps by glTF channel name, counting its own edits.
 
     ``version`` moves on every change made in place, so a cache of what a
@@ -127,7 +127,7 @@ class TextureChannels(Dict[str, Any]):
         self._changed()
         return found
 
-    def popitem(self) -> Tuple[str, Any]:
+    def popitem(self) -> tuple[str, Any]:
         found = super().popitem()
         self._changed()
         return found
@@ -266,7 +266,7 @@ class PBRMaterial(node.Node):
                 self, '_batch_version',
                 int(self.__dict__.get('_batch_version', 0)) + 1)
 
-    def batchingVersion(self) -> Tuple[int, int, int]:
+    def batchingVersion(self) -> tuple[int, int, int]:
         """A value that changes whenever something deciding how this batches does.
 
         The factor block's version (which covers the alpha mode, transmission

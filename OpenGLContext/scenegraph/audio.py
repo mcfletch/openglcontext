@@ -31,7 +31,8 @@ from __future__ import annotations
 import logging
 import math
 import os
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from collections.abc import Callable, Sequence
+from typing import Any, Optional
 
 import numpy as np
 from vrml import field, node, protofunctions
@@ -83,7 +84,7 @@ def direction_to_world(direction: Sequence[float], matrix: Any) -> np.ndarray:
     return np.asarray(np.dot(homogeneous, matrix))[:3]
 
 
-def pose_from_matrix(matrix: Any) -> Tuple[np.ndarray, np.ndarray]:
+def pose_from_matrix(matrix: Any) -> tuple[np.ndarray, np.ndarray]:
     """A node's world position and forward axis, from its accumulated matrix."""
     return np.asarray(matrix)[3, :3].copy(), np.asarray(np.dot(FORWARD, matrix))[:3]
 
@@ -368,10 +369,10 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
         super(AudioEmitter, self).__init__(**named)
         self._record = model.AudioEmitter()
         #: The engine's handle for each source this emitter started.
-        self._playing: Dict[AudioSource, Any] = {}
+        self._playing: dict[AudioSource, Any] = {}
         #: When each finished one-shot may sound again, by source, for the
         #: sources that have a :attr:`AudioSource.repeatInterval`.
-        self._repeats: Dict[AudioSource, float] = {}
+        self._repeats: dict[AudioSource, float] = {}
         # Ambient timing is presentation and not simulation -- nothing reads a
         # repeat back -- so the session's own stream is enough. Emitters draw
         # from it in turn rather than each from the same place, which is what
@@ -380,7 +381,7 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
         self._jitter = entropy.randomizer('audio-jitter')
         #: When each playing source was last re-aimed, by source.  See
         #: :data:`AIM_INTERVAL`.
-        self._aimed: Dict[AudioSource, float] = {}
+        self._aimed: dict[AudioSource, float] = {}
         #: How far through its first aiming interval this emitter starts, so a
         #: level's worth of them do not all re-aim on the same frame and turn a
         #: saving into a stutter every few frames.  Drawn from the session's own
@@ -641,7 +642,7 @@ class Sound(basenodes.Sound):
 
 
 def _pan(engine: Any, location: np.ndarray, level: float,
-         spatialize: bool) -> Tuple[float, float]:
+         spatialize: bool) -> tuple[float, float]:
     """``level`` split between the ears for a sound at ``location``.
 
     A sound the author asked not to spatialise still fades with distance -- the
@@ -689,7 +690,7 @@ def stop_scene_audio(paths: Sequence[Any]) -> None:
 
 
 def audio_location(audio: model.Audio,
-                   resolve: Optional[Callable[[str], str]] = None) -> List[str]:
+                   resolve: Optional[Callable[[str], str]] = None) -> list[str]:
     """Where a piece of a document's audio is, as something a reader can act on.
 
     Empty where there is no location to give: a ``bufferView`` lives inside the
@@ -713,7 +714,7 @@ def emitters_from_document(document: model.AudioDocument,
                            emitters: Optional[Sequence[model.AudioEmitter]] = None,
                            library: Optional[Any] = None,
                            resolve: Optional[Callable[[str], str]] = None
-                           ) -> List[AudioEmitter]:
+                           ) -> list[AudioEmitter]:
     """Scenegraph nodes for emitters a parsed glTF document declares.
 
     ``emitters`` is what a glTF node or scene names, already resolved --
@@ -757,7 +758,7 @@ def emitters_from_document(document: model.AudioDocument,
             if library is not None:
                 built.useLibrary(library, source)
             sources.append(built)
-        named: Dict[str, Any] = {'type': emitter.type, 'gain': emitter.gain,
+        named: dict[str, Any] = {'type': emitter.type, 'gain': emitter.gain,
                                  'sources': sources}
         if emitter.positional is not None:
             for name in AudioEmitter.POSITIONAL_FIELDS:

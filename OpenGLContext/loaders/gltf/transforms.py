@@ -11,7 +11,8 @@ implementation of each.
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, NamedTuple, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, NamedTuple, Optional
 
 import numpy as np
 
@@ -27,7 +28,7 @@ else:
     from OpenGLContext.scenegraph.basenodes import Transform
 
 
-def _bounds_from_points(points: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def _bounds_from_points(points: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     p = np.asarray(points, dtype='d')
     return p.min(axis=0), p.max(axis=0)
 
@@ -58,7 +59,7 @@ def _transform_for(node: "pygltflib.Node", force_trs: bool = False) -> "Transfor
     return t
 
 
-def _quat_to_xyzr(q: Sequence[float]) -> Tuple[float, float, float, float]:
+def _quat_to_xyzr(q: Sequence[float]) -> tuple[float, float, float, float]:
     x, y, z, w = [float(v) for v in q]
     # Normalize first: a slightly non-unit quaternion (common in exported assets)
     # otherwise yields a wrong angle from acos(w) and an unnormalized axis.
@@ -89,7 +90,7 @@ def _local_matrix_rv(transform_node: "Transform") -> np.ndarray:
 
 
 def look_orientation(forward: Sequence[float],
-                     up: Sequence[float] = (0, 1, 0)) -> Tuple[float, float, float, float]:
+                     up: Sequence[float] = (0, 1, 0)) -> tuple[float, float, float, float]:
     """VRML97 axis-angle orientation (x, y, z, angle) for a camera looking along
     ``forward`` with roughly ``up`` upward.
 
@@ -130,7 +131,7 @@ def look_orientation(forward: Sequence[float],
 
 
 def _world_box(world_matrix: np.ndarray,
-               local_bounds: Tuple[np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray]:
+               local_bounds: tuple[np.ndarray, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
     """A local axis-aligned box placed in the world, as a world-aligned box."""
     lo, hi = local_bounds
     corners = np.array([[x, y, z, 1.0]
@@ -193,7 +194,7 @@ def _weighted_median(points: np.ndarray, weights: np.ndarray) -> np.ndarray:
     return middle
 
 
-def framing_bounds(parts: Sequence[Tuple[Any, Any, float]]) -> "Optional[ModelBounds]":
+def framing_bounds(parts: Sequence[tuple[Any, Any, float]]) -> "Optional[ModelBounds]":
     """The box a camera should frame, given every drawn part of a model.
 
     ``parts`` is one ``(minimum, maximum, weight)`` per primitive: its

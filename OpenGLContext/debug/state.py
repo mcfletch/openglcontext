@@ -23,7 +23,7 @@ What is captured is the subset of the machine state that
 :attr:`State.booleanarguments` and :attr:`State.stringarguments` name, which is
 fixed-function state: a core-profile context answers none of it.
 """
-from typing import Any, Dict, Tuple
+from typing import Any
 
 from OpenGL.GL import *
 
@@ -49,7 +49,7 @@ class State( dict ):
         for name, argument, _description in self.stringarguments:
             base[name] = glGetString( argument )
         super( State, self).__init__( base )
-    def diff( self, other: Dict[str, Any] ) -> Dict[str, Tuple[Any, Any]]:
+    def diff( self, other: dict[str, Any] ) -> dict[str, tuple[Any, Any]]:
         """Create a difference-state from other (assume other is earlier)
 
         Returns dict of {state-name:(old,new)}

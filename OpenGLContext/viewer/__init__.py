@@ -40,7 +40,7 @@ Walking is not here: it is a capability of *every* interactive context, in
 
 See [docs/gltf.rst](../../docs/gltf.rst).
 """
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from OpenGLContext.viewer.options import ViewerOptions
 
@@ -48,7 +48,7 @@ __all__ = ['ViewerOptions', 'ViewerContext', 'SceneViewerMixin', 'viewerFor']
 
 #: The class built for each backend named, so a program asking twice gets one
 #: class and ``isinstance`` means what a reader expects.
-_viewers: Dict[str, type] = {}
+_viewers: dict[str, type] = {}
 
 
 def viewerFor(backend: Optional[str] = None) -> type:

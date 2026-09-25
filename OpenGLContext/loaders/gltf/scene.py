@@ -25,7 +25,8 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple, Union
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 from omi_audio import model as audiomodel
@@ -470,7 +471,7 @@ def _beside_fields(node: Any, **values: Any) -> None:
 
 
 def _light_node(light_def: Any, world: np.ndarray, casts: bool = True
-                ) -> "Optional[Union[DirectionalLight, PointLight, SpotLight]]":
+                ) -> "Optional[DirectionalLight | PointLight | SpotLight]":
     """Build a scenegraph light from a KHR_lights_punctual light + world matrix.
 
     Intensities/colours are passed through as authored. Directional lights cast
@@ -519,7 +520,7 @@ def _light_node(light_def: Any, world: np.ndarray, casts: bool = True
                               'spot outerConeAngle', minimum=0.0, maximum=np.pi / 2.0)
         inner = values.number(spot.get('innerConeAngle'), 0.0, 'spot innerConeAngle',
                               minimum=0.0, maximum=outer)
-        light: Union[PointLight, SpotLight] = SpotLight(
+        light: PointLight | SpotLight = SpotLight(
             location=pos, direction=direction, color=color,
             intensity=intensity, castShadows=shadows, attenuation=atten,
             cutOffAngle=outer, beamWidth=inner)
@@ -645,7 +646,7 @@ class _SceneBuilder:
         return shapes
 
     def _record_part(self, world: np.ndarray, shape: Any,
-                     bounds: Tuple[np.ndarray, np.ndarray]) -> None:
+                     bounds: tuple[np.ndarray, np.ndarray]) -> None:
         """Note where one drawn primitive ended up, and how much of it there is.
 
         A coarser level of an object already recorded is not another part of
@@ -660,7 +661,7 @@ class _SceneBuilder:
             (minimum, maximum, 0 if positions is None else len(positions)))
 
     def build(self, node_index: int, parent_world: np.ndarray,
-              ancestry: Tuple[int, ...] = (), parent_visible: bool = True,
+              ancestry: tuple[int, ...] = (), parent_visible: bool = True,
               replacing: bool = False, parent_casts: bool = True) -> Any:
         # Any rather than Transform: a node carrying an OGLC_hook tag may end
         # up as whatever its hook made of it -- see _place.
@@ -841,7 +842,7 @@ class _SceneBuilder:
         )
 
     def _lod_node(self, node: Any, node_index: int, ids: list,
-                  world: np.ndarray, ancestry: Tuple[int, ...],
+                  world: np.ndarray, ancestry: tuple[int, ...],
                   node_visible: bool, carrier: Any = None,
                   node_casts: bool = True) -> Any:
         """One switching node for a node that carries ``MSFT_lod``.
@@ -1109,7 +1110,7 @@ class _SceneBuilder:
         self.scene_graph.children = [root]
 
         framed = framing_bounds(self.parts)
-        box: Tuple[Any, Any] = (None, None)
+        box: tuple[Any, Any] = (None, None)
         if framed is None:
             center, radius = (0.0, 0.0, 0.0), 1.0
         else:

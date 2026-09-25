@@ -12,7 +12,8 @@ that moves or is edited.
 """
 from __future__ import annotations
 
-from typing import Any, Iterable, List, Sequence, Tuple
+from collections.abc import Iterable, Sequence
+from typing import Any
 
 import numpy as np
 from omi_physics import model
@@ -37,7 +38,7 @@ class ZoneRegion:
         return float(self.shape.distance(np.asarray(pos, dtype='d')[:3])) <= 0.0
 
 
-def gravity_volumes(zones: Iterable[PlacedZone]) -> List[GravityVolume]:
+def gravity_volumes(zones: Iterable[PlacedZone]) -> list[GravityVolume]:
     """A gravity volume for each zone whose gravity setting is enabled.
 
     A directional field's ``direction`` and a point field's ``center`` are in
@@ -64,7 +65,7 @@ def gravity_volumes(zones: Iterable[PlacedZone]) -> List[GravityVolume]:
     return volumes
 
 
-def scene_zones(group: Any) -> List[PlacedZone]:
+def scene_zones(group: Any) -> list[PlacedZone]:
     """Every zone under ``group``, placed by the transforms above it.
 
     The children followed are the ones a node draws
@@ -100,7 +101,7 @@ class GravityZones:
 
     def __init__(self, world: Any) -> None:
         self.world = world
-        self._placed: Tuple[PlacedZone, ...] = ()
+        self._placed: tuple[PlacedZone, ...] = ()
 
     def follow(self, zones: Sequence[PlacedZone]) -> bool:
         """Bring the world's zone volumes to ``zones``; return whether they changed."""

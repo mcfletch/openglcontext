@@ -6,7 +6,7 @@ model.  If the document carries OMI physics bodies those are honoured directly
 (via :mod:`omi_physics.omi_gltf`); otherwise the whole model becomes one
 static collision mesh.  Used by the ``oglc-gltf`` viewer's walk-around mode.
 """
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 import numpy as np
 
 from omi_physics import model
@@ -25,7 +25,7 @@ def _local_matrix(node: Any) -> np.ndarray:
     return np.eye(4)
 
 
-def _mesh_positions_indices(geom: Any) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+def _mesh_positions_indices(geom: Any) -> Optional[tuple[np.ndarray, np.ndarray]]:
     """Return ``(positions, triangle_indices)`` for a scenegraph geometry, or None if it has none.
 
     ``geom`` is a scenegraph geometry node; positions come from its ``positions``
@@ -55,7 +55,7 @@ def _mesh_positions_indices(geom: Any) -> Optional[Tuple[np.ndarray, np.ndarray]
 def _fan_triangulate(coord_index: np.ndarray) -> np.ndarray:
     """Fan-triangulate a VRML ``coordIndex`` (``-1``-separated faces) to a flat triangle index array."""
     tris = []
-    face: List[int] = []
+    face: list[int] = []
     for v in coord_index:
         if v < 0:
             for k in range(1, len(face) - 1):
@@ -81,7 +81,7 @@ _BOX_TRIS = np.array([
 ], dtype='i')
 
 
-def _aabb_box(lo: np.ndarray, hi: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def _aabb_box(lo: np.ndarray, hi: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """The 8 corner points (and 12 triangles) of the AABB [lo, hi]."""
     corners = np.array([[hi[0] if ix else lo[0],
                          hi[1] if iy else lo[1],
@@ -91,7 +91,7 @@ def _aabb_box(lo: np.ndarray, hi: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
     return corners, _BOX_TRIS
 
 
-def _placed_worlds(node: Any, world: np.ndarray) -> List[np.ndarray]:
+def _placed_worlds(node: Any, world: np.ndarray) -> list[np.ndarray]:
     """The world matrices a node's mesh is drawn at: one, or one per placement.
 
     An empty placement set draws nothing, so it collides with nothing.
@@ -105,8 +105,8 @@ def _placed_worlds(node: Any, world: np.ndarray) -> List[np.ndarray]:
     return [placement @ world for placement in found]
 
 
-def _append_mesh(world_points: np.ndarray, tri: Any, points: List[np.ndarray],
-                 tris: List[np.ndarray], state: Dict[str, int],
+def _append_mesh(world_points: np.ndarray, tri: Any, points: list[np.ndarray],
+                 tris: list[np.ndarray], state: dict[str, int],
                  min_hull_size: float) -> None:
     """Add one placed mesh's world verts/tris, re-basing its indices."""
     wp = world_points[:, :3]
@@ -128,9 +128,9 @@ def _append_mesh(world_points: np.ndarray, tri: Any, points: List[np.ndarray],
         tris.append(np.asarray(tri) + base)
 
 
-def _collect(node: Any, world_matrix: np.ndarray, points: List[np.ndarray],
-             tris: List[np.ndarray], ancestry: Tuple[Any, ...],
-             state: Dict[str, int], min_hull_size: float) -> None:
+def _collect(node: Any, world_matrix: np.ndarray, points: list[np.ndarray],
+             tris: list[np.ndarray], ancestry: tuple[Any, ...],
+             state: dict[str, int], min_hull_size: float) -> None:
     """Walk ``node`` and append each mesh's world-space verts/tris to ``points``/``tris``.
 
     ``node`` is a scenegraph node. Mutates ``points``, ``tris`` and ``state``
@@ -163,7 +163,7 @@ def _collect(node: Any, world_matrix: np.ndarray, points: List[np.ndarray],
 
 
 def extract_trimesh(group: Any,
-                    min_hull_size: float = 0.0) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+                    min_hull_size: float = 0.0) -> Optional[tuple[np.ndarray, np.ndarray]]:
     """Return ``(points, indices)`` of the whole scene's world-space triangles.
 
     ``group`` is the root scenegraph node. Returns None if it has no extractable
@@ -174,8 +174,8 @@ def extract_trimesh(group: Any,
     trading exact collision shape for a much smaller trimesh. ``0`` (default) keeps
     every triangle.
     """
-    points: List[np.ndarray] = []
-    tris: List[np.ndarray] = []
+    points: list[np.ndarray] = []
+    tris: list[np.ndarray] = []
     _collect(group, np.eye(4), points, tris, (), {'n': 0}, min_hull_size)
     if not points:
         return None
@@ -187,7 +187,7 @@ def extract_trimesh(group: Any,
 def collision_world_from_scene(
         group: Any, gravity: float = 9.81, ground_pad: float = 0.0,
         min_hull_size: float = 0.0
-) -> Tuple[PhysicsWorld, Optional[Tuple[np.ndarray, np.ndarray]]]:
+) -> tuple[PhysicsWorld, Optional[tuple[np.ndarray, np.ndarray]]]:
     """Build a :class:`PhysicsWorld` whose static geometry is the model's mesh.
 
     ``group`` is the root scenegraph node. Every zone in it that carries

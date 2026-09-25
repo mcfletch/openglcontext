@@ -13,7 +13,7 @@ through it so the three cannot drift.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import ctypes
 
@@ -42,8 +42,8 @@ class _AsyncPickMixin(PassResources):
     """Async PBO-fenced pick readback + the shared pick-event dispatch helper."""
 
     use_async_pick: bool = True
-    _async_batches: Optional[List] = None
-    _pbo_free: Optional[List] = None
+    _async_batches: Optional[list] = None
+    _pbo_free: Optional[list] = None
     _ASYNC_MAX_INFLIGHT = 4
 
     if TYPE_CHECKING:
@@ -55,7 +55,7 @@ class _AsyncPickMixin(PassResources):
         def _getSelectionBuffer(self) -> "SelectionBufferFBO": ...
 
     @staticmethod
-    def _dispatchPickEvent(mode: Any, event: Any, object_paths: List,
+    def _dispatchPickEvent(mode: Any, event: Any, object_paths: list,
                            x: float, y: float, depth: float,
                            matrix: Any, projection: Any, viewport: Any) -> None:
         """Populate a pick event and hand it to the context.
@@ -132,7 +132,7 @@ class _AsyncPickMixin(PassResources):
             self._pbo_free = []
         self._pbo_free.append((pid, cap))
 
-    def submitAsyncPicks(self, mode: Any, events: Dict, id_map: Dict) -> None:
+    def submitAsyncPicks(self, mode: Any, events: dict, id_map: dict) -> None:
         """Issue async reads of object-id + depth under each pick sample.
 
         Reads from the MRT selection FBO (which now holds this frame's render)
@@ -264,7 +264,7 @@ class _AsyncPickMixin(PassResources):
             glBindBuffer(GL_PIXEL_PACK_BUFFER, 0)
         return data
 
-    def _resolveBatch(self, mode: Any, b: Dict, block: bool = False) -> None:
+    def _resolveBatch(self, mode: Any, b: dict, block: bool = False) -> None:
         """Read a batch's PBOs back to the CPU and dispatch its pick events."""
         if block:
             # Honour the wait status: on TIMEOUT_EXPIRED / WAIT_FAILED

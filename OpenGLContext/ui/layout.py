@@ -7,7 +7,8 @@ adds the one thing a box cannot express, which is a column of labels that lines
 up across unrelated rows.
 """
 
-from typing import Any, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from vrml import field
 
@@ -84,14 +85,14 @@ class Grid(Widget):
                 if getattr(child, 'visible', True)]
 
     # -- measurement ------------------------------------------------------
-    def _rows(self) -> List[List[Any]]:
+    def _rows(self) -> list[list[Any]]:
         """The children grouped into rows; the last row may be short."""
         count = max(1, int(self.columns))
         children = list(self.layoutChildren())
         return [children[start:start + count]
                 for start in range(0, len(children), count)]
 
-    def _measure(self, metrics: FontMetrics) -> Tuple[List[int], List[int]]:
+    def _measure(self, metrics: FontMetrics) -> tuple[list[int], list[int]]:
         """Natural width of each column and height of each row."""
         rows = self._rows()
         widths = [0] * max(1, int(self.columns))
@@ -106,7 +107,7 @@ class Grid(Widget):
         return (widths, heights)
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         if not self.layoutChildren():
             return (0, 0)
         widths, heights = self._measure(metrics)
@@ -121,7 +122,7 @@ class Grid(Widget):
     #: label is not shortened, it is destroyed.
     MINIMUM_COLUMN_CHARS = 4
 
-    def _columnWidths(self, metrics: FontMetrics, available: int) -> List[int]:
+    def _columnWidths(self, metrics: FontMetrics, available: int) -> list[int]:
         widths, _heights = self._measure(metrics)
         gaps = metrics.pixels(self.columnSpacing) * (len(widths) - 1)
         spare = available - sum(widths) - gaps
@@ -143,8 +144,8 @@ class Grid(Widget):
             given += share
         return widths
 
-    def _squeeze(self, widths: List[int], shortfall: int,
-                 metrics: FontMetrics) -> List[int]:
+    def _squeeze(self, widths: list[int], shortfall: int,
+                 metrics: FontMetrics) -> list[int]:
         """Take a shortfall out of the widest columns, never below a floor.
 
         Unlike a box, a grid has an obvious place to find the room: the label
@@ -184,7 +185,7 @@ class Grid(Widget):
             cursor_y -= height + padding * 2 + spacing
 
     # -- rows as a whole ---------------------------------------------------
-    def rowRects(self) -> List[Rect]:
+    def rowRects(self) -> list[Rect]:
         """One rectangle per row, spanning the grid and taking in the padding.
 
         Derived from where the cells actually are rather than remembered from
@@ -229,7 +230,7 @@ class Grid(Widget):
             current = current.parent
         return None
 
-    def activeRows(self) -> Tuple[Optional[int], Optional[int]]:
+    def activeRows(self) -> tuple[Optional[int], Optional[int]]:
         """Which row the pointer is on, and which the keyboard is in.
 
         Read from what the panel already knows rather than searched for: hover

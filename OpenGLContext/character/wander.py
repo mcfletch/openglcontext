@@ -64,7 +64,8 @@ sliding along while its legs stride the other way.
 
 from __future__ import annotations
 
-from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
+from collections.abc import Callable, Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -121,12 +122,12 @@ class Wander:
         and fifty times over.
     """
 
-    def __init__(self, bounds: Tuple[float, float, float, float] =
+    def __init__(self, bounds: tuple[float, float, float, float] =
                  (-10.0, 10.0, -10.0, 10.0), *,
                  stream: str = 'wander',
-                 speed: Tuple[float, float] = (0.75, 1.35),
-                 walk: Tuple[float, float] = (2.5, 9.0),
-                 stand: Tuple[float, float] = (0.8, 4.0),
+                 speed: tuple[float, float] = (0.75, 1.35),
+                 walk: tuple[float, float] = (2.5, 9.0),
+                 stand: tuple[float, float] = (0.8, 4.0),
                  turn_rate: float = 1.5,
                  turn_gait: float = 0.5,
                  fade: float = 0.35,
@@ -159,7 +160,7 @@ class Wander:
         self.action = np.zeros(0, dtype=np.int32)
         self.walked = np.zeros(0, dtype=bool)
         self.turned = np.zeros(0, dtype=bool)
-        self._pending: List[Tuple[float, float, float]] = []
+        self._pending: list[tuple[float, float, float]] = []
         self._fresh = 0
 
     def __len__(self) -> int:
@@ -308,7 +309,7 @@ class Wander:
                        + self._rng.uniform(-0.5, 0.5, count))
         return np.where(self._inside()[rows], away, inward)
 
-    def _draw(self, span: Tuple[float, float], count: int) -> np.ndarray:
+    def _draw(self, span: tuple[float, float], count: int) -> np.ndarray:
         return np.asarray(self._rng.uniform(span[0], span[1], count))
 
 
@@ -346,13 +347,13 @@ class Gait:
 
     def __init__(self, model: Any, walk: str, *,
                  run: Optional[str] = None,
-                 idle: Union[str, Sequence[str], None] = None,
+                 idle: str | Sequence[str] | None = None,
                  walk_stride: float = 1.0,
                  run_stride: Optional[float] = None,
                  fade: float = 0.35) -> None:
         mixer = getattr(model, 'mixer', model)
         #: The idle clips this figure has to choose between, in order.
-        self.idles: List[str] = ([] if idle is None else
+        self.idles: list[str] = ([] if idle is None else
                                  [idle] if isinstance(idle, str) else list(idle))
         self.walk_stride = float(walk_stride)
         self.run_stride = float(run_stride if run_stride is not None
@@ -431,7 +432,7 @@ class WanderingCrowd:
     module.
     """
 
-    def __init__(self, bounds: Tuple[float, float, float, float] =
+    def __init__(self, bounds: tuple[float, float, float, float] =
                  (-10.0, 10.0, -10.0, 10.0), *,
                  crowd: Optional[Crowd] = None,
                  gait: Optional[Callable[[Any], Gait]] = None,
@@ -454,14 +455,14 @@ class WanderingCrowd:
         #: scale a stride measured off the model by this too.
         self.scale = float(scale)
         self._gait = gait if gait is not None else _one_clip_gait
-        self.gaits: List[Gait] = []
-        self.transforms: List[Transform] = []
+        self.gaits: list[Gait] = []
+        self.transforms: list[Transform] = []
 
     def __len__(self) -> int:
         return len(self.transforms)
 
     @property
-    def members(self) -> List[Any]:
+    def members(self) -> list[Any]:
         """The crowd's members, in the order figures were taken in."""
         return self.crowd.members
 
@@ -488,7 +489,7 @@ class WanderingCrowd:
         return self.crowd.update(dt, **named)
 
     def schedule(self, eye: Sequence[float],
-                 bands: Sequence[Tuple[float, float]]) -> None:
+                 bands: Sequence[tuple[float, float]]) -> None:
         """Ask for fewer poses a second the further a figure is from ``eye``.
 
         ``bands`` is ``((metres, poses a second), ...)`` at increasing
@@ -540,7 +541,7 @@ class WanderingCrowd:
                                     actions[index])
 
 
-def _pair(span: Any) -> Tuple[float, float]:
+def _pair(span: Any) -> tuple[float, float]:
     """A ``(low, high)`` range, from one of those or from a single value."""
     try:
         low, high = span

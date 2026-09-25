@@ -18,7 +18,8 @@ discovered later:
 
 from __future__ import annotations
 
-from typing import Any, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from vrml import field
 
@@ -70,7 +71,7 @@ class ScrollViewport(Widget):
 
     # -- measurement ------------------------------------------------------
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         width = 0
         height = 0
         inner = None if available is None else max(0, available - self._barGutter())
@@ -250,7 +251,7 @@ class ScrollViewport(Widget):
             return False
         return self.scrollBy(-delta * WHEEL_LINES * self.lineHeight)
 
-    def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+    def key(self, name: str, modifiers: tuple[int, int, int]) -> bool:
         # A page keeps one line of what was on screen, so the eye has
         # something to land on rather than starting again from nothing.
         page = max(1, self.rect.height - self.lineHeight)

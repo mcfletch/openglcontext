@@ -27,12 +27,13 @@ left, which is how a scene is edited while it is drawn.
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Iterable, List, Mapping, Optional, Tuple, Union
+from collections.abc import Callable, Iterable, Mapping
+from typing import Any, Optional, Union
 
 __all__ = ['MemoMissedInputs', 'check_memo_inputs']
 
 Edit = Callable[[], object]
-Edits = Union[Mapping[str, Edit], Iterable[Tuple[str, Edit]]]
+Edits = Mapping[str, Edit] | Iterable[tuple[str, Edit]]
 
 
 class MemoMissedInputs(AssertionError):
@@ -74,7 +75,7 @@ def check_memo_inputs(ask: Callable[[], Any], inputs: Edits, *,
     pairs = list(inputs.items()) if isinstance(inputs, Mapping) else list(inputs)
     if not pairs:
         raise ValueError('check_memo_inputs was given no inputs to edit')
-    found: List[str] = []
+    found: list[str] = []
     before = ask()
     expected_before = fresh() if fresh is not None else None
     for name, edit in pairs:

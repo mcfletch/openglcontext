@@ -38,7 +38,7 @@ import functools
 import importlib
 import re
 import textwrap
-from typing import Iterator
+from collections.abc import Iterator
 
 __all__ = [
     'Block', 'commentary', 'inline', 'escape', 'wrap', 'entry_points',

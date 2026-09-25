@@ -10,7 +10,7 @@ The overlay is an ``IndexedLineSet`` (per-vertex colour), so it renders through
 the same path in both the legacy and shader profiles.  Enable features with the
 ``PhysicsDebug`` bit flags.
 """
-from typing import Any, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING
 import numpy as np
 
 from OpenGLContext.scenegraph import basenodes as _basenodes
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 # attributes; access it through an ``Any`` alias.
 basenodes: Any = _basenodes
 
-_Edge = Tuple[np.ndarray, np.ndarray]
+_Edge = tuple[np.ndarray, np.ndarray]
 
 # Feature flags (debugPhysics bitmask)
 PROXIES = 1
@@ -72,7 +72,7 @@ class PhysicsDebugDraw:
         self.root = basenodes.Group(children=[self.shape, self._proxy_group])
 
     def _seg(self, pts: list, cols: list, a: Any, b: Any,
-             color: Tuple[float, float, float]) -> Tuple[int, int, int]:
+             color: tuple[float, float, float]) -> tuple[int, int, int]:
         """Append a coloured line segment ``a``-``b`` and return its index triple."""
         i = len(pts)
         pts.append(a)
@@ -179,7 +179,7 @@ class PhysicsDebugDraw:
         return wire
 
     @staticmethod
-    def _wire_scale(shape: Any) -> Tuple[float, ...]:
+    def _wire_scale(shape: Any) -> tuple[float, ...]:
         """Transform scale that fits the unit wireframe to ``shape``."""
         if shape.type == 'box':
             return tuple(float(s) for s in shape.size)
@@ -235,7 +235,7 @@ class PhysicsDebugDraw:
 
 
 # ── wireframe generators ────────────────────────────────────────────────
-def _wire_node(edges: List[_Edge]) -> Any:
+def _wire_node(edges: list[_Edge]) -> Any:
     """A green ``IndexedLineSet`` from local-space edges (for instanced proxies)."""
     pts: list = []
     idx: list = []
@@ -264,7 +264,7 @@ def _unit_sphere_wire() -> Any:
     return _wire_node(_sphere_edges(np.zeros(3), 1.0))
 
 
-def box_edges_aabb(lo: np.ndarray, hi: np.ndarray) -> List[_Edge]:
+def box_edges_aabb(lo: np.ndarray, hi: np.ndarray) -> list[_Edge]:
     """The 12 edges of the axis-aligned box spanning ``[lo, hi]``."""
     c = [(lo[0], lo[1], lo[2]), (hi[0], lo[1], lo[2]), (hi[0], hi[1], lo[2]),
          (lo[0], hi[1], lo[2]), (lo[0], lo[1], hi[2]), (hi[0], lo[1], hi[2]),
@@ -274,13 +274,13 @@ def box_edges_aabb(lo: np.ndarray, hi: np.ndarray) -> List[_Edge]:
     return [(np.array(c[a]), np.array(c[b])) for a, b in e]
 
 
-def _box_corners(proxy: BoxProxy) -> List[np.ndarray]:
+def _box_corners(proxy: BoxProxy) -> list[np.ndarray]:
     """The 8 world-space corners of an oriented box proxy."""
     signs = [(sx, sy, sz) for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)]
     return [proxy.center + proxy.R @ (np.array(s) * proxy.half) for s in signs]
 
 
-def proxy_corners(proxy: Proxy) -> List[np.ndarray]:
+def proxy_corners(proxy: Proxy) -> list[np.ndarray]:
     """Representative world-space corner points for ``proxy`` (its AABB corners for round shapes)."""
     if isinstance(proxy, BoxProxy):
         return _box_corners(proxy)
@@ -294,7 +294,7 @@ def proxy_corners(proxy: Proxy) -> List[np.ndarray]:
              (hi[0], hi[1], hi[2]), (lo[0], hi[1], hi[2])]]]
 
 
-def proxy_edges(proxy: Proxy) -> List[_Edge]:
+def proxy_edges(proxy: Proxy) -> list[_Edge]:
     """Wireframe edges tessellating ``proxy`` for the debug overlay."""
     if isinstance(proxy, BoxProxy):
         c = _box_corners(proxy)
@@ -313,9 +313,9 @@ def proxy_edges(proxy: Proxy) -> List[_Edge]:
 
 
 def _ring(center: np.ndarray, radius: float, axis_u: np.ndarray,
-          axis_v: np.ndarray, n: int = 16) -> List[_Edge]:
+          axis_v: np.ndarray, n: int = 16) -> list[_Edge]:
     """Edges of a circle of ``n`` segments in the ``axis_u``/``axis_v`` plane."""
-    out: List[_Edge] = []
+    out: list[_Edge] = []
     prev: Optional[np.ndarray] = None
     for k in range(n + 1):
         t = 2 * np.pi * k / n
@@ -326,14 +326,14 @@ def _ring(center: np.ndarray, radius: float, axis_u: np.ndarray,
     return out
 
 
-def _sphere_edges(center: np.ndarray, radius: float) -> List[_Edge]:
+def _sphere_edges(center: np.ndarray, radius: float) -> list[_Edge]:
     """Three orthogonal rings approximating a sphere's silhouette."""
     x, y, z = np.eye(3)
     return (_ring(center, radius, x, y) + _ring(center, radius, y, z)
             + _ring(center, radius, x, z))
 
 
-def _capsule_edges(proxy: CapsuleProxy) -> List[_Edge]:
+def _capsule_edges(proxy: CapsuleProxy) -> list[_Edge]:
     """End-cap rings, connecting side lines, and a mid ring for a capsule."""
     r = proxy.radius
     axis = proxy.R @ np.array([0, 1.0, 0])
@@ -346,11 +346,11 @@ def _capsule_edges(proxy: CapsuleProxy) -> List[_Edge]:
     return edges
 
 
-def _hull_edges(points: np.ndarray) -> List[_Edge]:
+def _hull_edges(points: np.ndarray) -> list[_Edge]:
     """Unique edges of the convex hull of ``points``."""
     verts, faces = hull.convex_hull(points)
     seen: set = set()
-    edges: List[_Edge] = []
+    edges: list[_Edge] = []
     for f in faces:
         for a, b in ((f[0], f[1]), (f[1], f[2]), (f[2], f[0])):
             key = (min(a, b), max(a, b))
@@ -360,9 +360,9 @@ def _hull_edges(points: np.ndarray) -> List[_Edge]:
     return edges
 
 
-def _mesh_edges(proxy: TriangleMeshProxy, limit: int = 2000) -> List[_Edge]:
+def _mesh_edges(proxy: TriangleMeshProxy, limit: int = 2000) -> list[_Edge]:
     """Triangle edges of a mesh proxy, capped at ``limit`` triangles."""
-    edges: List[_Edge] = []
+    edges: list[_Edge] = []
     for tri in proxy.indices[:limit]:
         a, b, c = (proxy.world_pts[tri[0]], proxy.world_pts[tri[1]],
                    proxy.world_pts[tri[2]])

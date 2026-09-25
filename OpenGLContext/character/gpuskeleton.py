@@ -32,7 +32,8 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -181,14 +182,14 @@ class GPUSkeleton:
 
     def __init__(self, parents: np.ndarray, joints_per_figure: int) -> None:
         self.joints_per_figure = int(joints_per_figure)
-        self._programs: Dict[str, int] = {}
-        self._buffers: Dict[str, _Buffer] = {}
+        self._programs: dict[str, int] = {}
+        self._buffers: dict[str, _Buffer] = {}
         self._skin_signature: Any = None
         self._target_signature: Any = None
         #: Clip name -> its index in the uploaded table, once the clips are
         #: described; empty until then, and empty is what says the blend has
         #: to stay on the processor.
-        self.clip_index: Dict[str, int] = {}
+        self.clip_index: dict[str, int] = {}
         self.ok = self._build(parents)
 
     # -- setting up --------------------------------------------------------
@@ -219,7 +220,7 @@ class GPUSkeleton:
             return False
         return True
 
-    def describe_skins(self, plans: Sequence[Tuple[np.ndarray, np.ndarray]]) -> None:
+    def describe_skins(self, plans: Sequence[tuple[np.ndarray, np.ndarray]]) -> None:
         """Say which rig slots each skin's joints sit in, and their inverse binds.
 
         One call per rig, not per frame: the skins of a build do not change.
@@ -228,9 +229,9 @@ class GPUSkeleton:
         if signature == self._skin_signature:
             return
         self._skin_signature = signature
-        self.skin_offsets: List[int] = []
-        slot_runs: List[np.ndarray] = []
-        bind_runs: List[np.ndarray] = []
+        self.skin_offsets: list[int] = []
+        slot_runs: list[np.ndarray] = []
+        bind_runs: list[np.ndarray] = []
         offset = 0
         for slots, inverse_bind in plans:
             self.skin_offsets.append(offset)
@@ -324,8 +325,8 @@ class GPUSkeleton:
         return (self.joints_per_figure + 31) // 32
 
     # -- the frame ---------------------------------------------------------
-    def run(self, pose: Optional[Tuple[np.ndarray, np.ndarray, np.ndarray]],
-            targets: Sequence[Tuple[int, int, int, int]],
+    def run(self, pose: Optional[tuple[np.ndarray, np.ndarray, np.ndarray]],
+            targets: Sequence[tuple[int, int, int, int]],
             palette_buffer: int, count: int = 0) -> bool:
         """Compose ``pose`` into every named skin's palette. False if it could not.
 
@@ -370,8 +371,8 @@ class GPUSkeleton:
         glUseProgram(0)
         return True
 
-    def _pack_targets(self, targets: Sequence[Tuple[int, int, int, int]]
-                      ) -> Tuple[np.ndarray, np.ndarray, int]:
+    def _pack_targets(self, targets: Sequence[tuple[int, int, int, int]]
+                      ) -> tuple[np.ndarray, np.ndarray, int]:
         table = np.empty((len(targets), 4), dtype=np.int32)
         mesh_slots = np.empty(len(targets), dtype=np.int32)
         widest = 1
@@ -410,10 +411,10 @@ def _pack_clips(samplers: Sequence[Any], joints: int) -> tuple:
     nothing else.
     """
     index = np.full((len(samplers), joints, 3), -1, dtype=np.int32)
-    channels: List[Tuple[int, int, int, int]] = []
-    times: List[np.ndarray] = []
-    values: List[np.ndarray] = []
-    names: Dict[str, int] = {}
+    channels: list[tuple[int, int, int, int]] = []
+    times: list[np.ndarray] = []
+    values: list[np.ndarray] = []
+    names: dict[str, int] = {}
     keys = 0
     rows = 0
     for clip, sampler in enumerate(samplers):
@@ -468,7 +469,7 @@ def _widen4(values: np.ndarray) -> np.ndarray:
     return out
 
 
-def _pack_pose_rows(rest: Tuple[np.ndarray, np.ndarray, np.ndarray]) -> np.ndarray:
+def _pack_pose_rows(rest: tuple[np.ndarray, np.ndarray, np.ndarray]) -> np.ndarray:
     """``(N, 3, 4)`` float32: where each joint rests."""
     translation, rotation, scale = rest
     packed = np.zeros((len(translation), 3, 4), dtype=np.float32)
@@ -478,7 +479,7 @@ def _pack_pose_rows(rest: Tuple[np.ndarray, np.ndarray, np.ndarray]) -> np.ndarr
     return packed
 
 
-def _pack_pose(pose: Tuple[np.ndarray, np.ndarray, np.ndarray]) -> np.ndarray:
+def _pack_pose(pose: tuple[np.ndarray, np.ndarray, np.ndarray]) -> np.ndarray:
     """``(F, N, 3, 4)`` float32: translation, rotation and scale per joint."""
     translation, rotation, scale = pose
     count, joints = translation.shape[0], translation.shape[1]

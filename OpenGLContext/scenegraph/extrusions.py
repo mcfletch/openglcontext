@@ -39,7 +39,7 @@ from __future__ import annotations
 
 import logging
 from math import pi
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 import numpy as np
 from vrml import field, node, protofunctions
@@ -455,5 +455,5 @@ def _optional(value: Any) -> Optional[np.ndarray]:
     return np.asarray(value, dtype='d')
 
 
-def _unused(value: List) -> None:                # pragma: no cover
+def _unused(value: list) -> None:                # pragma: no cover
     """Kept out of the public surface."""

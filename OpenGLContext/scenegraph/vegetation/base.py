@@ -11,7 +11,7 @@ The near mesh dithers OUT and the impostor billboard dithers IN across the SAME
 window; sharing one constant pair keeps the two shaders complementary so the
 handoff never shows a seam or a double-draw.
 """
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 from OpenGL.GL import (
@@ -64,7 +64,7 @@ class InstancedVegBase(vnodes.PointSet):
         #: The node's own program name.
         _prog: int
         #: Uniform name -> location, for that program.
-        U: Dict[str, int]
+        U: dict[str, int]
         #: The node's axis-aligned extent, as an (x, y, z) size.
         bounds: Any
         #: The node's program and its forms for shared draws.
@@ -97,7 +97,7 @@ class InstancedVegBase(vnodes.PointSet):
         if self._gl is not None:
             self.programs.resend()
 
-    def _upload_constants(self, U: Dict[str, int]) -> None:
+    def _upload_constants(self, U: dict[str, int]) -> None:
         """Upload the uniforms that change only when a setting does (program already bound)."""
 
     def _stream(self) -> bool:

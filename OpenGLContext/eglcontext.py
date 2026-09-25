@@ -65,7 +65,8 @@ import ctypes
 import logging
 import os
 import threading
-from typing import Any, Hashable, Dict, Iterable, List, Literal, Mapping, Optional, Sequence
+from collections.abc import Hashable, Iterable, Mapping, Sequence
+from typing import Any, Literal, Optional
 
 from OpenGL import EGL
 from OpenGL.GL import glFlush
@@ -200,7 +201,7 @@ def configAttributes(
     rgb: bool = True,
     multisampleSamples: int = 0,
     multisampleBuffer: int = 0,
-) -> List[int]:
+) -> list[int]:
     """The ``eglChooseConfig`` attribute list for these buffer settings.
 
     Sizes of zero or less are left out rather than requested as zero, so the
@@ -208,7 +209,7 @@ def configAttributes(
     ``-1`` means.  The surface type is always a pbuffer: there is no window, so
     it has to be a surface EGL can make on its own.
     """
-    attributes: List[int] = [
+    attributes: list[int] = [
         EGL.EGL_SURFACE_TYPE, EGL.EGL_PBUFFER_BIT,
         EGL.EGL_RENDERABLE_TYPE, EGL.EGL_OPENGL_BIT,
         # ``rgb`` picks the kind of colour buffer, not merely how many bits of
@@ -246,7 +247,7 @@ def contextAttributes(
     profile: str = 'core',
     version: Sequence[int] = (3, 3),
     forwardCompatible: bool = False,
-) -> List[int]:
+) -> list[int]:
     """The ``eglCreateContext`` attribute list for this profile and version.
 
     ``profile`` is one of :data:`PROFILES`.  ``'any'`` asks for nothing at all,
@@ -265,7 +266,7 @@ def contextAttributes(
     if profile == 'any':
         return [EGL.EGL_NONE]
     major, minor = version
-    attributes: List[int] = [
+    attributes: list[int] = [
         EGL.EGL_CONTEXT_MAJOR_VERSION, int(major),
         EGL.EGL_CONTEXT_MINOR_VERSION, int(minor),
         EGL.EGL_CONTEXT_OPENGL_PROFILE_MASK,
@@ -278,7 +279,7 @@ def contextAttributes(
     return attributes
 
 
-def definitionAttributes(definition: Any) -> List[int]:
+def definitionAttributes(definition: Any) -> list[int]:
     """The ``eglCreateContext`` attribute list a :class:`ContextDefinition` asks for.
 
     The same request the windowed backends make of their toolkits: a core
@@ -317,7 +318,7 @@ def selectDevice(environ: Optional[Mapping[str, str]] = None) -> DeviceInfo:
 #: context that terminated on its way out would take its siblings with it.
 #: Keyed by the handle rather than by the wrapper, which is a new object each
 #: call.  A process holds one or two of these, so the map never grows.
-_DISPLAY_USES: Dict[int, int] = {}
+_DISPLAY_USES: dict[int, int] = {}
 #: Held while :data:`_DISPLAY_USES` is read and changed, since a context may be
 #: built or released on any thread.
 _DISPLAY_LOCK = threading.Lock()

@@ -9,14 +9,15 @@ camera is at a given point along a path.
 """
 from __future__ import annotations
 
-from typing import Any, List, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any
 
 from OpenGLContext.quaternion import Quaternion
 
 __all__ = ['Pose', 'ease', 'pose_at', 'poses_from', 'segment_at']
 
 #: A place to be and a way to face: a position and an orientation quaternion.
-Pose = Tuple[Sequence[float], Quaternion]
+Pose = tuple[Sequence[float], Quaternion]
 
 
 def ease(fraction: float) -> float:
@@ -29,7 +30,7 @@ def ease(fraction: float) -> float:
     return t * t * (3.0 - 2.0 * t)
 
 
-def segment_at(count: int, fraction: float) -> Tuple[int, float]:
+def segment_at(count: int, fraction: float) -> tuple[int, float]:
     """Which leg of a ``count``-waypoint path ``fraction`` is on, and how far.
 
     Returns the index of the waypoint the leg starts at and how far along that
@@ -63,7 +64,7 @@ def pose_at(poses: Sequence[Pose], fraction: float,
     return position, facing.slerp(turned, along)
 
 
-def poses_from(viewpoints: Sequence[Any]) -> List[Pose]:
+def poses_from(viewpoints: Sequence[Any]) -> list[Pose]:
     """The scene's ``Viewpoint`` nodes as a path, in the order they are declared.
 
     A viewpoint states its orientation the way VRML97 does -- an axis and an
@@ -73,7 +74,7 @@ def poses_from(viewpoints: Sequence[Any]) -> List[Pose]:
     """
     from OpenGLContext import quaternion
 
-    found: List[Pose] = []
+    found: list[Pose] = []
     for viewpoint in viewpoints:
         x, y, z, angle = (float(v) for v in viewpoint.orientation)
         found.append(([float(v) for v in viewpoint.position],

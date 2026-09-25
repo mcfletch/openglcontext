@@ -15,7 +15,8 @@ Note:
     This is wall-clock, not CPU time.
 """
 import time
-from typing import Callable, Optional
+from collections.abc import Callable
+from typing import Optional
 
 __all__ = ['systemTime', 'setTimeSource', 'timeSource', 'wallClock']
 

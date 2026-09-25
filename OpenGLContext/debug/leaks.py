@@ -13,14 +13,14 @@ object alive at the last call, freed since, whose memory a new object has taken
 before the next call.  That new object is taken for the old one.
 """
 import gc
-from typing import Any, Dict, List
+from typing import Any
 
 #: Identity of every object alive at the last :func:`init` or :func:`delta`,
 #: as ``{id(object): True}``.
-whole_set: Dict[int, bool] = {}
+whole_set: dict[int, bool] = {}
 
 
-def _remember(objects: List[Any]) -> None:
+def _remember(objects: list[Any]) -> None:
     """Make the remembered set exactly the identities of `objects`"""
     whole_set.clear()
     whole_set.update(dict.fromkeys(map(id, objects), True))
@@ -31,7 +31,7 @@ def init() -> None:
     _remember(gc.get_objects())
 
 
-def delta(report: bool = True) -> List[Any]:
+def delta(report: bool = True) -> list[Any]:
     """The objects that have appeared since the last :func:`init` or :func:`delta`
 
     ``report`` prints each one as it is found, which is what makes this usable

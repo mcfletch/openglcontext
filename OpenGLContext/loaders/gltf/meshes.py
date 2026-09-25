@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import enum
 import logging
-from typing import TYPE_CHECKING, Any, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
@@ -61,7 +61,7 @@ class PrimitiveMode(enum.IntEnum):
 
 
 def _triangulate_indices(mode: Optional[int], indices: Optional[np.ndarray],
-                         vertex_count: int) -> Tuple[Optional[np.ndarray], Optional[int]]:
+                         vertex_count: int) -> tuple[Optional[np.ndarray], Optional[int]]:
     """Map a primitive's (mode, indices) to a (indices, gl_draw_mode) pair.
 
     The glTF primitive.mode enum equals the GL primitive enum (POINTS=0 … TRIANGLES=4),
@@ -98,7 +98,7 @@ def _primitive_shape(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
                      resolver: Resolver, mat_cache: dict, tex_cache: dict,
                      hooks: "Optional[HookRunner]" = None,
                      world: Optional[np.ndarray] = None
-                     ) -> Tuple[Optional["Shape"], Optional[Tuple[np.ndarray, np.ndarray]]]:
+                     ) -> tuple[Optional["Shape"], Optional[tuple[np.ndarray, np.ndarray]]]:
     attrs = primitive.attributes
     if attrs.POSITION is None:
         return None, None

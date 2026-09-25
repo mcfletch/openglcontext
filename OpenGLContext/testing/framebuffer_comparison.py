@@ -28,7 +28,7 @@ import logging
 import os
 import sys
 import time
-from typing import Any, Dict, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Optional, TYPE_CHECKING
 import numpy as np
 from OpenGLContext import renderoptions
 from OpenGLContext.capture import ensure_pillow, read_back_buffer, save_png
@@ -255,7 +255,7 @@ def save_comparison_images(
     diff: Optional[np.ndarray],
     output_dir: str,
     test_name: str,
-) -> Tuple[Optional[str], Optional[str], Optional[str]]:
+) -> tuple[Optional[str], Optional[str], Optional[str]]:
     """Save reference, result, and diff images.
 
     Args:
@@ -768,7 +768,7 @@ class VisualRegressionTest:
         Returns:
             Dict with test information for report generation
         """
-        data: Dict[str, Any] = {
+        data: dict[str, Any] = {
             'test_name': self.test_name,
             'status': self._status,
             'reference_image': self._reference_path if self.has_reference else None,

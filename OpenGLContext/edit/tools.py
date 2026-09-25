@@ -28,7 +28,8 @@ cannot be switched out from under a gesture it is half-way through.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, List, Optional, Sequence, Tuple
+from collections.abc import Callable, Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -53,7 +54,7 @@ class Pointer:
     world: Optional[np.ndarray] = None
     node: Any = None
     button: int = 0
-    modifiers: Tuple[int, int, int] = (0, 0, 0)
+    modifiers: tuple[int, int, int] = (0, 0, 0)
 
     @property
     def on_surface(self) -> bool:
@@ -126,7 +127,7 @@ class ToolMode:
         """The pointer moved with nothing held."""
         return False
 
-    def on_key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+    def on_key(self, name: str, modifiers: tuple[int, int, int]) -> bool:
         """A key, while this tool is in force."""
         return False
 
@@ -160,7 +161,7 @@ class ToolManager:
     def __init__(self, tools: Sequence[ToolMode] = (),
                  on_change: Optional[Callable[[Optional[ToolMode]], None]] = None
                  ) -> None:
-        self.tools: List[ToolMode] = list(tools)
+        self.tools: list[ToolMode] = list(tools)
         #: Called with the tool that has just taken the pointer.
         self.on_change = on_change
         self.active: Optional[ToolMode] = self.tools[0] if self.tools else None
@@ -229,7 +230,7 @@ class ToolManager:
         pointer.button = self._button
         return dragging.on_release(pointer)
 
-    def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+    def key(self, name: str, modifiers: tuple[int, int, int]) -> bool:
         if name == '<escape>' and self._dragging is not None:
             dragging, self._dragging = self._dragging, None
             dragging.cancel()

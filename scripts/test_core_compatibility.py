@@ -20,7 +20,7 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
-from typing import List, Optional, Tuple
+from typing import Optional
 
 
 @dataclass
@@ -37,7 +37,7 @@ class TestResult:
     used_compat_renderer: bool = False  # True if we saw FLATCOMPAT_USED error
 
 
-def find_test_scripts(test_dir: str) -> List[str]:
+def find_test_scripts(test_dir: str) -> list[str]:
     """Find all Python test scripts in the test directory."""
     patterns = [
         os.path.join(test_dir, '*.py'),
@@ -199,7 +199,7 @@ def categorize_error(output: str) -> str:
 
 
 def generate_report(
-    results: List[TestResult],
+    results: list[TestResult],
     output_path: Optional[str] = None
 ) -> str:
     """Generate a markdown report of test results."""

@@ -15,7 +15,8 @@ The mode in force is published as ``ContextDefinition.movementMode``, an
 HUD label, a sound — watches that field rather than being told about it.
 """
 
-from typing import Any, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from .modes import KeyBinding, MovementMode
 
@@ -48,7 +49,7 @@ class NavigationManager:
     def modes(self) -> Sequence[MovementMode]:
         return list(getattr(self.definition, 'movementModes', ()) or ())
 
-    def _selectable(self) -> List[MovementMode]:
+    def _selectable(self) -> list[MovementMode]:
         """Modes the player may choose: enabled, and not world-imposed.
 
         A mode that *can* impose itself is excluded whether or not it applies
@@ -116,7 +117,7 @@ class NavigationManager:
         return current
 
     # -- bindings ---------------------------------------------------------
-    def binding_table(self) -> List[Tuple[str, KeyBinding]]:
+    def binding_table(self) -> list[tuple[str, KeyBinding]]:
         """``(mode name, binding)`` for every command, for a settings window."""
         return [(mode.name, binding)
                 for mode in self.modes() for binding in mode.bindings]

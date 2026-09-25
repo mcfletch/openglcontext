@@ -37,7 +37,8 @@ the world. What being *inside* it is like is
 """
 from __future__ import annotations
 
-from typing import Any, Iterator, Optional, Tuple
+from collections.abc import Iterator
+from typing import Any, Optional
 
 import numpy as np
 from vrml import field, node
@@ -256,7 +257,7 @@ def _heading(style: 'WaterStyle') -> float:
 
 def _phases(
     style: 'WaterStyle', x: Any, z: Any, when: float
-) -> Iterator[Tuple[Any, float, float, float]]:
+) -> Iterator[tuple[Any, float, float, float]]:
     """Each train's phase at every point, and its own amplitude."""
     heading = _heading(style)
     x = np.asarray(x, dtype='d')
@@ -339,7 +340,7 @@ def _resolved(wavelength: float, footprint: float) -> float:
 def _fine_ripple(x: np.ndarray, z: np.ndarray, steepness: float,
                  heading: float, when: float,
                  style: 'WaterStyle',
-                 footprint: float = 0.0) -> Tuple[np.ndarray, np.ndarray]:
+                 footprint: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
     """The ripple that lives in the normals rather than in the surface.
 
     :data:`_RIPPLE_TRAINS` over the style's ``ripple`` metres, which is finer

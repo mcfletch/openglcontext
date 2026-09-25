@@ -19,7 +19,8 @@ The blend is read from world XZ, so a patch is told where the world put it: a
 tile is placed by the tileset's own transform, where a field sits at the origin.
 """
 import ctypes
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any, Optional
 
 import numpy as np
 from OpenGL.GL import (

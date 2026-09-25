@@ -8,7 +8,8 @@ The pass itself does the work -- ``_flat.FlatPass`` observes the scenegraph's
 structure and renders from the paths it knows are active. This module only picks
 one and hands the context to it.
 """
-from typing import Any, Callable, Dict, Optional
+from collections.abc import Callable
+from typing import Any, Optional
 
 from OpenGLContext import contextresources
 from OpenGLContext.passes import viewpointbinding
@@ -29,7 +30,7 @@ USE_FLAT = True
 #: shadow maps in a context that is alive -- which nothing can then be told to
 #: delete, since deleting them needs that context current.
 #: ``shaderpass.get_shader_program`` is keyed the same way, for the same reason.
-_passes: Dict[Optional[contextresources.ContextKey], Any] = {}
+_passes: dict[Optional[contextresources.ContextKey], Any] = {}
 
 #: The pass that rendered most recently, whatever context that was in.  For the
 #: demos that toggle ``use_shaders`` on it and for :func:`report_render_failures`;

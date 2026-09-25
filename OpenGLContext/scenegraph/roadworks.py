@@ -26,7 +26,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
-from typing import Any, Callable, Dict, Optional, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -279,7 +280,7 @@ def bridge_meshes(points: Any, profile: Optional[RoadProfile] = None,
                   material: Optional[PBRMaterial] = None,
                   barrier: Optional[PBRMaterial] = None,
                   bank: Any = None,
-                  ) -> Dict[str, PBRMesh]:
+                  ) -> dict[str, PBRMesh]:
     """A deck, its parapets and its piers, along a stretch of centreline.
 
     ``points`` is (N,3) at the height the *road surface* runs at -- the same
@@ -316,7 +317,7 @@ def bridge_meshes(points: Any, profile: Optional[RoadProfile] = None,
     half = carried.total_width / 2.0
     edge = float(carried.section()[0, 1])
 
-    parts: Dict[str, PBRMesh] = {}
+    parts: dict[str, PBRMesh] = {}
     # The deck: down the near fascia, along the soffit, up the far one. Left
     # open at the top, where the carriageway closes it.
     soffit = edge - bridge.deck_depth
@@ -337,7 +338,7 @@ def causeway_meshes(points: Any, profile: Optional[RoadProfile] = None,
                     causeway: Optional[CausewayProfile] = None,
                     material: Optional[PBRMaterial] = None,
                     bank: Any = None,
-                    ) -> Dict[str, PBRMesh]:
+                    ) -> dict[str, PBRMesh]:
     """The fill under a causeway and the low wall along each edge.
 
     ``points`` is (N,3) at the height the road surface runs at. ``ground`` is
@@ -374,7 +375,7 @@ def causeway_meshes(points: Any, profile: Optional[RoadProfile] = None,
     half = carried.total_width / 2.0
     edge = float(carried.section()[0, 1])
 
-    parts: Dict[str, PBRMesh] = {
+    parts: dict[str, PBRMesh] = {
         'wall': _parapet(line, right, up, material, half, edge,
                          causeway.wall_height, causeway.wall_width)}
     if ground is not None:
@@ -387,7 +388,7 @@ def tunnel_meshes(points: Any, profile: Optional[RoadProfile] = None,
                   tunnel: Optional[TunnelProfile] = None,
                   material: Optional[PBRMaterial] = None,
                   bank: Any = None,
-                  ) -> Dict[str, PBRMesh]:
+                  ) -> dict[str, PBRMesh]:
     """A bore and its two portals, along a stretch of centreline.
 
     ``points`` is (N,3) at the height the road surface runs at. The lining
@@ -630,7 +631,7 @@ class BoreCut:
     inset: float = BORE_INSET
     approach: float = 0.0
 
-    def to_json(self) -> Dict[str, float]:
+    def to_json(self) -> dict[str, float]:
         """This cut as a baked road carries it."""
         return {'clearance': float(self.tunnel.clearance),
                 'margin': float(self.tunnel.margin),

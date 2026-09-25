@@ -1,5 +1,6 @@
 """Classic trackball mechanism for interactive rotation"""
-from typing import Any, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any
 
 from OpenGLContext.arrays import *
 from OpenGL.GLU import *
@@ -64,11 +65,11 @@ class Trackball:
         self.center = array( [x,y,z,0], 'd')
         self.dragAngle = dragAngle
         self.vector = self.originalPosition - self.center 
-    def cancel(self) -> Tuple[Any, Quaternion]:
+    def cancel(self) -> tuple[Any, Quaternion]:
         """Cancel drag rotation, return pos,quat to original values"""
         return self.originalPosition, self.originalQuaternion
         
-    def rotate(self, newX: float, newY: float) -> Tuple[Any, Quaternion]:
+    def rotate(self, newX: float, newY: float) -> tuple[Any, Quaternion]:
         """Update with new x,y drag coordinates
 
         newX, newY -- the new screen coordinates for the drag

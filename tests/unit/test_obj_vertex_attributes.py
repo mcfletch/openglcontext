@@ -4,7 +4,7 @@
 pairs in ``point``, which is what the geometry's ``normalIndex`` and
 ``texCoordIndex`` are indices into.
 """
-from typing import Any, List, Tuple
+from typing import Any
 
 from OpenGLContext.loaders.obj import OBJHandler
 from OpenGLContext.scenegraph import basenodes
@@ -23,14 +23,14 @@ f 1/1/1 2/2/1 3/3/1 4/4/1
 """
 
 
-def _shapes(sg: Any) -> List[Any]:
+def _shapes(sg: Any) -> list[Any]:
     return [child
             for transform in sg.children
             for child in getattr(transform, 'children', [])
             if isinstance(child, basenodes.Shape)]
 
 
-def _parse(tmp_path: Any) -> Tuple[Any, Any]:
+def _parse(tmp_path: Any) -> tuple[Any, Any]:
     ok, sg = OBJHandler().parse(CUBE_FACE_OBJ, str(tmp_path / 'quad.obj'))
     assert ok is True
     shapes = _shapes(sg)

@@ -11,7 +11,8 @@ The scene an adapter produces answers a fixed set of questions, listed on
 already answers them and is handed back as it is; a loader that returns
 something else is wrapped in a :class:`ViewerScene`.
 """
-from typing import Any, Iterable, Optional, Sequence, Tuple
+from collections.abc import Iterable, Sequence
+from typing import Any, Optional
 
 __all__ = ['SceneAdapter', 'ViewerScene', 'UnknownSourceType', 'scene_bounds']
 
@@ -20,7 +21,7 @@ class UnknownSourceType(ValueError):
     """No adapter is registered for this source."""
 
 
-def scene_bounds(nodes: Iterable[Any]) -> Tuple[Tuple[float, float, float], float]:
+def scene_bounds(nodes: Iterable[Any]) -> tuple[tuple[float, float, float], float]:
     """The bounding sphere ``(center, radius)`` of a loaded document's nodes.
 
     What an adapter hands the viewer to frame a camera with, for a format whose
@@ -84,7 +85,7 @@ class ViewerScene(object):
                  pose: Any = None,
                  metric: bool = False) -> None:
         self.group = group
-        self.center: Tuple[float, ...] = tuple(float(v) for v in center)
+        self.center: tuple[float, ...] = tuple(float(v) for v in center)
         self.radius = float(radius)
         self.strays = 0
         self.stray_reach = 0.0

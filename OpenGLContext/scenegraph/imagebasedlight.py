@@ -21,7 +21,8 @@ is first needed, and draws nothing to do it.
 from __future__ import annotations
 
 import math
-from typing import Any, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, Optional
 
 import numpy as np
 from vrml import field, node
@@ -187,18 +188,18 @@ class ImageBasedLight(nodetypes.Children, node.Node):
     #: The width of the largest specular mip.
     specularImageSize = field.newField('specularImageSize', 'SFInt32', 1, 0)
 
-    def __init__(self, specular: Optional[List[List[np.ndarray]]] = None,
+    def __init__(self, specular: Optional[list[list[np.ndarray]]] = None,
                  **named: Any) -> None:
         super().__init__(**named)
         #: The mip chain: for each level, six linear ``(n, n, 3)`` faces.
-        self.specular: List[List[np.ndarray]] = list(specular or [])
+        self.specular: list[list[np.ndarray]] = list(specular or [])
 
     @property
     def rotated(self) -> bool:
         x, y, z, w = (float(v) for v in self.rotation)
         return not (abs(x) < 1e-9 and abs(y) < 1e-9 and abs(z) < 1e-9)
 
-    def specular_faces(self, level: int) -> List[np.ndarray]:
+    def specular_faces(self, level: int) -> list[np.ndarray]:
         """The six faces of one mip, turned by :attr:`rotation`, scaled by intensity."""
         faces = self.specular[level]
         if self.rotated:
@@ -208,7 +209,7 @@ class ImageBasedLight(nodetypes.Children, node.Node):
                      for face in range(6)]
         return [np.asarray(face, dtype='f4') * float(self.intensity) for face in faces]
 
-    def irradiance_faces(self, size: int) -> List[np.ndarray]:
+    def irradiance_faces(self, size: int) -> list[np.ndarray]:
         """The six faces of the irradiance cube, ``(size, size, 3)``, as the shader reads them."""
         turn = _rotation_matrix(self.rotation) if self.rotated else np.identity(3)
         return [(sh_irradiance(self.irradianceCoefficients,

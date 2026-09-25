@@ -15,7 +15,7 @@ rather than on a bounding-volume centre, the priming rounds before the first
 frame, and the per-frame view projection.
 """
 import math
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 import numpy as np
 
@@ -226,14 +226,14 @@ class TilesAdapter(SceneAdapter):
             terrain.shutdown()
 
     # -- framing ----------------------------------------------------------
-    def _bounds(self) -> Tuple[np.ndarray, float]:
+    def _bounds(self) -> tuple[np.ndarray, float]:
         """The whole dataset's bounding sphere, aimed at real geometry."""
         from OpenGLContext.loaders.tiles3d.gltf_uploader import make_tile_loader
         return self.boundsOf(self.terrain.tileset.root,
                              make_tile_loader(cache_dir=self.cacheDirectory))
 
     @staticmethod
-    def boundsOf(root: Any, load_tile: Any) -> Tuple[np.ndarray, float]:
+    def boundsOf(root: Any, load_tile: Any) -> tuple[np.ndarray, float]:
         """``(centre, radius)`` for a tileset, from its extent and its mesh.
 
         The root bounding volume gives the extent.  The first content tile's
@@ -267,13 +267,13 @@ class TilesAdapter(SceneAdapter):
             self.terrain.wait_for_loads(timeout=PRIME_TIMEOUT)
 
     # -- where the camera is ----------------------------------------------
-    def _eye(self, platform: Any) -> Tuple[float, ...]:
+    def _eye(self, platform: Any) -> tuple[float, ...]:
         if platform is None:
             return tuple(float(v) for v in self.center)
         return tuple(float(v) for v in platform.position[:3])
 
     def _viewProjection(self, viewer: Any, platform: Any,
-                        eye: Tuple[float, ...]) -> np.ndarray:
+                        eye: tuple[float, ...]) -> np.ndarray:
         """The matrix the streamer culls and measures error against.
 
         Built here rather than read from the renderer because the streamer runs

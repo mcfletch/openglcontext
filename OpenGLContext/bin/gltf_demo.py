@@ -34,7 +34,8 @@ Every ``oglc-gltf`` command-line option applies (``--shadows/--no-shadows``,
 import os
 import sys
 from dataclasses import dataclass
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from OpenGLContext.bin.view import apply_render_env, build_parser
 from OpenGLContext.ui.gallery import Picture

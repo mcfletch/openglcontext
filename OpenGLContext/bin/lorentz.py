@@ -6,7 +6,8 @@ from OpenGLContext import testingcontext
 #: checker can name -- which is what Any says here.
 BaseContext: Any = testingcontext.getInteractive()
 import logging
-from typing import TYPE_CHECKING, List, Sequence, Tuple
+from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from OpenGLContext.arrays import arange
 
@@ -92,14 +93,14 @@ class LorentzContext(BaseContext):
 
 
 def lorentz(iterations: int = 100000,
-            start: Sequence[float] = (0, -2, -1)) -> List[Tuple[float, float, float]]:
+            start: Sequence[float] = (0, -2, -1)) -> list[tuple[float, float, float]]:
     """Calculate the lorentz equation"""
     h = 0.01
     a = 10.0
     b = 28.0
     c = 8.0 / 3.0
     x0, y0, z0 = start
-    points: List[Tuple[float, float, float]] = []
+    points: list[tuple[float, float, float]] = []
     for _n in range(iterations):
         # lorentz linear function set
         x1 = x0 + h * a * (y0 - x0)

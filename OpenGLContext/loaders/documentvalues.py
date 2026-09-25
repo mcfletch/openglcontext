@@ -45,9 +45,8 @@ import json
 import logging
 import math
 from collections.abc import Mapping
-from typing import (
-    Any, Callable, Iterable, Optional, Sequence, Set, Tuple, TypeGuard, Union,
-)
+from collections.abc import Callable, Iterable, Sequence
+from typing import Any, Optional, TypeGuard
 
 log = logging.getLogger(__name__)
 
@@ -98,7 +97,7 @@ def _clamped(number: float, minimum: Optional[float],
     return number
 
 
-def parse_object(data: Union[str, bytes], what: str) -> JSONObject:
+def parse_object(data: str | bytes, what: str) -> JSONObject:
     """``data``, JSON text whose top level is an object, as a :data:`JSONObject`.
 
     Raises :class:`DocumentError` where ``data`` is not JSON (or not UTF-8),
@@ -127,7 +126,7 @@ def require_array(raw: object, what: str) -> JSONArray:
     return raw
 
 
-def require_numbers(raw: object, what: str, length: int) -> Tuple[float, ...]:
+def require_numbers(raw: object, what: str, length: int) -> tuple[float, ...]:
     """``raw`` as ``length`` finite floats, or :class:`DocumentError`."""
     numbers = _numbers(raw, length)
     if numbers is None:
@@ -181,7 +180,7 @@ def _is_object(raw: object) -> TypeGuard[JSONObject]:
     return isinstance(raw, Mapping) and all(isinstance(key, str) for key in raw)
 
 
-def _numbers(raw: object, length: int) -> Optional[Tuple[float, ...]]:
+def _numbers(raw: object, length: int) -> Optional[tuple[float, ...]]:
     """``raw`` as ``length`` finite floats, or None."""
     if not isinstance(raw, (list, tuple)) or len(raw) != length:
         return None
@@ -214,7 +213,7 @@ class DocumentValues:
                  logger: Optional[logging.Logger] = None) -> None:
         self._warn = warn
         self._logger = logger or log
-        self._said: Set[str] = set()
+        self._said: set[str] = set()
 
     def warn(self, message: str) -> None:
         """Report ``message``, once for this reader."""
@@ -303,7 +302,7 @@ class DocumentValues:
         return default
 
     def vector(self, raw: object, default: Sequence[float], what: str,
-               length: int = 3) -> Tuple[float, ...]:
+               length: int = 3) -> tuple[float, ...]:
         """``raw`` as ``length`` finite floats, or ``default``."""
         if raw is None:
             return tuple(default)

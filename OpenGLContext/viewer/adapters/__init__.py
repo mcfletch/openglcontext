@@ -18,7 +18,7 @@ See [docs/gltf.rst](../../../docs/gltf.rst).
 """
 import os
 import urllib.parse
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 
 from OpenGLContext.loaders.documentvalues import parse_object
 from OpenGLContext.viewer.adapters.base import (
@@ -34,7 +34,7 @@ __all__ = ['SceneAdapter', 'ViewerScene', 'UnknownSourceType', 'adapter_for',
 SNIFF_BYTES = 64 * 1024
 
 
-def _keys() -> Dict[str, Any]:
+def _keys() -> dict[str, Any]:
     """Every registered key -> its plugin entry, lowercased.
 
     Read afresh each time rather than memoised: registrations are a module-level
@@ -60,7 +60,7 @@ def _adapter(entry: Any) -> SceneAdapter:
     return adapter
 
 
-def known_sources() -> Tuple[str, ...]:
+def known_sources() -> tuple[str, ...]:
     """Every suffix and content type a viewer can open, sorted to be read."""
     return tuple(sorted(_keys()))
 

@@ -17,7 +17,8 @@ program shows.
     context.pushOverlay(menu.main_menu(on_browse=..., on_quit=...))
 """
 from gettext import gettext as _
-from typing import Any, Callable, List, Optional, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any, Optional
 
 from OpenGLContext.ui.gallery import Carousel
 from OpenGLContext.ui.layout import Column, Row
@@ -81,7 +82,7 @@ def main_menu(on_browse: Optional[Callable[[], None]] = None,
     everything worth looking at is on the shelf, and a viewer launched from a
     desktop has no command line to pass a URL on.
     """
-    children: List[Any] = [Label(text=TITLE, name='title')]
+    children: list[Any] = [Label(text=TITLE, name='title')]
     if subtitle:
         children.append(Label(text=subtitle, wrap=True, name='subtitle'))
     children.append(Separator(top=6))
@@ -148,7 +149,7 @@ def browse_screen(library: Library,
     chooser.enabled = bool(categories)
     band = Carousel(name='entry', visibleCount=SHOWN)
     note = Label(name='note', text='', wrap=True)
-    entries: List[Entry] = []
+    entries: list[Entry] = []
 
     def show(shelf: Sequence[Entry]) -> None:
         """Point the band at one category's entries."""

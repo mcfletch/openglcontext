@@ -47,7 +47,8 @@ from __future__ import annotations
 from dataclasses import replace
 
 from gettext import gettext as _
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+from collections.abc import Callable, Sequence
+from typing import Any, Optional
 
 import numpy as np
 from vrml import field
@@ -119,7 +120,7 @@ RENDERING_LABEL = _('Rendering')
 ELLIPSIS = '...'
 
 
-def axis_directions(view: View) -> Optional[Dict[str, Tuple[float, float]]]:
+def axis_directions(view: View) -> Optional[dict[str, tuple[float, float]]]:
     """Which way the world's axes run on screen in this view, or None.
 
     Each is a unit vector in the view's own pixels, x to the right and y up.
@@ -131,7 +132,7 @@ def axis_directions(view: View) -> Optional[Dict[str, Tuple[float, float]]]:
     matrix = np.asarray(camera.matrix(), 'd')
     width, height = view.size
     width, height = max(int(width), 1), max(int(height), 1)
-    found: Dict[str, Tuple[float, float]] = {}
+    found: dict[str, tuple[float, float]] = {}
     for name, axis in (('x', (1.0, 0.0, 0.0)),
                        ('y', (0.0, 1.0, 0.0)),
                        ('z', (0.0, 0.0, 1.0))):
@@ -162,7 +163,7 @@ class _ViewWidget(Widget):
         self.chrome = chrome
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         return (metrics.char_height, metrics.char_height)
 
 
@@ -184,7 +185,7 @@ class ViewLabel(_ViewWidget):
                 'cameras, and how it is drawn')
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         """The name, the caret after it, and a button's padding round both."""
         pad_x = self.activeSkin().buttonPadding(metrics)[0]
         return (metrics.text_width(str(self.text)) + pad_x * 2
@@ -218,7 +219,7 @@ class ViewLabel(_ViewWidget):
         renderer.segment((middle_x - half, middle_y + half // 2), tip, 1.5, colour)
         renderer.segment(tip, (middle_x + half, middle_y + half // 2), 1.5, colour)
 
-    def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+    def key(self, name: str, modifiers: tuple[int, int, int]) -> bool:
         if name in ('<return>', ' ') and self.enabled:
             self.activate()
             return True
@@ -269,7 +270,7 @@ class _ChromeButton(_ViewWidget):
     washOnHover = False
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         side = int(metrics.char_height * BUTTON_CHARS)
         return (side, side)
 
@@ -286,7 +287,7 @@ class _ChromeButton(_ViewWidget):
     def glyph(self, renderer: Any, rect: Rect, colour: Any) -> None:
         """Draw what this button does, inside ``rect``."""
 
-    def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+    def key(self, name: str, modifiers: tuple[int, int, int]) -> bool:
         if name in ('<return>', ' ') and self.enabled:
             self.activate()
             return True
@@ -422,10 +423,9 @@ class ViewChrome(Panel):
     def __init__(self, layout: Optional[ViewLayout] = None,
                  stack: Any = None,
                  on_arrange: Optional[Callable[[], None]] = None,
-                 only: Optional[Dict[str, Sequence[str]]] = None,
-                 bounds: Optional[Callable[[], Optional[Tuple[Any, Any]]]] = None,
-                 cameras: Union[Sequence[SceneCamera],
-                                Callable[[], Sequence[SceneCamera]], None] = None,
+                 only: Optional[dict[str, Sequence[str]]] = None,
+                 bounds: Optional[Callable[[], Optional[tuple[Any, Any]]]] = None,
+                 cameras: Sequence[SceneCamera] | Callable[[], Sequence[SceneCamera]] | None = None,
                  **named: Any) -> None:
         named.setdefault('modal', False)
         named.setdefault('closeOnEscape', False)
@@ -445,12 +445,12 @@ class ViewChrome(Panel):
         #: The scene's cameras, or what answers them, for the menu's
         #: *Cameras*. None, or none answered, offers no such item.
         self.cameras = cameras
-        self._splitters: List[Splitter] = []
+        self._splitters: list[Splitter] = []
         #: What the furniture was last built for; see :meth:`furniture_key`.
         self._builtFor: Any = None
 
     # -- what each view gets -----------------------------------------------
-    def parts_for(self, view: View) -> Tuple[str, ...]:
+    def parts_for(self, view: View) -> tuple[str, ...]:
         """Which parts this view is given."""
         named = self.only.get(str(view.name))
         if named is not None:
@@ -459,7 +459,7 @@ class ViewChrome(Panel):
                    'expand': bool(self.expand)}
         return tuple(part for part in PARTS if offered[part])
 
-    def furniture_key(self) -> Tuple[Any, ...]:
+    def furniture_key(self) -> tuple[Any, ...]:
         """What decides which furniture there is: the views shown and their parts.
 
         The views, by identity, with their names, their parts and whether each
@@ -481,7 +481,7 @@ class ViewChrome(Panel):
     def rebuild(self) -> None:
         """Make the furniture for the views the arrangement is showing."""
         self._builtFor = self.furniture_key()
-        children: List[Widget] = []
+        children: list[Widget] = []
         self._splitters = []
         for view in self._shown():
             parts = self.parts_for(view)
@@ -498,13 +498,13 @@ class ViewChrome(Panel):
             children.extend(self._splitters)
         self.children = children
 
-    def _shown(self) -> List[View]:
+    def _shown(self) -> list[View]:
         layout = self.layout_of
         if layout is None:
             return []
         return [view for view in layout.views if view.visible]
 
-    def _split_widgets(self) -> List[Splitter]:
+    def _split_widgets(self) -> list[Splitter]:
         """One splitter per line this arrangement divides the window along."""
         layout = self.layout_of
         if layout is None or layout.maximised is not None:
@@ -522,7 +522,7 @@ class ViewChrome(Panel):
         return []
 
     # -- where it all goes --------------------------------------------------
-    def layout(self, viewport: Tuple[int, int], metrics: FontMetrics) -> None:
+    def layout(self, viewport: tuple[int, int], metrics: FontMetrics) -> None:
         """Place the furniture for this window, building it again only where it changed."""
         if self.furniture_key() != self._builtFor:
             self.rebuild()
@@ -589,7 +589,7 @@ class ViewChrome(Panel):
                               metrics)
         self._arrange_splitters(metrics)
 
-    def _parts_of(self, view: View, kind: Any) -> List[Widget]:
+    def _parts_of(self, view: View, kind: Any) -> list[Widget]:
         """This view's furniture of one kind, in the order it was built."""
         return [child for child in self.layoutChildren()
                 if isinstance(child, kind) and getattr(child, 'view', None) is view]
@@ -656,7 +656,7 @@ class ViewChrome(Panel):
         """
         if self.stack is None:
             return None
-        items: List[Any] = []
+        items: list[Any] = []
         if view.camera is not None:
             items.append(MenuItem(text=VIEW_LABEL, submenu=[
                 self._kind_item(view, kind) for kind in VIEW_KINDS]))
@@ -679,7 +679,7 @@ class ViewChrome(Panel):
         return self._put_up(Menu(items=items, anchor=(float(at.x), float(at.y)),
                                  above=float(at.top), stack=self.stack))
 
-    def scene_cameras(self) -> List[SceneCamera]:
+    def scene_cameras(self) -> list[SceneCamera]:
         """The cameras the menu offers: what ``cameras`` is, or answers."""
         found = self.cameras() if callable(self.cameras) else self.cameras
         return list(found or ())
@@ -714,7 +714,7 @@ class ViewChrome(Panel):
         item.on_activate = chosen
         return item
 
-    def _drawn_items(self, view: View) -> List[MenuItem]:
+    def _drawn_items(self, view: View) -> list[MenuItem]:
         """Shaded or wireframe: how what the view holds is drawn."""
         wire = bool(view.style.wireframe)
         items = []

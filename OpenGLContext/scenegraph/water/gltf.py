@@ -50,7 +50,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 from OpenGLContext.loaders.documentvalues import DocumentValues
 from OpenGLContext.loaders.gltf import hooks
@@ -73,7 +73,7 @@ KIND = 'water'
 #: The motions a style may be named by. A document may also spell one out in
 #: full, since water is a continuum and five names are a convenience rather
 #: than the set of things water does.
-STYLES: Dict[str, WaterStyle] = {
+STYLES: dict[str, WaterStyle] = {
     'still': STILL, 'breeze': BREEZE, 'flowing': FLOWING, 'choppy': CHOPPY,
     'lake': LAKE,
 }
@@ -118,16 +118,16 @@ def style_for(named: Any, values: Optional[DocumentValues] = None) -> WaterStyle
 #: The range each written-out style field is held to, ``(minimum, maximum)``
 #: with None for an open end. A wavelength or a ripple is at least a
 #: centimetre, since the wave divides by both.
-STYLE_RANGES: Dict[str, Tuple[Optional[float], Optional[float]]] = {
+STYLE_RANGES: dict[str, tuple[Optional[float], Optional[float]]] = {
     'amplitude': (0.0, None), 'wavelength': (0.01, None), 'speed': (None, None),
     'steepness': (0.0, None), 'ripple': (0.01, None),
 }
 
 
-def _written_out(fields: Dict[str, Any], values: DocumentValues) -> WaterStyle:
+def _written_out(fields: dict[str, Any], values: DocumentValues) -> WaterStyle:
     """A style spelled out field by field, over whichever one it names."""
     base = style_for(fields.get('style', 'still'), values)
-    found: Dict[str, Any] = {}
+    found: dict[str, Any] = {}
     for name, (minimum, maximum) in STYLE_RANGES.items():
         if fields.get(name) is not None:
             found[name] = values.number(fields[name], float(getattr(base, name)),
@@ -198,7 +198,7 @@ def water_hook(ctx: "hooks.HookContext") -> None:
     return None
 
 
-def advance(bodies: List[WaterBody], when: float) -> bool:
+def advance(bodies: list[WaterBody], when: float) -> bool:
     """Move every body's surface to ``when``, in seconds since the scene began.
 
     Returns whether anything moved. Still water has its ripple in the normals

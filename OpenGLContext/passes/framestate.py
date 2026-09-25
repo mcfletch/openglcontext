@@ -12,7 +12,7 @@ frame; ``frameState`` on the pass is the open one, or None between frames.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     import numpy as np
@@ -33,7 +33,7 @@ class FrameState:
         #: Where each shape of the walk is and how far it reaches, the world
         #: centres and radii of :func:`~OpenGLContext.passes.reflection.reach`,
         #: once a mirror view has asked.
-        self.reach: Optional[Tuple['np.ndarray', 'np.ndarray']] = None
+        self.reach: Optional[tuple['np.ndarray', 'np.ndarray']] = None
         #: Per path of the walk, whether a mirror view drawing it draws it
         #: apart from a shared draw: 1 yes, 0 no, -1 not asked yet.
         self.refusesShare: Optional['np.ndarray'] = None

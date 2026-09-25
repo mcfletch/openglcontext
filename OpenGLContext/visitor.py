@@ -9,7 +9,8 @@ for bindables (Viewpoint, Background, Fog, NavigationInfo) which only mean
 something where the renderer would encounter them.
 """
 import traceback
-from typing import Any, List, Sequence, Tuple, Type
+from collections.abc import Sequence
+from typing import Any
 
 from vrml.vrml97 import nodetypes
 from vrml import node as _node
@@ -23,7 +24,7 @@ TRAVERSAL_TYPES = (nodetypes.Traversable, nodetypes.Children,
                    _node.PrototypedNode, nodetypes.Rendering)
 
 
-def children(node: Any, types: Tuple[type, ...] = TRAVERSAL_TYPES) -> Sequence[Any]:
+def children(node: Any, types: tuple[type, ...] = TRAVERSAL_TYPES) -> Sequence[Any]:
     """The children of ``node`` to traverse into, or ``()`` when it has none."""
     if hasattr(node, 'renderedChildren'):
         found: Sequence[Any] = node.renderedChildren(types)
@@ -32,7 +33,7 @@ def children(node: Any, types: Tuple[type, ...] = TRAVERSAL_TYPES) -> Sequence[A
 
 
 def find(sg: Any,
-         desiredTypes: Any = ()) -> List['nodepath.NodePath']:
+         desiredTypes: Any = ()) -> list['nodepath.NodePath']:
     """Node-paths to every instance of ``desiredTypes`` within scenegraph ``sg``.
 
     ``desiredTypes`` may be a single type or a sequence of them. Returns a list of
@@ -50,7 +51,7 @@ def find(sg: Any,
     # depth each queued node hangs at, which is what lets one flat list
     # reconstruct the full path to every match.
     todo = [(0, sg)]
-    currentStack: List[Any] = []
+    currentStack: list[Any] = []
     childrenTypes = TRAVERSAL_TYPES + desiredTypes
     while todo:
         index, current = todo.pop(0)

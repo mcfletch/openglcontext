@@ -59,9 +59,8 @@ import importlib
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import (
-    TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple, Union, overload,
-)
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Optional, Union, overload
 
 import numpy as np
 
@@ -95,7 +94,7 @@ ENVIRONMENT = 'OPENGLCONTEXT_GLTF_HOOKS'
 #: only when a document names one and nothing has bound it yet. A fixed table
 #: in this source: a document selects among these names and cannot name a
 #: module of its own.
-BUILTIN: Dict[str, str] = {
+BUILTIN: dict[str, str] = {
     'water': 'OpenGLContext.scenegraph.water.gltf',
     'mirror': 'OpenGLContext.scenegraph.mirrorhooks',
     'fire': 'OpenGLContext.scenegraph.particlehooks',
@@ -160,7 +159,7 @@ def tag_for(holder: Any) -> Optional[HookTag]:
 
 #: What a hook returns. At the material point: None, or a node to stand in
 #: the shape's place. At the node point: None, or ``(node, replacing)``.
-HookResult = Union[None, 'Node', Tuple['Node', bool]]
+HookResult = Union[None, 'Node', tuple['Node', bool]]
 
 #: A hook, called once per primitive of a tagged material or once per tagged
 #: node. See :class:`HookContext` for what it is handed and may return.
@@ -186,7 +185,7 @@ class Registration:
     advance: Optional[Advance] = None
 
 
-_REGISTRY: Dict[str, Registration] = {}
+_REGISTRY: dict[str, Registration] = {}
 
 
 @overload
@@ -202,7 +201,7 @@ def register(kind: str, factory: Factory, *, shareable: bool = True,
 def register(kind: str, factory: Optional[Factory] = None, *,
              shareable: bool = True,
              advance: Optional[Advance] = None
-             ) -> Union[Factory, Callable[[Factory], Factory]]:
+             ) -> Factory | Callable[[Factory], Factory]:
     """Bind ``kind`` to a factory, as a decorator or as a call.
 
     The engine claims the bare lowercase names it documents and ships. An
@@ -222,7 +221,7 @@ def unregister(kind: str) -> None:
 
 
 @overload
-def registered(kind: None = None) -> Dict[str, Registration]: ...
+def registered(kind: None = None) -> dict[str, Registration]: ...
 
 
 @overload
@@ -230,7 +229,7 @@ def registered(kind: str) -> Optional[Registration]: ...
 
 
 def registered(kind: Optional[str] = None
-               ) -> Union[Dict[str, Registration], Optional[Registration]]:
+               ) -> dict[str, Registration] | Optional[Registration]:
     """What ``kind`` is bound to, or the whole registry where none is named.
 
     A viewer reports which of a file's tags it can honour with this. A kind the
@@ -289,7 +288,7 @@ class HookContext:
     document: Any
     resolver: 'Resolver'
     #: The dict that becomes :attr:`GLTFScene.hook_data`, keyed by kind.
-    scene_data: Dict[str, Any]
+    scene_data: dict[str, Any]
     #: Row-vector 4x4, or None; see above.
     world_matrix: Optional[np.ndarray] = None
     #: What a hook reads its parameters through: each value a hook cannot use
@@ -302,13 +301,13 @@ class HookContext:
     mesh: Optional['PBRMesh'] = None
     material: Optional['PBRMaterial'] = None
     shape: Optional['Shape'] = None
-    bounds: Optional[Tuple[np.ndarray, np.ndarray]] = None
+    bounds: Optional[tuple[np.ndarray, np.ndarray]] = None
 
     # the node point
     #: The glTF node record (a ``pygltflib.Node``).
     node: Any = None
     transform: Optional['Transform'] = None
-    children: List['Node'] = field(default_factory=list)
+    children: list['Node'] = field(default_factory=list)
     local_matrix: Optional[np.ndarray] = None
 
     def collect(self, item: Any) -> Any:
@@ -320,7 +319,7 @@ class HookContext:
         self.scene_data.setdefault(self.kind, []).append(item)
         return item
 
-    def world_bounds(self) -> Optional[Tuple[Any, Any]]:
+    def world_bounds(self) -> Optional[tuple[Any, Any]]:
         """:attr:`bounds` placed in the world, as a world-aligned box.
 
         None where there is nothing to place -- a node hook's context carries
@@ -351,15 +350,15 @@ class HookRunner:
                  values: Optional[DocumentValues] = None) -> None:
         self.document = document
         self.resolver = resolver
-        self.scene_data: Dict[str, Any] = {}
+        self.scene_data: dict[str, Any] = {}
         self.on = enabled() if on is None else bool(on)
         #: What every hook of this load reads its parameters through.
         self.values = values if values is not None else DocumentValues()
         #: What each kind met in this load was bound to, as it was then.
-        self.registrations: Dict[str, Registration] = {}
-        self._unknown: Set[str] = set()
+        self.registrations: dict[str, Registration] = {}
+        self._unknown: set[str] = set()
 
-    def _bound(self, holder: Any) -> Optional[Tuple[HookTag, Registration]]:
+    def _bound(self, holder: Any) -> Optional[tuple[HookTag, Registration]]:
         """The tag a holder carries and what it is bound to, or None.
 
         None covers the three ways there is nothing to run: the mechanism is
@@ -411,7 +410,7 @@ class HookRunner:
 
     def material(self, primitive: Any, material_def: Any, mesh: Any,
                  material: Any, shape: Any, bounds: Any,
-                 world: Optional[np.ndarray] = None) -> Tuple[Any, Any, bool]:
+                 world: Optional[np.ndarray] = None) -> tuple[Any, Any, bool]:
         """Run a tagged material's hook. Returns ``(node, bounds, shareable)``.
 
         ``world`` reaches only a hook whose kind is not shareable.
@@ -428,8 +427,8 @@ class HookRunner:
             return shape, bounds, entry.shareable
         return (shape if made is None else made), ctx.bounds, entry.shareable
 
-    def node(self, node_def: Any, transform: 'Transform', children: List['Node'],
-             local: np.ndarray, world: np.ndarray) -> Optional[Tuple['Node', bool]]:
+    def node(self, node_def: Any, transform: 'Transform', children: list['Node'],
+             local: np.ndarray, world: np.ndarray) -> Optional[tuple['Node', bool]]:
         """Run a tagged node's hook.
 
         Returns ``None`` where the loader keeps what it built, or the

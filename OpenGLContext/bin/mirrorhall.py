@@ -33,7 +33,8 @@ floor at y = 0; the ``far`` wall is at -z.
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, NamedTuple, Optional
 
 import numpy as np
 
@@ -52,7 +53,7 @@ TILE, BRICK = 0.30, 0.10
 
 #: Each wall by name: the axis it lies across, where, and the rotation that
 #: turns a surface facing +z to face into the room from it.
-WALLS: Dict[str, Tuple[int, float, Tuple[float, float, float, float]]] = {
+WALLS: dict[str, tuple[int, float, tuple[float, float, float, float]]] = {
     'far': (2, -LENGTH / 2, (0.0, 1.0, 0.0, 0.0)),
     'near': (2, LENGTH / 2, (0.0, 1.0, 0.0, math.pi)),
     'left': (0, -WIDTH / 2, (0.0, 1.0, 0.0, math.pi / 2)),
@@ -61,7 +62,7 @@ WALLS: Dict[str, Tuple[int, float, Tuple[float, float, float, float]]] = {
 
 #: Where each wall's half columns stand, along it: x on the far and near
 #: walls, z on the left and right.
-PILASTERS: Dict[str, Tuple[float, ...]] = {
+PILASTERS: dict[str, tuple[float, ...]] = {
     'left': tuple(float(z) for z in range(-10, 11, 2)),
     'right': (-9.0, -2.0, 2.0, 9.0),
     'far': (-4.6, 4.6),
@@ -69,7 +70,7 @@ PILASTERS: Dict[str, Tuple[float, ...]] = {
 }
 
 #: The middle of each bay between them, where something may be hung.
-BAYS: Dict[str, Tuple[float, ...]] = {
+BAYS: dict[str, tuple[float, ...]] = {
     'left': tuple(float(z) for z in range(-9, 10, 2)),
     'right': (-5.5, 0.0, 5.5),
     'far': (0.0,),
@@ -77,11 +78,11 @@ BAYS: Dict[str, Tuple[float, ...]] = {
 }
 
 #: The windows in the right wall: (z of the middle, sill, head), in metres.
-WINDOWS: Tuple[Tuple[float, float, float], ...] = ((-5.5, 1.1, 3.5), (5.5, 1.1, 3.5))
+WINDOWS: tuple[tuple[float, float, float], ...] = ((-5.5, 1.1, 3.5), (5.5, 1.1, 3.5))
 WINDOW_WIDTH = 2.2
 
 #: The dais's steps, lowest first: (height of the tread, z of its front edge).
-STEPS: Tuple[Tuple[float, float], ...] = ((0.15, -9.9), (0.3, -10.25), (0.45, -10.6))
+STEPS: tuple[tuple[float, float], ...] = ((0.15, -9.9), (0.3, -10.25), (0.45, -10.6))
 
 #: The sunlight's direction: low, from beyond the right wall, so each window
 #: lays a patch of light several metres across the floor.
@@ -149,7 +150,7 @@ def _part(group: str, material: Any, geometry: surfaces.Geometry,
 
 
 def _on_wall(wall: str, along: float, height: float, offset: float
-             ) -> Tuple[Tuple[float, float, float], Tuple[float, float, float, float]]:
+             ) -> tuple[tuple[float, float, float], tuple[float, float, float, float]]:
     """A point ``offset`` metres out from ``wall``, and the rotation that faces it in."""
     if wall not in WALLS:
         raise ValueError('the hall has no %r wall; it has %s' % (wall, ', '.join(WALLS)))
@@ -173,7 +174,7 @@ class Hall:
     def __init__(self) -> None:
         self.finish = Finishes()
 
-    def room(self) -> List[Any]:
+    def room(self) -> list[Any]:
         """Everything in the hall but its floor and what the demo hangs in it.
 
         The scenery is :meth:`parts` merged into one shape for each group and
@@ -181,7 +182,7 @@ class Hall:
         a view draws a few dozen shapes, not a few hundred small ones, and
         still leaves out the groups it cannot see.
         """
-        merged: Dict[Tuple[str, int], List[Part]] = {}
+        merged: dict[tuple[str, int], list[Part]] = {}
         for part in self.parts():
             merged.setdefault((part.group, id(part.material)), []).append(part)
         scenery = []
@@ -206,12 +207,12 @@ class Hall:
                      groundAngle=[1.35])]
                 + scenery + self._lamps())
 
-    def parts(self) -> List[Part]:
+    def parts(self) -> list[Part]:
         """Every piece of the hall's scenery, each on its own, in the room's space."""
         return (self._walls() + self._moldings() + self._pilasters() + self._windows()
                 + self._dais() + self._columns())
 
-    def floor(self, field: Any, border: Any) -> List[Any]:
+    def floor(self, field: Any, border: Any) -> list[Any]:
         """The floor: ``field`` inside a border one tile wide of ``border``.
 
         Each wears two :data:`TILE` tiles to a repeat, and the two grids meet
@@ -234,7 +235,7 @@ class Hall:
                 surfaces.shape(ring, border, rotation=flat)]
 
     def hang(self, geometry: surfaces.Geometry, material: Any, wall: str, along: float,
-             height: float, frame: Optional[Any] = None, border: float = 0.1) -> List[Any]:
+             height: float, frame: Optional[Any] = None, border: float = 0.1) -> list[Any]:
         """``geometry`` wearing ``material``, flat on ``wall`` and facing into the room.
 
         ``geometry`` lies in its own xy plane facing +z, as
@@ -254,7 +255,7 @@ class Hall:
         return hung
 
     def basin(self, x0: float, x1: float, z0: float, z1: float,
-              rim: float = 0.3) -> List[Any]:
+              rim: float = 0.3) -> list[Any]:
         """A pool's basin from ``x0``-``x1``, ``z0``-``z1``: a sandstone rim ``rim``
         metres high, and a floor of glazed tiles 10 cm across."""
         thick = 0.2
@@ -271,7 +272,7 @@ class Hall:
                                (1.0, 0.0, 0.0, -math.pi / 2))]
 
     # -- the walls ---------------------------------------------------------------
-    def _walls(self) -> List[Part]:
+    def _walls(self) -> list[Part]:
         """Four brick walls, the right one open at its windows, and a plaster ceiling."""
         walls = []
         for wall, (axis, _at, _rotation) in WALLS.items():
@@ -285,7 +286,7 @@ class Hall:
         return walls
 
     def _brickwork(self, wall: str, span: float,
-                   openings: Sequence[Tuple[float, float, float]]) -> List[Part]:
+                   openings: Sequence[tuple[float, float, float]]) -> list[Part]:
         """``wall`` in pieces round ``openings`` (across, sill, head), its courses in line.
 
         ``brick()`` has four bricks across a repeat, so the repeat is four
@@ -310,9 +311,9 @@ class Hall:
                 pieces.append(_part(wall, self.finish.brick, geometry, at, rotation))
         return pieces
 
-    def _moldings(self) -> List[Part]:
+    def _moldings(self) -> list[Part]:
         """A skirting, a dado rail and a three-stepped cornice round every wall."""
-        runs: List[Tuple[float, float, float]] = [
+        runs: list[tuple[float, float, float]] = [
             (SKIRTING / 2, SKIRTING, 0.025), (DADO, 0.06, 0.035),
             (CORNICE + 0.035, 0.07, 0.07), (CORNICE + 0.105, 0.07, 0.12),
             (CORNICE + 0.18, 0.08, 0.18)]
@@ -325,7 +326,7 @@ class Hall:
                                    surfaces.block((span, tall, depth)), at, rotation))
         return found
 
-    def _pilasters(self) -> List[Part]:
+    def _pilasters(self) -> list[Part]:
         """Half columns of pale marble, on a base and under a capital, between the bays."""
         shaft_bottom, shaft_top = 0.24, CORNICE - 0.16
         shaft = surfaces.cylinder(0.16, shaft_top - shaft_bottom, sides=16, arc=math.pi,
@@ -342,7 +343,7 @@ class Hall:
                 found.append(_part(wall, self.finish.molding, capital, above, rotation))
         return found
 
-    def _windows(self) -> List[Part]:
+    def _windows(self) -> list[Part]:
         """Each window's stone surround, sill and bronze glazing bars."""
         stone, bars, found = self.finish.sandstone, self.finish.bronze, []
         for along, low, high in WINDOWS:
@@ -366,7 +367,7 @@ class Hall:
                                transom, rotation))
         return found
 
-    def _dais(self) -> List[Part]:
+    def _dais(self) -> list[Part]:
         """Marble steps up to the far wall, each edged with a brass nosing."""
         wide, back, found = WIDTH - 0.02, -LENGTH / 2, []
         for rise, front in STEPS:
@@ -378,10 +379,10 @@ class Hall:
         return found
 
     @staticmethod
-    def _column_places() -> List[Tuple[float, float]]:
+    def _column_places() -> list[tuple[float, float]]:
         return [(-4.5 + 3.0 * index, -7.0 + 5.0 * (index % 2)) for index in range(4)]
 
-    def _columns(self) -> List[Part]:
+    def _columns(self) -> list[Part]:
         """Four columns of brushed metal, their edges chamfered 5 mm, each under a lamp."""
         found = []
         for (x, z), metal in zip(self._column_places(), self.finish.columns):
@@ -391,7 +392,7 @@ class Hall:
                                (x, 3.3, z)))
         return found
 
-    def _lamps(self) -> List[Any]:
+    def _lamps(self) -> list[Any]:
         """The light each column's lamp gives the room."""
         return [basenodes.PointLight(location=(x, 3.7, z), intensity=2.0,
                                      color=(1.0, 0.95, 0.85), attenuation=(1.0, 0.0, 0.02),

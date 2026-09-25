@@ -9,7 +9,7 @@ never both claim the pixel between them, so a click there is unambiguous.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -37,7 +37,7 @@ class Rect:
         return self.width <= 0 or self.height <= 0
 
     @property
-    def centre(self) -> Tuple[int, int]:
+    def centre(self) -> tuple[int, int]:
         """The middle pixel -- what a test clicks and a label centres on."""
         return (self.x + self.width // 2, self.y + self.height // 2)
 

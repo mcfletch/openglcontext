@@ -23,7 +23,7 @@ metres fit down it, and the two conversions an editor lives on --
 """
 from __future__ import annotations
 
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 import numpy as np
 
@@ -50,7 +50,7 @@ class MapView:
     would be a map with a hole in it.
     """
 
-    def __init__(self, centre: Tuple[float, float] = (0.0, 0.0),
+    def __init__(self, centre: tuple[float, float] = (0.0, 0.0),
                  span: float = 1000.0, floor: float = -1000.0,
                  ceiling: float = 2000.0, smallest: float = 10.0,
                  largest: float = 100000.0) -> None:
@@ -72,12 +72,12 @@ class MapView:
         self._span = float(min(max(float(value), self.smallest), self.largest))
 
     # -- the camera --------------------------------------------------------
-    def metres_per_pixel(self, viewport: Tuple[int, int]) -> float:
+    def metres_per_pixel(self, viewport: tuple[int, int]) -> float:
         """The scale the map is drawn at."""
         height = int(viewport[1]) or 1
         return self.span / height
 
-    def matrices(self, viewport: Tuple[int, int]) -> Tuple[np.ndarray, np.ndarray]:
+    def matrices(self, viewport: tuple[int, int]) -> tuple[np.ndarray, np.ndarray]:
         """``(model-view, projection)`` for this view, row-vector.
 
         The model-view turns the world so that looking down ``-y`` becomes
@@ -103,7 +103,7 @@ class MapView:
 
     # -- reading the pointer ----------------------------------------------
     def world_from_screen(self, x: float, y: float,
-                          viewport: Tuple[int, int]) -> Tuple[float, float]:
+                          viewport: tuple[int, int]) -> tuple[float, float]:
         """The world ``(x, z)`` under a window pixel.
 
         Window pixels count from the bottom left, as GL and the pick point do.
@@ -114,7 +114,7 @@ class MapView:
                 self.centre[1] - (float(y) - height / 2.0) * scale)
 
     def screen_from_world(self, point: Any,
-                          viewport: Tuple[int, int]) -> Tuple[float, float]:
+                          viewport: tuple[int, int]) -> tuple[float, float]:
         """Where a world point is drawn, in window pixels.
 
         Takes ``(x, z)`` or a full ``(x, y, z)``; the height is ignored,
@@ -128,7 +128,7 @@ class MapView:
                 height / 2.0 - (z - self.centre[1]) / scale)
 
     # -- moving about ------------------------------------------------------
-    def pan(self, dx: float, dy: float, viewport: Tuple[int, int]) -> None:
+    def pan(self, dx: float, dy: float, viewport: tuple[int, int]) -> None:
         """Drag the map by a pointer movement in pixels.
 
         The world goes with the pointer, so what was under it stays under it.
@@ -137,8 +137,8 @@ class MapView:
         self.centre = (self.centre[0] - float(dx) * scale,
                        self.centre[1] + float(dy) * scale)
 
-    def zoom(self, factor: float, at: Optional[Tuple[float, float]] = None,
-             viewport: Optional[Tuple[int, int]] = None) -> None:
+    def zoom(self, factor: float, at: Optional[tuple[float, float]] = None,
+             viewport: Optional[tuple[int, int]] = None) -> None:
         """Scale the view. Below 1 comes closer; above 1 draws back.
 
         ``at`` is a window pixel to zoom about -- the pointer, usually. The
@@ -155,8 +155,8 @@ class MapView:
         self.centre = (self.centre[0] + anchor[0] - moved[0],
                        self.centre[1] + anchor[1] - moved[1])
 
-    def frame(self, minimum: Tuple[float, float], maximum: Tuple[float, float],
-              viewport: Tuple[int, int]) -> None:
+    def frame(self, minimum: tuple[float, float], maximum: tuple[float, float],
+              viewport: tuple[int, int]) -> None:
         """Put a region on screen: centred, and wholly inside the window."""
         self.centre = ((float(minimum[0]) + float(maximum[0])) / 2.0,
                        (float(minimum[1]) + float(maximum[1])) / 2.0)
@@ -176,7 +176,7 @@ class MapViewPlatform(ViewPlatform):
     looking to fall out of step with the first.
     """
 
-    def __init__(self, view: MapView, viewport: Tuple[int, int] = (1, 1)) -> None:
+    def __init__(self, view: MapView, viewport: tuple[int, int] = (1, 1)) -> None:
         # Before the base class, because setting a position on this platform
         # is how the map is told where to look, and the base sets one.
         self.view = view

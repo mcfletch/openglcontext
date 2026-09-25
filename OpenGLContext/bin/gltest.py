@@ -6,7 +6,8 @@ import optparse
 import sys
 import os
 import logging
-from typing import Any, List, Optional, Sequence, Type
+from collections.abc import Sequence
+from typing import Any, Optional
 
 log = logging.getLogger("gltest")
 from OpenGLContext import testingcontext, context, plugins
@@ -23,17 +24,17 @@ def readConfigs(configs: Sequence[str]) -> configparser.ConfigParser:
     return cfg
 
 
-def contextClass(configs: Sequence[str]) -> Optional[Type[Any]]:
+def contextClass(configs: Sequence[str]) -> Optional[type[Any]]:
     """The context class the test should render in
 
     With no configuration file, the pygame VRML context is asked for, and the
     user's default backend where there is no pygame.
     """
     if configs:
-        configured: Optional[Type[Any]] = context.Context.fromConfig(
+        configured: Optional[type[Any]] = context.Context.fromConfig(
             readConfigs(configs))
         return configured
-    installed: Optional[Type[Any]] = (
+    installed: Optional[type[Any]] = (
         context.Context.getContextType("pygame", plugins.VRMLContext)
         or context.Context.getContextType(None, plugins.VRMLContext)
     )
@@ -41,11 +42,11 @@ def contextClass(configs: Sequence[str]) -> Optional[Type[Any]]:
 
 
 def saveAndExitClass(
-    base: Type[Any],
+    base: type[Any],
     frames: int,
     template: str,
     script_name: str,
-) -> Type[Any]:
+) -> type[Any]:
     """A context class that saves a screenshot and exits after ``frames`` frames
 
     ``base`` is chosen at run time, from a configuration file or from the
@@ -119,7 +120,7 @@ def parser() -> optparse.OptionParser:
     return result
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: Optional[list[str]] = None) -> int:
     """Do the test for the passed elements"""
     options, args = parser().parse_args(sys.argv[1:] if argv is None else argv)
     if not options.script:

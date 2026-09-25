@@ -1,5 +1,5 @@
 """Utilities for processing arrays of vectors"""
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 from OpenGLContext.arrays import *
 
@@ -71,7 +71,7 @@ def normalise( vectors: Any ) -> Any:
     mags = where( mags, mags, 1.0)
     return divide_safe( vectors, mags)
 
-def colinear( points: Any ) -> Optional[Tuple[Any, Any, Any]]:
+def colinear( points: Any ) -> Optional[tuple[Any, Any, Any]]:
     """Given 3 points, determine if they are colinear
 
     Uses the definition which says that points are collinear
@@ -90,7 +90,7 @@ def colinear( points: Any ) -> Optional[Tuple[Any, Any, Any]]:
             return (a,b,c)
     return None
 
-def orientToXYZR( a: Any, b: Any ) -> Tuple[Any, Any, Any, Any]:
+def orientToXYZR( a: Any, b: Any ) -> tuple[Any, Any, Any, Any]:
     """Calculate axis/angle rotation transforming vec a -> vec b"""
     if allclose(a,b):
         return (0,1,0,0)

@@ -19,7 +19,8 @@ places tens of small painted objects can be.
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
+from collections.abc import Mapping, Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -31,11 +32,11 @@ __all__ = ['Box', 'pack_cells', 'cell_centre', 'srgb_bytes', 'flat_patch',
            'merged_mesh', 'textured_mesh']
 
 #: A corner of an atlas, as the texture coordinates that reach it.
-Box = Tuple[float, float, float, float]
+Box = tuple[float, float, float, float]
 
 
 def pack_cells(patches: Mapping[str, Any], cell: int = 256
-               ) -> Tuple[Any, Dict[str, Box]]:
+               ) -> tuple[Any, dict[str, Box]]:
     """Square patches on the smallest square grid that holds them.
 
     ``patches`` maps a name to an image ``cell`` pixels square --
@@ -50,7 +51,7 @@ def pack_cells(patches: Mapping[str, Any], cell: int = 256
     columns = max(int(math.ceil(math.sqrt(len(names)))), 1)
     rows = max(int(math.ceil(len(names) / columns)), 1)
     image = Image.new('RGBA', (columns * cell, rows * cell), (0, 0, 0, 0))
-    boxes: Dict[str, Box] = {}
+    boxes: dict[str, Box] = {}
     for index, name in enumerate(names):
         column, row = index % columns, index // columns
         image.paste(patches[name], (column * cell, row * cell))
@@ -60,7 +61,7 @@ def pack_cells(patches: Mapping[str, Any], cell: int = 256
     return image, boxes
 
 
-def cell_centre(box: Box) -> Tuple[float, float]:
+def cell_centre(box: Box) -> tuple[float, float]:
     """The middle of an atlas cell, for geometry that wants one flat colour."""
     u0, v0, u1, v1 = box
     return ((u0 + u1) / 2.0, (v0 + v1) / 2.0)

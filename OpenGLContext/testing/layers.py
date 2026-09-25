@@ -30,7 +30,8 @@ from __future__ import annotations
 import contextlib
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Iterator, List, Optional
+from collections.abc import Callable, Iterator
+from typing import Any, Optional
 
 __all__ = ['LayerFailure', 'LayerRun', 'LayerNotIsolated', 'check_failing_layer',
            'drive_failing_layer']
@@ -65,7 +66,7 @@ class _Reports(logging.Handler):
 
     def __init__(self) -> None:
         super().__init__(logging.ERROR)
-        self.found: List[logging.LogRecord] = []
+        self.found: list[logging.LogRecord] = []
 
     def emit(self, record: logging.LogRecord) -> None:
         if record.exc_info and isinstance(record.exc_info[1], LayerFailure):

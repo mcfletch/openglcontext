@@ -32,7 +32,8 @@ from __future__ import annotations
 import logging
 import weakref
 from dataclasses import dataclass
-from typing import Any, NamedTuple, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, NamedTuple, Optional
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -79,7 +80,7 @@ WATER_REFLECTOR = WATER
 
 #: A plane in the world: a point on it and its unit normal, which points to
 #: the side the mirror is seen from.
-Plane = Tuple[np.ndarray, np.ndarray]
+Plane = tuple[np.ndarray, np.ndarray]
 
 
 # --- which surfaces are mirrors -----------------------------------------------
@@ -269,7 +270,7 @@ class _Fit(NamedTuple):
 _FITS: "weakref.WeakKeyDictionary[Any, _Fit]" = weakref.WeakKeyDictionary()
 
 
-def _geometry_points(geometry: Any) -> Tuple[Any, Any, bool]:
+def _geometry_points(geometry: Any) -> tuple[Any, Any, bool]:
     """A geometry's vertex positions, what its faces are indexed by, and
     whether those are polygons.
 
@@ -456,7 +457,7 @@ def oblique_projection(projection: Any, plane: ArrayLike) -> np.ndarray:
 # --- the part of the screen a mirror covers -----------------------------------
 
 #: A rectangle in normalised device coordinates: ``(x0, y0, x1, y1)``.
-NDCRect = Tuple[float, float, float, float]
+NDCRect = tuple[float, float, float, float]
 
 #: The whole view, in normalised device coordinates.
 WHOLE: NDCRect = (-1.0, -1.0, 1.0, 1.0)
@@ -566,7 +567,7 @@ class MirrorView:
     lookup: np.ndarray
     crop: NDCRect
     rect: NDCRect
-    size: Tuple[int, int]
+    size: tuple[int, int]
 
     @property
     def modelproj(self) -> np.ndarray:
@@ -641,7 +642,7 @@ def too_small(record: Any, eye: ArrayLike, texels_per_radian: float) -> bool:
     return bool(2.0 * np.arctan(radius / distance) * texels_per_radian < SMALLEST)
 
 
-def reach(matrices: Any, points: Any, bounded: Any) -> Tuple[np.ndarray, np.ndarray]:
+def reach(matrices: Any, points: Any, bounded: Any) -> tuple[np.ndarray, np.ndarray]:
     """Where each of a walk's shapes is in the world, and how far it reaches.
 
     ``matrices`` are the ``(N, 4, 4)`` placements, ``points`` the ``(N, 8, 4)``
@@ -682,11 +683,11 @@ def too_small_mask(centres: Any, radii: Any, bounded: Any, eye: ArrayLike,
 # --- reading a reflection -----------------------------------------------------
 
 #: A tile's place in the atlas, in texels: ``(x, y, width, height)``.
-TileRect = Tuple[int, int, int, int]
+TileRect = tuple[int, int, int, int]
 
 
 def tile_transform(crop: NDCRect, tile: TileRect,
-                   atlas: Tuple[int, int]) -> Tuple[float, float, float, float]:
+                   atlas: tuple[int, int]) -> tuple[float, float, float, float]:
     """What takes a normalised device position in a mirror's view to the atlas.
 
     ``(scale_x, scale_y, offset_x, offset_y)``: the atlas coordinate is
@@ -698,7 +699,7 @@ def tile_transform(crop: NDCRect, tile: TileRect,
     return (sx, sy, tile[0] / atlas[0] - x0 * sx, tile[1] / atlas[1] - y0 * sy)
 
 
-def tile_bounds(tile: TileRect, atlas: Tuple[int, int]) -> Tuple[float, float, float, float]:
+def tile_bounds(tile: TileRect, atlas: tuple[int, int]) -> tuple[float, float, float, float]:
     """A tile's texels in atlas coordinates, half a texel in from each edge.
 
     ``(u0, v0, u1, v1)``, which is the ``planarBounds`` uniform: a lookup is
@@ -708,7 +709,7 @@ def tile_bounds(tile: TileRect, atlas: Tuple[int, int]) -> Tuple[float, float, f
             (tile[0] + tile[2] - 0.5) / atlas[0], (tile[1] + tile[3] - 0.5) / atlas[1])
 
 
-def bounds_tile(bounds: Sequence[float], atlas: Tuple[int, int]) -> TileRect:
+def bounds_tile(bounds: Sequence[float], atlas: tuple[int, int]) -> TileRect:
     """The tile :func:`tile_bounds` made ``bounds`` from, in texels."""
     x = int(round(bounds[0] * atlas[0] - 0.5))
     y = int(round(bounds[1] * atlas[1] - 0.5))
@@ -717,7 +718,7 @@ def bounds_tile(bounds: Sequence[float], atlas: Tuple[int, int]) -> TileRect:
 
 
 def atlas_lookup(world: ArrayLike, mirror: MirrorView, tile: TileRect,
-                 atlas: Tuple[int, int]) -> Tuple[float, float]:
+                 atlas: tuple[int, int]) -> tuple[float, float]:
     """Where a point on the mirror reads its reflection, in atlas coordinates.
 
     The shader's arithmetic, with no distortion: the point through the tile's

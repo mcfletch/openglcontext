@@ -47,7 +47,8 @@ import functools
 import os
 import socket
 import sys
-from typing import Any, Dict, Iterator, Mapping, Optional, Sequence
+from collections.abc import Iterator, Mapping, Sequence
+from typing import Any, Optional
 
 from OpenGLContext import contextresources
 
@@ -778,7 +779,7 @@ def gl_available() -> bool:
 
 #: Why each profile asked about could not be had, by profile name; ``None``
 #: where it could. Remembered for the same reason :func:`describe_gl` is.
-_PROFILE_REFUSALS: Dict[str, Optional[str]] = {}
+_PROFILE_REFUSALS: dict[str, Optional[str]] = {}
 
 
 def profile_unavailable(profile: str) -> str | None:
@@ -806,7 +807,7 @@ def profile_unavailable(profile: str) -> str | None:
 
 #: Why a windowless context of each profile asked about could not be had, by
 #: profile name; ``None`` where it could.
-_OFFSCREEN_REFUSALS: Dict[str, Optional[str]] = {}
+_OFFSCREEN_REFUSALS: dict[str, Optional[str]] = {}
 
 
 def offscreen_unavailable(profile: str = 'core') -> str | None:

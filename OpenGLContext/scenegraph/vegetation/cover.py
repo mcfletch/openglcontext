@@ -55,7 +55,8 @@ import posixpath
 import threading
 import weakref
 import zlib
-from typing import TYPE_CHECKING, Any, Callable, Optional, Sequence, Union
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 from vrml import field
@@ -496,7 +497,7 @@ class GroundCover(Group):
     species = field.newField('species', 'MFNode', 1, list)
 
     def __init__(self, field: "HeightField",
-                 species: "Union[CoverSpecies, Sequence[CoverSpecies]]",
+                 species: "CoverSpecies | Sequence[CoverSpecies]",
                  clump_radius: float = CLUMP_RADIUS,
                  card_radius: float = CARD_RADIUS,
                  far_radius: float = FAR_RADIUS,

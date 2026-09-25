@@ -34,7 +34,8 @@ from __future__ import annotations
 import logging
 import threading
 import weakref
-from typing import Any, Callable, Dict, Hashable, Iterable, List, Optional
+from collections.abc import Callable, Hashable, Iterable
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 
@@ -49,7 +50,7 @@ __all__ = [
 ]
 
 #: Callables to run as a context is destroyed, in the order they registered.
-_callbacks: List[Callable[[], None]] = []
+_callbacks: list[Callable[[], None]] = []
 
 #: What :func:`context_key` hands :class:`ContextKey`, and nothing else does.
 _ASKED = object()
@@ -170,7 +171,7 @@ class _Held:
     """What one owner holds: for each context, its entries by key."""
 
     def __init__(self) -> None:
-        self.by_context: Dict[Optional[ContextKey], Dict[Hashable, Any]] = {}
+        self.by_context: dict[Optional[ContextKey], dict[Hashable, Any]] = {}
 
 
 class ContextNames:
@@ -207,11 +208,11 @@ class ContextNames:
         #: Names whose owner was collected, by the context that issued them,
         #: waiting for that context to be current. Appended from a finaliser,
         #: which may run on any thread, so guarded.
-        self._orphans: Dict[Optional[ContextKey], List[int]] = {}
+        self._orphans: dict[Optional[ContextKey], list[int]] = {}
         self._lock = threading.Lock()
         on_context_lost(self._context_lost)
 
-    def entries(self, owner: Any) -> Optional[Dict[Hashable, Any]]:
+    def entries(self, owner: Any) -> Optional[dict[Hashable, Any]]:
         """``owner``'s entries for the current context; None where it cannot hold any.
 
         Made on first use. The names collected owners left in this context are

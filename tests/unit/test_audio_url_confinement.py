@@ -10,7 +10,7 @@ pull same-origin audio.
 A source built in application code has no document behind it, so nothing is
 confined -- that name came from the application, not from a file.
 """
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 import pytest
 
@@ -21,7 +21,7 @@ class _Engine:
     """Records the names it is asked for and hands back a stand-in clip."""
 
     def __init__(self, known: Optional[dict] = None) -> None:
-        self.asked: List[str] = []
+        self.asked: list[str] = []
         self._known = known or {}
 
     def clip(self, name: str) -> Any:

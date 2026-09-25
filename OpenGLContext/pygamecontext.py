@@ -19,7 +19,8 @@ from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.events import pygameevents
 from OpenGLContext.looptrace import LoopTrace
 import logging
-from typing import Any, Hashable, Optional, Tuple
+from collections.abc import Hashable
+from typing import Any, Optional
 log = logging.getLogger( __name__ )
 
 # SDL's window flags and GL attributes are reached through `pygame` rather than

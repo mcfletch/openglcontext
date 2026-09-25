@@ -13,7 +13,7 @@ only sets up the VAO and issues the draw.
 from __future__ import annotations
 
 import weakref
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 import numpy as np
 from OpenGL.GL import (
@@ -610,7 +610,7 @@ class PBRMesh(node.Node):
         return boundingvolume.AABoundingBox.fromPoints(
             np.concatenate([moved - reach, moved + reach]))
 
-    def _joint_bounds(self) -> Tuple[Any, Any, Any]:
+    def _joint_bounds(self) -> tuple[Any, Any, Any]:
         """Per joint: the centre and radius of the rest vertices it reaches.
 
         Worked out once from the bind pose, which is all it depends on.

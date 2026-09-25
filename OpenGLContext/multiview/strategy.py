@@ -45,7 +45,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Collection, Dict, Iterable, List, NamedTuple, Optional, Sequence, Set, Tuple
+from collections.abc import Collection, Iterable, Sequence
+from typing import Any, NamedTuple, Optional
 
 import numpy as np
 
@@ -67,7 +68,7 @@ __all__ = [
 ]
 
 #: Every strategy, fastest first.
-STRATEGIES: Tuple[str, ...] = ('vertex', 'geometry', 'sequential')
+STRATEGIES: tuple[str, ...] = ('vertex', 'geometry', 'sequential')
 
 #: The uniform-buffer binding point the ``ViewBlock`` is read from.
 VIEW_BLOCK_BINDING = 2
@@ -78,7 +79,7 @@ VIEW_RECORD_BYTES = 96
 
 #: The extensions that let a vertex shader write ``gl_ViewportIndex``, in the
 #: order they are preferred.
-VERTEX_VIEWPORT_EXTENSIONS: Tuple[str, ...] = (
+VERTEX_VIEWPORT_EXTENSIONS: tuple[str, ...] = (
     'GL_ARB_shader_viewport_layer_array',
     'GL_AMD_vertex_shader_viewport_index',
 )
@@ -86,7 +87,7 @@ VERTEX_VIEWPORT_EXTENSIONS: Tuple[str, ...] = (
 #: What each GL context turned out to be able to do, keyed by the context
 #: (:func:`~OpenGLContext.contextresources.context_key`), and dropped as the
 #: context dies, since a driver hands its address to the next one.
-_DETECTED: Dict[Optional[contextresources.ContextKey], 'MultiviewCapabilities'] = {}
+_DETECTED: dict[Optional[contextresources.ContextKey], 'MultiviewCapabilities'] = {}
 
 
 def reset_detected() -> None:
@@ -120,8 +121,8 @@ class MultiviewCapabilities:
     rather than the GL 3.3 floor assumed with no context current.
     """
 
-    def __init__(self, gl_version: Tuple[int, int] = (3, 3),
-                 extensions: Optional[Set[str]] = None,
+    def __init__(self, gl_version: tuple[int, int] = (3, 3),
+                 extensions: Optional[set[str]] = None,
                  max_viewports: int = 1, detected: bool = False) -> None:
         self.gl_version = (int(gl_version[0]), int(gl_version[1]))
         self.extensions = frozenset(
@@ -161,7 +162,7 @@ class MultiviewCapabilities:
             return MAX_VIEWS
         return min(self.max_viewports, MAX_VIEWS)
 
-    def available(self) -> Tuple[str, ...]:
+    def available(self) -> tuple[str, ...]:
         """The strategies this driver can run, fastest first."""
         found = []
         if self.viewport_array:
@@ -205,7 +206,7 @@ class MultiviewCapabilities:
 
     # -- construction ------------------------------------------------------
     @classmethod
-    def from_features(cls, extensions: Set[str], gl_version: Tuple[int, int],
+    def from_features(cls, extensions: set[str], gl_version: tuple[int, int],
                       max_viewports: int = 1) -> 'MultiviewCapabilities':
         """From an extension set, a version and ``GL_MAX_VIEWPORTS``; no GL."""
         return cls(gl_version, extensions, max_viewports)
@@ -269,8 +270,8 @@ class ViewFrame:
     modelproj: Any
     frustum: Any
     maxDepth: float = 0.0
-    toRender: List[Any] = field(default_factory=list)
-    visiblePlacements: Dict[int, Any] = field(default_factory=dict)
+    toRender: list[Any] = field(default_factory=list)
+    visiblePlacements: dict[int, Any] = field(default_factory=dict)
     fitted: bool = False
 
 
@@ -289,7 +290,7 @@ class ViewRecord(NamedTuple):
     cascadeByFit: int
 
 
-def view_records(frames: Sequence[ViewFrame], reference: ViewFrame) -> List[ViewRecord]:
+def view_records(frames: Sequence[ViewFrame], reference: ViewFrame) -> list[ViewRecord]:
     """Each frame's :class:`ViewRecord`, for drawing in ``reference``'s eye space."""
     to_world = np.linalg.inv(np.asarray(reference.modelView, 'd'))
     reference_view = np.asarray(reference.modelView, 'd')
@@ -340,7 +341,7 @@ def program_views(views: int) -> int:
     return count
 
 
-def view_record_offsets(count: int) -> Dict[str, int]:
+def view_record_offsets(count: int) -> dict[str, int]:
     """The std140 byte offset of each ``ViewBlock`` member, by GLSL name."""
     offsets = {}
     for index in range(count):
@@ -351,7 +352,7 @@ def view_record_offsets(count: int) -> Dict[str, int]:
     return offsets
 
 
-def driver_view_offsets(program: int) -> Dict[str, int]:
+def driver_view_offsets(program: int) -> dict[str, int]:
     """The offsets the driver gives the ``ViewBlock`` members of ``program``.
 
     What :func:`view_record_offsets` is held to; a program whose block is
@@ -359,7 +360,7 @@ def driver_view_offsets(program: int) -> Dict[str, int]:
     """
     from OpenGL import GL
 
-    def indices_of(names: List[str]) -> Any:
+    def indices_of(names: list[str]) -> Any:
         found = np.zeros(len(names), 'I')
         GL.glGetUniformIndices(program, len(names), names, found)
         return found
@@ -384,7 +385,7 @@ def view_mask(indices: Iterable[int]) -> int:
     return mask
 
 
-def view_list(mask: int) -> Tuple[int, List[int]]:
+def view_list(mask: int) -> tuple[int, list[int]]:
     """``(count, indices)`` of the views in ``mask``, padded to :data:`MAX_VIEWS`.
 
     What the ``vertex`` strategy's routing reads: a draw instanced ``count``

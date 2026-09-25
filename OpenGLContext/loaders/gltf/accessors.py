@@ -15,7 +15,7 @@ whose accessors share one buffer decodes it once.
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
@@ -63,7 +63,7 @@ def _buffer_bytes(g: "pygltflib.GLTF2", buffer_index: int, resolver: Resolver) -
     resolver memoises the decoded bytes by buffer index and each buffer is
     base64-decoded or fetched once however many accessors read from it.
     """
-    cache: Optional[Dict[int, bytes]] = (
+    cache: Optional[dict[int, bytes]] = (
         getattr(resolver, '_buffers', None) if resolver is not None else None
     )
     if cache is not None and buffer_index in cache:
@@ -145,7 +145,7 @@ def _checked_count(count: Any, what: str) -> int:
     return n
 
 
-def declared_bounds(acc: Any) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+def declared_bounds(acc: Any) -> Optional[tuple[np.ndarray, np.ndarray]]:
     """A ``POSITION`` accessor's declared ``min`` and ``max``, or None.
 
     None where the accessor declares either one as anything other than at

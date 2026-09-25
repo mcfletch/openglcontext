@@ -25,7 +25,8 @@ from __future__ import annotations
 import argparse
 import math
 import sys
-from typing import Any, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -141,7 +142,7 @@ class AudioYard:
             for number, (x, z) in enumerate(BALL_SPOTS)]
         #: Blows the balls took since the last frame, from every physics step
         #: of it. A pair of balls meeting is one entry, not two.
-        self.blows: List[Any] = []
+        self.blows: list[Any] = []
         self.physics.manager.events.subscribe(
             self.blows.append, body=self.balls, above=IMPACT_FLOOR)
 
@@ -193,7 +194,7 @@ class AudioYard:
 
     def scene(self) -> Any:
         """The scenegraph: a light, the physics bodies, every sound's marker and the zones."""
-        extra: List[Any] = [
+        extra: list[Any] = [
             DirectionalLight(direction=(-0.3, -1.0, -0.5), intensity=0.9),
             Transform(translation=BELL_POSITION, children=[
                 _marker(self.finish.bell, Sphere(radius=0.5)),

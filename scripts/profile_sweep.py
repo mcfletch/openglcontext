@@ -37,7 +37,8 @@ import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, Optional
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TESTS = os.path.join(HERE, 'tests')
@@ -61,7 +62,7 @@ SKIP = {
 DREW = 0.05
 
 
-def scripts(only: Sequence[str] = ()) -> List[str]:
+def scripts(only: Sequence[str] = ()) -> list[str]:
     """The scripts to sweep, as bare file names."""
     if only:
         return list(only)
@@ -92,7 +93,7 @@ def drawn_fraction(path: str) -> Optional[float]:
 
 
 def run(name: str, profile: str, capture_dir: str, backend: str,
-        frames: int, timeout: int) -> Dict[str, Any]:
+        frames: int, timeout: int) -> dict[str, Any]:
     """One script, one profile, one capture."""
     env = dict(os.environ)
     # The core arm names no profile at all, because core is what a context asks
@@ -136,7 +137,7 @@ def run(name: str, profile: str, capture_dir: str, backend: str,
 
 
 def sweep(out: str, names: Sequence[str], backend: str, frames: int,
-          timeout: int, jobs: int) -> List[Dict[str, Any]]:
+          timeout: int, jobs: int) -> list[dict[str, Any]]:
     results = []
     for profile in ('compatibility', 'core'):
         capture_dir = os.path.join(out, profile)
@@ -153,13 +154,13 @@ def sweep(out: str, names: Sequence[str], backend: str, frames: int,
     return results
 
 
-def report(results: Sequence[Dict[str, Any]]) -> int:
+def report(results: Sequence[dict[str, Any]]) -> int:
     """Print the buckets and return the number of regressions found."""
-    paired: Dict[str, Dict[str, Any]] = collections.defaultdict(dict)
+    paired: dict[str, dict[str, Any]] = collections.defaultdict(dict)
     for result in results:
         paired[result['script']][result['profile']] = result
 
-    buckets: Dict[str, List[Any]] = collections.defaultdict(list)
+    buckets: dict[str, list[Any]] = collections.defaultdict(list)
     for name, pair in sorted(paired.items()):
         compat, core = pair.get('compatibility'), pair.get('core')
         if not compat or not core:

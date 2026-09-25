@@ -155,7 +155,8 @@ def test_the_module_needs_nothing_but_numpy_to_import():
             imported.update(alias.name.split('.')[0] for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.level == 0:
             imported.add(node.module.split('.')[0])
-    assert imported <= {'__future__', 'dataclasses', 'typing', 'math', 'numpy'}
+    assert imported <= {'__future__', 'collections', 'dataclasses', 'typing', 'math',
+                        'numpy'}
 
 
 # --- geometry that wears a surface at its size ------------------------------------

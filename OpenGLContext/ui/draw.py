@@ -26,7 +26,8 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 import ctypes
 
@@ -90,7 +91,7 @@ void main(){
 }"""
 
 
-def _rgba(colour: Any) -> Tuple[float, float, float, float]:
+def _rgba(colour: Any) -> tuple[float, float, float, float]:
     """Four floats from a colour field, tolerating a three-component one.
 
     Asked once per quad and once per glyph, so a whole overlay asks it thousands
@@ -146,16 +147,16 @@ class OverlayRenderer:
         self._text: Any = None
         self._pictures = PictureCache(upload=self._uploadTexture,
                                       delete=self._deleteTexture)
-        self._vertices: List[float] = []
+        self._vertices: list[float] = []
         #: Atlas coordinates by character, so the arithmetic behind them runs
         #: once for each character the application ever draws.
-        self._glyphs: Dict[str, Tuple[float, float, float, float]] = {}
+        self._glyphs: dict[str, tuple[float, float, float, float]] = {}
         self._texture: Any = None
         self._mode: str = self.BLEND
         self._scissor: Optional[Rect] = None
         #: The session's clock for the frame being drawn; see :meth:`drawTrees`.
         self.now: Optional[float] = None
-        self._viewport: Tuple[int, int] = (1, 1)
+        self._viewport: tuple[int, int] = (1, 1)
 
     # -- lifecycle --------------------------------------------------------
     @classmethod
@@ -281,7 +282,7 @@ class OverlayRenderer:
         return texture
 
     def imageTexture(self, url: str,
-                     blocking: bool = True) -> Optional[Tuple[Any, int, int]]:
+                     blocking: bool = True) -> Optional[tuple[Any, int, int]]:
         """A picture's texture, size included, through the picture cache.
 
         ``url`` is a filesystem path, a ``file:`` URL or an ``http(s)`` URL.
@@ -483,7 +484,7 @@ class OverlayRenderer:
         return True
 
     @staticmethod
-    def _fit(near: int, far: int, available: int) -> Tuple[int, int]:
+    def _fit(near: int, far: int, available: int) -> tuple[int, int]:
         total = near + far
         if total <= available or total <= 0:
             return (near, far)
@@ -491,7 +492,7 @@ class OverlayRenderer:
 
     @staticmethod
     def _spans(start: int, extent: int, near: int, far: int, source: int,
-               flip: int) -> List[Tuple[int, int, float, float]]:
+               flip: int) -> list[tuple[int, int, float, float]]:
         """Three (offset, size, uv near, uv far) runs along one axis.
 
         ``flip`` is set for the vertical axis, where the image's first row is
@@ -515,7 +516,7 @@ class OverlayRenderer:
             source_offset += source_size
         return spans
 
-    def _glyphUV(self, character: str) -> Tuple[float, float, float, float]:
+    def _glyphUV(self, character: str) -> tuple[float, float, float, float]:
         """Where one character sits in the atlas, worked out once ever.
 
         The atlas does not change while it is bound, and the arithmetic behind
@@ -618,7 +619,7 @@ class OverlayRenderer:
                       max(0, previous.height))
 
     # -- the frame --------------------------------------------------------
-    def begin(self, viewport: Tuple[int, int]) -> bool:
+    def begin(self, viewport: tuple[int, int]) -> bool:
         """Make the overlay program current and set the screen-space state.
 
         Takes depth testing and face culling off and blending on, and does
@@ -673,7 +674,7 @@ class OverlayRenderer:
             glEnable(GL_DEPTH_TEST)
             glUseProgram(0)
 
-    def drawTrees(self, trees: Sequence[Any], viewport: Tuple[int, int],
+    def drawTrees(self, trees: Sequence[Any], viewport: tuple[int, int],
                   now: Optional[float] = None) -> None:
         """Draw a run of widget trees, first to last, in one batch.
 
@@ -705,6 +706,6 @@ class OverlayRenderer:
         finally:
             self.end()
 
-    def draw(self, stack: Any, viewport: Tuple[int, int]) -> None:
+    def draw(self, stack: Any, viewport: tuple[int, int]) -> None:
         """Draw every panel in a stack, oldest first so the newest is on top."""
         self.drawTrees(stack.panels, viewport)

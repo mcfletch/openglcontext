@@ -22,14 +22,14 @@ from __future__ import annotations
 import os
 import socket
 import urllib.parse
-from typing import Dict, Optional, Tuple
+from typing import Optional
 
 #: Seconds to wait for a host to accept a connection.
 CONNECT_TIMEOUT = 5.0
 
 #: Why each (host, port) asked about could not be reached, or ``None`` where it
 #: could.
-_HOSTS: Dict[Tuple[str, int], Optional[str]] = {}
+_HOSTS: dict[tuple[str, int], Optional[str]] = {}
 
 
 def unreachable(url: str, cache_dir: str | None = None) -> str | None:

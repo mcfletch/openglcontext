@@ -24,7 +24,8 @@ shader itself declares it cannot be drawn without
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, NamedTuple, Optional, Tuple
+from collections.abc import Iterable
+from typing import Any, NamedTuple, Optional
 
 from OpenGL.GL import (
     GL_ACTIVE_ATTRIBUTES, GL_FALSE, GL_FLOAT, GL_TRIANGLES,
@@ -89,7 +90,7 @@ class GeometryArrays(object):
 
     def __init__(
         self,
-        arrays: Dict[str, VertexArray],
+        arrays: dict[str, VertexArray],
         count: int,
         draw_mode: int = GL_TRIANGLES,
         indices: Optional[Any] = None,
@@ -112,7 +113,7 @@ class GeometryArrays(object):
         """What this geometry can feed a shader."""
         return frozenset(self.arrays)
 
-    def buffers(self) -> Tuple[Any, ...]:
+    def buffers(self) -> tuple[Any, ...]:
         """Every buffer this describes, for cache-invalidation by identity."""
         return tuple(entry.buffer for entry in self.arrays.values()) + (
             self.indices,)
@@ -146,7 +147,7 @@ class GeometryArrays(object):
     def interleaved(
         cls,
         buffer: Any,
-        vertex_format: Dict[str, int],
+        vertex_format: dict[str, int],
         count: int,
         draw_mode: int = GL_TRIANGLES,
         indices: Optional[Any] = None,

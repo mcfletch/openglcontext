@@ -3,7 +3,8 @@
 import contextlib
 import traceback
 from functools import reduce
-from typing import TYPE_CHECKING, Any, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGL.GL import *
 from OpenGL.GL import glBindAttribLocation, glUseProgram
@@ -32,7 +33,7 @@ VBO = vbo.VBO
 
 log = logging.getLogger(__name__)
 
-def glsl_version() -> List[int]:
+def glsl_version() -> list[int]:
     """``GL_SHADING_LANGUAGE_VERSION`` as ``[major, minor]``
 
     A driver may append its own text after the version -- "3.30 NVIDIA via Cg
@@ -115,7 +116,7 @@ class ShaderIndexBuffer(_Buffer, shaders.ShaderIndexBuffer):
 class ShaderAttribute(shaders.ShaderAttribute):
     """VBO-based buffer implementation for generic geomtry indices"""
 
-    def render(self, shader: Any, mode: Any) -> Optional[Tuple[Any, int]]:
+    def render(self, shader: Any, mode: Any) -> Optional[tuple[Any, int]]:
         """Set this uniform value for the given shader
 
         This is called at render-time to update the value...
@@ -131,7 +132,7 @@ class ShaderAttribute(shaders.ShaderAttribute):
         return None
 
     def renderPost(self, shader: Any, mode: Any,
-                   token: Optional[Tuple[Any, int]] = None) -> None:
+                   token: Optional[tuple[Any, int]] = None) -> None:
         """Undo what :meth:`render` set up, given the token it returned
 
         The token is the (buffer, location) pair, or None when the shader had no
@@ -240,7 +241,7 @@ class FloatUniform(_Uniform, shaders.FloatUniform):
     if TYPE_CHECKING:
         #: The element shape and the ``glUniform*`` entry point, both filled in
         #: by :func:`_uniformCls` when it generates the concrete subclass.
-        shape: Tuple[int, ...]
+        shape: tuple[int, ...]
         baseFunction: Any
 
     def render(self, shader: Any, mode: Any, location: Optional[int] = None) -> Any:
@@ -341,7 +342,7 @@ class TextureBufferUniform(_TextureUniform, shaders.TextureBufferUniform):
 
 
 def _uniformCls(suffix: str) -> None:
-    def buildCls(name: str, suffix: str, size: Tuple[int, ...],
+    def buildCls(name: str, suffix: str, size: tuple[int, ...],
                  function: Any, base: type) -> None:
         if "m" in suffix:
             NEED_TRANSPOSE = False
@@ -431,7 +432,7 @@ class ShaderURLField(fieldtypes.MFString):
         shader is a handful of small files, and the pool already runs the
         shaders of a scene alongside each other.
         """
-        overall: List[Any] = [self.subLoad(client, value) for value in url]
+        overall: list[Any] = [self.subLoad(client, value) for value in url]
         result = [x for x in overall if x is not None]
         if len(result) == len(overall):
             client.source = "\n".join([as_str(r) for r in result])
@@ -563,7 +564,7 @@ class GLSLObject(shaders.GLSLObject):
     attributes = field.newField("attributes", "MFNode", 1, list)
 
     # we've manually chosen this implementation...
-    def render(self, mode: Any, shader: Any = None) -> Tuple[Any, ...]:
+    def render(self, mode: Any, shader: Any = None) -> tuple[Any, ...]:
         """Render our shaders in the current mode"""
         renderer = mode.cache.getData(self)
         if renderer is None:
@@ -757,7 +758,7 @@ class GLSLObject(shaders.GLSLObject):
                     "Attempting to get attribute/uniform from failed compile"
                 ) from None
 
-    def sortKey(self, mode: Any, matrix: Any) -> Tuple[Any, ...]:
+    def sortKey(self, mode: Any, matrix: Any) -> tuple[Any, ...]:
         """Produce the sorting key for this shape's appearance/shaders/etc"""
         # TODO: figure out how to handle
         return False, [], None
@@ -774,7 +775,7 @@ class Shader(shaders.Shader):
     uniformIDs = None
     attributeIDs = None
 
-    def render(self, mode: Any = None) -> Tuple[Any, ...]:
+    def render(self, mode: Any = None) -> tuple[Any, ...]:
         """Render the shader"""
         current = self.currentImplementation()
         if current:
@@ -796,7 +797,7 @@ class Shader(shaders.Shader):
             return self.current.renderPost(textureToken, mode)
         return None
 
-    def sortKey(self, mode: Any, matrix: Any) -> Tuple[Any, ...]:
+    def sortKey(self, mode: Any, matrix: Any) -> tuple[Any, ...]:
         """Produce the sorting key for this shape's appearance/shaders/etc"""
         current = self.currentImplementation()
         if current:
@@ -878,7 +879,7 @@ class ShaderGeometry(shaders.ShaderGeometry):
             if transient:
                 glDeleteVertexArrays(1, [vao])
 
-    def sortKey(self, mode: Any, matrix: Any) -> Tuple[Any, ...]:
+    def sortKey(self, mode: Any, matrix: Any) -> tuple[Any, ...]:
         """Produce the sorting key for this shape's appearance/shaders/etc"""
         # distance calculation...
         distance = polygonsort.distances(

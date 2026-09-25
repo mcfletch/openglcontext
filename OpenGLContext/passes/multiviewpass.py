@@ -14,7 +14,8 @@ the class. See docs/multiview.rst.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy
 from OpenGL.GL import (
@@ -60,7 +61,7 @@ class MultiviewPassMixin( PassResources ):
         lighting: bool
         textured: bool
         mirroredDraw: bool
-        visiblePlacements: Optional[Dict[int, Any]]
+        visiblePlacements: Optional[dict[int, Any]]
         _zoneHidden: Any
 
         def setViewPlatform( self, vp: Any ) -> None: ...
@@ -68,24 +69,24 @@ class MultiviewPassMixin( PassResources ):
         def chooseLevels( self, viewers: Sequence['lod.Viewer'] ) -> None: ...
         def gatherPaths( self ) -> 'GatheredPaths': ...
         def renderSet( self, matrix: Any,
-                       gathered: Optional['GatheredPaths'] = None ) -> List[Any]: ...
+                       gathered: Optional['GatheredPaths'] = None ) -> list[Any]: ...
         def greatestDepth( self, toRender: Sequence[Any] ) -> float: ...
         def zoneHiddenAt( self, camera: Any ) -> Any: ...
         def setupViewLighting( self, matrix: Any, lighting: Optional['Lighting'],
                                fitted: bool = False ) -> None: ...
-        def shaderRenderOpaque( self, toRender: List, id_map: Optional[Dict] = None,
+        def shaderRenderOpaque( self, toRender: list, id_map: Optional[dict] = None,
                                 skip: Optional[set] = None ) -> None: ...
         def resetMeshDrawState( self ) -> None: ...
-        def shaderSelectRenderOptimized( self, mode: Any, toRender: List,
-                                         events: Dict ) -> None: ...
+        def shaderSelectRenderOptimized( self, mode: Any, toRender: list,
+                                         events: dict ) -> None: ...
         def selectRender( self, mode: Any, toRender: Sequence[Any],
-                          events: Dict[Any, Any] ) -> None: ...
+                          events: dict[Any, Any] ) -> None: ...
 
     #: The cameras the shape being drawn is seen from, as points in the eye
     #: space it is drawn in, while one draw serves several views; None for a
     #: draw that serves one. What a shape choosing its detail by distance
     #: measures to; see :func:`OpenGLContext.scenegraph.tessellationlod.lod_level`.
-    viewerEyes: Optional[List[Any]] = None
+    viewerEyes: Optional[list[Any]] = None
     #: How many views each draw of a shared ``vertex``-strategy draw reaches,
     #: so every draw is instanced that many times over; 0 otherwise. See
     #: :func:`OpenGLContext.multiview.strategy.draw_arrays`.
@@ -115,7 +116,7 @@ class MultiviewPassMixin( PassResources ):
                      or getattr( material, 'octahedralViews', 0 ) )
 
     def sharedRecords( self, frames: Sequence['ViewFrame'],
-                       reference: 'ViewFrame' ) -> Dict[int, List[Any]]:
+                       reference: 'ViewFrame' ) -> dict[int, list[Any]]:
         """The records one draw serves several views for, by view mask.
 
         Each is put in ``reference``'s eye space, which is where a shared draw
@@ -124,7 +125,7 @@ class MultiviewPassMixin( PassResources ):
         view takes no part: ``glPolygonMode`` holds for every viewport at once,
         so it draws its shapes itself.
         """
-        found: Dict[int, List[Any]] = {}
+        found: dict[int, list[Any]] = {}
         for index, frame in enumerate( frames ):
             if frame.view.style.wireframe:
                 continue
@@ -140,7 +141,7 @@ class MultiviewPassMixin( PassResources ):
         entries = list( found.values() )
         worlds = asarray( [ record[2] for record, _mask in entries ], 'f' )
         modelviews = worlds @ asarray( reference.modelView, 'f' )
-        groups: Dict[int, List[Any]] = {}
+        groups: dict[int, list[Any]] = {}
         for (record, mask), modelview in zip( entries, modelviews ):
             key, _mv, tmatrix, bvolume, path, node = record
             groups.setdefault( mask, [] ).append(
@@ -161,7 +162,7 @@ class MultiviewPassMixin( PassResources ):
         super().disposeResources()
 
     def uploadViewTable( self, frames: Sequence['ViewFrame'],
-                         reference: 'ViewFrame', capacity: int = 0 ) -> List[Any]:
+                         reference: 'ViewFrame', capacity: int = 0 ) -> list[Any]:
         """Fill and bind the ``ViewBlock`` for drawing ``frames`` in ``reference``'s space.
 
         ``capacity`` is the views the bound programs were compiled for, which
@@ -182,9 +183,9 @@ class MultiviewPassMixin( PassResources ):
         return view_records( frames, reference )
 
     def renderShared( self, frames: Sequence['ViewFrame'],
-                      id_map: Optional[Dict[int, Any]],
+                      id_map: Optional[dict[int, Any]],
                       lighting: Optional['Lighting'] = None, mirrored: bool = False,
-                      capacity: int = 0, into_atlas: bool = False ) -> Optional[Dict[int, Any]]:
+                      capacity: int = 0, into_atlas: bool = False ) -> Optional[dict[int, Any]]:
         """Draw every shape that can serve several views once, for all of them.
 
         The draw is made in the active view's eye space, exactly as that view
@@ -217,7 +218,7 @@ class MultiviewPassMixin( PassResources ):
         if not shader.select_program_set( max( len( frames ), capacity ), strategy ):
             self.multiviewFailed( strategy )
             return None
-        drawn: Dict[int, Any] = {}
+        drawn: dict[int, Any] = {}
         try:
             self.applyViewFrame( reference, gl=False )
             rects = array( [ frame.rect for frame in frames ], 'f' )
@@ -260,7 +261,7 @@ class MultiviewPassMixin( PassResources ):
             shader.select_program_set( 0 )
         return drawn
 
-    def selectRenderViews( self, mode: Any, events: Dict[Any, Any],
+    def selectRenderViews( self, mode: Any, events: dict[Any, Any],
                            debugSelection: bool ) -> None:
         """Resolve ``events`` by drawing the selection render, a view at a time.
 
@@ -302,7 +303,7 @@ class MultiviewPassMixin( PassResources ):
     #: What the definition asked for when :attr:`multiviewStrategy` was chosen.
     _multiviewRequested: Optional[str] = None
     #: The strategies whose programs would not compile on this pass's context.
-    _multiviewFailed: Tuple[str, ...] = ()
+    _multiviewFailed: tuple[str, ...] = ()
 
     def chooseMultiview( self ) -> str:
         """The strategy the definition asks for, or the best this driver can build."""
@@ -362,7 +363,7 @@ class MultiviewPassMixin( PassResources ):
             self._defaultLayout = ViewLayout.single()
         return self._defaultLayout
 
-    def layoutViews( self, context: Any ) -> List['ViewFrame']:
+    def layoutViews( self, context: Any ) -> list['ViewFrame']:
         """Place this frame's views and work out each one's camera.
 
         Leaves the pass looking through the layout's active view. Attachments
@@ -402,7 +403,7 @@ class MultiviewPassMixin( PassResources ):
         self.applyViewFrame( active, gl=False )
         return frames
 
-    def clearUncovered( self, context: Any, frames: List['ViewFrame'] ) -> None:
+    def clearUncovered( self, context: Any, frames: list['ViewFrame'] ) -> None:
         """Clear the window where no view will draw in it.
 
         A view clears its own rectangle and nothing else, and a layout need not
@@ -444,7 +445,7 @@ class MultiviewPassMixin( PassResources ):
                 glScissor( *frame.rect )
                 glEnable( GL_SCISSOR_TEST )
 
-    def prepareViews( self ) -> List['ViewFrame']:
+    def prepareViews( self ) -> list['ViewFrame']:
         """Cull and sort the scene once per view, from one walk of it.
 
         Levels of detail are chosen first, for every view at once, since a
@@ -507,9 +508,9 @@ class MultiviewPassMixin( PassResources ):
                     return frame
         return self.activeFrame
 
-    def eventsByView( self, events: Dict[Any, Any] ) -> List[Tuple['ViewFrame', Dict[Any, Any]]]:
+    def eventsByView( self, events: dict[Any, Any] ) -> list[tuple['ViewFrame', dict[Any, Any]]]:
         """``events`` divided among the views they are resolved through, in draw order."""
-        grouped: Dict[int, Dict[Any, Any]] = {}
+        grouped: dict[int, dict[Any, Any]] = {}
         for key, event in events.items():
             frame = self.frameForEvent( event )
             if frame is not None:

@@ -22,7 +22,8 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from typing import Any, Dict, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from OpenGLContext.scenegraph import basenodes, surfaces
 
@@ -76,10 +77,10 @@ class ZoneCourt:
 
     def __init__(self, finishes: Optional[Finishes] = None) -> None:
         self.finishes = finishes if finishes is not None else Finishes()
-        self.lamps: Dict[str, Any] = {}
-        self.zones: Dict[str, Any] = {}
+        self.lamps: dict[str, Any] = {}
+        self.zones: dict[str, Any] = {}
         #: The transform each zone hangs under; emptied to take a zone away.
-        self.holders: Dict[str, Any] = {}
+        self.holders: dict[str, Any] = {}
         self.sun = basenodes.DirectionalLight(
             direction=(-0.35, -1.0, -0.55), color=(1.0, 0.96, 0.9),
             intensity=2.2, castShadows=True)
@@ -87,7 +88,7 @@ class ZoneCourt:
         self.statue = self._statue()
         self.statue_shown = basenodes.ZoneVisibility(nodes=[self.statue],
                                                      visible=True)
-        self.children: List[Any] = [
+        self.children: list[Any] = [
             basenodes.SimpleBackground(color=(0.62, 0.72, 0.84)),
             self.sun,
             surfaces.shape(surfaces.block((24.0, 0.2, 24.0), repeat=2.0),
@@ -124,7 +125,7 @@ class ZoneCourt:
         return self.holders['court']
 
     # -- a room ------------------------------------------------------------
-    def _room(self, name: str, x: float) -> List[Any]:
+    def _room(self, name: str, x: float) -> list[Any]:
         """One room's walls, roof, floor, plinth, lamp and zone."""
         finishes = self.finishes
         width, height, depth = ROOM
@@ -161,7 +162,7 @@ class ZoneCourt:
                                     color=colour, intensity=intensity,
                                     radius=8.0, castShadows=False)
         self.lamps[name] = lamp
-        settings: List[Any] = [basenodes.ZoneLights(lights=[lamp])]
+        settings: list[Any] = [basenodes.ZoneLights(lights=[lamp])]
         if name == 'east':
             settings.append(basenodes.ZoneEnvironment(capture=True,
                                                       intensity=1.0))

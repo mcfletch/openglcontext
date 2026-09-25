@@ -1,6 +1,7 @@
 """Cache of compiled textures for a context"""
 import weakref
-from typing import Any, Callable, Optional, Tuple
+from collections.abc import Callable
+from typing import Any, Optional
 
 from OpenGLContext import atlas
 class TextureCache( object ):
@@ -13,7 +14,7 @@ class TextureCache( object ):
         make per-context caches viable.
     """
     def __init__( self, atlasSize: Optional[int] = None ) -> None:
-        self.textures: 'weakref.WeakValueDictionary[Tuple[Any, bool, bool], Any]' = weakref.WeakValueDictionary()
+        self.textures: 'weakref.WeakValueDictionary[tuple[Any, bool, bool], Any]' = weakref.WeakValueDictionary()
         self.atlases = atlas.AtlasManager( max_size = atlasSize )
     def getTexture( self, pil: Any, textureClass: Callable[[Any], Any],
                     mode: Any = None, repeating: bool = False,

@@ -23,7 +23,8 @@ defaults to 1 and pixel measurements mean what they say.
 
 from __future__ import annotations
 
-from typing import Any, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 #: Appended to text that was cut to fit.
 ELLIPSIS = '…'
@@ -79,7 +80,7 @@ class FontMetrics:
         """Width of one line of text."""
         return len(text) * self.char_width
 
-    def text_size(self, text: str) -> Tuple[int, int]:
+    def text_size(self, text: str) -> tuple[int, int]:
         """Width and height of possibly multi-line text.
 
         Empty text measures zero rather than one blank line, so an unset label
@@ -91,7 +92,7 @@ class FontMetrics:
         return (max(self.text_width(line) for line in lines),
                 len(lines) * self.line_height)
 
-    def lines_size(self, lines: Sequence[str]) -> Tuple[int, int]:
+    def lines_size(self, lines: Sequence[str]) -> tuple[int, int]:
         """Width and height of already-wrapped lines."""
         if not lines:
             return (0, 0)
@@ -104,7 +105,7 @@ class FontMetrics:
             return 0
         return max(0, int(width) // self.char_width)
 
-    def wrap(self, text: str, width: int) -> List[str]:
+    def wrap(self, text: str, width: int) -> list[str]:
         """Break text into lines that each fit within ``width`` pixels.
 
         Breaks between words where it can and inside a word where it cannot: a
@@ -118,7 +119,7 @@ class FontMetrics:
         that size, and unreadable-but-whole beats shredded.
         """
         columns = self.characters_for(width)
-        lines: List[str] = []
+        lines: list[str] = []
         for paragraph in text.split('\n'):
             if not paragraph.strip():
                 lines.append('')
@@ -127,10 +128,10 @@ class FontMetrics:
         return lines
 
     @staticmethod
-    def _wrap_paragraph(paragraph: str, columns: int) -> List[str]:
+    def _wrap_paragraph(paragraph: str, columns: int) -> list[str]:
         if columns <= 0:
             return paragraph.split()
-        lines: List[str] = []
+        lines: list[str] = []
         current = ''
         for word in paragraph.split():
             while len(word) > columns:

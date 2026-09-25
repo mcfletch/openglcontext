@@ -18,7 +18,8 @@ defaults reproduce the viewer's built-in framing, so an unlisted model still
 frames sensibly and a listed model only moves for the fields it overrides.
 """
 from dataclasses import dataclass
-from typing import Any, Iterator, Optional, Tuple
+from collections.abc import Iterator
+from typing import Any, Optional
 
 from OpenGLContext.loaders import resolver
 
@@ -47,9 +48,9 @@ class SceneSpec:
                                        # 'studio' => the neutral studio set (bright grey
                                        # backdrop + softboxes) that the Khronos material
                                        # references use for metals/glass/anisotropy
-    cameras: Tuple[int, ...] = ()   # () => one auto-framed view; else baked-camera indices
-    eye: Optional[Tuple[float, float, float]] = None      # explicit camera position
-    look_at: Optional[Tuple[float, float, float]] = None  # + target => interior shot
+    cameras: tuple[int, ...] = ()   # () => one auto-framed view; else baked-camera indices
+    eye: Optional[tuple[float, float, float]] = None      # explicit camera position
+    look_at: Optional[tuple[float, float, float]] = None  # + target => interior shot
     bloom: bool = False             # HDR bloom (emissive glow halo) -- for emissive scenes
     shadows: bool = False           # render with shadow maps: for a scene whose lights'
                                     # shadows are part of what it shows
@@ -147,7 +148,7 @@ def _hdr(name: str, panorama: str, **kw: Any) -> SceneSpec:
 # dialed in during the conformance pass; everything else takes the viewer defaults.
 # The wide, flat test grids overestimate their bounding sphere, so a margin < 1
 # pulls the camera in until the model fills the frame instead of floating small.
-DEMO_SCENES: Tuple[SceneSpec, ...] = (
+DEMO_SCENES: tuple[SceneSpec, ...] = (
     # -- conformance set: the models the QA pass flagged --------------------
     _studio('MetalRoughSpheres', margin=0.9,
           description='Metal/rough sphere grid; metals reflect the HDR studio.'),
@@ -503,7 +504,7 @@ def find_parthenon(start: Optional[str] = None) -> Optional[str]:
     return None
 
 
-def resolve_source(spec: SceneSpec, parthenon: Optional[str] = None) -> Tuple[Optional[str], bool]:
+def resolve_source(spec: SceneSpec, parthenon: Optional[str] = None) -> tuple[Optional[str], bool]:
     """Resolve a spec's model source to something loadable.
 
     Returns (source, is_local), where `is_local` says the source is a path to

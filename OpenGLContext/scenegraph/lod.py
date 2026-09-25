@@ -19,7 +19,8 @@ announces itself on the same signal a ``Switch`` uses, because the pass keeps a
 flattened scenegraph and a level nobody told it about would not be drawn.
 """
 import math
-from typing import Any, NamedTuple, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, NamedTuple, Optional
 
 import numpy as np
 from pydispatch import dispatcher

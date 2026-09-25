@@ -24,7 +24,8 @@ the model declares first and falls back to a humanoid bone of that name, so
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, Optional
+from collections.abc import Iterable
+from typing import Any, Optional
 
 from OpenGLContext.character.attachment import SOCKET_PREFIX, attach, detach, sockets
 from OpenGLContext.character.humanoid import Humanoid
@@ -45,7 +46,7 @@ class CharacterModel:
         #: Every clip the document carries, by name.
         self.mixer = AnimationMixer.from_scene(scene)
         #: The attachment points the model declares, by name.
-        self.points: Dict[str, Any] = sockets(scene, prefix=socket_prefix)
+        self.points: dict[str, Any] = sockets(scene, prefix=socket_prefix)
 
     # -- construction -----------------------------------------------------
     @classmethod
@@ -61,7 +62,7 @@ class CharacterModel:
 
     # -- what it can play -------------------------------------------------
     @property
-    def clips(self) -> Dict[str, Any]:
+    def clips(self) -> dict[str, Any]:
         """The clips this model carries, by name."""
         return self.mixer.clips
 

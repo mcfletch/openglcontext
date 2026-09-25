@@ -13,9 +13,8 @@ from __future__ import annotations
 
 import os
 import logging
-from typing import (
-    TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple,
-)
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 from OpenGL.GL import (
@@ -40,7 +39,7 @@ log = logging.getLogger(__name__)
 #: A frame's environment lighting, from :meth:`_FlatEffectsMixin.iblPrepare`:
 #: the mode (``'full'``, ``'analytic'`` or ``'off'``) and the probe where it is
 #: ``'full'``.
-Lighting = Tuple[str, Optional["IBLProbe"]]
+Lighting = tuple[str, Optional["IBLProbe"]]
 
 
 class _FlatEffectsMixin(ReflectionsMixin, PassResources):
@@ -61,7 +60,7 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
         transparent: bool
 
         def _writeShapeId(self, shader: Any, path: Any, node: Any, prog: Any,
-                          id_map: Optional[Dict]) -> Any: ...
+                          id_map: Optional[dict]) -> Any: ...
 
         def _restoreShapeId(self, masked: Any) -> None: ...
 
@@ -235,7 +234,7 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
                 self._transmission_mode = 'off'
         return self._transmission_mode
 
-    def transmissiveRecords(self, toRender: List) -> set:
+    def transmissiveRecords(self, toRender: list) -> set:
         """Indices of opaque records whose material has transmission > 0."""
         out = set()
         for i, rec in enumerate(toRender):
@@ -248,8 +247,8 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
                 out.add(i)
         return out
 
-    def shaderRenderTransmissive(self, toRender: List, indices: set,
-                                 id_map: Optional[Dict] = None) -> None:
+    def shaderRenderTransmissive(self, toRender: list, indices: set,
+                                 id_map: Optional[dict] = None) -> None:
         """Draw transmissive (glass) shapes after the opaque backdrop is ready.
 
         'full': capture the opaque colour buffer to a mipmapped texture, then draw
@@ -334,7 +333,7 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
         return os.environ.get('OPENGLCONTEXT_INSTANCE_CLUSTER_CULL', '').strip().lower() \
             in ('1', 'true', 'yes', 'on')
 
-    def frustumVisibilityFilter(self, records: List) -> List:
+    def frustumVisibilityFilter(self, records: list) -> list:
         """Filter records for visibility using frustum planes
 
         This does per-object culling based on frustum lookups
@@ -363,7 +362,7 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
                 result.append( record )
         return result
 
-    def _clusterFrustumFilter(self, records: List) -> List:
+    def _clusterFrustumFilter(self, records: list) -> list:
         """Cluster-accelerated equivalent of frustumVisibilityFilter.
 
         Spatially clusters the records by world translation and tests each

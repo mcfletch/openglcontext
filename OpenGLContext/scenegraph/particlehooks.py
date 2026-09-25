@@ -49,7 +49,7 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any, Dict, FrozenSet, List, Optional, Tuple
+from typing import Any, Optional
 
 import numpy as np
 
@@ -67,15 +67,15 @@ __all__ = ['KINDS', 'AUTHORED', 'FIELDS', 'RANGES', 'MULTIPLIER_MAXIMUM',
 KINDS = ('fire', 'smoke', 'sparks')
 
 #: Where an authored effect differs from the preset of the same name.
-AUTHORED: Dict[str, Dict[str, Any]] = {
+AUTHORED: dict[str, dict[str, Any]] = {
     'sparks': {'rate': 60.0, 'burst': 0},
 }
 
-_HINTS: Dict[str, Any] = ParticleEmitter.UI_HINTS
+_HINTS: dict[str, Any] = ParticleEmitter.UI_HINTS
 _BUDGET = int(_HINTS['maxParticles']['maximum'])
 
 
-def _hinted(name: str) -> Tuple[Optional[float], Optional[float]]:
+def _hinted(name: str) -> tuple[Optional[float], Optional[float]]:
     return _HINTS[name]['minimum'], _HINTS[name]['maximum']
 
 
@@ -83,7 +83,7 @@ def _hinted(name: str) -> Tuple[Optional[float], Optional[float]]:
 #: ``(minimum, maximum)`` with None for an open end. The field's own
 #: ``UI_HINTS`` range where it declares one; a burst is held to the pool's
 #: largest budget, and the seed to what an ``SFInt32`` holds.
-RANGES: Dict[str, Tuple[Optional[float], Optional[float]]] = {
+RANGES: dict[str, tuple[Optional[float], Optional[float]]] = {
     **{name: _hinted(name) for name in ('rate', 'maxParticles', 'lifetime',
                                         'speed', 'spread', 'drag', 'size',
                                         'endSize')},
@@ -103,7 +103,7 @@ _FLAGS = ('worldSpace', 'enabled', 'burstOnStart')
 
 #: The emitter fields a tag may set by name. ``texture`` names a file, which
 #: is read beside the document only; ``externalURL`` is not authorable.
-FIELDS: FrozenSet[str] = frozenset(
+FIELDS: frozenset[str] = frozenset(
     (*RANGES, *_VECTORS, *_FLAGS, 'blending', 'texture'))
 
 #: The largest ``scale`` or ``density`` a tag may give, after the tagged
@@ -253,7 +253,7 @@ def particle_hook(ctx: "hooks.HookContext") -> Any:
     return Group(children=[*ctx.children, emitter]), False
 
 
-def advance(emitters: List[ParticleEmitter], when: float) -> bool:
+def advance(emitters: list[ParticleEmitter], when: float) -> bool:
     """Whether any emitter is emitting or has particles in the air.
 
     Each steps itself on the engine clock as it is drawn, so ``when`` is not

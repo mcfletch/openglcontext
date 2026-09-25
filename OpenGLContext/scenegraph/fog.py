@@ -24,7 +24,7 @@ Reference:
 
 from __future__ import annotations
 
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 import numpy as np
 from vrml import field
@@ -76,7 +76,7 @@ class Fog(basenodes.Fog):
                     'optionLabels': ('Steady', 'Closing in')},
     }
 
-    def fogParameters(self, matrix: Any) -> Tuple[int, float, Tuple[float, float, float]]:
+    def fogParameters(self, matrix: Any) -> tuple[int, float, tuple[float, float, float]]:
         """``(mode, density, colour)`` for the shader, from a world matrix.
 
         ``density`` is the **reciprocal of the visible range**, which is one
@@ -96,7 +96,7 @@ class Fog(basenodes.Fog):
         mode = FOG_TYPES.get(str(self.fogType).upper(), FOG_LINEAR)
         return (mode, 1.0 / visibility, self._color())
 
-    def _color(self) -> Tuple[float, float, float]:
+    def _color(self) -> tuple[float, float, float]:
         red, green, blue = (float(value) for value in self.color[:3])
         return (red, green, blue)
 

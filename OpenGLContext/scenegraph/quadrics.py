@@ -15,7 +15,7 @@ from OpenGLContext.arrays import (
 from OpenGLContext import vectorutilities
 from OpenGLContext.scenegraph import tessellationlod
 from OpenGL.arrays import vbo
-from typing import Any, Dict, Tuple
+from typing import Any
 
 
 #: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to whichever of
@@ -161,11 +161,11 @@ class Quadric( nodetypes.Geometry, node.Node ):
     # -- instancing -------------------------------------------------------
     # Quadrics share one interleaved V3F_T2F_N3F layout, so one instanced-draw
     # GPU builder serves them all; each subclass supplies its arrays + content key.
-    def _instanceArrays( self ) -> Tuple[Any, Any]:
+    def _instanceArrays( self ) -> tuple[Any, Any]:
         """(coords Nx8 interleaved V3F_T2F_N3F, indices) at a fixed LOD level."""
         raise NotImplementedError
 
-    def _instanceDependFields( self ) -> Tuple[str, ...]:
+    def _instanceDependFields( self ) -> tuple[str, ...]:
         """Fields whose change should rebuild the cached instance GPU."""
         return ()
 
@@ -189,7 +189,7 @@ class Sphere( basenodes.Sphere, Quadric ):
     # LOD level (keyed by level -> (coords, indices)).
     #: Unit-radius meshes, keyed by the angular step they were tessellated at,
     #: so every sphere drawn at a given detail shares one tessellation.
-    _unitSpheres: Dict[float, Tuple[Any, Any]] = {}
+    _unitSpheres: dict[float, tuple[Any, Any]] = {}
     #: Base angular step: pi/12 is a 24-sided silhouette, fine enough that the
     #: LOD schedule can step down from it without a visible pop.
     phi = field.newField( 'phi', 'SFFloat', 1, pi/12.0)
@@ -209,7 +209,7 @@ class Sphere( basenodes.Sphere, Quadric ):
             holder.depend( self, 'radius' )
         return vbos
 
-    def compileArrays( self, level: int = 0 ) -> Tuple[Any, Any]:
+    def compileArrays( self, level: int = 0 ) -> tuple[Any, Any]:
         """Compile to arrays at the given LOD level...
 
         returns coordarray, indexarray
@@ -227,20 +227,20 @@ class Sphere( basenodes.Sphere, Quadric ):
         coords[:,0:3] *= self.radius
         return coords, indices
 
-    def instanceContentKey( self ) -> Tuple[Any, ...]:
+    def instanceContentKey( self ) -> tuple[Any, ...]:
         """Spheres of the same radius/tessellation share geometry -> one instanced
         draw (the molecular-model case: thousands of identical atoms)."""
         return ('Sphere', round(float(self.radius), 6), round(float(self.phi), 6))
 
-    def _instanceArrays( self ) -> Tuple[Any, Any]:
+    def _instanceArrays( self ) -> tuple[Any, Any]:
         return self.compileArrays( 0 )
 
-    def _instanceDependFields( self ) -> Tuple[str, ...]:
+    def _instanceDependFields( self ) -> tuple[str, ...]:
         return ('radius',)
     
     @classmethod
     def sphere( cls, phi: float = pi/8.0, latAngle: float = pi,
-                longAngle: float = (pi*2) ) -> Tuple[Any, Any]:
+                longAngle: float = (pi*2) ) -> tuple[Any, Any]:
         """Create arrays for rendering a unit-sphere
         
         phi -- angle between points on the sphere (stacks/slices)
@@ -254,7 +254,7 @@ class Sphere( basenodes.Sphere, Quadric ):
         return cls._partialSphere( latsteps,longsteps )
 
     @classmethod
-    def _partialSphere( cls, latsteps: Any, longsteps: Any ) -> Tuple[Any, Any]:
+    def _partialSphere( cls, latsteps: Any, longsteps: Any ) -> tuple[Any, Any]:
         """Create a partial-sphere data-set for latsteps and longsteps
         
         returns (coordarray, indexarray)
@@ -331,15 +331,15 @@ class Cone( basenodes.Cone, Quadric ):
         holder.depend( self, 'height' )
         return vbos
 
-    def instanceContentKey( self ) -> Tuple[Any, ...]:
+    def instanceContentKey( self ) -> tuple[Any, ...]:
         return ('Cone', round(float(self.height), 6), round(float(self.bottomRadius), 6),
                 bool(self.bottom), bool(self.side))
 
-    def _instanceArrays( self ) -> Tuple[Any, Any]:
+    def _instanceArrays( self ) -> tuple[Any, Any]:
         return self.cone( self.height, self.bottomRadius, self.bottom, self.side,
                           phi=lod_phi( self._BASE_PHI, 0, 2*pi ) )
 
-    def _instanceDependFields( self ) -> Tuple[str, ...]:
+    def _instanceDependFields( self ) -> tuple[str, ...]:
         return ('bottomRadius', 'height', 'bottom', 'side')
 
     @classmethod
@@ -347,7 +347,7 @@ class Cone( basenodes.Cone, Quadric ):
         cls, height: float = 2.0, radius: float = 1.0, bottom: bool = True,
         side: bool = True, phi: float = pi/16, longAngle: float = (pi*2),
         top: bool = False, cylinder: bool = False
-    ) -> Tuple[Any, Any]:
+    ) -> tuple[Any, Any]:
         """Generate a VBO data-set to render a cone"""
         (0,height/2.0,0)
         longsteps = arange( 0,longAngle+0.000003, phi )
@@ -469,16 +469,16 @@ class Cylinder( basenodes.Cylinder, Quadric ):
         holder.depend( self, 'height' )
         return vbos
 
-    def instanceContentKey( self ) -> Tuple[Any, ...]:
+    def instanceContentKey( self ) -> tuple[Any, ...]:
         return ('Cylinder', round(float(self.height), 6), round(float(self.radius), 6),
                 bool(self.bottom), bool(self.side), bool(self.top))
 
-    def _instanceArrays( self ) -> Tuple[Any, Any]:
+    def _instanceArrays( self ) -> tuple[Any, Any]:
         return Cone.cone( self.height, self.radius, self.bottom, self.side,
                           phi=lod_phi( Cone._BASE_PHI, 0, 2*pi ),
                           top=self.top, cylinder=True )
 
-    def _instanceDependFields( self ) -> Tuple[str, ...]:
+    def _instanceDependFields( self ) -> tuple[str, ...]:
         return ('radius', 'height', 'bottom', 'side', 'top')
 
     def boundingVolume( self, mode: Any = None ) -> Any:

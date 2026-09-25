@@ -27,7 +27,8 @@ import sys
 import threading
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any, Optional
 
 from OpenGLContext import entropy
 from OpenGLContext.events import synthetic, systemtime
@@ -240,9 +241,9 @@ class SessionRecording:
         self.journal = journal
         self.recorder = recorder
         self._clock = clock
-        self._taps: List[Tap] = []
+        self._taps: list[Tap] = []
         self._handler: Optional[logging.Handler] = None
-        self._hooks: Dict[str, Any] = {}
+        self._hooks: dict[str, Any] = {}
         self._drawStarted = 0.0
         self._previousEnd: Optional[float] = None
         #: The last exception written, so the same one reaching this by two
@@ -604,7 +605,7 @@ def _configured_ceiling() -> Optional[int]:
         return DEFAULT_MAX_BYTES
 
 
-def _describeDefinition(definition: Any) -> Dict[str, Any]:
+def _describeDefinition(definition: Any) -> dict[str, Any]:
     """The window this session asked for, as data.
 
     Read defensively field by field: a context definition is a VRML node whose
@@ -612,7 +613,7 @@ def _describeDefinition(definition: Any) -> Dict[str, Any]:
     journal can hold, and one that will not convert must cost that line of the
     header rather than the recording.
     """
-    found: Dict[str, Any] = {}
+    found: dict[str, Any] = {}
     try:
         found['size'] = [int(value) for value in getattr(definition, 'size', ())]
     except (TypeError, ValueError):
@@ -624,8 +625,8 @@ def _describeDefinition(definition: Any) -> Dict[str, Any]:
     return found
 
 
-def _header(context: Any, randomness: Optional[Dict[str, Any]] = None
-            ) -> Dict[str, Any]:
+def _header(context: Any, randomness: Optional[dict[str, Any]] = None
+            ) -> dict[str, Any]:
     """What is known about this session before it has drawn anything.
 
     The rest of the description of the application arrives in the ``state``
@@ -633,7 +634,7 @@ def _header(context: Any, randomness: Optional[Dict[str, Any]] = None
     The seed is here as well as in its own record, because it is one number
     and the first line is where a reader looks for it.
     """
-    header: Dict[str, Any] = {'context': type(context).__name__}
+    header: dict[str, Any] = {'context': type(context).__name__}
     if randomness and 'seed' in randomness:
         header['seed'] = randomness['seed']
     try:

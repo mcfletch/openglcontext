@@ -1,6 +1,6 @@
 """Definition of a Context's visual parameters"""
 import os
-from typing import Any, Tuple
+from typing import Any
 
 from vrml import node, field
 
@@ -35,7 +35,7 @@ def _get_default_profile() -> str:
     return os.environ.get('OPENGLCONTEXT_PROFILE', 'core')
 
 
-def version_for_profile(profile: str) -> Tuple[int, int]:
+def version_for_profile(profile: str) -> tuple[int, int]:
     """The OpenGL version a context of ``profile`` needs, unless told otherwise.
 
     Core profile requires at least OpenGL 3.2; the shaders here target 3.3.
@@ -45,7 +45,7 @@ def version_for_profile(profile: str) -> Tuple[int, int]:
     return (3, 3) if profile == 'core' else (0, 0)
 
 
-def _get_default_version() -> Tuple[int, int]:
+def _get_default_version() -> tuple[int, int]:
     """The version field's default, from the profile the environment names."""
     return version_for_profile(_get_default_profile())
 

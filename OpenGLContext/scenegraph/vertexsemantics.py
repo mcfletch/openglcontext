@@ -43,7 +43,7 @@ that.
 """
 from __future__ import annotations
 
-from typing import Dict, NamedTuple, Tuple
+from typing import NamedTuple
 
 __all__ = [
     'VertexSemantic', 'SEMANTICS', 'BY_SEMANTIC', 'BY_ATTRIBUTE', 'location',
@@ -87,7 +87,7 @@ INSTANCE_JOINT_BASE = 14
 #: Where a shader of your own may put an input the engine has no name for.
 FIRST_FREE_LOCATION = 15
 
-SEMANTICS: Tuple[VertexSemantic, ...] = (
+SEMANTICS: tuple[VertexSemantic, ...] = (
     VertexSemantic('TEXCOORD_0', LOC_TEXCOORD, 2, 'aTexCoord'),
     VertexSemantic('NORMAL', LOC_NORMAL, 3, 'aNormal'),
     VertexSemantic('POSITION', LOC_POSITION, 3, 'aPosition'),
@@ -98,10 +98,10 @@ SEMANTICS: Tuple[VertexSemantic, ...] = (
     VertexSemantic('WEIGHTS_0', LOC_WEIGHTS, 4, 'aWeights'),
 )
 
-BY_SEMANTIC: Dict[str, VertexSemantic] = {
+BY_SEMANTIC: dict[str, VertexSemantic] = {
     entry.semantic: entry for entry in SEMANTICS
 }
-BY_ATTRIBUTE: Dict[str, VertexSemantic] = {
+BY_ATTRIBUTE: dict[str, VertexSemantic] = {
     entry.attribute: entry for entry in SEMANTICS
 }
 

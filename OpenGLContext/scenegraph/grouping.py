@@ -1,5 +1,5 @@
 """Common implementation for grouping-type nodes"""
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGL.GL import *
 from vrml.vrml97 import nodetypes
@@ -103,7 +103,7 @@ class Grouping(object):
     children = ChildrenTypedField( 'children', 1, [])
     def renderedChildren(
         self, types: Any = (nodetypes.Children, nodetypes.Rendering,)
-    ) -> List[Any]:
+    ) -> list[Any]:
         """List all children which are instances of given types"""
         children: ChildrenTypedField = self.__class__.children
         return children.byType( self, types )
@@ -136,8 +136,8 @@ class Grouping(object):
             return current
         # need to create a new volume and make it depend
         # on the appropriate fields...
-        volumes: List[Any] = []
-        dependencies: List[Tuple[Any, Optional[str]]] = [(self,'children')]
+        volumes: list[Any] = []
+        dependencies: list[tuple[Any, Optional[str]]] = [(self,'children')]
         unbounded = 0
         for child in self.children:
             try:

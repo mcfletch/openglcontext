@@ -20,7 +20,6 @@ the size from what arrives.
 
 from __future__ import annotations
 
-from typing import List
 
 from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
 
@@ -40,7 +39,7 @@ class WheelNotches(object):
         #: Rotation reported so far that has not yet made a whole notch.
         self.remainder = 0.0
 
-    def notches(self, rotation: float) -> List[int]:
+    def notches(self, rotation: float) -> list[int]:
         """The wheel buttons one report of ``rotation`` amounts to
 
         Answers a list of :data:`~OpenGLContext.events.mouseevents.WHEEL_UP` or

@@ -1,5 +1,5 @@
 """Scenegraph node"""
-from typing import Any, List
+from typing import Any
 
 from vrml.vrml97 import scenegraph, nodetypes
 from vrml import field, node
@@ -16,7 +16,7 @@ class SceneGraph(scenegraph.SceneGraph):
     viewpointPaths = ()
     def renderedChildren(
         self, types: Any = (nodetypes.Children, nodetypes.Rendering,)
-    ) -> List[Any]:
+    ) -> list[Any]:
         """List of all children that are instances of given types"""
         return [
             child for child in self.children

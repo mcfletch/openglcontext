@@ -41,7 +41,8 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any, Callable, Literal, Tuple
+from collections.abc import Callable
+from typing import Any, Literal
 
 __all__ = ['Scaling', 'ScalingExceeded', 'check_scaling', 'measure_scaling']
 
@@ -61,8 +62,8 @@ class Scaling:
     second over the first.
     """
 
-    sizes: Tuple[int, int]
-    costs: Tuple[float, float]
+    sizes: tuple[int, int]
+    costs: tuple[float, float]
     measure: Measure
 
     @property

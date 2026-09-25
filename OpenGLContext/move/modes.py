@@ -24,7 +24,8 @@ moment needs no special case.
 """
 
 from gettext import gettext as _
-from typing import Any, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from vrml import field, node
 
@@ -110,7 +111,7 @@ class MovementMode(node.Node):
         if not self.bindings:
             self.bindings = list(self.defaultBindings())
 
-    def keys_for(self, command: str) -> Tuple[str, ...]:
+    def keys_for(self, command: str) -> tuple[str, ...]:
         """The keys currently bound to ``command``."""
         for binding in self.bindings:
             if binding.command == command:
@@ -284,7 +285,7 @@ class _GroundMode(MovementMode):
                        modifier='ctrl'),
         ]
 
-    def _movement(self, inputs: Any) -> Tuple[float, float]:
+    def _movement(self, inputs: Any) -> tuple[float, float]:
         return (self._axis(inputs, 'forward', 'back'),
                 self._axis(inputs, 'right', 'left'))
 

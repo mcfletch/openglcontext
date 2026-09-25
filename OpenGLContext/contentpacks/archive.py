@@ -20,7 +20,7 @@ import os
 import sys
 import tarfile
 import zipfile
-from typing import Sequence
+from collections.abc import Sequence
 
 from OpenGLContext import atomicfiles
 from OpenGLContext.loaders import resolver

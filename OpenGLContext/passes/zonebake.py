@@ -31,7 +31,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable, Hashable, List, Optional, Sequence, Tuple
+from collections.abc import Callable, Hashable, Sequence
+from typing import Any, Optional
 
 __all__ = ['FRAMES_PER_ZONE', 'BakedZoneLight', 'ZoneBakePlan', 'bake_zone_lights']
 
@@ -42,7 +43,7 @@ log = logging.getLogger(__name__)
 #: with what it has.
 FRAMES_PER_ZONE = 40
 
-Eye = Tuple[float, float, float]
+Eye = tuple[float, float, float]
 
 
 @dataclass
@@ -68,7 +69,7 @@ class ZoneBakePlan:
     when they have, or after ``frames_per_zone`` frames, whichever is first.
     """
 
-    def __init__(self, zones: Sequence[Tuple[Hashable, Eye]],
+    def __init__(self, zones: Sequence[tuple[Hashable, Eye]],
                  frames_per_zone: int = FRAMES_PER_ZONE) -> None:
         if int(frames_per_zone) < 1:
             raise ValueError('a zone needs at least one frame, not %r'
@@ -78,10 +79,10 @@ class ZoneBakePlan:
         self._index = 0
         self._frames = 0
         #: The keys finished without their captures settling.
-        self.missed: List[Hashable] = []
+        self.missed: list[Hashable] = []
 
     @property
-    def current(self) -> Optional[Tuple[Hashable, Eye]]:
+    def current(self) -> Optional[tuple[Hashable, Eye]]:
         """The ``(key, eye)`` of the zone being baked, or None when done."""
         return self.zones[self._index] if self._index < len(self.zones) else None
 
@@ -90,7 +91,7 @@ class ZoneBakePlan:
         return self._index >= len(self.zones)
 
     @property
-    def progress(self) -> Tuple[int, int]:
+    def progress(self) -> tuple[int, int]:
         """``(zones finished, zones in all)``."""
         return self._index, len(self.zones)
 
@@ -113,7 +114,7 @@ class ZoneBakePlan:
         return bool(settled)
 
 
-def _capturing(flat: Any) -> List[Tuple[Any, Eye]]:
+def _capturing(flat: Any) -> list[tuple[Any, Eye]]:
     """``(Zone node, capture point in the world)`` for every zone the pass
     has placed whose environment asks for a capture."""
     from OpenGLContext.scenegraph.zone import ENVIRONMENT
@@ -131,7 +132,7 @@ def _capturing(flat: Any) -> List[Tuple[Any, Eye]]:
 def bake_zone_lights(context: Any, frames_per_zone: int = FRAMES_PER_ZONE,
                      before_frame: Optional[Callable[[Eye], None]] = None,
                      progress: Optional[Callable[[int, int], None]] = None,
-                     ) -> List[BakedZoneLight]:
+                     ) -> list[BakedZoneLight]:
     """Every capturing zone of ``context``'s scene, captured and read back.
 
     ``context`` is an open context (an offscreen one, usually) whose scene
@@ -149,7 +150,7 @@ def bake_zone_lights(context: Any, frames_per_zone: int = FRAMES_PER_ZONE,
     if flat is None:
         raise RuntimeError('the context drew no render pass')
     plan = ZoneBakePlan(_capturing(flat), frames_per_zone)
-    baked: List[BakedZoneLight] = []
+    baked: list[BakedZoneLight] = []
     while plan.current is not None:
         zone, eye = plan.current
         context.platform.setPosition(eye)

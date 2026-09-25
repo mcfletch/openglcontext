@@ -20,7 +20,8 @@ the way out of one, and is therefore the one key that cannot be bound.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from collections.abc import Callable
+from typing import Any, Optional
 
 from vrml import field
 
@@ -91,17 +92,17 @@ class Panel(RootWidget):
         super(Panel, self).__init__(**named)
         #: Named actions a widget can trigger.  Each is called with the panel
         #: and the widget, so one command can serve several buttons.
-        self.commands: Dict[str, Callable[['Panel', Widget], None]] = {
+        self.commands: dict[str, Callable[['Panel', Widget], None]] = {
             'close': lambda panel, widget: panel.close(
                 getattr(widget, 'value', None) or None),
         }
         #: Keys that act without a control of their own -- a second spelling
         #: of an answer, a shortcut to a page.  Each is called with the panel.
-        self.accelerators: Dict[str, Callable[['Panel'], None]] = {}
+        self.accelerators: dict[str, Callable[['Panel'], None]] = {}
         #: Notified when the panel closes.  Separate from ``on_close`` so an
         #: overlay stack can pop the panel without taking the one callback the
         #: caller wanted for the answer.
-        self.closeListeners: List[Callable[['Panel'], None]] = []
+        self.closeListeners: list[Callable[['Panel'], None]] = []
 
     # -- layout -----------------------------------------------------------
     def contentRect(self) -> Rect:
@@ -114,7 +115,7 @@ class Panel(RootWidget):
         return inner
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         skin = self.activeSkin()
         widest = 0
         total = 0
@@ -128,7 +129,7 @@ class Panel(RootWidget):
         pad = int(skin.panelPadding) * 2
         return (widest + pad, total + pad)
 
-    def layout(self, viewport: Tuple[int, int], metrics: FontMetrics) -> None:
+    def layout(self, viewport: tuple[int, int], metrics: FontMetrics) -> None:
         """Place the panel in a window of this size and arrange its contents.
 
         Run when something changes rather than every frame: a settings page is
@@ -242,7 +243,7 @@ class Panel(RootWidget):
         """
         return self._hovered
 
-    def focusables(self) -> List[Widget]:
+    def focusables(self) -> list[Widget]:
         """Every widget Tab can stop on, in the order they are laid out."""
         return [widget for widget in self.walk()
                 if widget is not self and widget.focusable
@@ -365,7 +366,7 @@ class Panel(RootWidget):
         return False
 
     # -- keyboard ---------------------------------------------------------
-    def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+    def key(self, name: str, modifiers: tuple[int, int, int]) -> bool:
         """Offer a key to the panel.  True if it acted on it.
 
         The return says whether anything changed, for redraw; it is *not* what

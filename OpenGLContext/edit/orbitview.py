@@ -25,7 +25,8 @@ the editor is looking.
 from __future__ import annotations
 
 import math
-from typing import Any, Sequence, Tuple, Union
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 
@@ -78,7 +79,7 @@ class OrbitView:
     HIGHEST = 89.0
     LOWEST = 1.0
 
-    def __init__(self, centre: Tuple[float, float] = (0.0, 0.0),
+    def __init__(self, centre: tuple[float, float] = (0.0, 0.0),
                  ground: float = 0.0, heading: float = 0.0,
                  pitch: float = DEFAULT_PITCH, distance: float = 800.0,
                  fov: float = DEFAULT_FOV, nearest: float | None = None,
@@ -148,15 +149,15 @@ class OrbitView:
         self.nearest = radius * 0.01
         self.furthest = radius * 1000.0
 
-    def look_at(self, centre: Tuple[float, float],
+    def look_at(self, centre: tuple[float, float],
                 ground: float | None = None) -> None:
         """Point the camera at somewhere else on the ground."""
         self.centre = (float(centre[0]), float(centre[1]))
         if ground is not None:
             self.ground = float(ground)
 
-    def stand_at(self, eye: Union[Sequence[float], np.ndarray],
-                 forward: Union[Sequence[float], np.ndarray],
+    def stand_at(self, eye: Sequence[float] | np.ndarray,
+                 forward: Sequence[float] | np.ndarray,
                  distance: float) -> None:
         """Stand at ``eye`` looking along ``forward``, orbiting a point ``distance`` ahead.
 
@@ -180,8 +181,8 @@ class OrbitView:
         target = start - (self.position() - self.target())
         self.look_at((float(target[0]), float(target[2])), float(target[1]))
 
-    def frame(self, minimum: Tuple[float, float], maximum: Tuple[float, float],
-              viewport: Tuple[int, int]) -> None:
+    def frame(self, minimum: tuple[float, float], maximum: tuple[float, float],
+              viewport: tuple[int, int]) -> None:
         """Look at a region from far enough off to see all of it."""
         self.centre = ((float(minimum[0]) + float(maximum[0])) / 2.0,
                        (float(minimum[1]) + float(maximum[1])) / 2.0)
@@ -196,9 +197,9 @@ class OrbitView:
         horizontal = (across / 2.0) / max(math.tan(half) * width / height, 1e-6)
         self.dolly(max(vertical, horizontal) / max(self.distance, 1e-9))
 
-    def frame_box(self, minimum: Union[Sequence[float], np.ndarray],
-                  maximum: Union[Sequence[float], np.ndarray],
-                  viewport: Tuple[int, int]) -> None:
+    def frame_box(self, minimum: Sequence[float] | np.ndarray,
+                  maximum: Sequence[float] | np.ndarray,
+                  viewport: tuple[int, int]) -> None:
         """Look at the middle of a box from far enough off to see all of it.
 
         The box is fitted by the sphere around it, so it stays on screen
@@ -215,7 +216,7 @@ class OrbitView:
         self.dolly(radius / math.sin(min(half, across)) / max(self.distance, 1e-9))
 
     # -- the camera --------------------------------------------------------
-    def matrices(self, viewport: Tuple[int, int]) -> Tuple[np.ndarray, np.ndarray]:
+    def matrices(self, viewport: tuple[int, int]) -> tuple[np.ndarray, np.ndarray]:
         """``(model-view, projection)`` for this view, row-vector."""
         return (self._model(), self._projection(viewport))
 
@@ -237,7 +238,7 @@ class OrbitView:
         model[3, :3] = -(eye @ model[:3, :3])
         return model
 
-    def _projection(self, viewport: Tuple[int, int]) -> np.ndarray:
+    def _projection(self, viewport: tuple[int, int]) -> np.ndarray:
         aspect = (int(viewport[0]) or 1) / (int(viewport[1]) or 1)
         near = max(self.distance, self.nearest) * NEAR_SHARE
         far = max(self.distance * FAR_SHARE, near * 10.0)
@@ -266,7 +267,7 @@ class OrbitViewPlatform(ViewPlatform):
     """
 
     def __init__(self, view: OrbitView,
-                 viewport: Tuple[int, int] = (1, 1)) -> None:
+                 viewport: tuple[int, int] = (1, 1)) -> None:
         # Before the base class, because setting a position on this platform is
         # how the view is told where to stand, and the base sets one.
         self.view = view

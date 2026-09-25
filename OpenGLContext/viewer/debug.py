@@ -11,7 +11,8 @@ Registered as one more section on the overlay that ``Alt+F`` already raises, so
 there is one developer overlay rather than a viewer-shaped second one.
 """
 import os
-from typing import Any, Callable, List, Tuple
+from collections.abc import Callable
+from typing import Any
 
 __all__ = ['scene_provider', 'install']
 
@@ -20,9 +21,9 @@ __all__ = ['scene_provider', 'install']
 SCENE_ORDER = 25
 
 
-def _rows(viewer: Any) -> List[Tuple[str, str]]:
+def _rows(viewer: Any) -> list[tuple[str, str]]:
     source = getattr(viewer, 'source', None)
-    rows: List[Tuple[str, str]] = [
+    rows: list[tuple[str, str]] = [
         ('source', os.path.basename(source) if source else '(nothing loaded)'),
     ]
     adapter = getattr(viewer, 'adapter', None)
@@ -57,14 +58,14 @@ def _rows(viewer: Any) -> List[Tuple[str, str]]:
     return rows
 
 
-def scene_provider(viewer: Any) -> Callable[[], List[Tuple[str, str]]]:
+def scene_provider(viewer: Any) -> Callable[[], list[tuple[str, str]]]:
     """A provider reporting what this viewer has open.
 
     Every value is read defensively.  The developer overlay is what somebody
     looks at when things are going wrong, and a half-built viewer is exactly
     when that is; a section that raised would take the overlay down with it.
     """
-    def rows() -> List[Tuple[str, str]]:
+    def rows() -> list[tuple[str, str]]:
         try:
             return _rows(viewer)
         except Exception as error:              # pragma: no cover - defensive

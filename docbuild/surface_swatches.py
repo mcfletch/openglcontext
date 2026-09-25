@@ -13,13 +13,13 @@ from __future__ import annotations
 import math
 import os
 import sys
-from typing import Any, List
+from typing import Any
 
 #: The panels are laid out in this many rows.
 ROWS = 2
 
 
-def swatches() -> List[Any]:
+def swatches() -> list[Any]:
     """The scene: a panel of each surface, a camera and a raking light."""
     from OpenGLContext.scenegraph import basenodes, surfaces
     made = [
@@ -31,7 +31,7 @@ def swatches() -> List[Any]:
         surfaces.brushed_metal(256, surfaces.STEEL, 0.2),
     ]
     across = len(made) // ROWS
-    scene: List[Any] = [
+    scene: list[Any] = [
         basenodes.Viewpoint(position=(0.0, 0.0, 5.8), fieldOfView=0.6),
         basenodes.NavigationInfo(headlight=False),
         basenodes.Background(skyColor=[(0.16, 0.17, 0.19)]),

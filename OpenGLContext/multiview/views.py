@@ -30,10 +30,8 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import (
-    TYPE_CHECKING, Any, Callable, Dict, Iterable, Iterator, List, Optional,
-    Protocol, Sequence, Set, Tuple, Union,
-)
+from collections.abc import Callable, Iterable, Iterator, Sequence
+from typing import TYPE_CHECKING, Any, Optional, Protocol
 
 from OpenGLContext.events.mouseevents import WHEEL_BUTTONS
 
@@ -75,7 +73,7 @@ class ViewCamera(Protocol):
 MAX_VIEWS = 16
 
 #: ``(x, y, width, height)`` in window pixels, from the bottom left.
-Rect = Tuple[int, int, int, int]
+Rect = tuple[int, int, int, int]
 
 #: ``(width, height) -> [rect, ...]``, one rectangle per view, in order.
 Arrangement = Callable[[int, int], Sequence[Rect]]
@@ -99,7 +97,7 @@ class ViewStyle:
     :class:`~OpenGLContext.multiview.grid.Grid`, where the scene has one.
     """
 
-    background: Union[bool, Tuple[float, ...]] = True
+    background: bool | tuple[float, ...] = True
     wireframe: bool = False
     grid: bool = False
 
@@ -109,7 +107,7 @@ class ViewStyle:
                 'a view background is True or an RGB/RGBA colour, not %r'
                 % (self.background,))
 
-    def clear_colour(self) -> Optional[Tuple[float, float, float, float]]:
+    def clear_colour(self) -> Optional[tuple[float, float, float, float]]:
         """The RGBA colour this view clears to, or None to draw the scene's background."""
         if isinstance(self.background, bool):
             return None
@@ -154,7 +152,7 @@ class View:
         return '<View %r at %r>' % (self.name, self.rect)
 
     @property
-    def size(self) -> Tuple[int, int]:
+    def size(self) -> tuple[int, int]:
         """``(width, height)`` of the view's rectangle."""
         return (self.rect[2], self.rect[3])
 
@@ -168,14 +166,14 @@ class View:
         left, bottom, width, height = self.rect
         return left <= x < left + width and bottom <= y < bottom + height
 
-    def local(self, x: float, y: float) -> Tuple[float, float]:
+    def local(self, x: float, y: float) -> tuple[float, float]:
         """Window pixel ``(x, y)`` in this view's own pixels, from its bottom left."""
         return (x - self.rect[0], y - self.rect[1])
 
 
 @contextmanager
 def tile_of(view: View, camera: ViewCamera,
-            window: Tuple[int, int]) -> Iterator[None]:
+            window: tuple[int, int]) -> Iterator[None]:
     """Within the block, ``camera`` projects for ``view``'s tile rather than the window.
 
     For a view drawn through the context's own camera, which the context keeps
@@ -233,23 +231,23 @@ def _cut(extent: int, fraction: float) -> int:
     return int(round(extent * fraction))
 
 
-def _single(width: int, height: int, split: Tuple[float, float]) -> List[Rect]:
+def _single(width: int, height: int, split: tuple[float, float]) -> list[Rect]:
     return [(0, 0, width, height)]
 
 
-def _split(width: int, height: int, split: Tuple[float, float]) -> List[Rect]:
+def _split(width: int, height: int, split: tuple[float, float]) -> list[Rect]:
     at = _cut(width, split[0])
     return [(0, 0, at, height), (at, 0, width - at, height)]
 
 
-def _stack(width: int, height: int, split: Tuple[float, float]) -> List[Rect]:
+def _stack(width: int, height: int, split: tuple[float, float]) -> list[Rect]:
     # ``split[1]`` is measured down from the top, the way a reader sees it;
     # rows count up from the bottom.
     below = height - _cut(height, split[1])
     return [(0, below, width, height - below), (0, 0, width, below)]
 
 
-def _quad(width: int, height: int, split: Tuple[float, float]) -> List[Rect]:
+def _quad(width: int, height: int, split: tuple[float, float]) -> list[Rect]:
     across = _cut(width, split[0])
     below = height - _cut(height, split[1])
     return [
@@ -287,9 +285,9 @@ class ViewLayout:
     """
 
     def __init__(self, views: Iterable[View],
-                 arrangement: Union[str, Arrangement] = 'single',
-                 split_at: Tuple[float, float] = (0.5, 0.5)) -> None:
-        self.views: List[View] = list(views)
+                 arrangement: str | Arrangement = 'single',
+                 split_at: tuple[float, float] = (0.5, 0.5)) -> None:
+        self.views: list[View] = list(views)
         if not self.views:
             raise ValueError('a view layout holds at least one view')
         if len(self.views) > MAX_VIEWS:
@@ -311,9 +309,9 @@ class ViewLayout:
         self.maximised: Optional[View] = None
         #: The view a held button is talking to, and which buttons hold it.
         self._captured: Optional[View] = None
-        self._held: Set[int] = set()
+        self._held: set[int] = set()
         #: The camera each view last told a size, and the size, by view.
-        self._told: Dict[View, Tuple[Any, Tuple[int, int]]] = {}
+        self._told: dict[View, tuple[Any, tuple[int, int]]] = {}
 
     # -- building ----------------------------------------------------------
     @classmethod
@@ -336,23 +334,23 @@ class ViewLayout:
     @classmethod
     def quad(cls, top_left: View, top_right: View, bottom_left: View,
              bottom_right: View,
-             split_at: Tuple[float, float] = (0.5, 0.5)) -> 'ViewLayout':
+             split_at: tuple[float, float] = (0.5, 0.5)) -> 'ViewLayout':
         """Four views around a centre that ``split_at`` places."""
         return cls([top_left, top_right, bottom_left, bottom_right], 'quad', split_at)
 
     # -- the split ---------------------------------------------------------
     @property
-    def split_at(self) -> Tuple[float, float]:
+    def split_at(self) -> tuple[float, float]:
         """Where the named arrangements divide the window, each 0 to 1."""
         return self._split_at
 
     @split_at.setter
-    def split_at(self, value: Tuple[float, float]) -> None:
+    def split_at(self, value: tuple[float, float]) -> None:
         self._split_at = (min(max(float(value[0]), 0.0), 1.0),
                           min(max(float(value[1]), 0.0), 1.0))
 
     # -- placing -----------------------------------------------------------
-    def rects(self, width: int, height: int) -> List[Rect]:
+    def rects(self, width: int, height: int) -> list[Rect]:
         """Where each view goes in a window this size, in the order of ``views``."""
         width, height = int(width), int(height)
         if self.maximised is not None:
@@ -368,7 +366,7 @@ class ViewLayout:
                              % (len(placed), len(self.views)))
         return [(int(x), int(y), int(w), int(h)) for x, y, w, h in placed]
 
-    def arrange(self, width: int, height: int) -> List[View]:
+    def arrange(self, width: int, height: int) -> list[View]:
         """Place every view in a window this size; the views to draw, in order.
 
         A camera of the view's own is told the size of its tile whenever that
@@ -397,7 +395,7 @@ class ViewLayout:
         self._told[view] = (camera, view.size)
         tell(*view.size)
 
-    def cameras(self, default: Optional[ViewCamera] = None) -> List[ViewCamera]:
+    def cameras(self, default: Optional[ViewCamera] = None) -> list[ViewCamera]:
         """Every camera the layout draws through, once each.
 
         ``default`` stands for a view with no camera of its own -- pass the
@@ -405,7 +403,7 @@ class ViewLayout:
         the viewer, such as streamed tiles or a vegetation field, which have
         to serve every view at once.
         """
-        found: List[ViewCamera] = []
+        found: list[ViewCamera] = []
         for view in self.views:
             camera = view.camera if view.camera is not None else default
             if camera is not None and not any(camera is seen for seen in found):

@@ -14,7 +14,8 @@ drives through at the moment the tile behind it swaps. The
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from omi_physics import model

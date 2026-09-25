@@ -6,7 +6,7 @@ Note: this is an entirely separate implementation from the PyOpenGL
     will be available, and provides only those methods and helpers
     commonly needed for manipulating rotations.
 """
-from typing import Any, Tuple
+from typing import Any
 
 from OpenGLContext import arrays as ar
 from OpenGLContext import utilities
@@ -127,7 +127,7 @@ class Quaternion(object):
             return self.__class__( ar.array([w,x,y,z],'d'))
         else:
             return ar.dot( self.matrix (), other )
-    def XYZR( self ) -> Tuple[Any, Any, Any, Any]:
+    def XYZR( self ) -> tuple[Any, Any, Any, Any]:
         """Get a VRML-style axis plus rotation form of the rotation.
         Note that this is in radians, not degrees, and that the angle
         is the last, not the first item... (x,y,z,radians)

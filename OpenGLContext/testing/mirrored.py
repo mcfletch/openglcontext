@@ -24,7 +24,8 @@ looking down -z, through the renderer the ``environment`` names.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional, Tuple
+from collections.abc import Mapping
+from typing import Any, Optional
 
 import numpy as np
 
@@ -62,7 +63,7 @@ def _scene(geometry: Any, appearance: Any, distance: float, mirror: bool) -> lis
     return [basenodes.Viewpoint(position=(0.0, 0.0, 0.0)), placed]
 
 
-def _frame(children: list, size: Tuple[int, int],
+def _frame(children: list, size: tuple[int, int],
            environment: Optional[Mapping[str, str]], frames: int) -> np.ndarray:
     from OpenGLContext.testing.scenes import drawn_image, scene_context
     with scene_context(children, size=size, environment=environment) as context:
@@ -72,7 +73,7 @@ def _frame(children: list, size: Tuple[int, int],
 
 
 def mirrored_render(geometry: Any, *, appearance: Any = None,
-                    distance: float = 4.0, size: Tuple[int, int] = (64, 64),
+                    distance: float = 4.0, size: tuple[int, int] = (64, 64),
                     environment: Optional[Mapping[str, str]] = None,
                     tolerance: int = 24, frames: int = 2) -> MirroredRender:
     """Draw ``geometry`` plain and mirrored, and compare the two pictures."""

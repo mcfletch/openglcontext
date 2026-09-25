@@ -2,7 +2,8 @@
 from vrml import cache
 from OpenGLContext.arrays import array
 from OpenGL.arrays import vbo
-from typing import Any, Iterator, Tuple
+from collections.abc import Iterator
+from typing import Any
 from OpenGL.GL import *
 from vrml.vrml97 import basenodes
 from vrml import protofunctions
@@ -109,7 +110,7 @@ class Box( basenodes.Box ):
             vb, VertexFormat.T2F_N3F_V3F, count=36,
         ), owner=self, where='Box')
 
-    def instanceContentKey(self) -> Tuple[Any, ...]:
+    def instanceContentKey(self) -> tuple[Any, ...]:
         """Boxes of the same size share geometry, so they batch as instances."""
         return ('Box', tuple(round(float(v), 6) for v in self.size))
 

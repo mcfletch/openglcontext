@@ -12,7 +12,8 @@ checked without a window.
   looking along its arcade.
 """
 from math import asin, atan2, pi, sin
-from typing import Any, NamedTuple, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, NamedTuple, Optional
 
 import numpy as np
 
@@ -37,9 +38,9 @@ DEFAULT_TILT = 0.10
 class CameraPose(NamedTuple):
     """A place to stand, a way to face, and the frustum to see it through."""
 
-    position: Tuple[float, float, float]
+    position: tuple[float, float, float]
     #: VRML axis/angle, or None when :attr:`quaternion` carries the aim instead.
-    orientation: Optional[Tuple[float, float, float, float]]
+    orientation: Optional[tuple[float, float, float, float]]
     fov: float
     near: float
     far: float

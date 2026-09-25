@@ -20,7 +20,8 @@ and drive it from the application's own ``mainloop`` by calling
 
 import logging
 import tkinter
-from typing import Any, Hashable, Optional, Tuple
+from collections.abc import Hashable
+from typing import Any, Optional
 
 from OpenGLContext.context import Context
 from OpenGLContext.contextdefinition import ContextDefinition
@@ -107,7 +108,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
     _pointerGrabbed = False
     #: Where the pointer was last warped to, so the movement the warp itself
     #: generates can be told from a real one.
-    _pointerWarpedTo: Optional[Tuple[int, int]] = None
+    _pointerWarpedTo: Optional[tuple[int, int]] = None
 
     def __init__(self, definition: Any = None, parent: Any = None,
                  **named: Any) -> None:

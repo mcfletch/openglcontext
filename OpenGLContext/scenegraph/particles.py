@@ -35,7 +35,8 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import Any, Dict, Optional, Sequence, Tuple, Union
+from collections.abc import Sequence
+from typing import Any, Optional, Union
 
 import numpy as np
 from OpenGL.GL import (
@@ -60,7 +61,7 @@ from OpenGLContext.scenegraph.instancedgl import (
 log = logging.getLogger(__name__)
 
 #: Anything three numbers long: a tuple, a VRML field, or a numpy row.
-Vector = Union[Sequence[float], np.ndarray]
+Vector = Sequence[float] | np.ndarray
 
 #: Layout of one instance row, in floats.  Position, base size, rotation,
 #: normalised age and a per-particle random number -- seven floats, 28 bytes.
@@ -74,7 +75,7 @@ INSTANCE_FLOATS = 7
 #: Blend factors by name.  Additive is the default because most effects are
 #: light -- fire, sparks, explosions, muzzle flashes -- and light adds.  Alpha is
 #: for the things that block light instead: smoke, dust, steam.
-BLEND_MODES: Dict[str, Tuple[int, int]] = {
+BLEND_MODES: dict[str, tuple[int, int]] = {
     'additive': (GL_SRC_ALPHA, GL_ONE),
     'alpha': (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA),
 }
@@ -507,7 +508,7 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node):
         """A particle's size multiplier ``fraction`` of the way through its life."""
         return float(self.size + (self.endSize - self.size) * fraction)
 
-    def colorAt(self, fraction: float) -> Tuple[float, float, float]:
+    def colorAt(self, fraction: float) -> tuple[float, float, float]:
         """A particle's colour ``fraction`` of the way through its life."""
         start = np.asarray(self.color, dtype='d')
         end = np.asarray(self.endColor, dtype='d')
@@ -517,7 +518,7 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node):
         """A particle's opacity ``fraction`` of the way through its life."""
         return float(self.alpha + (self.endAlpha - self.alpha) * fraction)
 
-    def lifeUniforms(self) -> Dict[str, Any]:
+    def lifeUniforms(self) -> dict[str, Any]:
         """The life curves as the two ends the shader interpolates between.
 
         Two ends and a lerp rather than a gradient texture: it covers every
@@ -530,7 +531,7 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node):
             'endColor': tuple(self.endColor) + (float(self.endAlpha),),
         }
 
-    def blendMode(self) -> Tuple[int, int]:
+    def blendMode(self) -> tuple[int, int]:
         """The GL blend factors for this emitter's ``blending``.
 
         An unrecognised name falls back to additive rather than raising: a
@@ -548,7 +549,7 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node):
     # Rendering
     # ------------------------------------------------------------------
 
-    def sortKey(self, mode: Any, matrix: Any) -> Tuple[Any, ...]:
+    def sortKey(self, mode: Any, matrix: Any) -> tuple[Any, ...]:
         """Always transparent, and sorted by depth like any other blended thing.
 
         Shape's key is ``(transparent, textures, distance, ...)``; this matches
@@ -616,7 +617,7 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node):
             return None
         return np.asarray(path.transformMatrix())
 
-    def _pose(self, mode: Any) -> Tuple[np.ndarray, Optional[np.ndarray]]:
+    def _pose(self, mode: Any) -> tuple[np.ndarray, Optional[np.ndarray]]:
         """Where the emitter is, in the frame its particles live in.
 
         A world-space system emits at the node's world position, with its
@@ -741,7 +742,7 @@ def _instance_attribute(location: int, size: int, stride: int, offset: int) -> N
 #: set of field values and nothing more, so anything it does can be done by hand
 #: -- but an explosion should be one line, not twenty, and these are what the
 #: numbers for one actually look like.
-PRESETS: Dict[str, Dict[str, Any]] = {
+PRESETS: dict[str, dict[str, Any]] = {
     'explosion': dict(
         rate=0.0, burst=180, maxParticles=256, lifetime=0.9, lifetimeVariation=0.5,
         direction=(0.0, 1.0, 0.0), speed=9.0, speedVariation=0.7, spread=math.pi,

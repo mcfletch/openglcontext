@@ -20,7 +20,7 @@ should not have to go through a menu to say so, and a designer looking for
 """
 from __future__ import annotations
 
-from typing import Any, List, Optional, Tuple
+from typing import Any, Optional
 
 from vrml import field
 
@@ -70,12 +70,12 @@ class ToolButton(Widget):
         return bool(current is not None and current.name == str(self.tool))
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         pad_x, pad_y = self.activeSkin().buttonPadding(metrics)
         return (metrics.text_width(self.text) + pad_x * 2,
                 metrics.char_height + pad_y * 2)
 
-    def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+    def key(self, name: str, modifiers: tuple[int, int, int]) -> bool:
         if name in ('<return>', ' ') and self.enabled:
             self.activate()
             return True
@@ -143,7 +143,7 @@ class ToolPalette(Panel):
             for tool in getattr(self.tools, 'tools', ())
         ]
 
-    def buttons(self) -> List[ToolButton]:
+    def buttons(self) -> list[ToolButton]:
         """The buttons, in the order they are drawn."""
         return [child for child in self.layoutChildren()
                 if isinstance(child, ToolButton)]
@@ -165,7 +165,7 @@ class ToolPalette(Panel):
         return width / max(float(getattr(metrics, 'scale', 1.0)), 1e-6)
 
     # -- where it goes -----------------------------------------------------
-    def layout(self, viewport: Tuple[int, int], metrics: FontMetrics) -> None:
+    def layout(self, viewport: tuple[int, int], metrics: FontMetrics) -> None:
         self.link()
         view_width, view_height = int(viewport[0]), int(viewport[1])
         self.scaleSkin(metrics)
@@ -190,7 +190,7 @@ class ToolPalette(Panel):
             cursor -= height + spacing
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         children = list(self.layoutChildren())
         widest = 0
         total = 0

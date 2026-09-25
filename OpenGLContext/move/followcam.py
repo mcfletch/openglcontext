@@ -25,7 +25,7 @@ places the target on the camera's view -Z axis — verified end-to-end against
 ``ViewPlatform.modelMatrix`` in ``tests/test_followcam.py``.
 """
 import math
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 import numpy as np
 
@@ -39,7 +39,7 @@ def _normalize(v: Any) -> np.ndarray:
 
 
 def look_at_orientation(eye: Any, target: Any,
-                        up: Any = (0.0, 1.0, 0.0)) -> Tuple[float, float, float, float]:
+                        up: Any = (0.0, 1.0, 0.0)) -> tuple[float, float, float, float]:
     """VRML axis-angle ``(x, y, z, radians)`` orienting a camera at ``eye`` to
     look at ``target``.
 
@@ -61,7 +61,7 @@ def look_at_orientation(eye: Any, target: Any,
     return _matrix_to_axis_angle(R)
 
 
-def _matrix_to_axis_angle(R: np.ndarray) -> Tuple[float, float, float, float]:
+def _matrix_to_axis_angle(R: np.ndarray) -> tuple[float, float, float, float]:
     """A 3x3 rotation matrix as VRML axis-angle ``(x, y, z, radians)``.
 
     ``R``'s columns are where the rotated frame's axes land, which is the

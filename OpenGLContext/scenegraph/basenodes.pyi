@@ -11,11 +11,11 @@ A third party's node, registered by importing its own package, is not here and
 resolves as ``Any`` -- which is what a checker can say about a name whose class
 it has no declaration for.
 """
-from typing import Any, Dict
+from typing import Any
 
 #: Node classes by the name they are registered under, including any a third
 #: party added; ``basenodes.NAME`` is the same object.
-PROTOTYPES: Dict[str, Any]
+PROTOTYPES: dict[str, Any]
 
 from OpenGLContext.scenegraph.shaders import FloatUniform as _FloatUniform
 from OpenGLContext.scenegraph.shaders import IntUniform as _IntUniform

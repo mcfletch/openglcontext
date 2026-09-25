@@ -36,7 +36,8 @@ import shutil
 import stat
 import subprocess
 import tarfile
-from typing import Any, Dict, List, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any
 
 from OpenGLContext import atomicfiles
 
@@ -118,7 +119,7 @@ BACKEND_RUNTIME = {
 }
 
 
-def prune_patterns(keep: Sequence[str] = ()) -> Tuple[str, ...]:
+def prune_patterns(keep: Sequence[str] = ()) -> tuple[str, ...]:
     """:data:`PRUNE`, less what the named backends need kept
 
     keep -- the backends the application opens its window with, named as
@@ -193,7 +194,7 @@ def interpreter_platform(python: str) -> str:
     return _ask(python, 'import sysconfig; print(sysconfig.get_platform())')
 
 
-def metadata(python: str, distribution: str) -> Dict[str, Any]:
+def metadata(python: str, distribution: str) -> dict[str, Any]:
     """What an installed distribution says about itself, as a dict
 
     Read from the environment that was built rather than from the source tree,
@@ -224,7 +225,7 @@ def metadata(python: str, distribution: str) -> Dict[str, Any]:
         '    "scripts": scripts,\n'
         '}))\n'
     )
-    found: Dict[str, Any] = json.loads(_ask(python, script, distribution))
+    found: dict[str, Any] = json.loads(_ask(python, script, distribution))
     return found
 
 
@@ -289,7 +290,7 @@ def build(runtime: str, staging: str, installed: str,
     subprocess.check_call([base, '-m', 'venv', '--without-pip', environment])
     python = os.path.join(environment, 'bin', 'python3')
 
-    arguments: List[str] = []
+    arguments: list[str] = []
     for path in requirements:
         arguments += ['--requirement', path]
     arguments += list(install)
@@ -316,7 +317,7 @@ def build(runtime: str, staging: str, installed: str,
     return python
 
 
-def prune(prefix: str, patterns: Sequence[str] = PRUNE) -> List[str]:
+def prune(prefix: str, patterns: Sequence[str] = PRUNE) -> list[str]:
     """Remove what a shipped application has no use for, and report what went
 
     prefix -- a built environment's directory, holding ``python`` and ``venv``
@@ -326,7 +327,7 @@ def prune(prefix: str, patterns: Sequence[str] = PRUNE) -> List[str]:
     interpreter builds, and which of them ships Tk or a manual is not something
     to have to know.
     """
-    removed: List[str] = []
+    removed: list[str] = []
     for pattern in patterns:
         for path in sorted(glob.glob(os.path.join(prefix, pattern))):
             if os.path.isdir(path) and not os.path.islink(path):
@@ -355,7 +356,7 @@ def _compile(python: str, staging: str, installed: str) -> None:
 
 
 
-def relocate(root: str, source: str, target: str) -> List[str]:
+def relocate(root: str, source: str, target: str) -> list[str]:
     """Rewrite the build-time paths in a tree to the ones it will run at
 
     A virtual environment records where it was made: in ``pyvenv.cfg``, in the
@@ -381,7 +382,7 @@ def relocate(root: str, source: str, target: str) -> List[str]:
 
     Returns the paths that were changed.
     """
-    changed: List[str] = []
+    changed: list[str] = []
     root, source = os.path.abspath(root), os.path.abspath(source)
     prefix = source if source.endswith(os.sep) else source + os.sep
     for directory, dirnames, filenames in os.walk(root):

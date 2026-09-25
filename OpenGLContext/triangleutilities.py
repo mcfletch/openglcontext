@@ -1,11 +1,11 @@
 """Utility functions for processing triangle vertex arrays"""
-from typing import Any, Tuple
+from typing import Any
 
 from OpenGLContext.arrays import *
 from OpenGLContext.vectorutilities import *
 
 def basisVectors( vertices: Any, components: int = 3,
-                  ccw: int = 1 ) -> Tuple[Any, Any]:
+                  ccw: int = 1 ) -> tuple[Any, Any]:
     """Calculate basis vectors for given triangle vertices
     
     vertices -- x*components array of vertex

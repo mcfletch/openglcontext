@@ -47,7 +47,8 @@ import sys
 import urllib.parse
 import zipfile
 from dataclasses import dataclass
-from typing import Any, Callable, NamedTuple, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any, NamedTuple
 
 from OpenGLContext import atomicfiles
 from OpenGLContext.loaders.documentvalues import (

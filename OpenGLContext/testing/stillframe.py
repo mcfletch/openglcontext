@@ -31,7 +31,8 @@ import contextlib
 import sys
 from collections import Counter
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, Iterable, Iterator, List, Tuple
+from collections.abc import Callable, Iterable, Iterator
+from typing import Any
 
 __all__ = ['ALLOCATIONS', 'COMPILES', 'StillFrameWork', 'FrameWork', 'UPLOADS',
            'check_still_frame', 'counting_gl', 'still_frame_work']
@@ -90,7 +91,7 @@ class FrameWork:
                    counted or 'no counted calls', where and ': ' + where))
 
 
-def _holders() -> List[Dict[str, Any]]:
+def _holders() -> list[dict[str, Any]]:
     """Every namespace a GL entry point may be called through."""
     holders = [vars(module) for module in list(sys.modules.values())
                if module is not None and hasattr(module, '__dict__')]
@@ -123,12 +124,12 @@ def counting_gl(names: Iterable[str] = ALLOCATIONS + UPLOADS + COMPILES
     from OpenGL import GL
     work = FrameWork()
     counts, sites = work.calls, work.sites
-    originals: Dict[int, Tuple[str, Any]] = {}
+    originals: dict[int, tuple[str, Any]] = {}
     for name in names:
         function = getattr(GL, name, None)
         if function is not None:
             originals[id(function)] = (name, function)
-    wrappers: Dict[int, Any] = {}
+    wrappers: dict[int, Any] = {}
     for key, (name, function) in originals.items():
         def counted(*args: Any, _name: str = name, _function: Any = function,
                     **named: Any) -> Any:
@@ -136,7 +137,7 @@ def counting_gl(names: Iterable[str] = ALLOCATIONS + UPLOADS + COMPILES
             sites[(_name, _site(sys._getframe(1)))] += 1
             return _function(*args, **named)
         wrappers[key] = counted
-    replaced: List[Tuple[Dict[str, Any], str, Any]] = []
+    replaced: list[tuple[dict[str, Any], str, Any]] = []
     for holder in _holders():
         for attribute, value in list(holder.items()):
             wrapper = wrappers.get(id(value))

@@ -34,7 +34,8 @@ largest single lever a crowd has.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from collections.abc import Iterable
+from typing import Any, Optional
 
 import numpy as np
 
@@ -82,8 +83,8 @@ class Crowd:
         self._skeleton: Any = None
         self._skeleton_tried = False
         self._frame = 0
-        self.members: List[Member] = []
-        self._by_mixer: Dict[AnimationMixer, Member] = {}
+        self.members: list[Member] = []
+        self._by_mixer: dict[AnimationMixer, Member] = {}
         self._layout: Optional[Rig] = None
         #: Runs of arithmetic the last :meth:`update` took -- one per set of
         #: figures doing the same kind of thing. It is what says whether a
@@ -95,7 +96,7 @@ class Crowd:
         #: separate scenegraphs over one document, so their clips are separate
         #: objects holding the same keyframes, and regrouping them once is
         #: enough for all of them.
-        self._samplers: Dict[str, ClipSampler] = {}
+        self._samplers: dict[str, ClipSampler] = {}
         self._turn = 0
 
     # -- membership --------------------------------------------------------
@@ -145,7 +146,7 @@ class Crowd:
         step = max(0.0, float(dt))
         self._frame += 1
         self._mode = mode
-        due: List[Member] = []
+        due: list[Member] = []
         for member in self.members:
             for layer in member.mixer.layers:
                 layer._settle(step)
@@ -170,7 +171,7 @@ class Crowd:
             member._due = 0.0
         return True
 
-    def _take_turns(self, due: List[Member], budget: int) -> List[Member]:
+    def _take_turns(self, due: list[Member], budget: int) -> list[Member]:
         """The next ``budget`` figures, starting where the last frame stopped."""
         count = len(due)
         start = self._turn % count
@@ -179,9 +180,9 @@ class Crowd:
         return ordered[:budget]
 
     # -- grouping ----------------------------------------------------------
-    def _groups(self, due: Iterable[Member]) -> Dict[Any, List[Member]]:
+    def _groups(self, due: Iterable[Member]) -> dict[Any, list[Member]]:
         """Figures doing the same kind of thing, gathered under one key."""
-        groups: Dict[Any, List[Member]] = {}
+        groups: dict[Any, list[Member]] = {}
         for member in due:
             groups.setdefault(self._signature(member.mixer), []).append(member)
         return groups
@@ -206,7 +207,7 @@ class Crowd:
         return tuple(parts)
 
     # -- posing ------------------------------------------------------------
-    def _pose_group(self, group: List[Member]) -> None:
+    def _pose_group(self, group: list[Member]) -> None:
         """Pose every figure of one group, then skin and write each of them."""
         layout = self._layout
         assert layout is not None
@@ -241,7 +242,7 @@ class Crowd:
         self._write_group(group, pose)
 
     @staticmethod
-    def _has_morph_weights(group: List[Member]) -> bool:
+    def _has_morph_weights(group: list[Member]) -> bool:
         for member in group:
             for layer in member.mixer.layers:
                 for track in layer.tracks:
@@ -250,7 +251,7 @@ class Crowd:
         return False
 
     @staticmethod
-    def _plain(group: List[Member], index: int, tracks: int) -> bool:
+    def _plain(group: list[Member], index: int, tracks: int) -> bool:
         """Whether this layer is one clip at full weight with nothing masked.
 
         Which is what a figure is doing nearly all of the time -- a cross-fade
@@ -270,8 +271,8 @@ class Crowd:
                    and member.mixer.layers[index].tracks[0].weight >= 1.0
                    for member in group)
 
-    def _lay_layer(self, group: List[Member], index: int,
-                   pose: Tuple[np.ndarray, ...],
+    def _lay_layer(self, group: list[Member], index: int,
+                   pose: tuple[np.ndarray, ...],
                    restriction: Optional["_Restriction"] = None) -> None:
         """Write one clip straight into the pose, for every figure at once.
 
@@ -279,7 +280,7 @@ class Crowd:
         only where the scenegraph reads it.
         """
         picked = [self._track(member, index, 0) for member in group]
-        by_clip: Dict[str, List[Tuple[int, Any]]] = {}
+        by_clip: dict[str, list[tuple[int, Any]]] = {}
         for row, track in enumerate(picked):
             by_clip.setdefault(track.clip.name, []).append((row, track))
         for entries in by_clip.values():
@@ -295,8 +296,8 @@ class Crowd:
                 if len(slots):
                     pose[path_index][np.ix_(rows, slots)] = sampled[path_index]
 
-    def _apply_layer(self, group: List[Member], index: int, tracks: int,
-                     pose: Tuple[np.ndarray, ...],
+    def _apply_layer(self, group: list[Member], index: int, tracks: int,
+                     pose: tuple[np.ndarray, ...],
                      restriction: Optional["_Restriction"] = None) -> None:
         """Blend one layer of every figure of the group over the pose so far.
 
@@ -324,7 +325,7 @@ class Crowd:
             # One sampling call per distinct clip, whatever the figures are
             # playing; everything after it is the same arithmetic for all of
             # them, so the blend below runs once over the whole group.
-            by_clip: Dict[str, List[Tuple[int, Any]]] = {}
+            by_clip: dict[str, list[tuple[int, Any]]] = {}
             for row, track in enumerate(picked):
                 by_clip.setdefault(track.clip.name, []).append((row, track))
             for entries in by_clip.values():
@@ -371,8 +372,8 @@ class Crowd:
         return found
 
     # -- the same work, on the GPU ----------------------------------------
-    def _skin_on_gpu(self, group: List[Member],
-                     pose: Tuple[np.ndarray, ...]) -> bool:
+    def _skin_on_gpu(self, group: list[Member],
+                     pose: tuple[np.ndarray, ...]) -> bool:
         """Compose this group's skeletons and palettes with a compute shader.
 
         False where there is no context to do it in, no compute in the driver,
@@ -395,7 +396,7 @@ class Crowd:
             self._skin_group(group, pose)
         return True
 
-    def _blend_on_gpu(self, group: List[Member]) -> bool:
+    def _blend_on_gpu(self, group: list[Member]) -> bool:
         """Sample, blend, compose and skin this group entirely on the GPU.
 
         False -- and the caller does it all in numpy -- unless every figure of
@@ -423,7 +424,7 @@ class Crowd:
         self._write_read_joints(group)
         return True
 
-    def _write_read_joints(self, group: List[Member]) -> None:
+    def _write_read_joints(self, group: list[Member]) -> None:
         """Put the joints something reads onto the scenegraph, and no others.
 
         The pose is on the GPU and nothing reads it back, but a weapon hanging
@@ -444,8 +445,8 @@ class Crowd:
         self._write_slots(group, self._partial_pose(group, slots), wanted,
                           columns=columns)
 
-    def _partial_pose(self, group: List[Member],
-                      slots: np.ndarray) -> Tuple[np.ndarray, ...]:
+    def _partial_pose(self, group: list[Member],
+                      slots: np.ndarray) -> tuple[np.ndarray, ...]:
         """The pose of ``slots`` only, for every figure of a plain group."""
         layout = self._layout
         assert layout is not None
@@ -470,12 +471,12 @@ class Crowd:
                                   restriction=restriction)
         return pose
 
-    def _all_samplers(self) -> List[ClipSampler]:
+    def _all_samplers(self) -> list[ClipSampler]:
         """Every clip of the build, regrouped, in a stable order."""
         first = self.members[0].mixer
         return [self._sampler(clip) for _name, clip in sorted(first.clips.items())]
 
-    def _blend_tables(self, group: List[Member], skeleton: Any) -> Optional[tuple]:
+    def _blend_tables(self, group: list[Member], skeleton: Any) -> Optional[tuple]:
         """What every figure is playing, as the tables the blend shader reads.
 
         ``(tracks, layers, spans, masks)`` -- or None where any figure is doing
@@ -483,9 +484,9 @@ class Crowd:
         in numpy instead.
         """
         clip_index = skeleton.clip_index
-        tracks: List[Tuple[float, float, float, float]] = []
-        layers: List[Tuple[float, float, float, float]] = []
-        spans: List[Tuple[int, int]] = []
+        tracks: list[tuple[float, float, float, float]] = []
+        layers: list[tuple[float, float, float, float]] = []
+        spans: list[tuple[int, int]] = []
         masks = _MaskTable(self._layout, skeleton.mask_words())
         for member in group:
             first = len(layers)
@@ -533,7 +534,7 @@ class Crowd:
         self._skeleton = skeleton
         return skeleton
 
-    def _palette_targets(self, group: List[Member]) -> Optional[List[tuple]]:
+    def _palette_targets(self, group: list[Member]) -> Optional[list[tuple]]:
         """Where every skinned mesh of the group reads its joints.
 
         One entry per mesh, since a mesh is what holds a range of the palette;
@@ -543,7 +544,7 @@ class Crowd:
         plans = group[0].mixer._skin_plans
         skeleton.describe_skins([(slots, bind) for _s, slots, bind, _m in plans])
         mode = self._mode
-        targets: List[tuple] = []
+        targets: list[tuple] = []
         for figure, member in enumerate(group):
             for index, (skin, _slots, _bind, mesh_slot) in enumerate(
                     member.mixer._skin_plans):
@@ -564,7 +565,7 @@ class Crowd:
         return int(self._skeleton.skin_counts[skin])
 
     # -- what comes out of the pose ---------------------------------------
-    def _skin_group(self, group: List[Member], pose: Tuple[np.ndarray, ...]) -> None:
+    def _skin_group(self, group: list[Member], pose: tuple[np.ndarray, ...]) -> None:
         """Build every figure's joint matrices from one composed skeleton."""
         layout = self._layout
         assert layout is not None
@@ -598,7 +599,7 @@ class Crowd:
                     mesh.set_skin_matrices(matrices[row])
 
     def _world_matrices(self, count: int,
-                        pose: Tuple[np.ndarray, ...]) -> np.ndarray:
+                        pose: tuple[np.ndarray, ...]) -> np.ndarray:
         """``(F, N, 4, 4)`` world matrices, one generation of the skeleton at a time."""
         layout = self._layout
         assert layout is not None
@@ -614,14 +615,14 @@ class Crowd:
             world[:, first:past] = world[:, first:past] @ world[:, parents]
         return world
 
-    def _write_group(self, group: List[Member],
-                     pose: Tuple[np.ndarray, ...]) -> None:
+    def _write_group(self, group: list[Member],
+                     pose: tuple[np.ndarray, ...]) -> None:
         """Put each figure's pose onto its own scenegraph nodes."""
         self._write_slots(group, pose, [member.mixer._writable()
                                         for member in group])
 
-    def _write_slots(self, group: List[Member], pose: Tuple[np.ndarray, ...],
-                     wanted: List[np.ndarray],
+    def _write_slots(self, group: list[Member], pose: tuple[np.ndarray, ...],
+                     wanted: list[np.ndarray],
                      columns: Optional[np.ndarray] = None) -> None:
         """Write the named joints of every figure, converting once for all of them.
 
@@ -666,8 +667,8 @@ class _MaskTable:
     def __init__(self, layout: Any, words: int) -> None:
         self._layout = layout
         self._words = words
-        self._rows: List[np.ndarray] = []
-        self._of: Dict[Any, int] = {}
+        self._rows: list[np.ndarray] = []
+        self._of: dict[Any, int] = {}
 
     def index(self, layer: Any) -> float:
         """Which row this layer's mask is, or -1 where it masks nothing."""

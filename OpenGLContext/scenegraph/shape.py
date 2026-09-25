@@ -1,6 +1,6 @@
 """Renderable geometry composed of a geometry object with applied appearance"""
 
-from typing import Any, Optional, Tuple
+from typing import Any
 
 from OpenGL.GL import *
 from OpenGL.GL import glUseProgram
@@ -263,7 +263,7 @@ class Shape(basenodes.Shape):
         """
         return False
 
-    def sortKey(self, mode: Any, matrix: Any) -> Tuple[Any, ...]:
+    def sortKey(self, mode: Any, matrix: Any) -> tuple[Any, ...]:
         """Produce the sorting key for this shape's appearance/shaders/etc"""
         if self.appearance:
             key = self.appearance.sortKey(mode, matrix)

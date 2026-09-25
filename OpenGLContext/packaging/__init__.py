@@ -22,7 +22,7 @@ Nothing in this package is imported by the engine at run time, and nothing in
 it draws anything.
 """
 
-from typing import List, Sequence, Set
+from collections.abc import Sequence
 
 __all__ = ['BACKEND_MODULES', 'SESSIONS', 'SESSION_ALTERNATIVE', 'SYSTEM_LIBRARIES',
            'WAYLAND_DECORATIONS', 'WAYLAND_LIBRARIES', 'X11_LIBRARIES',
@@ -122,7 +122,7 @@ SESSION_ALTERNATIVE = 'libwayland-client0 | libx11-6'
 #: :func:`session_libraries`.
 SESSIONS = ('either', 'wayland', 'x11', 'both')
 
-def unused_backend_modules(keep: Sequence[str] = ('glfw',)) -> List[str]:
+def unused_backend_modules(keep: Sequence[str] = ('glfw',)) -> list[str]:
     """Report the toolkit modules an application keeping only *keep* can leave out
 
     A frozen bundle picks up every toolkit that happens to be installed
@@ -150,10 +150,10 @@ def unused_backend_modules(keep: Sequence[str] = ('glfw',)) -> List[str]:
             'Not a windowing backend: %s; known backends are %s'
             % (', '.join(unknown), ', '.join(sorted(BACKEND_MODULES)))
         )
-    kept: Set[str] = set()
+    kept: set[str] = set()
     for name in kept_names:
         kept.update(BACKEND_MODULES[name])
-    unused: Set[str] = set()
+    unused: set[str] = set()
     for name, modules in BACKEND_MODULES.items():
         if name not in kept_names:
             unused.update(modules)
@@ -170,7 +170,7 @@ def _checked(session: str) -> str:
     return session
 
 
-def session_libraries(session: str = 'either') -> List[str]:
+def session_libraries(session: str = 'either') -> list[str]:
     """The libraries a package built for *session* asks the machine for
 
     GLFW opens every windowing library through ``dlopen`` rather than linking
@@ -211,7 +211,7 @@ def session_libraries(session: str = 'either') -> List[str]:
     return sorted(asked)
 
 
-def session_recommendations(session: str = 'either') -> List[str]:
+def session_recommendations(session: str = 'either') -> list[str]:
     """What a package built for *session* is better for having
 
     Only Wayland has any: X11 decorations are the window manager's business,

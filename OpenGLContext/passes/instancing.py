@@ -14,7 +14,8 @@ nodes, and ``EXT_mesh_gpu_instancing`` all feed the same batcher.
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from collections.abc import Callable
+from typing import Any, Optional
 import numpy as np
 import ctypes
 
@@ -57,7 +58,7 @@ __all__ = (
 #: The ``(key, instanceable)`` pair an instance grouping is made with: the
 #: batch key of a shape (None for one that cannot batch), and whether it can be
 #: drawn instanced at all.
-Batchers = Tuple[Callable[[Any], Any], Callable[[Any], bool]]
+Batchers = tuple[Callable[[Any], Any], Callable[[Any], bool]]
 
 # Per-instance attribute locations, from the engine-wide table in
 # OpenGLContext.scenegraph.vertexsemantics; a mat4 occupies four consecutive
@@ -529,27 +530,27 @@ def record_placements(record: tuple, visible: Optional[dict] = None) -> Optional
     return placements() if placements is not None else None
 
 
-def instance_counts(records: List[tuple],
-                    visible: Optional[dict] = None) -> List[int]:
+def instance_counts(records: list[tuple],
+                    visible: Optional[dict] = None) -> list[int]:
     """How many instances each record draws, in order."""
     return [1 if (p := record_placements(r, visible)) is None else len(p)
             for r in records]
 
 
-def per_instance(values: List[Any], counts: List[int]) -> List[Any]:
+def per_instance(values: list[Any], counts: list[int]) -> list[Any]:
     """One entry per instance from one entry per record.
 
     A record that stands for many placements gives its pick id and its material
     to all of them: they are one node, so they are one object to pick and one
     material to shade with.
     """
-    out: List[Any] = []
+    out: list[Any] = []
     for value, count in zip(values, counts, strict=True):
         out.extend([value] * count)
     return out
 
 
-def instance_matrices(records: List[tuple], index: int = 1,
+def instance_matrices(records: list[tuple], index: int = 1,
                       after: Any = None,
                       visible: Optional[dict] = None) -> np.ndarray:
     """Every instance's matrix for a set of records, as an ``(N,4,4)`` f32 array.
@@ -561,7 +562,7 @@ def instance_matrices(records: List[tuple], index: int = 1,
     placements contributes one matrix per placement, each placed inside its
     record's own; every other record contributes its own.
     """
-    rows: List[np.ndarray] = []
+    rows: list[np.ndarray] = []
     for record in records:
         matrix = np.asarray(record[index], dtype='f')
         placements = record_placements(record, visible)
@@ -574,7 +575,7 @@ def instance_matrices(records: List[tuple], index: int = 1,
     return out
 
 
-def instance_joint_bases(mode: Any, group: Any) -> Optional[Dict[Any, int]]:
+def instance_joint_bases(mode: Any, group: Any) -> Optional[dict[Any, int]]:
     """Where each member of a skinned group reads its joints, by geometry.
 
     None where the group is not skinned, or where a figure has no palette range
@@ -593,7 +594,7 @@ def instance_joint_bases(mode: Any, group: Any) -> Optional[Dict[Any, int]]:
     if getattr(group.geometry, 'skin_joints', None) is None:
         return None
     from OpenGLContext.scenegraph.skinning import palette_for
-    bases: Dict[Any, int] = {}
+    bases: dict[Any, int] = {}
     pending: list = []
     for record in group.members:
         geometry = record[5].geometry
@@ -611,8 +612,8 @@ def instance_joint_bases(mode: Any, group: Any) -> Optional[Dict[Any, int]]:
     return bases
 
 
-def member_joint_bases(bases: Dict[Any, int], records: List[tuple],
-                       counts: List[int]) -> List[int]:
+def member_joint_bases(bases: dict[Any, int], records: list[tuple],
+                       counts: list[int]) -> list[int]:
     """The joint base of every instance ``records`` draws, in draw order.
 
     ``counts`` is what :func:`instance_counts` said of the same records, so a
@@ -637,7 +638,7 @@ def _winding_sign(mv: Any) -> int:
     return -1 if d < 0 else 1
 
 
-def winding_signs(modelviews: List[Any]) -> List[int]:
+def winding_signs(modelviews: list[Any]) -> list[int]:
     """:func:`_winding_sign` of each of ``modelviews``, worked out together.
 
     One determinant expression over the stacked upper 3x3s. A list that does
@@ -654,16 +655,16 @@ def winding_signs(modelviews: List[Any]) -> List[int]:
     d = (a[:, 0, 0] * (a[:, 1, 1] * a[:, 2, 2] - a[:, 1, 2] * a[:, 2, 1])
          - a[:, 0, 1] * (a[:, 1, 0] * a[:, 2, 2] - a[:, 1, 2] * a[:, 2, 0])
          + a[:, 0, 2] * (a[:, 1, 0] * a[:, 2, 1] - a[:, 1, 1] * a[:, 2, 0]))
-    signs: List[int] = np.where(d < 0, -1, 1).tolist()
+    signs: list[int] = np.where(d < 0, -1, 1).tolist()
     return signs
 
 
 def build_instance_groups(
-    records: List[tuple],
+    records: list[tuple],
     min_instances: int = 2,
     key: Callable = geometry_instance_key,
     instanceable: Optional[Callable] = None,
-) -> Tuple[List[InstanceGroup], List[tuple]]:
+) -> tuple[list[InstanceGroup], list[tuple]]:
     """Partition render records into instanced groups and leftover singles.
 
     Args:
@@ -682,17 +683,17 @@ def build_instance_groups(
     Returns:
         (groups, singles). Every input record appears exactly once across the two.
     """
-    buckets: "Dict[Any, List[tuple]]" = {}
-    order: List[Any] = []
-    singles: List[tuple] = []
+    buckets: "dict[Any, list[tuple]]" = {}
+    order: list[Any] = []
+    singles: list[tuple] = []
     # A batched scene is many records over few distinct shapes -- a baked forest
     # is one Shape placed a few dozen times per tile -- and the key and the
     # instanceable test read nothing but the shape. Ask each of them once. The
     # memo lasts only this call, so nothing here has to reason about when a
     # material changed.
-    asked: "Dict[int, Tuple[Any, bool]]" = {}
+    asked: "dict[int, tuple[Any, bool]]" = {}
 
-    batched: List[Tuple[tuple, Any]] = []
+    batched: list[tuple[tuple, Any]] = []
     for record in records:
         shape = record[5]
         answer = asked.get(id(shape))
@@ -721,7 +722,7 @@ def build_instance_groups(
             order.append(k)
         buckets[k].append(record)
 
-    groups: List[InstanceGroup] = []
+    groups: list[InstanceGroup] = []
     for k in order:
         members = buckets[k]
         # The threshold is about the draws, not the nodes: one node holding a

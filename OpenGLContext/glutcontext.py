@@ -1,7 +1,8 @@
 '''Context functionality using the GLUT windowing API
 '''
 import logging
-from typing import Any, Hashable, Optional, Sequence, Tuple
+from collections.abc import Hashable, Sequence
+from typing import Any, Optional
 
 from OpenGL.GL import *
 from OpenGL.GLUT import *
@@ -98,7 +99,7 @@ class GLUTContext(
     _pointerGrabbed = False
     #: Where the pointer was last warped to, so the movement the warp itself
     #: generates can be told from a real one.
-    _pointerWarpedTo: Optional[Tuple[int, int]] = None
+    _pointerWarpedTo: Optional[tuple[int, int]] = None
     #: Set when the loop should end; the window's close button and OnQuit both
     #: raise it, and MainLoop watches it.
     _finished = False

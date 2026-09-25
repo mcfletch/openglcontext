@@ -45,7 +45,8 @@ The same program is written for Tk in :mod:`OpenGLContext.demos.tk_viewer` and
 for Qt in ``OpenGLContext_qt.demos.qt_viewer``.
 """
 import sys
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from collections.abc import Callable
+from typing import Any, Optional
 
 # Before OpenGL is imported by anything else: on GTK3 this is what settles
 # PYOPENGL_PLATFORM=egl, without which shader rendering has no context to track.
@@ -236,7 +237,7 @@ class ViewerFrame(wx.Frame):
         self.tree.Freeze()
         try:
             self.tree.DeleteAllItems()
-            items: Dict[Tuple[int, ...], Any] = {}
+            items: dict[tuple[int, ...], Any] = {}
             for row in rows:
                 if not row.path:
                     item = self.tree.AddRoot(self.rowLabel(row))
@@ -258,12 +259,12 @@ class ViewerFrame(wx.Frame):
             self.tree.Thaw()
             self.filling = False
 
-    def pathOf(self, item: Any) -> Optional[Tuple[int, ...]]:
+    def pathOf(self, item: Any) -> Optional[tuple[int, ...]]:
         """The outline path an item stands for, or None where it stands for
         none -- the placeholder under a closed row, or no item at all"""
         if not item or not item.IsOk():
             return None
-        path: Optional[Tuple[int, ...]] = self.tree.GetItemData(item)
+        path: Optional[tuple[int, ...]] = self.tree.GetItemData(item)
         return path
 
     def onOpenRow(self, event: Any) -> None:
@@ -313,7 +314,7 @@ class ViewerFrame(wx.Frame):
         """Redraw the panel: what the selected node is, and what it holds"""
         row = self.outline.selectedRow
         if row is None:
-            lines: List[str] = ['Nothing selected']
+            lines: list[str] = ['Nothing selected']
         else:
             lines = ['%s %s' % (row.nodeType, row.defName) if row.defName
                      else row.nodeType]
@@ -337,7 +338,7 @@ class ViewerApplication(wx.App):
         return True
 
 
-def main(argv: Optional[List[str]] = None) -> int:
+def main(argv: Optional[list[str]] = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     # wx renders from the canvas's own paint and idle events, so this is the
     # whole of the loop: there is nothing for the host to drive.

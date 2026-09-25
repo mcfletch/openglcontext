@@ -24,7 +24,8 @@ import os
 import shutil
 import tempfile
 import urllib.parse
-from typing import Any, Iterable, Sequence
+from collections.abc import Iterable, Sequence
+from typing import Any
 
 from OpenGLContext import atomicfiles, userpaths
 from OpenGLContext.loaders import resolver

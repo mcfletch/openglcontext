@@ -40,7 +40,8 @@ are.
 from __future__ import annotations
 
 import math
-from typing import Any, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -126,8 +127,8 @@ class TranslationGizmo:
                  colours: Sequence[Sequence[float]] = AXIS_COLOURS) -> None:
         #: How long an arm is, in the surrounding group's units.
         self.size = float(size)
-        self.materials: List[Material] = []
-        self.arms: List[Transform] = [
+        self.materials: list[Material] = []
+        self.arms: list[Transform] = [
             self._arm(index, colours[index]) for index in range(3)]
         #: The ``Transform`` to put in the scenegraph. Its children are the
         #: arms while the gizmo is attached and nothing at all while it is

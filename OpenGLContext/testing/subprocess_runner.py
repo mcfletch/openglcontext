@@ -12,7 +12,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional
 
 
 # Default timeout for test execution
@@ -33,7 +33,7 @@ class TestResult:
     duration: float
     timed_out: bool = False
     profile: str = ''
-    captured_images: Dict[str, Path] = field(default_factory=dict)
+    captured_images: dict[str, Path] = field(default_factory=dict)
 
     @property
     def success(self) -> bool:
@@ -100,11 +100,11 @@ def kill_process_tree(pid: int) -> None:
 
 
 def build_command(
-    script_path: Union[str, Path],
-    args: Optional[List[str]] = None,
+    script_path: str | Path,
+    args: Optional[list[str]] = None,
     with_coverage: bool = True,
     coverage_source: str = 'OpenGLContext',
-) -> List[str]:
+) -> list[str]:
     """Build command to run a test script.
 
     Args:
@@ -135,12 +135,12 @@ def build_command(
 
 
 def run_test(
-    script_path: Union[str, Path],
-    args: Optional[List[str]] = None,
-    env: Optional[Dict[str, str]] = None,
+    script_path: str | Path,
+    args: Optional[list[str]] = None,
+    env: Optional[dict[str, str]] = None,
     timeout: float = DEFAULT_TIMEOUT,
     with_coverage: bool = True,
-    cwd: Optional[Union[str, Path]] = None,
+    cwd: Optional[str | Path] = None,
 ) -> TestResult:
     """Run a test script in a subprocess.
 
@@ -172,12 +172,12 @@ def run_test(
 
 
 def run_test_with_popen(
-    script_path: Union[str, Path],
-    args: Optional[List[str]] = None,
-    env: Optional[Dict[str, str]] = None,
+    script_path: str | Path,
+    args: Optional[list[str]] = None,
+    env: Optional[dict[str, str]] = None,
     timeout: float = DEFAULT_TIMEOUT,
     with_coverage: bool = True,
-    cwd: Optional[Union[str, Path]] = None,
+    cwd: Optional[str | Path] = None,
 ) -> TestResult:
     """Run a test script using Popen for better timeout handling.
 
@@ -256,8 +256,8 @@ class TestRunner:
 
     def __init__(
         self,
-        test_dir: Optional[Union[str, Path]] = None,
-        reference_dir: Optional[Union[str, Path]] = None,
+        test_dir: Optional[str | Path] = None,
+        reference_dir: Optional[str | Path] = None,
         with_coverage: bool = True,
         default_timeout: float = DEFAULT_TIMEOUT,
     ) -> None:
@@ -276,12 +276,12 @@ class TestRunner:
         self.reference_dir = Path(reference_dir) if reference_dir else self.test_dir / 'reference_images'
         self.with_coverage = with_coverage
         self.default_timeout = default_timeout
-        self.results: List[TestResult] = []
+        self.results: list[TestResult] = []
 
     def run(
         self,
-        script: Union[str, Path],
-        args: Optional[List[str]] = None,
+        script: str | Path,
+        args: Optional[list[str]] = None,
         profile: str = 'compatibility',
         backend: Optional[str] = None,
         timeout: Optional[float] = None,
@@ -321,7 +321,7 @@ class TestRunner:
 
     def run_regression(
         self,
-        script: Union[str, Path],
+        script: str | Path,
         test_name: str,
         record_profile: str = 'compatibility',
         test_profile: str = 'core',
@@ -378,7 +378,7 @@ class TestRunner:
             timeout=timeout,
         )
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         """Get summary of all test results.
 
         Returns:

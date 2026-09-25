@@ -11,7 +11,7 @@ framebuffers live in :mod:`selectionbuffers` and the async PBO/fence readback in
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
@@ -47,7 +47,7 @@ class SelectionMixin(_AsyncPickMixin):
         modelView: Any
         shader_program: Optional["VRML97ShaderProgram"]
 
-        def getViewport(self) -> Tuple[int, int, int, int]: ...
+        def getViewport(self) -> tuple[int, int, int, int]: ...
 
     # Selection FBO for optimized picking (lazily initialized per instance)
     _selection_fbo: Optional['SelectionFBO'] = None
@@ -77,7 +77,7 @@ class SelectionMixin(_AsyncPickMixin):
     # Cache for hasMouseMoveHandlers check (cleared each frame)
     _has_mousemove_handlers: Optional[bool] = None
 
-    def _optimizePickEvents(self, context: Any, events: Dict) -> Dict:
+    def _optimizePickEvents(self, context: Any, events: dict) -> dict:
         """Optimize pick events by filtering and de-duplicating.
 
         Optimizations:
@@ -143,7 +143,7 @@ class SelectionMixin(_AsyncPickMixin):
 
         return optimized
 
-    def processPickEventsFromBuffer(self, mode: Any, events: Dict) -> None:
+    def processPickEventsFromBuffer(self, mode: Any, events: dict) -> None:
         """Process pick events using the cached MRT selection buffer.
 
         This is the fast path - no GPU rendering, just CPU array lookups.
@@ -175,8 +175,8 @@ class SelectionMixin(_AsyncPickMixin):
                 mode, event, [path] if path else [[]], x, y, depth,
                 *self._pickCamera(event))
 
-    def _createPickProjection(self, pick_region: Tuple[int, int, int, int],
-                              viewport: Tuple[int, int, int, int]) -> np.ndarray:
+    def _createPickProjection(self, pick_region: tuple[int, int, int, int],
+                              viewport: tuple[int, int, int, int]) -> np.ndarray:
         """Create a pick projection matrix that zooms into the pick region.
 
         Args:
@@ -218,7 +218,7 @@ class SelectionMixin(_AsyncPickMixin):
         # Combine with original projection
         return asarray(dot(self.projection, pick_matrix))
 
-    def shaderSelectRenderOptimized(self, mode: Any, toRender: List, events: Dict) -> None:
+    def shaderSelectRenderOptimized(self, mode: Any, toRender: list, events: dict) -> None:
         """Optimized selection render processing each pick point individually.
 
         For each pick point:
@@ -252,7 +252,7 @@ class SelectionMixin(_AsyncPickMixin):
         debugSelection = mode.context.contextDefinition.debugSelection
 
         # Collect pick points grouped by location
-        pickPoints: Dict[Any, List] = {}
+        pickPoints: dict[Any, list] = {}
         for event in events.values():
             x, y = key = tuple(event.getPickPoint())
             pickPoints.setdefault(key, []).append(event)
@@ -390,7 +390,7 @@ class SelectionMixin(_AsyncPickMixin):
                 log.debug("pick-loop FBO restore failed: %s", err)
             glDisable(GL_SCISSOR_TEST)
 
-    def _computeScreenSpaceBBoxes(self, toRender: List, vp_w: float, vp_h: float) -> List:
+    def _computeScreenSpaceBBoxes(self, toRender: list, vp_w: float, vp_h: float) -> list:
         """Pre-compute screen-space bounding boxes for all objects.
 
         Projects each object's bounding volume corners to screen space and
@@ -404,7 +404,7 @@ class SelectionMixin(_AsyncPickMixin):
         Returns:
             List of (min_x, min_y, max_x, max_y) tuples or None for objects without bounds
         """
-        result: List[Optional[Tuple[float, float, float, float]]] = []
+        result: list[Optional[tuple[float, float, float, float]]] = []
 
         for record in toRender:
             key, mvmatrix, tmatrix, bvolume, path, node = record

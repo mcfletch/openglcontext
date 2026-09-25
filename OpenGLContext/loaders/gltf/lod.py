@@ -30,7 +30,8 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
@@ -158,7 +159,7 @@ def halving_coverage(levels: int) -> list:
 
 
 def mesh_bounds(g: "pygltflib.GLTF2",
-                mesh_index: int) -> Optional[Tuple[Sequence[float], float]]:
+                mesh_index: int) -> Optional[tuple[Sequence[float], float]]:
     """``(centre, radius)`` of a mesh, from what its accessors declare.
 
     Read from the ``POSITION`` accessors' ``min``/``max`` rather than from the

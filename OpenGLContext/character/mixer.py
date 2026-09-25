@@ -39,9 +39,8 @@ a cross-fade all compose without any of them knowing about the others::
 from __future__ import annotations
 
 import logging
-from typing import (
-    Any, Callable, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple,
-)
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -149,7 +148,7 @@ class Layer:
         self.mask: Optional[frozenset] = None if mask is None else frozenset(mask)
         self.weight = float(weight)
         self.additive = bool(additive)
-        self.tracks: List[Track] = []
+        self.tracks: list[Track] = []
         self._clips: Optional[Mapping[str, Animation]] = None
         self._slot_mask: Optional[np.ndarray] = None
         self._masked: Optional[frozenset] = None
@@ -253,26 +252,26 @@ class AnimationMixer:
                  skins: Optional[Iterable[Any]] = None,
                  compute_worlds: Optional[Callable[[], dict]] = None,
                  rig: Optional[Rig] = None) -> None:
-        self.clips: Dict[str, Animation] = dict(clips)
-        self.node_transforms: Dict[int, Any] = dict(node_transforms or {})
-        self.node_morph: Dict[int, Sequence[Callable]] = dict(node_morph or {})
-        self.skins: List[Any] = list(skins or ())
+        self.clips: dict[str, Animation] = dict(clips)
+        self.node_transforms: dict[int, Any] = dict(node_transforms or {})
+        self.node_morph: dict[int, Sequence[Callable]] = dict(node_morph or {})
+        self.skins: list[Any] = list(skins or ())
         self.compute_worlds = compute_worlds
         #: The skeleton as arrays. Built from a flat list of nodes where the
         #: caller gave no hierarchy, which is enough to blend a pose; a rig
         #: from a loaded document knows the hierarchy and can skin as well.
         self.rig: Rig = rig if rig is not None else Rig(
             sorted(self.node_transforms), {}, self.node_transforms)
-        self.layers: List[Layer] = []
-        self._by_name: Dict[str, Layer] = {}
+        self.layers: list[Layer] = []
+        self._by_name: dict[str, Layer] = {}
         #: One :class:`~OpenGLContext.character.clip.ClipSampler` per clip,
         #: keyed by the clip object, so two mixers over one document share none
         #: of their playback and all of their regrouping.
-        self._samplers: Dict[Animation, ClipSampler] = {}
+        self._samplers: dict[Animation, ClipSampler] = {}
         #: The last pose written to the scenegraph, so an unchanged joint costs
         #: no field assignment -- and an idle character costs almost nothing.
-        self._written: Dict[Tuple[int, str], Any] = {}
-        self._written_pose: Optional[Tuple[np.ndarray, ...]] = None
+        self._written: dict[tuple[int, str], Any] = {}
+        self._written_pose: Optional[tuple[np.ndarray, ...]] = None
         self._warned: set = set()
         self._survey()
 
@@ -284,7 +283,7 @@ class AnimationMixer:
         Clips are keyed by the name the document gave each animation, or
         ``animation<index>`` where it named none.
         """
-        clips: Dict[str, Animation] = {}
+        clips: dict[str, Animation] = {}
         for index, animation in enumerate(getattr(scene, 'animations', None) or []):
             clips[animation.name or ('animation%d' % index)] = animation
         roots = getattr(scene, 'node_roots', None) or []
@@ -336,7 +335,7 @@ class AnimationMixer:
 
     def _plan_skins(self) -> None:
         """Note where each skin's joints sit in the rig, once rather than per frame."""
-        self._skin_plans: List[Tuple[Any, np.ndarray, np.ndarray, int]] = []
+        self._skin_plans: list[tuple[Any, np.ndarray, np.ndarray, int]] = []
         for skin in self.skins:
             joints = getattr(skin, 'joints', None)
             if joints is None or getattr(skin, 'inverse_bind', None) is None:
@@ -437,14 +436,14 @@ class AnimationMixer:
         tracks say it is without time passing.
         """
         pose = self.pose()
-        weights: Dict[int, np.ndarray] = {}
+        weights: dict[int, np.ndarray] = {}
         for layer in self.layers:
             if layer.weight and layer.tracks:
                 self._apply_layer(layer, pose, weights)
         self._write(pose, weights)
         self._reskin(pose)
 
-    def pose(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def pose(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """The rest pose to blend over: translation, rotation and scale arrays.
 
         Fresh arrays, one row per rig slot. A slot no clip drives is re-read
@@ -456,14 +455,14 @@ class AnimationMixer:
         return self.rig.rest_pose()
 
     def _apply_layer(self, layer: Layer,
-                     pose: Tuple[np.ndarray, np.ndarray, np.ndarray],
-                     weights: Dict[int, np.ndarray]) -> None:
+                     pose: tuple[np.ndarray, np.ndarray, np.ndarray],
+                     weights: dict[int, np.ndarray]) -> None:
         """Blend one layer's tracks over the pose built so far."""
         mask = layer.slot_mask(self.rig)
         blends = [_Blend(self.rig.n, width,
                          rotation=(path == 'rotation' and not layer.additive))
                   for path, width in _PATHS]
-        blended_weights: Dict[int, List[Any]] = {}
+        blended_weights: dict[int, list[Any]] = {}
         for track in layer.tracks:
             if track.weight <= 0:
                 continue
@@ -495,7 +494,7 @@ class AnimationMixer:
                              else _lerp('weights', current, value, strength))
 
     def _accumulate_weights(self, layer: Layer, sampler: ClipSampler, track: Track,
-                            store: Dict[int, List[Any]]) -> None:
+                            store: dict[int, list[Any]]) -> None:
         """Fold a track's morph weights into the layer's running mean.
 
         Morph weights are per mesh and of no fixed width, so they keep the
@@ -512,8 +511,8 @@ class AnimationMixer:
                 value = _delta('weights', value, base[node])
             _accumulate(store, node, value, track.weight, False)
 
-    def _write(self, pose: Tuple[np.ndarray, np.ndarray, np.ndarray],
-               weights: Dict[int, np.ndarray]) -> None:
+    def _write(self, pose: tuple[np.ndarray, np.ndarray, np.ndarray],
+               weights: dict[int, np.ndarray]) -> None:
         """Put the finished pose onto the scenegraph, where anything reads it.
 
         A joint whose only children are further joints is read by nothing: the
@@ -601,7 +600,7 @@ class AnimationMixer:
         for setter in self.node_morph.get(node, ()):
             setter(written)
 
-    def _reskin(self, pose: Tuple[np.ndarray, np.ndarray, np.ndarray]) -> None:
+    def _reskin(self, pose: tuple[np.ndarray, np.ndarray, np.ndarray]) -> None:
         """Rebuild every skin's joint matrices from the pose just blended."""
         if not self.skins:
             return
@@ -623,7 +622,7 @@ class AnimationMixer:
             for skin in strangers:
                 skin.apply(mapped)
 
-    def joint_matrices(self, pose: Optional[Tuple[np.ndarray, ...]] = None) -> List[np.ndarray]:
+    def joint_matrices(self, pose: Optional[tuple[np.ndarray, ...]] = None) -> list[np.ndarray]:
         """The ``(J, 4, 4)`` joint-matrix stack of each skin, in skin order.
 
         What a skinning shader wants uploaded, and what the CPU deform applies
@@ -636,7 +635,7 @@ class AnimationMixer:
                     self._apply_layer(layer, pose, {})
         worlds = self.rig.world_matrices(*pose)
         identity = np.eye(4)
-        out: List[np.ndarray] = []
+        out: list[np.ndarray] = []
         for _skin, slots, inverse_bind, mesh_slot in self._skin_plans:
             joint_worlds = np.tile(identity, (len(slots), 1, 1))
             known = slots >= 0
@@ -742,7 +741,7 @@ def _add_rows(path: str, current: np.ndarray, delta: np.ndarray,
     return np.asarray(current + delta * strength[:, None])
 
 
-def _accumulate(store: Dict[Any, List[Any]], key: Any,
+def _accumulate(store: dict[Any, list[Any]], key: Any,
                 value: Any, weight: float, rotation: bool) -> None:
     """Fold one track's value into a running weighted mean.
 

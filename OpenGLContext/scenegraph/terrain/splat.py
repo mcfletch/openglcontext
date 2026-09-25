@@ -8,7 +8,8 @@ and :class:`~OpenGLContext.scenegraph.terrain.ground.GroundPatch`, the same
 ground a streamed world's tiles are drawn with; this node works out the light
 baked into the landscape, and where cover and trees stand in it.
 """
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 from vrml.vrml97 import basenodes as vnodes

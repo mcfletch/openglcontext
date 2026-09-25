@@ -1,5 +1,4 @@
 """What :class:`DragWatcher` answers about a drag in progress."""
-from typing import Tuple
 
 import pytest
 
@@ -33,8 +32,8 @@ class TestFractions:
         ((200, 100), (200, 100), (250, 150)),  # and on the far edge
     ])
     def test_a_drag_from_an_edge_answers_rather_than_dividing_by_nothing(
-        self, start: Tuple[int, int], total: Tuple[int, int],
-        point: Tuple[int, int],
+        self, start: tuple[int, int], total: tuple[int, int],
+        point: tuple[int, int],
     ) -> None:
         """There is no distance to that edge, so the fraction toward it is zero."""
         watcher = DragWatcher(start[0], start[1], total[0], total[1])

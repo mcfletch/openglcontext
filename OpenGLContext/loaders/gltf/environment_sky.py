@@ -41,7 +41,8 @@ from __future__ import annotations
 import logging
 import math
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
@@ -87,7 +88,7 @@ class Sky:
     the sky and the colour is ignored.  Neither is applied yet.
     """
 
-    ambientLightColor: Tuple[float, float, float] = (0.0, 0.0, 0.0)
+    ambientLightColor: tuple[float, float, float] = (0.0, 0.0, 0.0)
     ambientSkyContribution: float = 1.0
 
 
@@ -101,9 +102,9 @@ class GradientSky(Sky):
     around the scene's directional light and are read but not drawn.
     """
 
-    topColor: Tuple[float, float, float] = (0.0, 0.0, 0.0)
-    horizonColor: Tuple[float, float, float] = (0.0, 0.0, 0.0)
-    bottomColor: Tuple[float, float, float] = (0.0, 0.0, 0.0)
+    topColor: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    horizonColor: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    bottomColor: tuple[float, float, float] = (0.0, 0.0, 0.0)
     topCurve: float = 0.15
     bottomCurve: float = 0.02
     sunAngleMax: float = 0.5
@@ -115,7 +116,7 @@ class PanoramaSky(Sky):
     """A sky that is a picture: one equirectangular texture, or six faces."""
 
     equirectangular: Optional[int] = None
-    cubemap: Optional[Tuple[int, ...]] = None
+    cubemap: Optional[tuple[int, ...]] = None
 
 
 @dataclass
@@ -126,10 +127,10 @@ class PhysicalSky(Sky):
     are the document's own.  Nothing draws them yet.
     """
 
-    groundColor: Tuple[float, float, float] = (0.3, 0.2, 0.1)
-    rayleighColor: Tuple[float, float, float] = (0.3, 0.5, 1.0)
+    groundColor: tuple[float, float, float] = (0.3, 0.2, 0.1)
+    rayleighColor: tuple[float, float, float] = (0.3, 0.5, 1.0)
     rayleighScale: float = 0.00003
-    mieColor: Tuple[float, float, float] = (1.0, 1.0, 1.0)
+    mieColor: tuple[float, float, float] = (1.0, 1.0, 1.0)
     mieScale: float = 0.000005
     mieAnisotropy: float = 0.8
 
@@ -138,15 +139,15 @@ class PhysicalSky(Sky):
 class PlainSky(Sky):
     """One colour, all the way round."""
 
-    color: Tuple[float, float, float] = field(default=(0.0, 0.0, 0.0))
+    color: tuple[float, float, float] = field(default=(0.0, 0.0, 0.0))
 
 
 # ----------------------------------------------------------------------
 # Reading
 # ----------------------------------------------------------------------
 
-def _color(block: Any, key: str, default: Tuple[float, float, float]
-           ) -> Tuple[float, float, float]:
+def _color(block: Any, key: str, default: tuple[float, float, float]
+           ) -> tuple[float, float, float]:
     """An RGB triple from ``block``, or ``default`` if it does not hold one.
 
     Values above 1.0 are kept: the extension permits them for an HDR sky, and
@@ -168,7 +169,7 @@ def _number(block: Any, key: str, default: float) -> float:
     return float(value)
 
 
-def _indices(block: Any, key: str, count: int) -> Optional[Tuple[int, ...]]:
+def _indices(block: Any, key: str, count: int) -> Optional[tuple[int, ...]]:
     """``count`` texture indices from ``block``, or None if it does not hold them."""
     value = block.get(key) if isinstance(block, dict) else None
     if not isinstance(value, (list, tuple)) or len(value) != count:
@@ -272,7 +273,7 @@ def scene_sky(extensions: Any, skies: Sequence[Optional[Sky]]) -> Optional[Sky]:
 # Building the background
 # ----------------------------------------------------------------------
 
-def _clamped(color: Sequence[float]) -> Tuple[float, float, float]:
+def _clamped(color: Sequence[float]) -> tuple[float, float, float]:
     """``color`` inside [0, 1].
 
     The gradient sphere and the clear colour are drawn in low dynamic range,
@@ -284,7 +285,7 @@ def _clamped(color: Sequence[float]) -> Tuple[float, float, float]:
 
 
 def _gradient_stops(horizon: Sequence[float], pole: Sequence[float], curve: float,
-                    count: int = GRADIENT_STOPS) -> Tuple[list, list]:
+                    count: int = GRADIENT_STOPS) -> tuple[list, list]:
     """Colour stops from ``pole`` to ``horizon``, and the angle each sits at.
 
     Angles are measured from the pole, as VRML97's ``Background`` measures both

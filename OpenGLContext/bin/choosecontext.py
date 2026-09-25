@@ -10,11 +10,10 @@ from OpenGLContext.scenegraph.basenodes import *
 from vrml.vrml97 import nodetypes
 from OpenGLContext.events import mouseevents
 from gettext import gettext as _
-from typing import List, Tuple
 
 class ChoiceContext( BaseContext ):
     currentChoice = 0
-    def loadChoices( self ) -> List[Tuple[int, str]]:
+    def loadChoices( self ) -> list[tuple[int, str]]:
         """See which contexts are available"""
         choices = [
             e.name for e in self.getContextTypes()

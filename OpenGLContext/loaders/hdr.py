@@ -21,7 +21,7 @@ The decoder handles the three scanline encodings Radiance emits:
 """
 from __future__ import annotations
 
-from typing import BinaryIO, Union, cast
+from typing import BinaryIO, cast
 
 import numpy as np
 
@@ -234,7 +234,7 @@ def _load(fh: BinaryIO) -> np.ndarray:
     return np.ascontiguousarray(img, dtype=np.float32)
 
 
-def load_hdr(source: Union[str, BinaryIO]) -> np.ndarray:
+def load_hdr(source: str | BinaryIO) -> np.ndarray:
     """Load a Radiance ``.hdr``/``.pic`` image as an ``(H, W, 3)`` float32 array.
 
     ``source`` is a filesystem path or an already-open binary file object. The

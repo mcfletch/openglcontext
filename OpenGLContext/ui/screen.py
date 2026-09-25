@@ -26,7 +26,7 @@ measuring it per frame is both necessary and cheap.
 from __future__ import annotations
 
 import logging
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 from OpenGLContext.events import systemtime
 from OpenGLContext.ui.metrics import FontMetrics, font_size_for, metrics_for
@@ -51,12 +51,12 @@ class ScreenMixin(object):
     #: hides it whatever this says.
     debugOverlayStartsVisible: bool = True
 
-    _hudLayers: Optional[List[Any]] = None
+    _hudLayers: Optional[list[Any]] = None
     _debugOverlay: Optional[Any] = None
 
     # -- the layers -------------------------------------------------------
     @property
-    def hudLayers(self) -> List[Any]:
+    def hudLayers(self) -> list[Any]:
         """The HUD trees drawn over this context's frames, back to front."""
         if self._hudLayers is None:
             self._hudLayers = []
@@ -145,7 +145,7 @@ class ScreenMixin(object):
 
     # -- drawing ----------------------------------------------------------
     def screenTrees(self, metrics: FontMetrics,
-                    now: Optional[float] = None) -> List[Any]:
+                    now: Optional[float] = None) -> list[Any]:
         """Everything to paint over this frame, in the order it is painted.
 
         The HUD layers, advanced to ``now`` and laid out for the window they
@@ -164,7 +164,7 @@ class ScreenMixin(object):
             trees.append(layer)
         return trees
 
-    def redrawWhileAnimating(self, trees: List[Any], now: float) -> None:
+    def redrawWhileAnimating(self, trees: list[Any], now: float) -> None:
         """Ask for another frame while anything in ``trees`` is still moving at ``now``.
 
         A ripple spreading across a control is drawn over several frames, and

@@ -19,7 +19,8 @@ from OpenGLContext.events import glfwevents
 from OpenGLContext.looptrace import LoopTrace
 import logging
 import warnings
-from typing import Any, Hashable, Dict, Optional, Tuple
+from collections.abc import Hashable
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 
@@ -62,7 +63,7 @@ class GLFWContext(
     #: Where and how big the window is when it is not filling the screen, as
     #: (x, y, width, height).  A position of None means the platform has never
     #: placed this window and should choose.
-    _windowedGeometry: Tuple[Optional[int], Optional[int], int, int] = (
+    _windowedGeometry: tuple[Optional[int], Optional[int], int, int] = (
         None, None, 300, 300)
 
     def __init__(self, definition: Any = None, **named: Any) -> None:
@@ -122,7 +123,7 @@ class GLFWContext(
         self.applyFullscreen()
         Context.settingsChanged(self)
 
-    def _fillMonitor(self, monitor: Any) -> Tuple[int, int]:
+    def _fillMonitor(self, monitor: Any) -> tuple[int, int]:
         """The size to ask for on ``monitor``, with the refresh rate to match.
 
         The monitor's *current* mode, so nothing switches resolution: a mode
@@ -164,7 +165,7 @@ class GLFWContext(
             # without -- the size is what has to come back, and a compositor
             # that places windows itself would ignore the position anyway -- so
             # the complaint is not worth showing a player.
-            position: Tuple[Optional[int], Optional[int]] = (None, None)
+            position: tuple[Optional[int], Optional[int]] = (None, None)
             with warnings.catch_warnings():
                 warnings.simplefilter('ignore')
                 try:
@@ -376,7 +377,7 @@ class GLFWContext(
     }
 
     #: The GLFW cursors this window has made, by name, until it is released.
-    _cursors: Optional[Dict[str, Any]] = None
+    _cursors: Optional[dict[str, Any]] = None
 
     def setPointerShape(self, name: str) -> bool:
         """Show this pointer; False for a name this platform has not got.

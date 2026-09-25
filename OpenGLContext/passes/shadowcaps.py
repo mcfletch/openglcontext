@@ -13,7 +13,7 @@ context.
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional, Set, Tuple
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ class ShadowCapabilities:
     #. Those were dropped; the fields below each gate real code.
     def __init__(
         self,
-        gl_version: Tuple[int, int] = (3, 3),
+        gl_version: tuple[int, int] = (3, 3),
         has_texture_gather: bool = False,
         has_cube_shadow: bool = True,
         has_cube_array: bool = False,
@@ -108,7 +108,7 @@ class ShadowCapabilities:
 
     # -- construction ------------------------------------------------------
     @classmethod
-    def from_features(cls, extensions: Set[str], gl_version: Tuple[int, int],
+    def from_features(cls, extensions: set[str], gl_version: tuple[int, int],
                       max_texture_units: int = 16) -> 'ShadowCapabilities':
         """Build from an extension-name set and version (pure, GL-free)."""
         def has(name: str) -> bool:
@@ -183,7 +183,7 @@ class ShadowCapabilities:
             return cls()
 
     @staticmethod
-    def _query_vram_mb(extensions: Set[str]) -> int:
+    def _query_vram_mb(extensions: set[str]) -> int:
         """Total dedicated VRAM in MB, or 0 if the GPU exposes no meminfo query.
 
         Uses GL_NVX_gpu_memory_info (NVIDIA) or GL_ATI_meminfo (AMD). Intel/mesa
@@ -207,7 +207,7 @@ class ShadowCapabilities:
         return 0
 
     @staticmethod
-    def _parse_version(raw: Any) -> Tuple[int, int]:
+    def _parse_version(raw: Any) -> tuple[int, int]:
         try:
             if isinstance(raw, bytes):
                 raw = raw.decode('ascii', 'replace')
@@ -219,7 +219,7 @@ class ShadowCapabilities:
             return (3, 3)
 
     @staticmethod
-    def _list_extensions(context: Optional[object]) -> Set[str]:
+    def _list_extensions(context: Optional[object]) -> set[str]:
         # Prefer the context's ExtensionManager if available
         if context is not None and hasattr(context, 'extensions'):
             try:
@@ -233,7 +233,7 @@ class ShadowCapabilities:
                 glGetIntegerv, glGetStringi, GL_NUM_EXTENSIONS, GL_EXTENSIONS,
             )
             count = int(glGetIntegerv(GL_NUM_EXTENSIONS))
-            out: Set[str] = set()
+            out: set[str] = set()
             for i in range(count):
                 name = glGetStringi(GL_EXTENSIONS, i)
                 out.add(name.decode() if isinstance(name, bytes) else name)

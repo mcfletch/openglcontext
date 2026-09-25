@@ -1,6 +1,7 @@
 """Interactions for navigating the context"""
 from gettext import gettext as _
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
 from OpenGLContext.move import movementmanager
 import math

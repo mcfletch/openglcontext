@@ -13,7 +13,8 @@ import ctypes
 import logging
 from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
-from typing import Any, Callable, Dict, Optional, Sequence, Tuple
+from collections.abc import Callable, Sequence
+from typing import Any, Optional
 
 import numpy as np
 from PIL import Image
@@ -59,7 +60,7 @@ def load_program(vert_name: str, frag_name: str) -> int:
 
 
 #: A program and its uniforms' locations, by name.
-Program = Tuple[int, Dict[str, int]]
+Program = tuple[int, dict[str, int]]
 
 
 class ViewPrograms:
@@ -81,21 +82,21 @@ class ViewPrograms:
     """
 
     def __init__(self, vert: str, frag: str, names: Sequence[str], base: int,
-                 setup: Optional[Callable[[Dict[str, int]], None]] = None,
+                 setup: Optional[Callable[[dict[str, int]], None]] = None,
                  position: str = 'vEyePos') -> None:
         self.vert, self.frag = vert, frag
         self.names = tuple(names)
         self.setup = setup
         self.position = position
-        self._forms: Dict[Tuple[str, int], Optional[Program]] = {
+        self._forms: dict[tuple[str, int], Optional[Program]] = {
             ('', 0): (int(base), self._locations(int(base)))}
 
-    def _locations(self, program: int) -> Dict[str, int]:
+    def _locations(self, program: int) -> dict[str, int]:
         return {name: int(glGetUniformLocation(program, name))
                 for name in self.names + ('viewCount', 'viewList', 'viewMask')}
 
     @staticmethod
-    def shared(mode: Any) -> Tuple[str, int]:
+    def shared(mode: Any) -> tuple[str, int]:
         """The strategy and view count the draw in progress is shared across."""
         shader = getattr(mode, 'shader_program', None)
         views = int(getattr(shader, 'program_set', 0) or 0)
@@ -126,7 +127,7 @@ class ViewPrograms:
         return found
 
     @staticmethod
-    def apply_views(mode: Any, locations: Dict[str, int]) -> None:
+    def apply_views(mode: Any, locations: dict[str, int]) -> None:
         """Say which views the draw reaches, on the bound program, in a shared draw."""
         shader = getattr(mode, 'shader_program', None)
         if not getattr(shader, 'program_set', 0):

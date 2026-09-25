@@ -2,7 +2,7 @@
 
 from gettext import gettext as _
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 
@@ -11,14 +11,14 @@ class MovementManager(object):
     """Base class for movement interaction controllers"""
 
     #: User-name, key, function-name for each command the manager offers.
-    commands: List[Tuple[str, str, str]] = [
+    commands: list[tuple[str, str, str]] = [
         (_("Examine"), "examine", "startExamineMode"),
         (_("Pan"), "pan", "startPanMode"),
         (_("Zoom In"), "zoomin", "zoomIn"),
         (_("Zoom Out"), "zoomout", "zoomOut"),
     ]
     #: key -> the ``addEventHandler`` parameters that raise that command.
-    commandBindings: Dict[str, Dict[str, Any]] = {}
+    commandBindings: dict[str, dict[str, Any]] = {}
     #: The context this manager is bound to; None until :meth:`bind`.  It is a
     #: window-owning Context of whichever backend is running, so it is reached
     #: by what it can do rather than by a declared type.

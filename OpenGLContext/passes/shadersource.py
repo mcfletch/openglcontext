@@ -13,7 +13,8 @@ import os
 import re
 import logging
 from functools import lru_cache
-from typing import Dict, FrozenSet, Iterator, List, NamedTuple, Optional, Tuple
+from collections.abc import Iterator
+from typing import NamedTuple, Optional
 
 log = logging.getLogger(__name__)
 
@@ -99,7 +100,7 @@ def inject_defines(source: str, defines: Optional[list] = None) -> str:
     return '\n'.join(lines)
 
 
-def input_markers(source: str) -> Dict[str, str]:
+def input_markers(source: str) -> dict[str, str]:
     """Each vertex input ``source`` declares, and the marker it carries.
 
     The marker is the first word of the comment on the declaration's own line,
@@ -109,7 +110,7 @@ def input_markers(source: str) -> Dict[str, str]:
 
 
 @lru_cache(maxsize=None)
-def required_inputs(filename: str) -> FrozenSet[str]:
+def required_inputs(filename: str) -> frozenset[str]:
     """The vertex arrays the shader in ``filename`` cannot be drawn without.
 
     Everything else it declares has a meaning at the value GL supplies when
@@ -143,7 +144,7 @@ def shadow_defines(max_shadow_lights: int, cube_array: bool) -> list:
 #: The answer, once a real context has given one. A shader compile asks for it
 #: and a scene that streams new materials compiles as it goes, so asking the
 #: driver each time is a measurable part of the frame.
-_SHADOW_CONFIG: "Optional[Tuple[int, bool]]" = None
+_SHADOW_CONFIG: "Optional[tuple[int, bool]]" = None
 
 
 def reset_shadow_config() -> None:
@@ -152,7 +153,7 @@ def reset_shadow_config() -> None:
     _SHADOW_CONFIG = None
 
 
-def resolve_shadow_config() -> Tuple[int, bool]:
+def resolve_shadow_config() -> tuple[int, bool]:
     """(max_shadow_lights, use_cube_array) for the current GL context.
 
     Derived from the driver's real per-stage GL_MAX_TEXTURE_IMAGE_UNITS so the lit
@@ -225,7 +226,7 @@ class VertexOutput(NamedTuple):
 _ROUTING_OUTPUTS = frozenset(('vView',))
 
 
-def _file_scope_statements(source: str) -> Iterator[Tuple[str, bool]]:
+def _file_scope_statements(source: str) -> Iterator[tuple[str, bool]]:
     """Each statement of ``source`` at file scope, and whether it is conditional.
 
     Comments are skipped, and so is everything inside a function body, a
@@ -234,7 +235,7 @@ def _file_scope_statements(source: str) -> Iterator[Tuple[str, bool]]:
     struct) is answered as its header, ending at the brace.
     """
     conditions = braces = parens = 0
-    current: List[str] = []
+    current: list[str] = []
     for line in _COMMENT_RE.sub(' ', source).split('\n'):
         directive = line.strip()
         if directive.startswith('#'):
@@ -262,7 +263,7 @@ def _file_scope_statements(source: str) -> Iterator[Tuple[str, bool]]:
                 current = []
 
 
-def vertex_outputs(source: str) -> List[VertexOutput]:
+def vertex_outputs(source: str) -> list[VertexOutput]:
     """Every ``out`` the vertex shader ``source`` hands on to be shaded, in order.
 
     ``vView``, which the vertex strategy's routing declares for itself, is not
@@ -315,7 +316,7 @@ def vertex_routing_source(vertex_source: str, views: int, extension: str) -> str
     ])
 
 
-def geometry_input_defines(source: str) -> List[str]:
+def geometry_input_defines(source: str) -> list[str]:
     """``#define`` lines renaming each vertex output for a geometry stage to read.
 
     Spliced into the vertex shader after its ``#version``, they rename the
@@ -327,7 +328,7 @@ def geometry_input_defines(source: str) -> List[str]:
 
 
 def geometry_stage_source(vertex_source: str, views: int,
-                          gl_version: Tuple[int, int],
+                          gl_version: tuple[int, int],
                           position: str = 'vPosition') -> str:
     """A geometry shader sending each triangle to the views in ``viewMask``.
 

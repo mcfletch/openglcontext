@@ -15,9 +15,8 @@ import os
 import logging
 import weakref
 from types import MappingProxyType
-from typing import (
-    TYPE_CHECKING, Any, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple,
-)
+from collections.abc import Iterator, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
@@ -371,7 +370,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
 
     #: Every material map this program samples, with its unit: the core maps,
     #: and the extension maps :attr:`ext_channels` says the driver has units for.
-    texture_units: Tuple[Tuple[str, int], ...] = tuple(PBR_UNITS.items())
+    texture_units: tuple[tuple[str, int], ...] = tuple(PBR_UNITS.items())
     _ext_channels: Mapping[str, int] = MappingProxyType({})
 
     @property
@@ -388,7 +387,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
 
     #: The lit program is the metallic/roughness one; the helper programs are
     #: the VRML97 ones this inherits, from the same files.
-    VERTEX_SOURCES: Dict[str, str] = dict(
+    VERTEX_SOURCES: dict[str, str] = dict(
         VRML97ShaderProgram.VERTEX_SOURCES, program='pbr.vert')
 
     def __init__(self) -> None:
@@ -396,7 +395,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         # One GL uniform buffer per material, uploaded once and reused across
         # frames. Weak keys so a buffer's bookkeeping drops when its material is
         # collected (the GL buffer itself is reclaimed at context teardown).
-        self._material_ubos: "weakref.WeakKeyDictionary[Any, Tuple[int, int]]" = \
+        self._material_ubos: "weakref.WeakKeyDictionary[Any, tuple[int, int]]" = \
             weakref.WeakKeyDictionary()
         self._default_material_ubo: Optional[int] = None
         # Per-instance so two programs (or two passes) never share transmission /
@@ -503,10 +502,10 @@ class PBRShaderProgram(VRML97ShaderProgram):
 
     #: The fragment and vertex defines the lit program was compiled with, so a
     #: set compiled for several views is compiled the same way.
-    _defines: Tuple[list, list] = ([], [])
+    _defines: tuple[list, list] = ([], [])
 
     def _compile_program_set(self, views: int,
-                             strategy: str = 'geometry') -> Dict[str, Optional[int]]:
+                             strategy: str = 'geometry') -> dict[str, Optional[int]]:
         """The PBR and vertex-colour programs compiled for ``views`` shared views."""
         ext_defines, skin_defines = self._defines
         try:
@@ -733,7 +732,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         self._set_uniform1i('hasVertexColor', 1 if enabled else 0, self.program)
 
     #: What :meth:`set_impostor` last set, and on which program.
-    _impostor: Tuple[Optional[int], int, bool] = (None, 0, True)
+    _impostor: tuple[Optional[int], int, bool] = (None, 0, True)
 
     def set_impostor(self, views: int, hemi: bool = True) -> None:
         """Draw this material's geometry as an octahedral impostor, or not.
@@ -1092,7 +1091,7 @@ class PBRPass(flatcore.FlatPass):
         if len(memo) > 100000:
             memo.clear()
 
-        def answer(shape: Any) -> Tuple[Any, bool]:
+        def answer(shape: Any) -> tuple[Any, bool]:
             geometry = getattr(shape, 'geometry', None)
             appearance = getattr(shape, 'appearance', None)
             material = getattr(appearance, 'material', None)

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Callable, Iterable, TypeVar
+from collections.abc import Callable, Iterable
+from typing import Any, TypeVar
 
 import traceback
 import logging

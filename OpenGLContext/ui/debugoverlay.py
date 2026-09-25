@@ -32,9 +32,8 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from typing import (
-    Any, Callable, Dict, Iterable, List, NamedTuple, Optional, Tuple,
-)
+from collections.abc import Callable, Iterable
+from typing import Any, NamedTuple, Optional
 
 from vrml import field
 
@@ -52,7 +51,7 @@ __all__ = [
 ]
 
 #: What a provider returns: pairs of name and value, or a mapping of the same.
-Rows = Iterable[Tuple[str, Any]]
+Rows = Iterable[tuple[str, Any]]
 Provider = Callable[[], Any]
 
 
@@ -60,7 +59,7 @@ class DebugSection(NamedTuple):
     """One labelled group of rows, as a provider last answered it."""
 
     title: str
-    rows: List[Tuple[str, str]]
+    rows: list[tuple[str, str]]
 
 
 class LaidOutRow(NamedTuple):
@@ -144,10 +143,10 @@ class DebugPanel(HUDWidget):
         super(DebugPanel, self).__init__(**named)
         #: What the providers last said.  Not a field: it is this frame's
         #: reading, not authored data.
-        self.sections: List[DebugSection] = []
+        self.sections: list[DebugSection] = []
 
     # -- measurement ------------------------------------------------------
-    def columnWidths(self, metrics: FontMetrics) -> Tuple[int, int]:
+    def columnWidths(self, metrics: FontMetrics) -> tuple[int, int]:
         """Pixels for the name column and for the value column.
 
         One pair for the whole overlay rather than per section, so the values
@@ -167,7 +166,7 @@ class DebugPanel(HUDWidget):
         return sum(1 + len(section.rows) for section in self.sections)
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         lines = self.lineCount()
         if not lines:
             return (0, 0)
@@ -178,7 +177,7 @@ class DebugPanel(HUDWidget):
         return (labels + gap + values + padding * 2,
                 lines * metrics.line_height + padding * 2)
 
-    def laidOutRows(self, metrics: FontMetrics) -> List[LaidOutRow]:
+    def laidOutRows(self, metrics: FontMetrics) -> list[LaidOutRow]:
         """Every heading and row, placed inside this plate, top down.
 
         The whole of the overlay's layout, and pure arithmetic: hand it a font
@@ -191,7 +190,7 @@ class DebugPanel(HUDWidget):
         inner = self.rect.inset(padding)
         line_height = metrics.line_height
         cursor = inner.top - metrics.char_height
-        laid: List[LaidOutRow] = []
+        laid: list[LaidOutRow] = []
         for section in self.sections:
             laid.append(LaidOutRow(
                 Rect(inner.x, cursor, inner.width, metrics.char_height),
@@ -237,7 +236,7 @@ class DebugOverlay(HUDLayer):
         self.panel = DebugPanel()
         self.children = [self.panel]
         #: Title to (order, provider), in registration order within an order.
-        self._providers: Dict[str, Tuple[int, Provider]] = {}
+        self._providers: dict[str, tuple[int, Provider]] = {}
         self._sequence = 0
 
     # -- the registry -----------------------------------------------------
@@ -257,14 +256,14 @@ class DebugOverlay(HUDLayer):
         """Take a section away -- a subsystem that has been shut down."""
         self._providers.pop(title, None)
 
-    def sections(self) -> List[DebugSection]:
+    def sections(self) -> list[DebugSection]:
         """Ask every provider, in order, for the rows it has right now.
 
         A provider with nothing to say is left out entirely rather than
         appearing as an empty heading: a physics section on a map with no
         physics is noise on a screen that is short of room.
         """
-        found: List[DebugSection] = []
+        found: list[DebugSection] = []
         for title, (_order, provider) in sorted(self._providers.items(),
                                                 key=lambda item: item[1][0]):
             rows = self._rowsFrom(title, provider)
@@ -273,7 +272,7 @@ class DebugOverlay(HUDLayer):
         return found
 
     @staticmethod
-    def _rowsFrom(title: str, provider: Provider) -> List[Tuple[str, str]]:
+    def _rowsFrom(title: str, provider: Provider) -> list[tuple[str, str]]:
         """One provider's rows, formatted, with a failure shown rather than raised."""
         try:
             answer = provider()
@@ -369,7 +368,7 @@ def loop_provider(context: Any) -> Provider:
         summary = trace.summary()
         if not summary['iterations']:
             return []
-        found: List[Tuple[str, Any]] = [
+        found: list[tuple[str, Any]] = [
             ('loop fps', Fixed(summary['rate'])),
             ('loop ms', Fixed(summary['median_ms'])),
             ('worst ms', Fixed(summary['worst_ms'])),
@@ -391,7 +390,7 @@ def render_provider(context: Any) -> Provider:
     """Which renderer features are on, and what the last frame cost in draws."""
     def rows() -> Rows:
         definition = getattr(context, 'contextDefinition', None)
-        found: List[Tuple[str, Any]] = [
+        found: list[tuple[str, Any]] = [
             ('profile', 'core' if getattr(context, 'coreProfile', False)
              else 'compatibility'),
         ]
@@ -430,7 +429,7 @@ def platform_provider(context: Any) -> Provider:
         platform = context.getViewPlatform()
         if platform is None:
             return []
-        found: List[Tuple[str, Any]] = [
+        found: list[tuple[str, Any]] = [
             ('position', tuple(float(value)
                                for value in platform.position[:3])),
         ]
@@ -456,7 +455,7 @@ def physics_provider(world: Callable[[], Any]) -> Provider:
         found_world = world()
         if found_world is None:
             return []
-        found: List[Tuple[str, Any]] = []
+        found: list[tuple[str, Any]] = []
         for name, label in (('bodies', 'bodies'), ('contacts', 'contacts')):
             collection = getattr(found_world, name, None)
             if collection is not None:
@@ -483,7 +482,7 @@ def simulation_provider(simulation: Callable[[], Any]) -> Provider:
         found_sim = simulation()
         if found_sim is None:
             return []
-        found: List[Tuple[str, Any]] = [
+        found: list[tuple[str, Any]] = [
             ('sim hz', Fixed(found_sim.rate())),
             ('asked', Fixed(found_sim.sim_hz)),
             ('steps', found_sim.steps),

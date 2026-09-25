@@ -22,7 +22,7 @@ This license explicitly permits:
 
 import importlib
 from types import ModuleType
-from typing import List, Optional, Tuple
+from typing import Optional
 
 # Font information
 FONT_NAME = 'DejaVu Sans Mono'
@@ -55,7 +55,7 @@ def get_atlas(size: int) -> Optional[ModuleType]:
         return None
 
 
-def get_closest_atlas(size: int) -> Tuple[Optional[int], Optional[ModuleType]]:
+def get_closest_atlas(size: int) -> tuple[Optional[int], Optional[ModuleType]]:
     """Get the atlas module closest to the specified size.
 
     Args:
@@ -72,6 +72,6 @@ def get_closest_atlas(size: int) -> Tuple[Optional[int], Optional[ModuleType]]:
     return closest, get_atlas(closest)
 
 
-def get_available_sizes() -> List[int]:
+def get_available_sizes() -> list[int]:
     """Return list of available font sizes."""
     return list(SIZES)

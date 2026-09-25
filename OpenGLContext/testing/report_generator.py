@@ -8,7 +8,7 @@ import base64
 import html
 import os
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 from OpenGLContext import atomicfiles
 
@@ -385,9 +385,9 @@ class TestReportGenerator:
             title: Title for the HTML report
         """
         self.title = title
-        self.tests: List[Dict[str, Any]] = []
+        self.tests: list[dict[str, Any]] = []
 
-    def add_test(self, test_data: Dict[str, Any]) -> None:
+    def add_test(self, test_data: dict[str, Any]) -> None:
         """Add a test result to the report.
 
         Args:
@@ -430,7 +430,7 @@ class TestReportGenerator:
             test_items='\n'.join(test_items),
         )
 
-    def _generate_test_item(self, test: Dict[str, Any], embed_images: bool) -> str:
+    def _generate_test_item(self, test: dict[str, Any], embed_images: bool) -> str:
         """Generate HTML for a single test item.
 
         Args:
@@ -461,7 +461,7 @@ class TestReportGenerator:
             metadata_section=metadata_section,
         )
 
-    def _generate_images_section(self, test: Dict[str, Any], embed_images: bool) -> str:
+    def _generate_images_section(self, test: dict[str, Any], embed_images: bool) -> str:
         """Generate the images comparison section.
 
         Renders up to four columns. When an ``upstream_image`` (the tertiary
@@ -496,7 +496,7 @@ class TestReportGenerator:
         images = [_image_box(label, test.get(key)) for label, key in columns]
         return f'<div class="image-comparison">{"".join(images)}</div>'
 
-    def _generate_diff_details(self, test: Dict[str, Any], embed_images: bool) -> str:
+    def _generate_diff_details(self, test: dict[str, Any], embed_images: bool) -> str:
         """One collapsible 'Show difference heatmap' toggle holding the amplified
         diff image, the comparison statistics, and stderr/stdout -- the detail a
         reviewer only wants on demand, kept out of the way of the real images."""
@@ -521,7 +521,7 @@ class TestReportGenerator:
         return ('<details class="diff-details"><summary>Show difference heatmap, '
                 'stats &amp; output</summary>%s</details>' % ''.join(parts))
 
-    def _generate_metadata_section(self, test: Dict[str, Any]) -> str:
+    def _generate_metadata_section(self, test: dict[str, Any]) -> str:
         """Render per-view render metadata (model, background, framing, provenance)
         as a collapsible table, from the ``metadata`` dict on the test data."""
         meta = test.get('metadata')
@@ -539,7 +539,7 @@ class TestReportGenerator:
             '<details class="metadata-details"><summary>Render metadata</summary>'
             '<div class="stats"><table>%s</table></div></details>' % ''.join(rows))
 
-    def _stats_rows(self, test: Dict[str, Any]) -> str:
+    def _stats_rows(self, test: dict[str, Any]) -> str:
         """The comparison-statistics table rows (``<tr>...``), or '' if no stats."""
         stats = test.get('comparison_stats')
         if not stats:
@@ -572,7 +572,7 @@ class TestReportGenerator:
 
 
 def generate_report(
-    test_results: List[Dict[str, Any]],
+    test_results: list[dict[str, Any]],
     output_path: str,
     title: str = "OpenGLContext Test Report",
     embed_images: bool = True,

@@ -22,7 +22,8 @@ reference screenshot, and being offline costs pictures and nothing else.
 """
 from dataclasses import dataclass, field, replace
 from functools import lru_cache
-from typing import Any, Dict, Iterable, Mapping, Optional, Tuple
+from collections.abc import Iterable, Mapping
+from typing import Any, Optional
 
 __all__ = ['Entry', 'Library', 'default_library', 'sample_entries',
            'world_entries', 'screenshot_urls',
@@ -72,9 +73,9 @@ class Library(object):
     """A shelf of :class:`Entry`, grouped into categories."""
 
     def __init__(self, entries: Iterable[Entry] = ()) -> None:
-        self.entries: Tuple[Entry, ...] = tuple(entries)
+        self.entries: tuple[Entry, ...] = tuple(entries)
 
-    def categories(self) -> Tuple[str, ...]:
+    def categories(self) -> tuple[str, ...]:
         """The categories present, in :data:`CATEGORY_ORDER` and then by name.
 
         A stable order, because a shelf that rearranges itself between runs is
@@ -84,7 +85,7 @@ class Library(object):
         known = [name for name in CATEGORY_ORDER if name in present]
         return tuple(known + sorted(present - set(CATEGORY_ORDER)))
 
-    def inCategory(self, category: str) -> Tuple[Entry, ...]:
+    def inCategory(self, category: str) -> tuple[Entry, ...]:
         """Everything on one shelf, in the order it was added."""
         return tuple(entry for entry in self.entries
                      if entry.category == category)
@@ -118,7 +119,7 @@ class Library(object):
 
 
 @lru_cache(maxsize=1)
-def screenshot_urls() -> Dict[str, str]:
+def screenshot_urls() -> dict[str, str]:
     """Sample name -> reference screenshot URL, from the Khronos catalogue.
 
     Memoised for the life of the process: the catalogue is one document and the
@@ -152,7 +153,7 @@ def _category_for(spec: Any) -> str:
     return MODELS
 
 
-def _options_for(spec: Any) -> Dict[str, Any]:
+def _options_for(spec: Any) -> dict[str, Any]:
     """The viewer options a demo-roster scene records for itself.
 
     Not ``anim_time``: that pins an animation to one instant so a *capture* is
@@ -160,7 +161,7 @@ def _options_for(spec: Any) -> Dict[str, Any]:
     stands.  The roster is shared with the capture harness, so what it records
     is not all meant for here.
     """
-    options: Dict[str, Any] = {}
+    options: dict[str, Any] = {}
     for name in ('yaw', 'elevation', 'tilt', 'margin'):
         value = getattr(spec, name, None)
         if value:
@@ -174,7 +175,7 @@ def _options_for(spec: Any) -> Dict[str, Any]:
     return options
 
 
-def sample_entries() -> Tuple[Entry, ...]:
+def sample_entries() -> tuple[Entry, ...]:
     """The demo roster as library entries, in its own order.
 
     A Khronos sample's ``source`` is **its URL**, not its name.  A bare name is
@@ -199,7 +200,7 @@ def sample_entries() -> Tuple[Entry, ...]:
     return tuple(entries)
 
 
-def world_entries(directory: Optional[str] = None) -> Tuple[Entry, ...]:
+def world_entries(directory: Optional[str] = None) -> tuple[Entry, ...]:
     """The VRML97 worlds in ``directory`` as library entries.
 
     **Not part of the default shelf.**  The only ``.wrl`` files this project

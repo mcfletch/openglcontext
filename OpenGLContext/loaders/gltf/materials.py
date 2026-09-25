@@ -16,7 +16,8 @@ spec/gloss workflow is converted to metallic/roughness in the sibling
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Callable, List, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGLContext.scenegraph.pbrmaterial import (
     PBRMaterial, PBRTexture, uv_transform_matrix,
@@ -60,7 +61,7 @@ class _TextureCollector:
         self._tex_cache = tex_cache
         self.textures: dict = {}
         self.tex_coord_mask = 0
-        self.uv_transform: Optional[List[List[float]]] = None
+        self.uv_transform: Optional[list[list[float]]] = None
         self.uv_params: Optional[dict] = None
         self._values = DocumentValues(logger=log)
 

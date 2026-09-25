@@ -3,7 +3,8 @@
 Draws through the shader pass under the core profile, and as a display list
 under the compatibility profile.
 """
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
+from collections.abc import Iterator, Sequence
+from typing import Any, Optional
 
 from OpenGL.GL import *
 from OpenGL.GL import glDeleteVertexArrays
@@ -40,7 +41,7 @@ class IndexedLineSet(
     
     # This code is not OpenGL 3.1 compatible
     """
-    def instanceContentKey(self) -> Tuple[Any, ...]:
+    def instanceContentKey(self) -> tuple[Any, ...]:
         """Signature so identical wireframes (same points/index/colour) batch.
 
         Debug collision proxies share one unit box / unit sphere wireframe, so
@@ -51,7 +52,7 @@ class IndexedLineSet(
         col = np.asarray(self.color.color, dtype='f').tobytes() if self.color else b''
         return ('IndexedLineSet', pts, idx, col, bool(self.colorPerVertex))
 
-    def _expand_line_vertices(self) -> Tuple[Any, Any]:
+    def _expand_line_vertices(self) -> tuple[Any, Any]:
         """Expand the polylines to flat ``GL_LINES`` vertex/colour pairs (M, 3)."""
         points = np.asarray(self.coord.point, dtype='f')
         indices = expandIndices(self.coordIndex)
@@ -60,8 +61,8 @@ class IndexedLineSet(
         cidx = None
         if colors is not None and self.colorPerVertex:
             cidx = (expandIndices(self.colorIndex) if len(self.colorIndex) else indices)
-        verts: List[Any] = []
-        cols: List[Any] = []
+        verts: list[Any] = []
+        cols: list[Any] = []
         for pi, poly in enumerate(indices):
             pc = cidx[pi] if cidx is not None else None
             for k in range(len(poly) - 1):
@@ -271,7 +272,7 @@ class IndexedLineSet(
         shader_program.use(lit=True)
         return 1
 
-    def _line_buffer(self, mode: Any, has_colors: bool) -> Tuple[Any, int, List[Any]]:
+    def _line_buffer(self, mode: Any, has_colors: bool) -> tuple[Any, int, list[Any]]:
         """Return (vbo, stride, segments) for the polylines, rebuilt only on change.
 
         ``segments`` is a list of (first, count) draw ranges into a single
@@ -287,7 +288,7 @@ class IndexedLineSet(
         points = np.asarray(self.coord.point, dtype='f')
         indices = expandIndices(self.coordIndex)
         colors: Optional[Any] = None
-        color_indices: List[Any] = []
+        color_indices: list[Any] = []
         if has_colors:
             colors = np.asarray(self.color.color, dtype='f')
             if self.colorPerVertex:
@@ -299,8 +300,8 @@ class IndexedLineSet(
             else:
                 color_indices = [[i] * len(poly) for i, poly in enumerate(indices)]
 
-        rows: List[Any] = []
-        segments: List[Tuple[int, int]] = []
+        rows: list[Any] = []
+        segments: list[tuple[int, int]] = []
         first = 0
         width = 6 if has_colors else 3
         for poly_idx, polyline in enumerate(indices):
@@ -433,10 +434,10 @@ class _LineInstanceGPU(object):
             self._instance_vao = None
 
 
-def expandIndices( indices: Any ) -> List[List[int]]:
+def expandIndices( indices: Any ) -> list[list[int]]:
     """Create a set of poly-line definitions"""
-    items: List[List[int]] = []
-    current: List[int] = []
+    items: list[list[int]] = []
+    current: list[int] = []
     for i in indices:
         if i == -1:
             if len(current)<2:

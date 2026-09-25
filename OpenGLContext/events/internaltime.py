@@ -1,5 +1,6 @@
 """Track a (potentially scaled) time with respect to an external time"""
-from typing import List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Optional
 
 from .timeevents import *
 
@@ -72,21 +73,21 @@ class InternalTime(object):
         """Get the last "external" time passed to the timer"""
         return self.lastRealTime
     
-    def start( self, realTime: float) -> List[TimeEvent]:
+    def start( self, realTime: float) -> list[TimeEvent]:
         """Start the timer from 0 for forward multipliers, duration for reverse multipliers"""
         self.active = 1
         self.lastRealTime = realTime
         self._resetCurrent()
         self.count = self.count + 1
         return [ StartEvent( self ) ]
-    def pause( self, realTime: float) -> List[TimeEvent]:
+    def pause( self, realTime: float) -> list[TimeEvent]:
         """Pause the timer, use resume to continue
 
         Note: does not create a FractionalEvent
         """
         self.active = 0
         return [ PauseEvent( self ) ]
-    def resume( self, realTime: float) -> List[TimeEvent]:
+    def resume( self, realTime: float) -> list[TimeEvent]:
         """Continue a paused timer
 
         Note: does not create a FractionalEvent
@@ -94,7 +95,7 @@ class InternalTime(object):
         self.active = 1
         self.lastRealTime = realTime
         return [ ResumeEvent( self ) ]
-    def stop( self, realTime: float) -> List[TimeEvent]:
+    def stop( self, realTime: float) -> list[TimeEvent]:
         """Stop this cycle (reset current fraction)"""
         if self.active:
             self.active = 0
@@ -130,16 +131,16 @@ class InternalTime(object):
         """Does the timer repeat, 0-no, 1-yes, >1-yes, count times"""
         return (self.repeating > 0)
         
-    def _finish( self, realTime: float ) -> List[TimeEvent]:
+    def _finish( self, realTime: float ) -> list[TimeEvent]:
         """Set in active and return finalization events"""
         self.active = 0
         if self.discreteOnly:
             return [ StopEvent( self ), ]
         else:
             return [ FractionalEvent (self), StopEvent( self ), ]
-    def _period( self, realTime: float ) -> List[TimeEvent]:
+    def _period( self, realTime: float ) -> list[TimeEvent]:
         """Interpret a cycle/period boundary, returning appropriate messages"""
-        messages: List[TimeEvent] = []
+        messages: list[TimeEvent] = []
         if self._repeats() and (self.count < self.repeating or self.repeating == 1):
             # repeat forever, or not yet done
             self._resetCurrent( 0 )

@@ -27,7 +27,8 @@ form a base pack and what it needs take. Building the screen touches no GL.
 from __future__ import annotations
 
 from gettext import gettext as _
-from typing import Any, Callable, List, Optional, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any, Optional
 
 from OpenGLContext.contentpacks.fetch import FetchJob
 from OpenGLContext.contentpacks.pack import ContentPack, human_bytes
@@ -92,7 +93,7 @@ class ContentScreen:
                  columns: int = COLUMNS,
                  job: Optional[FetchJob] = None,
                  heading: str = '') -> None:
-        self.packs: List[ContentPack] = []
+        self.packs: list[ContentPack] = []
         self.wanted = wanted
         self.together = together
         self.on_fetch = on_fetch
@@ -116,7 +117,7 @@ class ContentScreen:
         self.fetch_button.on_activate = lambda _widget: self._start()
         self.stop_button.on_activate = lambda _widget: self._stop()
         self.close_button.on_activate = lambda _widget: self._close()
-        body: List[Any] = [self.caption, self.progress, Separator(top=6),
+        body: list[Any] = [self.caption, self.progress, Separator(top=6),
                            Row(spacing=8, name='buttons', children=[
                                self.fetch_button, self.stop_button, Spacer(),
                                self.close_button])]
@@ -160,7 +161,7 @@ class ContentScreen:
                     return pack
         return self.packs[0]
 
-    def whole(self) -> List[ContentPack]:
+    def whole(self) -> list[ContentPack]:
         """Every pack a Download would fetch."""
         if self.together:
             return list(self.packs)

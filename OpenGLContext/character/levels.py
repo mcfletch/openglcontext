@@ -26,7 +26,8 @@ whose elbow is driven by its hip is worse than a figure drawn at full detail.
 from __future__ import annotations
 
 import logging
-from typing import Any, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, Optional
 
 # The engine's own Group, which is what offers ``renderedChildren``: the
 # renderer walks a scenegraph by asking each node for that and nothing else, so
@@ -55,7 +56,7 @@ def levels_match(fine: Any, coarse: Any) -> bool:
     return True
 
 
-def _joint_names(scene: Any, skin: Any) -> List[Optional[str]]:
+def _joint_names(scene: Any, skin: Any) -> list[Optional[str]]:
     names = getattr(scene, 'node_names', None) or {}
     return [names.get(int(joint)) for joint in skin.joints]
 

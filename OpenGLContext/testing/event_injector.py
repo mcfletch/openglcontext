@@ -41,7 +41,7 @@ import os
 import socket
 import sys
 import time
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGLContext.events import synthetic
 from OpenGLContext.testing.process_exit import flush_and_exit
@@ -88,7 +88,7 @@ def _bind_listener(sock: socket.socket, path: str) -> None:
     os.replace(temporary, path)
 
 
-def _sender_address(path: str) -> Union[str, Tuple[str, int]]:
+def _sender_address(path: str) -> str | tuple[str, int]:
     """Where a sender should connect to reach the listener named by *path*.
 
     Raises :class:`FileNotFoundError` while the listener has yet to publish
@@ -127,7 +127,7 @@ class EventInjector:
         self._buffer = ''
         self._socket: Optional[socket.socket] = None
         self._conn: Optional[socket.socket] = None
-        self._captures: Dict[str, Any] = {}
+        self._captures: dict[str, Any] = {}
 
         if socket_path:
             self._setup_socket(socket_path)
@@ -162,7 +162,7 @@ class EventInjector:
         flags = fcntl.fcntl(fd, fcntl.F_GETFL)
         fcntl.fcntl(fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
-    def poll(self) -> List[Dict[str, Any]]:
+    def poll(self) -> list[dict[str, Any]]:
         """Poll for and return available events.
 
         Returns:
@@ -268,7 +268,7 @@ class EventInjectionMixin:
     """
 
     _event_injector: Optional[EventInjector] = None
-    _injection_captures: Dict[str, Any] = {}
+    _injection_captures: dict[str, Any] = {}
 
     if TYPE_CHECKING:
         # Provided by the concrete Context this mixin is composed into
@@ -337,7 +337,7 @@ class EventInjectionMixin:
         for event in self._event_injector.poll():
             self._dispatch_injected_event(event)
 
-    def _dispatch_injected_event(self, event: Dict[str, Any]) -> None:
+    def _dispatch_injected_event(self, event: dict[str, Any]) -> None:
         """Convert JSON event to OpenGLContext event and dispatch.
 
         The input vocabulary is :mod:`OpenGLContext.events.synthetic`, shared
@@ -360,7 +360,7 @@ class EventInjectionMixin:
         else:
             log.warning("EventInjector: Unknown event type: %s", event_type)
 
-    def _inject_keyboard(self, event: Dict[str, Any]) -> None:
+    def _inject_keyboard(self, event: dict[str, Any]) -> None:
         """Inject a raw key, and the character a press of it also produces.
 
         A key generates a low-level ``keyboard`` event, and on press a
@@ -408,7 +408,7 @@ class EventInjectionMixin:
         else:
             flush_and_exit(0)
 
-    def get_injection_captures(self) -> Dict[str, Any]:
+    def get_injection_captures(self) -> dict[str, Any]:
         """Get all captured framebuffers.
 
         Returns:
@@ -472,7 +472,7 @@ class EventSender:
 
         return False
 
-    def send_event(self, event: Dict[str, Any]) -> None:
+    def send_event(self, event: dict[str, Any]) -> None:
         """Send a raw event dictionary.
 
         Args:
@@ -489,7 +489,7 @@ class EventSender:
         y: int,
         button: int = 0,
         state: int = 1,
-        modifiers: Optional[List[int]] = None,
+        modifiers: Optional[list[int]] = None,
         pick: bool = False,
     ) -> None:
         """Send a mouse button event.
@@ -518,8 +518,8 @@ class EventSender:
         self,
         x: int,
         y: int,
-        buttons: Optional[List[int]] = None,
-        modifiers: Optional[List[int]] = None,
+        buttons: Optional[list[int]] = None,
+        modifiers: Optional[list[int]] = None,
         pick: bool = False,
     ) -> None:
         """Send a mouse move event.
@@ -544,7 +544,7 @@ class EventSender:
         self,
         key: str,
         state: int = 1,
-        modifiers: Optional[List[int]] = None,
+        modifiers: Optional[list[int]] = None,
     ) -> None:
         """Send a keyboard event.
 

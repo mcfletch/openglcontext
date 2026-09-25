@@ -36,7 +36,8 @@ are next read, so a busy scene does not flood the host.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, Dict, Iterable, List, NamedTuple, Optional, Set, Tuple
+from collections.abc import Callable, Iterable
+from typing import Any, NamedTuple, Optional
 
 from pydispatch import dispatcher
 from vrml import field as _field
@@ -49,10 +50,10 @@ __all__ = ['OutlinePath', 'OutlineRow', 'SceneOutline', 'isNode', 'nodeChildren'
 log = logging.getLogger(__name__)
 
 #: A row's address: the child indices leading to it from the root, which is ``()``.
-OutlinePath = Tuple[int, ...]
+OutlinePath = tuple[int, ...]
 
 
-def nodeFields(node: Any) -> List[Any]:
+def nodeFields(node: Any) -> list[Any]:
     """The fields of *node* that hold the nodes under it, in name order
 
     A weak field is left out: it refers to a node that lives somewhere else,
@@ -65,13 +66,13 @@ def nodeFields(node: Any) -> List[Any]:
     return sorted(fields, key=lambda field: field.name)
 
 
-def nodeChildren(node: Any) -> List[Tuple[str, Any]]:
+def nodeChildren(node: Any) -> list[tuple[str, Any]]:
     """The nodes under *node*, each with the name of the field it hangs from
 
     Single- and multiple-valued fields read the same way here: ``geometry``
     contributes one child and ``children`` contributes as many as it holds.
     """
-    children: List[Tuple[str, Any]] = []
+    children: list[tuple[str, Any]] = []
     for field in nodeFields(node):
         try:
             value = field.fget(node)
@@ -94,7 +95,7 @@ def isNode(value: Any) -> bool:
     return isinstance(value, _node.Node) and not isinstance(value, _node.NullNode)
 
 
-def nodeSummary(node: Any, width: int = 60) -> List[Tuple[str, str]]:
+def nodeSummary(node: Any, width: int = 60) -> list[tuple[str, str]]:
     """What one node holds, as ``(field name, value)`` text in name order
 
     The panel beside a tree: the values a node carries in its own right, with
@@ -104,7 +105,7 @@ def nodeSummary(node: Any, width: int = 60) -> List[Tuple[str, str]]:
     """
     if node is None:
         return []
-    summary: List[Tuple[str, str]] = []
+    summary: list[tuple[str, str]] = []
     for field in sorted(protofunctions.getFields(node), key=lambda field: field.name):
         if getattr(field, 'nodes', 0) or field.name.startswith(' '):
             continue
@@ -160,15 +161,15 @@ class SceneOutline:
     ) -> None:
         self.onChange = onChange
         #: The paths whose children are shown.  The root opens with the scene.
-        self.expanded: Set[OutlinePath] = (
+        self.expanded: set[OutlinePath] = (
             {()} if expanded is None else {tuple(path) for path in expanded}
         )
         self._root: Any = None
-        self._rows: List[OutlineRow] = []
+        self._rows: list[OutlineRow] = []
         self._dirty = False
         self._selection: Optional[OutlinePath] = None
         #: The nodes being listened to, and the fields listened to on each.
-        self._watched: Dict[int, Tuple[Any, Tuple[Any, ...]]] = {}
+        self._watched: dict[int, tuple[Any, tuple[Any, ...]]] = {}
         self.root = root
 
     # -- the scene --------------------------------------------------------
@@ -197,13 +198,13 @@ class SceneOutline:
 
     # -- the rows ---------------------------------------------------------
     @property
-    def rows(self) -> List[OutlineRow]:
+    def rows(self) -> list[OutlineRow]:
         """The visible rows, walked again first if the scene has changed."""
         if self._dirty:
             self.refresh()
         return self._rows
 
-    def refresh(self) -> List[OutlineRow]:
+    def refresh(self) -> list[OutlineRow]:
         """Walk the scene now, whether or not anything said it had changed."""
         rows = self._walk()
         self._rows = rows
@@ -220,17 +221,17 @@ class SceneOutline:
         """
         return self._dirty
 
-    def _walk(self) -> List[OutlineRow]:
+    def _walk(self) -> list[OutlineRow]:
         """Depth-first through the expanded part of the scene"""
         if self._root is None:
             return []
-        rows: List[OutlineRow] = []
+        rows: list[OutlineRow] = []
         # An explicit stack rather than recursion: how deep a loaded scene goes
         # is the file's business, so it is bounded by memory here rather than by
         # the interpreter's recursion limit.
         # ``above`` is every node on the way to this one, which is what stops a
         # scene that refers back to itself being walked twice.
-        stack: List[Tuple[OutlinePath, Any, Optional[str], Tuple[Any, ...]]] = [
+        stack: list[tuple[OutlinePath, Any, Optional[str], tuple[Any, ...]]] = [
             ((), self._root, None, ())
         ]
         while stack:
@@ -308,7 +309,7 @@ class SceneOutline:
         return None
 
     # -- watching the scene -----------------------------------------------
-    def _watchedFields(self, node: Any) -> Tuple[Any, ...]:
+    def _watchedFields(self, node: Any) -> tuple[Any, ...]:
         """The fields of *node* whose changing changes this outline
 
         Which is the structure under it, and the name it is shown by.
@@ -322,7 +323,7 @@ class SceneOutline:
         outline of a large scene does not disconnect and reconnect thousands of
         fields for each change.
         """
-        wanted: Dict[int, Any] = {}
+        wanted: dict[int, Any] = {}
         for row in rows:
             wanted.setdefault(id(row.node), row.node)
         for key, (node, fields) in list(self._watched.items()):
@@ -335,7 +336,7 @@ class SceneOutline:
                 self._connect(node, fields, dispatcher.connect)
                 self._watched[key] = (node, fields)
 
-    def _connect(self, node: Any, fields: Tuple[Any, ...], action: Callable[..., Any]) -> None:
+    def _connect(self, node: Any, fields: tuple[Any, ...], action: Callable[..., Any]) -> None:
         """Subscribe to, or unsubscribe from, each of *fields* on *node*
 
         Both the value being replaced and the field being deleted are changes

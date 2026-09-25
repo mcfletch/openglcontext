@@ -22,7 +22,8 @@ by the interface scale, exactly as the skin's are -- see
 :mod:`OpenGLContext.ui.metrics`.
 """
 
-from typing import Any, Iterator, List, Optional, Sequence, Tuple
+from collections.abc import Iterator, Sequence
+from typing import Any, Optional
 
 from vrml import field, node
 
@@ -34,7 +35,7 @@ ROW = 'row'
 COLUMN = 'column'
 
 
-def distribute(children: Sequence[Any], mains: List[int], spare: int) -> List[int]:
+def distribute(children: Sequence[Any], mains: list[int], spare: int) -> list[int]:
     """Share out (or claw back) main-axis space among the flexible children.
 
     Space left over goes to the children that asked for it, in proportion to
@@ -119,7 +120,7 @@ class GUINode(object):
 
     # -- measurement ------------------------------------------------------
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         """Size of what is inside, ignoring margins.  Overridden by widgets.
 
         ``available`` is the width the caller can offer, or None when it does
@@ -129,7 +130,7 @@ class GUINode(object):
         return (0, 0)
 
     def natural_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         """Size this asks for, including its margins.
 
         An explicit ``width``/``height`` wins over the measurement, which is
@@ -233,7 +234,7 @@ class PaintedImage(GUINode, node.Node):
     image = field.newField("image", "SFImage", 1, None)
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         if self.image is not None:
             return (int(self.image.width), int(self.image.height))
         return (0, 0)
@@ -274,7 +275,7 @@ class GUIBox(GUINode, node.Node):
                 if getattr(child, 'visible', True)]
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         children = self.layoutChildren()
         sizes = [child.natural_size(metrics,
                                     self._childAvailable(available, metrics))
@@ -314,9 +315,9 @@ class GUIBox(GUINode, node.Node):
         return max(0, int(available) - int(metrics.pixels(self.padding)) * 2)
 
     @staticmethod
-    def _remeasure(children: Sequence[Any], sizes: List[Tuple[int, int]],
-                   mains: List[int], metrics: FontMetrics, room: int
-                   ) -> Tuple[List[Tuple[int, int]], List[int]]:
+    def _remeasure(children: Sequence[Any], sizes: list[tuple[int, int]],
+                   mains: list[int], metrics: FontMetrics, room: int
+                   ) -> tuple[list[tuple[int, int]], list[int]]:
         """Second pass along a row, for children whose height follows a width.
 
         Two things happen, and only to the children that say they wrap.  Each
@@ -367,12 +368,12 @@ class GUIBox(GUINode, node.Node):
             cursor += main + spacing + gap
 
     def _distribute(self, children: Sequence[GUINode],
-                    sizes: Sequence[Tuple[int, int]], spare: int) -> List[int]:
+                    sizes: Sequence[tuple[int, int]], spare: int) -> list[int]:
         """Main-axis size for each child: natural, plus its share of ``spare``."""
         mains = [int(size[0] if self.horizontal else size[1]) for size in sizes]
         return distribute(children, mains, spare)
 
-    def _justify(self, spare: int, count: int) -> Tuple[int, int]:
+    def _justify(self, spare: int, count: int) -> tuple[int, int]:
         """Where the run of children starts, and any gap added between them."""
         if spare <= 0:
             return (0, 0)
@@ -386,7 +387,7 @@ class GUIBox(GUINode, node.Node):
         return (0, 0)
 
     def _childRect(self, inner: Rect, cursor: int, main: int,
-                   size: Tuple[int, int]) -> Rect:
+                   size: tuple[int, int]) -> Rect:
         """One child's rectangle, from its main-axis run and the cross axis."""
         if self.horizontal:
             cross, extent = self._cross(inner.height, size[1])
@@ -395,7 +396,7 @@ class GUIBox(GUINode, node.Node):
         cross, extent = self._cross(inner.width, size[0])
         return Rect(inner.x + cross, inner.top - cursor - main, extent, main)
 
-    def _cross(self, available: int, natural: int) -> Tuple[int, int]:
+    def _cross(self, available: int, natural: int) -> tuple[int, int]:
         """Offset and size across the axis the box does not run along."""
         align = self.align
         if align == 'stretch':

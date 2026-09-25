@@ -18,7 +18,8 @@ import json
 import logging
 import os
 import tempfile
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from OpenGLContext.loaders.resolver import contained_source
 
@@ -50,7 +51,7 @@ def save_bindings(navigation: Any, path: Optional[str] = None) -> str:
     it, which is atomic on every platform this runs on.
     """
     path = path or bindings_path()
-    stored: Dict[str, Dict[str, Any]] = {}
+    stored: dict[str, dict[str, Any]] = {}
     for mode_name, binding in navigation.binding_table():
         stored.setdefault(mode_name, {})[binding.command] = {
             'keys': [str(key) for key in binding.keys],
@@ -105,7 +106,7 @@ def load_bindings(navigation: Any, path: Optional[str] = None) -> bool:
     return True
 
 
-def _keyList(value: Any, where: str) -> Optional[List[str]]:
+def _keyList(value: Any, where: str) -> Optional[list[str]]:
     """A saved ``keys`` entry, or None if it is not one.
 
     A string is refused rather than iterated: ``"wasd"`` is somebody meaning
@@ -137,14 +138,14 @@ def _modifier(value: Any, where: str) -> str:
     return value
 
 
-def snapshot(navigation: Any) -> Dict[str, Dict[str, Any]]:
+def snapshot(navigation: Any) -> dict[str, dict[str, Any]]:
     """Every binding as it stands, in a form :func:`restore` can put back.
 
     What makes the binding page's Cancel real.  Plain data rather than the
     nodes themselves, so a reset that rebuilds a mode's bindings can still be
     undone.
     """
-    kept: Dict[str, Dict[str, Any]] = {}
+    kept: dict[str, dict[str, Any]] = {}
     for mode_name, binding in navigation.binding_table():
         kept.setdefault(mode_name, {})[str(binding.command)] = {
             'keys': [str(key) for key in binding.keys],
@@ -153,7 +154,7 @@ def snapshot(navigation: Any) -> Dict[str, Dict[str, Any]]:
     return kept
 
 
-def restore(navigation: Any, kept: Dict[str, Dict[str, Any]]) -> None:
+def restore(navigation: Any, kept: dict[str, dict[str, Any]]) -> None:
     """Put the bindings back as :func:`snapshot` found them."""
     for mode in navigation.modes():
         saved = kept.get(str(mode.name))
@@ -204,9 +205,9 @@ def reset_bindings(navigation: Any, path: Optional[str] = None) -> None:
         forget_saved(path)
 
 
-def conflicts(table: Sequence[Tuple[str, Any]], key: str, modifier: str = '',
+def conflicts(table: Sequence[tuple[str, Any]], key: str, modifier: str = '',
               mode: Optional[str] = None, skip: Any = None
-              ) -> List[Tuple[str, Any]]:
+              ) -> list[tuple[str, Any]]:
     """Bindings that already claim a key, and would fight over it.
 
     Two things narrow what counts as a fight:

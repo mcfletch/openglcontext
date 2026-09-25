@@ -48,7 +48,8 @@ reads its pointer some other way.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
+from collections.abc import Sequence
+from typing import Any, Optional, Union
 
 import numpy as np
 
@@ -74,7 +75,7 @@ FLAT_BACKGROUND = (0.32, 0.33, 0.35)
 #: not.
 OPENING_HEADING = 330.0
 
-Colour = Union[Tuple[float, float, float], Tuple[float, float, float, float]]
+Colour = tuple[float, float, float] | tuple[float, float, float, float]
 
 
 class QuadView:
@@ -98,7 +99,7 @@ class QuadView:
             raise ValueError('a quad view has three orthographic views, not %d'
                              % len(directions))
         #: The orthographic views' cameras, by direction.
-        self.orthographic: Dict[str, OrthoView] = {
+        self.orthographic: dict[str, OrthoView] = {
             direction: OrthoView(direction) for direction in directions}
         #: The perspective view's camera. It may go below the model as well as
         #: above it: an object, unlike the land, has an underside to look at.
@@ -107,10 +108,10 @@ class QuadView:
         #: Which of the scene's cameras to open on.
         self.choose_camera = choose_camera
         #: The scene's cameras, as :meth:`cameras_found` was last told them.
-        self.cameras: List[SceneCamera] = []
+        self.cameras: list[SceneCamera] = []
         #: The box last framed, which is how far ahead a camera looked
         #: through is orbited about.
-        self._framed: Optional[Tuple[np.ndarray, np.ndarray]] = None
+        self._framed: Optional[tuple[np.ndarray, np.ndarray]] = None
         flat = ViewStyle(background=background, grid=True)
         views = [View(OrthoViewPlatform(camera), name=direction, style=flat)
                  for direction, camera in self.orthographic.items()]

@@ -34,7 +34,7 @@ named point buys.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import numpy as np
 
@@ -63,7 +63,7 @@ def generation() -> int:
 SOCKET_PREFIX = 'socket_'
 
 
-def sockets(scene: Any, prefix: str = SOCKET_PREFIX) -> Dict[str, Any]:
+def sockets(scene: Any, prefix: str = SOCKET_PREFIX) -> dict[str, Any]:
     """The attachment points a loaded glTF declares, by the name after ``prefix``.
 
     ``scene`` is a :class:`~OpenGLContext.loaders.gltf.scene.GLTFScene`. The
@@ -72,7 +72,7 @@ def sockets(scene: Any, prefix: str = SOCKET_PREFIX) -> Dict[str, Any]:
     """
     names = getattr(scene, 'node_names', None) or {}
     transforms = getattr(scene, 'node_transforms', None) or {}
-    out: Dict[str, Any] = {}
+    out: dict[str, Any] = {}
     for index, name in sorted(names.items()):
         if name.startswith(prefix):
             transform = transforms.get(index)

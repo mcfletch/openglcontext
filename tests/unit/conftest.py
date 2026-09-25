@@ -11,7 +11,7 @@ The environment those memos are read from is the shipped plugin's to restore --
 rather than for this directory.
 """
 
-from typing import Iterator
+from collections.abc import Iterator
 
 import pytest
 

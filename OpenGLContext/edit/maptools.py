@@ -8,7 +8,8 @@ is a mode of its own, and this is it.
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Optional, Tuple
+from collections.abc import Callable
+from typing import Any, Optional
 
 from OpenGLContext.edit.mapview import MapView
 from OpenGLContext.edit.tools import Pointer, ToolMode
@@ -26,7 +27,7 @@ class PanTool(ToolMode):
     """
 
     def __init__(self, view: MapView,
-                 viewport: Callable[[], Tuple[int, int]],
+                 viewport: Callable[[], tuple[int, int]],
                  on_change: Optional[Callable[[], None]] = None,
                  **named: Any) -> None:
         named.setdefault('name', 'pan')
@@ -37,7 +38,7 @@ class PanTool(ToolMode):
         self.viewport = viewport
         #: Called after the map has moved.
         self.on_change = on_change
-        self._from: Optional[Tuple[float, float]] = None
+        self._from: Optional[tuple[float, float]] = None
 
     def cancel(self) -> None:
         self._from = None

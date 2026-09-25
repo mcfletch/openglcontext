@@ -2,7 +2,8 @@
 import math
 import weakref
 import logging
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from OpenGL.GL import *
 from OpenGLContext.arrays import zeros, array, dot, ArrayType
@@ -19,7 +20,7 @@ class _Strip( object ):
         self.height = height 
         self.width = 0
         self.yoffset = yoffset
-        self.maps: List['weakref.ref[Map]'] = []
+        self.maps: list['weakref.ref[Map]'] = []
     def start_coord( self, x: int ) -> int:
         """Do we have an empty space sufficient to fit image of width x?
         
@@ -67,14 +68,14 @@ class Atlas( object ):
     use for modifying texture coordinates to map from the
     original to the packed coordinates.
     """
-    _size: Optional[Tuple[int, int, int]] = None
+    _size: Optional[tuple[int, int, int]] = None
     def __init__( self, components: int = 4, dataType: str = 'B',
                   max_size: int = 4096 ) -> None:
         self.components = components
         self.dataType = dataType
-        self.strips: List[_Strip] = []
+        self.strips: list[_Strip] = []
         self.max_size = max_size
-        self.need_updates: List['weakref.ref[Map]'] = []
+        self.need_updates: list['weakref.ref[Map]'] = []
         self.texture: Optional[texture.Texture] = None
         log.info( 
             'Allocating a %s-component texture atlas of size %sx%s',
@@ -93,7 +94,7 @@ class Atlas( object ):
         strip,start = self.choose_strip( max_x, max_y, x, y )
         return strip.add( image, start=start )
     def choose_strip( self, max_x: int, max_y: int,
-                      x: int, y: int ) -> Tuple['_Strip', int]:
+                      x: int, y: int ) -> tuple['_Strip', int]:
         """Find the strip to which we should be added"""
         candidates = [ 
             s 
@@ -126,7 +127,7 @@ class Atlas( object ):
         start = strip.start_coord( x )
         return strip, start
     
-    def size( self ) -> Tuple[int, int, int]:
+    def size( self ) -> tuple[int, int, int]:
         """The atlas texture's width, height and component count"""
         if self._size is None:
             x = y = self.max_size
@@ -184,8 +185,8 @@ class Map( object ):
     _matrix: Any = None
     _coords: Any = None
     _uploaded = False
-    def __init__( self, atlas: 'Atlas', offset: Tuple[int, int],
-                  size: Tuple[int, int], image: Any ) -> None:
+    def __init__( self, atlas: 'Atlas', offset: tuple[int, int],
+                  size: tuple[int, int], image: Any ) -> None:
         self.atlas = atlas 
         self.offset = offset 
         self.size = size
@@ -258,7 +259,7 @@ class AtlasManager( object ):
     """Collection of atlases within the renderer"""
     def __init__( self, max_size: Optional[int] = 4096,
                   max_child_size: int = 128 ) -> None:
-        self.components: Dict[int, List[Atlas]] = {}
+        self.components: dict[int, list[Atlas]] = {}
         self.max_size = max_size
         self.max_child_size = max_child_size
     FORMAT_MAPPING = {

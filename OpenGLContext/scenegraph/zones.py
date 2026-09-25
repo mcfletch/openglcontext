@@ -37,8 +37,8 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import (Any, Dict, Hashable, Iterable, List, Mapping, Optional,
-                    Sequence, Tuple)
+from collections.abc import Hashable, Iterable, Mapping, Sequence
+from typing import Any, Optional
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -84,7 +84,7 @@ class ShapeSpec:
     """
 
     kind: str
-    size: Tuple[float, float, float] = (1.0, 1.0, 1.0)
+    size: tuple[float, float, float] = (1.0, 1.0, 1.0)
     radius: float = 0.5
     height: float = 0.5
     radius_top: float = 0.25
@@ -114,11 +114,11 @@ class PlacedShape:
 
     kind: str
     to_local: np.ndarray
-    params: Tuple[float, ...]
+    params: tuple[float, ...]
     #: The frame's translation: where the shape's centre is in the world.
-    centre: Tuple[float, float, float] = (0.0, 0.0, 0.0)
+    centre: tuple[float, float, float] = (0.0, 0.0, 0.0)
     #: Half extents of a box that encloses the shape in its own frame.
-    reach: Tuple[float, float, float] = (0.0, 0.0, 0.0)
+    reach: tuple[float, float, float] = (0.0, 0.0, 0.0)
 
     @property
     def volume(self) -> float:
@@ -199,7 +199,7 @@ def place(shape: ShapeSpec, matrix: Optional[ArrayLike] = None) -> PlacedShape:
     to_local[:3, :3] = rotation.T
     to_local[3, :3] = -origin @ rotation.T
     kind = shape.kind
-    params: Tuple[float, ...]
+    params: tuple[float, ...]
     if kind == BOX:
         half = np.abs(np.asarray(shape.size, dtype='d')) * scale / 2.0
         params = tuple(float(v) for v in half)
@@ -223,7 +223,7 @@ def place(shape: ShapeSpec, matrix: Optional[ArrayLike] = None) -> PlacedShape:
     return PlacedShape(kind, to_local, params, _triple(origin), _triple(reach))
 
 
-def _triple(values: Any) -> Tuple[float, float, float]:
+def _triple(values: Any) -> tuple[float, float, float]:
     """Three numbers as a tuple of three floats."""
     x, y, z = (float(v) for v in values)
     return (x, y, z)
@@ -280,8 +280,8 @@ class _Candidate:
     order: int
 
 
-def layers(candidates: Iterable[Tuple[Hashable, Any, float, int, float]]
-           ) -> List[Layer]:
+def layers(candidates: Iterable[tuple[Hashable, Any, float, int, float]]
+           ) -> list[Layer]:
     """The zones deciding one setting, bottom first, each with its share.
 
     Each candidate is ``(key, block, weight, priority, volume)``. The zones
@@ -298,7 +298,7 @@ def layers(candidates: Iterable[Tuple[Hashable, Any, float, int, float]]
              for order, (key, block, w, priority, volume) in enumerate(candidates)
              if w > 0.0]
     stack.sort(key=lambda c: (c.priority, -c.volume, c.order))
-    result: List[Layer] = []
+    result: list[Layer] = []
     left = 1.0
     for candidate in reversed(stack):
         share = candidate.weight * left
@@ -309,16 +309,16 @@ def layers(candidates: Iterable[Tuple[Hashable, Any, float, int, float]]
     return result
 
 
-def shares(stack: Sequence[Layer]) -> Dict[Hashable, float]:
+def shares(stack: Sequence[Layer]) -> dict[Hashable, float]:
     """Each zone's share of a setting, by key, from :func:`layers`."""
-    found: Dict[Hashable, float] = {}
+    found: dict[Hashable, float] = {}
     for layer in stack:
         found[layer.key] = found.get(layer.key, 0.0) + layer.share
     return found
 
 
 def named_shares(stack: Sequence[Layer], names: Mapping[Hashable, Iterable[Hashable]]
-                 ) -> Dict[Hashable, float]:
+                 ) -> dict[Hashable, float]:
     """How much each named thing is switched on, from a stack of layers.
 
     ``names`` gives, for each zone key, the things its block switches on --
@@ -327,7 +327,7 @@ def named_shares(stack: Sequence[Layer], names: Mapping[Hashable, Iterable[Hasha
     or switches the setting off, takes its share from everything below it and
     gives it to nothing.
     """
-    found: Dict[Hashable, float] = {}
+    found: dict[Hashable, float] = {}
     for layer in stack:
         if layer.block is None:
             continue

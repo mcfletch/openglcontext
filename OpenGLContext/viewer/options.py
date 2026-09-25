@@ -17,7 +17,8 @@ two places is a default that is eventually wrong in one of them.
         options = ViewerOptions(source='model.glb', physics=True)
 """
 from dataclasses import dataclass, field, fields
-from typing import Any, Dict, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from OpenGLContext import renderoptions
 
@@ -25,7 +26,7 @@ __all__ = ['ViewerOptions', 'WINDOW_SIZE']
 
 #: The window an interactive viewer opens when no size is given, and the one
 #: it returns to from full screen: 1080p.
-WINDOW_SIZE: Tuple[int, int] = (1920, 1080)
+WINDOW_SIZE: tuple[int, int] = (1920, 1080)
 
 
 @dataclass
@@ -76,9 +77,9 @@ class ViewerOptions:
     tilt: Optional[float] = None
     #: Explicit camera position in world space.  With :attr:`look_at` this
     #: replaces auto-framing entirely, which is how an interior shot is set up.
-    eye: Optional[Tuple[float, ...]] = None
+    eye: Optional[tuple[float, ...]] = None
     #: Explicit camera target in world space.
-    look_at: Optional[Tuple[float, ...]] = None
+    look_at: Optional[tuple[float, ...]] = None
 
     # -- lighting and environment -----------------------------------------
     #: ``auto`` adds a default rig only to a model with no lights of its own;
@@ -132,7 +133,7 @@ class ViewerOptions:
     # -- the window and the frame -----------------------------------------
     #: Window size as ``(width, height)``.  None is :data:`WINDOW_SIZE` for
     #: an interactive viewer and the backend's default for a capture.
-    size: Optional[Tuple[int, int]] = None
+    size: Optional[tuple[int, int]] = None
     #: Fill the screen.  None fills it unless :attr:`size` names a window,
     #: with ``OPENGLCONTEXT_FULLSCREEN`` pinning that default.  A hidden
     #: window never fills the screen, so a capture never does.
@@ -152,7 +153,7 @@ class ViewerOptions:
     #: Walk the camera along the scene's own viewpoints while recording.
     fly_through: bool = False
 
-    def window(self) -> Dict[str, Any]:
+    def window(self) -> dict[str, Any]:
         """The :class:`ContextDefinition` fields for the viewer's window.
 
         ``size`` and ``fullscreen`` for an interactive viewer; for a capture or

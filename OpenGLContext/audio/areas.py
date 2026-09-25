@@ -16,7 +16,8 @@ from __future__ import annotations
 
 import weakref
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Set
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -84,7 +85,7 @@ def apply_zones(engine: Any, emitters: Sequence[Any], zones: Sequence[Any],
     def named(setting: Any) -> Sequence[Any]:
         return list(getattr(setting, 'emitters', None) or ())
 
-    controlled: Set[Any] = set()
+    controlled: set[Any] = set()
     for zone in zones:
         setting = zone.setting(AUDIO)
         if setting is not None and bool(setting.enabled):
@@ -100,7 +101,7 @@ def apply_zones(engine: Any, emitters: Sequence[Any], zones: Sequence[Any],
 
 
 def _lay_reverb(engine: Any, zones: Sequence[Any], position: ArrayLike,
-                weights: Optional[Dict[PlacedZone, float]]) -> None:
+                weights: Optional[dict[PlacedZone, float]]) -> None:
     """The zones' reverb over the application's, on ``engine``; see :func:`apply_zones`."""
     from OpenGLContext.passes import zonelayers
     from OpenGLContext.scenegraph.zone import REVERB

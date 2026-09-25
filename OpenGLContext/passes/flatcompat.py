@@ -6,7 +6,8 @@ core-profile pass is :mod:`OpenGLContext.passes.flatcore`; which of the two
 renders a given context is decided in
 :mod:`OpenGLContext.passes.renderpass`, not chosen by the caller.
 """
-from typing import Any, Dict, List, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from . import _flat
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume
@@ -253,7 +254,7 @@ class FlatPass( _flat.FlatPass ):
         self._renderDeferredTransparent()
 
     def selectRender( self, mode: Any, toRender: Sequence[Any],
-                      events: Dict[Any, Any] ) -> None:
+                      events: dict[Any, Any] ) -> None:
         """Legacy colour-buffer pick for the compatibility profile.
 
         Packs the id unshifted into RGB and toggles the fixed-function lighting

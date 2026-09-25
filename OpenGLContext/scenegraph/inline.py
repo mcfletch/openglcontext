@@ -1,5 +1,6 @@
 """VRML97 Inline node"""
-from typing import Any, List, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from vrml.vrml97 import basenodes, nodetypes
 from vrml import protofunctions, fieldtypes
@@ -57,7 +58,7 @@ class Inline(basenodes.Inline):
     scenegraph = None
     def renderedChildren(
         self, types: Any = (nodetypes.Children, nodetypes.Rendering,)
-    ) -> List[Any]:
+    ) -> list[Any]:
         """Choose child from level that is at appropriate range"""
         if self.scenegraph:
             return self.scenegraph.children

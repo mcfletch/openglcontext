@@ -1,6 +1,7 @@
 """Resource-manager for textures (with PIL conversions)"""
 
-from typing import Any, Callable, Dict, Iterable, Optional, Sequence, Tuple
+from collections.abc import Callable, Iterable, Sequence
+from typing import Any, Optional
 
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -37,7 +38,7 @@ class NumpyAdapter(object):
     def __init__(self, array: Any) -> None:
         self.size = array.shape[:-1]
         self.mode = self.shapeToMode(array.shape[-1])
-        self.info: Dict[str, Any] = {}
+        self.info: dict[str, Any] = {}
         self.array = array
 
     def tostring(self, *args: Any, **named: Any) -> Any:
@@ -454,7 +455,7 @@ class MMTexture(Texture):
         return image
 
 
-def getLengthFormat(image: Any) -> Tuple[int, int]:
+def getLengthFormat(image: Any) -> tuple[int, int]:
     """Return PIL image component-length and format
 
     This returns the number of components, and the OpenGL

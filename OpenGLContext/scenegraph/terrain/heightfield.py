@@ -9,7 +9,8 @@ above or below it, and a plant seated on it meets that ground. Also bakes the tw
 static shadow terms used by the splat shader.
 """
 import math
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any, Optional
 
 import numpy as np
 from PIL import Image

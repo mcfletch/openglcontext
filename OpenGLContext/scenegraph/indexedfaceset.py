@@ -57,7 +57,7 @@ XXX This node needs some serious optimization.  Possible approaches:
                 the length of the data-array
 """
 
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 import numpy as np
 from OpenGLContext.scenegraph import coordinatebounded
@@ -182,7 +182,7 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
     def _hasGeometry(self) -> bool:
         return bool(len(self.coordIndex) and self.coord and len(self.coord.point))
 
-    def _instanceArrays(self) -> Optional[Tuple[Any, Any, Any]]:
+    def _instanceArrays(self) -> Optional[tuple[Any, Any, Any]]:
         """Expanded (positions, normals, texcoords) triangle soup for instancing.
 
         Reuses ``ArrayGeometryCompiler`` -- the same tessellation the
@@ -200,7 +200,7 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
         vertexArray, colorArray, normalArray, textureCoordinateArray = expanded
         return vertexArray, normalArray, textureCoordinateArray
 
-    def instanceContentKey(self) -> Optional[Tuple[Any, ...]]:
+    def instanceContentKey(self) -> Optional[tuple[Any, ...]]:
         """Hashable signature so distinct-but-identical IFS nodes share one draw.
 
         Covers the scatter case: a bolt, tile or leaf authored as an IFS and used

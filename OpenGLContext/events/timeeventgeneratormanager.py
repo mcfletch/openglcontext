@@ -1,5 +1,5 @@
 """Object which manages the registration and deregistration of timed event generators"""
-from typing import Any, List
+from typing import Any
 
 from . import systemtime
 
@@ -14,7 +14,7 @@ class TimeEventGeneratorManager(object):
     """
     def __init__( self ) -> None:
         """Initialize the TimeEventGeneratorManager"""
-        self.__generators: List[Any] = []
+        self.__generators: list[Any] = []
     def addEventGenerator( self, generator: Any ) -> None:
         """Add a new generator to the list of generators
 

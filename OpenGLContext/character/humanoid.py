@@ -32,7 +32,8 @@ has ended up this frame.
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Iterable, Iterator, List, Mapping, Optional, Sequence
+from collections.abc import Iterable, Iterator, Mapping, Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -58,9 +59,9 @@ _THUMB_SEGMENTS = ('Metacarpal', 'Proximal', 'Distal')
 _FINGER_SEGMENTS = ('Proximal', 'Intermediate', 'Distal')
 
 
-def _finger_bones() -> Dict[str, Optional[str]]:
+def _finger_bones() -> dict[str, Optional[str]]:
     """The thirty finger bones and their parents, both hands."""
-    out: Dict[str, Optional[str]] = {}
+    out: dict[str, Optional[str]] = {}
     for side in ('left', 'right'):
         for finger in FINGERS:
             segments = _THUMB_SEGMENTS if finger == 'Thumb' else _FINGER_SEGMENTS
@@ -76,7 +77,7 @@ def _finger_bones() -> Dict[str, Optional[str]]:
 #: nothing: it is the root of the humanoid, whatever a file's node graph puts
 #: above it. Bones between two humanoid bones in the file are permitted and are
 #: simply not humanoid bones.
-BONE_PARENT: Dict[str, Optional[str]] = {
+BONE_PARENT: dict[str, Optional[str]] = {
     'hips': None,
     'spine': 'hips',
     'chest': 'spine',
@@ -137,7 +138,7 @@ _LEFT = frozenset({'left', 'lft', 'l'})
 _RIGHT = frozenset({'right', 'rgt', 'r'})
 
 #: Cores that name one bone outright, whichever side of the body they are on.
-_PLAIN: Dict[str, str] = {
+_PLAIN: dict[str, str] = {
     'hips': 'hips', 'hip': 'hips', 'pelvis': 'hips',
     'spine': 'spine', 'chest': 'chest', 'ribcage': 'chest',
     'upperchest': 'upperChest',
@@ -146,14 +147,14 @@ _PLAIN: Dict[str, str] = {
 
 #: Cores that name one bone only once a chain position is known. A rig that
 #: numbers its spine, and the ``<part>_joint_<n>`` chains, land here.
-_PLAIN_NUMBERED: Dict[tuple, str] = {
+_PLAIN_NUMBERED: dict[tuple, str] = {
     ('spine', 1): 'chest', ('spine', 2): 'upperChest',
     ('torso', 1): 'hips', ('torso', 2): 'spine', ('torso', 3): 'chest',
     ('neck', 1): 'neck', ('neck', 2): 'head',
 }
 
 #: Cores that name a bone once the side is known, as the suffix after the side.
-_SIDED: Dict[str, str] = {
+_SIDED: dict[str, str] = {
     'shoulder': 'Shoulder', 'clavicle': 'Shoulder',
     'upperarm': 'UpperArm', 'arm': 'UpperArm',
     'lowerarm': 'LowerArm', 'forearm': 'LowerArm', 'elbow': 'LowerArm',
@@ -167,21 +168,21 @@ _SIDED: Dict[str, str] = {
 }
 
 #: The limb chains a numbered rig writes instead of naming each joint.
-_SIDED_NUMBERED: Dict[tuple, str] = {
+_SIDED_NUMBERED: dict[tuple, str] = {
     ('arm', 1): 'UpperArm', ('arm', 2): 'LowerArm', ('arm', 3): 'Hand',
     ('leg', 1): 'UpperLeg', ('leg', 2): 'LowerLeg', ('leg', 3): 'Foot',
     ('leg', 4): 'Toes', ('leg', 5): 'Toes',
 }
 
 #: What a finger is called, mapped to the VRM name for it.
-_FINGER_NAMES: Dict[str, str] = {
+_FINGER_NAMES: dict[str, str] = {
     'thumb': 'Thumb', 'index': 'Index', 'middle': 'Middle', 'ring': 'Ring',
     'little': 'Little', 'pinky': 'Little',
 }
 
 #: What a finger *segment* is called when a rig spells it out rather than
 #: numbering it.
-_SEGMENT_NAMES: Dict[str, str] = {
+_SEGMENT_NAMES: dict[str, str] = {
     'metacarpal': 'Metacarpal', 'proximal': 'Proximal',
     'intermediate': 'Intermediate', 'medial': 'Intermediate',
     'distal': 'Distal',
@@ -193,7 +194,7 @@ _SEGMENT_NAMES: Dict[str, str] = {
 _WORDS = re.compile(r'[A-Z]+(?![a-z])|[A-Z][a-z]*|[a-z]+|[0-9]+')
 
 
-def _words(name: str) -> List[str]:
+def _words(name: str) -> list[str]:
     """The lower-case words of a joint name, namespace and filler removed."""
     for separator in (':', '|'):
         if separator in name:
@@ -213,7 +214,7 @@ def bone_for_name(name: str) -> Optional[str]:
     words = _words(name)
     side: Optional[str] = None
     number: Optional[int] = None
-    core: List[str] = []
+    core: list[str] = []
     for word in words:
         if word in _LEFT and side is None:
             side = 'left'
@@ -226,7 +227,7 @@ def bone_for_name(name: str) -> Optional[str]:
     return _bone_for_words(core, side, number)
 
 
-def _bone_for_words(core: List[str], side: Optional[str],
+def _bone_for_words(core: list[str], side: Optional[str],
                     number: Optional[int]) -> Optional[str]:
     """The bone named by the words left after side and chain position."""
     finger = _finger_bone(core, side, number)
@@ -252,7 +253,7 @@ def _bone_for_words(core: List[str], side: Optional[str],
     return None
 
 
-def _finger_bone(core: List[str], side: Optional[str],
+def _finger_bone(core: list[str], side: Optional[str],
                  number: Optional[int]) -> Optional[str]:
     """The finger bone these words name, if they name one."""
     finger = next((_FINGER_NAMES[word] for word in core if word in _FINGER_NAMES), None)
@@ -283,18 +284,18 @@ FAMILIES: tuple = (
 )
 
 
-def _family(names: Iterable[str]) -> Dict[str, str]:
+def _family(names: Iterable[str]) -> dict[str, str]:
     """The exact-name table for the rig these names are from, or an empty one."""
     plain = {name.rsplit(':', 1)[-1].rsplit('|', 1)[-1].strip().lower()
              for name in names}
     for signature, table in FAMILIES:
         if signature <= plain:
-            found: Dict[str, str] = table
+            found: dict[str, str] = table
             return found
     return {}
 
 
-def bones_by_name(names: Mapping[int, str]) -> Dict[str, int]:
+def bones_by_name(names: Mapping[int, str]) -> dict[str, int]:
     """Map humanoid bones onto node indices by reading the nodes' names.
 
     A rig from a family this recognises (see :data:`FAMILIES`) is read from
@@ -306,7 +307,7 @@ def bones_by_name(names: Mapping[int, str]) -> Dict[str, int]:
     stable across loads.
     """
     table = _family(names.values())
-    out: Dict[str, int] = {}
+    out: dict[str, int] = {}
     for index in sorted(names):
         plain = names[index].rsplit(':', 1)[-1].rsplit('|', 1)[-1].strip().lower()
         bone = table.get(plain) or bone_for_name(names[index])
@@ -315,7 +316,7 @@ def bones_by_name(names: Mapping[int, str]) -> Dict[str, int]:
     return out
 
 
-def bones_from_extensions(extensions: Mapping[str, Any]) -> Dict[str, int]:
+def bones_from_extensions(extensions: Mapping[str, Any]) -> dict[str, int]:
     """The humanoid bone map a document states for itself, or an empty map.
 
     Reads ``VRMC_vrm`` and, for a clip-only document, ``VRMC_vrm_animation``.
@@ -329,7 +330,7 @@ def bones_from_extensions(extensions: Mapping[str, Any]) -> Dict[str, int]:
         human_bones = (block.get('humanoid') or {}).get('humanBones')
         if not isinstance(human_bones, dict):
             continue
-        out: Dict[str, int] = {}
+        out: dict[str, int] = {}
         for bone, entry in human_bones.items():
             node = entry.get('node') if isinstance(entry, dict) else None
             if bone in BONE_PARENT and isinstance(node, int):
@@ -357,12 +358,12 @@ class Humanoid:
                  transforms: Optional[Mapping[int, Any]] = None,
                  names: Optional[Mapping[int, str]] = None,
                  roots: Optional[Sequence[int]] = None) -> None:
-        self.bones: Dict[str, int] = dict(bones)
-        self.children: Dict[int, List[int]] = {
+        self.bones: dict[str, int] = dict(bones)
+        self.children: dict[int, list[int]] = {
             k: list(v) for k, v in (children or {}).items()}
-        self.transforms: Dict[int, Any] = dict(transforms or {})
-        self.names: Dict[int, str] = dict(names or {})
-        self.roots: List[int] = list(roots if roots is not None else ())
+        self.transforms: dict[int, Any] = dict(transforms or {})
+        self.names: dict[int, str] = dict(names or {})
+        self.roots: list[int] = list(roots if roots is not None else ())
 
     # -- construction -----------------------------------------------------
     @classmethod

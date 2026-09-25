@@ -1,5 +1,6 @@
 """Class for tessellating polygons using GLU"""
-from typing import Any, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -41,14 +42,14 @@ class PolygonTessellator(object):
         return self._controller
     def reset( self, forceTriangles: int = 1 ) -> None:
         """Reset the tessellator for a new polygon"""
-        self.result: List[Any] = []
-        self.current: List[Any] = []
+        self.result: list[Any] = []
+        self.current: list[Any] = []
         self.type: Optional[int] = None
         self.forceTriangles = forceTriangles
 
 
     def tessContours( self, contours: Sequence[Any], forceTriangles: int = 1,
-                      normal: Any = None ) -> List[Any]:
+                      normal: Any = None ) -> list[Any]:
         """Tessellate polygon defined by (multiple) contours
 
         Occasionally will create new vertices as a blending
@@ -98,7 +99,7 @@ class PolygonTessellator(object):
                 gluTessNormal( self.controller, 0.,0.,0. )
         return self.result
         
-    def tessellate(self, vertices: Sequence[Any], forceTriangles: int = 1 ) -> List[Any]:
+    def tessellate(self, vertices: Sequence[Any], forceTriangles: int = 1 ) -> list[Any]:
         """Tessellate polygon defined by vertices
 
         Less general form of tessContours, takes a single

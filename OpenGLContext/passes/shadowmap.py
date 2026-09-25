@@ -18,7 +18,7 @@ lifecycle of ``SelectionFBO`` in :mod:`OpenGLContext.passes._flat`.
 from __future__ import annotations
 
 import logging
-from typing import Optional, Tuple
+from typing import Optional
 
 from OpenGL.GL import (
     GL_FRAMEBUFFER, GL_FRAMEBUFFER_COMPLETE, GL_DEPTH_ATTACHMENT,
@@ -42,13 +42,13 @@ from OpenGL.GL import (
 log = logging.getLogger(__name__)
 
 
-def _save_target() -> Tuple[int, Tuple[int, ...]]:
+def _save_target() -> tuple[int, tuple[int, ...]]:
     fbo = int(glGetIntegerv(GL_FRAMEBUFFER_BINDING))
     viewport = tuple(int(v) for v in glGetIntegerv(GL_VIEWPORT))
     return fbo, viewport
 
 
-def _restore_target(fbo: int, viewport: Optional[Tuple[int, ...]]) -> None:
+def _restore_target(fbo: int, viewport: Optional[tuple[int, ...]]) -> None:
     glBindFramebuffer(GL_FRAMEBUFFER, fbo)
     if viewport is not None:
         glViewport(*viewport)
@@ -81,13 +81,13 @@ class ShadowMapArray:
     def texture(self) -> Optional[int]:
         return self.depth_texture
 
-    def _names(self) -> Optional[Tuple[int, int]]:
+    def _names(self) -> Optional[tuple[int, int]]:
         """The framebuffer and depth texture, or None while either is missing."""
         if self.fbo is None or self.depth_texture is None:
             return None
         return (self.fbo, self.depth_texture)
 
-    def _ensure(self, size: int, layers: int) -> Optional[Tuple[int, int]]:
+    def _ensure(self, size: int, layers: int) -> Optional[tuple[int, int]]:
         """The framebuffer and depth texture, made if they are not there yet.
 
         None where the driver would not make them.  Handing back the names
@@ -185,13 +185,13 @@ class ShadowMapCubeArray:
     def texture(self) -> Optional[int]:
         return self.depth_texture
 
-    def _names(self) -> Optional[Tuple[int, int]]:
+    def _names(self) -> Optional[tuple[int, int]]:
         """The framebuffer and depth texture, or None while either is missing."""
         if self.fbo is None or self.depth_texture is None:
             return None
         return (self.fbo, self.depth_texture)
 
-    def _ensure(self, size: int, num_cubes: int) -> Optional[Tuple[int, int]]:
+    def _ensure(self, size: int, num_cubes: int) -> Optional[tuple[int, int]]:
         """The framebuffer and depth texture, made if they are not there yet.
 
         None where the driver would not make them.  Handing back the names
@@ -285,13 +285,13 @@ class ShadowMapCube:
     def texture(self) -> Optional[int]:
         return self.depth_texture
 
-    def _names(self) -> Optional[Tuple[int, int]]:
+    def _names(self) -> Optional[tuple[int, int]]:
         """The framebuffer and depth texture, or None while either is missing."""
         if self.fbo is None or self.depth_texture is None:
             return None
         return (self.fbo, self.depth_texture)
 
-    def _ensure(self, size: int) -> Optional[Tuple[int, int]]:
+    def _ensure(self, size: int) -> Optional[tuple[int, int]]:
         """The framebuffer and depth texture, made if they are not there yet.
 
         None where the driver would not make them.  Handing back the names

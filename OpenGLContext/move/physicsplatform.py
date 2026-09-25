@@ -14,7 +14,7 @@ every frame -- so the mode is what a player is moving at, and editing it on the
 settings screen is felt on the next step.  A caller with no opinion passes none
 and the body keeps whatever it was built with.
 """
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 import numpy as np
 
@@ -193,10 +193,10 @@ class PhysicsViewPlatform:
     def update(self, dt: float) -> None:
         self.character.update(dt)
 
-    def camera_position(self) -> Tuple[float, ...]:
+    def camera_position(self) -> tuple[float, ...]:
         return tuple(self.character.eye())
 
-    def feet_position(self) -> Tuple[float, ...]:
+    def feet_position(self) -> tuple[float, ...]:
         """Where the body ends, which is not where it looks from.
 
         A game asking whether the avatar is standing in something -- water, a

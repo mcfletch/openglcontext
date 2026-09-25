@@ -36,7 +36,8 @@ overrides nothing -- so it can be added to any class that offers:
 See [docs/physics.rst](../../docs/physics.rst) and
 ``plans/PHYSICS-COLLISION.md`` §Phase 5.
 """
-from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
@@ -53,7 +54,7 @@ if TYPE_CHECKING:
 __all__ = ['PhysicsWalkMixin', 'yaw_from_orientation']
 
 #: World bounds as ``(lo, hi)`` corner arrays.
-Bounds = Tuple[Any, Any]
+Bounds = tuple[Any, Any]
 
 
 def yaw_from_orientation(orientation: Sequence[float]) -> float:
@@ -158,7 +159,7 @@ class PhysicsWalkMixin(object):
         return self.enablePhysics(True) if enable else False
 
     # -- the world the avatar walks in ------------------------------------
-    def buildPhysicsWorld(self) -> Optional[Tuple['PhysicsWorld', Bounds]]:
+    def buildPhysicsWorld(self) -> Optional[tuple['PhysicsWorld', Bounds]]:
         """The collision world and its bounds, or None if nothing is walkable.
 
         The default cooks one static collision mesh out of this context's
@@ -364,7 +365,7 @@ class PhysicsWalkMixin(object):
         if viewpoints:
             platform.yaw = yaw_from_orientation(viewpoints[0].orientation)
         cx, cz = (lo[0] + hi[0]) / 2, (lo[2] + hi[2]) / 2
-        candidates: list[Tuple[float, float]] = []
+        candidates: list[tuple[float, float]] = []
         for viewpoint in viewpoints:
             position = viewpoint.position
             if lo[0] <= position[0] <= hi[0] and lo[2] <= position[2] <= hi[2]:

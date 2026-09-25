@@ -30,7 +30,8 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, Optional, Sequence, Tuple
+from collections.abc import Iterable, Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -123,7 +124,7 @@ class SignFace:
         return self.kind if not self.speed else '%s %d' % (self.kind, self.speed)
 
     @property
-    def plates(self) -> Tuple[str, ...]:
+    def plates(self) -> tuple[str, ...]:
         """The plates this sign carries, bottom of the post upwards."""
         if self.kind == LIMIT:
             if self.speed <= 0:
@@ -164,7 +165,7 @@ class SignProfile:
     offset: float = 1.4
 
 
-def plate_shape(name: str) -> Tuple[float, float]:
+def plate_shape(name: str) -> tuple[float, float]:
     """How wide and how tall that plate is, against a sign's own size."""
     if name.startswith(ADVISORY + '-'):
         return ADVISORY_SHAPE
@@ -228,7 +229,7 @@ def sign_material(name: str, size: int = 256, image: Any = None) -> PBRMaterial:
                        textures={'baseColor': face}, doubleSided=False)
 
 
-def plates_of(faces: "Iterable[str | SignFace]") -> Tuple[str, ...]:
+def plates_of(faces: "Iterable[str | SignFace]") -> tuple[str, ...]:
     """Every plate the signs need, once each, in a settled order."""
     found: list[str] = []
     for one in faces:
@@ -239,7 +240,7 @@ def plates_of(faces: "Iterable[str | SignFace]") -> Tuple[str, ...]:
 
 
 def sign_atlas(faces: "Sequence[str | SignFace]" = WARNINGS, cell: int = 256
-               ) -> "Tuple[Any, Dict[str, Tuple[float, float, float, float]]]":
+               ) -> "tuple[Any, dict[str, tuple[float, float, float, float]]]":
     """Every plate, and the post's colour, in one image.
 
     Returns the image and ``{name: (u0, v0, u1, v1)}`` -- a box per plate, and
@@ -273,7 +274,7 @@ def atlas_material(image: Any = None,
 
 def sign_mesh(face: "str | SignFace", profile: Optional[SignProfile] = None,
               material: Optional[PBRMaterial] = None,
-              cells: Optional[Dict[str, Any]] = None) -> PBRMesh:
+              cells: Optional[dict[str, Any]] = None) -> PBRMesh:
     """One whole sign at the origin, facing -Z, as a single mesh.
 
     Post and plates together, reading out of one atlas, so a sign is one
@@ -297,7 +298,7 @@ def sign_mesh(face: "str | SignFace", profile: Optional[SignProfile] = None,
 
 def sign_meshes(face: "str | SignFace", profile: Optional[SignProfile] = None,
                 material: Optional[PBRMaterial] = None,
-                post: Optional[PBRMaterial] = None) -> Dict[str, PBRMesh]:
+                post: Optional[PBRMaterial] = None) -> dict[str, PBRMesh]:
     """One sign at the origin, facing -Z, as ``{'post': …, 'plate': …}``.
 
     The prototype's frame: the foot is at y=0, the plates look down -Z, and the
@@ -315,7 +316,7 @@ def sign_meshes(face: "str | SignFace", profile: Optional[SignProfile] = None,
                  for name, foot in _stack(face, profile)], faces)}
 
 
-def _stack(face: SignFace, profile: SignProfile) -> "list[Tuple[str, float]]":
+def _stack(face: SignFace, profile: SignProfile) -> "list[tuple[str, float]]":
     """Each plate and the height its bottom edge sits at, bottom upwards."""
     foot = float(profile.post_height)
     out = []
@@ -377,7 +378,7 @@ def _inset(outline: list, by: float) -> list:
     return out
 
 
-def _box_of(name: str, size: int = 1000) -> "Tuple[float, float, float, float]":
+def _box_of(name: str, size: int = 1000) -> "tuple[float, float, float, float]":
     """Where in its square cell the plate's picture is, as fractions of it.
 
     The geometry reads exactly this, so a letterbox tab is not stretched to fill
@@ -430,7 +431,7 @@ def _maximum(draw: Any, speed: int, size: int) -> None:
              middle + half_wide * 0.62, middle + half_tall * 0.84))
 
 
-def _fitted(draw: Any, text: str, box: "Tuple[float, float, float, float]"
+def _fitted(draw: Any, text: str, box: "tuple[float, float, float, float]"
             ) -> None:
     """Draw ``text`` as large as it will go inside ``box``, centred in it.
 
@@ -515,7 +516,7 @@ def _arrow(draw: Any, tail: tuple, head: tuple, size: int,
 
 
 def _post(profile: SignProfile, material: PBRMaterial,
-          uv: "Optional[Tuple[float, float]]" = None,
+          uv: "Optional[tuple[float, float]]" = None,
           top: Optional[float] = None) -> PBRMesh:
     """The post: a low-sided tube from the ground to the top of the sign.
 
@@ -546,7 +547,7 @@ def _post(profile: SignProfile, material: PBRMaterial,
 
 def _plate(profile: SignProfile, material: PBRMaterial, name: str,
            foot: float,
-           box: "Optional[Tuple[float, float, float, float]]" = None) -> PBRMesh:
+           box: "Optional[tuple[float, float, float, float]]" = None) -> PBRMesh:
     """One plate: a thin prism cut to that plate's own outline, facing -Z.
 
     ``foot`` is where its bottom edge sits above the ground. ``box`` is the
@@ -589,8 +590,8 @@ def _plate(profile: SignProfile, material: PBRMaterial, name: str,
                          np.asarray(texcoords, dtype='f'))
 
 
-def _within(box: "Optional[Tuple[float, float, float, float]]", name: str,
-            u: float, v: float) -> "Tuple[float, float]":
+def _within(box: "Optional[tuple[float, float, float, float]]", name: str,
+            u: float, v: float) -> "tuple[float, float]":
     """A point of a plate's own picture, as a point of the atlas.
 
     Twice narrowed: the cell this plate's picture was packed into, and the part

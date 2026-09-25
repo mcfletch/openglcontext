@@ -26,7 +26,8 @@ from __future__ import annotations
 import contextlib
 import gc
 import os
-from typing import Any, Iterator, List, Mapping, Optional, Sequence, Tuple
+from collections.abc import Iterator, Mapping, Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -62,7 +63,7 @@ def _environment(settings: Mapping[str, str]) -> Iterator[None]:
 
 
 @contextlib.contextmanager
-def scene_context(children: Sequence[Any], *, size: Tuple[int, int] = (96, 96),
+def scene_context(children: Sequence[Any], *, size: tuple[int, int] = (96, 96),
                   environment: Optional[Mapping[str, str]] = None,
                   base: Any = None, **definition: Any) -> Iterator[Any]:
     """A context drawing a scene of ``children``, current until the block ends.
@@ -115,7 +116,7 @@ def drawn_image(context: Any) -> np.ndarray:
     undefined.
     """
     from OpenGLContext.capture import read_back_buffer
-    frames: List[np.ndarray] = []
+    frames: list[np.ndarray] = []
     presented = type(context).SwapBuffers
 
     def reading() -> Any:

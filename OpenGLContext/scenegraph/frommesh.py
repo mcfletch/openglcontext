@@ -23,7 +23,8 @@ reaches the scenegraph the same way.
 """
 from __future__ import annotations
 
-from typing import Any, Iterable, List, Optional
+from collections.abc import Iterable
+from typing import Any, Optional
 
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
@@ -62,7 +63,7 @@ def mesh_from_primitive(primitive: Any, **named: Any) -> PBRMesh:
     return PBRMesh(**arrays)
 
 
-def meshes_from_mesh(mesh: Any, **named: Any) -> List[PBRMesh]:
+def meshes_from_mesh(mesh: Any, **named: Any) -> list[PBRMesh]:
     """Every primitive of a generated mesh, as :class:`PBRMesh` nodes."""
     primitives = getattr(mesh, 'primitives', None)
     if primitives is None:
@@ -94,7 +95,7 @@ def shape_from_mesh(mesh: Any, appearance: Optional[Any] = None,
 
 
 def shapes_from_mesh(mesh: Any, appearance: Optional[Any] = None,
-                     **named: Any) -> List[Any]:
+                     **named: Any) -> list[Any]:
     """One ``Shape`` per primitive, sharing an appearance."""
     from OpenGLContext.scenegraph.basenodes import Shape
 

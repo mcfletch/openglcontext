@@ -12,26 +12,26 @@ emits, so it needs nothing backend-specific: a context connects it once and
 movement modes sample it.
 """
 
-from typing import Iterable, List, Set, Tuple
+from collections.abc import Iterable
 
 
 class InputState:
     """Held keys, one-shot presses, and accumulated mouse motion."""
 
     def __init__(self) -> None:
-        self._held: Set[str] = set()
+        self._held: set[str] = set()
         #: Shift, control and alt as of the most recent key event, whichever
         #: key it was.  **Sampled, not remembered per key**: a modifier is a
         #: thing that is true *now*, and recording the ones that happened to be
         #: down when a key was first pressed makes `ctrl` + arrow depend on
         #: which of the two the player pressed first, and leaves it applying
         #: after `ctrl` has been let go.
-        self._modifierState: Tuple[int, int, int] = (0, 0, 0)
+        self._modifierState: tuple[int, int, int] = (0, 0, 0)
         #: Keys pressed since the last time each was sampled.  Held separately
         #: from ``_held`` so a tap that starts and ends inside one frame is not
         #: lost between samples.
-        self._pressed: Set[str] = set()
-        self._mouse: List[float] = [0.0, 0.0]
+        self._pressed: set[str] = set()
+        self._mouse: list[float] = [0.0, 0.0]
 
     # -- feeding ---------------------------------------------------------
     def process(self, event: object) -> None:
@@ -109,7 +109,7 @@ class InputState:
         return ((1.0 if self.held(*positive) else 0.0)
                 - (1.0 if self.held(*negative) else 0.0))
 
-    def modifiers(self, name: str = '') -> Tuple[int, int, int]:
+    def modifiers(self, name: str = '') -> tuple[int, int, int]:
         """Shift, control and alt as they stand right now.
 
         ``name`` is accepted and ignored: a caller asks about the modifiers
@@ -118,7 +118,7 @@ class InputState:
         """
         return self._modifierState
 
-    def mouse_delta(self) -> Tuple[float, float]:
+    def mouse_delta(self) -> tuple[float, float]:
         """Mouse motion accumulated since the last call, then reset.
 
         Consumed by reading: mouse-look wants how far the pointer travelled

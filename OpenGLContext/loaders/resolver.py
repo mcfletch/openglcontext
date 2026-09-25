@@ -66,7 +66,8 @@ import threading
 import urllib.parse
 import urllib.request
 import urllib.error
-from typing import Any, BinaryIO, Callable, List, Optional, Sequence, Tuple, TypeVar, Union
+from collections.abc import Callable, Sequence
+from typing import Any, BinaryIO, Optional, TypeVar, Union
 
 from OpenGLContext import atomicfiles
 
@@ -92,7 +93,7 @@ class _Checked(str):
                 % (cls.__name__, __name__))
         return super().__new__(cls, value)
 
-    def __reduce__(self) -> Tuple[type, Tuple[str]]:
+    def __reduce__(self) -> tuple[type, tuple[str]]:
         # Unpickled, it has been through no check in this process.
         return (str, (str(self),))
 
@@ -122,7 +123,7 @@ class CheckedURL(_Checked):
 
 
 #: Where a checked reference leads: a file on this machine or a URL.
-Located = Union[ContainedPath, CheckedURL]
+Located = ContainedPath | CheckedURL
 
 
 def safe_url(url: str) -> str:
@@ -175,7 +176,7 @@ class FetchCancelled(Exception):
 _ALLOWED_URL_SCHEMES = ('http', 'https')
 
 
-def _origin(url: str) -> Tuple[str, str]:
+def _origin(url: str) -> tuple[str, str]:
     """(scheme, netloc) security origin of a URL.
 
     ``netloc`` keeps host, port and any userinfo verbatim, so two virtual hosts on
@@ -357,7 +358,7 @@ def _without_query(url: str) -> str:
                                     '', ''))
 
 
-def _addresses(host: str) -> List[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+def _addresses(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
     """The addresses ``host`` names: itself when it is a literal, else DNS's.
 
     An IPv4 address carried inside an IPv6 one (``::ffff:10.0.0.1``) is
@@ -628,7 +629,7 @@ class Resolver:
         #: Arrays already decoded, keyed by (kind, accessor index), which every
         #: build of one shared glTF document reads from; None for a resolver
         #: serving a single load.  See ``loaders.gltf.loader.SharedDocument``.
-        self.shared_reads: Optional[dict[Tuple[str, int], Any]] = None
+        self.shared_reads: Optional[dict[tuple[str, int], Any]] = None
 
     def resolve(self, uri: str) -> Located:
         """Return the absolute location ``uri`` resolves to under the policy.

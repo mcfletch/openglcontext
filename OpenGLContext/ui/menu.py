@@ -48,7 +48,8 @@ which was chosen.
 """
 from __future__ import annotations
 
-from typing import Any, Iterator, List, Optional, Sequence, Set, Tuple
+from collections.abc import Iterator, Sequence
+from typing import Any, Optional
 
 from vrml import field, node
 
@@ -133,7 +134,7 @@ class MenuItem(Widget):
 
     # -- measuring ---------------------------------------------------------
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         skin = self.activeSkin()
         pad_x, pad_y = skin.buttonPadding(metrics)
         width = metrics.text_width(self.text)
@@ -154,7 +155,7 @@ class MenuItem(Widget):
             return True
         return False
 
-    def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+    def key(self, name: str, modifiers: tuple[int, int, int]) -> bool:
         if name in ('<return>', ' ') and self.enabled:
             self.activate()
             return True
@@ -217,7 +218,7 @@ class MenuItem(Widget):
         renderer.rect(Rect(left, cell + metrics.underline, width, 1), colour)
 
 
-def _word_starts(text: str) -> List[int]:
+def _word_starts(text: str) -> list[int]:
     """Where each word of ``text`` begins."""
     return [index for index, letter in enumerate(text)
             if letter.isalnum() and (index == 0 or not text[index - 1].isalnum())]
@@ -229,7 +230,7 @@ def assign_access_keys(items: Sequence['MenuItem']) -> None:
     The first letter of one of its words where one is free, then any letter
     or digit of its text; an item whose every letter is taken gets none.
     """
-    taken: Set[str] = {str(item.mnemonic)[:1].lower() for item in items
+    taken: set[str] = {str(item.mnemonic)[:1].lower() for item in items
                        if item.mnemonic}
     for item in items:
         item._assigned = ''
@@ -274,7 +275,7 @@ class _MenuPanel(Panel):
         self.parentMenu = parentMenu
         #: What this was last laid out against, so a submenu opened from it can
         #: be put in the right place at once rather than on the next frame.
-        self._laidOut: Optional[Tuple[Tuple[int, int], FontMetrics]] = None
+        self._laidOut: Optional[tuple[tuple[int, int], FontMetrics]] = None
         if items:
             self.children = list(items)
 
@@ -287,7 +288,7 @@ class _MenuPanel(Panel):
     def contentRect(self) -> Rect:
         return self.rect.inset(self.menuPadding(self.activeSkin()))
 
-    def items(self) -> List[MenuItem]:
+    def items(self) -> list[MenuItem]:
         """This panel's own items, in the order they are drawn."""
         return [child for child in self.layoutChildren()
                 if isinstance(child, MenuItem)]
@@ -303,7 +304,7 @@ class _MenuPanel(Panel):
         """
         return _walkItems(self.items())
 
-    def submenuAnchor(self, item: MenuItem) -> Tuple[float, float]:
+    def submenuAnchor(self, item: MenuItem) -> tuple[float, float]:
         """Where the list this item leads to should open."""
         raise NotImplementedError
 
@@ -368,7 +369,7 @@ class Menu(_MenuPanel):
                 row._assigned = ''
 
     # -- where it goes -----------------------------------------------------
-    def layout(self, viewport: Tuple[int, int], metrics: FontMetrics) -> None:
+    def layout(self, viewport: tuple[int, int], metrics: FontMetrics) -> None:
         self.link()
         self.assignAccessKeys()
         view_width, view_height = int(viewport[0]), int(viewport[1])
@@ -414,7 +415,7 @@ class Menu(_MenuPanel):
             cursor -= height
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         widest = 0
         total = 0
         for child in self.layoutChildren():
@@ -423,7 +424,7 @@ class Menu(_MenuPanel):
         pad = self.menuPadding(self.activeSkin()) * 2
         return (widest + pad, total + pad)
 
-    def submenuAnchor(self, item: MenuItem) -> Tuple[float, float]:
+    def submenuAnchor(self, item: MenuItem) -> tuple[float, float]:
         return (float(self.rect.x + self.rect.width), float(item.rect.top))
 
     # -- the pointer and the keys -------------------------------------------
@@ -459,7 +460,7 @@ class Menu(_MenuPanel):
             return True
         return super(Menu, self).pointer_released(x, y, button)
 
-    def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+    def key(self, name: str, modifiers: tuple[int, int, int]) -> bool:
         if self.choosing:
             return name != '<escape>' or super(Menu, self).key(name, modifiers)
         if name == '<left>' and isinstance(self.parentMenu, Menu):
@@ -526,7 +527,7 @@ class MenuBar(_MenuPanel):
 
     PROTO = 'MenuBar'
 
-    def __init__(self, menus: Optional[Sequence[Tuple[str, Sequence[Widget]]]] = None,
+    def __init__(self, menus: Optional[Sequence[tuple[str, Sequence[Widget]]]] = None,
                  **named: Any) -> None:
         named.setdefault('modal', False)
         named.setdefault('closeOnEscape', False)
@@ -534,7 +535,7 @@ class MenuBar(_MenuPanel):
                   for title, items in (menus or ())]
         super(MenuBar, self).__init__(items=titles, **named)
 
-    def layout(self, viewport: Tuple[int, int], metrics: FontMetrics) -> None:
+    def layout(self, viewport: tuple[int, int], metrics: FontMetrics) -> None:
         self.link()
         view_width, view_height = int(viewport[0]), int(viewport[1])
         self.scaleSkin(metrics)
@@ -556,7 +557,7 @@ class MenuBar(_MenuPanel):
             cursor += width
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         width = 0
         tallest = 0
         for child in self.layoutChildren():
@@ -566,5 +567,5 @@ class MenuBar(_MenuPanel):
         pad = self.menuPadding(self.activeSkin()) * 2
         return (width + pad, tallest + pad)
 
-    def submenuAnchor(self, item: MenuItem) -> Tuple[float, float]:
+    def submenuAnchor(self, item: MenuItem) -> tuple[float, float]:
         return (float(item.rect.x), float(self.rect.y))

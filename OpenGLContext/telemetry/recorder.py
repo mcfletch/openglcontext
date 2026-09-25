@@ -26,7 +26,8 @@ from __future__ import annotations
 import logging
 import time
 import traceback as traceback_module
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ __all__ = ['SessionRecorder', 'milliseconds']
 #: earlier positions are a hundred lines a second saying nothing.
 COLLAPSING = ('pointer', 'mousemove')
 
-Record = Dict[str, Any]
+Record = dict[str, Any]
 
 
 class SessionRecorder:
@@ -69,7 +70,7 @@ class SessionRecorder:
                  clock: Any = time.perf_counter,
                  block: int = BLOCK,
                  state_seconds: float = STATE_SECONDS,
-                 state: Optional[Callable[[], Dict[str, Any]]] = None) -> None:
+                 state: Optional[Callable[[], dict[str, Any]]] = None) -> None:
         self._write = write
         self._clock = clock
         self.block = int(block)
@@ -80,10 +81,10 @@ class SessionRecorder:
         #: which is what an input arriving now will be stamped with.
         self.frames = 0
         self.closed = False
-        self._pending: List[Record] = []
-        self._times: List[float] = []
-        self._draws: List[Optional[float]] = []
-        self._phases: Dict[str, float] = {}
+        self._pending: list[Record] = []
+        self._times: list[float] = []
+        self._draws: list[Optional[float]] = []
+        self._phases: dict[str, float] = {}
         self._stalls = 0
         self._block_started: Optional[float] = None
         #: Seconds of frames written down so far, added up as the file holds
@@ -118,7 +119,7 @@ class SessionRecorder:
         self._hold(entry)
 
     def frame(self, duration: Optional[float], draw: Optional[float] = None,
-              phases: Optional[Dict[str, float]] = None,
+              phases: Optional[dict[str, float]] = None,
               stalled: bool = False) -> float:
         """Finish one frame, writing out everything it collected.
 
@@ -171,7 +172,7 @@ class SessionRecorder:
         """
         self._emit({'kind': 'mark', 'name': name, 'fields': fields})
 
-    def entropy(self, state: Dict[str, Any]) -> None:
+    def entropy(self, state: dict[str, Any]) -> None:
         """Where this session's randomness starts.
 
         Its own record rather than a line of the header: the seed is one
@@ -201,7 +202,7 @@ class SessionRecorder:
         self._emit(record)
 
     def message(self, level: int, logger: str, message: str,
-                traceback: Optional[List[str]] = None) -> None:
+                traceback: Optional[list[str]] = None) -> None:
         """Record a warning or an error somebody logged."""
         record: Record = {
             'kind': 'log',
@@ -318,7 +319,7 @@ def milliseconds(seconds: float) -> float:
     return round(seconds * 1000.0, 2)
 
 
-def _traceback(error: BaseException) -> List[str]:
+def _traceback(error: BaseException) -> list[str]:
     """An exception's traceback as the lines a reader wants, newlines removed."""
     formatted = traceback_module.format_exception(
         type(error), error, error.__traceback__)
@@ -370,14 +371,14 @@ class Keeping:
     def __init__(self, clock: Optional[Callable[[], float]] = None) -> None:
         self.clock = clock
         #: Every mark taken, as ``(when, name, fields)``.
-        self.marks: List[tuple[float, str, Dict[str, Any]]] = []
+        self.marks: list[tuple[float, str, dict[str, Any]]] = []
 
     def mark(self, name: str, /, **fields: Any) -> None:
         """Keep a mark."""
         when = float(self.clock()) if self.clock is not None else 0.0
         self.marks.append((when, name, fields))
 
-    def named(self, name: str) -> List[tuple[float, str, Dict[str, Any]]]:
+    def named(self, name: str) -> list[tuple[float, str, dict[str, Any]]]:
         """The marks called ``name``, in order."""
         return [one for one in self.marks if one[1] == name]
 

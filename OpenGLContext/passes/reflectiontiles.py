@@ -33,7 +33,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import math
-from typing import Dict, Hashable, Iterable, List, Mapping, NamedTuple, Optional, Set, Tuple
+from collections.abc import Hashable, Iterable, Mapping
+from typing import NamedTuple, Optional
 
 __all__ = [
     'GUTTER', 'DRIFT_TEXELS', 'Tile', 'Packed', 'TilePacker', 'Candidate',
@@ -61,7 +62,7 @@ class Tile:
     height: int
 
     @property
-    def rect(self) -> Tuple[int, int, int, int]:
+    def rect(self) -> tuple[int, int, int, int]:
         """``(x, y, width, height)``, as ``glViewport`` takes it."""
         return self.x, self.y, self.width, self.height
 
@@ -75,9 +76,9 @@ class Packed:
     no room for.
     """
 
-    tiles: Dict[Hashable, Tile]
-    moved: Set[Hashable] = field(default_factory=set)
-    unplaced: Set[Hashable] = field(default_factory=set)
+    tiles: dict[Hashable, Tile]
+    moved: set[Hashable] = field(default_factory=set)
+    unplaced: set[Hashable] = field(default_factory=set)
 
 
 def _shelf_height(height: int) -> int:
@@ -101,7 +102,7 @@ class _Shelf:
     y: int
     height: int
     #: Each slot, in order along the shelf.
-    slots: List[_Slot] = field(default_factory=list)
+    slots: list[_Slot] = field(default_factory=list)
 
     def fit(self, width: int, limit: int) -> Optional[int]:
         """The first x a slot ``width`` wide fits at, or None."""
@@ -119,13 +120,13 @@ class TilePacker:
     def __init__(self, width: int, height: int, gutter: int = GUTTER) -> None:
         self.gutter = int(gutter)
         self.width = self.height = 0
-        self._shelves: List[_Shelf] = []
-        self._sizes: Dict[Hashable, Tuple[int, int]] = {}
-        self._tiles: Dict[Hashable, Tile] = {}
+        self._shelves: list[_Shelf] = []
+        self._sizes: dict[Hashable, tuple[int, int]] = {}
+        self._tiles: dict[Hashable, Tile] = {}
         self.resize(width, height)
 
     @property
-    def tiles(self) -> Dict[Hashable, Tile]:
+    def tiles(self) -> dict[Hashable, Tile]:
         """Every tile placed, by key."""
         return dict(self._tiles)
 
@@ -137,10 +138,10 @@ class TilePacker:
         self._tiles = {}
 
     # -- placing ----------------------------------------------------------
-    def _slot(self, size: Tuple[int, int]) -> Tuple[int, int]:
+    def _slot(self, size: tuple[int, int]) -> tuple[int, int]:
         return size[0] + 2 * self.gutter, size[1] + 2 * self.gutter
 
-    def _insert(self, key: Hashable, size: Tuple[int, int]) -> bool:
+    def _insert(self, key: Hashable, size: tuple[int, int]) -> bool:
         """Place one slot: on a shelf of its class, on a new shelf, or beside
         taller slots on a taller shelf, the first of those with room."""
         width, height = self._slot(size)
@@ -164,7 +165,7 @@ class TilePacker:
                         key=lambda shelf: shelf.height)
         return self._on_shelf(key, size, width, taller)
 
-    def _on_shelf(self, key: Hashable, size: Tuple[int, int], width: int,
+    def _on_shelf(self, key: Hashable, size: tuple[int, int], width: int,
                   shelves: Iterable[_Shelf]) -> bool:
         for shelf in shelves:
             x = shelf.fit(width, self.width)
@@ -174,7 +175,7 @@ class TilePacker:
         return False
 
     def _occupy(self, shelf: _Shelf, x: int, width: int, key: Hashable,
-                size: Tuple[int, int]) -> None:
+                size: tuple[int, int]) -> None:
         shelf.slots.append(_Slot(x, width, key))
         shelf.slots.sort(key=lambda slot: slot.x)
         self._sizes[key] = size
@@ -190,7 +191,7 @@ class TilePacker:
         self._sizes.pop(key, None)
         self._tiles.pop(key, None)
 
-    def place(self, sizes: Mapping[Hashable, Tuple[int, int]]) -> Packed:
+    def place(self, sizes: Mapping[Hashable, tuple[int, int]]) -> Packed:
         """Hold a tile of each size by key, releasing every key not named.
 
         A key whose size is unchanged keeps its place. Where a new or resized
@@ -207,7 +208,7 @@ class TilePacker:
             return Packed(dict(self._tiles))
         return self._repack(wanted, before)
 
-    def _repack(self, wanted: Mapping[Hashable, Tuple[int, int]],
+    def _repack(self, wanted: Mapping[Hashable, tuple[int, int]],
                 before: Mapping[Hashable, Tile]) -> Packed:
         self._shelves, self._sizes, self._tiles = [], {}, {}
         unplaced = set()
@@ -292,8 +293,8 @@ class Chosen:
     views: int
     separate_views: int
     texels: float
-    decisions: List[Decision] = field(default_factory=list)
-    unaffordable: Set[Hashable] = field(default_factory=set)
+    decisions: list[Decision] = field(default_factory=list)
+    unaffordable: set[Hashable] = field(default_factory=set)
 
     def room(self, candidate: Candidate) -> bool:
         """Whether a view is left for ``candidate``, and a separate one where it needs one."""
@@ -365,7 +366,7 @@ class ReflectionSchedule:
         scale = math.sqrt(max(texels, 0.0) / candidate.texels)
         return scale if scale >= self.SMALLEST_SCALE else None
 
-    def choose(self, candidates: List[Candidate], budget: Budget) -> Chosen:
+    def choose(self, candidates: list[Candidate], budget: Budget) -> Chosen:
         """The mirror views to draw this frame, and what the budget has left."""
         total = float(budget.texels) * self.time_scale
         chosen = Chosen(int(budget.views), int(budget.separate_views), total)

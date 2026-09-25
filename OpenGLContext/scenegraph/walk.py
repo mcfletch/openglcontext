@@ -12,7 +12,8 @@ memory rather than by the interpreter's recursion limit.
     lights = [node for node in reachable(scene) if isinstance(node, Light)]
     meshes = reachable(model, fields=('children', 'geometry'))
 """
-from typing import Any, Dict, Iterator, List, Sequence
+from collections.abc import Iterator, Sequence
+from typing import Any
 
 __all__ = ['reachable']
 
@@ -26,7 +27,7 @@ def reachable(root: Any, fields: Sequence[str] = ('children',)) -> Iterator[Any]
     """
     # Each node visited, by address, holding the node so that the address
     # is not handed to another object while the walk is suspended.
-    seen: Dict[int, Any] = {}
+    seen: dict[int, Any] = {}
     stack = [root]
     while stack:
         node = stack.pop()
@@ -34,7 +35,7 @@ def reachable(root: Any, fields: Sequence[str] = ('children',)) -> Iterator[Any]
             continue
         seen[id(node)] = node
         yield node
-        below: List[Any] = []
+        below: list[Any] = []
         for field in fields:
             value = getattr(node, field, None)
             if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):

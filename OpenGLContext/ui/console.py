@@ -20,7 +20,8 @@ from __future__ import annotations
 import logging
 import weakref
 from gettext import gettext as _
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from collections.abc import Callable
+from typing import Any, Optional
 
 from vrml import field
 
@@ -58,7 +59,7 @@ class CommandRegistry:
     """
 
     def __init__(self) -> None:
-        self._commands: Dict[str, Tuple[Callable[..., Any], str]] = {}
+        self._commands: dict[str, tuple[Callable[..., Any], str]] = {}
         self.add('help', self._help, _('list the commands, or describe one'))
         self.add('clear', self._clear, _('empty the scrollback'))
 
@@ -67,7 +68,7 @@ class CommandRegistry:
         """Register a command, called as ``function(panel, *words)``."""
         self._commands[name] = (function, help)
 
-    def names(self) -> List[str]:
+    def names(self) -> list[str]:
         """Every registered command, in the order help lists them."""
         return sorted(self._commands)
 
@@ -124,7 +125,7 @@ class ConsoleView(Widget):
 
     def __init__(self, **named: Any) -> None:
         super(ConsoleView, self).__init__(**named)
-        self.lines: List[ConsoleLine] = []
+        self.lines: list[ConsoleLine] = []
 
     def write(self, text: str, level: int = logging.INFO) -> None:
         """Append text, split into lines, dropping the oldest past the limit."""
@@ -139,7 +140,7 @@ class ConsoleView(Widget):
         self.lines = []
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         widest = max([len(line.text) for line in self.lines], default=0)
         return (widest * metrics.char_width,
                 len(self.lines) * metrics.line_height)
@@ -181,7 +182,7 @@ class ConsolePanel(Panel):
         self.body: Optional[ScrollViewport] = None
         self.entry: Optional[TextField] = None
         #: Commands typed, most recent last, walked with the arrow keys.
-        self.history: List[str] = []
+        self.history: list[str] = []
         self._historyAt: Optional[int] = None
 
     # -- output -----------------------------------------------------------
@@ -258,7 +259,7 @@ class ConsolePanel(Panel):
         self.entry.caret = len(self.entry.read())
         return True
 
-    def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+    def key(self, name: str, modifiers: tuple[int, int, int]) -> bool:
         if name == '<return>':
             self.submit()
             return True

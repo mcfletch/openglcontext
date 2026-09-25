@@ -31,7 +31,8 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Callable, Iterator, Optional, Sequence, Tuple, Union
+from collections.abc import Callable, Iterator, Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -70,7 +71,7 @@ class AssetLibrary(object):
     the answer changes, what was shared from the previous directory is let go.
     """
 
-    def __init__(self, root: Union[str, Callable[[], str]]) -> None:
+    def __init__(self, root: str | Callable[[], str]) -> None:
         self._where: Optional[Callable[[], str]] = (
             root if callable(root) else None)
         self._root = "" if callable(root) else os.path.abspath(root)
@@ -212,7 +213,7 @@ def merged_by_material(node: Any) -> "list":
     return [(groups[key][0],) + _joined(groups[key][1]) for key in order]
 
 
-def merged_mesh(node: Any) -> "Optional[Tuple[dict, np.ndarray]]":
+def merged_mesh(node: Any) -> "Optional[tuple[dict, np.ndarray]]":
     """A subtree's triangle meshes as one glTF-shaped mesh in world space.
 
     Returns ``({'POSITION': (v, 3), 'NORMAL': (v, 3), ...}, indices)``, or None
@@ -253,7 +254,7 @@ def merged_mesh(node: Any) -> "Optional[Tuple[dict, np.ndarray]]":
     return _joined([piece for _material, piece in collected])
 
 
-def _joined(pieces: "Sequence") -> "Tuple[dict, np.ndarray]":
+def _joined(pieces: "Sequence") -> "tuple[dict, np.ndarray]":
     """Several world-space pieces as one mesh, indices moved along."""
     positions, normals, texcoords, triangles = [], [], [], []
     offset = 0
@@ -276,7 +277,7 @@ def _joined(pieces: "Sequence") -> "Tuple[dict, np.ndarray]":
     return attributes, np.concatenate(triangles).astype(np.uint32)
 
 
-def _merge(node: Any, world: np.ndarray, collected: list, ancestry: Tuple[Any, ...]) -> None:
+def _merge(node: Any, world: np.ndarray, collected: list, ancestry: tuple[Any, ...]) -> None:
     """Append ``(material, (positions, normals, texcoords, indices))`` per mesh."""
     # Cycle-detect on the path rather than globally: one mesh mounted under
     # several transforms is several instances, and each belongs at its own.
@@ -427,7 +428,7 @@ def recolour(node: Any, colour: Sequence[float], glow: float = 0.0) -> int:
     return touched
 
 
-def bounds(node: Any) -> "Optional[Tuple[np.ndarray, np.ndarray]]":
+def bounds(node: Any) -> "Optional[tuple[np.ndarray, np.ndarray]]":
     """The box a subtree occupies, as ``(minimum, maximum)``, or None if empty.
 
     In the space the subtree's own root sits in, with every ``Transform`` on the

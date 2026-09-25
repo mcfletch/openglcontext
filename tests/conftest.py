@@ -14,7 +14,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 import pytest
 
@@ -74,8 +74,8 @@ def subprocess_runner():
     """
     def run(
         script_path: Path,
-        args: Optional[List[str]] = None,
-        env: Optional[Dict[str, str]] = None,
+        args: Optional[list[str]] = None,
+        env: Optional[dict[str, str]] = None,
         timeout: float = DEFAULT_TIMEOUT,
         coverage: bool = True,
     ) -> SubprocessResult:
@@ -120,7 +120,7 @@ def opengl_env():
 
     Returns a callable that generates env dict for a given profile.
     """
-    def get_env(profile: str = 'compatibility', backend: Optional[str] = None) -> Dict[str, str]:
+    def get_env(profile: str = 'compatibility', backend: Optional[str] = None) -> dict[str, str]:
         """Get environment variables for the given profile.
 
         Args:
@@ -221,7 +221,7 @@ def event_sender():
 
     Returns a factory that creates EventSender instances.
     """
-    senders: List[EventSender] = []
+    senders: list[EventSender] = []
 
     def create(socket_path: Optional[str] = None) -> EventSender:
         if socket_path is None:
@@ -245,8 +245,8 @@ def interactive_runner(subprocess_runner, event_sender):
     """
     def run(
         script_path: Path,
-        events: List[Dict[str, Any]],
-        env: Optional[Dict[str, str]] = None,
+        events: list[dict[str, Any]],
+        env: Optional[dict[str, str]] = None,
         timeout: float = DEFAULT_TIMEOUT,
     ) -> SubprocessResult:
         """Run an interactive test with events.

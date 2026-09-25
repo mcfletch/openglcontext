@@ -1,6 +1,6 @@
 """Module providing translation from GLUT callbacks to OpenGLContext events"""
 
-from typing import TYPE_CHECKING, Any, Dict, List, Tuple
+from typing import TYPE_CHECKING, Any
 
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
 from OpenGLContext.events.mouseevents import WHEEL_BUTTONS
@@ -21,7 +21,7 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         # What this mix-in needs of the GLUT context beside it.
         def addPickEvent(self, event: Any) -> Any: ...
         def triggerPick(self) -> Any: ...
-        def getViewPort(self) -> Tuple[int, int]: ...
+        def getViewPort(self) -> tuple[int, int]: ...
 
     ### KEYBOARD interactions
     def glutOnKeyDown(self, character: Any, x: int, y: int) -> None:
@@ -125,9 +125,9 @@ class GLUTXEvent(object):
             list
     """
 
-    CURRENTBUTTONSTATES: List[int] = [0, 0, 0]
+    CURRENTBUTTONSTATES: list[int] = [0, 0, 0]
 
-    def _getModifiers(self, modifierMask: int) -> Tuple[bool, bool, bool]:
+    def _getModifiers(self, modifierMask: int) -> tuple[bool, bool, bool]:
         """Get the 3-tuple of modifier booleans"""
         return (
             not (not (GLUT_ACTIVE_SHIFT & modifierMask)),
@@ -135,7 +135,7 @@ class GLUTXEvent(object):
             not (not (GLUT_ACTIVE_ALT & modifierMask)),
         )
 
-    def _updateButtons(self, button: int, state: int) -> Tuple[int, int]:
+    def _updateButtons(self, button: int, state: int) -> tuple[int, int]:
         """Update the global mouse-button-states with an event's data"""
         if state == GLUT_UP:
             state = 0
@@ -217,7 +217,7 @@ class GLUTKeypressEvent(GLUTXEvent, keyboardevents.KeypressEvent):
         self.name = keyboardMapping.get(character, character)
 
 
-keyboardMapping: Dict[Any, str] = {
+keyboardMapping: dict[Any, str] = {
     GLUT_KEY_F1: "<F1>",
     GLUT_KEY_F2: "<F2>",
     GLUT_KEY_F3: "<F3>",
@@ -246,7 +246,7 @@ keyboardMapping: Dict[Any, str] = {
     b"\177": "<delete>",
     b"\010": "<backspace>",
 }
-buttonMapping: Dict[Any, int] = {
+buttonMapping: dict[Any, int] = {
     GLUT_LEFT_BUTTON: 0,
     GLUT_RIGHT_BUTTON: 1,
     GLUT_MIDDLE_BUTTON: 2,

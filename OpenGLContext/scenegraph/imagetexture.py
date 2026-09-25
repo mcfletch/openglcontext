@@ -1,7 +1,8 @@
 """ImageTexture and MMImageTexture nodes using PIL"""
 
 import contextlib
-from typing import TYPE_CHECKING, Any, Optional, Sequence
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGL.GL import *
 from OpenGL.GLU import *

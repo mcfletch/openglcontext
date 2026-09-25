@@ -14,7 +14,7 @@ about how text reaches the screen.
     viewer.overlayText = "model.glb\\n[1/3] aerial"
     viewer.overlayError = False
 """
-from typing import TYPE_CHECKING, Any, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGLContext.ui.hudwidgets import HUDLayer, TextBlock
 
@@ -56,7 +56,7 @@ class CaptionMixin(object):
     _captionLayer: Optional[CaptionLayer] = None
 
     if TYPE_CHECKING:
-        hudLayers: List[Any]
+        hudLayers: list[Any]
 
         def addHUDLayer(self, layer: Any) -> Any: ...
         def removeHUDLayer(self, layer: Any) -> None: ...
@@ -105,7 +105,7 @@ class CaptionMixin(object):
 
     @overlayText.setter
     def overlayText(self, text: str) -> None:
-        lines: List[str] = str(text).split('\n') if text else []
+        lines: list[str] = str(text).split('\n') if text else []
         block = self.captionLayer.block
         if [str(line) for line in block.lines] == lines:
             return          # recomposed on every camera change; only news counts

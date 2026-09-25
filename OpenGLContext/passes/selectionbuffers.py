@@ -16,7 +16,7 @@ picking *logic* in :mod:`selection` stays free of framebuffer bookkeeping.
 """
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple
+from typing import Optional
 
 from OpenGL.GL import (
     GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_BUFFER_BIT, GL_DEPTH_ATTACHMENT,
@@ -235,7 +235,7 @@ class SelectionBufferFBO:
         self._initialized = False
 
         # Object ID to path mapping (rebuilt each frame)
-        self.id_map: Dict = {}
+        self.id_map: dict = {}
 
     @property
     def readyFramebuffer(self) -> Optional[int]:
@@ -417,7 +417,7 @@ class SelectionBufferFBO:
         # Restore both draw buffers
         glDrawBuffers(2, [GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1])
 
-    def read_pixel(self, x: int, y: int) -> Tuple[int, float]:
+    def read_pixel(self, x: int, y: int) -> tuple[int, float]:
         """Read (object_id, depth) at one pixel straight from the FBO.
 
         This replaces reading back the *entire* id+depth buffer every frame (a

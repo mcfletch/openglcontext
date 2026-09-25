@@ -17,7 +17,8 @@ of tessellated arrays shared by the per-shape and instanced draw paths.
 
 import logging
 from itertools import zip_longest
-from typing import Any, Iterator, Optional
+from collections.abc import Iterator
+from typing import Any, Optional
 
 from numpy import add, arccos, array, divide, dot, ones, repeat
 from OpenGL.GL import GL_TRIANGLES

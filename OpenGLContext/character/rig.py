@@ -20,7 +20,8 @@ row, ``p @ M`` transforms it, and ``world = local @ parent``.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -29,7 +30,7 @@ from OpenGLContext.loaders.gltf.animation import vrml_to_quat_xyzw
 __all__ = ['Rig', 'quat_to_matrices', 'compose_local']
 
 #: Translation, rotation and scale for every slot of a rig.
-Pose = Tuple[np.ndarray, np.ndarray, np.ndarray]
+Pose = tuple[np.ndarray, np.ndarray, np.ndarray]
 
 
 def quat_to_matrices(quaternions: np.ndarray) -> np.ndarray:
@@ -100,13 +101,13 @@ class Rig:
         is not numbered again, so a hierarchy that loops back on itself costs a
         wasted edge rather than the process.
         """
-        indices: List[int] = []
-        slot_of: Dict[int, int] = {}
-        parents: List[int] = []
-        depths: List[int] = []
+        indices: list[int] = []
+        slot_of: dict[int, int] = {}
+        parents: list[int] = []
+        depths: list[int] = []
         frontier = [(int(r), -1) for r in roots]
         while frontier:
-            following: List[Tuple[int, int]] = []
+            following: list[tuple[int, int]] = []
             for index, parent_slot in frontier:
                 if index in slot_of:
                     continue
@@ -123,14 +124,14 @@ class Rig:
         self.n = len(indices)
         depth = np.asarray(depths, dtype=np.int32)
         #: Slots grouped by generation, roots first.
-        self.levels: List[np.ndarray] = [
+        self.levels: list[np.ndarray] = [
             np.flatnonzero(depth == d) for d in range(int(depth.max()) + 1)
         ] if self.n else []
         # Numbering is breadth-first, so a generation is a contiguous run of
         # slots: (first, past-the-end, parent slot of each). Composing a
         # generation is then a slice on one side and one gather on the other,
         # which is what a crowd's world matrices are built out of.
-        self.level_ranges: List[Tuple[int, int, np.ndarray]] = [
+        self.level_ranges: list[tuple[int, int, np.ndarray]] = [
             (int(level[0]), int(level[-1]) + 1, self.parent[level])
             for level in self.levels[1:]
         ]
@@ -142,7 +143,7 @@ class Rig:
         kept whole and used in place of a composed one, which is also why an
         animation cannot drive such a node.
         """
-        self.transforms: List[Any] = [node_transforms.get(int(i)) for i in self.indices]
+        self.transforms: list[Any] = [node_transforms.get(int(i)) for i in self.indices]
         self.rest_translation = np.zeros((self.n, 3), dtype='d')
         self.rest_rotation = np.tile(np.array([0.0, 0.0, 0.0, 1.0]), (self.n, 1))
         self.rest_scale = np.ones((self.n, 3), dtype='d')
@@ -186,7 +187,7 @@ class Rig:
             world[level] = world[level] @ world[self.parent[level]]
         return world
 
-    def world_matrix_map(self, worlds: np.ndarray) -> Dict[int, np.ndarray]:
+    def world_matrix_map(self, worlds: np.ndarray) -> dict[int, np.ndarray]:
         """World matrices keyed by glTF node index, for a caller wanting a dict."""
         return {int(index): worlds[slot] for slot, index in enumerate(self.indices)}
 

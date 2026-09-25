@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, List, Optional, Tuple
+from typing import Any, Optional
 
 from vrml import field
 
@@ -81,7 +81,7 @@ class Picture(Widget):
     aspect = field.newField('aspect', 'SFFloat', 1, DEFAULT_ASPECT)
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         width = metrics.char_width * PICTURE_COLUMNS
         return (width, max(1, int(width / max(float(self.aspect), 0.1))))
 
@@ -224,7 +224,7 @@ class Carousel(BoundWidget):
         images = list(self.optionImages)
         return str(images[index]) if index < len(images) else ''
 
-    def visible(self) -> List[Item]:
+    def visible(self) -> list[Item]:
         """The band as it is shown: the selection in the middle, wrapping.
 
         Wrapping so a band of five over a list of fifty always shows five —
@@ -240,7 +240,7 @@ class Carousel(BoundWidget):
         return [self._item(options, (first + offset) % len(options))
                 for offset in range(span)]
 
-    def _item(self, options: List[str], index: int) -> Item:
+    def _item(self, options: list[str], index: int) -> Item:
         return Item(option=str(options[index]), label=self.label_for(index),
                     image=self.image_for(index), selected=index == self.index)
 
@@ -266,7 +266,7 @@ class Carousel(BoundWidget):
 
     # -- where everything lands -------------------------------------------
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         span = min(max(1, int(self.visibleCount)), max(1, len(self.options)))
         slot = metrics.char_width * PICTURE_COLUMNS
         arrows = metrics.char_width * ARROW_COLUMNS * 2
@@ -279,14 +279,14 @@ class Carousel(BoundWidget):
         return (arrows + slot * span + gaps,
                 picture + (metrics.char_height + metrics.line_gap) * 2)
 
-    def arrowRects(self) -> Tuple[Rect, Rect]:
+    def arrowRects(self) -> tuple[Rect, Rect]:
         """The two arrows, at either end of the band."""
         width = min(self.rect.width / 2.0, max(1.0, self.rect.height / 3.0))
         return (_pixels(self.rect.x, self.rect.y, width, self.rect.height),
                 _pixels(self.rect.right - width, self.rect.y, width,
                         self.rect.height))
 
-    def slotRects(self, metrics: FontMetrics) -> List[Rect]:
+    def slotRects(self, metrics: FontMetrics) -> list[Rect]:
         """Where each visible item goes, left to right, between the arrows."""
         items = self.visible()
         if not items:
@@ -361,7 +361,7 @@ class Carousel(BoundWidget):
                 return item.option
         return None
 
-    def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+    def key(self, name: str, modifiers: tuple[int, int, int]) -> bool:
         if name in ('<right>', '<down>'):
             self.step(1)
             return True
@@ -415,7 +415,7 @@ class Carousel(BoundWidget):
                         align='center')
 
     def _paintChosen(self, renderer: Any, skin: Any, metrics: FontMetrics,
-                     items: List[Item]) -> None:
+                     items: list[Item]) -> None:
         """The chosen item's name in full, across the whole band.
 
         A tile is too narrow for a name of any length, so the captions under

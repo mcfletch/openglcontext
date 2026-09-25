@@ -9,7 +9,7 @@ profile and renderer.  Shadow mapping comes from
 :class:`~OpenGLContext.passes.shadowmixin.ShadowMapMixin`.
 """
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from OpenGLContext import renderoptions
 from . import _flat
@@ -132,7 +132,7 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
         return geometry_instance_key(shape)
 
     def _drawInstanceGroup(self, group: Any, shader: Any, prog: Any,
-                           id_map: Optional[Dict[int, Any]]) -> None:
+                           id_map: Optional[dict[int, Any]]) -> None:
         """Draw an InstanceGroup through the VRML97 lit program in one call.
 
         Binds the group's single representative material (per-instance material

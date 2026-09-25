@@ -10,7 +10,8 @@ dissolve). Returns arrays ready for
 :meth:`~OpenGLContext.scenegraph.vegetation.billboards.InstancedBillboards.update_instances`.
 """
 import math
-from typing import TYPE_CHECKING, Callable, Optional, TypeVar
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Optional, TypeVar
 
 import numpy as np
 

@@ -33,7 +33,8 @@ weakly::
 from __future__ import annotations
 
 from gettext import gettext as _
-from typing import Any, Callable, List, Optional, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any, Optional
 
 from OpenGLContext.ui import dialogs, generate
 from OpenGLContext.ui.layout import Column, Row
@@ -225,12 +226,12 @@ def _declared(node: Any, attribute: str) -> Optional[Sequence[str]]:
     return getattr(type(node), attribute, None)
 
 
-def _section(heading: str, page: Any) -> List[Any]:
+def _section(heading: str, page: Any) -> list[Any]:
     return [Label(text=heading, name='%s.heading' % (heading.lower(),),
                   top=8), page]
 
 
-def _audioSection(session: SettingsSession) -> List[Any]:
+def _audioSection(session: SettingsSession) -> list[Any]:
     """The player's sound settings, from the definition's ``audio`` sub-node.
 
     Edited in place on the draft's own sub-node, so Cancel reverts it with
@@ -244,7 +245,7 @@ def _audioSection(session: SettingsSession) -> List[Any]:
         audio, include=_declared(audio, 'FIELDS')))
 
 
-def _modeSection(context: Any, session: SettingsSession) -> List[Any]:
+def _modeSection(context: Any, session: SettingsSession) -> list[Any]:
     """One button per declared movement mode, each opening its own page.
 
     A button rather than the mode's fields inline: a game may declare four
@@ -254,7 +255,7 @@ def _modeSection(context: Any, session: SettingsSession) -> List[Any]:
     modes = list(getattr(session.draft, 'movementModes', ()) or ())
     if not modes:
         return []
-    buttons: List[Any] = []
+    buttons: list[Any] = []
     for index, mode in enumerate(modes):
         name = str(mode.name) or 'mode %d' % (index,)
         button = Button(text='%s...' % (name.capitalize(),),

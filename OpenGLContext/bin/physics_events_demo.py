@@ -27,7 +27,8 @@ import argparse
 import sys
 import time
 from functools import partial
-from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -159,7 +160,7 @@ class CollisionYard:
         }
         #: The time step of each frame, and the cap the ``c`` key sets.
         self.frames = FrameStep(longest=0.1)
-        self.sounds: List[Tuple[str, np.ndarray, float]] = []
+        self.sounds: list[tuple[str, np.ndarray, float]] = []
 
         self._box((30.0, 1.0, 30.0), (0.0, -0.5, 0.0), self.finish.floor,
                   model.STATIC, material='stone')
@@ -168,9 +169,9 @@ class CollisionYard:
                       mass=20.0)
             for (x, z), finish in zip(CRATE_SPOTS, self.finish.crates)]
         self.balls = {name: self._ball(name) for name in PANE_X}
-        self.panes: Dict[str, PhysicsBody] = {}
-        self.broken: Set[str] = set()
-        self.fragments: List[PhysicsBody] = []
+        self.panes: dict[str, PhysicsBody] = {}
+        self.broken: set[str] = set()
+        self.fragments: list[PhysicsBody] = []
         self.plate = self._plate()
         self.weight = self._box((0.7, 0.7, 0.7), WEIGHT_PARKED, self.finish.weight,
                                 model.DYNAMIC, mass=40.0)
@@ -376,7 +377,7 @@ class CollisionYard:
         """How high the middle of the door is, in metres."""
         return float(self.world.position[self.door.index][1])
 
-    def step(self, dt: float, engine: Any) -> List[str]:
+    def step(self, dt: float, engine: Any) -> list[str]:
         """Advance the yard by ``dt`` seconds and play what was struck; return the sounds' names."""
         x, y, z = DOOR_CENTRE
         self._door.target = (x, y + (DOOR_TRAVEL if self.plate_pressed else 0.0), z)

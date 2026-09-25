@@ -22,7 +22,8 @@ from __future__ import annotations
 import dataclasses
 import struct
 import typing
-from typing import Any, Callable, Dict, List, Tuple
+from collections.abc import Callable
+from typing import Any
 
 import pygltflib
 
@@ -44,7 +45,7 @@ CORE_21 = ('shapes',)
 #: One decode plan per dataclass, resolved on first sight and reused. This is the
 #: cache dataclasses_json lacks: the plan is the whole cost, and there are 28
 #: classes against thousands of objects.
-_PLANS: Dict[type, List[Tuple[str, Converter]]] = {}
+_PLANS: dict[type, list[tuple[str, Converter]]] = {}
 
 
 def _identity(value: Any) -> Any:
@@ -68,7 +69,7 @@ def _converter(hint: Any) -> Converter:
     if origin is typing.Union:
         real = [a for a in typing.get_args(hint) if a is not type(None)]
         return _converter(real[0]) if len(real) == 1 else _identity
-    if origin in (list, List):
+    if origin in (list, list):
         args = typing.get_args(hint)
         # A morph target is typed List[Attributes], but pygltflib leaves those
         # elements as plain dicts (it decodes Attributes only as a direct field),
@@ -93,7 +94,7 @@ def _converter(hint: Any) -> Converter:
     return _identity
 
 
-def _plan(cls: type) -> List[Tuple[str, Converter]]:
+def _plan(cls: type) -> list[tuple[str, Converter]]:
     """The (field name, converter) list for ``cls``, resolved once."""
     plan = _PLANS.get(cls)
     if plan is None:

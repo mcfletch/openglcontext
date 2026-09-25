@@ -32,7 +32,7 @@ Reference:
 """
 from __future__ import annotations
 
-from typing import Sequence, Tuple
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -54,7 +54,7 @@ _TINY = 1e-12
 
 
 def direction_to_uv(direction: Sequence[float],
-                    hemi: bool = True) -> Tuple[float, float]:
+                    hemi: bool = True) -> tuple[float, float]:
     """Where on the unit square a direction's picture lives.
 
     ``direction`` need not be normalised. In the hemi layout a direction below
@@ -83,7 +83,7 @@ def direction_to_uv(direction: Sequence[float],
 
 
 def uv_to_direction(uv: Sequence[float],
-                    hemi: bool = True) -> Tuple[float, float, float]:
+                    hemi: bool = True) -> tuple[float, float, float]:
     """The direction whose picture lives at ``uv``; the inverse of the above."""
     u = float(uv[0]) * 2.0 - 1.0
     v = float(uv[1]) * 2.0 - 1.0
@@ -120,7 +120,7 @@ def view_directions(grid: int, hemi: bool = True) -> list:
 
 
 def cell_of(direction: Sequence[float], grid: int,
-            hemi: bool = True) -> Tuple[int, int]:
+            hemi: bool = True) -> tuple[int, int]:
     """Which cell of a ``grid`` x ``grid`` atlas a direction falls in."""
     _refuse_grid(grid)
     u, v = direction_to_uv(direction, hemi)
@@ -144,7 +144,7 @@ def tile_size(image: int, grid: int) -> int:
     return size
 
 
-def tile_origin(row: int, column: int, image: int, grid: int) -> Tuple[int, int]:
+def tile_origin(row: int, column: int, image: int, grid: int) -> tuple[int, int]:
     """The top-left pixel of one view's tile, as ``(x, y)``."""
     size = tile_size(image, grid)
     return column * size, row * size

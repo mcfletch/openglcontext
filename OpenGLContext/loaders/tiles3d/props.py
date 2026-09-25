@@ -18,7 +18,8 @@ The table's name is resolved within the tileset's reach
 """
 from __future__ import annotations
 
-from typing import List, Mapping, Optional
+from collections.abc import Mapping
+from typing import Optional
 
 from OpenGLContext.loaders.documentvalues import (
     JSONObject, require_object, require_text, require_whole,
@@ -31,7 +32,7 @@ __all__ = ['baked_props']
 
 
 def baked_props(extras: JSONObject, channel: str, base: str,
-                max_bytes: Optional[int] = fetch.DEFAULT_MAX_TILE_BYTES) -> List[Prop]:
+                max_bytes: Optional[int] = fetch.DEFAULT_MAX_TILE_BYTES) -> list[Prop]:
     """The props in ``extras[channel]``, in either form; empty where absent.
 
     ``base`` is the tileset's directory or URL directory

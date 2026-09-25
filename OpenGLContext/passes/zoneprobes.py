@@ -36,7 +36,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Callable, Dict, Hashable, Iterable, List, Optional, Tuple
+from collections.abc import Callable, Hashable, Iterable
+from typing import Optional
 
 from OpenGL.GL import (
     GL_CLAMP_TO_EDGE, GL_COLOR_ATTACHMENT0, GL_COLOR_BUFFER_BIT,
@@ -96,8 +97,8 @@ class CaptureSchedule:
 
     def __init__(self, bounces: int = BOUNCES) -> None:
         self.bounces = max(1, int(bounces))
-        self._captures: Dict[Hashable, _Capture] = {}
-        self._free: List[int] = []
+        self._captures: dict[Hashable, _Capture] = {}
+        self._free: list[int] = []
         self._next_layer = 1
 
     def __len__(self) -> int:
@@ -228,7 +229,7 @@ class CaptureSchedule:
             return started[0]
         return min(waiting, key=nearness)
 
-    def faces(self, key: Hashable, budget: int) -> List[int]:
+    def faces(self, key: Hashable, budget: int) -> list[int]:
         """The faces of ``key``'s cube to draw now, at most ``budget`` of them."""
         capture = self._captures[key]
         return list(range(capture.face, min(6, capture.face + max(1, int(budget)))))
@@ -262,7 +263,7 @@ class CaptureTarget:
         self._fbo: Optional[int] = None
         self._depth: Optional[int] = None
         self._previous = 0
-        self._viewport: Tuple[int, int, int, int] = (0, 0, 0, 0)
+        self._viewport: tuple[int, int, int, int] = (0, 0, 0, 0)
 
     def _ensure(self) -> None:
         if self.cube is not None:

@@ -48,7 +48,7 @@ from __future__ import annotations
 
 import copy
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from OpenGLContext.loaders.documentvalues import DocumentValues, JSONObject
 from OpenGLContext.loaders.gltf import hooks
@@ -67,7 +67,7 @@ KIND = 'mirror'
 
 #: Each parameter a tag may give, and the type its value is read as. A
 #: number is held to :data:`~OpenGLContext.scenegraph.reflector.LIMITS`.
-PARAMETERS: Dict[str, type] = {
+PARAMETERS: dict[str, type] = {
     'scale': float, 'interval': int, 'priority': float, 'distortion': float,
     'reflectance': float, 'replace': bool,
 }
@@ -86,7 +86,7 @@ def reflector_for(params: JSONObject, replace: bool = False,
     """
     values = values if values is not None else DocumentValues(logger=log)
     default = PlanarReflector()
-    found: Dict[str, Any] = {'replace': values.flag(
+    found: dict[str, Any] = {'replace': values.flag(
         params.get('replace'), replace, 'the mirror replace')}
     for name, kind in PARAMETERS.items():
         if kind is bool:
@@ -104,13 +104,13 @@ def reflector_for(params: JSONObject, replace: bool = False,
     return PlanarReflector(**found)
 
 
-def hook_for(reflector: PlanarReflector) -> Dict[str, Any]:
+def hook_for(reflector: PlanarReflector) -> dict[str, Any]:
     """The ``OGLC_hook`` block that loads back as ``reflector``.
 
     Only what differs from a default is written, so a plain mirror is
     written as plainly as an artist would tag one.
     """
-    written: Dict[str, Any] = {'kind': KIND}
+    written: dict[str, Any] = {'kind': KIND}
     default = PlanarReflector()
     for name, kind in PARAMETERS.items():
         value = getattr(reflector, name)

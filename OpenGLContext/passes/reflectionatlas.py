@@ -29,7 +29,7 @@ from __future__ import annotations
 
 import contextlib
 import math
-from typing import Iterable, Iterator, Tuple
+from collections.abc import Iterable, Iterator
 
 from OpenGLContext.passes.reflection import REFLECTION_UNIT, TileRect
 from OpenGLContext.passes.reflectiontiles import GUTTER
@@ -37,7 +37,7 @@ from OpenGLContext.passes.reflectiontiles import GUTTER
 __all__ = ['LEVELS', 'FILL', 'atlas_size', 'ReflectionAtlas']
 
 #: The draw and read framebuffers bound when the atlas was asked to draw.
-Bindings = Tuple[int, int]
+Bindings = tuple[int, int]
 
 #: Mip levels the atlas holds: the full texels and two blurred ones.
 LEVELS = 3
@@ -51,7 +51,7 @@ FILL = 0.5
 _STEP = 16
 
 
-def atlas_size(width: int, height: int, share: float) -> Tuple[int, int]:
+def atlas_size(width: int, height: int, share: float) -> tuple[int, int]:
     """An atlas of ``share`` of a ``width`` by ``height`` window's pixels.
 
     The window's own shape, each side scaled by the square root of the share
@@ -87,7 +87,7 @@ class ReflectionAtlas:
     UNIT = REFLECTION_UNIT
 
     def __init__(self) -> None:
-        self.size: Tuple[int, int] = (0, 0)
+        self.size: tuple[int, int] = (0, 0)
         self.framebuffer = 0
         self.texture = 0
         self.depth = 0

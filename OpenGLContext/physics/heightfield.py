@@ -23,7 +23,8 @@ is set, while the surface a player sees keeps the hill it runs inside.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 from omi_physics import model

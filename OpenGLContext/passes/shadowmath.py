@@ -11,12 +11,13 @@ without a GL context.
 """
 from __future__ import annotations
 
-from typing import Optional, Sequence, Tuple, Union
+from collections.abc import Sequence
+from typing import Optional, Union
 
 import numpy as np
 from vrml.vrml97 import transformmatrix
 
-Vec3 = Union[Sequence[float], np.ndarray]
+Vec3 = Sequence[float] | np.ndarray
 Matrix4 = np.ndarray
 
 
@@ -68,7 +69,7 @@ _CORNER_ENDS = np.array([[bool(i & 4), bool(i & 2), bool(i & 1)]
 
 
 def world_bounds(points: np.ndarray, matrices: np.ndarray
-                 ) -> Tuple[np.ndarray, np.ndarray]:
+                 ) -> tuple[np.ndarray, np.ndarray]:
     """Place ``K`` sets of points by their own matrices, and box each set.
 
     points -- ``(K,n,3)`` or ``(K,n,4)`` local points, ``n`` the same for all
@@ -98,7 +99,7 @@ def near_far_from_points(
     points: np.ndarray,
     min_near: float = 0.05,
     margin: float = 1.05,
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """Fit near/far planes around ``points`` as seen from a light view matrix.
 
     points -- (N,3) or (N,4) array of world-space points (e.g. occluder bbox
@@ -130,7 +131,7 @@ def spot_light_view_projection(
     far: float,
     fov_margin: float = 1.1,
     max_fov: float = np.pi * 0.95,
-) -> Tuple[Matrix4, Matrix4]:
+) -> tuple[Matrix4, Matrix4]:
     """View and projection matrices for a spot light's shadow map.
 
     cutoff_angle -- VRML97 spotlight half-angle (radians). The shadow frustum
@@ -203,7 +204,7 @@ def cascade_splits(near: float, far: float, count: int, blend: float = 0.5) -> l
 
 def directional_cascade(light_dir: Vec3, corners_world: np.ndarray,
                         texel_snap: int = 0,
-                        caster_bounds: Optional[np.ndarray] = None) -> Tuple[Matrix4, Matrix4]:
+                        caster_bounds: Optional[np.ndarray] = None) -> tuple[Matrix4, Matrix4]:
     """Light view + ortho projection fitting a directional light to frustum corners.
 
     light_dir -- direction the light travels (world space).
@@ -332,7 +333,7 @@ def depth_bias_terms(
     projection: Matrix4,
     texel_bias: float,
     resolution: int,
-) -> Tuple[float, float, float]:
+) -> tuple[float, float, float]:
     """Coefficients turning a bias in shadow texels into ``projection``'s depth.
 
     A receiver nudges its own depth toward the light before comparing it with the

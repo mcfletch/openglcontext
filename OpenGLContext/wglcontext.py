@@ -53,7 +53,8 @@ identically; what it cannot do is run with no desktop).
 
 import logging
 import os
-from typing import Any, Hashable, Dict, Literal, Mapping, Optional, Sequence, Tuple
+from collections.abc import Hashable, Mapping, Sequence
+from typing import Any, Literal, Optional
 
 from OpenGL.WGL import offscreen
 
@@ -112,7 +113,7 @@ def available(profile: str = 'core') -> Sequence[str]:
     return missing
 
 
-def bufferSizes(definition: Any) -> Dict[str, Any]:
+def bufferSizes(definition: Any) -> dict[str, Any]:
     """The buffer request a :class:`ContextDefinition` becomes.
 
     Split out because it is the whole of the translation between this package's
@@ -139,7 +140,7 @@ def bufferSizes(definition: Any) -> Dict[str, Any]:
     }
 
 
-def profileFor(definition: Any) -> Tuple[str, Tuple[int, ...]]:
+def profileFor(definition: Any) -> tuple[str, tuple[int, ...]]:
     """``(profile, version)`` for ``offscreen``, from a context definition.
 
     The profile mask arrived with GL 3.2 and a driver refuses a request below

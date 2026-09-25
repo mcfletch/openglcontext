@@ -25,7 +25,7 @@ GL, so it can be asked and tested without a window.
 from __future__ import annotations
 
 import math
-from typing import Any, List, NamedTuple, Optional, Tuple
+from typing import Any, NamedTuple, Optional
 
 import numpy as np
 from vrml import field, node
@@ -50,7 +50,7 @@ HEAVY_EVERY = 10
 #: The steps a ruler is marked in, within one decade.
 STEPS = (1.0, 2.0, 5.0)
 
-Point = Tuple[float, float, float]
+Point = tuple[float, float, float]
 
 
 class GridLines(NamedTuple):
@@ -60,8 +60,8 @@ class GridLines(NamedTuple):
     those drawn heavier, and ``spacing`` how many units apart they are.
     """
 
-    segments: List[Tuple[Point, Point]]
-    heavy: List[int]
+    segments: list[tuple[Point, Point]]
+    heavy: list[int]
     spacing: float
 
 
@@ -87,7 +87,7 @@ def spacing_for(shown: float, pixels: int) -> float:
     return best
 
 
-def _plane(view: View) -> Optional[Tuple[np.ndarray, np.ndarray, Point, float]]:
+def _plane(view: View) -> Optional[tuple[np.ndarray, np.ndarray, Point, float]]:
     """The two world directions a view is ruled along, its middle, and its scale.
 
     An elevation is ruled in its own plane; a plan view and one that turns are
@@ -138,8 +138,8 @@ def lines_for(view: View, spacing: Optional[float] = None) -> Optional[GridLines
     # step and not on the camera.
     offset_x = round(float(np.dot(origin, across)) / step) * step
     offset_y = round(float(np.dot(origin, along)) / step) * step
-    segments: List[Tuple[Point, Point]] = []
-    heavy: List[int] = []
+    segments: list[tuple[Point, Point]] = []
+    heavy: list[int] = []
     for direction, other, offset, other_offset in (
             (across, along, offset_x, offset_y),
             (along, across, offset_y, offset_x)):
@@ -201,7 +201,7 @@ class Grid(nodetypes.Rendering, nodetypes.Children, node.Node):
         return rows
 
     # -- the node protocol the render pass reads ----------------------------
-    def sortKey(self, mode: Any, matrix: Any) -> Tuple[Any, ...]:
+    def sortKey(self, mode: Any, matrix: Any) -> tuple[Any, ...]:
         """Opaque, keyed as a shape with no appearance is."""
         return (False, [], 0.0, [], None)
 

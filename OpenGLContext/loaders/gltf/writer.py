@@ -35,7 +35,8 @@ import json
 import os
 import struct
 from dataclasses import dataclass, field as dataclass_field
-from typing import Any, Iterable, Optional, Sequence, Union
+from collections.abc import Iterable, Sequence
+from typing import Any, Optional, Union
 
 import numpy as np
 
@@ -168,7 +169,7 @@ class SceneNode:
     chain keeps its finer levels out of the file every reader opens.
     """
 
-    mesh: Union[PBRMesh, Sequence[PBRMesh], None] = None
+    mesh: PBRMesh | Sequence[PBRMesh] | None = None
     name: Optional[str] = None
     translation: Optional[Sequence[float]] = None
     rotation: Optional[Sequence[float]] = None
@@ -492,7 +493,7 @@ class GLTFWriter:
 
     # -- meshes ----------------------------------------------------------------
 
-    def add_mesh(self, mesh: Union[PBRMesh, Sequence[PBRMesh]],
+    def add_mesh(self, mesh: PBRMesh | Sequence[PBRMesh],
                  name: Optional[str] = None,
                  buffer: Optional[str] = None) -> int:
         """Write one mesh (or a group of primitives) and return its index.
@@ -1047,7 +1048,7 @@ def _pack_glb(document: dict, blob: bytes) -> bytes:
     return bytes(out)
 
 
-def write_glb(content: Union[MeshLike, Iterable[MeshLike]],
+def write_glb(content: MeshLike | Iterable[MeshLike],
               path: Optional[str] = None, generator: str = GENERATOR) -> bytes:
     """Write meshes or nodes as a ``.glb`` and return the bytes.
 

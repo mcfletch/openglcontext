@@ -63,7 +63,7 @@ Note:
 """
 
 import logging
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 from OpenGL._bytes import as_str
@@ -75,7 +75,7 @@ from OpenGLContext.loaders.loader import join_reference
 from hashlib import md5
 
 
-def _as_text(data: Union[bytes, str]) -> str:
+def _as_text(data: bytes | str) -> str:
     """Decode loader bytes to text (mtl/obj content is UTF-8 text)."""
     if isinstance(data, bytes):
         return data.decode("utf-8", "replace")
@@ -92,8 +92,8 @@ class OBJHandler(base.BaseHandler):
             material=basenodes.Material(diffuseColor=[0.9, 0.9, 0.9]),
         )
 
-    def parse(self, data: Union[bytes, str], baseURL: str, *args: Any,
-              **named: Any) -> Tuple[bool, Any]:
+    def parse(self, data: bytes | str, baseURL: str, *args: Any,
+              **named: Any) -> tuple[bool, Any]:
         """Parse the loaded data (with the provided meta-information)
 
         This implementation simply creates VRML97 scenegraph nodes out
@@ -116,7 +116,7 @@ class OBJHandler(base.BaseHandler):
         group = None  # shape
         material = None  # appearance, material, texture
 
-        materials: Dict[str, Any] = {}
+        materials: dict[str, Any] = {}
 
         # indices are 1-based, the first values are never used...
         vertices = [[0.0, 0.0, 0.0]]
@@ -236,14 +236,14 @@ class OBJHandler(base.BaseHandler):
     # basenodes.Background( skyColor=[1,1,1] ),
     # ]
 
-    def _cleanIndex(self, v: str) -> List[int]:
+    def _cleanIndex(self, v: str) -> list[int]:
         """Indices are in the format:
 
         ci/ti/ni where ti and ni can be null
         """
         return ([int(x) for x in [j or 0 for j in v.split("/")]] + [0, 0])[:3]
 
-    def load_material_library(self, url: str, materials: Dict[str, Any],
+    def load_material_library(self, url: str, materials: dict[str, Any],
                               baseURL: Optional[str] = None) -> bool:
         """Load the materials in ``url`` into the ``materials`` mapping.
 

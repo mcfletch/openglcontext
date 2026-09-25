@@ -1,7 +1,8 @@
 """Module providing translation from pygame events to OpenGLContext events"""
 
 import re
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
 from OpenGLContext.events.mouseevents import WHEEL_BUTTONS
@@ -18,7 +19,7 @@ log = logging.getLogger(__name__)
 #: Keys SDL names in a way the general rule below does not reach.  The keypad's
 #: own Enter is the return key, and the last three are named for what they do
 #: rather than for the legend on the cap, as X11 and wx name them.
-KEY_NAMES: Dict[str, str] = {
+KEY_NAMES: dict[str, str] = {
     'space': ' ',
     'enter': '<return>',
     'break': '<pause>',
@@ -50,13 +51,13 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
     _pointerGrabbed = False
     #: Where the pointer would be if it had gone on moving, while it is
     #: grabbed and so no longer moving at all.
-    _pygameWalked: Optional[Tuple[int, int]] = None
+    _pygameWalked: Optional[tuple[int, int]] = None
 
     if TYPE_CHECKING:
         # What this mix-in needs of the Pygame context beside it.
         def addPickEvent(self, event: Any) -> Any: ...
         def triggerPick(self) -> Any: ...
-        def getViewPort(self) -> Tuple[int, int]: ...
+        def getViewPort(self) -> tuple[int, int]: ...
 
     ### KEYBOARD interactions
     def PygameKeyDown(self, event: Any) -> int:
@@ -105,7 +106,7 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         self.clearHeldKeys()
         return 1
 
-    def _modifierState(self) -> Tuple[bool, bool, bool]:
+    def _modifierState(self) -> tuple[bool, bool, bool]:
         """The (shift, ctrl, alt) triple as the keyboard stands now"""
         mods = pygame.key.get_mods()
         return (bool(mods & KMOD_SHIFT), bool(mods & KMOD_CTRL),
@@ -179,9 +180,9 @@ class PygameXEvent(object):
             mouse buttons, a three-value list
     """
 
-    CURRENTBUTTONSTATES: List[int] = [0, 0, 0]
+    CURRENTBUTTONSTATES: list[int] = [0, 0, 0]
 
-    def _getModifiers(self) -> Tuple[bool, bool, bool]:
+    def _getModifiers(self) -> tuple[bool, bool, bool]:
         "get the state of the keyboard modifiers"
         mods = pygame.key.get_mods()
         return (

@@ -13,7 +13,6 @@ etc.
 """
 
 import logging
-from typing import Any
 
 from vrml import field, node
 

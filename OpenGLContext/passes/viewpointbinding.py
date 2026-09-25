@@ -11,7 +11,8 @@ context when the set has changed.
 the core-profile pass, which takes its camera from the view platform only.
 """
 
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from vrml.vrml97 import nodetypes
 import logging

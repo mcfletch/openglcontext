@@ -31,7 +31,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union, overload
+from collections.abc import Callable
+from typing import Any, Optional, overload
 
 from OpenGLContext.loaders.documentvalues import DocumentValues, JSONObject, require_object
 from OpenGLContext.loaders.gltf import shapes as shapetable
@@ -70,14 +71,14 @@ class ZoneReading:
     node_index: int
     node_transform: Callable[[int], Any]
     light: Callable[[int], Any]
-    emitters: Callable[[int], List[Any]]
+    emitters: Callable[[int], list[Any]]
     place: Callable[[Any], None]
     warn: Callable[[str], None]
     #: The ``EXT_lights_image_based`` light at an index, or None.
     image_light: Callable[[int], Any] = lambda index: None
     #: Settings other readers made for this zone, which a reader may extend
     #: rather than add a second of.
-    settings: List[ZoneSetting] = field(default_factory=list)
+    settings: list[ZoneSetting] = field(default_factory=list)
     #: What a reader reads a block's values through, reporting by ``warn``.
     values: DocumentValues = field(default_factory=DocumentValues)
 
@@ -86,7 +87,7 @@ class ZoneReading:
 #: setting node, or None where the block says nothing the engine can use.
 Reader = Callable[[object, ZoneReading], Optional[ZoneSetting]]
 
-_READERS: Dict[str, Reader] = {}
+_READERS: dict[str, Reader] = {}
 
 
 @overload
@@ -98,7 +99,7 @@ def register_scoped(name: str, reader: Reader) -> Reader: ...
 
 
 def register_scoped(name: str, reader: Optional[Reader] = None
-                    ) -> Union[Reader, Callable[[Reader], Reader]]:
+                    ) -> Reader | Callable[[Reader], Reader]:
     """Read extension ``name``'s block in a zone with ``reader``.
 
     Usable as a call, which returns ``reader``, or as a decorator. Registering
@@ -118,12 +119,12 @@ def unregister_scoped(name: str) -> None:
     _READERS.pop(name, None)
 
 
-def registered_scoped() -> List[str]:
+def registered_scoped() -> list[str]:
     """The extension names zones are read for, sorted."""
     return sorted(_READERS)
 
 
-def _indices(block: object, key: str) -> List[int]:
+def _indices(block: object, key: str) -> list[int]:
     values = block.get(key) if isinstance(block, dict) else None
     if not isinstance(values, list):
         return []
@@ -151,7 +152,7 @@ def _read_audio(block: object, reading: ZoneReading) -> Optional[ZoneSetting]:
     """``KHR_audio_emitter``: the scene form, ``{"emitters": [...]}``."""
     if block is False:
         return ZoneAudio(enabled=False)
-    emitters: List[Any] = []
+    emitters: list[Any] = []
     for index in _indices(block, 'emitters'):
         found = reading.emitters(index)
         if not found:
@@ -247,7 +248,7 @@ def _environment(block: object, values: DocumentValues) -> Optional[ZoneEnvironm
     if not isinstance(block, dict):
         return None
     raw = block.get('capture', False)
-    centre: Tuple[float, ...] = (0.0, 0.0, 0.0)
+    centre: tuple[float, ...] = (0.0, 0.0, 0.0)
     if isinstance(raw, dict):
         centre = values.vector(raw.get('position'), centre,
                                'the environment capture position')
@@ -284,11 +285,11 @@ class ZoneReader:
     def __init__(self, document: Any) -> None:
         self.document = document
         self.shapes = shapetable.document_shapes(document)
-        self.zones: List[Zone] = []
+        self.zones: list[Zone] = []
         #: Each zone with its glTF node index and the blocks it borrows,
         #: read once every node is built.
-        self._pending: List[Tuple[Zone, int, JSONObject]] = []
-        self._warned: Set[str] = set()
+        self._pending: list[tuple[Zone, int, JSONObject]] = []
+        self._warned: set[str] = set()
         #: What the zones' own values are read through, reporting by :meth:`warn`.
         self.values = DocumentValues(warn=self.warn)
 
@@ -347,7 +348,7 @@ class ZoneReader:
 
     def finish(self, node_transform: Callable[[int], Any],
                light: Callable[[int], Any],
-               emitters: Callable[[int], List[Any]],
+               emitters: Callable[[int], list[Any]],
                place: Callable[[Any], None],
                image_light: Callable[[int], Any] = lambda index: None) -> None:
         """Read every zone's borrowed extension blocks, now every node is built."""

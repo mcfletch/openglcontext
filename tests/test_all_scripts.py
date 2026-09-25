@@ -31,7 +31,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 import pytest
 
@@ -137,11 +137,11 @@ class VisualTestResult:
     reference_image: Optional[str] = None
     result_image: Optional[str] = None
     diff_image: Optional[str] = None
-    comparison_stats: Optional[Dict[str, Any]] = None
+    comparison_stats: Optional[dict[str, Any]] = None
     expect_visual_diff: bool = False
     traceback: Optional[str] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for report generation."""
         return {
             'test_name': self.script_name,
@@ -160,7 +160,7 @@ class VisualTestResult:
 
 
 # Global list to collect test results for report generation
-_test_results: List[VisualTestResult] = []
+_test_results: list[VisualTestResult] = []
 
 
 def _check_coverage_available():
@@ -256,7 +256,7 @@ HAS_WIN32UI = _check_win32ui_available()
 IS_WINDOWS = _is_windows()
 
 
-def _build_coverage_command(script_path: Path, args: Optional[List[str]] = None) -> List[str]:
+def _build_coverage_command(script_path: Path, args: Optional[list[str]] = None) -> list[str]:
     """Build command to run script with coverage collection."""
     if HAS_COVERAGE:
         cmd = [
@@ -338,7 +338,7 @@ def _run_script(
     env_overrides: Optional[dict] = None,
     expected_returncode: int = 0,
     auto_exit_frames: int = AUTO_EXIT_FRAMES,
-) -> Tuple[int, str, str]:
+) -> tuple[int, str, str]:
     """Run a script and return (returncode, stdout, stderr).
 
     Raises AssertionError if:
@@ -559,7 +559,7 @@ def _run_visual_test(
 
 
 def _compare_images(reference_path: Path, result_path: Path,
-                    tolerance: float = MAX_PERCENT_DIFFERENT) -> Optional[Dict[str, Any]]:
+                    tolerance: float = MAX_PERCENT_DIFFERENT) -> Optional[dict[str, Any]]:
     """Compare two images and return comparison statistics.
 
     Args:
@@ -618,7 +618,7 @@ def _compare_images(reference_path: Path, result_path: Path,
         return {'error': str(e), 'is_match': False}
 
 
-def generate_html_report(results: List[VisualTestResult], output_path: Path) -> None:
+def generate_html_report(results: list[VisualTestResult], output_path: Path) -> None:
     """Generate an HTML report with side-by-side image comparisons.
 
     Args:
@@ -747,7 +747,7 @@ GLUT_SCRIPTS = [
 ]
 
 
-def get_all_test_scripts(include_non_visual: bool = True) -> List[Path]:
+def get_all_test_scripts(include_non_visual: bool = True) -> list[Path]:
     """Get list of all test scripts to run.
 
     Args:

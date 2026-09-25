@@ -64,7 +64,8 @@ from __future__ import annotations
 import contextlib
 import os
 import warnings
-from typing import Any, Callable, Iterator, Literal, Mapping, Tuple, get_args
+from collections.abc import Callable, Iterator, Mapping
+from typing import Any, Literal, get_args
 
 import pytest
 
@@ -195,7 +196,7 @@ OPEN_AUDIT_MODES = ('off', 'report', 'fail')
 NumpyErrorAction = Literal['raise', 'warn', 'ignore', 'call', 'print', 'log']
 
 #: What ``numpy_errors`` may say: the actions ``numpy.errstate`` takes.
-NUMPY_ERROR_ACTIONS: Tuple[NumpyErrorAction, ...] = get_args(NumpyErrorAction)
+NUMPY_ERROR_ACTIONS: tuple[NumpyErrorAction, ...] = get_args(NumpyErrorAction)
 
 
 def pytest_addoption(parser: Any) -> None:

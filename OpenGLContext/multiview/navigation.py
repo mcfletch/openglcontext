@@ -37,7 +37,8 @@ events.
 from __future__ import annotations
 
 from gettext import gettext as _
-from typing import Any, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 import math
 
@@ -96,7 +97,7 @@ class ViewNavigationMode(node.Node):
         'enabled': {'label': 'Available'},
     }
 
-    def keys_for(self, command: str) -> Tuple[str, ...]:
+    def keys_for(self, command: str) -> tuple[str, ...]:
         """The keys currently bound to ``command``."""
         for binding in self.bindings:
             if binding.command == command:
@@ -142,7 +143,7 @@ def _binding(command: str, label: str, keys: Sequence[str],
                       keys=[str(key) for key in keys], modifier=modifier)
 
 
-def _zoom_bindings() -> List[KeyBinding]:
+def _zoom_bindings() -> list[KeyBinding]:
     """The bindings every camera has: the wheel, and a drag nothing raises yet."""
     return [
         _binding(ZOOM_IN, _('Zoom in'), [button_name(WHEEL_UP)]),
@@ -199,10 +200,10 @@ class ViewNavigation:
         self.turns = camera is not None and hasattr(camera, 'orbit')
         self.mode = mode if mode is not None else (
             examine_mode() if self.turns else plan_mode())
-        self._held: Optional[Tuple[str, float, float]] = None
+        self._held: Optional[tuple[str, float, float]] = None
 
     # -- what it offers ----------------------------------------------------
-    def commands(self) -> Tuple[str, ...]:
+    def commands(self) -> tuple[str, ...]:
         """The gestures this camera can be moved by."""
         if self.camera is None:
             return ()
@@ -216,7 +217,7 @@ class ViewNavigation:
         found = self.mode.command_for(key, modifiers)
         return found if found in self.commands() else None
 
-    def keys_for(self, command: str) -> Tuple[str, ...]:
+    def keys_for(self, command: str) -> tuple[str, ...]:
         """The keys currently bound to ``command``."""
         return self.mode.keys_for(command)
 
@@ -228,11 +229,11 @@ class ViewNavigation:
         return self.mode.rebind(command, keys, modifier)
 
     # -- what a settings screen reads --------------------------------------
-    def modes(self) -> List[ViewNavigationMode]:
+    def modes(self) -> list[ViewNavigationMode]:
         """The modes on offer, which is the one this view is using."""
         return [self.mode]
 
-    def binding_table(self) -> List[Tuple[str, KeyBinding]]:
+    def binding_table(self) -> list[tuple[str, KeyBinding]]:
         """``(mode name, binding)`` for every command, for a settings window."""
         return [(str(self.mode.name), binding)
                 for binding in self.mode.bindings
@@ -275,7 +276,7 @@ class ViewNavigation:
         return True
 
     # -- moving the camera --------------------------------------------------
-    def _size(self) -> Tuple[int, int]:
+    def _size(self) -> tuple[int, int]:
         width, height = self.view.size
         if width <= 0 or height <= 0:
             return (1, 1)

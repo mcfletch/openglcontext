@@ -23,10 +23,8 @@ from __future__ import annotations
 
 import itertools
 from dataclasses import dataclass, field
-from typing import (
-    Any, Callable, Dict, FrozenSet, Hashable, Iterable, List, Mapping, NamedTuple,
-    Optional, Sequence, Set, Tuple, Union, cast,
-)
+from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
+from typing import Any, NamedTuple, Optional, cast
 
 import numpy as np
 
@@ -63,10 +61,10 @@ class Lookup(NamedTuple):
     mirror view drawing this mirror does not read.
     """
 
-    matrix: Tuple[float, ...]
-    transform: Tuple[float, float, float, float]
-    bounds: Tuple[float, float, float, float]
-    normal: Tuple[float, float, float]
+    matrix: tuple[float, ...]
+    transform: tuple[float, float, float, float]
+    bounds: tuple[float, float, float, float]
+    normal: tuple[float, float, float]
     distortion: float
     replace: bool
     rough: float
@@ -142,12 +140,12 @@ class ReflectionPlan:
     """What a frame draws and reads; see :class:`ReflectionPlanner`."""
 
     frames: Sequence[Any]
-    draws: List[MirrorDraw] = field(default_factory=list)
-    lookups: Dict[Hashable, Lookup] = field(default_factory=dict)
-    candidates: List[Candidate] = field(default_factory=list)
+    draws: list[MirrorDraw] = field(default_factory=list)
+    lookups: dict[Hashable, Lookup] = field(default_factory=dict)
+    candidates: list[Candidate] = field(default_factory=list)
     #: Each mirror's key to its group's, for a mirror that shares a
     #: reflection with others in its plane; a mirror of its own is absent.
-    aliases: Dict[Hashable, Hashable] = field(default_factory=dict)
+    aliases: dict[Hashable, Hashable] = field(default_factory=dict)
     #: Whether a mirror in view shows something it should not go on showing
     #: in a still scene: a reflection drawn while the pass settled, none at
     #: all, or one its camera has moved too far from. The pass asks for
@@ -185,7 +183,7 @@ def view_key(view: Any) -> Hashable:
     return ('reflected', view.serial) if isinstance(view, ReflectedView) else id(view)
 
 
-def lookup_key(view: Any, path: Any) -> Tuple[Hashable, int]:
+def lookup_key(view: Any, path: Any) -> tuple[Hashable, int]:
     """The key the mirror at ``path``, seen in ``view``, is held by.
 
     The path is a list, so it is kept by ``id``; the planner's held tiles hold
@@ -194,7 +192,7 @@ def lookup_key(view: Any, path: Any) -> Tuple[Hashable, int]:
     return view_key(view), id(path)
 
 
-def key_for(frame: Any, record: Any) -> Tuple[Hashable, int]:
+def key_for(frame: Any, record: Any) -> tuple[Hashable, int]:
     """The key one mirror in one view is held by."""
     return lookup_key(frame.view, record[4])
 
@@ -216,7 +214,7 @@ class _Held:
     redo: bool = False
     #: The reflections of mirrors in its view it was drawn without, which
     #: those mirrors showed the probe in place of; drawn again once one is.
-    missing: FrozenSet[Hashable] = frozenset()
+    missing: frozenset[Hashable] = frozenset()
 
 
 @dataclass
@@ -233,7 +231,7 @@ class _Seen:
     held: Optional[_Held]
     valid: bool
     #: Every mirror sharing this reflection, the first being ``record``.
-    members: List['_Surface'] = field(default_factory=list)
+    members: list['_Surface'] = field(default_factory=list)
 
 
 class _Surface(NamedTuple):
@@ -242,7 +240,7 @@ class _Surface(NamedTuple):
     record: Any
     reflector: PlanarReflector
     rough: float
-    plane: Tuple[np.ndarray, np.ndarray]
+    plane: tuple[np.ndarray, np.ndarray]
     corners: np.ndarray
 
 
@@ -262,7 +260,7 @@ class _Group:
     reflector: PlanarReflector
     normal: np.ndarray
     distance: float
-    members: List[_Surface]
+    members: list[_Surface]
 
     @classmethod
     def of(cls, surface: _Surface) -> '_Group':
@@ -278,7 +276,7 @@ class _Group:
                 and abs(float(np.dot(normal, point)) - self.distance) <= COPLANAR)
 
 
-def _scaled(size: Tuple[int, int], scale: float) -> Tuple[int, int]:
+def _scaled(size: tuple[int, int], scale: float) -> tuple[int, int]:
     return (reflection.texels(size[0] * scale), reflection.texels(size[1] * scale))
 
 
@@ -289,18 +287,18 @@ class ReflectionPlanner:
         self.packer = TilePacker(0, 0)
         self.schedule = ReflectionSchedule()
         self.frame = 0
-        self._held: Dict[Hashable, _Held] = {}
-        self._crowded: Set[Hashable] = set()
+        self._held: dict[Hashable, _Held] = {}
+        self._crowded: set[Hashable] = set()
         #: Whether a mirror's reflection may be drawn for a camera at ``eye``:
         #: ``allowed(record, eye)``, or None where every mirror may. The pass
         #: sets it from the scene's zones; see
         #: :meth:`~OpenGLContext.passes.zonepass.ZonesMixin.mirrorAllowed`.
         self.allowed: Optional[Callable[[Any, np.ndarray], bool]] = None
-        self._views: Dict[Hashable, ReflectedView] = {}
+        self._views: dict[Hashable, ReflectedView] = {}
         #: The reflections in the atlas that a mirror view may read.
-        self._arrived: Set[Hashable] = set()
+        self._arrived: set[Hashable] = set()
         #: The last plan's aliases, for what the pass says about a member.
-        self._aliases: Dict[Hashable, Hashable] = {}
+        self._aliases: dict[Hashable, Hashable] = {}
 
     def reset(self) -> None:
         """Forget every tile: the atlas they were in is gone."""
@@ -342,7 +340,7 @@ class ReflectionPlanner:
 
     # -- finding the mirrors ----------------------------------------------
     def _seen(self, frames: Sequence[Any],
-              shown: Optional[Callable[[Any], Sequence[Any]]] = None) -> List[_Seen]:
+              shown: Optional[Callable[[Any], Sequence[Any]]] = None) -> list[_Seen]:
         """Each view's mirrors, those in one plane sharing a reflector as one.
 
         ``shown(frame)`` is the part of a view's draw list that may hold a
@@ -355,7 +353,7 @@ class ReflectionPlanner:
                 continue
             modelview = np.asarray(frame.modelView, 'd')
             eye = np.linalg.inv(modelview)[3, :3]
-            groups: List[_Group] = []
+            groups: list[_Group] = []
             for record in (frame.toRender if shown is None else shown(frame)):
                 surface = self._surface(frame, record, eye)
                 if surface is None:
@@ -393,7 +391,7 @@ class ReflectionPlanner:
         return _Surface(record, reflector, rough, plane,
                         np.asarray(reflection.world_corners(local, record[2]), 'd'))
 
-    def _mirror(self, frame: Any, members: List[_Surface], eye: np.ndarray
+    def _mirror(self, frame: Any, members: list[_Surface], eye: np.ndarray
                 ) -> Optional[_Seen]:
         first = members[0]
         record, reflector, plane = first.record, first.reflector, first.plane
@@ -433,7 +431,7 @@ class ReflectionPlanner:
         return view
 
     def _inside(self, entries: Sequence[_Seen],
-                inside: Callable[[Any], Sequence[Any]]) -> List[_Seen]:
+                inside: Callable[[Any], Sequence[Any]]) -> list[_Seen]:
         """The mirrors seen in the views of ``entries``' mirrors.
 
         ``inside(frame)`` is what a mirror view's frame would draw. A mirror's
@@ -488,8 +486,8 @@ class ReflectionPlanner:
             separate=separate)
 
     # -- the frame --------------------------------------------------------
-    def plan(self, frames: Sequence[Any], atlas: Tuple[int, int],
-             budget: Union[Budget, Callable[[], Budget]],
+    def plan(self, frames: Sequence[Any], atlas: tuple[int, int],
+             budget: Budget | Callable[[], Budget],
              separate: Callable[[MirrorView], bool] = lambda mirror: False,
              inside: Optional[Callable[[Any], Sequence[Any]]] = None,
              bounces: int = 2,
@@ -546,7 +544,7 @@ class ReflectionPlanner:
         plan.aliases = {key_for(entry.frame, member.record): key
                         for key, entry in seen.items() for member in entry.members[1:]}
         settling = self.frame <= SETTLE_FRAMES
-        held: Dict[Hashable, _Held] = {}
+        held: dict[Hashable, _Held] = {}
         for key, entry in seen.items():
             tile = packed.tiles.get(key)
             if tile is None:
@@ -579,8 +577,8 @@ class ReflectionPlanner:
             for candidate in candidates)
         return plan
 
-    def _redraw_moved(self, packed: Packed, seen: Dict[Hashable, _Seen],
-                      decisions: Dict[Hashable, float], candidates: Sequence[Candidate],
+    def _redraw_moved(self, packed: Packed, seen: dict[Hashable, _Seen],
+                      decisions: dict[Hashable, float], candidates: Sequence[Candidate],
                       chosen: Chosen) -> None:
         """Draw again, at the scale they were drawn at, the kept tiles a repack
         moved, as far as what is left of the budget allows.
@@ -597,7 +595,7 @@ class ReflectionPlanner:
                 decisions[key] = held.scale
 
     def contents(self, plan: ReflectionPlan, draw: MirrorDraw, records: Sequence[Any],
-                 earlier: Mapping[Hashable, Any]) -> Tuple[List[Any], bool]:
+                 earlier: Mapping[Hashable, Any]) -> tuple[list[Any], bool]:
         """What ``draw``'s mirror view draws of ``records``, and whether it is
         drawn again next frame for a mirror it left out.
 
@@ -613,8 +611,8 @@ class ReflectionPlanner:
         """
         own = draw.paths or {id(draw.record[4]): draw.record[4]}
         drawing = {each.key for each in plan.draws}
-        kept: List[Any] = []
-        missing: Set[Hashable] = set()
+        kept: list[Any] = []
+        missing: set[Hashable] = set()
         incomplete = False
         for record in records:
             if reflection.is_reflector(record):
@@ -634,7 +632,7 @@ class ReflectionPlanner:
             self.drawn_without(draw.key, missing)
         return kept, incomplete
 
-    def _pack(self, seen: Dict[Hashable, _Seen], decisions: Dict[Hashable, float],
+    def _pack(self, seen: dict[Hashable, _Seen], decisions: dict[Hashable, float],
               weights: Mapping[Hashable, float]) -> Packed:
         """Place this frame's tiles, and settle the scale of each drawn one.
 
@@ -659,9 +657,9 @@ class ReflectionPlanner:
         packed = self.packer.place({**kept, **drawn})
         if not packed.unplaced:
             return packed
-        placed: Dict[Hashable, Tuple[int, int]] = {}
+        placed: dict[Hashable, tuple[int, int]] = {}
 
-        def fits(key: Hashable, size: Tuple[int, int]) -> bool:
+        def fits(key: Hashable, size: tuple[int, int]) -> bool:
             return not self.packer.place({**placed, key: size}).unplaced
 
         for key in sorted({**kept, **drawn}, key=lambda key: -weights[key]):
@@ -679,7 +677,7 @@ class ReflectionPlanner:
                         if key in packed.tiles and packed.tiles[key] != tile}
         return packed
 
-    def _lookup(self, held: _Held, seen: _Seen, atlas: Tuple[int, int]) -> Lookup:
+    def _lookup(self, held: _Held, seen: _Seen, atlas: tuple[int, int]) -> Lookup:
         mirror = held.mirror
         return Lookup(
             matrix=tuple(float(value) for value in np.asarray(mirror.lookup, 'd').ravel()),

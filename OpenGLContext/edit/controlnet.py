@@ -42,7 +42,8 @@ cage's rows are the surface's rows.
 """
 from __future__ import annotations
 
-from typing import Any, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -75,7 +76,7 @@ MARKER_GLOW, SELECTED_GLOW = 0.30, 0.55
 CAGE_COLOUR = (0.45, 0.48, 0.55)
 
 
-def cage_polylines(count: int, columns: int = 0) -> List[List[int]]:
+def cage_polylines(count: int, columns: int = 0) -> list[list[int]]:
     """The rows and columns of a control grid, as lists of point indices.
 
     ``columns`` is the grid's width -- ``uDimension`` for a surface, since that
@@ -112,7 +113,7 @@ class ControlNet:
         self.geometry = Sphere(radius=float(size))
         self.appearance = _appearance(colour, MARKER_GLOW)
         self.selected_appearance = _appearance(selected_colour, SELECTED_GLOW)
-        self.markers: List[Transform] = [
+        self.markers: list[Transform] = [
             Transform(
                 translation=tuple(float(value) for value in point),
                 children=[Shape(appearance=self.appearance,
@@ -194,9 +195,9 @@ class ControlNet:
             self._selected = None
 
 
-def _index_list(polylines: Sequence[Sequence[int]]) -> List[int]:
+def _index_list(polylines: Sequence[Sequence[int]]) -> list[int]:
     """Polylines as the ``-1``-separated index list VRML97 wants."""
-    indices: List[int] = []
+    indices: list[int] = []
     for polyline in polylines:
         indices.extend(int(index) for index in polyline)
         indices.append(-1)

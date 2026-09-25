@@ -25,7 +25,8 @@ found it, a reset included.
 from __future__ import annotations
 
 from gettext import gettext as _
-from typing import Any, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from OpenGLContext.move import bindingstore
 from OpenGLContext.ui import dialogs, generate
@@ -70,8 +71,8 @@ def open_bindings(context: Any, navigation: Any = None,
 def bindings_panel(context: Any, navigation: Any,
                    path: Optional[str] = None) -> Panel:
     """A row per declared command, each rebindable by clicking it."""
-    rows: List[Any] = []
-    buttons: List[Tuple[str, str, Any]] = []
+    rows: list[Any] = []
+    buttons: list[tuple[str, str, Any]] = []
     current_mode = None
     for mode_name, binding in navigation.binding_table():
         if mode_name != current_mode:
@@ -197,7 +198,7 @@ def _keysText(binding: Any) -> str:
     return text
 
 
-def _conflictNames(clash: Sequence[Tuple[str, Any]]) -> str:
+def _conflictNames(clash: Sequence[tuple[str, Any]]) -> str:
     return ', '.join(str(binding.label) or binding.command
                      for _name, binding in clash)
 
@@ -228,7 +229,7 @@ def _bind(binding: Any, key: str, on_bound: Any) -> None:
         on_bound()
 
 
-def _steal(binding: Any, key: str, clash: Sequence[Tuple[str, Any]],
+def _steal(binding: Any, key: str, clash: Sequence[tuple[str, Any]],
            on_bound: Any, capture: Panel) -> None:
     for _name, other in clash:
         other.keys = [existing for existing in other.keys if existing != key]

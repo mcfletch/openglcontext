@@ -35,7 +35,7 @@ import logging
 import os
 import random
 import zlib
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 import numpy as np
 
@@ -53,8 +53,8 @@ SEED_ENV = 'OPENGLCONTEXT_SEED'
 SEED_BITS = 64
 
 _seed: Optional[int] = None
-_generators: Dict[str, Any] = {}
-_randomizers: Dict[str, random.Random] = {}
+_generators: dict[str, Any] = {}
+_randomizers: dict[str, random.Random] = {}
 
 
 # -- the seed ---------------------------------------------------------------
@@ -140,7 +140,7 @@ def randomizer(stream: str = '') -> random.Random:
 
 # -- recording it -----------------------------------------------------------
 
-def capture() -> Dict[str, Any]:
+def capture() -> dict[str, Any]:
     """This session's seed and where the ordinary generators have got to.
 
     The seed alone describes a session that began from one.  It does not
@@ -150,7 +150,7 @@ def capture() -> Dict[str, Any]:
 
     Plain data throughout, so it goes into a journal as it stands.
     """
-    found: Dict[str, Any] = {'seed': seed()}
+    found: dict[str, Any] = {'seed': seed()}
     try:
         version, keys, gauss = random.getstate()
         found['random'] = [version, list(keys), gauss]
@@ -165,7 +165,7 @@ def capture() -> Dict[str, Any]:
     return found
 
 
-def restore(record: Dict[str, Any]) -> None:
+def restore(record: dict[str, Any]) -> None:
     """Put back what :func:`capture` recorded.
 
     Each half independently, and a half that will not go back is a debug line

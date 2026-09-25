@@ -25,7 +25,8 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Dict, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from vrml import protofunctions
 
@@ -53,7 +54,7 @@ __all__ = ['hidden_window', 'fullscreen_window',
 #: :mod:`OpenGLContext.testing.gl_env` asks this rather than keeping a second
 #: answer, so the engine and its test suite cannot disagree about what a child
 #: process may inherit.
-CONFIGURATION_PREFIXES: Tuple[str, ...] = ('OPENGLCONTEXT_', 'PYOPENGL_')
+CONFIGURATION_PREFIXES: tuple[str, ...] = ('OPENGLCONTEXT_', 'PYOPENGL_')
 
 
 def is_render_configuration(name: str) -> bool:
@@ -67,7 +68,7 @@ def is_render_configuration(name: str) -> bool:
 #: produced.  Named here because this module is what reads them, and because
 #: anything spawning a renderer to compare its pixels needs the *list* rather
 #: than the readers: see :func:`clean_environment`.
-ENVIRONMENT: Tuple[str, ...] = (
+ENVIRONMENT: tuple[str, ...] = (
     'OPENGLCONTEXT_PROFILE', 'OPENGLCONTEXT_BACKEND', 'OPENGLCONTEXT_RENDERER',
     'OPENGLCONTEXT_SHADOWS', 'OPENGLCONTEXT_SHADOWS_SOFT',
     'OPENGLCONTEXT_SHADOW_CASCADES', 'OPENGLCONTEXT_MAXIMUM_LIGHTS',
@@ -139,13 +140,13 @@ ENVIRONMENT: Tuple[str, ...] = (
 #: carries them across rather than dropping them: a caller that forgot to pin
 #: them opened a window on somebody's desktop, and a suite of several hundred
 #: GL tests opened several hundred.
-PRESENTATION: Tuple[str, ...] = (
+PRESENTATION: tuple[str, ...] = (
     'OPENGLCONTEXT_HIDDEN', 'OPENGLCONTEXT_NO_VSYNC',
 )
 
 
-def clean_environment(base: Optional[Dict[str, str]] = None,
-                      **pinned: str) -> Dict[str, str]:
+def clean_environment(base: Optional[dict[str, str]] = None,
+                      **pinned: str) -> dict[str, str]:
     """``base`` with every rendering variable dropped, then ``pinned`` set.
 
     For anything that **spawns a renderer and then compares its pixels**: a
@@ -180,7 +181,7 @@ def clean_environment(base: Optional[Dict[str, str]] = None,
 
 #: The values each three-valued option accepts, in the order a settings screen
 #: cycles them.  ``auto`` is first because it is the default.
-CHOICES: Dict[str, Tuple[str, ...]] = {
+CHOICES: dict[str, tuple[str, ...]] = {
     'ibl': ('auto', 'full', 'analytic', 'off'),
     'transmission': ('auto', 'full', 'blend', 'off'),
     'profile': ('compatibility', 'core'),
@@ -188,12 +189,12 @@ CHOICES: Dict[str, Tuple[str, ...]] = {
 }
 
 #: Other spellings an environment variable may give a choice by.
-SYNONYMS: Dict[str, Dict[str, str]] = {
+SYNONYMS: dict[str, dict[str, str]] = {
     'multiview': {'vs': 'vertex', 'gs': 'geometry', 'loop': 'sequential'},
 }
 
 #: What a settings screen shows for each of those values.
-LABELS: Dict[str, Tuple[str, ...]] = {
+LABELS: dict[str, tuple[str, ...]] = {
     'ibl': ('Automatic', 'Full probe', 'Analytic', 'Off'),
     'transmission': ('Automatic', 'Refractive', 'Blended', 'Off'),
     'profile': ('Compatibility', 'Core'),
@@ -285,7 +286,7 @@ FALSE_WORDS = ('0', 'off', 'false', 'no', 'none')
 TRUE_WORDS = ('1', 'on', 'true', 'yes')
 
 #: The answers already settled, keyed by variable name.  See :func:`env_flag_once`.
-_ENV_CACHE: Dict[str, Any] = {}
+_ENV_CACHE: dict[str, Any] = {}
 
 
 def reset_env_cache() -> None:
@@ -313,7 +314,7 @@ def env_number_once(name: str, default: float, integer: bool = False) -> float:
     return float(_ENV_CACHE[name])
 
 
-def env_choice_once(name: str, allowed: Sequence[str], synonyms: Dict[str, str],
+def env_choice_once(name: str, allowed: Sequence[str], synonyms: dict[str, str],
                     default: str = 'auto') -> str:
     """A named environment variable, read once and then remembered."""
     if name not in _ENV_CACHE:
@@ -374,7 +375,7 @@ def env_flag(name: str, default: bool) -> bool:
     return default
 
 
-def env_choice(name: str, allowed: Sequence[str], synonyms: Dict[str, str],
+def env_choice(name: str, allowed: Sequence[str], synonyms: dict[str, str],
                default: str = 'auto') -> str:
     """A named environment variable, mapped through its accepted spellings."""
     raw = os.environ.get(name, '').strip().lower()

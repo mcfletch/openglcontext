@@ -1,16 +1,17 @@
 """OpenGLContext plugin classes"""
-from typing import List, Sequence, Union
+from collections.abc import Sequence
+from typing import Union
 
 from OpenGL import plugins
 
 #: What :meth:`Context.match` and :meth:`Loader.match` will search for: one
 #: name, or a sequence of names any of which will do.
-Key = Union[bytes, str, Sequence[object]]
+Key = bytes | str | Sequence[object]
 
 
 class Context( plugins.Plugin ):
     """Data-type storage-format handler"""
-    registry: List[plugins.Plugin] = []
+    registry: list[plugins.Plugin] = []
     type_key = 'context'
     @classmethod
     def match( cls, key: Key ) -> plugins.Plugin:
@@ -28,16 +29,16 @@ class Context( plugins.Plugin ):
 class InteractiveContext( Context ):
     """Interaction-providing context"""
     type_key = 'interactive'
-    registry: List[plugins.Plugin] = []
+    registry: list[plugins.Plugin] = []
 
 class VRMLContext( InteractiveContext ):
     """VRML parser/rendering context"""
-    registry: List[plugins.Plugin] = []
+    registry: list[plugins.Plugin] = []
     type_key = 'vrml'
 
 class Loader( plugins.Plugin ):
     """A data-format loader (e.g. vrml97 or obj)"""
-    registry: List[plugins.Plugin] = []
+    registry: list[plugins.Plugin] = []
     @classmethod
     def match( cls, key: Key ) -> plugins.Plugin:
         """Determine what platform module to load
@@ -59,9 +60,9 @@ class Adapter( plugins.Plugin ):
     typed, and a third party adds a format without editing the viewer.  See
     OpenGLContext.viewer.adapters.
     """
-    registry: List[plugins.Plugin] = []
+    registry: list[plugins.Plugin] = []
     type_key = 'adapter'
 
 class Node( plugins.Plugin ):
     """A particular scenegraph node to be rendered"""
-    registry: List[plugins.Plugin] = []
+    registry: list[plugins.Plugin] = []

@@ -30,7 +30,8 @@ import os
 import re
 import urllib.parse
 from pathlib import PurePosixPath, PureWindowsPath
-from typing import Any, Iterable, Sequence
+from collections.abc import Iterable, Sequence
+from typing import Any
 
 from OpenGLContext.loaders import resolver
 from OpenGLContext.loaders.documentvalues import DocumentError, parse_object

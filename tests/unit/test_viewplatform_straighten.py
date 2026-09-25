@@ -5,7 +5,6 @@ rotation about Y alone, so the horizon comes level without the player being
 turned around.
 """
 import math
-from typing import Tuple
 
 import pytest
 
@@ -15,7 +14,7 @@ from OpenGLContext.move.viewplatform import ViewPlatform, xytoa
 YAWS = [math.radians(d) for d in range(0, 360, 30)]
 
 
-def _forward(platform: ViewPlatform) -> Tuple[float, float, float]:
+def _forward(platform: ViewPlatform) -> tuple[float, float, float]:
     return tuple(float(v) for v in (platform.quaternion * [0, 0, -1, 0])[:3])
 
 

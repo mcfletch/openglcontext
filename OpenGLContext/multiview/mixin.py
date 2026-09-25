@@ -20,7 +20,8 @@ in front of a view -- and what the furniture leaves reaches the views.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence, Tuple
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
 from OpenGLContext.multiview.quad import ELEVATIONS, FLAT_BACKGROUND
@@ -44,7 +45,7 @@ if TYPE_CHECKING:
         and reaches these through the MRO rather than owning them.
         """
 
-        def getViewPort(self) -> Tuple[int, int]: ...
+        def getViewPort(self) -> tuple[int, int]: ...
         def getViewLayout(self) -> Any: ...
         def triggerRedraw(self, force: int = 0) -> Any: ...
         def hasMouseMoveHandlers(self) -> bool: ...
@@ -65,7 +66,7 @@ class MultiViewMixin(_Host):
     #: The furniture drawn in them, where this window has an overlay stack.
     viewChrome: Any = None
 
-    _viewBounds: Optional[Callable[[], Optional[Tuple[Any, Any]]]] = None
+    _viewBounds: Optional[Callable[[], Optional[tuple[Any, Any]]]] = None
 
     # -- building ----------------------------------------------------------
     def startViews(self, bounds: Optional[Any] = None,
@@ -134,7 +135,7 @@ class MultiViewMixin(_Host):
             stack.invalidate()
         self.triggerRedraw(1)
 
-    def sceneCameras(self) -> List[SceneCamera]:
+    def sceneCameras(self) -> list[SceneCamera]:
         """The cameras the window's scene carries, as each view's menu offers them.
 
         Choosing one in the window's own view binds its ``Viewpoint``; in an
@@ -143,7 +144,7 @@ class MultiViewMixin(_Host):
         graph = getattr(self, 'getSceneGraph', None)
         return scene_cameras(graph() if graph is not None else None)
 
-    def boundsOfScene(self) -> Optional[Tuple[Any, Any]]:
+    def boundsOfScene(self) -> Optional[tuple[Any, Any]]:
         """The box round what the window is showing, or None where it shows nothing.
 
         From the context's own ``sceneBounds``, which answers a centre and a

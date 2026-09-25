@@ -56,7 +56,8 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from typing import Any, Callable, Mapping, Optional, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, Optional
 
 #: Pins whether contexts are released, for a run that already knows.
 TEARDOWN_VARIABLE = 'OPENGLCONTEXT_GLFW_TEARDOWN'

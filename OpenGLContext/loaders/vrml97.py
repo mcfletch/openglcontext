@@ -25,7 +25,7 @@ from vrml.vrml97 import parseprocessor
 from OpenGL._bytes import as_str
 import threading
 import logging
-from typing import Any, Dict, IO, Tuple, Union
+from typing import Any, IO
 
 log = logging.getLogger(__name__)
 
@@ -81,7 +81,7 @@ class VRML97Handler(base.BaseHandler):
     filename_extensions = [".wrl", ".wrl.gz", ".wrz", ".vrml", ".vrml.gz"]
     LOCK = threading.RLock()
 
-    def __init__(self, prototypes: Dict[str, Any]) -> None:
+    def __init__(self, prototypes: dict[str, Any]) -> None:
         """Initialise the file-handler
 
         prototypes -- prototype namespace provided by the
@@ -90,7 +90,7 @@ class VRML97Handler(base.BaseHandler):
         self.prototypes = prototypes
 
     def parse(self, data: Any, baseURL: str, *args: Any,
-              **named: Any) -> Tuple[bool, Any]:
+              **named: Any) -> tuple[bool, Any]:
         """Parse the loaded data (with the provided meta-information)"""
         with self.LOCK:
             success, results, next = _parser.parse(
@@ -108,7 +108,7 @@ class VRML97Handler(base.BaseHandler):
         return str(linearise.Lineariser().linear(node))
 
     @classmethod
-    def dump(cls, node: Any, file: Union[str, IO[str]]) -> str:
+    def dump(cls, node: Any, file: str | IO[str]) -> str:
         """Dump node's representation to a VRML97-formatted file
 
         ``file`` is a filename to write, or a text file open for writing. A

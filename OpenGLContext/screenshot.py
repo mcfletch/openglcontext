@@ -21,7 +21,7 @@ import logging
 import os
 import re
 import sys
-from typing import TYPE_CHECKING, Any, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGLContext import userpaths
 
@@ -69,7 +69,7 @@ class ScreenshotMixin(object):
         def addEventHandler(self, eventType: str, *arguments: Any,
                             **named: Any) -> Any: ...
         def triggerRedraw(self, force: int = 0) -> Any: ...
-        def getViewPort(self) -> Tuple[int, int]: ...
+        def getViewPort(self) -> tuple[int, int]: ...
         @classmethod
         def getApplicationName(cls) -> str: ...
 
@@ -115,7 +115,7 @@ class ScreenshotMixin(object):
         script: Optional[str] = None,
         date: Optional[str] = None,
         overwrite: bool = False,
-    ) -> Tuple[int, int]:
+    ) -> tuple[int, int]:
         """Save the current frame to disk, and say what size it was.
 
         The file goes to the user's picture folder, named for the window title:

@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import logging
 import traceback
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 
@@ -97,7 +97,7 @@ class RenderFailureLog:
     """
 
     def __init__(self) -> None:
-        self._failures: Dict[Tuple[str, str, str, str], RenderFailure] = {}
+        self._failures: dict[tuple[str, str, str, str], RenderFailure] = {}
         self._reported = False
 
     def record(self, where: str, node: Any, err: BaseException) -> bool:
@@ -120,7 +120,7 @@ class RenderFailureLog:
         failure.count += 1
         return first
 
-    def summary(self) -> List[RenderFailure]:
+    def summary(self) -> list[RenderFailure]:
         """Every cause recorded, the most frequent first."""
         return sorted(self._failures.values(), key=lambda f: -f.count)
 

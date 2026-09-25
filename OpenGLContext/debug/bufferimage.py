@@ -6,14 +6,14 @@ to, for instance, save the image to disk and examine
 it with an image editor to confirm that the buffer
 includes the expected results.
 """
-from typing import Any, Tuple
+from typing import Any
 
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
 from PIL import Image
 
 
-def _rectangle(x: int, y: int, width: int, height: int) -> Tuple[int, int]:
+def _rectangle(x: int, y: int, width: int, height: int) -> tuple[int, int]:
     """Fill in a negative width or height from the current viewport"""
     if width >= 0 and height >= 0:
         return width, height

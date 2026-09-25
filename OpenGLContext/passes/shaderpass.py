@@ -14,9 +14,8 @@ import os
 import re
 import logging
 from math import cos, sin
-from typing import (
-    Any, Callable, Dict, FrozenSet, Iterable, List, Optional, Set, Tuple, TYPE_CHECKING,
-)
+from collections.abc import Callable, Iterable
+from typing import Any, Optional, TYPE_CHECKING
 
 from OpenGL.GL import (
     GL_FALSE, GL_VERTEX_SHADER, GL_FRAGMENT_SHADER, GL_GEOMETRY_SHADER,
@@ -44,11 +43,11 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 # Type aliases
-Color3 = Tuple[float, float, float]
-Color4 = Tuple[float, float, float, float]
-Vec2 = Tuple[float, float]
-Vec3 = Tuple[float, float, float]
-Vec4 = Tuple[float, float, float, float]
+Color3 = tuple[float, float, float]
+Color4 = tuple[float, float, float, float]
+Vec2 = tuple[float, float]
+Vec3 = tuple[float, float, float]
+Vec4 = tuple[float, float, float, float]
 Matrix4 = npt.NDArray[np.float32]
 Matrix3 = npt.NDArray[np.float32]
 
@@ -73,7 +72,7 @@ from OpenGLContext.passes.shadersource import (
 from OpenGLContext.passes.shaderpass_shadow import _ShadowUniformMixin
 
 
-def _upload_view_list(location: int, indices: Tuple[int, ...]) -> None:
+def _upload_view_list(location: int, indices: tuple[int, ...]) -> None:
     """``viewList``: sixteen view indices as four ``ivec4``."""
     glUniform4iv(location, len(indices) // 4, np.asarray(indices, 'i'))
 
@@ -150,7 +149,7 @@ def normal_matrix(modelview: Matrix4) -> Matrix4:
     ), dtype='f')
 
 
-def _as_floats(value: Iterable[float]) -> Tuple[float, ...]:
+def _as_floats(value: Iterable[float]) -> tuple[float, ...]:
     return tuple(float(v) for v in value)
 
 
@@ -282,7 +281,7 @@ class ShaderAppearanceProgram(object):
         """The one program this has: an appearance draws with its own."""
         return int(self.program)
 
-    def required_inputs(self, program: Optional[int] = None) -> FrozenSet[str]:
+    def required_inputs(self, program: Optional[int] = None) -> frozenset[str]:
         """Nothing: what this program can be drawn without is its author's.
 
         The engine knows its own shaders' defaults and reports a geometry that
@@ -316,11 +315,11 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         self.line_program: Optional[int] = None  # For IndexedLineSet with per-vertex colors
         self.depth_program: Optional[int] = None  # Position-only, for shadow depth passes
         # Cache uniform locations per program: {program_id: {uniform_name: location}}
-        self._location_cache: Dict[int, Dict[str, int]] = {}
+        self._location_cache: dict[int, dict[str, int]] = {}
         # Cache last value uploaded per (program, uniform) so a redundant set
         # (e.g. the same material on many shapes) skips the glUniform call. The
         # cache reflects exactly what we uploaded, so skipping is never stale.
-        self._uniform_value_cache: Dict[Optional[int], Dict[str, Any]] = {}
+        self._uniform_value_cache: dict[Optional[int], dict[str, Any]] = {}
         #: Which material's textures are currently bound, for the pass now
         #: running. Cleared whenever a program is activated, because anything
         #: drawn between passes -- the overlay, a depth map -- binds these units
@@ -405,7 +404,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
     #: The programs a shared draw of several views binds. Each is compiled a
     #: second time for such a draw, with a geometry stage or with the vertex
     #: stage's routing as the strategy asks; see :meth:`select_program_set`.
-    MULTIVIEW_PROGRAMS: Tuple[str, ...] = ('program', 'vertex_color_program')
+    MULTIVIEW_PROGRAMS: tuple[str, ...] = ('program', 'vertex_color_program')
 
     #: Which set of :data:`MULTIVIEW_PROGRAMS` is in the attributes: 0 for the
     #: programs one view draws with, or the number of views a set was compiled
@@ -457,7 +456,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         return True
 
     def _compile_program_set(self, views: int,
-                             strategy: str = 'geometry') -> Dict[str, Optional[int]]:
+                             strategy: str = 'geometry') -> dict[str, Optional[int]]:
         """:data:`MULTIVIEW_PROGRAMS` compiled for a shared draw of ``views`` views."""
         return {
             'program': self._compile_one(
@@ -508,7 +507,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
             self._set_uniform('viewMask', self._view_mask, program, glUniform1ui)
 
     # Every GL program handle the pass may bind; cleared together on failure.
-    _PROGRAM_ATTRS: Tuple[str, ...] = (
+    _PROGRAM_ATTRS: tuple[str, ...] = (
         'program', 'unlit_program', 'vertex_color_program',
         'point_program', 'line_program', 'depth_program',
     )
@@ -516,7 +515,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
     #: The vertex shader each of those is compiled from. A geometry about to
     #: draw asks what the bound program cannot be drawn without, and this is
     #: how the handle it has leads back to the source that says so.
-    VERTEX_SOURCES: Dict[str, str] = {
+    VERTEX_SOURCES: dict[str, str] = {
         'program': 'vrml97_lighting.vert',
         'unlit_program': 'vrml97_unlit.vert',
         'vertex_color_program': 'vrml97_vertex_color.vert',
@@ -534,7 +533,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         """
         return int(self._active_program or self.program or 0)
 
-    def required_inputs(self, program: Optional[int] = None) -> FrozenSet[str]:
+    def required_inputs(self, program: Optional[int] = None) -> frozenset[str]:
         """The vertex arrays ``program`` cannot be drawn without.
 
         Defaults to the program now bound, which is the one a geometry node is
@@ -566,7 +565,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         them again.
         """
         from OpenGL.GL import glDeleteProgram
-        held: Set[Optional[int]] = {getattr(self, name, None) for name in self._PROGRAM_ATTRS}
+        held: set[Optional[int]] = {getattr(self, name, None) for name in self._PROGRAM_ATTRS}
         for found in (self.__dict__.pop('_program_sets', None) or {}).values():
             held.update((found or {}).values())
         for program in (int(name) for name in held if name):
@@ -1192,7 +1191,7 @@ class ShaderRenderMode:
 
 
 #: The programs, per GL context, compiled on the first frame that asks.
-_shader_programs: Dict[Optional[contextresources.ContextKey], VRML97ShaderProgram] = {}
+_shader_programs: dict[Optional[contextresources.ContextKey], VRML97ShaderProgram] = {}
 
 #: The identifier a cache keys on.  One implementation, in the module that owns
 #: the subject; this name is where the passes look for it.

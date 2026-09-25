@@ -29,7 +29,8 @@ import logging
 import queue
 import threading
 import time
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 

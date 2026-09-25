@@ -33,7 +33,8 @@ starts, and carried through every frame of it.
 """
 
 from math import asin, atan2, cos, pi, radians, sin, tan
-from typing import Any, Sequence, Tuple, cast
+from collections.abc import Sequence
+from typing import Any, cast
 
 import numpy as np
 
@@ -230,7 +231,7 @@ class TurntableOrbit(object):
                                   orientation)
 
     ### the gestures
-    def rotate(self, newX: float, newY: float) -> Tuple[np.ndarray, Quaternion]:
+    def rotate(self, newX: float, newY: float) -> tuple[np.ndarray, Quaternion]:
         """Swing the camera about the pivot to follow the pointer
 
         newX, newY -- where the pointer is now, in pick-point coordinates
@@ -245,7 +246,7 @@ class TurntableOrbit(object):
             self.startElevation - upWindow * self.dragAngle)
         return self._place()
 
-    def dolly(self, factor: float) -> Tuple[np.ndarray, Quaternion]:
+    def dolly(self, factor: float) -> tuple[np.ndarray, Quaternion]:
         """Move the camera toward or away from the pivot
 
         factor -- what to multiply the distance by; below one moves closer.
@@ -258,7 +259,7 @@ class TurntableOrbit(object):
         self.radius = max(self.radius * float(factor), self.minimumRadius)
         return self._place()
 
-    def pan(self, newX: float, newY: float) -> Tuple[np.ndarray, Quaternion]:
+    def pan(self, newX: float, newY: float) -> tuple[np.ndarray, Quaternion]:
         """Slide the camera and the pivot together, across the view
 
         newX, newY -- where the pointer is now, in pick-point coordinates
@@ -282,7 +283,7 @@ class TurntableOrbit(object):
         self.centre[:3] += shift
         return self._place()
 
-    def cancel(self) -> Tuple[np.ndarray, Quaternion]:
+    def cancel(self) -> tuple[np.ndarray, Quaternion]:
         """Give back the camera exactly as this gesture was handed it"""
         return self.startPosition, self.startOrientation
 
@@ -291,7 +292,7 @@ class TurntableOrbit(object):
     update = rotate
 
     ### internals
-    def _fractions(self, newX: float, newY: float) -> Tuple[float, float]:
+    def _fractions(self, newX: float, newY: float) -> tuple[float, float]:
         """How far the pointer has come, as a fraction of the window's height"""
         return ((float(newX) - self.start[0]) / self.span,
                 (float(newY) - self.start[1]) / self.span)
@@ -318,7 +319,7 @@ class TurntableOrbit(object):
         forward = np.asarray(aim * np.append(self._offset, 0.0), dtype='d')[:3]
         return aimAt(position[:3], position[:3] + forward, self.up)
 
-    def _place(self) -> Tuple[np.ndarray, Quaternion]:
+    def _place(self) -> tuple[np.ndarray, Quaternion]:
         """The camera that the current pivot, radius and angles describe"""
         position = self.centre.copy()
         position[:3] += self.radius * self._direction()

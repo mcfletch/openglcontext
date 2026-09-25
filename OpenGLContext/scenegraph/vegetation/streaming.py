@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import Callable
-from typing import Any, List, Optional, Tuple
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ class BackgroundCompute:
         self._request: Optional[tuple] = None
         self._result: Any = None
         self._have_result = False
-        self._failures: List[Tuple[tuple, BaseException]] = []
+        self._failures: list[tuple[tuple, BaseException]] = []
         #: Whether the worker is computing a request now.
         self.busy = False
         self._stop = False

@@ -25,7 +25,7 @@ import argparse
 import logging
 import os
 import sys
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 from OpenGLContext import testingcontext
 from OpenGLContext.contextdefinition import ContextDefinition
@@ -103,7 +103,7 @@ def build_skin(directory: str) -> Any:
     )
 
 
-def movement_modes() -> List[Any]:
+def movement_modes() -> list[Any]:
     """The ways of moving this demo offers, so the settings screen has some."""
     return [
         movemodes.WalkMode(name='walk'),

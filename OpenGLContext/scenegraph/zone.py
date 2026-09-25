@@ -41,7 +41,8 @@ from __future__ import annotations
 import logging
 import weakref
 from dataclasses import dataclass
-from typing import Any, Dict, Hashable, Iterable, List, Optional, Tuple
+from collections.abc import Hashable, Iterable
+from typing import Any, Optional
 
 import numpy as np
 from pydispatch import dispatcher
@@ -223,7 +224,7 @@ class Zone(nodetypes.Children, node.Node):
                 return found
         return None
 
-    def keys(self) -> List[str]:
+    def keys(self) -> list[str]:
         """The settings this zone carries, by the key each is decided under."""
         return [item.SETTING for item in self.settings or ()
                 if getattr(item, 'SETTING', '')]
@@ -257,7 +258,7 @@ class PlacedZone:
     def setting(self, key: str) -> Optional[ZoneSetting]:
         return self.zone.setting(key)
 
-    def candidate(self, key: str, weight: float) -> Tuple[Any, Any, float, int, float]:
+    def candidate(self, key: str, weight: float) -> tuple[Any, Any, float, int, float]:
         """This zone's entry in :func:`zones.layers` for setting ``key``.
 
         The block is the setting node, or None where it switches the setting
@@ -309,14 +310,14 @@ def _watch_setting_fields() -> None:
                                        weak=False)
 
 
-def _settings_key(zone: Zone) -> Tuple[Tuple[Hashable, int], ...]:
+def _settings_key(zone: Zone) -> tuple[tuple[Hashable, int], ...]:
     """The zone's settings, each with its version, as a comparable value."""
     return tuple((setting, setting_version(setting)) for setting in zone.settings or ())
 
 
-def placed_zones(found: Iterable[Tuple[Zone, Any]],
-                 cache: Optional[Dict[Tuple[Zone, int], Tuple[Any, Tuple[Any, ...], PlacedZone]]] = None
-                 ) -> List[PlacedZone]:
+def placed_zones(found: Iterable[tuple[Zone, Any]],
+                 cache: Optional[dict[tuple[Zone, int], tuple[Any, tuple[Any, ...], PlacedZone]]] = None
+                 ) -> list[PlacedZone]:
     """Each zone placed by its world matrix, for one frame.
 
     ``found`` pairs each zone with its row-vector world matrix, in the same
@@ -329,7 +330,7 @@ def placed_zones(found: Iterable[Tuple[Zone, Any]],
     once.
     """
     result = []
-    seen: Dict[Zone, int] = {}
+    seen: dict[Zone, int] = {}
     for zone, matrix in found:
         occurrence = seen.get(zone, 0)
         seen[zone] = occurrence + 1

@@ -27,7 +27,8 @@ point on one is the difference between drawing that road and approximating it.
 """
 from __future__ import annotations
 
-from typing import Any, Callable, Optional, Tuple
+from collections.abc import Callable
+from typing import Any, Optional
 
 import numpy as np
 
@@ -70,7 +71,7 @@ def pointer_from(event: Any, node: Any = None) -> Pointer:
                    modifiers=(shift, control, alt))
 
 
-def ray_from(event: Any) -> Tuple[np.ndarray, np.ndarray]:
+def ray_from(event: Any) -> tuple[np.ndarray, np.ndarray]:
     """The eye ray through the cursor: ``(origin, unit direction)``.
 
     Taken from the near and far planes rather than from the camera's position,
@@ -105,7 +106,7 @@ def ray_plane(origin: Any, direction: Any, point: Any, normal: Any
     return hit
 
 
-def horizon_plane(height: float = 0.0) -> Tuple[np.ndarray, np.ndarray]:
+def horizon_plane(height: float = 0.0) -> tuple[np.ndarray, np.ndarray]:
     """The level plane at a height, as the ``(point, normal)`` a ray wants.
 
     What a drag runs against when the thing being dragged should stay at the
@@ -137,7 +138,7 @@ def surface_normal(height_fn: Callable[[Any, Any], Any], x: Any, z: Any,
 
 
 def height_gradient(height_fn: Callable[[Any, Any], Any], x: Any, z: Any,
-                    step: float = GRADIENT_STEP) -> Tuple[Any, Any]:
+                    step: float = GRADIENT_STEP) -> tuple[Any, Any]:
     """How fast the ground rises east and north at a point.
 
     A pair of rates, not a direction: the length of the pair is the steepness
@@ -158,7 +159,7 @@ def height_gradient(height_fn: Callable[[Any, Any], Any], x: Any, z: Any,
 def snap_to_height(height_fn: Callable[[Any, Any], Any], x: float, z: float,
                    height: Optional[float] = None,
                    interval: float = 25.0, reach: float = 250.0,
-                   step: float = GRADIENT_STEP) -> Tuple[float, float]:
+                   step: float = GRADIENT_STEP) -> tuple[float, float]:
     """The nearest ground at a given height, from a point.
 
     ``height`` is the elevation to land on; with none, the nearest multiple of

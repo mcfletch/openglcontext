@@ -1,5 +1,6 @@
 """First-person-shooter like movement control"""
-from typing import Any, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from OpenGLContext.move import direct
 from OpenGLContext import arrays

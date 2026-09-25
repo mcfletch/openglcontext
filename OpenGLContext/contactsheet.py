@@ -16,7 +16,8 @@ that needs a web server to work is a review page nobody opens.
 from __future__ import annotations
 
 import os
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from OpenGLContext import atomicfiles
 from OpenGLContext.capture import ensure_pillow
@@ -54,7 +55,7 @@ PAGE = """<!doctype html>
 
 
 def tile(path: str, title: str,
-         rows: Sequence[Tuple[str, Sequence[Any]]],
+         rows: Sequence[tuple[str, Sequence[Any]]],
          columns: Sequence[str]) -> str:
     """Lay ``rows`` of captured frames out into one labelled sheet.
 
@@ -105,7 +106,7 @@ def index(out: str, caption: str = '', title: Optional[str] = None,
     ``order`` names the ones that come first within a group, which is how a
     run puts its overview at the top.
     """
-    groups: Dict[str, List[str]] = {}
+    groups: dict[str, list[str]] = {}
     for name in sorted(os.listdir(out)):
         if name.endswith('.png'):
             groups.setdefault(name.split('-', 1)[0], []).append(name)

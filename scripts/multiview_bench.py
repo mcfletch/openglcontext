@@ -24,7 +24,8 @@ import os
 import statistics
 import sys
 import time
-from typing import Any, List, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
@@ -63,9 +64,9 @@ class Result:
         return min(self.times) * 1000.0
 
 
-def scene_of(model: Optional[str], boxes: int) -> Tuple[list, Any, Any]:
+def scene_of(model: Optional[str], boxes: int) -> tuple[list, Any, Any]:
     """``(children, minimum, maximum)``: the scene to draw and the box around it."""
-    children: List[Any] = [
+    children: list[Any] = [
         basenodes.Background(skyColor=[(0.15, 0.17, 0.2)]),
         basenodes.DirectionalLight(direction=(-0.4, -0.6, -1.0), intensity=1.0),
     ]
@@ -94,8 +95,8 @@ def scene_of(model: Optional[str], boxes: int) -> Tuple[list, Any, Any]:
     return children, np.zeros(3) - 1.0, np.array([extent, extent, extent]) + 1.0
 
 
-def measure(children: list, bounds: Tuple[Any, Any], views: int,
-            strategy: Optional[str], size: Tuple[int, int],
+def measure(children: list, bounds: tuple[Any, Any], views: int,
+            strategy: Optional[str], size: tuple[int, int],
             frames: int, warmup: int) -> Result:
     """Render one case and answer what it cost.
 
@@ -103,8 +104,8 @@ def measure(children: list, bounds: Tuple[Any, Any], views: int,
     ``strategy`` pins how a multi-view frame is drawn.
     """
     Base: Any = testingcontext.getInteractive()
-    times: List[float] = []
-    counted: List[int] = []
+    times: list[float] = []
+    counted: list[int] = []
 
     class _Bench(Base):
         from OpenGLContext.contextdefinition import ContextDefinition

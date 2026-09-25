@@ -24,9 +24,8 @@ first::
 
 from __future__ import annotations
 
-from typing import (
-    TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple,
-)
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Optional
 
 import logging
 
@@ -39,7 +38,7 @@ log = logging.getLogger(__name__)
 __all__ = ['OverlayStack', 'OverlayMixin', 'WHEEL_UP', 'WHEEL_DOWN']
 
 #: What identifies one held input: its kind, and the key name or button number.
-_Claim = Tuple[str, Any]
+_Claim = tuple[str, Any]
 
 
 def _claimKey(event: Any) -> Optional['_Claim']:
@@ -65,11 +64,11 @@ class OverlayStack:
     """Panels over the frame, newest on top, only the top one hearing anything."""
 
     def __init__(self) -> None:
-        self.panels: List[Panel] = []
+        self.panels: list[Panel] = []
         #: Called with the stack whenever a panel is pushed or popped.
         self.on_change: Optional[Callable[['OverlayStack'], None]] = None
         #: The viewport the panels were last laid out for.
-        self.laidOutFor: Optional[Tuple[int, int]] = None
+        self.laidOutFor: Optional[tuple[int, int]] = None
 
     # -- the stack --------------------------------------------------------
     @property
@@ -102,7 +101,7 @@ class OverlayStack:
         top = self.top
         return bool(top is not None and top.capturing)
 
-    def push(self, panel: Panel, viewport: Optional[Tuple[int, int]] = None,
+    def push(self, panel: Panel, viewport: Optional[tuple[int, int]] = None,
              metrics: Any = None) -> Panel:
         """Put a panel on top, suspending whatever was there.
 
@@ -187,7 +186,7 @@ class OverlayStack:
                 tick(now)
 
     # -- layout -----------------------------------------------------------
-    def layout(self, viewport: Tuple[int, int], metrics: Any) -> None:
+    def layout(self, viewport: tuple[int, int], metrics: Any) -> None:
         """Lay every panel out for a window size.
 
         Every panel rather than only the top one: a parent screen is still
@@ -206,7 +205,7 @@ class OverlayStack:
     # Each of these offers the event to the panels topmost first and returns
     # whether any acted; what the *world* hears is decided by sinks(), not by
     # these.
-    def layers(self) -> List[Panel]:
+    def layers(self) -> list[Panel]:
         """The panels an event is offered to, topmost first.
 
         Down to and including the first modal one, because a modal panel is a
@@ -214,7 +213,7 @@ class OverlayStack:
         panels -- a menu bar and a tool palette -- are layers of a single
         interface, and each gets a look at what the layer over it left.
         """
-        offered: List[Panel] = []
+        offered: list[Panel] = []
         for panel in reversed(self.panels):
             offered.append(panel)
             if panel.modal:
@@ -241,7 +240,7 @@ class OverlayStack:
             acted = bool(action(panel)) or acted
         return acted
 
-    def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+    def key(self, name: str, modifiers: tuple[int, int, int]) -> bool:
         return self._first(lambda panel: panel.key(name, modifiers))
 
     def character(self, text: str) -> bool:
@@ -281,13 +280,13 @@ if TYPE_CHECKING:
         getInputState: Any
         suspendPointerCapture: Any
 
-        def getViewPort(self) -> Tuple[int, int]: ...
+        def getViewPort(self) -> tuple[int, int]: ...
         def triggerRedraw(self, force: int = 0) -> Any: ...
         def redrawAt(self, when: float) -> None: ...
         def overlayMetrics(self) -> Optional[FontMetrics]: ...
         def setPointerShape(self, name: str) -> bool: ...
         def screenTrees(self, metrics: FontMetrics,
-                        now: Optional[float] = None) -> List[Any]: ...
+                        now: Optional[float] = None) -> list[Any]: ...
         def ProcessEvent(self, event: Any) -> Any: ...
         def hasMouseMoveHandlers(self) -> bool: ...
 else:
@@ -308,14 +307,14 @@ class OverlayMixin(_Host):
 
     _overlays: Optional[OverlayStack] = None
     _overlayActive: bool = False
-    _holdingInputs: Optional[Dict['_Claim', bool]] = None
+    _holdingInputs: Optional[dict['_Claim', bool]] = None
     #: The input the world is being told about right now, or None. See
     #: :meth:`letGoOfHeldInput`.
     _dispatching: Optional['_Claim'] = None
 
     #: Where the pointer was last seen, and when it stopped there, for a tip
     #: that waits for it to rest.
-    _pointerAt: Optional[Tuple[float, float]] = None
+    _pointerAt: Optional[tuple[float, float]] = None
     _pointerSince: float = 0.0
     _tooltip: Any = None
     #: The shape the pointer is in, so it is set when it changes and not on
@@ -325,7 +324,7 @@ class OverlayMixin(_Host):
     _pointerHeld: bool = False
 
     @property
-    def _holding(self) -> Dict['_Claim', bool]:
+    def _holding(self) -> dict['_Claim', bool]:
         """Which side is holding each down/up input, made on first use.
 
         True where the overlay took the press, False where it went past. Read
@@ -570,7 +569,7 @@ class OverlayMixin(_Host):
         return True
 
     def screenTrees(self, metrics: FontMetrics,
-                    now: Optional[float] = None) -> List[Any]:
+                    now: Optional[float] = None) -> list[Any]:
         """The HUD layers, the open panels, and any tip over the lot.
 
         The panels are advanced to ``now`` first, so one whose time is up is

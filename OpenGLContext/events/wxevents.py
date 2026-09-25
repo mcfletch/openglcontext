@@ -1,6 +1,6 @@
 """Module providing translation from wxPython events to OpenGLContext events"""
 import logging
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
 from OpenGLContext.events.mouseevents import WHEEL_UP
@@ -12,7 +12,7 @@ log = logging.getLogger( __name__ )
 #: Which of OpenGLContext's button numbers each wx button is.  OpenGLContext
 #: numbers them in the X11 order -- 0 left, 1 right, 2 middle -- because the
 #: wheel takes 3 and 4 there; wx numbers them left, middle, right.
-BUTTON_MAPPING: Dict[int, int] = {
+BUTTON_MAPPING: dict[int, int] = {
     wx.MOUSE_BTN_LEFT: 0,
     wx.MOUSE_BTN_RIGHT: 1,
     wx.MOUSE_BTN_MIDDLE: 2,
@@ -22,7 +22,7 @@ BUTTON_MAPPING: Dict[int, int] = {
 #: drag, where wx names no button at all and the event has to be asked about
 #: each one.  The numbers are :data:`BUTTON_MAPPING`'s, so a drag reports the
 #: button its press did.
-BUTTON_IS_DOWN: Tuple[Tuple[int, str], ...] = (
+BUTTON_IS_DOWN: tuple[tuple[int, str], ...] = (
     (0, 'LeftIsDown'),
     (1, 'RightIsDown'),
     (2, 'MiddleIsDown'),
@@ -45,7 +45,7 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
         # What this mix-in needs of the wx canvas beside it.
         def addPickEvent(self, event: Any) -> Any: ...
         def triggerPick(self) -> Any: ...
-        def getViewPort(self) -> Tuple[int, int]: ...
+        def getViewPort(self) -> tuple[int, int]: ...
 
     ### KEYBOARD interactions
     def wxOnKeyDown( self, event: Any ) -> None:
@@ -154,7 +154,7 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
         """
 
 
-def _modifiersOf( wxEventObject: Any ) -> Tuple[bool, bool, bool]:
+def _modifiersOf( wxEventObject: Any ) -> tuple[bool, bool, bool]:
     """The shift, control and alt triple a wx event was delivered with
 
     A function rather than a method on the event classes, because the canvas
@@ -185,7 +185,7 @@ class wxXEvent(object):
     Provides method for determining the modifier set from
     wxPython event objects
     """
-    def _getModifiers( self, wxEventObject: Any) -> Tuple[bool, bool, bool]:
+    def _getModifiers( self, wxEventObject: Any) -> tuple[bool, bool, bool]:
         """Get a three-tupple of shift, control, alt status"""
         return _modifiersOf( wxEventObject )
 
@@ -257,7 +257,7 @@ class wxKeypressEvent( wxXEvent, keyboardevents.KeypressEvent ):
 
 PAGE_UP = wx.WXK_PRIOR if hasattr(wx,'WXK_PRIOR') else wx.WXK_PAGEUP
 PAGE_DOWN = wx.WXK_NEXT if hasattr(wx,'WXK_PRIOR') else wx.WXK_PAGEDOWN
-keyboardMapping: Dict[int, str] = {
+keyboardMapping: dict[int, str] = {
     wx.WXK_BACK:'<back>',
     wx.WXK_TAB:'<tab>',
     wx.WXK_RETURN:'<return>',

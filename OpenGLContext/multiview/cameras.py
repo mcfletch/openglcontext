@@ -23,7 +23,8 @@ terrain editor, with its centre given as a map's ``(x, z)``.
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, Optional, Sequence, Tuple, Union
+from collections.abc import Sequence
+from typing import Any, Optional, Union
 
 import numpy as np
 
@@ -32,16 +33,16 @@ from OpenGLContext.passes.shadowmath import ortho_matrix
 
 __all__ = ['DIRECTIONS', 'OrthoView', 'OrthoViewPlatform', 'Point']
 
-Vector = Tuple[float, float, float]
+Vector = tuple[float, float, float]
 #: A point given as a sequence of numbers or as an array.
-Point = Union[Sequence[float], np.ndarray]
+Point = Sequence[float] | np.ndarray
 
 #: For each direction a view can look along, the world directions of the
 #: view's right, its up, and the way back towards the camera. The camera stands
 #: on the side the name gives -- ``'front'`` stands at +z looking down -z,
 #: which is the view a VRML or glTF scene opens on -- and ``'top'`` puts -z up
 #: the screen, as a map puts north.
-DIRECTIONS: Dict[str, Tuple[Vector, Vector, Vector]] = {
+DIRECTIONS: dict[str, tuple[Vector, Vector, Vector]] = {
     'front': ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
     'back': ((-1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, -1.0)),
     'right': ((0.0, 0.0, -1.0), (0.0, 1.0, 0.0), (1.0, 0.0, 0.0)),
@@ -51,7 +52,7 @@ DIRECTIONS: Dict[str, Tuple[Vector, Vector, Vector]] = {
 }
 
 
-def _size(viewport: Sequence[float]) -> Tuple[int, int]:
+def _size(viewport: Sequence[float]) -> tuple[int, int]:
     """A viewport's width and height, neither of them zero."""
     return (int(viewport[0]) or 1), (int(viewport[1]) or 1)
 
@@ -133,7 +134,7 @@ class OrthoView:
         position: np.ndarray = np.asarray(self.centre, 'd') + self._back * (self.depth / 2.0)
         return position
 
-    def matrices(self, viewport: Sequence[float]) -> Tuple[np.ndarray, np.ndarray]:
+    def matrices(self, viewport: Sequence[float]) -> tuple[np.ndarray, np.ndarray]:
         """``(model-view, projection)`` for this view, row-vector."""
         model = np.zeros((4, 4), dtype='d')
         model[:3, 0] = self._right
@@ -164,7 +165,7 @@ class OrthoView:
         return point
 
     def screen_from_world(self, point: Point,
-                          viewport: Sequence[float]) -> Tuple[float, float]:
+                          viewport: Sequence[float]) -> tuple[float, float]:
         """The view pixel a world point is drawn at; its depth moves nothing."""
         offset = np.asarray(point[:3], 'd') - np.asarray(self.centre, 'd')
         scale = self.units_per_pixel(viewport) or 1e-12
@@ -280,7 +281,7 @@ ORTHOGRAPHIC = 'ortho'
 
 #: Every kind a view can be pointed at: the six axes, and the two ways a
 #: turning camera is drawn. What a view-name menu offers.
-VIEW_KINDS: Tuple[str, ...] = tuple(DIRECTIONS) + (PERSPECTIVE, ORTHOGRAPHIC)
+VIEW_KINDS: tuple[str, ...] = tuple(DIRECTIONS) + (PERSPECTIVE, ORTHOGRAPHIC)
 
 
 def view_kind(view: Any) -> Optional[str]:
@@ -297,7 +298,7 @@ def view_kind(view: Any) -> Optional[str]:
     return 'top'
 
 
-def shown_by(camera: Any) -> Tuple[Tuple[float, float, float], float]:
+def shown_by(camera: Any) -> tuple[tuple[float, float, float], float]:
     """Where a camera is looking and how much it shows, whatever kind it is.
 
     ``(centre, span)`` in world units: the point in the middle of the view,

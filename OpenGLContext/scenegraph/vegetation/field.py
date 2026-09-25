@@ -23,7 +23,8 @@ from __future__ import annotations
 
 import math
 import posixpath
-from typing import Any, Callable, Optional, Sequence
+from collections.abc import Callable, Sequence
+from typing import Any, Optional
 
 import numpy as np
 from vrml import field

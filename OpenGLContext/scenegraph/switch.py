@@ -1,6 +1,6 @@
 """VRML97 Switch node"""
 import weakref
-from typing import Any, List, Optional, Tuple
+from typing import Any, Optional
 
 from vrml.vrml97 import basenodes, nodetypes
 from OpenGLContext.scenegraph import boundingvolume
@@ -54,7 +54,7 @@ class Switch(basenodes.Switch):
         )
     def renderedChildren(
         self, types: Any = (nodetypes.Children, nodetypes.Rendering,)
-    ) -> List[Any]:
+    ) -> list[Any]:
         """Children is not the source, choice is"""
         if self.whichChoice < 0 or self.whichChoice >= len(self.choice):
             return []
@@ -77,8 +77,8 @@ class Switch(basenodes.Switch):
             return current
         # need to create a new volume and make it depend
         # on the appropriate fields...
-        volumes: List[Any] = []
-        dependencies: List[Tuple[Any, Optional[str]]] = [
+        volumes: list[Any] = []
+        dependencies: list[tuple[Any, Optional[str]]] = [
             (self,'choice'),(self,'whichChoice')]
         unbounded = 0
         for child in self.renderedChildren():

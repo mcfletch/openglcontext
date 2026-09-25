@@ -53,7 +53,8 @@ rectangles back.
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List, Optional, Sequence, Tuple, cast
+from collections.abc import Sequence
+from typing import Any, Optional, cast
 
 import numpy as np
 
@@ -89,8 +90,8 @@ ANCHORS = (
 )
 
 
-def place(container: Rect, size: Tuple[int, int], anchor: str,
-          offset: Tuple[int, int]) -> Rect:
+def place(container: Rect, size: tuple[int, int], anchor: str,
+          offset: tuple[int, int]) -> Rect:
     """Where a box of ``size`` sits in ``container``, by name and then nudged.
 
     ``offset`` is in pixels with **+y up**, the origin this whole coordinate
@@ -147,7 +148,7 @@ class Anchored(object):
     #: size.
     offset = field.newField('offset', 'SFVec2f', 1, (0.0, 0.0))
 
-    def anchorOffset(self, metrics: FontMetrics) -> Tuple[int, int]:
+    def anchorOffset(self, metrics: FontMetrics) -> tuple[int, int]:
         """This element's offset in real pixels."""
         return (metrics.pixels(self.offset[0]), metrics.pixels(self.offset[1]))
 
@@ -215,7 +216,7 @@ class HUDLayer(RootWidget):
         return None
 
     # -- layout -----------------------------------------------------------
-    def layout(self, viewport: Tuple[int, int], metrics: FontMetrics) -> None:
+    def layout(self, viewport: tuple[int, int], metrics: FontMetrics) -> None:
         """Take the whole window and place every child in it."""
         self.link()
         self._metrics = metrics
@@ -327,11 +328,11 @@ class Crosshair(HUDWidget):
                 + metrics.pixels(self.length))
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         extent = self.reach(metrics) * 2
         return (extent, extent)
 
-    def segments(self, metrics: FontMetrics) -> List[Rect]:
+    def segments(self, metrics: FontMetrics) -> list[Rect]:
         """The rectangles the reticule is drawn from, in its laid-out place.
 
         Rectangles rather than lines because that is what the overlay renderer
@@ -369,7 +370,7 @@ class Crosshair(HUDWidget):
             segments.append(Rect(x - dot // 2, y - dot // 2, dot, dot))
         return segments
 
-    def outlineSegments(self, metrics: FontMetrics) -> List[Rect]:
+    def outlineSegments(self, metrics: FontMetrics) -> list[Rect]:
         """The reticule's shape, one pixel larger on every side.
 
         Drawn first and in the shadow colour, which is what stops a light
@@ -380,7 +381,7 @@ class Crosshair(HUDWidget):
             return []
         return [segment.expand(1) for segment in self.segments(metrics)]
 
-    def hitMarks(self, metrics: FontMetrics) -> List[Rect]:
+    def hitMarks(self, metrics: FontMetrics) -> list[Rect]:
         """Four ticks around the middle while a hit is being acknowledged.
 
         Empty once :attr:`hitDuration` has passed, so the caller draws it
@@ -488,7 +489,7 @@ class BarMeter(HUDWidget):
                 + int(self.activeSkin().hudSpacing))
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         return (self.labelWidth(metrics) + metrics.pixels(self.barWidth),
                 max(metrics.pixels(self.barHeight), metrics.char_height))
 
@@ -528,7 +529,7 @@ class BarMeter(HUDWidget):
         left = 1.0 - (self._now - self._flash_at) / duration
         return float(self.flashStrength) * left if left > 0.0 else 0.0
 
-    def flashColour(self) -> Tuple[float, float, float, float]:
+    def flashColour(self) -> tuple[float, float, float, float]:
         """White at the flash's current strength."""
         return (1.0, 1.0, 1.0, self.flashAlpha())
 
@@ -614,7 +615,7 @@ class Readout(HUDWidget):
         return metrics.pixels(self.iconSize) + int(self.activeSkin().hudSpacing)
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         text = self.text()
         width = self.iconWidth(metrics) + metrics.text_width(text)
         height = max(metrics.char_height,
@@ -691,7 +692,7 @@ class LampRow(HUDWidget):
         """Whether the lamp at that place in the row is lit."""
         return bool(0 <= at < int(self.count) and at < int(self.lit))
 
-    def visibleLamps(self) -> List[int]:
+    def visibleLamps(self) -> list[int]:
         """Every lamp's place in the row, left to right."""
         return list(range(max(0, int(self.count))))
 
@@ -703,7 +704,7 @@ class LampRow(HUDWidget):
 
     # -- geometry ---------------------------------------------------------
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         lamps = max(0, int(self.count))
         if not lamps:
             return (0, 0)
@@ -726,7 +727,7 @@ class LampRow(HUDWidget):
         return _grown(self.lampRect(at, metrics),
                       metrics.pixels(float(self.lampSize) * self.haloEdge))
 
-    def haloColour(self, at: int, skin: Any) -> Tuple[float, float, float, float]:
+    def haloColour(self, at: int, skin: Any) -> tuple[float, float, float, float]:
         """The lamp's own colour, carried at the halo's strength."""
         red, green, blue, alpha = _rgba(self.lampColour(at, skin))
         return (red, green, blue, alpha * float(self.haloStrength))
@@ -749,7 +750,7 @@ def _grown(rect: Rect, side: int) -> Rect:
                 rect.width + 2 * side, rect.height + 2 * side)
 
 
-def _rgba(colour: Any) -> Tuple[float, float, float, float]:
+def _rgba(colour: Any) -> tuple[float, float, float, float]:
     """A colour as four floats, whatever sequence it arrived as."""
     values = [float(part) for part in colour]
     while len(values) < 4:
@@ -783,7 +784,7 @@ class TextBlock(HUDWidget):
         return self.tinted(skin.hudText)
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         lines = [str(line) for line in self.lines]
         if not lines:
             return (0, 0)
@@ -793,7 +794,7 @@ class TextBlock(HUDWidget):
         height = len(lines) * metrics.line_height - metrics.line_gap
         return (width, height)
 
-    def lineRects(self, metrics: FontMetrics) -> List[Rect]:
+    def lineRects(self, metrics: FontMetrics) -> list[Rect]:
         """Where each line goes, first at the top.
 
         Text reads downwards and this coordinate system counts upwards, so the
@@ -841,7 +842,7 @@ class ScreenWash(HUDWidget):
 
     interactive = False
 
-    def wash(self) -> Optional[Tuple[Rect, Tuple[float, float, float, float]]]:
+    def wash(self) -> Optional[tuple[Rect, tuple[float, float, float, float]]]:
         """The rectangle to fill and its colour, or None when it is invisible.
 
         None rather than a transparent rectangle, so a wash that is switched
@@ -856,7 +857,7 @@ class ScreenWash(HUDWidget):
                             float(colour[2]), alpha))
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         """The whole layer: a wash is the screen, not a box on it."""
         parent = getattr(self, 'parent', None)
         area = getattr(parent, 'rect', None)
@@ -921,7 +922,7 @@ class MessageQueue(HUDWidget):
     def __init__(self, **named: Any) -> None:
         super(MessageQueue, self).__init__(**named)
         #: What is up right now, newest first.  Not a field: it is transient.
-        self.messages: List[Message] = []
+        self.messages: list[Message] = []
 
     # -- posting ----------------------------------------------------------
     def post(self, text: str, now: Optional[float] = None,
@@ -948,7 +949,7 @@ class MessageQueue(HUDWidget):
                          if not message.expired(now)]
 
     # -- what is on screen ------------------------------------------------
-    def entries(self, now: float) -> List[Tuple[str, Tuple[float, float, float, float]]]:
+    def entries(self, now: float) -> list[tuple[str, tuple[float, float, float, float]]]:
         """The lines to draw and the colour each is drawn in, newest first.
 
         The colour carries the fade in its alpha, so the caller draws what it
@@ -968,7 +969,7 @@ class MessageQueue(HUDWidget):
         return found
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         if not self.messages:
             return (0, 0)
         widest = max(metrics.text_width(message.text)
@@ -989,7 +990,7 @@ class MessageQueue(HUDWidget):
 #: one stands for: straight ahead, to the right, behind, to the left.  Behind
 #: is the bottom of the screen because that is where a player looks for what
 #: they cannot see, and it is the reading every game in the genre has taught.
-EDGES: Tuple[Tuple[str, float], ...] = (
+EDGES: tuple[tuple[str, float], ...] = (
     ('top', 0.0),
     ('right', math.pi / 2.0),
     ('bottom', math.pi),
@@ -1073,7 +1074,7 @@ class DamageIndicator(HUDWidget):
         super(DamageIndicator, self).__init__(**named)
         #: What is being shown right now.  Not a field: it is transient and
         #: worth neither saving nor sending.
-        self.marks: List[DamageMark] = []
+        self.marks: list[DamageMark] = []
 
     # -- taking a hit -----------------------------------------------------
     def hurt(self, bearing: float, intensity: float = 1.0,
@@ -1104,7 +1105,7 @@ class DamageIndicator(HUDWidget):
                       if not mark.spent(now, duration)]
 
     # -- what is on screen ------------------------------------------------
-    def shares(self) -> Dict[str, float]:
+    def shares(self) -> dict[str, float]:
         """How strongly each edge is lit, by name, leaving out the dark ones.
 
         A hit contributes to an edge in proportion to how much it faces it --
@@ -1114,7 +1115,7 @@ class DamageIndicator(HUDWidget):
         instead of stepping it.
         """
         duration = float(self.duration)
-        lit: Dict[str, float] = {}
+        lit: dict[str, float] = {}
         for mark in self.marks:
             strength = mark.strength(self._now, duration)
             if strength <= 0.0:
@@ -1126,7 +1127,7 @@ class DamageIndicator(HUDWidget):
         return lit
 
     def edges(self, metrics: FontMetrics
-              ) -> List[Tuple[str, Rect, Tuple[float, float, float, float]]]:
+              ) -> list[tuple[str, Rect, tuple[float, float, float, float]]]:
         """Each lit edge, the band it occupies, and the colour at its outside.
 
         The band is the whole strip; :meth:`bands` is what actually gets
@@ -1149,7 +1150,7 @@ class DamageIndicator(HUDWidget):
         return found
 
     def bands(self, metrics: FontMetrics
-              ) -> List[Tuple[Rect, Tuple[float, float, float, float]]]:
+              ) -> list[tuple[Rect, tuple[float, float, float, float]]]:
         """The strips to draw and the colour of each, strongest first.
 
         Every strip sits inside the one before it and is fainter, which is a
@@ -1191,7 +1192,7 @@ class DamageIndicator(HUDWidget):
         return Rect(outside + step * index, band.y, width, band.height)
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         """The whole layer: a wash is at the edges of the screen, not in a box."""
         parent = getattr(self, 'parent', None)
         area = getattr(parent, 'rect', None)
@@ -1244,16 +1245,16 @@ class MiniMap(HUDWidget):
     _stroked: Any = None
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         side = max(1, metrics.pixels(self.size))
         return (side, side)
 
     # -- the fitting ------------------------------------------------------
-    def bounds(self) -> Optional[Tuple[float, float, float, float]]:
+    def bounds(self) -> Optional[tuple[float, float, float, float]]:
         """The route's own extent in world XZ, or None for no route."""
         return self._fitting()[0]
 
-    def _fitting(self) -> Tuple[Optional[Tuple[float, float, float, float]], Any]:
+    def _fitting(self) -> tuple[Optional[tuple[float, float, float, float]], Any]:
         """The route's extent and its points, kept while the route is the same one.
 
         A route is set once and a map is painted every frame, so its extent
@@ -1270,7 +1271,7 @@ class MiniMap(HUDWidget):
         self._fitted = (self.route, found, points)
         return found, points
 
-    def _placing(self) -> Optional[Tuple[float, float, float, float, float, Rect]]:
+    def _placing(self) -> Optional[tuple[float, float, float, float, float, Rect]]:
         """``(middle x, middle y, centre x, centre z, scale, box)`` for placing points."""
         found = self.bounds()
         if found is None:
@@ -1283,7 +1284,7 @@ class MiniMap(HUDWidget):
         return (box.x + box.width / 2.0, box.y + box.height / 2.0,
                 (low_x + high_x) / 2.0, (low_z + high_z) / 2.0, scale, box)
 
-    def at(self, x: float, z: float) -> Tuple[float, float]:
+    def at(self, x: float, z: float) -> tuple[float, float]:
         """Where a world position lands on the map, in window pixels.
 
         Clamped to the box: a car that has left the road is somewhere, and
@@ -1300,7 +1301,7 @@ class MiniMap(HUDWidget):
         return (min(max(place[0], box.x), float(box.right)),
                 min(max(place[1], box.y), float(box.top)))
 
-    def strokes(self) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
+    def strokes(self) -> list[tuple[tuple[float, float], tuple[float, float]]]:
         """The route as pairs of points on the map, thinned to :attr:`detail`.
 
         Kept while the route, the box and the settings are the same, since a
@@ -1311,13 +1312,13 @@ class MiniMap(HUDWidget):
                float(self.inset), int(self.detail), bool(self.closed))
         held = self._stroked
         if held is not None and held[0] is self.route and held[1] == key:
-            strokes: List[Tuple[Tuple[float, float], Tuple[float, float]]] = held[2]
+            strokes: list[tuple[tuple[float, float], tuple[float, float]]] = held[2]
             return strokes
         found = self._strokes()
         self._stroked = (self.route, key, found)
         return found
 
-    def _strokes(self) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
+    def _strokes(self) -> list[tuple[tuple[float, float], tuple[float, float]]]:
         _found, points = self._fitting()
         placing = self._placing()
         if points is None or len(points) < 2 or placing is None:
@@ -1334,7 +1335,7 @@ class MiniMap(HUDWidget):
         placed = list(zip(xs.tolist(), ys.tolist(), strict=True))
         return list(zip(placed[:-1], placed[1:], strict=True))
 
-    def marked(self) -> List[Tuple[Tuple[float, float], str]]:
+    def marked(self) -> list[tuple[tuple[float, float], str]]:
         """Each mark's place on the map, and what kind it is."""
         return [(self.at(float(x), float(z)), str(kind))
                 for x, z, kind in self.marks]

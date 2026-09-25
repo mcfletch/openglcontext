@@ -25,7 +25,7 @@ reads it and does not write to it.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 import numpy as np
 
@@ -35,7 +35,7 @@ from OpenGLContext.loaders.gltf.animation import Animation, quat_slerp_rows
 __all__ = ['ClipSampler']
 
 #: The paths a skeleton's pose is made of, and how wide each one is.
-_PATHS: Tuple[Tuple[str, int], ...] = (
+_PATHS: tuple[tuple[str, int], ...] = (
     ('translation', 3), ('rotation', 4), ('scale', 3),
 )
 
@@ -57,7 +57,7 @@ class _Block:
         self.interpolation = interpolation
         self.is_rotation = is_rotation
 
-    def _segment(self, t: float) -> Tuple[int, float]:
+    def _segment(self, t: float) -> tuple[int, float]:
         """The segment start index and the [0, 1] fraction along it."""
         times = self.times
         n = len(times)
@@ -121,7 +121,7 @@ class _Block:
         blended: np.ndarray = a + (b - a) * fraction[:, None, None]
         return blended
 
-    def _segments(self, times: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def _segments(self, times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """Segment index and [0, 1] fraction for each of ``times`` at once."""
         grid = self.times
         n = len(grid)
@@ -197,7 +197,7 @@ class _PathChannels:
     def __init__(self, width: int) -> None:
         self.width = width
         self.slots = np.zeros(0, dtype=np.int32)
-        self.blocks: List[_Block] = []
+        self.blocks: list[_Block] = []
         #: Values for the channels that never move, laid straight into ``sample``.
         self.constant = np.zeros((0, width), dtype='d')
         self.constant_rows = np.zeros(0, dtype=np.int32)
@@ -242,12 +242,12 @@ class ClipSampler:
         self.rig = rig
         self.name = animation.name
         self.duration = animation.duration
-        self._paths: Dict[str, _PathChannels] = {
+        self._paths: dict[str, _PathChannels] = {
             path: _PathChannels(width) for path, width in _PATHS
         }
-        self._weights: List[Tuple[int, Any]] = []
+        self._weights: list[tuple[int, Any]] = []
         #: Views of this clip narrowed to a few joints, kept by which joints.
-        self._restricted: Dict[bytes, "ClipSampler"] = {}
+        self._restricted: dict[bytes, "ClipSampler"] = {}
         self._group(animation, rig)
 
     # -- what the clip drives ---------------------------------------------
@@ -282,7 +282,7 @@ class ClipSampler:
         channels drive one path of one node -- which is malformed -- the later
         one wins, as it does when the values are collected into a dict.
         """
-        by_path: Dict[str, Dict[int, Any]] = {path: {} for path, _ in _PATHS}
+        by_path: dict[str, dict[int, Any]] = {path: {} for path, _ in _PATHS}
         for channel in animation.channels:
             if channel.path == 'weights':
                 self._weights.append((channel.node_index, channel.sampler))
@@ -296,15 +296,15 @@ class ClipSampler:
                              is_rotation=(path == 'rotation'))
 
     @staticmethod
-    def _build_path(store: _PathChannels, samplers: Dict[int, Any], width: int,
+    def _build_path(store: _PathChannels, samplers: dict[int, Any], width: int,
                     is_rotation: bool) -> None:
         if not samplers:
             return
         slots = sorted(samplers)
         store.slots = np.asarray(slots, dtype=np.int32)
-        constant_rows: List[int] = []
-        constant_values: List[np.ndarray] = []
-        blocks: Dict[Any, List[Tuple[int, Any]]] = {}
+        constant_rows: list[int] = []
+        constant_values: list[np.ndarray] = []
+        blocks: dict[Any, list[tuple[int, Any]]] = {}
         for row, slot in enumerate(slots):
             sampler = samplers[slot]
             fixed = _constant_value(sampler)
@@ -355,7 +355,7 @@ class ClipSampler:
         return view
 
     # -- sampling ----------------------------------------------------------
-    def sample(self, t: float) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def sample(self, t: float) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Translation, rotation and scale at ``t``, one row per driven slot.
 
         Each array lines up with the matching ``slots_*``. The rows are the
@@ -366,7 +366,7 @@ class ClipSampler:
                 self._paths['rotation'].sample(t),
                 self._paths['scale'].sample(t))
 
-    def sample_many(self, times: Any) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def sample_many(self, times: Any) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Translation, rotation and scale at each of ``times``.
 
         Each array is ``(F, C, W)``: one row of driven slots per time, in the
@@ -378,7 +378,7 @@ class ClipSampler:
                 self._paths['rotation'].sample_many(times),
                 self._paths['scale'].sample_many(times))
 
-    def sample_weights(self, t: float) -> Dict[int, np.ndarray]:
+    def sample_weights(self, t: float) -> dict[int, np.ndarray]:
         """Morph weights at ``t``, by glTF node index.
 
         Morph weights are per mesh and of no fixed width, so they are answered

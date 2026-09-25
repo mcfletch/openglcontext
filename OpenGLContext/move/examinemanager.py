@@ -7,7 +7,7 @@ or not a drag is in progress.  The bindings are in
 :mod:`OpenGLContext.move.direct`.
 """
 
-from typing import Any, Tuple
+from typing import Any
 
 from OpenGLContext.events import eventmanager
 from OpenGLContext.events.mouseevents import WHEEL_BUTTONS, WHEEL_UP
@@ -33,7 +33,7 @@ DOLLY_STEP = 0.8
 NEAR_PLANE_MARGIN = 2.0
 
 
-def gestureArea(context: Any, event: Any) -> Tuple[int, int]:
+def gestureArea(context: Any, event: Any) -> tuple[int, int]:
     """``(width, height)`` a drag that began with ``event`` is measured against.
 
     The tile of the view the event was routed to, where the window shows

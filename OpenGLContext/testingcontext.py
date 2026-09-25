@@ -7,13 +7,13 @@ unlikely that nontrivial code will be completely stable across
 all interactive context classes."""
 
 import optparse
-from typing import Any, Optional, Type
+from typing import Any, Optional
 
 from OpenGLContext import plugins, context, contextdefinition
 
 #: The context class a test runner has every test context built on, where it
 #: names one; None leaves the choice to the backend preference.
-CONFIGURED_BASE: Optional[Type[context.Context]] = None
+CONFIGURED_BASE: Optional[type[context.Context]] = None
 REQUIRED_EXTENSION_MISSING = 3 # process return-code for a missing extension
 
 
@@ -60,7 +60,7 @@ def getInteractive( preference: Any = None ) -> Any:
         preference, plugins.InteractiveContext,
     )
 
-def _required( found: Any, preference: Any, type: Type[plugins.Context] ) -> Any:
+def _required( found: Any, preference: Any, type: type[plugins.Context] ) -> Any:
     """Return the context class, or say what was asked for and what there is
 
     The import error itself is logged by the plug-in as it fails, which is

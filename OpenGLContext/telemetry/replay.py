@@ -40,7 +40,8 @@ from __future__ import annotations
 import json
 import logging
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional
+from collections.abc import Callable, Iterable
+from typing import Any, Optional
 
 from OpenGLContext.events import systemtime
 from OpenGLContext.loaders.documentvalues import DocumentValues
@@ -52,7 +53,7 @@ log = logging.getLogger(__name__)
 _values = DocumentValues(logger=log)
 
 
-def _whole(record: Dict[str, Any], key: str, default: int) -> int:
+def _whole(record: dict[str, Any], key: str, default: int) -> int:
     """A record's whole-number field, or ``default`` where it holds none."""
     return _values.integer(record.get(key), default, 'journal %s' % (key,))
 
@@ -65,14 +66,14 @@ __all__ = ['MarkComparison', 'Recording', 'RecordedClock', 'Replay',
 CLOSE_ENOUGH = 1e-9
 
 
-def read_records(path: Any) -> List[Dict[str, Any]]:
+def read_records(path: Any) -> list[dict[str, Any]]:
     """Every record in a journal file.
 
     A line that will not parse is skipped rather than fatal: a session killed
     mid-write leaves a partial last line, and it is the session that was killed
     whose records are worth having.
     """
-    found: List[Dict[str, Any]] = []
+    found: list[dict[str, Any]] = []
     try:
         text = Path(path).read_text()
     except OSError as error:
@@ -98,20 +99,20 @@ class Recording:
         'log': 'messages', 'mark': 'marks', 'state': 'states',
     }
 
-    def __init__(self, records: Iterable[Dict[str, Any]]) -> None:
+    def __init__(self, records: Iterable[dict[str, Any]]) -> None:
         self.records = list(records)
-        self.header: Dict[str, Any] = {}
-        self.inputs: List[Dict[str, Any]] = []
-        self.blocks: List[Dict[str, Any]] = []
-        self.exceptions: List[Dict[str, Any]] = []
-        self.messages: List[Dict[str, Any]] = []
-        self.marks: List[Dict[str, Any]] = []
-        self.states: List[Dict[str, Any]] = []
-        self.end: Dict[str, Any] = {}
+        self.header: dict[str, Any] = {}
+        self.inputs: list[dict[str, Any]] = []
+        self.blocks: list[dict[str, Any]] = []
+        self.exceptions: list[dict[str, Any]] = []
+        self.messages: list[dict[str, Any]] = []
+        self.marks: list[dict[str, Any]] = []
+        self.states: list[dict[str, Any]] = []
+        self.end: dict[str, Any] = {}
         #: Where this session's randomness started; see
         #: :mod:`OpenGLContext.entropy`. Empty for a journal that recorded
         #: none -- an older one, or one cut off before it was written.
-        self.entropy: Dict[str, Any] = {}
+        self.entropy: dict[str, Any] = {}
         self.truncated = False
         for record in self.records:
             kind = str(record.get('kind', ''))
@@ -133,21 +134,21 @@ class Recording:
         return cls(read_records(path))
 
     # -- what is in it ----------------------------------------------------
-    def inputs_by_frame(self) -> Dict[int, List[Dict[str, Any]]]:
+    def inputs_by_frame(self) -> dict[int, list[dict[str, Any]]]:
         """Each frame's input, in the order it arrived, keyed by frame."""
-        grouped: Dict[int, List[Dict[str, Any]]] = {}
+        grouped: dict[int, list[dict[str, Any]]] = {}
         for record in self.inputs:
             grouped.setdefault(_whole(record, 'frame', 0), []).append(record)
         return grouped
 
-    def frame_times(self) -> List[float]:
+    def frame_times(self) -> list[float]:
         """When each frame started, in seconds from the start of the session.
 
         Recovered from the blocks rather than stored per frame: a block says
         when its first frame began and how long each frame in it took, and each
         frame's time is where those add up to.
         """
-        times: List[float] = []
+        times: list[float] = []
         for block in self.blocks:
             when = _values.number(block.get('t'), 0.0, 'journal block time')
             for milliseconds in block.get('ms', ()):
@@ -160,7 +161,7 @@ class Recording:
         """How many frames the session lasted."""
         return sum(len(block.get('ms', ())) for block in self.blocks)
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         """The session in one mapping, for a report or an overlay."""
         milliseconds = sorted(float(value) for block in self.blocks
                               for value in block.get('ms', ()))
@@ -267,7 +268,7 @@ class Replay:
     """
 
     def __init__(self, recording: Recording,
-                 deliver: Callable[[Dict[str, Any]], Any],
+                 deliver: Callable[[dict[str, Any]], Any],
                  start: Optional[float] = None) -> None:
         self.recording = recording
         self.deliver = deliver
@@ -365,7 +366,7 @@ class MarkComparison:
     everything after it is that one's consequence.
     """
 
-    def __init__(self, marks: Iterable[Dict[str, Any]]) -> None:
+    def __init__(self, marks: Iterable[dict[str, Any]]) -> None:
         self.expected = list(marks)
         #: Marks the replay has made, and how they went.
         self.made = 0
@@ -375,7 +376,7 @@ class MarkComparison:
         self.first: Optional[str] = None
 
     # -- taking them in ---------------------------------------------------
-    def mark(self, frame: int, name: str, fields: Dict[str, Any]) -> bool:
+    def mark(self, frame: int, name: str, fields: dict[str, Any]) -> bool:
         """Answer the next recorded mark with this one; True if they agree."""
         expected = (self.expected[self.made] if self.made < len(self.expected)
                     else None)
@@ -426,11 +427,11 @@ class MarkComparison:
 
     # -- what came of it --------------------------------------------------
     @property
-    def missing(self) -> List[Dict[str, Any]]:
+    def missing(self) -> list[dict[str, Any]]:
         """Recorded marks the replay has not reached: what it never did."""
         return self.expected[self.made:]
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         """The comparison as numbers, for an overlay or a report."""
         return {'recorded': len(self.expected), 'made': self.made,
                 'matched': self.matched, 'diverged': self.diverged,
@@ -459,8 +460,8 @@ def _count(number: int, thing: str) -> str:
     return '%d %s%s' % (number, thing, '' if number == 1 else 's')
 
 
-def _difference(expected: Optional[Dict[str, Any]], frame: int, name: str,
-                fields: Dict[str, Any]) -> Optional[str]:
+def _difference(expected: Optional[dict[str, Any]], frame: int, name: str,
+                fields: dict[str, Any]) -> Optional[str]:
     """How a mark differs from the one it should have answered, or None."""
     if expected is None:
         return 'a mark the recording does not hold: %s' % (
@@ -482,7 +483,7 @@ def _difference(expected: Optional[Dict[str, Any]], frame: int, name: str,
     return None
 
 
-def _describe(name: str, fields: Dict[str, Any]) -> str:
+def _describe(name: str, fields: dict[str, Any]) -> str:
     """A mark as a reader wants to see it: its name and what it carried."""
     if not fields:
         return name
@@ -490,7 +491,7 @@ def _describe(name: str, fields: Dict[str, Any]) -> str:
         '%s=%s' % (key, value) for key, value in sorted(fields.items())))
 
 
-def _as_data(fields: Dict[str, Any]) -> Dict[str, Any]:
+def _as_data(fields: dict[str, Any]) -> dict[str, Any]:
     """A live mark's fields as the data a journal would have written for them.
 
     Through the journal's own serialiser, so what is compared is what would

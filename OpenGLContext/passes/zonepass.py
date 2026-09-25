@@ -20,10 +20,8 @@ from __future__ import annotations
 
 import logging
 from types import MappingProxyType
-from typing import (
-    TYPE_CHECKING, Any, Dict, FrozenSet, Hashable, List, Mapping, Optional,
-    Sequence, Set, Tuple,
-)
+from collections.abc import Hashable, Mapping, Sequence
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
@@ -70,7 +68,7 @@ class _ObjectZones:
                  'slots', 'row')
 
     def __init__(self, path: Any, matrix: Any, bounds: Any, epoch: int,
-                 cell: Tuple[int, ...], kept: List[Any],
+                 cell: tuple[int, ...], kept: list[Any],
                  reach: Optional[zonelayers.Reach]) -> None:
         self.path = path
         self.matrix = matrix
@@ -81,15 +79,15 @@ class _ObjectZones:
         self.kept = kept
         self.reach = reach
         self.mask = 0
-        self.layers: Tuple[float, ...] = ()
+        self.layers: tuple[float, ...] = ()
         self.pack: Optional[ZonePack] = None
         self.scale = 0.0
-        self.centre: Optional[Tuple[float, float, float]] = None
+        self.centre: Optional[tuple[float, float, float]] = None
         self.slack = 0.0
         self.version = -1
         #: :func:`~OpenGLContext.passes.zonelayers.light_decision`, and the
         #: slot version ``mask`` was made for.
-        self.lights: Tuple[FrozenSet[Any], bool] = (frozenset(), False)
+        self.lights: tuple[frozenset[Any], bool] = (frozenset(), False)
         self.slots = -1
         self.row: Optional[int] = None
 
@@ -122,7 +120,7 @@ class ZonesMixin(PassResources):
     """Zones for a render pass; see the module docstring."""
 
     if TYPE_CHECKING:  # pragma: no cover - what the pass supplies
-        paths: Dict[type, List[Any]]
+        paths: dict[type, list[Any]]
         shader_program: Any
         _ibl_probe: Any
         activeFrame: Any
@@ -132,7 +130,7 @@ class ZonesMixin(PassResources):
         _reflection_lookups: Mapping[Any, Any]
 
         def applyViewFrame(self, frame: Any, gl: bool = True) -> None: ...
-        def renderSet(self, matrix: Any, gathered: Any) -> List[Any]: ...
+        def renderSet(self, matrix: Any, gathered: Any) -> list[Any]: ...
         def frameGather(self) -> Any: ...
         def setupViewLighting(self, view: Any, lighting: Any,
                               fitted: bool = True) -> None: ...
@@ -149,23 +147,23 @@ class ZonesMixin(PassResources):
     _environmentZones: Sequence[PlacedZone] = ()
     _lightZones: Sequence[PlacedZone] = ()
     #: Each light node a zone names, with the zones naming it.
-    _controlledLights: Mapping[Any, List[PlacedZone]] = MappingProxyType({})
+    _controlledLights: Mapping[Any, list[PlacedZone]] = MappingProxyType({})
     #: Bumped when every object's answer is let go of at once.
     _zoneEpoch = 0
     #: What each object was last worked out to get, by id of its path, which
     #: is a list and not hashable. The entry holds the path, so the id is not
     #: reused while it is kept, and a lookup checks the entry is the path's.
-    _zoneObjects: Optional[Dict[int, '_ObjectZones']] = None
+    _zoneObjects: Optional[dict[int, '_ObjectZones']] = None
     #: Where each object's answer holds, to find those a changed zone reaches.
     _objectBoxes: Optional[ObjectBoxes] = None
     #: Each zone's placement, reused while nothing about the zone has changed.
-    _zonePlacements: Optional[Dict[Tuple[Zone, int], Any]] = None
+    _zonePlacements: Optional[dict[tuple[Zone, int], Any]] = None
     #: What the program was last handed, so a run of alike draws uploads once.
     _zoneApplied: Any = None
     _lightsOffApplied = 0
     #: The light node bound to each slot, in slot order, for the light mask.
     boundLights: Sequence[Any] = ()
-    _boundLightsSeen: Tuple[Any, ...] = ()
+    _boundLightsSeen: tuple[Any, ...] = ()
     #: The camera the current view looks from, in the world.
     _zoneCamera: Optional[np.ndarray] = None
     #: Captures of zone probes, and the target they are drawn into.
@@ -176,7 +174,7 @@ class ZonesMixin(PassResources):
     _zoneLighting: Any = None
     _probeLost = 0
     #: Image-based lights given a layer and not yet uploaded into it.
-    _imageLights: Optional[Dict[Any, Any]] = None
+    _imageLights: Optional[dict[Any, Any]] = None
     #: What the scene's own image-based light was last uploaded against.
     _sceneLightMark: Any = None
     _zoneWarned = False
@@ -191,10 +189,10 @@ class ZonesMixin(PassResources):
     _allTable: Optional[zonelayers.ZoneTable] = None
     #: Every environment zone's distance from this view's camera, made the
     #: first time an object crossing too many zones asks.
-    _nearness: Optional[Dict[PlacedZone, float]] = None
+    _nearness: Optional[dict[PlacedZone, float]] = None
     #: Every zone's weight at the last point asked about, with the table and
     #: the point it was worked out for.
-    _weightsAt: Optional[Tuple[Any, Tuple[float, ...], Dict[PlacedZone, float]]] = None
+    _weightsAt: Optional[tuple[Any, tuple[float, ...], dict[PlacedZone, float]]] = None
     #: Bumped whenever a probe layer's answer may have changed: a capture or
     #: an upload finishing, a capture starting or ending, a probe lost, the
     #: environment mode changing. A draw re-reads its layers only then.
@@ -202,12 +200,12 @@ class ZonesMixin(PassResources):
     _probeSignature: Any = None
     #: Each instanced group's box, by the group's key, with the member
     #: matrices and bounds it was made from.
-    _zoneGroups: Optional[Dict[Hashable, Tuple[Tuple[Any, ...], Tuple[Any, ...],
+    _zoneGroups: Optional[dict[Hashable, tuple[tuple[Any, ...], tuple[Any, ...],
                                                '_GroupBox', np.ndarray]]] = None
     #: Bumped when lights are bound to different slots.
     _slotVersion = 0
     #: The camera's cell for the view being drawn.
-    _zoneCell: Tuple[int, ...] = ()
+    _zoneCell: tuple[int, ...] = ()
 
     def disposeResources(self) -> None:
         """Release the target zone probes are captured into."""
@@ -215,7 +213,7 @@ class ZonesMixin(PassResources):
         super().disposeResources()
 
     # -- once a frame --------------------------------------------------------
-    def placeZones(self) -> List[PlacedZone]:
+    def placeZones(self) -> list[PlacedZone]:
         """Place every zone in the scene for this frame, and return them."""
         if self._zonePlacements is None:
             self._zonePlacements = {}
@@ -230,7 +228,7 @@ class ZonesMixin(PassResources):
             self._zonesChanged(before, placed, [zone for zone, _matrix in found])
         return placed
 
-    def _zonesChanged(self, before: Sequence[PlacedZone], placed: List[PlacedZone],
+    def _zonesChanged(self, before: Sequence[PlacedZone], placed: list[PlacedZone],
                       nodes: Sequence[Zone]) -> None:
         """Take ``placed`` as the frame's zones, where they differ from ``before``.
 
@@ -241,7 +239,7 @@ class ZonesMixin(PassResources):
         classified again.
         """
         assert self._zonePlacements is not None
-        seen: Dict[Zone, int] = {}
+        seen: dict[Zone, int] = {}
         for node in nodes:
             seen[node] = seen.get(node, 0) + 1
         for key in [key for key in self._zonePlacements if key[1] >= seen.get(key[0], 0)]:
@@ -275,9 +273,9 @@ class ZonesMixin(PassResources):
                 held.epoch = -1
 
     @staticmethod
-    def _captureKeys(placed: Sequence[PlacedZone]) -> Set[Any]:
+    def _captureKeys(placed: Sequence[PlacedZone]) -> set[Any]:
         """What a probe layer may be held for: each zone, and each image light a zone names."""
-        keys: Set[Any] = set()
+        keys: set[Any] = set()
         for zone in placed:
             keys.add(zone.zone)
             light = getattr(zone.setting(ENVIRONMENT), 'light', None)
@@ -327,7 +325,7 @@ class ZonesMixin(PassResources):
 
     # -- once a draw ---------------------------------------------------------
     def zoneState(self, path: Any, tmatrix: Any, bvolume: Any
-                  ) -> Tuple[Optional[ZonePack], int]:
+                  ) -> tuple[Optional[ZonePack], int]:
         """The environment layers and light mask the zones give one object.
 
         Which zones reach the object is kept until a zone moves or the object
@@ -427,7 +425,7 @@ class ZonesMixin(PassResources):
         if stale:
             self._classify(stale)
 
-    def _classify(self, items: Sequence[Tuple[Any, Any, Any]]) -> None:
+    def _classify(self, items: Sequence[tuple[Any, Any, Any]]) -> None:
         """Classify ``(path, matrix, bounds)`` items against the zones, all at once."""
         objects = self._zoneObjects
         if objects is None:
@@ -475,8 +473,8 @@ class ZonesMixin(PassResources):
             held.row = rows.place(reused, held, lows[index], highs[index])
             objects[id(path)] = held  # noqa: OGC131 held is _ObjectZones(path, ...), which holds path
 
-    def _measure(self, items: Sequence[Tuple[Any, Any]]
-                 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def _measure(self, items: Sequence[tuple[Any, Any]]
+                 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """The world boxes and bounding spheres of many ``(matrix, bounds)``.
 
         Returns ``(lows, highs, scales, radii, centres)``: each object's world
@@ -548,13 +546,13 @@ class ZonesMixin(PassResources):
     #: zones than the shader holds has its nearest zones chosen again.
     CAMERA_CELL = 32.0
 
-    def _cameraNearness(self) -> Optional[Dict[PlacedZone, float]]:
+    def _cameraNearness(self) -> Optional[dict[PlacedZone, float]]:
         if self._nearness is None and self._zoneCamera is not None \
                 and self._environmentTable is not None:
             self._nearness = self._environmentTable.nearness(self._zoneCamera)
         return self._nearness
 
-    def _cameraCell(self) -> Tuple[int, ...]:
+    def _cameraCell(self) -> tuple[int, ...]:
         camera = self._zoneCamera
         if camera is None:
             return ()
@@ -647,7 +645,7 @@ class ZonesMixin(PassResources):
             self._lightsOffApplied = mask
 
     @staticmethod
-    def worldBox(tmatrix: Any, bvolume: Any) -> Tuple[np.ndarray, np.ndarray]:
+    def worldBox(tmatrix: Any, bvolume: Any) -> tuple[np.ndarray, np.ndarray]:
         """The world-space box around an object's bounds, or a vast one without."""
         try:
             points = bvolume.getPoints() if bvolume is not None else ()
@@ -730,7 +728,7 @@ class ZonesMixin(PassResources):
         schedule = self._zoneCaptures
         return schedule is not None and schedule.settled(zone)
 
-    def zoneLightImage(self, zone: Any) -> Optional[Tuple[Any, Any]]:
+    def zoneLightImage(self, zone: Any) -> Optional[tuple[Any, Any]]:
         """``(irradiance, mips)`` of the ``Zone`` node ``zone``'s captured
         probe, read back from the GPU, or None before its first capture.
 
@@ -744,7 +742,7 @@ class ZonesMixin(PassResources):
         layer = None if schedule is None else schedule.layer(zone)
         if layer is None or probe is None:
             return None
-        found: Tuple[Any, Any] = probe.read_layer(layer)
+        found: tuple[Any, Any] = probe.read_layer(layer)
         return found
 
     def uploadImageLights(self, probe: Any) -> None:
@@ -768,7 +766,7 @@ class ZonesMixin(PassResources):
             if probe.upload_light(scene, 0):
                 self._sceneLightMark = mark
 
-    def _waitingLights(self) -> Dict[Any, Any]:
+    def _waitingLights(self) -> dict[Any, Any]:
         """The image-based lights given a layer and not yet uploaded into it."""
         if self._imageLights is None:
             self._imageLights = {}
@@ -820,7 +818,7 @@ class ZonesMixin(PassResources):
                 if bool(getattr(setting, 'capture', False)) \
                         and weights.get(placed, 0.0) >= 1.0:
                     schedule.camera_inside(placed.zone)
-        by_key: Dict[Hashable, PlacedZone] = {
+        by_key: dict[Hashable, PlacedZone] = {
             zone.zone: zone for zone in self._environmentZones}
         key = schedule.next(lambda k: self._captureDistance(by_key.get(k), camera))
         if key is None:
@@ -867,7 +865,7 @@ class ZonesMixin(PassResources):
         # capture if one is waiting.
         self._askForFrame()
 
-    def _everyImageLight(self) -> Dict[Any, Any]:
+    def _everyImageLight(self) -> dict[Any, Any]:
         """Every zone's image-based light, to upload again after a loss."""
         found = {}
         for zone in self._environmentZones:
@@ -968,7 +966,7 @@ class ZonesMixin(PassResources):
         return True
 
     @staticmethod
-    def _captureDepth(template: Any) -> Tuple[float, float]:
+    def _captureDepth(template: Any) -> tuple[float, float]:
         """The near and far planes of a capture, from the camera's own."""
         try:
             fovy, aspect, near, far = template.camera.frustum
@@ -995,9 +993,9 @@ class ZonesMixin(PassResources):
 
     # -- what the camera sees ------------------------------------------------
     #: The nodes zones hide from the view being culled.
-    _zoneHidden: FrozenSet[Any] = frozenset()
+    _zoneHidden: frozenset[Any] = frozenset()
 
-    def zoneHiddenAt(self, point: Optional[Any]) -> FrozenSet[Any]:
+    def zoneHiddenAt(self, point: Optional[Any]) -> frozenset[Any]:
         """The nodes the zones hide from a camera at ``point``.
 
         A node a ``ZoneVisibility`` shows is drawn only for a camera inside a
@@ -1007,8 +1005,8 @@ class ZonesMixin(PassResources):
         """
         if point is None or not self._zones:
             return frozenset()
-        named: Dict[Any, List[Tuple[Tuple[int, float], bool, float]]] = {}
-        weights: Optional[Dict[PlacedZone, float]] = None
+        named: dict[Any, list[tuple[tuple[int, float], bool, float]]] = {}
+        weights: Optional[dict[PlacedZone, float]] = None
         for zone in self._zones:
             setting = zone.setting(VISIBILITY)
             if not isinstance(setting, ZoneVisibility) or not bool(setting.enabled):
@@ -1021,7 +1019,7 @@ class ZonesMixin(PassResources):
                     ((zone.priority, -zone.volume), bool(setting.visible), weight))
         if not named:
             return frozenset()
-        hidden: Set[Any] = set()
+        hidden: set[Any] = set()
         for node, entries in named.items():
             inside = [entry for entry in entries if entry[2] > 0.0]
             if inside:
@@ -1053,7 +1051,7 @@ class ZonesMixin(PassResources):
         path = record[4]
         on_path = set(path)
         candidates = []
-        names: Dict[Any, List[Any]] = {}
+        names: dict[Any, list[Any]] = {}
         controlled = False
         weights = self.zoneWeightsAt(eye)
         for zone in self._zones:
@@ -1097,7 +1095,7 @@ class ZonesMixin(PassResources):
                 return True
         return False
 
-    def zoneWeightsAt(self, point: Any) -> Dict[PlacedZone, float]:
+    def zoneWeightsAt(self, point: Any) -> dict[PlacedZone, float]:
         """Every zone's weight at ``point``, by its placement.
 
         Worked out for every zone at once, and kept for as long as the zones

@@ -37,10 +37,11 @@ it had been installed as its own console script.
 import importlib
 import os
 import sys
-from typing import Any, Callable, List, Mapping, Optional, Sequence, Set, Union
+from collections.abc import Callable, Mapping, Sequence
+from typing import Any, Optional, Union
 
 #: A command is the function itself, or the ``'module:attribute'`` name of one.
-Command = Union[str, Callable[[], Any]]
+Command = str | Callable[[], Any]
 
 __all__ = ['command_modules', 'command_name', 'load', 'run']
 
@@ -114,14 +115,14 @@ def load(command: Command) -> Callable[[], Any]:
     return found
 
 
-def command_modules(commands: Mapping[str, Command]) -> List[str]:
+def command_modules(commands: Mapping[str, Command]) -> list[str]:
     """The modules the named commands live in, as a sorted list
 
     A freezer follows import statements and so cannot see a command named as a
     string; this is what to tell it about. Commands given as functions are
     already reached by the import that produced them and are not reported.
     """
-    modules: Set[str] = set()
+    modules: set[str] = set()
     for command in commands.values():
         if not callable(command):
             module = command.partition(':')[0]

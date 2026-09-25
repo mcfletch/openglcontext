@@ -20,7 +20,7 @@ import logging
 import os
 import re
 import sys
-from typing import Iterable
+from collections.abc import Iterable
 
 from docbuild import markup
 

@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, replace
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 import numpy as np
 
@@ -782,7 +782,7 @@ def _segment_directions(segments: Any) -> np.ndarray:
 
 
 def sweep_frames(line: np.ndarray, bank: Any = None, closed: bool = False
-                 ) -> Tuple[np.ndarray, np.ndarray]:
+                 ) -> tuple[np.ndarray, np.ndarray]:
     """Per-point (right, up) vectors for a centreline.
 
     The tangent at a point is the average of the segments meeting there, so the
@@ -868,7 +868,7 @@ def morphed_sections(profile: RoadProfile, other: RoadProfile,
 
 def road_surface(points: Any, profile: RoadProfile, sections: Any = None,
                  bank: Any = None, closed: bool = False, frames: Any = None
-                 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+                 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Sweep a profile along a centreline: positions, normals, UVs, indices.
 
     ``points`` is the centreline as (N,3) world positions, already at the height

@@ -20,7 +20,8 @@ Format-neutral: what a load *produces* is whatever :meth:`requestScene`'s
 """
 import logging
 import threading
-from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any, Optional
 
 log = logging.getLogger(__name__)
 
@@ -53,7 +54,7 @@ class AsyncSceneMixin(object):
     #: Guards the handover between the worker and the render thread.
     _loadLock: Optional[threading.Lock] = None
     #: ``(scene, error)`` waiting to be applied, or None.
-    _pendingScene: Optional[Tuple[Any, Any]] = None
+    _pendingScene: Optional[tuple[Any, Any]] = None
     #: Bumped per request; a worker whose token is stale is dropped.
     _loadToken: int = 0
 

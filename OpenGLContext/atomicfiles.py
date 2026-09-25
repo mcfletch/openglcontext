@@ -32,7 +32,8 @@ import sys
 import tempfile
 import threading
 import time
-from typing import IO, Any, Iterator
+from collections.abc import Iterator
+from typing import IO, Any
 
 __all__ = ['copy_file', 'file_lock', 'remove_directory', 'replace_directory',
            'staged_directory', 'staged_file', 'write_bytes', 'write_text']

@@ -27,7 +27,8 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Any, Callable, TypeVar
+from collections.abc import Callable
+from typing import Any, TypeVar
 
 from OpenGLContext import atomicfiles
 from OpenGLContext.loaders.resolver import contained_source

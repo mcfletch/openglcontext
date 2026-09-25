@@ -1,5 +1,5 @@
 """Event classes and manager relating to the keyboard"""
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 from OpenGLContext.events import event, eventmanager
 from OpenGL._bytes import as_str
@@ -33,7 +33,7 @@ class KeyboardEvent (event.Event):
     def name(self, value: Any) -> None:
         self._name = as_str(value)
 
-    def getKey (self) -> Tuple[str, int, Tuple[int, int, int]]:
+    def getKey (self) -> tuple[str, int, tuple[int, int, int]]:
         """Get the event key used to lookup a handler for this event"""
         return self.name, self.state, self.getModifiers()
 
@@ -65,7 +65,7 @@ class KeypressEvent( event.Event ):
     side: int = 0 # 1 = left, 2 = right, 3= keypad may not be available everywhere
     repeating: int = 0 # if true, this is a virtual event generated as a typematic repeat
 
-    def getKey (self) -> Tuple[str, Tuple[int, int, int]]:
+    def getKey (self) -> tuple[str, tuple[int, int, int]]:
         """Get the event key used to lookup a handler for this event"""
         return (self.name, self.getModifiers())
 
@@ -77,7 +77,7 @@ class KeyboardEventManager (eventmanager.EventManager):
     # routes on and assembles the key the base method registers under.
     def registerCallback(  # type: ignore[override]  # takes the fields its event routes on, not the base's key
         self, name: Any = None, state: Any = 0,
-        modifiers: Tuple[int, int, int] = (0, 0, 0), function: Any = None,
+        modifiers: tuple[int, int, int] = (0, 0, 0), function: Any = None,
     ) -> Any:
         """Register a function to receive keyboard events matching
         the given specification  To deregister, pass None as the
@@ -116,14 +116,14 @@ class KeyboardEventManager (eventmanager.EventManager):
 
         returns the previous handler or None
         """
-        key: Optional[Tuple[Any, ...]] = None
+        key: Optional[tuple[Any, ...]] = None
         if name is not None:
             key = as_str(name), state, modifiers
         return super( KeyboardEventManager, self).registerCallback( key, function )
 class KeypressEventManager (eventmanager.EventManager):
     type = KeypressEvent.type
     def registerCallback(  # type: ignore[override]  # takes the fields its event routes on, not the base's key
-        self, name: Any = None, modifiers: Tuple[int, int, int] = (0, 0, 0),
+        self, name: Any = None, modifiers: tuple[int, int, int] = (0, 0, 0),
         function: Any = None,
     ) -> Any:
         """Register a function to receive keyboard events matching
@@ -159,7 +159,7 @@ class KeypressEventManager (eventmanager.EventManager):
             
         returns the previous handler or None
         """
-        key: Optional[Tuple[Any, ...]] = None
+        key: Optional[tuple[Any, ...]] = None
         if name is not None:
             key = as_str(name), modifiers
         return super( KeypressEventManager, self).registerCallback( key, function )

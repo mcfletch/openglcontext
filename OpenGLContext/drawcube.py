@@ -9,7 +9,8 @@ This version was taken from the NeHe tutorials,
 to replace the original which did not include
 texture coordinate information.
 """
-from typing import Callable, Optional
+from collections.abc import Callable
+from typing import Optional
 
 from OpenGL.GL import *
 from OpenGL.arrays import vbo

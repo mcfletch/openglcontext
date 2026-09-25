@@ -18,7 +18,8 @@ a :class:`~OpenGLContext.scenegraph.fog.Fog` rather than on an overlay.
 """
 from __future__ import annotations
 
-from typing import Dict, Iterable, Optional, Tuple
+from collections.abc import Iterable
+from typing import Optional
 
 from vrml import field, node
 
@@ -75,7 +76,7 @@ class Medium(node.Node):
 #: still. Lava is opaque and closer than arm's length, because you cannot see
 #: through molten rock and somebody who has fallen into it should be in no
 #: doubt which of the three they are in.
-MEDIA: Dict[str, Medium] = {
+MEDIA: dict[str, Medium] = {
     WATER: Medium(name=WATER, color=(0.004, 0.022, 0.030), visibility=9.0,
                   muffle=0.75, harm=0.0),
     SLIME: Medium(name=SLIME, color=(0.012, 0.030, 0.006), visibility=4.5,
@@ -92,7 +93,7 @@ UNKNOWN = MEDIA[WATER]
 #: The substances **worst first**. A body may span several, and whoever is in
 #: them needs to hear about the one that will hurt them rather than the one
 #: that happened to be found first.
-SEVERITY: Tuple[str, ...] = (LAVA, SLIME, WATER)
+SEVERITY: tuple[str, ...] = (LAVA, SLIME, WATER)
 
 
 def medium_for(name: Optional[str]) -> Optional[Medium]:

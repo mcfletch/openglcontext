@@ -1,5 +1,6 @@
 '''Simple utility functions that should really be in a C module'''
-from typing import Any, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any
 
 from OpenGLContext.arrays import (
     cos,sin,array,asarray,zeros,reshape,compress,allclose,dot,
@@ -46,7 +47,7 @@ def pointNormal2Plane( point: Any, normal: Any ) -> Any:
     result[3] = - dot(normal, point)
     return result
 
-def plane2PointNormal( plane: Any ) -> Tuple[Any, Any]:
+def plane2PointNormal( plane: Any ) -> tuple[Any, Any]:
     """Get a point and normal from a plane equation"""
     (a,b,c,d) = plane
     return asarray((-d*a,-d*b,-d*c),'f'), asarray((a,b,c),'f')

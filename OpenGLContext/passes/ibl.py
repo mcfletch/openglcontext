@@ -25,7 +25,8 @@ from __future__ import annotations
 
 import os
 import logging
-from typing import Any, Callable, List, Optional, Tuple
+from collections.abc import Callable
+from typing import Any, Optional
 
 import numpy as np
 
@@ -390,7 +391,7 @@ class IBLProbe(object):
         #: The convolution programs, kept while the probe lives once a layer
         #: other than the scene's has been filled, since zones fill theirs
         #: one at a time over many frames.
-        self._convolvers: Optional[Tuple[int, int]] = None
+        self._convolvers: Optional[tuple[int, int]] = None
         #: Counts the times the layers past the scene's were lost -- the arrays
         #: were rebuilt or grown without a copy -- so whoever filled them can
         #: tell it must fill them again.
@@ -831,7 +832,7 @@ class IBLProbe(object):
         finally:
             glBindTexture(target, 0)
 
-    def read_layer(self, layer: int = 0) -> Tuple[List[np.ndarray], List[List[np.ndarray]]]:
+    def read_layer(self, layer: int = 0) -> tuple[list[np.ndarray], list[list[np.ndarray]]]:
         """The irradiance faces and the prefiltered mip chain of one layer, as float RGB.
 
         What :meth:`upload_light` puts in, read back: six ``(n, n, 3)``
@@ -842,7 +843,7 @@ class IBLProbe(object):
         target = GL_TEXTURE_CUBE_MAP_ARRAY if self.arrayed else GL_TEXTURE_CUBE_MAP
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
 
-        def faces_of(texture: Optional[int], level: int, size: int) -> List[np.ndarray]:
+        def faces_of(texture: Optional[int], level: int, size: int) -> list[np.ndarray]:
             glBindTexture(target, texture or 0)
             try:
                 if self.arrayed:

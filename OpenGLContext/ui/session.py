@@ -35,7 +35,8 @@ Two rules the copying keeps:
 
 from __future__ import annotations
 
-from typing import Any, Callable, List, Optional, Set
+from collections.abc import Callable
+from typing import Any, Optional
 
 from pydispatch import dispatcher
 from vrml import node as vrmlnode, protofunctions
@@ -51,7 +52,7 @@ _INTERNAL = ('externalURL',)
 TRANSIENT_ATTRIBUTE = 'TRANSIENT_FIELDS'
 
 
-def _editableFields(source: Any) -> List[Any]:
+def _editableFields(source: Any) -> list[Any]:
     """The fields a session copies: the settings, and nothing else.
 
     Out: the node system's own bookkeeping, and anything the class declares in
@@ -200,8 +201,8 @@ class SettingsSession:
             except dispatcher.errors.DispatcherError:
                 pass
 
-    def _draftNodes(self) -> List[Any]:
-        found: List[Any] = []
+    def _draftNodes(self) -> list[Any]:
+        found: list[Any] = []
         _collectNodes(self.draft, found)
         return found
 
@@ -226,7 +227,7 @@ class SettingsSession:
             self._dirtyKnown = not nodes_equal(self.draft, self.target)
         return self._dirtyKnown
 
-    def changed_fields(self) -> Set[str]:
+    def changed_fields(self) -> set[str]:
         """The names of the fields the user actually moved.
 
         Against the values the session opened with rather than against the
@@ -312,7 +313,7 @@ class SettingsSession:
         return current
 
 
-def _collectNodes(current: Any, found: List[Any]) -> None:
+def _collectNodes(current: Any, found: list[Any]) -> None:
     """Every node in a tree, the root first, with no node visited twice."""
     if any(current is seen for seen in found):
         return

@@ -12,7 +12,8 @@ for the volumes worlds actually have.
 """
 from __future__ import annotations
 
-from typing import Any, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 from vrml import field, node
@@ -56,7 +57,7 @@ class Volume(node.Node):
                                          strict=True))))
 
     @classmethod
-    def below(cls, minimum: Tuple[float, float], maximum: Tuple[float, float],
+    def below(cls, minimum: tuple[float, float], maximum: tuple[float, float],
               level: float, depth: float, medium: str = WATER) -> 'Volume':
         """A sheet of water over a footprint, and the ``depth`` under it.
 

@@ -32,7 +32,8 @@ from __future__ import annotations
 import logging
 import threading
 from collections import OrderedDict
-from typing import Any, Callable, List, Optional, Tuple
+from collections.abc import Callable
+from typing import Any, Optional
 
 from OpenGLContext.loaders.resolver import checked_url, fetch_to_cache, is_url
 
@@ -82,7 +83,7 @@ UPLOADS_PER_PUMP = 2
 DEFAULT_WORKERS = 2
 
 #: An entry: the texture, and the size it was decoded at.
-Entry = Tuple[Any, int, int]
+Entry = tuple[Any, int, int]
 
 
 class PictureCache(object):
@@ -126,7 +127,7 @@ class PictureCache(object):
         #: Texels held by :attr:`_resident`, kept rather than recomputed.
         self._texels = 0
         #: url -> (width, height, rgba) waiting for the render thread.
-        self._decoded: "OrderedDict[str, Tuple[int, int, bytes]]" = OrderedDict()
+        self._decoded: "OrderedDict[str, tuple[int, int, bytes]]" = OrderedDict()
         #: urls being decoded, or known bad.
         self._working: set = set()
         self._bad: set = set()
@@ -195,7 +196,7 @@ class PictureCache(object):
         if self.onReady is not None:
             self.onReady()          # outside the lock: it will ask for a frame
 
-    def _read(self, url: str) -> Tuple[int, int, bytes]:
+    def _read(self, url: str) -> tuple[int, int, bytes]:
         """``(width, height, rgba)`` for a path or an http(s) URL.
 
         **Flipped top-to-bottom on the way in.**  PIL hands over its rows top
@@ -284,7 +285,7 @@ class PictureCache(object):
     def clear(self) -> None:
         """Delete every texture.  The cache is usable again afterwards."""
         with self._lock:
-            entries: List[Entry] = list(self._resident.values())
+            entries: list[Entry] = list(self._resident.values())
             self._resident.clear()
             self._decoded.clear()
             self._bad.clear()

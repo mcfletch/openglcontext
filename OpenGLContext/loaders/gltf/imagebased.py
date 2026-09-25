@@ -24,7 +24,7 @@ from __future__ import annotations
 import io
 import logging
 import math
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Optional
 
 import numpy as np
 
@@ -54,9 +54,9 @@ class ImageLights:
         entries = block.get('lights') if isinstance(block, dict) else None
         self._g = g
         self._resolver = resolver
-        self._entries: List[Any] = entries if isinstance(entries, list) else []
-        self._lights: Dict[int, Optional[ImageBasedLight]] = {}
-        self._images: Dict[int, Optional[np.ndarray]] = {}
+        self._entries: list[Any] = entries if isinstance(entries, list) else []
+        self._lights: dict[int, Optional[ImageBasedLight]] = {}
+        self._images: dict[int, Optional[np.ndarray]] = {}
         self._values = DocumentValues(logger=log)
 
     def __len__(self) -> int:
@@ -101,7 +101,7 @@ class ImageLights:
         mips = entry.get('specularImages')
         if not (isinstance(mips, list) and mips):
             raise _Refused('specularImages is not a list of mips')
-        specular: List[List[np.ndarray]] = []
+        specular: list[list[np.ndarray]] = []
         for level, faces in enumerate(mips):
             if not isinstance(faces, list) or len(faces) != 6:
                 raise _Refused('mip %d is not six image indices' % (level,))
@@ -146,7 +146,7 @@ def _decoded(g: Any, index: int, resolver: Any) -> Optional[np.ndarray]:
     return decode_rgbd(np.asarray(image)).astype('f4')
 
 
-def _face_size(faces: List[np.ndarray], level: int) -> int:
+def _face_size(faces: list[np.ndarray], level: int) -> int:
     """How many pixels across one mip's six faces are, all alike and square."""
     sizes = {face.shape[:2] for face in faces}
     if len(sizes) != 1:
@@ -158,7 +158,7 @@ def _face_size(faces: List[np.ndarray], level: int) -> int:
     return int(width)
 
 
-def _coefficients(raw: Any) -> Optional[List[Tuple[float, ...]]]:
+def _coefficients(raw: Any) -> Optional[list[tuple[float, ...]]]:
     """Nine rows of three finite numbers, or None."""
     if not isinstance(raw, list) or len(raw) != 9:
         return None

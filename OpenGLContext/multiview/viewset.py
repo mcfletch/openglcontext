@@ -27,7 +27,8 @@ event belongs to.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple, Union
+from collections.abc import Iterable, Mapping, Sequence
+from typing import Any, Optional, Union
 
 import numpy as np
 
@@ -40,7 +41,7 @@ __all__ = ['ViewSet', 'fit_view']
 ARRANGEMENT_FOR = {1: 'single', 2: 'split', 4: 'quad'}
 
 #: A corner of a box: three numbers, however they are held.
-Box = Union[Sequence[float], np.ndarray]
+Box = Sequence[float] | np.ndarray
 
 
 class ViewSet:
@@ -58,13 +59,13 @@ class ViewSet:
                  arrangements: Optional[Mapping[str, Iterable[Any]]] = None,
                  mode: Optional[str] = None,
                  driven: Optional[Iterable[Any]] = None,
-                 split_at: Tuple[float, float] = (0.5, 0.5)) -> None:
-        self.views: List[View] = list(views)
+                 split_at: tuple[float, float] = (0.5, 0.5)) -> None:
+        self.views: list[View] = list(views)
         if not self.views:
             raise ValueError('a view set holds at least one view')
         chosen = (arrangements if arrangements is not None
                   else self._offered())
-        self._layouts: Dict[str, ViewLayout] = {
+        self._layouts: dict[str, ViewLayout] = {
             name: self._layout(name, shown, split_at)
             for name, shown in chosen.items()}
         #: Which arrangement is up.
@@ -81,9 +82,9 @@ class ViewSet:
         self.gestures = ViewGestures(self._layouts[self.mode])
         self.show(self.mode)
 
-    def _offered(self) -> Dict[str, Tuple[View, ...]]:
+    def _offered(self) -> dict[str, tuple[View, ...]]:
         """Each view alone, the first two side by side, and four in a quad."""
-        offered: Dict[str, Tuple[View, ...]] = {
+        offered: dict[str, tuple[View, ...]] = {
             view.name or 'view %d' % index: (view,)
             for index, view in enumerate(self.views)}
         if len(self.views) >= 2:
@@ -111,7 +112,7 @@ class ViewSet:
                          % (view, ', '.join(mine.name for mine in self.views)))
 
     def _layout(self, name: str, shown: Iterable[Any],
-                split_at: Tuple[float, float]) -> ViewLayout:
+                split_at: tuple[float, float]) -> ViewLayout:
         chosen = [self.named(view) for view in shown]
         arrangement = ARRANGEMENT_FOR.get(len(chosen))
         if arrangement is None:
@@ -122,7 +123,7 @@ class ViewSet:
 
     # -- the arrangements --------------------------------------------------
     @property
-    def arrangements(self) -> Dict[str, ViewLayout]:
+    def arrangements(self) -> dict[str, ViewLayout]:
         """The arrangements on offer, by name, in the order they were given."""
         return dict(self._layouts)
 
@@ -168,12 +169,12 @@ class ViewSet:
         self.layout.maximise(view)
 
     # -- placing them ------------------------------------------------------
-    def arrange(self, width: int, height: int) -> List[View]:
+    def arrange(self, width: int, height: int) -> list[View]:
         """Place the views in a window this size; the ones to draw, in order."""
         self.window = (int(width) or 1, int(height) or 1)
         return self.layout.arrange(*self.window)
 
-    def size(self, view: View) -> Tuple[int, int]:
+    def size(self, view: View) -> tuple[int, int]:
         """A view's own size, or the window's where the arrangement hides it.
 
         A view that is about to be shown is measured by the window, so framing
@@ -182,7 +183,7 @@ class ViewSet:
         """
         return view.size if view.visible else self.window
 
-    def local(self, view: View, x: float, y: float) -> Tuple[float, float]:
+    def local(self, view: View, x: float, y: float) -> tuple[float, float]:
         """Window pixel ``(x, y)`` in ``view``'s own pixels."""
         return view.local(x, y)
 
@@ -209,7 +210,7 @@ class ViewSet:
 
 
 def fit_view(view: View, minimum: Box, maximum: Box,
-             size: Tuple[int, int]) -> bool:
+             size: tuple[int, int]) -> bool:
     """Fit a box into one view; False for a view with no camera to fit it in.
 
     Each camera is framed as its kind is: an orthographic view and one that

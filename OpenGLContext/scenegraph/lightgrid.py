@@ -30,7 +30,7 @@ pass, which finds the node in the scenegraph and lights each object that
 carries no lightmap of its own with it -- see
 :mod:`OpenGLContext.passes.pbrpass` and ``docs/pbr.rst``.
 """
-from typing import Any, List, Optional, Tuple
+from typing import Any, Optional
 
 import numpy as np
 from vrml import field, node
@@ -94,7 +94,7 @@ class LightGrid(nodetypes.Children, node.Node):
         return len(self.ambient) >= shape[0] * shape[1] * shape[2]
 
     @property
-    def shape(self) -> Tuple[int, ...]:
+    def shape(self) -> tuple[int, ...]:
         """``counts`` as a tuple of three ints, or ``()`` if it is not three."""
         counts = self.counts
         if len(counts) != 3:
@@ -103,8 +103,8 @@ class LightGrid(nodetypes.Children, node.Node):
         return () if min(found) < 1 else found
 
     def cell(self, point: Any,
-             counts: Optional[Tuple[int, ...]] = None
-             ) -> Tuple[float, float, float]:
+             counts: Optional[tuple[int, ...]] = None
+             ) -> tuple[float, float, float]:
         """Where ``point`` falls in the grid, in samples rather than metres.
 
         Clamped to the grid, so a point outside it lands on the boundary and
@@ -130,7 +130,7 @@ class LightGrid(nodetypes.Children, node.Node):
             found.append(min(max(value, 0.0), limit))
         return (found[0], found[1], found[2])
 
-    def sample(self, point: Any) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    def sample(self, point: Any) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """The light at ``point``, as (ambient, directional, direction).
 
         The two irradiances are linear colours scaled by :attr:`intensity`;
@@ -160,8 +160,8 @@ class LightGrid(nodetypes.Children, node.Node):
         return ambient, directional, direction / length
 
     @staticmethod
-    def _corners(position: Tuple[float, float, float],
-                 counts: Tuple[int, ...]) -> Tuple[List[int], np.ndarray]:
+    def _corners(position: tuple[float, float, float],
+                 counts: tuple[int, ...]) -> tuple[list[int], np.ndarray]:
         """The eight samples around ``position`` and what each contributes.
 
         Spelled out rather than looped because the eight of them are the whole

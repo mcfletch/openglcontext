@@ -24,7 +24,8 @@ than a missing one.
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from collections.abc import Iterable, Sequence
+from typing import Any, Optional
 
 from vrml import protofunctions
 
@@ -64,7 +65,7 @@ ACRONYMS = frozenset((
 _CAMEL = re.compile(r'(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])')
 
 
-def label_for(name: str, hint: Optional[Dict[str, Any]] = None) -> str:
+def label_for(name: str, hint: Optional[dict[str, Any]] = None) -> str:
     """What to call a field on screen: its hint, or its name made readable.
 
     Sentence case, because a settings page is a list of things rather than a
@@ -86,13 +87,13 @@ def _word(word: str, first: bool) -> str:
     return word.capitalize() if first else word.lower()
 
 
-def hints_for(node: Any) -> Dict[str, Dict[str, Any]]:
+def hints_for(node: Any) -> dict[str, dict[str, Any]]:
     """The presentation hints for a node, base classes included.
 
     Walked from the base classes down so a subclass can refine how an inherited
     field is shown -- a swim speed and a walk speed want different ranges.
     """
-    merged: Dict[str, Dict[str, Any]] = {}
+    merged: dict[str, dict[str, Any]] = {}
     for klass in reversed(type(node).__mro__):
         declared = klass.__dict__.get(HINTS_ATTRIBUTE)
         if not declared:
@@ -102,7 +103,7 @@ def hints_for(node: Any) -> Dict[str, Dict[str, Any]]:
     return merged
 
 
-def editor_for(node: Any, name: str, hint: Optional[Dict[str, Any]] = None
+def editor_for(node: Any, name: str, hint: Optional[dict[str, Any]] = None
                ) -> Optional[Widget]:
     """The widget that edits one field, or None if it has no simple editor.
 
@@ -140,8 +141,8 @@ def editor_for(node: Any, name: str, hint: Optional[Dict[str, Any]] = None
     return None
 
 
-def _numberEditor(kind: str, hint: Dict[str, Any],
-                  common: Dict[str, Any]) -> Widget:
+def _numberEditor(kind: str, hint: dict[str, Any],
+                  common: dict[str, Any]) -> Widget:
     integer = kind in ('SFInt32', 'SFUInt32')
     if 'minimum' in hint and 'maximum' in hint:
         return Slider(minimum=float(hint['minimum']),
@@ -156,7 +157,7 @@ def _numberEditor(kind: str, hint: Dict[str, Any],
     return NumberField(integer=integer, **common)
 
 
-def page_for(node: Any, hints: Optional[Dict[str, Dict[str, Any]]] = None,
+def page_for(node: Any, hints: Optional[dict[str, dict[str, Any]]] = None,
              include: Optional[Sequence[str]] = None,
              exclude: Iterable[str] = (), columns: int = 2) -> Grid:
     """A label/control grid for a node's fields.
@@ -173,7 +174,7 @@ def page_for(node: Any, hints: Optional[Dict[str, Dict[str, Any]]] = None,
     hints = dict(hints or hints_for(node))
     skipped = set(exclude)
     names = list(include) if include is not None else _fieldNames(node)
-    cells: List[Widget] = []
+    cells: list[Widget] = []
     for name in names:
         if name in skipped:
             continue
@@ -190,6 +191,6 @@ def page_for(node: Any, hints: Optional[Dict[str, Dict[str, Any]]] = None,
                 rowPadding=ROW_PADDING)
 
 
-def _fieldNames(node: Any) -> List[str]:
+def _fieldNames(node: Any) -> list[str]:
     return [definition.name for definition in protofunctions.getFields(node)
             if not definition.name.startswith(' ')]

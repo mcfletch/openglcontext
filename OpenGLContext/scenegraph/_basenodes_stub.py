@@ -20,7 +20,8 @@ from __future__ import annotations
 import ast
 import collections
 import os
-from typing import Dict, Iterable, Iterator, List, Optional, Tuple
+from collections.abc import Iterable, Iterator
+from typing import Optional
 
 #: Where the ``Node(...)`` registrations live, relative to the package root.
 REGISTRY_MODULE = '__init__.py'
@@ -41,11 +42,11 @@ A third party's node, registered by importing its own package, is not here and
 resolves as ``Any`` -- which is what a checker can say about a name whose class
 it has no declaration for.
 """
-from typing import Any, Dict
+from typing import Any
 
 #: Node classes by the name they are registered under, including any a third
 #: party added; ``basenodes.NAME`` is the same object.
-PROTOTYPES: Dict[str, Any]
+PROTOTYPES: dict[str, Any]
 
 '''
 
@@ -60,7 +61,7 @@ DYNAMIC_FAMILIES = (
 )
 
 
-def _dynamic_base(module: str, attribute: str) -> Optional[Tuple[str, str]]:
+def _dynamic_base(module: str, attribute: str) -> Optional[tuple[str, str]]:
     """The ``(module, base)`` a dynamically built node derives from, or None."""
     for family_module, prefix, base in DYNAMIC_FAMILIES:
         if module != family_module or not attribute.startswith(prefix):
@@ -84,7 +85,7 @@ def package_root(start: str) -> str:
     return here
 
 
-def _string(expression: ast.expr, bindings: Dict[str, str]) -> str:
+def _string(expression: ast.expr, bindings: dict[str, str]) -> str:
     """The value of a registration argument, or raise ``ValueError``.
 
     Two forms occur: a literal, and a literal prefix concatenated with the
@@ -101,15 +102,15 @@ def _string(expression: ast.expr, bindings: Dict[str, str]) -> str:
     raise ValueError(ast.dump(expression))
 
 
-def _literals(expression: ast.expr) -> List[str]:
+def _literals(expression: ast.expr) -> list[str]:
     """The strings a ``for`` loop's tuple or list iterates, or raise."""
     if isinstance(expression, (ast.Tuple, ast.List)):
         return [_string(element, {}) for element in expression.elts]
     raise ValueError(ast.dump(expression))
 
 
-def _calls(body: List[ast.stmt], bindings: Dict[str, str]
-           ) -> Iterator[Tuple[str, str]]:
+def _calls(body: list[ast.stmt], bindings: dict[str, str]
+           ) -> Iterator[tuple[str, str]]:
     for statement in body:
         if isinstance(statement, ast.For):
             if not isinstance(statement.target, ast.Name):
@@ -132,7 +133,7 @@ def _calls(body: List[ast.stmt], bindings: Dict[str, str]
             )
 
 
-def registrations(source: str) -> List[Tuple[str, str]]:
+def registrations(source: str) -> list[tuple[str, str]]:
     """The ``(name, import path)`` pairs of every ``Node(...)`` call in *source*.
 
     Both have to be worked out statically: a name a stub cannot spell is a name
@@ -152,9 +153,9 @@ def registrations(source: str) -> List[Tuple[str, str]]:
     return list(_calls(ast.parse(source).body, {}))
 
 
-def imports(pairs: Iterable[Tuple[str, str]]) -> Dict[str, List[Tuple[str, str]]]:
+def imports(pairs: Iterable[tuple[str, str]]) -> dict[str, list[tuple[str, str]]]:
     """Group ``(name, import path)`` pairs into module -> [(attribute, name)]."""
-    grouped: Dict[str, List[Tuple[str, str]]] = collections.defaultdict(list)
+    grouped: dict[str, list[tuple[str, str]]] = collections.defaultdict(list)
     for name, path in pairs:
         module, _dot, attribute = path.rpartition('.')
         grouped[module].append((attribute, name))
@@ -200,7 +201,7 @@ def stub_text(source: str) -> str:
     return ''.join(lines)
 
 
-def expected(start: str) -> Tuple[str, str]:
+def expected(start: str) -> tuple[str, str]:
     """``(path of the stub, what it should contain)`` for this checkout."""
     root = package_root(start)
     with open(os.path.join(root, REGISTRY_MODULE), encoding='utf-8') as handle:

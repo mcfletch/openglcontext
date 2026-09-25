@@ -21,7 +21,8 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from typing import Any, Dict, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from OpenGLContext.scenegraph import basenodes, surfaces
 
@@ -79,12 +80,12 @@ class LODHall:
     def __init__(self, finishes: Optional[Finishes] = None) -> None:
         self.finishes = finishes if finishes is not None else Finishes()
         self.tinted = False
-        self.chains: List[Any] = []
-        self.columns: List[Any] = []
+        self.chains: list[Any] = []
+        self.columns: list[Any] = []
         #: What each level's shapes wear untinted, by shape.
-        self._worn: Dict[Any, Any] = {}
+        self._worn: dict[Any, Any] = {}
         length = ROWS * SPACING
-        self.children: List[Any] = [
+        self.children: list[Any] = [
             basenodes.SimpleBackground(color=(0.55, 0.62, 0.72)),
             basenodes.DirectionalLight(direction=(-0.3, -1.0, -0.45),
                                        color=(1.0, 0.96, 0.9), intensity=2.4),
@@ -149,7 +150,7 @@ class LODHall:
         return scene.group
 
     # -- the keys ------------------------------------------------------------
-    def levels(self) -> List[List[Any]]:
+    def levels(self) -> list[list[Any]]:
         """Every level-of-detail node's levels, the orbs' first, then the columns'."""
         return [list(node.level) for node in self.chains + self.columns]
 
@@ -182,10 +183,10 @@ class LODHall:
         return '\n'.join('  %s -- %s' % item for item in cls.KEYS.items())
 
 
-def _chains_under(node: Any) -> List[Any]:
+def _chains_under(node: Any) -> list[Any]:
     """Every ScreenCoverageLOD below ``node``, in document order."""
     from OpenGLContext.scenegraph.lod import ScreenCoverageLOD
-    found: List[Any] = []
+    found: list[Any] = []
     stack = [node]
     while stack:
         current = stack.pop(0)

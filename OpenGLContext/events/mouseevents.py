@@ -1,5 +1,6 @@
 """Events relating to the mouse"""
-from typing import Any, Iterable, Optional, Tuple
+from collections.abc import Iterable
+from typing import Any, Optional
 
 from OpenGLContext.events import event, eventmanager
 from OpenGL.GLU import *
@@ -68,7 +69,7 @@ class MouseEvent( event.Event ):
     """
     type = ""
     viewCoordinate: Any = ()
-    pickPoint: Tuple[Any, ...] = ()
+    pickPoint: tuple[Any, ...] = ()
     worldCoordinate: Any = ()
     nameStack: Any = ()
     modelViewMatrix: Any = None
@@ -80,7 +81,7 @@ class MouseEvent( event.Event ):
     currentPath: Any = ()
     currentNode: Any = None
     atTarget: int = 0
-    def getPickPoint( self ) -> Tuple[Any, ...]:
+    def getPickPoint( self ) -> tuple[Any, ...]:
         """Get the 2D picking point in OpenGL coordinates
         
         Note that OpenGL coordinates are counted from the bottom left
@@ -198,10 +199,10 @@ class MouseButtonEvent (MouseEvent):
         a thumb produced it.
         """
         return button_name(self.button)
-    def getKey (self) -> Tuple[Any, ...]:
+    def getKey (self) -> tuple[Any, ...]:
         """Get the event key used to lookup a handler for this event"""
         return (self.button, self.state, self.getModifiers(),)
-    def getPickKey (self) -> Tuple[Any, ...]:
+    def getPickKey (self) -> tuple[Any, ...]:
         """Distinguish one wheel notch from the next; see Event.getPickKey.
 
         Scrolling is reported far faster than frames are drawn, so an ordinary
@@ -211,7 +212,7 @@ class MouseButtonEvent (MouseEvent):
         """
         if self.button not in WHEEL_BUTTONS:
             return self.getKey()
-        key: Optional[Tuple[Any, ...]] = self.__dict__.get('_pickKey')
+        key: Optional[tuple[Any, ...]] = self.__dict__.get('_pickKey')
         if key is None:
             key = self.__dict__['_pickKey'] = self.getKey() + (
                 next(MouseButtonEvent._notchCounter),)
@@ -228,7 +229,7 @@ class MouseButtonEventManager (MouseEventManager):
     def registerCallback(  # type: ignore[override]  # takes the fields its event routes on, not the base's key
         self,
         button: Any = 0, state: Any = 0,
-        modifiers: Tuple[int, int, int] = (0, 0, 0),
+        modifiers: tuple[int, int, int] = (0, 0, 0),
         function: Any = None, node: Any = None, capture: Any = 0,
     ) -> Any:
         """Register a function to receive mouse-button events matching
@@ -258,7 +259,7 @@ class MouseButtonEventManager (MouseEventManager):
             
         returns the previous handler or None
         """
-        key: Optional[Tuple[Any, ...]] = None
+        key: Optional[tuple[Any, ...]] = None
         if button is not None:
             key = button, state, modifiers
         return super( MouseButtonEventManager, self).registerCallback(
@@ -286,11 +287,11 @@ class MouseMoveEvent( MouseEvent ):
     """
     type = "mousemove"
     dragStart: Any = () # if non-null, the initial position of the drag (viewCoordinates)
-    buttons: Tuple[int, ...] = ()
-    def getKey (self) -> Tuple[Any, ...]:
+    buttons: tuple[int, ...] = ()
+    def getKey (self) -> tuple[Any, ...]:
         """Get the event key used to lookup a handler for this event"""
         return self.getButtons(), self.getModifiers()
-    def getButtons( self ) -> Tuple[int, ...]:
+    def getButtons( self ) -> tuple[int, ...]:
         """Return the active buttons as a tuple of integers."""
         return self.buttons
 
@@ -304,7 +305,7 @@ class MouseMoveEventManager (MouseEventManager):
     lastPath: Any = ()
     def registerCallback(  # type: ignore[override]  # takes the fields its event routes on, not the base's key
         self,
-        buttons: Any = (), modifiers: Tuple[int, int, int] = (0, 0, 0),
+        buttons: Any = (), modifiers: tuple[int, int, int] = (0, 0, 0),
         function: Any = None, node: Any = None, capture: Any = 0,
     ) -> Any:
         """Register a function to receive keyboard events matching
@@ -322,7 +323,7 @@ class MouseMoveEventManager (MouseEventManager):
             
         returns the previous handler or None
         """
-        key: Optional[Tuple[Any, ...]] = None
+        key: Optional[tuple[Any, ...]] = None
         if buttons:
             key = buttons, modifiers
         return super( MouseMoveEventManager, self).registerCallback(
@@ -429,7 +430,7 @@ class _MouseChangeEventManager (MouseEventManager):
     @classmethod
     def registerCallback(  # type: ignore[override]  # takes the fields its event routes on, not the base's key
         cls,
-        buttons: Any = (), modifiers: Tuple[int, int, int] = (0, 0, 0),
+        buttons: Any = (), modifiers: tuple[int, int, int] = (0, 0, 0),
         function: Any = None, node: Any = None, capture: Any = 0,
     ) -> Any:
         """Register a function to receive keyboard events matching
@@ -447,7 +448,7 @@ class _MouseChangeEventManager (MouseEventManager):
             
         returns the previous handler or None
         """
-        key: Optional[Tuple[Any, ...]] = None
+        key: Optional[tuple[Any, ...]] = None
         if buttons:
             key = buttons, modifiers
         return super( _MouseChangeEventManager, cls).registerCallback(

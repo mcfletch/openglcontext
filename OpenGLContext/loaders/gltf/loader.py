@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import TYPE_CHECKING, Optional, Union, cast
+from typing import TYPE_CHECKING, Optional, cast
 
 from OpenGLContext.loaders.resolver import (
     check_size, checked_url, contained_source, read_contained, Resolver, fetch_url, DEFAULT_MAX_RESOURCE_BYTES,
@@ -60,7 +60,7 @@ def _require_pygltflib() -> "type[pygltflib.GLTF2]":
         ) from err
 
 
-def _source_bytes(source: Union[bytes, bytearray, str],
+def _source_bytes(source: bytes | bytearray | str,
                   max_resource_bytes: Optional[int],
                   base_dir: Optional[str]) -> "tuple[bytes, Optional[str]]":
     """The bytes of a glTF/GLB source, and where its relative references live.
@@ -108,7 +108,7 @@ class SharedDocument:
         return resolver
 
 
-def parse_gltf(source: Union[bytes, bytearray, str], base_url: Optional[str] = None,
+def parse_gltf(source: bytes | bytearray | str, base_url: Optional[str] = None,
                max_resource_bytes: Optional[int] = DEFAULT_MAX_RESOURCE_BYTES,
                base_dir: Optional[str] = None) -> SharedDocument:
     """Parse a glTF/GLB into a reusable :class:`SharedDocument`, building no scene.
@@ -121,7 +121,7 @@ def parse_gltf(source: Union[bytes, bytearray, str], base_url: Optional[str] = N
                           base_dir=base_dir, max_resource_bytes=max_resource_bytes)
 
 
-def load_gltf(source: "Union[bytes, bytearray, str, None]" = None,
+def load_gltf(source: "bytes | bytearray | str | None" = None,
               base_url: Optional[str] = None,
               max_resource_bytes: Optional[int] = DEFAULT_MAX_RESOURCE_BYTES,
               pointer_time: Optional[float] = None,

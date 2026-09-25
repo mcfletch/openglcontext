@@ -6,7 +6,8 @@ each ``add_*`` call creates a ``Transform``/``Shape`` for rendering and a
 elapsed time and refreshes the debug overlay.  The demos in ``tests/physics_*.py``
 build on this so each stays short and readable.
 """
-from typing import Any, Dict, Iterable, List, Optional, Union
+from collections.abc import Iterable
+from typing import Any, Optional
 import numpy as np
 
 from OpenGLContext.scenegraph import basenodes as _basenodes
@@ -48,10 +49,10 @@ class DemoScene:
             gravity = model.Gravity(gravity=9.81, direction=(0, -1, 0))
         self.manager = PhysicsManager(gravity=gravity, **world_kw)
         self.world = self.manager.world
-        self.children: List[Any] = []
+        self.children: list[Any] = []
         self.debug = PhysicsDebugDraw(self.world, flags=debug_flags)
         self.background = background
-        self._materials: Dict[str, int] = {}
+        self._materials: dict[str, int] = {}
         self._was_active = True
 
     # -- materials -------------------------------------------------------
@@ -75,7 +76,7 @@ class DemoScene:
     # -- bodies ----------------------------------------------------------
     def add_box(self, size: Vec = (1, 1, 1), position: Vec = (0, 0, 0),
                 color: Vec = (0.8, 0.8, 0.85), dynamic: bool = True,
-                mass: float = 1.0, material: Union[str, int] = 'wood',
+                mass: float = 1.0, material: str | int = 'wood',
                 collision_filter: int = -1, velocity: Vec = (0, 0, 0),
                 rotation: Vec = (0, 0, 1, 0)) -> Any:
         """Add a box body and its render mesh; return the :class:`PhysicsBody`."""
@@ -86,7 +87,7 @@ class DemoScene:
 
     def add_sphere(self, radius: float = 0.5, position: Vec = (0, 0, 0),
                    color: Vec = (0.9, 0.5, 0.3), dynamic: bool = True,
-                   mass: float = 1.0, material: Union[str, int] = 'rubber',
+                   mass: float = 1.0, material: str | int = 'rubber',
                    collision_filter: int = -1, velocity: Vec = (0, 0, 0)) -> Any:
         """Add a sphere body and its render mesh; return the :class:`PhysicsBody`."""
         shape = self.world.add_shape(model.Shape.sphere(radius))
@@ -95,7 +96,7 @@ class DemoScene:
                            collision_filter, velocity, (0, 0, 1, 0))
 
     def _spawn(self, geom: Any, shape_idx: int, position: Vec, color: Vec,
-               dynamic: bool, mass: float, material: Union[str, int],
+               dynamic: bool, mass: float, material: str | int,
                collision_filter: int, velocity: Vec, rotation: Vec) -> Any:
         """Build the transform/shape and physics body for one object and register both."""
         mt = model.DYNAMIC if dynamic else model.STATIC
@@ -114,7 +115,7 @@ class DemoScene:
     def add_mesh_body(self, geometry: Any, shape: model.Shape,
                       position: Vec = (0, 0, 0), color: Vec = (0.8, 0.75, 0.6),
                       dynamic: bool = True, mass: float = 1.0,
-                      material: Union[str, int] = 'wood',
+                      material: str | int = 'wood',
                       rotation: Vec = (0, 0, 1, 0)) -> Any:
         """Attach an already-cooked ``model.Shape`` to an arbitrary render mesh."""
         shape_idx = self.world.add_shape(shape)

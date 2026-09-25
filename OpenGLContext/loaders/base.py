@@ -1,7 +1,7 @@
 """Base loader module for OpenGLContext"""
 
 import logging
-from typing import IO, Any, Tuple, cast
+from typing import IO, Any, cast
 
 log = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class BaseHandler(object):
             raise ValueError("""NULL results for url %s""" % (baseURL,))
 
     def parse(self, data: Any, baseURL: str, filename: str, file: IO[bytes],
-              *args: Any, **named: Any) -> Tuple[bool, Any]:
+              *args: Any, **named: Any) -> tuple[bool, Any]:
         """Parse the loaded data (with the provided meta-information)"""
         raise NotImplementedError(
             """%s does not implement parse method""" % (self.__class__.__name__,)

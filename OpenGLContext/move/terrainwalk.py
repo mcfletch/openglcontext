@@ -36,7 +36,8 @@ See [docs/terrain.rst](../../docs/terrain.rst#heightfield) and
 [docs/navigation.rst](../../docs/navigation.rst).
 """
 import math
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Sequence, Tuple
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
@@ -84,8 +85,8 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         self._tw_hf = height_field
         self._tw_cpos = None if collider_pos is None else np.asarray(collider_pos, np.float32)
         self._tw_crad = None if collider_radius is None else np.asarray(collider_radius, np.float32)
-        self._tw_streams: List[list] = []
-        self._tw_pose: Optional[Tuple[float, ...]] = None
+        self._tw_streams: list[list] = []
+        self._tw_pose: Optional[tuple[float, ...]] = None
         self._tw_build_grid()
 
     def _tw_build_grid(self) -> None:
@@ -102,7 +103,7 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         Sets ``_tw_grid`` to a dict mapping ``(cell_x, cell_z)`` to an ascending
         array of collider indices, or ``None`` when there are no colliders.
         """
-        self._tw_grid: Optional[Dict[tuple, np.ndarray]] = None
+        self._tw_grid: Optional[dict[tuple, np.ndarray]] = None
         self._tw_cell = 0.0
         cpos = self._tw_cpos
         if cpos is None or not len(cpos):
@@ -113,7 +114,7 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         cell = max(float(self.collide_broadphase), reach, 1e-6)
         cx = np.floor(cpos[:, 0] / cell).astype(np.int64)
         cz = np.floor(cpos[:, 2] / cell).astype(np.int64)
-        grid: Dict[tuple, List[int]] = {}
+        grid: dict[tuple, list[int]] = {}
         for idx, key in enumerate(zip(cx.tolist(), cz.tolist(), strict=True)):
             grid.setdefault(key, []).append(idx)
         self._tw_grid = {k: np.asarray(v, np.intp) for k, v in grid.items()}
@@ -137,13 +138,13 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
     #: Where the last resolved step ended, which is what the next one is swept
     #: from.  None until something has walked, and again after a flight, since
     #: there is no walked path to sweep along.
-    _tw_prev: Optional[Tuple[float, float]] = None
+    _tw_prev: Optional[tuple[float, float]] = None
 
-    def _tw_xz(self) -> Tuple[float, float]:
+    def _tw_xz(self) -> tuple[float, float]:
         p = self.platform.position
         return float(p[0]), float(p[2])
 
-    def _push_out(self, x: float, z: float) -> Tuple[float, float]:
+    def _push_out(self, x: float, z: float) -> tuple[float, float]:
         """Push (x, z) out of the deepest collider it lies inside (one resolve)."""
         cpos = self._tw_cpos
         grid = self._tw_grid
@@ -185,7 +186,7 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
                 z += dz[k] * push
         return x, z
 
-    def _tw_sweep(self, x: float, z: float) -> Tuple[float, float]:
+    def _tw_sweep(self, x: float, z: float) -> tuple[float, float]:
         """Resolve the move from the last resolved spot to ``(x, z)``.
 
         Swept in substeps no longer than :attr:`collide_substep`, because a
@@ -231,7 +232,7 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         return changed
 
     # -- the avatar, and the ground it is not allowed through ----------------
-    def buildPhysicsWorld(self) -> Optional[Tuple[Any, Tuple[Any, Any]]]:
+    def buildPhysicsWorld(self) -> Optional[tuple[Any, tuple[Any, Any]]]:
         """An empty collision world over the height field's square.
 
         The ground and the trunks are analytic, and answering "how high is the
@@ -404,7 +405,7 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
                 character.grounded = True
         character.position[:] = (x, y, z)
 
-    def _tw_forward(self) -> Tuple[float, float]:
+    def _tw_forward(self) -> tuple[float, float]:
         """Horizontal unit forward vector ``(fx, fz)`` from the platform orientation."""
         fx, _fy, fz = self.platform.forward()
         n = math.hypot(fx, fz) or 1.0
@@ -415,7 +416,7 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         fx, fz = self._tw_forward()
         return math.atan2(fx, fz)
 
-    def _tw_pose_sig(self) -> Tuple[float, ...]:
+    def _tw_pose_sig(self) -> tuple[float, ...]:
         """A signature of the current view that changes iff the rendered image can.
 
         Position plus orientation quaternion: nothing in a static terrain scene

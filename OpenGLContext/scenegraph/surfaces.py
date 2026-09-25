@@ -23,7 +23,8 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, List, NamedTuple, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, NamedTuple
 
 import numpy as np
 
@@ -103,7 +104,7 @@ def _clip(value: np.ndarray) -> np.ndarray:
     return np.asarray(np.clip(value, 0.0, 1.0))
 
 
-def _grid(size: int) -> Tuple[np.ndarray, np.ndarray]:
+def _grid(size: int) -> tuple[np.ndarray, np.ndarray]:
     """Texel centres across and down, from 0 to 1."""
     along = (np.arange(size) + 0.5) / float(size)
     return np.meshgrid(along, along)
@@ -284,7 +285,7 @@ def to_srgb(linear: np.ndarray) -> np.ndarray:
     return encoded
 
 
-def images(maps: Maps, relief: float = 2.0) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def images(maps: Maps, relief: float = 2.0) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """``(base colour, metallic-roughness, normal)`` as 8-bit RGB arrays.
 
     Laid out as glTF has them: base colour sRGB-encoded, roughness in the
@@ -349,8 +350,8 @@ def _down(texcoords: np.ndarray) -> np.ndarray:
 
 
 def _facing_z(positions: np.ndarray, indices: Sequence[int], repeat: float,
-              origin: Tuple[float, float],
-              start: Tuple[float, float] = (0.0, 0.0)) -> Geometry:
+              origin: tuple[float, float],
+              start: tuple[float, float] = (0.0, 0.0)) -> Geometry:
     """Points in the xy plane, facing +z, textured by the metre from ``origin``,
     which falls ``start`` metres into the surface."""
     count = len(positions)
@@ -363,7 +364,7 @@ def _facing_z(positions: np.ndarray, indices: Sequence[int], repeat: float,
 
 
 def panel(width: float, height: float, repeat: float = 1.0,
-          start: Tuple[float, float] = (0.0, 0.0)) -> Geometry:
+          start: tuple[float, float] = (0.0, 0.0)) -> Geometry:
     """A ``width`` by ``height`` rectangle centred in its own xy plane, facing +z.
 
     The surface repeats every ``repeat`` metres. Its bottom-left corner sits
@@ -447,7 +448,7 @@ def block(size: Sequence[float], repeat: float = 1.0, chamfer: float = 0.0) -> G
                        ).astype(np.uint32))
 
 
-def prism(outline: Sequence[Tuple[float, float]], height: float,
+def prism(outline: Sequence[tuple[float, float]], height: float,
           repeat: float = 1.0) -> Geometry:
     """A convex ``outline`` of (x, z) points stood ``height`` high, centred, and capped.
 
@@ -466,11 +467,11 @@ def prism(outline: Sequence[Tuple[float, float]], height: float,
     lengths = np.linalg.norm(following - points, axis=1)
     walked = np.concatenate([[0.0], np.cumsum(lengths)])
     perimeter = walked[-1]
-    positions: List[Tuple[float, float, float]] = []
-    normals: List[Tuple[float, float, float]] = []
-    texcoords: List[Tuple[float, float]] = []
-    tangents: List[Tuple[float, float, float, float]] = []
-    indices: List[int] = []
+    positions: list[tuple[float, float, float]] = []
+    normals: list[tuple[float, float, float]] = []
+    texcoords: list[tuple[float, float]] = []
+    tangents: list[tuple[float, float, float, float]] = []
+    indices: list[int] = []
     for side in range(count):
         (x0, z0), (x1, z1) = points[side], following[side]
         dx, dz = (x1 - x0) / lengths[side], (z1 - z0) / lengths[side]
@@ -592,7 +593,7 @@ def sphere(radius: float, sides: int = 24, repeat: float = 1.0) -> Geometry:
                          np.ones_like(lon)], axis=-1).reshape(-1, 4)
     texcoords = np.stack([(2.0 * math.pi - lon) * radius,
                           (lat + math.pi / 2.0) * radius], axis=-1).reshape(-1, 2)
-    indices: List[int] = []
+    indices: list[int] = []
     for ring in range(rings):
         low, high = ring * columns, (ring + 1) * columns
         for step in range(around):

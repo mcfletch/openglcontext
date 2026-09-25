@@ -1,5 +1,5 @@
 """Mix-in class for contexts needing to control a viewplatform object"""
-from typing import TYPE_CHECKING, Any, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
 from OpenGLContext.move import viewplatform
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
         the rest, reaching the context's own through ``super()``.
         """
 
-        def getViewPort( self ) -> Tuple[int, int]: ...
+        def getViewPort( self ) -> tuple[int, int]: ...
         def hasMouseMoveHandlers( self ) -> bool: ...
         def setupDefaultEventCallbacks( self ) -> None: ...
         def ProcessEvent( self, event: Any ) -> Any: ...
@@ -76,7 +76,7 @@ class ViewPlatformMixin(PhysicsWalkMixin, _Host):
     #: Drives the declared movement modes, when the context declares any.
     navigation: Any = None
     #: Last pointer position, for turning an absolute position into a delta.
-    _lastPointer: Optional[Tuple[float, float]] = None
+    _lastPointer: Optional[tuple[float, float]] = None
     #: Whether the backend reports pointer motion directly.  Set the first time
     #: it does, so the same motion is not counted again off the event queue.
     _directPointerMotion = False

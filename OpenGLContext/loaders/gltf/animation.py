@@ -22,7 +22,8 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import TYPE_CHECKING, Any, Callable, Iterable, Optional, Sequence, Tuple
+from collections.abc import Callable, Iterable, Sequence
+from typing import TYPE_CHECKING, Any, Optional
 
 import numpy as np
 
@@ -96,7 +97,7 @@ def vrml_to_quat_xyzw(rotation: Sequence[float]) -> np.ndarray:
     return np.concatenate([axis * math.sin(half), [math.cos(half)]])
 
 
-def quat_xyzw_to_vrml(q: np.ndarray) -> Tuple[float, float, float, float]:
+def quat_xyzw_to_vrml(q: np.ndarray) -> tuple[float, float, float, float]:
     """glTF quaternion [x,y,z,w] -> VRML97 axis-angle (x, y, z, radians)."""
     x, y, z, w = quat_normalize(q)
     w = max(-1.0, min(1.0, w))
@@ -236,7 +237,7 @@ class Sampler(object):
     def duration(self) -> float:
         return float(self.times[-1]) if len(self.times) else 0.0
 
-    def _segment(self, t: float) -> Tuple[int, float]:
+    def _segment(self, t: float) -> tuple[int, float]:
         """Return (i, u): the segment start index i and the [0,1] fraction u."""
         times = self.times
         n = len(times)
@@ -677,7 +678,7 @@ def _build_animations(g: "pygltflib.GLTF2", resolver: Resolver,
 
 
 def _resolve_json_pointer(g: "pygltflib.GLTF2",
-                          tokens: list) -> Optional[Tuple[Any, str, str]]:
+                          tokens: list) -> Optional[tuple[Any, str, str]]:
     """Resolve a JSON pointer against a parsed glTF document.
 
     Walk ``g`` (a pygltflib object tree mixing attributes, lists and extension

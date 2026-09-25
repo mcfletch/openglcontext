@@ -25,8 +25,8 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import (Any, Callable, Dict, FrozenSet, Hashable, Iterable, List,
-                    Mapping, Optional, Sequence, Set, Tuple)
+from collections.abc import Callable, Hashable, Iterable, Mapping, Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -78,20 +78,20 @@ class ZonePack:
     to_local: np.ndarray
     shape: np.ndarray
     light: np.ndarray
-    key: Tuple[Any, ...]
+    key: tuple[Any, ...]
     #: Whether more zones crossed the object than there are layers, so which
     #: were kept depends on where the camera is.
     limited: bool = False
 
 
-def _params(placed: zones.PlacedShape) -> Tuple[float, float, float, float]:
+def _params(placed: zones.PlacedShape) -> tuple[float, float, float, float]:
     values = tuple(placed.params) + (0.0, 0.0, 0.0)
     if placed.kind == zones.SPHERE:
         return (values[0], 0.0, 0.0, 0.0)
     return (float(values[0]), float(values[1]), float(values[2]), 0.0)
 
 
-def _pack(stack: Sequence[Tuple[PlacedZone, bool, float, float]],
+def _pack(stack: Sequence[tuple[PlacedZone, bool, float, float]],
           limited: bool = False) -> ZonePack:
     """``stack`` is bottom first: (zone, wholly inside, intensity, probe layer)."""
     kinds = np.zeros(MAX_ZONE_LAYERS, dtype=np.int32)
@@ -108,14 +108,14 @@ def _pack(stack: Sequence[Tuple[PlacedZone, bool, float, float]],
     return ZonePack(len(stack), kinds, to_local, shape, light, tuple(key), limited)
 
 
-def world_reach(placed: PlacedZone) -> Tuple[np.ndarray, np.ndarray]:
+def world_reach(placed: PlacedZone) -> tuple[np.ndarray, np.ndarray]:
     """The world box round ``placed``'s shape and its blend band, as ``(low, high)``."""
     low, high = _world_boxes(placed.shape.to_local[None],
                              (np.asarray(placed.shape.reach, 'd') + placed.blend)[None])
     return low[0], high[0]
 
 
-def _world_boxes(to_local: np.ndarray, reach: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+def _world_boxes(to_local: np.ndarray, reach: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """``(Z, 3)`` world boxes of oriented boxes of half extents ``reach``."""
     if not len(to_local):
         return np.zeros((0, 3)), np.zeros((0, 3))
@@ -220,12 +220,12 @@ class ZoneTable:
             + matrices[:, None, 3, :3])
         return found
 
-    def classify(self, minimum: Any, maximum: Any) -> List[Tuple[PlacedZone, bool]]:
+    def classify(self, minimum: Any, maximum: Any) -> list[tuple[PlacedZone, bool]]:
         """Each zone the box reaches, with whether the box is wholly inside it."""
         return self.classify_many([minimum], [maximum])[0]
 
     def classify_many(self, minimums: Any, maximums: Any
-                      ) -> List[List[Tuple[PlacedZone, bool]]]:
+                      ) -> list[list[tuple[PlacedZone, bool]]]:
         """:meth:`classify` for many boxes at once: ``(M, 3)`` corners each.
 
         The boxes are taken :attr:`chunk` at a time in the order of a curve
@@ -241,7 +241,7 @@ class ZoneTable:
         high_in = np.asarray(maximums, dtype='d').reshape(-1, 3)
         if not self.placed:
             return [[] for _ in range(len(low_in))]
-        found: List[List[Tuple[PlacedZone, bool]]] = [[] for _ in range(len(low_in))]
+        found: list[list[tuple[PlacedZone, bool]]] = [[] for _ in range(len(low_in))]
         order = spatial_order(low_in, high_in)
         for start in range(0, len(low_in), self.chunk):
             rows = order[start:start + self.chunk]
@@ -251,7 +251,7 @@ class ZoneTable:
         return found
 
     def _classify_chunk(self, low_in: np.ndarray, high_in: np.ndarray
-                        ) -> List[List[Tuple[PlacedZone, bool]]]:
+                        ) -> list[list[tuple[PlacedZone, bool]]]:
         count = len(low_in)
         nearby = self.near(low_in.min(axis=0), high_in.max(axis=0))
         if not len(nearby):
@@ -276,7 +276,7 @@ class ZoneTable:
                 & ~(np.any(low > reach, axis=2) | np.any(high < -reach, axis=2)))
         half = self.half[which][None]
         inside = np.all(low >= -half, axis=2) & np.all(high <= half, axis=2)
-        found: List[List[Tuple[PlacedZone, bool]]] = [[] for _ in range(count)]
+        found: list[list[tuple[PlacedZone, bool]]] = [[] for _ in range(count)]
         rows, columns = np.nonzero(near)
         for row, at in zip(rows.tolist(), columns.tolist(), strict=True):
             index = which[at]
@@ -346,7 +346,7 @@ class ZoneTable:
         slack: np.ndarray = np.minimum(np.maximum(room.min(axis=1), 0.0), limit)
         return slack
 
-    def nearness(self, point: Any) -> Dict[PlacedZone, float]:
+    def nearness(self, point: Any) -> dict[PlacedZone, float]:
         """Every zone's signed distance from ``point``, by zone, in one pass."""
         found = self.signed_distances(np.asarray(point, dtype='d')[:3])[0]
         return dict(zip(self.placed, found.tolist(), strict=True))
@@ -366,8 +366,8 @@ class ObjectBoxes:
     def __init__(self, capacity: int = 256) -> None:
         self.low = np.full((capacity, 3), np.inf)
         self.high = np.full((capacity, 3), -np.inf)
-        self.owners: List[Any] = [None] * capacity
-        self._free: List[int] = []
+        self.owners: list[Any] = [None] * capacity
+        self._free: list[int] = []
         self._used = 0
 
     def __len__(self) -> int:
@@ -407,7 +407,7 @@ class ObjectBoxes:
         self._free = []
         self._used = 0
 
-    def overlapping(self, low: Any, high: Any) -> List[Any]:
+    def overlapping(self, low: Any, high: Any) -> list[Any]:
         """The owner of every row whose box overlaps the world box ``[low, high]``."""
         used = self._used
         hit = (np.all(self.low[:used] <= np.asarray(high, 'd'), axis=1)
@@ -427,11 +427,11 @@ class Reach:
     are worked out apart (:func:`reach`, then :func:`pack_reach`).
     """
 
-    stack: Tuple[Tuple[PlacedZone, bool], ...]
+    stack: tuple[tuple[PlacedZone, bool], ...]
     limited: bool = False
 
 
-def stacked(reaching: List[Tuple[PlacedZone, bool]]) -> List[Tuple[PlacedZone, bool]]:
+def stacked(reaching: list[tuple[PlacedZone, bool]]) -> list[tuple[PlacedZone, bool]]:
     """``reaching`` stacked bottom first, with nothing under a zone it fills."""
     reaching = sorted(reaching, key=lambda item: (item[0].priority, -item[0].volume))
     base = 0
@@ -442,7 +442,7 @@ def stacked(reaching: List[Tuple[PlacedZone, bool]]) -> List[Tuple[PlacedZone, b
 
 
 def classified(placed: Sequence[PlacedZone], minimum: Any, maximum: Any,
-               table: Optional[ZoneTable] = None) -> List[Tuple[PlacedZone, bool]]:
+               table: Optional[ZoneTable] = None) -> list[tuple[PlacedZone, bool]]:
     """Every environment zone reaching the box, bottom first, none under one it fills.
 
     Each zone reaching the box is paired with whether the box is wholly
@@ -458,7 +458,7 @@ def classified(placed: Sequence[PlacedZone], minimum: Any, maximum: Any,
 
 
 def _reaching(placed: Sequence[PlacedZone], key: str, minimum: Any, maximum: Any
-              ) -> List[Tuple[PlacedZone, bool]]:
+              ) -> list[tuple[PlacedZone, bool]]:
     """Each zone with a ``key`` setting the box reaches, with whether it is inside."""
     found = []
     for zone in placed:
@@ -470,10 +470,10 @@ def _reaching(placed: Sequence[PlacedZone], key: str, minimum: Any, maximum: Any
     return found
 
 
-def chosen(kept: Sequence[Tuple[PlacedZone, bool]], camera: Optional[Any] = None,
+def chosen(kept: Sequence[tuple[PlacedZone, bool]], camera: Optional[Any] = None,
            warn: Optional[Callable[[str], None]] = None,
            table: Optional[ZoneTable] = None,
-           near: Optional[Dict[PlacedZone, float]] = None) -> Optional[Reach]:
+           near: Optional[dict[PlacedZone, float]] = None) -> Optional[Reach]:
     """The layers the shader is given from :func:`classified`'s answer.
 
     All of them where they fit. Where more zones reach the object than the
@@ -521,7 +521,7 @@ def reach(placed: Sequence[PlacedZone], minimum: Any, maximum: Any,
 
 
 def probe_layers(found: Reach, probe_layer: Callable[[PlacedZone], float]
-                 ) -> Tuple[float, ...]:
+                 ) -> tuple[float, ...]:
     """Each reaching zone's probe layer, as ``probe_layer`` answers it now."""
     return tuple(float(probe_layer(zone)) if _lit(zone) else NO_ENVIRONMENT
                  for zone, _inside in found.stack)
@@ -564,9 +564,9 @@ def environment_layers(placed: Sequence[PlacedZone], minimum: Any, maximum: Any,
     return pack_reach(found, probe_layers(found, probe_layer))
 
 
-def controlled_lights(placed: Iterable[PlacedZone]) -> Dict[Any, List[PlacedZone]]:
+def controlled_lights(placed: Iterable[PlacedZone]) -> dict[Any, list[PlacedZone]]:
     """Each light node a zone names, with the zones that name it."""
-    found: Dict[Any, List[PlacedZone]] = {}
+    found: dict[Any, list[PlacedZone]] = {}
     for zone in placed:
         setting = zone.setting(LIGHTS)
         if setting is None or not bool(setting.enabled):
@@ -576,8 +576,8 @@ def controlled_lights(placed: Iterable[PlacedZone]) -> Dict[Any, List[PlacedZone
     return found
 
 
-def light_decision(reaching: Sequence[Tuple[PlacedZone, bool]]
-                   ) -> Tuple[FrozenSet[Any], bool]:
+def light_decision(reaching: Sequence[tuple[PlacedZone, bool]]
+                   ) -> tuple[frozenset[Any], bool]:
     """Which lights the zones switch on for an object, and whether they darken it.
 
     ``reaching`` is each zone with a lights setting that reaches the object,
@@ -591,7 +591,7 @@ def light_decision(reaching: Sequence[Tuple[PlacedZone, bool]]
     which slot a light is bound to, so it holds until the object or a zone
     moves.
     """
-    on: Set[Any] = set()
+    on: set[Any] = set()
     dark = False
     for zone, inside in stacked(list(reaching)):
         setting = zone.setting(LIGHTS)
@@ -602,8 +602,8 @@ def light_decision(reaching: Sequence[Tuple[PlacedZone, bool]]
     return frozenset(on), dark
 
 
-def light_mask(decision: Tuple[FrozenSet[Any], bool], slots: Sequence[Any],
-               controlled: Mapping[Any, List[PlacedZone]]) -> int:
+def light_mask(decision: tuple[frozenset[Any], bool], slots: Sequence[Any],
+               controlled: Mapping[Any, list[PlacedZone]]) -> int:
     """The ``lightsOff`` mask from :func:`light_decision`, for the lights in ``slots``."""
     on, dark = decision
     mask = 0
@@ -617,7 +617,7 @@ def light_mask(decision: Tuple[FrozenSet[Any], bool], slots: Sequence[Any],
 
 
 def lights_off(placed: Sequence[PlacedZone], minimum: Any, maximum: Any,
-               slots: Sequence[Any], controlled: Mapping[Any, List[PlacedZone]]) -> int:
+               slots: Sequence[Any], controlled: Mapping[Any, list[PlacedZone]]) -> int:
     """The ``lightsOff`` mask for an object: one bit per light slot that does not light it.
 
     ``slots`` is the light node bound to each slot, in slot order. A light a
@@ -630,7 +630,7 @@ def lights_off(placed: Sequence[PlacedZone], minimum: Any, maximum: Any,
                       slots, controlled)
 
 
-def point_weights(table: ZoneTable, point: Any) -> Dict[PlacedZone, float]:
+def point_weights(table: ZoneTable, point: Any) -> dict[PlacedZone, float]:
     """Every zone's weight at ``point``, by zone, in one pass."""
     if not table.placed:
         return {}
@@ -641,7 +641,7 @@ def point_weights(table: ZoneTable, point: Any) -> Dict[PlacedZone, float]:
 
 def camera_shares(placed: Sequence[PlacedZone], point: Any, key: str,
                   names: Callable[[Any], Iterable[Hashable]],
-                  weights: Optional[Dict[PlacedZone, float]] = None) -> Dict[Hashable, float]:
+                  weights: Optional[dict[PlacedZone, float]] = None) -> dict[Hashable, float]:
     """How much each thing zones switch on for ``key`` is on, at ``point``.
 
     ``names`` gives the things a setting names -- emitters, nodes, mirrors.
@@ -651,7 +651,7 @@ def camera_shares(placed: Sequence[PlacedZone], point: Any, key: str,
     :func:`point_weights` for ``point`` where the caller has it.
     """
     candidates = []
-    mapping: Dict[Hashable, List[Hashable]] = {}
+    mapping: dict[Hashable, list[Hashable]] = {}
     for zone in placed:
         setting = zone.setting(key)
         if setting is None:
@@ -678,7 +678,7 @@ class Reverb:
 
 
 def reverb_at(placed: Sequence[PlacedZone], point: Any,
-              weights: Optional[Dict[PlacedZone, float]] = None,
+              weights: Optional[dict[PlacedZone, float]] = None,
               base: Optional[Reverb] = None) -> Reverb:
     """The reverb heard at ``point``, the zones it is in laid over ``base``.
 

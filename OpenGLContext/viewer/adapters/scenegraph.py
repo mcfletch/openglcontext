@@ -7,7 +7,7 @@ read too.  What it does *not* work out is anything a viewer needs beyond the
 nodes: how big the scene is, where its cameras are, or whether its coordinates
 mean anything.  This fills that in, once, for all of them.
 """
-from typing import Any, List, Tuple
+from typing import Any
 
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.viewpoint import Viewpoint
@@ -58,7 +58,7 @@ class SceneGraphAdapter(SceneAdapter):
         )
 
     @staticmethod
-    def splitViewpoints(children: Any) -> Tuple[List[Any], List[Any]]:
+    def splitViewpoints(children: Any) -> tuple[list[Any], list[Any]]:
         """The document's top-level viewpoints, and everything else.
 
         Only top-level ones are offered as cameras.  A ``Viewpoint`` nested

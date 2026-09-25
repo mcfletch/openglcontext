@@ -8,7 +8,8 @@ context, so nothing here has to name one (``OpenGL.platform.linux``).
 import wx
 
 from io import BytesIO
-from typing import Any, Hashable, List, Optional, Tuple
+from collections.abc import Hashable
+from typing import Any, Optional
 
 from wx import glcanvas
 #from wx.glcanvas import *
@@ -42,7 +43,7 @@ class wxContext(
     _pointerGrabbed = False
     #: Where the pointer was last warped to, so the movement the warp itself
     #: generates can be told from a real one.
-    _pointerWarpedTo: Optional[Tuple[int, int]] = None
+    _pointerWarpedTo: Optional[tuple[int, int]] = None
     #: Set once this canvas's GL objects have been let go, so quitting and the
     #: canvas's own destruction do not both do it.
     _released = False
@@ -104,9 +105,9 @@ class wxContext(
             self.Show( )
         context.Context.__init__ (self, definition)
     @classmethod
-    def wxFlagsFromDefinition( cls, definition: Any ) -> List[int]:
+    def wxFlagsFromDefinition( cls, definition: Any ) -> list[int]:
         """Determine the flags to pass to he initialiser (attribList)"""
-        attributes: List[int] = []
+        attributes: list[int] = []
         if definition.rgb:
             attributes.append( glcanvas.WX_GL_RGBA )
         else:
@@ -536,7 +537,7 @@ class wxContext(
     @classmethod
     def ContextMainLoop( cls, *args: Any, **named: Any ) -> None:
         """Initialise the context and start the mainloop"""
-        made: List['wxContext'] = []
+        made: list['wxContext'] = []
         class ContextApp(wx.App):
             def OnInit(self) -> bool:
                 wx.InitAllImageHandlers()

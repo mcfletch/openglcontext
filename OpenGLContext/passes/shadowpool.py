@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import os
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGLContext.passes.shadowmap import ShadowMapArray, ShadowMapCube, ShadowMapCubeArray
 from OpenGLContext.passes.shadowcaps import ShadowCapabilities
@@ -117,10 +117,10 @@ class _ShadowMapPoolMixin(PassResources):
     # back to one cube map per slot.
     _shared_array: Optional[ShadowMapArray] = None
     _shared_cube_array: Optional[ShadowMapCubeArray] = None
-    _maps_cube: Optional[Dict[int, ShadowMapCube]] = None
+    _maps_cube: Optional[dict[int, ShadowMapCube]] = None
     #: The frame's per-light shadow bindings, built by the shadow pass and
     #: dropped with the maps they refer to.
-    _shadow_bindings: Optional[List[dict]] = None
+    _shadow_bindings: Optional[list[dict]] = None
 
     def disposeResources(self) -> None:
         """Release the shadow maps; see :meth:`disposeShadowMaps`."""

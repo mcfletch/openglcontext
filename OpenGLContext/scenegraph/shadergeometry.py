@@ -22,7 +22,7 @@ interleaved layouts the engine's own geometry is built in:
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 
 from OpenGL.GL import (
     glGenVertexArrays, glBindVertexArray, glDeleteVertexArrays,
@@ -41,7 +41,7 @@ class VertexFormat:
     """
 
     # Layout: texcoord(2f) + normal(3f) + position(3f) = 8 floats = 32 bytes
-    T2F_N3F_V3F: Dict[str, int] = {
+    T2F_N3F_V3F: dict[str, int] = {
         'stride': 32,
         'texcoord_offset': 0,
         'texcoord_size': 2,
@@ -52,7 +52,7 @@ class VertexFormat:
     }
 
     # Layout: position(3f) + texcoord(2f) + normal(3f) = 8 floats = 32 bytes
-    V3F_T2F_N3F: Dict[str, int] = {
+    V3F_T2F_N3F: dict[str, int] = {
         'stride': 32,
         'position_offset': 0,
         'position_size': 3,
@@ -77,10 +77,10 @@ def _same_refs(a: Sequence[Any], b: Sequence[Any]) -> bool:
 SHARED_LAYOUT = 0
 
 #: One layout's entry: the VBOs the VAO records, and the VAO's name.
-_Entry = Tuple[Sequence[Any], int]
+_Entry = tuple[Sequence[Any], int]
 
 
-def _entry_names(entry: _Entry) -> Tuple[int]:
+def _entry_names(entry: _Entry) -> tuple[int]:
     return (entry[1],)
 
 

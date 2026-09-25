@@ -21,7 +21,7 @@ How the reflections are drawn, and what they cost, is
 """
 from __future__ import annotations
 
-from typing import Dict, Optional, Tuple
+from typing import Optional
 
 from vrml import field, node
 
@@ -33,7 +33,7 @@ __all__ = ['PlanarReflector', 'LIMITS', 'WATER', 'WATER_DISTORTION']
 #: The range each numeric field is drawn within, ``(minimum, maximum)``, None
 #: where it is open. :meth:`PlanarReflector.bounded` reads a field through it,
 #: and the ``mirror`` hook reads a file's values through it.
-LIMITS: Dict[str, Tuple[Optional[float], Optional[float]]] = {
+LIMITS: dict[str, tuple[Optional[float], Optional[float]]] = {
     'scale': (0.05, 1.0),
     'interval': (1, None),
     'priority': (0.0, None),

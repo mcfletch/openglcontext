@@ -24,7 +24,8 @@ import logging
 import math
 import os
 import time
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any, Optional
 
 from OpenGLContext.loaders.documentvalues import (
     DocumentValues, JSONObject, parse_object, require_number, require_object,

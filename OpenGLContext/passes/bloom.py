@@ -21,7 +21,8 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from OpenGL.GL import (
     GL_TRIANGLES, GL_TEXTURE_2D, GL_TEXTURE0, GL_RGBA16F, GL_RGBA, GL_FLOAT,
@@ -117,11 +118,11 @@ void main(){
 
 
 #: ``(x, y, width, height)`` in pixels, from the bottom left.
-Rect = Tuple[int, int, int, int]
+Rect = tuple[int, int, int, int]
 
 
-def scaled_rect(rect: Rect, size: Tuple[int, int],
-                scaled: Tuple[int, int]) -> Rect:
+def scaled_rect(rect: Rect, size: tuple[int, int],
+                scaled: tuple[int, int]) -> Rect:
     """``rect`` of a ``size`` target, in the pixels of a ``scaled`` one.
 
     Edges are rounded, so rectangles that meet in the one meet in the other.
@@ -132,8 +133,8 @@ def scaled_rect(rect: Rect, size: Tuple[int, int],
     return (int(left), int(bottom), int(right - left), int(top - bottom))
 
 
-def tile_uniforms(rect: Rect, size: Tuple[int, int]) -> Tuple[
-        Tuple[float, float, float, float], Tuple[float, float, float, float]]:
+def tile_uniforms(rect: Rect, size: tuple[int, int]) -> tuple[
+        tuple[float, float, float, float], tuple[float, float, float, float]]:
     """``(region, bounds)`` for drawing into ``rect`` of a ``size`` target.
 
     ``region`` is the rectangle as ``(offset, size)`` in texture coordinates,
@@ -192,13 +193,13 @@ class _Targets:
     into at the wrong one.
     """
 
-    size: Tuple[int, int]
-    bloom_size: Tuple[int, int]
+    size: tuple[int, int]
+    bloom_size: tuple[int, int]
     scene_fbo: int
     scene_tex: int
     depth_rb: int
-    ping_fbo: Tuple[int, int]
-    ping_tex: Tuple[int, int]
+    ping_fbo: tuple[int, int]
+    ping_tex: tuple[int, int]
 
 
 class BloomPass(object):
@@ -219,17 +220,17 @@ class BloomPass(object):
         return self._prev_fbo
 
     @property
-    def size(self) -> Optional[Tuple[int, int]]:
+    def size(self) -> Optional[tuple[int, int]]:
         """What the scene target is sized for, or None while there is none."""
         return self._targets.size if self._targets else None
 
     @property
-    def bloom_size(self) -> Optional[Tuple[int, int]]:
+    def bloom_size(self) -> Optional[tuple[int, int]]:
         """The half-resolution size the blur works at."""
         return self._targets.bloom_size if self._targets else None
 
     # -- lifecycle --------------------------------------------------------
-    def _ensure(self, w: int, h: int) -> Tuple[_Chain, _Targets]:
+    def _ensure(self, w: int, h: int) -> tuple[_Chain, _Targets]:
         """The chain and the targets for a frame this size, made if need be."""
         if self._chain is None:
             self._chain = _Chain(

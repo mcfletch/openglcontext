@@ -25,7 +25,7 @@ import logging
 import os
 import threading
 import urllib.parse
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
 
 from OpenGLContext.loaders import resolver
 

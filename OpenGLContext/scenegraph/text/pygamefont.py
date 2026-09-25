@@ -1,7 +1,8 @@
 """PyGame bitmap and texmap fonts"""
 from __future__ import annotations
 
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from OpenGLContext.scenegraph.text import fontprovider, font
 from OpenGL.GL import *

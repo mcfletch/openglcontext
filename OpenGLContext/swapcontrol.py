@@ -18,7 +18,8 @@ paths read the drawable the calling thread is bound to.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable, List
+from collections.abc import Callable
+from typing import Any
 
 from OpenGL.extensions import available
 
@@ -79,4 +80,4 @@ def _egl(interval: int) -> bool:
 #: Tried in turn until one answers.  GLX first because a GLUT or wx window on
 #: X11 is the case this exists for, and because EGL's call succeeds against a
 #: display that is not the one being drawn into.
-_ATTEMPTS: List[Callable[[int], bool]] = [_glx, _egl]
+_ATTEMPTS: list[Callable[[int], bool]] = [_glx, _egl]

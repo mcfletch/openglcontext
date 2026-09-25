@@ -8,7 +8,8 @@ This serves as a fallback when glutfont is not available (non-GLUT contexts).
 """
 from __future__ import annotations
 
-from typing import Any, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from OpenGL.GL import *
 from OpenGLContext.scenegraph.text import fontprovider, font

@@ -22,19 +22,18 @@ an unwanted toolkit out altogether, pass
 :func:`OpenGLContext.packaging.unused_backend_modules` to ``excludes``.
 """
 
-from typing import List
 
 from PyInstaller import isolated
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 
 @isolated.decorate
-def _plugin_modules() -> List[str]:
+def _plugin_modules() -> list[str]:
     """Modules the plug-in registries would import, the engine's own included"""
     import OpenGLContext  # imported for its registrations
     from OpenGL import plugins
 
-    modules: List[str] = plugins.registered_modules()
+    modules: list[str] = plugins.registered_modules()
     return modules
 
 

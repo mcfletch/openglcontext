@@ -10,7 +10,7 @@ before the swap: reading it *after* the swap returns an older frame.
 """
 import logging
 import os
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 import numpy as np
 from OpenGL.GL import (
@@ -56,7 +56,7 @@ def ensure_pillow() -> Any:
         return None
 
 
-def read_back_buffer(hud_height: int = 0) -> Tuple[Any, int, int]:
+def read_back_buffer(hud_height: int = 0) -> tuple[Any, int, int]:
     """Read the current back buffer as a top-down RGB uint8 array.
 
     hud_height -- pixels to drop from the *bottom* of the frame (where the HUD /

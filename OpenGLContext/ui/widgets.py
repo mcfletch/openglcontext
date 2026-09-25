@@ -21,9 +21,8 @@ from __future__ import annotations
 
 import math
 import re
-from typing import (
-    TYPE_CHECKING, Any, Callable, Iterator, List, Optional, Tuple, cast,
-)
+from collections.abc import Callable, Iterator
+from typing import TYPE_CHECKING, Any, Optional, cast
 
 if TYPE_CHECKING:
     # 3.11's Self, used to say that a widget's callback is handed *that*
@@ -159,7 +158,7 @@ class Widget(GUINode, node.Node):
     on_activate: Optional[Callable[['Self'], None]] = None
     on_change: Optional[Callable[['Self'], None]] = None
     #: The ripple running across this widget: when it started, and where.
-    _ripple: Optional[Tuple[float, float, float]] = None
+    _ripple: Optional[tuple[float, float, float]] = None
 
     def __init__(self, on_activate: Optional[Callable[['Self'], None]] = None,
                  on_change: Optional[Callable[['Self'], None]] = None,
@@ -256,7 +255,7 @@ class Widget(GUINode, node.Node):
         return self.focused
 
     # -- keyboard ---------------------------------------------------------
-    def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+    def key(self, name: str, modifiers: tuple[int, int, int]) -> bool:
         """A key while this widget has focus.  True if it consumed it."""
         return False
 
@@ -299,7 +298,7 @@ class Widget(GUINode, node.Node):
             started(self)
         return True
 
-    def rippleAt(self, now: float) -> Optional[Tuple[float, float, float, float]]:
+    def rippleAt(self, now: float) -> Optional[tuple[float, float, float, float]]:
         """``(x, y, radius, strength)`` of the ripple at ``now``; None with none running.
 
         The radius eases out to the corner of the widget furthest from where
@@ -449,7 +448,7 @@ class RootWidget(Widget):
     _scaledBy: float = 1.0
     #: The widgets in this tree with a ripple running, so a frame can ask
     #: whether to draw another without walking the tree.
-    _effects: Optional[List[Widget]] = None
+    _effects: Optional[list[Widget]] = None
 
     def effectStarted(self, widget: Widget) -> None:
         """A widget in this tree started something that moves over time."""
@@ -469,7 +468,7 @@ class RootWidget(Widget):
                          if widget.rippleRunning(now)]
         return bool(self._effects)
 
-    def layoutChildren(self) -> List[Widget]:
+    def layoutChildren(self) -> list[Widget]:
         return [child for child in self.children
                 if getattr(child, 'visible', True)]
 
@@ -518,7 +517,7 @@ class RootWidget(Widget):
         would size its first pass against the unscaled default and paint the
         result at the real scale.
         """
-        stack: List[Any] = [self]
+        stack: list[Any] = [self]
         while stack:
             current = stack.pop()
             for child in current.layoutChildren():
@@ -583,14 +582,14 @@ class Label(Widget):
         return bool(self.wrap)
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         if self.wrap:
             width = int(self.width) or available or self.rect.width
             if width:
                 return metrics.lines_size(metrics.wrap(self.text, width))
         return metrics.text_size(self.text)
 
-    def display_lines(self, metrics: FontMetrics) -> List[str]:
+    def display_lines(self, metrics: FontMetrics) -> list[str]:
         """The lines to draw, wrapped to the rectangle this ended up with."""
         if not self.text:
             return []
@@ -688,7 +687,7 @@ class Button(BoundWidget):
     washOnHover = False
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         pad_x, pad_y = self.activeSkin().buttonPadding(metrics)
         return (metrics.text_width(self.text) + pad_x * 2,
                 metrics.char_height + pad_y * 2)
@@ -699,7 +698,7 @@ class Button(BoundWidget):
             return True
         return False
 
-    def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+    def key(self, name: str, modifiers: tuple[int, int, int]) -> bool:
         if name in ('<return>', ' ') and self.enabled:
             self.activate()
             return True
@@ -734,7 +733,7 @@ class Toggle(BoundWidget):
     focusable = True
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         skin = self.activeSkin()
         width = int(skin.switchWidth)
         height = max(int(skin.switchHeight), metrics.char_height)
@@ -770,7 +769,7 @@ class Toggle(BoundWidget):
         self.write(not self.read())
         super(Toggle, self).activate()
 
-    def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+    def key(self, name: str, modifiers: tuple[int, int, int]) -> bool:
         if name in ('<return>', ' '):
             self.activate()
             return True
@@ -857,7 +856,7 @@ class Select(BoundWidget):
         return str(options[index])
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         widest = max([len(self.display_label(index))
                       for index in range(len(self.options))], default=0)
         arrows = metrics.char_width * 3 * 2
@@ -873,7 +872,7 @@ class Select(BoundWidget):
         options = list(self.options)
         return str(options[index]) if index < len(options) else ''
 
-    def arrow_rects(self) -> Tuple[Rect, Rect]:
+    def arrow_rects(self) -> tuple[Rect, Rect]:
         """The left and right arrows, at the two ends of the widget."""
         width = min(self.rect.width // 2, max(1, self.rect.height))
         left = Rect(self.rect.x, self.rect.y, width, self.rect.height)
@@ -913,7 +912,7 @@ class Select(BoundWidget):
         self.activate()
         return True
 
-    def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+    def key(self, name: str, modifiers: tuple[int, int, int]) -> bool:
         if name in ('<right>', '<up>'):
             self.step(1)
             return True
@@ -965,7 +964,7 @@ class Slider(BoundWidget):
     ripples = False
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         return (metrics.char_width * 14,
                 max(int(self.activeSkin().thumbWidth),
                     metrics.char_height + int(self.activeSkin().buttonPaddingY)))
@@ -1076,7 +1075,7 @@ class Slider(BoundWidget):
         was, self.armed = self.armed, False
         return was
 
-    def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+    def key(self, name: str, modifiers: tuple[int, int, int]) -> bool:
         amount = float(self.step) or (float(self.maximum) - float(self.minimum)) / 20.0
         if name in ('<right>', '<up>'):
             return self.write(self.coerce(float(self.read()) + amount)) or True
@@ -1144,7 +1143,7 @@ class TextField(BoundWidget):
         return str(super(TextField, self).read())
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         columns = int(self.maximumLength) or 20
         return (columns * metrics.char_width + int(self.activeSkin().fieldPadding) * 2,
                 metrics.char_height + int(self.activeSkin().buttonPaddingY))
@@ -1203,7 +1202,7 @@ class TextField(BoundWidget):
             self.caret += len(text)
         return True
 
-    def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+    def key(self, name: str, modifiers: tuple[int, int, int]) -> bool:
         if name not in _EDIT_KEYS:
             return False
         current = self.display_text()
@@ -1345,12 +1344,12 @@ class KeyCapture(BoundWidget):
     captured: Optional[str] = None
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         return (metrics.text_width(self.display_value()) +
                 int(self.activeSkin().fieldPadding) * 2 + metrics.char_width * 4,
                 metrics.char_height + int(self.activeSkin().buttonPaddingY))
 
-    def read(self) -> List[str]:
+    def read(self) -> list[str]:
         """The keys as they stand: the bound field's, or this widget's own."""
         source = (getattr(self.target, self.fieldName) if self.bound
                   else self.keys)
@@ -1389,7 +1388,7 @@ class KeyCapture(BoundWidget):
             self.changed()
         return True
 
-    def key(self, name: str, modifiers: Tuple[int, int, int]) -> bool:
+    def key(self, name: str, modifiers: tuple[int, int, int]) -> bool:
         if name == '<escape>':
             return False
         return self.capture(name)
@@ -1398,7 +1397,7 @@ class KeyCapture(BoundWidget):
         """Bind a mouse button, spelled as the event system spells one."""
         return self.capture('<mouse%d>' % (index,))
 
-    def result(self) -> List[str]:
+    def result(self) -> list[str]:
         """The keys this dialog would store: what was captured, or the old set."""
         if self.captured is None:
             return self.read()

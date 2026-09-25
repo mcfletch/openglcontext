@@ -1,5 +1,5 @@
 """Appearance node based on VRML 97 model"""
-from typing import Any, Tuple
+from typing import Any
 
 from vrml.vrml97 import basenodes
 from OpenGL.GL import (
@@ -40,7 +40,7 @@ class Appearance(basenodes.Appearance):
     Reference:
         http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Appearance
     """
-    def render (self, mode: Any = None) -> Tuple[Any, ...]:
+    def render (self, mode: Any = None) -> tuple[Any, ...]:
         """Render Appearance, return (lit, textured, alpha, textureToken)
 
         Renders the appearance node, returning 3 status flags
@@ -88,7 +88,7 @@ class Appearance(basenodes.Appearance):
             glBindTexture(GL_TEXTURE_2D, 0)
             glDisable(GL_TEXTURE_2D)
 
-    def sortKey( self, mode: Any, matrix: Any ) -> Tuple[Any, ...]:
+    def sortKey( self, mode: Any, matrix: Any ) -> tuple[Any, ...]:
         """Produce the sorting key for this shape's appearance/shaders/etc
         
         key is:

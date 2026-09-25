@@ -10,7 +10,7 @@ once a frame, usually from its ``OnIdle``.
 from collections import OrderedDict
 from collections.abc import Hashable
 from contextlib import AbstractContextManager, nullcontext
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 from omi_physics.contactevents import BodyRef
 from omi_physics.world import PhysicsWorld
@@ -75,7 +75,7 @@ class PhysicsManager:
         self._retired: "OrderedDict[BodyRef, Any]" = OrderedDict()
 
     @property
-    def bodies(self) -> List[Any]:
+    def bodies(self) -> list[Any]:
         """The registered ``PhysicsBody`` handles, in the order they were added."""
         return list(self._bodies)
 

@@ -38,7 +38,7 @@ handler rather than about the route to it.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 from OpenGLContext.events.keyboardevents import KeyboardEvent, KeypressEvent
 from OpenGLContext.events.mouseevents import MouseButtonEvent, MouseMoveEvent
@@ -65,7 +65,7 @@ def _modifiers(event: Any) -> list:
     return [int(bool(flag)) for flag in (event.getModifiers() or (0, 0, 0))]
 
 
-def describe(event: Any) -> Optional[Dict[str, Any]]:
+def describe(event: Any) -> Optional[dict[str, Any]]:
     """``event`` as a record, or ``None`` if it is not an input event.
 
     Only what a replay needs to produce the same event again: an event also
@@ -77,7 +77,7 @@ def describe(event: Any) -> Optional[Dict[str, Any]]:
     kind = getattr(event, 'type', None)
     if kind not in _CLASSES:
         return None
-    record: Dict[str, Any] = {'type': kind, 'modifiers': _modifiers(event)}
+    record: dict[str, Any] = {'type': kind, 'modifiers': _modifiers(event)}
     if kind in ('keyboard', 'keypress'):
         record['key'] = event.name
         if kind == 'keyboard':
@@ -93,7 +93,7 @@ def describe(event: Any) -> Optional[Dict[str, Any]]:
     return record
 
 
-def build(record: Dict[str, Any]) -> Optional[Any]:
+def build(record: dict[str, Any]) -> Optional[Any]:
     """The engine event ``record`` describes, or ``None`` if it describes none.
 
     The caller sets ``context`` on what comes back; :func:`dispatch` does.
@@ -119,7 +119,7 @@ def build(record: Dict[str, Any]) -> Optional[Any]:
     return event
 
 
-def dispatch(context: Any, record: Dict[str, Any]) -> bool:
+def dispatch(context: Any, record: dict[str, Any]) -> bool:
     """Deliver ``record`` to ``context`` the way the platform would have.
 
     Answers whether it was delivered.  A context that has no entry point for

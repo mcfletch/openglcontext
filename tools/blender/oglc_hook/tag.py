@@ -13,7 +13,7 @@ a surface, and what a mirror is worth.
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
 
 __all__ = ['EXTENSION', 'WATER', 'MIRROR', 'MIRROR_PARAMETERS', 'EFFECTS',
            'KINDS', 'STYLES', 'MEDIA',
@@ -36,7 +36,7 @@ MIRROR = 'mirror'
 
 #: The particle effects, which belong on an object: each stands where the
 #: object stands. The panel has the same two fields for all three.
-EFFECTS: Dict[str, str] = {
+EFFECTS: dict[str, str] = {
     'fire': 'A flame, standing where the object stands',
     'smoke': 'A column of smoke, rising from the object',
     'sparks': 'A fountain of sparks, thrown up from the object',
@@ -44,7 +44,7 @@ EFFECTS: Dict[str, str] = {
 
 #: Every kind the engine ships, offered as the kind field is typed. A game's
 #: own kinds are typed in full.
-KINDS: Dict[str, str] = {
+KINDS: dict[str, str] = {
     WATER: 'A surface that moves as water, and a body you can be inside of',
     MIRROR: 'A flat surface that reflects the scene in front of it',
     **EFFECTS,
@@ -52,11 +52,11 @@ KINDS: Dict[str, str] = {
 
 #: Where each of the engine's kinds is read. On the other holder the loader
 #: passes it over, so the panel says so.
-_BELONGS: Dict[str, str] = {WATER: 'material', **{kind: 'object' for kind in EFFECTS}}
+_BELONGS: dict[str, str] = {WATER: 'material', **{kind: 'object' for kind in EFFECTS}}
 _HOLDER = {'material': 'a material', 'object': 'an object'}
 
 #: How water moves, and what each motion is.
-STYLES: Dict[str, str] = {
+STYLES: dict[str, str] = {
     'still': 'A pond: the ripple is in the normals and the surface holds level',
     'breeze': 'A pond or small lake seen from its bank: wind-ruffled, fine waves',
     'flowing': 'A river: a long swell carried in one direction',
@@ -65,21 +65,21 @@ STYLES: Dict[str, str] = {
 }
 
 #: What being inside the body is like.
-MEDIA: Dict[str, str] = {
+MEDIA: dict[str, str] = {
     'water': 'Water: you can see and it does not hurt',
     'slime': 'Slime: close, green and harmful',
     'lava': 'Lava: opaque, and harmful quickly',
 }
 
 #: What shades the surface.
-SHADING: Dict[str, str] = {
+SHADING: dict[str, str] = {
     'keep': "The file's own material, so what was authored is what is drawn",
     'engine': "The engine's water material",
 }
 
 #: What the loader assumes when a parameter is absent. A panel left at one of
 #: these writes nothing for it, so a tag says what the artist changed.
-DEFAULTS: Dict[str, Any] = {
+DEFAULTS: dict[str, Any] = {
     'style': 'still', 'material': 'keep', 'medium': 'water', 'depth': 0.0,
     'scale': 1.0, 'density': 1.0,
     'mirror_scale': 0.5, 'interval': 3, 'priority': 1.0, 'distortion': 0.0,
@@ -88,7 +88,7 @@ DEFAULTS: Dict[str, Any] = {
 
 #: The panel's mirror fields, and the parameter each is written as. The
 #: resolution is its own field because ``scale`` is already the effects'.
-MIRROR_PARAMETERS: Dict[str, str] = {
+MIRROR_PARAMETERS: dict[str, str] = {
     'mirror_scale': 'scale', 'interval': 'interval', 'priority': 'priority',
     'distortion': 'distortion', 'reflectance': 'reflectance',
 }
@@ -100,7 +100,7 @@ def _typed(value: Any) -> float:
     return float('%.7g' % float(value))
 
 
-def parameters(text: Any) -> Dict[str, Any]:
+def parameters(text: Any) -> dict[str, Any]:
     """The JSON object in the parameters field, or ``{}`` where it is blank.
 
     Raises :class:`ValueError` with what is wrong with it, which the panel
@@ -120,7 +120,7 @@ def parameters(text: Any) -> Dict[str, Any]:
     return value
 
 
-def hook_block(settings: Any) -> Optional[Dict[str, Any]]:
+def hook_block(settings: Any) -> Optional[dict[str, Any]]:
     """The ``OGLC_hook`` payload these settings ask for, or None for no tag.
 
     The parameters field is merged last, so it is the way to reach a parameter
@@ -146,14 +146,14 @@ def hook_block(settings: Any) -> Optional[Dict[str, Any]]:
     return {'kind': kind, **params}
 
 
-def _water_parameters(settings: Any) -> Dict[str, Any]:
+def _water_parameters(settings: Any) -> dict[str, Any]:
     """The four water fields, less the ones still saying what the loader assumes.
 
     ``style`` is written whatever it says: it is the choice the panel is there
     to make, and a file that names it reads as deliberate rather than defaulted.
     """
     style = str(getattr(settings, 'style', '') or '').strip().lower()
-    params: Dict[str, Any] = {'style': style or DEFAULTS['style']}
+    params: dict[str, Any] = {'style': style or DEFAULTS['style']}
     shading = str(getattr(settings, 'material', '') or '').strip().lower()
     if shading and shading != DEFAULTS['material']:
         params['material'] = shading
@@ -166,9 +166,9 @@ def _water_parameters(settings: Any) -> Dict[str, Any]:
     return params
 
 
-def _effect_parameters(settings: Any) -> Dict[str, Any]:
+def _effect_parameters(settings: Any) -> dict[str, Any]:
     """``scale`` and ``density``, where either differs from 1."""
-    params: Dict[str, Any] = {}
+    params: dict[str, Any] = {}
     for name in ('scale', 'density'):
         value = _typed(getattr(settings, name, DEFAULTS[name]))
         if value != DEFAULTS[name]:
@@ -176,9 +176,9 @@ def _effect_parameters(settings: Any) -> Dict[str, Any]:
     return params
 
 
-def _mirror_parameters(settings: Any) -> Dict[str, Any]:
+def _mirror_parameters(settings: Any) -> dict[str, Any]:
     """The mirror fields that differ from what the loader assumes."""
-    params: Dict[str, Any] = {}
+    params: dict[str, Any] = {}
     for name, written in MIRROR_PARAMETERS.items():
         value = getattr(settings, name, DEFAULTS[name])
         value = int(value) if name == 'interval' else _typed(value)
@@ -201,13 +201,13 @@ def misplaced(kind: Any, on: str) -> str:
         str(kind).strip(), _HOLDER[belongs], _HOLDER[on])
 
 
-def suggestions(typed: Any) -> List[str]:
+def suggestions(typed: Any) -> list[str]:
     """The engine's kinds that begin with what has been typed, in order."""
     start = str(typed or '').strip().lower()
     return sorted(kind for kind in KINDS if kind.startswith(start))
 
 
-def preview(block: Optional[Dict[str, Any]]) -> str:
+def preview(block: Optional[dict[str, Any]]) -> str:
     """One line saying what goes in the file, for the panel to draw."""
     if not block:
         return ''

@@ -16,7 +16,8 @@ import os
 import urllib.parse
 from urllib.request import url2pathname
 from io import BytesIO
-from typing import Any, Dict, IO, List, Optional, Sequence, Tuple, Union
+from collections.abc import Sequence
+from typing import Any, IO, Optional
 from OpenGL._bytes import as_8_bit
 from OpenGLContext.loaders.resolver import (
     Resolver,
@@ -31,13 +32,13 @@ log = logging.getLogger(__name__)
 
 #: What one fetch answers with: the URL it settled on, an open binary stream, the
 #: name to report it under, and the response headers where the transport had any.
-Fetched = Tuple[str, IO[bytes], str, Optional[Any]]
+Fetched = tuple[str, IO[bytes], str, Optional[Any]]
 #: What :meth:`_Loader.__call__` hands a handler: the same four with the name
 #: ahead of the stream, which is the order every handler's ``__call__`` takes.
-Loaded = Tuple[str, str, IO[bytes], Optional[Any]]
+Loaded = tuple[str, str, IO[bytes], Optional[Any]]
 
 
-def as_unicode(u: Union[bytes, str]) -> str:
+def as_unicode(u: bytes | str) -> str:
     """*u* as text, decoding UTF-8 bytes where that is what arrived."""
     if isinstance(u, bytes):
         return u.decode("utf-8")
@@ -127,11 +128,11 @@ class _Loader(object):
         """Initialize the Loader"""
         # One Resolver per base URL, so a document's repeated references (a marble
         # texture used by many shapes) are fetched and memoised once.
-        self._resolvers: Dict[str, Resolver] = {}
+        self._resolvers: dict[str, Resolver] = {}
 
     def __call__(
         self,
-        url: Union[bytes, str, Sequence[Union[bytes, str]]],
+        url: bytes | str | Sequence[bytes | str],
         baseURL: Optional[str] = None,
     ) -> Loaded:
         """Load the given multi-value url and call callbacks
@@ -148,7 +149,7 @@ class _Loader(object):
         """
         log.info("Loading: %s, %s", url, baseURL)
         if isinstance(url, (bytes, str)):
-            urls: List[str] = [as_unicode(url)]
+            urls: list[str] = [as_unicode(url)]
         else:
             urls = [as_unicode(u) for u in url]
         for u in urls:
@@ -218,7 +219,7 @@ class _Loader(object):
         file = open(path, "rb")
         return (path, file, path, None)
 
-    loadedHandlers: Dict[str, Any] = {}
+    loadedHandlers: dict[str, Any] = {}
 
     def loadHandlers(self) -> None:
         """Load all registered handlers"""

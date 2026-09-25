@@ -1,6 +1,7 @@
 """node-path implementation for OpenGLContext
 """
-from typing import TYPE_CHECKING, Any, Iterator
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, Any
 
 from vrml.vrml97 import nodepath, nodetypes
 from vrml.cache import CACHE

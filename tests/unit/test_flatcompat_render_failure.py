@@ -4,7 +4,7 @@ The compatibility pass records the failure through
 :meth:`~OpenGLContext.passes._flat.FlatPass.renderFailed`, exactly as the core
 pass does, and goes on to the next shape.
 """
-from typing import Any, List, Tuple
+from typing import Any
 
 import pytest
 
@@ -44,7 +44,7 @@ class _Context:
     contextDefinition = _Definition()
 
 
-def _records(nodes: List[Any], transparent: int) -> List[Tuple[Any, ...]]:
+def _records(nodes: list[Any], transparent: int) -> list[tuple[Any, ...]]:
     """One (sortKey, mvmatrix, tmatrix, bvolume, path, node) record per node."""
     from OpenGLContext.arrays import identity
     matrix = identity(4, 'f')
@@ -57,7 +57,7 @@ def compat_pass(gl_context_compat: Any) -> Any:
     from OpenGLContext.passes.flatcompat import FlatPass
     pass_object = FlatPass.__new__(FlatPass)
     pass_object.context = _Context()
-    pass_object.failed: List[Tuple[str, Any, BaseException]] = []
+    pass_object.failed: list[tuple[str, Any, BaseException]] = []
 
     def renderFailed(where: str, node: Any, err: BaseException) -> None:
         pass_object.failed.append((where, node, err))

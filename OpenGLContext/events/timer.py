@@ -1,5 +1,6 @@
 """EventManager providing vcr-like control of an InternalTime object"""
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any, Optional
 
 from . import eventmanager, systemtime, internaltime
 from pydispatch import dispatcher

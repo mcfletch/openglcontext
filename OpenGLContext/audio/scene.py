@@ -20,7 +20,8 @@ from __future__ import annotations
 import logging
 import time
 import weakref
-from typing import Any, Dict, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from omi_audio.device import open_device
 from omi_audio.engine import AudioEngine
@@ -137,7 +138,7 @@ def _view_platform(context: Any) -> Any:
     return getattr(context, 'platform', None)
 
 
-def describe(context: Any) -> Dict[str, Any]:
+def describe(context: Any) -> dict[str, Any]:
     """What this context's audio is doing, for a debug overlay."""
     engine = _engines.get(context)
     if engine is None:

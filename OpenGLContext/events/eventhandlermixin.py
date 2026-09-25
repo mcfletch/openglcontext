@@ -3,9 +3,8 @@
 import queue
 import logging
 import time
-from typing import (
-    TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple, Type,
-)
+from collections.abc import Sequence
+from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGL._bytes import as_str
 
@@ -53,7 +52,7 @@ class HeldKeyMixin(object):
             '%s must implement emitKey to use held-key tracking'
             % (self.__class__.__name__,))
 
-    def heldKeys(self) -> Dict[Any, Any]:
+    def heldKeys(self) -> dict[Any, Any]:
         """The keys currently down, as ``{key: modifiers}``"""
         return dict((key, held[0]) for key, held in self._heldMap().items())
 
@@ -103,7 +102,7 @@ class HeldKeyMixin(object):
         if layout is not None:
             layout.release_all()
 
-    def _heldMap(self) -> Dict[Any, List[Any]]:
+    def _heldMap(self) -> dict[Any, list[Any]]:
         held = self.__dict__.get('_heldKeysMap')
         if held is None:
             held = self.__dict__['_heldKeysMap'] = {}
@@ -132,9 +131,9 @@ class EventHandlerMixin(HeldKeyMixin):
     """
 
     #: ``(eventType, managerClass)`` pairs the context builds its managers from.
-    EventManagerClasses: Sequence[Tuple[Optional[str], Type[Any]]] = []
+    EventManagerClasses: Sequence[tuple[Optional[str], type[Any]]] = []
     #: What drives the TimeSensors and Timers, or None for a context with none.
-    TimeManagerClass: Optional[Type[Any]] = None
+    TimeManagerClass: Optional[type[Any]] = None
 
     if TYPE_CHECKING:
         # What this mix-in reaches for on the Context it is mixed into.  The
@@ -152,8 +151,8 @@ class EventHandlerMixin(HeldKeyMixin):
         (a list of (eventType, managerClass) values) and calls
         addEventManager for each item.
         """
-        self.__managers: Dict[Optional[str], Any] = {}
-        self.__uncaptureDict: Dict[str, Any] = {}
+        self.__managers: dict[Optional[str], Any] = {}
+        self.__uncaptureDict: dict[str, Any] = {}
         for key, managerClass in self.EventManagerClasses:
             self.addEventManager(key, managerClass())
         self.__timeManager: Any = (

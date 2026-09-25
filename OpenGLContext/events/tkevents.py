@@ -1,6 +1,6 @@
 """Module providing translation from Tkinter events to OpenGLContext events"""
 
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
 from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
@@ -24,11 +24,11 @@ WHEEL_DELTA = 120.0
 #: Which Tk button number is which of OpenGLContext's.  Tk numbers them 1, 2,
 #: 3 for left, middle, right; OpenGLContext numbers them 0, 2, 1, since it
 #: keeps the X11 order where the wheel is 4 and 5.
-BUTTON_MAPPING: Dict[int, int] = {1: 0, 2: 2, 3: 1}
+BUTTON_MAPPING: dict[int, int] = {1: 0, 2: 2, 3: 1}
 
 #: The Tk button numbers a wheel notch arrives on under X11, and which way each
 #: turns.
-X11_WHEEL_BUTTONS: Dict[int, int] = {4: WHEEL_UP, 5: WHEEL_DOWN}
+X11_WHEEL_BUTTONS: dict[int, int] = {4: WHEEL_UP, 5: WHEEL_DOWN}
 
 
 class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
@@ -46,7 +46,7 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
         # What this mix-in needs of the Tk context beside it.
         def addPickEvent(self, event: Any) -> Any: ...
         def triggerPick(self) -> Any: ...
-        def getViewPort(self) -> Tuple[int, int]: ...
+        def getViewPort(self) -> tuple[int, int]: ...
 
     ### KEYBOARD interactions
     def tkOnKeyDown( self, event: Any ) -> None:
@@ -178,7 +178,7 @@ class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
         """
 
 
-def modifiersOf( tkEventObject: Any ) -> Tuple[bool, bool, bool]:
+def modifiersOf( tkEventObject: Any ) -> tuple[bool, bool, bool]:
     """The shift, control and alt triple a Tk event was delivered with
 
     A function rather than a method on the event classes, because the context
@@ -216,7 +216,7 @@ class tkXEvent(object):
     Provides method for determining the modifier set from
     Tkinter event objects
     """
-    def _getModifiers( self, tkEventObject: Any) -> Tuple[bool, bool, bool]:
+    def _getModifiers( self, tkEventObject: Any) -> tuple[bool, bool, bool]:
         """Get a three-tupple of shift, control, alt status"""
         return modifiersOf( tkEventObject )
 
@@ -290,7 +290,7 @@ class tkKeypressEvent( tkXEvent, keyboardevents.KeypressEvent ):
         self.name = tkEventObject.char
 
 
-keyboardMapping: Dict[str, str] = {
+keyboardMapping: dict[str, str] = {
     'BackSpace':'<backspace>',
     'Tab':'<tab>',
     'Return':'<return>',

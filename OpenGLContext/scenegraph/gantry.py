@@ -24,7 +24,8 @@ being handed the geometry.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any, NamedTuple, Optional
 
 import numpy as np
 
@@ -137,7 +138,7 @@ def chequer_texture(size: int = 256, columns: int = BANNER_SQUARES[0],
     return image
 
 
-def gantry_atlas(cell: int = 256) -> Tuple[Any, Dict[str, Box]]:
+def gantry_atlas(cell: int = 256) -> tuple[Any, dict[str, Box]]:
     """Steel, banner and road paint in one image.
 
     Returns the image and ``{name: (u0, v0, u1, v1)}`` for ``steel``,
@@ -169,7 +170,7 @@ def gantry_material(image: Any = None, cell: int = 256) -> PBRMaterial:
 
 
 def gantry_legs(span: float, profile: Optional[GantryProfile] = None,
-                drops: Sequence[float] = (0.0, 0.0)) -> List[Leg]:
+                drops: Sequence[float] = (0.0, 0.0)) -> list[Leg]:
     """The two uprights of a gantry of this span, left first.
 
     ``drops`` is how far below the road each leg's ground is, in the same order.
@@ -186,7 +187,7 @@ def gantry_legs(span: float, profile: Optional[GantryProfile] = None,
 
 def gantry_mesh(span: float, profile: Optional[GantryProfile] = None,
                 material: Optional[PBRMaterial] = None,
-                cells: Optional[Dict[str, Box]] = None,
+                cells: Optional[dict[str, Box]] = None,
                 drops: Sequence[float] = (0.0, 0.0)) -> PBRMesh:
     """One whole gantry at the origin, as a single mesh.
 
@@ -222,7 +223,7 @@ def gantry_mesh(span: float, profile: Optional[GantryProfile] = None,
 
 def start_line_mesh(width: float, profile: Optional[GantryProfile] = None,
                     material: Optional[PBRMaterial] = None,
-                    cells: Optional[Dict[str, Box]] = None,
+                    cells: Optional[dict[str, Box]] = None,
                     crossfall: float = 0.0) -> PBRMesh:
     """The line painted across the carriageway, at the origin, road along Z.
 
@@ -246,9 +247,9 @@ def start_line_mesh(width: float, profile: Optional[GantryProfile] = None,
     # An even count, so the crown falls on a joint and the two halves of the
     # line mirror each other; sized off the row depth, so a square is square.
     columns = max(int(round(width / deep / 2.0)), 1) * 2
-    positions: List[tuple] = []
-    texcoords: List[tuple] = []
-    faces: List[int] = []
+    positions: list[tuple] = []
+    texcoords: list[tuple] = []
+    faces: list[int] = []
     for column in range(columns):
         x0 = -half + column * float(width) / columns
         x1 = -half + (column + 1) * float(width) / columns
@@ -267,8 +268,8 @@ def start_line_mesh(width: float, profile: Optional[GantryProfile] = None,
                          np.asarray(texcoords, dtype='f'))
 
 
-def _dressed(material: Optional[PBRMaterial], cells: Optional[Dict[str, Box]]
-             ) -> Tuple[PBRMaterial, Dict[str, Box]]:
+def _dressed(material: Optional[PBRMaterial], cells: Optional[dict[str, Box]]
+             ) -> tuple[PBRMaterial, dict[str, Box]]:
     """The material and atlas boxes a piece is built against, painting its own
     if the caller has none."""
     if cells is None:
@@ -279,7 +280,7 @@ def _dressed(material: Optional[PBRMaterial], cells: Optional[Dict[str, Box]]
 
 
 def _tube(offset: float, radius: float, sides: int, bottom: float, top: float,
-          material: PBRMaterial, uv: Tuple[float, float]) -> PBRMesh:
+          material: PBRMaterial, uv: tuple[float, float]) -> PBRMesh:
     """One leg: a low-sided tube standing at ``offset`` along the beam.
 
     Open at both ends -- the foot is in the ground and the head is inside the
@@ -292,7 +293,7 @@ def _tube(offset: float, radius: float, sides: int, bottom: float, top: float,
     lower, upper = ring.copy(), ring.copy()
     lower[:, 1] = bottom
     upper[:, 1] = top
-    faces: List[int] = []
+    faces: list[int] = []
     for index in range(sides):
         step = (index + 1) % sides
         faces += [index, step, index + sides, step, step + sides, index + sides]
@@ -302,8 +303,8 @@ def _tube(offset: float, radius: float, sides: int, bottom: float, top: float,
                          np.tile(np.asarray(uv, dtype='f'), (len(positions), 1)))
 
 
-def _box(low: Tuple[float, float, float], high: Tuple[float, float, float],
-         material: PBRMaterial, uv: Tuple[float, float],
+def _box(low: tuple[float, float, float], high: tuple[float, float, float],
+         material: PBRMaterial, uv: tuple[float, float],
          facing: Optional[Box] = None) -> PBRMesh:
     """An axis-aligned box, every face its own four corners so it reads flat.
 
@@ -321,9 +322,9 @@ def _box(low: Tuple[float, float, float], high: Tuple[float, float, float],
         [(x0, y0, z0), (x1, y0, z0), (x1, y0, z1), (x0, y0, z1)],   # -Y
         [(x0, y1, z1), (x1, y1, z1), (x1, y1, z0), (x0, y1, z0)],   # +Y
     ]
-    positions: List[tuple] = []
-    texcoords: List[tuple] = []
-    faces: List[int] = []
+    positions: list[tuple] = []
+    texcoords: list[tuple] = []
+    faces: list[int] = []
     for index, quad in enumerate(quads):
         base = len(positions)
         positions += quad
@@ -336,9 +337,9 @@ def _box(low: Tuple[float, float, float], high: Tuple[float, float, float],
                          np.asarray(texcoords, dtype='f'))
 
 
-def _across(point: Tuple[float, float, float],
-            low: Tuple[float, float, float], high: Tuple[float, float, float],
-            box: Box) -> Tuple[float, float]:
+def _across(point: tuple[float, float, float],
+            low: tuple[float, float, float], high: tuple[float, float, float],
+            box: Box) -> tuple[float, float]:
     """Where one corner of a banner face reads in its cell of the atlas.
 
     The picture runs the length of the board and stands upright on it, so the

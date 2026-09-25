@@ -18,7 +18,8 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Sequence, Tuple
+from collections.abc import Callable, Sequence
+from typing import Any, Optional
 
 import numpy as np
 
@@ -27,7 +28,7 @@ __all__ = [
     'first_camera', 'look_through',
 ]
 
-Vector = Tuple[float, float, float]
+Vector = tuple[float, float, float]
 
 #: Which camera of a scene's a view opens on: given them all, in the order the
 #: scene declares them, answers one, or None for none of them.
@@ -94,7 +95,7 @@ def camera_at(viewpoint: Any, matrix: Any = None, name: str = '',
         viewpoint=viewpoint, path=path)
 
 
-def scene_cameras(scenegraph: Any) -> List[SceneCamera]:
+def scene_cameras(scenegraph: Any) -> list[SceneCamera]:
     """Every camera the render pass has found in ``scenegraph``, in its order.
 
     Empty for a scene with none, for None, and for a scene no frame has drawn

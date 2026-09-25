@@ -35,7 +35,8 @@ Emphasis and focus are answered separately and deliberately:
   line.
 """
 
-from typing import Any, Sequence, Tuple
+from collections.abc import Sequence
+from typing import Any
 
 from vrml import field, node, protofunctions
 
@@ -68,7 +69,7 @@ class NineSlice(node.Node):
     #: several states.
     tint = field.newField('tint', 'SFVec4f', 1, (1, 1, 1, 1))
 
-    def borders(self) -> Tuple[int, int, int, int]:
+    def borders(self) -> tuple[int, int, int, int]:
         """Corner sizes as whole pixels, in the order left, top, right, bottom."""
         left, top, right, bottom = (int(value) for value in self.border)
         return (left, top, right, bottom)
@@ -281,7 +282,7 @@ class Skin(node.Node):
         return self.secondaryText
 
     def buttonState(self, hovered: bool = False, down: bool = False,
-                    enabled: bool = True) -> Tuple[Any, Any]:
+                    enabled: bool = True) -> tuple[Any, Any]:
         """Fill colour and artwork for one button state.
 
         The artwork may be an unset ``SFNode``, which the renderer reads as no
@@ -295,7 +296,7 @@ class Skin(node.Node):
             return (self.buttonHoverFill, self.buttonHoverImage)
         return (self.buttonFill, self.buttonImage)
 
-    def buttonPadding(self, metrics: FontMetrics) -> Tuple[int, int]:
+    def buttonPadding(self, metrics: FontMetrics) -> tuple[int, int]:
         """A button's padding in pixels, from its character-based width."""
         return (int(self.buttonPaddingX * metrics.char_width),
                 int(self.buttonPaddingY))

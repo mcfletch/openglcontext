@@ -12,7 +12,7 @@ and puts one up.
 """
 from __future__ import annotations
 
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 from vrml import field
 
@@ -51,12 +51,12 @@ class Tooltip(Panel):
         return None
 
     def content_size(self, metrics: FontMetrics,
-                     available: Optional[int] = None) -> Tuple[int, int]:
+                     available: Optional[int] = None) -> tuple[int, int]:
         pad = int(self.activeSkin().panelPadding)
         return (metrics.text_width(str(self.text)) + pad,
                 metrics.char_height + pad)
 
-    def layout(self, viewport: Tuple[int, int], metrics: FontMetrics) -> None:
+    def layout(self, viewport: tuple[int, int], metrics: FontMetrics) -> None:
         """Beside the pointer, and inside the window wherever the pointer is."""
         self.link()
         self.scaleSkin(metrics)

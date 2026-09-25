@@ -16,7 +16,7 @@ GL allows one ``GL_TIME_ELAPSED`` query at a time, so timers do not nest.
 """
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import Any, Optional
 
 __all__ = ['DEPTH', 'GpuTimer']
 
@@ -30,9 +30,9 @@ class GpuTimer:
 
     def __init__(self, depth: int = DEPTH) -> None:
         self.depth = int(depth)
-        self._queries: List[int] = []
-        self._issued: List[bool] = [False] * self.depth
-        self._tags: List[Any] = [None] * self.depth
+        self._queries: list[int] = []
+        self._issued: list[bool] = [False] * self.depth
+        self._tags: list[Any] = [None] * self.depth
         self._next = 0
         self._open = False
         #: The newest measurement read back, in milliseconds, or None.

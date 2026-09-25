@@ -29,7 +29,7 @@ from vrml import field, protofunctions
 
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
-from typing import Any, Optional, Tuple
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 from OpenGLContext import arrays
@@ -310,7 +310,7 @@ class _SurfaceRenderer(object):
         return self
 
     # -- distance level-of-detail -----------------------------------------
-    def _lod_bounding_sphere(self) -> Optional[Tuple[Any, float]]:
+    def _lod_bounding_sphere(self) -> Optional[tuple[Any, float]]:
         """(center, radius) of this surface in local space, or None (subclass hook)."""
         return None
 
@@ -324,7 +324,7 @@ class _SurfaceRenderer(object):
         return tessellationlod.lod_level(mode, center, radius)
 
     @staticmethod
-    def _control_point_sphere(control_point: Any) -> Optional[Tuple[Any, float]]:
+    def _control_point_sphere(control_point: Any) -> Optional[tuple[Any, float]]:
         """Local bounding sphere (center, radius) from a control-point array."""
         try:
             cp = arrays.reshape(arrays.array(control_point, 'd'), (-1, 3))
@@ -435,7 +435,7 @@ class NurbsSurface(_SurfaceRenderer, nurbs.NurbsSurface):
             if field_obj is not None:
                 holder.depend(self, field_obj)
 
-    def _lod_bounding_sphere(self) -> Optional[Tuple[Any, float]]:
+    def _lod_bounding_sphere(self) -> Optional[tuple[Any, float]]:
         return self._control_point_sphere(self.controlPoint)
 
     def _tessellate(self, steps: Optional[float] = None) -> Any:
@@ -472,7 +472,7 @@ class TrimmedSurface(_SurfaceRenderer, nurbs.TrimmedSurface):
         if trim_field is not None:
             holder.depend(self, trim_field)
 
-    def _lod_bounding_sphere(self) -> Optional[Tuple[Any, float]]:
+    def _lod_bounding_sphere(self) -> Optional[tuple[Any, float]]:
         if not self.surface:
             return None
         return self._control_point_sphere(self.surface.controlPoint)
@@ -544,7 +544,7 @@ class NurbsCurve(nurbs.NurbsCurve):
                         holder.depend(self, field_obj)
         return cached
 
-    def _evaluate(self) -> Optional[Tuple[Any, Any]]:
+    def _evaluate(self) -> Optional[tuple[Any, Any]]:
         """Points along the curve, and a colour each where the node gives them.
 
         ``None`` where the node does not describe a curve; the colours are
@@ -667,7 +667,7 @@ class NurbsCurve(nurbs.NurbsCurve):
         """Return degree of a nurbs-curve object"""
         return len(self.knot) - len(self.controlPoint) + 1
 
-    def uniform(self) -> Tuple[int, str]:
+    def uniform(self) -> tuple[int, str]:
         """Check that curve is "uniform"
 
         * all items in knots are increasing
@@ -698,7 +698,7 @@ class NurbsCurve(nurbs.NurbsCurve):
                 last = item
         return 1, "Uniform"
 
-    def allIncreasing(self) -> Tuple[int, str]:
+    def allIncreasing(self) -> tuple[int, str]:
         """Check that all items in knots are increasing"""
         if not len(self.knot):
             return 1, "No knots defined"

@@ -19,7 +19,7 @@ import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ class SessionJournal:
     max_bytes -- the ceiling; ``None`` for none.
     """
 
-    def __init__(self, path: Any, header: Optional[Dict[str, Any]] = None,
+    def __init__(self, path: Any, header: Optional[dict[str, Any]] = None,
                  max_bytes: Optional[int] = DEFAULT_MAX_BYTES,
                  now: Any = None) -> None:
         self.path = Path(path)
@@ -84,7 +84,7 @@ class SessionJournal:
         self._open(header or {})
 
     # -- the file ---------------------------------------------------------
-    def _open(self, header: Dict[str, Any]) -> None:
+    def _open(self, header: dict[str, Any]) -> None:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             self._handle = self.path.open('w')
@@ -105,7 +105,7 @@ class SessionJournal:
         record.update(header)
         self(record)
 
-    def __call__(self, record: Dict[str, Any]) -> None:
+    def __call__(self, record: dict[str, Any]) -> None:
         """Append one record.  This is what a recorder is given as its writer."""
         if self.disabled:
             return

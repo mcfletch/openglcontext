@@ -26,7 +26,8 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import TYPE_CHECKING, Callable, Sequence, TextIO
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, TextIO
 
 from . import catalog, fetch
 from .pack import ContentPack, human_bytes

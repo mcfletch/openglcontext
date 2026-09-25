@@ -15,7 +15,8 @@ from __future__ import annotations
 import collections
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any, Optional
 
 from OpenGLContext.loaders.documentvalues import bounded
 from OpenGLContext.telemetry.replay import Recording
@@ -35,7 +36,7 @@ def describe(recording: Recording, events: bool = False,
     marks -- list every mark the game made rather than the ends of them.
     limit -- how many exceptions, marks and distinct warnings to show.
     """
-    lines: List[str] = []
+    lines: list[str] = []
     lines.extend(_session(recording))
     lines.extend(_frames(recording))
     lines.extend(_failures(recording, limit))
@@ -45,7 +46,7 @@ def describe(recording: Recording, events: bool = False,
     return '\n'.join(lines)
 
 
-def _session(recording: Recording) -> List[str]:
+def _session(recording: Recording) -> list[str]:
     header = recording.header
     summary = recording.summary()
     argv = ' '.join(str(word) for word in header.get('argv', ())) or '-'
@@ -74,7 +75,7 @@ def _session(recording: Recording) -> List[str]:
     return lines
 
 
-def _frames(recording: Recording) -> List[str]:
+def _frames(recording: Recording) -> list[str]:
     summary = recording.summary()
     if not summary['frames']:
         return ['', 'no frames were recorded']
@@ -85,7 +86,7 @@ def _frames(recording: Recording) -> List[str]:
         '  median %.1fms, worst %.1fms, %d stalls' % (
             summary['median_ms'], summary['worst_ms'], summary['stalls']),
     ]
-    phases: Dict[str, float] = collections.defaultdict(float)
+    phases: dict[str, float] = collections.defaultdict(float)
     for block in recording.blocks:
         for name, milliseconds in (block.get('phases_ms') or {}).items():
             phases[name] += float(milliseconds)
@@ -96,8 +97,8 @@ def _frames(recording: Recording) -> List[str]:
     return lines
 
 
-def _failures(recording: Recording, limit: int) -> List[str]:
-    lines: List[str] = []
+def _failures(recording: Recording, limit: int) -> list[str]:
+    lines: list[str] = []
     if recording.exceptions:
         lines.append('')
         lines.append('%d exception(s):' % (len(recording.exceptions),))
@@ -125,7 +126,7 @@ def _failures(recording: Recording, limit: int) -> List[str]:
     return lines
 
 
-def _marks(recording: Recording, limit: int, every: bool = False) -> List[str]:
+def _marks(recording: Recording, limit: int, every: bool = False) -> list[str]:
     """What the game said it was doing, which is what a reader looks at first.
 
     A game that marks well makes hundreds of them, and the ones that matter are
@@ -155,7 +156,7 @@ def _marks(recording: Recording, limit: int, every: bool = False) -> List[str]:
     return lines
 
 
-def _mark(record: Dict[str, Any]) -> str:
+def _mark(record: dict[str, Any]) -> str:
     """One mark as its line: when, which frame, its name and what it carried."""
     fields = ' '.join('%s=%s' % pair
                       for pair in (record.get('fields') or {}).items())
@@ -164,7 +165,7 @@ def _mark(record: Dict[str, Any]) -> str:
         record.get('name', '-'), fields)).rstrip()
 
 
-def _input(recording: Recording, events: bool) -> List[str]:
+def _input(recording: Recording, events: bool) -> list[str]:
     if not recording.inputs:
         return ['', 'no input was recorded']
     counted = collections.Counter(record.get('type')
@@ -180,7 +181,7 @@ def _input(recording: Recording, events: bool) -> List[str]:
     return lines
 
 
-def _oneEvent(record: Dict[str, Any]) -> str:
+def _oneEvent(record: dict[str, Any]) -> str:
     kind = record.get('type')
     if kind in ('keyboard', 'keypress'):
         return '%-11s key %r%s' % (
@@ -199,7 +200,7 @@ def _oneEvent(record: Dict[str, Any]) -> str:
     return str(kind)
 
 
-def _state(recording: Recording) -> List[str]:
+def _state(recording: Recording) -> list[str]:
     """The last description the application gave of itself.
 
     Last rather than every one: a session samples it every few seconds, and
@@ -218,7 +219,7 @@ def _state(recording: Recording) -> List[str]:
     return lines
 
 
-def _stamp(record: Dict[str, Any]) -> str:
+def _stamp(record: dict[str, Any]) -> str:
     """A record's time as minutes and seconds into the session."""
     seconds = bounded(record.get('t'), 0.0)
     return '%2d:%06.3f' % (int(seconds // 60), seconds % 60)

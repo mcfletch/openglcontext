@@ -3,7 +3,7 @@
 from OpenGL.GL import *
 from OpenGL.GL import glDeleteVertexArrays
 from OpenGL.arrays import vbo
-from typing import Any, Tuple
+from typing import Any
 from vrml.vrml97 import basenodes
 from OpenGLContext.scenegraph import coordinatebounded
 from OpenGLContext.scenegraph.vertexsemantics import (
@@ -217,7 +217,7 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
         return 1
 
     def _point_buffer(self, mode: Any, points: Any,
-                      has_colors: bool) -> Tuple[Any, int]:
+                      has_colors: bool) -> tuple[Any, int]:
         """Return (vbo, stride) for the point data, re-uploading only on change.
 
         A persistent VBO is kept on the node; when coord/color change (tracked

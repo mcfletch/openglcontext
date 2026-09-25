@@ -1,5 +1,6 @@
 """Abstract base class for all event managers."""
-from typing import Any, Dict, Iterable
+from collections.abc import Iterable
+from typing import Any
 
 from pydispatch import dispatcher
 import logging
@@ -29,7 +30,7 @@ class EventManager(object):
     type: str = ""
     def __init__ (self ) -> None:
         """Initialise the event manager"""
-        self.mapping: Dict[Any, Any] = {
+        self.mapping: dict[Any, Any] = {
         }
     def hasReceivers( self ) -> bool:
         """Whether any live callback is registered for this manager's event type.

@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 from OpenGLContext.bin.mirrorhall import BAYS, Hall
 from OpenGLContext.scenegraph import basenodes, surfaces
@@ -50,10 +50,10 @@ log = logging.getLogger(__name__)
 __all__ = ['BOUNCES', 'BUDGETS', 'INTERVALS', 'POOL', 'MirrorHall', 'main']
 
 #: The ``reflectionViews`` the ``b`` key steps through; 0 is the strategy's own.
-BUDGETS: Tuple[int, ...] = (0, 1, 2, 4)
+BUDGETS: tuple[int, ...] = (0, 1, 2, 4)
 
 #: The ``reflectionBounces`` the ``m`` key steps through.
-BOUNCES: Tuple[int, ...] = (2, 3, 1)
+BOUNCES: tuple[int, ...] = (2, 3, 1)
 
 #: The pool's water: ripples a few millimetres high and a few centimetres
 #: across, moving slowly, which is what tells indoor water from glass.
@@ -61,7 +61,7 @@ POOL = BREEZE.varied(name='pool', amplitude=0.004, wavelength=0.45, speed=0.35,
                      steepness=RIPPLE * 1.2, ripple=0.14)
 
 #: The corridor intervals the ``i`` key steps through.
-INTERVALS: Tuple[int, ...] = (3, 1, 6)
+INTERVALS: tuple[int, ...] = (3, 1, 6)
 
 
 class MirrorHall:
@@ -72,7 +72,7 @@ class MirrorHall:
     """
 
     #: The keys :meth:`press` answers, and what each does.
-    KEYS: Dict[str, str] = {
+    KEYS: dict[str, str] = {
         'r': 'reflections on and off',
         'b': 'mirror views a frame may draw',
         'm': 'how deep mirrors seen in mirrors are followed',
@@ -90,10 +90,10 @@ class MirrorHall:
         self.floor = PlanarReflector(interval=2, priority=0.5)
         #: The window, which shows nothing of its own material.
         self.window = PlanarReflector(replace=True, interval=1)
-        self.children: List[Any] = self._build()
+        self.children: list[Any] = self._build()
 
     # -- the mirrors -------------------------------------------------------
-    def _build(self) -> List[Any]:
+    def _build(self) -> list[Any]:
         hall = Hall()
         # A mirror is a material carrying a reflector: silvered metal, polished
         # marble, or glass that shows only what it reflects.

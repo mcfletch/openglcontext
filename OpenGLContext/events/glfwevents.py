@@ -1,6 +1,6 @@
 """Module providing translation from GLFW callbacks to OpenGLContext events"""
 
-from typing import TYPE_CHECKING, Any, Dict, List, Tuple
+from typing import TYPE_CHECKING, Any
 
 from OpenGLContext import renderoptions
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
@@ -58,7 +58,7 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
 
         def addPickEvent(self, event: Any) -> Any: ...
         def triggerPick(self) -> Any: ...
-        def getViewPort(self) -> Tuple[int, int]: ...
+        def getViewPort(self) -> tuple[int, int]: ...
         def OnResize(self, *arguments: Any) -> Any: ...
 
     ### KEYBOARD interactions
@@ -89,7 +89,7 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         mods = self._getCurrentModifiers()
         self.ProcessEvent(GLFWKeypressEvent(self, codepoint, mods))
 
-    def _getCurrentModifiers(self) -> Tuple[bool, bool, bool]:
+    def _getCurrentModifiers(self) -> tuple[bool, bool, bool]:
         """Get current modifier state by polling GLFW"""
         shift = (glfw.get_key(self.window, glfw.KEY_LEFT_SHIFT) == glfw.PRESS or
                  glfw.get_key(self.window, glfw.KEY_RIGHT_SHIFT) == glfw.PRESS)
@@ -101,7 +101,7 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
 
     ### MOUSE Interaction
     def _cursorToFramebuffer(self, window: Any, x: float,
-                             y: float) -> Tuple[float, float]:
+                             y: float) -> tuple[float, float]:
         """Scale a GLFW cursor position to framebuffer pixels.
 
         GLFW reports the cursor in logical window coordinates, but the viewport
@@ -147,7 +147,7 @@ class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
         for button in notches:
             self._emitWheel(window, button)
 
-    def _wheelNotches(self, offset: float) -> List[int]:
+    def _wheelNotches(self, offset: float) -> list[int]:
         """The notches in one report: a wheel's clicks, or a touchpad's sum.
 
         **The two are different devices and are counted differently.**  A wheel
@@ -256,9 +256,9 @@ class GLFWXEvent(object):
             list
     """
 
-    CURRENTBUTTONSTATES: List[int] = [0, 0, 0]
+    CURRENTBUTTONSTATES: list[int] = [0, 0, 0]
 
-    def _getModifiers(self, modifierMask: int) -> Tuple[bool, bool, bool]:
+    def _getModifiers(self, modifierMask: int) -> tuple[bool, bool, bool]:
         """Get the 3-tuple of modifier booleans from GLFW modifier mask"""
         return (
             bool(modifierMask & glfw.MOD_SHIFT),
@@ -266,7 +266,7 @@ class GLFWXEvent(object):
             bool(modifierMask & glfw.MOD_ALT),
         )
 
-    def _updateButtons(self, button: int, state: int) -> Tuple[int, int]:
+    def _updateButtons(self, button: int, state: int) -> tuple[int, int]:
         """Update the global mouse-button-states with an event's data"""
         index = buttonMapping.get(button)
         if index is None:
@@ -339,7 +339,7 @@ class GLFWKeyboardEvent(GLFWXEvent, keyboardevents.KeyboardEvent):
         if key == glfw.KEY_SPACE:
             return ' '
         # Punctuation and other printable characters
-        punctuation: Dict[int, str] = {
+        punctuation: dict[int, str] = {
             glfw.KEY_APOSTROPHE: "'",
             glfw.KEY_COMMA: ",",
             glfw.KEY_MINUS: "-",
@@ -375,7 +375,7 @@ class GLFWKeypressEvent(GLFWXEvent, keyboardevents.KeypressEvent):
 
 
 # Keyboard mapping from GLFW key codes to OpenGLContext key names
-keyboardMapping: Dict[int, str] = {
+keyboardMapping: dict[int, str] = {
     glfw.KEY_F1: "<F1>",
     glfw.KEY_F2: "<F2>",
     glfw.KEY_F3: "<F3>",
@@ -436,7 +436,7 @@ keyboardMapping: Dict[int, str] = {
 }
 
 # Mouse button mapping from GLFW button codes to OpenGLContext button indices
-buttonMapping: Dict[int, int] = {
+buttonMapping: dict[int, int] = {
     glfw.MOUSE_BUTTON_LEFT: 0,
     glfw.MOUSE_BUTTON_RIGHT: 1,
     glfw.MOUSE_BUTTON_MIDDLE: 2,

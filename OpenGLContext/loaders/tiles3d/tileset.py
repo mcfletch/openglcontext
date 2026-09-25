@@ -30,7 +30,7 @@ from OpenGLContext.loaders.tiles3d.boundingvolume import (
     SphereBV, BoxBV, RegionBV, WGS84_A, WGS84_B,
 )
 
-BoundingVolume = Union[SphereBV, BoxBV, RegionBV]
+BoundingVolume = SphereBV | BoxBV | RegionBV
 
 _IDENTITY = np.identity(4, dtype="d")
 

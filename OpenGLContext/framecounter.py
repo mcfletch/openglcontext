@@ -7,7 +7,7 @@ what lets a core-profile context report its frame rate at all: the display this
 node used to do went through fixed-function calls that a core profile does not
 have.
 """
-from typing import List, Optional, Tuple
+from typing import Optional
 
 from vrml import node, field
 
@@ -27,7 +27,7 @@ class FrameCounter( node.Node ):
     # model load (network + decode) or the first-frame shader compile lands in a
     # timed frame and permanently drags the number down. A windowed median
     # reflects current rendering speed and shrugs off those outliers.
-    _recent: Optional[List[float]] = None
+    _recent: Optional[list[float]] = None
     _RECENT_WINDOW = 90
 
     def addFrame( self, duration: float ) -> float:
@@ -58,7 +58,7 @@ class FrameCounter( node.Node ):
                 return round( 1.0 / median, 4 )
         return self.summary()[1]
 
-    def summary( self ) -> Tuple[int, float, float]:
+    def summary( self ) -> tuple[int, float, float]:
         """Give a summary of framerates
 
         returns (count, average fps, last frame-time)

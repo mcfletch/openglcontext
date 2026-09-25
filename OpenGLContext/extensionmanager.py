@@ -1,5 +1,5 @@
 """Object managing OpenGL extension loading for a Context"""
-from typing import Any, Dict, List, Optional
+from typing import Any
 from OpenGL.GL import glGetString, GL_EXTENSIONS
 from OpenGL.GLU import gluGetString, GLU_EXTENSIONS
 import traceback
@@ -33,7 +33,7 @@ class ExtensionManager(object):
 
         This implementation simply creates the modules attribute.
         """
-        self.modules: Dict[str, Any] = {}
+        self.modules: dict[str, Any] = {}
 
     def hasExtension(self, moduleName: str) -> bool:
         """Query whether an extension is currently loaded
@@ -89,26 +89,26 @@ class ExtensionManager(object):
                 return None
 
     # convenience queries...
-    def listGL(self) -> List[bytes]:
+    def listGL(self) -> list[bytes]:
         """Return list of OpenGL extension names"""
-        names: List[bytes] = glGetString(GL_EXTENSIONS).split()
+        names: list[bytes] = glGetString(GL_EXTENSIONS).split()
         return names
 
-    def listGLU(self) -> List[bytes]:
+    def listGLU(self) -> list[bytes]:
         """Return list of GLU extension names
 
         XXX This is currently broken with PyOpenGL 2.0.1
         """
-        names: List[bytes] = gluGetString(GLU_EXTENSIONS).split()
+        names: list[bytes] = gluGetString(GLU_EXTENSIONS).split()
         return names
 
-    def listWGL(self) -> List[bytes]:
+    def listWGL(self) -> list[bytes]:
         """Return list of WGL extension names"""
         extensions_string = self.initExtension(
             "OpenGL.WGL.EXT.extensions_string",
         )
         if extensions_string:
-            names: List[bytes] = \
+            names: list[bytes] = \
                 extensions_string.wglGetExtensionsStringEXT().split()
             return names
         else:

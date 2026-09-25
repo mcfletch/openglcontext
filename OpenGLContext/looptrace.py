@@ -47,7 +47,8 @@ import logging
 import os
 import time
 from contextlib import contextmanager
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
+from collections.abc import Callable, Iterator
+from typing import Any, Optional
 
 log = logging.getLogger(__name__)
 
@@ -56,8 +57,8 @@ __all__ = ['LoopTrace', 'describe_phases', 'STALL_MS_ENV', 'TRACE_STALLS_ENV']
 STALL_MS_ENV = 'OPENGLCONTEXT_STALL_MS'
 TRACE_STALLS_ENV = 'OPENGLCONTEXT_TRACE_STALLS'
 
-Phases = Dict[str, float]
-Record = Tuple[float, Phases]
+Phases = dict[str, float]
+Record = tuple[float, Phases]
 #: ``(duration, phases, stalled)`` -- what :meth:`LoopTrace.subscribe` hands on.
 Listener = Callable[[float, Phases, bool], None]
 
@@ -103,16 +104,16 @@ class LoopTrace:
                               else stall_ms) / 1000.0
         self.trace = _configured_trace() if trace is None else bool(trace)
         self._clock = clock
-        self._records: List[Record] = []
+        self._records: list[Record] = []
         self._phases: Phases = {}
-        self._stack: List[List[Any]] = []
+        self._stack: list[list[Any]] = []
         #: Stalls since the loop started, which outlives the window they
         #: happened in: "it hitched four times" is the report, and a window
         #: that has moved on cannot give it.
         self.stalls = 0
         #: ``(duration, phases)`` of the most recent stall, or None.
         self.last_stall: Optional[Record] = None
-        self._listeners: List[Listener] = []
+        self._listeners: list[Listener] = []
         # When the open iteration started, or None between iterations. Read by
         # a watcher on another thread, so it is one plain float assignment and
         # never a compound structure: a sampler must be able to read it without
@@ -146,7 +147,7 @@ class LoopTrace:
         the phases of one iteration divide its wall time rather than overlap.
         """
         stack = self._stack
-        frame: List[Any] = [self._clock(), 0.0]         # started, in children
+        frame: list[Any] = [self._clock(), 0.0]         # started, in children
         stack.append(frame)
         try:
             yield
@@ -226,7 +227,7 @@ class LoopTrace:
         """
         return self._records[-1] if self._records else None
 
-    def summary(self) -> Dict[str, Any]:
+    def summary(self) -> dict[str, Any]:
         """The whole picture as one mapping, ready for a provider to lay out.
 
         ``rate`` is iterations per second of *wall clock* -- the rate the
@@ -271,7 +272,7 @@ class LoopTrace:
                 for name, total in sorted(totals.items(),
                                           key=lambda pair: -pair[1])}
 
-    def worst_phase(self) -> Optional[Tuple[str, float]]:
+    def worst_phase(self) -> Optional[tuple[str, float]]:
         """Where the most recent stall's time went: ``(name, ms)``, or None.
 
         The one row worth putting on a crowded overlay, because it turns "it

@@ -13,7 +13,7 @@ two members that name the concrete ``Context`` class directly (``getTTFFiles``,
 import os
 import sys
 import logging
-from typing import Any, List, Optional, Type
+from typing import Any, Optional
 
 from OpenGL.plugins import Plugin
 
@@ -94,8 +94,8 @@ class ContextConfigMixin:
     @classmethod
     def getContextTypes(
         cls,
-        type: Type[plugins.Context] = plugins.InteractiveContext,
-    ) -> List[Plugin]:
+        type: type[plugins.Context] = plugins.InteractiveContext,
+    ) -> list[Plugin]:
         """Retrieve the set of defined context types
 
         type -- testing type key from setup.py for the registered modules
@@ -103,14 +103,14 @@ class ContextConfigMixin:
         returns list of setuptools entry-point objects which can be passed to
         getContextType( name ) to retrieve the actual context type.
         """
-        registered: List[Plugin] = type.all()
+        registered: list[Plugin] = type.all()
         return registered
 
     @classmethod
     def getContextType(
         cls,
         entrypoint: Any = None,
-        type: Type[plugins.Context] = plugins.InteractiveContext,
+        type: type[plugins.Context] = plugins.InteractiveContext,
     ) -> Any:
         """Load a single context type via entry-point resolution
 

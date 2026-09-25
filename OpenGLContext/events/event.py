@@ -1,5 +1,5 @@
 """Base class for all OpenGLContext event objects."""
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 
 
 class Event(object):
@@ -25,11 +25,11 @@ class Event(object):
     renderingPass: Any = None
     view: Any = None
     #: keyboard modifiers, three-tuple of shift, control, alt
-    modifiers: Tuple[int, int, int] = (0, 0, 0)
+    modifiers: tuple[int, int, int] = (0, 0, 0)
 
     def __init__(self) -> None:
         """Initialize common event parameters"""
-        self.visitedNodes: Dict[Any, Any] = {}
+        self.visitedNodes: dict[Any, Any] = {}
 
     def visited(self, key: Any, value: Optional[Any] = None) -> Optional[Any]:
         """Check for or register visitation of the given key
@@ -71,7 +71,7 @@ class Event(object):
         """
         return self.getKey()
 
-    def getModifiers(self) -> Tuple[int, int, int]:
+    def getModifiers(self) -> tuple[int, int, int]:
         """Retrieve a tuple of the active modifier keys
 
         Format is three Boolean values, (shift, control, alt)

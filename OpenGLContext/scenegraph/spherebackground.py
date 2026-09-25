@@ -1,6 +1,6 @@
 """Gradient-sphere background node"""
 import os
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Optional
 
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
@@ -22,7 +22,7 @@ SHADER_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'shaders')
 #: The gradient program, per GL context that compiled one.  A program is a name
 #: its own context issues, so a second window handed the first one's program
 #: draws through a name its driver never gave out.
-_shaders: Dict[Optional[contextresources.ContextKey], Any] = {}
+_shaders: dict[Optional[contextresources.ContextKey], Any] = {}
 
 
 @contextresources.on_context_lost
@@ -121,7 +121,7 @@ class _SphereBackground( object ):
         holder = mode.cache.holder(self, (None, ()), LEGACY_CACHE_KEY)
         return None
         
-    def buildSphere( self, colorSet: Any ) -> Tuple[Any, Any]:
+    def buildSphere( self, colorSet: Any ) -> tuple[Any, Any]:
         """``(vertices, colours)`` for one segment of the angle:colour set
 
         A vertex pair per stop between the poles, so a set of only the two
@@ -305,10 +305,10 @@ class _SphereBackground( object ):
 
     # Shader-based rendering support
     @staticmethod
-    def _compile_background_shader() -> Tuple[Any, Dict[str, int]]:
+    def _compile_background_shader() -> tuple[Any, dict[str, int]]:
         """The gradient program and its locations, for the current context."""
         key = contextresources.context_key()
-        compiled: Tuple[Any, Dict[str, int]] | None = _shaders.get(key)
+        compiled: tuple[Any, dict[str, int]] | None = _shaders.get(key)
         if compiled is not None:
             return compiled
 
@@ -333,7 +333,7 @@ class _SphereBackground( object ):
         _shaders[key] = compiled
         return compiled
 
-    def compileShader(self, mode: Any = None) -> Tuple[Any, Any, int] | None:
+    def compileShader(self, mode: Any = None) -> tuple[Any, Any, int] | None:
         """Compile shader-based rendering data for this background.
 
         Returns (vertices_vbo, colors_vbo, vertex_count, rotation_matrices)

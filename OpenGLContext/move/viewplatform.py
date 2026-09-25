@@ -17,7 +17,8 @@ a fixed orbit.
 """
 
 from math import atan2, pi
-from typing import Any, Optional, Sequence, Tuple, Union, cast
+from collections.abc import Sequence
+from typing import Any, Optional, cast
 
 from numpy import array, dot, negative, radians
 from OpenGLContext import quaternion
@@ -63,7 +64,7 @@ class ViewPlatform(object):
 
     #: Field of view (degrees), aspect ratio, near and far clipping distances,
     #: in the order ``gluPerspective`` takes them.
-    frustum: Tuple[float, float, float, float]
+    frustum: tuple[float, float, float, float]
     #: Object-space position, four components.
     position: Any
     #: View orientation.
@@ -72,7 +73,7 @@ class ViewPlatform(object):
     def __init__(
         self,
         position: Sequence[float] = (0, 0, 10),
-        orientation: Union[Sequence[float], Quaternion] = (0, 1, 0, 0),
+        orientation: Sequence[float] | Quaternion = (0, 1, 0, 0),
         fieldOfView: float = pi / 3,
         aspect: float = 1.0,
         near: float = 0.3,
@@ -142,7 +143,7 @@ class ViewPlatform(object):
             self.position = array(position, "f")
 
     def setOrientation(
-        self, orientation: Union[Sequence[float], Quaternion]
+        self, orientation: Sequence[float] | Quaternion
     ) -> None:
         """Set the current "camera orientation"
 
@@ -231,7 +232,7 @@ class ViewPlatform(object):
         else:
             return model
 
-    def getNearFar(self) -> Tuple[float, float]:
+    def getNearFar(self) -> tuple[float, float]:
         """Return the near and far frustum depths
 
         This method isn't actually used in OpenGLContext,

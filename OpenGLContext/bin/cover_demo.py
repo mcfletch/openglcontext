@@ -25,7 +25,8 @@ import io
 import math
 import os
 import sys
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from collections.abc import Callable, Sequence
+from typing import Any, Optional
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -75,9 +76,9 @@ class Grounds:
             'earth': surfaces.sandstone(256, colour=(0.20, 0.13, 0.07), seed=12),
             'rock': surfaces.sandstone(256, colour=(0.30, 0.29, 0.27), seed=13),
         }
-        self._images: Dict[str, Tuple[bytes, bytes]] = {}
+        self._images: dict[str, tuple[bytes, bytes]] = {}
 
-    def __call__(self, name: str, resolution: str) -> Dict[str, Any]:
+    def __call__(self, name: str, resolution: str) -> dict[str, Any]:
         if name not in self._images:
             base, _packed, bumps = surfaces.images(self._maps[name], relief=3.0)
             self._images[name] = (_png(base), _png(bumps))
@@ -167,7 +168,7 @@ def _flower_card(seed: int = 23) -> Image.Image:
     return card
 
 
-_CARDS: Dict[str, Callable[[], Image.Image]] = {
+_CARDS: dict[str, Callable[[], Image.Image]] = {
     'grass': _grass_card, 'fern': _fern_card, 'flowers': _flower_card,
 }
 
@@ -191,10 +192,10 @@ def _blades(count: int, rings: int, seed: int = 31) -> Any:
     from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
     from OpenGLContext.scenegraph.pbrmesh import PBRMesh
     rng = np.random.default_rng(seed)
-    positions: List[Tuple[float, float, float]] = []
-    normals: List[Tuple[float, float, float]] = []
-    texcoords: List[Tuple[float, float]] = []
-    indices: List[int] = []
+    positions: list[tuple[float, float, float]] = []
+    normals: list[tuple[float, float, float]] = []
+    texcoords: list[tuple[float, float]] = []
+    indices: list[int] = []
     for _blade in range(count):
         angle = rng.uniform(0.0, 2.0 * math.pi)
         spot = rng.uniform(-0.12, 0.12, 2)
@@ -284,7 +285,7 @@ class Meadow:
             mask=control_weight(self.control, ['meadow'], LAYERS, EXTENT),
             shade=self.terrain.shade, background=background)
         self.density = 0
-        self.children: List[Any] = [
+        self.children: list[Any] = [
             basenodes.SimpleBackground(color=(0.58, 0.70, 0.84)),
             basenodes.DirectionalLight(direction=(-0.5, -0.72, -0.48),
                                        color=(1.0, 0.95, 0.86), intensity=2.2),
@@ -359,12 +360,12 @@ class Meadow:
         """The keys, one to a line."""
         return '\n'.join('  %s -- %s' % item for item in cls.KEYS.items())
 
-    def standing(self, x: float, z: float, eye: float = 1.7) -> Tuple[float, float, float]:
+    def standing(self, x: float, z: float, eye: float = 1.7) -> tuple[float, float, float]:
         """Where an eye ``eye`` metres over the ground at ``(x, z)`` is."""
         ground = float(self.field.sample(np.array([x]), np.array([z]))[0])
         return (x, ground + eye, z)
 
-    def viewpoint(self) -> Tuple[Tuple[float, float, float], Tuple[float, float, float, float]]:
+    def viewpoint(self) -> tuple[tuple[float, float, float], tuple[float, float, float, float]]:
         """Where the demo starts: a position, and an orientation looking at the well."""
         x, z = WELL[0] - 7.0, WELL[1] + 13.0
         turn = -math.atan2(WELL[0] - x, z - WELL[1])
