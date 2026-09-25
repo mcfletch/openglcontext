@@ -43,6 +43,10 @@ GITHUB = 'gh'
 #: What ``run`` is: a command line, run to completion, its exit status back.
 Runner = Callable[[Sequence[str]], int]
 
+#: What ``ask`` is: a command line, run to completion, its exit status and
+#: everything it printed back.
+Asker = Callable[[Sequence[str]], tuple[int, str]]
+
 
 def built(pack: ContentPack, archives: str) -> str:
     """Where ``pack``'s archive is in ``archives``.
@@ -111,28 +115,44 @@ def repository(url: str) -> str:
 
 def push(repository: str, tag: str, paths: Sequence[str],
          title: str | None = None, notes: str | None = None,
-         run: Runner | None = None) -> None:
+         run: Runner | None = None, ask: Asker | None = None) -> None:
     """Attach ``paths`` to ``repository``'s release at ``tag``.
 
     The tag carries content and nothing else, so the first push creates the
     release and every later one replaces the assets on it -- a rebuilt pack
     takes the name the registry fetches, rather than arriving beside it as a
     second file nothing looks at.
+
+    Whether the release exists is asked first, and only ``gh``'s own "release
+    not found" is taken for no: any other failure to ask (credentials, the
+    network) is raised with what ``gh`` said. The tag and the paths follow a
+    ``--``, and the paths are made absolute, so neither is read as an option.
+    ``run`` runs a command for its status and ``ask`` for its status and
+    output; both default to running ``gh`` itself.
     """
     runner = run if run is not None else _run
+    asker = ask if ask is not None else _ask
     where = ['--repo', repository]
+    files = [os.path.abspath(path) for path in paths]
     try:
         # --json so an existing release answers with one line rather than with
         # its whole body: this asks whether the tag is there, not what is on it.
-        if runner([GITHUB, 'release', 'view', tag, *where, '--json', 'id']) != 0:
+        found, said = asker([GITHUB, 'release', 'view', *where, '--json', 'id',
+                             '--', tag])
+        if found == 0:
+            log.info('uploading %d files to %s', len(files), tag)
+            status = runner([GITHUB, 'release', 'upload', *where, '--clobber',
+                             '--', tag, *files])
+        elif _NOT_FOUND in said.lower():
             log.info('creating the release at %s', tag)
-            status = runner([GITHUB, 'release', 'create', tag, *paths, *where,
+            status = runner([GITHUB, 'release', 'create', *where,
                              '--title', title or tag,
-                             '--notes', notes or 'Content for %s.' % (tag,)])
+                             '--notes', notes or 'Content for %s.' % (tag,),
+                             '--', tag, *files])
         else:
-            log.info('uploading %d files to %s', len(paths), tag)
-            status = runner([GITHUB, 'release', 'upload', tag, *paths, *where,
-                             '--clobber'])
+            raise IOError('%s could not say whether %s has a release at %s '
+                          '(exit %d): %s' % (GITHUB, repository, tag, found,
+                                             said.strip()))
     except FileNotFoundError as error:
         raise IOError('%s is not installed, and it is what a release is '
                       'attached with: see https://cli.github.com/'
@@ -142,6 +162,17 @@ def push(repository: str, tag: str, paths: Sequence[str],
                       % (GITHUB, status, tag))
 
 
+#: What ``gh release view`` prints, lower-cased, for a tag with no release.
+_NOT_FOUND = 'release not found'
+
+
 def _run(argv: Sequence[str]) -> int:
     """Run ``argv`` to completion, its output going where ours does."""
     return subprocess.call(list(argv))
+
+
+def _ask(argv: Sequence[str]) -> tuple[int, str]:
+    """Run ``argv`` to completion; its status, and its output and errors."""
+    done = subprocess.run(list(argv), capture_output=True, text=True,
+                          check=False)
+    return done.returncode, (done.stdout or '') + (done.stderr or '')

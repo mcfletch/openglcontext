@@ -138,18 +138,27 @@ class TestAttachingThemToARelease:
         with pytest.raises(ValueError):
             publish.repository('https://example.com/packs/ashdown.tar.gz')
 
+    def after_terminator(self, argv):
+        return argv[argv.index('--') + 1:]
+
     def test_a_tag_that_is_not_there_yet_is_created(self, tmp_path) -> None:
         ran = []
 
+        def ask(argv):
+            ran.append(argv)
+            return 1, 'release not found\n'
+
         def runner(argv):
             ran.append(argv)
-            return 1 if argv[1] == 'release' and argv[2] == 'view' else 0
+            return 0
 
         publish.push('mcfletch/glisteel', 'content-v1', ['a.tar.gz'],
-                     run=runner)
-        assert ran[0][1:4] == ['release', 'view', 'content-v1']
-        assert ran[1][1:4] == ['release', 'create', 'content-v1']
-        assert 'a.tar.gz' in ran[1]
+                     run=runner, ask=ask)
+        assert ran[0][1:3] == ['release', 'view']
+        assert self.after_terminator(ran[0]) == ['content-v1']
+        assert ran[1][1:3] == ['release', 'create']
+        assert self.after_terminator(ran[1]) == [
+            'content-v1', os.path.abspath('a.tar.gz')]
 
     def test_a_tag_that_is_there_takes_the_files_it_is_given(self,
                                                              tmp_path) -> None:
@@ -162,25 +171,42 @@ class TestAttachingThemToARelease:
             return 0
 
         publish.push('mcfletch/glisteel', 'content-v1', ['a.tar.gz'],
-                     run=runner)
-        assert ran[1][1:4] == ['release', 'upload', 'content-v1']
-        assert '--clobber' in ran[1]
+                     run=runner, ask=lambda argv: (0, '{"id": 1}'))
+        assert ran[0][1:3] == ['release', 'upload']
+        assert '--clobber' in ran[0]
+        assert self.after_terminator(ran[0]) == [
+            'content-v1', os.path.abspath('a.tar.gz')]
+
+    def test_a_failure_to_ask_is_not_taken_for_a_missing_release(self) -> None:
+        """An authentication or network failure is not a release to create."""
+        ran = []
+        with pytest.raises(IOError) as raised:
+            publish.push('mcfletch/glisteel', 'content-v1', ['a.tar.gz'],
+                         run=lambda argv: ran.append(argv) or 0,
+                         ask=lambda argv: (4, 'HTTP 401: Bad credentials'))
+        assert ran == [], 'it went on to create a release'
+        assert 'Bad credentials' in str(raised.value)
+
+    def test_a_path_or_tag_like_an_option_stays_an_argument(self) -> None:
+        ran = []
+        publish.push('mcfletch/glisteel', '-v1', ['-a.tar.gz'],
+                     run=lambda argv: ran.append(argv) or 0,
+                     ask=lambda argv: (0, '{}'))
+        assert self.after_terminator(ran[0]) == [
+            '-v1', os.path.abspath('-a.tar.gz')]
 
     def test_an_upload_that_failed_is_said_rather_than_passed_over(self) -> None:
-        def runner(argv):
-            return 0 if argv[2] == 'view' else 2
-
         with pytest.raises(IOError):
             publish.push('mcfletch/glisteel', 'content-v1', ['a.tar.gz'],
-                         run=runner)
+                         run=lambda argv: 2, ask=lambda argv: (0, '{}'))
 
     def test_without_the_command_it_says_what_to_install(self) -> None:
-        def runner(argv):
+        def ask(argv):
             raise FileNotFoundError(argv[0])
 
         with pytest.raises(IOError) as raised:
             publish.push('mcfletch/glisteel', 'content-v1', ['a.tar.gz'],
-                         run=runner)
+                         run=lambda argv: 0, ask=ask)
         assert publish.GITHUB in str(raised.value)
 
 
@@ -190,3 +216,12 @@ class TestRunningTheCommand:
         import sys
         assert publish._run([sys.executable, '-c', '']) == 0
         assert publish._run([sys.executable, '-c', 'raise SystemExit(3)']) == 3
+
+    def test_asking_answers_the_status_and_what_it_printed(self) -> None:
+        import sys
+        status, said = publish._ask(
+            [sys.executable, '-c',
+             'import sys; print("out"); print("err", file=sys.stderr); '
+             'raise SystemExit(1)'])
+        assert status == 1
+        assert 'out' in said and 'err' in said
