@@ -357,8 +357,8 @@ class Splitter(Widget):
         self.chrome = chrome
         # What the pointer says about it: a line that drags one way asks for
         # the arrows that drag that way, and the crossing for either.
-        self.cursor = ('resize-x' if self.vertical is not False
-                       else 'resize-y')
+        self.cursor = {True: 'resize-x', False: 'resize-y'}.get(
+            self.vertical, 'resize')
 
     def press(self, x: float, y: float) -> bool:
         self.armed = True
@@ -741,11 +741,6 @@ class ViewChrome(Panel):
     def _changed(self) -> None:
         if self.on_arrange is not None:
             self.on_arrange()
-
-    # -- what the world behind it hears ------------------------------------
-    def pointer_pressed(self, x: float, y: float, button: int = 0) -> bool:
-        """A press that lands on no control belongs to the scene underneath."""
-        return bool(super(ViewChrome, self).pointer_pressed(x, y, button))
 
 
 def fitted(text: str, width: int, metrics: FontMetrics) -> str:

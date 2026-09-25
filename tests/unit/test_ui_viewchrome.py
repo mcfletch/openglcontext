@@ -610,3 +610,12 @@ class TestWhatTheExpandButtonSays:
         assert alone
         layout.maximise(button.view)
         assert button.tooltip and button.tooltip != alone
+
+
+class TestWhatTheSplittersAskThePointerFor:
+    def test_each_line_asks_for_the_arrows_that_drag_it(self):
+        assert Splitter(vertical=True).cursor == 'resize-x'
+        assert Splitter(vertical=False).cursor == 'resize-y'
+
+    def test_the_quads_crossing_asks_for_either(self):
+        assert Splitter(vertical=None).cursor == 'resize'
