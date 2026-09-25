@@ -45,13 +45,13 @@ class Window:
     def getViewPlatform(self):
         return None
 
-    def triggerRedraw(self, force=0):
+    def triggerRedraw(self, force=0):  # noqa: ARG002 the signature of the triggerRedraw it stands in for
         self.redraws += 1
 
     def getInputState(self):
         raise AssertionError('a HUD never touches the input sampler')
 
-    def suspendPointerCapture(self, suspend):
+    def suspendPointerCapture(self, _suspend):
         raise AssertionError('a HUD never takes the pointer')
 
 

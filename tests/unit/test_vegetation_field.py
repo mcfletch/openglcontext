@@ -399,7 +399,7 @@ class TestTheForestStandsInItsOwnShade:
     """
 
     def _shade(self):
-        def at(x, z):
+        def at(x, _z):
             return np.where(np.asarray(x, 'd') < 0.0, 0.2, 1.0)
         return at
 

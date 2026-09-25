@@ -204,6 +204,9 @@ class TestTheMixinsComposeCleanly:
         'setMovementManager',           # sizes free-fly stepping to the scene
         'physicsAvatarScale',           # a metric world gets a person, not a giant
         'debugOverlayStartsVisible',    # a viewer opens on the scene alone
+        'renderer',                     # a glTF material needs the PBR pass
+        'resolveDefinition',            # adds the options' shadows and ambient,
+                                        # over what the context resolves
         # Answered by each mix-in that has an opinion and passed on rather than
         # replaced -- which is the distinction this gate is drawing. A viewer
         # may be capturing and recording at once, and the frames either still

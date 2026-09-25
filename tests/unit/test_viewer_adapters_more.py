@@ -213,7 +213,7 @@ class TestAimingAtRealGeometry:
         assert np.allclose(center, [0.0, 0.0, 0.0])
 
     def test_a_tile_that_will_not_load_leaves_the_bounding_centre(self):
-        def explode(tile):
+        def explode(_tile):
             raise IOError('no such tile')
         adapter = TilesAdapter()
         root = self._root((3.0, 0.0, 0.0), 5.0, content_uri='c.glb', children=[])

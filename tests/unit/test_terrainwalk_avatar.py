@@ -63,10 +63,10 @@ class _Manager:
     def __init__(self):
         self.bound = True
 
-    def bind(self, context):
+    def bind(self, _context):
         self.bound = True
 
-    def unbind(self, context):
+    def unbind(self, _context):
         self.bound = False
 
 

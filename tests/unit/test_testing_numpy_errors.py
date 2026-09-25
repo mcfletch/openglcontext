@@ -19,10 +19,10 @@ class _Config:
     def __init__(self, option=None, ini=''):
         self.option, self.ini = option, ini
 
-    def getoption(self, name, default=None):
+    def getoption(self, _name, default=None):  # noqa: ARG002 the signature of the getoption it stands in for
         return self.option
 
-    def getini(self, name):
+    def getini(self, _name):
         return self.ini
 
 

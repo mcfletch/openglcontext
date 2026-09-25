@@ -74,7 +74,7 @@ class TestTheHandover:
         seen = {}
 
         class _Recording(_Host):
-            def applyLoadedScene(inner, scene):
+            def applyLoadedScene(inner, _scene):
                 seen['thread'] = threading.current_thread().name
 
         host = _Recording()
@@ -220,7 +220,7 @@ class _RecordedHost(_Host):
         super(_RecordedHost, self).__init__()
         self.drawn = 0
 
-    def OnDraw(self, force=1):
+    def OnDraw(self, force=1):  # noqa: ARG002 the signature of the OnDraw it stands in for
         self.drawn += 1
         return 1
 

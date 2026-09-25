@@ -148,7 +148,7 @@ def test_grass_mask_thins_and_excludes():
 def test_grass_mask_is_world_anchored():
     """A cell's keep/drop under a mask must not change as the disc recentres."""
     hf = HeightField(np.zeros((16, 16)), 1000.0, 10.0)
-    def m(x, z):
+    def m(x, _z):
         return np.full_like(x, 0.5)      # 50% keep, decided per-cell by hash
     p1, _, _ = world_grid_scatter(0.0, 0.0, 40.0, 1.0, hf, mask=m)
     p2, _, _ = world_grid_scatter(6.0, 4.0, 40.0, 1.0, hf, mask=m)
@@ -292,7 +292,7 @@ class _Walker(TerrainWalkMixin):
     def __init__(self, platform):
         self.platform = platform
         self.redraws = 0
-    def triggerRedraw(self, force=0): self.redraws += 1
+    def triggerRedraw(self, force=0): self.redraws += 1  # noqa: ARG002 the signature of the triggerRedraw it stands in for
 
 
 def test_idle_redraws_only_when_the_view_changes():

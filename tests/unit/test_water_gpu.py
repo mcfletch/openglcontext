@@ -114,13 +114,13 @@ class TestTurningItOn:
         def __init__(self):
             self.set = {}
 
-        def _set_uniform1i(self, name, value, program=None):
+        def _set_uniform1i(self, name, value, program=None):  # noqa: ARG002 the signature of the _set_uniform1i it stands in for
             self.set[name] = value
 
-        def _set_uniform1f(self, name, value, program=None):
+        def _set_uniform1f(self, name, value, program=None):  # noqa: ARG002 the signature of the _set_uniform1f it stands in for
             self.set[name] = value
 
-        def _set_uniform2f(self, name, value, program=None):
+        def _set_uniform2f(self, name, value, program=None):  # noqa: ARG002 the signature of the _set_uniform2f it stands in for
             self.set[name] = value
 
     def _program(self):

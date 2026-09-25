@@ -88,7 +88,7 @@ class TestDraft:
     def test_watchers_of_a_field_hear_the_commit(self, session, target):
         seen = []
 
-        def receiver(*args, **named):
+        def receiver(*args, **_named):
             seen.append(args)
 
         protofunctions.getField(target, 'lights').watch(target, receiver)

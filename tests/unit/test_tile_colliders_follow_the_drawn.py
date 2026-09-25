@@ -49,7 +49,7 @@ class _World:
         self.shapes.append(shape)
         return len(self.shapes) - 1
 
-    def add_body(self, motion, collider=None, position=None):
+    def add_body(self, _motion, collider=None, position=None):  # noqa: ARG002 the signature of the add_body it stands in for
         self._next += 1
         self.bodies[self._next] = collider
         return self._next

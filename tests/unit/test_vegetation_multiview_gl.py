@@ -67,7 +67,7 @@ def _scene(images):
             _ground(images), _cards(images)]
 
 
-def _two_views(context):
+def _two_views(_context):
     def camera(x):
         return ViewPlatform(position=(x, 1.7, 6.0), orientation=(0, 1, 0, 0))
 

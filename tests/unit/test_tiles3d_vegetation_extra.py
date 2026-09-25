@@ -48,7 +48,7 @@ def test_poisson_thin_fallback_uses_2d_positions(monkeypatch):
 
 
 def test_scatter_disc_zero_density_is_empty():
-    def hf(x, z):
+    def hf(x, _z):
         return np.zeros(np.shape(x))
     s = scatter_disc((0.0, 0.0, 0.0), radius=5.0, density=0.0, seed=1, height_fn=hf)
     assert len(s) == 0

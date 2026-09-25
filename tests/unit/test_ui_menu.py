@@ -442,7 +442,7 @@ class _Recorder:
         self.calls = []
 
     def __getattr__(self, name):
-        def record(*arguments, **named):
+        def record(*arguments, **_named):
             self.calls.append((name, arguments))
         return record
 

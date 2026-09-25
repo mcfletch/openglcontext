@@ -21,7 +21,7 @@ class _Tile:
 def test_on_renderable_ignores_already_resident_tile(monkeypatch):
     calls = {"n": 0}
 
-    def fake_extract(drawable, min_hull_size=0.0):
+    def fake_extract(_drawable, min_hull_size=0.0):  # noqa: ARG001 the signature of the extract_trimesh it stands in for
         calls["n"] += 1
         pts = np.array([[0, 0, 0], [1, 0, 0], [0, 0, 1]], "f4")
         idx = np.array([[0, 1, 2]], "u4")

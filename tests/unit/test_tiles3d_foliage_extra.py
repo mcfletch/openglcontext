@@ -67,7 +67,7 @@ def test_scene_glb_color_normal_and_mask(tmp_path):
 
 def test_ground_patch_split_emits_rock_on_steep_slope():
     # A cliff (very steep in x) guarantees rock-classified triangles as well as dirt.
-    def hf(x, z):
+    def hf(x, _z):
         return np.maximum(np.asarray(x), 0.0) * 30.0
     dirt = F.procedural_ground_maps(seed=1)
     rock = F.procedural_ground_maps(seed=2)

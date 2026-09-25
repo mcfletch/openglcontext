@@ -499,10 +499,10 @@ class FakeRenderer:
         self.rects.append((rect, colour(colour) if callable(colour) else
                            tuple(float(v) for v in colour)))
 
-    def textIn(self, rect, text, colour, align='left', pad=0):
+    def textIn(self, rect, text, colour, align='left', pad=0):  # noqa: ARG002 the signature of the textIn it stands in for
         self.texts.append((rect, text, tuple(float(v) for v in colour)))
 
-    def ninepatch(self, rect, image):
+    def ninepatch(self, _rect, _image):
         return False
 
 

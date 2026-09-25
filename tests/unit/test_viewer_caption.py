@@ -43,7 +43,7 @@ class _Host(CaptionMixin):
     def removeHUDLayer(self, layer):
         self._hudLayers.remove(layer)
 
-    def triggerRedraw(self, force=0):
+    def triggerRedraw(self, force=0):  # noqa: ARG002 the signature of the triggerRedraw it stands in for
         self.redrawn += 1
 
 

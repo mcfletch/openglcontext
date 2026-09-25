@@ -37,7 +37,7 @@ class _Context(context_module.Context):
         self.loopTrace = None
         self.telemetry = None
 
-    def OnDraw(self, force=1):
+    def OnDraw(self, force=1):  # noqa: ARG002 the signature of the OnDraw it stands in for
         self.drawn += 1
         return 1
 

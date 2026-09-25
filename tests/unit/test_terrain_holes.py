@@ -38,7 +38,7 @@ def circle(x, z):
     return np.hypot(np.asarray(x, 'd'), np.asarray(z, 'd')) < RADIUS
 
 
-def nowhere(x, z):
+def nowhere(x, _z):
     return np.zeros(np.shape(np.asarray(x)), dtype=bool)
 
 
@@ -189,7 +189,7 @@ class TestTheFieldAndTheColliderCutTheSame:
 
 
 class _NoWorld:
-    def add_body(self, *args, **named):
+    def add_body(self, *_args, **_named):
         return object()
 
     def remove_body(self, *args, **named):

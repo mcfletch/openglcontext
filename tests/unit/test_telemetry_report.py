@@ -156,7 +156,7 @@ class TestTheOverlaySection:
         class Context:
             telemetry = None
 
-            def OnDraw(self, force=1):
+            def OnDraw(self, force=1):  # noqa: ARG002 the signature of the OnDraw it stands in for
                 return 1
 
         context = Context()
@@ -185,7 +185,7 @@ class TestTheOverlaySection:
         class Context:
             telemetry = None
 
-            def OnDraw(self, force=1):
+            def OnDraw(self, force=1):  # noqa: ARG002 the signature of the OnDraw it stands in for
                 return 1
 
         recorded = Context()
@@ -211,7 +211,7 @@ class TestTheOverlaySection:
         class Context:
             telemetry = None
 
-            def OnDraw(self, force=1):
+            def OnDraw(self, force=1):  # noqa: ARG002 the signature of the OnDraw it stands in for
                 return 1
 
             def mark(self, name, **fields):

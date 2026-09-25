@@ -48,7 +48,7 @@ class TestRegistry:
         assert 'repeat the words' in registry.dispatch(None, 'help echo')
 
     def test_a_command_that_raises_reports_rather_than_dying(self, registry):
-        def broken(panel):
+        def broken(_panel):
             raise ValueError('deliberate')
         registry.add('broken', broken, 'always fails')
         assert 'deliberate' in registry.dispatch(None, 'broken')

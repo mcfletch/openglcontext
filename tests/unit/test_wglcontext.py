@@ -468,7 +468,7 @@ class TestAFailedConstructionSaysWhatIsMissing:
     def test_the_failure_is_this_packages_own_class(self, monkeypatch):
         """A caller catches one thing whichever offscreen backend it asked
         for, rather than importing the binding's exception to catch it."""
-        def refuses(**named):
+        def refuses(**_named):
             raise offscreen.WGLError('nothing doing')
 
         monkeypatch.setattr(offscreen, 'OffscreenContext', refuses)

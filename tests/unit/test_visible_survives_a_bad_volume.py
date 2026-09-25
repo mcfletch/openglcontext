@@ -24,7 +24,7 @@ def node(request, monkeypatch):
     module = {'Shape': shape, 'ShaderGeometry': shaders}[request.param]
     instance = cls()
 
-    def boundingVolume(mode):
+    def boundingVolume(_mode):
         raise _Boom('no volume for you')
 
     monkeypatch.setattr(instance, 'boundingVolume', boundingVolume)

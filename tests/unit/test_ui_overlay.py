@@ -73,7 +73,7 @@ class World:
     def getInputState(self):
         return self.inputState
 
-    def triggerRedraw(self, force=0):
+    def triggerRedraw(self, force=0):  # noqa: ARG002 the signature of the triggerRedraw it stands in for
         self.redraws += 1
 
     def redrawAt(self, when):
@@ -94,7 +94,7 @@ class World:
         self.cursors.append('<captured>' if capture else '<released>')
         return True
 
-    def screenTrees(self, metrics, now=None):
+    def screenTrees(self, _metrics, now=None):  # noqa: ARG002 the signature of the screenTrees it stands in for
         """What a context draws over the frame: its HUD layers, of which the
         stand-in has none."""
         return []
@@ -568,7 +568,7 @@ class _FakeGL:
         self.deleted = []
         self._next = 0
 
-    def upload(self, width, height, data):
+    def upload(self, _width, _height, _data):
         self._next += 1
         return self._next
 
@@ -714,7 +714,7 @@ class TestTheWorldIsToldToLetGoWhenAPanelOpens:
         OpenGLContext application quits it."""
         panel = dialog()
 
-        def opening(event):
+        def opening(_event):
             context.pushOverlay(panel)
 
         context.handlers.append(opening)

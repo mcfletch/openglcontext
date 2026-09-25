@@ -30,7 +30,7 @@ def room(size=10.0, blend=0.0, priority=0, **settings):
                 settings=list(settings.values()))
 
 
-def scene_probe(zone):
+def scene_probe(_zone):
     return SCENE_PROBE
 
 
@@ -162,7 +162,7 @@ class TestTheCamera:
     def test_an_emitter_is_heard_inside_and_fades_over_the_blend(self):
         zones = place((room(blend=2.0, audio=ZoneAudio()), (0, 0, 0)))
 
-        def names(setting):
+        def names(_setting):
             return ['bird']
         inside = zonelayers.camera_shares(zones, (0, 0, 0), AUDIO, names)
         edge = zonelayers.camera_shares(zones, (6, 0, 0), AUDIO, names)

@@ -85,7 +85,7 @@ def test_waiting_for_loads_shares_one_deadline(tmp_path):
     terrain = TilesTerrain(path, workers=1)
     given = []
 
-    def slow_tiles(timeout):
+    def slow_tiles(timeout):  # noqa: ARG001 the signature of the runtime.wait_for_loads it stands in for, called with timeout=
         time.sleep(0.2)
         return True
     runtime_wait = terrain.runtime.wait_for_loads

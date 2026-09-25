@@ -272,7 +272,7 @@ class _Recorder:
         if name.startswith('_'):
             raise AttributeError(name)
 
-        def record(*arguments, **named):
+        def record(*arguments, **_named):
             self.recorded.append((name, arguments))
         return record
 

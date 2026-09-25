@@ -140,7 +140,7 @@ class TestChoosingATool:
         palette, tools = _palette()
 
         class Holding(ToolMode):
-            def on_press(self, pointer):
+            def on_press(self, _pointer):
                 return True
 
         tools.tools[0] = Holding(name='route', label='Draw route')

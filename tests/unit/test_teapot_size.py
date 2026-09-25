@@ -19,7 +19,7 @@ class _Recorder:
     def __init__(self):
         self.matrices = []
 
-    def set_matrices(self, modelview, projection, program=None):
+    def set_matrices(self, modelview, _projection, program=None):  # noqa: ARG002 the signature of the set_matrices it stands in for
         self.matrices.append(np.asarray(modelview, dtype='d'))
 
 

@@ -38,7 +38,7 @@ class _GL:
         self.deleted = []
         self._next = 1
 
-    def upload(self, width, height, data):
+    def upload(self, width, height, _data):
         self._next += 1
         self.uploaded.append((self._next, width, height))
         return self._next
@@ -188,7 +188,7 @@ class TestRemotePictures:
         local = picture('remote.png')
         asked = []
 
-        def fetch(url, **named):
+        def fetch(url, **_named):
             asked.append(url)
             return local
         monkeypatch.setattr(pictures, 'fetch_to_cache', fetch)
@@ -198,7 +198,7 @@ class TestRemotePictures:
 
     def test_a_download_that_fails_is_a_missing_picture_not_a_crash(self, gl,
                                                                     monkeypatch):
-        def fetch(url, **named):
+        def fetch(_url, **_named):
             raise IOError('no route to host')
         monkeypatch.setattr(pictures, 'fetch_to_cache', fetch)
         assert _cache(gl).get('https://example.com/x.png', blocking=True) is None

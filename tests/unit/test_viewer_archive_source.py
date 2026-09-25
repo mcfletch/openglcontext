@@ -217,7 +217,7 @@ class TestAnUnpackingThatDidNotFinish:
         world = _tar(tmp_path / 'world.tar.gz', ['a.bin', 'gallery.glb'])
         real = viewersource.archive.extract
 
-        def interrupted(path, directory, kind, **named):
+        def interrupted(_path, directory, _kind, **_named):
             os.makedirs(directory, exist_ok=True)
             with open(os.path.join(directory, 'a.bin'), 'wb') as handle:
                 handle.write(b'the first member')
@@ -234,7 +234,7 @@ class TestAnUnpackingThatDidNotFinish:
                                                 monkeypatch):
         world = _tar(tmp_path / 'world.tar.gz', ['gallery.glb'])
 
-        def interrupted(path, directory, kind, **named):
+        def interrupted(_path, directory, _kind, **_named):
             os.makedirs(directory, exist_ok=True)
             raise OSError('the disk is full')
 

@@ -30,10 +30,10 @@ class _Platform:
     def __init__(self):
         self.moved = []
 
-    def set_move(self, forward=0.0, strafe=0.0, mode='walk', speed=None):
+    def set_move(self, forward=0.0, strafe=0.0, mode='walk', speed=None):  # noqa: ARG002 the signature of the set_move it stands in for
         self.moved.append((forward, strafe, mode))
 
-    def set_fly_move(self, forward=0.0, strafe=0.0, up=0.0, speed=None):
+    def set_fly_move(self, forward=0.0, strafe=0.0, up=0.0, speed=None):  # noqa: ARG002 the signature of the set_fly_move it stands in for
         self.moved.append((forward, strafe, up))
 
     def jump(self):
@@ -68,7 +68,7 @@ class _Context(ViewPlatformMixin, _Dispatch):
         self.samples = []
         self.picked = []
 
-    def getEventManager(self, kind):
+    def getEventManager(self, _kind):
         return None
 
     def triggerRedraw(self, value=1):
@@ -80,7 +80,7 @@ class _Context(ViewPlatformMixin, _Dispatch):
     def addPickEvent(self, event):
         self.picked.append(event)
 
-    def OnDraw(self, force=1):
+    def OnDraw(self, force=1):  # noqa: ARG002 the signature of the OnDraw it stands in for
         """One frame: sample what is held, exactly as a movement mode would."""
         state = self.getInputState()
         self.samples.append((sorted(state.held_keys()), state.mouse_delta()))
@@ -209,7 +209,7 @@ class TestASessionThatDependsOnItsLuck:
         context = _Context()
         rolled = []
 
-        def roll(force=1):
+        def roll(force=1):  # noqa: ARG001 the signature of the OnDraw it stands in for
             rolled.append(random.random())
             rolled.append(float(entropy.generator('loot').random()))
             return 1

@@ -46,13 +46,13 @@ class _Host(ViewerScreensMixin):
         self.sources.append(source)
         return self.openable
 
-    def addEventHandler(self, kind, name=None, function=None, **named):
+    def addEventHandler(self, kind, name=None, function=None, **_named):
         self.handlers.append((kind, name, function))
 
     def triggerRedraw(self, force=0):
         pass
 
-    def OnQuit(self, event=None):
+    def OnQuit(self, event=None):  # noqa: ARG002 the signature of the OnQuit it stands in for
         self.quit += 1
 
     def removeHUDLayer(self, layer):

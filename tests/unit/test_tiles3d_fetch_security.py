@@ -119,7 +119,7 @@ class TestReadBytesIsSizeCapped:
     def test_a_remote_payload_goes_through_the_capped_fetch(self, tmp_path, monkeypatch):
         seen = {}
 
-        def fake(url, cache_dir=None, max_bytes=None, **kw):
+        def fake(url, cache_dir=None, max_bytes=None, **_named):
             seen.update(url=url, cache_dir=cache_dir, max_bytes=max_bytes)
             return b"glb"
 
@@ -163,7 +163,7 @@ class TestTheCacheTheTilesRuntimeUses:
     def test_a_second_read_of_one_tile_does_not_refetch(self, tmp_path, monkeypatch):
         calls = []
 
-        def once(url, base, timeout=30):
+        def once(url, _base, timeout=30):  # noqa: ARG001 the signature of the resolver._open_url it stands in for
             calls.append(url)
             return _FakeResponse(b"glb")
 

@@ -17,7 +17,7 @@ class _Context:
     def __init__(self):
         self.redraws = 0
 
-    def triggerRedraw(self, force=0):
+    def triggerRedraw(self, force=0):  # noqa: ARG002 the signature of the triggerRedraw it stands in for
         self.redraws += 1
 
 

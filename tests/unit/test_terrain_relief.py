@@ -176,7 +176,7 @@ class TestGroundThatWasGraded:
     ground was worked."""
 
     def _beside(self, half=10.0, fade=10.0):
-        def weight(x, z):
+        def weight(x, _z):
             away = np.abs(np.asarray(x, dtype='d'))
             return np.clip((away - half) / fade, 0.0, 1.0)
         return weight

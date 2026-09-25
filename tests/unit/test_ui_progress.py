@@ -28,10 +28,10 @@ class _Renderer:
     def pill(self, rect, colour):
         self.drawn.append(('pill', rect, tuple(colour)))
 
-    def lines(self, rect, lines, colour, align='left'):
+    def lines(self, rect, lines, _colour, align='left'):  # noqa: ARG002 the signature of the lines it stands in for
         self.drawn.append(('lines', rect, tuple(lines)))
 
-    def textIn(self, rect, text, colour, align='left'):
+    def textIn(self, rect, text, _colour, align='left'):  # noqa: ARG002 the signature of the textIn it stands in for
         self.drawn.append(('text', rect, text))
 
 
@@ -48,7 +48,7 @@ class _Metrics:
     char_width = 8
     line_height = 16
 
-    def wrap(self, text, width):
+    def wrap(self, text, _width):
         return [text]
 
 

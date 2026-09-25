@@ -148,7 +148,7 @@ class TestWhatIsOnTheShelf:
     def test_building_the_shelf_touches_no_network(self, monkeypatch):
         """Opening a viewer must not wait on a catalogue download."""
 
-        def refuse(*args, **named):
+        def refuse(*_args, **_named):
             raise AssertionError('the library fetched something')
         monkeypatch.setattr(gltf, 'fetch_sample_catalog', refuse)
         assert default_library().entries

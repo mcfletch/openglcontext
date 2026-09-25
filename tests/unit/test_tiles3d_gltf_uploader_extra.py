@@ -86,10 +86,10 @@ class _FakeCache:
         self._data = data
         self.holders_asked = []
 
-    def getData(self, geometry, key=""):
+    def getData(self, _geometry, key=""):  # noqa: ARG002 the signature of the getData it stands in for
         return self._data
 
-    def getHolder(self, geometry, key=""):
+    def getHolder(self, geometry, key=""):  # noqa: ARG002 the signature of the getHolder it stands in for
         self.holders_asked.append(geometry)
         return None
 
@@ -149,7 +149,7 @@ def test_dispose_material_textures_skips_missing_and_swallows_gl_errors(monkeypa
     material = types.SimpleNamespace(
         textures={"a": no_ctx, "b": zero_tid, "c": boom})
 
-    def bad_delete(ids):
+    def bad_delete(_ids):
         raise RuntimeError("no context")
 
     monkeypatch.setattr(gl, "glDeleteTextures", bad_delete)

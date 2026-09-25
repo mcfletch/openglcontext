@@ -37,7 +37,7 @@ class FakeContext:
         self.loopTrace = None
         self.telemetry = None
 
-    def OnDraw(self, force=1):
+    def OnDraw(self, force=1):  # noqa: ARG002 the signature of the OnDraw it stands in for
         self.drawn += 1
         return 1
 
@@ -103,7 +103,7 @@ class TestTheTap:
         assert context.ProcessEvent.__func__ is original
 
     def test_a_tap_that_raises_costs_nothing(self, context):
-        def explode(event):
+        def explode(_event):
             raise RuntimeError('no')
         tap = telemetry_record.Tap(context, 'ProcessEvent', before=explode)
         try:
@@ -178,7 +178,7 @@ class TestWhatIsRecorded:
 class TestExceptions:
     def test_one_escaping_the_draw_is_recorded_and_still_raised(
             self, context, target):
-        def explode(force=1):
+        def explode(force=1):  # noqa: ARG001 the signature of the OnDraw it stands in for
             raise ValueError('mid-frame')
         context.OnDraw = explode
         session = telemetry.start(context, target)
@@ -212,7 +212,7 @@ class TestExceptions:
         """It escapes the draw, then unwinds the loop: two routes, one bug."""
         error = ValueError('once only')
 
-        def explode(force=1):
+        def explode(force=1):  # noqa: ARG001 the signature of the OnDraw it stands in for
             raise error
         context.OnDraw = explode
         session = telemetry.start(context, target)

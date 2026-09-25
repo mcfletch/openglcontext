@@ -54,7 +54,7 @@ class TestTessellateRetry:
     def test_permanent_failure_latches_after_max(self, monkeypatch):
         calls = {'n': 0}
 
-        def always(*a, **k):
+        def always(*_args, **_named):
             calls['n'] += 1
             raise RuntimeError("boom")
         monkeypatch.setattr(teapot_nurbs, 'tessellate_teapot', always)

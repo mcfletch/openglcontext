@@ -27,7 +27,7 @@ class _Viewer:
             setattr(self, name, self._recorder(name))
 
     def _recorder(self, name):
-        def called(event):
+        def called(_event):
             self.called.append(name)
         return called
 

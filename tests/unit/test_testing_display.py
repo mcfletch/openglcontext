@@ -103,7 +103,7 @@ class TestAskedOnce:
         class Opened:
             returncode = 0
 
-        def run(*args, **named):
+        def run(*_args, **named):
             ran.append(named['env']['DISPLAY'])
             return Opened()
 
