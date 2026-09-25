@@ -145,7 +145,7 @@ def entry_points() -> dict[str, str]:
     for package in CALL_PACKAGES:
         try:
             module = importlib.import_module(package)
-        except Exception:
+        except (ImportError, OSError):
             continue
         for name in dir(module):
             if _CALL.fullmatch(name) and callable(getattr(module, name, None)):

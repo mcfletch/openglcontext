@@ -20,6 +20,7 @@ import base64
 import io
 import os
 import sys
+import traceback
 
 try:
     from PIL import Image, ImageDraw, ImageFont
@@ -138,7 +139,7 @@ def generate_atlas(font_path, size):
     """
     try:
         font = ImageFont.truetype(font_path, size)
-    except Exception as e:
+    except OSError as e:
         print(f"Warning: Could not load font at size {size}: {e}")
         font = ImageFont.load_default()
 
@@ -445,9 +446,8 @@ def main(argv=None):
                   f"{atlas_data['char_width']}x{atlas_data['char_height']} per char, "
                   f"{png_size} bytes)")
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 one size's failure is printed with its traceback and the other sizes still generate
             print(f"FAILED: {e}")
-            import traceback
             traceback.print_exc()
 
     # Generate index module

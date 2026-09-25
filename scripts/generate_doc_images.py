@@ -28,7 +28,11 @@ import os
 import subprocess
 import sys
 import tempfile
-from urllib.request import urlretrieve
+
+from PIL import Image
+
+from OpenGLContext.loaders import gltf
+from OpenGLContext.loaders.resolver import checked_url, fetch_to_cache
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(HERE)
@@ -80,7 +84,6 @@ def _spawn(model, out, framing=None, cam=None):
     model themselves; all that is left here is the docs' own house style, which
     is a fixed width and JPEG rather than PNG.
     """
-    from PIL import Image
     cmd = [sys.executable, '-m', 'OpenGLContext.bin.view', model,
            '--size', '%dx680' % WIDTH, '--frames', str(FRAMES),
            '--background', 'sky']
@@ -112,20 +115,13 @@ def _save_jpeg(image, out):
 
 
 def _download_sample(name):
-    from OpenGLContext.loaders import gltf
-    os.makedirs(CACHE, exist_ok=True)
-    path = os.path.join(CACHE, '%s.glb' % name)
-    if not os.path.exists(path):
-        url = gltf.sample_model_url(name)
-        print('  downloading %s' % name)
-        urlretrieve(url, path)
-    return path
+    print('  fetching %s' % name)
+    return fetch_to_cache(checked_url(gltf.sample_model_url(name)), CACHE,
+                          max_bytes=None)
 
 
 def _capture_script(module, out, frames):
     """Run a demo test-script whole and grab a frame via the auto-exit capture."""
-    import tempfile
-    from PIL import Image
     tests_dir = os.path.join(REPO, 'tests')
     with tempfile.TemporaryDirectory() as td:
         env = dict(os.environ)
@@ -142,7 +138,7 @@ def _capture_script(module, out, frames):
                 % (tests_dir, module, WIDTH, 680))
         try:
             subprocess.run([sys.executable, '-c', code], timeout=300, env=env)
-        except Exception as err:
+        except (OSError, subprocess.SubprocessError) as err:
             print('  FAIL %s: %s' % (module, err))
             return
         png = os.path.join(td, 'cap.png')
@@ -169,14 +165,13 @@ def _gltf_gallery():
     for name, framing in GLTF_DEMOS:
         try:
             model = _download_sample(name)
-        except Exception as err:
+        except OSError as err:
             print('  FAIL download %s: %s' % (name, err))
             continue
         _spawn(model, os.path.join(out_dir, '%s.jpg' % name), framing=framing)
 
 
 def _parthenon_gallery(model):
-    from OpenGLContext.loaders import gltf
     print('Parthenon cameras -> docs/images/parthenon/')
     scene = gltf.load_gltf(model)          # parse only, no GL context needed
     cams = list(getattr(scene, 'cameras', None) or [])

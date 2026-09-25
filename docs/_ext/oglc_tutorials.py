@@ -7,7 +7,8 @@ writes it; ``plans/SPHINX-DOCS.md`` describes why.
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Callable
+from typing import Any, ClassVar
 
 from docutils.nodes import Node
 from docutils.parsers.rst import directives
@@ -19,7 +20,7 @@ from sphinx.directives.code import CodeBlock
 class TutorialCode(CodeBlock):
     """``code-block``, shown at the indent the code has in its script."""
 
-    option_spec = dict(CodeBlock.option_spec, indent=directives.nonnegative_int)
+    option_spec: ClassVar[dict[str, Callable[[str], Any]]] = dict(CodeBlock.option_spec, indent=directives.nonnegative_int)
     content: StringList
 
     def run(self) -> list[Node]:

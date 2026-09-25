@@ -45,6 +45,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import glob
+import importlib.util
 import locale
 import logging
 import os
@@ -137,11 +138,7 @@ def find_directdocs(named: str | None = None) -> str | None:
             return candidate if os.path.isdir(
                 os.path.join(candidate, 'directdocs')
             ) else None
-    try:
-        import directdocs
-    except ImportError:
-        pass
-    else:
+    if importlib.util.find_spec('directdocs') is not None:
         return ''
     workspace = os.path.dirname(HERE)
     for name in ('pyopengl', 'PyOpenGL'):
@@ -163,7 +160,7 @@ def build_api(directdocs: str | None, skip: list[str]) -> None:
         )
     if where:
         sys.path.insert(0, where)
-    from directdocs import dumbpydoc
+    from directdocs import dumbpydoc  # noqa: PLC0415 importable only once the sys.path entry find_directdocs answered is in place
 
     log.info('Writing the module pages into %s', API)
     shutil.rmtree(API, ignore_errors=True)
@@ -189,7 +186,7 @@ def build_api(directdocs: str | None, skip: list[str]) -> None:
 def build_tutorials() -> None:
     """Write the code walkthroughs from the commentary in ``tests/*.py``."""
     sys.path.insert(0, HERE)
-    from docbuild import tutorials
+    from docbuild import tutorials  # noqa: PLC0415 importable only once this script's directory is on sys.path
 
     log.info('Writing the tutorials into %s', TUTORIALS)
     for stale in glob.glob(os.path.join(TUTORIALS, '*.rst')):
@@ -595,7 +592,7 @@ def main(argv: list[str] | None = None) -> int:
             stage(options.output, options.stage)
         if options.publish:
             message = 'Documentation built %s' % (
-                datetime.datetime.now().isoformat(timespec='seconds'),
+                datetime.datetime.now().astimezone().isoformat(timespec='seconds'),
             )
             publish(
                 options.output,
@@ -606,10 +603,10 @@ def main(argv: list[str] | None = None) -> int:
                 lease=lease,
             )
     except Failed as err:
-        log.error('%s', err)
+        log.error('%s', err)  # noqa: TRY400 Failed carries the message for the user; its traceback is this script's own control flow
         return 1
     except subprocess.CalledProcessError as err:
-        log.error('%s exited %d', ' '.join(err.cmd), err.returncode)
+        log.error('%s exited %d', ' '.join(err.cmd), err.returncode)  # noqa: TRY400 the command has already printed its own output; the traceback would only point at subprocess.run
         return err.returncode
     return 0
 

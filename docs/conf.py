@@ -33,7 +33,7 @@ project = 'OpenGLContext'
 author = 'Mike C. Fletcher and Contributors'
 #: The end is the year the set is built, so a rebuild keeps it current and
 #: nobody has to remember to.
-copyright = '2003-%s, %s' % (datetime.date.today().year, author)
+copyright = '2003-%s, %s' % (datetime.datetime.now(datetime.timezone.utc).year, author)
 release = __version__
 version = '.'.join(__version__.split('.')[:2])
 

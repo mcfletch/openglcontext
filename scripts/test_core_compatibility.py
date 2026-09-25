@@ -101,7 +101,7 @@ def run_test(script_path: str, profile: str, timeout: int = 10) -> TestResult:
         stderr_str = stderr_raw.decode('utf-8', errors='replace') if isinstance(stderr_raw, bytes) else str(stderr_raw)
         output = stdout_str + stderr_str
 
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         exit_code = -1
         output = str(e)
 

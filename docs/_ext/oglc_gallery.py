@@ -25,7 +25,8 @@ from __future__ import annotations
 import os
 import posixpath
 import tomllib
-from typing import Any
+from collections.abc import Callable
+from typing import Any, ClassVar
 
 from docutils import nodes
 from docutils.parsers.rst import Directive, directives
@@ -64,7 +65,7 @@ def read_manifest(path: str) -> dict[str, Any]:
 class GalleryDirective(Directive):
     required_arguments = 1
     optional_arguments = 0
-    option_spec = {
+    option_spec: ClassVar[dict[str, Callable[[str], Any]]] = {
         'interval': directives.positive_int,
         'class': directives.class_option,
     }

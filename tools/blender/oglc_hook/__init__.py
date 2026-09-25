@@ -45,7 +45,7 @@ log = logging.getLogger(__name__)
 PROPERTY = 'oglc_hook'
 
 
-def _kind_search(settings, context, edit_text):
+def _kind_search(_settings, _context, edit_text):
     """The engine's kinds, offered as the kind field is typed."""
     return tag.suggestions(edit_text)
 
@@ -194,7 +194,7 @@ class OGLC_PT_material_hook(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = 'material'
-    bl_options = {'DEFAULT_CLOSED'}
+    bl_options = {'DEFAULT_CLOSED'}  # noqa: RUF012 Blender reads bl_options from the class as a set, and would take an annotation for an RNA property
 
     @classmethod
     def poll(cls, context):
@@ -209,7 +209,7 @@ class OGLC_PT_object_hook(Panel):
     bl_space_type = 'PROPERTIES'
     bl_region_type = 'WINDOW'
     bl_context = 'object'
-    bl_options = {'DEFAULT_CLOSED'}
+    bl_options = {'DEFAULT_CLOSED'}  # noqa: RUF012 Blender reads bl_options from the class as a set, and would take an annotation for an RNA property
 
     @classmethod
     def poll(cls, context):
@@ -255,7 +255,9 @@ def _apply(gltf2_object, datablock):
     try:
         block = tag.hook_block(settings)
     except ValueError as error:
-        log.error('%s on %r is not written: %s', tag.EXTENSION,
+        # The message names the mistyped field; a traceback into this add-on
+        # would tell the artist nothing more.
+        log.error('%s on %r is not written: %s', tag.EXTENSION,  # noqa: TRY400 the message is the report
                   getattr(datablock, 'name', datablock), error)
         return
     if block is None:
@@ -268,10 +270,10 @@ def _apply(gltf2_object, datablock):
 class glTF2ExportUserExtension:
     """What the glTF exporter calls as it writes each material and each node."""
 
-    def gather_material_hook(self, gltf2_material, blender_material, export_settings):
+    def gather_material_hook(self, gltf2_material, blender_material, export_settings):  # noqa: ARG002 the glTF exporter's hook signature
         _apply(gltf2_material, blender_material)
 
-    def gather_node_hook(self, gltf2_node, blender_object, export_settings):
+    def gather_node_hook(self, gltf2_node, blender_object, export_settings):  # noqa: ARG002 the glTF exporter's hook signature
         _apply(gltf2_node, blender_object)
 
 

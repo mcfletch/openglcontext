@@ -15,13 +15,16 @@ import os
 import sys
 from typing import Any
 
+from OpenGLContext import testingcontext
+from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.scenegraph import basenodes, surfaces
+
 #: The panels are laid out in this many rows.
 ROWS = 2
 
 
 def swatches() -> list[Any]:
     """The scene: a panel of each surface, a camera and a raking light."""
-    from OpenGLContext.scenegraph import basenodes, surfaces
     made = [
         surfaces.checkered_marble(512, tiles=2), surfaces.marble(256),
         surfaces.brick(256), surfaces.plaster(256), surfaces.sandstone(256),
@@ -52,10 +55,6 @@ def swatches() -> list[Any]:
 def main() -> int:
     """Open the swatches in a window."""
     os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
-    from OpenGLContext import testingcontext
-    from OpenGLContext.contextdefinition import ContextDefinition
-    from OpenGLContext.scenegraph import basenodes
-
     base: Any = testingcontext.getInteractive()
 
     class SwatchContext(base):

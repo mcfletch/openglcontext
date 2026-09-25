@@ -40,6 +40,9 @@ from concurrent.futures import ThreadPoolExecutor
 from collections.abc import Sequence
 from typing import Any, Optional
 
+import numpy as np
+from PIL import Image
+
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TESTS = os.path.join(HERE, 'tests')
 
@@ -79,13 +82,8 @@ def drawn_fraction(path: str) -> Optional[float]:
     scene on a sky-blue background is not read as fully drawn.
     """
     try:
-        import numpy as np
-        from PIL import Image
-    except ImportError:  # pragma: no cover - numpy and Pillow are dependencies
-        return None
-    try:
         pixels = np.asarray(Image.open(path).convert('RGB')).reshape(-1, 3).astype(int)
-    except Exception:
+    except OSError:
         return None
     values, counts = np.unique(pixels, axis=0, return_counts=True)
     background = values[counts.argmax()]

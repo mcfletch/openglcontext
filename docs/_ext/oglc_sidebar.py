@@ -44,17 +44,17 @@ PRIORITY = 900
 
 
 def _navigation_tree(html: str) -> str:
-    from furo.navigation import get_navigation_tree
+    from furo.navigation import get_navigation_tree  # noqa: PLC0415 furo is the docs extra's theme; the caller logs and keeps the theme's tree without it
 
     return str(get_navigation_tree(html))
 
 
 def bound_the_navigation_tree(
-    app: Sphinx,
-    pagename: str,
-    templatename: str,
+    _app: Sphinx,
+    _pagename: str,
+    _templatename: str,
     context: dict[str, Any],
-    doctree: Any,
+    _doctree: Any,
 ) -> None:
     if 'toctree' not in context or 'furo_navigation_tree' not in context:
         return

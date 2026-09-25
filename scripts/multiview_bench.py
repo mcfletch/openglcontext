@@ -39,10 +39,15 @@ os.environ.setdefault('OPENGLCONTEXT_IBL', 'analytic')
 import numpy as np
 
 from OpenGLContext import testingcontext
+from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
+from OpenGLContext.loaders.gltf import load_gltf
 from OpenGLContext.multiview.quad import QuadView
 from OpenGLContext.multiview import strategy as multiview
+from OpenGLContext.multiview.views import ViewLayout
 from OpenGLContext.passes import renderpass
 from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.testing.glcontext import describe_gl
 
 
 class Result:
@@ -71,7 +76,6 @@ def scene_of(model: Optional[str], boxes: int) -> tuple[list, Any, Any]:
         basenodes.DirectionalLight(direction=(-0.4, -0.6, -1.0), intensity=1.0),
     ]
     if model:
-        from OpenGLContext.loaders.gltf import load_gltf
         scene = load_gltf(model)
         children.append(scene.group)
         return children, np.asarray(scene.minimum, 'd'), np.asarray(scene.maximum, 'd')
@@ -108,7 +112,6 @@ def measure(children: list, bounds: tuple[Any, Any], views: int,
     counted: list[int] = []
 
     class _Bench(Base):
-        from OpenGLContext.contextdefinition import ContextDefinition
         contextDefinition = ContextDefinition(size=size)
 
         def OnInit(self) -> None:
@@ -121,14 +124,12 @@ def measure(children: list, bounds: tuple[Any, Any], views: int,
                 self.quad.layout.arrange(*self.getViewPort())
                 self.quad.frame(*bounds)
             else:
-                from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
-                from OpenGLContext.multiview.views import ViewLayout
                 orbit = OrbitView(nearest=1e-3, furthest=1e7)
                 orbit.frame_box(bounds[0], bounds[1], size)
                 self.viewLayout = ViewLayout.single(
                     OrbitViewPlatform(orbit, size), name='single')
 
-        def OnIdle(self, *arguments: Any) -> None:
+        def OnIdle(self, *_arguments: Any) -> None:
             if len(times) >= frames + warmup:
                 self.ContextMainLoop and self.setCurrent()
                 raise SystemExit(0)
@@ -187,7 +188,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             continue
         results.append(measure(children, (low, high), 4, strategy, size,
                                options.frames, options.warmup))
-    from OpenGLContext.testing.glcontext import describe_gl
     print('%s' % (describe_gl(),))
     print('scene: %s, %d frames of %dx%d' % (
         options.model or '%d boxes' % options.boxes, options.frames, size[0], size[1]))
