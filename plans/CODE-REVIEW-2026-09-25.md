@@ -524,10 +524,9 @@ The decisions below are the review's proposals, and each is the maintainer's to 
 Every finding has a status above. Still to do before a release:
 
 - Publishing steps, each the maintainer's: omi_audio 0.4.0a1 (BIN-3), then opengl_decimate 0.2.0a1 (LIB-D25, ED-M5; its first PyPI release, before the editor), push the engine's `content-v1` release (CP-1, DOC-26), then an OpenGLContext release carrying the new APIs glisteel now calls (`telemetry.Keeping`, `scenegraph.roadcourse`, `audio.vehicle`, `contentpacks.Application`, `ui.contentscreen`), and raise glisteel's floor to it.
-- `uv sync` and `tools/preflight.py --rebuild-env` over every project: running at the end of this pass; its failures are the next work.
-- Reference images: `tests/mirrors_room.py` has none yet, and the surface orientation fix (REF-m15, d93daab) changes captures of scenes using procedural surfaces (`zones_demo` differs by 49%); re-bless after checking each is the texture flip.
+- `tools/preflight.py --rebuild-env` over every project: 69 of 69 gates green after the fixes it prompted (the ground-cover and LOD tutorials added to the docs build, the editor typed against the engine's new types, `zones_demo` re-blessed for the surface texture-coordinate fix, and a first baseline for `tests/mirrors_room.py`).
 - The questions for the maintainer are under each `Needs input` finding.
-- Follow-up plan: a categorised plan for preventing the recurring defect classes with static-analysis gates (an extended ruff, typed wrappers), being drafted from a catalogue of all the workspace's reviews.
+- Follow-up: [DEFECT-PREVENTION.md](DEFECT-PREVENTION.md), the plan for gates that catch the recurring defect classes, with the catalogue in [DEFECT-CATALOGUE.md](DEFECT-CATALOGUE.md).
 
 ## Scope and method
 
