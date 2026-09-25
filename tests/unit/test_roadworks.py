@@ -89,7 +89,7 @@ class TestABridge:
             >= float(meshes['deck'].positions[:, 1].min()) - 0.01
 
     def test_a_pier_stands_under_uneven_ground(self) -> None:
-        def sloping(x, z):
+        def sloping(x, _z):
             # Rising, but staying under the deck for the whole span.
             return np.asarray(x, dtype='d') * 0.08
         meshes = bridge_meshes(_straight(length=400.0), ROAD, sloping)
@@ -404,7 +404,7 @@ class TestWhereADeckLandsOnRisingGround:
     where the ground has come up past the soffit. Built anyway it is a block of
     concrete standing across the carriageway."""
 
-    def _into_a_hill(self, x, z):
+    def _into_a_hill(self, x, _z):
         """Ground well under the deck, rising past it at the far end."""
         return np.clip((np.asarray(x, 'd') - 120.0) * 0.6, 0.0, 200.0)
 
@@ -430,7 +430,7 @@ class TestWhereADeckLandsOnRisingGround:
 
     def test_a_span_landing_on_the_ground_at_both_ends_needs_no_piers(self) -> None:
         """Nothing is under it: the deck sits on what it is spanning."""
-        def level(x, z):
+        def level(x, _z):
             return np.full(np.shape(np.asarray(x, 'd')), 40.0)
         meshes = bridge_meshes(_straight(length=200.0, height=40.0), ROAD, level)
         assert 'piers' not in meshes
@@ -924,7 +924,7 @@ class TestBakedLightSurvivesABake:
 
     def test_and_a_reader_takes_it_back_off_the_file(self) -> None:
         handler = _MATERIAL_EXT_HANDLERS['OGLC_materials_baked_light']
-        assert handler({}, lambda *args, **named: None, DocumentValues()) == {
+        assert handler({}, lambda *_args, **_named: None, DocumentValues()) == {
             'bakedLight': True}
 
 

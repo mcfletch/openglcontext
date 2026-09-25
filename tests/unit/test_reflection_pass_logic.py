@@ -99,7 +99,7 @@ class _Shader:
     def __init__(self):
         self.given = []
 
-    def set_planar_reflection(self, lookup, program=None):
+    def set_planar_reflection(self, lookup, program=None):  # noqa: ARG002 the signature of PBRShaderProgram.set_planar_reflection
         self.given.append(lookup)
 
 
@@ -179,7 +179,7 @@ class _FailingPlanner:
         self.calls = 0
         self.schedule = None
 
-    def plan(self, *args, **named):
+    def plan(self, *_args, **_named):
         self.calls += 1
         raise RuntimeError('the reflection atlas is incomplete (0x8cd6)')
 
@@ -272,7 +272,7 @@ class _Atlas:
     def __init__(self, new=False):
         self.new, self.released, self.mipmapped = new, 0, False
 
-    def ensure_size(self, width, height):
+    def ensure_size(self, _width, _height):
         return self.new
 
     def bind(self):
@@ -287,7 +287,7 @@ class _Context(_Context):
         super().__init__(*args, **named)
         self.redraws = 0
 
-    def triggerRedraw(self, when=0):
+    def triggerRedraw(self, when=0):  # noqa: ARG002 stands in for Context.triggerRedraw(force)
         self.redraws += 1
 
 
@@ -310,15 +310,15 @@ def _drawing_pass(records, **fields):
     effects.sceneMirrors = lambda: np.arange(len(records))
     effects.activeFrame = None
     effects.mirrorsZoned = lambda: False
-    effects.mirrorsIn = lambda frame: []
-    effects._separateShapes = lambda mirror: False
+    effects.mirrorsIn = lambda _frame: []
+    effects._separateShapes = lambda _mirror: False
     effects.stats = types.SimpleNamespace()
     effects._reflection_planner = planner = ReflectionPlanner()
     planner.frame = SETTLE_FRAMES
     effects._reflection_atlas = _Atlas()
     effects.drawn = []
 
-    def draw(plan, lighting, gathered, atlas):
+    def draw(plan, _lighting, _gathered, _atlas):
         effects.drawn.append(plan)
         effects._incompleteMirrors = frozenset(draw.key for draw in plan.draws)
 

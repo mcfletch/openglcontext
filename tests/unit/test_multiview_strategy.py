@@ -173,14 +173,16 @@ class TestDetect:
         assert found.available() == ('sequential',)
         assert not found.detected
 
-    def test_a_real_driver_is_asked_once(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_real_driver_is_asked_once(self):
         first = MultiviewCapabilities.detect()
         assert first.detected
         assert first.gl_version >= (3, 3)
         assert MultiviewCapabilities.detect() is first
         assert 'sequential' in first.available()
 
-    def test_a_context_that_dies_is_forgotten(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_context_that_dies_is_forgotten(self):
         """A driver hands a dead context's address to the next one."""
         MultiviewCapabilities.detect()
         key = contextresources.context_key()
@@ -188,7 +190,8 @@ class TestDetect:
         contextresources.context_lost()
         assert key not in multiview._DETECTED
 
-    def test_a_driver_that_answers_nothing_is_asked_once(self, gl_context, monkeypatch):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_driver_that_answers_nothing_is_asked_once(self, monkeypatch):
         asked = []
 
         def nothing(cls):

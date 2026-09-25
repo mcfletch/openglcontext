@@ -47,7 +47,7 @@ class _Buffer:
     def __init__(self):
         self.id_map = {}
 
-    def read_pixel(self, x, y):
+    def read_pixel(self, _x, _y):
         return 0, 0.5
 
 

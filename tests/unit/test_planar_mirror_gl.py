@@ -82,7 +82,8 @@ def env(monkeypatch):
     return monkeypatch
 
 
-def test_the_mirror_shows_what_stands_behind_the_camera(render_scene, env):
+@pytest.mark.usefixtures('env')
+def test_the_mirror_shows_what_stands_behind_the_camera(render_scene):
     frame = frames_of(render_scene, _room(), frames=3, size=SIZE)[-1]
     assert _red(frame) > 300
 
@@ -93,14 +94,15 @@ def test_switched_off_the_mirror_reflects_the_sky(render_scene, env):
     assert _red(frame) == 0
 
 
-def test_a_disabled_reflector_reflects_the_sky(render_scene, env):
+@pytest.mark.usefixtures('env')
+def test_a_disabled_reflector_reflects_the_sky(render_scene):
     frame = frames_of(render_scene, _room(_mirror(reflector=PlanarReflector(
         enabled=False))), frames=3, size=SIZE)[-1]
     assert _red(frame) == 0
 
 
-def test_a_mirror_that_replaces_its_surface_shows_the_reflection_whatever_its_material(
-        render_scene, env):
+@pytest.mark.usefixtures('env')
+def test_a_mirror_that_replaces_its_surface_shows_the_reflection_whatever_its_material(render_scene):
     """A rough blue plastic would reflect nothing; replacing, it shows the box."""
     rough_blue = dict(baseColor=(0.0, 0.0, 1.0), metallic=0.0, roughness=1.0)
     shown = frames_of(render_scene, _room(_mirror(
@@ -112,7 +114,8 @@ def test_a_mirror_that_replaces_its_surface_shows_the_reflection_whatever_its_ma
     assert _red(shaded) == 0
 
 
-def test_the_mirror_is_drawn_from_its_own_reflection_not_the_screen(render_scene, env):
+@pytest.mark.usefixtures('env')
+def test_the_mirror_is_drawn_from_its_own_reflection_not_the_screen(render_scene):
     """A mirror off to one side still reflects the box along its own normal."""
     frame = frames_of(render_scene, _room(_mirror(x=0.0, size=4.0)),
                       frames=3, size=SIZE)[-1]
@@ -122,8 +125,9 @@ def test_the_mirror_is_drawn_from_its_own_reflection_not_the_screen(render_scene
     assert int((corner[..., 0] > 120).sum()) == 0
 
 
-def test_each_view_sees_the_mirror_from_where_it_stands(render_scene, env):
-    def layout(context):
+@pytest.mark.usefixtures('env')
+def test_each_view_sees_the_mirror_from_where_it_stands(render_scene):
+    def layout(_context):
         left = View(ViewPlatform(position=(0.0, 0.0, 6.0), orientation=(0, 1, 0, 0)),
                     name='left')
         right = View(ViewPlatform(position=(0.0, 0.0, 6.0), orientation=(0, 1, 0, 0)),
@@ -224,7 +228,7 @@ def test_a_reflection_reused_after_a_small_move_matches_a_fresh_one(
         _room(_mirror(x=-2.0, size=3.5,
                       reflector=PlanarReflector(interval=1, priority=100.0)),
               _mirror(x=2.0, size=3.5, reflector=stale)),
-        frames=4, size=(240, 120), layout=lambda context: ViewLayout.single(platform))
+        frames=4, size=(240, 120), layout=lambda _context: ViewLayout.single(platform))
     platform.setPosition((0.01, 0.0, 6.0))
     rendered.context.OnDraw(force=1)
     assert renderpass.FLAT.stats.mirrorViews == 1
@@ -340,7 +344,8 @@ def _floor_and_wall():
             _floor(baseColor=(0.9, 0.9, 0.9), metallic=1.0, roughness=0.02)]
 
 
-def test_a_mirror_seen_in_a_mirror_shows_its_own_reflection(render_scene, env):
+@pytest.mark.usefixtures('env')
+def test_a_mirror_seen_in_a_mirror_shows_its_own_reflection(render_scene):
     """The floor reflects the wall mirror, and the wall mirror reflects the box.
 
     The box stands behind the camera, so the only way red reaches the floor is
@@ -423,7 +428,8 @@ def test_one_bounce_leaves_a_mirror_in_a_mirror_reflecting_the_probe(render_scen
                                    size=SIZE)[-1]) == 0
 
 
-def test_a_mirror_reflects_its_reflectance_of_the_light(render_scene, env):
+@pytest.mark.usefixtures('env')
+def test_a_mirror_reflects_its_reflectance_of_the_light(render_scene):
     """A mirror is told from an opening by reflecting less than all of it."""
     def red_level(reflectance):
         frame = frames_of(render_scene, _room(_mirror(reflector=PlanarReflector(
@@ -436,7 +442,8 @@ def test_a_mirror_reflects_its_reflectance_of_the_light(render_scene, env):
     assert half < full * 0.85
 
 
-def test_a_shape_made_a_mirror_while_out_of_view_is_found_in_a_mirror(render_scene, env):
+@pytest.mark.usefixtures('env')
+def test_a_shape_made_a_mirror_while_out_of_view_is_found_in_a_mirror(render_scene):
     """The mirror behind the camera is plain metal until its material is given
     a reflector, and no view but the front mirror's can see it."""
     scene = _behind_the_camera()
@@ -452,7 +459,8 @@ def test_a_shape_made_a_mirror_while_out_of_view_is_found_in_a_mirror(render_sce
     assert _red_anywhere(read_back_buffer()[0]) > 20
 
 
-def test_a_scene_without_mirrors_looks_at_no_shape_for_one(render_scene, env, monkeypatch):
+@pytest.mark.usefixtures('env')
+def test_a_scene_without_mirrors_looks_at_no_shape_for_one(render_scene, monkeypatch):
     asked = []
     real = reflection.reflector_for
     monkeypatch.setattr(reflection, 'reflector_for',
@@ -462,7 +470,8 @@ def test_a_scene_without_mirrors_looks_at_no_shape_for_one(render_scene, env, mo
     assert asked == []
 
 
-def test_the_planner_looks_only_at_the_mirrors(render_scene, env, monkeypatch):
+@pytest.mark.usefixtures('env')
+def test_the_planner_looks_only_at_the_mirrors(render_scene, monkeypatch):
     asked = []
     real = ReflectionPlanner._surface
     monkeypatch.setattr(ReflectionPlanner, '_surface',

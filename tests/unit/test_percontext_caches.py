@@ -160,7 +160,7 @@ class TestClosingAWindowLetsGoOfItsOwnContext:
     same address to -- which then draws through names its own context never
     issued."""
 
-    def test_the_last_window_open_is_not_the_one_being_closed(self, gl_window):
+    def test_the_last_window_open_is_not_the_one_being_closed(self):
         """Two windows, closed in turn: whichever was left current when the
         first of them went is the one the caches would hear about, and the
         other one's programs would stay reachable for ever."""
@@ -277,20 +277,23 @@ class TestReplacingAPassLetsGoOfItsShadowMaps:
         renderpass._passes.clear()
         renderpass._passes.update(saved)
 
-    def test_a_scenegraph_swap_disposes_the_outgoing_pass(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_scenegraph_swap_disposes_the_outgoing_pass(self):
         one, two = object(), object()
         first = renderpass.cached_pass(one, lambda: _StandInPass(one))
         renderpass.cached_pass(two, lambda: _StandInPass(two))
         assert first.disposed == 1
 
-    def test_losing_the_context_disposes_it(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_losing_the_context_disposes_it(self):
         scene = object()
         only = renderpass.cached_pass(scene, lambda: _StandInPass(scene))
         renderpass.drop_pass()
         assert only.disposed == 1
         assert renderpass._passes == {}
 
-    def test_a_pass_that_raises_does_not_stop_the_replacement(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_pass_that_raises_does_not_stop_the_replacement(self):
         class Awkward(_StandInPass):
             def disposeResources(self):
                 raise RuntimeError('the driver said no')
@@ -311,7 +314,7 @@ class _ListFont:
         class ListFont(font.Font):
             made = 0
 
-            def createChar(self, char, mode=None):
+            def createChar(self, char, mode=None):  # noqa: ARG002 the signature of Font.createChar
                 ListFont.made += 1
                 name = int(glGenLists(1)) if lists else None
                 return name, font.CharacterMetrics(char, 1.0, 1.0)

@@ -50,7 +50,7 @@ def fake_download(monkeypatch, tmp_path):
     payload = bytes(range(256)) * 4096          # 1 MiB, distinctive content
     calls = {'n': 0}
 
-    def _fake_open(url, base_url, timeout=30):
+    def _fake_open(*_args, **_named):
         calls['n'] += 1
         return _SlowResponse(payload)
 

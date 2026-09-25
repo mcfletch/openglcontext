@@ -43,7 +43,7 @@ def test_gpu_resources_built_once_and_reused(monkeypatch):
     builds = []
 
     class FakeGPU:
-        def __init__(self, mesh, pending_deletes=None):
+        def __init__(self, mesh, pending_deletes=None):  # noqa: ARG002 the signature of pbrmesh._MeshGPU
             builds.append(mesh)
 
     monkeypatch.setattr(pbrmesh, "_MeshGPU", FakeGPU)
@@ -59,7 +59,7 @@ def test_gpu_resources_built_once_and_reused(monkeypatch):
 
 def test_gpu_cache_is_per_node(monkeypatch):
     """Distinct meshes get distinct cached GPU resources under one cache."""
-    monkeypatch.setattr(pbrmesh, "_MeshGPU", lambda mesh, pending_deletes=None: object())
+    monkeypatch.setattr(pbrmesh, "_MeshGPU", lambda _mesh, pending_deletes=None: object())  # noqa: ARG005 the signature of pbrmesh._MeshGPU
     mode = types.SimpleNamespace(cache=Cache())
     a, b = _mesh(), _mesh()
     assert a._gpu(mode) is not b._gpu(mode)

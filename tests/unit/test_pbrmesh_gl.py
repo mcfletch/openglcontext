@@ -50,7 +50,8 @@ def _full_mesh(indices=(0, 1, 2), draw_mode=GL_TRIANGLES):
 
 
 class TestMeshGPUUpload:
-    def test_indexed_mesh_builds_all_attribute_buffers(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_indexed_mesh_builds_all_attribute_buffers(self):
         mesh = _full_mesh()
         gpu = mesh._gpu(_mode())
         assert gpu.vao != 0
@@ -63,34 +64,41 @@ class TestMeshGPUUpload:
         assert set(gpu.dyn) == set()
         assert glGetError() == GL_NO_ERROR
 
-    def test_non_indexed_mesh_counts_vertices(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_non_indexed_mesh_counts_vertices(self):
         gpu = _full_mesh(indices=None)._gpu(_mode())
         assert gpu.indexed is False
         assert gpu.count == 3                       # vertex count, not index count
         assert gpu.idx_vbo is None
 
-    def test_gpu_is_cached_per_context(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_gpu_is_cached_per_context(self):
         mesh = _full_mesh()
         mode = _mode()
         assert mesh._gpu(mode) is mesh._gpu(mode)   # second call reuses the VAO
 
 
 class TestRenderDraw:
-    def test_render_indexed_triangles(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_render_indexed_triangles(self):
         assert _full_mesh().render(mode=_mode()) == 1
 
-    def test_render_non_indexed_array(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_render_non_indexed_array(self):
         assert _full_mesh(indices=None).render(mode=_mode()) == 1
 
-    def test_render_points_mode(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_render_points_mode(self):
         # GL_POINTS enables GL_PROGRAM_POINT_SIZE around the draw.
         assert _full_mesh(draw_mode=GL_POINTS).render(mode=_mode()) == 1
 
-    def test_render_skips_empty_mesh(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_render_skips_empty_mesh(self):
         empty = PBRMesh(positions=np.zeros((0, 3), 'f'))
         assert empty.render(mode=_mode()) == 1
 
-    def test_render_sets_vertex_color_uniform(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_render_sets_vertex_color_uniform(self):
         calls = []
 
         class _SP:
@@ -112,7 +120,8 @@ class TestDynamicDeform:
                             'normals': np.zeros((3, 3), 'f'),
                             'tangents': np.zeros((3, 3), 'f')}])
 
-    def test_morph_reupload_on_weight_change(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_morph_reupload_on_weight_change(self):
         mesh = self._morph_mesh()
         mode = _mode()
         gpu = mesh._gpu(mode)
@@ -124,7 +133,8 @@ class TestDynamicDeform:
         assert gpu2._uploaded_morph_version != v0
         assert glGetError() == GL_NO_ERROR
 
-    def test_zero_weight_morph_target_is_skipped(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_zero_weight_morph_target_is_skipped(self):
         # Two targets, only the first active: the zero-weight target is skipped in
         # the deform accumulation but the active one still applies.
         p = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], 'f')
@@ -149,7 +159,8 @@ class TestDynamicDeform:
         translate[3, 0] = distance                   # row-vector translation +x
         return np.stack([translate])
 
-    def test_skin_pose_moves_the_vertices(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_skin_pose_moves_the_vertices(self):
         mesh = self._skinned()
         assert mesh.is_deformable is True
 
@@ -159,7 +170,8 @@ class TestDynamicDeform:
         mesh._gpu(_mode())
         assert glGetError() == GL_NO_ERROR
 
-    def test_the_shader_path_leaves_the_buffers_at_rest(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_the_shader_path_leaves_the_buffers_at_rest(self):
         """Nothing is re-uploaded per frame: the pose is a palette of matrices."""
         mesh = self._skinned()
 
@@ -170,7 +182,8 @@ class TestDynamicDeform:
         assert mesh.positions[0][0] == pytest.approx(0.0)
         assert set(mesh._gpu(_mode()).dyn) == set()
 
-    def test_the_cpu_path_deforms_the_arrays_and_re_uploads(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_the_cpu_path_deforms_the_arrays_and_re_uploads(self):
         mesh = self._skinned()
         mesh.skin_on_gpu = False
 
@@ -183,14 +196,16 @@ class TestDynamicDeform:
 
 
 class TestResourcesAndQueue:
-    def test_release_clears_vaos(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_release_clears_vaos(self):
         gpu = _full_mesh()._gpu(_mode())
         assert gpu.vao != 0
         gpu.release()
         assert gpu.vao == 0
         gpu.release()                                # idempotent
 
-    def test_a_rebuilt_instance_vao_is_given_the_divisor_it_is_drawn_with(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_a_rebuilt_instance_vao_is_given_the_divisor_it_is_drawn_with(self):
         """The divisor is state of the VAO, so a new VAO starts from its own."""
         gpu = _full_mesh()._gpu(_mode())
         modelviews = [np.eye(4, dtype='f')] * 2
@@ -210,12 +225,14 @@ class TestResourcesAndQueue:
         assert divisor() == 3
         assert glGetError() == GL_NO_ERROR
 
-    def test_instance_gpu_returns_cached_gpu(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_instance_gpu_returns_cached_gpu(self):
         mesh = _full_mesh()
         mode = _mode()
         assert mesh.instanceGPU(mode) is mesh._gpu(mode)
 
-    def test_finalizer_enqueues_then_flush_deletes(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_finalizer_enqueues_then_flush_deletes(self):
         mesh = _full_mesh()
         mode = _mode()
         queue = PBRMesh._pending_delete_queue(mode)
@@ -230,7 +247,8 @@ class TestResourcesAndQueue:
 
 
 class TestBoundingAndMisc:
-    def test_bounding_volume_from_points(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_bounding_volume_from_points(self):
         vol = _full_mesh().boundingVolume(None)
         assert vol is not None
 
@@ -296,7 +314,8 @@ class TestDrawingIntoADepthMap:
     def _depth_mode(self):
         return _mode(shadow_pass=True, shader_program=_DepthProgram())
 
-    def test_a_plain_mesh_draws_itself(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_a_plain_mesh_draws_itself(self):
         mode = self._depth_mode()
         assert _full_mesh().depthDraw(mode) is True
         assert glGetError() == GL_NO_ERROR
@@ -304,11 +323,13 @@ class TestDrawingIntoADepthMap:
         # not skinned, whatever drew before it.
         assert mode.shader_program.skinning == [None]
 
-    def test_an_unindexed_mesh_draws_itself(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_an_unindexed_mesh_draws_itself(self):
         assert _full_mesh(indices=None).depthDraw(self._depth_mode()) is True
         assert glGetError() == GL_NO_ERROR
 
-    def test_a_morphed_mesh_is_drawn_posed(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_a_morphed_mesh_is_drawn_posed(self):
         mesh = TestDynamicDeform()._morph_mesh()
         mode = self._depth_mode()
         gpu = mesh._gpu(mode)
@@ -317,16 +338,19 @@ class TestDrawingIntoADepthMap:
         assert mesh.depthDraw(mode) is True
         assert gpu._uploaded_morph_version != before
 
-    def test_a_skinned_mesh_asks_for_the_whole_draw(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_a_skinned_mesh_asks_for_the_whole_draw(self):
         mesh = _full_mesh()
         mesh.skin_joints = np.zeros((3, 4), 'f')
         assert mesh.depthDraw(self._depth_mode()) is False
 
-    def test_an_empty_mesh_draws_nothing(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_an_empty_mesh_draws_nothing(self):
         empty = PBRMesh(positions=np.zeros((0, 3), 'f'))
         assert empty.depthDraw(self._depth_mode()) is True
 
-    def test_a_shape_draws_its_mesh_into_the_depth_map_that_way(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_a_shape_draws_its_mesh_into_the_depth_map_that_way(self):
         mesh = _full_mesh()
         drawn = []
         mesh.depthDraw = lambda mode: drawn.append(mode) or True

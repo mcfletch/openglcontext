@@ -131,7 +131,8 @@ class _Context:
 
 
 class TestPBRTextureGL:
-    def test_a_context_that_has_gone_is_forgotten(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_a_context_that_has_gone_is_forgotten(self):
         """The textures are kept by context, not by where it was allocated.
 
         A collected context's address is handed to the next object of its
@@ -146,7 +147,8 @@ class TestPBRTextureGL:
         gc.collect()
         assert len(tex._per_context) == 0
 
-    def test_cached_builds_once_and_applies_sampler(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_cached_builds_once_and_applies_sampler(self):
         img = Image.new("RGBA", (4, 4), (200, 100, 50, 255))
         tex = PBRTexture(img, srgb=True, wrap_s=GL_REPEAT, wrap_t=GL_CLAMP_TO_EDGE,
                          min_filter=GL_LINEAR, mag_filter=GL_NEAREST)
@@ -166,7 +168,8 @@ class TestPBRTextureGL:
         # A second lookup with the same context returns the cached object.
         assert tex.cached(mode) is built
 
-    def test_cached_defaults_without_sampler_overrides(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_cached_defaults_without_sampler_overrides(self):
         img = Image.new("RGBA", (2, 2), (10, 20, 30, 255))
         tex = PBRTexture(img)                      # no wrap/filter overrides
         mode = types.SimpleNamespace(context=_Context())
@@ -177,7 +180,8 @@ class TestPBRTextureGL:
         assert mag == GL_LINEAR                    # default mag filter
         assert glGetError() == GL_NO_ERROR
 
-    def test_mipmap_failure_falls_back_to_linear_min_filter(self, gl, monkeypatch):
+    @pytest.mark.usefixtures('gl')
+    def test_mipmap_failure_falls_back_to_linear_min_filter(self, monkeypatch):
         # A driver that cannot generate mipmaps -> _apply_sampler must degrade the
         # min filter to plain GL_LINEAR rather than a mipmap filter (else sampling
         # an incomplete mip chain renders black).

@@ -114,7 +114,7 @@ class TestFinalizerNeverTouchesGL:
     def test_del_enqueues_instead_of_deleting(self, monkeypatch):
         deleted = []
         monkeypatch.setattr(pbrmesh, 'glDeleteVertexArrays',
-                            lambda n, ids: deleted.extend(ids))
+                            lambda _n, ids: deleted.extend(ids))
         queue = []
         gpu = self._gpu(7, queue)
         gpu.__del__()
@@ -124,7 +124,7 @@ class TestFinalizerNeverTouchesGL:
     def test_del_without_queue_is_silent(self, monkeypatch):
         deleted = []
         monkeypatch.setattr(pbrmesh, 'glDeleteVertexArrays',
-                            lambda n, ids: deleted.extend(ids))
+                            lambda _n, ids: deleted.extend(ids))
         gpu = self._gpu(9, None)
         gpu.__del__()                 # no queue attached -> nothing happens, no crash
         assert deleted == []
@@ -132,7 +132,7 @@ class TestFinalizerNeverTouchesGL:
     def test_flush_deletes_queued_ids_once(self, monkeypatch):
         deleted = []
         monkeypatch.setattr(pbrmesh, 'glDeleteVertexArrays',
-                            lambda n, ids: deleted.extend(ids))
+                            lambda _n, ids: deleted.extend(ids))
         ctx = _FakeContext()
         mode = FakeMode()
         mode.context = ctx
@@ -168,7 +168,7 @@ class TestDefensiveTeardown:
 
     def test_release_swallows_delete_failure(self, monkeypatch):
         monkeypatch.setattr(pbrmesh, 'glDeleteVertexArrays',
-                            lambda *a: (_ for _ in ()).throw(RuntimeError("bad ctx")))
+                            lambda *_a: (_ for _ in ()).throw(RuntimeError("bad ctx")))
         gpu = self._bare_gpu()
         gpu.release()                       # exception is caught
         assert gpu.vao == 0                 # slot still cleared
@@ -193,7 +193,7 @@ class TestDefensiveTeardown:
 
     def test_flush_swallows_delete_failure(self, monkeypatch):
         monkeypatch.setattr(pbrmesh, 'glDeleteVertexArrays',
-                            lambda *a: (_ for _ in ()).throw(RuntimeError("bad ctx")))
+                            lambda *_a: (_ for _ in ()).throw(RuntimeError("bad ctx")))
         mode = FakeMode()
         mode.context = _FakeContext()
         queue = PBRMesh._pending_delete_queue(mode)

@@ -34,18 +34,14 @@ class TestTheHemisphereLayout:
         assert octahedral.direction_to_uv(UP) == pytest.approx([0.5, 0.5])
 
     @pytest.mark.parametrize('direction,corner', [
-        ((1, 0, 0), [1.0, 0.5 + 0.5]),
+        ((1, 0, 0), [1.0, 0.0]),
         ((0, 0, 1), [1.0, 1.0]),
-        ((-1, 0, 0), [0.0, 1.0 - 0.5]),
+        ((-1, 0, 0), [0.0, 1.0]),
         ((0, 0, -1), [0.0, 0.0]),
     ])
     def test_the_horizon_goes_to_the_edges(self, direction, corner):
         """The four compass points land on the square's four corners."""
-        found = octahedral.direction_to_uv(direction)
-
-        assert 0.0 <= found[0] <= 1.0 and 0.0 <= found[1] <= 1.0
-        assert min(found) == pytest.approx(0.0) or \
-            max(found) == pytest.approx(1.0)
+        assert octahedral.direction_to_uv(direction) == pytest.approx(corner)
 
     def test_every_direction_lands_inside_the_square(self):
         rng = np.random.default_rng(7)

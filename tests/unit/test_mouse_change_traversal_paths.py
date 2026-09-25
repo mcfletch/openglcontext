@@ -33,9 +33,9 @@ class _Event:
         self.newPath = newPath
 
 
-@pytest.mark.parametrize('manager,attribute', [
-    (mouseevents.MouseInEventManager, 'newPath'),
-    (mouseevents.MouseOutEventManager, 'lastPath'),
+@pytest.mark.parametrize('manager', [
+    mouseevents.MouseInEventManager,
+    mouseevents.MouseOutEventManager,
 ], ids=['mousein', 'mouseout'])
 class TestTheDeltaIsAPath:
     def _traversed(self, manager, scene):
@@ -43,21 +43,22 @@ class TestTheDeltaIsAPath:
         instance = manager.__new__(manager)
         return instance._traversalPaths(_Event(lastPath=off, newPath=onto))
 
-    def test_it_gives_one_path(self, manager, attribute, scene):
+    def test_it_gives_one_path(self, manager, scene):
         assert len(self._traversed(manager, scene)) == 1
 
-    def test_the_delta_is_still_a_node_path(self, manager, attribute, scene):
+    def test_the_delta_is_still_a_node_path(self, manager, scene):
         found = self._traversed(manager, scene)[0]
         assert isinstance(found, NodePath), type(found)
 
-    def test_it_can_still_give_its_matrix(self, manager, attribute, scene):
+    def test_it_can_still_give_its_matrix(self, manager, scene):
         """``transformMatrix`` is what a handler asks the path for."""
         found = self._traversed(manager, scene)[0]
         assert found.transformMatrix().shape == (4, 4)
 
-    def test_the_shared_prefix_is_dropped(self, manager, attribute, scene):
+    def test_the_shared_prefix_is_dropped(self, manager, scene):
         """Both paths start at the same Transform, so only the leaf differs."""
         _root, onto, off = scene
         found = self._traversed(manager, scene)[0]
-        expected = {'newPath': onto, 'lastPath': off}[attribute]
+        expected = {mouseevents.MouseInEventManager: onto,
+                    mouseevents.MouseOutEventManager: off}[manager]
         assert list(found) == [expected[-1]]

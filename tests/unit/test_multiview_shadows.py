@@ -50,7 +50,7 @@ def _cameras():
 
 
 def _layout(fitted):
-    def build(context):
+    def build(_context):
         far, near = _cameras()
         layout = ViewLayout.split(View(far, name='far'), View(near, name='near'))
         layout.activate(layout.views[1 if fitted == 'near' else 0])
@@ -75,14 +75,15 @@ def _near_tile(render_scene, fitted, shadows=True):
     return frames[-1][:, WIDTH // 2:]
 
 
-def test_the_close_view_has_a_shadow_to_compare(render_scene, env):
+@pytest.mark.usefixtures('env')
+def test_the_close_view_has_a_shadow_to_compare(render_scene):
     lit = _near_tile(render_scene, 'near', shadows=False)
     shadowed = _near_tile(render_scene, 'near')
     assert _differing(lit, shadowed) > 400
 
 
-def test_a_view_the_cascades_were_not_fitted_to_still_shows_the_shadow(
-        render_scene, env):
+@pytest.mark.usefixtures('env')
+def test_a_view_the_cascades_were_not_fitted_to_still_shows_the_shadow(render_scene):
     own = _near_tile(render_scene, 'near')
     borrowed = _near_tile(render_scene, 'far')
     # The borrowed cascades cover the ground at a different resolution, so the
@@ -90,7 +91,7 @@ def test_a_view_the_cascades_were_not_fitted_to_still_shows_the_shadow(
     assert _differing(own, borrowed) < 60
 
 
-def _looking_away_layout(context):
+def _looking_away_layout(_context):
     """The active view looks up at the empty sky; the other sees the shadow."""
     _far, near = _cameras()
     away = _looking((0.0, 0.0, 60.0), (0.0, 100.0, 70.0))
@@ -99,8 +100,8 @@ def _looking_away_layout(context):
     return layout
 
 
-def test_an_active_view_with_nothing_in_it_leaves_the_others_their_shadows(
-        render_scene, env):
+@pytest.mark.usefixtures('env')
+def test_an_active_view_with_nothing_in_it_leaves_the_others_their_shadows(render_scene):
     lit = _near_tile(render_scene, 'near', shadows=False)
     frames = frames_of(render_scene, _scene(), frames=3, shadows=True,
                        size=(WIDTH, HEIGHT), layout=_looking_away_layout)

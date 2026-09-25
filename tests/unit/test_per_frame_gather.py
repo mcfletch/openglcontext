@@ -210,7 +210,7 @@ class TestTheShadowPoolReadsTheGather:
         for record in records:
             assert record[2] is record[4].transformMatrix()
 
-    def test_the_pool_carries_the_paths_own_matrix(self, monkeypatch):
+    def test_the_pool_carries_the_paths_own_matrix(self):
         """Which is what lets the caster memo tell a still scene from a moved one."""
         passing, _moves = self._pass(3)
         passing.renderSet(np.eye(4, dtype='f'))

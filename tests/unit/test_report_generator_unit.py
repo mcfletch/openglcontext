@@ -88,7 +88,7 @@ def test_image_ref_verbatim_without_base_dir():
 
 def test_image_ref_falls_back_on_cross_drive(monkeypatch):
     """A ValueError from relpath (cross-drive) falls back to the raw path."""
-    def _boom(path, start):
+    def _boom(_path, _start):
         raise ValueError('paths on different drives')
 
     monkeypatch.setattr(os.path, 'relpath', _boom)

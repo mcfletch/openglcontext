@@ -32,7 +32,7 @@ class _Platform:
 
 
 class _Dispatch:
-    def ProcessEvent(self, event):
+    def ProcessEvent(self, _event):
         return None
 
 
@@ -46,7 +46,7 @@ class _Context(ViewPlatformMixin, _Dispatch):
         self.platform = _Platform()
         self.captures = []
 
-    def getEventManager(self, kind):
+    def getEventManager(self, _kind):
         return None
 
     def triggerRedraw(self, value=1):
@@ -166,7 +166,7 @@ def test_the_glfw_backend_disables_the_cursor_to_capture(monkeypatch):
     from OpenGLContext import glfwcontext  # noqa: PLC0415 needs the glfw package, which the other tests here do not
     calls = []
     monkeypatch.setattr(glfw, 'set_input_mode',
-                        lambda window, mode, value: calls.append((mode, value)))
+                        lambda _window, mode, value: calls.append((mode, value)))
     monkeypatch.setattr(glfw, 'raw_mouse_motion_supported', lambda: False)
     context = glfwcontext.GLFWContext.__new__(glfwcontext.GLFWContext)
     context.window = object()
@@ -183,7 +183,7 @@ def test_raw_motion_is_asked_for_when_the_platform_has_it(monkeypatch):
     from OpenGLContext import glfwcontext  # noqa: PLC0415 needs the glfw package, which the other tests here do not
     calls = []
     monkeypatch.setattr(glfw, 'set_input_mode',
-                        lambda window, mode, value: calls.append((mode, value)))
+                        lambda _window, mode, value: calls.append((mode, value)))
     monkeypatch.setattr(glfw, 'raw_mouse_motion_supported', lambda: True)
     context = glfwcontext.GLFWContext.__new__(glfwcontext.GLFWContext)
     context.window = object()

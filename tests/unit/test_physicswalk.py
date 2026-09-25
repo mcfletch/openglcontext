@@ -70,10 +70,10 @@ class _Manager:
     def __init__(self):
         self.bound = True
 
-    def bind(self, context):
+    def bind(self, _context):
         self.bound = True
 
-    def unbind(self, context):
+    def unbind(self, _context):
         self.bound = False
 
 
@@ -308,7 +308,7 @@ class TestSpawnAvatar:
         real capsule report a partial score has to be tuned to the avatar's
         size to the point where it tests the collision engine instead.
         """
-        monkeypatch.setattr(physicswalk, '_clearance', lambda character, radius: 2)
+        monkeypatch.setattr(physicswalk, '_clearance', lambda _character, _radius: 2)
         host = _started()
         host.enablePhysics(True)
         character = host.physicsPlatform.character

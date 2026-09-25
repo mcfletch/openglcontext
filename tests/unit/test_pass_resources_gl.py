@@ -97,7 +97,8 @@ def _swap(context):
     context.OnDraw(force=1)
 
 
-def test_a_scene_swap_releases_the_outgoing_passs_gl_objects(render_scene, env):
+@pytest.mark.usefixtures('env')
+def test_a_scene_swap_releases_the_outgoing_passs_gl_objects(render_scene):
     rendered = render_scene(_room(), frames=3, size=SIZE)
     context = rendered.context
     outgoing = renderpass.current_pass()
@@ -118,7 +119,8 @@ def test_a_scene_swap_releases_the_outgoing_passs_gl_objects(render_scene, env):
     assert _census() == settled
 
 
-def test_disposing_twice_is_harmless(render_scene, env):
+@pytest.mark.usefixtures('env')
+def test_disposing_twice_is_harmless(render_scene):
     render_scene(_room(), frames=2, size=SIZE)
     pass_ = renderpass.current_pass()
     held = _names(pass_)
@@ -128,7 +130,8 @@ def test_disposing_twice_is_harmless(render_scene, env):
     assert _alive(held) == []
 
 
-def test_a_pass_draws_again_after_disposing(render_scene, env):
+@pytest.mark.usefixtures('env')
+def test_a_pass_draws_again_after_disposing(render_scene):
     """What disposing drops is made again on the next frame that needs it."""
     rendered = render_scene(_room(), frames=2, size=SIZE)
     pass_ = renderpass.current_pass()

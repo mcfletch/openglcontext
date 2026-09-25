@@ -123,7 +123,7 @@ class TestWhatADeformerMayChange:
         """Content is not always well formed; a bad deformer costs an effect."""
         mesh = grid()
         rest = mesh.positions.copy()
-        mesh.set_surface_deformer(lambda p, n, t: None)
+        mesh.set_surface_deformer(lambda _p, _n, _t: None)
         assert np.allclose(mesh.positions, rest)
 
 

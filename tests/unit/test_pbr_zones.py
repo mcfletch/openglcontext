@@ -95,13 +95,13 @@ class TestTheProgramAPI:
         program = pbrpass.PBRShaderProgram.__new__(pbrpass.PBRShaderProgram)
         program.program = 7
         calls = []
-        program._set_uniform1i = lambda name, value, prog=None: calls.append((name, int(value)))
-        program._get_location = lambda name, prog=None: {'zoneKind': 1, 'zoneToLocal': 2,
+        program._set_uniform1i = lambda name, value, prog=None: calls.append((name, int(value)))  # noqa: ARG005 the signature of ShaderProgram._set_uniform1i
+        program._get_location = lambda name, prog=None: {'zoneKind': 1, 'zoneToLocal': 2,  # noqa: ARG005 the signature of ShaderProgram._get_location
                                                          'zoneShape': 3, 'zoneLight': 4}[name]
-        monkeypatch.setattr(pbrpass, 'glUniform1iv', lambda loc, n, v: calls.append(('1iv', loc, n)))
-        monkeypatch.setattr(pbrpass, 'glUniform4fv', lambda loc, n, v: calls.append(('4fv', loc, n)))
+        monkeypatch.setattr(pbrpass, 'glUniform1iv', lambda loc, n, _v: calls.append(('1iv', loc, n)))
+        monkeypatch.setattr(pbrpass, 'glUniform4fv', lambda loc, n, _v: calls.append(('4fv', loc, n)))
         monkeypatch.setattr(pbrpass, 'glUniformMatrix4fv',
-                            lambda loc, n, t, v: calls.append(('m4', loc, n, t)))
+                            lambda loc, n, t, _v: calls.append(('m4', loc, n, t)))
         return program, calls
 
     def test_no_zones_uploads_one_integer(self, monkeypatch):
@@ -113,7 +113,7 @@ class TestTheProgramAPI:
         program, calls = self._program(monkeypatch)
         zones = placed_zones([(Zone(size=(10, 10, 10), settings=[ZoneEnvironment()]),
                                np.identity(4))])
-        pack = environment_layers(zones, (-1, -1, -1), (1, 1, 1), lambda z: -1.0)
+        pack = environment_layers(zones, (-1, -1, -1), (1, 1, 1), lambda _z: -1.0)
         program.set_zones(pack)
         assert calls[-1] == ('zoneLayers', 1)
         assert ('1iv', 1, MAX_ZONE_LAYERS) in calls
@@ -142,10 +142,10 @@ class FakeShader:
     def __init__(self):
         self.zones, self.masks = [], []
 
-    def set_zones(self, pack=None, program=None):
+    def set_zones(self, pack=None, program=None):  # noqa: ARG002 the signature of PBRShaderProgram.set_zones
         self.zones.append(pack)
 
-    def set_lights_off(self, mask=0, program=None):
+    def set_lights_off(self, mask=0, program=None):  # noqa: ARG002 the signature of VRML97ShaderProgram.set_lights_off
         self.masks.append(mask)
 
 
@@ -563,7 +563,7 @@ class TestManyZones:
         zoned = ZonedPass([(Zone(size=(10, 10, 10), settings=[ZoneEnvironment()]), at(0))])
         zoned.placeZones()
         layer = [-1.0]
-        zoned.zoneProbeLayer = lambda zone: layer[0]
+        zoned.zoneProbeLayer = lambda _zone: layer[0]
         path, where = ('box',), at(0)
         first, _mask = zoned.zoneState(path, where, Box(1))
         found = _held(zoned, path).reach
@@ -719,7 +719,7 @@ class ImageProbe:
     def grow(self, layers):
         self.layers = layers
 
-    def upload_light(self, light, layer):
+    def upload_light(self, _light, layer):
         self.uploads.append(layer)
         return True
 
@@ -851,7 +851,7 @@ class CaptureProbe(ImageProbe):
         super().__init__()
         self.takes, self.convolved = takes, []
 
-    def convolve(self, cube, layer):
+    def convolve(self, _cube, layer):
         self.convolved.append(layer)
         return self.takes
 
@@ -887,10 +887,10 @@ class CapturingPass(ZonedPass):
         self._captureTarget = CaptureTarget()
         self.activeFrame = type('Frame', (), {'view': None, 'camera': None,
                                               'modelView': at(50)})()
-        self.drawn = draw or (lambda records: None)
+        self.drawn = draw or (lambda _records: None)
         self.shader_program = type('Program', (), {
-            'use': lambda self, lit=True: None,
-            'set_hdr_output': lambda self, on: None})()
+            'use': lambda _self, lit=True: None,  # noqa: ARG005 the signature of the shader program's use
+            'set_hdr_output': lambda _self, _on: None})()
 
     def frameGather(self):
         return None
@@ -898,7 +898,7 @@ class CapturingPass(ZonedPass):
     def applyViewFrame(self, frame, gl=True):
         pass
 
-    def renderSet(self, matrix, gathered=None):
+    def renderSet(self, _matrix, gathered=None):  # noqa: ARG002 the signature of the pass's renderSet
         return []
 
     def currentBackground(self):
@@ -907,7 +907,7 @@ class CapturingPass(ZonedPass):
     def setupViewLighting(self, view, lighting, fitted=True):
         pass
 
-    def shaderRenderOpaque(self, records, id_map=None):
+    def shaderRenderOpaque(self, records, id_map=None):  # noqa: ARG002 the signature of the pass's shaderRenderOpaque
         self.drawn(records)
 
     def clearPlanarReflection(self):
@@ -930,7 +930,7 @@ class TestCaptures:
         assert zoned._ibl_probe.convolved == [1]
 
     def test_a_failed_capture_is_not_drawn_again_and_the_others_are_kept(self, caplog):
-        def broken(records):
+        def broken(_records):
             raise RuntimeError('no program')
         zoned = CapturingPass(CaptureProbe(), draw=broken)
         with caplog.at_level('ERROR', logger='OpenGLContext.passes.zonepass'):
@@ -956,11 +956,11 @@ class TestCaptures:
         assert target.released and zoned._captureTarget is None
 
     def test_a_zone_given_up_is_captured_again_once_the_probes_are_lost(self):
-        def broken(records):
+        def broken(_records):
             raise RuntimeError('no program')
         zoned = CapturingPass(CaptureProbe(), draw=broken)
         zoned.frames(2)
-        zoned.drawn = lambda records: None
+        zoned.drawn = lambda _records: None
         zoned._ibl_probe.lost += 1
         zoned.frames(3)
         assert zoned._ibl_probe.convolved

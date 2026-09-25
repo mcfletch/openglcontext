@@ -16,10 +16,10 @@ class _Platform:
         self.moved = []
         self.jumped = 0
 
-    def set_move(self, forward=0.0, strafe=0.0, mode='walk', speed=None):
+    def set_move(self, forward=0.0, strafe=0.0, mode='walk', speed=None):  # noqa: ARG002 the signature of PhysicsPlatform.set_move, which the modes call by keyword
         self.moved.append(('walk', forward, strafe, mode))
 
-    def set_fly_move(self, forward=0.0, strafe=0.0, up=0.0, speed=None):
+    def set_fly_move(self, forward=0.0, strafe=0.0, up=0.0, speed=None):  # noqa: ARG002 the signature of PhysicsPlatform.set_fly_move, which the modes call by keyword
         self.moved.append(('fly', forward, strafe, up))
 
     def jump(self):
@@ -64,7 +64,7 @@ def test_the_current_mode_can_be_watched_for_change():
     manager, definition = _manager(walk, swim, platform=platform)
     seen = []
 
-    def receiver(signal=None, sender=None, value=None):
+    def receiver(value=None):
         seen.append(value)
 
     protofunctions.getField(definition, 'movementMode').watch(definition, receiver)

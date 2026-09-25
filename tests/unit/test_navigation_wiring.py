@@ -36,10 +36,10 @@ class _Platform:
         self.moved = []
         self.jumped = 0
 
-    def set_move(self, forward=0.0, strafe=0.0, mode='walk', speed=None):
+    def set_move(self, forward=0.0, strafe=0.0, mode='walk', speed=None):  # noqa: ARG002 the signature of PhysicsPlatform.set_move, which the modes call by keyword
         self.moved.append((forward, strafe, mode))
 
-    def set_fly_move(self, forward=0.0, strafe=0.0, up=0.0, speed=None):
+    def set_fly_move(self, forward=0.0, strafe=0.0, up=0.0, speed=None):  # noqa: ARG002 the signature of PhysicsPlatform.set_fly_move, which the modes call by keyword
         self.moved.append((forward, strafe, up))
 
     def jump(self):
@@ -70,10 +70,10 @@ class _Context(ViewPlatformMixin, _Dispatch):
         self.platform = _Platform()
         self._redraws = 0
 
-    def getEventManager(self, kind):
+    def getEventManager(self, _kind):
         return None
 
-    def triggerRedraw(self, value=1):
+    def triggerRedraw(self, value=1):  # noqa: ARG002 stands in for Context.triggerRedraw(force)
         self._redraws += 1
 
 
@@ -329,7 +329,7 @@ def test_pointer_motion_uses_the_pick_points_origin():
         def getViewPort(self):
             return (800, 600)
 
-        def _cursorToFramebuffer(self, window, x, y):
+        def _cursorToFramebuffer(self, _window, x, y):
             return x, y
 
         def recordPointerMotion(self, x, y):

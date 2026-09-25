@@ -77,21 +77,24 @@ def _coverage(surface, **render):
 
 
 class TestTheUpload:
-    def test_it_reports_what_it_uploaded(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_it_reports_what_it_uploaded(self):
         tessellation = tessellate_surface(_surface(), u_step=4, v_step=4)
         vertices, indices, count, has_colors = build_surface_vbo(tessellation)
         assert vertices is not None and indices is not None
         assert count == tessellation.triangle_count * 3
         assert has_colors is False
 
-    def test_the_vertex_buffer_is_the_interleaved_rows(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_the_vertex_buffer_is_the_interleaved_rows(self):
         tessellation = tessellate_surface(_surface(), u_step=4, v_step=4)
         vertices, _indices, _count, _colors = build_surface_vbo(tessellation)
         data = np.asarray(vertices.data).reshape(-1, 6)
         assert len(data) == tessellation.vertex_count
         assert np.allclose(data[:, 3:], tessellation.positions)
 
-    def test_colours_widen_the_row(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_colours_widen_the_row(self):
         colors = [[x / 3.0, y / 3.0, 0.5] for y in range(4) for x in range(4)]
         tessellation = tessellate_surface(_surface(color=colors), u_step=4, v_step=4)
         vertices, _indices, _count, has_colors = build_surface_vbo(tessellation)
@@ -99,7 +102,8 @@ class TestTheUpload:
         assert np.asarray(vertices.data).reshape(-1, 10).shape[0] == \
             tessellation.vertex_count
 
-    def test_an_empty_tessellation_uploads_nothing(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_an_empty_tessellation_uploads_nothing(self):
         empty = tessellate_surface(_surface(), trimming_contours=[
             nurbs.Contour2D(children=[nurbs.Polyline2D(
                 point=[[0.9, 0.1], [0.1, 0.1], [0.1, 0.9], [0.9, 0.9]])]),
@@ -108,17 +112,21 @@ class TestTheUpload:
 
 
 class TestTheFixedFunctionDraw:
-    def test_a_surface_covers_the_viewport(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_surface_covers_the_viewport(self):
         assert _drawn(_surface())[:3] == pytest.approx((255, 255, 255), abs=2)
 
-    def test_a_solid_surface_facing_away_is_culled(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_solid_surface_facing_away_is_culled(self):
         assert _drawn(_surface(control=_AWAY))[:3] == pytest.approx((0, 0, 0), abs=2)
 
-    def test_the_same_surface_draws_where_it_is_not_solid(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_the_same_surface_draws_where_it_is_not_solid(self):
         assert _drawn(_surface(control=_AWAY, solid=0))[:3] == \
             pytest.approx((255, 255, 255), abs=2)
 
-    def test_nothing_is_drawn_where_a_trim_cut_it_away(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_nothing_is_drawn_where_a_trim_cut_it_away(self):
         """The middle is inside the hole, so the clear colour shows through."""
         outer = nurbs.Contour2D(children=[nurbs.Polyline2D(
             point=[[0, 0], [1, 0], [1, 1], [0, 1]])])
@@ -128,12 +136,14 @@ class TestTheFixedFunctionDraw:
             surface=_surface(), trimmingContour=[outer, hole])
         assert _drawn(trimmed)[:3] == pytest.approx((0, 0, 0), abs=2)
 
-    def test_a_per_vertex_colour_reaches_the_pixel(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_per_vertex_colour_reaches_the_pixel(self):
         """Every control point red, so the whole surface draws red."""
         red = [[1.0, 0.0, 0.0]] * 16
         assert _drawn(_surface(color=red))[:3] == pytest.approx((255, 0, 0), abs=2)
 
-    def test_an_edge_geometry_type_draws_lines_not_a_fill(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_an_edge_geometry_type_draws_lines_not_a_fill(self):
         """Wireframe: the same faces, drawn as their edges, cover far less."""
         coarse = NurbsDomainDistanceSample(uStep=3, vStep=3)
         filled = _coverage(_surface(sampling=coarse))
@@ -141,7 +151,8 @@ class TestTheFixedFunctionDraw:
         assert filled == pytest.approx(1.0, abs=0.02)
         assert 0.0 < wire < 0.5
 
-    def test_a_curve_draws(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_curve_draws(self):
         """A NURBS curve straight across the middle of the viewport."""
         curve = nurbs.NurbsCurve(
             knot=_KNOT,
@@ -150,7 +161,8 @@ class TestTheFixedFunctionDraw:
         )
         assert _drawn(curve)[:3] == pytest.approx((255, 255, 255), abs=2)
 
-    def test_a_curve_with_no_knots_draws_nothing(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_curve_with_no_knots_draws_nothing(self):
         assert nurbs.NurbsCurve().render() == 0
 
 

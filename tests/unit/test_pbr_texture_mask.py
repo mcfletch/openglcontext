@@ -30,7 +30,7 @@ class _Holder:
     def __init__(self, texture):
         self.texture = texture
 
-    def cached(self, mode):
+    def cached(self, _mode):
         return None if self.texture is None else types.SimpleNamespace(texture=self.texture)
 
 
@@ -46,10 +46,10 @@ def program(monkeypatch):
     p.ext_channels = {'clearcoat': pbrpass.PBR_EXT_UNITS['clearcoat']}
     bound = []
     uniforms = []
-    monkeypatch.setattr(pbrpass, 'glActiveTexture', lambda unit: None)
-    monkeypatch.setattr(pbrpass, 'glBindTexture', lambda target, tid: bound.append(tid))
+    monkeypatch.setattr(pbrpass, 'glActiveTexture', lambda _unit: None)
+    monkeypatch.setattr(pbrpass, 'glBindTexture', lambda _target, tid: bound.append(tid))
     monkeypatch.setattr(p, '_set_uniform1i',
-                        lambda name, value, program=None: uniforms.append((name, value)))
+                        lambda name, value, program=None: uniforms.append((name, value)))  # noqa: ARG005 the signature of ShaderProgram._set_uniform1i
     p.bound, p.uniforms = bound, uniforms
     return p
 
@@ -111,7 +111,8 @@ class _Drawing:
 class TestTheUnits:
     """What each unit holds after a draw of a material, on a real context."""
 
-    def test_maps_uploaded_by_the_draw_land_on_their_own_units(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_maps_uploaded_by_the_draw_land_on_their_own_units(self):
         """Uploading a map binds it where it was made; each still ends on its unit.
 
         The maps have never been drawn, so the draw is what uploads them, and

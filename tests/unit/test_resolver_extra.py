@@ -66,7 +66,7 @@ def test_a_cache_hit_survives_a_refused_touch(tmp_path, monkeypatch):
     with open(path, "wb") as handle:
         handle.write(b"data")
 
-    def bad_utime(path, times):
+    def bad_utime(_path, _times):
         raise OSError("read-only fs")
 
     monkeypatch.setattr(resolver.os, "utime", bad_utime)
@@ -81,7 +81,7 @@ def test_a_failed_rename_leaves_no_temporary(tmp_path, monkeypatch):
             self.headers = {}
             self.sent = False
 
-        def read(self, n=-1):
+        def read(self, n=-1):  # noqa: ARG002 the file object's read(size)
             if self.sent:
                 return b""
             self.sent = True
@@ -91,9 +91,9 @@ def test_a_failed_rename_leaves_no_temporary(tmp_path, monkeypatch):
             pass
 
     monkeypatch.setattr(resolver, "_open_url",
-                        lambda url, redirects=None, timeout=30: Body())
+                        lambda *_args, **_named: Body())
 
-    def bad_replace(src, dst):
+    def bad_replace(_src, _dst):
         raise RuntimeError("replace failed")
 
     monkeypatch.setattr(os, "replace", bad_replace)
@@ -108,7 +108,7 @@ def test_a_failed_rename_leaves_no_temporary(tmp_path, monkeypatch):
 def test_purge_cache_swallows_stat_errors(tmp_path, monkeypatch):
     (tmp_path / "old.bin").write_bytes(b"x")
 
-    def bad_getmtime(path):
+    def bad_getmtime(_path):
         raise OSError("vanished")
 
     monkeypatch.setattr(resolver.os.path, "getmtime", bad_getmtime)
@@ -128,13 +128,13 @@ class TestUserAgent:
         seen = {}
 
         class FakeOpener:
-            def open(self, request, timeout=None):
+            def open(self, request, timeout=None):  # noqa: ARG002 OpenerDirector.open, which the resolver calls with timeout=
                 seen['agent'] = request.get_header('User-agent')
                 seen['url'] = request.full_url
                 return io.BytesIO(b'ok')
 
         original = urllib.request.build_opener
-        urllib.request.build_opener = lambda *handlers: FakeOpener()
+        urllib.request.build_opener = lambda *_handlers: FakeOpener()
         try:
             resolver._open_url('https://example.invalid/a.zip')
         finally:
@@ -155,8 +155,7 @@ class TestSubResourcesAreCachedOnDisk:
     """
 
     def _resolver(self, monkeypatch, calls):
-        def fake(url, cache_dir=None, max_bytes=None, progress=None,
-                 cancel=None):
+        def fake(url, **_named):
             calls.append(url)
             return b'BYTES'
         monkeypatch.setattr(resolver, 'fetch_url', fake)
@@ -187,8 +186,7 @@ class TestSubResourcesAreCachedOnDisk:
     def test_the_size_cap_is_still_applied(self, monkeypatch):
         seen = {}
 
-        def fake(url, cache_dir=None, max_bytes=None, progress=None,
-                 cancel=None):
+        def fake(_url, max_bytes=None, **_named):
             seen['max_bytes'] = max_bytes
             return b''
         monkeypatch.setattr(resolver, 'fetch_url', fake)
@@ -202,7 +200,7 @@ class TestSubResourcesAreCachedOnDisk:
         calls = []
         monkeypatch.setattr(
             resolver, 'fetch_url',
-            lambda url, **named: calls.append(url) or b'')
+            lambda url, **_named: calls.append(url) or b'')
         found = resolver.Resolver(base_url='https://example.com/m/model.gltf')
         with pytest.raises(IOError):
             found.fetch('https://elsewhere.example/evil.png')

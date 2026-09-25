@@ -145,7 +145,7 @@ class TestTheGeometryStage:
             self.source(views=1)
 
 
-def _platform(position, look=(0.0, 0.0, 0.0), ortho=None):
+def _platform(position, look=(0.0, 0.0, 0.0)):
     return ViewPlatform(position=position,
                         orientation=look_at_orientation(position, look))
 
@@ -213,20 +213,22 @@ class TestTheViewTable:
 
 class TestOnTheDriver:
     @pytest.fixture
-    def programs(self, gl_context):
+    def programs(self, gl_context):  # noqa: ARG002 the capabilities are detected on the current GL context this fixture makes
         found = multiview.MultiviewCapabilities.detect()
         if 'geometry' not in found.available():
             pytest.skip('this driver has no viewport arrays')
         return found
 
-    def test_the_lit_programs_link_with_the_geometry_stage(self, programs):
+    @pytest.mark.usefixtures('programs')
+    def test_the_lit_programs_link_with_the_geometry_stage(self):
         shader = VRML97ShaderProgram()
         assert shader.compile()
         assert shader.select_program_set(4)
         assert shader.program and shader.vertex_color_program
         shader.select_program_set(0)
 
-    def test_the_pbr_program_links_with_the_geometry_stage(self, programs):
+    @pytest.mark.usefixtures('programs')
+    def test_the_pbr_program_links_with_the_geometry_stage(self):
         shader = PBRShaderProgram()
         assert shader.compile()
         plain = shader.program
@@ -235,7 +237,8 @@ class TestOnTheDriver:
         shader.select_program_set(0)
         assert shader.program == plain
 
-    def test_the_lit_programs_link_with_the_vertex_routing(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_the_lit_programs_link_with_the_vertex_routing(self):
         multiview.reset_detected()
         if 'vertex' not in multiview.MultiviewCapabilities.detect().available():
             pytest.skip('this driver has no vertex-stage viewport index')
@@ -246,7 +249,8 @@ class TestOnTheDriver:
         shader.select_program_set(0)
         assert shader.program_strategy == ''
 
-    def test_a_set_compiled_for_more_views_serves_fewer(self, programs):
+    @pytest.mark.usefixtures('programs')
+    def test_a_set_compiled_for_more_views_serves_fewer(self):
         """Sets are compiled for a power of two of views, so a frame whose count
         of views changes compiles a set only when it passes the next one."""
         shader = VRML97ShaderProgram()
@@ -266,7 +270,8 @@ class TestOnTheDriver:
         assert shader.select_program_set(3) and shader.program_set == 4
         shader.select_program_set(0)
 
-    def test_the_table_layout_is_the_drivers(self, programs):
+    @pytest.mark.usefixtures('programs')
+    def test_the_table_layout_is_the_drivers(self):
         shader = VRML97ShaderProgram()
         assert shader.compile() and shader.select_program_set(3)
         assert shader.program_set == 4

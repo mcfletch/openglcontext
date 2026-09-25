@@ -50,23 +50,27 @@ def _centre(render_scene, scene):
     return frame[SIZE // 2, SIZE // 2].astype(int)
 
 
-def test_the_mesh_is_drawn_in_its_base_colour(render_scene, compat):
+@pytest.mark.usefixtures('compat')
+def test_the_mesh_is_drawn_in_its_base_colour(render_scene):
     red, green, blue = _centre(render_scene, _scene(_square()))
     assert red > 120 and green < 60 and blue < 60, (red, green, blue)
 
 
-def test_vertex_colours_tint_the_mesh(render_scene, compat):
+@pytest.mark.usefixtures('compat')
+def test_vertex_colours_tint_the_mesh(render_scene):
     colours = np.array([[0.1, 1.0, 0.1, 1.0]] * 4, 'f')
     red, green, blue = _centre(render_scene, _scene(_square(colours), base=(1, 1, 1)))
     assert green > 120 and red < 60, (red, green, blue)
 
 
-def test_a_double_sided_mesh_is_seen_from_behind(render_scene, compat):
+@pytest.mark.usefixtures('compat')
+def test_a_double_sided_mesh_is_seen_from_behind(render_scene):
     red, _green, _blue = _centre(render_scene, _scene(_square(solid=False, facing=-1.0)))
     assert red > 40
 
 
-def test_a_solid_mesh_is_not_seen_from_behind(render_scene, compat):
+@pytest.mark.usefixtures('compat')
+def test_a_solid_mesh_is_not_seen_from_behind(render_scene):
     assert _centre(render_scene, _scene(_square(facing=-1.0))).max() < 10
 
 
@@ -82,7 +86,8 @@ def _chequer(first, second):
     return image
 
 
-def test_the_base_colour_map_is_drawn(render_scene, compat):
+@pytest.mark.usefixtures('compat')
+def test_the_base_colour_map_is_drawn(render_scene):
     blue = (20, 40, 230)
     material = PBRMaterial(baseColor=(1, 1, 1), metallic=0.0, roughness=1.0,
                            textures={'baseColor': PBRTexture(_chequer(blue, blue), srgb=True)})
@@ -92,7 +97,8 @@ def test_the_base_colour_map_is_drawn(render_scene, compat):
     assert blue_ > 120 and red < 60, (red, green, blue_)
 
 
-def test_the_map_is_not_left_bound_for_the_next_shape(gl_context_compat):
+@pytest.mark.usefixtures('gl_context_compat')
+def test_the_map_is_not_left_bound_for_the_next_shape():
     """``Appearance.renderPost`` takes back what its ``render`` bound."""
 
     class _Context:
@@ -114,7 +120,8 @@ def test_the_map_is_not_left_bound_for_the_next_shape(gl_context_compat):
     assert GL.glGetIntegerv(GL.GL_TEXTURE_BINDING_2D) == 0
 
 
-def test_a_double_sided_mesh_leaves_culling_as_the_pass_records_it(gl_context_compat):
+@pytest.mark.usefixtures('gl_context_compat')
+def test_a_double_sided_mesh_leaves_culling_as_the_pass_records_it():
     """The pass keeps what it last set for culling and sets it again only on a
     change; a mesh that turns culling on behind it leaves the next
     double-sided mesh culled."""
@@ -126,7 +133,8 @@ def test_a_double_sided_mesh_leaves_culling_as_the_pass_records_it(gl_context_co
     assert bool(GL.glIsEnabled(GL.GL_CULL_FACE)) is bool(mode._cull_enabled) is True
 
 
-def test_a_mirrored_solid_mesh_is_seen_from_the_front(render_scene, compat):
+@pytest.mark.usefixtures('compat')
+def test_a_mirrored_solid_mesh_is_seen_from_the_front(render_scene):
     """A mirroring transform turns the triangles' winding over; the front face
     follows it, as it does in the core profile."""
     mirrored = basenodes.Transform(scale=(-1.0, 1.0, 1.0),

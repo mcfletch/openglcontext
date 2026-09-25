@@ -19,10 +19,10 @@ def _bare():
 class TestFenceStatus:
     def test_timeout_drops_batch_without_reading(self, monkeypatch):
         monkeypatch.setattr(asyncpick, 'glClientWaitSync',
-                            lambda *a, **k: GL_TIMEOUT_EXPIRED, raising=False)
+                            lambda *_a, **_k: GL_TIMEOUT_EXPIRED, raising=False)
         read = {'n': 0}
         sel = _bare()
-        sel._readPBO = lambda *a, **k: read.__setitem__('n', read['n'] + 1)
+        sel._readPBO = lambda *_a, **_k: read.__setitem__('n', read['n'] + 1)
         # A batch that, if read, would raise (proving it is not read on timeout).
         b = {'fence': object(), 'n': 2, 'events': ['e'], 'id_map': {}}
         sel._resolveBatch(mode=None, b=b, block=True)
@@ -30,10 +30,10 @@ class TestFenceStatus:
 
     def test_signalled_batch_is_read(self, monkeypatch):
         monkeypatch.setattr(asyncpick, 'glClientWaitSync',
-                            lambda *a, **k: GL_ALREADY_SIGNALED, raising=False)
+                            lambda *_a, **_k: GL_ALREADY_SIGNALED, raising=False)
         reached = {'hit': False}
 
-        def fake_read(*a, **k):
+        def fake_read(*_a, **_k):
             reached['hit'] = True
             raise RuntimeError("stop after reaching the read")   # short-circuit
         sel = _bare()

@@ -80,8 +80,8 @@ def test_the_shapes_go_with_the_window(window, monkeypatch):
     monkeypatch.setattr(glfw, 'destroy_cursor', destroying)
     # The fixture owns the window and its GL objects; only the cursors are
     # this context's to let go of here.
-    monkeypatch.setattr(glfw, 'destroy_window', lambda handle: None)
-    monkeypatch.setattr(_Window, 'releaseContextResources', lambda self, handle: None)
+    monkeypatch.setattr(glfw, 'destroy_window', lambda _handle: None)
+    monkeypatch.setattr(_Window, 'releaseContextResources', lambda _self, _handle: None)
     context.releaseWindow()
     assert destroyed == made
     assert not context._cursors
@@ -149,7 +149,7 @@ class TestMouseLookKeepsThePointerHidden:
 
     def test_glut_refuses_a_shape_while_the_pointer_is_grabbed(self, monkeypatch):
         set_to = []
-        monkeypatch.setattr(GLUT, 'glutSetWindow', lambda window: None)
+        monkeypatch.setattr(GLUT, 'glutSetWindow', lambda _window: None)
         monkeypatch.setattr(GLUT, 'glutSetCursor', set_to.append)
         context = GLUTContext.__new__(GLUTContext)
         context.windowID = 1
@@ -166,7 +166,7 @@ class TestNoWrongPicture:
 
     def test_glut_has_no_not_allowed_pointer(self, monkeypatch):
         set_to = []
-        monkeypatch.setattr(GLUT, 'glutSetWindow', lambda window: None)
+        monkeypatch.setattr(GLUT, 'glutSetWindow', lambda _window: None)
         monkeypatch.setattr(GLUT, 'glutSetCursor', set_to.append)
         context = GLUTContext.__new__(GLUTContext)
         context.windowID = 1

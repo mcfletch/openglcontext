@@ -36,22 +36,26 @@ def no_registry():
 
 
 class TestBuildingFromAKnownFile:
-    def test_a_file_and_size_need_no_registry(self, no_registry, font_file):
+    @pytest.mark.usefixtures('no_registry')
+    def test_a_file_and_size_need_no_registry(self, font_file):
         built = pygamefont.PyGameBitmapFont(filename=font_file, size=18)
 
         assert built.font.get_height() > 0
 
-    def test_the_file_it_was_built_from_is_recorded(self, no_registry, font_file):
+    @pytest.mark.usefixtures('no_registry')
+    def test_the_file_it_was_built_from_is_recorded(self, font_file):
         built = pygamefont.PyGameBitmapFont(filename=font_file, size=18)
 
         assert built.filename == font_file
 
-    def test_the_size_it_was_built_at_is_recorded(self, no_registry, font_file):
+    @pytest.mark.usefixtures('no_registry')
+    def test_the_size_it_was_built_at_is_recorded(self, font_file):
         built = pygamefont.PyGameBitmapFont(filename=font_file, size=18)
 
         assert built.size == 18
 
-    def test_line_height_follows_the_size(self, no_registry, font_file):
+    @pytest.mark.usefixtures('no_registry')
+    def test_line_height_follows_the_size(self, font_file):
         small = pygamefont.PyGameBitmapFont(filename=font_file, size=10)
         large = pygamefont.PyGameBitmapFont(filename=font_file, size=30)
 
@@ -61,6 +65,7 @@ class TestBuildingFromAKnownFile:
 class TestWithoutARegistry:
     """Matching needs the scanned font metadata, and says so when it has none."""
 
-    def test_match_reports_the_missing_registry(self, no_registry):
+    @pytest.mark.usefixtures('no_registry')
+    def test_match_reports_the_missing_registry(self):
         with pytest.raises(RuntimeError):
             pygamefont.PyGameFontProvider.match(None)

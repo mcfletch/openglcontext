@@ -41,7 +41,7 @@ def _signed_area(triangle):
 
 
 @pytest.fixture
-def tessellator(gl_context):
+def tessellator(gl_context):  # noqa: ARG001 the tessellator is made on the current GL context this fixture makes
     """A tessellator with the GLU controller a live GL context provides."""
     tess = polygontessellator.PolygonTessellator()
     gluTessNormal(tess.controller, 0.0, 0.0, 1.0)

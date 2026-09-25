@@ -394,7 +394,7 @@ class _Inputs:
     def held(self, *names):
         return any(name in self._held for name in names)
 
-    def pressed(self, *names):
+    def pressed(self, *_names):
         return False
 
     def axis(self, positive, negative):
@@ -485,7 +485,7 @@ class _Recorder:
     def __init__(self):
         self.looked = 0.0
 
-    def set_move(self, forward=0.0, strafe=0.0, mode='walk', speed=None):
+    def set_move(self, forward=0.0, strafe=0.0, mode='walk', speed=None):  # noqa: ARG002 the signature of PhysicsPlatform.set_move, which the modes call by keyword
         self.forward = forward
 
     def turn(self, delta):
@@ -617,13 +617,13 @@ class _Mouse:
     def __init__(self, dx=0.0, dy=0.0):
         self._delta = (dx, dy)
 
-    def held(self, *names):
+    def held(self, *_names):
         return False
 
-    def pressed(self, *names):
+    def pressed(self, *_names):
         return False
 
-    def modifiers(self, name):
+    def modifiers(self, _name):
         return (0, 0, 0)
 
     def mouse_delta(self):
@@ -658,10 +658,10 @@ def test_the_turn_command_turns_right():
         def held(self, *names):
             return 'e' in names or '<right>' in names
 
-        def pressed(self, *names):
+        def pressed(self, *_names):
             return False
 
-        def modifiers(self, name):
+        def modifiers(self, _name):
             return (0, 0, 0)
 
         def mouse_delta(self):
@@ -680,10 +680,10 @@ def test_the_look_up_command_looks_up():
         def held(self, *names):
             return '<up>' in names
 
-        def pressed(self, *names):
+        def pressed(self, *_names):
             return False
 
-        def modifiers(self, name):
+        def modifiers(self, _name):
             return (1, 1, 1)      # ctrl is held, which is what 'lookup' wants
 
         def mouse_delta(self):

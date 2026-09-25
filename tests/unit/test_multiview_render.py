@@ -43,7 +43,7 @@ def _camera(x):
     return ViewPlatform(position=(x, 0, 6), orientation=(0, 1, 0, 0))
 
 
-def _side_by_side(context, right_style=None, right_camera=None):
+def _side_by_side(_context, right_style=None, right_camera=None):
     left = View(_camera(-3.0), name='left')
     right = View(right_camera if right_camera is not None else _camera(3.0),
                  name='right', style=right_style)
@@ -61,7 +61,8 @@ def env(monkeypatch):
 
 
 class TestEachViewThroughItsOwnCamera:
-    def test_each_tile_shows_the_box_its_camera_faces(self, render_scene, env):
+    @pytest.mark.usefixtures('env')
+    def test_each_tile_shows_the_box_its_camera_faces(self, render_scene):
         frames = frames_of(render_scene, _scene(), frames=3,
                            layout=_side_by_side, size=(WIDTH, HEIGHT))
         frame = frames[-1]
@@ -71,7 +72,8 @@ class TestEachViewThroughItsOwnCamera:
         assert left[0] > 100 and left[2] < 40, left
         assert right[2] > 100 and right[0] < 40, right
 
-    def test_a_perspective_view_takes_the_aspect_of_its_tile(self, render_scene, env):
+    @pytest.mark.usefixtures('env')
+    def test_a_perspective_view_takes_the_aspect_of_its_tile(self, render_scene):
         """A square tile of a wide window draws a box square, not stretched."""
         frames = frames_of(render_scene, _scene(), frames=3,
                            layout=_side_by_side, size=(WIDTH, HEIGHT))
@@ -82,7 +84,8 @@ class TestEachViewThroughItsOwnCamera:
         width = columns[-1] - columns[0] + 1
         assert abs(width - height) <= 2, (width, height)
 
-    def test_the_default_layout_is_one_view_of_the_whole_window(self, render_scene, env):
+    @pytest.mark.usefixtures('env')
+    def test_the_default_layout_is_one_view_of_the_whole_window(self, render_scene):
         rendered = render_scene(_scene(), frames=2, size=(WIDTH, HEIGHT))
         (view,) = rendered.context.getViewLayout().views
         assert view.rect == (0, 0, WIDTH, HEIGHT)
@@ -90,7 +93,8 @@ class TestEachViewThroughItsOwnCamera:
 
 
 class TestPerViewStyle:
-    def test_a_flat_background_fills_only_its_own_tile(self, render_scene, env):
+    @pytest.mark.usefixtures('env')
+    def test_a_flat_background_fills_only_its_own_tile(self, render_scene):
         green = ViewStyle(background=(0.0, 1.0, 0.0))
         frames = frames_of(render_scene, _scene(), frames=3, size=(WIDTH, HEIGHT),
                            layout=lambda context: _side_by_side(context, green))
@@ -100,7 +104,8 @@ class TestPerViewStyle:
         assert right_corner[1] > 200 and right_corner[0] < 30, right_corner
         assert left_corner.max() < 30, left_corner
 
-    def test_a_wireframe_view_draws_lines_where_its_twin_draws_faces(self, render_scene, env):
+    @pytest.mark.usefixtures('env')
+    def test_a_wireframe_view_draws_lines_where_its_twin_draws_faces(self, render_scene):
         wire = ViewStyle(wireframe=True)
         frames = frames_of(
             render_scene, _scene(), frames=3, size=(WIDTH, HEIGHT),
@@ -111,7 +116,8 @@ class TestPerViewStyle:
         assert shaded > 1000
         assert 0 < lines < shaded // 3, (lines, shaded)
 
-    def test_the_wireframe_does_not_outlast_its_view(self, render_scene, env):
+    @pytest.mark.usefixtures('env')
+    def test_the_wireframe_does_not_outlast_its_view(self, render_scene):
         """The next frame's first view is shaded again."""
         wire = ViewStyle(wireframe=True)
         frames = frames_of(
@@ -151,7 +157,8 @@ class TestPickingThroughTheViewClicked:
         shape = paths[0][-1]
         return tuple(float(c) for c in shape.appearance.material.diffuseColor)
 
-    def test_a_click_in_each_tile_lands_on_that_tiles_box(self, render_scene, env):
+    @pytest.mark.usefixtures('env')
+    def test_a_click_in_each_tile_lands_on_that_tiles_box(self, render_scene):
         rendered = render_scene(_scene(), frames=2, picks=[], size=(WIDTH, HEIGHT),
                                 layout=_side_by_side)
         left, right = self._pick(rendered, [(WIDTH // 4, HEIGHT // 2),
@@ -161,7 +168,8 @@ class TestPickingThroughTheViewClicked:
         assert left.view.name == 'left'
         assert right.view.name == 'right'
 
-    def test_a_click_unprojects_through_its_views_camera(self, render_scene, env):
+    @pytest.mark.usefixtures('env')
+    def test_a_click_unprojects_through_its_views_camera(self, render_scene):
         rendered = render_scene(_scene(), frames=2, picks=[], size=(WIDTH, HEIGHT),
                                 layout=_side_by_side)
         left, right = self._pick(rendered, [(WIDTH // 4, HEIGHT // 2),
@@ -173,7 +181,8 @@ class TestPickingThroughTheViewClicked:
             assert point[0] == pytest.approx(x, abs=0.1), point
             assert point[2] == pytest.approx(1.0, abs=0.1), point
 
-    def test_the_view_clicked_becomes_the_active_one(self, render_scene, env):
+    @pytest.mark.usefixtures('env')
+    def test_the_view_clicked_becomes_the_active_one(self, render_scene):
         rendered = render_scene(_scene(), frames=2, picks=[], size=(WIDTH, HEIGHT),
                                 layout=_side_by_side)
         layout = rendered.context.getViewLayout()
@@ -182,7 +191,7 @@ class TestPickingThroughTheViewClicked:
         assert layout.active.name == 'right'
 
 
-def _ruled(context):
+def _ruled(_context):
     """Two top views of the same ground, the left one ruled."""
     black = (0.0, 0.0, 0.0)
     left = View(OrthoViewPlatform(OrthoView('top', span=20.0)), name='ruled',
@@ -201,13 +210,15 @@ class TestTheGrid:
         return int(((tile[..., 0] > 150) & (tile[..., 1] > 150)
                     & (tile[..., 2] < 60)).sum())
 
-    def test_it_is_drawn_in_the_view_whose_style_asks(self, render_scene, env):
+    @pytest.mark.usefixtures('env')
+    def test_it_is_drawn_in_the_view_whose_style_asks(self, render_scene):
         frame = frames_of(render_scene, _grid_scene(), frames=3,
                           layout=_ruled, size=(WIDTH, HEIGHT))[-1]
         assert self._lit(frame[:, :WIDTH // 2]) > 100
         assert self._lit(frame[:, WIDTH // 2:]) == 0
 
-    def test_and_in_a_compatibility_profile(self, render_scene, env, monkeypatch):
+    @pytest.mark.usefixtures('env')
+    def test_and_in_a_compatibility_profile(self, render_scene, monkeypatch):
         monkeypatch.setenv('OPENGLCONTEXT_PROFILE', 'compatibility')
         frame = frames_of(render_scene, _grid_scene(), frames=3,
                           layout=_ruled, size=(WIDTH, HEIGHT))[-1]
@@ -216,8 +227,8 @@ class TestTheGrid:
 
 
 class TestCompatibilityProfile:
-    def test_each_tile_shows_the_box_its_camera_faces(self, render_scene, env,
-                                                      monkeypatch):
+    @pytest.mark.usefixtures('env')
+    def test_each_tile_shows_the_box_its_camera_faces(self, render_scene, monkeypatch):
         monkeypatch.setenv('OPENGLCONTEXT_PROFILE', 'compatibility')
         frames = frames_of(render_scene, _scene(), frames=3,
                            layout=_side_by_side, size=(WIDTH, HEIGHT))
@@ -229,15 +240,18 @@ class TestCompatibilityProfile:
 
 
 class TestTheStrategy:
-    def test_a_frame_of_several_views_settles_how_it_is_drawn(self, render_scene, env):
+    @pytest.mark.usefixtures('env')
+    def test_a_frame_of_several_views_settles_how_it_is_drawn(self, render_scene):
         render_scene(_scene(), frames=2, size=(WIDTH, HEIGHT), layout=_side_by_side)
         assert renderpass.FLAT.multiviewStrategy in multiview.STRATEGIES
 
-    def test_one_view_asks_the_driver_nothing(self, render_scene, env):
+    @pytest.mark.usefixtures('env')
+    def test_one_view_asks_the_driver_nothing(self, render_scene):
         render_scene(_scene(), frames=2, size=(WIDTH, HEIGHT))
         assert renderpass.FLAT.multiviewStrategy is None
 
-    def test_a_pinned_strategy_is_the_one_drawn_with(self, render_scene, env):
+    @pytest.mark.usefixtures('env')
+    def test_a_pinned_strategy_is_the_one_drawn_with(self, render_scene):
         def layout(context):
             context.contextDefinition.multiview = 'sequential'
             return _side_by_side(context)
@@ -247,7 +261,8 @@ class TestTheStrategy:
         assert renderpass.FLAT.multiviewStrategy == 'sequential'
 
 
-    def test_a_strategy_chosen_while_running_is_the_one_drawn_with(self, render_scene, env):
+    @pytest.mark.usefixtures('env')
+    def test_a_strategy_chosen_while_running_is_the_one_drawn_with(self, render_scene):
         """The settings screen's field takes effect on the next frame."""
 
         def layout(context):
@@ -279,7 +294,7 @@ class TestAnArrangementThatLeavesRoom:
     the band is a colour rather than whatever the last frame left there.
     """
 
-    def _with_a_band(self, context):
+    def _with_a_band(self, _context):
         band = 60
 
         def arrangement(width, height):
@@ -292,15 +307,17 @@ class TestAnArrangementThatLeavesRoom:
                      style=ViewStyle(background=(0.0, 0.0, 1.0)))
         return ViewLayout([left, right], arrangement=arrangement)
 
-    def test_the_views_are_where_the_arrangement_put_them(self, render_scene, env):
+    @pytest.mark.usefixtures('env')
+    def test_the_views_are_where_the_arrangement_put_them(self, render_scene):
         frame = frames_of(render_scene, _scene(), frames=2,
                           layout=self._with_a_band, size=(WIDTH, HEIGHT))[-1]
         assert _tile_centre(frame, 80)[0] > 100      # the left view, red
         assert _tile_centre(frame, 170)[2] > 100     # the right view, blue
 
-    def test_what_a_view_stops_covering_is_cleared(self, render_scene, env):
+    @pytest.mark.usefixtures('env')
+    def test_what_a_view_stops_covering_is_cleared(self, render_scene):
         """A band given up to a toolbar keeps no part of the frame before it."""
-        def shrinking(context):
+        def shrinking(_context):
             drawn = []
 
             def arrangement(width, height):
@@ -322,7 +339,8 @@ class TestAnArrangementThatLeavesRoom:
 
 
 class TestAViewThroughTheWindowsCamera:
-    def test_it_takes_the_aspect_of_its_tile(self, render_scene, env):
+    @pytest.mark.usefixtures('env')
+    def test_it_takes_the_aspect_of_its_tile(self, render_scene):
         """A view with no camera of its own draws a box square in a square tile."""
         def layout(context):
             context.getViewPlatform().setPosition((-3.0, 0.0, 6.0))
@@ -338,8 +356,9 @@ class TestAViewThroughTheWindowsCamera:
         width = columns[-1] - columns[0] + 1
         assert abs(width - height) <= 2, (width, height)
 
-    def test_the_windows_camera_keeps_the_windows_aspect(self, render_scene, env):
-        def layout(context):
+    @pytest.mark.usefixtures('env')
+    def test_the_windows_camera_keeps_the_windows_aspect(self, render_scene):
+        def layout(_context):
             return ViewLayout.split(View(name='window'), View(_camera(3.0), name='right'))
 
         rendered = render_scene(_scene(), frames=2, size=(WIDTH, HEIGHT), layout=layout)
@@ -348,7 +367,8 @@ class TestAViewThroughTheWindowsCamera:
 
 
 class TestAViewThatRaises:
-    def test_the_next_frame_is_not_confined_to_its_tile(self, render_scene, env, monkeypatch):
+    @pytest.mark.usefixtures('env')
+    def test_the_next_frame_is_not_confined_to_its_tile(self, render_scene, monkeypatch):
         """A view that fails part-way leaves no scissor rectangle behind it."""
 
         original = _flat.FlatPass.renderViewShader
@@ -374,7 +394,7 @@ class TestAViewThatRaises:
 
         monkeypatch.setattr(_flat.FlatPass, '__call__', surviving)
 
-        def layout(context):
+        def layout(_context):
             drawn = []
             green = ViewStyle(background=(0.0, 1.0, 0.0))
 

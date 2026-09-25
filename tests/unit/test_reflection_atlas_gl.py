@@ -18,7 +18,8 @@ def test_the_atlas_is_a_share_of_the_windows_pixels():
     assert atlas_size(100, 100, 1.0) == (112, 112)
 
 
-def test_a_cleared_tile_holds_nothing_and_its_neighbour_is_untouched(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_a_cleared_tile_holds_nothing_and_its_neighbour_is_untouched():
     atlas = ReflectionAtlas()
     try:
         assert atlas.ensure_size(64, 32)
@@ -43,7 +44,8 @@ def test_a_cleared_tile_holds_nothing_and_its_neighbour_is_untouched(gl_context)
     assert atlas.size == (0, 0) and not atlas.texture
 
 
-def test_the_timer_measures_without_waiting(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_the_timer_measures_without_waiting():
     timer = GpuTimer()
     try:
         for _ in range(12):
@@ -58,13 +60,15 @@ def test_the_timer_measures_without_waiting(gl_context):
         timer.release()
 
 
-def test_ending_a_timer_that_never_began_does_nothing(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_ending_a_timer_that_never_began_does_nothing():
     timer = GpuTimer()
     timer.end()
     assert timer.milliseconds is None
 
 
-def test_each_reading_is_numbered_and_carries_what_its_frame_was_tagged(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_each_reading_is_numbered_and_carries_what_its_frame_was_tagged():
     """The newest reading stays until another arrives; its number says when
     one has, and its tag is what the measured frame was drawn with."""
     timer = GpuTimer()
@@ -104,7 +108,8 @@ def _fill(atlas, colour):
     atlas.end(previous)
 
 
-def test_clearing_a_tile_clears_its_gutter_and_nothing_past_it(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_clearing_a_tile_clears_its_gutter_and_nothing_past_it():
     """The blurred levels a rough mirror reads reach into the gutter."""
     atlas = ReflectionAtlas()
     try:
@@ -122,7 +127,8 @@ def test_clearing_a_tile_clears_its_gutter_and_nothing_past_it(gl_context):
         atlas.release()
 
 
-def test_a_gutter_at_the_edge_of_the_atlas_is_clipped_to_it(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_a_gutter_at_the_edge_of_the_atlas_is_clipped_to_it():
     atlas = ReflectionAtlas()
     try:
         atlas.ensure_size(32, 32)
@@ -136,7 +142,8 @@ def test_a_gutter_at_the_edge_of_the_atlas_is_clipped_to_it(gl_context):
         atlas.release()
 
 
-def test_keeping_copies_only_the_tiles_named(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_keeping_copies_only_the_tiles_named():
     atlas = ReflectionAtlas()
     try:
         atlas.ensure_size(64, 32)
@@ -151,7 +158,8 @@ def test_keeping_copies_only_the_tiles_named(gl_context):
         atlas.release()
 
 
-def test_the_atlas_leaves_the_state_it_found(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_the_atlas_leaves_the_state_it_found():
     """Clear colour, the texture on the active unit and both framebuffer
     bindings are as they were after every call."""
     texture = int(gl.glGenTextures(1))

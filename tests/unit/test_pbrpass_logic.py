@@ -12,7 +12,7 @@ from OpenGLContext.passes import instancing
 class Geom:
     def __init__(self, instanceable=True, content=('g',)):
         if instanceable:
-            self.instanceGPU = lambda mode: None
+            self.instanceGPU = lambda _mode: None
         self.instanceContentKey = lambda: content
 
 

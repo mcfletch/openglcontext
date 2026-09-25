@@ -98,7 +98,7 @@ class TestWhatItTraverses:
             PROTO = 'Awkward'
 
             class refuses(vnode.SFNode):
-                def fget(self, client, *args, **named):
+                def fget(self, _client, *_args, **_named):
                     raise ValueError('this field will not be read')
 
             refuses = refuses('refuses')
@@ -320,7 +320,7 @@ class TestSummarisingANode:
             PROTO = 'Awkward'
 
             class refuses(fieldtypes.SFFloat):
-                def fget(self, client, *args, **named):
+                def fget(self, _client, *_args, **_named):
                     raise ValueError('this field will not be read')
 
             refuses = refuses('refuses')

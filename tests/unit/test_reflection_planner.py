@@ -354,7 +354,7 @@ def test_a_mirror_seen_only_in_another_mirror_is_drawn_for_that_mirror():
     a reflection of its own, drawn from the front mirror's camera."""
     front, back = _mirror(), _behind()
     plan = _settled_planner().plan([_frame([front])], ATLAS, BIG,
-                                   inside=lambda frame: [front, back])
+                                   inside=lambda _frame: [front, back])
     [outer], [inner] = _by_path(plan, front), _by_path(plan, back)
     assert inner.frame.view is outer.view
     assert (outer.depth, inner.depth) == (1, 2)
@@ -380,7 +380,7 @@ def test_a_mirrors_view_is_the_same_view_from_frame_to_frame():
     planner = _settled_planner()
     front, back = _mirror(), _behind()
     views = [_by_path(planner.plan([_frame([front])], ATLAS, BIG,
-                                   inside=lambda frame: [back]), front)[0].view
+                                   inside=lambda _frame: [back]), front)[0].view
              for _ in range(2)]
     assert views[0] is views[1]
     assert views[0].name == VIEW.name
@@ -418,7 +418,7 @@ def test_a_view_drawn_without_a_mirrors_reflection_is_drawn_again_once_it_has_on
     one = Budget(views=1, separate_views=1, texels=10 ** 9)
 
     def plan(budget):
-        return planner.plan([_frame([front])], ATLAS, budget, inside=lambda frame: [back])
+        return planner.plan([_frame([front])], ATLAS, budget, inside=lambda _frame: [back])
 
     first = plan(one)
     [outer] = first.draws
@@ -438,8 +438,8 @@ def test_a_mirror_in_a_mirror_is_allowed_by_where_the_viewer_stands():
     planner = _settled_planner()
     front, back = _mirror(), _behind()
     asked = []
-    planner.allowed = lambda record, eye: asked.append(tuple(np.round(eye, 6))) or True
-    planner.plan([_frame([front])], ATLAS, BIG, inside=lambda frame: [back])
+    planner.allowed = lambda _record, eye: asked.append(tuple(np.round(eye, 6))) or True
+    planner.plan([_frame([front])], ATLAS, BIG, inside=lambda _frame: [back])
     assert len(asked) == 2
     assert asked[0] == asked[1] == pytest.approx((0.0, 1.6, 3.0))
 
@@ -475,7 +475,7 @@ def test_a_group_leaves_every_one_of_its_mirrors_out_of_its_own_view():
     shared = PlanarReflector(interval=3)
     left, right = _mirror(-1.5, reflector=shared), _mirror(1.5, reflector=shared)
     plan = _settled_planner().plan([_frame([left, right])], ATLAS, BIG,
-                                   inside=lambda frame: [left, right])
+                                   inside=lambda _frame: [left, right])
     assert [draw.depth for draw in plan.draws] == [1]
 
 
@@ -492,12 +492,12 @@ def test_a_view_waiting_on_a_group_is_drawn_again_when_any_of_it_arrives():
     for record in back:
         record[5].appearance.material.reflector = shared
     one = Budget(views=1, separate_views=1, texels=10 ** 9)
-    first = planner.plan([_frame([front])], ATLAS, one, inside=lambda frame: back)
+    first = planner.plan([_frame([front])], ATLAS, one, inside=lambda _frame: back)
     [outer] = first.draws
     member = lookup_key(outer.view, back[1][4])
     planner.drawn_without(outer.key, [member])
-    planner.plan([_frame([front])], ATLAS, one, inside=lambda frame: back)
-    third = planner.plan([_frame([front])], ATLAS, NOTHING, inside=lambda frame: back)
+    planner.plan([_frame([front])], ATLAS, one, inside=lambda _frame: back)
+    third = planner.plan([_frame([front])], ATLAS, NOTHING, inside=lambda _frame: back)
     assert not {c.key: c for c in third.candidates}[outer.key].valid
 
 
@@ -618,7 +618,7 @@ def test_facing_mirrors_stop_being_followed_at_a_multiple_of_the_view_budget():
     records[3][2][3, 0] = 0.0
     budget = Budget(views=2, separate_views=2, texels=10 ** 9)
     plan = _settled_planner().plan([_frame(records[:3])], ATLAS, budget,
-                                   inside=lambda frame: records, bounces=6)
+                                   inside=lambda _frame: records, bounces=6)
     assert len(plan.candidates) <= CANDIDATES_PER_VIEW * budget.views + len(records)
 
 
@@ -637,7 +637,7 @@ def test_planes_either_side_of_a_rounding_boundary_are_one_plane():
 
 def _front_and_back(planner, budget=BIG):
     front, back = _mirror(reflector=PlanarReflector(interval=100)), _behind()
-    plan = planner.plan([_frame([front])], ATLAS, budget, inside=lambda frame: [back])
+    plan = planner.plan([_frame([front])], ATLAS, budget, inside=lambda _frame: [back])
     outer, = _by_path(plan, front)
     return front, back, plan, outer
 
@@ -697,7 +697,7 @@ def test_whether_a_mirror_view_draws_apart_is_asked_of_its_own_camera():
     plan = _settled_planner().plan(
         [_frame([front])], ATLAS, Budget(views=16, separate_views=1, texels=10 ** 9),
         separate=lambda mirror: asked.append(mirror) or True,
-        inside=lambda frame: [front, back])
+        inside=lambda _frame: [front, back])
     assert len(asked) == 2 and all(isinstance(mirror, MirrorView) for mirror in asked)
     assert len(plan.draws) == 1
 
@@ -720,7 +720,7 @@ def test_a_wireframe_view_looks_for_no_mirror():
 
 def test_a_mirror_its_zone_refuses_is_not_drawn():
     planner = ReflectionPlanner()
-    planner.allowed = lambda record, eye: False
+    planner.allowed = lambda _record, _eye: False
     assert planner.plan([_frame([_mirror()])], ATLAS, BIG).draws == []
 
 

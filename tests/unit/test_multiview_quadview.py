@@ -173,7 +173,7 @@ class TestTheWheel:
 class TestEngineEvents:
     """``handle`` reads the context's own events and routes them through the layout."""
 
-    def _button(self, quad, x, y, button, state):
+    def _button(self, x, y, button, state):
         event = MouseButtonEvent()
         event.button, event.state, event.modifiers = button, state, (0, 0, 0)
         event.pickPoint = (x, y)
@@ -190,10 +190,10 @@ class TestEngineEvents:
         front = quad.view('front')
         x, y = _centre_of(front)
         centre = front.camera.view.centre
-        assert quad.handle(self._button(quad, x, y, 2, 1))
+        assert quad.handle(self._button(x, y, 2, 1))
         assert quad.handle(self._move(x + 20, y))
         assert front.camera.view.centre != centre
-        assert quad.handle(self._button(quad, x + 20, y, 2, 0))
+        assert quad.handle(self._button(x + 20, y, 2, 0))
         moved = front.camera.view.centre
         assert not quad.handle(self._move(x + 60, y))
         assert front.camera.view.centre == moved
@@ -202,11 +202,11 @@ class TestEngineEvents:
         quad = _quad()
         top = quad.view('top')
         span = top.camera.view.span
-        assert quad.handle(self._button(quad, *_centre_of(top), WHEEL_UP, 1))
+        assert quad.handle(self._button(*_centre_of(top), WHEEL_UP, 1))
         assert top.camera.view.span < span
         # The notch's release is part of the same notch.
-        assert quad.handle(self._button(quad, *_centre_of(top), WHEEL_UP, 0))
-        quad.handle(self._button(quad, *_centre_of(top), WHEEL_DOWN, 1))
+        assert quad.handle(self._button(*_centre_of(top), WHEEL_UP, 0))
+        quad.handle(self._button(*_centre_of(top), WHEEL_DOWN, 1))
         assert top.camera.view.span == pytest.approx(span)
 
     def test_an_event_it_has_no_use_for_is_left_for_others(self):
@@ -253,7 +253,7 @@ class TestWhatThePerspectiveViewOpensOn:
         assert quad.orbit.position() == pytest.approx((0.0, 2.0, 5.0))
 
     def test_the_application_can_choose_none_of_them(self):
-        quad = _quad(choose_camera=lambda cameras: None)
+        quad = _quad(choose_camera=lambda _cameras: None)
         before = quad.orbit.position().copy()
         assert quad.cameras_found([self._camera()]) is None
         assert quad.orbit.position() == pytest.approx(before)

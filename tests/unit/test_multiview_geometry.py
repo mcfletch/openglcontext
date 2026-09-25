@@ -72,7 +72,7 @@ def env(request, monkeypatch):
 
 
 @pytest.fixture(params=['geometry', 'vertex'])
-def shared(request, gl_context):
+def shared(request, gl_context):  # noqa: ARG001 the strategy is detected on the current GL context this fixture makes
     """A strategy that draws once for every view, where this driver runs it."""
     multiview.reset_detected()
     if request.param not in multiview.MultiviewCapabilities.detect().available():
@@ -89,13 +89,14 @@ def _render(render_scene, strategy):
     return frames[-1], renderpass.FLAT, draws[-1]
 
 
-def test_the_strategy_asked_for_is_the_one_drawn_with(render_scene, env, shared):
+@pytest.mark.usefixtures('env')
+def test_the_strategy_asked_for_is_the_one_drawn_with(render_scene, shared):
     _frame, flat, _draws = _render(render_scene, shared)
     assert flat.multiviewStrategy == shared
 
 
-def test_one_submission_draws_what_views_in_turn_draw(render_scene, env,
-                                                      shared):
+@pytest.mark.usefixtures('env')
+def test_one_submission_draws_what_views_in_turn_draw(render_scene, shared):
     once, _flat, _ = _render(render_scene, shared)
     sequential, _flat, _ = _render(render_scene, 'sequential')
     differing = (abs(once.astype(int) - sequential.astype(int)).max(axis=-1) > 24)
@@ -106,7 +107,8 @@ def test_one_submission_draws_what_views_in_turn_draw(render_scene, env,
             assert len(np.unique(once[rows, columns].reshape(-1, 3), axis=0)) > 20
 
 
-def test_a_shape_seen_by_every_view_is_drawn_once(render_scene, env, shared):
+@pytest.mark.usefixtures('env')
+def test_a_shape_seen_by_every_view_is_drawn_once(render_scene, shared):
     _frame, _flat, once = _render(render_scene, shared)
     _frame, _flat, sequential = _render(render_scene, 'sequential')
     assert once < sequential
@@ -114,14 +116,14 @@ def test_a_shape_seen_by_every_view_is_drawn_once(render_scene, env, shared):
     assert once <= 4 + 4
 
 
-def test_the_single_view_programs_are_back_after_the_frame(render_scene, env,
-                                                           shared):
+@pytest.mark.usefixtures('env')
+def test_the_single_view_programs_are_back_after_the_frame(render_scene, shared):
     _frame, flat, _ = _render(render_scene, shared)
     assert flat.shader_program.program_set == 0
 
 
-def test_a_click_in_a_shared_view_picks_through_that_view(render_scene, env,
-                                                          shared):
+@pytest.mark.usefixtures('env')
+def test_a_click_in_a_shared_view_picks_through_that_view(render_scene, shared):
     rendered = render_scene(_scene(), frames=2, picks=[], shadows=True,
                             size=(WIDTH, HEIGHT), layout=_layout(shared))
     context = rendered.context
@@ -144,8 +146,8 @@ def test_a_click_in_a_shared_view_picks_through_that_view(render_scene, env,
     assert isinstance(paths[0][-1].geometry, basenodes.Sphere)
 
 
-def test_an_instanced_crowd_is_drawn_once_for_every_view(render_scene, env,
-                                                         shared, monkeypatch):
+@pytest.mark.usefixtures('env')
+def test_an_instanced_crowd_is_drawn_once_for_every_view(render_scene, shared, monkeypatch):
     """Copies collapsed into one instanced draw share that draw across views too."""
     monkeypatch.setenv('OPENGLCONTEXT_INSTANCE_MIN', '2')
     # One geometry and one appearance, which is what both passes group by.
@@ -167,12 +169,13 @@ def test_an_instanced_crowd_is_drawn_once_for_every_view(render_scene, env,
     assert differing.mean() < 0.005, differing.sum()
 
 
-def test_programs_that_will_not_compile_leave_the_views_drawn_in_turn(
-        render_scene, env, shared, monkeypatch):
+@pytest.mark.usefixtures('env')
+def test_programs_that_will_not_compile_leave_the_views_drawn_in_turn(render_scene, shared,
+                                                                      monkeypatch):
     """A driver that offers a strategy and then fails to build it still draws."""
     attempts = []
 
-    def refuse(self, views, strategy='geometry'):
+    def refuse(self, _views, strategy='geometry'):
         attempts.append(strategy)
         return {name: None for name in self.MULTIVIEW_PROGRAMS}
 
@@ -190,15 +193,17 @@ def test_programs_that_will_not_compile_leave_the_views_drawn_in_turn(
         assert differing.mean() < 0.005, differing.sum()
 
 
-def test_more_views_than_the_driver_has_viewports_are_drawn_in_turn(
-        render_scene, env, shared, monkeypatch):
-    monkeypatch.setattr(MultiviewCapabilities, 'max_views', property(lambda self: 2))
+@pytest.mark.usefixtures('env')
+def test_more_views_than_the_driver_has_viewports_are_drawn_in_turn(render_scene, shared,
+                                                                    monkeypatch):
+    monkeypatch.setattr(MultiviewCapabilities, 'max_views', property(lambda _self: 2))
     _frame, _flat, draws = _render(render_scene, shared)
     _frame, _flat, sequential = _render(render_scene, 'sequential')
     assert draws == sequential
 
 
-def test_a_wireframe_view_beside_shared_ones_draws_its_own_lines(render_scene, env, shared):
+@pytest.mark.usefixtures('env')
+def test_a_wireframe_view_beside_shared_ones_draws_its_own_lines(render_scene, shared):
     """Polygon mode holds for every viewport, so a wireframe view is drawn apart."""
 
     def build(context):

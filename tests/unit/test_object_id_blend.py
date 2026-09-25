@@ -23,7 +23,7 @@ class TestDisableObjectIdBlendHelper:
     def test_swallows_driver_error(self, monkeypatch, caplog):
         """A driver without indexed enables keeps its blend state; the
         failure is logged rather than raised into the pass."""
-        def boom(cap, i):
+        def boom(_cap, _i):
             raise RuntimeError("no indexed blend")
         monkeypatch.setattr(_flat, 'glDisablei', boom)
         caplog.set_level(logging.DEBUG, logger=_flat.log.name)

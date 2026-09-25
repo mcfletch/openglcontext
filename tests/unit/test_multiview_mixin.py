@@ -53,7 +53,7 @@ class _World:
     def getViewPlatform(self):
         return self.platform
 
-    def triggerRedraw(self, force=0):
+    def triggerRedraw(self, force=0):  # noqa: ARG002 the signature of Context.triggerRedraw
         self.redraws += 1
 
     def hasMouseMoveHandlers(self):
@@ -69,7 +69,7 @@ class _World:
     def getInputState(self):
         return self.inputState
 
-    def screenTrees(self, metrics, now=None):
+    def screenTrees(self, _metrics, now=None):  # noqa: ARG002 the signature of OverlayMixin.screenTrees
         return []
 
     def overlayMetrics(self):
@@ -255,7 +255,7 @@ class TestLosingFocusMidDrag:
     def test_the_drag_ends_and_the_pointer_is_free(self):
         """No release arrives for a button held as the window lost focus."""
         window = _window(arrangement='quad')
-        window.emitKey = lambda *args: None
+        window.emitKey = lambda *_args: None
         front = window.views.named('front')
         x, y, width, height = front.rect
         window.ProcessEvent(_Event(x + width // 2, y + height // 2))

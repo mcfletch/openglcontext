@@ -30,7 +30,8 @@ def display(monkeypatch):
     pygame.display.quit()
 
 
-def test_the_buffers_a_definition_asks_for_reach_sdl(display, monkeypatch):
+@pytest.mark.usefixtures('display')
+def test_the_buffers_a_definition_asks_for_reach_sdl(monkeypatch):
     """Every attribute this backend sets is one SDL knows.
 
     An attribute SDL does not recognise raises, so the window is never opened
@@ -59,11 +60,12 @@ def test_the_buffers_a_definition_asks_for_reach_sdl(display, monkeypatch):
     assert asked[pygame.GL_STEREO] == 1
 
 
-def test_a_default_definition_asks_for_no_optional_buffers(display):
+@pytest.mark.usefixtures('display')
+def test_a_default_definition_asks_for_no_optional_buffers():
     """-1 means "choose", so nothing is requested for those buffers."""
     asked = []
     original = pygame.display.gl_set_attribute
-    pygame.display.gl_set_attribute = lambda attribute, value: asked.append(attribute)
+    pygame.display.gl_set_attribute = lambda attribute, _value: asked.append(attribute)
     try:
         PygameContext.pygameFlagsFromDefinition(ContextDefinition())
     finally:
@@ -73,13 +75,15 @@ def test_a_default_definition_asks_for_no_optional_buffers(display):
     assert pygame.GL_MULTISAMPLESAMPLES not in asked
 
 
-def test_a_window_is_resizable_and_double_buffered(display):
+@pytest.mark.usefixtures('display')
+def test_a_window_is_resizable_and_double_buffered():
     flags = PygameContext.pygameWindowFlags(ContextDefinition())
     assert flags & pygame.RESIZABLE
     assert flags & pygame.DOUBLEBUF
 
 
-def test_single_buffering_is_asked_for_by_leaving_it_out(display):
+@pytest.mark.usefixtures('display')
+def test_single_buffering_is_asked_for_by_leaving_it_out():
     flags = PygameContext.pygameWindowFlags(ContextDefinition(doubleBuffer=False))
     assert not (flags & pygame.DOUBLEBUF)
     assert flags & pygame.RESIZABLE

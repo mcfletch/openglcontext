@@ -116,7 +116,8 @@ class TestWhatTheEnginesShadersRequire:
 
 
 class TestTheProgramAnswersForWhatIsBound:
-    def test_the_depth_program_asks_for_less_than_the_lit_one(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_the_depth_program_asks_for_less_than_the_lit_one(self):
         shader_program = PBRShaderProgram()
         assert shader_program.compile(), 'the PBR programs did not compile'
         assert shader_program.required_inputs(shader_program.program) == (
@@ -131,7 +132,8 @@ class TestTheProgramAnswersForWhatIsBound:
         assert appearance.bound_program() == 7
         assert appearance.required_inputs() == frozenset()
 
-    def test_a_program_from_somewhere_else_is_owed_nothing(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_program_from_somewhere_else_is_owed_nothing(self):
         """Only the shaders the engine compiled are ones it can speak for."""
 
         shader_program = VRML97ShaderProgram()
@@ -141,13 +143,15 @@ class TestTheProgramAnswersForWhatIsBound:
 
 
 class TestWhatAProgramReads:
-    def test_the_active_attributes_are_the_ones_declared_and_used(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_the_active_attributes_are_the_ones_declared_and_used(self):
         program = program_reading('aPosition', 'aNormal')
         assert set(program_inputs(program)) == {'aPosition', 'aNormal'}
 
 
 class TestTheReport:
-    def test_an_array_the_geometry_lacks_is_named(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_an_array_the_geometry_lacks_is_named(self):
         program = program_reading('aPosition', 'aTangent')
         arrays = GeometryArrays.separate(count=3, positions=a_buffer())
         pass_ = Pass()
@@ -160,7 +164,8 @@ class TestTheReport:
         assert len(pass_.reported) == 1
         assert pass_.reported[0][0] == 'opaque'
 
-    def test_an_array_the_shader_can_do_without_is_not_reported(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_an_array_the_shader_can_do_without_is_not_reported(self):
         """The case an uber-shader is in on every ordinary box."""
         program = program_reading('aPosition', 'aTangent')
         arrays = GeometryArrays.separate(count=3, positions=a_buffer())
@@ -169,7 +174,8 @@ class TestTheReport:
             program, arrays, {'aPosition'}, mode=pass_) is None
         assert pass_.reported == []
 
-    def test_a_geometry_that_supplies_everything_is_not_reported(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_geometry_that_supplies_everything_is_not_reported(self):
         program = program_reading('aPosition', 'aNormal')
         arrays = GeometryArrays.separate(
             count=3, positions=a_buffer(), normals=a_buffer())
@@ -178,7 +184,8 @@ class TestTheReport:
             program, arrays, {'aPosition', 'aNormal'}, mode=pass_) is None
         assert pass_.reported == []
 
-    def test_an_input_compiled_out_of_the_program_is_not_owed(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_an_input_compiled_out_of_the_program_is_not_owed(self):
         """The driver's copy is the authority: no aWeights, nothing to feed."""
         program = program_reading('aPosition')
         arrays = GeometryArrays.separate(count=3, positions=a_buffer())
@@ -186,7 +193,8 @@ class TestTheReport:
         assert report_missing_inputs(
             program, arrays, {'aPosition', 'aWeights'}, mode=pass_) is None
 
-    def test_a_shader_the_engine_does_not_speak_for_is_owed_nothing(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_shader_the_engine_does_not_speak_for_is_owed_nothing(self):
         """A ``Shader`` node's own GLSL: its defaults are its author's business."""
         program = program_reading('aPosition', 'sparkleAmount')
         arrays = GeometryArrays.separate(count=3)
@@ -195,7 +203,8 @@ class TestTheReport:
             program, arrays, frozenset(), mode=pass_) is None
         assert pass_.reported == []
 
-    def test_it_is_said_once_rather_than_once_a_frame(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_it_is_said_once_rather_than_once_a_frame(self):
         program = program_reading('aPosition', 'aTangent')
         arrays = GeometryArrays.separate(count=3, positions=a_buffer())
         pass_ = Pass()
@@ -204,7 +213,8 @@ class TestTheReport:
                 program, arrays, {'aPosition', 'aTangent'}, mode=pass_)
         assert len(pass_.reported) == 1
 
-    def test_a_geometry_with_more_to_offer_is_checked_on_its_own(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_geometry_with_more_to_offer_is_checked_on_its_own(self):
         """The record is per program and per set of arrays, not per program."""
         program = program_reading('aPosition', 'aTangent')
         required = {'aPosition', 'aTangent'}
@@ -219,7 +229,8 @@ class TestTheReport:
             required, mode=pass_) is None
         assert len(pass_.reported) == 1
 
-    def test_a_pass_that_keeps_no_log_still_gets_the_answer(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_pass_that_keeps_no_log_still_gets_the_answer(self):
         program = program_reading('aPosition', 'aNormal')
         arrays = GeometryArrays.separate(count=3, positions=a_buffer())
         err = report_missing_inputs(

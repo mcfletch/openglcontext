@@ -119,7 +119,7 @@ class TestPerLevelCaching:
         monkeypatch.setenv('OPENGLCONTEXT_LOD', 'off')
         seen = []
         monkeypatch.setattr(Sphere, 'compile',
-                            lambda self, mode=None, level=0, key='': seen.append(level) or ('c', 'i', level))
+                            lambda _self, mode=None, level=0, key='': seen.append(level) or ('c', 'i', level))  # noqa: ARG005 the signature of Sphere.compile, which is called by keyword
         s = Sphere(radius=1.0)
         s._lod_vbos(self._mode(-500.0))                # far, but LOD disabled
         assert seen == [0]

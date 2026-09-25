@@ -246,7 +246,7 @@ class TestLifetime:
         add_floor(mgr)
         crate = add_crate(mgr)
 
-        def broken(hit):
+        def broken(_hit):
             raise RuntimeError('broken handler')
 
         heard = []
@@ -508,7 +508,7 @@ class TestALateSubscription:
         mgr = manager()
         add_floor(mgr)
         crate = add_crate(mgr, position=(0, 0.5, 0))
-        mgr.events.subscribe(lambda hit: None, body=crate,
+        mgr.events.subscribe(lambda _hit: None, body=crate,
                              phases=('begin', 'persist'), immediate=True)
         run(mgr, 3.0)
         heard = []
@@ -583,7 +583,7 @@ class TestTheLogIsKeptOnlyForSubscribers:
         add_floor(mgr)
         crate = add_crate(mgr, position=(0, 0.5, 0))
         held = []
-        mgr.events.subscribe(lambda hit: held.append(len(mgr.world.contact_log)),
+        mgr.events.subscribe(lambda _hit: held.append(len(mgr.world.contact_log)),
                              body=crate, phases=('begin', 'persist'), immediate=True)
         run(mgr, 0.5)
         assert held and max(held) == 0

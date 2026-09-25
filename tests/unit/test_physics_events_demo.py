@@ -112,7 +112,8 @@ class TestGun:
         assert heard == ['ping']
         assert yard.world.linear_velocity[crate.index][2] < -0.5
 
-    def test_a_shot_at_nothing_hits_nothing(self, yard, engine):
+    @pytest.mark.usefixtures('engine')
+    def test_a_shot_at_nothing_hits_nothing(self, yard):
         assert yard.fire((0, 20, 0), (0, 1, 0)) is None
 
 

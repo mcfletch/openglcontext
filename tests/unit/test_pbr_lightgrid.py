@@ -69,9 +69,9 @@ class TestTheProgramAPI:
         program = PBRShaderProgram.__new__(PBRShaderProgram)
         program.program = 7
         uploaded = []
-        program._set_uniform1i = lambda name, value, prog=None: uploaded.append(
+        program._set_uniform1i = lambda name, value, prog=None: uploaded.append(  # noqa: ARG005 the signature of ShaderProgram._set_uniform*
             (name, int(value)))
-        program._set_uniform3f = lambda name, value, prog=None: uploaded.append(
+        program._set_uniform3f = lambda name, value, prog=None: uploaded.append(  # noqa: ARG005 the signature of ShaderProgram._set_uniform*
             (name, tuple(float(v) for v in value)))
         return program, uploaded
 
@@ -105,7 +105,7 @@ class TestWhichObjectsAreLookedUp:
         self.sampled = []
 
         class Shader:
-            def set_light_grid(inner, *args, **named):
+            def set_light_grid(inner, *args, **_named):
                 self.sampled.append(args)
         return pass_, Shader(), np.identity(4, dtype='d')
 

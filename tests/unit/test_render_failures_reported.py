@@ -28,7 +28,7 @@ from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 class _Exploding(basenodes.Box):
     """A geometry node that cannot draw, which is the case being reported."""
 
-    def render(self, *args, **named):
+    def render(self, *_args, **_named):
         raise RuntimeError('this geometry cannot draw')
 
 
@@ -137,6 +137,6 @@ class TestTheRunSaysWhatNeverDrew:
         reported = []
         monkeypatch.setattr(renderpass, 'report_render_failures',
                             lambda: reported.append(True))
-        monkeypatch.setattr(os, '_exit', lambda code: None)
+        monkeypatch.setattr(os, '_exit', lambda _code: None)
         rendered.context.OnQuit()
         assert reported == [True]

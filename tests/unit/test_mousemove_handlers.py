@@ -14,7 +14,7 @@ class _MoveManager(EventManager):
     type = 'mousemove'
 
 
-def _receiver(**named):
+def _receiver(**_named):
     return None
 
 
@@ -47,7 +47,7 @@ class TestHasMouseMoveHandlersDelegates:
             def getEventManager(self, t):
                 return managers.get(t)
 
-            def isCapturingEvents(self, t):
+            def isCapturingEvents(self, _t):
                 """A drag that took the type over registers no receivers."""
                 return False
         f = Fake()

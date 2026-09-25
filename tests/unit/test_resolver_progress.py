@@ -51,7 +51,7 @@ def serve(monkeypatch, payload):
     made = {}
 
     def factory(**named):
-        def _open(url, base_url, timeout=30):
+        def _open(*_args, **_named):
             made['response'] = _ChunkedResponse(payload, **named)
             return made['response']
         monkeypatch.setattr(resolver, '_open_url', _open)
@@ -68,7 +68,7 @@ class TestStreaming:
                                        cache_dir=str(tmp_path))
         assert open(path, 'rb').read() == payload
 
-    def test_the_body_is_never_held_whole_in_memory(self, serve, payload, tmp_path):
+    def test_the_body_is_never_held_whole_in_memory(self, serve, tmp_path):
         """The point of streaming, and the part a progress bar does not prove.
 
         A 450 MB pack read in one call is 450 MB of process memory before a
@@ -120,15 +120,15 @@ class TestProgress:
         serve()
         seen = []
         resolver.fetch_to_cache('https://example.com/g.bin', cache_dir=str(tmp_path),
-                                progress=lambda done, total: seen.append(total))
+                                progress=lambda _done, total: seen.append(total))
         assert seen[-1] == len(payload)
 
-    def test_an_unknown_total_is_reported_as_none(self, serve, payload, tmp_path):
+    def test_an_unknown_total_is_reported_as_none(self, serve, tmp_path):
         """A progress bar with no total should show motion, not a false 100%."""
         serve(length=False)
         seen = []
         resolver.fetch_to_cache('https://example.com/h.bin', cache_dir=str(tmp_path),
-                                progress=lambda done, total: seen.append(total))
+                                progress=lambda _done, total: seen.append(total))
         assert set(seen) == {None}
 
     def test_a_progress_callback_that_raises_does_not_lose_the_download(
@@ -136,7 +136,7 @@ class TestProgress:
         """Reporting is the caller's business and its failure is not fatal."""
         serve()
 
-        def broken(done, total):
+        def broken(_done, _total):
             raise RuntimeError('the progress bar fell over')
 
         path = resolver.fetch_to_cache('https://example.com/i.bin',
@@ -157,15 +157,14 @@ class TestProgress:
 
 class TestCancelling:
 
-    def test_a_cancelled_download_stops(self, serve, payload, tmp_path):
+    def test_a_cancelled_download_stops(self, serve, tmp_path):
         serve(chunk=1024)
         with pytest.raises(resolver.FetchCancelled):
             resolver.fetch_to_cache('https://example.com/k.bin',
                                     cache_dir=str(tmp_path),
                                     cancel=lambda: True)
 
-    def test_a_cancelled_download_leaves_nothing_in_the_cache(self, serve, payload,
-                                                              tmp_path):
+    def test_a_cancelled_download_leaves_nothing_in_the_cache(self, serve, tmp_path):
         """Half a texture pack in the cache is worse than none of one."""
         serve(chunk=1024)
         url = 'https://example.com/l.bin'
@@ -185,7 +184,7 @@ class TestCancelling:
         with pytest.raises(resolver.FetchCancelled):
             resolver.fetch_to_cache('https://example.com/m.bin',
                                     cache_dir=str(tmp_path), cancel=after_two,
-                                    progress=lambda done, total: seen.append(done))
+                                    progress=lambda done, _total: seen.append(done))
         assert seen and seen[-1] < len(payload)
 
     def test_not_cancelling_downloads_normally(self, serve, payload, tmp_path):
@@ -195,8 +194,7 @@ class TestCancelling:
                                        cancel=lambda: False)
         assert open(path, 'rb').read() == payload
 
-    def test_the_response_is_closed_even_when_cancelled(self, serve, payload,
-                                                        tmp_path):
+    def test_the_response_is_closed_even_when_cancelled(self, serve, tmp_path):
         made = serve(chunk=1024)
         with pytest.raises(resolver.FetchCancelled):
             resolver.fetch_to_cache('https://example.com/o.bin',
@@ -222,13 +220,13 @@ class TestMemory:
         big = os.urandom(self.size)
         monkeypatch.setattr(
             resolver, '_open_url',
-            lambda url, redirects=None, timeout=30: _ChunkedResponse(
+            lambda *_args, **_named: _ChunkedResponse(
                 big, chunk=resolver.DOWNLOAD_CHUNK_BYTES))
         peak = self.peak_while(lambda: resolver.fetch_to_cache(
             'https://example.com/big.bin', cache_dir=str(tmp_path)))
         assert peak < self.size // 4, 'peak %d bytes' % (peak,)
 
-    def test_a_cache_hit_reads_nothing(self, monkeypatch, tmp_path):
+    def test_a_cache_hit_reads_nothing(self, tmp_path):
         url = 'https://example.com/big.bin'
         path = resolver.cached_path(url, str(tmp_path))
         with open(path, 'wb') as handle:
