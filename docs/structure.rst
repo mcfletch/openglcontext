@@ -127,11 +127,12 @@ The packages inside OpenGLContext
        demos["demos"]:3
 
        ui["ui"]:2
-       edit["edit"]:2
+       edit["edit"]:1
+       multiview["multiview"]:1
        testing["testing"]:1
        telemetry["telemetry"]:1
        debug["debug"]:1
-       packaging["packaging"]:1
+       packaging["packaging · __pyinstaller"]:1
 
        passes["passes"]:2
        physics["physics"]:1
@@ -181,6 +182,11 @@ simulation packages update.
      - The editor toolkit: tool modes, plan and orbit views, the tri-axis
        handle, and a NURBS node's control points.
      - :doc:`Editing <editing>`
+   * - ``multiview``
+     - Several views of one scene in one window: the views and their layout,
+       orthographic cameras, the scene's own cameras as views, the gestures
+       that move each, and the quad arrangement.
+     - :doc:`Several views <multiview>`
    * - ``testing``
      - The machinery a test suite imports: a hidden GL context, the pytest
        fixtures that provide one, capture and comparison.
@@ -192,15 +198,20 @@ simulation packages update.
    * - ``debug``
      - Developer aids: buffer dumps, GL state, leak counts.
      - —
-   * - ``packaging``
+   * - ``packaging``, ``__pyinstaller``
      - Shipping an application: a PyInstaller bundle, or a Debian package
-       carrying its own interpreter.
+       carrying its own interpreter; ``__pyinstaller`` holds the hooks
+       PyInstaller finds by entry point.
      - :doc:`Packaging <packaging>`
    * - ``passes``
      - The render passes: the flat core and compatibility passes, the PBR
-       uber-shader, shadows, image-based lighting and instancing.
+       uber-shader, shadows, image-based lighting, planar reflections, zones,
+       level of detail and instancing.
      - :doc:`Core-Profile Rendering <renderpasses>`, :doc:`Core vs.
-       Compatibility Contexts <profiles>`
+       Compatibility Contexts <profiles>`, :doc:`PBR <pbr>`,
+       :doc:`Shadows <shadows>`, :doc:`Reflections <reflections>`,
+       :doc:`Zones <zones>`, :doc:`Level of detail <lod>`,
+       :doc:`Instancing <instancing>`
    * - ``physics``
      - Rigid bodies, colliders, gravity zones, triggers and the character
        controller, on ``omi_physics``.
@@ -226,9 +237,13 @@ simulation packages update.
      - :doc:`Capturing the Render <capturing>`, :doc:`Recording <recording>`
    * - ``scenegraph``
      - Every node type: shapes, materials, lights, text, NURBS, extrusions,
-       terrain, water, roads, vegetation and the PBR mesh.
+       terrain, water, roads, vegetation, procedural surfaces, zones,
+       particles and the PBR mesh.
      - :doc:`VRML97 nodes <vrml97>`, :doc:`PBR materials <pbr>`,
-       :doc:`Text <text>`
+       :doc:`Text <text>`, :doc:`NURBS <nurbs>`, :doc:`Extrusions <extrusions>`,
+       :doc:`Terrain <terrain>`, :doc:`Water <water>`, :doc:`Roads <roads>`,
+       :doc:`Vegetation <vegetation>`, :doc:`Surfaces <surfaces>`,
+       :doc:`Zones <zones>`, :doc:`Particles <particles>`
    * - ``loaders``
      - File formats into the scenegraph: glTF and GLB, VRML97, OBJ and
        streamed 3D Tiles.

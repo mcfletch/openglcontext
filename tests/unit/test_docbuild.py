@@ -545,3 +545,19 @@ class TestTheZonesPageListsTheReaders:
         sentence = page[start:page.index('. ', start)]
         missing = [name for name in zoning.BUILTIN if name not in sentence]
         assert missing == []
+
+
+class TestTheStructurePageNamesEveryPackage:
+    def test_every_sub_package_has_a_row(self):
+        here = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))
+        root = os.path.join(here, 'OpenGLContext')
+        with open(os.path.join(here, 'docs', 'structure.rst'),
+                  encoding='utf-8') as handle:
+            page = handle.read()
+        packages = sorted(
+            name for name in os.listdir(root)
+            if os.path.isfile(os.path.join(root, name, '__init__.py'))
+            and name not in ('tests',))
+        assert [name for name in packages
+                if '``%s``' % (name,) not in page] == []
