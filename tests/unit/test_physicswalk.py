@@ -549,3 +549,44 @@ class TestClearance:
         host.enablePhysics(True)
         character = host.physicsPlatform.character
         assert physicswalk._clearance(character, 0.3) == 4
+
+
+class TestZoneGravity:
+    """A zone's gravity is where the render pass places the zone, step by step."""
+
+    def scene(self, zone):
+        scene = _floor_scene()
+        scene.children.append(Transform(translation=(0.0, 5.0, 0.0), children=[zone]))
+        return scene
+
+    def test_the_world_follows_a_zone_the_pass_has_moved(self, monkeypatch):
+        from OpenGLContext.passes import renderpass
+        from OpenGLContext.physics.zones import ZoneRegion
+        from OpenGLContext.scenegraph.zone import Zone, ZoneGravity, placed_zones
+        zone = Zone(size=(4.0, 4.0, 4.0), settings=[ZoneGravity(gravity=2.0)])
+        host = _started(self.scene(zone))
+        assert host.enablePhysics(True)
+        world = host.gravityZones.world
+        mine = lambda: [v for v in world.gravity_volumes  # noqa: E731
+                        if isinstance(v.region, ZoneRegion)]
+        assert len(mine()) == 1 and mine()[0].contains(np.array([0.0, 5.0, 0.0]))
+        moved = np.identity(4)
+        moved[3, :3] = (30.0, 5.0, 0.0)
+
+        class Pass:
+            zones = placed_zones([(zone, moved)])
+        monkeypatch.setattr(renderpass, 'current_pass', lambda: Pass)
+        host.stepPhysics(0.01)
+        (volume,) = mine()
+        assert volume.contains(np.array([30.0, 5.0, 0.0]))
+        assert not volume.contains(np.array([0.0, 5.0, 0.0]))
+
+    def test_without_a_pass_the_world_keeps_what_it_was_built_with(self, monkeypatch):
+        from OpenGLContext.passes import renderpass
+        from OpenGLContext.scenegraph.zone import Zone, ZoneGravity
+        host = _started(self.scene(Zone(size=(4.0, 4.0, 4.0), settings=[ZoneGravity()])))
+        assert host.enablePhysics(True)
+        before = list(host.gravityZones.world.gravity_volumes)
+        monkeypatch.setattr(renderpass, 'current_pass', lambda: None)
+        host.stepPhysics(0.01)
+        assert host.gravityZones.world.gravity_volumes == before

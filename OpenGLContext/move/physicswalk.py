@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from omi_physics.character import CharacterCapabilities, CharacterController
     from omi_physics.world import PhysicsWorld
     from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
+    from OpenGLContext.physics.zones import GravityZones
 
 __all__ = ['PhysicsWalkMixin', 'yaw_from_orientation']
 
@@ -97,6 +98,9 @@ class PhysicsWalkMixin(object):
     #: Built lazily, on the first :meth:`enablePhysics`, and kept afterwards so
     #: toggling back to walking resumes rather than respawns.
     physicsPlatform: Optional['PhysicsViewPlatform'] = None
+    #: The world's zone gravity volumes, kept where the render pass places the
+    #: zones; built with the world.
+    gravityZones: Optional['GravityZones'] = None
     #: Whether the avatar, rather than the free-fly camera, owns the view.
     physicsWalking: bool = False
     #: Downward acceleration at avatar scale 1, in scene units per second squared.
@@ -220,6 +224,8 @@ class PhysicsWalkMixin(object):
         self.physicsPlatform = PhysicsViewPlatform(
             world, capabilities, yaw=self.physicsYaw,
             gravity=self.physicsGravity * scale)
+        from OpenGLContext.physics.zones import GravityZones
+        self.gravityZones = GravityZones(world)
         self.applyMovementModes(scale)
         self.spawnAvatar(lo, hi, capabilities, self.physicsSpawnViewpoints())
         self._physicsLast = self.physicsNow()
@@ -448,11 +454,28 @@ class PhysicsWalkMixin(object):
         if dt is None:
             dt = min(now - self._physicsLast, self.physicsMaxStep)
         self._physicsLast = now
+        self.followZoneGravity()
         self.updateNavigation(dt)
         platform.update(dt)
         self.resolvePhysicsStep()
         platform.apply(self)
         self.triggerRedraw(1)
+
+    def followZoneGravity(self) -> None:
+        """Put the world's zone gravity where the render pass placed the zones.
+
+        The pass drawing this context places every zone once a frame; a zone
+        that moved, or whose gravity was edited, is followed from the next
+        step. Before the first frame, and where no pass draws this context,
+        the world keeps the volumes it was built with.
+        """
+        keeper = self.gravityZones
+        if keeper is None:
+            return
+        from OpenGLContext.passes import renderpass
+        zones = getattr(renderpass.current_pass(), 'zones', None)
+        if zones is not None:
+            keeper.follow(zones)
 
     def resolvePhysicsStep(self) -> None:
         """Correct the avatar's pose once the character has solved its own step.

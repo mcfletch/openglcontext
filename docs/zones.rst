@@ -120,7 +120,8 @@ and emitters it names stay where they are in the scene. A zone moved at
 runtime, or with a field of it or of one of its settings set, is placed again
 on the next frame, and the lighting, lights, sound, visibility and mirrors
 follow it from that frame; only the objects near the zone are classified
-again. Change a setting by setting its field (``setting.intensity = 0.5``) or
+again. Gravity follows it too where the physics world is kept in step with
+the render pass's zones (see `Gravity`_). Change a setting by setting its field (``setting.intensity = 0.5``) or
 by giving the zone a new ``settings`` list; appending to the list is seen too.
 
 Zones in a glTF file
@@ -273,7 +274,16 @@ second squared and ``replace`` and ``stop`` as the extension defines them.
 :func:`~OpenGLContext.physics.gltf_world.collision_world_from_scene` adds a
 volume for every such zone to the physics world it builds, and
 :func:`OpenGLContext.physics.zones.gravity_volumes` gives them to a world
-built another way.
+built another way. Both place the zones as the scene is when they are
+called, following the children a node draws: a ``Switch``'s chosen node and
+each of an LOD's levels.
+
+``GravityZones(world).follow(zones)`` keeps a world's zone volumes where the
+zones are: given the zones as placed now -- the render pass's ``zones`` each
+frame -- it replaces the world's zone volumes when a zone carrying gravity
+has moved, been edited, come or gone, and leaves volumes the application
+added itself. Walking (``PhysicsWalkMixin``) calls it every step with the
+zones of the pass drawing the context.
 
 .. _zone-bake:
 

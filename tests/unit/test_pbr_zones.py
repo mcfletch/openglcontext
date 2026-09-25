@@ -348,6 +348,31 @@ class TestGravity:
         assert volume.field.direction == pytest.approx((0.0, 1.0, 0.0), abs=1e-6)
         assert volume.field.replace
 
+    def test_a_zone_a_switch_shows_is_found_and_one_it_hides_is_not(self):
+        from OpenGLContext.physics.zones import scene_zones
+        from OpenGLContext.scenegraph.basenodes import Switch
+        shown, hidden = (Zone(settings=[ZoneGravity()]), Zone(settings=[ZoneGravity()]))
+        found = scene_zones(Transform(children=[
+            Switch(choice=[shown, hidden], whichChoice=0)]))
+        assert [placed.zone for placed in found] == [shown]
+
+    def test_a_world_follows_zones_placed_again(self):
+        from OpenGLContext.physics.gltf_world import collision_world_from_scene
+        from OpenGLContext.physics.zones import GravityZones, scene_zones
+        from omi_physics.gravity import GravityVolume, InfiniteRegion
+        from omi_physics import model
+        zone = Zone(size=(4, 4, 4), settings=[ZoneGravity()])
+        world, _bounds = collision_world_from_scene(Transform(children=[zone]))
+        own = world.add_gravity_volume(GravityVolume(model.Gravity(), InfiniteRegion()))
+        keeper = GravityZones(world)
+        placed = placed_zones([(zone, at(20))])
+        assert keeper.follow(placed)
+        assert not keeper.follow(placed)
+        assert len(world.gravity_volumes) == 2 and own in world.gravity_volumes
+        assert world.gravity_volumes[-1].contains(np.array([20.0, 0.0, 0.0]))
+        assert keeper.follow(scene_zones(Transform(children=[])))
+        assert world.gravity_volumes == [own]
+
     def test_a_collision_world_carries_the_volumes(self):
         from OpenGLContext.physics.gltf_world import collision_world_from_scene
         scene = Transform(children=[Zone(size=(4, 4, 4), settings=[ZoneGravity()])])
