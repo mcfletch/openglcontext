@@ -21,41 +21,42 @@ create your own demos or tools.
 
 ## What it does
 
-- **Renders into five GUI toolkits** — GLFW (recommended for core-profile and
-  PBR rendering), GLUT, Pygame, wxPython and Qt/PySide — owning the window or
-  embedded as one canvas in a larger application. Backends are plug-ins, so an
+- Renders into six GUI toolkits - GLFW (recommended for core-profile and
+  PBR rendering), GLUT, Pygame, Tk, wxPython and Qt/PySide, owning the window
+  or embedded as one canvas in a larger application, and offscreen through EGL
+  or WGL with no window at all. Backends are plug-ins, so an
   application can register its own.
 
-- **Loads scenes** — glTF 2.0 and GLB with animation, skinning and morph
+- Loads scenes - glTF 2.0 and GLB with animation, skinning and morph
   targets; VRML97; Wavefront OBJ; and streamed 3D Tiles datasets, from a file or
   over the network. PK3 files with a [secondary package](https://github.com/mcfletch/twig-bb).
 
-- **Draws them** — physically based materials, image-based lighting, shadows,
+- Draws them - physically based materials, image-based lighting, shadows,
   transmission and bloom, particle effects, fog, TrueType text, and instancing
   that collapses repeated shapes into a single draw.
 
-- **Lets you interact** — click to pick objects in the scene, move through it in
+- Lets you interact - click to pick objects in the scene, move through it in
   examine, fly, walk or first-person mode, respond to mouse, keyboard and timer
   events, and put panels, widgets and a settings screen over the top.
 
-- **Game-style physics** — rigid bodies, collision, joints and gravity zones,
+- Game-style physics - rigid bodies, collision, joints and gravity zones,
   and a character who walks on the terrain you can see.
 
-- **Game-style positional audio** — sounds placed in the scene and heard from
+- Game-style positional audio - sounds placed in the scene and heard from
   where the listener stands.
 
-- **Worlds, not just models** — roads swept from a centreline and a
+- Worlds, not just models - roads swept from a centreline and a
   cross-section, water as still lakes, flowing rivers or choppy weather and as
   a medium you can be inside, streamed 3D Tiles terrain with distance-LOD
   vegetation, and a navigation mesh generated from the collision mesh.
 
-- **Rigged characters** — skeletal animation with several clips playing at
+- Rigged characters - skeletal animation with several clips playing at
   once, attachments on a hand, distance LOD, and crowds posed on the GPU.
 
-- **Records what it draws** — H.264 straight from the framebuffer to the
+- Records what it draws - H.264 straight from the framebuffer to the
   GPU's video encoder, on a clock that counts frames.
 
-- **Viewer Application** — `oglc-view model.glb`. With embedded links to sample
+- Viewer Application - `oglc-view model.glb`. With embedded links to sample
   content you can browse through the embedded UI.
 
 | | | |
@@ -130,66 +131,126 @@ carries no environment, and a publisher that names one will not match.
 
 ## Changelog
 
+### Unreleased
+
+- Planar reflections - a material carrying a `PlanarReflector` is a mirror,
+  drawn from a mirrored camera into a shared atlas under a per-frame budget;
+  water and polished floors reflect the same way. `oglc-mirrors` is the demo.
+  `docs/reflections.rst`.
+- Zones - regions of a scene that carry their own image-based light, local
+  lamps, ambience and reverb, visibility and gravity, read from glTF's
+  `OGLC_zone` extension. `docs/zones.rst`.
+- Several views of one scene - a plan, two elevations and a perspective view
+  in one window, with splitters and per-view controls; `oglc-view --views
+  quad`. `docs/multiview.rst`.
+- Mesh level of detail - glTF's `MSFT_lod` read into `ScreenCoverageLOD`,
+  chosen by screen coverage, with octahedral impostors as the coarsest level.
+  `oglc-view --pack openglcontext/gallery` opens the demo world.
+  `docs/lod.rst`.
+- Procedural surfaces - PBR maps for marble, tiles, brick and metals, and
+  geometry that wears them by the metre. `docs/surfaces.rst`.
+- Engine hooks - glTF's `OGLC_hook` extension places fire, smoke, sparks,
+  water and mirrors, with a Blender panel that authors them. `docs/gltf.rst`.
+- Collision subscriptions - a callback for a body's collisions, delivered
+  once a frame; `oglc-physics-events` is the demo. `docs/physics.rst`.
+- Application sounds and area ambience, and `oglc-audio-demo`.
+  `docs/audio.rst`.
+- Terrain holes, ground relief and stone; vegetation ground cover and plant
+  sets. `docs/terrain.rst`, `docs/vegetation.rst`.
+- Content packs - release-asset redirects to a CDN are followed for content;
+  installs are staged and recorded, so an interrupted one leaves no pack and a
+  rebuilt one is fetched again; registry entries are type-checked, `requires`
+  is enforced, and plain http needs a digest. `oglc-view` opens an archive's
+  `#member` and, with `--pack`, a pack the engine publishes.
+  `docs/contentpacks.rst`, `docs/viewer.rst`.
+- Overlay UI pointer shapes and tooltips. `docs/overlayui.rst`.
+- `castsShadow` on a shape leaves it out of every shadow map.
+  `docs/shadows.rst`.
+- `OpenGLContext.atomicfiles` - a file or directory written whole or not at
+  all, and a lock for two processes writing the same one.
+- The documentation is a Sphinx site built by `build-docs.py`, with a page per
+  module and the tutorials written from `tests/*.py`.
+- `packaging` is a dependency, for content packs' `requires` specifiers.
+
+### 3.0.0a2 to 3.0.0a5
+
+- H.264 recording of the colour buffer on the GPU's own encoder, on a clock
+  that counts frames. `docs/recording.rst`.
+- Offscreen contexts with no window: EGL on Linux and a WGL pbuffer on
+  Windows. `docs/offscreen.rst`.
+- Shipping an application - PyInstaller hooks found by entry point, and
+  `oglc-deb` for a Debian package of an `/opt` environment.
+  `docs/packaging.rst`.
+- Session telemetry - a whole session to one file, and replayed from it.
+  `docs/telemetry.rst`.
+- Water - still lakes, flowing rivers and choppy weather, and a medium you can
+  be inside. `docs/water.rst`.
+- Content packs - data an application fetches rather than ships: a registry,
+  a per-application store, bounded extraction and a download job polled from
+  the frame loop. `docs/contentpacks.rst`.
+- A `ProgressBar` widget, and height fields that report where the ground is
+  not there.
+
 ### 3.0.0a1
 
 The major version marks the removals at the end of this entry: several
 sub-packages and the visitor-based renderer are gone, so code that imported them
 needs changing. Everything else here is additive.
 
-- **glTF 2.0**, as a loader package (`loaders/gltf/`) and the format the viewer
+- glTF 2.0, as a loader package (`loaders/gltf/`) and the format the viewer
   leads with: `.gltf`/`.glb`, local or over http(s), with animation, skinning,
   morph targets, sparse accessors, computed tangents and the
   `KHR_materials_*`/`KHR_texture_transform`/unlit/specular-glossiness family.
   `KHR_draco_mesh_compression` decodes when the optional `DracoPy` is installed.
   See `docs/gltf.rst`.
 
-- **Physically-based rendering** — a metallic/roughness uber-shader and PBR
+- Physically-based rendering - a metallic/roughness uber-shader and PBR
   render pass, `PBRMaterial`, image-based lighting (analytic or a runtime probe,
   with Radiance `.hdr` panoramas), screen-space transmission and emissive bloom.
   `docs/pbr.rst`, `docs/ubershader.rst`.
 
-- **Shadow maps**, per-light, with cascades for directional lights and an
+- Shadow maps, per-light, with cascades for directional lights and an
   fps-adaptive cascade count. Replaces the removed stencil-volume path.
   `docs/shadows.rst`.
 
-- **Instanced rendering**, automatic: the pass batches shapes that share geometry
+- Instanced rendering, automatic: the pass batches shapes that share geometry
   and a compatible appearance into one `glDrawElementsInstanced`, for VRML
   `USE`/`DEF`, shared glTF meshes and `EXT_mesh_gpu_instancing` alike.
   `docs/instancing.rst`.
 
-- **One viewer, `oglc-view`**, for glTF, VRML97, OBJ and 3D Tiles: format is
+- One viewer, `oglc-view`, for glTF, VRML97, OBJ and 3D Tiles: format is
   chosen from the source by a registered `SceneAdapter`, so a third party adds a
   format without touching the viewer. It carries a launch menu, a model library,
   and settings and controls screens. `oglc-vrml`, `oglc-gltf` and `oglc-tiles`
   are deprecated aliases for it. `docs/viewer.rst`.
 
-- **An overlay UI** (`ui/`) — panels, widgets, layout and a skin, drawn in one
+- An overlay UI (`ui/`) - panels, widgets, layout and a skin, drawn in one
   batched call, with a settings screen generated from a node's own fields, a
   console and a key-bindings editor. `docs/overlayui.rst`.
 
-- **Rigid-body physics and character movement** — collision, gravity, joints and
+- Rigid-body physics and character movement - collision, gravity, joints and
   gravity zones through the `omi_physics` package, first-person and examine
   navigation, declared movement modes, and a terrain-walking mode.
   `docs/physics.rst`, `docs/navigation.rst`.
 
-- **Terrain and 3D Tiles** — an OGC 3D Tiles streaming runtime with
+- Terrain and 3D Tiles - an OGC 3D Tiles streaming runtime with
   screen-space-error LOD, async paging and eviction (`docs/tiles3d.rst`);
   splat-textured heightfield terrain, walked (`docs/terrain.rst`); and
   instanced vegetation (`docs/vegetation.rst`).
 
-- **Spatial audio** — VRML97's `Sound` and `AudioClip` play, alongside glTF's
+- Spatial audio - VRML97's `Sound` and `AudioClip` play, alongside glTF's
   `KHR_audio_emitter`, through the `omi_audio` package. `docs/audio.rst`.
 
-- **Swept geometry** — `Lathe`, `Spiral`, `Screw`, `PolyCylinder`, `PolyCone` and
+- Swept geometry - `Lathe`, `Spiral`, `Screw`, `PolyCylinder`, `PolyCone` and
   VRML97's `Extrusion` generate their vertex arrays with the `opengl_extrusions`
   package, which also provides the constrained Delaunay tessellator that fills
   their end caps. The result is an indexed triangle mesh, so these draw in a core
   profile like any other geometry. `docs/extrusions.rst`.
 
-- **Particle systems**, **fog**, and a **HUD/debug overlay** with frame timing and
+- Particle systems, fog, and a HUD/debug overlay with frame timing and
   loop instrumentation. `docs/particles.rst`, `docs/hud.rst`.
 
-- **Untrusted assets are contained.** A document that names external resources —
+- Untrusted assets are contained. A document that names external resources —
   a glTF's buffers, images and audio, a 3D Tiles tileset's content and nested
   tilesets — may only reach what its own origin permits: same-origin http(s) for
   a document fetched over the network (re-checked on every redirect hop), and the
@@ -197,7 +258,7 @@ needs changing. Everything else here is additive.
   size-capped, and the download cache is per-user rather than in shared
   system temp. The policy lives in one module, `loaders/resolver.py`.
 
-- **Packaging modernised** — `pyproject.toml` with PEP 639 licence metadata, and
+- Packaging modernised - `pyproject.toml` with PEP 639 licence metadata, and
   `scripts/check_release_artifact.py`, which refuses an artifact carrying files
   the source tree no longer has.
 
