@@ -4,12 +4,17 @@ The PBR pass asks three kinds of question of the scene's zones, and the
 answers are worked out here, with no GL, from the zones
 :func:`~OpenGLContext.scenegraph.zone.placed_zones` placed for the frame:
 
-* For a draw, which zones' environments reach the object and how
-  (:func:`environment_layers`). An object wholly inside a zone takes it as a
-  constant; one crossing a zone's surface, or its blend band, has the zone
-  weighted per fragment by ``_zone_inc.glsl``. The answer is packed into the
-  arrays that shader reads (:class:`ZonePack`).
-* For a draw, which of the lights zones control are off (:func:`lights_off`).
+* For a draw, which zones' environments reach the object and how. An object
+  wholly inside a zone takes it as a constant; one crossing a zone's
+  surface, or its blend band, has the zone weighted per fragment by
+  ``_zone_inc.glsl``. The answer is packed into the arrays that shader reads
+  (:class:`ZonePack`). The pass asks this of many objects at once through a
+  :class:`ZoneTable` (:meth:`ZoneTable.classify_many`, then :func:`stacked`,
+  :func:`chosen` and :func:`pack_reach`); :func:`environment_layers` is the
+  same for one object.
+* For a draw, which of the lights zones control are off: :func:`light_decision`
+  from what the table answers, then :func:`light_mask`; :func:`lights_off`
+  is the same for one object.
 * For a camera or a listener, how much of each thing a zone switches on is on
   (:func:`camera_shares`), and what reverb it hears (:func:`reverb_at`).
 
@@ -34,6 +39,7 @@ log = logging.getLogger(__name__)
 
 __all__ = [
     'MAX_ZONE_LAYERS', 'SCENE_PROBE', 'NO_ENVIRONMENT', 'ZonePack', 'ZoneTable',
+    'ObjectBoxes', 'world_reach',
     'Reach', 'reach', 'classified', 'stacked', 'chosen', 'probe_layers', 'pack_reach',
     'environment_layers', 'lights_off', 'light_decision', 'light_mask',
     'controlled_lights', 'point_weights', 'camera_shares',
@@ -61,7 +67,9 @@ class ZonePack:
     so the layer is a constant), ``to_local`` the world-to-shape matrices,
     row-vector as the engine's are, ``shape`` the dimensions, and ``light``
     each layer's intensity, blend and probe layer. ``key`` compares equal
-    for two packs that would upload the same values.
+    for two packs that would upload the same values; it holds each layer's
+    :class:`~OpenGLContext.scenegraph.zone.PlacedZone`, which stands for one
+    placement of one zone.
     """
 
     count: int
@@ -95,8 +103,25 @@ def _pack(stack: Sequence[Tuple[PlacedZone, bool, float, float]],
         to_local[index] = placed.shape.to_local
         shape[index] = _params(placed.shape)
         light[index] = (intensity, placed.blend, probe, 0.0)
-        key.append((id(placed), inside, intensity, probe))
+        key.append((placed, inside, intensity, probe))
     return ZonePack(len(stack), kinds, to_local, shape, light, tuple(key), limited)
+
+
+def world_reach(placed: PlacedZone) -> Tuple[np.ndarray, np.ndarray]:
+    """The world box round ``placed``'s shape and its blend band, as ``(low, high)``."""
+    low, high = _world_boxes(placed.shape.to_local[None],
+                             (np.asarray(placed.shape.reach, 'd') + placed.blend)[None])
+    return low[0], high[0]
+
+
+def _world_boxes(to_local: np.ndarray, reach: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    """``(Z, 3)`` world boxes of oriented boxes of half extents ``reach``."""
+    if not len(to_local):
+        return np.zeros((0, 3)), np.zeros((0, 3))
+    to_world = np.linalg.inv(to_local)
+    middle = to_world[:, 3, :3]
+    spread = (np.abs(to_world[:, :3, :3]) * reach[:, :, None]).sum(axis=1)
+    return middle - spread, middle + spread
 
 
 class ZoneTable:
@@ -104,18 +129,22 @@ class ZoneTable:
 
     Classifying an object against each zone one at a time costs several numpy
     calls a zone, which a world of fifty zones along a road pays for every
-    object that spans them. :meth:`classify` answers for all of them in one
-    pass: the conservative clear-of-it test
+    object that spans them. :meth:`classify_many` answers for many objects
+    and zones in one pass: the conservative clear-of-it test
     :meth:`~OpenGLContext.scenegraph.zones.PlacedShape.classify` makes first,
     and for boxes -- what a world's zones mostly are -- the exact inside test
-    too. :meth:`distances` gives every box's distance from a point the same
-    way. Other shapes are measured one at a time, as before.
+    too. :meth:`signed_distances` gives every zone's distance from points the
+    same way. Other shapes are measured one at a time.
     """
 
     #: How far from a sphere :meth:`sphere_slack` looks for zones, in metres.
     #: A zone further away than this leaves the sphere at least this much
     #: room, less its radius, so the slack answered is never more than that.
     slack_reach = 60.0
+
+    #: How many boxes :meth:`classify_many` carries through at once, which
+    #: bounds the memory one call takes whatever it is asked.
+    chunk = 512
 
     def __init__(self, placed: Sequence[PlacedZone]) -> None:
         self.placed = list(placed)
@@ -135,13 +164,7 @@ class ZoneTable:
         # Each zone's reach -- its shape and its blend band -- as a box in the
         # world, so the zones a query could touch are found before any point
         # is carried into a zone's frame.
-        if count:
-            to_world = np.linalg.inv(self.to_local)
-            middle = to_world[:, 3, :3]
-            spread = (np.abs(to_world[:, :3, :3]) * self.reach[:, :, None]).sum(axis=1)
-            self.world_low, self.world_high = middle - spread, middle + spread
-        else:
-            self.world_low = self.world_high = np.zeros((0, 3))
+        self.world_low, self.world_high = _world_boxes(self.to_local, self.reach)
         # The physics engine's broad phase: a query costs the depth of the
         # tree rather than a comparison with every zone.
         from omi_physics.broadphase import DynamicAABBTree
@@ -167,14 +190,6 @@ class ZoneTable:
             + matrices[:, None, 3, :3])
         return found
 
-    def _local(self, points: np.ndarray) -> np.ndarray:
-        """``(N, 3)`` world points in every zone's frame, as ``(Z, N, 3)``."""
-        return self._local_to(slice(None), points)
-
-    def reaching(self, minimum: Any, maximum: Any) -> List[PlacedZone]:
-        """The zones whose shape, or blend band, the box may reach."""
-        return [zone for zone, _inside in self.classify(minimum, maximum)]
-
     def classify(self, minimum: Any, maximum: Any) -> List[Tuple[PlacedZone, bool]]:
         """Each zone the box reaches, with whether the box is wholly inside it."""
         return self.classify_many([minimum], [maximum])[0]
@@ -183,44 +198,53 @@ class ZoneTable:
                       ) -> List[List[Tuple[PlacedZone, bool]]]:
         """:meth:`classify` for many boxes at once: ``(M, 3)`` corners each.
 
-        One pass for every box against every zone, which is how the objects
-        that moved since the last frame are classified together rather than
-        one numpy call apiece.
+        The boxes are taken :attr:`chunk` at a time, and each chunk is
+        carried into the frames of only the zones whose world reach overlaps
+        one of its boxes, so what one call holds is bounded by the chunk and
+        the zones near it rather than by every box against every zone.
         """
         low_in = np.asarray(minimums, dtype='d').reshape(-1, 3)
         high_in = np.asarray(maximums, dtype='d').reshape(-1, 3)
-        if not self.placed or not len(low_in):
+        if not self.placed:
             return [[] for _ in range(len(low_in))]
-        # Only the zones whose reach overlaps the boxes together are carried
-        # through; a world's zones are strung out along its roads, and an
-        # object is near few of them.
-        which = self.near(low_in.min(axis=0), high_in.max(axis=0))
+        found: List[List[Tuple[PlacedZone, bool]]] = []
+        for start in range(0, len(low_in), self.chunk):
+            found.extend(self._classify_chunk(low_in[start:start + self.chunk],
+                                              high_in[start:start + self.chunk]))
+        return found
+
+    def _classify_chunk(self, low_in: np.ndarray, high_in: np.ndarray
+                        ) -> List[List[Tuple[PlacedZone, bool]]]:
+        count = len(low_in)
+        # Which world reach each box overlaps, as (M, Z): what is carried
+        # through is only the zones some box of the chunk is near.
+        overlaps = (np.all(low_in[:, None, :] <= self.world_high[None], axis=2)
+                    & np.all(high_in[:, None, :] >= self.world_low[None], axis=2))
+        which = np.flatnonzero(overlaps.any(axis=0))
         if not len(which):
-            return [[] for _ in range(len(low_in))]
+            return [[] for _ in range(count)]
         corners = np.where(zones._CORNER_ENDS[None, :, :], high_in[:, None, :],
                            low_in[:, None, :])                         # (M, 8, 3)
-        count = len(low_in)
         local = self._local_to(which, corners.reshape(-1, 3))          # (W, M*8, 3)
         # Corners leading, since numpy reduces a short trailing axis slowly.
         local = local.reshape(len(which), count, 8, 3).transpose(2, 1, 0, 3)
         low, high = local.min(axis=0), local.max(axis=0)               # (M, W, 3)
         reach = self.reach[which][None]
-        clear = np.any(low > reach, axis=2) | np.any(high < -reach, axis=2)
+        near = (overlaps[:, which]
+                & ~(np.any(low > reach, axis=2) | np.any(high < -reach, axis=2)))
         half = self.half[which][None]
-        inside_box = (np.all(low >= -half, axis=2) & np.all(high <= half, axis=2))
-        found: List[List[Tuple[PlacedZone, bool]]] = []
-        for row in range(count):
-            mine = []
-            for at in np.flatnonzero(~clear[row]):
-                index = which[at]
-                zone = self.placed[index]
-                if self.box[index]:
-                    inside = bool(inside_box[row, at])
-                else:
-                    inside = bool(np.all(zones._distance(
-                        zone.shape.kind, zone.shape.params, local[:, row, at]) <= 0.0))
-                mine.append((zone, inside))
-            found.append(mine)
+        inside = np.all(low >= -half, axis=2) & np.all(high <= half, axis=2)
+        found: List[List[Tuple[PlacedZone, bool]]] = [[] for _ in range(count)]
+        rows, columns = np.nonzero(near)
+        for row, at in zip(rows.tolist(), columns.tolist(), strict=True):
+            index = which[at]
+            zone = self.placed[index]
+            if self.box[index]:
+                within = bool(inside[row, at])
+            else:
+                within = bool(np.all(zones._distance(
+                    zone.shape.kind, zone.shape.params, local[:, row, at]) <= 0.0))
+            found[row].append((zone, within))
         return found
 
     def signed_distances(self, points: Any) -> np.ndarray:
@@ -285,19 +309,68 @@ class ZoneTable:
         found = self.signed_distances(np.asarray(point, dtype='d')[:3])[0]
         return dict(zip(self._ids, found.tolist(), strict=True))
 
-    def distances(self, point: Any) -> Dict[int, float]:
-        """Every zone's signed distance from ``point``, by ``id`` of the zone."""
-        if not self.placed:
-            return {}
-        local = self._local(np.asarray(point, dtype='d')[:3][None, :])[:, 0, :]
-        q = np.abs(local) - self.half
-        boxed = (np.linalg.norm(np.maximum(q, 0.0), axis=1)
-                 + np.minimum(q.max(axis=1), 0.0))
-        found = {}
-        for index, zone in enumerate(self.placed):
-            found[id(zone)] = (float(boxed[index]) if self.box[index]
-                               else float(zone.shape.distance(point)))
-        return found
+
+class ObjectBoxes:
+    """Where each object's classification holds, for finding those a change reaches.
+
+    Each object the pass has classified is given a row: the world box within
+    which its answer stays true -- its own box, grown to the sphere its slack
+    lets it move in. When a zone moves, or anything about it changes,
+    :meth:`overlapping` answers the objects whose row overlaps the zone's
+    reach before and after, which are the only ones whose answer can have
+    changed. No GL.
+    """
+
+    def __init__(self, capacity: int = 256) -> None:
+        self.low = np.full((capacity, 3), np.inf)
+        self.high = np.full((capacity, 3), -np.inf)
+        self.owners: List[Any] = [None] * capacity
+        self._free: List[int] = []
+        self._used = 0
+
+    def __len__(self) -> int:
+        return self._used - len(self._free)
+
+    def place(self, row: Optional[int], owner: Any, low: Any, high: Any) -> int:
+        """Put ``owner``'s box in ``row``, or in a new row; return the row."""
+        if row is None:
+            row = self._free.pop() if self._free else self._grow()
+        self.low[row] = low
+        self.high[row] = high
+        self.owners[row] = owner
+        return row
+
+    def _grow(self) -> int:
+        row = self._used
+        if row == len(self.owners):
+            capacity = 2 * len(self.owners)
+            self.low = np.concatenate([self.low, np.full((capacity - row, 3), np.inf)])
+            self.high = np.concatenate([self.high, np.full((capacity - row, 3), -np.inf)])
+            self.owners.extend([None] * (capacity - row))
+        self._used += 1
+        return row
+
+    def drop(self, row: int) -> None:
+        """Let ``row`` go, for another object to take."""
+        self.low[row] = np.inf
+        self.high[row] = -np.inf
+        self.owners[row] = None
+        self._free.append(row)
+
+    def clear(self) -> None:
+        """Let every row go."""
+        self.low[:] = np.inf
+        self.high[:] = -np.inf
+        self.owners = [None] * len(self.owners)
+        self._free = []
+        self._used = 0
+
+    def overlapping(self, low: Any, high: Any) -> List[Any]:
+        """The owner of every row whose box overlaps the world box ``[low, high]``."""
+        used = self._used
+        hit = (np.all(self.low[:used] <= np.asarray(high, 'd'), axis=1)
+               & np.all(self.high[:used] >= np.asarray(low, 'd'), axis=1))
+        return [self.owners[row] for row in np.flatnonzero(hit).tolist()]
 
 
 @dataclass(frozen=True)
@@ -338,16 +411,21 @@ def classified(placed: Sequence[PlacedZone], minimum: Any, maximum: Any,
     of the same zones, which answers for all of them in one pass.
     """
     if table is not None:
-        reaching = table.classify(minimum, maximum)
-    else:
-        reaching = []
-        for zone in placed:
-            if zone.setting(ENVIRONMENT) is None:
-                continue
-            where = zone.shape.classify(minimum, maximum, zone.blend)
-            if where != zones.OUTSIDE:
-                reaching.append((zone, where == zones.INSIDE))
-    return stacked(reaching)
+        return stacked(table.classify(minimum, maximum))
+    return stacked(_reaching(placed, ENVIRONMENT, minimum, maximum))
+
+
+def _reaching(placed: Sequence[PlacedZone], key: str, minimum: Any, maximum: Any
+              ) -> List[Tuple[PlacedZone, bool]]:
+    """Each zone with a ``key`` setting the box reaches, with whether it is inside."""
+    found = []
+    for zone in placed:
+        if zone.setting(key) is None:
+            continue
+        where = zone.shape.classify(minimum, maximum, zone.blend)
+        if where != zones.OUTSIDE:
+            found.append((zone, where == zones.INSIDE))
+    return found
 
 
 def chosen(kept: Sequence[Tuple[PlacedZone, bool]], camera: Optional[Any] = None,
@@ -356,9 +434,10 @@ def chosen(kept: Sequence[Tuple[PlacedZone, bool]], camera: Optional[Any] = None
            near: Optional[Dict[int, float]] = None) -> Optional[Reach]:
     """The layers the shader is given from :func:`classified`'s answer.
 
-    All of them where they fit. Where more zones cross the object than the
-    shader has room for, the one it is inside stays, the others nearest
-    ``camera`` are kept, and ``warn`` is told. ``near`` is the table's
+    All of them where they fit. Where more zones reach the object than the
+    shader has room for, the one it is wholly inside stays where there is
+    one, the rest of the room goes to the zones nearest ``camera``, and
+    ``warn`` is told. ``near`` is the table's
     :meth:`ZoneTable.nearness` for ``camera`` where the caller already has
     it -- one answer serves every object drawn from that camera. None where
     no zone reaches the object.
@@ -367,10 +446,13 @@ def chosen(kept: Sequence[Tuple[PlacedZone, bool]], camera: Optional[Any] = None
         return None
     if len(kept) <= MAX_ZONE_LAYERS:
         return Reach(tuple(kept), False)
+    # stacked() leaves a zone the object is wholly inside at the bottom.
+    head = list(kept[:1]) if kept[0][1] else []
+    rest = list(kept[len(head):])
+    room = MAX_ZONE_LAYERS - len(head)
     if warn is not None:
         warn('an object crosses %d zones; the %d nearest the camera are kept'
-             % (len(kept) - 1, MAX_ZONE_LAYERS - 1))
-    head, rest = list(kept[:1]), list(kept[1:])
+             % (len(rest), room))
     if camera is not None:
         point = np.asarray(camera, dtype='d')[:3]
         if near is None and table is not None:
@@ -379,7 +461,7 @@ def chosen(kept: Sequence[Tuple[PlacedZone, bool]], camera: Optional[Any] = None
             rest.sort(key=lambda item: near.get(id(item[0]), 0.0))
         else:
             rest.sort(key=lambda item: float(item[0].shape.distance(point)))
-    rest = rest[:MAX_ZONE_LAYERS - 1]
+    rest = rest[:room]
     rest.sort(key=lambda item: (item[0].priority, -item[0].volume))
     return Reach(tuple(head + rest), True)
 
@@ -452,26 +534,24 @@ def controlled_lights(placed: Iterable[PlacedZone]) -> Dict[int, List[PlacedZone
     return found
 
 
-def light_decision(placed: Sequence[PlacedZone], minimum: Any, maximum: Any
+def light_decision(reaching: Sequence[Tuple[PlacedZone, bool]]
                    ) -> Tuple[FrozenSet[int], bool]:
     """Which lights the zones switch on for an object, and whether they darken it.
 
-    The first is the ``id`` of every light a zone reaching the object names,
-    among the zones at or above the topmost one it is wholly inside (that one
-    covers the whole object); the second whether the object is wholly inside
-    a zone that switches the lights off. Neither depends on which slot a light
-    is bound to, so it holds until the object or a zone moves.
+    ``reaching`` is each zone with a lights setting that reaches the object,
+    with whether the object is wholly inside it, as
+    :meth:`ZoneTable.classify` answers for a table of those zones. The first
+    part of the answer is the ``id`` of every light a zone reaching the
+    object names, among the zones at or above the topmost one it is wholly
+    inside (that one covers the whole object); the second is whether the
+    object is wholly inside a zone that switches the lights off. A zone the
+    object only crosses switches no light off for it. Neither depends on
+    which slot a light is bound to, so it holds until the object or a zone
+    moves.
     """
-    reaching: List[Tuple[PlacedZone, bool]] = []
-    for zone in placed:
-        if zone.setting(LIGHTS) is None:
-            continue
-        where = zone.shape.classify(minimum, maximum, zone.blend)
-        if where != zones.OUTSIDE:
-            reaching.append((zone, where == zones.INSIDE))
     on: Set[int] = set()
     dark = False
-    for zone, inside in stacked(reaching):
+    for zone, inside in stacked(list(reaching)):
         setting = zone.setting(LIGHTS)
         if setting is None or not bool(setting.enabled):
             dark = dark or inside
@@ -505,7 +585,8 @@ def lights_off(placed: Sequence[PlacedZone], minimum: Any, maximum: Any,
     Where the object is wholly inside a zone that switches the lights off,
     every light no zone names is off too.
     """
-    return light_mask(light_decision(placed, minimum, maximum), slots, controlled)
+    return light_mask(light_decision(_reaching(placed, LIGHTS, minimum, maximum)),
+                      slots, controlled)
 
 
 def point_weights(table: ZoneTable, point: Any) -> Dict[int, float]:
@@ -513,10 +594,7 @@ def point_weights(table: ZoneTable, point: Any) -> Dict[int, float]:
     if not table.placed:
         return {}
     d = table.signed_distances(np.asarray(point, dtype='d')[:3])[0]
-    blend = np.array([zone.blend for zone in table.placed])
-    t = np.clip(np.where(blend > 0.0, d / np.maximum(blend, 1e-12), np.where(d > 0.0, 1.0, 0.0)),
-                0.0, 1.0)
-    w = np.where(d <= 0.0, 1.0, 1.0 - t * t * (3.0 - 2.0 * t))
+    w = zones.weight(d, table.blend)
     return {id(zone): float(value) for zone, value in zip(table.placed, w, strict=True)}
 
 

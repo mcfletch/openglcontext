@@ -157,6 +157,11 @@ OpenGLContext/
 │   ├── gputimer.py   # GPU time of a stretch of a frame, read without waiting
 │   ├── renderstats.py # What a frame cost in shapes and draws, for the
 │   │                 # developer overlay -- docs/hud.rst
+│   ├── zonepass.py   # The pass's side of zones: placing them each frame,
+│   │                 # what each draw is given, captures -- docs/zones-internals.rst
+│   ├── zonelayers.py # What zones give a draw, a camera, a listener -- no GL
+│   ├── zoneprobes.py # When a zone's probe is captured, and the cube it is
+│   │                 # drawn into
 │   ├── zonebake.py   # Every capturing zone captured once and read back,
 │   │                 # for a world to ship as image lights -- docs/zones.rst
 │   ├── layerguard.py # An optional frame layer, switched off at its first
@@ -188,6 +193,9 @@ OpenGLContext/
 │   │                 # so Blender loads it too -- docs/surfaces.rst
 │   ├── varied.py     # Varied: a node's copy with some fields changed
 │   ├── lightgrid.py  # Baked irradiance grid: lights what a lightmap cannot
+│   ├── zone.py       # Zone and its settings nodes; placing a frame's zones
+│   │                 # -- docs/zones.rst
+│   ├── zones.py      # Zones' arithmetic: shapes, distances, layering -- no GL
 │   ├── imagebasedlight.py  # A document's own convolved environment
 │   │                 # (EXT_lights_image_based) -- docs/pbr.rst
 │   ├── octahedral.py # The fold an impostor's views are laid out by; the same

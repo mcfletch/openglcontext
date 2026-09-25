@@ -101,6 +101,29 @@ class TestEnvironmentLayers:
         kept = sorted(float(v) for v in pack.shape[:pack.count, 0])
         assert kept == [1.0] * MAX_ZONE_LAYERS
 
+    def test_with_no_zone_it_is_inside_every_layer_goes_to_the_nearest(self):
+        pairs = [(room(size=2.0, environment=ZoneEnvironment(intensity=0.1 * (i + 1))),
+                  (x, 0, 0)) for i, x in enumerate(range(0, 12, 2))]
+        warned = []
+        pack = environment_layers(place(*pairs), (-5, -5, -5), (15, 5, 5),
+                                  scene_probe, camera=(12, 0, 0), warn=warned.append)
+        intensities = sorted(round(float(v), 3) for v in pack.light[:pack.count, 0])
+        assert intensities == [0.3, 0.4, 0.5, 0.6]
+        assert warned == ['an object crosses 6 zones; the 4 nearest the camera are kept']
+
+    def test_the_zone_an_object_is_inside_stays_however_far(self):
+        pairs = [(room(size=40.0, environment=ZoneEnvironment(intensity=0.05)), (0, 0, 0))]
+        pairs += [(room(size=2.0, priority=1,
+                        environment=ZoneEnvironment(intensity=0.1 * (i + 1))),
+                   (x, 0, 0)) for i, x in enumerate(range(0, 12, 2))]
+        warned = []
+        pack = environment_layers(place(*pairs), (-5, -5, -5), (15, 5, 5),
+                                  scene_probe, camera=(12, 0, 0), warn=warned.append)
+        assert pack.kinds[0] == 0 and pack.light[0][0] == pytest.approx(0.05)
+        assert sorted(round(float(v), 3) for v in pack.light[1:pack.count, 0]) == \
+            [0.4, 0.5, 0.6]
+        assert warned == ['an object crosses 6 zones; the 3 nearest the camera are kept']
+
     def test_equal_packs_compare_equal(self):
         zones = place((room(environment=ZoneEnvironment(intensity=0.1)), (0, 0, 0)))
         one = environment_layers(zones, *BOX, scene_probe)
@@ -243,7 +266,7 @@ class TestTheTable:
                       for where in (zone.shape.classify(low, high, zone.blend),)
                       if where != 'outside'}
             assert kept == wanted
-            near = table.distances(low)
+            near = table.nearness(low)
             for zone in zones:
                 assert near[id(zone)] == pytest.approx(float(zone.shape.distance(low)))
 
@@ -285,6 +308,52 @@ def _spread(rng, count=60, across=2000.0):
                     settings=[ZoneEnvironment()])
         placed.append((zone, matrix))
     return placed_zones(placed)
+
+
+class TestManyBoxesAtOnce:
+    def test_the_answer_does_not_depend_on_how_many_are_taken_at_a_time(self):
+        rng = np.random.default_rng(31)
+        zones = _spread(rng)
+        whole = zonelayers.ZoneTable(zones)
+        pieces = zonelayers.ZoneTable(zones)
+        pieces.chunk = 7
+        lows = rng.uniform(-900, 900, (100, 3)) * (1, 0.01, 1)
+        highs = lows + rng.uniform(0.5, 40, (100, 3))
+        ids = lambda found: [[(id(z), inside) for z, inside in row] for row in found]  # noqa: E731
+        assert ids(whole.classify_many(lows, highs)) == ids(pieces.classify_many(lows, highs))
+
+    def test_a_first_frame_of_many_objects_over_many_zones_stays_small(self):
+        """Twenty thousand boxes over fifty-six zones along a road, in no order."""
+        import tracemalloc
+        rng = np.random.default_rng(32)
+        placed = [(room(size=20.0, blend=5.0, environment=ZoneEnvironment()), (x, 0, 0))
+                  for x in np.linspace(-1000, 1000, 56)]
+        table = zonelayers.ZoneTable(place(*placed))
+        lows = rng.uniform(-1000, 1000, (20000, 3)) * (1, 0.005, 0.005)
+        highs = lows + 2.0
+        tracemalloc.start()
+        try:
+            table.classify_many(lows, highs)
+            _now, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        assert peak < 64 * 1024 * 1024, peak
+
+
+class TestObjectBoxes:
+    def test_the_objects_a_changed_region_reaches_are_found(self):
+        boxes = zonelayers.ObjectBoxes(capacity=2)
+        rows = {name: boxes.place(None, name, (x, 0, 0), (x + 1, 1, 1))
+                for name, x in (('a', 0.0), ('b', 10.0), ('c', 20.0))}
+        assert len(boxes) == 3
+        assert sorted(boxes.overlapping((9.5, 0, 0), (21, 1, 1))) == ['b', 'c']
+        boxes.drop(rows['b'])
+        assert boxes.overlapping((9.5, 0, 0), (21, 1, 1)) == ['c']
+        assert boxes.place(None, 'd', (5, 0, 0), (6, 1, 1)) == rows['b']
+        boxes.place(rows['a'], 'a', (100, 0, 0), (101, 1, 1))
+        assert boxes.overlapping((-1, -1, -1), (2, 2, 2)) == []
+        boxes.clear()
+        assert len(boxes) == 0 and boxes.overlapping((-1e9,) * 3, (1e9,) * 3) == []
 
 
 class TestTheTableAsksOnlyTheZonesNearby:

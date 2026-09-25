@@ -229,18 +229,20 @@ def _triple(values: Any) -> Tuple[float, float, float]:
     return (x, y, z)
 
 
-def weight(distance: ArrayLike, blend: float) -> np.ndarray:
+def weight(distance: ArrayLike, blend: ArrayLike) -> np.ndarray:
     """How much a point at ``distance`` from a zone's surface is inside it.
 
     One on and inside the surface, nought ``blend`` metres out and beyond,
     and a smoothstep between, which is what ``_zone_inc.glsl`` computes per
-    fragment. With no blend the edge is hard.
+    fragment. With no blend the edge is hard. ``blend`` is one number, or one
+    for each distance.
     """
     d = np.asarray(distance, dtype='d')
-    if blend <= 0.0:
-        return np.where(d <= 0.0, 1.0, 0.0)
-    t = np.clip(d / float(blend), 0.0, 1.0)
-    return 1.0 - t * t * (3.0 - 2.0 * t)
+    b = np.asarray(blend, dtype='d')
+    t = np.clip(d / np.where(b > 0.0, b, 1.0), 0.0, 1.0)
+    found: np.ndarray = np.where(b > 0.0, 1.0 - t * t * (3.0 - 2.0 * t),
+                                 np.where(d <= 0.0, 1.0, 0.0))
+    return found
 
 
 def weights(shape: PlacedShape, points: ArrayLike, blend: float) -> np.ndarray:

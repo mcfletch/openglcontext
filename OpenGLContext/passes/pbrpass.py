@@ -1214,7 +1214,7 @@ class PBRPass(flatcore.FlatPass):
         # The whole group draws as one, reached by the zones any member is.
         apply_zones = getattr(self, 'applyZonesToGroup', None)
         if apply_zones is not None:
-            apply_zones(shader, group.members, prog)
+            apply_zones(shader, group.members, prog, key=group.key)
 
         gpu = geom.instanceGPU(self)
         bases = instance_joint_bases(self, group)

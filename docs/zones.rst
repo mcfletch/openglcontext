@@ -117,7 +117,11 @@ Zones from code
 
 The zone goes anywhere in the scenegraph; its transform places it. The lights
 and emitters it names stay where they are in the scene. A zone moved at
-runtime is placed again on the next frame.
+runtime, or with a field of it or of one of its settings set, is placed again
+on the next frame, and the lighting, lights, sound, visibility and mirrors
+follow it from that frame; only the objects near the zone are classified
+again. Change a setting by setting its field (``setting.intensity = 0.5``) or
+by giving the zone a new ``settings`` list; appending to the list is seen too.
 
 Zones in a glTF file
 --------------------
@@ -239,8 +243,7 @@ as it would be in a scene with no zones.
 
 ``ZoneReverb`` gives everything heard the reverb of the place: ``level`` from
 0 to 1, ``decay`` in seconds (the time a sound takes to fall by 60 dB) and
-``damping`` from 0 to 1. A car in a tunnel hears its own engine and tyres come
-back off the walls. The reverb fades in over the zone's ``blend``; see
+``damping`` from 0 to 1. The reverb fades in over the zone's ``blend``; see
 :ref:`audio-areas` for background sound in general, and
 ``omi_audio.reverb`` for the reverb itself.
 

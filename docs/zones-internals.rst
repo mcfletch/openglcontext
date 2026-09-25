@@ -68,7 +68,13 @@ distance ``d`` is 1 for ``d <= 0`` and ``1 - smoothstep(0, blend, d)`` beyond.
 
 ``placed_zones`` keeps each zone's placement against the matrix object the
 scenegraph's transform cache handed over, which is the same object for as
-long as the node has not moved, so a still zone is placed once.
+long as the node has not moved, together with the zone's shape and rules and
+each of its settings with a count of the times a field of that setting has
+been set (``setting_version``). A still, unedited zone is placed once and
+keeps its ``PlacedZone``; moving the zone, editing any field of it or of one
+of its settings, or giving it other settings makes a new one, and a new
+``PlacedZone`` is how the pass learns that a zone changed. A zone met at more
+than one path (a ``USE``) is a placement for each.
 
 Layering
 --------
@@ -96,8 +102,10 @@ each draw, ``applyZones`` sits beside ``applyLightGrid`` in the opaque,
 transparent and transmissive loops, and ``applyZonesToGroup`` covers an
 instanced group with the box around all its members.
 
-``environment_layers`` classifies the object's world box against each zone
-with an environment:
+The pass classifies each object's world box against the zones with an
+environment (``ZoneTable.classify_many`` over a table of them, then
+``stacked`` and ``chosen``; ``environment_layers`` is the same for one
+object):
 
 - clear of the zone and its blend band, and the zone is left out;
 - wholly inside, and the zone is a constant for the draw (shader kind 0);
@@ -105,31 +113,60 @@ with an environment:
 
 The zones reaching the object are stacked, and every zone beneath the topmost
 one the object is wholly inside is dropped, since that one covers the whole
-object. At most four layers go to the shader; an object crossing more keeps the
-ones nearest the camera.
+object. At most four layers go to the shader. An object crossing more keeps
+the zone it is wholly inside, where there is one, and gives the rest of the
+layers to the zones nearest the camera, chosen again as the camera moves
+``CAMERA_CELL`` (32 m).
 
 The answer is packed into four uniform arrays (kinds, world-to-shape matrices,
-dimensions, and intensity, blend and probe layer) and cached per object
-against its world matrix and the pass's ``_zoneEpoch``, which counts the
-events that can change an answer: a zone moving, a capture finishing, a probe
-being lost, the lights being bound in a different order. A still scene pays a
-dictionary lookup per draw. Uploads happen only when the pack differs from the
-last draw's, and draws are sorted by material, so a run of objects in the same
-room uploads once.
+dimensions, and intensity, blend and probe layer) and kept per object with the
+path, the world matrix and the bounding volume it was worked out for. A still
+scene pays a dictionary lookup per draw. Uploads happen only when the pack
+differs from the last draw's, and draws are sorted by material, so a run of
+objects in the same room uploads once. What moves an object's answer on:
+
+- The object moving further than its slack, being scaled up, or having new
+  bounds (a node's cached bounding volume is a new object when its bounds
+  change). The slack is the room its bounding sphere has before it could
+  cross a zone's surface or the edge of its blend band
+  (``ZoneTable.sphere_slack``); only the zones within ``slack_reach`` (60 m)
+  are measured, so the slack is never more than that less the sphere's
+  radius.
+- A zone near it coming, going, moving or being edited. Each classified
+  object has a row in ``ObjectBoxes``: its world box grown to the sphere its
+  slack lets it move in. When a zone's placement changes, the objects whose
+  row overlaps the zone's reach where it was or where it is are marked stale
+  and classified again when next drawn; the rest keep their answers.
+- The pass's probe version (``_probeVersion``): a capture or an upload
+  finishing, a capture starting or ending, a probe lost, the environment mode
+  changing. The object's probe layers are read again, and it is packed again
+  only if they differ.
+- The slot version (``_slotVersion``): the lights bound in a different order.
+  Only the light mask is made again.
+- ``_zoneEpoch``, which lets go of every answer at once when more than
+  ``KEPT_LIMIT`` objects or groups are kept, as a streamed world's objects come
+  and go.
 
 The objects that did move are classified together
-(``ZoneTable.classify_many``). The table keeps each zone's reach -- its shape
-and blend band -- as a world box in an ``omi_physics`` dynamic AABB tree, the
-physics engine's broad phase, so a batch of boxes is carried only into the
-frames of the zones whose reach it overlaps. A moved object keeps its answer
-while it stays within its slack: the room its bounding sphere has before it
-could cross a zone's surface or the edge of its blend band
-(``ZoneTable.sphere_slack``). Only the zones within ``slack_reach`` (60 m) are
-measured, so the slack is never more than that less the sphere's radius.
+(``ZoneTable.classify_many``). The boxes are taken ``chunk`` (512) at a time,
+and each chunk is carried only into the frames of the zones whose world reach
+overlaps one of its boxes, so the memory a call takes is bounded by the chunk
+and the zones near it. The table also keeps each zone's reach in an
+``omi_physics`` dynamic AABB tree, the physics engine's broad phase, which
+``sphere_slack`` queries for the zones near a set of spheres.
 
-``lights_off`` gives the object a mask of light slots to skip, read by the
-light loop in ``pbr.frag`` as ``lightsOff``. ``setupShaderLights`` records
-which light went into which slot (``boundLights``).
+An instanced group is kept under the group's own key, the same whichever of
+its members are drawn, with the member matrices and bounds its box was made
+from. The box is made again when those are other objects.
+
+The lights are classified the same way, against a table of the zones with a
+lights setting: ``light_decision`` turns what that table answers into the
+lights the zones switch on for the object and whether it is wholly inside a
+zone that switches them off, and ``light_mask`` turns that into the
+``lightsOff`` mask of light slots to skip, read by the light loop in
+``pbr.frag``. ``lights_off`` is the same for one object.
+``setupShaderLights`` records which light went into which slot
+(``boundLights``).
 
 Per fragment
 ------------
@@ -192,7 +229,9 @@ The camera
 
 Audio, visibility and mirrors are decided at a camera position with
 ``zones.layers`` and ``named_shares``: the share of the zones naming a thing
-that the point is in.
+that the point is in. ``zoneWeightsAt`` weighs every zone at a point in one
+pass (``point_weights``) and keeps the answer while the zones and the point
+are the same, so the questions a view asks from its camera share it.
 
 - ``apply_zones`` sets each zone-controlled ``AudioEmitter``'s ``zoneGain``,
   which its record multiplies into the emitter's gain, and sets the engine's

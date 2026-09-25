@@ -38,21 +38,26 @@ A glTF document declares zones with the ``OGLC_zone`` extension, which
 """
 from __future__ import annotations
 
+import logging
+import weakref
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Hashable, Iterable, List, Optional, Tuple
 
 import numpy as np
+from pydispatch import dispatcher
 from vrml import field, node
 from vrml.vrml97 import nodetypes
 
 from OpenGLContext.scenegraph import zones
 from OpenGLContext.scenegraph.zones import PlacedShape, ShapeSpec
 
+log = logging.getLogger(__name__)
+
 __all__ = [
     'Zone', 'ZoneSetting', 'ZoneEnvironment', 'ZoneLights', 'ZoneAudio',
     'ZoneReverb', 'ZoneVisibility', 'ZoneMirrors', 'ZoneGravity',
     'PlacedZone', 'ENVIRONMENT', 'LIGHTS', 'AUDIO', 'REVERB', 'VISIBILITY',
-    'MIRRORS', 'GRAVITY', 'placed_zones',
+    'MIRRORS', 'GRAVITY', 'placed_zones', 'setting_version',
 ]
 
 #: The key each kind of setting is decided under. The zone's own settings use
@@ -164,7 +169,9 @@ class ZoneGravity(ZoneSetting):
     ``type`` is ``directional`` (along ``direction``) or ``point`` (towards
     ``center``, in the zone's own frame), ``gravity`` the acceleration in
     metres per second squared. ``replace`` overrides gravity from volumes
-    below this one and ``stop`` cancels it; otherwise the fields add.
+    below this one and ``stop`` cancels it; otherwise the fields add. The
+    fields are named as the extension names its properties, ``type``
+    included, so a block and its node read alike.
     """
     PROTO = 'ZoneGravity'
     SETTING = GRAVITY
@@ -222,9 +229,15 @@ class Zone(nodetypes.Children, node.Node):
                 if getattr(item, 'SETTING', '')]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class PlacedZone:
-    """A zone where it is this frame: its node, its placed shape and its rules."""
+    """A zone where it is this frame: its node, its placed shape and its rules.
+
+    :func:`placed_zones` hands back the same object while nothing about the
+    zone has changed -- its place, its shape, its rules or any of its
+    settings -- so a new object is how a caller learns that one did. Two
+    placements compare equal only when they are the same object.
+    """
 
     zone: Zone
     shape: PlacedShape
@@ -262,34 +275,87 @@ class PlacedZone:
         return world
 
 
+#: Each setting node's count of changes, by node; see :func:`setting_version`.
+_setting_changes: "weakref.WeakKeyDictionary[ZoneSetting, int]" = weakref.WeakKeyDictionary()
+
+#: The zones whose shape type was refused, each reported once.
+_refused: "weakref.WeakSet[Zone]" = weakref.WeakSet()
+
+
+def setting_version(setting: ZoneSetting) -> int:
+    """How many times a field of ``setting`` has been set or deleted.
+
+    A zone's placement is made again when this moves for any of its
+    settings, so an edit to a setting reaches what was worked out from it.
+    """
+    return _setting_changes.get(setting, 0)
+
+
+def _setting_changed(sender: Any = None, **_named: Any) -> None:
+    if isinstance(sender, ZoneSetting):
+        _setting_changes[sender] = _setting_changes.get(sender, 0) + 1
+
+
+def _watch_setting_fields() -> None:
+    """Count every set and delete of a field of any setting class."""
+    todo = [ZoneSetting]
+    while todo:
+        cls = todo.pop()
+        todo.extend(cls.__subclasses__())
+        for value in vars(cls).values():
+            if isinstance(value, field.Field):
+                for signal in ('set', 'del'):
+                    dispatcher.connect(_setting_changed, signal=(signal, value),
+                                       weak=False)
+
+
+def _settings_key(zone: Zone) -> Tuple[Tuple[Hashable, int], ...]:
+    """The zone's settings, each with its version, as a comparable value."""
+    return tuple((setting, setting_version(setting)) for setting in zone.settings or ())
+
+
 def placed_zones(found: Iterable[Tuple[Zone, Any]],
-                 cache: Optional[Dict[int, Tuple[Any, Tuple[Any, ...], PlacedZone]]] = None
+                 cache: Optional[Dict[Tuple[Zone, int], Tuple[Any, Tuple[Any, ...], PlacedZone]]] = None
                  ) -> List[PlacedZone]:
     """Each zone placed by its world matrix, for one frame.
 
-    ``found`` pairs each zone with its row-vector world matrix. ``cache``, a
-    dict the caller keeps between frames, holds each zone's placement against
-    the matrix object and the shape it was made from, so a zone that has not
-    moved or changed is not placed again. A zone whose shape type is not one
-    a zone may use is left out.
+    ``found`` pairs each zone with its row-vector world matrix, in the same
+    order from frame to frame; a zone met more than once (a ``USE``) is a
+    placement for each time. ``cache``, a dict the caller keeps between
+    frames, holds each placement against the matrix object, the shape and
+    rules, and the settings with their versions it was made from, so a zone
+    that has not moved or changed keeps its :class:`PlacedZone`. A zone
+    whose shape type is not one a zone may use is left out, and reported
+    once.
     """
     result = []
+    seen: Dict[Zone, int] = {}
     for zone, matrix in found:
+        occurrence = seen.get(zone, 0)
+        seen[zone] = occurrence + 1
         key = (str(zone.shapeType), tuple(zone.size), float(zone.radius),
                float(zone.height), float(zone.radiusTop),
-               float(zone.radiusBottom), int(zone.priority), float(zone.blend))
-        held = cache.get(id(zone)) if cache is not None else None
+               float(zone.radiusBottom), int(zone.priority), float(zone.blend),
+               _settings_key(zone))
+        held = cache.get((zone, occurrence)) if cache is not None else None
         if held is not None and held[0] is matrix and held[1] == key:
             result.append(held[2])
             continue
         try:
             spec = zone.shape()
-        except ValueError:
+        except ValueError as error:
+            if zone not in _refused:
+                _refused.add(zone)
+                log.warning('zone %s is left out: %s',
+                            getattr(zone, 'DEF', None) or '(unnamed)', error)
             continue
         m = np.asarray(matrix, dtype='d')
         placed = PlacedZone(zone, zones.place(spec, m), int(zone.priority),
                             max(float(zone.blend), 0.0), m)
         if cache is not None:
-            cache[id(zone)] = (matrix, key, placed)
+            cache[(zone, occurrence)] = (matrix, key, placed)
         result.append(placed)
     return result
+
+
+_watch_setting_fields()

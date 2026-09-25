@@ -133,10 +133,20 @@ class FakeShader:
 
 
 class Box:
-    """A bounding volume of eight corners about the origin."""
+    """A bounding volume of eight corners about the origin.
 
-    def __init__(self, half):
-        self.half = half
+    One object for each size, as a node's cached volume is one object until
+    its bounds change.
+    """
+
+    _made: dict = {}
+
+    def __new__(cls, half):
+        found = cls._made.get(half)
+        if found is None:
+            found = cls._made[half] = super().__new__(cls)
+            found.half = half
+        return found
 
     def getPoints(self):
         h = self.half
@@ -211,6 +221,14 @@ class TestThePass:
         assert zoned.placeZones()[0] is placed[0]
         zoned.paths[Zone][0].matrix = at(5)
         assert zoned.placeZones()[0] is not placed[0]
+
+
+    def test_a_zone_of_no_known_shape_is_left_out_and_reported_once(self, caplog):
+        zoned = ZonedPass([(Zone(shapeType='Box', settings=[ZoneEnvironment()]), at(0))])
+        with caplog.at_level('WARNING', logger='OpenGLContext.scenegraph.zone'):
+            assert zoned.placeZones() == []
+            assert zoned.placeZones() == []
+        assert len([r for r in caplog.records if "'Box'" in r.getMessage()]) == 1
 
 
 class TestTheCamera:
@@ -382,10 +400,10 @@ class TestManyZones:
             def getPoints(self):
                 return np.array([(x, y, z, 1.0) for x in (-100, 100)
                                  for y in (-100, 100) for z in (-100, 100)])
-        path, where = ('ground',), at(0)
+        path, where, everything = ('ground',), at(0), Everything()
 
         def reached():
-            zoned.zoneState(path, where, Everything())
+            zoned.zoneState(path, where, everything)
             return zoned._zoneObjects[id(path)].reach
 
         first = reached()
@@ -435,9 +453,12 @@ class TestMovingObjectsTogether:
         assert calls == [1]
         together = [zoned._zoneObjects[id(r[4])].reach for r in records]
         for record, found in zip(records, together):
-            one = zoned._classifyObject(record[2], record[3]).reach
-            assert (None if one is None else [(id(z), i) for z, i in one.stack]) == \
-                (None if found is None else [(id(z), i) for z, i in found.stack])
+            alone = ZonedPass([(zone.zone, zone.matrix) for zone in zoned.zones])
+            alone.placeZones()
+            alone.refreshZones([record])
+            one = alone._zoneObjects[id(record[4])].reach
+            assert (None if one is None else [(id(z.zone), i) for z, i in one.stack]) == \
+                (None if found is None else [(id(z.zone), i) for z, i in found.stack])
 
 
 class TestSlack:
@@ -476,15 +497,210 @@ class TestInstancedGroups:
         real = zoned._classify
         zoned._classify = lambda items: calls.append(len(items)) or real(items)
         shader = zoned.shader_program
-        zoned.applyZonesToGroup(shader, members)
-        zoned.applyZonesToGroup(shader, members)
+        zoned.applyZonesToGroup(shader, members, key='trees')
+        zoned.applyZonesToGroup(shader, members, key='trees')
         assert calls == [1]
         assert shader.zones[-1].light[0][0] == pytest.approx(0.2)
         moved = list(members)
         moved[0] = (None, None, at(30.0), Box(1), ('tree', -2.0), None)
-        zoned.applyZonesToGroup(shader, moved)
+        zoned.applyZonesToGroup(shader, moved, key='trees')
         assert calls == [1, 1]
         assert shader.zones[-1].kinds[0] == 1        # the group now crosses the edge
+
+
+class TestEditingAZone:
+    """A zone's settings edited at run time reach what the pass already worked out."""
+
+    def zoned(self, *settings):
+        zone = Zone(size=(10, 10, 10), settings=list(settings))
+        zoned = ZonedPass([(zone, at(0))])
+        zoned.placeZones()
+        zoned.setupZones(np.identity(4))
+        return zone, zoned
+
+    def pack(self, zoned, path=('box',), where=None):
+        zoned.placeZones()
+        return zoned.zoneState(path, at(0) if where is None else where, Box(1))
+
+    def test_an_edited_intensity_reaches_an_object_already_classified(self):
+        setting = ZoneEnvironment(intensity=0.2)
+        _zone, zoned = self.zoned(setting)
+        where = at(0)
+        assert self.pack(zoned, where=where)[0].light[0][0] == pytest.approx(0.2)
+        setting.intensity = 0.9
+        assert self.pack(zoned, where=where)[0].light[0][0] == pytest.approx(0.9)
+
+    def test_an_environment_switched_off_lights_nothing(self):
+        setting = ZoneEnvironment(intensity=0.5)
+        _zone, zoned = self.zoned(setting)
+        where = at(0)
+        self.pack(zoned, where=where)
+        setting.enabled = False
+        assert self.pack(zoned, where=where)[0].light[0][0] == 0.0
+
+    def test_a_setting_added_to_a_placed_zone_reaches_what_is_inside(self):
+        zone, zoned = self.zoned(ZoneEnvironment(intensity=0.5))
+        zone.settings = []
+        where = at(0)
+        assert self.pack(zoned, where=where)[0] is None
+        zone.settings = [ZoneEnvironment(intensity=0.3)]
+        assert self.pack(zoned, where=where)[0].light[0][0] == pytest.approx(0.3)
+
+    def test_a_setting_appended_in_place_is_seen(self):
+        zone, zoned = self.zoned(ZoneEnvironment(intensity=0.5))
+        where = at(0)
+        self.pack(zoned, where=where)
+        zone.settings.append(ZoneLights(enabled=False))
+        zoned.boundLights = [PointLight()]
+        zoned.setupZones(np.identity(4))
+        assert self.pack(zoned, where=where)[1] == 0b1
+
+    def test_a_light_given_to_a_zone_lights_only_inside(self):
+        lamp = PointLight()
+        setting = ZoneLights(lights=[])
+        _zone, zoned = self.zoned(setting)
+        zoned.boundLights = [lamp]
+        zoned.setupZones(np.identity(4))
+        outside = at(50)
+        self.pack(zoned, path=('far',), where=outside)
+        assert zoned.zoneState(('far',), outside, Box(1))[1] == 0
+        setting.lights = [lamp]
+        assert self.pack(zoned, path=('far',), where=outside)[1] == 0b1
+
+
+class ImageProbe:
+    """A probe that takes an upload into any layer it has."""
+
+    arrayed, ready, lost, prefilter = True, True, 0, None
+
+    def __init__(self):
+        self.layers, self.uploads = 1, []
+
+    def grow(self, layers):
+        self.layers = layers
+
+    def upload_light(self, light, layer):
+        self.uploads.append(layer)
+        return True
+
+
+class TestImageLightsWhileZonesMove:
+    def test_an_image_lit_zone_keeps_its_layer_while_another_zone_moves(self):
+        from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
+        lit = Zone(size=(10, 10, 10), settings=[ZoneEnvironment(light=ImageBasedLight())])
+        lift = Zone(size=(2, 2, 2), settings=[ZoneEnvironment(intensity=0.5)])
+        zoned = ZonedPass([(lit, at(0)), (lift, at(30))])
+        probe = zoned._ibl_probe = ImageProbe()
+        zoned._zoneLighting = ('full', probe)
+        placed = zoned.placeZones()[0]
+        assert zoned.zoneProbeLayer(placed) == -1.0       # reserved, not yet filled
+        zoned.uploadImageLights(probe)
+        assert zoned.zoneProbeLayer(placed) == 1.0
+        for height in (1.0, 2.0, 3.0):
+            zoned.paths[Zone][1].matrix = at(30, height)
+            placed = zoned.placeZones()[0]
+            zoned.uploadImageLights(probe)
+            assert zoned.zoneProbeLayer(placed) == 1.0
+        assert probe.uploads == [1]
+
+
+class TestAnObjectChangingInPlace:
+    def test_an_object_scaled_where_it_stands_is_classified_again(self):
+        zoned = ZonedPass([(Zone(size=(10, 10, 10), settings=[ZoneEnvironment()]), at(0))])
+        zoned.placeZones()
+        path = ('statue',)
+        assert zoned.zoneState(path, at(0), Box(1))[0].kinds[0] == 0      # inside
+        grown = at(0)
+        grown[:3, :3] *= 20.0
+        assert zoned.zoneState(path, grown, Box(1))[0].kinds[0] == 1      # across
+
+    def test_an_object_whose_bounds_change_is_classified_again(self):
+        zoned = ZonedPass([(Zone(size=(10, 10, 10), settings=[ZoneEnvironment()]), at(0))])
+        zoned.placeZones()
+        path, where = ('particles',), at(0)
+        assert zoned.zoneState(path, where, Box(1))[0].kinds[0] == 0
+        assert zoned.zoneState(path, where, Box(20))[0].kinds[0] == 1
+
+
+class TestAGroupFrameByFrame:
+    """Records made afresh each frame, the old ones let go, as the pass makes them."""
+
+    @staticmethod
+    def frame(positions):
+        return [(None, None, at(x), Box(1), path, None) for path, x in positions]
+
+    def test_a_member_moving_out_is_seen_though_its_matrix_is_new(self):
+        """The moved member's new matrix is often made where the old one was."""
+        zoned = ZonedPass([(Zone(size=(10, 10, 10), settings=[ZoneEnvironment()]), at(0))])
+        zoned.placeZones()
+        zoned.setupZones(np.identity(4))
+        shader = zoned.shader_program
+        paths = [('tree', index) for index in range(3)]
+        bounds = Box(1)
+
+        def draw(matrices):
+            members = [(None, None, matrix, bounds, path, None)
+                       for path, matrix in zip(paths, matrices)]
+            zoned.applyZonesToGroup(shader, members, key='trees')
+        matrices = [at(x) for x in (-2.0, 0.0, 2.0)]
+        draw(matrices)
+        assert shader.zones[-1].kinds[0] == 0
+        del matrices
+        matrices = [at(x) for x in (30.0, 0.0, 2.0)]
+        draw(matrices)
+        assert shader.zones[-1].kinds[0] == 1
+
+    def test_a_group_seen_in_part_keeps_one_entry(self):
+        zoned = ZonedPass([(Zone(size=(10, 10, 10), settings=[ZoneEnvironment()]), at(0))])
+        zoned.placeZones()
+        zoned.setupZones(np.identity(4))
+        shader = zoned.shader_program
+        paths = [('tree', index) for index in range(6)]
+        for first in range(4):
+            visible = list(zip(paths, range(6)))[first:first + 2]
+            zoned.applyZonesToGroup(shader, self.frame(visible), key='trees')
+        assert len(zoned._zoneGroups) == 1
+        assert len(zoned._zoneObjects) == 1
+
+
+class TestOneZoneMoving:
+    """Ten rooms along a street and a thousand still objects, one room creeping."""
+
+    def street(self):
+        pairs = [(Zone(size=(10, 10, 10), blend=1.0,
+                       settings=[ZoneEnvironment(intensity=0.1 * (i + 1))]), at(100.0 * i))
+                 for i in range(10)]
+        zoned = ZonedPass(pairs)
+        zoned.placeZones()
+        zoned.setupZones(np.identity(4))
+        records = [(None, None, at(x), Box(0.5), ('thing', index), None)
+                   for index, x in enumerate(np.linspace(-20.0, 920.0, 1000))]
+        zoned.refreshZones(records)
+        counted = []
+        real = zoned._classify
+        zoned._classify = lambda items: counted.append(len(items)) or real(items)
+        return zoned, records, counted
+
+    def test_only_the_objects_near_it_are_classified_again(self):
+        zoned, records, counted = self.street()
+        for step in range(1, 4):
+            zoned.paths[Zone][0].matrix = at(0.01 * step)
+            zoned.placeZones()
+            zoned.refreshZones(records)
+        assert 0 < max(counted) < 150, counted
+
+    def test_what_they_are_given_is_where_it_is_now(self):
+        zoned, records, _counted = self.street()
+        zoned.paths[Zone][3].matrix = at(0.0, 30.0)        # lifted clear of the street
+        zoned.placeZones()
+        zoned.refreshZones(records)
+        for record in records:
+            x = record[2][3, 0]
+            reach = zoned._zoneObjects[id(record[4])].reach
+            if abs(x - 300.0) < 4.0:
+                assert reach is None, x
+            elif abs(x - 400.0) < 4.0:
+                assert reach.stack[0][0].zone is zoned.zones[4].zone
 
 
 class TestPassState:
