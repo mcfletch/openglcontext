@@ -292,11 +292,18 @@ class TestClosing:
 
     def test_a_write_that_fails_costs_the_record_and_not_the_game(
             self, clock):
-        def explode(record):
-            raise OSError('disk full')
-        recorder = SessionRecorder(explode, clock=clock)
-        recorder.mark('still running')          # must not raise
-        recorder.frame(0.016)
+        kept = []
+
+        def full_once(record):
+            if record.get('name') == 'lost':
+                raise OSError('disk full')
+            kept.append(record)
+        recorder = SessionRecorder(full_once, clock=clock)
+        recorder.mark('lost')
+        assert recorder.frame(0.016) == pytest.approx(0.016)
+        recorder.mark('still running')
+        assert recorder.frames == 1 and not recorder.closed
+        assert [r['name'] for r in kinds(kept, 'mark')] == ['still running']
 
 
 class TestAfterItIsClosed:
@@ -334,13 +341,16 @@ class TestMarkingWhenNobodyIsRecording:
 
     def test_and_a_real_recording_says_it_is(self, tmp_path) -> None:
         from OpenGLContext.telemetry import SessionRecorder
-        assert SessionRecorder(_Written())
+        assert SessionRecorder(_Written().write)
 
     def test_one_stands_in_for_the_other(self) -> None:
         """Same call, so a caller written for one runs against the other."""
         from OpenGLContext.telemetry import NOT_RECORDING, SessionRecorder
-        for recorder in (NOT_RECORDING, SessionRecorder(_Written())):
-            recorder.mark('pass-begun', gap=40.0, sight=260.0)
+        journal = _Written()
+        for recorder in (NOT_RECORDING, SessionRecorder(journal.write)):
+            assert recorder.mark('pass-begun', gap=40.0, sight=260.0) is None
+        (mark,) = kinds(journal.records, 'mark')
+        assert mark['fields'] == {'gap': 40.0, 'sight': 260.0}
 
 
 class TestKeepingMarksInMemory:

@@ -114,12 +114,15 @@ class TestMarkingWhileReplaying:
         session = telemetry.start(context, target)
         context.OnDraw()
         session.close()
+        journal = target.read_text()
         playing = _Context()
         driver = telemetry.start_replay(playing, target)
         try:
-            playing.mark('level-loaded', map='ztn3dm1')
+            assert playing.mark('level-loaded', map='ztn3dm1') is None
+            assert driver.marks.made == 1         # compared, not written
         finally:
             driver.close()
+        assert target.read_text() == journal
 
     def test_the_marks_are_compared_with_the_ones_recorded(self, context,
                                                            target):

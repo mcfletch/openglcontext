@@ -278,18 +278,29 @@ class TestSwitchingItOn:
             session.close()
 
     def test_a_path_that_cannot_be_written_is_not_a_reason_not_to_start(
-            self, context, tmp_path, monkeypatch):
-        monkeypatch.setenv(telemetry.TELEMETRY_ENV,
-                           str(tmp_path / 'file.jsonl' / 'nested.jsonl'))
-        session = telemetry.install(context)
-        context.OnDraw()                       # the game runs regardless
-        if session is not None:
+            self, context, tmp_path, monkeypatch, caplog):
+        blocker = tmp_path / 'file.jsonl'
+        blocker.write_text('a file where a directory is wanted')
+        unwritable = blocker / 'nested.jsonl'
+        monkeypatch.setenv(telemetry.TELEMETRY_ENV, str(unwritable))
+        with caplog.at_level(logging.WARNING):
+            session = telemetry.install(context)
+        try:
+            assert session is not None and session.journal.disabled
+            assert any('cannot record telemetry' in record.getMessage()
+                       for record in caplog.records)
+            assert context.OnDraw() == 1           # the game runs regardless
+            assert context.drawn == 1
+        finally:
             session.close()
+        assert not unwritable.exists()
 
-    def test_closing_twice_is_harmless(self, context, target):
+    def test_closing_twice_writes_one_ending(self, context, target):
         session = telemetry.start(context, target)
         session.close()
         session.close()
+        assert session.closed and context.telemetry is None
+        assert len(records(target, 'end')) == 1
 
     def test_the_context_is_left_as_it_was_found(self, context, target):
         session = telemetry.start(context, target)
