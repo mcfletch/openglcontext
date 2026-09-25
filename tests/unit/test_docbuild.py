@@ -561,3 +561,52 @@ class TestTheStructurePageNamesEveryPackage:
             and name not in ('tests',))
         assert [name for name in packages
                 if '``%s``' % (name,) not in page] == []
+
+
+class TestTheHookSchemaMatchesTheKinds:
+    """``docs/extensions/schema/OGLC_hook.schema.json`` names every parameter
+    each shipped kind reads, with the ranges the code holds it to."""
+
+    def schema(self):
+        import json
+        here = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))
+        with open(os.path.join(here, 'docs', 'extensions', 'schema',
+                               'OGLC_hook.schema.json'),
+                  encoding='utf-8') as handle:
+            return json.load(handle)['$defs']
+
+    def test_every_shipped_kind_is_covered(self):
+        from OpenGLContext.loaders.gltf import hooks
+        described = {'water', 'mirror', 'fire', 'smoke', 'sparks'}
+        assert set(hooks.BUILTIN) == described
+
+    def test_the_mirror_parameters_and_their_limits(self):
+        from OpenGLContext.scenegraph.mirrorhooks import PARAMETERS
+        from OpenGLContext.scenegraph.reflector import LIMITS
+        mirror = self.schema()['mirror']['properties']
+        assert set(PARAMETERS) <= set(mirror)
+        for name, (low, high) in LIMITS.items():
+            assert mirror[name].get('minimum') == low, name
+            assert mirror[name].get('maximum') == high, name
+
+    def test_the_particle_fields_and_their_ranges(self):
+        from OpenGLContext.scenegraph import particlehooks
+        particles = self.schema()['particles']['properties']
+        assert set(particlehooks.FIELDS) | {'scale', 'density'} <= set(particles)
+        for name, (low, high) in particlehooks.RANGES.items():
+            assert particles[name].get('minimum') == low, name
+            assert particles[name].get('maximum') == high, name
+        assert particles['scale']['maximum'] == particlehooks.MULTIPLIER_MAXIMUM
+
+    def test_the_water_parameters_and_styles(self):
+        from OpenGLContext.scenegraph.water import gltf, medium
+        defs = self.schema()
+        water = defs['water']['properties']
+        assert {'style', 'material', 'medium', 'depth'} <= set(water)
+        assert set(water['medium']['enum']) == set(medium.MEDIA)
+        style = defs['waterStyle']['properties']
+        assert set(style['style']['enum']) == set(gltf.STYLES)
+        for name, (low, high) in gltf.STYLE_RANGES.items():
+            assert style[name].get('minimum') == low, name
+            assert style[name].get('maximum') == high, name

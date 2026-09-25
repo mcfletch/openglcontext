@@ -385,6 +385,7 @@ Documentation
 
    environment
    extensions/OGLC_zone
+   extensions/OGLC_hook
    typing
    numeric_arrays
    api/index

@@ -436,6 +436,10 @@ Reference
   invalid values are handled, and how to build a clean environment for a
   reproducible render.
 
+- :doc:`OGLC_hook <extensions/OGLC_hook>` -- the specification of the glTF
+  tag that names what a material or an object is (water, a mirror, fire,
+  smoke, sparks), with every kind's parameters and its JSON schema.
+
 - :doc:`OGLC_zone <extensions/OGLC_zone>` -- the specification of the glTF
   extension that marks a region and the extensions that apply inside it, for
   glTF 2.0 with ``KHR_implicit_shapes`` and glTF 2.1, with its JSON schema

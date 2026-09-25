@@ -89,7 +89,8 @@ Placing an effect in a model
 ----------------------------
 
 A glTF file can say where its fires are. An object tagged with the
-:ref:`OGLC_hook <hooks>` kind ``fire``, ``smoke`` or ``sparks`` loads with an
+:ref:`OGLC_hook <hooks>` kind ``fire``, ``smoke`` or ``sparks``
+(:doc:`specification <extensions/OGLC_hook>`) loads with an
 emitter from the preset of that name at the object's position, alongside any
 mesh the object already has. In Blender, put the tag on the object (an empty,
 or the brazier itself), either with the **Engine Hook** panel of the

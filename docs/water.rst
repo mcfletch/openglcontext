@@ -489,7 +489,8 @@ Authoring water in a model
 --------------------------
 
 An artist can also mark water in the model. Give the lake's material a custom
-property called ``OGLC_hook`` and export it, and the surface loads moving. The
+property called ``OGLC_hook`` and export it, and the surface loads moving
+(:doc:`specification <extensions/OGLC_hook>`). The
 ``water`` kind is built in, so a tagged file opens in ``oglc-view`` as water
 with nothing registered.
 

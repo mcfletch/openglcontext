@@ -301,7 +301,8 @@ spellings:
 The extension wins where both are present, because a file carrying one was
 written by a tool that knew what it meant. A ``kind`` nothing is registered for
 loads as an ordinary shape, so a file authored for another engine still loads
-here.
+here. The :doc:`OGLC_hook specification <extensions/OGLC_hook>` lists every
+kind the engine registers, with its parameters and a JSON schema.
 
 Authoring one in Blender
 ^^^^^^^^^^^^^^^^^^^^^^^^

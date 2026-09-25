@@ -1,0 +1,111 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OGLC_hook material and node extension",
+  "description": "A kind the loading application makes something of, and that kind's parameters. The same value may be written under the holder's extras. A string is the kind with every parameter at its default.",
+  "oneOf": [
+    {"type": "string", "minLength": 1},
+    {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The kind: one the application registered. OpenGLContext registers water, mirror, fire, smoke and sparks. A kind nothing is registered for loads as ordinary geometry."
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"kind": {"const": "water"}}},
+          "then": {"$ref": "#/$defs/water"}
+        },
+        {
+          "if": {"properties": {"kind": {"const": "mirror"}}},
+          "then": {"$ref": "#/$defs/mirror"}
+        },
+        {
+          "if": {"properties": {"kind": {"enum": ["fire", "smoke", "sparks"]}}},
+          "then": {"$ref": "#/$defs/particles"}
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "waterStyle": {
+      "type": "object",
+      "description": "A named style with any of its motions written over it.",
+      "properties": {
+        "style": {"enum": ["still", "breeze", "flowing", "choppy", "lake"], "default": "still"},
+        "amplitude": {"type": "number", "minimum": 0, "description": "Metres."},
+        "wavelength": {"type": "number", "minimum": 0.01, "description": "Metres."},
+        "speed": {"type": "number", "description": "Metres a second the crests travel."},
+        "steepness": {"type": "number", "minimum": 0},
+        "ripple": {"type": "number", "minimum": 0.01, "description": "Metres the surface tilt repeats over."},
+        "flow": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2, "description": "Metres a second the surface drifts, as (x, z)."}
+      }
+    },
+    "water": {
+      "description": "Read on a material: its surfaces become moving water bounding a volume.",
+      "properties": {
+        "kind": true,
+        "style": {
+          "default": "still",
+          "oneOf": [
+            {"enum": ["still", "breeze", "flowing", "choppy", "lake"]},
+            {"$ref": "#/$defs/waterStyle"}
+          ]
+        },
+        "material": {"enum": ["keep", "engine"], "default": "keep"},
+        "medium": {"enum": ["water", "slime", "lava"], "default": "water"},
+        "depth": {"type": "number", "minimum": 0, "default": 0, "description": "Metres below the surface's lowest point the volume reaches."}
+      }
+    },
+    "mirror": {
+      "description": "Read on a material (each surface a mirror, shaded by the material) and on a node (its surfaces show only the reflection).",
+      "properties": {
+        "kind": true,
+        "scale": {"type": "number", "minimum": 0.05, "maximum": 1, "default": 0.5},
+        "interval": {"type": "integer", "minimum": 1, "default": 3},
+        "priority": {"type": "number", "minimum": 0, "default": 1},
+        "distortion": {"type": "number", "minimum": 0, "maximum": 1, "default": 0},
+        "reflectance": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.97},
+        "replace": {"type": "boolean", "description": "Whether the surface shows only the reflection: false on a material and true on a node unless given."}
+      }
+    },
+    "particles": {
+      "description": "Read on a node: an emitter started from the engine's preset of the kind's name stands where the node stands.",
+      "properties": {
+        "kind": true,
+        "scale": {"type": "number", "minimum": 0, "maximum": 100, "default": 1},
+        "density": {"type": "number", "minimum": 0, "maximum": 100, "default": 1},
+        "texture": {"type": "string", "description": "A sprite image, relative to the document, read only beside a document loaded from a directory."},
+        "rate": {"type": "number", "minimum": 0, "maximum": 2000},
+        "maxParticles": {"type": "integer", "minimum": 1, "maximum": 20000},
+        "lifetime": {"type": "number", "minimum": 0.05, "maximum": 30},
+        "lifetimeVariation": {"type": "number", "minimum": 0},
+        "speed": {"type": "number", "minimum": 0, "maximum": 100},
+        "speedVariation": {"type": "number", "minimum": 0},
+        "spread": {"type": "number", "minimum": 0, "maximum": 3.141592653589793},
+        "drag": {"type": "number", "minimum": 0, "maximum": 10},
+        "size": {"type": "number", "minimum": 0, "maximum": 20},
+        "endSize": {"type": "number", "minimum": 0, "maximum": 20},
+        "sizeVariation": {"type": "number", "minimum": 0},
+        "spin": {"type": "number"},
+        "spinVariation": {"type": "number", "minimum": 0},
+        "alpha": {"type": "number", "minimum": 0, "maximum": 1},
+        "endAlpha": {"type": "number", "minimum": 0, "maximum": 1},
+        "burst": {"type": "integer", "minimum": 0, "maximum": 20000},
+        "seed": {"type": "integer", "minimum": -1, "maximum": 2147483647},
+        "direction": {"$ref": "#/$defs/vector3"},
+        "gravity": {"$ref": "#/$defs/vector3"},
+        "color": {"$ref": "#/$defs/vector3"},
+        "endColor": {"$ref": "#/$defs/vector3"},
+        "worldSpace": {"type": "boolean"},
+        "enabled": {"type": "boolean"},
+        "burstOnStart": {"type": "boolean"},
+        "blending": {"enum": ["additive", "alpha"]}
+      }
+    },
+    "vector3": {"type": "array", "items": {"type": "number"}, "minItems": 3, "maxItems": 3}
+  }
+}

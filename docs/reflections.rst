@@ -118,7 +118,8 @@ water whose material names no reflector reflects the same way. See
 Authoring mirrors in a model
 ----------------------------
 
-A glTF marks a mirror with the ``OGLC_hook`` tag (:ref:`hooks`) naming the
+A glTF marks a mirror with the ``OGLC_hook`` tag (:ref:`hooks`,
+:doc:`specification <extensions/OGLC_hook>`) naming the
 ``mirror`` kind. The tag goes in one of two places, and they mean different
 things:
 
