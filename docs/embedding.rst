@@ -63,6 +63,14 @@ embedded view has to run on the toolkit that owns the host window.
 raises an error that lists the available backends. Two calls with the same
 name return the same class, so ``isinstance`` checks work as expected.
 
+The class draws a model as ``oglc-view`` does: with the
+:doc:`PBR renderer <pbr>` (its ``renderer`` attribute is ``'pbr'``), with
+shadows, and with the ambient and environment light scaled to 0.4 so that the
+default light rig's sun reads against it. ``options.ibl_intensity`` and
+``options.shadows`` on the subclass change those, and
+``OPENGLCONTEXT_IBL_INTENSITY`` still sets the ambient scale where the options
+do not. A ``contextDefinition`` passed to the constructor outranks both.
+
 Override ``hasSceneToShow`` in every embedded view. A viewer started with
 nothing to show opens its library, which suits ``oglc-view`` but not an
 application with its own File menu. The viewer's other screens stay on their

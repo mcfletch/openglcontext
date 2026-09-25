@@ -9,9 +9,9 @@ which case an analytic gradient sky stands in.
 :func:`apply_render_env` is the other half, and a caller building a viewer
 without a command line needs it: several of the options a viewer takes are
 read once by the render passes at start-up rather than per frame, so they are
-put into the environment before a context exists. A ``ViewerOptions`` that is
-never passed through it is a viewer whose shadows, exposure and environment
-settings say nothing.
+put into the environment before a context exists. The viewer class applies
+``shadows`` and ``ibl_intensity`` itself; ``environment``, ``background`` and
+``capture`` reach the renderer only through this.
 """
 import os
 from typing import Any, Optional
@@ -25,36 +25,34 @@ from OpenGLContext.viewer.options import ViewerOptions
 
 __all__ = ['count_nodes', 'count_lights', 'count_backgrounds', 'sky_background',
            'hdr_background', 'cube_background', 'background_for',
-           'apply_render_env', 'viewer_defaults', 'VIEWER_DEFAULTS']
+           'apply_render_env', 'viewer_defaults', 'VIEWER_DEFAULTS',
+           'VIEWER_IBL_INTENSITY']
 
 
-#: What a viewer needs the renderer set to before anything imports it, and what
-#: a program that shows a model through :class:`ViewerContext` must therefore
-#: apply first: the metallic/roughness pass, because a PBR material has nothing
-#: to say to any other one, and a warm sky held back far enough that the sun's
-#: shadows read against it.  The core profile it all runs in is the default and
-#: is not named here.
+#: What a viewer's command line settles before anything imports a window
+#: system: the backend its own window opens on.  How the viewer *draws* -- the
+#: metallic/roughness pass, the ambient held back -- is declared by the viewer
+#: class instead, so a view embedded in another program's window draws a model
+#: the same way without a command line to set it up.
 VIEWER_DEFAULTS = {
     'OPENGLCONTEXT_BACKEND': 'glfw',
-    'OPENGLCONTEXT_RENDERER': 'pbr',
-    'OPENGLCONTEXT_SHADOWS': '1',
-    # The directional-shadow cascade count is left fps-adaptive for interactive
-    # use: each extra cascade is a full depth pass over the whole scene (the
-    # dominant shadow-pass cost), so the controller sheds cascades when the
-    # frame rate sags. It is pinned only for a capture (see
-    # :func:`apply_render_env`), where a reproducible frame matters more than
-    # the frame rate.
-    'OPENGLCONTEXT_IBL_INTENSITY': '0.4',
 }
+
+#: The viewer's scale on the un-shadowed ambient/environment term: a warm sky
+#: held back far enough that the default rig's sun and its shadows read
+#: against it.  Applied by
+#: :meth:`~OpenGLContext.viewer.sceneviewer.SceneViewerMixin.resolveDefinition`
+#: where neither the options nor ``OPENGLCONTEXT_IBL_INTENSITY`` choose one.
+VIEWER_IBL_INTENSITY = 0.4
 
 
 def viewer_defaults() -> None:
-    """Put the viewer's renderer settings into the environment, once.
+    """Put the viewer's command-line settings into the environment, once.
 
-    Call it **before importing anything that renders**: the passes read these
-    at import, so a setting made afterwards is a setting nobody sees. Anything
-    already set is left alone, so a caller or a shell that has chosen
-    differently keeps its choice.
+    Call it **before importing anything that renders**: the backend is chosen
+    as the context classes are imported, so a setting made afterwards is a
+    setting nobody sees. Anything already set is left alone, so a caller or a
+    shell that has chosen differently keeps its choice.
     """
     for name, value in VIEWER_DEFAULTS.items():
         os.environ.setdefault(name, value)

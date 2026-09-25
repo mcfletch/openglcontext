@@ -52,7 +52,9 @@ from typing import (
     TYPE_CHECKING, Any, List, NamedTuple, Optional, Sequence, Tuple, cast,
 )
 
-from OpenGLContext import testingcontext
+from vrml.protofunctions import getField
+
+from OpenGLContext import renderoptions, testingcontext
 from OpenGLContext.scenegraph.light import DirectionalLight, Light, PointLight
 from OpenGLContext.scenegraph.scenegraph import SceneGraph
 from OpenGLContext.scenegraph.transform import Transform
@@ -99,6 +101,15 @@ NO_MODIFIERS = (False, False, False)
 CONTROL = (False, True, False)
 
 
+def _isSet(definition: Any, name: str) -> bool:
+    """Whether a definition's field holds a value rather than its default.
+
+    Reading the field would run its default and settle it, so the field is
+    asked instead.
+    """
+    return bool(getField(definition, name).fhas(definition))
+
+
 class KeyBinding(NamedTuple):
     """One key the viewer answers to.
 
@@ -129,6 +140,9 @@ if TYPE_CHECKING:
         assembled context, the frame two from the context itself.
         """
 
+        @classmethod
+        def resolveDefinition(cls, definition: Any = None,
+                              **named: Any) -> Any: ...
         def physicsAvatarScale(self, low: Any, high: Any) -> float: ...
         def setMovementManager(self, manager: Any) -> None: ...
         def setupCallbacks(self) -> None: ...
@@ -153,6 +167,32 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
     options: ViewerOptions = ViewerOptions()
     #: A viewer opens on the scene; :kbd:`Alt+f` brings up the overlay.
     debugOverlayStartsVisible = False
+    #: The metallic/roughness pass, because a glTF material has nothing to say
+    #: to any other one, and the default rig's sun is sized for it.  Declared on
+    #: the class so a view embedded in another program's window draws with it
+    #: as ``oglc-view`` does, with no environment variable to set first.
+    renderer: Optional[str] = 'pbr'
+
+    @classmethod
+    def resolveDefinition(cls, definition: Any = None, **named: Any) -> Any:
+        """The context's definition, carrying the viewer's rendering settings.
+
+        :attr:`options` choose shadows and the ambient scale where they say
+        anything.  Where they do not, ``OPENGLCONTEXT_IBL_INTENSITY`` is left
+        to supply the ambient scale, and failing that it is
+        :data:`~OpenGLContext.viewer.environment.VIEWER_IBL_INTENSITY`.  A
+        field the definition passed in already sets is left as it is.
+        """
+        resolved = super().resolveDefinition(definition, **named)
+        options = cls.options
+        if options.shadows is not None and not _isSet(resolved, 'shadows'):
+            resolved.shadows = options.shadows
+        if not _isSet(resolved, 'iblIntensity'):
+            if options.ibl_intensity is not None:
+                resolved.iblIntensity = options.ibl_intensity
+            elif not renderoptions.env_text_once('OPENGLCONTEXT_IBL_INTENSITY').strip():
+                resolved.iblIntensity = env.VIEWER_IBL_INTENSITY
+        return resolved
 
     #: Resolved scene source (path or URL).
     source: Optional[str] = None

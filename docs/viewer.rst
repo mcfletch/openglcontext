@@ -31,7 +31,11 @@ Opening a scene
    GLTF=path/to/model.gltf oglc-view
 
 The viewer turns on the core profile, the PBR renderer, the GLFW backend and
-shadows itself. No environment variables are needed.
+shadows itself, and scales the ambient and environment light to 0.4 so the
+sun's shadows read. No environment variables are needed. The renderer, the
+shadows and the ambient scale belong to the viewer class rather than to the
+command, so a view :doc:`embedded in another application <embedding>` draws
+the same way.
 
 ``--pack KEY`` opens a :doc:`content pack <contentpacks>` the engine publishes
 (``OpenGLContext/packs.json``): ``openglcontext/gallery`` is the

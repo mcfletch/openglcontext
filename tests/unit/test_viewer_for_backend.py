@@ -37,6 +37,58 @@ class TestWhatComesBack:
         assert viewerFor('tk') is viewerFor('tk')
 
 
+def iblIntensity(definition):
+    """The ambient scale the pass draws with, read the way the pass reads it."""
+    from OpenGLContext import renderoptions
+
+    return renderoptions.number(
+        definition, 'iblIntensity',
+        renderoptions.env_number('OPENGLCONTEXT_IBL_INTENSITY', 1.0))
+
+
+class TestAnEmbeddedViewLooksLikeOglcView:
+    """A view inside somebody else's window draws a model as ``oglc-view`` does.
+
+    The program embedding it has no command line to set the renderer up, so
+    whatever the viewer needs of the renderer is declared by the viewer class.
+    """
+
+    @pytest.fixture(autouse=True)
+    def unpinned(self, monkeypatch):
+        monkeypatch.delenv('OPENGLCONTEXT_IBL_INTENSITY', raising=False)
+        monkeypatch.delenv('OPENGLCONTEXT_SHADOWS', raising=False)
+
+    def test_it_draws_with_the_metallic_roughness_pass(self):
+        assert viewerFor('tk').renderer == 'pbr'
+
+    def test_the_ambient_is_held_back_so_the_sun_reads(self):
+        from OpenGLContext.viewer.environment import VIEWER_IBL_INTENSITY
+
+        definition = viewerFor('tk').resolveDefinition()
+        assert iblIntensity(definition) == pytest.approx(VIEWER_IBL_INTENSITY)
+        assert VIEWER_IBL_INTENSITY < 1.0
+
+    def test_the_environment_still_pins_it(self, monkeypatch):
+        monkeypatch.setenv('OPENGLCONTEXT_IBL_INTENSITY', '0.7')
+        definition = viewerFor('tk').resolveDefinition()
+        assert iblIntensity(definition) == pytest.approx(0.7)
+
+    def test_the_options_choose_it(self):
+        from OpenGLContext import renderoptions
+        from OpenGLContext.viewer.options import ViewerOptions
+
+        class Chosen(viewerFor('tk')):
+            options = ViewerOptions(ibl_intensity=0.2, shadows=False)
+
+        definition = Chosen.resolveDefinition()
+        assert iblIntensity(definition) == pytest.approx(0.2)
+        assert renderoptions.flag(definition, 'shadows', True) is False
+
+    def test_a_definition_passed_in_outranks_the_viewer(self):
+        definition = viewerFor('tk').resolveDefinition({'iblIntensity': 0.9})
+        assert iblIntensity(definition) == pytest.approx(0.9)
+
+
 class TestWhenItCannot:
     def test_a_backend_nobody_registered_says_so(self):
         with pytest.raises(RuntimeError) as raised:
