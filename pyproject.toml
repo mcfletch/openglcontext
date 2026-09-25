@@ -373,7 +373,6 @@ open_audit_sanctioned = [
     "OpenGLContext.move.bindingstore",
     # Readers of document- and application-named files.
     "OpenGLContext.loaders.cc0",
-    "OpenGLContext.loaders.gltf.loader",
     "OpenGLContext.loaders.gltf.lodasset",
     "OpenGLContext.loaders.gltf.writer",
     "OpenGLContext.loaders.loader",
