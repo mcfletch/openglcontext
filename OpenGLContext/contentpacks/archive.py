@@ -17,8 +17,12 @@ from __future__ import annotations
 import gzip
 import hashlib
 import os
+import sys
 import tarfile
 import zipfile
+
+from OpenGLContext import atomicfiles
+from OpenGLContext.loaders import resolver
 
 __all__ = ['DigestMismatch', 'EPOCH', 'MAX_ENTRIES', 'MAX_EXPANSION',
            'MINIMUM_UNPACKED', 'TooLarge', 'UnreadableArchive', 'UnsafeArchive',
@@ -76,8 +80,9 @@ class DigestMismatch(IOError):
 
 
 def extract(path: str, directory: str, kind: str,
-            max_bytes: int | None = None,
-            max_entries: int = MAX_ENTRIES) -> str:
+            max_bytes: int | None = MINIMUM_UNPACKED,
+            max_entries: int = MAX_ENTRIES,
+            cancel: resolver.Cancel | None = None) -> str:
     """Extract the archive at ``path`` into ``directory``; return ``directory``.
 
     ``kind`` is ``zip`` or ``tar``, from the pack's own declaration rather than
@@ -85,62 +90,88 @@ def extract(path: str, directory: str, kind: str,
     compression is detected by the reader, so one ``tar`` covers ``.tar``,
     ``.tar.gz``, ``.tar.bz2`` and ``.tar.xz``.
 
-    **What the archive would write is judged before it writes any of it.** A cap
+    What the archive would write is judged before it writes any of it. A cap
     on the download says nothing about the unpacking: a megabyte of zeroes
     deflates to almost nothing, so an archive well inside any transfer limit can
     fill a disk. ``max_bytes`` is that second limit -- see
-    :func:`unpacked_limit` -- and ``max_entries`` bounds the count, since a
-    million empty files costs nothing to send and plenty to write.
+    :func:`unpacked_limit` -- and defaults to :data:`MINIMUM_UNPACKED`; pass
+    None for no limit. ``max_entries`` bounds the count, since a million empty
+    files costs nothing to send and plenty to write.
 
-    The sizes are read from the archive's own headers, which is what makes the
-    refusal free: nothing is created when one is refused. Both readers here are
-    bounded by those declared sizes when they extract, so a header that
-    understates its member yields a short file or a checksum failure rather than
-    an overrun.
+    The sizes are read from the archive's own headers, and a tarball's headers
+    are counted and summed as they are read, so an archive over either limit
+    is refused at the first header past it and nothing is created. Both readers
+    are bounded by the declared sizes when they extract, so a header that
+    understates its member yields a short file or a checksum failure rather
+    than an overrun.
+
+    ``cancel`` is asked before each member is written; when it answers true
+    the extraction stops with :class:`~OpenGLContext.loaders.resolver.FetchCancelled`,
+    leaving whatever was written so far for the caller's staging to discard.
     """
     if kind == 'zip':
-        _extract_zip(path, directory, max_bytes, max_entries)
+        _extract_zip(path, directory, max_bytes, max_entries, cancel)
     elif kind == 'tar':
-        _extract_tar(path, directory, max_bytes, max_entries)
+        _extract_tar(path, directory, max_bytes, max_entries, cancel)
     else:
         raise ValueError('no reader for a %r archive' % (kind,))
     return directory
 
 
-def _refuse_the_size(sizes: list[int], max_bytes: int | None,
-                     max_entries: int, path: str) -> None:
-    """Refuse an archive by what it would write, before it writes anything."""
-    if len(sizes) > max_entries:
-        raise TooLarge('%s holds %d entries, and %d is the most one archive is '
-                       'unpacked from' % (path, len(sizes), max_entries))
-    total = sum(sizes)
-    if max_bytes is not None and total > max_bytes:
-        raise TooLarge('%s would unpack to %d bytes, over the %d it is allowed'
-                       % (path, total, max_bytes))
+def _check_cancel(cancel: resolver.Cancel | None) -> None:
+    if cancel is not None and cancel():
+        raise resolver.FetchCancelled('the unpacking was cancelled')
+
+
+class _Budget:
+    """The entry count and byte total an archive is allowed, spent as its
+    headers are read."""
+
+    def __init__(self, path: str, max_bytes: int | None,
+                 max_entries: int) -> None:
+        self.path, self.max_bytes, self.max_entries = path, max_bytes, max_entries
+        self.entries = self.total = 0
+
+    def spend(self, size: int) -> None:
+        self.entries += 1
+        if self.entries > self.max_entries:
+            raise TooLarge('%s holds more than %d entries, the most one archive '
+                           'is unpacked from' % (self.path, self.max_entries))
+        self.total += size
+        if self.max_bytes is not None and self.total > self.max_bytes:
+            raise TooLarge('%s would unpack to more than %d bytes, the most it '
+                           'is allowed' % (self.path, self.max_bytes))
 
 
 def write(directory: str, path: str, compresslevel: int = 9) -> str:
     """Archive the tree at ``directory`` as the ``.tar.gz`` ``path``; its path.
 
-    **The bytes are a function of the content and of nothing else**, which is
-    what makes the digest a registry records worth recording: entries are
-    written in sorted order, each carrying :data:`EPOCH` rather than its own
-    modification time, no owner, no group and one mode; and the gzip container
-    above them carries the same fixed time and none of the name it was given.
-    Two builds of the same files, on different machines and in different
-    checkouts, reach the same digest -- so a release rebuilt from its tag can be
-    shown to be the release, and a pack that did change says so.
+    The bytes are a function of the content and of nothing else, so the digest
+    a registry records is one a rebuild reaches again: entries are written in
+    sorted order, each carrying :data:`EPOCH` rather than its own modification
+    time, no owner, no group and one mode; and the gzip container above them
+    carries the same fixed time and none of the name it was given. Two builds
+    of the same files, on different machines and in different checkouts, reach
+    the same digest, so a release rebuilt from its tag can be shown to be the
+    release.
 
     Files only: directories arrive as the parents of the entries inside them,
     which is what a pack is. Names are stored relative to ``directory``, so a
-    pack unpacks as its own root wherever the store puts it.
+    pack unpacks as its own root wherever the store puts it. A symbolic link
+    anywhere in the tree is refused with its name, since an installer refuses
+    a link and a linked directory would otherwise be left out; copy the file
+    into the tree instead.
+
+    The archive is written beside ``path`` and moved into place when complete,
+    so a refused or interrupted write leaves the previous build where it was.
     """
-    with open(path, 'wb') as raw:
+    names = _entries(directory)
+    with atomicfiles.staged_file(path, 'wb') as raw:
         with gzip.GzipFile(filename='', mode='wb', fileobj=raw,
                            compresslevel=compresslevel,
                            mtime=EPOCH) as compressed:
             with tarfile.open(fileobj=compressed, mode='w|') as handle:
-                for name in _entries(directory):
+                for name in names:
                     full = os.path.join(directory, *name.split('/'))
                     info = handle.gettarinfo(full, name)
                     info.mtime = EPOCH
@@ -164,11 +195,21 @@ def _entries(directory: str) -> list[str]:
     capitals where ``/`` sorts before them, so sorting the local spelling would
     put ``a/b`` and ``a0`` in one order here and the other order there, and the
     same content would digest differently on the two.
+
+    A symbolic link, to a file or to a directory, is an ``IOError`` naming it.
     """
-    return sorted(
-        os.path.relpath(os.path.join(root, leaf), directory).replace(os.sep,
-                                                                    '/')
-        for root, _, files in os.walk(directory) for leaf in files)
+    names: list[str] = []
+    for root, directories, files in os.walk(directory):
+        for leaf in directories + files:
+            full = os.path.join(root, leaf)
+            if os.path.islink(full):
+                raise IOError(
+                    '%s is a symbolic link; a pack holds files, so copy what '
+                    'it points at into the tree' % (full,))
+        names.extend(
+            os.path.relpath(os.path.join(root, leaf), directory).replace(
+                os.sep, '/') for leaf in files)
+    return sorted(names)
 
 
 def digest(path: str) -> str:
@@ -203,24 +244,40 @@ def check_digest(path: str, expected: str) -> None:
 
 
 def _extract_zip(path: str, directory: str, max_bytes: int | None,
-                 max_entries: int) -> None:
+                 max_entries: int, cancel: resolver.Cancel | None) -> None:
     root = os.path.abspath(directory)
+    budget = _Budget(path, max_bytes, max_entries)
     try:
         with zipfile.ZipFile(path) as zip_file:
             entries = zip_file.infolist()
             for entry in entries:
+                budget.spend(entry.file_size)
                 _refuse_escape(entry.filename, root, directory)
-            _refuse_the_size([entry.file_size for entry in entries],
-                             max_bytes, max_entries, path)
             os.makedirs(directory, exist_ok=True)
-            zip_file.extractall(directory)
+            for entry in entries:
+                _check_cancel(cancel)
+                zip_file.extract(entry, directory)
     except zipfile.BadZipFile as error:
         raise UnreadableArchive('%s is not readable as a zip: %s'
                                 % (path, error)) from error
 
 
+def _require_filters(path: str) -> None:
+    """Refuse to read a tarball on an interpreter without extraction filters.
+
+    ``filter='data'`` is what refuses links out of the tree and device nodes,
+    and it arrived in Python 3.10.12, 3.11.4 and 3.12. On an earlier patch
+    release there is no safe way to extract somebody else's tarball.
+    """
+    if not hasattr(tarfile, 'data_filter'):
+        raise UnreadableArchive(
+            '%s is a tarball, and this Python (%s) has no tarfile extraction '
+            'filters to unpack one safely; they are in Python 3.10.12, 3.11.4, '
+            '3.12 and later' % (path, sys.version.split()[0]))
+
+
 def _extract_tar(path: str, directory: str, max_bytes: int | None,
-                 max_entries: int) -> None:
+                 max_entries: int, cancel: resolver.Cancel | None) -> None:
     """Extract a tarball, refusing any entry that escapes ``directory``.
 
     ``filter='data'`` is what refuses the entries a name check cannot see: a
@@ -228,17 +285,25 @@ def _extract_tar(path: str, directory: str, max_bytes: int | None,
     device node, and the permission and ownership bits an archive should not be
     choosing. Its refusals are raised as :class:`UnsafeArchive` so a caller has
     one exception to catch whatever the container was.
+
+    The headers are read one at a time and spent against the budget as they
+    arrive; reading past a member in a compressed stream decompresses it, so
+    stopping at the first overrun is what bounds the work as well as the disk.
     """
+    _require_filters(path)
     root = os.path.abspath(directory)
+    budget = _Budget(path, max_bytes, max_entries)
     try:
         with tarfile.open(path) as tar:
-            members = tar.getmembers()
-            for member in members:
+            members = []
+            for member in tar:
+                budget.spend(member.size)
                 _refuse_escape(member.name, root, directory)
-            _refuse_the_size([member.size for member in members],
-                             max_bytes, max_entries, path)
+                members.append(member)
             os.makedirs(directory, exist_ok=True)
-            tar.extractall(directory, filter='data')
+            for member in members:
+                _check_cancel(cancel)
+                tar.extract(member, directory, filter='data')
     except tarfile.FilterError as error:
         raise UnsafeArchive('%s holds an entry that would not be safe to '
                             'write: %s' % (path, error)) from error

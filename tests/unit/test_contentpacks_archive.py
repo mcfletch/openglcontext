@@ -363,3 +363,105 @@ class TestWritingAPack:
         path = archive.write(where, str(tmp_path / 'track.tar.gz'))
         with tarfile.open(path) as handle:
             assert 'trees/fir.glb' in handle.getnames()
+
+
+class TestReadingNoMoreThanItMust:
+    def test_a_tarball_of_countless_entries_is_refused_early(self, tmp_path,
+                                                              monkeypatch):
+        """The count is kept while the headers are read, and the reading stops
+        at the first entry over it rather than after all of them."""
+        source = tar_of(tmp_path / 'many.tar.gz',
+                        ['f%d' % n for n in range(2000)], size=0)
+        read = []
+        real = tarfile.TarFile.next
+
+        def counting(self):
+            read.append(1)
+            return real(self)
+
+        monkeypatch.setattr(tarfile.TarFile, 'next', counting)
+        with pytest.raises(archive.TooLarge) as raised:
+            archive.extract(source, str(tmp_path / 'out'), 'tar',
+                            max_entries=50)
+        assert 'entries' in str(raised.value)
+        assert len(read) < 100, 'every header was read before the refusal'
+
+    def test_a_tarball_over_its_size_stops_at_the_first_overrun(
+            self, tmp_path, monkeypatch):
+        source = tar_of(tmp_path / 'big.tar.gz',
+                        ['f%d' % n for n in range(500)], size=1024)
+        read = []
+        real = tarfile.TarFile.next
+
+        def counting(self):
+            read.append(1)
+            return real(self)
+
+        monkeypatch.setattr(tarfile.TarFile, 'next', counting)
+        with pytest.raises(archive.TooLarge):
+            archive.extract(source, str(tmp_path / 'out'), 'tar',
+                            max_bytes=10 * 1024)
+        assert len(read) < 20
+
+    def test_the_unpacking_cap_applies_unless_it_is_lifted(self, tmp_path):
+        """Safe by default: ``None`` is how a caller asks for no cap."""
+        bomb = TestAnArchiveThatWouldFillTheDisk().bomb(
+            tmp_path / 'b.zip', members=9, each=8 * 1024 * 1024)
+        with pytest.raises(archive.TooLarge):
+            archive.extract(bomb, str(tmp_path / 'out'), 'zip')
+
+    def test_an_interpreter_without_extraction_filters_says_so(
+            self, tmp_path, monkeypatch):
+        source = tar_of(tmp_path / 'a.tar.gz', ['a'])
+        monkeypatch.delattr(tarfile, 'data_filter')
+        with pytest.raises(archive.UnreadableArchive) as raised:
+            archive.extract(source, str(tmp_path / 'out'), 'tar')
+        assert 'Python' in str(raised.value)
+
+    def test_a_cancel_stops_the_unpacking(self, tmp_path):
+        from OpenGLContext.loaders import resolver
+        source = tar_of(tmp_path / 'a.tar.gz', ['f%d' % n for n in range(20)])
+        with pytest.raises(resolver.FetchCancelled):
+            archive.extract(source, str(tmp_path / 'out'), 'tar',
+                            cancel=lambda: True)
+        source = zip_of(tmp_path / 'a.zip', ['f%d' % n for n in range(20)])
+        with pytest.raises(resolver.FetchCancelled):
+            archive.extract(source, str(tmp_path / 'out2'), 'zip',
+                            cancel=lambda: True)
+
+
+class TestWritingAPackFromATreeWithLinks:
+    @pytest.mark.skipif(not hasattr(os, 'symlink'), reason='no symlinks')
+    def test_a_linked_file_is_refused_by_name(self, tmp_path):
+        tree = tmp_path / 'tree'
+        tree.mkdir()
+        (tree / 'real.txt').write_text('x')
+        os.symlink(str(tree / 'real.txt'), str(tree / 'link.txt'))
+        with pytest.raises(IOError) as raised:
+            archive.write(str(tree), str(tmp_path / 'a.tar.gz'))
+        assert 'link.txt' in str(raised.value)
+
+    @pytest.mark.skipif(not hasattr(os, 'symlink'), reason='no symlinks')
+    def test_a_linked_directory_is_refused_rather_than_left_out(self,
+                                                                tmp_path):
+        tree = tmp_path / 'tree'
+        (tree / 'real').mkdir(parents=True)
+        (tree / 'real' / 'a.txt').write_text('x')
+        os.symlink(str(tree / 'real'), str(tree / 'dirlink'))
+        with pytest.raises(IOError) as raised:
+            archive.write(str(tree), str(tmp_path / 'a.tar.gz'))
+        assert 'dirlink' in str(raised.value)
+
+    @pytest.mark.skipif(not hasattr(os, 'symlink'), reason='no symlinks')
+    def test_a_refused_write_leaves_no_archive(self, tmp_path):
+        tree = tmp_path / 'tree'
+        tree.mkdir()
+        (tree / 'real.txt').write_text('x')
+        os.symlink(str(tree / 'real.txt'), str(tree / 'zlink.txt'))
+        out = tmp_path / 'dist'
+        out.mkdir()
+        (out / 'a.tar.gz').write_bytes(b'the last good build')
+        with pytest.raises(IOError):
+            archive.write(str(tree), str(out / 'a.tar.gz'))
+        assert (out / 'a.tar.gz').read_bytes() == b'the last good build'
+        assert os.listdir(out) == ['a.tar.gz']
