@@ -6,6 +6,10 @@
 // `shininess` uniform. calcLight takes a per-light shadowFactor, so a shader that
 // resolves shadows passes it through and one that doesn't passes 1.0.
 
+// One bit per light slot a zone switches off for the draw: set, the light does
+// not light it (OpenGLContext.passes.zonelayers.light_mask).
+uniform int lightsOff;
+
 // Attenuation for point/spot lights. Clamp the denominator (as pbr.frag does) so
 // a zero-constant light near a fragment can't divide by zero into Inf/NaN.
 float calcAttenuation(int lightIndex, float distance) {

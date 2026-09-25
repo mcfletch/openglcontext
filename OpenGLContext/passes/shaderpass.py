@@ -716,6 +716,8 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
                 self._apply_object_id(program)
             if self.program_set and lit:
                 self._apply_view_mask(program)
+            if self._lights_off and lit and vertex_colors:
+                self._set_uniform1i('lightsOff', self._lights_off, program)
         return program is not None
 
     def use_depth(self) -> Optional[int]:
@@ -986,6 +988,19 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         loc = self._get_location('objectId', program)
         if loc != -1:
             glUniform1ui(loc, object_id)
+
+    #: The light slots zones switch off for the draw; see set_lights_off.
+    _lights_off = 0
+
+    def set_lights_off(self, mask: int = 0, program: Optional[int] = None) -> None:
+        """Switch off the lights in slots whose bits are set in ``mask``, for the next draw.
+
+        Set on ``program`` (the lit program by default) and remembered, so a
+        geometry that switches to the vertex-colour program carries it there.
+        """
+        self._lights_off = int(mask)
+        self._set_uniform1i('lightsOff', self._lights_off,
+                            program if program is not None else self.program)
 
     def set_instancing(self, enabled: bool, program: Optional[int] = None) -> None:
         """Toggle the shader's per-instance path (instanced model + object id).

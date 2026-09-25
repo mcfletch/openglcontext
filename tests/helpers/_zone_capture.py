@@ -17,7 +17,10 @@ Modes:
 ``imagelight`` the zone's environment is a red image-based light, as a
               document's ``EXT_lights_image_based`` gives one.
 
-Usage:  python tests/helpers/_zone_capture.py OUTPUT.png MODE
+Usage:  python tests/helpers/_zone_capture.py OUTPUT.png MODE [pbr|flat]
+
+``flat`` draws with the core flat pass and VRML97 materials rather than the
+PBR pass, for the modes about lights.
 """
 import os
 import sys
@@ -29,12 +32,15 @@ MODES = ('none', 'dim', 'capture', 'lights', 'nolights', 'imagelight')
 def main() -> int:
     out_path = sys.argv[1]
     mode = sys.argv[2] if len(sys.argv) > 2 else 'none'
+    renderer = sys.argv[3] if len(sys.argv) > 3 else 'pbr'
     if mode not in MODES:
         raise ValueError('no zone capture mode %r; the modes are %s' % (mode, ', '.join(MODES)))
+    if renderer not in ('pbr', 'flat'):
+        raise ValueError('no zone capture renderer %r' % (renderer,))
 
     os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
     os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-    os.environ['OPENGLCONTEXT_RENDERER'] = 'pbr'
+    os.environ['OPENGLCONTEXT_RENDERER'] = renderer
     os.environ.setdefault('OPENGLCONTEXT_SHADOWS', '0')
     os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
     os.environ['OPENGLCONTEXT_IBL'] = 'full'
@@ -44,12 +50,14 @@ def main() -> int:
     from OpenGLContext import testingcontext
     BaseContext = testingcontext.getInteractive()
     from OpenGLContext.scenegraph.basenodes import (
-        Appearance, Box, DirectionalLight, PointLight, Shape, Sphere,
+        Appearance, Box, DirectionalLight, Material, PointLight, Shape, Sphere,
         Transform, Zone, ZoneEnvironment, ZoneLights, sceneGraph,
     )
     from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 
     def grey():
+        if renderer == 'flat':
+            return Appearance(material=Material(diffuseColor=(0.8, 0.8, 0.8)))
         return Appearance(material=PBRMaterial(
             baseColor=(0.8, 0.8, 0.8), metallic=0.0, roughness=0.7))
 

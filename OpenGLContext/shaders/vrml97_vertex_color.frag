@@ -74,6 +74,7 @@ void main() {
     vec3 lighting = vec3(0.0);
     for (int i = 0; i < MAX_LIGHTS; i++) {
         if (i >= numLights) break;
+        if ((lightsOff & (1 << i)) != 0) continue;   // a zone's light, off for this draw
         lighting += calcLight(i, normal, viewDir, matDiffuse, specularColor, lightShadow[i]);
     }
 

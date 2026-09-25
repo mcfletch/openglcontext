@@ -378,9 +378,16 @@ Limits
   takes its length from the scale along its axis and its radii from the mean of
   the other two scales. An uneven zone is best authored as a box.
 - A zone's lights are decided per object, and its environment per fragment.
-- The environment of a zone applies to the PBR renderer. The splat terrain,
-  vegetation and water shaders have environment lighting of their own and are
-  not changed by zones.
+- A zone's environment applies to what the PBR program draws, which is the one
+  program that reads the environment probe. The flat core pass has no probe,
+  and the splat terrain, vegetation and water shaders light with a sun and a
+  hemispheric ambient of their own; zones do not change them.
+- A zone's lights apply to the PBR program and to the VRML97 lighting programs
+  (material and per-vertex colour), in the PBR pass and the flat core pass
+  alike. The terrain, vegetation and water shaders read no punctual lights, so
+  a ``ZoneLights`` changes nothing they draw, and neither does the
+  compatibility-profile pass, whose fixed-function lights are not masked per
+  draw.
 - Audio has one listener, at the main view's camera.
 
 Examples

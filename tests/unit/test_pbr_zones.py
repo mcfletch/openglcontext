@@ -413,13 +413,13 @@ class TestGravity:
 
 # -- renders ------------------------------------------------------------------
 
-def _render(tmp_path_factory, mode):
+def _render(tmp_path_factory, mode, renderer='pbr'):
     from OpenGLContext.testing.glcontext import gl_available
     if not gl_available():
         pytest.skip('no GL context can be made here')
-    out = str(tmp_path_factory.mktemp('zones') / ('%s.png' % mode))
-    done = subprocess.run([sys.executable, CAPTURE, out, mode], capture_output=True,
-                          text=True, timeout=300)
+    out = str(tmp_path_factory.mktemp('zones') / ('%s-%s.png' % (mode, renderer)))
+    done = subprocess.run([sys.executable, CAPTURE, out, mode, renderer],
+                          capture_output=True, text=True, timeout=300)
     assert done.returncode == 0, 'zone render (%s) failed:\n%s' % (mode, done.stderr[-3000:])
     assert os.path.exists(out), 'zone render (%s) wrote nothing:\n%s' % (
         mode, done.stderr[-3000:])
@@ -431,6 +431,11 @@ def _render(tmp_path_factory, mode):
 def renders(tmp_path_factory):
     return {mode: _render(tmp_path_factory, mode)
             for mode in ('none', 'dim', 'capture', 'lights', 'nolights', 'imagelight')}
+
+
+def _red(rgb):
+    """How much redder than grey a region's mean colour is."""
+    return rgb[0] - (rgb[1] + rgb[2]) / 2.0
 
 
 def _regions(image):
@@ -464,8 +469,12 @@ class TestRenders:
     def test_a_zone_light_lights_nothing_outside_its_zone(self, renders):
         _left, zoned_right = _regions(renders['lights'])
         _left, open_right = _regions(renders['nolights'])
-        red = lambda rgb: rgb[0] - (rgb[1] + rgb[2]) / 2.0   # noqa: E731
-        assert red(open_right) > red(zoned_right) + 1.0
+        assert _red(open_right) > _red(zoned_right) + 1.0
+
+    def test_so_it_does_in_the_flat_pass(self, tmp_path_factory):
+        _left, zoned_right = _regions(_render(tmp_path_factory, 'lights', 'flat'))
+        _left, open_right = _regions(_render(tmp_path_factory, 'nolights', 'flat'))
+        assert _red(open_right) > _red(zoned_right) + 1.0
 
 
 def _cost(mode, frames=120):

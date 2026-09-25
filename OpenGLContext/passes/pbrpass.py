@@ -728,11 +728,6 @@ class PBRShaderProgram(VRML97ShaderProgram):
             glUniform4fv(loc, MAX_ZONE_LAYERS, pack.light)
         self._set_uniform1i('zoneLayers', pack.count, target)
 
-    def set_lights_off(self, mask: int = 0, program: Any = None) -> None:
-        """Switch off the lights in slots whose bits are set in ``mask``, for the next draw."""
-        target = program if program is not None else self.program
-        self._set_uniform1i('lightsOff', int(mask), target)
-
     def set_vertex_color(self, enabled: bool) -> None:
         """Enable/disable per-vertex color (glTF COLOR_0) modulation of baseColor."""
         self._set_uniform1i('hasVertexColor', 1 if enabled else 0, self.program)
