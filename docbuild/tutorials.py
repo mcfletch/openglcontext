@@ -145,12 +145,15 @@ PATHS = [
     TutorialPath(
         'Building a World',
         """The scenery nodes and the tools around them: rooms lit as rooms,
-        mirrors, water, roads, audio, particles, instanced batching, writing a
-        scene out as glTF, and recording a session or a video of one.""",
+        mirrors, water, ground cover, levels of detail, roads, audio,
+        particles, instanced batching, writing a scene out as glTF, and
+        recording a session or a video of one.""",
         [
             'zones_demo',
             'mirrors_room',
             'water_demo',
+            'cover_meadow',
+            'lod_hall',
             'roads_demo',
             'particles_effects',
             'audio_spatial',
