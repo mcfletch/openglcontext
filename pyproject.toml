@@ -47,7 +47,7 @@ dependencies = [
     "pillow",
     "PyOpenGL>=4.0.0a1",
     "PyOpenGL-accelerate>=4.0.0a1",
-    "PyVRML97>=2.3.5a1",
+    "PyVRML97>=2.4.0a2",
     "PyVRML97-accelerate>=2.3.5a1",
     "pydispatcher",
     "TTFQuery>=2.0.1a1",
