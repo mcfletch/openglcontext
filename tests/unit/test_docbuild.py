@@ -500,3 +500,34 @@ class TestThePathsThemselves:
             )
         ]
         assert missing == []
+
+
+class TestEveryLinkedTutorialIsWritten:
+    """A page that links ``tutorials/<name>`` links a page the build writes:
+    one of :data:`tutorials.PATHS`, or a hand-written one."""
+
+    def written(self):
+        names = {'index'} | {name for name, _ in tutorials.HAND_WRITTEN}
+        for path in tutorials.PATHS:
+            names.update(path.pages)
+            names.update(path.scripts)
+        return names
+
+    def test_no_documentation_page_links_a_tutorial_nothing_writes(self):
+        import glob
+        import re
+        here = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))
+        linked = set()
+        for page in glob.glob(os.path.join(here, 'docs', '*.rst')):
+            with open(page, encoding='utf-8') as handle:
+                linked.update(re.findall(r'<tutorials/([A-Za-z0-9_]+)>',
+                                         handle.read()))
+        assert linked - self.written() == set()
+
+    def test_a_tutorial_s_screenshot_is_committed_beside_it(self):
+        here = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))
+        picture = os.path.join(here, 'docs', 'tutorials',
+                               'physics_events.py-screen-0001.png')
+        assert os.path.isfile(picture)

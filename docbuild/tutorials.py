@@ -117,6 +117,7 @@ PATHS = [
             'physics_friction',
             'using_collisions',
             'physics_triggers',
+            'physics_events',
             'physics_joints',
             'physics_gravity_zones',
             'physics_cook_view',
