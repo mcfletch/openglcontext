@@ -803,18 +803,22 @@ class PBRShaderProgram(VRML97ShaderProgram):
         # compile time (see _init_pbr_samplers in compile), so don't re-set them
         # per draw.
         textures = getattr(material, 'textures', {}) or {}
+        # Every map is found before any is bound: the first draw of a map
+        # uploads it, and an upload binds the new texture on the active unit,
+        # which would be the unit of the map bound before it.
+        found = []
+        for channel, unit in self._textureUnits():
+            holder = textures.get(channel)
+            tex = holder.cached(mode) if holder is not None else None
+            if tex is not None and getattr(tex, 'texture', None):
+                found.append((channel, unit, tex.texture))
         # Which maps are sampled is one uniform, a bit per map, rather than a
         # uniform per map: a draw of a new material sets one value.
         sampled = 0
-        for channel, unit in self._textureUnits():
-            holder = textures.get(channel)
-            if holder is None:
-                continue
-            tex = holder.cached(mode)
-            if tex is not None and getattr(tex, 'texture', None):
-                glActiveTexture(GL_TEXTURE0 + unit)
-                glBindTexture(GL_TEXTURE_2D, tex.texture)
-                sampled |= PBR_TEXTURE_BITS[channel]
+        for channel, unit, texture in found:
+            glActiveTexture(GL_TEXTURE0 + unit)
+            glBindTexture(GL_TEXTURE_2D, texture)
+            sampled |= PBR_TEXTURE_BITS[channel]
         self._set_uniform1i('materialTextures', sampled, self.program)
         glActiveTexture(GL_TEXTURE0)
 

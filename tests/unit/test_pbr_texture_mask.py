@@ -98,3 +98,36 @@ class TestTheDraw:
         program.bind_pbr_textures(_Material(sheenColor=9), None)
         assert program.uniforms == [('materialTextures', 0)]
         assert program.bound == []
+
+
+class TestTheUnits:
+    """What each unit holds after a draw of a material, on a real context."""
+
+    def test_maps_uploaded_by_the_draw_land_on_their_own_units(self, gl_context):
+        """Uploading a map binds it where it was made; each still ends on its unit.
+
+        The maps have never been drawn, so the draw is what uploads them, and
+        an upload binds the new texture on whichever unit is active.
+        """
+        from types import SimpleNamespace
+
+        from OpenGL import GL as gl
+        from PIL import Image
+
+        from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
+
+        shader_program = pbrpass.PBRShaderProgram()
+        assert shader_program.compile(), 'the PBR programs did not compile'
+        channels = ('baseColor', 'metallicRoughness', 'normal', 'occlusion', 'emissive')
+        material = PBRMaterial()
+        material.textures = {
+            channel: PBRTexture(Image.new('RGB', (4, 4), (40 * index, 0, 0)))
+            for index, channel in enumerate(channels)}
+        mode = SimpleNamespace(context=gl_context)
+        shader_program.use(lit=True)
+        shader_program.bind_pbr_textures(material, mode)
+        for channel in channels:
+            gl.glActiveTexture(gl.GL_TEXTURE0 + pbrpass.PBR_UNITS[channel])
+            held = int(gl.glGetIntegerv(gl.GL_TEXTURE_BINDING_2D))
+            assert held == material.textures[channel].cached(mode).texture, channel
+        gl.glActiveTexture(gl.GL_TEXTURE0)
