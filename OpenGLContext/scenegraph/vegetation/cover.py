@@ -61,8 +61,10 @@ import numpy as np
 from vrml import field
 from vrml.node import Node
 
-from OpenGLContext.loaders.documentvalues import DocumentValues, JSONObject, require_text
-from OpenGLContext.loaders.resolver import contained_source
+from OpenGLContext.loaders.documentvalues import (
+    DocumentValues, JSONObject, parse_object, require_array, require_object, require_text,
+)
+from OpenGLContext.loaders.resolver import contain, contained_source, read_contained
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.varied import Varied
 from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
@@ -307,6 +309,26 @@ class CoverSpecies(Varied, Node):
                    patchMetres=number('patchMetres', PATCH_METRES),
                    canopy=list(values.vector(canopy, (), 'cover species canopy',
                                              length=2) if canopy else ()))
+
+
+#: What a set of baked plants lists its species in, beside them.
+COVER_MANIFEST = 'cover.json'
+
+
+def read_cover_manifest(directory: str,
+                        values: Optional[DocumentValues] = None) -> list['CoverSpecies']:
+    """The species the :data:`COVER_MANIFEST` in ``directory`` lists.
+
+    Each file a species names (its card, its clump) is resolved under
+    ``directory`` and refused (``IOError``) where it leads outside it. A
+    manifest with no ``species`` list is a
+    :class:`~OpenGLContext.loaders.documentvalues.DocumentError`.
+    """
+    path = contain(directory, COVER_MANIFEST)
+    document = parse_object(read_contained(path), path)
+    return [CoverSpecies.from_json(require_object(entry, 'a cover species'), values)
+            .located(lambda name: contain(directory, name))
+            for entry in require_array(document.get('species'), 'the cover species')]
 
 
 def _mesh_name(raw: object, default: str, values: DocumentValues) -> str:

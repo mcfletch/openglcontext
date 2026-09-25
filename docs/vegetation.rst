@@ -289,6 +289,9 @@ published plant scans. It downloads the model, restores the cutout mask that a
 JPEG base colour cannot hold, reduces each plant to the triangle budgets of the
 two levels, renders the billboard from the geometry so the two match, and
 writes a ``cover.json`` listing the species it made.
+``OpenGLContext.scenegraph.vegetation.cover.read_cover_manifest(directory)``
+reads it back: each species with its card and clump resolved under
+``directory``, and a name leading outside it refused.
 
 .. code-block:: bash
 

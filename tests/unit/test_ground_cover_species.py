@@ -11,6 +11,7 @@ tracks the live camera without re-scattering, and that the heavy half of the
 work can be handed to a thread that must not touch GL.
 """
 import json
+import os
 
 import numpy as np
 import pytest
@@ -628,3 +629,31 @@ def _plant_file(tmp_path):
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class TestACoverManifest:
+    """The ``cover.json`` a set of plants is baked with, read beside them."""
+
+    def _write(self, directory, species) -> None:
+        (directory / 'cover.json').write_text(json.dumps({'species': species}))
+
+    def test_its_species_name_files_beside_it(self, tmp_path) -> None:
+        from OpenGLContext.scenegraph.vegetation.cover import read_cover_manifest
+        self._write(tmp_path, [{'name': 'grass', 'card': 'grass.png', 'clump': 'g.glb'}])
+        found = read_cover_manifest(str(tmp_path))
+        root = os.path.realpath(str(tmp_path))
+        assert [(one.name, one.card, one.clump) for one in found] == [
+            ('grass', os.path.join(root, 'grass.png'), os.path.join(root, 'g.glb'))]
+
+    def test_a_species_naming_a_file_outside_it_is_refused(self, tmp_path) -> None:
+        from OpenGLContext.scenegraph.vegetation.cover import read_cover_manifest
+        self._write(tmp_path, [{'name': 'grass', 'card': '../../etc/passwd'}])
+        with pytest.raises(IOError, match='escapes the base directory'):
+            read_cover_manifest(str(tmp_path))
+
+    def test_a_manifest_that_lists_no_species_is_refused(self, tmp_path) -> None:
+        from OpenGLContext.loaders.documentvalues import DocumentError
+        from OpenGLContext.scenegraph.vegetation.cover import read_cover_manifest
+        (tmp_path / 'cover.json').write_text('{"plants": []}')
+        with pytest.raises(DocumentError, match='cover species is None'):
+            read_cover_manifest(str(tmp_path))
