@@ -39,6 +39,8 @@ from typing import Any, Optional
 
 import numpy as np
 
+from OpenGLContext import renderoptions
+
 log = logging.getLogger(__name__)
 
 __all__ = ['SEED_ENV', 'capture', 'forget', 'generator', 'randomizer',
@@ -211,7 +213,7 @@ def _configured() -> Optional[int]:
     A value that is not a number is a warning and a seed of our own: a mistyped
     diagnostic switch must not be the reason a game will not start.
     """
-    asked = os.environ.get(SEED_ENV)
+    asked = renderoptions.env_text(SEED_ENV)
     if not asked:
         return None
     try:

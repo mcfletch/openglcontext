@@ -30,7 +30,7 @@ from pathlib import Path
 from collections.abc import Callable
 from typing import Any, Optional
 
-from OpenGLContext import entropy
+from OpenGLContext import entropy, renderoptions
 from OpenGLContext.events import synthetic, systemtime
 from OpenGLContext.telemetry.journal import (DEFAULT_MAX_BYTES, SessionJournal,
                                              default_path)
@@ -577,10 +577,10 @@ def install(context: Any) -> Optional[Any]:
     Called by every context as it is built (``Context.setupTelemetry``), so a
     game switches recording on from outside itself with no code at all.
     """
-    replaying = os.environ.get(REPLAY_ENV)
+    replaying = renderoptions.env_text(REPLAY_ENV)
     if replaying:
         return start_replay(context, replaying)
-    asked = os.environ.get(TELEMETRY_ENV)
+    asked = renderoptions.env_text(TELEMETRY_ENV)
     if not asked:
         return None
     path = None if asked.lower() in AUTOMATIC else asked
@@ -594,7 +594,7 @@ def _configured_ceiling() -> Optional[int]:
     to start: a mistyped diagnostic switch must not be the reason a game will
     not run.
     """
-    asked = os.environ.get(MAX_MB_ENV)
+    asked = renderoptions.env_text(MAX_MB_ENV)
     if not asked:
         return DEFAULT_MAX_BYTES
     try:
@@ -645,9 +645,7 @@ def _header(context: Any, randomness: Optional[dict[str, Any]] = None
     definition = getattr(context, 'contextDefinition', None)
     if definition is not None:
         header['definition'] = _describeDefinition(definition)
-    from OpenGLContext import renderoptions
-    settings = {name: os.environ[name] for name in renderoptions.ENVIRONMENT
-                if name in os.environ}
+    settings = renderoptions.rendering_settings()
     if settings:
         header['environment'] = settings
     return header

@@ -6,6 +6,7 @@ the shipped node.
 import pytest
 
 from OpenGLContext.passes import pbrpass
+from OpenGLContext.scenegraph import pbrmesh
 
 
 class TestRendererEnvCached:
@@ -15,13 +16,13 @@ class TestRendererEnvCached:
         # session.  See OpenGLContext.passes.pbrpass.reset_renderer_cache.
         monkeypatch.setattr(pbrpass, '_renderer_is_pbr_cache', None)
         calls = {'n': 0}
-        real = pbrpass.os.environ.get
+        real = pbrpass.renderoptions.env_text
 
         def counting(key, *a, **k):
             if key == 'OPENGLCONTEXT_RENDERER':
                 calls['n'] += 1
             return real(key, *a, **k)
-        monkeypatch.setattr(pbrpass.os.environ, 'get', counting)
+        monkeypatch.setattr(pbrpass.renderoptions, 'env_text', counting)
         pbrpass.renderer_is_pbr()
         pbrpass.renderer_is_pbr()
         pbrpass.renderer_is_pbr()
@@ -54,7 +55,6 @@ class TestNamedConstants:
 
 class TestDrawUncachedFencedOut:
     def test_production_node_has_no_test_draw_path(self):
-        from OpenGLContext.scenegraph import pbrmesh
         assert not hasattr(pbrmesh._MeshGPU, 'draw_uncached')
 
 

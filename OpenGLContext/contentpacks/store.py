@@ -27,7 +27,7 @@ import urllib.parse
 from collections.abc import Iterable, Sequence
 from typing import Any
 
-from OpenGLContext import atomicfiles, userpaths
+from OpenGLContext import atomicfiles, renderoptions, userpaths
 from OpenGLContext.loaders import resolver
 from OpenGLContext.loaders.documentvalues import JSONObject, parse_object
 
@@ -309,7 +309,7 @@ class ContentStore:
 
 def _from_environment() -> list[str]:
     """The directories :data:`CONTENT_OVERRIDE` names, if any."""
-    named = os.environ.get(CONTENT_OVERRIDE, '')
+    named = renderoptions.env_text(CONTENT_OVERRIDE)
     return [part for part in named.split(os.pathsep) if part]
 
 

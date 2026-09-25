@@ -30,7 +30,6 @@ Controls:
 import argparse
 import functools
 import math
-import os
 import sys
 import tempfile
 import time
@@ -38,7 +37,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
-from OpenGLContext import testingcontext
+from OpenGLContext import renderoptions, testingcontext
 from OpenGLContext.scenegraph.scenegraph import SceneGraph as sceneGraph
 from OpenGLContext.scenegraph.light import DirectionalLight
 from OpenGLContext.scenegraph.background import Background
@@ -521,7 +520,7 @@ class TerrainViewer(_ContextBase):
             return now - self._keys.get(k, 0) < HOLD
         fwd = (1.0 if held("w") else 0.0) - (1.0 if held("s") else 0.0)
         strafe = (1.0 if held("d") else 0.0) - (1.0 if held("a") else 0.0)
-        if os.environ.get("OGLC_AUTOWALK"):        # headless movement self-test
+        if renderoptions.env_text("OGLC_AUTOWALK"):        # headless movement self-test
             fwd = 1.0
         if held("q"):
             nav.turn(-1.8 * dt)
@@ -605,7 +604,7 @@ def main(argv: list[str] | None = None) -> Any:
     if args.source and args.dem:
         build_parser().error("give either a tileset.json or --dem, not both")
     for name, value in TERRAIN_DEFAULTS.items():
-        os.environ.setdefault(name, value)
+        renderoptions.default_env(name, value)
     context = terrain_context()
     context.config = args
     if args.size:

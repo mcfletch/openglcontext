@@ -13,7 +13,6 @@ approximation instead -- see :func:`resolve_mode`.
 from __future__ import annotations
 
 import math
-import os
 from typing import Optional
 
 from OpenGL.GL import (
@@ -27,6 +26,8 @@ from OpenGL.GL import (
     glTexParameteri, glTexStorage2D, glCopyTexSubImage2D, glGenerateMipmap,
     glReadBuffer, glGetIntegerv,
 )
+
+from OpenGLContext import renderoptions
 
 # Transmission backdrop sampler unit, within the 16-unit budget;
 # see the unit map in pbrpass.PBR_UNITS. Sits just above the material maps.
@@ -44,7 +45,7 @@ def resolve_mode(renderer: str = '', requested: str = '') -> str:
     """
     env = (requested or '').strip().lower()
     if env in ('', 'auto'):
-        env = os.environ.get('OPENGLCONTEXT_TRANSMISSION', '').strip().lower()
+        env = renderoptions.env_text_once('OPENGLCONTEXT_TRANSMISSION').lower()
     if env in ('off', 'none', '0'):
         return 'off'
     if env in ('blend', 'fake'):

@@ -37,6 +37,7 @@ from dataclasses import dataclass
 from collections.abc import Sequence
 from typing import Any
 
+from OpenGLContext import renderoptions
 from OpenGLContext.bin.view import apply_render_env, build_parser
 from OpenGLContext.ui.gallery import Picture
 from OpenGLContext.ui.hudwidgets import HUDGroup, Readout
@@ -115,7 +116,7 @@ def default_env_prefix() -> str | None:
     package's ``resources/environment`` are used so the ``cube`` background works
     out of the box. Returns None if no face set is found.
     """
-    override = os.environ.get('OPENGLCONTEXT_ENV_CUBEMAP', '').strip()
+    override = renderoptions.env_text('OPENGLCONTEXT_ENV_CUBEMAP')
     if override:
         return override
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # OpenGLContext/
@@ -269,7 +270,7 @@ class TestContext(ViewerContext):
             self.catalog = demos_first(
                 [{'name': n, 'display': n, 'screenshot_url': None}
                  for n in gltf.SAMPLE_MODELS])
-        start = getattr(self.options, 'model', None) or os.environ.get('MODEL', '')
+        start = getattr(self.options, 'model', None) or renderoptions.env_text('MODEL')
         self.index = resolve_start_index([e['name'] for e in self.catalog], start)
 
     def loadScene(self) -> Any:
@@ -333,7 +334,8 @@ class TestContext(ViewerContext):
             self.options, self._ref_current)
         self.options.background = resolve_background(self.options, self._ref_current)
         # Bloom is read per frame from the env var, so toggling it per model works.
-        os.environ['OPENGLCONTEXT_BLOOM'] = '1' if resolve_bloom(self._ref_current) else '0'
+        renderoptions.set_env('OPENGLCONTEXT_BLOOM',
+                              '1' if resolve_bloom(self._ref_current) else '0')
         ViewerContext.buildScenegraph(self, scene)
         self.overlayText = self._label
 
@@ -448,7 +450,7 @@ def demo_config(argv: list[str] | None = None) -> DemoOptions:
     ``--physics``/``--no-physics`` on the command line is still honoured.
     """
     parser = build_parser(prog='oglc-gltf-demo')
-    parser.add_argument('--model', default=os.environ.get('MODEL', ''),
+    parser.add_argument('--model', default=renderoptions.env_text('MODEL'),
                         metavar='NAME|INDEX',
                         help='catalogue model to open on, by sample name '
                              '(e.g. DamagedHelmet) or 0-based index; '
@@ -494,10 +496,10 @@ def apply_environment(args: ViewerOptions) -> None:
     # when the user named no environment of their own.
     env = default_env_prefix()
     if env and not args.environment:
-        os.environ.setdefault('OPENGLCONTEXT_ENV_CUBEMAP', env)
-        os.environ.setdefault('OPENGLCONTEXT_IBL', 'full')
+        renderoptions.default_env('OPENGLCONTEXT_ENV_CUBEMAP', env)
+        renderoptions.default_env('OPENGLCONTEXT_IBL', 'full')
     if args.ibl_intensity is None:
-        os.environ['OPENGLCONTEXT_IBL_INTENSITY'] = '0.9'
+        renderoptions.set_env('OPENGLCONTEXT_IBL_INTENSITY', '0.9')
 
 
 def main(argv: list[str] | None = None) -> Any:

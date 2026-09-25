@@ -171,21 +171,21 @@ class MirrorHall:
 def main(argv: list[str] | None = None) -> int:
     """Open the hall in a window; ``--help`` prints the keys and exits."""
     import argparse
-    import os
     argparse.ArgumentParser(
         prog='oglc-mirrors',
         description=(__doc__ or '').split('\n\n')[0],
         epilog='keys:\n' + MirrorHall.help(),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     ).parse_args(argv)
-    # The mirrors are metallic/roughness materials, which the PBR pass draws.
-    os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
     from OpenGLContext import testingcontext
     from OpenGLContext.contextdefinition import ContextDefinition
 
     base: Any = testingcontext.getInteractive()
 
     class MirrorContext(base):
+        #: The mirrors are metallic/roughness materials.
+        renderer = 'pbr'
+
         def OnInit(self) -> None:
             self.hall = MirrorHall()
             self.sg = basenodes.sceneGraph(children=self.hall.children)

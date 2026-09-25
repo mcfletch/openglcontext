@@ -20,7 +20,6 @@ describes each setting, and this file is the working code for them.
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from collections.abc import Sequence
 from typing import Any, Optional
@@ -217,15 +216,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         epilog='keys:\n' + ZoneCourt.help(),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     ).parse_args(argv)
-    # The rooms are metallic/roughness materials and the zones are the PBR
-    # pass's, so this is the renderer the demo needs.
-    os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
     from OpenGLContext import testingcontext
     from OpenGLContext.contextdefinition import ContextDefinition
 
     base: Any = testingcontext.getInteractive()
 
     class ZonesContext(base):                   # pragma: no cover - needs a window
+        #: The rooms are metallic/roughness materials, and zones are the PBR
+        #: pass's.
+        renderer = 'pbr'
         initialPosition = (0.0, 1.8, 8.0)
 
         def OnInit(self) -> None:

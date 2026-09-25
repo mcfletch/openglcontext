@@ -35,7 +35,7 @@ the Context exposes.
 from __future__ import annotations
 
 from OpenGL.GL import *
-from OpenGLContext import contextresources, texturecache, plugins
+from OpenGLContext import contextresources, texturecache, plugins, renderoptions
 from OpenGLContext.screenshot import ScreenshotMixin
 from OpenGLContext.passes import renderpass
 from vrml.vrml97 import nodetypes
@@ -417,7 +417,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         If OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR is also set, a screenshot
         will be captured before exiting.
         """
-        auto_exit = os.environ.get('OPENGLCONTEXT_AUTO_EXIT_FRAMES')
+        auto_exit = renderoptions.env_text('OPENGLCONTEXT_AUTO_EXIT_FRAMES')
         if auto_exit:
             try:
                 self._autoExitFrames = int(auto_exit)
@@ -427,7 +427,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             except ValueError:
                 log.warning(f"Invalid OPENGLCONTEXT_AUTO_EXIT_FRAMES value: {auto_exit}")
 
-        capture_dir = os.environ.get('OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR')
+        capture_dir = renderoptions.env_text('OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR')
         if capture_dir:
             self._autoExitCaptureDir = capture_dir
             log.info(f"Auto-exit capture enabled: screenshots will be saved to {capture_dir}")
@@ -537,7 +537,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         try:
             from OpenGLContext.capture import capture_to_png
             # Use test name from environment, or fall back to class attribute or class name
-            test_name = os.environ.get(
+            test_name = renderoptions.env_text(
                 'OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME',
                 getattr(self, 'test_name', self.__class__.__name__)
             )

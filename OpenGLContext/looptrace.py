@@ -44,11 +44,12 @@ per iteration.  Logging is off unless asked for, so a shipped game is silent.
 from __future__ import annotations
 
 import logging
-import os
 import time
 from contextlib import contextmanager
 from collections.abc import Callable, Iterator
 from typing import Any, Optional
+
+from OpenGLContext import renderoptions
 
 log = logging.getLogger(__name__)
 
@@ -303,7 +304,7 @@ def _configured_stall_ms() -> float:
     An unreadable value is the default and a warning rather than a failure: a
     mistyped diagnostic switch must not be the reason a game will not start.
     """
-    asked = os.environ.get(STALL_MS_ENV)
+    asked = renderoptions.env_text(STALL_MS_ENV)
     if not asked:
         return LoopTrace.DEFAULT_STALL_MS
     try:
@@ -316,6 +317,5 @@ def _configured_stall_ms() -> float:
 
 def _configured_trace() -> bool:
     """Whether stalls should be logged as well as counted."""
-    from OpenGLContext import renderoptions
     return (renderoptions.env_flag(TRACE_STALLS_ENV, False)
-            or bool(os.environ.get(STALL_MS_ENV, '').strip()))
+            or bool(renderoptions.env_text(STALL_MS_ENV)))

@@ -219,9 +219,7 @@ ignore = [
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 # The workspace's banned-api list (plans/DEFECT-PREVENTION.md): the raw form,
-# and the engine API that replaces it. `os.environ`/`os.getenv` are not on it
-# yet: the engine's own reads of the environment outside renderoptions are
-# still to be routed through their readers (the plan's baseline says where).
+# and the engine API that replaces it.
 "urllib.request.urlretrieve".msg = "fetch through OpenGLContext.loaders.resolver: fetch_to_cache or fetch_url with a CheckedURL"
 "urllib.request.urlopen".msg = "open through OpenGLContext.loaders.resolver.open_url with a CheckedURL (checked_url, require_host, AllowedHosts.check), which puts every redirect to a policy"
 "tarfile.TarFile.extractall".msg = "unpack through OpenGLContext.contentpacks.archive.extract, which refuses a member that leaves the directory and caps the size"
@@ -230,6 +228,8 @@ ignore = [
 "shutil.move".msg = "move a finished file or directory into place through OpenGLContext.atomicfiles: staged_file, staged_directory or replace_directory"
 "os.rename".msg = "os.rename refuses an existing target on Windows; use os.replace, or OpenGLContext.atomicfiles"
 "os._exit".msg = "exit through OpenGLContext.processexit.flush_and_exit, which flushes what was written first"
+"os.environ".msg = "read through OpenGLContext.renderoptions (env_flag, env_number, env_choice, env_text, their _once forms, environment()); pin one with renderoptions.set_env or default_env"
+"os.getenv".msg = "read through OpenGLContext.renderoptions (env_flag, env_number, env_choice, env_text, their _once forms)"
 
 [tool.ruff.lint.per-file-ignores]
 # The modules that implement a replacement use the raw form, and the tests,
@@ -237,9 +237,24 @@ ignore = [
 # themselves and end their own processes.
 "OpenGLContext/atomicfiles.py" = ["TID251"]
 "OpenGLContext/processexit.py" = ["TID251"]
+# The environment's readers and writers: renderoptions for the engine's own
+# variables, userpaths for the platform's per-user directories, the test
+# machinery, which builds the environment of the subprocesses it drives, and
+# the viewer's command line, which puts its settings into the environment
+# before a context exists.
+"OpenGLContext/renderoptions.py" = ["TID251"]
+"OpenGLContext/userpaths.py" = ["TID251"]
+"OpenGLContext/testing/**" = ["TID251"]
+"OpenGLContext/viewer/environment.py" = ["TID251"]
+# Holds viewer work in progress that reads OPENGLCONTEXT_IBL_INTENSITY and
+# GLTF directly; its reads move to renderoptions when that work lands, and
+# this entry goes with them.
+"OpenGLContext/viewer/sceneviewer.py" = ["TID251"]
 "tests/**" = ["TID251"]
 "scripts/**" = ["TID251"]
 "build-docs.py" = ["TID251"]
+"docbuild/**" = ["TID251"]
+"docs/conf.py" = ["TID251"]
 
 [tool.mypy]
 # Matches the interpreter the project is developed and tested against.  The

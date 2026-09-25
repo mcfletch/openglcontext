@@ -9,6 +9,7 @@ import os
 import numpy as np
 import pytest
 
+from OpenGLContext import renderoptions
 from OpenGLContext.passes import ibl
 from OpenGLContext.passes.shadersource import preprocess_shader
 from tests.unit.test_hdr_loader import encode_flat
@@ -51,6 +52,7 @@ def test_env_hdr_path_from_environment(monkeypatch):
     monkeypatch.setenv('OPENGLCONTEXT_ENV_HDR', '/some/where/foo.hdr')
     assert ibl.equirect_hdr_path() == '/some/where/foo.hdr'
     monkeypatch.delenv('OPENGLCONTEXT_ENV_HDR', raising=False)
+    renderoptions.reset_env_cache()      # the variable is read once
     assert ibl.equirect_hdr_path() is None
 
 

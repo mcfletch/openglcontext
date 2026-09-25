@@ -30,9 +30,9 @@ context itself rather than by a caller.
 """
 from __future__ import annotations
 
-import os
 from typing import Any
 
+from OpenGLContext import renderoptions
 from OpenGLContext.events import systemtime
 
 __all__ = ['FixedStepClock', 'capture_clock', 'CAPTURE_FPS', 'CAPTURE_START']
@@ -152,11 +152,9 @@ def capture_clock() -> "FixedStepClock | None":
     every Timer and TimeSensor.  Code calling ``time.time()`` itself does not,
     and has to ask this clock instead for its motion to be reproducible.
     """
-    from OpenGLContext import renderoptions
-
     fps = renderoptions.env_number(
         'OPENGLCONTEXT_CAPTURE_FPS',
-        CAPTURE_FPS if os.environ.get('OPENGLCONTEXT_AUTO_EXIT_FRAMES') else 0,
+        CAPTURE_FPS if renderoptions.env_text('OPENGLCONTEXT_AUTO_EXIT_FRAMES') else 0,
         integer=True,
     )
     if fps <= 0:

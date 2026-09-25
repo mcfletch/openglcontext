@@ -17,7 +17,7 @@ from typing import Any, Optional
 
 from OpenGL.plugins import Plugin
 
-from OpenGLContext import atomicfiles, plugins
+from OpenGLContext import atomicfiles, plugins, renderoptions
 
 log = logging.getLogger(__name__)
 
@@ -192,9 +192,9 @@ class ContextConfigMixin:
         Valid backend names: glut, pygame, wx, glfw, 
         """
         # First check environment variable
-        name = os.environ.get('OPENGLCONTEXT_BACKEND')
-        if name:
-            return name.strip()
+        named = renderoptions.env_text('OPENGLCONTEXT_BACKEND')
+        if named:
+            return named
 
         # Fall back to config file
         directory = cls.getUserAppDataDirectory()

@@ -22,6 +22,7 @@ import ctypes
 from OpenGL.GL import (
     GL_CCW, GL_CULL_FACE, glDisable, glEnable, glFrontFace,
 )
+from OpenGLContext import renderoptions
 from OpenGLContext.scenegraph import vertexsemantics
 
 __all__ = (
@@ -31,6 +32,7 @@ __all__ = (
     'geometry_texture_key',
     'geometry_content_key',
     'geometry_content_instance_key',
+    'instance_collapse_is_enabled',
     'build_mesh_gpu',
     'group_material_table',
     'build_instance_groups',
@@ -83,6 +85,18 @@ def max_materials_per_ubo(block_size_bytes: int,
     guaranteed). At least 1, so a caller can always make progress.
     """
     return max(1, int(block_size_bytes) // int(stride))
+
+
+def instance_collapse_is_enabled() -> bool:
+    """Whether to collapse distinct-node but identical-content geometry into one
+    instanced draw (``OPENGLCONTEXT_INSTANCE_COLLAPSE``, default on; read once).
+
+    On: batch by geometry CONTENT (a cached per-mesh hash), so glTF repeated
+    meshes and re-authored primitives instance even when they are separate nodes.
+    Off: batch only by shared geometry-node identity (USE/DEF), avoiding the
+    one-time content hash on scenes of all-unique meshes.
+    """
+    return renderoptions.env_flag_once('OPENGLCONTEXT_INSTANCE_COLLAPSE', True)
 
 
 def geometry_instance_key(shape: Any) -> Optional[tuple]:

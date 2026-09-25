@@ -393,9 +393,6 @@ class CollisionYard:
 
 def main() -> int:                              # pragma: no cover - needs a window
     """Open the yard in a window."""
-    import os
-    # The yard is dressed in metallic/roughness materials, which the PBR pass draws.
-    os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
     argparse.ArgumentParser(description=(__doc__ or '').splitlines()[0]).parse_args()
     from OpenGLContext import testingcontext
     from OpenGLContext.audio import scene as audioscene
@@ -405,6 +402,8 @@ def main() -> int:                              # pragma: no cover - needs a win
     base: Any = testingcontext.getInteractive()
 
     class EventsContext(base):
+        #: The yard is dressed in metallic/roughness materials.
+        renderer = 'pbr'
         initialPosition = (0, 2.2, 9)
 
         def OnInit(self) -> None:

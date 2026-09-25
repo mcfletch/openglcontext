@@ -19,7 +19,6 @@ for them.
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from collections.abc import Sequence
 from typing import Any, Optional
@@ -204,14 +203,14 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         epilog='keys:\n' + LODHall.help(),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     ).parse_args(argv)
-    # The orbs and the hall are metallic/roughness materials.
-    os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
     from OpenGLContext import testingcontext
     from OpenGLContext.contextdefinition import ContextDefinition
 
     base: Any = testingcontext.getInteractive()
 
     class LODContext(base):                     # pragma: no cover - needs a window
+        #: The orbs and the hall are metallic/roughness materials.
+        renderer = 'pbr'
         initialPosition = (0.0, 1.6, 4.0)
 
         def OnInit(self) -> None:

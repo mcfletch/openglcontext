@@ -57,13 +57,13 @@ from __future__ import annotations
 
 import importlib
 import logging
-import os
 from dataclasses import dataclass, field
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Optional, Union, overload
 
 import numpy as np
 
+from OpenGLContext import renderoptions
 from OpenGLContext.loaders.documentvalues import DocumentValues, JSONObject, require_object
 
 if TYPE_CHECKING:
@@ -107,7 +107,7 @@ _OFF = ('0', 'no', 'false', 'off')
 
 def enabled() -> bool:
     """Whether tags are read at all, from :data:`ENVIRONMENT`."""
-    return os.environ.get(ENVIRONMENT, '1').strip().lower() not in _OFF
+    return renderoptions.env_text(ENVIRONMENT, '1').lower() not in _OFF
 
 
 # --- the tag ------------------------------------------------------------------

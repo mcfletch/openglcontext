@@ -11,7 +11,6 @@ under the PBR pass without per-shape program switches.
 """
 from __future__ import annotations
 
-import os
 import logging
 import weakref
 from types import MappingProxyType
@@ -31,7 +30,9 @@ from OpenGL.GL import (
 )
 from OpenGL.GL import shaders as GL_shaders
 
+from OpenGLContext import renderoptions
 from OpenGLContext.passes import flatcore
+from OpenGLContext.passes.instancing import instance_collapse_is_enabled
 from OpenGLContext.passes.shaderpass import (
     VRML97ShaderProgram, link_program, load_fragment_source, resolve_shadow_config,
     preprocess_shader,
@@ -979,24 +980,12 @@ def instancing_is_enabled(source: Any = None) -> bool:
     which is how the performance win is A/B'd. Read per call, so a benchmark or
     a settings screen can toggle it between frames.
     """
-    from OpenGLContext import renderoptions
     default = renderoptions.env_flag('OPENGLCONTEXT_INSTANCING', True)
     if source is None:
         return default
     return renderoptions.flag(source, 'instancing', default)
 
 
-def instance_collapse_is_enabled() -> bool:
-    """Whether to collapse distinct-node but identical-content geometry into one
-    instanced draw (``OPENGLCONTEXT_INSTANCE_COLLAPSE``, default on).
-
-    On: batch by geometry CONTENT (a cached per-mesh hash), so glTF repeated
-    meshes and re-authored primitives instance even when they are separate nodes.
-    Off: batch only by shared geometry-node identity (USE/DEF), avoiding the
-    one-time content hash on scenes of all-unique meshes.
-    """
-    return os.environ.get('OPENGLCONTEXT_INSTANCE_COLLAPSE', '1').strip().lower() \
-        not in ('0', 'off', 'false', 'no')
 
 
 class PBRPass(flatcore.FlatPass):
@@ -1025,7 +1014,6 @@ class PBRPass(flatcore.FlatPass):
         OPENGLCONTEXT_INSTANCE_MIN, read once per process rather than at import
         so an application -- or a test -- can still set it.
         """
-        from OpenGLContext import renderoptions
         return int(renderoptions.env_number_once(
             'OPENGLCONTEXT_INSTANCE_MIN', 4, integer=True))
 
@@ -1266,7 +1254,7 @@ def renderer_is_pbr() -> bool:
     global _renderer_is_pbr_cache
     if _renderer_is_pbr_cache is None:
         _renderer_is_pbr_cache = (
-            os.environ.get('OPENGLCONTEXT_RENDERER', '').strip().lower() == 'pbr')
+            renderoptions.env_text('OPENGLCONTEXT_RENDERER').lower() == 'pbr')
     return _renderer_is_pbr_cache
 
 

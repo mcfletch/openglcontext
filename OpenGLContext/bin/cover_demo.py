@@ -380,13 +380,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         epilog='keys:\n' + Meadow.help(),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     ).parse_args(argv)
-    os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
     from OpenGLContext import testingcontext
     from OpenGLContext.contextdefinition import ContextDefinition
 
     base: Any = testingcontext.getInteractive()
 
     class CoverContext(base):                   # pragma: no cover - needs a window
+        #: The meadow's plants and ground are metallic/roughness materials.
+        renderer = 'pbr'
+
         def OnInit(self) -> None:
             self.meadow = Meadow()
             position, orientation = self.meadow.viewpoint()

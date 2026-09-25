@@ -8,6 +8,8 @@ VRML97 materials (no alphaMode) fall back to the transparency field.
 from OpenGLContext.scenegraph.appearance import Appearance
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.material import Material
+from OpenGLContext import renderoptions
+from OpenGLContext.passes.transmission import resolve_mode
 
 
 def _transparent(material):
@@ -55,22 +57,16 @@ def test_transmissive_material_stays_in_opaque_pass():
     assert _transparent(m) is False
 
 
-def test_transmission_resolve_mode():
-    import os
-    from OpenGLContext.passes.transmission import resolve_mode
-    saved = os.environ.pop('OPENGLCONTEXT_TRANSMISSION', None)
-    try:
-        # auto: software rasteriser -> blend, real GPU -> full
-        assert resolve_mode('llvmpipe (LLVM 15)') == 'blend'
-        assert resolve_mode('NVIDIA GeForce RTX 4090') == 'full'
-        for val, expect in [('off', 'off'), ('blend', 'blend'), ('full', 'full'),
-                            ('none', 'off'), ('fake', 'blend'), ('on', 'full')]:
-            os.environ['OPENGLCONTEXT_TRANSMISSION'] = val
-            assert resolve_mode('llvmpipe') == expect
-    finally:
-        os.environ.pop('OPENGLCONTEXT_TRANSMISSION', None)
-        if saved is not None:
-            os.environ['OPENGLCONTEXT_TRANSMISSION'] = saved
+def test_transmission_resolve_mode(monkeypatch):
+    monkeypatch.delenv('OPENGLCONTEXT_TRANSMISSION', raising=False)
+    # auto: software rasteriser -> blend, real GPU -> full
+    assert resolve_mode('llvmpipe (LLVM 15)') == 'blend'
+    assert resolve_mode('NVIDIA GeForce RTX 4090') == 'full'
+    for val, expect in [('off', 'off'), ('blend', 'blend'), ('full', 'full'),
+                        ('none', 'off'), ('fake', 'blend'), ('on', 'full')]:
+        monkeypatch.setenv('OPENGLCONTEXT_TRANSMISSION', val)
+        renderoptions.reset_env_cache()      # the variable is read once
+        assert resolve_mode('llvmpipe') == expect
 
 
 if __name__ == "__main__":

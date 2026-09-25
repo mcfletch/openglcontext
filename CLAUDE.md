@@ -417,8 +417,11 @@ Do **not** use `../.env` or the project-local `openglcontext/.venv` — neither 
 variable is the field's *default* rather than a competitor: a shell variable
 still pins a feature for a script or a CI run, while the settings screen
 (`OpenGLContext.ui.settings`) writes the field and takes precedence from then on.
-Passes read through `OpenGLContext.renderoptions`, never the environment
-directly. The fields are `shadows`, `shadowsSoft`, `shadowCascades`,
+The engine reads the environment only through `OpenGLContext.renderoptions`
+(and `userpaths` for the platform's per-user directories), which ruff's
+banned-api list holds it to; a program pins a variable with
+`renderoptions.set_env` / `default_env`, which forget an answer already read
+once. The fields are `shadows`, `shadowsSoft`, `shadowCascades`,
 `maximumLights`, `bloom`, `ibl`, `iblIntensity`, `transmission`,
 `planarReflections` (with the reflection budget: `reflectionViews`,
 `reflectionBounces`, `reflectionSeparateViews`, `reflectionAtlas`,

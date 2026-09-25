@@ -21,10 +21,6 @@ Booleans
    value therefore cannot silently reverse the setting a CI run pinned. An
    unparseable number is reported the same way.
 
-   ``OPENGLCONTEXT_PICKING``, ``OPENGLCONTEXT_INSTANCE_COLLAPSE`` and
-   ``OPENGLCONTEXT_INSTANCE_CLUSTER_CULL`` are parsed separately, without the
-   warning: an unrecognised value leaves the default in place, and
-   ``OPENGLCONTEXT_PICKING`` set to an empty string turns picking off.
 
 ``auto``
    The three-valued options take ``auto`` to let the engine choose. For
@@ -34,14 +30,32 @@ Booleans
 When they are read
    These are start-up settings: set them before the program starts. Some are
    read the first time they are needed and then kept
-   (``renderoptions.env_flag_once`` and ``env_number_once``); others, such as
-   ``OPENGLCONTEXT_BLOOM``, ``OPENGLCONTEXT_LOD``,
-   ``OPENGLCONTEXT_GPU_SKINNING`` and ``OPENGLCONTEXT_SHADOW_CASCADES``, are
-   read each time the setting is asked for while its ``ContextDefinition``
-   field is unset. A change to ``os.environ`` in a running program therefore
-   reaches some settings and not others. To change a feature while the
-   program runs, set the ``ContextDefinition`` field, which takes precedence
-   over the variable.
+   (``renderoptions.env_flag_once``, ``env_number_once``, ``env_choice_once``
+   and ``env_text_once``), among them every switch a render pass consults
+   while it draws; others, such as ``OPENGLCONTEXT_BLOOM``,
+   ``OPENGLCONTEXT_LOD``, ``OPENGLCONTEXT_GPU_SKINNING`` and
+   ``OPENGLCONTEXT_SHADOW_CASCADES``, are read each time the setting is asked
+   for while its ``ContextDefinition`` field is unset. To change a feature
+   while the program runs, set the ``ContextDefinition`` field, which takes
+   precedence over the variable.
+
+Setting one from a program
+   A program that pins a variable before it opens a context, as its command
+   line asks, sets it with ``renderoptions.set_env(name, value)``, or with
+   ``renderoptions.default_env(name, value)`` to leave a value the shell set.
+   Either forgets the answer already kept for that variable, so the next read
+   sees the new value; a write straight to ``os.environ`` would not reach a
+   setting already read once. A program that needs the metallic/roughness
+   pass declares ``renderer = 'pbr'`` on its context class instead, which
+   leaves the environment of every later context alone.
+
+   The engine reads the environment only through ``OpenGLContext.renderoptions``
+   (``env_flag``, ``env_number``, ``env_choice``, ``env_text``, their ``_once``
+   forms, and ``environment()`` for a function that takes the environment as
+   a mapping), and ``OpenGLContext.userpaths`` for the platform's per-user
+   directories. Ruff's banned-api check holds the engine to that; a project
+   built on the engine can add ``os.environ`` and ``os.getenv`` to its own
+   banned-api list the same way.
 
 Reproducible renders
    To start a subprocess whose render must be reproducible, build its

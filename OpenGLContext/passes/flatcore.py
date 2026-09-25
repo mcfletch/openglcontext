@@ -8,7 +8,6 @@ is :mod:`OpenGLContext.passes.flatcompat`, and
 profile and renderer.  Shadow mapping comes from
 :class:`~OpenGLContext.passes.shadowmixin.ShadowMapMixin`.
 """
-import os
 from typing import Any, Optional
 
 from OpenGLContext import renderoptions
@@ -124,10 +123,9 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
         collapse off, fall back to node-identity grouping (USE/DEF only)."""
         from OpenGLContext.passes.instancing import (
             geometry_instance_key, geometry_content_instance_key,
+            instance_collapse_is_enabled,
         )
-        collapse = os.environ.get('OPENGLCONTEXT_INSTANCE_COLLAPSE', '1').strip().lower() \
-            not in ('0', 'off', 'false', 'no')
-        if collapse:
+        if instance_collapse_is_enabled():
             return geometry_content_instance_key(shape)
         return geometry_instance_key(shape)
 

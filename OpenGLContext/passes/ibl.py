@@ -55,6 +55,7 @@ from OpenGL.GL import (
 )
 from OpenGL.GL import shaders as GL_shaders
 
+from OpenGLContext import renderoptions
 from OpenGLContext.passes.shaderpass import preprocess_shader
 
 log = logging.getLogger(__name__)
@@ -85,8 +86,7 @@ def environment_cubemap_prefix() -> Optional[str]:
     ``OPENGLCONTEXT_ENV_CUBEMAP=/path/pimbackground_`` selects the six faces
     ``/path/pimbackground_RT.jpg`` ... ``_BK.jpg``.
     """
-    val = os.environ.get('OPENGLCONTEXT_ENV_CUBEMAP', '').strip()
-    return val or None
+    return renderoptions.env_text_once('OPENGLCONTEXT_ENV_CUBEMAP') or None
 
 
 # Registered equirectangular HDR environment (H, W, 3 linear float32), set by the
@@ -136,8 +136,7 @@ def equirect_hdr_path() -> Optional[str]:
     scenegraph node. A URL is fetched and cached on first use by
     :func:`load_equirect_hdr`.
     """
-    val = os.environ.get('OPENGLCONTEXT_ENV_HDR', '').strip()
-    return val or None
+    return renderoptions.env_text_once('OPENGLCONTEXT_ENV_HDR') or None
 
 
 def load_equirect_hdr(source: str) -> np.ndarray:
@@ -297,7 +296,7 @@ def resolve_ibl_mode(renderer: str = '',
     """
     env = (requested or '').strip().lower()
     if env in ('', 'auto'):
-        env = os.environ.get('OPENGLCONTEXT_IBL', '').strip().lower()
+        env = renderoptions.env_text_once('OPENGLCONTEXT_IBL').lower()
     if env in ('off', 'none', '0'):
         return 'off'
     if env in ('analytic', 'approx', 'analytical'):
@@ -334,7 +333,7 @@ def ibl_is_adaptive(requested: str = '', capturing: bool = False) -> bool:
     env = (requested or '').strip().lower()
     if env not in ('', 'auto'):
         return False
-    env = os.environ.get('OPENGLCONTEXT_IBL', '').strip().lower()
+    env = renderoptions.env_text_once('OPENGLCONTEXT_IBL').lower()
     return env in ('', 'auto')
 
 

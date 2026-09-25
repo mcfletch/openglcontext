@@ -13,6 +13,7 @@ import pytest
 
 PIL = pytest.importorskip("PIL")
 
+from OpenGLContext import renderoptions
 from OpenGLContext.passes import ibl
 
 from OpenGLContext.testing.paths import tests_root
@@ -44,4 +45,5 @@ class TestCubemapFaceLoading:
         monkeypatch.setenv('OPENGLCONTEXT_ENV_CUBEMAP', ENV_PREFIX)
         assert ibl.environment_cubemap_prefix() == ENV_PREFIX
         monkeypatch.delenv('OPENGLCONTEXT_ENV_CUBEMAP', raising=False)
+        renderoptions.reset_env_cache()      # the variable is read once
         assert ibl.environment_cubemap_prefix() is None

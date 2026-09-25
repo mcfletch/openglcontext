@@ -189,8 +189,8 @@ The rules and what to use instead
    ``open``, file-system changes, ``shutil`` and ``subprocess`` at module or
    class level. A value read at import is fixed before an application or test
    can set it. Read it on first use; the engine's own switches go through
-   ``renderoptions.env_flag_once`` and ``env_number_once`` (see
-   :doc:`environment`). A command whose console-script entry point imports
+   ``renderoptions.env_flag_once``, ``env_number_once`` and their siblings
+   (see :doc:`environment`). A command whose console-script entry point imports
    the module and calls ``main()`` sets its defaults in ``main()``; a program
    run by path is named in the ``script`` scope.
 

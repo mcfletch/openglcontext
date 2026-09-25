@@ -33,6 +33,7 @@ import os
 import urllib.parse
 from typing import Optional
 
+from OpenGLContext import userpaths
 from OpenGLContext.loaders import resolver
 from OpenGLContext.loaders.resolver import CheckedURL, ContainedPath, Located
 
@@ -118,8 +119,8 @@ def dir_of(uri: str) -> str:
 
 
 def default_cache_dir() -> str:
-    root = os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache")
-    return os.path.join(root, "openglcontext", "tiles3d")
+    """Where fetched tiles are cached: ``openglcontext/tiles3d`` in the user's cache."""
+    return os.path.join(userpaths.cachedirectory(), "openglcontext", "tiles3d")
 
 
 def read_bytes(uri: Located, cache_dir: Optional[str] = None,

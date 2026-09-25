@@ -74,7 +74,7 @@ from OpenGL.EGL.devices import DeviceInfo, devices
 from OpenGL.EGL.EXT.platform_base import eglGetPlatformDisplayEXT
 from OpenGL.EGL.EXT.platform_device import EGL_PLATFORM_DEVICE_EXT
 
-from OpenGLContext import contextresources
+from OpenGLContext import contextresources, renderoptions
 from OpenGLContext.context import Context
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.interactivecontext import InteractiveContext
@@ -135,7 +135,7 @@ class EGLContextError(RuntimeError):
 def prefersSoftware(environ: Optional[Mapping[str, str]] = None) -> bool:
     """Whether this environment is asking for software rendering."""
     if environ is None:
-        environ = os.environ
+        environ = renderoptions.environment()
     if environ.get('LIBGL_ALWAYS_SOFTWARE', '').strip().lower() not in _OFF:
         return True
     return environ.get('GALLIUM_DRIVER', '').strip().lower() in _SOFTWARE_DRIVERS
@@ -153,7 +153,7 @@ def chooseDevice(
     rather than refusing to run.
     """
     if environ is None:
-        environ = os.environ
+        environ = renderoptions.environment()
     available = tuple(available)
     if not available:
         return None

@@ -16,7 +16,7 @@ from OpenGLContext import userpaths
 def clean(monkeypatch):
     """An environment with none of the variables the rules consult."""
     for name in ('HOME', 'XDG_PICTURES_DIR', 'XDG_CONFIG_HOME', 'APPDATA',
-                 'USERPROFILE'):
+                 'USERPROFILE', 'XDG_CACHE_HOME', 'LOCALAPPDATA'):
         monkeypatch.delenv(name, raising=False)
     return monkeypatch
 
@@ -128,3 +128,29 @@ class TestThePicturesDirectory:
         monkeypatch.setattr(os.path, 'expanduser', lambda path: path)
         with pytest.raises(OSError):
             userpaths.picturesdirectory()
+
+
+class TestTheCacheDirectory:
+    def test_the_xdg_variable_wins(self, clean, tmp_path):
+        clean.setattr(sys, 'platform', 'linux')
+        clean.setenv('XDG_CACHE_HOME', str(tmp_path / 'cache'))
+        clean.setenv('HOME', str(tmp_path))
+        assert userpaths.cachedirectory() == str(tmp_path / 'cache')
+
+    def test_without_it_the_xdg_default_is_used(self, clean, tmp_path):
+        clean.setattr(sys, 'platform', 'linux')
+        clean.setenv('HOME', str(tmp_path))
+        assert userpaths.cachedirectory() == str(tmp_path / '.cache')
+
+    def test_windows_uses_the_local_directory(self, clean, tmp_path):
+        """A cache is not roamed with the profile."""
+        clean.setattr(sys, 'platform', 'win32')
+        clean.setenv('LOCALAPPDATA', str(tmp_path))
+        assert userpaths.cachedirectory() == str(tmp_path)
+
+    def test_no_home_at_all_is_an_error_the_caller_can_catch(self, clean,
+                                                             monkeypatch):
+        clean.setattr(sys, 'platform', 'linux')
+        monkeypatch.setattr(os.path, 'expanduser', lambda path: path)
+        with pytest.raises(OSError):
+            userpaths.cachedirectory()

@@ -1,5 +1,4 @@
 """Definition of a Context's visual parameters"""
-import os
 from typing import Any
 
 from vrml import node, field
@@ -32,7 +31,7 @@ def _get_default_profile() -> str:
     a run, and a program that needs it declares ``profile = 'compatibility'``
     on its context class.  See :meth:`OpenGLContext.context.Context.profile`.
     """
-    return os.environ.get('OPENGLCONTEXT_PROFILE', 'core')
+    return renderoptions.env_text('OPENGLCONTEXT_PROFILE', 'core')
 
 
 def version_for_profile(profile: str) -> tuple[int, int]:
@@ -54,14 +53,11 @@ def _get_default_picking() -> bool:
     """Whether colour-based scenegraph picking is enabled by default.
 
     Disabled when OPENGLCONTEXT_PICKING is set to a falsey value
-    (0/off/false/no). Turning picking off skips the selection render, the MRT
-    id/depth buffer and its readback -- useful for headless capture or any
-    context that never queries object ids.
+    (0/off/false/no/none); unset or blank leaves it on. Turning picking off
+    skips the selection render, the MRT id/depth buffer and its readback --
+    useful for headless capture or any context that never queries object ids.
     """
-    value = os.environ.get('OPENGLCONTEXT_PICKING')
-    if value is None:
-        return True
-    return value.strip().lower() not in ('0', 'off', 'false', 'no', '')
+    return renderoptions.env_flag('OPENGLCONTEXT_PICKING', True)
 
 
 class ContextDefinition( node.Node ):

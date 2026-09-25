@@ -40,9 +40,14 @@ class TestPickingDefault:
         assert bool(cd.ContextDefinition().pickEnabled) is True
 
     def test_env_disables(self, monkeypatch):
-        for v in ('0', 'off', 'false', 'no', ''):
+        for v in ('0', 'off', 'false', 'no', 'none'):
             monkeypatch.setenv('OPENGLCONTEXT_PICKING', v)
             assert cd._get_default_picking() is False, v
+
+    def test_a_blank_variable_is_the_default(self, monkeypatch):
+        """What an unexported shell variable expands to: the same as unset."""
+        monkeypatch.setenv('OPENGLCONTEXT_PICKING', '')
+        assert cd._get_default_picking() is True
 
     def test_env_enables(self, monkeypatch):
         for v in ('1', 'on', 'true', 'yes'):

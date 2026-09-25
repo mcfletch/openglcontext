@@ -45,7 +45,7 @@ import time
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any, Optional
 
-from OpenGLContext import atomicfiles
+from OpenGLContext import atomicfiles, renderoptions
 
 __all__ = [
     'control_paragraph', 'debian_architecture', 'debian_name', 'debian_version',
@@ -281,7 +281,7 @@ def _timestamp() -> int:
     ``SOURCE_DATE_EPOCH`` where the caller set it, so that building the same
     input twice gives the same bytes; the moment of the build otherwise.
     """
-    given = os.environ.get('SOURCE_DATE_EPOCH', '').strip()
+    given = renderoptions.env_text('SOURCE_DATE_EPOCH')
     return int(given) if given.isdigit() else int(time.time())
 
 

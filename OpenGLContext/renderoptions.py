@@ -19,13 +19,20 @@ default, so nothing has to construct a context to render.
 Three-valued settings use ``'auto'``, which means "the engine decides": IBL and
 transmission both degrade themselves on a software rasteriser, and a screen that
 forced a choice would take that away.
+
+This module is also where the engine reads the process environment at all
+(:func:`env_flag`, :func:`env_number`, :func:`env_choice`, :func:`env_text`,
+their ``_once`` forms, and :func:`environment`), and where a program writes a
+variable it pins before opening a context (:func:`set_env`,
+:func:`default_env`), so a write reaches a setting already read once.
 """
 
 from __future__ import annotations
 
 import logging
 import os
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
+from types import MappingProxyType
 from typing import Any, Optional
 
 from vrml import protofunctions
@@ -34,8 +41,9 @@ log = logging.getLogger(__name__)
 
 __all__ = ['hidden_window', 'fullscreen_window',
            'definition', 'flag', 'choice', 'number', 'env_flag', 'env_choice',
-           'env_number', 'env_flag_once', 'env_number_once', 'env_choice_once',
-           'reset_env_cache',
+           'env_number', 'env_text', 'env_flag_once', 'env_number_once',
+           'env_choice_once', 'env_text_once', 'reset_env_cache', 'set_env',
+           'default_env', 'environment', 'rendering_settings',
            'clean_environment', 'is_render_configuration', 'CHOICES', 'LABELS',
            'CONFIGURATION_PREFIXES', 'ENVIRONMENT']
 
@@ -322,6 +330,47 @@ def env_choice_once(name: str, allowed: Sequence[str], synonyms: dict[str, str],
     return str(_ENV_CACHE[name])
 
 
+def env_text_once(name: str, default: str = '') -> str:
+    """A text environment variable, read once and then remembered."""
+    if name not in _ENV_CACHE:
+        _ENV_CACHE[name] = env_text(name, default)
+    return str(_ENV_CACHE[name])
+
+
+def set_env(name: str, value: str) -> None:
+    """Set an environment variable for this process and the processes it starts.
+
+    The answer :func:`env_flag_once` and its siblings settled for ``name`` is
+    forgotten, so the next read sees the new value. A program pins a setting
+    this way before it opens a context, as its command line asks.
+    """
+    os.environ[name] = value
+    _ENV_CACHE.pop(name, None)
+
+
+def default_env(name: str, value: str) -> None:
+    """:func:`set_env` ``name`` to ``value`` unless the environment already sets it.
+
+    What a program wants by default, which the user's shell still outranks.
+    """
+    if not os.environ.get(name, '').strip():
+        set_env(name, value)
+
+
+def environment() -> Mapping[str, str]:
+    """The process environment, read-only and live.
+
+    For a function that takes the environment as a parameter, so that a test
+    can hand it another mapping.
+    """
+    return MappingProxyType(os.environ)
+
+
+def rendering_settings() -> dict[str, str]:
+    """The variables of :data:`ENVIRONMENT` that are set, and their values."""
+    return {name: os.environ[name] for name in ENVIRONMENT if name in os.environ}
+
+
 def hidden_window() -> bool:
     """Whether a context should render without putting a window on the screen.
 
@@ -387,6 +436,12 @@ def env_choice(name: str, allowed: Sequence[str], synonyms: dict[str, str],
                     ', '.join(allowed))
         return default
     return raw
+
+
+def env_text(name: str, default: str = '') -> str:
+    """A text environment variable, stripped; unset or blank is ``default``."""
+    raw = os.environ.get(name, '').strip()
+    return raw or default
 
 
 def env_number(name: str, default: float, integer: bool = False) -> float:

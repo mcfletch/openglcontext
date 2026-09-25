@@ -52,13 +52,12 @@ identically; what it cannot do is run with no desktop).
 """
 
 import logging
-import os
 from collections.abc import Hashable, Mapping, Sequence
 from typing import Any, Literal, Optional
 
 from OpenGL.WGL import offscreen
 
-from OpenGLContext import contextresources
+from OpenGLContext import contextresources, renderoptions
 from OpenGLContext.context import Context
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.interactivecontext import InteractiveContext
@@ -97,7 +96,7 @@ def acceleration(environ: Optional[Mapping[str, str]] = None) -> str:
     advertises no fully-accelerated pbuffer format.
     """
     if environ is None:
-        environ = os.environ
+        environ = renderoptions.environment()
     if environ.get(ACCELERATION_VARIABLE, '').strip().lower() not in _OFF:
         return 'any'
     return 'accelerated'

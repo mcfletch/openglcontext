@@ -11,7 +11,6 @@ combined class.
 """
 from __future__ import annotations
 
-import os
 import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Optional
@@ -330,8 +329,7 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
 
     # -- visibility culling ------------------------------------------------
     def _cluster_cull_enabled(self) -> bool:
-        return os.environ.get('OPENGLCONTEXT_INSTANCE_CLUSTER_CULL', '').strip().lower() \
-            in ('1', 'true', 'yes', 'on')
+        return renderoptions.env_flag_once('OPENGLCONTEXT_INSTANCE_CLUSTER_CULL', False)
 
     def frustumVisibilityFilter(self, records: list) -> list:
         """Filter records for visibility using frustum planes

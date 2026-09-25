@@ -182,11 +182,12 @@ if __name__ == "__main__":
     import os
     import glob
     import traceback
+    from ttfquery import findsystem
     testText = [ chr(x) for x in range(32,256)]
     def scan( directory: str | None = None ) -> list[tuple[str, list[str]]]:
         """Report every font file in directory this module cannot read"""
         if directory is None:
-            directory = os.path.join( os.environ['windir'], 'fonts')
+            directory = findsystem.win32FontDirectory()
         files = glob.glob( os.path.join(directory, "*.ttf"))
         errors: list[tuple[str, list[str]]] = []
         for file in files:

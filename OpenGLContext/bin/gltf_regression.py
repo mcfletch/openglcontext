@@ -98,7 +98,7 @@ def default_baseline_root() -> str:
     ``gltf_baseline`` folder. ``OPENGLCONTEXT_GLTF_BASELINE`` points somewhere
     else, for a working copy kept outside the checkout.
     """
-    env = os.environ.get('OPENGLCONTEXT_GLTF_BASELINE', '').strip()
+    env = renderoptions.env_text('OPENGLCONTEXT_GLTF_BASELINE')
     if env:
         return env
     return os.path.join(REPO, 'tests', 'reference_images', 'gltf_baseline')
@@ -367,7 +367,8 @@ def _gl_renderer() -> dict[str, str]:
         out = subprocess.run(
             [sys.executable, '-c', _PROVENANCE_PROGRAM],
             capture_output=True, text=True, timeout=30,
-            env=dict(os.environ, OPENGLCONTEXT_HIDDEN='1', OPENGLCONTEXT_BACKEND='glfw'),
+            env=dict(renderoptions.environment(), OPENGLCONTEXT_HIDDEN='1',
+                     OPENGLCONTEXT_BACKEND='glfw'),
         ).stdout.splitlines()
         return {'gl_renderer': (out[0].strip() if out else '') or 'unknown',
                 'gl_version': out[1].strip() if len(out) > 1 else ''}

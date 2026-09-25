@@ -18,7 +18,7 @@ import os
 import sys
 from typing import Optional
 
-__all__ = ['appdatadirectory', 'picturesdirectory']
+__all__ = ['appdatadirectory', 'cachedirectory', 'picturesdirectory']
 
 
 def appdatadirectory() -> str:
@@ -51,6 +51,26 @@ def appdatadirectory() -> str:
     if os.path.isdir(possible):
         return possible if sys.platform == 'win32' else os.path.join(possible, '.config')
     raise OSError("""Unable to determine the user's application-data directory""")
+
+
+def cachedirectory() -> str:
+    """The directory for this user's cached files, which can be made again.
+
+    Windows: ``%LOCALAPPDATA%``, which stays on this machine rather than
+    roaming with the profile.
+    Everywhere else: ``$XDG_CACHE_HOME``, or ``~/.cache`` when it is unset.
+
+    Raises OSError when there is no home directory to answer from.
+    """
+    if sys.platform == 'win32':
+        local = os.environ.get('LOCALAPPDATA')
+        if local:
+            return local
+    else:
+        xdg = os.environ.get('XDG_CACHE_HOME')
+        if xdg:
+            return xdg
+    return os.path.join(_homedirectory(), '.cache')
 
 
 def picturesdirectory() -> str:

@@ -114,8 +114,9 @@ model or a GIS terrain, use ``oglc-view``:
 The source is a local path or an ``http(s)://`` URL. For a URL, the root
 tileset, its tile content and any nested tilesets are fetched over the network
 and cached on disk, so each tile downloads once. The cache is
-``$XDG_CACHE_HOME/openglcontext/tiles3d`` (``~/.cache/openglcontext/tiles3d``
-by default); ``--cache-dir`` sets another. The viewer frames the whole tileset
+``openglcontext/tiles3d`` in the user's cache directory:
+``$XDG_CACHE_HOME`` (``~/.cache`` by default), or ``%LOCALAPPDATA%`` on
+Windows. ``--cache-dir`` sets another. The viewer frames the whole tileset
 at startup. Fly with the mouse and ``W A S D`` or the arrow keys. Tiles load
 and unload by screen-space error as you move.
 

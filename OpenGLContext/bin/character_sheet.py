@@ -42,7 +42,7 @@ from OpenGLContext.viewer.environment import apply_render_env, viewer_defaults
 
 viewer_defaults()   # before anything that renders is imported
 
-from OpenGLContext import contactsheet
+from OpenGLContext import contactsheet, renderoptions
 from OpenGLContext.capture import read_back_buffer
 from OpenGLContext.character import CharacterModel
 from OpenGLContext.viewer.options import ViewerOptions
@@ -290,9 +290,9 @@ def main(argv: Optional[list] = None, prog: str = 'oglc-character-sheet') -> Any
     # Nobody watches a sheet being drawn, and a mapped surface is what makes a
     # read-back hang: a compositor throttles the swap to a frame callback that
     # a window nothing is showing never gets.
-    os.environ.setdefault('OPENGLCONTEXT_HIDDEN', '1')
-    os.environ.setdefault('OPENGLCONTEXT_NO_VSYNC', '1')
-    os.environ.setdefault('OPENGLCONTEXT_DISABLE_FPS_DISPLAY', '1')
+    renderoptions.default_env('OPENGLCONTEXT_HIDDEN', '1')
+    renderoptions.default_env('OPENGLCONTEXT_NO_VSYNC', '1')
+    renderoptions.default_env('OPENGLCONTEXT_DISABLE_FPS_DISPLAY', '1')
     # Several of the options above are read once by the passes at start-up
     # rather than per frame, and this is what puts them where those can see
     # them. Without it the sheet is drawn by a differently-configured renderer

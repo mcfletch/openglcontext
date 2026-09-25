@@ -55,6 +55,8 @@ from pathlib import Path
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any, Optional
 
+from OpenGLContext import renderoptions
+
 log = logging.getLogger(__name__)
 
 __all__ = ['StackSampler', 'StallJournal', 'TRACE_ENV', 'describe_episode',
@@ -512,7 +514,7 @@ def install(trace: Any, path: Optional[str] = None,
     Answers the journal, or ``None`` when :data:`TRACE_ENV` is unset -- which
     is the usual case, and costs nothing at all.
     """
-    asked = path if path is not None else os.environ.get(TRACE_ENV)
+    asked = path if path is not None else renderoptions.env_text(TRACE_ENV)
     if not asked:
         return None
     sampler = StackSampler(when=trace.overrunning)
