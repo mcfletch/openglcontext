@@ -580,6 +580,8 @@ class OverlayMixin(_Host):
             trees.extend(stack.panels)
             tip = self.tooltipTree(now)
             if tip is not None:
+                size = self.getViewPort()
+                tip.layout((int(size[0]), int(size[1])), metrics)
                 trees.append(tip)
         return trees
 

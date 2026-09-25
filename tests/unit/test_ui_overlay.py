@@ -774,6 +774,16 @@ class TestTellingThePointerWhatIsUnderIt:
         from OpenGLContext.ui.tooltip import Tooltip
         assert isinstance(trees[-1], Tooltip)
 
+    def test_it_is_laid_out_beside_the_pointer_as_it_is_drawn(self):
+        """The frame that draws the tip gives it a size and a place."""
+        from OpenGLContext.ui.tooltip import Tooltip
+        context, _panel, button = self._resting()
+        trees = context.screenTrees(FontMetrics(8, 16, 2), now=10.0)
+        tip = trees[-1]
+        assert isinstance(tip, Tooltip)
+        assert tip.rect.width > 0 and tip.rect.height > 0
+        assert tip.rect.x > button.rect.centre[0]
+
     def test_moving_the_pointer_starts_the_pause_again(self):
         context, _panel, button = self._resting()
         assert context.tooltipTree(now=10.0) is not None
