@@ -21,7 +21,7 @@ The decisions below are the review's proposals, and each is the maintainer's to 
 
 | Code | Severity | Summary | Decision | Remediation | Status |
 |---|---|---|---|---|---|
-| REF-C1 | Critical | Bad reflector values abort a load or fail every frame; reflection pass has no failure isolation | Fix | Catch `OverflowError` and reject non-finite values in `reflector_for`, clamp `scale` and `interval`; sanitise fields in the planner; wrap `renderReflections` to log once and disable planar reflections. | Open |
+| REF-C1 | Critical | Bad reflector values abort a load or fail every frame; reflection pass has no failure isolation | Fix | Catch `OverflowError` and reject non-finite values in `reflector_for`, clamp `scale` and `interval`; sanitise fields in the planner; wrap `renderReflections` to log once and disable planar reflections. | Fixed 2b39a0e |
 | REF-M1 | Major | Object `mirror` hook mutates cached shared Shapes, so every node on that mesh mirrors | Fix | Build new `Shape`/`Appearance` per shape sharing the geometry and return them as `(node, True)`, or make `hooks.node` honour `shareable=False`. Test two nodes on one mesh. | Open |
 | REF-M2 | Major | Mirror over the texel budget is never drawn and forces redraws forever | Fix | Draw an unaffordable must-draw candidate at the largest scale that fits (floored near 1/8); record unaffordable candidates so `unfinished` stops spinning. Add a tight-budget planner test. | Open |
 | REF-M3 | Major | Millisecond target re-applies one stale GPU reading every frame, compounding | Fix | Expose a fresh flag or sequence number on `GpuTimer`, call `measured` once per new reading using the scale that frame drew with. Test that repeated readings leave the scale unchanged. | Open |
@@ -70,7 +70,7 @@ The decisions below are the review's proposals, and each is the maintainer's to 
 | ZON-M4 | Major | Any zone moving evicts every image-light probe layer, so they never light | Fix | Call `keep()` with zone ids plus each live `ZoneEnvironment.light` id, or key reservations by owning zone; use `id(zone.zone)` for liveness. | Open |
 | ZON-M5 | Major | One moving zone reclassifies every object every frame | Fix | Move the zone's tree entry and mark stale only objects referencing or overlapping that zone via a reverse index; keep the global epoch for add/remove. | Open |
 | ZON-M6 | Major | `classify_many` builds objects x zones x 8 arrays; 443 MB first-frame spike | Fix | Chunk items (about 1,024 at a time) and query the tree per object or bucket rather than by the union box. | Open |
-| ZON-M7 | Major | Malformed `OGLC_zone` values abort loading the whole document | Fix | Guard `zone_for`, `_environment` and `_reverb` with `(TypeError, ValueError)`, warn once, return None; require three sizes in `read_shape`; add the cases to tests. | Open |
+| ZON-M7 | Major | Malformed `OGLC_zone` values abort loading the whole document | Fix | Guard `zone_for`, `_environment` and `_reverb` with `(TypeError, ValueError)`, warn once, return None; require three sizes in `read_shape`; add the cases to tests. | Fixed with SG-M1 (69e59f9) |
 | ZON-M8 | Major | Zones overwrite the application's audio reverb every frame | Fix | Touch reverb only when a zone has `ZoneReverb`; restore the application's value on leaving, or blend over it; use one default decay. | Open |
 | ZON-M9 | Major | Emitter zone gain and reverb stick after the last zone goes | Fix | On zones going to none, reset `zoneGain` to 1.0 and clear reverb, or always call `apply_zones`. | Open |
 | ZON-M10 | Major | Zone modules fail the mypy gate with 47 errors | Fix | Use `TYPE_CHECKING` with a pass-surface Protocol, narrow `held`, add a `Region` protocol in `omi_physics.gravity`, type numpy returns. | Open |
@@ -89,7 +89,7 @@ The decisions below are the review's proposals, and each is the maintainer's to 
 | ZON-m12 | Minor | `chosen` keeps `kept[0]` as base even when not inside | Fix | Keep the head only when it is inside; otherwise choose all layers by nearness. | Open |
 | ZON-m13 | Minor | Gravity volumes snapshot zones and miss Switch/LOD children | Fix | Give `ZoneRegion` a live zone reference or update per step; walk the pass's child fields; at least document the snapshot. | Open |
 | ZON-m14 | Minor | `TilesTerrain` joins zones file name without containment; loads synchronously | Duplicate of SG-M7 | Reject absolute and `..` names; catch load errors and continue without zones. | Open |
-| ZON-m15 | Minor | `omi_audio` pin predates the reverb the zones drive | Duplicate of BIN-3 | Release omi_audio with reverb and raise the pin; log once when `ZoneReverb` has no engine reverb. | Open |
+| ZON-m15 | Minor | `omi_audio` pin predates the reverb the zones drive | Duplicate of BIN-3 | Release omi_audio with reverb and raise the pin; log once when `ZoneReverb` has no engine reverb. | Fixed with BIN-3 |
 | ZON-m16 | Minor | No numeric test holds GLSL zone distances to Python | Fix | Add a `gl_context` test comparing `zoneDistance` with `zones._distance` for every kind, including tapered cylinder and uneven capsule. | Open |
 | ZON-m17 | Minor | Cost test times intensity zones, not the probe-array path | Fix | Add a `probes` mode with four image-lit layers and time it; tighten the intensity-only bound. | Open |
 | ZON-n1 | Nit | Dead code and test-only paths in zone modules | Maintainer decision | Either delete the unused helpers, or document them as public API and have the pass use them. | Open |
@@ -156,57 +156,57 @@ The decisions below are the review's proposals, and each is the maintainer's to 
 | PASS-d4 | Minor | `lod.rst` does not state impostor shadow or atlas-size limits | Fix | State the impostor shadow behaviour chosen under PASS-m5 and the atlas-size coupling from PASS-m4 in `lod.rst`. | Open |
 | PASS-d5 | Nit | No page describes the overlay's mirror timing counters | Fix | Describe how the overlay shows `mirrorMilliseconds` and the mirror counters in `overlayui.rst`. | Open |
 | PASS-d6 | Minor | `ImageBasedLight` node is documented only in its module docstring | Fix | Document its fields, `rotation` and `irradiance_faces` units, and link the node from `gltf.rst` and `zones.rst`. | Open |
-| MV-M1 | Major | Cached view navigation keeps driving the camera `point_view` / `look_through` replaced | Fix | Rebuild in `navigation_for` when `navigation.camera` is not the view's camera; carry `mode` over within a family; test gestures after `point_view` and `look_through`. | Open |
-| MV-M2 | Major | Camera-less view in a tile uses the window's aspect ratio | Fix | In `layoutViews`, derive the projection from the tile (explicit aspect to `viewMatrix()` or set/restore `setViewport`); add a split render test with a camera-less view. | Open |
-| MV-M3 | Major | Tooltip is never laid out; draws 0x0 at the origin | Fix | Lay the tip out in `tooltipTree` or `screenTrees` with the viewport and metrics in hand; test the rectangle after `screenTrees`. | Open |
-| MV-M4 | Major | On-demand windows never redraw to show a pending tooltip | Investigate | Confirm interactively, then report the overlay as animating while a tip is pending, or schedule a one-shot redraw at `_pointerSince + TOOLTIP_PAUSE`. | Open |
-| MV-M5 | Major | `point_view` family change clamps distance to 20 m, losing small subjects | Fix | Build the orbit with `nearest`/`furthest` scaled from `span` and `lowest=-OrbitView.HIGHEST`; test `shown_by` across a round trip. | Open |
-| MV-M6 | Major | `routeEvent` raises `AttributeError` for hand-rolled events `addPickEvent` accepts | Fix | Use `getattr(event, 'view', None)` in `routeEvent` and `ViewGestures.handle`; set the attribute only where possible; add a duck-typed event test. | Open |
-| MV-M7 | Major | Multi-view strategy fixed at first frame; live setting does nothing | Maintainer decision | Either keep `(requested, strategy)` on the pass and re-choose when the request changes, or document the field as start-up only and remove it from the settings screen. | Open |
+| MV-M1 | Major | Cached view navigation keeps driving the camera `point_view` / `look_through` replaced | Fix | Rebuild in `navigation_for` when `navigation.camera` is not the view's camera; carry `mode` over within a family; test gestures after `point_view` and `look_through`. | Fixed 9587724 |
+| MV-M2 | Major | Camera-less view in a tile uses the window's aspect ratio | Fix | In `layoutViews`, derive the projection from the tile (explicit aspect to `viewMatrix()` or set/restore `setViewport`); add a split render test with a camera-less view. | Fixed 0047be6 |
+| MV-M3 | Major | Tooltip is never laid out; draws 0x0 at the origin | Fix | Lay the tip out in `tooltipTree` or `screenTrees` with the viewport and metrics in hand; test the rectangle after `screenTrees`. | Fixed 659843e |
+| MV-M4 | Major | On-demand windows never redraw to show a pending tooltip | Investigate | Confirm interactively, then report the overlay as animating while a tip is pending, or schedule a one-shot redraw at `_pointerSince + TOOLTIP_PAUSE`. | Fixed f2a7193 (confirmed in a hidden GLFW window driving _loopIteration: two frames in 1.5 s, neither with the tip; Context.redrawAt added) |
+| MV-M5 | Major | `point_view` family change clamps distance to 20 m, losing small subjects | Fix | Build the orbit with `nearest`/`furthest` scaled from `span` and `lowest=-OrbitView.HIGHEST`; test `shown_by` across a round trip. | Fixed cbf8ae6 |
+| MV-M6 | Major | `routeEvent` raises `AttributeError` for hand-rolled events `addPickEvent` accepts | Fix | Use `getattr(event, 'view', None)` in `routeEvent` and `ViewGestures.handle`; set the attribute only where possible; add a duck-typed event test. | Fixed 3bfd0af |
+| MV-M7 | Major | Multi-view strategy fixed at first frame; live setting does nothing | Maintainer decision | Either keep `(requested, strategy)` on the pass and re-choose when the request changes, or document the field as start-up only and remove it from the settings screen. | Fixed e75a0e3 (settled by the engine-first rules: the field is live, the pass re-chooses when it changes) |
 | MV-M8 | Major | `multiview.grid` is public but not drawn, exported or documented | Maintainer decision | Either finish it (node or pass hook drawing `lines_for` per view honouring `ViewStyle`, plus a demo) or remove it; correct the docstring either way. | Open |
-| MV-M9 | Major | `EGLContext` ignores the definition's profile and version | Fix | Pass `contextAttributes(definition.profile, definition.version, forwardCompatible=...)` to `_createContext`; test `GL_CONTEXT_PROFILE_MASK` on an `EGLContext`. | Open |
-| MV-M10 | Major | Interrupted viewer archive extraction is cached as a complete world | Fix | Use the same staging helper as CP-3: extract to a `.partial-<pid>` directory, `os.replace` on success, remove on failure. | Open |
-| MV-M11 | Major | Backends apply the mouse-look pointer-shape guard unevenly; GLUT can unhide it | Fix | Guard once in `OverlayMixin.showCursor` (or in every backend), reset `_cursorShown` when capture ends, add the Qt-style test per backend. | Open |
-| MV-m1 | Minor | Capability cache keyed by reusable context address, never evicted | Fix | Register with `contextresources` to drop the entry when the context dies, or key by the context object. | Open |
-| MV-m2 | Minor | Fly-through path survives a scene change | Fix | Reset `_flyPath = None` where `self.viewpoints` is assigned. | Open |
-| MV-m3 | Minor | `advanceFlyThrough` requests frames forever after the path ends | Fix | Return False once the fraction reaches 1.0 and the final pose is applied. | Open |
-| MV-m4 | Minor | Live fly-through timed from viewer start, shared with turntable | Fix | Give the fly-through its own start time, reset on mount. | Open |
+| MV-M9 | Major | `EGLContext` ignores the definition's profile and version | Fix | Pass `contextAttributes(definition.profile, definition.version, forwardCompatible=...)` to `_createContext`; test `GL_CONTEXT_PROFILE_MASK` on an `EGLContext`. | Fixed 6805708 |
+| MV-M10 | Major | Interrupted viewer archive extraction is cached as a complete world | Fix | Use the same staging helper as CP-3: extract to a `.partial-<pid>` directory, `os.replace` on success, remove on failure. | Fixed f3d7771 |
+| MV-M11 | Major | Backends apply the mouse-look pointer-shape guard unevenly; GLUT can unhide it | Fix | Guard once in `OverlayMixin.showCursor` (or in every backend), reset `_cursorShown` when capture ends, add the Qt-style test per backend. | Fixed 7b8de6d |
+| MV-m1 | Minor | Capability cache keyed by reusable context address, never evicted | Fix | Register with `contextresources` to drop the entry when the context dies, or key by the context object. | Fixed e75a0e3 |
+| MV-m2 | Minor | Fly-through path survives a scene change | Fix | Reset `_flyPath = None` where `self.viewpoints` is assigned. | Fixed 5e2dfd8 |
+| MV-m3 | Minor | `advanceFlyThrough` requests frames forever after the path ends | Fix | Return False once the fraction reaches 1.0 and the final pose is applied. | Fixed 5e2dfd8 |
+| MV-m4 | Minor | Live fly-through timed from viewer start, shared with turntable | Fix | Give the fly-through its own start time, reset on mount. | Fixed 5e2dfd8 |
 | MV-m5 | Minor | `ViewChrome` rebuilds every widget per layout, losing drag highlight and focus | Investigate | Confirm, then rebuild only when shown views, parts or arrangement change (keep a key); otherwise re-arrange existing children. | Open |
 | MV-m6 | Minor | Quad crossing requests `resize-x` instead of `resize` | Fix | Map `vertical is None` to `'resize'`. | Open |
 | MV-m7 | Minor | Pointer capture can stick after a lost release or layout switch | Investigate | Confirm, then add `ViewLayout.release_all()` called from `show()` and focus-out; treat a press of a held button as a new capture. | Open |
 | MV-m8 | Minor | Keys do not follow the active view; examine and dolly use whole window | Investigate | Confirm, then state the limit in the docs or give `ViewNavigation` key bindings; pass `frame.rect` to the orbit builders when the event has a view. | Open |
-| MV-m9 | Minor | `resolve_source` raises for missing or ambiguous archives instead of returning None | Fix | Return None for a missing local archive; document the `UnknownMember` raise and handle it in the viewer, printing its listing. | Open |
-| MV-m10 | Minor | Docs and docstring use nonexistent `context.placeViews` | Fix | Name `viewsArranged`, or show a local function. | Open |
+| MV-m9 | Minor | `resolve_source` raises for missing or ambiguous archives instead of returning None | Fix | Return None for a missing local archive; document the `UnknownMember` raise and handle it in the viewer, printing its listing. | Fixed 7f1b047 |
+| MV-m10 | Minor | Docs and docstring use nonexistent `context.placeViews` | Fix | Name `viewsArranged`, or show a local function. | Fixed 41ccaab |
 | MV-m11 | Minor | `backends.rst` method table lacks `setPointerShape` | Fix | Add a row pointing to `CURSORS` and `overlayui.rst#pointer-feedback`. | Open |
-| MV-m12 | Minor | `_multiview_inc.glsl` comment names a nonexistent module | Fix | Point the comment at `OpenGLContext/multiview/strategy.py` (`pack_view_table`). | Open |
-| MV-m13 | Minor | `viewLayout` doc comment sits above `setPointerShape` | Fix | Move the comment above `viewLayout: Any = None`. | Open |
-| MV-m14 | Minor | GLFW standard cursors are never destroyed | Fix | Call `glfw.destroy_cursor` on each in `releaseWindow`. | Open |
-| MV-m15 | Minor | Exception inside a view leaves scissoring enabled | Investigate | Confirm, then wrap the per-view loop in `try/finally: self.finishViews()` and disable scissoring unconditionally in `finishViews`. | Open |
+| MV-m12 | Minor | `_multiview_inc.glsl` comment names a nonexistent module | Fix | Point the comment at `OpenGLContext/multiview/strategy.py` (`pack_view_table`). | Fixed 6a8ed9c (comment only; no test) |
+| MV-m13 | Minor | `viewLayout` doc comment sits above `setPointerShape` | Fix | Move the comment above `viewLayout: Any = None`. | Fixed 41ccaab |
+| MV-m14 | Minor | GLFW standard cursors are never destroyed | Fix | Call `glfw.destroy_cursor` on each in `releaseWindow`. | Fixed d67ee87 |
+| MV-m15 | Minor | Exception inside a view leaves scissoring enabled | Investigate | Confirm, then wrap the per-view loop in `try/finally: self.finishViews()` and disable scissoring unconditionally in `finishViews`. | Fixed a17d7a1 |
 | MV-m16 | Minor | Public multiview API typed `Any` throughout | Fix | Add a `ViewCamera` Protocol; type `View.camera`, `viewLayout` and `routeEvent` with it and `Optional[...]`. | Open |
 | MV-m17 | Minor | `ProgressBar` missing from `__all__`; docstring breaks writing rules | Fix | Add to `__all__`; reduce the docstring to what it draws, what it clamps, and that it takes no focus. | Open |
-| MV-m18 | Minor | Writing-rule breaches in new multiview, viewer, EGL and Qt docstrings | Fix | Run `/ai-isms --fix` over the listed files. | Open |
-| MV-m19 | Minor | `display_answers` runs an uncached Tk subprocess per call | Fix | Cache with `functools.lru_cache` keyed on `(display, directory)`. | Open |
-| MV-m20 | Minor | `draw_arrays` / `draw_elements` import `OpenGL.GL` on every draw | Fix | Import at module level. | Open |
-| MV-m21 | Minor | Viewer archive cache has no eviction or extraction race protection | Duplicate of MV-M10 | Atomic extraction via MV-M10 covers the race; also document the cache directory or add an LRU cap. | Open |
-| MV-m22 | Minor | GLUT and Tk map `'no'` to misleading cursors | Fix | Leave `'no'` out of the GLUT table so the call returns False. | Open |
+| MV-m18 | Minor | Writing-rule breaches in new multiview, viewer, EGL and Qt docstrings | Fix | Run `/ai-isms --fix` over the listed files. | Fixed 41ccaab (openglcontext); the openglcontext-qt test docstring with GAME-Q3 |
+| MV-m19 | Minor | `display_answers` runs an uncached Tk subprocess per call | Fix | Cache with `functools.lru_cache` keyed on `(display, directory)`. | Fixed 9e19e67 (the client run is cached per display; the cheap socket check is not, so a server that goes away is still seen) |
+| MV-m20 | Minor | `draw_arrays` / `draw_elements` import `OpenGL.GL` on every draw | Fix | Import at module level. | Fixed e75a0e3 |
+| MV-m21 | Minor | Viewer archive cache has no eviction or extraction race protection | Duplicate of MV-M10 | Atomic extraction via MV-M10 covers the race; also document the cache directory or add an LRU cap. | Fixed f3d7771 (race: lock and staging; eviction: directory documented as removable at any time, no LRU cap) |
+| MV-m22 | Minor | GLUT and Tk map `'no'` to misleading cursors | Fix | Leave `'no'` out of the GLUT table so the call returns False. | Fixed 018ed37 |
 | MV-n1 | Nit | `ViewChrome.pointer_pressed` only calls `super()` | Fix | Remove it. | Open |
 | MV-n2 | Nit | `ExpandButton.paint` and `Widget.rippleAt` mutate state | Fix | Make `tooltip` a property; let `animating` clear `_ripple`. | Open |
 | MV-n3 | Nit | camelCase and snake_case mixed within the multiview package | Fix | Choose one naming style per module family. | Open |
 | MV-n4 | Nit | Mixin duplicates `QuadView` defaults; `quad` re-exports navigation constants | Fix | Define each default once. | Open |
-| MV-n5 | Nit | Redundant aliases and defaults in `strategy.py`; failed detection retried each frame | Fix | Drop `IMPLEMENTED` and the `viewport` alias, align `max_viewports` defaults, cache a failed detection. | Open |
-| MV-n6 | Nit | `ViewSet.local` and `view_for` repeat `View` and `Context` logic | Fix | Delegate to `View.local` and `Context.routeEvent`. | Open |
-| MV-n7 | Nit | `cache_dir()` shadowed by `cache_dir` parameters in `source.py` | Fix | Rename the function or the parameters. | Open |
+| MV-n5 | Nit | Redundant aliases and defaults in `strategy.py`; failed detection retried each frame | Fix | Drop `IMPLEMENTED` and the `viewport` alias, align `max_viewports` defaults, cache a failed detection. | Fixed e75a0e3 |
+| MV-n6 | Nit | `ViewSet.local` and `view_for` repeat `View` and `Context` logic | Fix | Delegate to `View.local` and `Context.routeEvent`. | Fixed 3bfd0af (view_for delegates to ViewLayout.view_of; ViewSet.local is kept, a one-line delegation glisteel-editor calls) |
+| MV-n7 | Nit | `cache_dir()` shadowed by `cache_dir` parameters in `source.py` | Fix | Rename the function or the parameters. | Fixed 7f1b047 |
 | MV-n8 | Nit | `hoverWash` names both a colour and a bool; comment misleads | Fix | Rename one of them and correct the per-widget comment. | Open |
 | MV-n9 | Nit | `MiniMap` cache in `__dict__` uses a redundant `id()` plus `is` key | Fix | Key the cache by identity once. | Open |
 | MV-n10 | Nit | `hasMouseMoveHandlers` always True once views exist | Fix | Return True only while `gestures._held` is set. | Open |
-| MV-n11 | Nit | `requested_strategy` reads the environment without a read-once variant | Fix | Read the environment once, per the CLAUDE.md read-once rule. | Open |
+| MV-n11 | Nit | `requested_strategy` reads the environment without a read-once variant | Fix | Read the environment once, per the CLAUDE.md read-once rule. | Fixed e75a0e3 |
 | MV-n12 | Nit | openglcontext-qt `pyproject.toml` comment names the wrong release | Duplicate of GAME-Q1 | Fixed with GAME-Q1: make the comment match `>=3.0.0a5`. | Open |
-| MV-n13 | Nit | `PbufferContext.release()` un-currents whatever EGL context is current | Fix | Release only when this context is current, as `_egl_pbuffer` does. | Open |
-| MV-n14 | Nit | `_DISPLAY_USES` module dict modified without a lock | Fix | Guard updates with a module lock. | Open |
-| MV-n15 | Nit | `flythrough.poses_from` missing from `__all__` | Fix | Add it to `__all__`. | Open |
-| MV-d1 | Minor | Viewer docs lack the archive cache location and growth; member syntax unverified | Document | State the cache directory and its growth in `docs/viewer.rst`; confirm it names the archive-member syntax and add it if absent. | Open |
-| SG-C1 | Critical | `OGLC_hook` sets any `ParticleEmitter` field unbounded, including a local `texture` path | Fix | Whitelist authorable fields; drop or resolve `texture`, drop `externalURL`/`maxParticles`; clamp scale, density, rate, burst to field maxima; hostile-input test; bound `mirrorhooks` scale. | Open |
-| SG-M1 | Major | One malformed hook, zone or MSFT_lod value aborts the whole glTF load | Fix | Shared log-and-fall-back number helper in water, zoning and lod readers; skip bad ids; catch factory exceptions in `HookRunner`; hostile-input tests. Covers ZON-M7's zone case. | Open |
+| MV-n13 | Nit | `PbufferContext.release()` un-currents whatever EGL context is current | Fix | Release only when this context is current, as `_egl_pbuffer` does. | Fixed 11edccd |
+| MV-n14 | Nit | `_DISPLAY_USES` module dict modified without a lock | Fix | Guard updates with a module lock. | Fixed 11edccd (no test: a thread race on the count cannot be produced on demand; the lock is shown by reading) |
+| MV-n15 | Nit | `flythrough.poses_from` missing from `__all__` | Fix | Add it to `__all__`. | Fixed 41ccaab |
+| MV-d1 | Minor | Viewer docs lack the archive cache location and growth; member syntax unverified | Document | State the cache directory and its growth in `docs/viewer.rst`; confirm it names the archive-member syntax and add it if absent. | Fixed with MV-M10 (f3d7771, the other agent's Archives section of viewer.rst names the member syntax, the cache directory and that nothing evicts it) |
+| SG-C1 | Critical | `OGLC_hook` sets any `ParticleEmitter` field unbounded, including a local `texture` path | Fix | Whitelist authorable fields; drop or resolve `texture`, drop `externalURL`/`maxParticles`; clamp scale, density, rate, burst to field maxima; hostile-input test; bound `mirrorhooks` scale. | Fixed 36aa17c |
+| SG-M1 | Major | One malformed hook, zone or MSFT_lod value aborts the whole glTF load | Fix | Shared log-and-fall-back number helper in water, zoning and lod readers; skip bad ids; catch factory exceptions in `HookRunner`; hostile-input tests. Covers ZON-M7's zone case. | Fixed 69e59f9 |
 | SG-M2 | Major | `LOD.boundingVolume` stays cached for the first level drawn | Fix | Clear the cached volume in `show()` when the level changes, or bound the node by the union of all levels; add a test. | Open |
 | SG-M3 | Major | LOD level selection has no hysteresis, so threshold jitter flips levels | Fix | Add a `hysteresis` fraction (default about 0.1) to coverage and distance selection; test with coverage oscillating across a threshold. | Open |
 | SG-M4 | Major | MSFT_lod path skips skin and morph registration for the finest level | Fix | Call `_register_morph` and `_register_skin` in `_lod_node`, passing `node_index`; test with `RiggedSimple` wrapped in MSFT_lod. | Open |
@@ -226,7 +226,7 @@ The decisions below are the review's proposals, and each is the maintainer's to 
 | SG-m9 | Minor | `GLTFScene.advance` looks up kinds in the global registry at advance time | Fix | Record each kind's `Registration` in `HookRunner` and store it with `hook_data`; consider a `registry=` argument to `load_gltf`. | Open |
 | SG-m10 | Minor | Zone naming a hook-replaced node controls a detached `Transform` | Investigate | Have `node_transform` return what stands in the slot, or warn when a zone names a replaced node. | Open |
 | SG-m11 | Minor | `imagebased` skips face validation, decodes eagerly, lets some errors escape | Fix | Validate face sizes, decode only referenced lights lazily, cache per image index, widen the guard to `Exception` with a warning. | Open |
-| SG-m12 | Minor | `decode_data_uri` decodes before checking the size cap | Fix | Check `len(payload) * 3 // 4` against the cap before `b64decode`. | Open |
+| SG-m12 | Minor | `decode_data_uri` decodes before checking the size cap | Fix | Check `len(payload) * 3 // 4` against the cap before `b64decode`. | Fixed 942b27d |
 | SG-m13 | Minor | Resolver private names renamed without aliases | Maintainer decision | Keep deprecated aliases for one release, or note the rename in the changelog; update `_default_cache_dir` users. | Open |
 | SG-m14 | Minor | `GroundCover._told` swaps `_blocks` while a background scatter may write | Investigate | Guard `_blocks`/`_retired` with a lock, or a generation counter bumped in `_told` and checked before storing. | Open |
 | SG-m15 | Minor | `BackgroundCompute` drops failed requests; unshut cover leaks its thread | Fix | Reset `_near_at`/`_far_at` on failure; hold the owner weakly or add `dispose`; document `shutdown()` in `docs/vegetation.rst`. | Open |
@@ -240,11 +240,11 @@ The decisions below are the review's proposals, and each is the maintainer's to 
 | SG-m23 | Minor | Seven new `type: ignore`s carry no reason | Fix | Use explicit-length tuple types, a `Protocol` with `copy()` for `Varied`, and give any remaining ignore a reason. | Open |
 | SG-m24 | Minor | Hooks API typed loosely (`Any` returns and fields) | Fix | `@overload` `register`/`registered`, type `HookContext` fields, split the two factory return shapes, use `set[str]`. | Open |
 | SG-m25 | Minor | Presets moved to Nodes: renamed kwargs, lost hashability, mutable global presets | Maintainer decision | Record renames in the changelog; choose between mutable shared presets and frozen ones (e.g. `style_for` returning `.varied()` copies). | Open |
-| SG-m26 | Minor | Water hook does not validate `medium` or `depth` | Fix | Clamp depth to non-negative; map unknown media to `WATER` with a warning, as the mirror hook does. | Open |
+| SG-m26 | Minor | Water hook does not validate `medium` or `depth` | Fix | Clamp depth to non-negative; map unknown media to `WATER` with a warning, as the mirror hook does. | Fixed 69e59f9 |
 | SG-m27 | Minor | `LoadPool` may run `prepare` on a worker; slow fetches starve loads | Investigate | Call `prepare` eagerly for known kinds at import or context start; consider a per-fetch timeout or separate network pool. | Open |
 | SG-n1 | Nit | Docstrings break writing rules: history, bold leaders, maxims, selling | Fix | Run `/ai-isms --fix` over the listed files; move the Beacon narrative to the roads plan. | Open |
 | SG-n2 | Nit | `loaders/assets.py` reformatted wholesale to double quotes in a feature commit | Maintainer decision | Either restore the package's single-quote style in `assets.py` or keep the reformat as is. | Open |
-| SG-n3 | Nit | `octahedralHemi` reads the string `"false"` as true | Fix | Parse string booleans as the mirror hook does. | Open |
+| SG-n3 | Nit | `octahedralHemi` reads the string `"false"` as true | Fix | Parse string booleans as the mirror hook does. | Fixed c69d33b |
 | SG-n4 | Nit | glTF 2.1 `shapes` handling targets an unratified version; `read_shape` unchecked | Investigate | Cite the draft followed or keep it behind the extension; check `size` has three positive components. | Open |
 | SG-n5 | Nit | `_warn_if_displaced` prints the node name twice and reads oddly | Fix | Format the name once and rewrite the message plainly. | Open |
 | SG-n6 | Nit | `_index_emitters` is O(built x declared) | Fix | Use an `id(emitter)` to index dict. | Open |
@@ -256,31 +256,31 @@ The decisions below are the review's proposals, and each is the maintainer's to 
 | SG-n12 | Nit | `wait_for_loads` can wait up to twice the timeout | Fix | Share one deadline between the runtime and cover waits. | Open |
 | SG-n13 | Nit | Octahedral docstring says the arithmetic is in one place; `pbr.vert` copies it | Fix | Say the Python and GLSL copies are tested against each other. | Open |
 | SG-n14 | Nit | `PBRMesh.unchecked` keys on program ids, which GL reuses | Fix | Clear the entry when a program is deleted, or key on the program object rather than its id. | Open |
-| SG-d1 | Minor | `docs/untrusted.rst` omits `OGLC_hook`, `OGLC_zone` and `EXT_lights_image_based` | Fix | State what a downloaded file can make built-in kinds do, give the limits, and point to `OPENGLCONTEXT_GLTF_HOOKS=0`. | Open |
-| SG-d2 | Minor | `docs/gltf.rst` "never names code" ignores resource paths; kinds table omits `mirror` | Fix | Qualify the guarantee for resources such as particle `texture`; add `mirror` to the engine-kinds table. | Open |
+| SG-d1 | Minor | `docs/untrusted.rst` omits `OGLC_hook`, `OGLC_zone` and `EXT_lights_image_based` | Fix | State what a downloaded file can make built-in kinds do, give the limits, and point to `OPENGLCONTEXT_GLTF_HOOKS=0`. | Documented 87a45d0 |
+| SG-d2 | Minor | `docs/gltf.rst` "never names code" ignores resource paths; kinds table omits `mirror` | Fix | Qualify the guarantee for resources such as particle `texture`; add `mirror` to the engine-kinds table. | Documented 87a45d0 |
 | SG-d3 | Minor | `merged_mesh`, `merged_by_material`, `grid.Patches`, `world_noise` are public but undocumented | Fix | Document the functions and exports in the assets and vegetation docs. | Open |
 | SG-d4 | Minor | No installed demo for ground cover, MSFT_lod/impostors, holes/bores, zones/IBL | Fix | Add installed `oglc-*` demos, at least for MSFT_lod and ground cover, covering the documented use cases. | Open |
-| CP-1 | Critical | Resolver refuses GitHub's cross-origin redirect, so no shipped pack downloads | Fix | Give content packs their own redirect policy: allow https to public hosts, refuse private addresses and non-https; test with two servers; push `content-v1` before release. | Open |
-| CP-2 | Major | No installed-version record; URL-keyed cache fails for ever on a changed digest | Fix | Write an install record (key, sha256, url) and compare it in `root_for`; evict and re-download once on `DigestMismatch`; key cache by digest; new URL per rebuild. | Open |
-| CP-3 | Major | Extraction not atomic: partial pack counts as installed, concurrent installs interleave | Fix | Extract into a sibling `.partial-<pid>` directory, write the install record, `os.replace` under a lock file; marker last for `within`; remove partial on failure. | Open |
-| CP-4 | Major | `tar.getmembers()` enumerates everything before entry-count and size checks | Fix | Iterate members with running count and size, stop at the first overrun, and bound decompressed bytes read during enumeration. | Open |
+| CP-1 | Critical | Resolver refuses GitHub's cross-origin redirect, so no shipped pack downloads | Fix | Give content packs their own redirect policy: allow https to public hosts, refuse private addresses and non-https; test with two servers; push `content-v1` before release. | Fixed a9a8616 (pushing the `content-v1` release: Needs input) |
+| CP-2 | Major | No installed-version record; URL-keyed cache fails for ever on a changed digest | Fix | Write an install record (key, sha256, url) and compare it in `root_for`; evict and re-download once on `DigestMismatch`; key cache by digest; new URL per rebuild. | Fixed 99b0959 (install record compared in root_for; cached archive evicted and fetched once more on DigestMismatch; cache stays keyed by URL, since the record plus the retry make a rebuild under the same URL work) |
+| CP-3 | Major | Extraction not atomic: partial pack counts as installed, concurrent installs interleave | Fix | Extract into a sibling `.partial-<pid>` directory, write the install record, `os.replace` under a lock file; marker last for `within`; remove partial on failure. | Fixed 99b0959 (helper ed05f72) |
+| CP-4 | Major | `tar.getmembers()` enumerates everything before entry-count and size checks | Fix | Iterate members with running count and size, stop at the first overrun, and bound decompressed bytes read during enumeration. | Fixed faec2f1 |
 | CP-5 | Major | Plain http accepted and sha256 optional, so packs can be replaced in transit | Fix | Require https unless the pack carries a sha256, or require https outright; consider a digest for every pack in a shipped registry. | Open |
 | CP-6 | Major | Documented `requires` field is never parsed or enforced | Maintainer decision | Either validate with `SpecifierSet` and exclude non-matching packs by application version, with tests, or remove the field and its documentation. | Open |
 | CP-7 | Major | A registry that fails validation is kept and breaks every `load_registries()` | Fix | Validate the bundle from a temporary extraction and keep it only on success; remove the kept file and `.unpacked` directory on failure. | Open |
-| CP-8 | Major | `publish.install(within=X, replace=True)` deletes the whole owning pack | Fix | With `within`, remove only the needed pack's listed files or refuse `replace`; stop ignoring removal errors; warn when the root is outside `store.root`. | Open |
+| CP-8 | Major | `publish.install(within=X, replace=True)` deletes the whole owning pack | Fix | With `within`, remove only the needed pack's listed files or refuse `replace`; stop ignoring removal errors; warn when the root is outside `store.root`. | Fixed 99b0959 |
 | CP-9 | Major | Downloads and cache hits hold the whole archive in memory, twice on fetch | Fix | Stream chunks into the `mkstemp` file with cap and cancel checks, hash while streaming, and only touch the file on a hit. | Open |
 | CP-10 | Major | Namespace partition bypassable on case-insensitive or dot-stripping filesystems | Fix | Casefold namespace and directory for comparison and path; forbid trailing `.` and Windows reserved names in `_SEGMENT` and `_NAMESPACE`. | Open |
 | CP-11 | Minor | Registry fields coerced instead of type-checked | Fix | Check `isinstance` per field (bool, list of key strings, int not bool, str); test marker segments with `PurePosixPath(marker).parts`. | Open |
 | CP-12 | Minor | Refreshed registry bundle extracted over the old one; stale files survive | Fix | Extract into a fresh temporary directory and swap it in; skip extraction when the bundle digest matches the last one recorded. | Open |
-| CP-13 | Minor | `fetch_registry` and `resolver.fetch_url` accept `file://` and plain http | Fix | Check `is_url()`, or require https, at the top of `fetch_url` and in `fetch_registry`. | Open |
+| CP-13 | Minor | `fetch_registry` and `resolver.fetch_url` accept `file://` and plain http | Fix | Check `is_url()`, or require https, at the top of `fetch_url` and in `fetch_registry`. | Fixed a9a8616 (fetch_url); registry https rule with CP-5 |
 | CP-14 | Minor | `missing_base` returns a flat list, losing each pack's `within` | Fix | Return (pack, within) pairs, or add a helper that fetches a base pack's closure with the right `within`. | Open |
-| CP-15 | Minor | Cancel ignored during extraction; job state never shows failure; traceback dropped | Fix | Pass the cancel predicate into `extract` per member; set `state` to done, failed or cancelled; log with `exc_info`. | Open |
-| CP-16 | Minor | Tar `data` filter missing on older 3.10/3.11 patch releases the floor allows | Fix | Check `hasattr(tarfile, 'data_filter')` once and raise a clear error, or raise the Python floor. | Open |
-| CP-17 | Minor | `archive.extract` uncapped by default; twig-bb relies on it and has its own zip extractor | Fix | Default `max_bytes` to `MINIMUM_UNPACKED`, `None` only when explicit; move twig-bb's zip and nested-pk3 handling onto `archive.extract`. | Open |
-| CP-18 | Minor | `archive.write` stores symlinks as links and drops symlinked directories | Fix | Refuse or dereference symlinks; write to a temporary file and `os.replace` it. | Open |
+| CP-15 | Minor | Cancel ignored during extraction; job state never shows failure; traceback dropped | Fix | Pass the cancel predicate into `extract` per member; set `state` to done, failed or cancelled; log with `exc_info`. | Fixed 99b0959, faec2f1 (cancel during extraction); job state and traceback: see below |
+| CP-16 | Minor | Tar `data` filter missing on older 3.10/3.11 patch releases the floor allows | Fix | Check `hasattr(tarfile, 'data_filter')` once and raise a clear error, or raise the Python floor. | Fixed faec2f1 (clear refusal on an interpreter without tarfile filters) |
+| CP-17 | Minor | `archive.extract` uncapped by default; twig-bb relies on it and has its own zip extractor | Fix | Default `max_bytes` to `MINIMUM_UNPACKED`, `None` only when explicit; move twig-bb's zip and nested-pk3 handling onto `archive.extract`. | Fixed faec2f1 (engine default cap); twig-bb's own zip extractor: see notes |
+| CP-18 | Minor | `archive.write` stores symlinks as links and drops symlinked directories | Fix | Refuse or dereference symlinks; write to a temporary file and `os.replace` it. | Fixed faec2f1 (symlinks refused by name; archive written atomically) |
 | CP-19 | Minor | `packs.json` is not in the wheel and nothing in the engine reads it | Maintainer decision | Either ship it in package-data with a consumer such as `oglc-view --pack openglcontext/gallery`, or move it beside `release-assets.py` as build output. | Open |
 | CP-20 | Minor | `publish.push` treats any `gh release view` failure as missing; no option terminator | Fix | Distinguish not-found from other failures; pass absolute paths or place them after `--`. | Open |
-| CP-21 | Minor | Refused-redirect error message carries the signed CDN URL | Fix | Pass the target through `safe_url` with the query stripped before building the message. | Open |
+| CP-21 | Minor | Refused-redirect error message carries the signed CDN URL | Fix | Pass the target through `safe_url` with the query stripped before building the message. | Fixed a9a8616 |
 | CP-22 | Minor | Documented single exception family misses `http.client.InvalidURL` | Fix | Validate URL host and port in `_check_where_it_lands`; have the resolver raise a dedicated size exception and catch that. | Open |
 | CP-23 | Minor | `release-assets.py` staging directories reused, so stale files enter archives | Fix | `shutil.rmtree` the staging directory before staging; fail when `CREDITS.txt` is missing. | Open |
 | CP-24 | Nit | Registry download cap and unpack cap use different constants | Fix | Drive both caps from one constant. | Open |
@@ -289,22 +289,22 @@ The decisions below are the review's proposals, and each is the maintainer's to 
 | CP-27 | Nit | Preview and escape checks use `abspath`, not `realpath` | Fix | Use `realpath` in `_resolve_preview` and `_refuse_escape`. | Open |
 | CP-28 | Nit | Only the asset-cache leaf gets mode 0700; store directories use the umask | Fix | Apply consistent directory modes, or rely on and state the per-user app-data parent. | Open |
 | CP-29 | Nit | Content-pack docstrings break the writing rules (glosses, insisting, bold leader) | Fix | Rewrite the listed sentences in `store.py`, `fetch.py`, `catalog.py` and `pack.py` as plain statements. | Open |
-| PH-01 | Major | Threaded manager loses a removed body's `'end'` events and prunes the subscription | Fix | In `_remove_body`, under the world lock, publish the world's contact log through a new omi_physics `ThreadedSimulation.flush_events()`; add a threaded removal test. | Open |
-| PH-02 | Major | Late subscription receives every event logged since reporting was switched on | Fix | Drain the contact log whenever reporting is on and dispatch only if draining; test that a late subscriber gets no old events. | Open |
-| PH-03 | Major | Render-thread code mutates a threaded world without the world lock | Fix | Add a manager `_mutate()` hook taking the world lock for `report_hit` and `_report`; take trigger points from the snapshot; document walker `with_world()`; qualify hit ordering. | Open |
-| PH-04 | Minor | mypy error: `apply_zones` given an ndarray for `Sequence[float]` | Fix | Widen `apply_zones`' `position` to `ArrayLike`. | Open |
+| PH-01 | Major | Threaded manager loses a removed body's `'end'` events and prunes the subscription | Fix | In `_remove_body`, under the world lock, publish the world's contact log through a new omi_physics `ThreadedSimulation.flush_events()`; add a threaded removal test. | Fixed e10a78b, with omi_physics 010ef09 (`ThreadedSimulation.flush_events`) |
+| PH-02 | Major | Late subscription receives every event logged since reporting was switched on | Fix | Drain the contact log whenever reporting is on and dispatch only if draining; test that a late subscriber gets no old events. | Fixed e10a78b |
+| PH-03 | Major | Render-thread code mutates a threaded world without the world lock | Fix | Add a manager `_mutate()` hook taking the world lock for `report_hit` and `_report`; take trigger points from the snapshot; document walker `with_world()`; qualify hit ordering. | Fixed e10a78b, with omi_physics 4ef553c (TriggerEvent.point, re-entrant world lock) |
+| PH-04 | Minor | mypy error: `apply_zones` given an ndarray for `Sequence[float]` | Fix | Widen `apply_zones`' `position` to `ArrayLike`. | Fixed 8c0b006 (before this work; `apply_zones` already takes `ArrayLike`, mypy clean) |
 | PH-05 | Minor | Zone gain and reverb stick when the zone list becomes empty | Duplicate of ZON-M9 | Fixed with ZON-M9: call `apply_zones` with no zones once when they go, or unconditionally. | Open |
-| PH-06 | Minor | Threaded manager writes a stale snapshot onto a body in a reused slot | Fix | Record the snapshot version each body was added at and skip it in `_write` until reached, or publish under the world lock in `add`/`remove`. | Open |
-| PH-07 | Minor | A dome taller than its diameter floats above the ground | Fix | Clamp `lift` to at most `radius` or use a capsule; state the rule in `Prop.shape` and add a test. | Open |
-| PH-08 | Minor | `remove` and `body_for` are linear in the body count | Fix | Keep bodies in an insertion-ordered dict and a transform-id-to-body map maintained in `add`/`remove`. | Open |
-| PH-09 | Minor | No tests for threaded removal events, late subscriptions or zone audio | Fix | Add the tests named under PH-01, PH-02 and PH-05. | Open |
-| PH-10 | Nit | `_handles` duplicates `world.handle_of` | Fix | Drop `_handles`; have `handle()` consult `world.handle_of` then `_retired`. | Open |
-| PH-11 | Nit | Class attributes declared after `__init__` in the physics managers | Fix | Move `steps_on_this_thread` and `RETIRED_KEPT` to the top of the class body. | Open |
+| PH-06 | Minor | Threaded manager writes a stale snapshot onto a body in a reused slot | Fix | Record the snapshot version each body was added at and skip it in `_write` until reached, or publish under the world lock in `add`/`remove`. | Fixed e10a78b |
+| PH-07 | Minor | A dome taller than its diameter floats above the ground | Fix | Clamp `lift` to at most `radius` or use a capsule; state the rule in `Prop.shape` and add a test. | Fixed 73f5543 |
+| PH-08 | Minor | `remove` and `body_for` are linear in the body count | Fix | Keep bodies in an insertion-ordered dict and a transform-id-to-body map maintained in `add`/`remove`. | Fixed e10a78b |
+| PH-09 | Minor | No tests for threaded removal events, late subscriptions or zone audio | Fix | Add the tests named under PH-01, PH-02 and PH-05. | Fixed e10a78b (threaded removal and late-subscription tests) |
+| PH-10 | Nit | `_handles` duplicates `world.handle_of` | Fix | Drop `_handles`; have `handle()` consult `world.handle_of` then `_retired`. | Fixed e10a78b |
+| PH-11 | Nit | Class attributes declared after `__init__` in the physics managers | Fix | Move `steps_on_this_thread` and `RETIRED_KEPT` to the top of the class body. | Fixed e10a78b |
 | PH-12 | Nit | Per-frame import of `apply_zones` in `audio.scene.update` | Fix | Import `apply_zones` at module level. | Open |
-| PH-13 | Nit | Prose in `PropColliders._stand` argues; `gltf_world` comment repeats docstring | Fix | Use the plainer `_stand` wording from the finding; drop the repeated inline comment. | Open |
+| PH-13 | Nit | Prose in `PropColliders._stand` argues; `gltf_world` comment repeats docstring | Fix | Use the plainer `_stand` wording from the finding; drop the repeated inline comment. | Fixed 73f5543 |
 | BIN-1 | Major | Tk and wx demos never open in quad view; `views` default overrides class attribute | Fix in engine | Default `ViewerOptions.views` to None and pass it through so `multiViewArrangement` applies; add a unit test for a `'quad'` subclass. | Open |
 | BIN-2 | Major | `profile_view` sets the env var too late; profiles with error checking on | Fix | Assign `OpenGL.ERROR_CHECKING = False` again (or a supported runtime switch); correct the comment; add a subprocess test. | Open |
-| BIN-3 | Major | `omi_audio` pin is below the API the engine calls (`set_rate`, `reverb`) | Fix | Release a new omi_audio version and pin `omi_audio>=` it, coordinated with `tools/release.toml`. | Open |
+| BIN-3 | Major | `omi_audio` pin is below the API the engine calls (`set_rate`, `reverb`) | Fix | Release a new omi_audio version and pin `omi_audio>=` it, coordinated with `tools/release.toml`. | Fixed f9d10f3, with omi_audio b7bf4e6 (version 0.4.0a1); publishing omi_audio 0.4.0a1 is Needs input |
 | BIN-4 | Major | `oglc-audio-demo` uses flat single-colour plastic | Fix | Dress the yard with engine `surfaces` PBR materials as `CollisionYard` does and set `OPENGLCONTEXT_RENDERER=pbr`. | Open |
 | BIN-5 | Minor | Audio demo shows `box_gain`, not zones, and no reverb | Fix | Make the cave and stream `Zone` nodes with `ZoneAudio` and a cave `ZoneReverb`; keep `box_gain` in docs as the no-zone option. | Open |
 | BIN-6 | Minor | Kinematic door driving and trigger occupancy hand-rolled in the demo | Fix in engine | Add a kinematic mover helper and a trigger-occupancy object to the physics API, test them, and have the yard call them. | Open |
@@ -314,7 +314,7 @@ The decisions below are the review's proposals, and each is the maintainer's to 
 | BIN-10 | Minor | `--video-fps 0` and non-positive `--video-seconds` not rejected by the parser | Fix | Use a positive-number `type=` for both options, as `_parse_size` does. | Open |
 | BIN-11 | Minor | `gltf_regression` rederives the cache key and reads whole files | Fix | Use `resolver.fetch_to_cache` or `cached_path`; make the default cache directory public if tools need it. | Open |
 | BIN-12 | Minor | `oglc-mirrors --help` opens the demo instead of printing usage | Fix | Add an `argparse.ArgumentParser(...).parse_args()` in `main()`. | Open |
-| BIN-13 | Minor | `physics.rst` repeats a sentence; `viewer.rst` omits `archive#member` sources | Fix | Delete the repeated sentence (with DOC-11); add an Archives subsection to `viewer.rst`. | Open |
+| BIN-13 | Minor | `physics.rst` repeats a sentence; `viewer.rst` omits `archive#member` sources | Fix | Delete the repeated sentence (with DOC-11); add an Archives subsection to `viewer.rst`. | Fixed f3d7771 (viewer.rst Archives section); repeated sentence with DOC-11 |
 | BIN-14 | Nit | Trailing "which is what" glosses, one bolded, in `oglc-view` docstring and help | Fix | Rewrite both as plain statements, per the suggested wording. | Open |
 | BIN-15 | Nit | `--capture-image` and `--capture` are two separate options with one dest | Fix | Declare one argument with both spellings so help shows a single entry. | Open |
 | BIN-16 | Nit | `--video-seconds` also sets unrecorded fly-through length; help omits it | Document | Say so in the `--video-seconds` help, or add a `--fly-seconds` option. | Open |
@@ -344,48 +344,48 @@ The decisions below are the review's proposals, and each is the maintainer's to 
 | DOC-23 | Nit | `viewer.rst` omits options, misnames backends in an error, lacks two formats | Fix | Complete the `ViewerOptions` list, correct the error wording, add `.obj.gz` and `#member` archives to the table. | Open |
 | DOC-24 | Nit | Vegetation block size stated as fixed 32 metres | Investigate | Confirm the far-rung sizing, then say "at least 32 metres wide, wider for the far rungs". | Open |
 | DOC-25 | Minor | Writing-rule violations: README bold leaders and six toolkits, bold openers, glosses | Fix | Rewrite the README list with plain leaders and add Tk; remove bold paragraph openers in roads.rst and testing.rst; recast the glosses. | Open |
-| DOC-26 | Major | LOD page's demo command cannot work | Duplicate of CP-1 | Fixed with CP-1, plus pushing the `content-v1` release. | Open |
+| DOC-26 | Major | LOD page's demo command cannot work | Duplicate of CP-1 | Fixed with CP-1, plus pushing the `content-v1` release. | Fixed with CP-1 (pushing `content-v1`: Needs input, see CP-1) |
 | DOC-27 | Minor | `contentpacks.rst` documents `requires`, http and stable URLs beyond what code gives | Document | State the limits now; bring the page in line once CP-2, CP-5 and CP-6 are fixed. | Open |
-| LIB-D1 | Major | `multiple-choice` schedule spends 20 failed draws per initial edge before stopping | Fix | Size the failure budget to the live pool since the last success, or fall back to one exhaustive pass and stop; add a bounded-work test. | Open |
-| LIB-D2 | Major | Open surfaces reduce to nothing, contrary to README, `survey` floor and tests | Maintainer decision | Either add the boundary link condition in both reducers to keep patches, or let patches vanish and correct README Limits, `Survey.floor`/`reducible`, `test_survey.py` and GALLERY.md. | Open |
-| LIB-D3 | Major | `locked` takes welded-point indices, not the caller's vertex indices | Fix | Map `locked` through `vertex_point` inside `_Engine`; add `locked_points` if welded points are needed; at minimum document zero-tolerance welding and expose the map. | Open |
-| LIB-D4 | Minor | `import opengl_decimate.survey as m` yields the function, not the module | Fix | Rename the `survey` and `simplify` modules (or the functions) so package attributes do not shadow submodules. | Open |
-| LIB-D5 | Minor | Default `normal_noise` 1e-3 is too small to condition the 3x3 solve | Fix | Scale the determinant test by the added noise, or test the smallest eigenvalue, or raise the default; test a planar fan solves. | Open |
-| LIB-D6 | Minor | Compiled loop is quadratic in vertex valence (ring, duplicate-face, link scans) | Fix | Deduplicate rings with a per-point epoch stamp array and reuse it for the duplicate-face test. | Open |
-| LIB-D7 | Minor | Docs say normals accumulate per point; code uses smoothing groups | Fix | Rewrite the `options.py` and API.md passages to describe smoothing groups and point to `crease_angle`. | Open |
-| LIB-D8 | Minor | New option, result field and accelerator switches missing from API.md and README | Fix | Add rows for `drop_components_below` and `dropped_away`, and a section on `OPENGL_DECIMATE_NO_ACCEL` and `native.ACCELERATED`. | Open |
-| LIB-D9 | Minor | Empty result lacks `NORMAL` although `recompute_normals` was set | Fix | Add an empty `(0, 3)` float32 `NORMAL` in the empty-surface return when `recompute_normals` is set. | Open |
-| LIB-D10 | Minor | `survey()` skips input validation and cannot take weld or drop options | Fix | Call `simplify._check` and accept `options: SimplifyOptions \| None` so weld and drop settings apply. | Open |
-| LIB-D11 | Minor | `seam_share` counts edges onto seams, not the atlas boundary its docstring claims | Fix | Correct the docstring, or add a separate count of edges whose sides disagree on texture coordinates. | Open |
-| LIB-D12 | Minor | `lock_seams` compares only copy counts, so seam points may merge across charts | Investigate | Reproduce with a one-triangle-wide chart; if confirmed, require multi-copy contractions to run along a seam edge. | Open |
-| LIB-D13 | Minor | MESH-DECIMATION plan contradicts itself on M4, coverage and the accelerator package | Fix | Update the status line, milestone table and M4 text, and qualify the 100% coverage claim. | Open |
-| LIB-D14 | Minor | Near-singular optimal placement is unbounded and can move a vertex far away | Investigate | Confirm on a curved crease; then reject optima far from the edge midpoint or use a truncated-SVD solve anchored there. | Open |
-| LIB-D15 | Minor | `certify` counts components removed by `drop_components_below` as deviation | Fix | Certify against the input without the dropped faces, or report both figures. | Open |
-| LIB-D16 | Minor | `CollapseSequence.__post_init__` runs a per-contraction Python loop on every `simplify` | Fix | Compute winner and loser inside the compiled loop and return them with the log. | Open |
-| LIB-D17 | Nit | Float index arrays are silently truncated to integers | Fix | Refuse a non-integer index dtype with a `DecimateError`. | Open |
-| LIB-D18 | Nit | CI comments misstate Rosetta and the platform count across five libraries | Fix | Reword to "Intel Macs cannot run an arm64 wheel, so they need one built on x86_64"; correct the platform count in `test.yml`. | Open |
-| LIB-D19 | Nit | Several opengl_decimate passages break the workspace writing rules | Fix | Run `/ai-isms --fix` over `src/` and the workflows; move measurement narrative to GALLERY or plans. | Open |
-| LIB-D20 | Nit | `REVIEW.md` work ledger is tracked at the library root | Fix | Move it into `plans/` or the engine's plan. | Open |
-| LIB-D21 | Nit | Compiled path narrows indices to int32 without a range check | Fix | Refuse meshes whose indices or incidence counts overflow int32 with a `DecimateError`. | Open |
-| LIB-D22 | Nit | Grid search rebuilds a boolean mask through `np.isin` | Fix | Use the mask `found == np.repeat(closest, sizes)` directly. | Open |
-| LIB-D23 | Nit | Native heap starts at 1,024 entries; sequence fields typed `Any` | Fix | Size the heap from the edge count and give `origin` and `_moved*` their array types. | Open |
-| LIB-D24 | Nit | NumPy and compiled reducers treat an infinite price differently | Fix | Test `isfinite` in both reducers. | Open |
-| LIB-D25 | Minor | opengl_decimate has no CHANGELOG for a large feature release | Fix | Add a CHANGELOG covering the new reducer, options, fields and switches. | Open |
-| LIB-P1 | Minor | `ContactTracker.ignored` keys can outlive pairs dropped for cleared flags | Investigate | Confirm the re-flag case; then discard those keys from `ignored` where `update` drops unflagged pairs. | Open |
-| LIB-P2 | Minor | A raising contact listener leaves the world part-way through a step | Maintainer decision | Either collect the exception, finish the step and re-raise, or log and continue; document which applies. | Open |
-| LIB-P3 | Minor | omi_physics 0.4.0 adds public API with no changelog | Fix | Add a changelog covering contact events, sensors, ray filters and trigger filters. | Open |
-| LIB-P4 | Nit | `ContactEvent.point` and `normal` are views into one shared per-step array | Fix | Copy each row into its own array, or document that the arrays are shared. | Open |
-| LIB-P5 | Nit | Stale `last_batch` is detected by comparing lengths | Fix | Stamp the batch with `step_count` and compare that. | Open |
-| LIB-P6 | Nit | Ray `filter` keyword shadows the builtin and is undocumented | Fix | Document the keyword in README and docs; consider a non-shadowing name. | Open |
-| LIB-P7 | Nit | `world.alive()` scans the free-slot list | Fix | Keep a boolean liveness array. | Open |
-| LIB-P8 | Nit | Ray bundle test allocates `(R, T, 3)` temporaries for widely spread bundles | Document | State the memory cost of wide bundles over dense meshes in the docstring. | Open |
-| LIB-P9 | Nit | Adding a listener fills `contact_log` although nothing drains it | Fix | Deliver to listeners without retaining events in `contact_log` when no log consumer exists. | Open |
-| LIB-P10 | Nit | `ContactLog.dropped` miscounts when a drain races on another thread | Fix | Compute the dropped count under the same lock as `extend`. | Open |
-| LIB-A1 | Minor | Reverb comb delays share factors in samples; docs claim they do not | Fix | Choose mutually prime delays in samples per rate (primes nearest the targets), or drop the claim. | Open |
-| LIB-A2 | Minor | Reverb omits Schroeder's series allpass diffusers | Fix | Add two allpasses of about 5 ms and 1.7 ms, vectorised the same way as the combs. | Open |
-| LIB-A3 | Minor | Wet reverb signal is not normalised against comb gain and can clip | Fix | Scale by (1-g) or an RMS-normalising constant and state the headroom in the docs. | Open |
-| LIB-A4 | Nit | omi_audio CHANGELOG uses bold-leader bullets; README Limits has a defensive preface | Fix | Rewrite the bullets as plain definitions and drop the preface. | Open |
-| LIB-A5 | Nit | Reverb delay lines can decay into float32 denormals | Investigate | Confirm the slowdown on x86; then flush lines below about 1e-30 to zero. | Open |
+| LIB-D1 | Major | `multiple-choice` schedule spends 20 failed draws per initial edge before stopping | Fix | Size the failure budget to the live pool since the last success, or fall back to one exhaustive pass and stop; add a bounded-work test. | Fixed 22a3388 (opengl_decimate) |
+| LIB-D2 | Major | Open surfaces reduce to nothing, contrary to README, `survey` floor and tests | Maintainer decision | Either add the boundary link condition in both reducers to keep patches, or let patches vanish and correct README Limits, `Survey.floor`/`reducible`, `test_survey.py` and GALLERY.md. | Fixed 2f3c128 (opengl_decimate). Decided per correctness: both reducers keep an open piece's last triangle (boundary form of the link condition), matching Survey.floor, README and tests; README Limits corrected for closed pieces |
+| LIB-D3 | Major | `locked` takes welded-point indices, not the caller's vertex indices | Fix | Map `locked` through `vertex_point` inside `_Engine`; add `locked_points` if welded points are needed; at minimum document zero-tolerance welding and expose the map. | Fixed b8424fb (opengl_decimate): locked maps through vertex_point |
+| LIB-D4 | Minor | `import opengl_decimate.survey as m` yields the function, not the module | Fix | Rename the `survey` and `simplify` modules (or the functions) so package attributes do not shadow submodules. | Fixed 00aa189 (opengl_decimate): modules renamed reduction.py and floors.py |
+| LIB-D5 | Minor | Default `normal_noise` 1e-3 is too small to condition the 3x3 solve | Fix | Scale the determinant test by the added noise, or test the smallest eigenvalue, or raise the default; test a planar fan solves. | Fixed 3780f81 (opengl_decimate): determinacy is the reciprocal condition number |
+| LIB-D6 | Minor | Compiled loop is quadratic in vertex valence (ring, duplicate-face, link scans) | Fix | Deduplicate rings with a per-point epoch stamp array and reuse it for the duplicate-face test. | Fixed 8868dbe (opengl_decimate): epoch stamps, sorted pair duplicate test, qsort; 16k-spoke cone 4.4 s -> 0.12 s |
+| LIB-D7 | Minor | Docs say normals accumulate per point; code uses smoothing groups | Fix | Rewrite the `options.py` and API.md passages to describe smoothing groups and point to `crease_angle`. | In progress |
+| LIB-D8 | Minor | New option, result field and accelerator switches missing from API.md and README | Fix | Add rows for `drop_components_below` and `dropped_away`, and a section on `OPENGL_DECIMATE_NO_ACCEL` and `native.ACCELERATED`. | In progress |
+| LIB-D9 | Minor | Empty result lacks `NORMAL` although `recompute_normals` was set | Fix | Add an empty `(0, 3)` float32 `NORMAL` in the empty-surface return when `recompute_normals` is set. | Fixed 7f3f32a (opengl_decimate) |
+| LIB-D10 | Minor | `survey()` skips input validation and cannot take weld or drop options | Fix | Call `simplify._check` and accept `options: SimplifyOptions \| None` so weld and drop settings apply. | In progress |
+| LIB-D11 | Minor | `seam_share` counts edges onto seams, not the atlas boundary its docstring claims | Fix | Correct the docstring, or add a separate count of edges whose sides disagree on texture coordinates. | In progress |
+| LIB-D12 | Minor | `lock_seams` compares only copy counts, so seam points may merge across charts | Investigate | Reproduce with a one-triangle-wide chart; if confirmed, require multi-copy contractions to run along a seam edge. | In progress |
+| LIB-D13 | Minor | MESH-DECIMATION plan contradicts itself on M4, coverage and the accelerator package | Fix | Update the status line, milestone table and M4 text, and qualify the 100% coverage claim. | In progress |
+| LIB-D14 | Minor | Near-singular optimal placement is unbounded and can move a vertex far away | Investigate | Confirm on a curved crease; then reject optima far from the edge midpoint or use a truncated-SVD solve anchored there. | Fixed 3780f81 (opengl_decimate): far optima (up to 266 edge lengths on a noisy tube) confirmed from the solve, not observed reaching a contraction; both reducers now drop a minimiser further from the midpoint than the edge length |
+| LIB-D15 | Minor | `certify` counts components removed by `drop_components_below` as deviation | Fix | Certify against the input without the dropped faces, or report both figures. | In progress |
+| LIB-D16 | Minor | `CollapseSequence.__post_init__` runs a per-contraction Python loop on every `simplify` | Fix | Compute winner and loser inside the compiled loop and return them with the log. | In progress |
+| LIB-D17 | Nit | Float index arrays are silently truncated to integers | Fix | Refuse a non-integer index dtype with a `DecimateError`. | In progress |
+| LIB-D18 | Nit | CI comments misstate Rosetta and the platform count across five libraries | Fix | Reword to "Intel Macs cannot run an arm64 wheel, so they need one built on x86_64"; correct the platform count in `test.yml`. | In progress |
+| LIB-D19 | Nit | Several opengl_decimate passages break the workspace writing rules | Fix | Run `/ai-isms --fix` over `src/` and the workflows; move measurement narrative to GALLERY or plans. | In progress |
+| LIB-D20 | Nit | `REVIEW.md` work ledger is tracked at the library root | Fix | Move it into `plans/` or the engine's plan. | In progress |
+| LIB-D21 | Nit | Compiled path narrows indices to int32 without a range check | Fix | Refuse meshes whose indices or incidence counts overflow int32 with a `DecimateError`. | In progress |
+| LIB-D22 | Nit | Grid search rebuilds a boolean mask through `np.isin` | Fix | Use the mask `found == np.repeat(closest, sizes)` directly. | In progress |
+| LIB-D23 | Nit | Native heap starts at 1,024 entries; sequence fields typed `Any` | Fix | Size the heap from the edge count and give `origin` and `_moved*` their array types. | In progress |
+| LIB-D24 | Nit | NumPy and compiled reducers treat an infinite price differently | Fix | Test `isfinite` in both reducers. | In progress |
+| LIB-D25 | Minor | opengl_decimate has no CHANGELOG for a large feature release | Fix | Add a CHANGELOG covering the new reducer, options, fields and switches. | In progress |
+| LIB-P1 | Minor | `ContactTracker.ignored` keys can outlive pairs dropped for cleared flags | Investigate | Confirm the re-flag case; then discard those keys from `ignored` where `update` drops unflagged pairs. | Fixed 010ef09 (omi_physics) |
+| LIB-P2 | Minor | A raising contact listener leaves the world part-way through a step | Maintainer decision | Either collect the exception, finish the step and re-raise, or log and continue; document which applies. | Fixed 010ef09 (omi_physics): settled by correctness - the step (or removal) finishes, the first listener exception is raised after it, later ones are logged |
+| LIB-P3 | Minor | omi_physics 0.4.0 adds public API with no changelog | Fix | Add a changelog covering contact events, sensors, ray filters and trigger filters. | Fixed c15bdaf (omi_physics) |
+| LIB-P4 | Nit | `ContactEvent.point` and `normal` are views into one shared per-step array | Fix | Copy each row into its own array, or document that the arrays are shared. | Fixed 010ef09 (omi_physics) |
+| LIB-P5 | Nit | Stale `last_batch` is detected by comparing lengths | Fix | Stamp the batch with `step_count` and compare that. | Fixed 010ef09 (omi_physics) |
+| LIB-P6 | Nit | Ray `filter` keyword shadows the builtin and is undocumented | Fix | Document the keyword in README and docs; consider a non-shadowing name. | Documented c15bdaf (omi_physics): keyword kept as `filter`, the name of the CollisionFilter it takes; no function uses the builtin |
+| LIB-P7 | Nit | `world.alive()` scans the free-slot list | Fix | Keep a boolean liveness array. | Fixed 010ef09 (omi_physics); a cost change has no Red, liveness covered by a new test |
+| LIB-P8 | Nit | Ray bundle test allocates `(R, T, 3)` temporaries for widely spread bundles | Document | State the memory cost of wide bundles over dense meshes in the docstring. | Documented c15bdaf (omi_physics) |
+| LIB-P9 | Nit | Adding a listener fills `contact_log` although nothing drains it | Fix | Deliver to listeners without retaining events in `contact_log` when no log consumer exists. | Fixed 010ef09 (omi_physics): `PhysicsWorld.log_events` |
+| LIB-P10 | Nit | `ContactLog.dropped` miscounts when a drain races on another thread | Fix | Compute the dropped count under the same lock as `extend`. | Fixed 010ef09 (omi_physics); the stress test did not reproduce the race before the fix (the window is a few bytecodes), fixed by reading |
+| LIB-A1 | Minor | Reverb comb delays share factors in samples; docs claim they do not | Fix | Choose mutually prime delays in samples per rate (primes nearest the targets), or drop the claim. | Fixed 86797e2 (omi_audio) |
+| LIB-A2 | Minor | Reverb omits Schroeder's series allpass diffusers | Fix | Add two allpasses of about 5 ms and 1.7 ms, vectorised the same way as the combs. | Fixed 86797e2 (omi_audio) |
+| LIB-A3 | Minor | Wet reverb signal is not normalised against comb gain and can clip | Fix | Scale by (1-g) or an RMS-normalising constant and state the headroom in the docs. | Fixed 86797e2 (omi_audio): RMS-normalised combs, headroom stated in MIXING.md |
+| LIB-A4 | Nit | omi_audio CHANGELOG uses bold-leader bullets; README Limits has a defensive preface | Fix | Rewrite the bullets as plain definitions and drop the preface. | Fixed b7bf4e6 (omi_audio) |
+| LIB-A5 | Nit | Reverb delay lines can decay into float32 denormals | Investigate | Confirm the slowdown on x86; then flush lines below about 1e-30 to zero. | Fixed 86797e2 (omi_audio): subnormals confirmed in the lines (1e-45); no slowdown measurable on this AMD CPU, flushed anyway |
 | LIB-V1 | Minor | `builtOn` gains a dead weak reference for every transient path | Fix | Give each weak reference a removal callback, or compact the list at twice its live count. | Open |
 | LIB-V2 | Nit | Cache lookup inlined twice instead of making `getHolder` fast | Fix | Make `CACHE.getHolder` cheap enough and call it at both sites. | Open |
 | LIB-V3 | Nit | Non-transforming path returns its parent's cached matrix array | Fix | State "do not modify the returned array" in the docstring, or return a read-only view. | Open |
@@ -398,7 +398,7 @@ The decisions below are the review's proposals, and each is the maintainer's to 
 | ED-M2 | Major | `bake_card` leaves z unscaled, so plants deeper than tall are clipped | Fix | Scale z into [-1, 1] by the plant's depth extent; choose card width from x extent or horizontal radius explicitly; test a plant deep in z. | Open |
 | ED-M3 | Major | Loose stone puts 8 MB of JSON into `tileset.json` extras | Fix in engine | Write stones as a binary npz asset with only name and count in extras; the engine, not glisteel, reads it and builds `PropColliders`. | Open |
 | ED-M4 | Major | Blender add-on manifest missing from the wheel; `--package` fails | Fix | Add `blender/openglcontext_lod/blender_manifest.toml` to package-data and test it loads through `importlib.resources`. | Open |
-| ED-M5 | Major | Zones call omi_audio synth functions no release carries; no floor declared | Fix | omi_audio half is a duplicate of BIN-3. For the opengl_decimate half, bump its version and raise the editor's floor together. | Open |
+| ED-M5 | Major | Zones call omi_audio synth functions no release carries; no floor declared | Fix | omi_audio half is a duplicate of BIN-3. For the opengl_decimate half, bump its version and raise the editor's floor together. | omi_audio half fixed 064b328 (openglcontext-editor); the opengl_decimate half is not in this assignment |
 | ED-M6 | Major | Bake and game derive bore openings with different parameters | Fix in engine | One engine function deriving bore openings from the world record (profile, approach, ground), called by bake and game; or record mouth outlines in the world. | Open |
 | ED-M7 | Major | `bake_probes` sets process env, reads engine privates, loop untestable | Fix in engine | Engine API on the zones pass returning zone lights, scheduling in a plain object, options instead of `os.environ`; module only writes files. | Open |
 | ED-M8 | Major | glTF read and written by hand in four places beside engine loader/writer | Fix in engine | Read plants through the engine loader or pygltflib; move sidecar reader and zone/emitter writer into the engine; write LOD glb via `GLTFWriter`. | Open |
@@ -507,17 +507,17 @@ The decisions below are the review's proposals, and each is the maintainer's to 
 | GAME-M2 | Major | `world.contact_log` grows to 65 536 events and is never drained | Fix in engine | Give omi_physics listener delivery without logging (`log_events=False`); meanwhile drain the log once per frame in `MarbleGame.advance`. | Open |
 | GAME-M3 | Minor | Listeners set world-wide persist reporting; lever fires on any body | Fix | Filter on the marble's index in `struck`; scope persist reporting per body if omi_physics can. | Open |
 | GAME-Q1 | Minor | openglcontext-qt pyproject comment names the wrong release | Fix | Make the comment name 3.0.0a5, the contentpacks release the floor requires. | Open |
-| GAME-Q2 | Minor | Pointer shape stale after capture release | Duplicate of MV-M11 | Invalidate `_cursorShown` in the engine when pointer capture changes state. | Open |
+| GAME-Q2 | Minor | Pointer shape stale after capture release | Duplicate of MV-M11 | Invalidate `_cursorShown` in the engine when pointer capture changes state. | Fixed with MV-M11 (7b8de6d) |
 | GAME-Q3 | Nit | Insisting test docstring; untyped `CURSOR_SHAPES` class attribute | Fix | Rewrite the test docstring plainly and annotate `CURSOR_SHAPES` as `ClassVar[dict[str, str]]`. | Open |
-| GAME-W1 | Major | verify-everything.py does not run opengl_decimate | Fix | Add `opengl_decimate` after `opengl_extrusions`; add a `tools/tests` check that `PROJECTS` covers the workspace directories minus explicit exclusions. | Open |
-| GAME-W2 | Minor | preflight `checks` gate hard-codes the POSIX venv `bin` layout | Fix | Use `venv_tool(dev_venv, 'tox')`. | Open |
-| GAME-W3 | Minor | Multi-file version bump can leave the tree half-bumped | Fix | Compute every replacement first, raise if any fails, then write them all. | Open |
-| GAME-W4 | Minor | `declared_path` strips every leading dot, not the `./` prefix | Fix | Use `removeprefix('./')` in a loop, or `os.path.relpath`. | Open |
-| GAME-W5 | Minor | tools/issues.py: offline traceback, lost pages, open-only fetch, non-atomic save | Fix | Catch `URLError`, save pages collected before the rate-limit stop, fetch or document open-only, and save the cache atomically. | Open |
-| GAME-W6 | Nit | History in preflight tool docstrings | Fix | Rewrite the `venv_tool` and `declared_path` docstrings in the present tense. | Open |
-| GAME-W7 | Nit | Entry with no version key raises a bare `KeyError` | Fix | Raise a `ReleaseError` naming the project in `_version_files`. | Open |
-| GAME-W8 | Nit | Missing blank lines before a section comment in doc_images.py | Fix | Add the blank lines; consider selecting ruff's E30x rules at the root. | Open |
-| GAME-d2 | Minor | Workspace CLAUDE.md has no entry for tools/issues.py | Fix | Add a `tools/issues.py` entry to the "Other" list in CLAUDE.md. | Open |
+| GAME-W1 | Major | verify-everything.py does not run opengl_decimate | Fix | Add `opengl_decimate` after `opengl_extrusions`; add a `tools/tests` check that `PROJECTS` covers the workspace directories minus explicit exclusions. | Fixed 37ff30c (workspace root) |
+| GAME-W2 | Minor | preflight `checks` gate hard-codes the POSIX venv `bin` layout | Fix | Use `venv_tool(dev_venv, 'tox')`. | Fixed bbc5415 (workspace root) |
+| GAME-W3 | Minor | Multi-file version bump can leave the tree half-bumped | Fix | Compute every replacement first, raise if any fails, then write them all. | Fixed a290b2e (workspace root) |
+| GAME-W4 | Minor | `declared_path` strips every leading dot, not the `./` prefix | Fix | Use `removeprefix('./')` in a loop, or `os.path.relpath`. | Fixed bbc5415 (workspace root) |
+| GAME-W5 | Minor | tools/issues.py: offline traceback, lost pages, open-only fetch, non-atomic save | Fix | Catch `URLError`, save pages collected before the rate-limit stop, fetch or document open-only, and save the cache atomically. | Fixed d0b0c02 (workspace root); shared tools/atomicwrite.py in bba63a9 |
+| GAME-W6 | Nit | History in preflight tool docstrings | Fix | Rewrite the `venv_tool` and `declared_path` docstrings in the present tense. | Fixed bbc5415 (workspace root) |
+| GAME-W7 | Nit | Entry with no version key raises a bare `KeyError` | Fix | Raise a `ReleaseError` naming the project in `_version_files`. | Fixed a290b2e (workspace root) |
+| GAME-W8 | Nit | Missing blank lines before a section comment in doc_images.py | Fix | Add the blank lines; consider selecting ruff's E30x rules at the root. | Fixed 2425a64 (workspace root) |
+| GAME-d2 | Minor | Workspace CLAUDE.md has no entry for tools/issues.py | Fix | Add a `tools/issues.py` entry to the "Other" list in CLAUDE.md. | Documented 5d5f6b7 (workspace root) |
 
 ## Scope and method
 
@@ -4206,6 +4206,14 @@ CP-1. Every GitHub-hosted pack fails to download, and so does the documented LOD
 
 ##### Major
 
+Question for the maintainer (CP-1): The redirect fix is in, and a real GitHub release asset now downloads through
+`resolver.PUBLIC_HOSTS`. The engine's own `content-v1` release is still not
+pushed, so `OpenGLContext/packs.json` and the `oglc-view` command in
+`docs/lod.rst` still point at a 404. Pushing it is a publishing step
+(`./release-assets.py --push` in openglcontext). Push it before tagging the
+engine release, or hold `packs.json` and the lod.rst command back until it is
+pushed?
+
 CP-2. Content is never updated after a publisher rebuilds a pack, and a changed digest under the same URL fails for ever
 - Refs: `OpenGLContext/contentpacks/store.py:344-364,448-457`, `OpenGLContext/contentpacks/fetch.py:172-190`, `OpenGLContext/contentpacks/publish.py:109-132`, `OpenGLContext/contentpacks/pack.py:66-69`, `OpenGLContext/loaders/resolver.py:457-463`
 - Problem, in three linked parts:
@@ -4611,6 +4619,13 @@ None.
 - Suggested fix: bump omi_audio's version, release it, and pin
   `omi_audio>=<that version>`. Coordinate this with the release tooling in
   `tools/release.toml`.
+
+Question for the maintainer (BIN-3): omi_audio's source is now 0.4.0a1 and OpenGLContext and openglcontext-editor require
+`omi_audio>=0.4.0a1`. Nothing has been tagged or uploaded. Publishing 0.4.0a1 (tag
+v0.4.0a1 on omi_audio's main and let its release workflow upload, or
+`tools/release.py omi_audio`) has to happen before an OpenGLContext release that carries
+the new floor; tools/release.toml computes that order from the requirement, so no edit
+there was needed. Recommendation: release omi_audio 0.4.0a1 in the next release round.
 
 ##### BIN-4 `oglc-audio-demo` uses flat single-colour plastic
 
