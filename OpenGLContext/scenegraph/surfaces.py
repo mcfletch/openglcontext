@@ -326,10 +326,12 @@ class Geometry(NamedTuple):
     """A mesh to wear a surface: the arrays a ``PBRMesh`` takes.
 
     ``texcoords`` are in repeats of the surface, so a surface keeps the size
-    it was made for however large the mesh is; ``tangents`` run the way the
-    texture's u runs, with a handedness of 1, which a normal map is read
-    along. Triangles wind counter-clockwise seen from the side the normals
-    face.
+    it was made for however large the mesh is. u runs across a face and v
+    runs down it, as glTF's texture coordinates run: row 0 of a map, its
+    top, is at the top of a wall. ``tangents`` run the way u runs, with a
+    handedness of 1, so the bitangent points up the face, toward row 0,
+    which is the way a normal map's green channel is read. Triangles wind
+    counter-clockwise seen from the side the normals face.
     """
 
     positions: np.ndarray
@@ -339,6 +341,13 @@ class Geometry(NamedTuple):
     indices: np.ndarray
 
 
+def _down(texcoords: np.ndarray) -> np.ndarray:
+    """``texcoords`` whose v was measured up a face, measured down it."""
+    turned = np.array(texcoords, 'f')
+    turned[:, 1] = -turned[:, 1]
+    return turned
+
+
 def _facing_z(positions: np.ndarray, indices: Sequence[int], repeat: float,
               origin: Tuple[float, float],
               start: Tuple[float, float] = (0.0, 0.0)) -> Geometry:
@@ -346,8 +355,8 @@ def _facing_z(positions: np.ndarray, indices: Sequence[int], repeat: float,
     which falls ``start`` metres into the surface."""
     count = len(positions)
     at = np.asarray(positions, 'f')
-    texcoords = ((at[:, :2] - np.asarray(origin, 'f') + np.asarray(start, 'f'))
-                 / float(repeat)).astype('f')
+    texcoords = _down((at[:, :2] - np.asarray(origin, 'f') + np.asarray(start, 'f'))
+                      / float(repeat))
     return Geometry(at, np.tile(np.array([0.0, 0.0, 1.0], 'f'), (count, 1)), texcoords,
                     np.tile(np.array([1.0, 0.0, 0.0, 1.0], 'f'), (count, 1)),
                     np.asarray(indices, np.uint32))
@@ -486,7 +495,7 @@ def prism(outline: Sequence[Tuple[float, float]], height: float,
             first, second = base + 1 + side, base + 1 + (side + 1) % count
             indices += [base, second, first] if facing > 0 else [base, first, second]
     return Geometry(np.asarray(positions, 'f'), np.asarray(normals, 'f'),
-                    (np.asarray(texcoords, 'd') / float(repeat)).astype('f'),
+                    _down(np.asarray(texcoords, 'd') / float(repeat)),
                     np.asarray(tangents, 'f'), np.asarray(indices, np.uint32))
 
 
@@ -555,7 +564,7 @@ def cylinder(radius: float, height: float, sides: int = 16, arc: float = 2.0 * m
                for index in (step, step + 1, columns + step + 1,
                              step, columns + step + 1, columns + step)]
     return Geometry(positions.astype('f'), normals.astype('f'),
-                    (texcoords / float(repeat)).astype('f'),
+                    _down(texcoords / float(repeat)),
                     np.concatenate([tangent, tangent]).astype('f'),
                     np.asarray(indices, np.uint32))
 

@@ -168,7 +168,8 @@ def _faces(geometry):
 
 
 def _texture_runs_along_the_tangents(geometry):
-    """On every triangle, u grows along the tangent and v along normal x tangent.
+    """On every triangle, u grows along the tangent and v against normal x
+    tangent, the bitangent: v runs down a face, as glTF's does.
 
     Measured against the triangle's mean tangent and normal: on a curved mesh
     each corner's are the smooth surface's, half a facet away from the
@@ -185,7 +186,7 @@ def _texture_runs_along_the_tangents(geometry):
         normal = geometry.normals[corners].mean(axis=0)
         bitangent = np.cross(normal / np.linalg.norm(normal), tangent) * geometry.tangents[corners[0], 3]
         assert np.dot(along_u, tangent) > 0.99 * np.linalg.norm(along_u)
-        assert np.dot(along_v, bitangent) > 0.99 * np.linalg.norm(along_v)
+        assert np.dot(along_v, bitangent) < -0.99 * np.linalg.norm(along_v)
 
 
 def test_a_panel_repeats_its_surface_every_so_many_metres():

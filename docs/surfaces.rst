@@ -131,9 +131,11 @@ Geometry to wear them
 
 Each function returns a ``Geometry``: the ``positions``, ``normals``,
 ``texcoords``, ``tangents`` and ``indices`` a ``PBRMesh`` takes. The texture
-coordinates are in repeats, measured in metres from the piece's own corner,
-and the tangents run the way the texture's u runs, which a normal map is read
-along. Triangles wind counter-clockwise seen from the side the normals face.
+coordinates are in repeats, measured in metres from the piece's own corner.
+u runs across a face and v down it, as glTF's texture coordinates run, so
+row 0 of a map is at the top of a wall; the tangents run the way u runs, and
+the bitangent up the face, which is the way a normal map is read.
+Triangles wind counter-clockwise seen from the side the normals face.
 
 .. list-table::
    :widths: auto
