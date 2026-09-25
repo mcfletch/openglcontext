@@ -274,7 +274,7 @@ class TestAnArchiveThatWouldFillTheDisk:
             100 * 1024 * 1024 * archive.MAX_EXPANSION
         assert archive.unpacked_limit(1) == archive.MINIMUM_UNPACKED
 
-    def test_a_real_pack_is_comfortably_inside_it(self, tmp_path) -> None:
+    def test_a_real_pack_is_comfortably_inside_it(self) -> None:
         """A glisteel track measures 57 MB unpacked against 48 MB compressed."""
         assert archive.unpacked_limit(48 * 1024 * 1024) > 57 * 1024 * 1024
 

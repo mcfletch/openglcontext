@@ -56,7 +56,7 @@ class TestPygame:
 class TestGLUT:
     """GLUT has no creation hint, so the window is hidden immediately after."""
 
-    def test_it_hides_the_window_it_just_made(self, monkeypatch):
+    def test_it_hides_the_window_it_just_made(self):
         pytest.importorskip('OpenGL.GLUT')
         from OpenGLContext import glutcontext  # noqa: PLC0415 follows the GLUT importorskip
         source = inspect.getsource(glutcontext)

@@ -179,8 +179,7 @@ class TestWhatTheStoreReads:
         assert pack.preview.startswith(store.root)
         assert os.path.isfile(pack.preview)
 
-    def test_a_registry_that_will_not_load_names_itself(self, store,
-                                                        tmp_path) -> None:
+    def test_a_registry_that_will_not_load_names_itself(self, store) -> None:
         """Refused loudly: one silently dropped is one nobody can see missing."""
         where = os.path.join(store.root, 'registries')
         os.makedirs(where, exist_ok=True)
@@ -250,7 +249,7 @@ class TestARegistryThatFailsToLoad:
         bad = bundle(tmp_path, {'key': 'glisteel/x', 'copyright': ''},
                      name='bad.zip')
         monkeypatch.setattr(resolver, 'fetch_to_cache',
-                            lambda url, **named: bad)
+                            lambda url, **_named: bad)
         with pytest.raises(catalog.BadCatalog):
             fetch.fetch_registry('https://example.invalid/bad.zip', store)
         assert store.registries() == []

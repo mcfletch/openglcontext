@@ -194,7 +194,7 @@ class TestHowAWorldRecordsItsBores:
         assert BoreCut().openings([], hillside) is None
         assert BoreCut().openings([line()[:1]], hillside) is None
 
-    def test_a_record_with_a_figure_that_is_no_number_takes_the_default(self, caplog):
+    def test_a_record_with_a_figure_that_is_no_number_takes_the_default(self):
         read = BoreCut.from_json({'portalBorder': 'wide', 'approach': -3.0})
         assert read.tunnel.portal_border == TunnelProfile().portal_border
         assert read.approach == 0.0

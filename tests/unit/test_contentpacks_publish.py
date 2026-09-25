@@ -143,7 +143,7 @@ class TestAttachingThemToARelease:
     def after_terminator(self, argv):
         return argv[argv.index('--') + 1:]
 
-    def test_a_tag_that_is_not_there_yet_is_created(self, tmp_path) -> None:
+    def test_a_tag_that_is_not_there_yet_is_created(self) -> None:
         ran = []
 
         def ask(argv):
@@ -162,8 +162,7 @@ class TestAttachingThemToARelease:
         assert self.after_terminator(ran[1]) == [
             'content-v1', os.path.abspath('a.tar.gz')]
 
-    def test_a_tag_that_is_there_takes_the_files_it_is_given(self,
-                                                             tmp_path) -> None:
+    def test_a_tag_that_is_there_takes_the_files_it_is_given(self) -> None:
         """A rebuilt pack replaces the one on the release rather than sitting
         beside it under a name nothing fetches."""
         ran = []

@@ -17,10 +17,10 @@ class _Raiser:
 
     pickable = False
 
-    def Render(self, mode: Any = None, **named: Any) -> None:
+    def Render(self, mode: Any = None, **_named: Any) -> None:
         raise ValueError('this node cannot draw')
 
-    def RenderTransparent(self, mode: Any = None, **named: Any) -> None:
+    def RenderTransparent(self, mode: Any = None, **_named: Any) -> None:
         raise ValueError('this node cannot draw')
 
 
@@ -32,10 +32,10 @@ class _Drawn:
     def __init__(self) -> None:
         self.drawn = 0
 
-    def Render(self, mode: Any = None, **named: Any) -> None:
+    def Render(self, mode: Any = None, **_named: Any) -> None:
         self.drawn += 1
 
-    def RenderTransparent(self, mode: Any = None, **named: Any) -> None:
+    def RenderTransparent(self, mode: Any = None, **_named: Any) -> None:
         self.drawn += 1
 
 

@@ -49,6 +49,7 @@ def isolated_registry():
         FontProvider.providers = saved
 
 
+@pytest.mark.usefixtures('isolated_registry')
 def test_shader_provider_preferred_over_glut_in_legacy_mode(isolated_registry):
     """On-screen (non-shader) rendering should pick the texture-atlas provider."""
     glut = _FakeProvider("glut")
@@ -63,6 +64,7 @@ def test_shader_provider_preferred_over_glut_in_legacy_mode(isolated_registry):
     assert font == "shader"
 
 
+@pytest.mark.usefixtures('isolated_registry')
 def test_glut_used_as_fallback_when_no_shader_provider(isolated_registry):
     """Without a texture-atlas provider, the legacy provider still works."""
     glut = _FakeProvider("glut")
@@ -74,6 +76,7 @@ def test_glut_used_as_fallback_when_no_shader_provider(isolated_registry):
     assert font == "glut"
 
 
+@pytest.mark.usefixtures('isolated_registry')
 def test_legacy_provider_skipped_in_shader_mode(isolated_registry):
     """Core-profile (shader) mode must not fall back to a GLUT provider."""
     glut = _FakeProvider("glut")
@@ -85,6 +88,7 @@ def test_legacy_provider_skipped_in_shader_mode(isolated_registry):
     assert font is None
 
 
+@pytest.mark.usefixtures('isolated_registry')
 def test_shader_provider_selected_in_shader_mode(isolated_registry):
     """Shader mode selects the shader-compatible provider."""
     glut = _FakeProvider("glut")

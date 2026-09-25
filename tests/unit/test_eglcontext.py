@@ -408,7 +408,7 @@ class TestAFailedConstructionReleasesWhatItTook:
             ),
         )
 
-        def fails(*arguments, **named):
+        def fails(*_args, **_named):
             raise eglcontext.EGLContextError('no')
 
         monkeypatch.setattr(eglcontext.EGLContext, step, fails)

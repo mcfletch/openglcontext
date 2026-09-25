@@ -720,7 +720,8 @@ class TestHowOftenAPlayingSoundIsReAimed:
         emitter.updateAudio(engine, translation(0.0, 0.0, -1.0), 2.0 / 60.0)
         assert self.aims(engine, emitter, [3.0 / 60.0]) == 1
 
-    def test_two_emitters_do_not_re_aim_on_the_same_frame(self, engine):
+    @pytest.mark.usefixtures('engine')
+    def test_two_emitters_do_not_re_aim_on_the_same_frame(self):
         """Spread on purpose: a level's worth landing together is a stutter."""
         phases = {self.make()._aimPhase for _ in range(20)}
         assert len(phases) > 1

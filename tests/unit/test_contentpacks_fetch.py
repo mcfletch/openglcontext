@@ -339,8 +339,9 @@ class TestAJobTheFrameLoopPolls:
         job.poll()
         assert job.finished and not job.failed
 
+    @pytest.mark.usefixtures('cache')
     def test_waiting_gives_up_when_the_worker_is_still_going(
-            self, store, cache) -> None:
+            self, store) -> None:
         released = threading.Event()
 
         def slow(pack, progress, cancel):
@@ -393,7 +394,7 @@ class TestAJobTheFrameLoopPolls:
         assert job.cancelled and job.failed is None
 
 class TestWhatTheFirstRunNeeds:
-    def test_a_base_pack_not_here_is_named(self, tmp_path, store) -> None:
+    def test_a_base_pack_not_here_is_named(self, store) -> None:
         packs = [pack('https://example.invalid/a.tar.gz', key='glisteel/cars',
                       directory='cars', base=True, sha256='ab' * 32),
                  pack('https://example.invalid/b.tar.gz', key='glisteel/track',
@@ -553,8 +554,8 @@ class TestFetchingContentAPackIsIncompleteWithout:
         assert os.path.isfile(os.path.join(root, 'trees', 'fir.npz'))
         assert os.path.isfile(os.path.join(root, 'world.json'))
 
-    def test_a_choice_asks_for_the_whole_set(self, served, store,
-                                             cache) -> None:
+    @pytest.mark.usefixtures('cache')
+    def test_a_choice_asks_for_the_whole_set(self, served, store) -> None:
         where, base = served
         packs = self.both(where, base)
         assert [one.key for one in fetch.wanted_for(packs[0], packs, store)] \
@@ -651,7 +652,7 @@ class TestWhereARegistryMayComeFrom:
         """Refused before anything is asked of the network."""
         asked = []
         monkeypatch.setattr(resolver, 'fetch_to_cache',
-                            lambda url, **named: asked.append(url))
+                            lambda url, **_named: asked.append(url))
         with pytest.raises(IOError):
             fetch.fetch_registry(url, store, cache_dir=cache)
         assert asked == []
@@ -672,8 +673,9 @@ class TestTheFirstRunWithAPackTheBaseNeeds:
                       directory='shared', marker='shared')
         return catalog.merge([cars, shared])
 
+    @pytest.mark.usefixtures('cache')
     def test_each_is_paired_with_the_base_pack_it_lands_in(
-            self, served, store, cache) -> None:
+            self, served, store) -> None:
         where, base = served
         packs = self.packs(where, base)
         assert [(one.key, within.key) for one, within in

@@ -48,7 +48,7 @@ def ask(monkeypatch):
 def test_an_untouched_shape_is_answered_from_the_memo(ask, monkeypatch):
     shape = _shape()
     first = ask(shape)
-    monkeypatch.setattr(PBRPass, '_keyFor', lambda *a: pytest.fail('asked again'))
+    monkeypatch.setattr(PBRPass, '_keyFor', lambda *_args: pytest.fail('asked again'))
     assert ask(shape) == first
 
 

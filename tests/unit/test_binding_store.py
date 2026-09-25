@@ -155,7 +155,7 @@ class TestSavingIsAllOrNothing:
         bindingstore.save_bindings(navigation, path)
         good = open(path).read()
 
-        def explode(*args, **named):
+        def explode(*_args, **_named):
             raise OSError("disk full")
 
         monkeypatch.setattr(bindingstore.json, 'dump', explode)
@@ -168,7 +168,7 @@ class TestSavingIsAllOrNothing:
                                                     monkeypatch):
         path = str(tmp_path / 'keys.json')
 
-        def explode(*args, **named):
+        def explode(*_args, **_named):
             raise OSError("disk full")
 
         monkeypatch.setattr(bindingstore.json, 'dump', explode)

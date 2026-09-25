@@ -44,7 +44,7 @@ class TestAddTransparent:
 class TestDrain:
     def test_replays_each_deferred_shape_then_clears(self, monkeypatch):
         for name in _GL_NOOPS:
-            monkeypatch.setattr(_flat, name, lambda *a, **k: None, raising=False)
+            monkeypatch.setattr(_flat, name, lambda *_args, **_named: None, raising=False)
 
         calls = []
 
@@ -64,14 +64,14 @@ class TestDrain:
 
     def test_empty_drain_is_noop(self, monkeypatch):
         for name in _GL_NOOPS:
-            monkeypatch.setattr(_flat, name, lambda *a, **k: None, raising=False)
+            monkeypatch.setattr(_flat, name, lambda *_args, **_named: None, raising=False)
         fp = _bare_pass()
         fp._renderDeferredTransparent()   # must not raise
         assert fp._deferredTransparent == []
 
     def test_one_failing_shape_does_not_abort_the_rest(self, monkeypatch):
         for name in _GL_NOOPS:
-            monkeypatch.setattr(_flat, name, lambda *a, **k: None, raising=False)
+            monkeypatch.setattr(_flat, name, lambda *_args, **_named: None, raising=False)
 
         drawn = []
 

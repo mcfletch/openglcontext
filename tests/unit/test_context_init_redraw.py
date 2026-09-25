@@ -40,7 +40,7 @@ class _Context(context_module.Context):
     def OnInit(self):
         self.work(self)
 
-    def OnDraw(self, *args, **named):
+    def OnDraw(self, *_args, **_named):
         self.drawn += 1
         return 1
 

@@ -22,7 +22,7 @@ class _Context(context_module.Context):
         self.handlers = []
         self.redrawRequest = threading.Event()
 
-    def addEventHandler(self, kind, name=None, function=None, **named):
+    def addEventHandler(self, kind, name=None, function=None, **_named):
         self.handlers.append((kind, name, function))
         return function
 

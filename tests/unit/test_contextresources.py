@@ -283,14 +283,16 @@ if __name__ == '__main__':
 class TestTheContextKey:
     """What every per-context table keys on: made only by ``context_key``."""
 
-    def test_the_current_context_has_one_key(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_the_current_context_has_one_key(self):
         key = contextresources.context_key()
         assert isinstance(key, contextresources.ContextKey)
         assert key == contextresources.context_key()
         assert hash(key) == hash(contextresources.context_key())
         assert {key: 1}[contextresources.context_key()] == 1
 
-    def test_a_key_is_not_its_raw_handle(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_key_is_not_its_raw_handle(self):
         key = contextresources.context_key()
         assert key != key.handle
         assert repr(key.handle) in repr(key)
@@ -307,6 +309,7 @@ class TestTheContextKey:
         assert contextresources.context_key() is None
 
 
+@pytest.mark.usefixtures('gl_context')
 def test_a_backend_names_the_context_to_pyopengl_by_its_handle(gl_context):
     handle = contextresources.current_handle()
     assert not isinstance(handle, contextresources.ContextKey)
@@ -314,10 +317,11 @@ def test_a_backend_names_the_context_to_pyopengl_by_its_handle(gl_context):
     assert handle == contextresources.context_key().handle
 
 
+@pytest.mark.usefixtures('gl_context')
 @pytest.mark.parametrize('module, name', [
     ('OpenGLContext.glfwcontext', 'GLFWContext'),
     ('OpenGLContext.eglcontext', 'EGLContext'),
 ])
-def test_each_backend_binds_pyopengl_to_the_platform_handle(gl_context, module, name):
+def test_each_backend_binds_pyopengl_to_the_platform_handle(module, name):
     backend = getattr(importlib.import_module(module), name)
     assert backend._glHandle(object()) == contextdata.getContext()

@@ -159,7 +159,7 @@ class TestTransmissionMode:
 
     def test_resolves_and_caches_from_renderer(self):
         p = _FlatEffectsMixin()
-        p.shader_program = type('P', (), {'set_transmission': lambda *a: None})()
+        p.shader_program = type('P', (), {'set_transmission': lambda *_args: None})()
         p._gl_renderer = 'NVIDIA GeForce RTX'
         mode = p.transmissionMode()
         assert mode == transmission.resolve_mode('NVIDIA GeForce RTX')

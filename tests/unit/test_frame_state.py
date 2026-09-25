@@ -54,8 +54,8 @@ class TestTheFramesWalk:
     def test_giving_the_views_back_leaves_the_walk_for_the_rest_of_the_frame(self, monkeypatch):
         """What the legacy pick path does part-way through a frame."""
         passing = _pass()
-        monkeypatch.setattr(_flat, 'glDisable', lambda *a: None)
-        monkeypatch.setattr(_flat, 'glViewport', lambda *a: None)
+        monkeypatch.setattr(_flat, 'glDisable', lambda *_args: None)
+        monkeypatch.setattr(_flat, 'glViewport', lambda *_args: None)
 
         class _Context:
             def getViewPort(self):

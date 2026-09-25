@@ -60,14 +60,16 @@ class _Mesh:
 
 
 class TestPaletteRanges:
-    def test_a_mesh_asking_again_gets_the_range_it_has(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_mesh_asking_again_gets_the_range_it_has(self):
         palette = JointPalette(capacity=8)
         mesh = _Mesh()
         base = palette.reserve(mesh, 4)
         assert palette.reserve(mesh, 4) == base
         assert palette.reserved_base(mesh) == base
 
-    def test_a_mesh_that_has_gone_holds_no_range(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_mesh_that_has_gone_holds_no_range(self):
         """Ranges are kept by mesh, not by where the mesh was allocated.
 
         A collected mesh's address is handed to the next object of its size,

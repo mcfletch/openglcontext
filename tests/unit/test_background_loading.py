@@ -254,8 +254,8 @@ class TestThePool:
 
 
 class TestWhatALoaderThreadMayDo:
-    def test_an_image_load_imports_nothing_of_its_own(self, tmp_path,
-                                                      unprepared_pool):
+    @pytest.mark.usefixtures('unprepared_pool')
+    def test_an_image_load_imports_nothing_of_its_own(self, tmp_path):
         """A module imported for the first time on a loader thread is imported
         under CPython's import lock, which is held with the GIL released: a
         thread waiting for it answers to no signal, no ``KeyboardInterrupt``

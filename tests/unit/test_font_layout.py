@@ -97,20 +97,23 @@ class TestTheRenderWrappersHandBackWhatTheyDrew:
     has to carry the answer back out rather than swallow it.
     """
 
-    def test_the_depth_mask_wrapper_returns_the_lines(self, gl_context_compat, lines):
+    @pytest.mark.usefixtures('gl_context_compat')
+    def test_the_depth_mask_wrapper_returns_the_lines(self, lines):
         class _Font(fontmodule.NoDepthBufferMixIn, fontmodule.Font):
             pass
 
         assert _Font().render(lines) is lines
 
-    def test_the_blending_wrapper_returns_the_lines(self, gl_context_compat):
+    @pytest.mark.usefixtures('gl_context_compat')
+    def test_the_blending_wrapper_returns_the_lines(self):
         class _Font(fontmodule.BitmapFontMixIn, fontmodule.Font):
             pass
 
         empty = []
         assert _Font().render(empty) is empty
 
-    def test_both_wrappers_together_return_the_lines(self, gl_context_compat):
+    @pytest.mark.usefixtures('gl_context_compat')
+    def test_both_wrappers_together_return_the_lines(self):
         class _Font(
             fontmodule.NoDepthBufferMixIn, fontmodule.BitmapFontMixIn, fontmodule.Font
         ):

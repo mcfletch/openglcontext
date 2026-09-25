@@ -491,8 +491,8 @@ class TestARootAskedForAtEachUse:
     """An application whose art arrives after start-up names its art by a
     function rather than by a directory, and each load asks it."""
 
-    def test_the_library_reads_from_wherever_the_art_is_now(self, library,
-                                                             tmp_path):
+    @pytest.mark.usefixtures('library')
+    def test_the_library_reads_from_wherever_the_art_is_now(self, tmp_path):
         where = [str(tmp_path / "not-yet")]
         following = AssetLibrary(lambda: where[0])
         assert following.load("cars/car.glb") is None
@@ -501,8 +501,8 @@ class TestARootAskedForAtEachUse:
             str(tmp_path / "cars" / "car.glb")
         assert following.load("cars/car.glb") is not None
 
-    def test_what_was_shared_from_the_old_place_is_let_go(self, library,
-                                                          tmp_path):
+    @pytest.mark.usefixtures('library')
+    def test_what_was_shared_from_the_old_place_is_let_go(self, tmp_path):
         where = [str(tmp_path / "not-yet")]
         following = AssetLibrary(lambda: where[0])
         assert following.shared("cars/car.glb") is None

@@ -84,11 +84,13 @@ class TestTheQuestionEveryBackendAsks:
     to, or they would drift apart on the one case that matters.
     """
 
-    def test_a_definition_that_asks_gets_it(self, visible):
+    @pytest.mark.usefixtures('visible')
+    def test_a_definition_that_asks_gets_it(self):
         assert renderoptions.fullscreen_window(
             ContextDefinition(fullscreen=True)) is True
 
-    def test_a_definition_that_does_not_ask_does_not(self, visible):
+    @pytest.mark.usefixtures('visible')
+    def test_a_definition_that_does_not_ask_does_not(self):
         assert renderoptions.fullscreen_window(ContextDefinition()) is False
 
     def test_hidden_outranks_the_request(self, monkeypatch):
@@ -96,12 +98,14 @@ class TestTheQuestionEveryBackendAsks:
         assert renderoptions.fullscreen_window(
             ContextDefinition(fullscreen=True)) is False
 
+    @pytest.mark.usefixtures('visible')
     def test_the_environment_reaches_a_definition_nobody_configured(
-            self, visible, monkeypatch):
+            self, monkeypatch):
         monkeypatch.setenv('OPENGLCONTEXT_FULLSCREEN', 'yes')
         assert renderoptions.fullscreen_window(ContextDefinition()) is True
 
-    def test_a_context_is_an_acceptable_source(self, visible):
+    @pytest.mark.usefixtures('visible')
+    def test_a_context_is_an_acceptable_source(self):
         class Windowed:
             contextDefinition = ContextDefinition(fullscreen=True)
         assert renderoptions.fullscreen_window(Windowed()) is True
@@ -133,7 +137,8 @@ class TestChoosingTheMonitor:
         monkeypatch.setenv('OPENGLCONTEXT_HIDDEN', '1')
         assert self._monitor(ContextDefinition(fullscreen=True)) is None
 
-    def test_a_full_screen_context_names_one(self, visible):
+    @pytest.mark.usefixtures('visible')
+    def test_a_full_screen_context_names_one(self):
         glfw.init()
         if not glfw.get_primary_monitor():
             pytest.skip('no monitor to fill')

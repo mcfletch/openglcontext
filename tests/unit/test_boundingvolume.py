@@ -103,6 +103,7 @@ def gl_context(gl_window):
     return gl_window('boundingvolume', profile='compatibility')
 
 
+@pytest.mark.usefixtures('gl_context')
 def test_frustum_extraction_matches_glfrustum(gl_context):
     """Frustum planes pulled from GL match the near/far fed to glFrustum.
 

@@ -32,10 +32,10 @@ PASSES = [
 class FakeViewPlatform:
     position = np.array([0.0, 0.0, 0.0, 1.0])
 
-    def viewMatrix(self, *args, **named):
+    def viewMatrix(self, *_args, **_named):
         return np.identity(4, dtype='f')
 
-    def modelMatrix(self, *args, **named):
+    def modelMatrix(self, *_args, **_named):
         return np.identity(4, dtype='f')
 
 

@@ -36,7 +36,8 @@ def env(monkeypatch):
              OPENGLCONTEXT_BLOOM='1')
 
 
-def test_the_frame_presented_is_the_composited_one(render_scene, env):
+@pytest.mark.usefixtures('env')
+def test_the_frame_presented_is_the_composited_one(render_scene):
     """Every frame read where a screenshot reads it already carries its glow."""
     frames = frames_of(render_scene, [_glowing_box(0.0)], frames=3,
                        size=(WIDTH, HEIGHT))
@@ -45,7 +46,8 @@ def test_the_frame_presented_is_the_composited_one(render_scene, env):
         assert centre.min() > 200, centre
 
 
-def test_the_glow_stays_inside_its_view(render_scene, env):
+@pytest.mark.usefixtures('env')
+def test_the_glow_stays_inside_its_view(render_scene):
     """A bright box at the edge of one view does not light the view beside it."""
     def layout(context):
         # The box sits at the right-hand edge of the left view; the right view
@@ -62,7 +64,8 @@ def test_the_glow_stays_inside_its_view(render_scene, env):
     assert right_edge.max() < 8, right_edge.max()
 
 
-def test_one_view_glows_as_it_always_has(render_scene, env):
+@pytest.mark.usefixtures('env')
+def test_one_view_glows_as_it_always_has(render_scene):
     """A single view's glow reaches the edge of the window unclamped by tiles."""
     frames = frames_of(render_scene, [_glowing_box(0.0)], frames=3,
                        size=(WIDTH, HEIGHT))
@@ -73,7 +76,8 @@ def test_one_view_glows_as_it_always_has(render_scene, env):
     assert lit[0] < box[0] - 2 and lit[-1] > box[-1] + 2
 
 
-def test_what_the_views_stop_covering_is_cleared(render_scene, env):
+@pytest.mark.usefixtures('env')
+def test_what_the_views_stop_covering_is_cleared(render_scene):
     """With bloom on, a band given up by the views keeps nothing of an earlier frame."""
     def layout(context):
         drawn = []

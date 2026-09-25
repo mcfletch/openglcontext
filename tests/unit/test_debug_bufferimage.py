@@ -38,6 +38,7 @@ def _clear_rect(x: int, y: int, width: int, height: int,
     glDisable(GL_SCISSOR_TEST)
 
 
+@pytest.mark.usefixtures('gl_context')
 def test_depth_normalises_a_uniform_buffer(gl_context):
     """A depth dump of a cleared buffer is an image, not an exception."""
     _clear(depth=1.0)
@@ -46,6 +47,7 @@ def test_depth_normalises_a_uniform_buffer(gl_context):
     assert image.mode == 'L'
 
 
+@pytest.mark.usefixtures('gl_context')
 def test_depth_values_stay_inside_a_byte(gl_context):
     """The far plane is white: the depth range is scaled across the byte."""
     _clear(depth=1.0)
@@ -53,6 +55,7 @@ def test_depth_values_stay_inside_a_byte(gl_context):
     assert image.getextrema() == (255, 255)
 
 
+@pytest.mark.usefixtures('gl_context')
 def test_depth_normalisation_spans_the_byte(gl_context):
     """Normalising puts the nearest depth at black and the furthest at white."""
     _clear(depth=1.0)
@@ -61,6 +64,7 @@ def test_depth_normalisation_spans_the_byte(gl_context):
     assert image.getextrema() == (0, 255)
 
 
+@pytest.mark.usefixtures('gl_context')
 def test_depth_reads_the_rectangle_it_is_asked_for(gl_context):
     """The x,y origin is honoured rather than being read from the corner."""
     _clear(depth=1.0)
@@ -71,6 +75,7 @@ def test_depth_reads_the_rectangle_it_is_asked_for(gl_context):
     assert far.getextrema() == (255, 255)
 
 
+@pytest.mark.usefixtures('gl_context')
 def test_stencil_reads_the_rectangle_it_is_asked_for(gl_context):
     """The stencil dump honours x,y as well."""
     _clear(stencil=3)
@@ -79,6 +84,7 @@ def test_stencil_reads_the_rectangle_it_is_asked_for(gl_context):
     assert bufferimage.stencil(0, 0, 4, 4).getextrema() == (3, 3)
 
 
+@pytest.mark.usefixtures('gl_context')
 def test_the_default_rectangle_is_the_whole_viewport(gl_context):
     """No rectangle given means the viewport."""
     _clear()
@@ -86,6 +92,7 @@ def test_the_default_rectangle_is_the_whole_viewport(gl_context):
     assert bufferimage.stencil().size == (WIDTH, HEIGHT)
 
 
+@pytest.mark.usefixtures('gl_context')
 def test_flip_puts_the_first_gl_row_at_the_bottom(gl_context):
     """GL numbers rows from the bottom, PIL from the top; ``flip`` reconciles.
 

@@ -128,7 +128,8 @@ class TestDispatchPickEvent:
 # PBO pooling
 # --------------------------------------------------------------------------- #
 class TestPBOPool:
-    def test_release_then_acquire_reuses_buffer(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_release_then_acquire_reuses_buffer(self):
         sel = _bare()
         pid, cap = sel._acquirePBO(16)
         assert cap >= 256                      # rounded up to a floor
@@ -136,7 +137,8 @@ class TestPBOPool:
         pid2, cap2 = sel._acquirePBO(16)       # fits -> same buffer back
         assert pid2 == pid and cap2 == cap
 
-    def test_acquire_creates_new_when_pool_too_small(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_acquire_creates_new_when_pool_too_small(self):
         sel = _bare()
         small_pid, small_cap = sel._acquirePBO(16)
         sel._releasePBO(small_pid, small_cap)
@@ -144,7 +146,8 @@ class TestPBOPool:
         assert big_pid != small_pid
         assert big_cap >= 4096
 
-    def test_release_initializes_pool(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_release_initializes_pool(self):
         sel = _bare()
         sel._pbo_free = None
         sel._releasePBO(123, 256)
@@ -155,25 +158,29 @@ class TestPBOPool:
 # submit / drain / resolve
 # --------------------------------------------------------------------------- #
 class TestAsyncSubmitDrain:
-    def test_empty_events_is_noop(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_empty_events_is_noop(self):
         sel = _bare()
         _attach_buffer(sel, _buffer_with_id())
         sel.submitAsyncPicks(FakeMode(), {}, {})
         assert sel._async_batches is None
 
-    def test_uninitialized_buffer_skips_submit(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_uninitialized_buffer_skips_submit(self):
         sel = _bare()
         _attach_buffer(sel, SelectionBufferFBO())    # never ensure_size'd
         sel.submitAsyncPicks(FakeMode(), {'k': FakeEvent(8, 8)}, {})
         assert sel._async_batches is None
 
-    def test_drain_with_no_batches_is_noop(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_drain_with_no_batches_is_noop(self):
         sel = _bare()
         sel.submitAsyncPicks  # noqa: B018  (attribute exists)
         sel.drainAsyncPicks(FakeMode())            # _async_batches is None
         assert sel._async_batches is None
 
-    def test_inbounds_pick_resolves_to_mapped_path(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_inbounds_pick_resolves_to_mapped_path(self):
         sel = _bare()
         sb = _buffer_with_id()
         _attach_buffer(sel, sb)
@@ -189,7 +196,8 @@ class TestAsyncSubmitDrain:
         assert ev.viewCoordinate[0] == 8 and ev.viewCoordinate[1] == 8
         assert mode.context.processed == [ev]
 
-    def test_out_of_bounds_pick_resolves_empty(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_out_of_bounds_pick_resolves_empty(self):
         sel = _bare()
         _attach_buffer(sel, _buffer_with_id())
         mode = FakeMode()
@@ -200,7 +208,8 @@ class TestAsyncSubmitDrain:
         assert ev.paths == [[]]                     # no id read -> empty path
         assert ev.viewCoordinate == (-4, -4, 1.0)
 
-    def test_unmapped_id_resolves_empty(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_unmapped_id_resolves_empty(self):
         sel = _bare()
         _attach_buffer(sel, _buffer_with_id())
         mode = FakeMode()
@@ -210,20 +219,22 @@ class TestAsyncSubmitDrain:
         sel.drainAsyncPicks(mode)
         assert ev.paths == [[]]
 
-    def test_unsignalled_fence_defers_batch(self, gl_context, monkeypatch):
+    @pytest.mark.usefixtures('gl_context')
+    def test_unsignalled_fence_defers_batch(self, monkeypatch):
         sel = _bare()
         _attach_buffer(sel, _buffer_with_id())
         mode = FakeMode()
         ev = FakeEvent(8, 8)
         sel.submitAsyncPicks(mode, {'k': ev}, {ENCODED_ID: ['p']})
         # Force drain to see the fence as not-yet-signalled.
-        monkeypatch.setattr(asyncpick, 'glClientWaitSync', lambda *a, **k: 0)
+        monkeypatch.setattr(asyncpick, 'glClientWaitSync', lambda *_args, **_named: 0)
         sel.drainAsyncPicks(mode)
         assert len(sel._async_batches) == 1         # kept for a later frame
         assert ev.paths is None                     # not dispatched yet
 
+    @pytest.mark.usefixtures('gl_context')
     def test_blocking_resolve_drops_batch_when_fence_never_signals(
-            self, gl_context, monkeypatch):
+            self, monkeypatch):
         # A blocking resolve whose fence times out must NOT read the PBO or
         # dispatch: the GPU write hasn't landed, so any id would be stale/zero.
         sel = _bare()
@@ -232,7 +243,7 @@ class TestAsyncSubmitDrain:
         ev = FakeEvent(8, 8)
         sel.submitAsyncPicks(mode, {'k': ev}, {ENCODED_ID: ['p']})
         batch = sel._async_batches.pop(0)
-        monkeypatch.setattr(asyncpick, 'glClientWaitSync', lambda *a, **k: 0)
+        monkeypatch.setattr(asyncpick, 'glClientWaitSync', lambda *_args, **_named: 0)
         reads = {'n': 0}
         orig = sel._readPBO
         sel._readPBO = lambda *a, **k: (reads.__setitem__('n', reads['n'] + 1)
@@ -242,7 +253,8 @@ class TestAsyncSubmitDrain:
         assert ev.paths is None                     # not dispatched
         assert mode.context.processed == []
 
-    def test_overflow_blocks_on_oldest_batch(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_overflow_blocks_on_oldest_batch(self):
         sel = _bare()
         _attach_buffer(sel, _buffer_with_id())
         sel._ASYNC_MAX_INFLIGHT = 1                  # force the bounded-queue drain

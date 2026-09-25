@@ -80,7 +80,7 @@ def _install_fake_net(monkeypatch, api_json, zip_bytes=None):
     monkeypatch.setattr(cc0.resolver, "open_url", fake_open_url)
 
 
-def test_material_downloads_extracts_and_caches(tmp_path, monkeypatch):
+def test_material_downloads_extracts_and_caches(monkeypatch):
     _install_fake_net(monkeypatch, _api_json())
 
     maps = cc0.material("bark")            # "bark" -> asset Bark012
@@ -93,11 +93,11 @@ def test_material_downloads_extracts_and_caches(tmp_path, monkeypatch):
     assert "Bark012" in open(credits).read()
 
 
-def test_material_reuses_cache_without_redownloading(tmp_path, monkeypatch):
+def test_material_reuses_cache_without_redownloading(monkeypatch):
     _install_fake_net(monkeypatch, _api_json())
     cc0.material("bark")                    # first call populates the cache
 
-    def explode(*a, **k):
+    def explode(*_args, **_named):
         raise AssertionError("must not hit the network on a cache hit")
 
     monkeypatch.setattr(cc0.resolver, "open_url", explode)
@@ -105,7 +105,7 @@ def test_material_reuses_cache_without_redownloading(tmp_path, monkeypatch):
     assert "color" in maps and "normal" in maps
 
 
-def test_manifest_not_duplicated_on_second_material(tmp_path, monkeypatch):
+def test_manifest_not_duplicated_on_second_material(monkeypatch):
     _install_fake_net(monkeypatch, _api_json())
     cc0._write_manifest("Rock030", "1K")
     cc0._write_manifest("Rock030", "1K")   # identical line -> not appended twice
@@ -114,7 +114,7 @@ def test_manifest_not_duplicated_on_second_material(tmp_path, monkeypatch):
 
 
 def test_an_unwritable_manifest_costs_the_credit_line_not_the_material(
-        tmp_path, monkeypatch):
+        monkeypatch):
     # A directory where the CREDITS file should be makes open() raise OSError.
     credits = os.path.join(cc0.cache_dir(), "CREDITS.txt")
     os.mkdir(credits)
@@ -124,15 +124,15 @@ def test_an_unwritable_manifest_costs_the_credit_line_not_the_material(
     assert os.path.isdir(credits) and os.listdir(credits) == []
 
 
-def test_download_without_matching_jpg_raises(tmp_path, monkeypatch):
+def test_download_without_matching_jpg_raises(monkeypatch):
     _install_fake_net(monkeypatch, _api_json(with_jpg=False))
     with pytest.raises(RuntimeError):
         cc0._download("Bark012")
 
 
-def test_try_material_returns_none_on_failure(tmp_path, monkeypatch):
+def test_try_material_returns_none_on_failure(monkeypatch):
 
-    def boom(*a, **k):
+    def boom(*_args, **_named):
         raise OSError("offline")
 
     monkeypatch.setattr(cc0.resolver, "open_url", boom)

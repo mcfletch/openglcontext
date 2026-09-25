@@ -36,7 +36,7 @@ class Recorder(ScreenshotMixin):
         self.bound = []
 
     def addEventHandler(self, type, name='', state=None, modifiers=None,
-                        function=None, **named):
+                        function=None, **_named):
         self.bound.append({
             'type': type, 'name': name, 'state': state,
             'modifiers': tuple(modifiers) if modifiers else None,

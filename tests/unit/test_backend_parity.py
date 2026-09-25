@@ -509,9 +509,9 @@ class TestTheVRMLContextsTakeTheirArguments:
         # Nothing here may reach GLUT: initialising it needs a display, and a
         # second initialisation ends the process rather than raising.
         monkeypatch.setattr(glutcontext, 'ensureGlutInitialised',
-                            lambda *arguments, **named: False)
+                            lambda *_args, **_named: False)
         monkeypatch.setattr(glutvrmlcontext, 'glutInit',
-                            lambda *arguments: None, raising=False)
+                            lambda *_args: None, raising=False)
         monkeypatch.setattr(glutvrmlcontext, 'glutMainLoop',
                             lambda: None, raising=False)
 

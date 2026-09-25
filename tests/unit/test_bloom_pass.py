@@ -22,6 +22,7 @@ def gl_context(gl_window):
     return gl_window('bloom', size=(96, 96))
 
 
+@pytest.mark.usefixtures('gl_context')
 def test_bloom_spreads_a_halo(gl_context):
     W = H = 96
     bp = BloomPass()
@@ -69,6 +70,7 @@ def test_bloom_enabled_reads_env(monkeypatch):
         assert bloom_enabled() is False
 
 
+@pytest.mark.usefixtures('gl_context')
 def test_same_size_begin_reuses_targets(gl_context):
     """A second begin() at the same size must not reallocate the scene target."""
     bp = BloomPass()
@@ -81,6 +83,7 @@ def test_same_size_begin_reuses_targets(gl_context):
     assert bp.size == (64, 64)
 
 
+@pytest.mark.usefixtures('gl_context')
 def test_resize_reallocates_targets(gl_context):
     """begin() at a new size releases the old targets and allocates fresh ones."""
     bp = BloomPass()
@@ -95,12 +98,13 @@ def test_resize_reallocates_targets(gl_context):
     assert bp._targets.scene_tex is not None
 
 
-def test_release_targets_swallows_delete_errors(gl_context, monkeypatch):
+@pytest.mark.usefixtures('gl_context')
+def test_release_targets_swallows_delete_errors(monkeypatch):
     """A GL failure while freeing any target must not escape _release_targets."""
     bp = BloomPass()
     bp.begin(32, 32)
 
-    def boom(*a, **k):
+    def boom(*_args, **_named):
         raise RuntimeError("simulated driver delete failure")
 
     monkeypatch.setattr(bloom, 'glDeleteFramebuffers', boom)

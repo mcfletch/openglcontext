@@ -67,7 +67,7 @@ class TestTheShaderCompileHarnessSkips:
         class Refuses:
             __module__ = 'OpenGLContext.testing'
 
-            def __init__(self, *arguments, **named):
+            def __init__(self, *_args, **_named):
                 raise raised
 
         monkeypatch.setattr(
