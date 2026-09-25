@@ -160,6 +160,10 @@ Triangles wind counter-clockwise seen from the side the normals face.
    * - ``cylinder(radius, height, sides=16, arc=2*pi, repeat=1.0)``
      - The curved face of an upright cylinder, open at the ends. ``arc`` of
        ``math.pi`` is a half column with its flat back on the plane z = 0.
+   * - ``sphere(radius, sides=24, repeat=1.0)``
+     - A sphere round its origin, ``sides`` faces round the equator and half
+       as many pole to pole, so fewer sides is a coarser sphere of the same
+       size. The surface is gathered at the poles.
    * - ``moved(geometry, offset)``
      - ``geometry`` shifted by ``offset`` metres.
    * - ``placed(geometry, translation, rotation)``

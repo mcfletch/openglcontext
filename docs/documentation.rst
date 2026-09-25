@@ -121,6 +121,12 @@ Installing the package puts these commands on your path:
    lamp, one lit by a probe captured inside it and a cool lamp, and a statue
    shown only from inside its room, with keys to take the zones away. See
    :ref:`The zones demo <zones-demo>`.
+``oglc-lod``
+   A marble hall of metal orbs on plinths, each a chain of four levels of
+   detail: one row built in code, one written to glTF with ``MSFT_lod`` and
+   read back, and columns between them chosen by distance, with keys to tint
+   each level and to switch hysteresis off. See :ref:`The levels-of-detail
+   demo <lod-hall>`.
 ``oglc-character-sheet``
    Draws every clip a rigged character plays as one picture, with a row per
    view and a column per moment of the cycle, plus an overview sheet and an

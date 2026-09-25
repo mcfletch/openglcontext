@@ -89,6 +89,28 @@ fly-through:
 
 See :ref:`Recording a video <video>`.
 
+.. _lod-hall:
+
+The nodes in code
+~~~~~~~~~~~~~~~~~
+
+.. code-block:: bash
+
+   oglc-lod
+
+A marble hall with two rows of metal orbs on sandstone plinths and marble
+columns between them, built in code with nothing to download. Each orb is a
+sphere modelled four times, from 48 sides round its equator to 6. The left row
+is a ``ScreenCoverageLOD`` per orb, with coverage thresholds of 0.25, 0.12,
+0.05 and 0; the right row is the same chain written with
+``GLTFWriter.add_lod`` as ``MSFT_lod`` and read back with ``load_gltf``. The
+columns are VRML97 ``LOD`` nodes that change level at 12 and 24 metres. ``t``
+dresses each level in its own metal (gold, copper, steel, silver) so the
+switches can be seen while walking, and ``h`` sets every node's
+``hysteresis`` to 0 and back. ``OpenGLContext.bin.lod_demo.LODHall`` builds
+the scene, and the :doc:`lod_hall tutorial <tutorials/lod_hall>` walks
+through it.
+
 .. _lod-choosing:
 
 How a level is chosen

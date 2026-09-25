@@ -32,8 +32,8 @@ __all__ = [
     'fbm', 'marble', 'checkered_marble', 'marble_tiles', 'tiles', 'brick', 'plaster',
     'sandstone',
     'brushed_metal', 'normal_map', 'to_srgb', 'images', 'pbr_material',
-    'Geometry', 'panel', 'polygon', 'block', 'prism', 'cylinder', 'moved', 'placed', 'merge',
-    'shape',
+    'Geometry', 'panel', 'polygon', 'block', 'prism', 'cylinder', 'sphere', 'moved',
+    'placed', 'merge', 'shape',
 ]
 
 #: Metals' reflectance at normal incidence, linear, which is a metal's base
@@ -566,6 +566,44 @@ def cylinder(radius: float, height: float, sides: int = 16, arc: float = 2.0 * m
     return Geometry(positions.astype('f'), normals.astype('f'),
                     _down(texcoords / float(repeat)),
                     np.concatenate([tangent, tangent]).astype('f'),
+                    np.asarray(indices, np.uint32))
+
+
+def sphere(radius: float, sides: int = 24, repeat: float = 1.0) -> Geometry:
+    """A sphere centred on its own origin, facing out.
+
+    ``sides`` flat faces go round its equator and half as many from pole to
+    pole, so fewer sides is a coarser sphere of the same size -- what the
+    levels of detail of one object are made of. The surface repeats every
+    ``repeat`` metres round the equator and from pole to pole; it is gathered
+    at the poles, as any wrapping of a sphere is.
+    """
+    around = max(3, int(sides))
+    rings = max(2, around // 2)
+    columns = around + 1
+    # Longitude runs as a cylinder's does (see cylinder), and latitude from
+    # the south pole up; v is then turned to run down, as on every face here.
+    longitude = 2.0 * math.pi * (1.0 - np.arange(columns) / float(around))
+    latitude = math.pi * (np.arange(rings + 1) / float(rings) - 0.5)
+    lat, lon = np.meshgrid(latitude, longitude, indexing='ij')
+    normals = np.stack([np.cos(lat) * np.cos(lon), np.sin(lat),
+                        np.cos(lat) * np.sin(lon)], axis=-1).reshape(-1, 3)
+    tangents = np.stack([np.sin(lon), np.zeros_like(lon), -np.cos(lon),
+                         np.ones_like(lon)], axis=-1).reshape(-1, 4)
+    texcoords = np.stack([(2.0 * math.pi - lon) * radius,
+                          (lat + math.pi / 2.0) * radius], axis=-1).reshape(-1, 2)
+    indices: List[int] = []
+    for ring in range(rings):
+        low, high = ring * columns, (ring + 1) * columns
+        for step in range(around):
+            # A quad at a pole has two corners on the pole itself; only the
+            # half of it that has any area is kept.
+            if ring > 0:
+                indices.extend((low + step, low + step + 1, high + step + 1))
+            if ring < rings - 1:
+                indices.extend((low + step, high + step + 1, high + step))
+    return Geometry((normals * radius).astype('f'), normals.astype('f'),
+                    _down(texcoords / float(repeat)), tangents.astype('f'),
                     np.asarray(indices, np.uint32))
 
 

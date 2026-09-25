@@ -259,6 +259,26 @@ def test_a_half_column_stands_against_a_wall_facing_out_from_it():
     _texture_runs_along_the_tangents(half)
 
 
+def test_a_sphere_faces_out_and_is_textured_round_its_equator():
+    ball = surfaces.sphere(0.5, sides=16, repeat=0.25)
+    assert np.allclose(np.linalg.norm(ball.positions, axis=1), 0.5, atol=1e-6)
+    assert np.allclose(ball.normals, ball.positions / 0.5, atol=1e-6)
+    corners, winding = _faces(ball)
+    assert (np.einsum('ij,ij->i', winding, corners.mean(axis=1)) > 0).all()
+    assert np.ptp(ball.texcoords[:, 0]) == pytest.approx(2 * math.pi * 0.5 / 0.25)
+    # Round the middle, where the wrapping is not gathered towards a pole.
+    triangles = ball.indices.reshape(-1, 3)
+    middle = (np.abs(ball.positions[triangles, 1]) < 0.2).all(axis=1)
+    _texture_runs_along_the_tangents(ball._replace(indices=triangles[middle].ravel()))
+
+
+def test_fewer_sides_is_fewer_triangles():
+    """What a level of detail is made of."""
+    counts = [len(surfaces.sphere(1.0, sides=sides).indices)
+              for sides in (32, 16, 8)]
+    assert counts == sorted(counts, reverse=True)
+
+
 def test_a_prism_is_its_outline_stood_up_and_capped():
     square = [(-0.5, -0.5), (0.5, -0.5), (0.5, 0.5), (-0.5, 0.5)]
     prism = surfaces.prism(square, 2.0, repeat=0.5)
