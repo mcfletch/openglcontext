@@ -15,7 +15,7 @@
 #define MAX_CASCADES 4
 
 // Light enums, the scene light-uniform block and encodeObjectId() -- shared with
-// vrml97_lighting.frag / pbr.frag (finding 2a).
+// vrml97_lighting.frag / pbr.frag.
 #include "_lights_inc.glsl"
 
 // Inputs from vertex shader
@@ -34,9 +34,8 @@ uniform float transparency;
 uniform mat4 eyeToWorld;   // inverse camera view (cube shadow direction)
 
 // Shadow-map uniforms, samplers and resolveShadows() -- needs the enums (above),
-// the vPosition/vNormal varyings and eyeToWorld, all declared above here. Folding
-// this in is what finally gives per-vertex-coloured / NURBS geometry shadows
-// (finding 2a: this shader previously had none).
+// the vPosition/vNormal varyings and eyeToWorld, all declared above here. It is
+// what gives per-vertex-coloured and NURBS geometry its shadows.
 #include "_shadow_inc.glsl"
 
 // Object ID for selection buffer (MRT)
@@ -47,7 +46,7 @@ layout(location = 0) out vec4 fragColor;
 // Output object ID (attachment 1) - for selection buffer
 layout(location = 1) out vec4 fragObjectId;
 
-// Shared calcAttenuation / calcSpotEffect / calcLight (finding 2a).
+// Shared calcAttenuation / calcSpotEffect / calcLight.
 #include "_vrml97_lighting_inc.glsl"
 
 void main() {

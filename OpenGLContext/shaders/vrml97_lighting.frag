@@ -1,7 +1,6 @@
 #version 330 core
-// Desktop OpenGL 3.3 only, by design (finding 5.3): no GLSL-ES / WebGL profile is
-// provided -- OpenGLContext targets desktop core profiles. A GLSL-ES port would
-// need precision qualifiers and the array-shadow-sampler fallbacks reworking.
+// Desktop OpenGL 3.3 core. There is no GLSL-ES / WebGL form: one would need
+// precision qualifiers and other fallbacks for the array shadow samplers.
 
 // VRML97-compatible lighting fragment shader
 // Implements the VRML97 lighting equation for directional, point, and spot lights
@@ -57,7 +56,7 @@ layout(location = 0) out vec4 fragColor;
 layout(location = 1) out vec4 fragObjectId;
 
 // Shared VRML97 lighting math (calcAttenuation / calcSpotEffect / calcLight),
-// also used by vrml97_vertex_color.frag so the two stay in lock-step (finding 2a).
+// also used by vrml97_vertex_color.frag so the two stay in lock-step.
 #include "_vrml97_lighting_inc.glsl"
 
 void main() {

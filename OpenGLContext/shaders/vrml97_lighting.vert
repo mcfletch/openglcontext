@@ -31,7 +31,7 @@ void main() {
     mat4 mv = instancingEnabled ? aInstanceModelView : modelViewMatrix;
     // Normal matrix follows the (per-instance) modelview when instancing.
     // mv is affine, so the 3x3 inverse-transpose is exact and ~4x cheaper than
-    // inverting the full 4x4 then truncating (finding 2e).
+    // inverting the full 4x4 then truncating.
     mat3 nrm = instancingEnabled ? transpose(inverse(mat3(mv))) : normalMatrix;
 
     // Transform position to eye space (for lighting calculations)

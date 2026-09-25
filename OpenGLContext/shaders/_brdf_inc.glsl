@@ -1,8 +1,8 @@
 // Shared Cook-Torrance BRDF terms and GGX importance-sampling machinery. One
 // definition splits across the analytic direct-lighting path (pbr.frag) and the
 // offline split-sum precomputes (ibl_brdf.frag, ibl_prefilter.frag), so the LUT,
-// the prefiltered probe and the real-time shading can never drift apart -- the
-// class of bug that let the direct and IBL geometry terms disagree (findings 1/2).
+// the prefiltered probe and the real-time shading use the same terms, and the
+// direct and image-based geometry terms agree.
 //
 // ROUGHNESS CONVENTION -- read before touching a caller:
 //   perceptualRoughness  is the glTF material `roughness` in [0,1], and is what
@@ -63,10 +63,8 @@ float F_Schlick(float cosT, float F0) {
 
 // Height-correlated Smith visibility for DIRECT lighting. This is G / (4 NdotL
 // NdotV) folded into one term, so the caller multiplies D * V * F with NO extra
-// 1/(4 NdotV NdotL) denominator. `alpha` = roughness^2. Replaces the older
-// separable Schlick-Smith G, which (a) needed the fragile grazing-angle clamp on
-// that denominator and (b) had been fed alpha where it expected perceptual
-// roughness, squaring it a second time (finding 1).
+// 1/(4 NdotV NdotL) denominator, which needs no clamp at grazing angles.
+// `alpha` = roughness^2, the squared roughness, not the perceptual one.
 float V_SmithGGXCorrelated(float NdotV, float NdotL, float alpha) {
     float a2 = alpha * alpha;
     float ggxV = NdotL * sqrt(NdotV * NdotV * (1.0 - a2) + a2);

@@ -1,6 +1,6 @@
 #version 330 core
 #include "_wave_inc.glsl"
-// Desktop OpenGL 3.3 only, by design (finding 5.3): no GLSL-ES / WebGL profile.
+// Desktop OpenGL 3.3 core; there is no GLSL-ES / WebGL form.
 
 // Physically-based (metallic/roughness) fragment shader, glTF 2.0 aligned.
 // Cook-Torrance BRDF over the shared OpenGLContext light uniforms, with the same
@@ -507,10 +507,9 @@ vec3 envIrradiance(vec3 d) {
     }
     if (iblMode == 1) {
         // envColor is a single radiance sample; a Lambertian surface needs the
-        // cosine-weighted hemispherical *irradiance*. Approximate that integral
-        // by dividing the radiance by PI (finding 4.4) so the analytic diffuse
-        // level matches the prefiltered-probe path instead of being ~PI too
-        // bright.
+        // cosine-weighted hemispherical *irradiance*. Dividing the radiance by
+        // PI approximates that integral, and puts the analytic diffuse at the
+        // level the prefiltered-probe path gives.
         return envColor(d) * INV_PI * iblIntensity * zoneAll;
     }
     return sceneAmbient * zoneAll;

@@ -1317,9 +1317,8 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         ``node`` is the one at the end of ``path``. It is carried rather than
         looked up because almost everything that reads a record wants it -- to
         key an instanced batch on, to ask whether it casts a shadow, to sort its
-        material, to draw it -- and `path[-1]` is a Python call. A frame of a
-        few thousand objects was making tens of thousands of them to reach a
-        node the gather already had in hand.
+        material, to draw it -- and `path[-1]` is a Python call, made several
+        times per record by those readers where the record did not carry it.
 
         ``gathered`` is the walk of the scene to cull; left out, it is the
         frame's (:meth:`frameGather`).
@@ -1839,21 +1838,37 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         self.setupLightGrid()
         self.setupZones(matrix)
 
+    #: The fill a context that says nothing gets: VRML97's stand-in for the
+    #: light a scene with no lamps still shows.
+    DEFAULT_AMBIENT: Tuple[float, float, float] = (0.2, 0.2, 0.2)
+    #: The ``gltf_scene_ambient`` values already reported as unusable.
+    _ambientWarned: Any = None
+
     def sceneAmbient( self ) -> Tuple[float, float, float]:
         """The flat fill light the shader adds to everything.
 
-        glTF lighting is IBL + punctual only -- a flat white fill is
-        non-physical and washes out self-lit scenes (DirectionalLight,
-        PointLightIntensityTest read pale grey instead of dark + crisp
-        lights). A glTF viewer sets context.gltf_scene_ambient low/zero;
-        legacy VRML scenes keep the 0.2 fill that stands in for no lights.
+        A glTF scene is lit by its image-based and punctual lights alone, and a
+        flat fill lightens every shadow of a scene lit that way, so a glTF
+        viewer sets ``context.gltf_scene_ambient`` low or to zero. It is one
+        grey level or an RGB colour (extra components are ignored); anything
+        else is reported once and :attr:`DEFAULT_AMBIENT` stands.
         """
         amb = getattr(getattr(self, 'context', None), 'gltf_scene_ambient', None)
         if amb is None:
-            return (0.2, 0.2, 0.2)
-        if not isinstance(amb, (tuple, list)):
-            return (float(amb),) * 3
-        return (float(amb[0]), float(amb[1]), float(amb[2]))
+            return self.DEFAULT_AMBIENT
+        try:
+            values = numpy.asarray(amb, dtype='d').ravel()
+        except (TypeError, ValueError):
+            values = numpy.zeros(0)
+        if len(values) == 1 or len(values) >= 3:
+            colour = values[:1].repeat(3) if len(values) == 1 else values[:3]
+            if numpy.all(numpy.isfinite(colour)):
+                return (float(colour[0]), float(colour[1]), float(colour[2]))
+        if self._ambientWarned != repr(amb):
+            self._ambientWarned = repr(amb)
+            log.warning('context.gltf_scene_ambient is %r, which is neither a grey '
+                        'level nor an RGB colour; the default fill is used', amb)
+        return self.DEFAULT_AMBIENT
 
     def renderViewShader( self, frame: 'ViewFrame', id_map: Optional[Dict[int, Any]],
                           lighting: Any = None, background: bool = True,

@@ -6,7 +6,7 @@
 const float PI     = 3.14159265359;
 const float INV_PI = 0.31830988618;
 
-// Accurate piecewise sRGB transfer functions (finding 5.1). pow(c, 2.2) only
+// Piecewise sRGB transfer functions. pow(c, 2.2) only
 // approximates the sRGB curve; the piecewise form has the correct linear segment
 // near black, so dark base-colour / emissive texels decode -- and the final
 // frame encodes -- without the slight shadow crush the gamma-2.2 shortcut adds.

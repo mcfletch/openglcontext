@@ -309,11 +309,8 @@ def build_mesh_gpu(mode: Any, node: Any, positions: Any, normals: Any = None,
 def set_cull_state(mode: Any, enabled: bool, front_face: int) -> None:
     """Set face culling and winding for the next draw, if they are not already.
 
-    **The memo of what GL currently has belongs to the pass, and this is how it
-    is reached.**  A geometry node that wanted a particular winding used to
-    write the pass's private attributes from another package: an
-    underscore-prefixed protocol with two participants, no owner, and nothing
-    to find it by from the pass's own module.
+    The memo of what GL currently has belongs to the pass, and a geometry node
+    that wants a particular winding or culling reaches it through this.
 
     Re-issued only when it actually changes -- an assembly draws hundreds of
     same-state shapes in a row -- and reset once per pass by

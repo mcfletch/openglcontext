@@ -5,7 +5,7 @@
 
 // PI + Hammersley/GGX importance sampling shared with the prefilter pass and the
 // real-time shader, so the LUT integrates the same lobe the probe was filtered
-// with (finding 2). The Smith geometry here uses the IBL k = alpha/2, kept local.
+// with. The Smith geometry here uses the IBL k = alpha/2, kept local.
 #include "_brdf_inc.glsl"
 
 in vec2 vUV;

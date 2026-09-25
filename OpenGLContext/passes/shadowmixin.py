@@ -238,10 +238,9 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         max_slots = min(caps.max_shadow_lights(), shader.MAX_SHADOW_LIGHTS)
         light_index = -1
         slot = 0
-        # Save the render target once for the whole batch. The per-map bind()
-        # calls no longer save/restore per pass (a glGetIntegerv stall that
-        # serialised every cascade/cube-face); we restore once at the end so all
-        # the depth passes can pipeline on the GPU.
+        # Save the render target once for the whole batch and restore it once
+        # at the end: the per-map bind() calls save nothing, since a
+        # glGetIntegerv per pass would serialise every cascade and cube face.
         saved_fbo = int(glGetIntegerv(GL_FRAMEBUFFER_BINDING))
         saved_viewport = tuple(int(v) for v in glGetIntegerv(GL_VIEWPORT))
         try:

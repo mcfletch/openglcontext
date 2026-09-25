@@ -1,7 +1,7 @@
 // Shared VRML97 lighting math -- the attenuation, spot-cone and per-light
 // contribution functions -- included by both vrml97_lighting.frag (material
 // diffuse) and vrml97_vertex_color.frag (per-vertex diffuse) so the two stay in
-// lock-step (finding 2a). The including shader must first pull in _lights_inc
+// lock-step. The including shader must first pull in _lights_inc
 // (the light-uniform block + enums) and declare the `vPosition` varying and the
 // `shininess` uniform. calcLight takes a per-light shadowFactor, so a shader that
 // resolves shadows passes it through and one that doesn't passes 1.0.

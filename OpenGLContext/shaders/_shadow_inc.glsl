@@ -5,13 +5,13 @@
 // MAX_SHADOW_LIGHTS and MAX_CASCADES and SHADOW_SPOT/SHADOW_DIR/SHADOW_POINT,
 // declare the varyings vPosition/vNormal, and declare `uniform mat4 eyeToWorld`.
 //
-// Texture-unit budget (finding 2.3): spot maps and directional cascades are
+// Texture-unit budget: spot maps and directional cascades are
 // packed into ONE sampler2DArrayShadow (layer = slot*MAX_CASCADES + cascade;
 // spot lights use cascade 0), with one raw view for the PCSS blocker search.
 // Point shadows come from a single samplerCubeArrayShadow when SHADOW_CUBE_ARRAY
 // is defined (GL 4.0 / ARB_texture_cube_map_array), else from one
-// samplerCubeShadow per slot. That caps the lit program at a handful of fragment
-// texture image units instead of the 20 the per-slot layout used to demand.
+// samplerCubeShadow per slot. That holds the lit program to a handful of
+// fragment texture image units, where a map per slot would need twenty.
 
 // resolveShadows() below hand-unrolls slots 0..3 with literal indices, because the
 // per-slot cube-sampler fallback needs compile-time-constant sampler indices. That
@@ -44,7 +44,7 @@ uniform float cubeFar[MAX_SHADOW_LIGHTS];
 uniform sampler2DArrayShadow shadowArray;      // spot + directional depth, hardware PCF
 uniform sampler2DArray       shadowArrayRaw;   // same texture, raw depth for PCSS
 
-// Named PCSS / bias tuning constants (finding 5.3).
+// PCSS and bias tuning constants.
 //
 // PCSS_SEARCH_SCALE and PCSS_PENUMBRA_SCALE are unit-conversion calibrations, not
 // artistic knobs: they map a normalised depth quantity to a texel count for the
@@ -52,14 +52,14 @@ uniform sampler2DArray       shadowArrayRaw;   // same texture, raw depth for PC
 // against the default 1024^2 spot/CSM maps so a normal_offset-biased contact
 // shadow hardens at the contact and softens with blocker distance at a plausible
 // rate; if you change the shadow-map resolution or the light's frustum, these are
-// what re-scale. The artist-facing per-light lever is instead `shadowLightSize`
-// (bigger light -> wider penumbra) -- which is currently a single global uniform;
-// making penumbra genuinely per-light means promoting shadowLightSize to a
-// per-slot array in the Python + here, not per-light-ing these calibrations.
+// what re-scale. The artist-facing lever is `shadowLightSize` (bigger light ->
+// wider penumbra), one uniform for every light; a penumbra per light would be
+// shadowLightSize as a per-slot array, here and in the Python, rather than
+// these calibrations made per light.
 const float PCSS_SEARCH_SCALE   = 300.0;   // blocker-search radius per unit light size (texels)
 const float PCSS_PENUMBRA_SCALE = 3000.0;  // penumbra depth -> PCF filter radius (texels)
 
-// PCF kernel bounds (finding: name the bare 2.0 / 12.0 magic radii). pcfArray caps
+// PCF kernel bounds. pcfArray caps
 // the half-kernel at PCF_MAX_RADIUS taps (5x5); a soft penumbra wider than
 // PCF_MAX_RADIUS_TEXELS is spread across those same taps, so very wide penumbrae
 // undersample and can band. Raising the cap costs taps quadratically -- tune here.
@@ -109,10 +109,9 @@ vec3 shadowSamplePos() {
 }
 
 // Variable-radius PCF over one layer of the shared depth array. Both the spot
-// and CSM paths funnel through this one function (finding 3.24). The integer tap
-// count follows the requested filter radius: a hard shadow does a cheap 3x3
-// (9 taps) and only a genuinely soft (PCSS) shadow widens to 5x5 -- instead of
-// the old fixed 5x5 (25 taps) regardless of hardness. The sample spacing is set
+// and CSM paths funnel through this one function. The integer tap count
+// follows the requested filter radius: a hard shadow does a 3x3 (9 taps) and
+// only a soft (PCSS) shadow widens to 5x5 (25). The sample spacing is set
 // so the kernel still spans +/- radiusTexels either way, so a wider penumbra
 // stays soft without paying for taps a hard edge doesn't need.
 float pcfArray(vec2 uv, float layer, float ref, float radiusTexels) {
@@ -201,7 +200,7 @@ float csmFactor(int slot) {
     vec3 p = (lc.xyz / lc.w) * 0.5 + 0.5;
     if (p.z > 1.0 || p.x < 0.0 || p.x > 1.0 || p.y < 0.0 || p.y > 1.0) return 1.0;
     float ref = p.z - depthBias(index, p.z);
-    // Same bounded PCF as the spot path (finding 3.24): hard -> 3x3, soft -> 5x5.
+    // Same bounded PCF as the spot path: hard -> 3x3, soft -> 5x5.
     // Intentionally a fixed-radius soft kernel, not PCSS contact-hardening like the
     // spot path: a directional light has no finite size / blocker distance to drive
     // penumbra growth, so a constant softening is the right model here.

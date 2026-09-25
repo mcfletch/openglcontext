@@ -143,7 +143,7 @@ void main() {
     // upper-3x3, NOT the inverse-transpose normalMatrix (that is for normals).
     // Guard the normalize: with no tangent attribute location 3 defaults to 0, and
     // normalize(0) is NaN -- emit a zero tangent instead so the fragment's
-    // length(vTangent) > 0 test cleanly disables normal mapping (finding 4.1).
+    // length(vTangent) > 0 test cleanly disables normal mapping.
     vec3 tEye = mat3(mv) * tangent;
     float tLen = length(tEye);
     vTangent = tLen > 0.0 ? tEye / tLen : vec3(0.0);

@@ -196,9 +196,7 @@ def load_cubemap_faces(prefix: str, size: int) -> Optional[dict[int, np.ndarray]
             return None
         img = Image.open(path).convert('RGB')
         if img.size != (size, size):
-            # Image.BILINEAR is a runtime module-level resampling constant Pillow's
-            # type stubs no longer expose (moved to Image.Resampling).
-            img = img.resize((size, size), Image.BILINEAR)  # type: ignore[attr-defined]
+            img = img.resize((size, size), Image.Resampling.BILINEAR)
         arr = np.asarray(img, dtype=np.float32) / 255.0
         faces[offset] = np.ascontiguousarray(
             _srgb_to_linear(arr).astype(np.float32))
