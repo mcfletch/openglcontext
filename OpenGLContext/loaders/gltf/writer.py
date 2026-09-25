@@ -32,6 +32,7 @@ from __future__ import annotations
 
 import io
 import json
+import os
 import struct
 from dataclasses import dataclass, field as dataclass_field
 from typing import Any, Iterable, Optional, Sequence, Union
@@ -157,6 +158,12 @@ class SceneNode:
     format's slot for what an application knows; ``hook`` is an ``OGLC_hook``
     block saying what the engine should make of this object
     (:mod:`OpenGLContext.loaders.gltf.hooks`).
+
+    ``buffer`` names the file beside the ``.glb`` that this node's mesh data
+    is written to, a plain file name such as ``'bust.lod0.bin'``; None, the
+    default, writes it into the glB's own binary chunk. A reader fetches that
+    file only when it reads the mesh, which is how a baked level-of-detail
+    chain keeps its finer levels out of the file every reader opens.
     """
 
     mesh: Union[PBRMesh, Sequence[PBRMesh], None] = None
@@ -169,37 +176,66 @@ class SceneNode:
     instances: Optional[InstanceSet] = None
     extras: Optional[dict] = None
     hook: Optional[dict] = None
+    buffer: Optional[str] = None
 
 
 # --- accessors and buffer layout ----------------------------------------------
 
 class _BufferBuilder:
-    """Accumulates the binary chunk and the bufferViews/accessors into it.
+    """Accumulates the buffers and the bufferViews/accessors into them.
 
-    Every view starts on a four-byte boundary, which satisfies the alignment the
-    spec asks of accessor offsets for all the component types written here.
+    Each buffer is named by the file it is written to, ``None`` being the glB's
+    own binary chunk. Every view starts on a four-byte boundary, which satisfies
+    the alignment the spec asks of accessor offsets for all the component types
+    written here.
     """
 
     def __init__(self) -> None:
-        self.blob = bytearray()
+        self.blobs: dict[Optional[str], bytearray] = {None: bytearray()}
         self.views: list[dict] = []
+        self.view_buffers: list[Optional[str]] = []
         self.accessors: list[dict] = []
 
-    def add_view(self, data: bytes, target: Optional[int] = None) -> int:
-        self.blob.extend(b'\x00' * (-len(self.blob) % 4))
-        view = {'buffer': 0, 'byteOffset': len(self.blob), 'byteLength': len(data)}
+    @property
+    def blob(self) -> bytearray:
+        """The glB's binary chunk."""
+        return self.blobs[None]
+
+    def add_view(self, data: bytes, target: Optional[int] = None,
+                 buffer: Optional[str] = None) -> int:
+        blob = self.blobs.setdefault(buffer, bytearray())
+        blob.extend(b'\x00' * (-len(blob) % 4))
+        view = {'byteOffset': len(blob), 'byteLength': len(data)}
         if target is not None:
             view['target'] = target
-        self.blob.extend(data)
+        blob.extend(data)
         self.views.append(view)
+        self.view_buffers.append(buffer)
         return len(self.views) - 1
+
+    def buffers(self) -> tuple[list[dict], list[dict]]:
+        """The document's ``buffers`` and ``bufferViews``.
+
+        The binary chunk is buffer 0 when it holds anything, and a buffer that
+        holds nothing is not listed, since glTF requires every buffer to hold
+        at least a byte. The files follow in the order they were first named.
+        """
+        order = [name for name, blob in self.blobs.items() if blob]
+        order.sort(key=lambda name: name is not None)
+        listed = [({'byteLength': len(self.blobs[name])} if name is None else
+                   {'uri': name, 'byteLength': len(self.blobs[name])})
+                  for name in order]
+        where = {name: index for index, name in enumerate(order)}
+        views = [dict(view, buffer=where[name])
+                 for view, name in zip(self.views, self.view_buffers)]
+        return listed, views
 
     def add_accessor(self, array: np.ndarray, kind: str, component_type: int,
                      target: Optional[int] = None, normalized: bool = False,
-                     bounds: bool = False) -> int:
+                     bounds: bool = False, buffer: Optional[str] = None) -> int:
         data = np.ascontiguousarray(array).tobytes()
         accessor: dict[str, Any] = {
-            'bufferView': self.add_view(data, target),
+            'bufferView': self.add_view(data, target, buffer),
             'componentType': component_type,
             'count': int(len(array)),
             'type': kind,
@@ -213,9 +249,11 @@ class _BufferBuilder:
         self.accessors.append(accessor)
         return len(self.accessors) - 1
 
-    def add_floats(self, array: np.ndarray, kind: str, bounds: bool = False) -> int:
+    def add_floats(self, array: np.ndarray, kind: str, bounds: bool = False,
+                   buffer: Optional[str] = None) -> int:
         return self.add_accessor(np.asarray(array, '<f4'), kind, FLOAT,
-                                 target=ARRAY_BUFFER, bounds=bounds)
+                                 target=ARRAY_BUFFER, bounds=bounds,
+                                 buffer=buffer)
 
 
 class _IdentityCache:
@@ -376,7 +414,8 @@ class GLTFWriter:
     written once and referenced twice, so a scatter of a thousand identical props
     costs one mesh.
 
-    Nodes added with no parent become roots of the default scene.
+    Nodes added with no parent become roots of the default scene. ``extras``
+    is written as the document's own ``extras``.
     """
 
     def __init__(self, generator: str = GENERATOR) -> None:
@@ -394,23 +433,28 @@ class GLTFWriter:
         self._material_index = _IdentityCache()
         self._image_index = _IdentityCache()
         self._texture_index: dict[tuple, int] = {}
+        #: Written as the document's ``extras`` when it holds anything.
+        self.extras: dict = {}
 
     # -- meshes ----------------------------------------------------------------
 
     def add_mesh(self, mesh: Union[PBRMesh, Sequence[PBRMesh]],
-                 name: Optional[str] = None) -> int:
+                 name: Optional[str] = None,
+                 buffer: Optional[str] = None) -> int:
         """Write one mesh (or a group of primitives) and return its index.
 
         Passing the same :class:`~OpenGLContext.scenegraph.pbrmesh.PBRMesh` object
-        again returns the index already assigned to it.
+        again returns the index already assigned to it. ``buffer`` is the file
+        beside the ``.glb`` its arrays go to, as :attr:`SceneNode.buffer`.
         """
+        _check_buffer_name(buffer)
         primitives_source = [mesh] if isinstance(mesh, PBRMesh) else list(mesh)
         if len(primitives_source) == 1:
             cached = self._mesh_index.get(primitives_source[0])
             if cached is not None:
                 return cached
         entry: dict[str, Any] = {
-            'primitives': [self._primitive(m) for m in primitives_source]}
+            'primitives': [self._primitive(m, buffer) for m in primitives_source]}
         if name:
             entry['name'] = name
         self._meshes.append(entry)
@@ -419,12 +463,13 @@ class GLTFWriter:
             self._mesh_index.set(primitives_source[0], index)
         return index
 
-    def _primitive(self, mesh: PBRMesh) -> dict:
+    def _primitive(self, mesh: PBRMesh, buffer: Optional[str] = None) -> dict:
         positions = np.asarray(mesh.positions, '<f4')
         if positions.ndim != 2 or positions.shape[1] != 3 or not len(positions):
             raise ValueError("a glTF primitive needs a non-empty (N,3) POSITION array")
         count = len(positions)
-        attributes = {'POSITION': self._buffer.add_floats(positions, 'VEC3', bounds=True)}
+        attributes = {'POSITION': self._buffer.add_floats(
+            positions, 'VEC3', bounds=True, buffer=buffer)}
 
         for name, source, allowed in (
                 ('NORMAL', mesh.normals, (3,)),
@@ -440,7 +485,7 @@ class GLTFWriter:
                     "glTF attribute %s has %d entries but POSITION has %d"
                     % (name, len(array), count))
             attributes[name] = self._buffer.add_floats(
-                array, _kind_for(array, name, allowed))
+                array, _kind_for(array, name, allowed), buffer=buffer)
 
         primitive: dict[str, Any] = {'attributes': attributes}
         indices = getattr(mesh, 'indices', None)
@@ -454,7 +499,7 @@ class GLTFWriter:
             primitive['indices'] = self._buffer.add_accessor(
                 indices.astype('<u2' if narrow else '<u4'), 'SCALAR',
                 UNSIGNED_SHORT if narrow else UNSIGNED_INT,
-                target=ELEMENT_ARRAY_BUFFER)
+                target=ELEMENT_ARRAY_BUFFER, buffer=buffer)
         mode = int(getattr(mesh, 'draw_mode', 4) or 0)
         if mode != 4:                                    # TRIANGLES is the default
             primitive['mode'] = mode
@@ -696,6 +741,61 @@ class GLTFWriter:
             node = SceneNode(**kwargs)
         elif kwargs:
             raise TypeError("pass a SceneNode or its fields, not both")
+        entry = self._node_entry(node)
+        self._nodes.append(entry)
+        index = len(self._nodes) - 1
+        if root:
+            self._roots.append(index)
+        return index
+
+    def add_lod(self, levels: Sequence[SceneNode],
+                coverage: Optional[Sequence[float]] = None, *,
+                root: bool = True) -> int:
+        """Write one object at several levels of detail; return its node's index.
+
+        ``levels`` are finest first. The finest is written as the node carrying
+        ``MSFT_lod``, whose ``ids`` name the others in decreasing detail, so a
+        reader that does not know the extension draws the finest, and this
+        engine's loader switches between them
+        (:mod:`OpenGLContext.loaders.gltf.lod`). The coarser levels are placed
+        where the finest is; their own transforms are not applied on top.
+
+        ``coverage`` is ``MSFT_screencoverage``, one share of the window's
+        height per level, decreasing: each level is drawn from its figure down
+        to the next, and nothing below the last. None writes
+        :func:`~OpenGLContext.loaders.gltf.lod.halving_coverage`, which ends at
+        0 so the coarsest level is never culled.
+
+        The finest level's node comes before the others, so a chain written
+        into an empty writer is node 0 with ``ids`` 1 onwards.
+        """
+        from OpenGLContext.loaders.gltf import lod as _lod
+        levels = list(levels)
+        if not levels:
+            raise ValueError("an object needs at least one level of detail")
+        stated = (_lod.halving_coverage(len(levels)) if coverage is None
+                  else [float(value) for value in coverage])
+        if len(stated) != len(levels):
+            raise ValueError("%d levels need %d coverage figures, not %d"
+                             % (len(levels), len(levels), len(stated)))
+        index = len(self._nodes)
+        self._nodes.append({})
+        if root:
+            self._roots.append(index)
+        # Meshes in decreasing detail, as the nodes are.
+        for level in levels:
+            if isinstance(level.mesh, PBRMesh):
+                self.add_mesh(level.mesh, buffer=level.buffer)
+        ids = [self.add_node(level, root=False) for level in levels[1:]]
+        entry = self._node_entry(levels[0])
+        entry.setdefault('extensions', {})[_lod.EXTENSION] = {'ids': ids}
+        entry.setdefault('extras', {})[_lod.COVERAGE] = stated
+        self._extensions_used.add(_lod.EXTENSION)
+        self._nodes[index] = entry
+        return index
+
+    def _node_entry(self, node: SceneNode) -> dict:
+        """One node's JSON, with its children and mesh written."""
         entry: dict[str, Any] = {}
         if node.name:
             entry['name'] = node.name
@@ -712,7 +812,7 @@ class GLTFWriter:
                 if value is not None:
                     entry[key] = [float(v) for v in value]
         if node.mesh is not None:
-            entry['mesh'] = self.add_mesh(node.mesh)
+            entry['mesh'] = self.add_mesh(node.mesh, buffer=node.buffer)
         if node.instances is not None:
             entry.setdefault('extensions', {})['EXT_mesh_gpu_instancing'] = \
                 self._instancing(node.instances)
@@ -725,11 +825,7 @@ class GLTFWriter:
         if node.children:
             entry['children'] = [self.add_node(child, root=False)
                                  for child in node.children]
-        self._nodes.append(entry)
-        index = len(self._nodes) - 1
-        if root:
-            self._roots.append(index)
-        return index
+        return entry
 
     def _instancing(self, instances: InstanceSet) -> dict:
         count = instances.count()
@@ -753,29 +849,62 @@ class GLTFWriter:
             'scene': 0,
             'scenes': [{'nodes': list(self._roots)}],
         }
+        buffers, views = self._buffer.buffers()
         for key, value in (('nodes', self._nodes), ('meshes', self._meshes),
                            ('materials', self._materials), ('textures', self._textures),
                            ('images', self._images), ('samplers', self._samplers),
                            ('accessors', self._buffer.accessors),
-                           ('bufferViews', self._buffer.views)):
+                           ('bufferViews', views), ('buffers', buffers)):
             if value:
                 doc[key] = value
-        if self._buffer.blob:
-            doc['buffers'] = [{'byteLength': len(self._buffer.blob)}]
         if self._extensions_used:
             doc['extensionsUsed'] = sorted(self._extensions_used)
+        if self.extras:
+            doc['extras'] = self.extras
         return doc
 
     def to_glb(self) -> bytes:
-        """The document as binary glTF."""
+        """The document as binary glTF.
+
+        Mesh data written to a named buffer is not in it; see
+        :meth:`external_buffers`.
+        """
         return _pack_glb(self.document(), bytes(self._buffer.blob))
 
+    def external_buffers(self) -> dict[str, bytes]:
+        """The bytes of each file the document names beside itself, by name."""
+        return {name: bytes(blob) for name, blob in self._buffer.blobs.items()
+                if name is not None and blob}
+
     def write(self, path: str) -> bytes:
-        """Write the document to ``path`` and return the bytes written."""
+        """Write the document to ``path`` and return the glB's bytes.
+
+        Each named buffer is written beside it. Every file is written whole
+        or not at all (:mod:`OpenGLContext.atomicfiles`), the named buffers
+        first, so a ``.glb`` on disk has its buffers beside it.
+        """
+        from OpenGLContext import atomicfiles
+        directory = os.path.dirname(os.path.abspath(path))
+        for name, data in self.external_buffers().items():
+            atomicfiles.write_bytes(os.path.join(directory, name), data)
         data = self.to_glb()
-        with open(path, 'wb') as handle:
-            handle.write(data)
+        atomicfiles.write_bytes(path, data)
         return data
+
+
+def _check_buffer_name(name: Optional[str]) -> None:
+    """Refuse a buffer name that is not a plain file name beside the ``.glb``.
+
+    The name is written into the document as a relative ``uri`` and the file
+    beside the ``.glb`` it is written to, and a reader resolves it under the
+    ``.glb``'s own directory, so anything with a directory in it is refused.
+    """
+    if name is None:
+        return
+    if (not name or name in ('.', '..') or os.path.basename(name) != name
+            or '\\' in name or ':' in name or '%' in name):
+        raise ValueError("a buffer is named by a plain file name beside the "
+                         ".glb, not %r" % (name,))
 
 
 def _pack_glb(document: dict, blob: bytes) -> bytes:

@@ -383,10 +383,11 @@ thresholds.
 Limits
 ------
 
-- Every level is decoded at load. A chain in one ``.glb`` holds all of its
-  levels in memory, whichever are on screen. The sidecar layout the baking
-  tools write would allow a streaming reader to load levels on demand, but the
-  engine does not defer a level's decode.
+- ``load_gltf`` decodes every level at load, so a chain in one ``.glb`` holds
+  all of its levels in memory, whichever are on screen. ``LODAsset``
+  (:ref:`Writing a chain <writing-lod>`) reads one level at a time from the
+  sidecar layout the baking tools write; the render pass does not yet switch
+  between levels read that way.
 
 - The switch between levels is instant. Levels are not blended (no
   geomorphing), so a level change can be visible if you look for it. The

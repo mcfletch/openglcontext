@@ -107,6 +107,45 @@ load as one instanced draw:
        scales=scales)),               # (N,3), optional
        path='trees.glb')
 
+.. _writing-lod:
+
+Levels of detail
+~~~~~~~~~~~~~~~~
+
+``GLTFWriter.add_lod`` writes one object at several levels of detail as
+``MSFT_lod`` (see :ref:`Levels of detail <lod>`). The levels are
+``SceneNode`` objects, finest first; the finest is the node that carries the
+extension, and the others are placed where it is. ``coverage`` is the
+``MSFT_screencoverage`` list, one figure per level. Without it the writer
+writes the series the loader would guess: a half, a quarter, and so on, ending
+at 0 so the coarsest level is never culled.
+
+A node's ``buffer`` names a file beside the ``.glb`` that its mesh data is
+written to. ``write`` writes those files as well, each whole or not at all. A
+chain that keeps its coarsest level in the ``.glb`` and each finer level in a
+file of its own costs a reader nothing for a level it never reads:
+
+.. code-block:: python
+
+   from OpenGLContext.loaders.gltf import GLTFWriter, SceneNode
+   from OpenGLContext.loaders.gltf.lodasset import LODAsset
+
+   writer = GLTFWriter()
+   writer.add_lod([SceneNode(mesh=fine, buffer='bust.lod0.bin'),
+                   SceneNode(mesh=middle, buffer='bust.lod1.bin'),
+                   SceneNode(mesh=coarse)])
+   writer.write('bust.glb')          # bust.glb, bust.lod0.bin, bust.lod1.bin
+
+   asset = LODAsset.open('bust.glb')          # reads the JSON chunk only
+   asset.levels[-1].triangle_count            # each level, described
+   attributes, indices = asset.load(2)        # reads the coarsest level's bytes
+
+``load_gltf`` reads every level of such a file into the scene. ``LODAsset``
+reads one level's byte ranges when asked, from the ``.glb``'s own chunk or
+from a file beside it; a file named anywhere else is refused, as it is for
+every loader (:doc:`untrusted`). A buffer name with a directory in it is
+refused by the writer.
+
 Textures
 ~~~~~~~~
 

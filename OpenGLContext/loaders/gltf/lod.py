@@ -121,6 +121,20 @@ def screen_coverage(node: Any, levels: int,
             return read
         values.warn('%s is %r, which is not a list of numbers; the levels are '
                     'scheduled by halving' % (COVERAGE, stated))
+    return halving_coverage(levels)
+
+
+def halving_coverage(levels: int) -> list:
+    """The coverage each of ``levels`` levels takes over at when none was
+    measured: :data:`FIRST_COVERAGE`, halved for each further level, and 0 for
+    the coarsest, so the chain is never culled by a threshold nobody chose.
+
+    What the loader reads a file that states no coverage as, and what
+    :meth:`~OpenGLContext.loaders.gltf.writer.GLTFWriter.add_lod` writes when
+    its caller measured none.
+    """
+    if levels <= 0:
+        return []
     return [FIRST_COVERAGE / (2 ** index) for index in range(levels - 1)] + [0.0]
 
 

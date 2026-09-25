@@ -267,7 +267,10 @@ Other rules the loader follows:
 
 - ``MSFT_lod`` on a *material*, which the extension also allows, is not read.
 
-To make a chain of levels, use the tools in `OpenGLContext-editor
+``GLTFWriter.add_lod`` writes a chain, and
+``OpenGLContext.loaders.gltf.lodasset.LODAsset`` reads one a level at a time;
+see :ref:`Writing a chain <writing-lod>`. To make the levels themselves, use
+the tools in `OpenGLContext-editor
 <https://github.com/mcfletch/openglcontext-editor>`__; see :ref:`Authoring a
 chain <lod-authoring>`. :doc:`Levels of detail <lod>` covers the whole
 subject, including impostors and a demo world to walk through.

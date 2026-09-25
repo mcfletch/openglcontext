@@ -104,9 +104,11 @@ OpenGLContext/
 │   ├── documentvalues.py  # A document's numbers, flags and names, checked:
 │   │                 # a default or a bound and one report, never a raise
 │   ├── gltf/         # glTF 2.0 / GLB
-│   │   └── lod.py    # MSFT_lod: a node's coarser levels, and when each is
-│   │                 # worth drawing -- docs/gltf.rst#lod. Making them is
-│   │                 # openglcontext-editor's job, not the engine's
+│   │   ├── lod.py    # MSFT_lod: a node's coarser levels, and when each is
+│   │   │             # worth drawing -- docs/gltf.rst#lod. Making them is
+│   │   │             # openglcontext-editor's job, not the engine's
+│   │   └── lodasset.py  # A chain read one level at a time, sidecars
+│   │                 # opened only when asked -- docs/baking.rst#writing-lod
 │   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/tiles3d.rst
 ├── move/             # Camera, movement modes, walking -- docs/navigation.rst
 │   └── orbit.py      # The examine gestures: orbit, dolly, pan -- no GL, no events
