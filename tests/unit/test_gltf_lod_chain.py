@@ -273,3 +273,18 @@ class TestWhereALevelsBytesMayLive:
         asset = LODAsset.open(_write(tmp_path), max_resource_bytes=8)
         with pytest.raises(ValueError):
             asset.load(2)
+
+
+@pytest.mark.parametrize('document, complaint', [
+    ({'nodes': [{'mesh': 'a'}], 'meshes': []}, "mesh is 'a', which is not a finite number"),
+    ({'nodes': [{'mesh': 2}], 'meshes': [{}]}, 'meshes 2 is named and there are 1'),
+    ({'nodes': [{'mesh': 0}], 'meshes': [{'primitives': [
+        {'attributes': {'POSITION': -1}}]}]}, 'POSITION is -1, which is negative'),
+    ({'nodes': [{'mesh': 0}], 'meshes': [{'primitives': [
+        {'attributes': {'POSITION': 0}}]}], 'accessors': [{'count': 1.5}]},
+     'accessor count is 1.5, which is not a whole number'),
+])
+def test_a_document_naming_what_is_not_there_is_refused(document, complaint):
+    from OpenGLContext.loaders.documentvalues import DocumentError
+    with pytest.raises(DocumentError, match=complaint):
+        LODAsset('chain.glb', document, 0)

@@ -549,3 +549,50 @@ def test_a_tile_finds_a_texture_named_beside_its_tileset(tmp_path):
             found.append(appearance.material)
         stack.extend(getattr(node, 'children', None) or [])
     assert any('baseColor' in m.textures for m in found)
+
+
+# --- a tileset that is not what the specification says ------------------------
+
+@pytest.mark.parametrize('root, complaint', [
+    ({"boundingVolume": {"box": [0.0] * 11}, "geometricError": 1.0},
+     'box is .*, which is not 12 finite numbers'),
+    ({"boundingVolume": "everywhere", "geometricError": 1.0},
+     "tile boundingVolume is 'everywhere', which is not an object"),
+    ({"boundingVolume": {"sphere": [0, 0, 0, 1]}},
+     'tile geometricError is None, which is not a finite number'),
+    ({"boundingVolume": {"sphere": [0, 0, 0, 1]}, "geometricError": 1.0,
+      "content": "tile.glb"},
+     "tile content is 'tile.glb', which is not an object"),
+    ({"boundingVolume": {"sphere": [0, 0, 0, 1]}, "geometricError": 1.0,
+      "content": {"uri": 7}},
+     'tile content uri is 7, which is not a string'),
+    ({"boundingVolume": {"sphere": [0, 0, 0, 1]}, "geometricError": 1.0,
+      "children": {"a": 1}},
+     'tile children is .*, which is not an array'),
+    ({"boundingVolume": {"sphere": [0, 0, 0, 1]}, "geometricError": 1.0,
+      "transform": [1, 0, 0]},
+     'tile transform is .*, which is not 16 finite numbers'),
+])
+def test_a_malformed_tile_is_refused_naming_what_is_wrong(root, complaint):
+    from OpenGLContext.loaders.documentvalues import DocumentError
+    with pytest.raises(DocumentError, match=complaint):
+        build_runtime_tileset(_tileset(root))
+
+
+def test_a_tileset_with_no_root_object_is_refused():
+    from OpenGLContext.loaders.documentvalues import DocumentError
+    with pytest.raises(DocumentError, match='tileset root is None'):
+        build_runtime_tileset({"asset": {"version": "1.1"}})
+
+
+def test_an_up_axis_that_is_no_axis_is_the_default():
+    ts = build_runtime_tileset({
+        "asset": {"version": "1.1", "gltfUpAxis": 3}, "geometricError": "x",
+        "root": {"boundingVolume": {"sphere": [0, 0, 0, 1]}, "geometricError": 1.0,
+                 "refine": 4},
+    })
+    default = build_runtime_tileset(_tileset(
+        {"boundingVolume": {"sphere": [0, 0, 0, 1]}, "geometricError": 1.0}))
+    assert np.array_equal(ts.root.content_transform, default.root.content_transform)
+    assert ts.root_geometric_error == 0.0
+    assert ts.root.refine == 'REPLACE'

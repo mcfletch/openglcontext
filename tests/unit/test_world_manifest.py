@@ -104,6 +104,15 @@ class TestWhereItLives:
         (tmp_path / MANIFEST).write_text('{not json', encoding='utf-8')
         assert read_manifest(str(tmp_path)) is None
 
+    def test_a_manifest_with_a_value_of_the_wrong_kind_reads_as_nothing(self, tmp_path):
+        (tmp_path / MANIFEST).write_text(
+            '{"name": "Ashdown", "roadLength": "long", "structures": {"bridge": 5}}')
+        assert read_manifest(str(tmp_path)) is None
+        (tmp_path / MANIFEST).write_text('{"name": "Ashdown", "structures": [1]}')
+        assert read_manifest(str(tmp_path)) is None
+        (tmp_path / MANIFEST).write_text('{"name": "Ashdown", "tileset": 3}')
+        assert read_manifest(str(tmp_path)) is None
+
     def test_a_manifest_with_no_name_reads_as_nothing(self, tmp_path):
         (tmp_path / MANIFEST).write_text('{"seed": 11}', encoding='utf-8')
         assert read_manifest(str(tmp_path)) is None

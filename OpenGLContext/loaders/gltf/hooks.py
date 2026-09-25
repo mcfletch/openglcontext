@@ -65,7 +65,7 @@ from typing import (
 
 import numpy as np
 
-from OpenGLContext.loaders.documentvalues import DocumentValues
+from OpenGLContext.loaders.documentvalues import DocumentValues, JSONObject, require_object
 
 if TYPE_CHECKING:
     from vrml.node import Node
@@ -118,15 +118,16 @@ class HookTag:
     """A kind, and whatever parameters that kind defines."""
 
     kind: str
-    params: Dict[str, Any] = field(default_factory=dict)
+    params: JSONObject = field(default_factory=dict)
 
 
-def _one_tag(block: Any) -> Optional[HookTag]:
+def _one_tag(block: object) -> Optional[HookTag]:
     """One ``OGLC_hook`` value as a tag, or None where it says nothing."""
     if isinstance(block, str):
         kind = block.strip()
         return HookTag(kind) if kind else None
     if isinstance(block, dict):
+        block = require_object(block, EXTENSION)
         kind = str(block.get('kind') or '').strip()
         if not kind:
             log.debug('%s names no kind; the material or node is loaded as it '
@@ -137,7 +138,7 @@ def _one_tag(block: Any) -> Optional[HookTag]:
     return None
 
 
-def tag_from(extras: Any, extensions: Any) -> Optional[HookTag]:
+def tag_from(extras: object, extensions: object) -> Optional[HookTag]:
     """The tag two holders spell, the extension winning over ``extras``."""
     for holder in (extensions, extras):
         if isinstance(holder, dict) and EXTENSION in holder:
@@ -282,7 +283,8 @@ class HookContext:
 
     at: str
     kind: str
-    params: Dict[str, Any]
+    #: The tag's parameters, each narrowed through :attr:`values` before use.
+    params: JSONObject
     #: The parsed glTF document (a ``pygltflib.GLTF2``).
     document: Any
     resolver: 'Resolver'

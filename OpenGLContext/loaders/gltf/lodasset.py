@@ -30,7 +30,6 @@ in the file.
 """
 from __future__ import annotations
 
-import json
 import os
 import struct
 from dataclasses import dataclass
@@ -38,7 +37,10 @@ from typing import Any, Optional
 
 import numpy as np
 
-from OpenGLContext.loaders.documentvalues import DocumentValues
+from OpenGLContext.loaders.documentvalues import (
+    DocumentValues, JSONObject, parse_object, require_array, require_index,
+    require_item, require_object, require_text, require_whole,
+)
 from OpenGLContext.loaders.gltf import lod as _lod
 from OpenGLContext.loaders.gltf.accessors import (
     _checked_count,
@@ -93,7 +95,7 @@ class LODAsset:
     ``levels`` describes each level, finest first; :meth:`load` reads one.
     """
 
-    def __init__(self, path: str, document: dict[str, Any], binary_offset: int,
+    def __init__(self, path: str, document: JSONObject, binary_offset: int,
                  max_resource_bytes: Optional[int] = DEFAULT_MAX_RESOURCE_BYTES
                  ) -> None:
         self.path = path
@@ -121,13 +123,11 @@ class LODAsset:
             json_length, json_kind = struct.unpack('<II', handle.read(8))
             if json_kind != _JSON_CHUNK:
                 raise ValueError('%r does not begin with a JSON chunk' % (path,))
-            document = json.loads(handle.read(json_length))
+            document = parse_object(handle.read(json_length), '%r glTF JSON' % (path,))
             binary_offset = 12 + 8 + json_length
             chunk = handle.read(8)
             if len(chunk) == 8 and struct.unpack('<II', chunk)[1] == _BIN_CHUNK:
                 binary_offset += 8
-        if not isinstance(document, dict):
-            raise ValueError('%r holds no glTF document' % (path,))
         return cls(path, document, binary_offset, max_resource_bytes)
 
     def load(self, level: int) -> tuple[dict[str, np.ndarray], np.ndarray]:
@@ -139,64 +139,70 @@ class LODAsset:
         holding a finer level is opened here and nowhere else.
         """
         primitive = self._primitive(level)
-        attributes = {name: self._read(index).astype(np.float32, copy=False)
-                      for name, index in primitive['attributes'].items()}
+        attributes = {name: self._read(require_index(raw, 'attribute %s' % (name,)))
+                      .astype(np.float32, copy=False)
+                      for name, raw in _attributes(primitive).items()}
         if primitive.get('indices') is None:
             indices = np.arange(len(attributes['POSITION']), dtype=np.uint32)
         else:
-            indices = self._read(primitive['indices']).astype(np.uint32).ravel()
+            indices = self._read(require_index(primitive['indices'], 'indices')
+                                 ).astype(np.uint32).ravel()
         return attributes, indices
 
     # -- the description ------------------------------------------------------
 
     def _describe(self) -> list[LODEntry]:
         values = DocumentValues()
-        extras = self.document.get('extras') or {}
-        errors = extras.get(LOD_ERROR) if isinstance(extras, dict) else None
-        errors = errors if isinstance(errors, list) else []
-        root = self.document['nodes'][self._root]
+        extras = values.mapping(self.document.get('extras'), 'the document extras')
+        errors = values.array(extras.get(LOD_ERROR), LOD_ERROR)
+        root = require_item(self.document, 'nodes', self._root)
         coverage = _lod.screen_coverage(_Node(root.get('extras')),
                                         len(self._meshes), values)
         out = []
         for level in range(len(self._meshes)):
             primitive = self._primitive(level)
-            position = self._accessor(primitive['attributes']['POSITION'])
-            vertices = _checked_count(position['count'], 'POSITION accessor')
+            position = self._accessor(require_index(_attributes(primitive)['POSITION'],
+                                             'POSITION'))
+            vertices = _checked_count(require_whole(position.get('count'), 'accessor count'),
+                                      'POSITION accessor')
             drawn = (vertices if primitive.get('indices') is None else
-                     _checked_count(self._accessor(primitive['indices'])['count'],
-                                    'index accessor'))
+                     _checked_count(require_whole(self._accessor(
+                         require_index(primitive['indices'], 'indices')).get('count'),
+                         'accessor count'), 'index accessor'))
             buffer = self._buffer_of(position)
+            uri = buffer.get('uri')
             out.append(LODEntry(
                 level=level, triangle_count=drawn // 3, vertex_count=vertices,
                 error=(values.number(errors[level], 0.0, LOD_ERROR, minimum=0.0)
                        if level < len(errors) else 0.0),
                 screen_coverage=float(coverage[level]),
-                source=buffer.get('uri'),
-                byte_length=int(buffer.get('byteLength', 0))))
+                source=None if uri is None else require_text(uri, 'buffer uri'),
+                byte_length=values.integer(buffer.get('byteLength'), 0,
+                                           'buffer byteLength', minimum=0)))
         return out
 
-    def _primitive(self, level: int) -> dict:
+    def _primitive(self, level: int) -> JSONObject:
         mesh = self._meshes[level]
-        primitives = mesh.get('primitives') or []
+        primitives = require_array(mesh.get('primitives') or [], 'mesh primitives')
         if len(primitives) != 1:
             raise ValueError('level %d of %r has %d primitives; a level is one'
                              % (level, self.path, len(primitives)))
-        primitive: dict = primitives[0]
+        primitive = require_object(primitives[0], 'mesh primitive')
         if primitive.get('mode', _TRIANGLES) != _TRIANGLES:
             raise ValueError('level %d of %r is not a triangle list'
                              % (level, self.path))
-        if 'POSITION' not in (primitive.get('attributes') or {}):
+        if 'POSITION' not in _attributes(primitive):
             raise ValueError('level %d of %r has no POSITION' % (level, self.path))
         return primitive
 
-    def _accessor(self, index: int) -> dict:
-        found: dict = self.document['accessors'][index]
-        return found
+    def _accessor(self, index: int) -> JSONObject:
+        return require_item(self.document, 'accessors', index)
 
-    def _buffer_of(self, accessor: dict) -> dict:
-        view = self.document['bufferViews'][accessor['bufferView']]
-        found: dict = self.document['buffers'][view.get('buffer', 0)]
-        return found
+    def _buffer_of(self, accessor: JSONObject) -> JSONObject:
+        view = require_item(self.document, 'bufferViews',
+                     require_index(accessor.get('bufferView'), 'bufferView'))
+        return require_item(self.document, 'buffers',
+                     require_index(view.get('buffer', 0), 'buffer'))
 
     # -- the bytes ------------------------------------------------------------
 
@@ -207,22 +213,26 @@ class LODAsset:
         if accessor.get('sparse') is not None or accessor.get('bufferView') is None:
             raise ValueError('accessor %d of %r is sparse; a level is read from '
                              'dense accessors only' % (index, self.path))
-        dtype = np.dtype(_component_dtype(accessor['componentType'])).newbyteorder('<')
-        width = _type_count(accessor['type'])
-        count = _checked_count(accessor['count'], 'accessor %d' % (index,))
-        view = self.document['bufferViews'][accessor['bufferView']]
+        dtype = np.dtype(_component_dtype(
+            require_whole(accessor.get('componentType'), 'componentType'))).newbyteorder('<')
+        width = _type_count(require_text(accessor.get('type'), 'accessor type'))
+        count = _checked_count(require_whole(accessor.get('count'), 'accessor count'),
+                               'accessor %d' % (index,))
+        view = require_item(self.document, 'bufferViews',
+                     require_index(accessor['bufferView'], 'bufferView'))
         item = dtype.itemsize * width
-        stride = view.get('byteStride') or item
+        stride = require_whole(view.get('byteStride') or item, 'byteStride')
         if stride < item or stride % dtype.itemsize:
             raise ValueError('accessor %d of %r has an invalid byteStride %r'
                              % (index, self.path, stride))
-        start = view.get('byteOffset', 0) + accessor.get('byteOffset', 0)
+        start = (require_index(view.get('byteOffset', 0), 'byteOffset')
+                 + require_index(accessor.get('byteOffset', 0), 'byteOffset'))
         span = (count - 1) * stride + item if count else 0
 
         # What the document asks to be read, checked before anything is read:
         # a length in the JSON is a claim, not a measurement.
         check_size(span, self.max_resource_bytes, 'accessor %d' % (index,))
-        raw, source = self._bytes(view.get('buffer', 0), start, span)
+        raw, source = self._bytes(require_index(view.get('buffer', 0), 'buffer'), start, span)
         if len(raw) != span:
             raise ValueError('%s is short: wanted %d bytes at %d'
                              % (source, span, start))
@@ -237,7 +247,8 @@ class LODAsset:
 
     def _bytes(self, buffer_index: int, start: int, length: int) -> tuple[bytes, str]:
         """``length`` bytes at ``start`` in one buffer, and where they came from."""
-        uri = self.document['buffers'][buffer_index].get('uri')
+        raw = require_item(self.document, 'buffers', buffer_index).get('uri')
+        uri = None if raw is None else require_text(raw, 'buffer uri')
         if uri is not None and uri.startswith('data:'):
             # A buffer that carries its own bytes reaches no file at all.
             whole = decode_data_uri(uri, self.max_resource_bytes)
@@ -262,30 +273,37 @@ class _Node:
         self.extras = extras
 
 
-def _chain_root(document: dict) -> int:
+def _chain_root(document: JSONObject) -> int:
     """The node that carries the chain: the scene's first root carrying
     ``MSFT_lod``, else its first root."""
-    scenes = document.get('scenes') or [{}]
-    scene = scenes[document.get('scene', 0) or 0]
-    roots = scene.get('nodes') or list(range(len(document.get('nodes') or [])))
+    scene = (require_item(document, 'scenes', require_index(document.get('scene') or 0, 'scene'))
+             if document.get('scenes') else {})
+    roots = [require_index(root, 'scene node')
+             for root in require_array(scene.get('nodes') or [], 'scene nodes')]
+    roots = roots or list(range(len(require_array(document.get('nodes') or [],
+                                                  'nodes'))))
     if not roots:
         raise ValueError('the document has no node to read a chain from')
-    nodes = document['nodes']
     for index in roots:
-        if _lod.EXTENSION in ((nodes[index].get('extensions') or {})):
-            return int(index)
-    return int(roots[0])
+        extensions = require_item(document, 'nodes', index).get('extensions') or {}
+        if _lod.EXTENSION in require_object(extensions, 'node extensions'):
+            return index
+    return roots[0]
 
 
-def _level_meshes(document: dict, carrier: int) -> list[dict]:
+def _level_meshes(document: JSONObject, carrier: int) -> list[JSONObject]:
     """Each level's mesh, finest first, from the node carrying the chain."""
-    nodes = document.get('nodes') or []
-    root = nodes[carrier]
-    ids = _lod.level_ids((root.get('extensions') or {}).get(_lod.EXTENSION))
+    root = require_item(document, 'nodes', carrier)
+    extensions = require_object(root.get('extensions') or {}, 'node extensions')
+    ids = _lod.level_ids(extensions.get(_lod.EXTENSION))
     meshes = []
     for index in [None] + ids:
-        node = root if index is None else nodes[index]
+        node = root if index is None else require_item(document, 'nodes', index)
         if node.get('mesh') is None:
             raise ValueError('level node %s has no mesh' % (index,))
-        meshes.append(document['meshes'][node['mesh']])
+        meshes.append(require_item(document, 'meshes', require_index(node['mesh'], 'mesh')))
     return meshes
+
+
+def _attributes(primitive: JSONObject) -> JSONObject:
+    return require_object(primitive.get('attributes') or {}, 'primitive attributes')

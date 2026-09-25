@@ -33,7 +33,7 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union, overload
 
-from OpenGLContext.loaders.documentvalues import DocumentValues
+from OpenGLContext.loaders.documentvalues import DocumentValues, JSONObject, require_object
 from OpenGLContext.loaders.gltf import shapes as shapetable
 from OpenGLContext.scenegraph.zone import (
     AUDIO, GRAVITY, LIGHTS, MIRRORS, VISIBILITY, Zone, ZoneAudio,
@@ -84,7 +84,7 @@ class ZoneReading:
 
 #: A reader: the extension's block (a dict, or False) and the reading, to a
 #: setting node, or None where the block says nothing the engine can use.
-Reader = Callable[[Any, ZoneReading], Optional[ZoneSetting]]
+Reader = Callable[[object, ZoneReading], Optional[ZoneSetting]]
 
 _READERS: Dict[str, Reader] = {}
 
@@ -123,7 +123,7 @@ def registered_scoped() -> List[str]:
     return sorted(_READERS)
 
 
-def _indices(block: Any, key: str) -> List[int]:
+def _indices(block: object, key: str) -> List[int]:
     values = block.get(key) if isinstance(block, dict) else None
     if not isinstance(values, list):
         return []
@@ -131,7 +131,7 @@ def _indices(block: Any, key: str) -> List[int]:
 
 
 @register_scoped(LIGHTS)
-def _read_lights(block: Any, reading: ZoneReading) -> Optional[ZoneSetting]:
+def _read_lights(block: object, reading: ZoneReading) -> Optional[ZoneSetting]:
     """``KHR_lights_punctual``: ``{"nodes": [...]}`` names light nodes."""
     if block is False:
         return ZoneLights(enabled=False)
@@ -147,7 +147,7 @@ def _read_lights(block: Any, reading: ZoneReading) -> Optional[ZoneSetting]:
 
 
 @register_scoped(AUDIO)
-def _read_audio(block: Any, reading: ZoneReading) -> Optional[ZoneSetting]:
+def _read_audio(block: object, reading: ZoneReading) -> Optional[ZoneSetting]:
     """``KHR_audio_emitter``: the scene form, ``{"emitters": [...]}``."""
     if block is False:
         return ZoneAudio(enabled=False)
@@ -162,7 +162,7 @@ def _read_audio(block: Any, reading: ZoneReading) -> Optional[ZoneSetting]:
 
 
 @register_scoped(VISIBILITY)
-def _read_visibility(block: Any, reading: ZoneReading) -> Optional[ZoneSetting]:
+def _read_visibility(block: object, reading: ZoneReading) -> Optional[ZoneSetting]:
     """``KHR_node_visibility``: ``{"nodes": [...], "visible": true}``."""
     if block is False or not isinstance(block, dict):
         reading.warn('KHR_node_visibility in a zone names the nodes it shows; '
@@ -175,7 +175,7 @@ def _read_visibility(block: Any, reading: ZoneReading) -> Optional[ZoneSetting]:
 
 
 @register_scoped('OGLC_hook')
-def _read_hooks(block: Any, reading: ZoneReading) -> Optional[ZoneSetting]:
+def _read_hooks(block: object, reading: ZoneReading) -> Optional[ZoneSetting]:
     """``OGLC_hook``, addressed by kind: ``{"mirror": false | {"nodes": [...]}}``."""
     if not isinstance(block, dict):
         reading.warn('OGLC_hook in a zone is addressed by kind, as '
@@ -195,7 +195,7 @@ def _read_hooks(block: Any, reading: ZoneReading) -> Optional[ZoneSetting]:
 
 
 @register_scoped(GRAVITY)
-def _read_gravity(block: Any, reading: ZoneReading) -> Optional[ZoneSetting]:
+def _read_gravity(block: object, reading: ZoneReading) -> Optional[ZoneSetting]:
     """``OMI_physics_gravity``, as a gravity volume's block."""
     if block is False:
         return ZoneGravity(stop=True)
@@ -203,7 +203,7 @@ def _read_gravity(block: Any, reading: ZoneReading) -> Optional[ZoneSetting]:
         return None
     values = reading.values
     return ZoneGravity(
-        type=str(block.get('type', 'directional')),
+        type=values.text(block.get('type'), 'directional', 'the zone gravity type'),
         gravity=values.number(block.get('gravity'), 9.81, 'the zone gravity'),
         direction=values.vector(block.get('direction'), (0.0, -1.0, 0.0),
                                 'the zone gravity direction'),
@@ -214,7 +214,7 @@ def _read_gravity(block: Any, reading: ZoneReading) -> Optional[ZoneSetting]:
 
 
 @register_scoped('EXT_lights_image_based')
-def _read_image_light(block: Any, reading: ZoneReading) -> Optional[ZoneSetting]:
+def _read_image_light(block: object, reading: ZoneReading) -> Optional[ZoneSetting]:
     """``EXT_lights_image_based``: ``{"light": n}``, its scene form.
 
     The light becomes the zone's environment probe; the zone's own
@@ -243,7 +243,7 @@ BUILTIN = tuple(registered_scoped())
 _INT32 = (-2 ** 31, 2 ** 31 - 1)
 
 
-def _environment(block: Any, values: DocumentValues) -> Optional[ZoneEnvironment]:
+def _environment(block: object, values: DocumentValues) -> Optional[ZoneEnvironment]:
     if not isinstance(block, dict):
         return None
     raw = block.get('capture', False)
@@ -260,7 +260,7 @@ def _environment(block: Any, values: DocumentValues) -> Optional[ZoneEnvironment
         capture=capture, captureCentre=centre)
 
 
-def _reverb(block: Any, values: DocumentValues) -> Optional[ZoneReverb]:
+def _reverb(block: object, values: DocumentValues) -> Optional[ZoneReverb]:
     if not isinstance(block, dict):
         return None
     return ZoneReverb(
@@ -287,7 +287,7 @@ class ZoneReader:
         self.zones: List[Zone] = []
         #: Each zone with its glTF node index and the blocks it borrows,
         #: read once every node is built.
-        self._pending: List[Tuple[Zone, int, Dict[str, Any]]] = []
+        self._pending: List[Tuple[Zone, int, JSONObject]] = []
         self._warned: Set[str] = set()
         #: What the zones' own values are read through, reporting by :meth:`warn`.
         self.values = DocumentValues(warn=self.warn)
@@ -310,13 +310,13 @@ class ZoneReader:
         if not isinstance(block, dict):
             return None
         try:
-            return self._zone(block, node, node_index)
+            return self._zone(require_object(block, EXTENSION), node, node_index)
         except (TypeError, ValueError, OverflowError) as error:
             self.warn('node %r could not be read as a zone: %s'
                       % (getattr(node, 'name', None) or node_index, error))
             return None
 
-    def _zone(self, block: Dict[str, Any], node: Any,
+    def _zone(self, block: JSONObject, node: Any,
               node_index: int) -> Optional[Zone]:
         values = self.values
         index = block.get('shape')
@@ -340,7 +340,8 @@ class ZoneReader:
         zone.settings = own
         borrowed = block.get('extensions')
         if isinstance(borrowed, dict) and borrowed:
-            self._pending.append((zone, node_index, borrowed))
+            self._pending.append((zone, node_index,
+                                  require_object(borrowed, 'the zone extensions')))
         self.zones.append(zone)
         return zone
 

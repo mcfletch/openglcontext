@@ -20,13 +20,16 @@ camera is clamped to, and what
 :class:`~OpenGLContext.physics.heightfield.HeightFieldColliders` builds colliders
 from.
 """
-import json
 import logging
 import math
 import os
 import time
 from typing import Any, Callable, Optional
 
+from OpenGLContext.loaders.documentvalues import (
+    DocumentValues, JSONObject, parse_object, require_number, require_object,
+    require_text,
+)
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.loaders.tiles3d import fetch
 from OpenGLContext.loaders.tiles3d.tileset import build_runtime_tileset
@@ -72,14 +75,18 @@ class TilesTerrain(Group):
         if fovy is None:
             fovy = math.radians(45.0)
         self.fovy = fovy
-        doc = json.loads(fetch.read_bytes(tileset_path, cache_dir=cache_dir))
+        doc = parse_object(fetch.read_bytes(tileset_path, cache_dir=cache_dir),
+                           tileset_path)
         if fetch.is_url(tileset_path):
             base_uri = fetch.dir_of(tileset_path)
         else:
             base_uri = os.path.dirname(os.path.abspath(tileset_path)) + os.sep
+        #: What a value of the world's extras that cannot be used is reported
+        #: through, once for the whole world.
+        self.values = DocumentValues(logger=log)
 
-        def resolver(uri: str) -> Any:
-            return json.loads(fetch.read_bytes(uri, cache_dir=cache_dir))
+        def resolver(uri: str) -> JSONObject:
+            return parse_object(fetch.read_bytes(uri, cache_dir=cache_dir), uri)
 
         tileset = build_runtime_tileset(doc, base_uri=base_uri, recenter=recenter,
                                         resolve_external=resolver)
@@ -102,6 +109,18 @@ class TilesTerrain(Group):
             max_uploads_per_update=max_uploads_per_update, workers=workers,
             on_evicted=on_evicted, on_drawn=on_drawn,
         )
+        try:
+            self._mount_extras(doc, base_uri, cache_dir, field_terrain, vegetation)
+        except BaseException:
+            # The loader threads are running by now, and a world that cannot
+            # be mounted is never handed back to be shut down.
+            self.runtime.shutdown()
+            raise
+
+    def _mount_extras(self, doc: JSONObject, base_uri: str,
+                      cache_dir: Optional[str], field_terrain: bool,
+                      vegetation: bool) -> None:
+        """Mount what the world carries beside its tiles, as its extras name it."""
         #: The landscape, when this world carries one as a field; None when its
         #: ground streams as tiles like everything else.
         self.field: Any = None
@@ -112,16 +131,19 @@ class TilesTerrain(Group):
         #: The node that draws it.
         self.ground: Any = None
         self._field_node: Any = None
-        extras = doc.get('extras') or {}
+        extras = self.values.mapping(doc.get('extras'), 'the tileset extras')
         if field_terrain and extras.get('terrain'):
-            self._mount_field(extras['terrain'], base_uri, cache_dir)
+            self._mount_field(require_object(extras['terrain'], 'the world terrain'),
+                              base_uri, cache_dir)
         #: The forest, when this world carries one; None when it has no trees or
         #: bakes them into its tiles.
         self.vegetation: Any = None
         #: What grows on the ground between the trees, when a world names it.
         self.cover: Any = None
-        if vegetation and extras.get('vegetation'):
-            self._mount_vegetation(extras['vegetation'], base_uri, cache_dir)
+        planted = (require_object(extras['vegetation'], 'the world vegetation')
+                   if vegetation and extras.get('vegetation') else None)
+        if planted is not None:
+            self._mount_vegetation(planted, base_uri, cache_dir)
         if self.ground is not None and self.vegetation is not None:
             # A splat terrain bakes a canopy term into its static shading, and
             # this is the one place that knows both where the ground is and
@@ -130,9 +152,9 @@ class TilesTerrain(Group):
             # is why the forest is then told the same figure.
             self.ground.canopy = self.vegetation.positions
             self.vegetation.lit_by(self.ground.shade)
-        if vegetation and extras.get('vegetation'):
-            self._mount_cover(extras['vegetation'].get('cover'), base_uri,
-                              cache_dir)
+        if planted is not None and planted.get('cover'):
+            self._mount_cover(require_object(planted['cover'], 'the world cover'),
+                              base_uri, cache_dir)
         #: The world's zones, when it names a document of them: the loaded
         #: :class:`~OpenGLContext.loaders.gltf.scene.GLTFScene`, whose
         #: ``zones`` and ``sounds`` an application may want. Its group is
@@ -152,7 +174,7 @@ class TilesTerrain(Group):
                          if node is not None]
         self.children = list(self._mounted)
 
-    def _mount_field(self, record: Any, base_uri: str,
+    def _mount_field(self, record: JSONObject, base_uri: str,
                      cache_dir: Optional[str]) -> None:
         """Build the field this world carries, and the node that draws it.
 
@@ -167,15 +189,20 @@ class TilesTerrain(Group):
         """
         from OpenGLContext.scenegraph.terrain.heightfield import HeightField
         from OpenGLContext.scenegraph.terrain.splat import SplatTerrain
-        layers = list(record.get('layers') or ())
+        layers = self.values.texts(record.get('layers'), (), 'the terrain layers')
         if not layers:
             raise ValueError(
                 "a world's terrain record names no ground materials, so there "
                 "is nothing to draw it with")
+
+        def required(key: str) -> float:
+            return require_number(record.get(key), 'the terrain %s' % (key,))
+
         self.field = HeightField.from_image(
-            _beside(base_uri, record['height'], cache_dir),
-            int(record['resolution']), float(record['extent']),
-            float(record['relief']), base=float(record.get('base', 0.0)))
+            _beside(base_uri, require_text(record.get('height'), 'the terrain height'),
+                    cache_dir),
+            int(required('resolution')), required('extent'), required('relief'),
+            base=self.values.number(record.get('base'), 0.0, 'the terrain base'))
         # Wrapped in a Shape: the splat terrain drives its own program, but the
         # render pass reaches geometry through a Shape and would not otherwise
         # see it at all.
@@ -183,8 +210,11 @@ class TilesTerrain(Group):
         from OpenGLContext.scenegraph.material import Material
         from OpenGLContext.scenegraph.shape import Shape
         self.ground = SplatTerrain(
-            self.field, layers, _beside(base_uri, record['control'], cache_dir))
-        self.drawn_as_tiles = str(record.get('drawn') or 'field') == 'tiles'
+            self.field, layers,
+            _beside(base_uri, require_text(record.get('control'), 'the terrain control'),
+                    cache_dir))
+        self.drawn_as_tiles = self.values.choice(
+            record.get('drawn'), 'field', 'the terrain drawn', ('field', 'tiles')) == 'tiles'
         self._field_node = None if self.drawn_as_tiles else Shape(
             geometry=self.ground, appearance=Appearance(material=Material()))
 
@@ -213,7 +243,7 @@ class TilesTerrain(Group):
         if self.cover is not None:
             self.cover.holes = holes
 
-    def _mount_vegetation(self, record: Any, base_uri: str,
+    def _mount_vegetation(self, record: JSONObject, base_uri: str,
                           cache_dir: Optional[str]) -> None:
         """Build the forest this world carries from its table and its species."""
         import numpy as np
@@ -221,20 +251,23 @@ class TilesTerrain(Group):
         from OpenGLContext.scenegraph.vegetation.field import (
             TreeSpecies, VegetationField,
         )
-        named = list(record.get('species') or ())
+        named = self.values.array(record.get('species'), 'the vegetation species')
         if not named:
             raise ValueError(
                 "a world's vegetation record names no species, so there is "
                 "nothing to draw its trees as")
-        species = [TreeSpecies.from_json(entry).located(
+        species = [TreeSpecies.from_json(require_object(entry, 'a tree species'),
+                                         self.values).located(
                        lambda name: _beside(base_uri, name, cache_dir))
                    for entry in named]
-        table = np.load(_beside(base_uri, record['trees'], cache_dir))
+        table = np.load(_beside(
+            base_uri, require_text(record.get('trees'), 'the vegetation trees'),
+            cache_dir))
         self.vegetation = VegetationField(
             table['positions'], table['yaws'], table['heights'], species,
             species_id=table['species'])
 
-    def _mount_zones(self, record: Any, base_uri: str,
+    def _mount_zones(self, record: object, base_uri: str,
                      cache_dir: Optional[str]) -> None:
         """Load the world's zones, from the glTF document its extras name.
 
@@ -248,11 +281,13 @@ class TilesTerrain(Group):
         the world is mounted without zones.
         """
         from OpenGLContext.loaders.gltf import loader
-        name = record.get('document') if isinstance(record, dict) else record
+        name = self.values.text(
+            record.get('document') if isinstance(record, dict) else record,
+            '', 'the world zones document')
         if not name:
             return
         try:
-            where = fetch.beside(base_uri, str(name))
+            where = fetch.beside(base_uri, name)
             if fetch.is_url(where):
                 zones = loader.load_gltf_url(where, cache_dir=cache_dir)
             else:
@@ -263,7 +298,7 @@ class TilesTerrain(Group):
         self.zones = zones
         self._zone_node = zones.group
 
-    def _mount_cover(self, record: Any, base_uri: str,
+    def _mount_cover(self, record: JSONObject, base_uri: str,
                      cache_dir: Optional[str]) -> None:
         """Build the ground cover this world names, if it has ground for it.
 
@@ -282,10 +317,13 @@ class TilesTerrain(Group):
             CoverSpecies, GroundCover, control_weight,
         )
         named = record.get('species')
-        species = [CoverSpecies.from_json(entry).located(
+        entries = ([record] if named is None
+                   else self.values.array(named, 'the cover species'))
+        species = [CoverSpecies.from_json(require_object(entry, 'a cover species'),
+                                          self.values).located(
                        lambda name: _beside(base_uri, name, cache_dir))
-                   for entry in (named if named is not None else [record])]
-        wanted = list(record.get('on') or ())
+                   for entry in entries]
+        wanted = self.values.texts(record.get('on'), (), 'the cover layers')
         mask = (control_weight(self.ground.control, wanted,
                                self.ground.layers, self.field.extent)
                 if wanted else None)

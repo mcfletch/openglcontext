@@ -591,6 +591,21 @@ class TestWhatABakedWorldCarries:
         assert not back.clumpFarMesh
         assert not len(back.canopy)
 
+    def test_a_density_that_is_no_number_is_the_default_and_reported(self) -> None:
+        from OpenGLContext.loaders.documentvalues import DocumentValues
+        said: list = []
+        back = CoverSpecies.from_json({'name': 'grass', 'card': 'g.png',
+                                       'density': 'thick', 'canopy': [0.2, 'x']},
+                                      DocumentValues(warn=said.append))
+        assert back.density == pytest.approx(2.2)
+        assert not len(back.canopy)
+        assert len(said) == 2
+
+    def test_a_species_with_no_card_is_refused(self) -> None:
+        from OpenGLContext.loaders.documentvalues import DocumentError
+        with pytest.raises(DocumentError, match='cover species card is None'):
+            CoverSpecies.from_json({'name': 'grass'})
+
     def test_a_whole_set_resolves_against_one_directory(self) -> None:
         found = [one.beside('/worlds/one')
                  for one in (_species('grass', clump='g.glb'), _species('fern'))]

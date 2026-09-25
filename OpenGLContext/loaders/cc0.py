@@ -15,7 +15,6 @@ compressed, so the bytes that arrive do not limit what extracting them writes:
 map taken out of it.
 """
 import io
-import json
 import os
 import ssl
 import urllib.request
@@ -24,6 +23,9 @@ from typing import Optional
 
 from OpenGLContext import userpaths
 from OpenGLContext.loaders import resolver
+from OpenGLContext.loaders.documentvalues import (
+    parse_object, require_array, require_object, require_text,
+)
 
 _UA = {"User-Agent": resolver.user_agent()}
 _CTX = ssl.create_default_context()
@@ -88,13 +90,22 @@ def _require_download_host(link: str) -> str:
 
 def _api_download_link(asset: str, resolution: str) -> str:
     """The JPG download URL ambientCG offers for ``asset`` at ``resolution``."""
-    data = json.loads(_read_capped(_API % asset, MAX_API_BYTES))
-    folders = (data["foundAssets"][0]["downloadFolders"]["default"]
-               ["downloadFiletypeCategories"])
-    for cat in folders.values():
-        for f in cat["downloads"]:
-            if f.get("attribute", "").startswith(resolution) and "JPG" in f["attribute"]:
-                return _require_download_host(str(f["downloadLink"]))
+    data = parse_object(_read_capped(_API % asset, MAX_API_BYTES), 'the ambientCG reply')
+    found = require_array(data.get("foundAssets"), "the ambientCG assets")
+    if not found:
+        raise RuntimeError("ambientCG has no asset %s" % (asset,))
+    folders: object = require_object(found[0], "the ambientCG asset")
+    for key in ("downloadFolders", "default", "downloadFiletypeCategories"):
+        folders = require_object(folders, "the ambientCG %s" % (key,)).get(key)
+    for cat in require_object(folders, "the ambientCG categories").values():
+        for entry in require_array(require_object(cat, "a download category")
+                                   .get("downloads"), "the downloads"):
+            f = require_object(entry, "a download")
+            attribute = f.get("attribute")
+            if isinstance(attribute, str) and attribute.startswith(resolution) \
+                    and "JPG" in attribute:
+                return _require_download_host(
+                    require_text(f.get("downloadLink"), "the download link"))
     raise RuntimeError("no %s JPG download for %s" % (resolution, asset))
 
 

@@ -50,7 +50,7 @@ import copy
 import logging
 from typing import Any, Dict, Optional
 
-from OpenGLContext.loaders.documentvalues import DocumentValues
+from OpenGLContext.loaders.documentvalues import DocumentValues, JSONObject
 from OpenGLContext.loaders.gltf import hooks
 from OpenGLContext.scenegraph.appearance import Appearance
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
@@ -73,7 +73,7 @@ PARAMETERS: Dict[str, type] = {
 }
 
 
-def reflector_for(params: Dict[str, Any], replace: bool = False,
+def reflector_for(params: JSONObject, replace: bool = False,
                   values: Optional[DocumentValues] = None) -> PlanarReflector:
     """The reflector a tag's parameters describe.
 

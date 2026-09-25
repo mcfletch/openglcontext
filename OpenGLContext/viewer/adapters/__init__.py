@@ -16,11 +16,11 @@ registries.  A third party adds a format by registering one more entry.
 
 See [docs/gltf.rst](../../../docs/gltf.rst).
 """
-import json
 import os
 import urllib.parse
 from typing import Any, Dict, Optional, Tuple
 
+from OpenGLContext.loaders.documentvalues import parse_object
 from OpenGLContext.viewer.adapters.base import (
     SceneAdapter, UnknownSourceType, ViewerScene,
 )
@@ -120,10 +120,10 @@ def _sniff(source: str) -> Optional[Any]:
         return None
     try:
         with open(source, 'rb') as handle:
-            document = json.loads(handle.read(SNIFF_BYTES).decode('utf-8'))
-    except (OSError, ValueError, UnicodeDecodeError):
+            document = parse_object(handle.read(SNIFF_BYTES), source)
+    except (OSError, ValueError):
         return None
-    if isinstance(document, dict) and 'asset' in document and 'root' in document:
+    if 'asset' in document and 'root' in document:
         return plugins.Adapter.by_name('tiles3d')
     return None
 

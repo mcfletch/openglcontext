@@ -29,6 +29,7 @@ import numpy as np
 from vrml import field
 from vrml.node import Node
 
+from OpenGLContext.loaders.documentvalues import DocumentValues, JSONObject, require_text
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.varied import Varied
 from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
@@ -159,15 +160,26 @@ class TreeSpecies(Varied, Node):
                 'cardWidth': self.cardWidth}
 
     @classmethod
-    def from_json(cls, record: Any) -> 'TreeSpecies':
-        """A species read back out of a baked world."""
-        return cls(name=record['name'], mesh=record['mesh'],
-                   solidTexture=record['solidTexture'],
-                   foliageTexture=record['foliageTexture'],
-                   impostor=record['impostor'],
-                   solid=list(record.get('solid', SOLID_KEYS)),
-                   foliage=list(record.get('foliage', FOLIAGE_KEYS)),
-                   cardWidth=float(record.get('cardWidth', 0.55)))
+    def from_json(cls, record: JSONObject,
+                  values: Optional[DocumentValues] = None) -> 'TreeSpecies':
+        """A species read back out of a baked world.
+
+        The files it names are required, and one missing is a
+        :class:`~OpenGLContext.loaders.documentvalues.DocumentError`; a key
+        list or card width that cannot be read is reported through ``values``
+        and is the default.
+        """
+        values = values if values is not None else DocumentValues()
+        named = {key: require_text(record.get(key), 'tree species %s' % (key,))
+                 for key in ('name', 'mesh', 'solidTexture', 'foliageTexture',
+                             'impostor')}
+        return cls(solid=values.texts(record.get('solid'), SOLID_KEYS,
+                                      'tree species solid'),
+                   foliage=values.texts(record.get('foliage'), FOLIAGE_KEYS,
+                                        'tree species foliage'),
+                   cardWidth=values.number(record.get('cardWidth'), 0.55,
+                                           'tree species cardWidth'),
+                   **named)
 
 
 class VegetationField(Group):

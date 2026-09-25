@@ -27,7 +27,11 @@ import json
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable, TypeVar
+
+from OpenGLContext.loaders.documentvalues import (
+    JSONObject, parse_object, require_number, require_object, require_text,
+)
 
 __all__ = ['MANIFEST', 'WorldManifest', 'carried', 'read_manifest',
            'write_manifest']
@@ -36,6 +40,8 @@ log = logging.getLogger(__name__)
 
 #: What the manifest is called, beside the tileset it describes.
 MANIFEST = 'world.json'
+
+_T = TypeVar('_T')
 
 
 @dataclass
@@ -84,22 +90,36 @@ class WorldManifest:
         return document
 
     @classmethod
-    def from_json(cls, document: dict[str, Any]) -> WorldManifest:
-        """Read one back. A document with no name is not a world."""
+    def from_json(cls, document: JSONObject) -> WorldManifest:
+        """Read one back. A document with no name is not a world.
+
+        A value of the wrong type is a
+        :class:`~OpenGLContext.loaders.documentvalues.DocumentError`, which
+        :func:`read_manifest` reports and reads as no manifest.
+        """
         name = document.get('name')
         if not name:
             raise ValueError("a world manifest has to say what the world is called")
+
+        def number(key: str) -> float:
+            return require_number(document.get(key), 'the world manifest %s' % (key,))
+
+        def text(key: str) -> str:
+            return require_text(document.get(key), 'the world manifest %s' % (key,))
+
+        structures = require_object(document.get('structures') or {},
+                                    'the world manifest structures')
         return cls(
-            name=str(name),
-            tileset=str(document.get('tileset', 'tileset.json')),
-            picture=_or_none(document.get('picture'), str),
-            seed=_or_none(document.get('seed'), int),
-            extent=_or_none(document.get('extent'), float),
-            road_length=_or_none(document.get('roadLength'), float),
-            structures={str(kind): float(metres) for kind, metres
-                        in (document.get('structures') or {}).items()},
+            name=require_text(name, 'the world manifest name'),
+            tileset=text('tileset') if 'tileset' in document else 'tileset.json',
+            picture=_or_none(document, 'picture', text),
+            seed=_or_none(document, 'seed', lambda key: int(number(key))),
+            extent=_or_none(document, 'extent', number),
+            road_length=_or_none(document, 'roadLength', number),
+            structures={kind: require_number(metres, 'the metres on %s' % (kind,))
+                        for kind, metres in structures.items()},
             closed=bool(document.get('closed', True)),
-            baked=_or_none(document.get('baked'), str))
+            baked=_or_none(document, 'baked', text))
 
 
 def carried(path: Any) -> dict[str, float]:
@@ -138,7 +158,7 @@ def read_manifest(where: str) -> WorldManifest | None:
         where if os.path.isdir(where) else os.path.dirname(where), MANIFEST)
     try:
         with open(path, encoding='utf-8') as handle:
-            return WorldManifest.from_json(json.load(handle))
+            return WorldManifest.from_json(parse_object(handle.read(), path))
     except FileNotFoundError:
         return None
     except (ValueError, OSError):
@@ -146,6 +166,6 @@ def read_manifest(where: str) -> WorldManifest | None:
         return None
 
 
-def _or_none(value: Any, kind: Any) -> Any:
-    """``kind(value)``, or None for a key the document did not carry."""
-    return None if value is None else kind(value)
+def _or_none(document: JSONObject, key: str, read: Callable[[str], _T]) -> _T | None:
+    """``read(key)``, or None for a key the document did not carry."""
+    return None if document.get(key) is None else read(key)

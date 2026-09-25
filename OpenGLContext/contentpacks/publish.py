@@ -50,6 +50,9 @@ from dataclasses import dataclass
 from typing import Any, Callable, NamedTuple, Sequence
 
 from OpenGLContext import atomicfiles
+from OpenGLContext.loaders.documentvalues import (
+    JSONObject, parse_object, require_array, require_object,
+)
 
 from . import archive, catalog
 from .pack import ContentPack
@@ -363,15 +366,15 @@ def bundle_registry(manifest: str, path: str, pictures: str | None = None
     directory if not given). A preview that is not there is left out.
     """
     beside = pictures or os.path.dirname(os.path.abspath(manifest))
-    with open(manifest, encoding='utf-8') as handle:
-        declared = json.load(handle)
+    with open(manifest, 'rb') as handle:
+        declared = parse_object(handle.read(), manifest)
     with atomicfiles.staged_file(path, 'wb') as raw:
         with zipfile.ZipFile(raw, 'w', zipfile.ZIP_DEFLATED) as bundle:
             bundle.write(manifest, catalog.MANIFEST)
-            for entry in declared.get('packs') or ():
+            for entry in _entries(declared, manifest):
                 named = entry.get('preview')
-                if named and os.path.isfile(os.path.join(beside, named)):
-                    bundle.write(os.path.join(beside, named), named)
+                if named and os.path.isfile(os.path.join(beside, str(named))):
+                    bundle.write(os.path.join(beside, str(named)), str(named))
     return path
 
 
@@ -410,13 +413,20 @@ def _document(release: Release,
     shipped registry's other entries where the release keeps them."""
     if not release.keep_unbuilt or not os.path.isfile(release.catalog):
         return {'namespace': release.namespace, 'packs': list(entries)}
-    with open(release.catalog, encoding='utf-8') as handle:
-        document = json.load(handle)
-    built = {one['key']: one for one in entries}
+    with open(release.catalog, 'rb') as handle:
+        document = dict(parse_object(handle.read(), release.catalog))
+    built: dict[object, JSONObject] = {one['key']: one for one in entries}
     packs = [built.pop(one.get('key'), one)
-             for one in document.get('packs') or ()]
+             for one in _entries(document, release.catalog)]
     document['packs'] = [one for one in entries if one['key'] in built] + packs
-    return dict(document)
+    return document
+
+
+def _entries(document: JSONObject, where: str) -> list[JSONObject]:
+    """The pack entries a registry document lists."""
+    return [require_object(entry, '%s pack entry' % (where,))
+            for entry in require_array(document.get('packs') or [],
+                                       '%s packs' % (where,))]
 
 
 def _install_built(release: Release, registry: str,

@@ -53,7 +53,7 @@ from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
 import numpy as np
 
-from OpenGLContext.loaders.documentvalues import DocumentValues, bounded
+from OpenGLContext.loaders.documentvalues import DocumentValues, JSONObject, bounded
 from OpenGLContext.loaders.gltf import hooks
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.particles import PRESETS, ParticleEmitter
@@ -117,7 +117,7 @@ _LENGTHS = ('size', 'endSize', 'speed')
 _COUNTS = ('burst', 'maxParticles')
 
 
-def emitter_for(kind: str, params: Dict[str, Any], extent: float = 1.0,
+def emitter_for(kind: str, params: JSONObject, extent: float = 1.0,
                 values: Optional[DocumentValues] = None,
                 resolver: Any = None) -> ParticleEmitter:
     """The emitter a tag of ``kind`` with ``params`` describes.
@@ -153,7 +153,7 @@ def emitter_for(kind: str, params: Dict[str, Any], extent: float = 1.0,
     return emitter
 
 
-def _read(emitter: ParticleEmitter, name: str, raw: Any, kind: str,
+def _read(emitter: ParticleEmitter, name: str, raw: object, kind: str,
           values: DocumentValues, resolver: Any) -> Any:
     """Field ``name`` of a tag of ``kind``, read from ``raw``.
 
@@ -192,7 +192,7 @@ def _held(name: str, value: float) -> float:
     return value
 
 
-def _multiplier(params: Dict[str, Any], name: str, kind: str,
+def _multiplier(params: JSONObject, name: str, kind: str,
                 values: DocumentValues) -> float:
     """A non-negative multiplier from the tag, or 1 where it gives none it can use."""
     raw = params.get(name, 1.0)
@@ -205,7 +205,7 @@ def _multiplier(params: Dict[str, Any], name: str, kind: str,
     return number
 
 
-def _sprite(raw: Any, what: str, values: DocumentValues, resolver: Any) -> str:
+def _sprite(raw: object, what: str, values: DocumentValues, resolver: Any) -> str:
     """A ``texture`` the document names, as a path beside the document, or ''.
 
     Only a document read from a directory has a sprite: the name is resolved

@@ -26,7 +26,6 @@ and left out of the credits.
 from __future__ import annotations
 
 import collections
-import json
 import os
 import re
 import urllib.parse
@@ -34,6 +33,7 @@ from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any, Iterable, Sequence
 
 from OpenGLContext.loaders import resolver
+from OpenGLContext.loaders.documentvalues import DocumentError, parse_object
 
 from .pack import ContentPack
 
@@ -127,13 +127,15 @@ def load(path: str) -> list[ContentPack]:
     it, so a chooser has a picture of each pack before anything is downloaded.
     """
     try:
-        with open(path, 'r', encoding='utf-8') as handle:
-            document = json.load(handle)
-    except (OSError, ValueError) as error:
+        with open(path, 'rb') as handle:
+            text = handle.read()
+    except OSError as error:
         raise BadCatalog('cannot read the content registry %s: %s'
                          % (path, error)) from error
-    if not isinstance(document, dict):
-        raise BadCatalog('%s is not a content registry' % (path,))
+    try:
+        document = parse_object(text, path)
+    except DocumentError as error:
+        raise BadCatalog('%s is not a content registry: %s' % (path, error)) from error
     namespace = document.get('namespace')
     if not isinstance(namespace, str) or not _is_name(namespace):
         raise BadCatalog(
@@ -304,7 +306,7 @@ def _refuse_repeats(packs: Sequence[ContentPack], where: str) -> None:
         seen.add(pack.key.casefold())
 
 
-def _pack(entry: Any, path: str, namespace: str) -> ContentPack:
+def _pack(entry: object, path: str, namespace: str) -> ContentPack:
     """One registry entry as a :class:`ContentPack`, or a clear complaint."""
     if not isinstance(entry, dict):
         raise BadCatalog('%s holds an entry that is not an object' % (path,))

@@ -51,6 +51,20 @@ def _mounted(terrain):
 
 
 class TestMountingTheField:
+    def test_a_terrain_record_with_no_usable_extent_is_refused(self, tmp_path) -> None:
+        from OpenGLContext.loaders.documentvalues import DocumentError
+        path = _world(tmp_path)
+        document = json.load(open(path))
+        document['extras']['terrain']['extent'] = 'wide'
+        json.dump(document, open(path, 'w'))
+        import threading
+        before = set(threading.enumerate())
+        with pytest.raises(DocumentError, match="the terrain extent is 'wide'"):
+            TilesTerrain(path, workers=1)
+        left = [thread for thread in threading.enumerate()
+                if thread not in before and thread.is_alive()]
+        assert left == []
+
     def test_a_world_that_carries_one_gets_it(self, tmp_path) -> None:
         terrain = TilesTerrain(_world(tmp_path), workers=1)
         try:

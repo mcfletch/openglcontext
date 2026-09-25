@@ -28,6 +28,7 @@ from typing import Any, Iterable, Sequence
 
 from OpenGLContext import atomicfiles, userpaths
 from OpenGLContext.loaders import resolver
+from OpenGLContext.loaders.documentvalues import JSONObject, parse_object
 
 from . import archive
 from .pack import ContentPack
@@ -190,7 +191,7 @@ class ContentStore:
             previous = _read_record(where, pack.key)
             _write_record(where, pack, files=files, complete=False)
             if previous is not None:
-                _remove_files(where, previous.get('files') or ())
+                _remove_files(where, _listed(previous))
             for name in files:
                 target = os.path.join(where, *name.split('/'))
                 os.makedirs(os.path.dirname(target), exist_ok=True)
@@ -215,7 +216,7 @@ class ContentStore:
                 return
             record = _read_record(where, pack.key)
             if record is not None:
-                _remove_files(where, record.get('files') or ())
+                _remove_files(where, _listed(record))
                 os.remove(_record_path(where, pack.key))
 
     def installed(self, packs: Iterable[ContentPack],
@@ -343,7 +344,7 @@ def _record_path(where: str, key: str) -> str:
                         key.casefold().replace('/', '+') + '.json')
 
 
-def _read_record(where: str, key: str) -> dict[str, Any] | None:
+def _read_record(where: str, key: str) -> JSONObject | None:
     """The install record for ``key`` in ``where``, or None if there is none.
 
     One that cannot be read is answered as an install that did not finish.
@@ -352,11 +353,10 @@ def _read_record(where: str, key: str) -> dict[str, Any] | None:
     if not os.path.exists(path):
         return None
     try:
-        with open(path, 'r', encoding='utf-8') as handle:
-            record = json.load(handle)
+        with open(path, 'rb') as handle:
+            return parse_object(handle.read(), path)
     except (OSError, ValueError):
         return {'complete': False}
-    return record if isinstance(record, dict) else {'complete': False}
 
 
 def _write_record(where: str, pack: ContentPack, files: list[str] | None,
@@ -369,7 +369,7 @@ def _write_record(where: str, pack: ContentPack, files: list[str] | None,
                            json.dumps(record, indent=1, sort_keys=True))
 
 
-def _describes(record: dict[str, Any], pack: ContentPack) -> bool:
+def _describes(record: JSONObject, pack: ContentPack) -> bool:
     """Whether an install record is of this pack, finished."""
     if record.get('complete') is not True:
         return False
@@ -385,6 +385,14 @@ def _files_under(directory: str) -> list[str]:
         for root, _, files in os.walk(directory) for leaf in files)
 
 
+def _listed(record: JSONObject) -> list[str]:
+    """The files an install record lists; an entry that is no name is passed over."""
+    files = record.get('files')
+    if not isinstance(files, list):
+        return []
+    return [name for name in files if isinstance(name, str)]
+
+
 def _remove_files(where: str, names: Iterable[str]) -> None:
     """Remove the files a record lists, and directories they leave empty.
 
@@ -394,7 +402,7 @@ def _remove_files(where: str, names: Iterable[str]) -> None:
     root = os.path.realpath(where)
     emptied: set[str] = set()
     for name in names:
-        target = os.path.realpath(os.path.join(where, *str(name).split('/')))
+        target = os.path.realpath(os.path.join(where, *name.split('/')))
         if not target.startswith(root + os.sep):
             continue
         try:

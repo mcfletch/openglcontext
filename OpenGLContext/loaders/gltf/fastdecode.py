@@ -20,12 +20,13 @@ attributes included.
 from __future__ import annotations
 
 import dataclasses
-import json
 import struct
 import typing
 from typing import Any, Callable, Dict, List, Tuple
 
 import pygltflib
+
+from OpenGLContext.loaders.documentvalues import JSONObject, parse_object, require_object
 
 #: GLB container constants (glTF 2.0 §4.4): little-endian magic and chunk tags.
 _GLB_MAGIC = 0x46546C67
@@ -102,7 +103,7 @@ def _plan(cls: type) -> List[Tuple[str, Converter]]:
     return plan
 
 
-def _decode(cls: type, data: Dict[str, Any]) -> Any:
+def _decode(cls: type, data: JSONObject) -> Any:
     """One dataclass instance from its JSON object.
 
     Only the properties the document names are passed to the constructor, so an
@@ -121,13 +122,10 @@ def decode_gltf(source: "str | bytes | bytearray | dict") -> "pygltflib.GLTF2":
     binary buffer of a ``.glb`` is handled by :func:`load_glb`.
     """
     if isinstance(source, dict):
-        document = source
+        document: JSONObject = require_object(source, 'glTF document')
     else:
-        text = source.decode('utf-8') if isinstance(source, (bytes, bytearray)) else source
-        document = json.loads(text)
-    if not isinstance(document, dict):
-        raise ValueError('glTF document must be a JSON object, not %s'
-                         % type(document).__name__)
+        document = parse_object(bytes(source) if isinstance(source, bytearray)
+                                else source, 'glTF document')
     gltf = _decode(pygltflib.GLTF2, document)
     for name in CORE_21:
         if name in document:

@@ -12,7 +12,6 @@ Per-instance data is replaced each frame with :meth:`update_instances` for a
 camera-following field, exactly like :class:`InstancedBillboards`.
 """
 import io
-import json
 import struct
 import ctypes
 from typing import Any, Optional
@@ -26,6 +25,10 @@ from OpenGL.GL import (
     glBindVertexArray, glBufferData, glDepthMask, glDisable, glDrawElementsInstanced,
     glEnable, glEnableVertexAttribArray, glGenBuffers, glGenVertexArrays,
     glGetUniformLocation, glUniform1f, glUniform1i, glUniform3f, glVertexAttribPointer,
+)
+from OpenGLContext.loaders.documentvalues import (
+    DocumentError, JSONObject, parse_object, require_array, require_index,
+    require_item, require_object, require_text, require_whole,
 )
 from OpenGLContext.scenegraph.instancedgl import (
     load_program, texture_rgba, delete_gl, setup_instance_attribs,
@@ -103,7 +106,7 @@ def _decimate_ribbons(P: np.ndarray, N: np.ndarray, UV: np.ndarray, idx: np.ndar
     return (P[used], N[used], UV[used], old2new[nt].ravel().astype(np.uint32))
 
 
-def _mesh_index(meshes: "list[dict]", wanted: "int | str") -> int:
+def _mesh_index(meshes: "list[JSONObject]", wanted: "int | str") -> int:
     """Which of a file's meshes ``wanted`` names.
 
     A name rather than a position, where the caller has one: the rungs of a
@@ -157,28 +160,47 @@ def load_clump_glb(path: str, normalize_height: bool = True,
         off += 8
         chunks.append((ctype, d[off:off + clen]))
         off += clen
-    g = json.loads(chunks[0][1])
+    g = parse_object(chunks[0][1], '%s glTF JSON' % (path,))
     bd = chunks[1][1]
-    acc, bv = g['accessors'], g['bufferViews']
+
+    def view_of(holder: JSONObject) -> "tuple[JSONObject, int]":
+        view = require_item(g, 'bufferViews',
+                            require_index(holder.get('bufferView'), 'bufferView'))
+        return view, require_index(view.get('byteOffset', 0), 'byteOffset')
 
     def read(i: int) -> np.ndarray:
-        a = acc[i]
-        v = bv[a['bufferView']]
-        o = v.get('byteOffset', 0) + a.get('byteOffset', 0)
-        arr = np.frombuffer(bd, _CT[a['componentType']], a['count'] * _NC[a['type']], o)
-        return arr.reshape(a['count'], _NC[a['type']])
+        a = require_item(g, 'accessors', i)
+        _, start = view_of(a)
+        o = start + require_index(a.get('byteOffset', 0), 'byteOffset')
+        kind = _CT.get(require_whole(a.get('componentType'), 'componentType'))
+        width = _NC.get(require_text(a.get('type'), 'accessor type'))
+        if kind is None or width is None:
+            raise DocumentError('accessor %d of %s is of a kind a clump is not '
+                                'read from' % (i, path))
+        count = require_index(a.get('count'), 'accessor count')
+        arr = np.frombuffer(bd, kind, count * width, o)
+        return arr.reshape(count, width)
 
-    pr = g['meshes'][_mesh_index(g['meshes'], mesh)]['primitives'][0]
-    P = read(pr['attributes']['POSITION']).astype(np.float32)
-    N = read(pr['attributes']['NORMAL']).astype(np.float32)
-    UV = read(pr['attributes']['TEXCOORD_0']).astype(np.float32)
-    idx = read(pr['indices']).ravel().astype(np.uint32)
+    meshes = [require_object(entry, 'mesh')
+              for entry in require_array(g.get('meshes'), 'meshes')]
+    primitives = require_array(meshes[_mesh_index(meshes, mesh)].get('primitives'),
+                               'mesh primitives')
+    if not primitives:
+        raise DocumentError('the clump mesh in %s has no primitive' % (path,))
+    pr = require_object(primitives[0], 'mesh primitive')
+    attributes = require_object(pr.get('attributes'), 'primitive attributes')
+
+    def attribute(name: str) -> np.ndarray:
+        return read(require_index(attributes.get(name), name)).astype(np.float32)
+
+    P = attribute('POSITION')
+    N = attribute('NORMAL')
+    UV = attribute('TEXCOORD_0')
+    idx = read(require_index(pr.get('indices'), 'indices')).ravel().astype(np.uint32)
     if length_samples is not None:
         P, N, UV, idx = _decimate_ribbons(P, N, UV, idx, int(length_samples))
-    img = g['images'][0]
-    iv = bv[img['bufferView']]
-    io0 = iv.get('byteOffset', 0)
-    raw = bd[io0:io0 + iv['byteLength']]
+    iv, io0 = view_of(require_item(g, 'images', 0))
+    raw = bd[io0:io0 + require_index(iv.get('byteLength'), 'byteLength')]
     tex_image = Image.open(io.BytesIO(raw)).convert("RGBA")
     if normalize_height:
         P = P.copy()

@@ -10,7 +10,11 @@ import math
 
 import pytest
 
-from OpenGLContext.loaders.documentvalues import DocumentValues, bounded
+from OpenGLContext.loaders.documentvalues import (
+    DocumentError, DocumentValues, bounded, parse_object, require_array,
+    require_index, require_item, require_number, require_numbers, require_object,
+    require_text, require_whole,
+)
 
 
 @pytest.fixture
@@ -121,6 +125,106 @@ def test_a_vector_is_its_numbers(values, said):
 def test_what_is_no_vector_is_the_default(values, said, raw):
     assert values.vector(raw, (0.0, 0.0, 0.0), 'position') == (0.0, 0.0, 0.0)
     assert len(said) == 1
+
+
+# --- structure ----------------------------------------------------------------
+
+def test_a_mapping_is_itself(values, said):
+    raw = {'depth': 2}
+    assert values.mapping(raw, 'water') is raw
+    assert values.mapping(None, 'water') == {}
+    assert said == []
+
+
+@pytest.mark.parametrize('raw', [[1, 2], 'deep', 3, {1: 'x'}])
+def test_what_is_no_mapping_is_empty_and_reported(values, said, raw):
+    assert values.mapping(raw, 'water') == {}
+    assert len(said) == 1
+    assert 'water' in said[0]
+
+
+def test_an_array_is_its_items(values, said):
+    assert values.array([1, 'x'], 'children') == [1, 'x']
+    assert values.array((1,), 'children') == (1,)
+    assert values.array(None, 'children') == ()
+    assert said == []
+
+
+@pytest.mark.parametrize('raw', ['abc', {'a': 1}, 3])
+def test_what_is_no_array_is_empty_and_reported(values, said, raw):
+    assert values.array(raw, 'children') == ()
+    assert len(said) == 1
+
+
+def test_a_text_is_a_string(values, said):
+    assert values.text('lake', 'pond', 'name') == 'lake'
+    assert values.text(None, 'pond', 'name') == 'pond'
+    assert said == []
+
+
+@pytest.mark.parametrize('raw', [3, ['lake'], {'a': 'b'}])
+def test_what_is_no_text_is_the_default_and_reported(values, said, raw):
+    assert values.text(raw, 'pond', 'name') == 'pond'
+    assert len(said) == 1
+
+
+def test_texts_are_a_list_of_strings(values, said):
+    assert values.texts(['a', 'b'], ('c',), 'keys') == ['a', 'b']
+    assert values.texts(None, ('c',), 'keys') == ['c']
+    assert said == []
+
+
+@pytest.mark.parametrize('raw', ['a', ['a', 2], {'a': 1}])
+def test_what_is_no_list_of_texts_is_the_default_and_reported(values, said, raw):
+    assert values.texts(raw, ('c',), 'keys') == ['c']
+    assert len(said) == 1
+
+
+def test_a_document_that_must_have_a_part_is_refused_without_it():
+    assert require_object({'a': 1}, 'root') == {'a': 1}
+    assert require_array([1], 'children') == [1]
+    assert require_numbers([1, '2', 3], 'box', 3) == (1.0, 2.0, 3.0)
+    with pytest.raises(DocumentError, match='root is None, which is not an object'):
+        require_object(None, 'root')
+    with pytest.raises(DocumentError, match='children is .abc., which is not an array'):
+        require_array('abc', 'children')
+    with pytest.raises(DocumentError, match='box is .1, 2., which is not 3 finite numbers'):
+        require_numbers([1, 2], 'box', 3)
+    with pytest.raises(DocumentError, match='box is .x., which is not 3 finite numbers'):
+        require_numbers('x', 'box', 3)
+    assert require_number('2.5', 'geometricError') == 2.5
+    assert require_text('a.glb', 'uri') == 'a.glb'
+    with pytest.raises(DocumentError, match='geometricError is None, which is not a finite'):
+        require_number(None, 'geometricError')
+    with pytest.raises(DocumentError, match='geometricError is True, which is not a finite'):
+        require_number(True, 'geometricError')
+    with pytest.raises(DocumentError, match='uri is 7, which is not a string'):
+        require_text(7, 'uri')
+    assert require_whole('3', 'count') == 3
+    assert require_index(0, 'mesh') == 0
+    document = {'meshes': [{'name': 'a'}, 'b']}
+    assert require_item(document, 'meshes', 0) == {'name': 'a'}
+    with pytest.raises(DocumentError, match='count is 1.5, which is not a whole'):
+        require_whole(1.5, 'count')
+    with pytest.raises(DocumentError, match='mesh is -1, which is negative'):
+        require_index(-1, 'mesh')
+    with pytest.raises(DocumentError, match='meshes 2 is named and there are 2'):
+        require_item(document, 'meshes', 2)
+    with pytest.raises(DocumentError, match="meshes 1 is 'b', which is not an object"):
+        require_item(document, 'meshes', 1)
+    assert issubclass(DocumentError, ValueError)
+
+
+def test_a_document_parses_to_an_object():
+    assert parse_object(b'{"asset": {"version": "1.1"}}', 'tileset') == {
+        'asset': {'version': '1.1'}}
+    assert parse_object('{}', 'tileset') == {}
+    with pytest.raises(DocumentError, match='tileset is not a JSON object'):
+        parse_object('[1, 2]', 'tileset')
+    with pytest.raises(DocumentError, match='tileset is not JSON'):
+        parse_object(b'{"asset"', 'tileset')
+    with pytest.raises(DocumentError, match='tileset is not JSON'):
+        parse_object(b'\xff\xfe', 'tileset')
 
 
 # --- reporting ----------------------------------------------------------------

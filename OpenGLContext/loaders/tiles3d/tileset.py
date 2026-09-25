@@ -7,13 +7,22 @@ its ancestors'), so per-frame traversal only measures distances and compares err
 We parse the tree ourselves rather than via py3dtiles: py3dtiles' tile reader raises
 `NotImplementedError` for `sphere`/`region` volumes, which terrain tilesets use.
 py3dtiles remains the tool for tile *content* and bake-side writing.
+
+The document is read as a
+:data:`~OpenGLContext.loaders.documentvalues.JSONObject`: a part the
+specification requires (the root, a tile's bounding volume and geometric
+error, a content's URI) that is missing or of the wrong type is a
+:class:`~OpenGLContext.loaders.documentvalues.DocumentError` naming it.
 """
-import json
-from collections.abc import Callable, Iterable, Iterator, Sequence
-from typing import Any, Optional, Union
+from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
+from typing import Optional, Union
 
 import numpy as np
 
+from OpenGLContext.loaders.documentvalues import (
+    JSONObject, bounded, parse_object, require_array, require_number,
+    require_numbers, require_object, require_text,
+)
 from OpenGLContext.loaders.tiles3d import fetch
 from OpenGLContext.loaders.tiles3d.boundingvolume import (
     SphereBV, BoxBV, RegionBV, WGS84_A, WGS84_B,
@@ -53,15 +62,17 @@ Z_UP_TO_Y_UP = np.array([[1.0, 0.0, 0.0, 0.0],
                          [0.0, 0.0, 0.0, 1.0]], dtype="d")
 
 
-def gltf_up_axis_matrix(asset: Optional[dict[str, Any]]) -> np.ndarray:
+def gltf_up_axis_matrix(asset: object) -> np.ndarray:
     """The rotation taking a tileset's glTF content into its tiles' Z-up frame.
 
     `asset` is a tileset document's `asset` object, whose optional `gltfUpAxis`
-    names the axis the content treats as up. An unknown value falls back to the
-    default rather than refusing the dataset.
+    names the axis the content treats as up. An unknown value, or an `asset`
+    that is no object, falls back to the default rather than refusing the
+    dataset.
     """
-    axis = str((asset or {}).get("gltfUpAxis", DEFAULT_GLTF_UP_AXIS)).upper()
-    return _UP_AXIS_TO_Z_UP.get(axis, _UP_AXIS_TO_Z_UP[DEFAULT_GLTF_UP_AXIS])
+    axis = asset.get("gltfUpAxis") if isinstance(asset, Mapping) else None
+    name = axis.upper() if isinstance(axis, str) else DEFAULT_GLTF_UP_AXIS
+    return _UP_AXIS_TO_Z_UP.get(name, _UP_AXIS_TO_Z_UP[DEFAULT_GLTF_UP_AXIS])
 
 
 class RuntimeTile:
@@ -131,7 +142,7 @@ class RuntimeTileset:
     """
 
     def __init__(
-        self, root: RuntimeTile, root_geometric_error: float, asset: dict[str, Any],
+        self, root: RuntimeTile, root_geometric_error: float, asset: JSONObject,
         geospatial: bool = False,
     ) -> None:
         self.root = root
@@ -148,6 +159,14 @@ def _matrix_from_list(values: Sequence[float]) -> np.ndarray:
     return np.asarray(values, dtype="d").reshape(4, 4).T
 
 
+def _local_transform(tile_dict: JSONObject) -> Optional[np.ndarray]:
+    """A tile's own `transform`, or None where it has none."""
+    local = tile_dict.get("transform")
+    if not local:
+        return None
+    return _matrix_from_list(require_numbers(local, "tile transform", 16))
+
+
 def _transform_point(matrix: np.ndarray, point: np.ndarray) -> np.ndarray:
     p = np.ones(4, dtype="d")
     p[:3] = point
@@ -159,18 +178,18 @@ def _transform_vector(matrix: np.ndarray, vector: np.ndarray) -> np.ndarray:
 
 
 def _world_bounding_volume(
-    bv_dict: dict[str, Any], matrix: np.ndarray, recenter_offset: np.ndarray,
+    bv_dict: JSONObject, matrix: np.ndarray, recenter_offset: np.ndarray,
     recenter_rotation: Optional[np.ndarray] = None,
 ) -> BoundingVolume:
     if "box" in bv_dict:
-        b = np.asarray(bv_dict["box"], dtype="d")
+        b = np.asarray(require_numbers(bv_dict["box"], "box", 12), dtype="d")
         center = _transform_point(matrix, b[0:3])
         half_axes = [_transform_vector(matrix, b[3:6]),
                      _transform_vector(matrix, b[6:9]),
                      _transform_vector(matrix, b[9:12])]
         return BoxBV(center, half_axes)
     if "sphere" in bv_dict:
-        s = np.asarray(bv_dict["sphere"], dtype="d")
+        s = np.asarray(require_numbers(bv_dict["sphere"], "sphere", 4), dtype="d")
         center = _transform_point(matrix, s[0:3])
         # Scale the radius by the largest axis scale so the sphere stays enclosing.
         scale = max(np.linalg.norm(matrix[:3, i]) for i in range(3))
@@ -178,7 +197,8 @@ def _world_bounding_volume(
     if "region" in bv_dict:
         # Regions are fixed to the WGS 84 datum and ignore the tile transform; only
         # the recenter offset (a pure ECEF translation) applies.
-        return RegionBV(bv_dict["region"], offset=recenter_offset,
+        return RegionBV(require_numbers(bv_dict["region"], "region", 6),
+                        offset=recenter_offset,
                         rotation=recenter_rotation)
     raise NotImplementedError(
         "Only box, sphere and region bounding volumes are supported (got %s)"
@@ -186,18 +206,18 @@ def _world_bounding_volume(
     )
 
 
-def _raw_content_uris(tile_dict: dict[str, Any]) -> list[str]:
+def _raw_content_uris(tile_dict: JSONObject) -> list[str]:
     """Every content URI on a tile: 1.0 `content` and/or 1.1 `contents` (plural)."""
-    uris = []
     single = tile_dict.get("content")
-    if single:
-        uri = single.get("uri", single.get("url"))
-        if uri:
-            uris.append(uri)
-    for entry in tile_dict.get("contents", []) or []:
+    entries = [require_object(single, "tile content")] if single else []
+    entries.extend(require_object(entry, "tile content")
+                   for entry in require_array(tile_dict.get("contents") or [],
+                                              "tile contents"))
+    uris = []
+    for entry in entries:
         uri = entry.get("uri", entry.get("url"))
         if uri:
-            uris.append(uri)
+            uris.append(require_text(uri, "tile content uri"))
     return uris
 
 
@@ -213,25 +233,30 @@ _MAX_EXTERNAL_DEPTH = 32
 
 
 def _build_tile(
-    tile_dict: dict[str, Any],
+    tile_dict: JSONObject,
     base_uri: str,
     parent_transform: np.ndarray,
     parent_refine: str,
     recenter_offset: np.ndarray,
-    resolve_external: "Optional[Callable[[str], dict[str, Any]]]",
+    resolve_external: "Optional[Callable[[str], JSONObject]]",
     depth: int,
     up_axis_matrix: np.ndarray = _IDENTITY,
     recenter_rotation: Optional[np.ndarray] = None,
 ) -> RuntimeTile:
-    local = tile_dict.get("transform")
-    matrix = parent_transform @ _matrix_from_list(local) if local else parent_transform
-    refine = tile_dict.get("refine", parent_refine).upper()
-    bv = _world_bounding_volume(tile_dict["boundingVolume"], matrix,
-                                recenter_offset, recenter_rotation)
+    local = _local_transform(tile_dict)
+    matrix = parent_transform @ local if local is not None else parent_transform
+    declared = tile_dict.get("refine")
+    refine = declared.upper() if isinstance(declared, str) else parent_refine
+    bv = _world_bounding_volume(
+        require_object(tile_dict.get("boundingVolume"), "tile boundingVolume"),
+        matrix, recenter_offset, recenter_rotation)
+    geometric_error = require_number(tile_dict.get("geometricError"),
+                                     "tile geometricError")
     children = [
-        _build_tile(child, base_uri, matrix, refine, recenter_offset,
-                    resolve_external, depth, up_axis_matrix, recenter_rotation)
-        for child in tile_dict.get("children", [])
+        _build_tile(require_object(child, "tile child"), base_uri, matrix, refine,
+                    recenter_offset, resolve_external, depth, up_axis_matrix,
+                    recenter_rotation)
+        for child in require_array(tile_dict.get("children", []), "tile children")
     ]
 
     # Content URIs split two ways: an external tileset (`.json`) is grafted in as a
@@ -250,7 +275,7 @@ def _build_tile(
             sub_doc = resolve_external(resolved)
             # An external tileset describes its own content, up axis included.
             sub_root = _build_tile(
-                sub_doc["root"], _dir_of(resolved), matrix, refine,
+                require_object(sub_doc.get("root"), "tileset root"), _dir_of(resolved), matrix, refine,
                 recenter_offset, resolve_external, depth + 1,
                 gltf_up_axis_matrix(sub_doc.get("asset")), recenter_rotation)
             children.append(sub_root)
@@ -259,7 +284,7 @@ def _build_tile(
 
     return RuntimeTile(
         bounding_volume=bv,
-        geometric_error=tile_dict["geometricError"],
+        geometric_error=geometric_error,
         refine=refine,
         content_uris=content_uris,
         world_transform=matrix,
@@ -297,35 +322,32 @@ def level_matrix(origin: np.ndarray) -> np.ndarray:
     return matrix
 
 
-def _recenter_offset(root_dict: dict[str, Any]) -> np.ndarray:
+def _recenter_offset(root_dict: JSONObject) -> np.ndarray:
     """The ECEF point to shift to the origin so a geospatial tileset stays precise.
 
     A root transform's translation places transform-mounted content (the common
     b3dm-at-ECEF case); otherwise a root `region` volume's centre stands in, so
     datum-fixed region tilesets recenter too.
     """
-    local = root_dict.get("transform")
-    if local:
-        t = _matrix_from_list(local)
-        if np.any(t[:3, 3]):
-            return t[:3, 3].copy()
-    bv = root_dict.get("boundingVolume", {})
+    t = _local_transform(root_dict)
+    if t is not None and np.any(t[:3, 3]):
+        return t[:3, 3].copy()
+    bv = require_object(root_dict.get("boundingVolume"), "tile boundingVolume")
     if "region" in bv:
-        return RegionBV(bv["region"]).ecef_center()
+        return RegionBV(require_numbers(bv["region"], "region", 6)).ecef_center()
     return np.zeros(3, dtype="d")
 
 
-def _default_external_resolver(uri: str) -> dict[str, Any]:
+def _default_external_resolver(uri: str) -> JSONObject:
     """Read and parse an external tileset (`.json`), local path or http(s) URL."""
-    tileset: dict[str, Any] = json.loads(fetch.read_bytes(uri))
-    return tileset
+    return parse_object(fetch.read_bytes(uri), uri)
 
 
 def build_runtime_tileset(
-    tileset_dict: dict[str, Any],
+    tileset_dict: JSONObject,
     base_uri: str = "",
     recenter: bool = False,
-    resolve_external: "Optional[Callable[[str], dict[str, Any]]]" = (
+    resolve_external: "Optional[Callable[[str], JSONObject]]" = (
         _default_external_resolver
     ),
 ) -> RuntimeTileset:
@@ -361,7 +383,7 @@ def build_runtime_tileset(
     which ignore the tile transform, receive it directly. The root keeps its
     orientation; only the huge translation is removed.
     """
-    root_dict = tileset_dict["root"]
+    root_dict = require_object(tileset_dict.get("root"), "tileset root")
     initial = _IDENTITY
     recenter_offset = np.zeros(3, dtype="d")
     recenter_rotation = None
@@ -385,7 +407,7 @@ def build_runtime_tileset(
                        recenter_rotation=recenter_rotation)
     return RuntimeTileset(
         root=root,
-        root_geometric_error=float(tileset_dict.get("geometricError", 0.0)),
-        asset=tileset_dict.get("asset", {}),
+        root_geometric_error=bounded(tileset_dict.get("geometricError"), 0.0),
+        asset=require_object(tileset_dict.get("asset", {}), "tileset asset"),
         geospatial=bool(np.any(_recenter_offset(root_dict))),
     )

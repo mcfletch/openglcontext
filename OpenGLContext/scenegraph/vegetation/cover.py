@@ -61,6 +61,7 @@ import numpy as np
 from vrml import field
 from vrml.node import Node
 
+from OpenGLContext.loaders.documentvalues import DocumentValues, JSONObject, require_text
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.varied import Varied
 from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
@@ -276,20 +277,45 @@ class CoverSpecies(Varied, Node):
                 'canopy': None if self.band is None else list(self.band)}
 
     @classmethod
-    def from_json(cls, record: Any) -> 'CoverSpecies':
-        """A species read back out of a baked world."""
-        far = record.get('clumpFarMesh')
-        return cls(name=record['name'], card=record['card'],
-                   clump=record.get('clump') or '',
-                   clumpMesh=str(record.get('clumpMesh', 0)),
-                   clumpFarMesh='' if far is None else str(far),
-                   density=float(record.get('density', 2.2)),
-                   height=float(record.get('height', COVER_HEIGHT)),
-                   cardWidth=float(record.get('cardWidth', CARD_WIDTH)),
-                   sunLevel=float(record.get('sunLevel', CARD_SUN)),
-                   patchiness=float(record.get('patchiness', 0.0)),
-                   patchMetres=float(record.get('patchMetres', PATCH_METRES)),
-                   canopy=list(record.get('canopy') or ()))
+    def from_json(cls, record: JSONObject,
+                  values: Optional[DocumentValues] = None) -> 'CoverSpecies':
+        """A species read back out of a baked world.
+
+        Its name and card are required, and one missing is a
+        :class:`~OpenGLContext.loaders.documentvalues.DocumentError`; any other
+        value that cannot be read is reported through ``values`` and is the
+        default. A clump mesh is named by name or by its index in the clump.
+        """
+        values = values if values is not None else DocumentValues()
+
+        def number(key: str, default: float) -> float:
+            return values.number(record.get(key), default, 'cover species %s' % (key,))
+
+        canopy = record.get('canopy')
+        return cls(name=require_text(record.get('name'), 'cover species name'),
+                   card=require_text(record.get('card'), 'cover species card'),
+                   clump=values.text(record.get('clump') or None, '',
+                                     'cover species clump'),
+                   clumpMesh=_mesh_name(record.get('clumpMesh'), '0', values),
+                   clumpFarMesh=_mesh_name(record.get('clumpFarMesh'), '', values),
+                   density=number('density', 2.2),
+                   height=number('height', COVER_HEIGHT),
+                   cardWidth=number('cardWidth', CARD_WIDTH),
+                   sunLevel=number('sunLevel', CARD_SUN),
+                   patchiness=number('patchiness', 0.0),
+                   patchMetres=number('patchMetres', PATCH_METRES),
+                   canopy=list(values.vector(canopy, (), 'cover species canopy',
+                                             length=2) if canopy else ()))
+
+
+def _mesh_name(raw: object, default: str, values: DocumentValues) -> str:
+    """A clump mesh named by a document: its name, or its index as a string."""
+    if raw is None:
+        return default
+    if isinstance(raw, str):
+        return raw
+    return str(values.integer(raw, int(default or 0), 'cover species clump mesh',
+                              minimum=0))
 
 
 def control_weight(image: Any, wanted: Sequence[str], layers: Sequence[str],

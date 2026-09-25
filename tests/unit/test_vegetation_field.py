@@ -260,6 +260,21 @@ class TestTheSpeciesDescription:
         back = TreeSpecies.from_json(json.loads(json.dumps(entry.to_json())))
         assert back.to_json() == entry.to_json()
 
+    def test_a_species_naming_no_mesh_is_refused(self) -> None:
+        from OpenGLContext.loaders.documentvalues import DocumentError
+        record = dict(_species().to_json(), mesh=3)
+        with pytest.raises(DocumentError, match='tree species mesh is 3'):
+            TreeSpecies.from_json(record)
+
+    def test_a_card_width_that_is_no_number_is_the_default(self) -> None:
+        said: list = []
+        from OpenGLContext.loaders.documentvalues import DocumentValues
+        record = dict(_species().to_json(), cardWidth='wide', solid='trunk')
+        back = TreeSpecies.from_json(record, DocumentValues(warn=said.append))
+        assert back.cardWidth == pytest.approx(0.55)
+        assert list(back.solid) == list(TreeSpecies().solid)
+        assert len(said) == 2
+
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
