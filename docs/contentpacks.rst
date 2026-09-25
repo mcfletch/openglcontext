@@ -310,6 +310,17 @@ this machine returns without using the network, and its progress is reported
 as finished, so a progress bar fills either way. The digest is checked before
 anything is written into the store.
 
+.. rst-class:: technical
+
+A release host answers a download with a redirect to a CDN on another host. A
+content pack, a registry bundle and an archive given to ``oglc-view`` follow a
+redirect to any public https host (``resolver.PUBLIC_HOSTS``). A redirect to
+another scheme, from https to plain http, or to a private, loopback or
+link-local address is refused. The one exception is a server on this machine
+redirecting to another address on this machine, such as a local mirror. A
+document's own references stay locked to the document's origin
+(``resolver.SAME_ORIGIN``).
+
 In a windowed application, use ``FetchJob`` and poll it once a frame.
 Downloading 450 MB on the frame loop's thread would freeze the window for
 minutes: no redraw, no way to cancel, and eventually a "not responding"

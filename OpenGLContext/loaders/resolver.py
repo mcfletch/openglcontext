@@ -11,7 +11,9 @@ containment core, kept in one auditable place. It enforces:
 
 * a document fetched over HTTP(S) may only pull same-origin http(s) URIs
   (blocks ``file://`` reads and ``169.254.169.254`` metadata SSRF), re-checked on
-  every redirect hop;
+  every redirect hop by a :class:`RedirectPolicy` -- :data:`SAME_ORIGIN` for a
+  document, :data:`PUBLIC_HOSTS` for content a trusted registry named;
+* :func:`fetch_url` fetches http(s) and nothing else;
 * a document loaded from a local path may only read files under its own directory
   (blocks ``../../etc/passwd`` traversal and absolute paths);
 * every fetched or decoded resource is size-capped; and
@@ -30,14 +32,17 @@ implementation somewhere else is a containment rule with a hole in it.
 
 __all__ = [
     'Resolver', 'FetchCancelled', 'Progress', 'Cancel',
+    'RedirectPolicy', 'SameOrigin', 'PublicHosts', 'SAME_ORIGIN', 'PUBLIC_HOSTS',
     'DEFAULT_MAX_RESOURCE_BYTES', 'DEFAULT_MAX_IMAGE_PIXELS', 'DOWNLOAD_CHUNK_BYTES',
     'safe_url', 'is_url', 'require_host', 'user_agent', 'check_size', 'check_pixels', 'decode_data_uri', 'resolver_max',
     'fetch_url', 'fetch_to_cache', 'stream_capped', 'cached_path', 'purge_cache',
 ]
 
 import base64
+import ipaddress
 import logging
 import os
+import socket
 import threading
 import urllib.parse
 import urllib.request
@@ -182,29 +187,148 @@ def _same_origin(a: str, b: str) -> bool:
     return _origin(a) == _origin(b)
 
 
-class _OriginLockedRedirectHandler(urllib.request.HTTPRedirectHandler):
-    """Re-apply the same-origin policy on every redirect hop.
+def _without_query(url: str) -> str:
+    """``url`` with its query and fragment removed, for a message or a log.
 
-    ``urllib.request.urlopen`` follows 3xx redirects without re-validating the
-    destination, so a same-origin URL that 302s to a link-local address (e.g.
-    ``169.254.169.254``) would otherwise defeat the pre-request origin check.
-    Each redirect target must keep an allowed scheme and the original origin, or
-    the request is refused.
+    A CDN's redirect target is signed in its query string, and a signature
+    written into an exception reaches logs and telemetry journals.
+    """
+    parts = urllib.parse.urlsplit(url)
+    return urllib.parse.urlunsplit((parts.scheme, parts.netloc, parts.path,
+                                    '', ''))
+
+
+def _addresses(host: str) -> List[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    """The addresses ``host`` names: itself when it is a literal, else DNS's.
+
+    An IPv4 address carried inside an IPv6 one (``::ffff:10.0.0.1``) is
+    answered as the IPv4 address, since that is where a connection goes.
+    Empty when the name does not resolve.
+    """
+    try:
+        found = [ipaddress.ip_address(host)]
+    except ValueError:
+        try:
+            infos = socket.getaddrinfo(host, None, proto=socket.IPPROTO_TCP)
+        except (OSError, UnicodeError):
+            return []
+        found = [ipaddress.ip_address(str(info[4][0]).split('%', 1)[0])
+                 for info in infos]
+    return [address.ipv4_mapped
+            if isinstance(address, ipaddress.IPv6Address)
+            and address.ipv4_mapped is not None else address
+            for address in found]
+
+
+class RedirectPolicy:
+    """Which redirect targets a fetch follows.
+
+    ``urllib`` follows a 3xx without looking at where it goes, so each hop is
+    put to :meth:`refusal` before it is followed. ``original`` is the URL the
+    caller asked for, and ``target`` the one the server answered with.
     """
 
-    def __init__(self, base_url: str) -> None:
-        self._base_url = base_url
+    def refusal(self, original: str, target: str) -> Optional[str]:
+        """Why ``target`` is not followed, or None when it is."""
+        raise NotImplementedError
+
+
+class SameOrigin(RedirectPolicy):
+    """A redirect keeps the scheme family and the exact origin.
+
+    The policy for a document and every reference it makes: a same-origin URL
+    that answers 302 with a link-local address (``169.254.169.254``) is
+    refused here as the reference itself would have been.
+    """
+
+    def refusal(self, original: str, target: str) -> Optional[str]:
+        if _origin(target)[0] not in _ALLOWED_URL_SCHEMES:
+            return 'it is not an http(s) URL'
+        if not _same_origin(original, target):
+            return 'it leaves the origin of %s' % (_without_query(original),)
+        return None
+
+
+class PublicHosts(RedirectPolicy):
+    """A redirect may reach any public host over https.
+
+    The policy for content whose URL a trusted party named and whose bytes are
+    checked by digest -- a content pack, or an archive the user typed. Release
+    hosts answer every download with a redirect to a CDN on another host, so
+    the origin lock is the wrong control for these. What stays refused:
+
+    * anything but http(s);
+    * plaintext, except between two loopback addresses, where no network is
+      crossed;
+    * a private, loopback, link-local or otherwise non-global address, unless
+      the URL asked for was itself on loopback and the target is too -- a local
+      mirror or a test server redirecting to itself.
+
+    A host name is resolved here to judge it, and resolved again when the
+    connection is made, so a name whose DNS answer changes between the two is
+    judged on the first answer.
+    """
+
+    def refusal(self, original: str, target: str) -> Optional[str]:
+        scheme = _origin(target)[0]
+        if scheme not in _ALLOWED_URL_SCHEMES:
+            return 'it is not an http(s) URL'
+        host = urllib.parse.urlsplit(target).hostname or ''
+        addresses = _addresses(host)
+        if not addresses:
+            return 'its host %r does not resolve' % (host,)
+        from_loopback = _is_loopback(original)
+        for address in addresses:
+            if address.is_loopback and from_loopback:
+                continue
+            if not address.is_global:
+                return 'its host %r is at %s, which is not a public address' % (
+                    host, address)
+        if scheme != 'https' and not (from_loopback and all(
+                address.is_loopback for address in addresses)):
+            return 'it is plaintext http'
+        return None
+
+
+def _is_loopback(url: str) -> bool:
+    """Whether every address ``url``'s host names is on this machine."""
+    addresses = _addresses(urllib.parse.urlsplit(url).hostname or '')
+    return bool(addresses) and all(address.is_loopback for address in addresses)
+
+
+#: The redirect policy for a document and its references: the default.
+SAME_ORIGIN: RedirectPolicy = SameOrigin()
+
+#: The redirect policy for content named by a trusted registry and checked by
+#: digest, or opened by the user: any public https host.
+PUBLIC_HOSTS: RedirectPolicy = PublicHosts()
+
+
+class _PolicyRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Put every redirect hop to a :class:`RedirectPolicy` before following it."""
+
+    def __init__(self, original: str, policy: RedirectPolicy) -> None:
+        self._original = original
+        self._policy = policy
 
     def redirect_request(self, req: urllib.request.Request, fp: Any, code: int,
                          msg: Any, headers: Any,
                          newurl: str) -> Optional[urllib.request.Request]:
-        if (_origin(newurl)[0] not in _ALLOWED_URL_SCHEMES
-                or not _same_origin(self._base_url, newurl)):
+        refused = self._policy.refusal(self._original, newurl)
+        if refused is not None:
+            shown = _without_query(newurl)
             raise urllib.error.HTTPError(
-                newurl, code,
-                "fetch refused cross-origin redirect to %r" % (newurl,),
+                shown, code,
+                "fetch refused the redirect to %r: %s" % (shown, refused),
                 headers, fp)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+class _OriginLockedRedirectHandler(_PolicyRedirectHandler):
+    """Re-apply the same-origin policy on every redirect hop."""
+
+    def __init__(self, base_url: str) -> None:
+        super().__init__(base_url, SAME_ORIGIN)
 
 
 def user_agent() -> str:
@@ -221,9 +345,10 @@ def user_agent() -> str:
             % (__version__,))
 
 
-def _urlopen_same_origin(url: str, base_url: str, timeout: int = 30) -> Any:
-    """Open ``url`` refusing any redirect that leaves ``base_url``'s origin."""
-    opener = urllib.request.build_opener(_OriginLockedRedirectHandler(base_url))
+def _open_url(url: str, redirects: RedirectPolicy = SAME_ORIGIN,
+              timeout: int = 30) -> Any:
+    """Open ``url``, following only the redirects ``redirects`` allows."""
+    opener = urllib.request.build_opener(_PolicyRedirectHandler(url, redirects))
     request = urllib.request.Request(safe_url(url),
                                      headers={'User-Agent': user_agent()})
     return opener.open(request, timeout=timeout)
@@ -442,18 +567,26 @@ def _release_download_slot(path: str) -> None:
 def fetch_url(url: str, cache_dir: Optional[str] = None,
                max_bytes: Optional[int] = DEFAULT_MAX_RESOURCE_BYTES,
                progress: Optional[Progress] = None,
-               cancel: Optional[Cancel] = None) -> bytes:
+               cancel: Optional[Cancel] = None,
+               redirects: RedirectPolicy = SAME_ORIGIN) -> bytes:
     """Fetch ``url`` into the on-disk cache (keyed by URL hash) and return its bytes.
 
     A cache hit is touched so its mtime tracks last-use, letting
     :func:`purge_cache` evict assets that have gone stale by disuse. Concurrent
     in-process fetches of the same asset are coalesced: only the first downloads,
-    the rest wait and then read the cached file. The fetch itself is origin-locked
-    (:func:`_urlopen_same_origin`) and size-capped.
+    the rest wait and then read the cached file. The fetch is size-capped, and
+    each redirect is put to ``redirects``: :data:`SAME_ORIGIN` unless the
+    caller names :data:`PUBLIC_HOSTS`.
+
+    Only http(s) is fetched; any other scheme is an ``IOError``, so a
+    ``file://`` URL cannot copy a local file into the cache.
 
     ``progress`` and ``cancel`` are for an asset large enough to be worth
     watching -- see :func:`fetch_to_cache`.
     """
+    if not is_url(url):
+        raise IOError('%r is not an http(s) URL, and only those are fetched'
+                      % (_without_query(url),))
     cache_dir = cache_dir or _default_cache_dir()
     os.makedirs(cache_dir, mode=0o700, exist_ok=True)
     path = cached_path(url, cache_dir)
@@ -470,11 +603,7 @@ def fetch_url(url: str, cache_dir: Optional[str] = None,
             if data is not None:
                 _report(progress, len(data), len(data))
                 return data
-            # The top-level document fetch is user-initiated, but a redirect that
-            # leaves the requested URL's origin is still refused (defence in depth)
-            # so a hostile server can't bounce the fetch to a link-local metadata
-            # endpoint.
-            resp = _urlopen_same_origin(url, url, timeout=30)
+            resp = _open_url(url, redirects, timeout=30)
             try:
                 data = stream_capped(resp, max_bytes, progress, cancel)
             finally:
@@ -573,7 +702,8 @@ def _atomic_write(path: str, data: bytes, cache_dir: str) -> None:
 def fetch_to_cache(url: str, cache_dir: Optional[str] = None,
                    max_bytes: Optional[int] = DEFAULT_MAX_RESOURCE_BYTES,
                    progress: Optional[Progress] = None,
-                   cancel: Optional[Cancel] = None) -> str:
+                   cancel: Optional[Cancel] = None,
+                   redirects: RedirectPolicy = SAME_ORIGIN) -> str:
     """Fetch ``url`` into the cache (once) and return its local file path.
 
     The path variant of :func:`fetch_url`, for callers that want the cached file
@@ -584,9 +714,10 @@ def fetch_to_cache(url: str, cache_dir: Optional[str] = None,
     hit, so a caller drawing a bar sees it finish whether or not anything was
     downloaded.  ``cancel()`` is asked between chunks and abandons the fetch
     with :class:`FetchCancelled` when it returns true.  Neither leaves a
-    partial file in the cache.
+    partial file in the cache.  ``redirects`` is as for :func:`fetch_url`.
     """
-    fetch_url(url, cache_dir, max_bytes, progress=progress, cancel=cancel)
+    fetch_url(url, cache_dir, max_bytes, progress=progress, cancel=cancel,
+              redirects=redirects)
     return cached_path(url, cache_dir)
 
 

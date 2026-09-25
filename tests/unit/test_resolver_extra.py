@@ -136,8 +136,7 @@ class TestUserAgent:
         original = urllib.request.build_opener
         urllib.request.build_opener = lambda *handlers: FakeOpener()
         try:
-            resolver._urlopen_same_origin('https://example.invalid/a.zip',
-                                          'https://example.invalid/a.zip')
+            resolver._open_url('https://example.invalid/a.zip')
         finally:
             urllib.request.build_opener = original
         assert seen['url'] == 'https://example.invalid/a.zip'

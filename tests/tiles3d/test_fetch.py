@@ -88,7 +88,7 @@ def test_read_bytes_url_caches_and_reuses(tmp_path, monkeypatch):
     # one call that reaches the network -- leaving the caching itself real,
     # which is what this test is about.
     from OpenGLContext.loaders import resolver
-    monkeypatch.setattr(resolver, "_urlopen_same_origin", fake_open)
+    monkeypatch.setattr(resolver, "_open_url", fake_open)
     cache = str(tmp_path / "cache")
     url = "https://host.example/set/tile.b3dm"
 

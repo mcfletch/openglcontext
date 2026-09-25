@@ -124,7 +124,8 @@ def fetch_registry(url: str, store: ContentStore, progress: Any = None,
     try:
         downloaded = resolver.fetch_to_cache(
             url, cache_dir=cache_dir, max_bytes=REGISTRY_LIMIT,
-            progress=progress, cancel=cancel)
+            progress=progress, cancel=cancel,
+            redirects=resolver.PUBLIC_HOSTS)
     except resolver.FetchCancelled as error:
         raise Cancelled(str(error)) from error
     except ValueError as error:
@@ -178,7 +179,8 @@ def fetch_pack(pack: ContentPack, store: ContentStore,
         downloaded = resolver.fetch_to_cache(
             pack.url, cache_dir=cache_dir,
             max_bytes=fetch_limit(pack.approximate_bytes),
-            progress=progress, cancel=cancel)
+            progress=progress, cancel=cancel,
+            redirects=resolver.PUBLIC_HOSTS)
     except resolver.FetchCancelled as error:
         raise Cancelled(str(error)) from error
     except ValueError as error:

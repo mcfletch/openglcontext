@@ -579,3 +579,46 @@ def drive(job, limit=2000):
             return job
         time.sleep(0.005)
     raise AssertionError('the job never finished')
+
+
+class TestAReleaseHostThatRedirects:
+    """Release assets are served by a redirect to a CDN on another host."""
+
+    @pytest.fixture
+    def redirecting(self, served):
+        where, cdn = served
+
+        class Redirect(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(302)
+                self.send_header('Location', cdn + self.path + '?sig=x')
+                self.end_headers()
+
+            def log_message(self, *args):
+                """Quiet."""
+
+        server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), Redirect)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            yield where, 'http://127.0.0.1:%d' % (server.server_address[1],)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+
+    def test_a_pack_arrives_through_the_redirect(self, redirecting, store,
+                                                 cache) -> None:
+        where, front = redirecting
+        made = make_tarball(where, 'a.tar.gz')
+        one = pack(front + '/a.tar.gz', sha256=digest_of(made))
+        root = fetch.fetch_pack(one, store, cache_dir=cache)
+        assert os.path.isfile(os.path.join(root, 'world.json'))
+
+    def test_a_registry_arrives_through_the_redirect(self, redirecting, store,
+                                                     cache) -> None:
+        where, front = redirecting
+        TestARegistryFetchedFromElsewhere().registry_bundle(where)
+        packs = fetch.fetch_registry(front + '/registry.zip', store,
+                                     cache_dir=cache)
+        assert [one.key for one in packs] == ['contrib.x/hillclimb']

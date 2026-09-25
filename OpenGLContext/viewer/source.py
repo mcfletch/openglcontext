@@ -115,7 +115,10 @@ def open_archive(source: str, cache_dir: Optional[str] = None,
 def _unpack(path: str, kind: str, into: Optional[str],
             max_bytes: int) -> str:
     """The directory ``path`` is unpacked into, unpacking it if it is not."""
-    local = (resolver.fetch_to_cache(path, max_bytes=max_bytes)
+    # An archive the user named follows redirects to any public host, as a
+    # content pack does: release hosts serve every asset through a CDN.
+    local = (resolver.fetch_to_cache(path, max_bytes=max_bytes,
+                                     redirects=resolver.PUBLIC_HOSTS)
              if is_url(path) else path)
     root = into if into is not None else cache_dir()
     # Named for what it holds rather than for where it came from, so the same

@@ -53,7 +53,7 @@ def serve(monkeypatch, payload):
         def _open(url, base_url, timeout=30):
             made['response'] = _ChunkedResponse(payload, **named)
             return made['response']
-        monkeypatch.setattr(resolver, '_urlopen_same_origin', _open)
+        monkeypatch.setattr(resolver, '_open_url', _open)
         return made
     return factory
 

@@ -54,7 +54,7 @@ def fake_download(monkeypatch, tmp_path):
         calls['n'] += 1
         return _SlowResponse(payload)
 
-    monkeypatch.setattr(resolver, '_urlopen_same_origin', _fake_open)
+    monkeypatch.setattr(resolver, '_open_url', _fake_open)
     return payload, str(tmp_path), calls
 
 
