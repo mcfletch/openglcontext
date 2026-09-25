@@ -36,8 +36,6 @@ import sys
 from dataclasses import dataclass
 from typing import Any, Sequence
 
-os.environ.setdefault('OPENGLCONTEXT_SHADOWS', '1')
-
 from OpenGLContext.bin.view import apply_render_env, build_parser
 from OpenGLContext.ui.gallery import Picture
 from OpenGLContext.ui.hudwidgets import HUDGroup, Readout
