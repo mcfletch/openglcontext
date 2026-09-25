@@ -88,7 +88,7 @@ class TestBeingToldTheSameChoiceRepeatedly:
         second = Group(children=[Shape(geometry=Box())])
         switch.choice = list(switch.choice) + [second]
         switch.whichChoice = 1
-        assert watcher.nodePaths.get(id(second)), (
+        assert watcher.nodePaths.get(second), (
             'switching to a new choice did not integrate it'
         )
 

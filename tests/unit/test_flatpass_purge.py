@@ -47,7 +47,7 @@ def held_paths(watcher):
 
 
 def paths_through(watcher, node):
-    return list(watcher.nodePaths.get(id(node), ()))
+    return list(watcher.nodePaths.get(node, ()))
 
 
 class TestPurgingInvalidatedPaths:
@@ -72,7 +72,7 @@ class TestPurgingInvalidatedPaths:
         for path in paths_through(watcher, gone):
             path.invalidate()
         watcher.purge()
-        assert id(gone) not in watcher.nodePaths
+        assert gone not in watcher.nodePaths
 
     def test_the_subtrees_still_there_are_untouched(self, watched) -> None:
         watcher, scene, subtrees = watched
@@ -93,3 +93,21 @@ class TestPurgingInvalidatedPaths:
         gc.collect()
         assert all(ref() is None for ref in watching), (
             'a purged path is still referenced somewhere')
+
+
+class TestNodesOutsideTheScene:
+    """The children signals are sent by every grouping node in the process."""
+
+    def test_a_child_added_elsewhere_leaves_no_record(self, watched) -> None:
+        watcher, scene, subtrees = watched
+        before = dict(watcher.nodePaths)
+        elsewhere = Group(children=[Shape(geometry=Box())])
+        watcher.onChildAdd(elsewhere, elsewhere.children[0])
+        assert watcher.nodePaths == before
+
+    def test_a_child_removed_elsewhere_leaves_no_record(self, watched) -> None:
+        watcher, scene, subtrees = watched
+        before = dict(watcher.nodePaths)
+        elsewhere = Group(children=[])
+        watcher.onChildRemove(elsewhere, Shape(geometry=Box()))
+        assert watcher.nodePaths == before

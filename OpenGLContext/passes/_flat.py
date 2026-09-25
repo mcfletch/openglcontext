@@ -191,8 +191,9 @@ class SGObserver( object ):
         self.contexts = contexts
         #: Which paths lead to a node of each declared interesting type.
         self.paths: Dict[type, List[Any]] = {}
-        #: ``id(node)`` -> every live path that ends at it.
-        self.nodePaths: Dict[int, List[Any]] = {}
+        #: Each integrated node -> every live path that ends at it. Keyed by
+        #: the node, which its paths hold anyway.
+        self.nodePaths: Dict[Any, List[Any]] = {}
         if scene:
             self.integrate( scene )
         connect(
@@ -232,10 +233,10 @@ class SGObserver( object ):
                 for child in next.renderedChildren( ):
                     todo.append( (child,path) )
     def npFor( self, node: Any ) -> List[Any]:
-        """For some reason setdefault isn't working for the weakkeydict"""
-        current = self.nodePaths.get( id(node) )
+        """The paths ending at ``node``, a record made for it if it has none."""
+        current = self.nodePaths.get( node )
         if current is None:
-            self.nodePaths[id(node)] = current = []
+            self.nodePaths[node] = current = []
         return current
     def onSwitchChange( self, sender: Any, value: Any ) -> None:
         """A Switch has chosen a different child, or none at all.
@@ -250,7 +251,7 @@ class SGObserver( object ):
         it afresh each time would leave a second path to the same node, and a
         third, each holding the transforms cached against it.
         """
-        for path in self.npFor( sender ):
+        for path in self.nodePaths.get( sender, () ):
             keeping = None
             for childPath in path.iterchildren():
                 if ( value is not None and childPath[-1] is value
@@ -266,14 +267,14 @@ class SGObserver( object ):
         if hasattr( sender, 'renderedChildren' ):
             children = sender.renderedChildren()
             if value in children:
-                for path in self.npFor( sender ):
+                for path in list( self.nodePaths.get( sender, () ) ):
                     self.integrate( value, path )
     def onChildRemove( self, sender: Any, value: Any ) -> None:
         """Invalidate all paths where sender has value as its child IFF child no longer in renderedChildren"""
         if hasattr( sender, 'renderedChildren' ):
             children = sender.renderedChildren()
             if value not in children:
-                for path in self.npFor( sender ):
+                for path in self.nodePaths.get( sender, () ):
                     for childPath in path.iterchildren():
                         if childPath[-1] is value:
                             childPath.invalidate()
@@ -303,8 +304,8 @@ class SGObserver( object ):
             if len(live) != len(values):
                 self._pathSetChanged()
             values[:] = live
-        for node_id in list( self.nodePaths.keys() ):
-            paths = self.nodePaths[node_id]
+        for node in list( self.nodePaths ):
+            paths = self.nodePaths[node]
             # By identity, not equality: two distinct paths running the same
             # route compare equal, and only this one is known to be broken.
             live = [ p for p in paths if not p.broken ]
@@ -314,7 +315,7 @@ class SGObserver( object ):
             if live:
                 paths[:] = live
             else:
-                del self.nodePaths[node_id]
+                del self.nodePaths[node]
         # Drop the removed paths' persistent picking ids so a later pick can't
         # resolve a stale object.
         sel_map = getattr( self, '_sel_id_map', None )
