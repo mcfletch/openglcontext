@@ -353,13 +353,6 @@ addopts = "-p OpenGLContext.testing.plugin -ra"
 # numbers fails where it is made rather than reaching a picture or a position.
 # A test that means to make one says so with numpy.errstate around it.
 numpy_errors = "raise"
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-# Backstop timeout so a single hung GL test can never wedge the whole session,
-# independent of the custom subprocess runner's own per-script timeouts (whose
-# ceiling is 120s). The slowest test that legitimately runs to completion takes
-# about 25 seconds, so this is a wide margin rather than a deadline.
 # A test fails that opened a file from a module of OpenGLContext outside the
 # sanctioned openers (OpenGLContext.testing.openaudit). The list is the
 # engine's openers, then the modules whose paths come from their own user,
@@ -408,6 +401,13 @@ open_audit_sanctioned = [
     "OpenGLContext.viewer.adapters",
     "OpenGLContext.viewer.source",
 ]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+# Backstop timeout so a single hung GL test can never wedge the whole session,
+# independent of the custom subprocess runner's own per-script timeouts (whose
+# ceiling is 120s). The slowest test that legitimately runs to completion takes
+# about 25 seconds, so this is a wide margin rather than a deadline.
 # Set via the ini keys rather than addopts so a checkout without pytest-timeout
 # only warns about unknown options instead of erroring on `--timeout`.
 timeout = 300
