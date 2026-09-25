@@ -18,6 +18,7 @@ from OpenGLContext.scenegraph.terrain.heightfield import HeightField
 from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
 from OpenGLContext.scenegraph.vegetation.field import _drawn
 from tests.unit.glrender import base_env, frames_of
+from tests.unit.test_planar_mirror_gl import _mirror
 from OpenGLContext.move.viewplatform import ViewPlatform
 from OpenGLContext.multiview.views import View, ViewLayout
 from OpenGLContext.passes import renderpass
@@ -95,7 +96,6 @@ def test_ground_and_cards_draw_once_for_both_views_and_look_the_same(
 
 def test_a_mirror_shows_the_ground_in_front_of_it(render_scene, env, images):
     """The ground is culled by the side it faces, and a mirror turns that over."""
-    from tests.unit.test_planar_mirror_gl import _mirror
     env.setenv('OPENGLCONTEXT_MULTIVIEW', 'sequential')
     scene = [basenodes.Viewpoint(position=(0.0, 1.7, 6.0), orientation=(1, 0, 0, -0.1)),
              basenodes.NavigationInfo(headlight=False),
@@ -113,7 +113,6 @@ def test_mirrors_draw_the_ground_and_cards_once_however_many_there_are(
         render_scene, env, images, strategy):
     """Ground and vegetation share the mirror views' submission too, and no
     longer count against the budget of views that draw on their own."""
-    from tests.unit.test_planar_mirror_gl import _mirror
     env.setenv('OPENGLCONTEXT_MULTIVIEW', strategy)
     env.setenv('OPENGLCONTEXT_REFLECTION_VIEWS', '16')
     env.setenv('OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS', '0')

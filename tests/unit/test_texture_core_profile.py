@@ -22,6 +22,7 @@ from OpenGLContext.scenegraph import basenodes
 from OpenGLContext import glfwcontext, texture
 from OpenGLContext.capture import read_back_buffer
 from OpenGLContext.passes import renderpass
+from tests.unit.glrender import base_env
 
 
 
@@ -32,7 +33,6 @@ def shader_paths(monkeypatch):
     The PBR renderer binds its own material textures and never reaches
     ``_Texture.render``, so the path under test here is the flat core one.
     """
-    from tests.unit.glrender import base_env
     base_env(monkeypatch)
     monkeypatch.delenv('OPENGLCONTEXT_RENDERER', raising=False)
 

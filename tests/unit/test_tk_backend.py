@@ -25,6 +25,9 @@ from OpenGLContext.context import Context
 
 pytest.importorskip('tkinter')
 
+# tkcontext imports tkinter, which the line above requires.
+from OpenGLContext.tkcontext import attributesFromDefinition
+
 DRIVER = tests_root(__file__) / 'helpers' / '_tk_backend_drive.py'
 
 #: Whether an X server answers and lets this process in: a ``DISPLAY`` naming
@@ -37,8 +40,6 @@ needs_display = pytest.mark.skipif(
 
 
 def _asked(**named):
-    from OpenGLContext.tkcontext import attributesFromDefinition
-
     return attributesFromDefinition(ContextDefinition(**named))
 
 

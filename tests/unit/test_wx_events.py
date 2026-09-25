@@ -18,6 +18,8 @@ import types
 
 import pytest
 
+import OpenGLContext.events as package
+
 #: wx's own numbering, from ``wx.MouseEvent``.
 WX_LEFT, WX_MIDDLE, WX_RIGHT, WX_NONE = 1, 2, 3, 0
 
@@ -52,11 +54,10 @@ def wxevents(monkeypatch):
     well as from ``sys.modules``, since the import puts it in both -- so that
     nothing else in the run reaches a module built on a wx that is not there.
     """
-    import OpenGLContext.events as package
     monkeypatch.setitem(sys.modules, 'wx', _fake_wx())
     monkeypatch.delitem(sys.modules, 'OpenGLContext.events.wxevents',
                         raising=False)
-    from OpenGLContext.events import wxevents as module
+    from OpenGLContext.events import wxevents as module  # noqa: PLC0415 built over the fake wx put in sys.modules above
     yield module
     sys.modules.pop('OpenGLContext.events.wxevents', None)
     if getattr(package, 'wxevents', None) is module:

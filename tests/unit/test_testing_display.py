@@ -16,6 +16,7 @@ import sys
 
 import pytest
 
+from OpenGLContext.testing import glcontext
 from OpenGLContext.testing.glcontext import X_CLIENT, display_answers
 
 #: A display number nothing is expected to be serving. X servers are numbered
@@ -97,7 +98,6 @@ class TestAskedOnce:
 
     def test_the_client_is_run_once_for_a_display(self, monkeypatch):
         pytest.importorskip('tkinter')
-        from OpenGLContext.testing import glcontext
         ran = []
 
         class Opened:

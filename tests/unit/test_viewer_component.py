@@ -20,6 +20,7 @@ from OpenGLContext.testing.paths import tests_root
 from OpenGLContext.viewer import ViewerOptions
 from OpenGLContext.viewer.sceneviewer import ViewerContext, SceneViewerMixin
 from OpenGLContext.viewer.source import load_gltf_source
+from OpenGLContext import testingcontext
 from OpenGLContext.context import Context
 from OpenGLContext.move.physicswalk import PhysicsWalkMixin
 from OpenGLContext.multiview.grid import Grid
@@ -214,7 +215,6 @@ class TestTheMixinsComposeCleanly:
         return {name for name in vars(klass) if not name.startswith('__')}
 
     def test_no_viewer_mix_in_shadows_a_context_member_by_accident(self):
-        from OpenGLContext import testingcontext
 
         # The platform's own interactive context, which is what ViewerContext
         # is composed over.

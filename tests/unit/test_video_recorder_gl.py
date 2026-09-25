@@ -34,7 +34,7 @@ def gl_context(gl_window):
 
 @pytest.fixture
 def encoder_available(gl_context):
-    from pyopengl_video import encoders
+    encoders = pytest.importorskip('pyopengl_video').encoders
     if not encoders():
         pytest.skip('no hardware video encoder on this machine')
 

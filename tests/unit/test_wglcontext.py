@@ -21,6 +21,7 @@ import inspect
 import pytest
 import OpenGL.GL as gl
 import numpy as np
+from OpenGL.WGL import offscreen
 from OpenGL.GL import (
     GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_RGB, GL_UNSIGNED_BYTE, glClear, glClearColor,
     glReadPixels,
@@ -41,7 +42,6 @@ def _needs_pbuffers():
     Asked of PyOpenGL without creating anything, so a context the engine fails
     to make where the extensions are offered fails the test.
     """
-    from OpenGL.WGL import offscreen
     missing = offscreen.available('core')
     if missing:
         pytest.skip('this driver offers no offscreen OpenGL: %s missing'
@@ -106,8 +106,6 @@ class TestTheBuffersADefinitionAsksFor:
         """The two are separate packages, so the shape of the call between them
         is worth stating rather than discovering at run time."""
 
-        from OpenGL.WGL import offscreen
-
         accepted = set(
             inspect.signature(offscreen.pixel_format_attributes).parameters)
         assert set(wglcontext.bufferSizes(definition())) <= accepted
@@ -139,8 +137,6 @@ class TestTheProfileADefinitionAsksFor:
         ) == ('legacy', (1, 1))
 
     def test_the_profile_names_are_ones_the_offscreen_module_offers(self):
-        from OpenGL.WGL import offscreen
-
         for profile in ('core', 'compatibility'):
             for version in ((3, 2), (4, 6), (2, 1)):
                 named, _ = wglcontext.profileFor(
@@ -463,8 +459,6 @@ class TestAFailedConstructionSaysWhatIsMissing:
     is an expected outcome rather than the end of the process."""
 
     def test_a_driver_with_no_pbuffers_is_refused_by_name(self, monkeypatch):
-        from OpenGL.WGL import offscreen
-
         monkeypatch.setattr(offscreen, 'available',
                             lambda profile='core': ('WGL_ARB_pbuffer',))
         with pytest.raises(wglcontext.WGLContextError) as caught:
@@ -474,8 +468,6 @@ class TestAFailedConstructionSaysWhatIsMissing:
     def test_the_failure_is_this_packages_own_class(self, monkeypatch):
         """A caller catches one thing whichever offscreen backend it asked
         for, rather than importing the binding's exception to catch it."""
-        from OpenGL.WGL import offscreen
-
         def refuses(**named):
             raise offscreen.WGLError('nothing doing')
 

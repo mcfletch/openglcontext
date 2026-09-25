@@ -17,6 +17,7 @@ from OpenGL.GL import (
 from PIL import Image
 from OpenGL import GL
 
+from OpenGLContext.scenegraph.terrain import ground
 from OpenGLContext.scenegraph.terrain.ground import (
     GROUND_MATERIAL, GroundPatch, GroundShading,
 )
@@ -145,7 +146,6 @@ def test_the_constants_are_sent_once_not_per_patch(gl_context, tmp_path):
         return original(*args)
     try:
         _draw(patch, np.eye(4))
-        from OpenGLContext.scenegraph.terrain import ground
         ground.glUniform1f, before = counting, ground.glUniform1f
         try:
             _draw(patch, np.eye(4))

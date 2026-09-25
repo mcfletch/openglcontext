@@ -19,6 +19,7 @@ from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.tooltip import TOOLTIP_PAUSE, Tooltip
 from OpenGLContext.ui.widgets import Button
 from tests.unit.glrender import base_env
+from OpenGLContext import testingcontext
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.ui.overlay import OverlayMixin
 
@@ -28,7 +29,6 @@ def window(monkeypatch):
     base_env(monkeypatch)
     if not glfw.init():
         pytest.skip('glfw init failed')
-    from OpenGLContext import testingcontext
 
     drawn = []
 

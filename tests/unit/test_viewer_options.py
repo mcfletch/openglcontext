@@ -16,6 +16,7 @@ import pytest
 from OpenGLContext.viewer.options import OPTION_NAMES, ViewerOptions
 from OpenGLContext.bin import view
 from OpenGLContext.bin.view import build_parser, parse_args
+from tests.unit.test_multiview_mixin import HIGH, LOW, _Window
 
 
 class TestUsableWithoutACommandLine:
@@ -197,7 +198,6 @@ class TestSourceIsStillOptional:
     def test_the_env_var_is_not_consumed_by_the_parser(self, monkeypatch):
         """``GLTF=`` is resolved by the viewer, so an explicit path still wins."""
         monkeypatch.setenv('GLTF', 'from-env.glb')
-        from OpenGLContext.bin import view
         assert view.parse_args(['given.glb']).source == 'given.glb'
         assert view.parse_args([]).source is None
         assert os.environ['GLTF'] == 'from-env.glb'
@@ -208,8 +208,6 @@ class TestTheArrangementAViewerOpensIn:
     command line says otherwise (the Tk and wx embedding demos declare it)."""
 
     def window(self, declared):
-        from .test_multiview_mixin import HIGH, LOW, _Window
-
         class Declared(_Window):
             multiViewArrangement = declared
 

@@ -15,6 +15,8 @@ from OpenGLContext.loaders.tiles3d.gltf_uploader import (
     _strip_b3dm, _CombinedScene, _drawable_shapes, _mesh_vbos,
     _dispose_mesh_gpu, _dispose_material_textures, GLTileUploader,
 )
+from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
+from OpenGLContext.loaders.tiles3d.tileset import build_runtime_tileset
 from OpenGLContext.scenegraph.group import Group
 
 
@@ -48,10 +50,6 @@ def test_combined_scene_wraps_children_and_bounds():
 
 
 def test_combined_scene_loader_path(tmp_path):
-    pytest.importorskip("pygltflib")
-    from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
-    from OpenGLContext.loaders.tiles3d.tileset import build_runtime_tileset
-
     path = build_sample_tileset(str(tmp_path))
     with open(path) as fh:
         doc = json.load(fh)

@@ -10,8 +10,7 @@ import logging
 
 import pytest
 
-from OpenGLContext.telemetry.recorder import SessionRecorder
-from OpenGLContext.telemetry import Keeping, NOT_RECORDING, Tee
+from OpenGLContext.telemetry import Keeping, NOT_RECORDING, SessionRecorder, Tee
 
 
 class FakeClock:
@@ -339,12 +338,10 @@ class TestMarkingWhenNobodyIsRecording:
         assert not NOT_RECORDING
 
     def test_and_a_real_recording_says_it_is(self, tmp_path) -> None:
-        from OpenGLContext.telemetry import SessionRecorder
         assert SessionRecorder(_Written().write)
 
     def test_one_stands_in_for_the_other(self) -> None:
         """Same call, so a caller written for one runs against the other."""
-        from OpenGLContext.telemetry import NOT_RECORDING, SessionRecorder
         journal = _Written()
         for recorder in (NOT_RECORDING, SessionRecorder(journal.write)):
             assert recorder.mark('pass-begun', gap=40.0, sight=260.0) is None
@@ -391,7 +388,6 @@ class TestMarkingToSeveralRecorders:
     """One run kept in memory for a summary and written to a journal as well."""
 
     def test_each_mark_reaches_every_recorder(self) -> None:
-        from OpenGLContext.telemetry import Keeping, SessionRecorder, Tee
         kept, written = Keeping(), _Written()
         both = Tee(kept, SessionRecorder(written.write))
         both.mark('crash', closing=12.0)

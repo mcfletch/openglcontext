@@ -15,9 +15,10 @@ import sys
 import numpy as np
 import pytest
 
-from OpenGLContext.testing import event_injector
+from OpenGLContext.testing import event_injector, report_generator, subprocess_runner
 from OpenGLContext.testing.event_injector import EventInjectionMixin, EventSender
 from OpenGLContext.testing.framebuffer_comparison import VisualRegressionTest
+from OpenGLContext.testing.paths import tests_root
 from OpenGLContext.testing.report_generator import _status_color
 from OpenGLContext.testing.subprocess_runner import build_command, kill_process_tree
 
@@ -40,9 +41,7 @@ class TestSubprocessRunner:
 
     def test_test_result_success(self):
         """TestResult correctly identifies success."""
-        from OpenGLContext.testing.subprocess_runner import TestResult
-
-        result = TestResult(
+        result = subprocess_runner.TestResult(
             script='test.py',
             returncode=0,
             stdout='output',
@@ -56,9 +55,7 @@ class TestSubprocessRunner:
 
     def test_test_result_failure(self):
         """TestResult correctly identifies failure."""
-        from OpenGLContext.testing.subprocess_runner import TestResult
-
-        result = TestResult(
+        result = subprocess_runner.TestResult(
             script='test.py',
             returncode=1,
             stdout='',
@@ -71,9 +68,7 @@ class TestSubprocessRunner:
 
     def test_test_result_skip(self):
         """TestResult correctly identifies skip."""
-        from OpenGLContext.testing.subprocess_runner import TestResult
-
-        result = TestResult(
+        result = subprocess_runner.TestResult(
             script='test.py',
             returncode=2,
             stdout='',
@@ -86,9 +81,7 @@ class TestSubprocessRunner:
 
     def test_test_result_timeout(self):
         """TestResult correctly identifies timeout."""
-        from OpenGLContext.testing.subprocess_runner import TestResult
-
-        result = TestResult(
+        result = subprocess_runner.TestResult(
             script='test.py',
             returncode=124,
             stdout='',
@@ -291,9 +284,8 @@ class TestTestReportGenerator:
 
     def test_empty_report(self):
         """TestReportGenerator creates valid HTML for empty report."""
-        from OpenGLContext.testing.report_generator import TestReportGenerator
 
-        gen = TestReportGenerator("Empty Report")
+        gen = report_generator.TestReportGenerator("Empty Report")
         html = gen.generate_html()
 
         assert "Empty Report" in html
@@ -303,9 +295,7 @@ class TestTestReportGenerator:
 
     def test_add_test(self):
         """TestReportGenerator adds tests correctly."""
-        from OpenGLContext.testing.report_generator import TestReportGenerator
-
-        gen = TestReportGenerator()
+        gen = report_generator.TestReportGenerator()
         gen.add_test({'test_name': 'test1', 'status': 'pass'})
         gen.add_test({'test_name': 'test2', 'status': 'fail'})
 
@@ -320,9 +310,7 @@ class TestTestReportGenerator:
 
     def test_save_to_file(self, tmp_path):
         """TestReportGenerator saves to file correctly."""
-        from OpenGLContext.testing.report_generator import TestReportGenerator
-
-        gen = TestReportGenerator("Test Report")
+        gen = report_generator.TestReportGenerator("Test Report")
         gen.add_test({'test_name': 'test', 'status': 'pass'})
 
         output_path = tmp_path / "report.html"
@@ -422,13 +410,11 @@ class TestConftest:
     def test_subprocess_result_properties(self):
         """conftest re-exports the package TestResult as its result type (3.27)."""
         # Import from conftest
-        from OpenGLContext.testing.paths import tests_root
         sys.path.insert(0, str(tests_root(__file__)))   # conftest lives in the tests root
-        from conftest import SubprocessResult
-        from OpenGLContext.testing.subprocess_runner import TestResult
+        from conftest import SubprocessResult  # noqa: PLC0415 importable once the line above puts the tests root on sys.path
 
         # conftest no longer keeps its own copy; it is the package's TestResult.
-        assert SubprocessResult is TestResult
+        assert SubprocessResult is subprocess_runner.TestResult
 
         result = SubprocessResult(
             script='demo.py',

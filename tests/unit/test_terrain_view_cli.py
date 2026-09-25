@@ -9,6 +9,7 @@ import types
 
 import numpy as np
 import pytest
+from PIL import Image
 
 from OpenGLContext.bin import terrain_view as T
 from OpenGLContext.loaders.tiles3d import procedural as P
@@ -107,8 +108,6 @@ class TestResolveWorld:
         assert height_fn is P.terrain_height
 
     def test_dem_world_bakes_from_a_heightmap_image(self, tmp_path):
-        pytest.importorskip('PIL')
-        from PIL import Image
         dem = tmp_path / 'height.png'
         Image.fromarray((np.random.default_rng(0).random((16, 16)) * 255)
                         .astype('uint8'), 'L').save(dem)

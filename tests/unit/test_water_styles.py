@@ -224,11 +224,9 @@ class TestALakeIsWater:
         assert LAKE.amplitude > 0.0 and LAKE.wavelength > 0.0
 
     def test_it_is_gentler_than_weather(self) -> None:
-        from OpenGLContext.scenegraph.water import CHOPPY, LAKE
         assert LAKE.amplitude < CHOPPY.amplitude
 
     def test_but_it_is_not_a_mirror(self) -> None:
-        from OpenGLContext.scenegraph.water import LAKE, STILL
         assert LAKE.amplitude > STILL.amplitude
 
     def test_a_sheet_carries_the_wave_it_is_asked_for(self) -> None:
