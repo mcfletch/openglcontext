@@ -502,6 +502,41 @@ A generated clip can also be registered by name and played through the engine:
    engine.clips.put('ping', synth.impact(0.4, seed=1))
    engine.play('ping', priority=1.0)
 
+.. _audio-vehicle:
+
+A vehicle
+~~~~~~~~~
+
+``OpenGLContext.audio.vehicle.VehicleSoundtrack`` is a road vehicle's sound
+made this way: a motor whine whose pitch follows the road speed, tyre noise
+from rolling and from scrub, wind that goes as the square of speed, and a
+one-shot impact. It reads an ``omi_physics`` vehicle - its ``speed()``, its
+wheels' ``slip`` (the sideways speed at the contact patch, m/s) and
+``grounded``, and its ``throttle`` - and writes gains and playback rates onto
+one ``global`` emitter, so the sound rides with the listener in the vehicle.
+
+.. code-block:: python
+
+   from omi_audio.vehicle import VehicleSoundTuning
+   from OpenGLContext.audio.vehicle import VehicleSoundtrack
+
+   track = VehicleSoundtrack(VehicleSoundTuning(tyre_scrub_from=0.25,
+                                                tyre_scrub_at=3.5))
+   scene.children.append(track.node)
+
+   def OnIdle(self):
+       track.update(dt, vehicle)          # after the physics step
+       if contact is not None:
+           track.hit(closing_speed)       # m/s; a nudge under 1 m/s is silent
+
+``VehicleSoundTuning`` (in ``omi_audio.vehicle``) holds every figure: pitches
+in Hz, speeds in m/s, gains 0 to 1, and ``settle``, the seconds a gain takes to
+travel full scale. Its defaults suit a small electric car. The scrub band,
+``tyre_scrub_from`` to ``tyre_scrub_at``, is the figure to measure for your own
+vehicle: above what its tyres show in ordinary cornering, and full at a slide.
+``update(dt, vehicle, speed=...)`` takes a speed in place of ``vehicle.speed()``
+where the game measures it another way.
+
 .. _audio-repeat:
 
 Occasional sounds

@@ -17,6 +17,9 @@ What is here is the two seams between that engine and a context:
                            on the :class:`~OpenGLContext.contextdefinition.ContextDefinition`
                            so it validates, serialises and generates its own
                            settings page like every other field group.
+:mod:`~.vehicle`           :class:`~.vehicle.VehicleSoundtrack`, a road
+                           vehicle's motor, tyres, wind and impacts as one
+                           emitter, fed from an ``omi_physics`` vehicle.
 =========================  ====================================================
 
 The nodes that put a sound *in* a scene are

@@ -73,6 +73,8 @@ package whose code ends up somewhere else.
 ```text
 OpenGLContext/
 ├── audio/            # Spatial audio nodes + the per-context engine -- docs/audio.rst
+│   └── vehicle.py    # A road vehicle's motor, tyres, wind and impacts as
+│                     # scene nodes -- docs/audio.rst#audio-vehicle
 ├── bin/              # The console commands (see [project.scripts]) -- docs/viewer.rst
 │   └── mirrorhall.py # The room oglc-mirrors hangs its mirrors in; scenery,
 │                     # not a command
