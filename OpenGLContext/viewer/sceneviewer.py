@@ -241,7 +241,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         # one view and four whether or not anything is loaded yet. A capture
         # or a recording gets no furniture, for the reason the caption is left
         # off one: what comes out is the scene, not the interface.
-        self.startViews(arrangement=str(self.options.views or 'single'),
+        self.startViews(arrangement=self.options.views,
                         chrome=not (self.capturing or self.recording))
         if self.capturing:
             # A capture has to be deterministic, and the settle logic has to see

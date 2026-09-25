@@ -203,3 +203,34 @@ class TestSourceIsStillOptional:
         assert view.parse_args(['given.glb']).source == 'given.glb'
         assert view.parse_args([]).source is None
         assert os.environ['GLTF'] == 'from-env.glb'
+
+
+class TestTheArrangementAViewerOpensIn:
+    """A viewer class that declares four views opens in four unless the
+    command line says otherwise (the Tk and wx embedding demos declare it)."""
+
+    def window(self, declared):
+        from .test_multiview_mixin import HIGH, LOW, _Window
+
+        class Declared(_Window):
+            multiViewArrangement = declared
+
+        return Declared, (LOW, HIGH)
+
+    def test_a_class_that_declares_quad_opens_in_quad(self):
+        Declared, bounds = self.window('quad')
+        window = Declared()
+        window.startViews(bounds=bounds, arrangement=ViewerOptions().views)
+        assert window.views.mode == 'quad'
+
+    def test_the_command_line_outranks_the_class(self):
+        Declared, bounds = self.window('quad')
+        window = Declared()
+        options = ViewerOptions(views='single')
+        window.startViews(bounds=bounds, arrangement=options.views)
+        assert window.views.mode == 'single'
+
+    def test_an_unpassed_views_option_is_none(self):
+        from OpenGLContext.bin.view import parse_args
+        assert parse_args(['model.glb']).views is None
+        assert parse_args(['model.glb', '--views', 'quad']).views == 'quad'

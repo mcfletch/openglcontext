@@ -47,10 +47,13 @@ class ViewerOptions:
     #: publishes, such as ``openglcontext/gallery``, fetched on first use.
     pack: Optional[str] = None
 
-    #: Open with four views of the scene -- the plan, the front and left
-    #: elevations, and the camera the viewer would otherwise have had alone.
-    #: ``v`` switches between one view and four however this starts.
-    views: str = 'single'
+    #: Open with one view of the scene (``'single'``) or four (``'quad'``) --
+    #: the plan, the front and left elevations, and the camera the viewer
+    #: would otherwise have had alone. None opens in the arrangement the
+    #: viewer class declares as ``multiViewArrangement``, one view unless it
+    #: says otherwise. ``v`` switches between one view and four however this
+    #: starts.
+    views: Optional[str] = None
 
     # -- cameras ----------------------------------------------------------
     #: Initial camera, by the glTF's own name or a 0-based index.
