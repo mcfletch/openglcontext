@@ -57,6 +57,10 @@ class PhysicsManager:
                                  default_angular_damping=default_angular_damping,
                                  **world_kw)
         self.world = world
+        # The world's event log is the manager's to drain, and it is wanted
+        # only once something subscribes (CollisionEvents switches it on);
+        # until then listeners are called and nothing is kept.
+        world.log_events = False
         #: The registered bodies in the order they were added, as dictionary
         #: keys so that removing one does not search for it.
         self._bodies: dict[Any, None] = {}

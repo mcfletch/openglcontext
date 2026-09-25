@@ -261,7 +261,10 @@ class CollisionEvents:
 
     def _index(self, subscription: Subscription) -> None:
         """File ``subscription`` under each body it covers, for :meth:`dispatch`."""
-        self.draining = True
+        if not self.draining:
+            with self.manager.with_world():
+                self.world.log_events = True
+            self.draining = True
         if subscription.bodies is None:
             self._everything.append(subscription)
         else:

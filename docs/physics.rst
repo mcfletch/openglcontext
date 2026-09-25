@@ -329,7 +329,10 @@ spawns the fragments hears it. One-way platforms use the same hook.
 Recording is ``omi_physics``' contact tracker (``contactevents.py``). A
 subscription on a body flags it and sets ``world.contact_reporting`` to
 ``'flagged'``; a subscription on every body sets ``'all'``. With nothing
-subscribed the world records nothing and the step costs what it did.
+subscribed the world records nothing and the step costs what it did. A
+manager keeps the world's event log (``world.log_events``) off until the first
+subscription that is not ``immediate``, so a world whose events go only to
+listeners inside the step keeps no log.
 Reporting every pair of a resting pile of 300 boxes adds about 2% to its step;
 asking for ``'persist'`` adds an object per touching pair per step, about 5% on
 the same pile. The world's own ``add_contact_listener``, ``contact_log`` and

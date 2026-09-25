@@ -575,3 +575,24 @@ class TestFindingBodies:
         mgr.remove(crates[2])
         assert mgr.body_for(crates[2].transform) is None
         assert mgr.bodies == [crates[0], crates[1], crates[3], crates[4]]
+
+
+class TestTheLogIsKeptOnlyForSubscribers:
+    def test_a_manager_with_only_immediate_subscriptions_logs_nothing(self) -> None:
+        mgr = manager()
+        add_floor(mgr)
+        crate = add_crate(mgr, position=(0, 0.5, 0))
+        held = []
+        mgr.events.subscribe(lambda hit: held.append(len(mgr.world.contact_log)),
+                             body=crate, phases=('begin', 'persist'), immediate=True)
+        run(mgr, 0.5)
+        assert held and max(held) == 0
+
+    def test_a_subscription_switches_the_log_on(self) -> None:
+        mgr = manager()
+        add_floor(mgr)
+        crate = add_crate(mgr, position=(0, 0.5, 0))
+        heard = []
+        mgr.events.subscribe(heard.append, body=crate)
+        run(mgr, 0.5)
+        assert [hit.phase for hit in heard] == ['begin']
