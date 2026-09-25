@@ -8,7 +8,7 @@ Uses pre-rendered DejaVu Sans Mono font atlases at multiple sizes.
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Optional
 
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
@@ -410,7 +410,7 @@ class ShaderTextRenderer:
 # merely per size: a renderer owns a texture, a VAO and a VBO, and those names
 # mean nothing in another context, so a second window handed the first
 # window's renderer draws the wrong thing or raises.
-_renderers: dict[tuple[Any, int], ShaderTextRenderer] = {}
+_renderers: dict[tuple[Optional[contextresources.ContextKey], int], ShaderTextRenderer] = {}
 
 
 #: The identifier the renderers are keyed by; one implementation, in the module

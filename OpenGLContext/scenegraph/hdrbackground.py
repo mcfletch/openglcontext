@@ -110,7 +110,7 @@ _CUBE_INDICES = np.array([
 #: The skybox program, per GL context that compiled one. A program is a name
 #: its own context issues, so a second window handed the first one's program
 #: draws through a name its driver never gave out.
-_shaders: Dict[Any, tuple] = {}
+_shaders: Dict[Optional[contextresources.ContextKey], tuple] = {}
 
 #: Every node holding compiled skybox objects, so a context's death can reach
 #: the ones that belong to it.
@@ -265,9 +265,9 @@ class _HDRBackground(object):
         return compiled
 
     #: Compiled skybox objects, one entry per GL context this node has drawn in.
-    _render_data: Dict[Any, tuple] = {}
+    _render_data: Dict[Optional[contextresources.ContextKey], tuple] = {}
 
-    def _drop_render_data(self, key: Any) -> None:
+    def _drop_render_data(self, key: Optional[contextresources.ContextKey]) -> None:
         """Free this node's skybox objects for one context (that context current)."""
         compiled = self._render_data.pop(key, None)
         if compiled is not None:

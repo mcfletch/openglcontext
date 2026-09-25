@@ -86,7 +86,7 @@ VERTEX_VIEWPORT_EXTENSIONS: Tuple[str, ...] = (
 #: What each GL context turned out to be able to do, keyed by the context
 #: (:func:`~OpenGLContext.contextresources.context_key`), and dropped as the
 #: context dies, since a driver hands its address to the next one.
-_DETECTED: Dict[Any, 'MultiviewCapabilities'] = {}
+_DETECTED: Dict[Optional[contextresources.ContextKey], 'MultiviewCapabilities'] = {}
 
 
 def reset_detected() -> None:

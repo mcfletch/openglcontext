@@ -1,6 +1,6 @@
 """Gradient-sphere background node"""
 import os
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
@@ -22,7 +22,7 @@ SHADER_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'shaders')
 #: The gradient program, per GL context that compiled one.  A program is a name
 #: its own context issues, so a second window handed the first one's program
 #: draws through a name its driver never gave out.
-_shaders: Dict[Any, Any] = {}
+_shaders: Dict[Optional[contextresources.ContextKey], Any] = {}
 
 
 @contextresources.on_context_lost

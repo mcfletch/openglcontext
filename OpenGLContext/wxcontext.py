@@ -8,7 +8,7 @@ context, so nothing here has to name one (``OpenGL.platform.linux``).
 import wx
 
 from io import BytesIO
-from typing import Any, List, Optional, Tuple
+from typing import Any, Hashable, List, Optional, Tuple
 
 from wx import glcanvas
 #from wx.glcanvas import *
@@ -319,14 +319,14 @@ class wxContext(
         # commented out!
         #~ context.Context.OnResize( self ) # triggers a redraw
 
-    def _glHandle(self) -> Any:
+    def _glHandle(self) -> Optional[Hashable]:
         """The GL context handle the caches and PyOpenGL key on.
 
         wx owns the context object and does not hand out a platform handle, so
         it is read from the platform with the canvas current.
         """
         from OpenGLContext import contextresources
-        return contextresources.context_key()
+        return contextresources.current_handle()
 
     def OnQuit(self, event: Any = None) -> Any:
         """Let go of this canvas's GL objects, then end the application

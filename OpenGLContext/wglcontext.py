@@ -53,7 +53,7 @@ identically; what it cannot do is run with no desktop).
 
 import logging
 import os
-from typing import Any, Dict, Literal, Mapping, Optional, Sequence, Tuple
+from typing import Any, Hashable, Dict, Literal, Mapping, Optional, Sequence, Tuple
 
 from OpenGL.WGL import offscreen
 
@@ -244,9 +244,9 @@ class WGLContext(
             self.surface.make_current()
         self.bindContextResources(self._glHandle())
 
-    def _glHandle(self) -> Any:
+    def _glHandle(self) -> Optional[Hashable]:
         """The GL context handle the caches and PyOpenGL key on."""
-        return contextresources.context_key()
+        return contextresources.current_handle()
 
     def OnResize(self, width: int, height: int) -> None:
         """Render at a new size.

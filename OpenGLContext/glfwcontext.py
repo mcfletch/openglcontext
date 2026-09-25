@@ -19,7 +19,7 @@ from OpenGLContext.events import glfwevents
 from OpenGLContext.looptrace import LoopTrace
 import logging
 import warnings
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Hashable, Dict, Optional, Tuple
 
 log = logging.getLogger(__name__)
 
@@ -459,7 +459,7 @@ class GLFWContext(
             glfw.make_context_current(self.window)
             self.bindContextResources(self._glHandle())
 
-    def _glHandle(self) -> Any:
+    def _glHandle(self) -> Optional[Hashable]:
         """The GL context handle the caches and PyOpenGL key on.
 
         GLFW's window is not it: what identifies a context to PyOpenGL is the
@@ -467,7 +467,7 @@ class GLFWContext(
         does.  Read after the window is current, which is the only moment the
         answer is about this window.
         """
-        return contextresources.context_key()
+        return contextresources.current_handle()
 
     def SwapBuffers(self) -> None:
         """Swap the front and back buffers"""

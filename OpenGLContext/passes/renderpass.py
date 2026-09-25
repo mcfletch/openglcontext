@@ -29,7 +29,7 @@ USE_FLAT = True
 #: shadow maps in a context that is alive -- which nothing can then be told to
 #: delete, since deleting them needs that context current.
 #: ``shaderpass.get_shader_program`` is keyed the same way, for the same reason.
-_passes: Dict[Any, Any] = {}
+_passes: Dict[Optional[contextresources.ContextKey], Any] = {}
 
 #: The pass that rendered most recently, whatever context that was in.  For the
 #: demos that toggle ``use_shaders`` on it and for :func:`report_render_failures`;

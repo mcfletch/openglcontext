@@ -39,31 +39,76 @@ from typing import Any, Callable, Dict, Hashable, Iterable, List, Optional
 log = logging.getLogger(__name__)
 
 __all__ = [
+    'ContextKey',
     'on_context_lost',
     'forget_context_lost',
     'context_lost',
     'context_key',
+    'current_handle',
     'ContextNames',
 ]
 
 #: Callables to run as a context is destroyed, in the order they registered.
 _callbacks: List[Callable[[], None]] = []
 
+#: What :func:`context_key` hands :class:`ContextKey`, and nothing else does.
+_ASKED = object()
 
-def context_key() -> Any:
-    """An identifier for the GL context that is current, or ``None``.
+
+class ContextKey:
+    """The GL context that was current when :func:`context_key` was asked.
+
+    What a per-context table is keyed on. It is made only by
+    :func:`context_key`, so a table typed ``Dict[ContextKey, ...]`` cannot be
+    handed an ``id()`` or a handle from somewhere else; the
+    ``openglcontext_checks`` mypy plugin reports a construction written
+    anywhere but here. Two keys are equal when they are for the same context.
+    ``handle`` is the platform's own handle, unique only among live contexts,
+    which is why a table keyed on it lets go as the context dies
+    (:func:`on_context_lost`).
+    """
+
+    __slots__ = ('handle',)
+
+    def __init__(self, handle: Hashable, key: object) -> None:
+        if key is not _ASKED:
+            raise TypeError('a ContextKey is made by contextresources.context_key, '
+                            'not directly')
+        self.handle = handle
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, ContextKey) and other.handle == self.handle
+
+    def __hash__(self) -> int:
+        return hash((ContextKey, self.handle))
+
+    def __repr__(self) -> str:
+        return 'ContextKey(%r)' % (self.handle,)
+
+
+def current_handle() -> Optional[Hashable]:
+    """The platform's own handle for the GL context that is current, or ``None``.
+
+    What PyOpenGL's dispatch is told a context by (``Context.bindContextResources``);
+    a table keys on :func:`context_key` instead.
+    """
+    key = context_key()
+    return None if key is None else key.handle
+
+
+def context_key() -> Optional[ContextKey]:
+    """The key of the GL context that is current, or ``None`` where none is.
 
     What every cache here keys on, and what a callback compares against to know
-    whether the context going away is the one it holds objects for.  It is the
-    platform's own handle, so it is only unique among *live* contexts -- which
-    is why letting go as a context dies is what makes it trustworthy.
+    whether the context going away is the one it holds objects for.
     """
     try:
         from OpenGL import contextdata
 
-        return contextdata.getContext()
-    except Exception:                   # pragma: no cover - no GL at all
+        handle = contextdata.getContext()
+    except Exception:
         return None
+    return ContextKey(handle, _ASKED)
 
 
 def on_context_lost(callback: Callable[[], None]) -> Callable[[], None]:
@@ -125,7 +170,7 @@ class _Held:
     """What one owner holds: for each context, its entries by key."""
 
     def __init__(self) -> None:
-        self.by_context: Dict[Any, Dict[Hashable, Any]] = {}
+        self.by_context: Dict[Optional[ContextKey], Dict[Hashable, Any]] = {}
 
 
 class ContextNames:
@@ -162,7 +207,7 @@ class ContextNames:
         #: Names whose owner was collected, by the context that issued them,
         #: waiting for that context to be current. Appended from a finaliser,
         #: which may run on any thread, so guarded.
-        self._orphans: Dict[Any, List[int]] = {}
+        self._orphans: Dict[Optional[ContextKey], List[int]] = {}
         self._lock = threading.Lock()
         on_context_lost(self._context_lost)
 
@@ -185,7 +230,7 @@ class ContextNames:
         self.collect(context)
         return held.by_context.setdefault(context, {})
 
-    def collect(self, context: Any = None) -> None:
+    def collect(self, context: Optional[ContextKey] = None) -> None:
         """Delete the names collected owners left in ``context``, which is current.
 
         ``context`` defaults to :func:`context_key`.

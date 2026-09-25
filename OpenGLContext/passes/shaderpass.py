@@ -1192,7 +1192,7 @@ class ShaderRenderMode:
 
 
 #: The programs, per GL context, compiled on the first frame that asks.
-_shader_programs: Dict[Any, VRML97ShaderProgram] = {}
+_shader_programs: Dict[Optional[contextresources.ContextKey], VRML97ShaderProgram] = {}
 
 #: The identifier a cache keys on.  One implementation, in the module that owns
 #: the subject; this name is where the passes look for it.

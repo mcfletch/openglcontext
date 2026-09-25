@@ -276,3 +276,52 @@ class TestContextNames:
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class TestTheContextKey:
+    """What every per-context table keys on: made only by ``context_key``."""
+
+    def test_the_current_context_has_one_key(self, gl_context):
+        key = contextresources.context_key()
+        assert isinstance(key, contextresources.ContextKey)
+        assert key == contextresources.context_key()
+        assert hash(key) == hash(contextresources.context_key())
+        assert {key: 1}[contextresources.context_key()] == 1
+
+    def test_a_key_is_not_its_raw_handle(self, gl_context):
+        key = contextresources.context_key()
+        assert key != key.handle
+        assert repr(key.handle) in repr(key)
+
+    def test_a_key_is_not_made_directly(self):
+        with pytest.raises(TypeError, match='context_key'):
+            contextresources.ContextKey(1234, object())
+
+    def test_no_current_context_has_no_key(self, monkeypatch):
+        from OpenGL import contextdata, error
+
+        def none() -> None:
+            raise error.Error('no context')
+
+        monkeypatch.setattr(contextdata, 'getContext', none)
+        assert contextresources.context_key() is None
+
+
+def test_a_backend_names_the_context_to_pyopengl_by_its_handle(gl_context):
+    from OpenGL import contextdata
+    handle = contextresources.current_handle()
+    assert not isinstance(handle, contextresources.ContextKey)
+    assert handle == contextdata.getContext()
+    assert handle == contextresources.context_key().handle
+
+
+@pytest.mark.parametrize('module, name', [
+    ('OpenGLContext.glfwcontext', 'GLFWContext'),
+    ('OpenGLContext.eglcontext', 'EGLContext'),
+])
+def test_each_backend_binds_pyopengl_to_the_platform_handle(gl_context, module, name):
+    import importlib
+
+    from OpenGL import contextdata
+    backend = getattr(importlib.import_module(module), name)
+    assert backend._glHandle(object()) == contextdata.getContext()

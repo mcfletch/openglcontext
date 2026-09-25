@@ -20,7 +20,7 @@ and drive it from the application's own ``mainloop`` by calling
 
 import logging
 import tkinter
-from typing import Any, Optional, Tuple
+from typing import Any, Hashable, Optional, Tuple
 
 from OpenGLContext.context import Context
 from OpenGLContext.contextdefinition import ContextDefinition
@@ -351,7 +351,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
             self.frame.makeCurrent()
             self.bindContextResources(self._glHandle())
 
-    def _glHandle(self) -> Any:
+    def _glHandle(self) -> Optional[Hashable]:
         """The GL context handle the caches and PyOpenGL key on
 
         The widget's context object is not it: what identifies a context to
@@ -361,7 +361,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
         """
         from OpenGLContext import contextresources
 
-        return contextresources.context_key()
+        return contextresources.current_handle()
 
     def SwapBuffers(self) -> None:
         """Present the rendered frame"""

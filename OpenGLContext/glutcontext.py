@@ -1,7 +1,7 @@
 '''Context functionality using the GLUT windowing API
 '''
 import logging
-from typing import Any, Optional, Sequence, Tuple
+from typing import Any, Hashable, Optional, Sequence, Tuple
 
 from OpenGL.GL import *
 from OpenGL.GLUT import *
@@ -390,14 +390,14 @@ class GLUTContext(
             )
         self.bindContextResources(handle)
 
-    def _glHandle(self) -> Any:
+    def _glHandle(self) -> Optional[Hashable]:
         """The GL context handle the caches and PyOpenGL key on.
 
         The GLUT window id is not it: what identifies a context to PyOpenGL is
         the platform's own handle.  Read with this window current, which is the
         only moment the answer is about this window.
         """
-        return contextresources.context_key()
+        return contextresources.current_handle()
 
     def releaseWindow(self) -> None:
         """Let this window's GL objects go, then destroy the window

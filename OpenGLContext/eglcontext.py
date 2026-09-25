@@ -65,7 +65,7 @@ import ctypes
 import logging
 import os
 import threading
-from typing import Any, Dict, Iterable, List, Literal, Mapping, Optional, Sequence
+from typing import Any, Hashable, Dict, Iterable, List, Literal, Mapping, Optional, Sequence
 
 from OpenGL import EGL
 from OpenGL.GL import glFlush
@@ -659,9 +659,9 @@ class EGLContext(
         self._makeCurrent()
         self.bindContextResources(self._glHandle())
 
-    def _glHandle(self) -> Any:
+    def _glHandle(self) -> Optional[Hashable]:
         """The GL context handle the caches and PyOpenGL key on."""
-        return contextresources.context_key()
+        return contextresources.current_handle()
 
     def OnResize(self, width: int, height: int) -> None:
         """Render at a new size.

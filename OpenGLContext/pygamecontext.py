@@ -19,7 +19,7 @@ from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.events import pygameevents
 from OpenGLContext.looptrace import LoopTrace
 import logging
-from typing import Any, Optional, Tuple
+from typing import Any, Hashable, Optional, Tuple
 log = logging.getLogger( __name__ )
 
 # SDL's window flags and GL attributes are reached through `pygame` rather than
@@ -169,7 +169,7 @@ class PygameContext(
         pygame.display.flip()
 
 
-    def _glHandle(self) -> Any:
+    def _glHandle(self) -> Optional[Hashable]:
         """The GL context handle the caches and PyOpenGL key on.
 
         SDL owns the context and does not name it, so it is read from the
@@ -177,7 +177,7 @@ class PygameContext(
         display is up, since it holds one context.
         """
         from OpenGLContext import contextresources
-        return contextresources.context_key()
+        return contextresources.current_handle()
 
     def setCurrent(self, blocking: int = 1) -> None:
         """Take the OpenGL focus.
