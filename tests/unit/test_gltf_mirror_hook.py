@@ -118,6 +118,66 @@ def test_an_object_mirror_takes_the_parameters_too():
     assert material.reflector.interval == 1 and material.reflector.replace
 
 
+def test_an_object_tag_leaves_other_objects_on_the_same_mesh_alone():
+    """The loader hands every node on one glTF mesh the same shapes."""
+    mesh = _quad(colour=(0.2, 0.6, 0.2))
+    scene = _load(SceneNode(children=[
+        SceneNode(name='before', mesh=mesh),
+        SceneNode(name='glass', mesh=mesh, extras={'OGLC_hook': 'mirror'}),
+        SceneNode(name='after', mesh=mesh)]))
+    before, = _shapes(scene.getDEF('before'))
+    glass, = _shapes(scene.getDEF('glass'))
+    after, = _shapes(scene.getDEF('after'))
+    assert glass.appearance.material.reflector.replace
+    for plain in (before, after):
+        assert not plain.appearance.material.reflector
+        assert tuple(plain.appearance.material.baseColor) == pytest.approx((0.2, 0.6, 0.2))
+    assert glass.geometry is before.geometry is after.geometry
+
+
+def _object_hook(children, params=None):
+    from OpenGLContext.loaders.documentvalues import DocumentValues
+    from OpenGLContext.scenegraph.mirrorhooks import mirror_hook
+    ctx = hooks.HookContext(at='node', kind='mirror', params=params or {}, document=None,
+                            resolver=None, scene_data={}, values=DocumentValues(),
+                            children=children)
+    assert mirror_hook(ctx) is None
+    return ctx.children
+
+
+def test_an_object_tag_reaches_the_shapes_under_its_levels_and_choices():
+    from OpenGLContext.scenegraph import basenodes
+    from OpenGLContext.scenegraph.appearance import Appearance
+
+    def shape():
+        return Shape(geometry=_quad(), appearance=Appearance(material=PBRMaterial()))
+
+    near, far, shown, hidden = shape(), shape(), shape(), shape()
+    lod = basenodes.LOD(level=[near, far])
+    switch = basenodes.Switch(choice=[basenodes.Transform(children=[shown]), hidden])
+    children = _object_hook([lod, switch])
+    found = [lod.level[0], lod.level[1], switch.choice[0].children[0], switch.choice[1]]
+    for made, original in zip(found, (near, far, shown, hidden)):
+        assert made is not original and made.geometry is original.geometry
+        assert made.appearance.material.reflector.replace
+        assert not original.appearance.material.reflector
+    assert children == [lod, switch]
+
+
+def test_a_replace_written_as_a_word_is_read_as_a_flag():
+    material = _material_of(_load(SceneNode(mesh=_quad({'kind': 'mirror',
+                                                         'replace': 'yes'}))))
+    assert material.reflector.replace
+
+
+def test_a_flag_where_a_number_belongs_is_reported_and_left_at_its_default(caplog):
+    with caplog.at_level(logging.WARNING):
+        material = _material_of(_load(SceneNode(mesh=_quad({'kind': 'mirror',
+                                                             'scale': True}))))
+    assert material.reflector.scale == pytest.approx(0.5)
+    assert any('scale' in record.getMessage() for record in caplog.records)
+
+
 # --- round trips --------------------------------------------------------------
 
 def test_a_material_reflector_round_trips_through_the_writer():

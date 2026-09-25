@@ -128,14 +128,16 @@ Authoring mirrors in a model
 A glTF marks a mirror with the ``OGLC_hook`` tag (:ref:`hooks`,
 :doc:`specification <extensions/OGLC_hook>`) naming the
 ``mirror`` kind. The tag goes in one of two places, and they mean different
-things:
+things.
 
-- On a **material**, every surface drawn with that material is a mirror, and
-  the material shades the reflection: its colour tints it, its metalness and
-  roughness weight it, its normal map breaks it up.
-- On an **object** (a glTF node), every surface of that object shows only its
-  reflection, with the sky where it reflects nothing. The object's own
-  materials are set aside.
+Tagged on a material, every surface drawn with that material is a mirror, and
+the material shades the reflection: its colour tints it, its metalness and
+roughness weight it, its normal map breaks it up.
+
+Tagged on an object (a glTF node), every surface of that object shows only its
+reflection, with the sky where it reflects nothing. The object's own
+materials are set aside for it alone: another object built from the same mesh
+keeps them.
 
 The parameters are the ``PlanarReflector`` fields above, all optional:
 ``scale``, ``interval``, ``priority``, ``distortion``, ``reflectance``, and

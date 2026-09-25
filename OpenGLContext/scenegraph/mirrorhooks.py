@@ -45,11 +45,13 @@ its plane by more than 1% of its size reports so and reflects the sky.
 """
 from __future__ import annotations
 
+import copy
 import logging
-from typing import Any, Dict, Iterator, Optional
+from typing import Any, Dict, Optional
 
 from OpenGLContext.loaders.documentvalues import DocumentValues
 from OpenGLContext.loaders.gltf import hooks
+from OpenGLContext.scenegraph.appearance import Appearance
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.reflector import LIMITS, PlanarReflector
 from OpenGLContext.scenegraph.shape import Shape
@@ -57,7 +59,7 @@ from OpenGLContext.scenegraph.shape import Shape
 log = logging.getLogger(__name__)
 
 __all__ = ['KIND', 'PARAMETERS', 'reflector_for', 'hook_for', 'mirror_material',
-           'mirror_hook']
+           'mirrored', 'mirror_hook']
 
 #: What a document names this hook.
 KIND = 'mirror'
@@ -122,14 +124,26 @@ def mirror_material(reflector: PlanarReflector) -> PBRMaterial:
                        reflector=reflector)
 
 
-def _shapes(nodes: Any) -> Iterator[Shape]:
-    """Every shape under ``nodes``, however deep."""
-    for node in nodes or ():
-        if isinstance(node, Shape):
-            yield node
-            continue
-        for name in ('children', 'level', 'choice'):
-            yield from _shapes(getattr(node, name, None))
+def mirrored(node: Any, material: PBRMaterial) -> Any:
+    """``node`` with every shape under it drawn with ``material``, however deep.
+
+    A shape is replaced by a copy that shares its geometry, with an appearance
+    of its own: the loader hands every node on one glTF mesh the same shapes,
+    and another node on that mesh is no mirror unless it is tagged too. The
+    groups, levels and choices above the shapes are the tagged node's own, and
+    have their lists replaced in place.
+    """
+    if isinstance(node, Shape):
+        made = copy.copy(node)
+        appearance = copy.copy(node.appearance) if node.appearance else Appearance()
+        appearance.material = material
+        made.appearance = appearance
+        return made
+    for name in ('children', 'level', 'choice'):
+        nodes = getattr(node, name, None)
+        if nodes:
+            setattr(node, name, [mirrored(child, material) for child in nodes])
+    return node
 
 
 def mirror_hook(ctx: "hooks.HookContext") -> None:
@@ -140,13 +154,8 @@ def mirror_hook(ctx: "hooks.HookContext") -> None:
         return None
     material = mirror_material(reflector_for(ctx.params, replace=True,
                                              values=ctx.values))
-    for shape in _shapes(ctx.children):
-        shape.appearance.material = material
-        if hasattr(shape.geometry, 'material'):
-            shape.geometry.material = material
+    ctx.children[:] = [mirrored(child, material) for child in ctx.children]
     return None
 
 
-# Not shareable: an object tagged a mirror has its own shapes changed, and a
-# second object built from the same mesh is not a mirror unless it says so.
 hooks.register(KIND, mirror_hook, shareable=False)
