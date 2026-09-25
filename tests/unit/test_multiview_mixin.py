@@ -245,11 +245,11 @@ class TestTheScenesCameras:
         graph = sceneGraph(children=[Viewpoint(description='Porch')])
         window.getSceneGraph = lambda: graph
         viewpointbinding.publish_viewpoints(window, FlatPass(graph, []))
-        assert [camera.name for camera in window.viewChrome.sceneCameras()] == ['Porch']
+        assert [camera.name for camera in window.viewChrome.scene_cameras()] == ['Porch']
 
     def test_a_window_with_no_scene_offers_none(self):
         window = _window(arrangement='quad')
-        assert window.viewChrome.sceneCameras() == []
+        assert window.viewChrome.scene_cameras() == []
 
 
 class TestLosingFocusMidDrag:

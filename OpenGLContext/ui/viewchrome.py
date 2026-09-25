@@ -446,7 +446,7 @@ class ViewChrome(Panel):
         #: *Cameras*. None, or none answered, offers no such item.
         self.cameras = cameras
         self._splitters: List[Splitter] = []
-        #: What the furniture was last built for; see :meth:`furnitureKey`.
+        #: What the furniture was last built for; see :meth:`furniture_key`.
         self._builtFor: Any = None
 
     # -- what each view gets -----------------------------------------------
@@ -459,7 +459,7 @@ class ViewChrome(Panel):
                    'expand': bool(self.expand)}
         return tuple(part for part in PARTS if offered[part])
 
-    def furnitureKey(self) -> Tuple[Any, ...]:
+    def furniture_key(self) -> Tuple[Any, ...]:
         """What decides which furniture there is: the views shown and their parts.
 
         The views, by identity, with their names, their parts and whether each
@@ -480,7 +480,7 @@ class ViewChrome(Panel):
 
     def rebuild(self) -> None:
         """Make the furniture for the views the arrangement is showing."""
-        self._builtFor = self.furnitureKey()
+        self._builtFor = self.furniture_key()
         children: List[Widget] = []
         self._splitters = []
         for view in self._shown():
@@ -524,7 +524,7 @@ class ViewChrome(Panel):
     # -- where it all goes --------------------------------------------------
     def layout(self, viewport: Tuple[int, int], metrics: FontMetrics) -> None:
         """Place the furniture for this window, building it again only where it changed."""
-        if self.furnitureKey() != self._builtFor:
+        if self.furniture_key() != self._builtFor:
             self.rebuild()
         self.link()
         self.scaleSkin(metrics)
@@ -533,7 +533,7 @@ class ViewChrome(Panel):
         self.rect = Rect(0, 0, width, height)
         self.arrange_content(metrics)
 
-    def roomIn(self, view: View, metrics: FontMetrics) -> Rect:
+    def room_in(self, view: View, metrics: FontMetrics) -> Rect:
         """The rectangle a view's furniture goes in: the view, less what is reserved.
 
         A view that reaches an edge of the window keeps clear of whatever has
@@ -559,7 +559,7 @@ class ViewChrome(Panel):
         row = metrics.char_height + margin
         triad = metrics.pixels(TRIAD_SIZE)
         for view in self._shown():
-            room = self.roomIn(view, metrics)
+            room = self.room_in(view, metrics)
             top = room.y + room.height - margin - metrics.char_height
             # The buttons first, from the right, so the name has what is left
             # rather than running underneath them.
@@ -660,7 +660,7 @@ class ViewChrome(Panel):
         if view.camera is not None:
             items.append(MenuItem(text=VIEW_LABEL, submenu=[
                 self._kind_item(view, kind) for kind in VIEW_KINDS]))
-        cameras = self.sceneCameras()
+        cameras = self.scene_cameras()
         if cameras:
             items.append(MenuItem(text=CAMERAS_LABEL, submenu=[
                 self._camera_item(view, camera) for camera in cameras]))
@@ -679,7 +679,7 @@ class ViewChrome(Panel):
         return self._put_up(Menu(items=items, anchor=(float(at.x), float(at.y)),
                                  above=float(at.top), stack=self.stack))
 
-    def sceneCameras(self) -> List[SceneCamera]:
+    def scene_cameras(self) -> List[SceneCamera]:
         """The cameras the menu offers: what ``cameras`` is, or answers."""
         found = self.cameras() if callable(self.cameras) else self.cameras
         return list(found or ())
