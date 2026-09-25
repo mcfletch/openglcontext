@@ -113,12 +113,16 @@ def test_manifest_not_duplicated_on_second_material(tmp_path, monkeypatch):
     assert text.count("Rock030 (1K)") == 1
 
 
-def test_write_manifest_swallows_os_error(tmp_path, monkeypatch):
+def test_an_unwritable_manifest_costs_the_credit_line_not_the_material(
+        tmp_path, monkeypatch):
     import os
-    # A directory where the CREDITS file should be makes open() raise OSError,
-    # which _write_manifest must swallow rather than propagate.
-    os.mkdir(os.path.join(cc0.cache_dir(), "CREDITS.txt"))
-    cc0._write_manifest("Rock030", "1K")   # must not raise
+    # A directory where the CREDITS file should be makes open() raise OSError.
+    credits = os.path.join(cc0.cache_dir(), "CREDITS.txt")
+    os.mkdir(credits)
+    _install_fake_net(monkeypatch, _api_json())
+    maps = cc0.material("bark")
+    assert os.path.isfile(maps["color"])
+    assert os.path.isdir(credits) and os.listdir(credits) == []
 
 
 def test_download_without_matching_jpg_raises(tmp_path, monkeypatch):

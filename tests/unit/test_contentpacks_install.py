@@ -263,6 +263,8 @@ class TestRemovingAPack:
     def test_a_pack_that_is_not_there_is_nothing_to_do(self, store):
         store.remove(a_pack())
         store.remove(a_pack(key='glisteel/art'), within=a_pack())
+        assert not os.path.exists(store.directory_for(a_pack()))
+        assert store.missing([a_pack()]) == [a_pack()]
 
 
 class TestReplacingAPackFoundElsewhere:

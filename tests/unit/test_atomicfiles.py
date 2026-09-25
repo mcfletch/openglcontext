@@ -205,4 +205,6 @@ class TestRemovingADirectory:
         assert os.listdir(tmp_path) == []
 
     def test_one_that_is_not_there_is_nothing_to_do(self, tmp_path):
+        (tmp_path / 'neighbour.txt').write_text('kept')
         atomicfiles.remove_directory(str(tmp_path / 'absent'))
+        assert os.listdir(tmp_path) == ['neighbour.txt']

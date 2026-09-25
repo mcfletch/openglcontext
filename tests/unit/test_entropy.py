@@ -8,6 +8,7 @@ from a stream derived from it -- which is what makes the seed worth recording
 and worth putting back.
 """
 
+import logging
 import random
 
 import numpy as np
@@ -148,12 +149,25 @@ class TestCapturingWhatTheGeneratorsHold:
         import json
         assert json.loads(json.dumps(entropy.capture()))
 
-    def test_a_record_from_somewhere_else_is_ignored_rather_than_fatal(self):
+    def test_a_record_from_somewhere_else_is_ignored_rather_than_fatal(self, caplog):
         """A journal from another Python, or a truncated one: a replay that
-        cannot put the numbers back is a worse replay, not a crash."""
-        entropy.restore({'random': ['nonsense'], 'numpy': 42})
-        entropy.restore({})
-        random.random()          # still usable
+        cannot put the numbers back is a worse replay, not a crash, and the
+        generators carry on from where they were."""
+        state = random.getstate()
+        numpy_state = np.random.get_state()
+        expected = random.random()
+        expected_numpy = np.random.random()
+        random.setstate(state)
+        np.random.set_state(numpy_state)
+        with caplog.at_level(logging.DEBUG, logger=entropy.__name__):
+            entropy.restore({'random': ['nonsense'], 'numpy': 42})
+            entropy.restore({})
+        assert random.random() == expected
+        assert np.random.random() == expected_numpy
+        assert [record.getMessage().split(' (')[0] for record in caplog.records] == [
+            'could not restore the state of random',
+            'could not restore the state of numpy.random',
+        ]
 
 
 class TestWhenAGeneratorWillNotDescribeItself:

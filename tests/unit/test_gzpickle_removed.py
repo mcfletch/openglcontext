@@ -21,8 +21,11 @@ def test_vrml2pklgz_module_is_gone():
         importlib.import_module('OpenGLContext.loaders.vrml2pklgz')
 
 
-def test_loaders_package_still_imports():
-    # Removing the dead modules must not break the loaders package itself.
-    import OpenGLContext.loaders
-    import OpenGLContext.loaders.loader
-    import OpenGLContext.loaders.obj
+def test_the_loaders_still_load_and_none_takes_a_pickle():
+    from OpenGLContext.loaders.loader import Loader
+    from OpenGLContext.loaders.obj import OBJHandler
+
+    assert isinstance(Loader.findHandler('scene.obj'), OBJHandler)
+    assert Loader.findHandler('scene.wrl') is not None
+    assert Loader.findHandler('scene.pkl') is None
+    assert Loader.findHandler('scene.pkl.gz') is None
