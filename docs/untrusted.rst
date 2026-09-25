@@ -72,6 +72,11 @@ advance: they are a fact about the provider, not about the reply.
 It refuses a host that only *ends* in an allowed name, a host hidden in the
 user-info part of the URL, and a non-default port.
 
+A service's link may answer with a redirect. Open it with
+``resolver.open_url(url, redirects=resolver.AllowedHosts(hosts))`` so that
+every hop is given the same test before it is followed; ``urllib`` on its own
+follows a redirect to any host.
+
 .. _loaders:
 
 Rules for each loader

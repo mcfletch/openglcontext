@@ -159,3 +159,56 @@ class TestWhatAFetchWillOpen:
         with pytest.raises(IOError):
             resolver.fetch_url(url, cache_dir=str(tmp_path))
         assert not list(tmp_path.iterdir()), 'something was cached'
+
+
+class TestAServiceThatNamesItsHosts:
+    """A catalogue publishes from hosts known in advance, and every hop of a
+    download it names is held to them, not only the URL it answered with."""
+
+    policy = resolver.AllowedHosts(('api.polyhaven.com', 'dl.polyhaven.org'))
+    asked = 'https://api.polyhaven.com/files/fern_02'
+
+    def test_a_hop_to_a_named_host_is_followed(self):
+        assert self.policy.refusal(
+            self.asked, 'https://dl.polyhaven.org/file/fern_02.gltf') is None
+
+    @pytest.mark.parametrize('target', [
+        'https://evil.example/payload',
+        'https://dl.polyhaven.org.example/payload',
+        'http://dl.polyhaven.org/file/fern_02.gltf',
+        'https://dl.polyhaven.org:8443/file/fern_02.gltf',
+        'https://169.254.169.254/latest/meta-data/',
+        'file:///etc/passwd',
+    ])
+    def test_a_hop_anywhere_else_is_refused(self, target):
+        assert self.policy.refusal(self.asked, target)
+
+    def test_a_download_redirected_off_the_list_is_refused(self, two_hosts):
+        front, _ = two_hosts
+        with pytest.raises(urllib.error.HTTPError):
+            resolver.open_url(front + '/pack.tar.gz',
+                              redirects=resolver.AllowedHosts(('127.0.0.1',)))
+
+    def test_the_caller_names_itself(self):
+        """A service that refuses anonymous clients is told who is asking."""
+        heard = []
+
+        class Recording(http.server.BaseHTTPRequestHandler):
+            def do_GET(self):
+                heard.append(self.headers['User-Agent'])
+                self.send_response(200)
+                self.send_header('Content-Length', '2')
+                self.end_headers()
+                self.wfile.write(b'ok')
+
+            def log_message(self, *args):
+                """Quiet."""
+        server, thread, base = _serve(Recording)
+        try:
+            with resolver.open_url(base + '/a', agent='Tester/1') as found:
+                assert found.read() == b'ok'
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+        assert heard == ['Tester/1']

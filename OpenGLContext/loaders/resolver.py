@@ -12,7 +12,9 @@ containment core, kept in one auditable place. It enforces:
 * a document fetched over HTTP(S) may only pull same-origin http(s) URIs
   (blocks ``file://`` reads and ``169.254.169.254`` metadata SSRF), re-checked on
   every redirect hop by a :class:`RedirectPolicy` -- :data:`SAME_ORIGIN` for a
-  document, :data:`PUBLIC_HOSTS` for content a trusted registry named;
+  document, :data:`PUBLIC_HOSTS` for content a trusted registry named,
+  :class:`AllowedHosts` for a service that publishes from hosts named in
+  advance;
 * :func:`fetch_url` fetches http(s) and nothing else;
 * a document loaded from a local path may only read files under its own directory
   (blocks ``../../etc/passwd`` traversal and absolute paths);
@@ -32,7 +34,8 @@ implementation somewhere else is a containment rule with a hole in it.
 
 __all__ = [
     'Resolver', 'FetchCancelled', 'ResourceTooLarge', 'Progress', 'Cancel',
-    'RedirectPolicy', 'SameOrigin', 'PublicHosts', 'SAME_ORIGIN', 'PUBLIC_HOSTS',
+    'RedirectPolicy', 'SameOrigin', 'PublicHosts', 'AllowedHosts',
+    'SAME_ORIGIN', 'PUBLIC_HOSTS', 'open_url',
     'DEFAULT_MAX_RESOURCE_BYTES', 'DEFAULT_MAX_IMAGE_PIXELS', 'DOWNLOAD_CHUNK_BYTES',
     'safe_url', 'is_url', 'is_local', 'require_host', 'user_agent', 'check_size', 'check_pixels', 'decode_data_uri', 'resolver_max',
     'fetch_url', 'fetch_to_cache', 'stream_capped', 'stream_to', 'cached_path',
@@ -293,6 +296,26 @@ class PublicHosts(RedirectPolicy):
         return None
 
 
+class AllowedHosts(RedirectPolicy):
+    """A redirect stays on hosts named in advance, over https.
+
+    The policy for a service that publishes from a known set of hosts: every
+    hop is put to :func:`require_host` against ``hosts``, the same test the
+    first URL is given, so a redirect cannot carry a download somewhere the
+    URL itself would have been refused.
+    """
+
+    def __init__(self, hosts: Sequence[str]) -> None:
+        self.hosts = tuple(hosts)
+
+    def refusal(self, original: str, target: str) -> Optional[str]:
+        try:
+            require_host(target, self.hosts)
+        except IOError as err:
+            return str(err)
+        return None
+
+
 def is_local(url: str) -> bool:
     """Whether ``url`` names this machine: ``localhost`` or a loopback address.
 
@@ -364,13 +387,26 @@ def user_agent() -> str:
             % (__version__,))
 
 
+def open_url(url: str, redirects: RedirectPolicy = SAME_ORIGIN,
+             timeout: int = 30, agent: Optional[str] = None) -> Any:
+    """The open response for ``url``, having followed only the redirects
+    ``redirects`` allows.
+
+    ``agent`` is the ``User-Agent`` sent, :func:`user_agent` when None. The
+    response is a context manager; read it with :func:`stream_capped` or
+    :func:`stream_to` to bound what arrives.
+    """
+    opener = urllib.request.build_opener(_PolicyRedirectHandler(url, redirects))
+    request = urllib.request.Request(
+        safe_url(url), headers={'User-Agent': agent or user_agent()})
+    return opener.open(request, timeout=timeout)
+
+
 def _open_url(url: str, redirects: RedirectPolicy = SAME_ORIGIN,
               timeout: int = 30) -> Any:
-    """Open ``url``, following only the redirects ``redirects`` allows."""
-    opener = urllib.request.build_opener(_PolicyRedirectHandler(url, redirects))
-    request = urllib.request.Request(safe_url(url),
-                                     headers={'User-Agent': user_agent()})
-    return opener.open(request, timeout=timeout)
+    """:func:`open_url` as this module's fetches call it, one name to replace
+    in a test that serves them."""
+    return open_url(url, redirects, timeout)
 
 
 def _resolve_local(base_dir: str, uri: str) -> str:
