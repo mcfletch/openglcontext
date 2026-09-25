@@ -629,3 +629,82 @@ def test_planes_either_side_of_a_rounding_boundary_are_one_plane():
     right[2][3, 2] = -5.00051
     plan = _settled_planner().plan([_frame([left, right])], ATLAS, BIG)
     assert len(plan.draws) == 1
+
+
+# --- what a mirror view draws ---------------------------------------------------------
+
+def _front_and_back(planner, budget=BIG):
+    front, back = _mirror(reflector=PlanarReflector(interval=100)), _behind()
+    plan = planner.plan([_frame([front])], ATLAS, budget, inside=lambda frame: [back])
+    outer, = _by_path(plan, front)
+    return front, back, plan, outer
+
+
+def test_a_mirror_view_leaves_out_the_mirror_it_is_the_reflection_of():
+    planner = _settled_planner()
+    front, back, plan, outer = _front_and_back(planner)
+    plain = _mirror(4.0)[:5] + (Shape(geometry=PBRMesh(positions=QUAD,
+                                                         indices=QUAD_INDICES)),)
+    earlier = {(view_key(outer.view), id(back[4])): object()}
+    kept, incomplete = planner.contents(plan, outer, [front, plain, back], earlier)
+    assert kept == [plain, back] and not incomplete
+
+
+def test_a_mirror_whose_reflection_is_drawn_this_frame_is_left_out_until_next():
+    planner = _settled_planner()
+    front, back, plan, outer = _front_and_back(planner)
+    kept, incomplete = planner.contents(plan, outer, [back], {})
+    assert kept == [] and incomplete
+
+
+def test_a_mirror_with_no_reflection_yet_is_drawn_and_the_view_redone_once_it_has_one():
+    planner = _settled_planner()
+    one = Budget(views=1, separate_views=1, texels=10 ** 9)
+    front, back, plan, outer = _front_and_back(planner, one)
+    kept, incomplete = planner.contents(plan, outer, [back], {})
+    assert kept == [back] and not incomplete
+    inner = (view_key(outer.view), id(back[4]))
+    assert planner._held[outer.key].missing == {inner}
+
+
+def test_keeping_only_some_tiles_gives_back_the_rest():
+    planner = _settled_planner()
+    records = [_mirror(x) for x in (-1.5, 1.5)]
+    plan = planner.plan([_frame(records)], ATLAS, BIG)
+    keep = plan.draws[0].key
+    planner.keep_only({keep})
+    assert set(planner._held) == {keep} and set(planner.packer.tiles) == {keep}
+
+
+def test_the_plan_carries_the_budget_it_was_made_within():
+    asked = []
+
+    def budget():
+        asked.append(1)
+        return BIG
+
+    plan = _settled_planner().plan([_frame([_mirror()])], ATLAS, budget)
+    assert plan.budget is BIG and asked == [1]
+    assert ReflectionPlanner().plan([_frame([])], ATLAS, budget).budget is None
+
+
+def test_whether_a_mirror_view_draws_apart_is_asked_of_its_own_camera():
+    """Nested mirror views are asked too, each with the mirror's own view."""
+    from OpenGLContext.passes.reflection import MirrorView
+    asked = []
+    front, back = _mirror(), _behind()
+    plan = _settled_planner().plan(
+        [_frame([front])], ATLAS, Budget(views=16, separate_views=1, texels=10 ** 9),
+        separate=lambda mirror: asked.append(mirror) or True,
+        inside=lambda frame: [front, back])
+    assert len(asked) == 2 and all(isinstance(mirror, MirrorView) for mirror in asked)
+    assert len(plan.draws) == 1
+
+
+def test_a_reflected_view_copied_without_its_source_says_so():
+    import copy
+    view = ReflectedView(VIEW, 'key', np.zeros(3))
+    bare = ReflectedView.__new__(ReflectedView)
+    with pytest.raises(AttributeError):
+        bare.source
+    assert copy.copy(view).source is VIEW

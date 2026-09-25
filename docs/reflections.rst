@@ -322,7 +322,9 @@ The budget is for a whole frame, across every view.
      - ``OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS``
      - 4
      - Of those, the most that also draw the shapes a shared draw refuses
-       (particles, text), each of which costs a draw per mirror view.
+       (particles, text), each of which costs a draw per mirror view. What a
+       mirror view draws is what its own camera sees, which may stand behind
+       the viewer.
    * - ``reflectionAtlas``
      - ``OPENGLCONTEXT_REFLECTION_ATLAS``
      - 0.5

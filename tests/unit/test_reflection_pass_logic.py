@@ -258,3 +258,151 @@ def test_a_reading_is_weighed_by_the_scale_its_frame_was_drawn_at():
     effects.renderReflections([], None)
     wanted = 0.5 * 5.0 / 6.0
     assert schedule.time_scale == pytest.approx(0.8 + schedule.SMOOTHING * (wanted - 0.8))
+
+
+# --- a frame's reflections, drawn with the GL left out ---------------------------
+
+class _Atlas:
+    """What the pass asks of the atlas, with nothing allocated."""
+
+    def __init__(self, new=False):
+        self.new, self.released, self.mipmapped = new, 0, False
+
+    def ensure_size(self, width, height):
+        return self.new
+
+    def bind(self):
+        pass
+
+    def release(self):
+        self.released += 1
+
+
+class _Context(_Context):
+    def __init__(self, *args, **named):
+        super().__init__(*args, **named)
+        self.redraws = 0
+
+    def triggerRedraw(self, when=0):
+        self.redraws += 1
+
+
+class _LitProgram(_Program):
+    def use(self, lit=True):
+        pass
+
+    def set_planar_levels(self, levels):
+        pass
+
+
+def _drawing_pass(records, **fields):
+    """A pass whose scene is ``records``' mirrors, drawing nothing on the GPU."""
+    import types
+    from OpenGLContext.passes.reflectionplanner import ReflectionPlanner, SETTLE_FRAMES
+    effects = ReflectionsMixin()
+    effects.context = _Context(ContextDefinition(**fields))
+    effects.multiviewStrategy = 'vertex'
+    effects.shader_program = _LitProgram()
+    gathered = types.SimpleNamespace(paths=[record[4] for record in records])
+    effects.frameGather = lambda: gathered
+    effects.sceneMirrors = lambda: np.arange(len(records))
+    effects.activeFrame = None
+    effects.mirrorsZoned = lambda: False
+    effects.mirrorsIn = lambda frame: []
+    effects._separateShapes = lambda mirror: False
+    effects.stats = types.SimpleNamespace()
+    effects._reflection_planner = planner = ReflectionPlanner()
+    planner.frame = SETTLE_FRAMES
+    effects._reflection_atlas = _Atlas()
+    effects.drawn = []
+
+    def draw(plan, lighting, gathered, atlas):
+        effects.drawn.append(plan)
+        effects._incompleteMirrors = frozenset(draw.key for draw in plan.draws)
+
+    effects._drawMirrorViews = draw
+    return effects
+
+
+def _mirror_frame():
+    from tests.unit.test_reflection_planner import _frame, _mirror
+    record = _mirror()
+    return record, _frame([record])
+
+
+def test_a_frame_asks_for_another_at_most_once():
+    """Unfinished and left incomplete, it still asks for one frame."""
+    record, frame = _mirror_frame()
+    effects = _drawing_pass([record])
+    effects._reflection_planner.frame = 0          # still settling: unfinished
+    effects.renderReflections([frame], None)
+    assert effects.drawn and effects.context.redraws == 1
+
+
+def test_switching_reflections_off_gives_back_the_atlas_and_every_tile():
+    record, frame = _mirror_frame()
+    effects = _drawing_pass([record])
+    atlas = effects._reflection_atlas
+    effects.renderReflections([frame], None)
+    assert effects._reflection_planner._held
+    effects.context.contextDefinition.planarReflections = False
+    effects.renderReflections([frame], None)
+    assert atlas.released == 1 and effects._reflection_atlas is None
+    assert not effects._reflection_planner._held
+    assert not effects._reflection_planner.packer.tiles
+    effects.renderReflections([frame], None)
+    assert atlas.released == 1
+
+
+def test_a_new_atlas_is_read_only_where_this_frame_drew():
+    """Tiles kept from before hold nothing in an atlas made this frame."""
+    from tests.unit.test_reflection_planner import _frame, _mirror
+    from OpenGLContext.passes.reflectiontiles import Budget
+    kept, drawn = _mirror(-1.5), _mirror(1.5)
+    effects = _drawing_pass([kept, drawn])
+    planner = effects._reflection_planner
+    planner.plan([_frame([kept])], effects.reflectionAtlasSize(), effects.reflectionBudget)
+    effects._reflection_atlas = _Atlas(new=True)
+    effects.reflectionBudget = lambda: Budget(views=1, separate_views=1, texels=10 ** 9)
+    frame = _frame([kept, drawn])
+    effects.renderReflections([frame], None)
+    plan, = effects.drawn
+    drew = {draw.key for draw in plan.draws}
+    assert drew and set(effects._reflection_lookups) <= drew
+    assert set(planner._held) == drew
+
+
+def test_the_budget_is_worked_out_once_a_frame():
+    record, frame = _mirror_frame()
+    effects = _drawing_pass([record])
+    asked = []
+    real = effects.reflectionBudget
+    effects.reflectionBudget = lambda: asked.append(1) or real()
+    effects.renderReflections([frame], None)
+    plan, = effects.drawn
+    assert len(asked) == 1 and plan.budget is not None
+
+
+# --- a shape too small to see in a mirror, for the whole walk at once -----------------
+
+def test_the_whole_walk_is_measured_as_each_shape_would_be():
+    rng = np.random.default_rng(7)
+    records, matrices, points, bounded = [], [], [], []
+    for index in range(40):
+        placement = np.identity(4, 'f')
+        placement[:3, :3] *= rng.uniform(0.2, 3.0)
+        placement[3, :3] = rng.uniform(-400.0, 400.0, 3)
+        size = rng.uniform(0.05, 4.0, 3)
+        centre = rng.uniform(-1.0, 1.0, 3)
+        volume = AABoundingBox(center=tuple(centre), size=tuple(size))
+        has_box = index % 7 != 0
+        records.append(((False,), None, placement, volume if has_box else None, (), None))
+        matrices.append(placement)
+        points.append(volume.getPoints())
+        bounded.append(has_box)
+    centres, radii = reflection.reach(np.array(matrices), np.array(points, 'f'),
+                                      np.array(bounded))
+    eye = np.array([3.0, 1.0, -2.0])
+    small = reflection.too_small_mask(centres, radii, np.array(bounded), eye, 150.0)
+    assert small.tolist() == [reflection.too_small(record, eye, 150.0) for record in records]
+    assert small.any() and not small.all()

@@ -173,9 +173,20 @@ class ReflectionAtlas:
 
     def bind(self) -> None:
         """Put the atlas on :data:`REFLECTION_UNIT` for the mirrors to read."""
+        self._on_unit(self.texture)
+
+    def unbind(self) -> None:
+        """Leave nothing on :data:`REFLECTION_UNIT`, while the atlas is drawn into.
+
+        A program that could sample the texture it draws into makes a feedback
+        loop, which GL leaves undefined.
+        """
+        self._on_unit(0)
+
+    def _on_unit(self, texture: int) -> None:
         from OpenGL import GL as gl
         gl.glActiveTexture(gl.GL_TEXTURE0 + self.UNIT)
-        gl.glBindTexture(gl.GL_TEXTURE_2D, self.texture)
+        gl.glBindTexture(gl.GL_TEXTURE_2D, texture)
         gl.glActiveTexture(gl.GL_TEXTURE0)
 
     def release(self) -> None:

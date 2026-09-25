@@ -16,7 +16,8 @@ reflection drawn a frame or two ago is still read in the right place, and it is
 kept until its mirror leaves the view.
 
 The pass that draws the plan is
-:meth:`~OpenGLContext.passes.flateffects._FlatEffectsMixin.renderReflections`.
+:meth:`~OpenGLContext.passes.reflectionpass.ReflectionsMixin.renderReflections`,
+and what each of its mirror views draws is :meth:`ReflectionPlanner.contents`.
 """
 from __future__ import annotations
 
@@ -101,6 +102,11 @@ class ReflectedView:
         return int(getattr(self.source, 'depth', 0)) + 1
 
     def __getattr__(self, name: str) -> Any:
+        # Reached only for a name the instance lacks; ``source`` itself is
+        # missing on a copy made without __init__, and asking the source for
+        # it would ask again forever.
+        if name == 'source':
+            raise AttributeError(name)
         return getattr(self.source, name)
 
 
@@ -146,10 +152,12 @@ class ReflectionPlan:
     #: all, or one its camera has moved too far from. The pass asks for
     #: another frame while this is so.
     unfinished: bool = False
+    #: The budget the plan was made within; None where no view had a mirror.
+    budget: Optional[Budget] = None
 
     @property
     def rough(self) -> bool:
-        """Whether any mirror read this frame wants the blurred mip levels."""
+        """Whether any mirror read this frame reads the blurred mip levels."""
         return any(lookup.rough > ROUGH and not lookup.replace
                    for lookup in self.lookups.values())
 
@@ -288,6 +296,17 @@ class ReflectionPlanner:
         """Forget every tile: the atlas they were in is gone."""
         self._held.clear()
         self.packer.resize(self.packer.width, self.packer.height)
+
+    def keep_only(self, keys: Iterable[Hashable]) -> None:
+        """Forget every tile but those of ``keys``, and give back their room.
+
+        For an atlas made anew after this frame's plan: only what the frame
+        draws into it is there to read.
+        """
+        keep = set(keys)
+        self._held = {key: held for key, held in self._held.items() if key in keep}
+        self.packer.place({key: (held.tile.width, held.tile.height)
+                           for key, held in self._held.items()})
 
     def redo(self, keys: Iterable[Hashable]) -> None:
         """Draw these mirrors' reflections again next frame.
@@ -461,7 +480,7 @@ class ReflectionPlanner:
     # -- the frame --------------------------------------------------------
     def plan(self, frames: Sequence[Any], atlas: Tuple[int, int],
              budget: Union[Budget, Callable[[], Budget]],
-             separate: Callable[[Any], bool] = lambda frame: False,
+             separate: Callable[[MirrorView], bool] = lambda mirror: False,
              inside: Optional[Callable[[Any], Sequence[Any]]] = None,
              bounces: int = 2,
              shown: Optional[Callable[[Any], Sequence[Any]]] = None) -> ReflectionPlan:
@@ -469,9 +488,9 @@ class ReflectionPlanner:
 
         ``atlas`` is the atlas's size in texels; ``budget`` is the frame's
         :class:`~OpenGLContext.passes.reflectiontiles.Budget`, or what makes
-        one, asked only where a view has a mirror in it. ``separate(frame)``
-        says whether a view's mirrors would also draw shapes a shared draw
-        refuses. ``inside(frame)`` answers the mirrors a mirror view's frame
+        one, asked only where a view has a mirror in it. ``separate(mirror)``
+        says whether a mirror view, drawn through ``mirror``'s camera, would
+        also draw shapes a shared draw refuses. ``inside(frame)`` answers the mirrors a mirror view's frame
         can see; given it, each is planned from that mirror's camera, drawn as
         its :class:`ReflectedView`, and read there a frame later. Every chain
         of mirrors is followed with its own camera, up to ``bounces``
@@ -495,6 +514,7 @@ class ReflectionPlanner:
             return ReflectionPlan(frames)
         if callable(budget):
             budget = budget()
+        assert isinstance(budget, Budget)
         if inside is not None:
             level = list(seen.values())
             enough = CANDIDATES_PER_VIEW * max(1, int(budget.views))
@@ -504,16 +524,14 @@ class ReflectionPlanner:
                 level = self._inside(level, inside)
                 seen.update((entry.key, entry) for entry in level)
         self._views = {key: view for key, view in self._views.items() if key in seen}
-        mirrored = {id(entry.frame): entry.frame for entry in seen.values()}
-        separates = {key: bool(separate(frame)) for key, frame in mirrored.items()}
-        candidates = [self._candidate(entry, separates[id(entry.frame)])
+        candidates = [self._candidate(entry, bool(separate(entry.mirror)))
                       for entry in seen.values()]
         chosen = self.schedule.choose(candidates, budget)
         decisions = {decision.key: decision.scale for decision in chosen.decisions}
         weights = {c.key: c.area * max(c.priority, 0.0) for c in candidates}
         packed = self._pack(seen, decisions, weights)
         self._redraw_moved(packed, seen, decisions, candidates, chosen)
-        plan = ReflectionPlan(frames, candidates=candidates)
+        plan = ReflectionPlan(frames, candidates=candidates, budget=budget)
         # Every group's, drawn or not: the pass names a mirror by its own key.
         plan.aliases = {key_for(entry.frame, member.record): key
                         for key, entry in seen.items() for member in entry.members[1:]}
@@ -567,6 +585,45 @@ class ReflectionPlanner:
                 continue
             if chosen.afford(by_key[key], held.scale):
                 decisions[key] = held.scale
+
+    def contents(self, plan: ReflectionPlan, draw: MirrorDraw, records: Sequence[Any],
+                 earlier: Mapping[Hashable, Any]) -> Tuple[List[Any], bool]:
+        """What ``draw``'s mirror view draws of ``records``, and whether it is
+        drawn again next frame for a mirror it left out.
+
+        ``records`` are what its camera sees, and ``earlier`` the lookups of
+        the frame before, which a mirror seen in it reads. The mirrors it is
+        the reflection of are left out. A mirror in it whose reflection for
+        this view is drawn this frame, and was not the frame before, is left
+        out, and the view is drawn again next frame, when that reflection is
+        there to read. One whose reflection is not drawn yet is kept, showing
+        what :meth:`~OpenGLContext.passes.reflectionpass.ReflectionsMixin.applyPlanarReflection`
+        finds meanwhile, and the view is drawn again once it has its own
+        (:meth:`drawn_without`).
+        """
+        own = draw.paths or frozenset((id(draw.record[4]),))
+        drawing = {each.key for each in plan.draws}
+        seen_in = view_key(draw.view)
+        kept: List[Any] = []
+        missing: Set[Hashable] = set()
+        incomplete = False
+        for record in records:
+            if reflection.is_reflector(record):
+                if id(record[4]) in own:
+                    continue
+                key = (seen_in, id(record[4]))
+                # A mirror sharing its plane's reflection is drawn under its
+                # group's key.
+                group = plan.canonical(key)
+                if key not in earlier:
+                    if group in drawing:
+                        incomplete = True
+                        continue
+                    missing.add(group)
+            kept.append(record)
+        if missing:
+            self.drawn_without(draw.key, missing)
+        return kept, incomplete
 
     def _pack(self, seen: Dict[Hashable, _Seen], decisions: Dict[Hashable, float],
               weights: Mapping[Hashable, float]) -> Packed:

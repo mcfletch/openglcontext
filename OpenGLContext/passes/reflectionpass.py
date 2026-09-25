@@ -30,6 +30,7 @@ if TYPE_CHECKING:
     from OpenGLContext.multiview.strategy import ViewFrame
     from OpenGLContext.passes._flat import GatheredPaths
     from OpenGLContext.passes.flateffects import Lighting
+    from OpenGLContext.passes.framestate import FrameState
     from OpenGLContext.passes.gputimer import GpuTimer
     from OpenGLContext.passes.reflectionatlas import ReflectionAtlas
     from OpenGLContext.passes.reflectionplanner import Lookup, ReflectionPlanner
@@ -65,7 +66,10 @@ class ReflectionsMixin(PassResources):
 
         def frameGather(self) -> "GatheredPaths": ...
         def applyViewFrame(self, frame: Any, gl: bool = True) -> None: ...
-        def renderSet(self, matrix: Any, gathered: Any = None) -> List[Any]: ...
+        frameState: Optional["FrameState"]
+
+        def renderSet(self, matrix: Any, gathered: Any = None,
+                      among: Optional[np.ndarray] = None) -> List[Any]: ...
         def setupViewLighting(self, matrix: Any, lighting: Optional["Lighting"],
                               fitted: bool = False) -> None: ...
         def shaderRenderOpaque(self, toRender: List, id_map: Optional[Dict] = None,
@@ -109,12 +113,21 @@ class ReflectionsMixin(PassResources):
 
     def disposeResources(self) -> None:
         """Release the atlas and the timer; mirrors read nothing until the next plan."""
-        let_go(self, '_reflection_atlas')
         let_go(self, '_reflection_timer')
+        self._releaseReflections()
         self._reflectionsOff()
+        super().disposeResources()
+
+    def _releaseReflections(self) -> None:
+        """Give back the atlas and forget every tile it held.
+
+        While reflections are off, and as the pass lets its resources go; the
+        next frame that draws a reflection makes an atlas again, and plans
+        every mirror as one with no tile.
+        """
+        let_go(self, '_reflection_atlas')
         if self._reflection_planner is not None:
             self._reflection_planner.reset()
-        super().disposeResources()
 
     def planarReflectionsEnabled(self) -> bool:
         """Whether mirrors and water reflect the scene this frame.
@@ -208,10 +221,24 @@ class ReflectionsMixin(PassResources):
         self._previous_lookups = {}
         self._reflection_lookups = {}
         self._reflection_applied = None
+        self._incompleteMirrors = frozenset()
         if not self.planarReflectionsEnabled():
+            self._releaseReflections()
             return
+        if self._drawReflections(frames, lighting, previous) or self._incompleteMirrors:
+            # A context that draws only when something changes would otherwise
+            # leave a still scene showing reflections drawn while the pass was
+            # settling, none, or ones drawn with a mirror left out, until
+            # something else asked for a frame.
+            trigger = getattr(self.context, 'triggerRedraw', None)
+            if trigger is not None:
+                trigger(0)
+
+    def _drawReflections(self, frames: List[Any], lighting: Optional[Lighting],
+                         previous: Mapping[Any, "Lookup"]) -> bool:
+        """Plan and draw this frame's reflections; whether the plan is unfinished."""
         gathered = self.frameGather()
-        from OpenGLContext.passes.reflectionatlas import ReflectionAtlas
+        from OpenGLContext.passes.reflectionatlas import LEVELS, ReflectionAtlas
         from OpenGLContext.passes.reflectionplanner import ReflectionPlanner
         if self._reflection_planner is None:
             self._reflection_planner = ReflectionPlanner()
@@ -221,7 +248,7 @@ class ReflectionsMixin(PassResources):
             # Nothing in the scene is a mirror: no tile the planner holds is
             # read, and no view is looked through for one.
             planner.reset()
-            return
+            return False
         mirror_paths = {id(gathered.paths[index]) for index in indices}
         # Zones may say which mirrors draw a reflection from where a camera is.
         planner.allowed = self.mirrorAllowed if self.mirrorsZoned() else None
@@ -245,27 +272,21 @@ class ReflectionsMixin(PassResources):
         if self.activeFrame is not None:
             # Looking for mirrors in the mirrors' views looked through them.
             self.applyViewFrame(self.activeFrame, gl=False)
-        self._reflection_lookups = plan.lookups
-        self._incompleteMirrors = frozenset()
-        if plan.unfinished:
-            # A context that draws only when something changes would otherwise
-            # leave a still scene showing reflections drawn while the pass was
-            # settling, or none, until something else asked for a frame.
-            trigger = getattr(self.context, 'triggerRedraw', None)
-            if trigger is not None:
-                trigger(0)
         if not plan.lookups:
-            return
+            return plan.unfinished
         atlas = self._reflection_atlas
         if atlas is None:
             atlas = self._reflection_atlas = ReflectionAtlas()
         if atlas.ensure_size(*size):
-            # A new atlas holds nothing any tile says it does.
+            # A new atlas holds only what this frame draws into it.
             previous = {}
-            if not plan.draws:
-                planner.reset()
-                self._reflection_lookups = {}
-                return
+            drawn = {draw.key for draw in plan.draws}
+            planner.keep_only(drawn)
+            plan.lookups = {key: lookup for key, lookup in plan.lookups.items()
+                            if plan.canonical(key) in drawn}
+        self._reflection_lookups = plan.lookups
+        if not plan.lookups:
+            return plan.unfinished
         # Only what was drawn once the pass settled is passed on to another
         # mirror: a picture from those first frames is not one to keep.
         self._previous_lookups = {key: lookup for key, lookup in previous.items()
@@ -286,23 +307,82 @@ class ReflectionsMixin(PassResources):
             # Each is drawn again next frame, when the mirror it left out has
             # a reflection of its own to show.
             planner.redo(self._incompleteMirrors)
-            trigger = getattr(self.context, 'triggerRedraw', None)
-            if trigger is not None:
-                trigger(0)
         self.stats.mirrorViews = len(plan.draws)
         self.stats.mirrorTexels = plan.texels
         self.stats.mirrorMilliseconds = None if timer is None else timer.milliseconds
         atlas.bind()
-        from OpenGLContext.passes.reflectionatlas import LEVELS
         shader = self.shader_program
         shader.use(lit=True)
         shader.set_planar_levels(LEVELS - 1 if atlas.mipmapped else 0)
+        return plan.unfinished
 
-    def _separateShapes(self, frame: Any) -> bool:
-        """Whether a view's mirrors would draw shapes a shared draw refuses."""
+    def _separateShapes(self, mirror: Any) -> bool:
+        """Whether a mirror view drawn through ``mirror``'s camera draws a
+        shape a shared draw refuses, and so costs a draw of its own.
+
+        The shapes its frustum keeps are asked, each at most once a frame;
+        what they answer is kept on the frame's state.
+        """
+        gathered = self.frameGather()
+        keep = self._survivorsThrough(mirror.modelproj)
+        if not len(keep):
+            return False
+        refuses = self._refusesShare(gathered)
+        unknown = keep[refuses[keep] < 0]
+        for index in unknown:
+            refuses[index] = self._refusedAt(gathered, int(index))
+        return bool((refuses[keep] == 1).any())
+
+    def _refusesShare(self, gathered: "GatheredPaths") -> np.ndarray:
+        """Per path of ``gathered``, whether a mirror view draws it apart
+        from a shared draw: 1, 0, or -1 where not asked yet this frame."""
+        state = self.frameState
+        refuses = None if state is None else state.refusesShare
+        if refuses is None or len(refuses) != len(gathered.paths):
+            refuses = np.full(len(gathered.paths), -1, dtype=np.int8)
+            if state is not None:
+                state.refusesShare = refuses
+        return refuses
+
+    def _refusedAt(self, gathered: "GatheredPaths", index: int) -> bool:
+        """Whether a mirror view draws path ``index`` apart from a shared draw.
+
+        An opaque shape that is no mirror and that one draw cannot serve
+        several views with; a transparent one is not drawn in a mirror view,
+        and a mirror in one is drawn singly whatever its view.
+        """
         from OpenGLContext.passes.reflection import is_reflector
-        return any(not record[0][0] and not is_reflector(record)
-                   and not self.sharesDraw(record) for record in frame.toRender)
+        node, own = gathered.nodes[index], gathered.own[index]
+        record = (node.sortKey(self, own), None, own, gathered.volumes[index],
+                  gathered.paths[index], node)
+        return (not record[0][0] and not is_reflector(record)
+                and not self.sharesDraw(record))
+
+    def _survivorsThrough(self, modelproj: Any, frame: Any = None,
+                          among: Optional[np.ndarray] = None) -> np.ndarray:
+        """Indices into this frame's walk of what a camera's frustum keeps.
+
+        ``modelproj`` is the camera's world-to-clip matrix; ``frame``, where
+        given, keeps the frustum made from it. ``among`` narrows the walk to
+        those indices first.
+        """
+        from OpenGLContext import frustum
+        gathered = self.frameGather()
+        found = None if frame is None else frame.frustum
+        if found is None:
+            found = frustum.Frustum.fromViewingMatrix(modelproj, normalize=1)
+            if frame is not None:
+                frame.frustum = found
+        subset = slice(None) if among is None else among
+        current, self.frustum = self.frustum, found
+        try:
+            keep = self._frustumSurvivors(
+                gathered.matrices[subset], gathered.points[subset],
+                np.asarray(gathered.bounded)[subset],
+                np.asarray(gathered.drawing)[subset])
+        finally:
+            self.frustum = current
+        return np.asarray(keep if among is None else np.asarray(among)[keep], dtype=int)
 
     def sceneMirrors(self) -> Any:
         """Indices into this frame's gather of the shapes that are mirrors.
@@ -328,21 +408,11 @@ class ReflectionsMixin(PassResources):
         camera, so a chain of mirrors costs a test of the few mirrors a scene
         has at each step rather than a cull of the whole scene.
         """
-        from OpenGLContext import frustum
         indices = self.sceneMirrors()
         if not len(indices):
             return []
         gathered = self.frameGather()
-        if frame.frustum is None:
-            frame.frustum = frustum.Frustum.fromViewingMatrix(frame.modelproj, normalize=1)
-        current, self.frustum = self.frustum, frame.frustum
-        try:
-            keep = indices[self._frustumSurvivors(
-                gathered.matrices[indices], gathered.points[indices],
-                np.asarray(gathered.bounded)[indices],
-                np.asarray(gathered.drawing)[indices])]
-        finally:
-            self.frustum = current
+        keep = self._survivorsThrough(frame.modelproj, frame, among=indices)
         modelview = np.asarray(frame.modelView, 'f')
         return [(gathered.nodes[index].sortKey(self, gathered.own[index]),
                  gathered.matrices[index] @ modelview, gathered.own[index],
@@ -356,18 +426,28 @@ class ReflectionsMixin(PassResources):
         texels of its tile. ``texels`` is the tile's texels per radian, worked
         out from the frame's rectangle and projection where not given. Sets
         the frame's frustum where it has none, and the placements it keeps of
-        each instanced set.
+        each instanced set. Which shapes are too small is measured for the
+        whole walk at once, from where each is and how far it reaches, which
+        is worked out once a frame.
         """
         from OpenGLContext import frustum
-        from OpenGLContext.passes.reflection import fov, too_small
+        from OpenGLContext.passes.reflection import fov, reach, too_small_mask
         if frame.frustum is None:
             frame.frustum = frustum.Frustum.fromViewingMatrix(frame.modelproj, normalize=1)
         if texels <= 0.0:
             texels = frame.rect[3] / max(fov(frame.projection), 1e-6)
         self.applyViewFrame(frame, gl=False)
+        gathered = self.frameGather()
+        state = self.frameState
+        placed = None if state is None else state.reach
+        if placed is None or len(placed[1]) != len(gathered.paths):
+            placed = reach(gathered.matrices, gathered.points, gathered.bounded)
+            if state is not None:
+                state.reach = placed
         eye = np.linalg.inv(np.asarray(frame.modelView, 'd'))[3, :3]
-        records = [record for record in self.renderSet(frame.modelView)
-                   if not record[0][0] and not too_small(record, eye, texels)]
+        small = too_small_mask(placed[0], placed[1], gathered.bounded, eye, texels)
+        records = [record for record in self.renderSet(frame.modelView, gathered, ~small)
+                   if not record[0][0]]
         frame.visiblePlacements = self.visiblePlacements or {}
         return records
 
@@ -376,22 +456,18 @@ class ReflectionsMixin(PassResources):
 
         Each is the mirror's camera, drawing into its tile as the draw's
         :class:`~OpenGLContext.passes.reflectionplanner.ReflectedView`, with
-        :meth:`mirrorContents` to draw. A mirror in it shows the reflection
-        drawn for that view the frame before. One whose reflection is being
-        drawn this frame and was not before is left out, and the view noted
-        in :attr:`_incompleteMirrors` to be drawn again next frame; one with
-        none drawn yet reflects the environment probe, and the planner is told
-        to draw the view again once it has one.
+        what :meth:`~OpenGLContext.passes.reflectionplanner.ReflectionPlanner.contents`
+        keeps of :meth:`mirrorContents` to draw. A view that left out a mirror
+        is noted in :attr:`_incompleteMirrors`, to be drawn again next frame.
         """
         from OpenGLContext.multiview.strategy import ViewFrame
-        from OpenGLContext.passes.reflection import fov, is_reflector
-        from OpenGLContext.passes.reflectionplanner import view_key
+        from OpenGLContext.passes.reflection import fov
+        planner = self._reflection_planner
+        assert planner is not None, 'a plan comes from the pass\'s planner'
         mirrors = []
         incomplete: Set[Any] = set()
         self._incompleteMirrors = incomplete
         earlier = self._previous_lookups
-        drawing = {draw.key for draw in plan.draws}
-        canonical = getattr(plan, 'canonical', lambda key: key)
         for draw in plan.draws:
             mirror = draw.mirror
             frame = ViewFrame(
@@ -401,26 +477,10 @@ class ReflectionsMixin(PassResources):
             texels = draw.tile.height / max(
                 (mirror.crop[3] - mirror.crop[1]) / 2.0 * fov(draw.frame.projection),
                 1e-6)
-            kept = []
-            missing = set()
-            own = draw.paths or frozenset((id(draw.record[4]),))
-            for record in self.mirrorContents(frame, texels):
-                if is_reflector(record):
-                    if id(record[4]) in own:
-                        continue
-                    key = (view_key(frame.view), id(record[4]))
-                    # A mirror sharing its plane's reflection is drawn under
-                    # its group's key.
-                    group = canonical(key)
-                    if key not in earlier:
-                        if group in drawing:
-                            incomplete.add(draw.key)
-                            continue
-                        missing.add(group)
-                kept.append(record)
-            if missing and self._reflection_planner is not None:
-                self._reflection_planner.drawn_without(draw.key, missing)
-            frame.toRender = kept
+            frame.toRender, left_out = planner.contents(
+                plan, draw, self.mirrorContents(frame, texels), earlier)
+            if left_out:
+                incomplete.add(draw.key)
             mirrors.append(frame)
         return mirrors
 
@@ -447,6 +507,10 @@ class ReflectionsMixin(PassResources):
             self._reflection_lookups = self._previous_lookups
             shader.use(lit=True)
             shader.set_planar_levels(0)
+        else:
+            # Nothing drawn reads a reflection, and the unit is not left
+            # naming the texture being drawn into.
+            atlas.unbind()
         previous = atlas.begin()
         drawn_before = self.stats.draws
         try:
@@ -457,7 +521,8 @@ class ReflectionsMixin(PassResources):
                 limit = max(1, MultiviewCapabilities.detect().max_views)
                 # One set of programs for every count of mirror views the
                 # budget allows, compiled the first frame there are mirrors.
-                capacity = min(limit, max(1, self.reflectionBudget().views))
+                budget = plan.budget or self.reflectionBudget()
+                capacity = min(limit, max(1, budget.views))
                 # A camera reflected an even number of times has its winding
                 # the right way round again, so those views draw apart.
                 for odd in (True, False):

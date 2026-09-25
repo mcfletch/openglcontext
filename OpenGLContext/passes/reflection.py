@@ -24,7 +24,7 @@ still read in the right place.
 
 Everything here is plain arithmetic with no GL. Matrices are row-vector, as the
 engine's are: ``point @ matrix``. The pass that draws the reflections is
-:meth:`~OpenGLContext.passes.flateffects._FlatEffectsMixin.renderReflections`,
+:meth:`~OpenGLContext.passes.reflectionpass.ReflectionsMixin.renderReflections`,
 and what it draws into is :mod:`OpenGLContext.passes.reflectionatlas`.
 """
 from __future__ import annotations
@@ -50,7 +50,8 @@ __all__ = [
     'surface_plane', 'local_plane', 'place_plane', 'world_corners',
     'box_corners', 'guarded', 'contains', 'tile_bounds', 'mirror_matrix', 'eye_plane',
     'oblique_projection', 'screen_rect', 'crop_matrix', 'texels', 'plan_mirror',
-    'tile_transform', 'atlas_lookup', 'fov', 'too_small', 'SMALLEST',
+    'tile_transform', 'atlas_lookup', 'fov', 'too_small', 'too_small_mask', 'reach',
+    'SMALLEST',
 ]
 
 #: The texture unit reflections are read from: past the joint palette (30),
@@ -608,6 +609,44 @@ def too_small(record: Any, eye: ArrayLike, texels_per_radian: float) -> bool:
     if distance <= radius:
         return False
     return bool(2.0 * np.arctan(radius / distance) * texels_per_radian < SMALLEST)
+
+
+def reach(matrices: Any, points: Any, bounded: Any) -> Tuple[np.ndarray, np.ndarray]:
+    """Where each of a walk's shapes is in the world, and how far it reaches.
+
+    ``matrices`` are the ``(N, 4, 4)`` placements, ``points`` the ``(N, 8, 4)``
+    corners of each shape's box in its own space, and ``bounded`` which of
+    them has a box. Answers the ``(N, 3)`` centres of the boxes placed in the
+    world, and the ``(N,)`` radii of the spheres round them; a shape without
+    a box has radius 0 and a centre of no meaning.
+    """
+    matrices = np.asarray(matrices, 'd')
+    corners = np.asarray(points, 'd')[:, :, :3]
+    if not len(corners):
+        return np.zeros((0, 3)), np.zeros(0)
+    low, high = corners.min(axis=1), corners.max(axis=1)
+    middle = np.c_[(low + high) * 0.5, np.ones(len(corners))]
+    placed = np.einsum('ni,nij->nj', middle, matrices)
+    w = placed[:, 3:]
+    centres = placed[:, :3] / np.where(w == 0.0, 1.0, w)
+    scale = np.linalg.norm(matrices[:, :3, :3], axis=2).max(axis=1)
+    radii = 0.5 * np.linalg.norm(high - low, axis=1) * scale
+    return centres, np.where(np.asarray(bounded, bool), radii, 0.0)
+
+
+def too_small_mask(centres: Any, radii: Any, bounded: Any, eye: ArrayLike,
+                   texels_per_radian: float) -> np.ndarray:
+    """:func:`too_small` for every shape of a walk at once, from :func:`reach`.
+
+    A shape without a box, or with the eye inside its sphere, is never too
+    small.
+    """
+    offsets = np.asarray(centres, 'd') - np.asarray(eye, 'd')[:3]
+    distance = np.linalg.norm(offsets, axis=1)
+    radii = np.asarray(radii, 'd')
+    outside = np.asarray(bounded, bool) & (distance > radii)
+    covers = 2.0 * np.arctan(radii / np.where(outside, distance, 1.0)) * texels_per_radian
+    return np.asarray(outside & (covers < SMALLEST))
 
 
 # --- reading a reflection -----------------------------------------------------

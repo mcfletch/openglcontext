@@ -1326,7 +1326,8 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         return float( platform().frustum[0] )
 
     def renderSet( self, matrix: Any,
-                   gathered: Optional[GatheredPaths] = None ) -> List[Any]:
+                   gathered: Optional[GatheredPaths] = None,
+                   among: Optional[numpy.ndarray] = None ) -> List[Any]:
         """The scene's shapes, culled to the frustum and ordered for drawing.
 
         Every path is asked for its world matrix, because a matrix is what the
@@ -1349,7 +1350,8 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         times per record by those readers where the record did not carry it.
 
         ``gathered`` is the walk of the scene to cull; left out, it is the
-        frame's (:meth:`frameGather`).
+        frame's (:meth:`frameGather`). ``among`` is a boolean per path of the
+        walk, and leaves out before the cull every path it marks False.
         """
         if gathered is None:
             gathered = self.frameGather()
@@ -1357,8 +1359,9 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
                                          gathered.matrices, gathered.own)
         if not paths:
             return []
+        drawing = gathered.drawing if among is None else gathered.drawing & among
         keep = self._frustumSurvivors( matrices, gathered.points,
-                                       gathered.bounded, gathered.drawing )
+                                       gathered.bounded, drawing )
         if not len(keep):
             return []
         kept = matrices[keep]

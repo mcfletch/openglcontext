@@ -483,3 +483,92 @@ def test_the_planner_looks_only_at_the_mirrors(render_scene, env, monkeypatch):
     frames_of(render_scene, _room() + boxes, frames=3, size=SIZE)
     assert asked
     assert all(reflection.shape_reflector(shape) is not None for shape in asked)
+
+
+def _points_behind(z=9.0):
+    """A cloud of points behind the camera: one draw cannot serve several
+    views with it, and only a mirror sees it."""
+    from OpenGL.GL import GL_POINTS
+    grid = np.array([(x, y, 0.0) for x in np.linspace(-2, 2, 5)
+                     for y in np.linspace(-2, 2, 5)], 'f')
+    mesh = PBRMesh(positions=grid, normals=np.tile((0, 0, 1), (len(grid), 1)),
+                   draw_mode=GL_POINTS)
+    return basenodes.Transform(translation=(0.0, 0.0, z), children=[basenodes.Shape(
+        geometry=mesh, appearance=basenodes.Appearance(material=PBRMaterial(
+            baseColor=(1.0, 1.0, 0.0))))])
+
+
+@pytest.mark.parametrize('behind, views', [(False, 2), (True, 1)])
+def test_a_mirror_view_seeing_what_a_shared_draw_refuses_is_a_separate_view(
+        render_scene, env, behind, views):
+    """What counts is what the mirror's own camera sees, which here is behind
+    the viewer's: with one separate view a frame, only one mirror is drawn."""
+    from OpenGLContext.passes import renderpass
+    from OpenGLContext.passes.reflectionplanner import ReflectionPlanner
+    env.setenv('OPENGLCONTEXT_REFLECTION_VIEWS', '4')
+    env.setenv('OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS', '1')
+    scene = _room(_mirror(x=-2.5, size=3.0, reflector=PlanarReflector(interval=1)),
+                  _mirror(x=2.5, size=3.0, reflector=PlanarReflector(interval=1)))
+    if behind:
+        scene.append(_points_behind())
+    drawn = []
+    real = ReflectionPlanner.plan
+
+    def planning(self, *args, **named):
+        plan = real(self, *args, **named)
+        drawn.append(len(plan.draws))
+        return plan
+
+    env.setattr(ReflectionPlanner, 'plan', planning)
+    render_scene(scene, frames=4, size=SIZE)
+    assert renderpass.FLAT is not None
+    assert drawn[-1] == views
+
+
+def test_the_atlas_is_not_on_its_unit_while_it_is_drawn_into(render_scene, env):
+    """A program able to sample the texture it draws into makes a feedback
+    loop; with no mirror seen in a mirror, nothing is on the unit."""
+    from OpenGL import GL as gl
+    from OpenGLContext.passes.reflection import REFLECTION_UNIT
+    from OpenGLContext.passes.reflectionatlas import ReflectionAtlas
+    found = []
+    real = ReflectionAtlas.begin
+
+    def begin(self):
+        gl.glActiveTexture(gl.GL_TEXTURE0 + REFLECTION_UNIT)
+        found.append((int(gl.glGetIntegerv(gl.GL_TEXTURE_BINDING_2D)), self.texture))
+        gl.glActiveTexture(gl.GL_TEXTURE0)
+        return real(self)
+
+    env.setattr(ReflectionAtlas, 'begin', begin)
+    render_scene(_room(_mirror(reflector=PlanarReflector(interval=1))), frames=4, size=SIZE)
+    assert len(found) >= 2
+    assert all(bound != texture for bound, texture in found)
+
+
+def test_mirror_views_are_drawn_one_at_a_time_where_the_shared_programs_fail(
+        render_scene, env):
+    """A driver refusing the programs one draw serves several views with
+    leaves each mirror view drawn in turn, and the mirrors reflect as before."""
+    from OpenGLContext.passes import renderpass, shaderpass
+    env.setenv('OPENGLCONTEXT_MULTIVIEW', 'vertex')
+
+    def pair():
+        return _room(_mirror(x=-2.0, size=3.5), _mirror(x=2.0, size=3.5))
+
+    shared = _red_anywhere(frames_of(render_scene, pair(), frames=3, size=SIZE)[-1])
+    if renderpass.FLAT.multiviewStrategy != 'vertex':
+        pytest.skip('this driver cannot draw with vertex')
+    refused = []
+    real = shaderpass.VRML97ShaderProgram.select_program_set
+
+    def select(self, views, strategy='geometry'):
+        if views:
+            refused.append(views)
+            return False
+        return real(self, views, strategy)
+
+    env.setattr(shaderpass.VRML97ShaderProgram, 'select_program_set', select)
+    alone = _red_anywhere(frames_of(render_scene, pair(), frames=3, size=SIZE)[-1])
+    assert refused
+    assert shared > 100 and alone >= 0.9 * shared
