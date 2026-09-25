@@ -186,12 +186,11 @@ class ViewSet:
 
     # -- the pointer -------------------------------------------------------
     def view_for(self, event: Any) -> Optional[View]:
-        """The view an event belongs to: the context's answer, or the layout's."""
-        found = getattr(event, 'view', None)
-        if found is None:
-            found = self.layout.route(event)
-            event.view = found
-        return found
+        """The view an event belongs to: the context's answer, or the layout's.
+
+        See :meth:`~OpenGLContext.multiview.views.ViewLayout.view_of`.
+        """
+        return self.layout.view_of(event)
 
     def handle(self, event: Any) -> bool:
         """Move a camera if the event asks one to; True where it was taken.

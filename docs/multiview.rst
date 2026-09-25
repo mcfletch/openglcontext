@@ -212,6 +212,10 @@ are the coordinates
 ``layout.active`` is the active view, and ``layout.activate(view)`` changes
 it. ``layout.view_at(x, y)`` returns the view at a window pixel, and
 ``layout.route(event)`` performs the assignment described above.
+``layout.view_of(event)`` routes an event once and records the answer as
+``event.view``; an event an application builds itself needs no ``view``
+attribute for this, and one that cannot be given the attribute is routed each
+time it is asked about.
 
 .. _quad-view:
 

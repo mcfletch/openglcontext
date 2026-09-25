@@ -386,6 +386,24 @@ class ViewLayout:
                 return view
         return None
 
+    def view_of(self, event: Any) -> Optional[View]:
+        """The view ``event`` belongs to, routed once and recorded as ``event.view``.
+
+        An event already routed keeps its view, so an event handled twice is
+        not routed twice -- a release routed again would find the drag it ended
+        already over. An event of an application's own that has no ``view``
+        attribute is routed; one that cannot be given the attribute is routed
+        every time it is asked about.
+        """
+        view: Optional[View] = getattr(event, 'view', None)
+        if view is None:
+            view = self.route(event)
+            try:
+                event.view = view
+            except AttributeError:
+                pass
+        return view
+
     def route(self, event: Any) -> Optional[View]:
         """The view an event belongs to.
 

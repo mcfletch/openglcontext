@@ -86,18 +86,17 @@ class ViewGestures:
         kind = getattr(event, 'type', None)
         if kind not in ('mousebutton', 'mousemove'):
             return False
-        if event.view is None:
-            event.view = self.layout.route(event)
+        view = self.layout.view_of(event)
         x, y = event.getPickPoint()
         if kind == 'mousemove':
-            return self.drag(event.view, x, y)
+            return self.drag(view, x, y)
         modifiers = tuple(event.getModifiers())
         if event.button in WHEEL_BUTTONS and not event.state:
             # The release of a notch, which the press already answered.
-            return self.navigation(event.view) is not None
+            return self.navigation(view) is not None
         if event.state:
-            return self.press(event.view, x, y, event.button, modifiers)
-        return self.release(event.view, x, y)
+            return self.press(view, x, y, event.button, modifiers)
+        return self.release(view, x, y)
 
     def press(self, view: Optional[View], x: float, y: float, button: int,
               modifiers: Sequence[int] = NO_MODIFIERS) -> bool:

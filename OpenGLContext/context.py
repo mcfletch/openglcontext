@@ -1591,17 +1591,15 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         return self.viewLayout
 
     def routeEvent(self, event: Any) -> Any:
-        """Say which view ``event`` belongs to, on the event, and return it.
+        """The view ``event`` belongs to, which is also recorded as ``event.view``.
 
         The view under the pointer, the one a held button's press began in,
         or for an event with no position the active view; see
-        :meth:`OpenGLContext.multiview.views.ViewLayout.route`. An event already routed
-        keeps its view, so an event handled twice is not routed twice -- a
-        release routed again would find the drag it ended already over.
+        :meth:`OpenGLContext.multiview.views.ViewLayout.route`. An event already
+        routed keeps its view; see
+        :meth:`OpenGLContext.multiview.views.ViewLayout.view_of`.
         """
-        if event.view is None:
-            event.view = self.getViewLayout().route(event)
-        return event.view
+        return self.getViewLayout().view_of(event)
 
     def getViewPort(self) -> tuple[int, int]:
         """Method to retrieve the current dimensions of the context

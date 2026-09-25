@@ -197,3 +197,59 @@ class TestReadingTheContextsEvents:
         assert gestures.drives(plan)
         assert not gestures.drives(layout.views[1])
         assert gestures.handle(self._button(*_centre_of(plan), 2, 1))
+
+
+class _Pointer:
+    """A press an application builds itself, with no ``view`` attribute."""
+
+    __slots__ = ('_point',)
+    type = 'mousebutton'
+    button = 2
+    state = 1
+
+    def __init__(self, x, y):
+        self._point = (x, y)
+
+    def getPickPoint(self):
+        return self._point
+
+    def getModifiers(self):
+        return (0, 0, 0)
+
+    def getKey(self):
+        return ('hand-rolled', self._point)
+
+
+class _HandRolled(_Pointer):
+    """One that takes whatever attributes it is given."""
+
+
+class _Sealed(_Pointer):
+    """One that cannot be given attributes at all."""
+
+    __slots__ = ()
+
+
+class TestAHandRolledEvent:
+    def test_the_gestures_route_it(self):
+        gestures, layout = _laid_out()
+        event = _HandRolled(*_centre_of(layout.views[0]))
+        assert gestures.handle(event)
+        assert event.view is layout.views[0]
+
+    def test_one_that_cannot_carry_its_view_is_still_routed(self):
+        gestures, layout = _laid_out()
+        event = _Sealed(*_centre_of(layout.views[1]))
+        assert gestures.handle(event)
+        assert layout.active is layout.views[1]
+
+    def test_the_context_records_it_for_picking(self):
+        from OpenGLContext.context import Context
+        context = Context.__new__(Context)
+        context.contextDefinition = None
+        context.pickEvents = {}
+        context.getViewLayout().arrange(100, 100)
+        event = _HandRolled(10, 10)
+        context.addPickEvent(event)
+        assert list(context.pickEvents) == [('mousebutton', ('hand-rolled', (10, 10)))]
+        assert event.view is context.getViewLayout().views[0]
