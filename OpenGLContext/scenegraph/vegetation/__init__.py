@@ -5,7 +5,8 @@
 - :class:`InstancedMeshLOD` — real tree meshes drawn near the camera (the
   high-detail LOD; impostor billboards take over at distance).
 - :func:`world_grid_scatter` — world-anchored jittered scatter for pop-free
-  camera-following grass fields.
+  camera-following grass fields, and :class:`ScatterBlocks`, the same scatter
+  kept by the block so each piece of ground is scattered once.
 - :class:`VegetationField` and :class:`TreeSpecies` — a whole forest as one
   node: the table of trees, the species they are drawn from, and the selection
   that keeps the near geometry and the far cards fed as the camera moves.
@@ -30,12 +31,13 @@ from OpenGLContext.scenegraph.vegetation.cover import (
 from OpenGLContext.scenegraph.vegetation.field import TreeSpecies, VegetationField
 from OpenGLContext.scenegraph.vegetation.grid import (
     Patches,
+    ScatterBlocks,
     world_grid_scatter,
     world_noise,
 )
 
 __all__ = ["InstancedBillboards", "InstancedMeshLOD", "InstancedClumps",
-           "load_clump_glb", "world_grid_scatter", "world_noise", "Patches",
+           "load_clump_glb", "world_grid_scatter", "ScatterBlocks", "world_noise", "Patches",
            "LOD_NEAR", "LOD_FAR",
            "TreeSpecies", "VegetationField", "CoverSpecies", "GroundCover",
            "control_weight"]

@@ -627,6 +627,26 @@ def _winding_sign(mv: Any) -> int:
     return -1 if d < 0 else 1
 
 
+def winding_signs(modelviews: List[Any]) -> List[int]:
+    """:func:`_winding_sign` of each of ``modelviews``, worked out together.
+
+    One determinant expression over the stacked upper 3x3s. A list that does
+    not stack into 4x4s is answered one matrix at a time.
+    """
+    if not modelviews:
+        return []
+    try:
+        a = np.asarray(modelviews, dtype='d')
+    except (TypeError, ValueError):
+        a = None
+    if a is None or a.ndim != 3 or a.shape[1] < 3 or a.shape[2] < 3:
+        return [_winding_sign(mv) for mv in modelviews]
+    d = (a[:, 0, 0] * (a[:, 1, 1] * a[:, 2, 2] - a[:, 1, 2] * a[:, 2, 1])
+         - a[:, 0, 1] * (a[:, 1, 0] * a[:, 2, 2] - a[:, 1, 2] * a[:, 2, 0])
+         + a[:, 0, 2] * (a[:, 1, 0] * a[:, 2, 1] - a[:, 1, 1] * a[:, 2, 0]))
+    return np.where(d < 0, -1, 1).tolist()
+
+
 def build_instance_groups(
     records: List[tuple],
     min_instances: int = 2,
@@ -661,6 +681,7 @@ def build_instance_groups(
     # material changed.
     asked: "Dict[int, Tuple[Any, bool]]" = {}
 
+    batched: List[Tuple[tuple, Any]] = []
     for record in records:
         shape = record[5]
         answer = asked.get(id(shape))
@@ -673,13 +694,17 @@ def build_instance_groups(
         if not batchable:
             singles.append(record)
             continue
-        # A batch is drawn with ONE front-face winding, so instances of opposite
-        # modelview determinant (mirror / negative scale) cannot share a group --
-        # the negatively-scaled ones would mis-cull and light inside-out
-        # (NegativeScaleTest). Fold the winding sign into the bucket key so each
-        # group is uniform, and _drawInstanceGroup's per-group _apply_draw_state
-        # (from members[0]) then sets the correct winding for all of it.
-        k = (k, _winding_sign(record[1]))
+        batched.append((record, k))
+
+    # A batch is drawn with ONE front-face winding, so instances of opposite
+    # modelview determinant (mirror / negative scale) cannot share a group --
+    # the negatively-scaled ones would mis-cull and light inside-out
+    # (NegativeScaleTest). Fold the winding sign into the bucket key so each
+    # group is uniform, and _drawInstanceGroup's per-group _apply_draw_state
+    # (from members[0]) then sets the correct winding for all of it.
+    signs = winding_signs([record[1] for record, _k in batched])
+    for (record, k), sign in zip(batched, signs):
+        k = (k, sign)
         if k not in buckets:
             buckets[k] = []
             order.append(k)

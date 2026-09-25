@@ -208,10 +208,25 @@ def world_grid_scatter(cx: float, cz: float, radius: float, density: float,
     # A cell outside the disc can still place its instance inside it, by up to
     # half a cell of jitter, so the sweep is widened by that much.
     reach = radius + s * max(jitter, 1.0) / 2.0
-    i0 = int(math.floor((cx - reach) / s))
-    i1 = int(math.ceil((cx + reach) / s))
-    j0 = int(math.floor((cz - reach) / s))
-    j1 = int(math.ceil((cz + reach) / s))
+    return _scatter_cells(
+        int(math.floor((cx - reach) / s)), int(math.ceil((cx + reach) / s)),
+        int(math.floor((cz - reach) / s)), int(math.ceil((cz + reach) / s)),
+        s, height_field, scale_mul, jitter, mask, salt, scale_range,
+        disc=(cx, cz, radius))
+
+
+def _scatter_cells(i0: int, i1: int, j0: int, j1: int, s: float,
+                   height_field: "HeightField", scale_mul: float, jitter: float,
+                   mask: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]],
+                   salt: int, scale_range: "tuple[float, float]",
+                   disc: "Optional[tuple[float, float, float]]" = None,
+                   ) -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
+    """The instances of the cells ``i0..i1`` by ``j0..j1``, each ``s`` wide.
+
+    With ``disc``, ``(cx, cz, radius)``, only those landing inside it. The
+    disc is tested before the mask and the ground are read, since those are
+    the costly part and most of a disc's square is outside it.
+    """
     Igrid, Jgrid = np.meshgrid(np.arange(i0, i1 + 1, dtype=np.int64),
                                np.arange(j0, j1 + 1, dtype=np.int64))
     I = Igrid.ravel()
@@ -223,7 +238,11 @@ def world_grid_scatter(cx: float, cz: float, radius: float, density: float,
     fz = hsh(_SEED_JITTER_Z)
     px = I * s + (fx - 0.5) * s * jitter
     pz = J * s + (fz - 0.5) * s * jitter
-    keep = ((px - cx) ** 2 + (pz - cz) ** 2) < radius * radius
+    if disc is not None:
+        cx, cz, radius = disc
+        keep = ((px - cx) ** 2 + (pz - cz) ** 2) < radius * radius
+    else:
+        keep = np.ones(len(px), bool)
     if mask is not None:
         w = np.clip(np.asarray(mask(px, pz), float), 0.0, 1.0)
         keep &= w > hsh(_SEED_KEEP)     # per-cell hash: keep with prob = weight
@@ -235,3 +254,101 @@ def world_grid_scatter(cx: float, cz: float, radius: float, density: float,
     sca = ((low + (high - low) * hsh(_SEED_SCALE)[keep])
            * scale_mul).astype(np.float32)
     return pos, yaw, sca
+
+
+#: How many grid cells along each side a block of :class:`ScatterBlocks` holds.
+BLOCK_CELLS = 32
+
+
+class ScatterBlocks:
+    """:func:`world_grid_scatter` kept by the block, so each place is scattered once.
+
+    The world's grid is cut into square blocks of :data:`BLOCK_CELLS` cells a
+    side. :meth:`disc` answers the scatter of a disc from the blocks it
+    reaches, scattering a block the first time it is reached and keeping it,
+    so a camera moving over the ground pays for the ground it newly reaches
+    and nothing it has already passed over. The answer is the same set of
+    instances :func:`world_grid_scatter` gives for that disc, in block order
+    rather than row order.
+
+    ``finish(points, yaws, scales)`` runs on each block as it is made and
+    returns the per-instance arrays to keep, positions first: whatever a
+    caller works out per instance from where it stands -- how much sun
+    reaches it -- is worked out once with the rest.
+
+    A block further than :attr:`keep` disc radii from the centre of the last
+    disc asked for is let go, so what is held follows the camera rather than
+    growing with everywhere it has been. :meth:`clear` lets go of everything,
+    which is what a caller does when its mask or ground change.
+
+    One caller at a time: a worker thread computing discs owns the blocks
+    while it does.
+    """
+
+    #: How far out, in radii of the last disc, a block is kept.
+    keep = 2.0
+
+    def __init__(self, density: float, height_field: "HeightField",
+                 scale_mul: float = 0.7, jitter: float = 0.95,
+                 mask: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None,
+                 salt: int = 0,
+                 scale_range: "tuple[float, float]" = (0.5, 1.0),
+                 finish: Optional[Callable[..., tuple]] = None) -> None:
+        self.density = float(density)
+        self.cell = 1.0 / math.sqrt(self.density)
+        self.height_field = height_field
+        self.scale_mul = scale_mul
+        self.jitter = jitter
+        self.mask = mask
+        self.salt = salt
+        self.scale_range = scale_range
+        self.finish = finish
+        #: How many blocks have been scattered, over the whole life of this.
+        self.built = 0
+        self._blocks: "dict[tuple[int, int], tuple]" = {}
+
+    def __len__(self) -> int:
+        return len(self._blocks)
+
+    def clear(self) -> None:
+        """Let go of every block, so each is scattered again when next reached."""
+        self._blocks.clear()
+
+    def _block(self, bi: int, bj: int) -> tuple:
+        found = self._blocks.get((bi, bj))
+        if found is None:
+            i0, j0 = bi * BLOCK_CELLS, bj * BLOCK_CELLS
+            found = _scatter_cells(
+                i0, i0 + BLOCK_CELLS - 1, j0, j0 + BLOCK_CELLS - 1, self.cell,
+                self.height_field, self.scale_mul, self.jitter, self.mask,
+                self.salt, self.scale_range)
+            if self.finish is not None:
+                found = tuple(self.finish(*found))
+            self._blocks[(bi, bj)] = found
+            self.built += 1
+        return found
+
+    def disc(self, cx: float, cz: float, radius: float) -> tuple:
+        """The instances within ``radius`` of ``(cx, cz)``, as the scatter gives them."""
+        span = self.cell * BLOCK_CELLS
+        # A cell's instance lands up to half a cell of jitter from the cell.
+        reach = radius + self.cell * max(self.jitter, 1.0) / 2.0
+        wanted = [self._block(bi, bj)
+                  for bj in range(int(math.floor((cz - reach) / span)),
+                                  int(math.floor((cz + reach) / span)) + 1)
+                  for bi in range(int(math.floor((cx - reach) / span)),
+                                  int(math.floor((cx + reach) / span)) + 1)]
+        self._forget(cx, cz, radius, span)
+        joined = [np.concatenate(parts) for parts in zip(*wanted, strict=True)]
+        points = joined[0]
+        inside = ((points[:, 0] - cx) ** 2 + (points[:, 2] - cz) ** 2
+                  < radius * radius)
+        return tuple(part[inside] for part in joined)
+
+    def _forget(self, cx: float, cz: float, radius: float, span: float) -> None:
+        far = self.keep * radius + span
+        for bi, bj in list(self._blocks):
+            x = (bi + 0.5) * span
+            z = (bj + 0.5) * span
+            if abs(x - cx) > far or abs(z - cz) > far:
+                del self._blocks[(bi, bj)]

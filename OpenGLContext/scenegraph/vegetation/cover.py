@@ -23,7 +23,11 @@ camera and re-chosen as that moves
 (:func:`~OpenGLContext.scenegraph.vegetation.grid.world_grid_scatter`). A cell's
 position and its fate are decided by the cell's own hash, so nothing shifts or
 appears as the disc recentres, and each species is salted onto a grid of its
-own so no two of them contend for the same cells.
+own so no two of them contend for the same cells. Since a cell's plant never
+changes, each rung keeps its scatter by the block
+(:class:`~OpenGLContext.scenegraph.vegetation.grid.ScatterBlocks`): a piece of
+ground is scattered once while the camera is near it, and a re-centred disc
+is assembled from blocks already made.
 
 Where it grows is decided by the ground itself. The splat control map already
 says where the grass and the leaf litter are, and it already has the road's
@@ -59,7 +63,7 @@ from vrml.node import Node
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.varied import Varied
 from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
-from OpenGLContext.scenegraph.vegetation.grid import Patches, world_grid_scatter
+from OpenGLContext.scenegraph.vegetation.grid import Patches, ScatterBlocks
 
 if TYPE_CHECKING:
     from OpenGLContext.scenegraph.terrain.heightfield import HeightField
@@ -427,6 +431,11 @@ class GroundCover(Group):
         if not kinds:
             raise ValueError("ground cover needs at least one species to grow")
         self.field = field
+        #: Each rung's scatter, kept by the block: see :meth:`_scatter`.
+        self._blocks: "dict[tuple, tuple[tuple, ScatterBlocks]]" = {}
+        self._retired = 0
+        self._near_at: Optional[np.ndarray] = None
+        self._far_at: Optional[np.ndarray] = None
         self.species = kinds
         self.clump_radius = float(clump_radius)
         self.card_radius = max(float(card_radius), float(clump_radius))
@@ -452,10 +461,40 @@ class GroundCover(Group):
         # children is a VRML ChildrenTypedField descriptor that coerces a node list.
         self.children = [_drawn(node) for rung in self.rungs
                          for node in rung.nodes]
-        self._near_at: Optional[np.ndarray] = None
-        self._far_at: Optional[np.ndarray] = None
         self._drawn_at: Optional[tuple] = None
         self.retune()
+
+    def _told(self, name: str, value: Any) -> None:
+        """Keep ``value`` as ``name``, and scatter everything again with it."""
+        self.__dict__['_' + name + '_fn'] = value
+        blocks = self.__dict__.get('_blocks')
+        if blocks:
+            self._retired += sum(held.built for _key, held in blocks.values())
+            blocks.clear()
+        self._near_at = self._far_at = None
+
+    mask = property(lambda self: self.__dict__.get('_mask_fn'),
+                    lambda self, value: self._told('mask', value),
+                    doc="Where it grows: ``mask(x, z) -> weight``.")
+    holes = property(lambda self: self.__dict__.get('_holes_fn'),
+                     lambda self, value: self._told('holes', value),
+                     doc="Where the ground is not there: ``holes(x, z) -> mask``.")
+    shade = property(lambda self: self.__dict__.get('_shade_fn'),
+                     lambda self, value: self._told('shade', value),
+                     doc="How much sun reaches it: ``shade(x, z) -> sun``.")
+    canopy = property(lambda self: self.__dict__.get('_canopy_fn'),
+                      lambda self, value: self._told('canopy', value),
+                      doc="How much tree cover stands over it: ``canopy(x, z)``.")
+
+    @property
+    def scattered(self) -> int:
+        """How many blocks of ground have been scattered, over this cover's life.
+
+        Each place is scattered once while the camera stays near it, so this
+        grows with the ground newly reached rather than with the distance
+        driven over ground already covered.
+        """
+        return self._retired + sum(held.built for _key, held in self._blocks.values())
 
     def rung(self, name: str) -> CoverRung:
         """The rung for the species called ``name``."""
@@ -503,26 +542,52 @@ class GroundCover(Group):
             return fit
         return at
 
-    def _scatter(self, rung: CoverRung, x: float, z: float, radius: float,
-                 density: float, height: float) -> tuple:
-        """One disc of one species, with how much sun reaches each plant."""
-        kind = rung.species
-        points, yaws, scales = world_grid_scatter(
-            x, z, radius, rung.patches.density_for(density), self.field,
-            scale_mul=height, jitter=COVER_JITTER, mask=self._suits(rung),
-            salt=kind.salt, scale_range=SIZE_SPREAD)
-        band = kind.band
-        if band is not None and self.canopy is not None and len(points):
-            # A plant at the edge of the cover it wants is a straggler rather
-            # than a full-sized one that happens to be there.
-            fit = _band(
-                np.asarray(self.canopy(points[:, 0], points[:, 2]), 'd'),
-                band)
-            scales = (scales * (STRAGGLER + (1.0 - STRAGGLER) * fit)
-                      ).astype('f4')
-        lit = (None if self.shade is None
-               else np.asarray(self.shade(points[:, 0], points[:, 2]), 'f4'))
-        return points, yaws, scales, lit
+    def _scatter(self, rung: CoverRung, role: str, x: float, z: float,
+                 radius: float, density: float, height: float) -> tuple:
+        """One disc of one species, with how much sun reaches each plant.
+
+        Every plant is decided by its own cell of a world-anchored grid, so the
+        scatter of a piece of ground never changes: it is kept by the block
+        (:class:`~OpenGLContext.scenegraph.vegetation.grid.ScatterBlocks`), and
+        a disc is assembled from the blocks it reaches. A block is scattered
+        the first time a disc reaches it, with its plants' sizes and light.
+        Changing the mask, the holes, the shade or the canopy scatters
+        everything again.
+        """
+        slot = (id(rung), role)
+        key = (float(density), float(height))
+        held = self._blocks.get(slot)
+        if held is None or held[0] != key:
+            if held is not None:
+                self._retired += held[1].built
+            kind = rung.species
+            held = (key, ScatterBlocks(
+                rung.patches.density_for(density), self.field,
+                scale_mul=height, jitter=COVER_JITTER, mask=self._suits(rung),
+                salt=kind.salt, scale_range=SIZE_SPREAD,
+                finish=self._finisher(rung)))
+            self._blocks[slot] = held
+        found = held[1].disc(x, z, radius)
+        return found if len(found) == 4 else (*found, None)
+
+    def _finisher(self, rung: CoverRung) -> Callable[..., tuple]:
+        """What a block's plants are given besides their places: size and light."""
+        band, canopy, shade = rung.species.band, self.canopy, self.shade
+
+        def finish(points: np.ndarray, yaws: np.ndarray,
+                   scales: np.ndarray) -> tuple:
+            if band is not None and canopy is not None and len(points):
+                # A plant at the edge of the cover it wants is a straggler
+                # rather than a full-sized one that happens to be there.
+                fit = _band(np.asarray(canopy(points[:, 0], points[:, 2]), 'd'),
+                            band)
+                scales = (scales * (STRAGGLER + (1.0 - STRAGGLER) * fit)
+                          ).astype('f4')
+            if shade is None:
+                return points, yaws, scales
+            return (points, yaws, scales,
+                    np.asarray(shade(points[:, 0], points[:, 2]), 'f4').reshape(-1))
+        return finish
 
     def compute_near(self, x: float, z: float) -> list:
         """Scatter the geometry and the cards around ``(x, z)``. No GL.
@@ -536,10 +601,10 @@ class GroundCover(Group):
         for rung in self.rungs:
             kind = rung.species
             density = kind.density * self.density_scale
-            cards = self._scatter(rung, x, z, self.card_radius,
+            cards = self._scatter(rung, 'cards', x, z, self.card_radius,
                                   density * CARD_SHARE, kind.height)
             clumps = (None if rung.clumps_near is None else self._scatter(
-                rung, x, z, self.clump_radius + CLUMP_STREAM_MARGIN, density,
+                rung, 'clumps', x, z, self.clump_radius + CLUMP_STREAM_MARGIN, density,
                 kind.height))
             out.append((cards, clumps))
         return out
@@ -553,7 +618,7 @@ class GroundCover(Group):
 
     def compute_far(self, x: float, z: float) -> list:
         """Scatter the coarse field that runs out to the haze. No GL."""
-        return [self._scatter(rung, x, z, self.far_radius,
+        return [self._scatter(rung, 'far', x, z, self.far_radius,
                               rung.species.density * self.density_scale
                               * FAR_SHARE,
                               rung.species.height * FAR_SCALE)

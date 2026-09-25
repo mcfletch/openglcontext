@@ -118,6 +118,23 @@ class TestWhereItGrows:
         cover.update((40.0, 0.0, 0.0))
         assert cover.selections == before + 1
 
+    def test_ground_driven_back_over_is_not_scattered_again(self) -> None:
+        cover = _cover(card_radius=100.0)
+        cover.update((0.0, 0.0, 0.0))
+        cover.update((40.0, 0.0, 0.0))
+        scattered = cover.scattered
+        for _lap in range(3):
+            cover.update((0.0, 0.0, 0.0))
+            cover.update((40.0, 0.0, 0.0))
+        assert cover.scattered == scattered
+
+    def test_moving_on_scatters_only_the_ground_newly_reached(self) -> None:
+        cover = _cover(card_radius=100.0)
+        cover.update((0.0, 0.0, 0.0))
+        first = cover.scattered
+        cover.update((40.0, 0.0, 0.0))
+        assert 0 < cover.scattered - first < first / 2
+
     def test_a_cell_keeps_its_place_as_the_disc_moves(self) -> None:
         """World-anchored, so nothing appears or shifts as you drive past."""
         cover = _cover(card_radius=150.0)
@@ -197,6 +214,15 @@ class TestWhereTheGroundIsNotThere:
         """A game stands the ground up from a tileset and finds out where the
         bores are from the roads, which it reads second."""
         cover = _cover(card_radius=300.0)
+        cover.holes = self._hole()
+        cover.update((0.0, 0.0, 0.0))
+        away = np.hypot(cover.rungs[0].cards.pos[:, 0],
+                        cover.rungs[0].cards.pos[:, 2])
+        assert float(away.min()) >= 60.0
+
+    def test_a_hole_told_to_it_after_it_has_grown_clears_the_opening(self) -> None:
+        cover = _cover(card_radius=300.0)
+        cover.update((0.0, 0.0, 0.0))
         cover.holes = self._hole()
         cover.update((0.0, 0.0, 0.0))
         away = np.hypot(cover.rungs[0].cards.pos[:, 0],

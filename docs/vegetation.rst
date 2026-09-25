@@ -148,6 +148,16 @@ whether it holds a plant come from a hash of the cell, so nothing shifts or
 pops as the disc re-centres. Each species uses its own salted grid, so
 species do not compete for the same cells.
 
+Because a cell's plant never changes, the scatter is kept by the block: the
+grid is cut into squares of 32 cells a side
+(``vegetation.grid.ScatterBlocks``), each scattered the first time a disc
+reaches it, with its plants' sizes and light, and kept while the camera is
+within twice the disc's radius of it. A disc is assembled from the blocks it
+reaches, so moving costs the ground newly reached, and driving back over
+ground already covered costs nothing but the assembly. ``GroundCover.scattered``
+counts the blocks scattered. Setting ``mask``, ``holes``, ``shade`` or
+``canopy`` scatters everything again.
+
 The scatter is the expensive half of the work and makes no GL calls. A caller
 with a worker thread can run ``compute_near`` on it and pass the result to
 ``apply_near`` on the render thread. ``update`` does both on the calling
