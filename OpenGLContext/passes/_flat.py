@@ -719,6 +719,18 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
             glClearColor(0.0, 0.0, 0.0, 1.0)
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
+    def batchingFunctions(self) -> Tuple[Any, Any]:
+        """The ``(key, instanceable)`` functions an instance grouping is made with.
+
+        A pass that remembers them per shape (the PBR pass's ``batchers``)
+        offers those; otherwise the pass's own ``_instanceKey`` and
+        ``_instanceable``.
+        """
+        batchers = getattr(self, 'batchers', None)
+        if batchers is not None:
+            return batchers()
+        return self._instanceKey, self._instanceable
+
     @staticmethod
     def _materialSortKey(rec: Sequence[Any]) -> int:
         """Group key so shapes sharing one material batch together in the draw.
@@ -782,11 +794,12 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         self.clearPlanarReflection()
         if getattr(self, 'instancing_enabled', False):
             from OpenGLContext.passes.instancing import build_instance_groups
+            key, instanceable = self.batchingFunctions()
             groups, single_recs = build_instance_groups(
                 [rec for (_i, rec) in opaque],
                 min_instances=self.instanceMinimum(),
-                key=self._instanceKey,
-                instanceable=self._instanceable,
+                key=key,
+                instanceable=instanceable,
             )
             for group in groups:
                 try:

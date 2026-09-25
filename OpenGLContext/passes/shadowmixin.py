@@ -983,9 +983,10 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         if hit is not None:
             return hit
         from OpenGLContext.passes.instancing import build_instance_groups
+        key, instanceable = self.batchingFunctions()
         result = build_instance_groups(
             list(toRender), min_instances=self.instanceMinimum(),
-            key=self._instanceKey, instanceable=self._instanceable)
+            key=key, instanceable=instanceable)
         # Only a few distinct caster sets exist per frame (one per shadow-casting
         # light); clear rather than grow unbounded if the scene churns.
         if len(cache) >= 8:

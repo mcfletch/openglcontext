@@ -1011,6 +1011,45 @@ class PBRPass(flatcore.FlatPass):
             return False
         return hasattr(geometry, 'instanceGPU')
 
+    def batchers(self) -> Tuple[Any, Any]:
+        """The ``(key, instanceable)`` pair for one grouping, remembered per shape.
+
+        What a shape batches on is read from its geometry and its appearance,
+        and they change far less often than a frame is drawn, so the answer is
+        kept against the identities (and the material's version) it was made
+        from and asked again only when one of them differs. A geometry that
+        computes its own content key from its fields is asked every time.
+        Whether content collapse is on is read once for the grouping.
+        """
+        collapse = instance_collapse_is_enabled()
+        memo = self.__dict__.setdefault('_batchMemo', {})
+        if len(memo) > 100000:
+            memo.clear()
+
+        def answer(shape: Any) -> Tuple[Any, bool]:
+            geometry = getattr(shape, 'geometry', None)
+            appearance = getattr(shape, 'appearance', None)
+            material = getattr(appearance, 'material', None)
+            signature = (id(geometry), id(appearance), id(material),
+                         getattr(material, '_ubo_version', 0),
+                         id(getattr(appearance, 'texture', None)), collapse)
+            held = memo.get(id(shape))
+            if held is not None and held[0] == signature:
+                return held[1], held[2]
+            key = self._keyFor(shape, collapse)
+            flag = key is not None and bool(self._instanceable(shape))
+            if not callable(getattr(geometry, 'instanceContentKey', None)):
+                memo[id(shape)] = (signature, key, flag)
+            return key, flag
+
+        return (lambda shape: answer(shape)[0]), (lambda shape: answer(shape)[1])
+
+    def _keyFor(self, shape: Any, collapse: bool) -> Any:
+        from OpenGLContext.passes.instancing import (
+            geometry_texture_key, geometry_content_key,
+        )
+        return geometry_content_key(shape) if collapse else geometry_texture_key(shape)
+
     def _instanceKey(self, shape: Any) -> Any:
         """Batch by geometry + texture set: materials differing only by FACTORS
         share one instanced draw (each instance indexes the material array). With
