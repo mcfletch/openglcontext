@@ -27,7 +27,13 @@ from OpenGLContext.testing.subprocess_runner import (
     kill_process_tree as _kill_process_tree,
     run_test_with_popen as _run_test_with_popen,
 )
+from OpenGLContext.testing.display import display_available
 from OpenGLContext.testing.event_injector import EventSender
+
+try:
+    import coverage
+except ImportError:                 # subprocess coverage is collected only where it is installed
+    coverage = None
 
 # Timeout settings
 DEFAULT_TIMEOUT = 30  # Most tests
@@ -48,18 +54,8 @@ collect_ignore = [
 PROFILES = ['compatibility', 'core']
 
 
-def _check_coverage_available() -> bool:
-    """Check if coverage module is available and can run."""
-    try:
-        import coverage
-        # Verify coverage.run works
-        return hasattr(coverage, 'Coverage')
-    except ImportError:
-        return False
-
-
-# Cache coverage availability check
-_COVERAGE_AVAILABLE = _check_coverage_available()
+#: Whether subprocess runs are measured and their data combined at the end.
+_COVERAGE_AVAILABLE = coverage is not None and hasattr(coverage, 'Coverage')
 
 
 @pytest.fixture
@@ -238,7 +234,7 @@ def event_sender():
 
 
 @pytest.fixture
-def interactive_runner(subprocess_runner, event_sender):
+def interactive_runner(event_sender):
     """Run an interactive test with event injection.
 
     Returns a callable that spawns a subprocess and provides an event sender.
@@ -388,11 +384,11 @@ def pytest_configure(config):
 
 
 # Skip tests based on available backends
-def pytest_collection_modifyitems(config, items):
+def pytest_collection_modifyitems(items):
     """Modify test collection based on available backends."""
     # Check for GLFW availability
     try:
-        import glfw
+        import glfw  # noqa: PLC0415 glfw is optional; only whether it imports is asked, and only here
         has_glfw = True
     except ImportError:
         has_glfw = False
@@ -400,7 +396,6 @@ def pytest_collection_modifyitems(config, items):
     # A windowed display OR an offscreen GL platform (EGL/OSMesa) can render;
     # only skip visual tests when neither is present, so a headless CI runner
     # configured with PYOPENGL_PLATFORM actually runs them.
-    from OpenGLContext.testing.display import display_available
     has_display = display_available()
 
     for item in items:
@@ -414,7 +409,7 @@ def pytest_collection_modifyitems(config, items):
 
 
 # Coverage combination hooks
-def pytest_sessionstart(session):
+def pytest_sessionstart():
     """Clean up old coverage data files before running tests."""
     if _COVERAGE_AVAILABLE:
         # Remove old parallel coverage files
@@ -426,7 +421,7 @@ def pytest_sessionstart(session):
                 pass
 
 
-def pytest_sessionfinish(session, exitstatus):
+def pytest_sessionfinish():
     """Combine coverage data from all subprocess runs after tests complete."""
     if not _COVERAGE_AVAILABLE:
         return
@@ -465,5 +460,5 @@ def pytest_sessionfinish(session, exitstatus):
                 print(f"Coverage report failed: {result.stderr}")
         else:
             print(f"Coverage combine failed: {result.stderr}")
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         print(f"Coverage combination error: {e}")

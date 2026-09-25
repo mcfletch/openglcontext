@@ -22,18 +22,30 @@ Visual Regression:
 - An HTML report is generated at tests/report.html
 """
 
+import importlib
 import json
 import os
 import re
 import subprocess
 import sys
 import time
+import traceback
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
+import numpy as np
 import pytest
+from PIL import Image
+
+from OpenGLContext.testing.framebuffer_comparison import compare_images
+from OpenGLContext.testing.report_generator import TestReportGenerator
+
+try:
+    import coverage
+except ImportError:                 # subprocess coverage is collected only where it is installed
+    coverage = None
 
 # Test directory paths
 TESTS_DIR = Path(__file__).parent
@@ -165,11 +177,7 @@ _test_results: list[VisualTestResult] = []
 
 def _check_coverage_available():
     """Check if coverage module is available."""
-    try:
-        import coverage
-        return hasattr(coverage, 'Coverage')
-    except ImportError:
-        return False
+    return coverage is not None and hasattr(coverage, 'Coverage')
 
 
 from OpenGLContext.testing.display import (
@@ -182,27 +190,28 @@ from OpenGLContext.testing.gl_env import gl_subprocess_env
 from OpenGLContext.testingcontext import REQUIRED_EXTENSION_MISSING
 
 
-def _check_wx_available():
-    """Whether wxPython can be cleanly imported in this environment.
+def _importable(name):
+    """Whether the optional module ``name`` imports cleanly here.
 
     Catches every failure, not just ImportError: wxPython's own package init can
     raise AttributeError from a circular import in some collection orders, and an
     availability probe must report "unavailable" rather than crash collection.
     """
     try:
-        import wx
-        return True
-    except Exception:
+        importlib.import_module(name)
+    except Exception:  # noqa: BLE001 any failure to import is the answer "unavailable"
         return False
+    return True
+
+
+def _check_wx_available():
+    """Whether wxPython can be cleanly imported in this environment."""
+    return _importable('wx')
 
 
 def _check_pygame_available():
     """Whether pygame can be cleanly imported (any failure -> unavailable)."""
-    try:
-        import pygame
-        return True
-    except Exception:
-        return False
+    return _importable('pygame')
 
 
 def _check_glut_available():
@@ -214,11 +223,7 @@ def _check_glut_available():
     """
     if os.environ.get('WAYLAND_DISPLAY'):
         return False
-    try:
-        from OpenGL import GLUT
-        return True
-    except Exception:
-        return False
+    return _importable('OpenGL.GLUT')
 
 
 def _check_win32ui_available():
@@ -229,11 +234,7 @@ def _check_win32ui_available():
     context they build a font in. Without it they cannot run, which is a
     different thing from the platform being wrong for them.
     """
-    try:
-        import win32ui
-        return True
-    except Exception:
-        return False
+    return _importable('win32ui')
 
 
 def _is_windows():
@@ -512,29 +513,28 @@ def _run_visual_test(
             reference_image = str(reference_image_path)
 
             # Compare images
-            try:
-                comparison_stats = _compare_images(
-                    reference_image_path, result_image_path,
-                    tolerance=tolerance_for(test_name))
+            comparison_stats = _compare_images(
+                reference_image_path, result_image_path,
+                tolerance=tolerance_for(test_name))
 
-                if comparison_stats:
-                    # Create diff image
-                    diff_image_path = RESULT_IMAGES_DIR / f"{test_name}_diff.png"
-                    if diff_image_path.exists():
-                        diff_image = str(diff_image_path)
+            if comparison_stats:
+                # Create diff image
+                diff_image_path = RESULT_IMAGES_DIR / f"{test_name}_diff.png"
+                if diff_image_path.exists():
+                    diff_image = str(diff_image_path)
 
-                    # Update status based on visual comparison:
-                    # a real pixel difference is a failure unless the script is
-                    # flagged as producing expected (randomized) differences.
-                    if status == 'pass':
-                        if comparison_stats.get('is_match', False):
-                            status = 'pass'
-                        elif expect_visual_diff:
-                            status = 'visual_diff_expected'
-                        else:
-                            status = 'visual_diff'
-            except Exception as e:
-                stderr += f"\nImage comparison error: {e}"
+                # Update status based on visual comparison:
+                # a real pixel difference is a failure unless the script is
+                # flagged as producing expected (randomized) differences.
+                if status == 'pass':
+                    if comparison_stats.get('is_match', False):
+                        status = 'pass'
+                    elif expect_visual_diff:
+                        status = 'visual_diff_expected'
+                    else:
+                        status = 'visual_diff'
+                if 'error' in comparison_stats:
+                    stderr += "\nImage comparison error: %s" % (comparison_stats['error'],)
 
     # Create result object
     test_result = VisualTestResult(
@@ -568,18 +568,10 @@ def _compare_images(reference_path: Path, result_path: Path,
         tolerance: percent of pixels that may differ (see tolerance_for)
 
     Returns:
-        Dict with comparison statistics, or None if comparison failed
+        Dict with comparison statistics; where an image cannot be read, one
+        with ``is_match`` False and the ``error``
     """
-    try:
-        import numpy as np
-        from PIL import Image
-    except ImportError:
-        return None
-
-    # Delegate the pixel math to the single implementation in the shipped
-    # package rather than keeping a second copy here.
-    from OpenGLContext.testing.framebuffer_comparison import compare_images
-
+    # The pixel math is the shipped package's single implementation.
     try:
         ref_array = np.array(Image.open(reference_path).convert('RGB'), dtype=np.uint8)
         result_array = np.array(Image.open(result_path).convert('RGB'), dtype=np.uint8)
@@ -614,7 +606,8 @@ def _compare_images(reference_path: Path, result_path: Path,
             'percent_different': result.percent_different,
             'is_match': is_match,
         }
-    except Exception as e:
+    except OSError as e:
+        # An image that will not open or save: a failed comparison, with why.
         return {'error': str(e), 'is_match': False}
 
 
@@ -625,8 +618,6 @@ def generate_html_report(results: list[VisualTestResult], output_path: Path) -> 
         results: List of test results
         output_path: Path to save the HTML report
     """
-    from OpenGLContext.testing.report_generator import TestReportGenerator
-
     generator = TestReportGenerator(title="OpenGLContext Visual Regression Report")
 
     for result in results:
@@ -1123,12 +1114,13 @@ def pytest_configure(config):
 
 
 @pytest.fixture(scope="session", autouse=True)
-def generate_report_on_finish(request):
+def generate_report_on_finish():
     """Generate HTML report after all tests complete."""
     yield
     # This runs after all tests in the session
     if _test_results:
         try:
             generate_html_report(_test_results, REPORT_PATH)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 a report that cannot be written does not fail the run it reports on
+            traceback.print_exc()
             print(f"Failed to generate HTML report: {e}")

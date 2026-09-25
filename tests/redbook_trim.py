@@ -52,7 +52,6 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.arrays import *
-import traceback
 
 class TestContext( BaseContext ):
     profile = 'compatibility'   # draws with the fixed-function pipeline
@@ -83,49 +82,44 @@ class TestContext( BaseContext ):
         ],'f') # /* clockwise */ 
 
 
+        glClearColor (0.0, 0.0, 0.0, 0.0)
+        glMaterialfv(GL_FRONT, GL_DIFFUSE, array([0.7, 0.7, 0.7, 1.0],'f'))
+        glMaterialfv(GL_FRONT, GL_SPECULAR, array([1.0, 1.0, 1.0, 1.0],'f'))
+        glMaterialfv(GL_FRONT, GL_SHININESS, array([100.0],'f'))
+
+        glEnable(GL_AUTO_NORMAL)
+        glEnable(GL_NORMALIZE)
+
+        knots= array([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],'f')
+        glPushMatrix()
         try:
-                
+            glRotatef(330.0, 1.,0.,0.)
+            glScalef (0.5, 0.5, 0.5)
 
-            glClearColor (0.0, 0.0, 0.0, 0.0)
-            glMaterialfv(GL_FRONT, GL_DIFFUSE, array([0.7, 0.7, 0.7, 1.0],'f'))
-            glMaterialfv(GL_FRONT, GL_SPECULAR, array([1.0, 1.0, 1.0, 1.0],'f'))
-            glMaterialfv(GL_FRONT, GL_SHININESS, array([100.0],'f'))
-
-            glEnable(GL_AUTO_NORMAL)
-            glEnable(GL_NORMALIZE)
-
-            knots= array([0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0],'f')
-            glPushMatrix()
+            gluBeginSurface(self.theNurb)
             try:
-                glRotatef(330.0, 1.,0.,0.)
-                glScalef (0.5, 0.5, 0.5)
-
-                gluBeginSurface(self.theNurb)
+                gluNurbsSurface(
+                    self.theNurb,
+                    knots, knots,
+                    self.controlPoints,
+                    GL_MAP2_VERTEX_3
+                )
+                gluBeginTrim (self.theNurb)
                 try:
-                    gluNurbsSurface(
-                        self.theNurb,
-                        knots, knots,
-                        self.controlPoints,
-                        GL_MAP2_VERTEX_3
-                    )
-                    gluBeginTrim (self.theNurb)
-                    try:
-                        gluPwlCurve (self.theNurb, edgePt, GLU_MAP1_TRIM_2)
-                    finally:
-                        gluEndTrim (self.theNurb)
-                        
-                    gluBeginTrim (self.theNurb)
-                    try:
-                        gluNurbsCurve (self.theNurb, curveKnots, curvePt, GLU_MAP1_TRIM_2)
-                        gluPwlCurve (self.theNurb, pwlPt, GLU_MAP1_TRIM_2)
-                    finally:
-                        gluEndTrim (self.theNurb)
+                    gluPwlCurve (self.theNurb, edgePt, GLU_MAP1_TRIM_2)
                 finally:
-                    gluEndSurface(self.theNurb)
+                    gluEndTrim (self.theNurb)
+                    
+                gluBeginTrim (self.theNurb)
+                try:
+                    gluNurbsCurve (self.theNurb, curveKnots, curvePt, GLU_MAP1_TRIM_2)
+                    gluPwlCurve (self.theNurb, pwlPt, GLU_MAP1_TRIM_2)
+                finally:
+                    gluEndTrim (self.theNurb)
             finally:
-                glPopMatrix()
-        except Exception:
-            traceback.print_exc()
+                gluEndSurface(self.theNurb)
+        finally:
+            glPopMatrix()
 
 
     def OnInit( self ):
