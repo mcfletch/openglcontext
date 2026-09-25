@@ -19,7 +19,7 @@ from OpenGLContext.events import glfwevents
 from OpenGLContext.looptrace import LoopTrace
 import logging
 import warnings
-from typing import Any, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 log = logging.getLogger(__name__)
 
@@ -375,7 +375,8 @@ class GLFWContext(
         'no': ('NOT_ALLOWED_CURSOR',),
     }
 
-    _cursors: Any = None
+    #: The GLFW cursors this window has made, by name, until it is released.
+    _cursors: Optional[Dict[str, Any]] = None
 
     def setPointerShape(self, name: str) -> bool:
         """Show this pointer; False for a name this platform has not got.
@@ -518,6 +519,11 @@ class GLFWContext(
         except Exception:               # pragma: no cover - needs a lost window
             pass
         self.releaseContextResources(self._glHandle())
+        # GLFW keeps a cursor until it is destroyed or GLFW is terminated, so
+        # a process that opens many windows would otherwise collect them.
+        for cursor in (self._cursors or {}).values():
+            glfw.destroy_cursor(cursor)
+        self._cursors = None
         glfw.destroy_window(window)
 
     def OnIdle(self, *arguments: Any) -> int:

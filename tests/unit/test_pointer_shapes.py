@@ -62,6 +62,29 @@ def test_the_same_shape_is_made_once(window):
     assert context._cursors == made
 
 
+def test_the_shapes_go_with_the_window(window, monkeypatch):
+    """A process that opens many windows does not collect their cursors."""
+    context = _Window(window)
+    assert context.setPointerShape('arrow')
+    made = list(context._cursors.values())
+    destroyed = []
+    real = glfw.destroy_cursor
+
+    def destroying(cursor):
+        destroyed.append(cursor)
+        real(cursor)
+
+    monkeypatch.setattr(glfw, 'destroy_cursor', destroying)
+    # The fixture owns the window and its GL objects; only the cursors are
+    # this context's to let go of here.
+    monkeypatch.setattr(glfw, 'destroy_window', lambda handle: None)
+    monkeypatch.setattr(_Window, 'releaseContextResources', lambda self, handle: None)
+    context.releaseWindow()
+    assert destroyed == made
+    assert not context._cursors
+    glfw.make_context_current(window)
+
+
 def test_a_context_with_no_window_sets_nothing():
     assert not _Window(None).setPointerShape('hand')
 
