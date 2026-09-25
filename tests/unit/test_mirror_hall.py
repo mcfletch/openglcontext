@@ -140,6 +140,46 @@ def test_the_windows_open_onto_a_sky(hall):
         assert covering == []
 
 
+# --- how the room is lit ---------------------------------------------------------------
+
+def test_only_the_lamp_housings_cast_no_shadow(hall):
+    """A housing stands between its lamp and the room; everything else casts."""
+    records = _records(hall.room())
+    lamp = hall.finish.lamp
+    housings = [r[5] for r in records if r[5].appearance.material is lamp]
+    assert housings
+    assert not any(shape.castsShadow for shape in housings)
+    assert all(r[5].castsShadow for r in records if r[5].appearance.material is not lamp)
+
+
+def test_the_sun_comes_in_through_the_windows_well_onto_the_floor(hall):
+    """Each window lays its light on the floor inside, reaching metres into the room."""
+    from OpenGLContext.scenegraph.basenodes import DirectionalLight
+    [sun] = [node for node in hall.room() if isinstance(node, DirectionalLight)]
+    direction = np.asarray(sun.direction, 'd')
+    for along, low, high in WINDOWS:
+        for height in (low, high):
+            opening = np.array([WIDTH / 2, height, along])
+            landing = opening + direction * (height / -direction[1])
+            assert abs(landing[0]) < WIDTH / 2 and abs(landing[2]) < LENGTH / 2
+        assert WIDTH / 2 - landing[0] > 2.0
+
+
+def test_the_room_is_lit_by_what_can_be_seen_inside_it(hall):
+    """A zone round the whole room takes its environment from a capture."""
+    from OpenGLContext.scenegraph.basenodes import Transform, Zone
+    [holder] = [node for node in hall.room() if isinstance(node, Transform)
+                and any(isinstance(child, Zone) for child in node.children)]
+    [zone] = holder.children
+    [setting] = zone.settings
+    assert setting.capture
+    low = np.asarray(holder.translation) - np.asarray(zone.size) / 2
+    high = np.asarray(holder.translation) + np.asarray(zone.size) / 2
+    for part in hall.parts():
+        points = part.geometry.positions
+        assert (points.min(axis=0) > low).all() and (points.max(axis=0) < high).all()
+
+
 def test_the_floor_steps_up_to_the_far_wall(hall):
     treads = sorted(_pieces(hall, hall.finish.treads), key=lambda box: box[1][1])
     assert [round(float(hi[1]), 3) for _lo, hi in treads] == [rise for rise, _front in STEPS]

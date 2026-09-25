@@ -372,7 +372,10 @@ a black marble border sharing another, a pool whose water ripples, and a round
 window that shows only what it reflects. The room itself -- brick walls
 broken by half columns and moldings, real windows onto a sky, the dais, the
 metal columns -- is ``OpenGLContext/bin/mirrorhall.py``, made from
-:doc:`surfaces` and holding no mirrors of its own, so
+:doc:`surfaces` and holding no mirrors of its own. It is lit by a low sun
+through its windows and by lamps on the columns, and a :doc:`zone <zones>`
+round it takes its environment light from a capture inside it, so the
+mirrors reflect a room lit by the room rather than by the sky. So
 ``OpenGLContext/bin/mirrors_demo.py`` is only the mirrors: what each
 reflector is set to, the materials carrying them, and where they go.
 

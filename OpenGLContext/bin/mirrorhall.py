@@ -12,6 +12,12 @@ A hall 16.2 metres wide, 24 long and 4.4 high, made from
 * a floor slot for 30 cm marble tiles inside a border of black marble tiles,
   and a basin for a pool, tiled at the bottom.
 
+It is lit as a room: a low sun (:data:`SUN`) shines in through the windows
+and lays their shape on the floor and the dais, the lamps light it from the
+columns, and a zone round the whole hall takes its environment light from a
+capture made inside it, so what is not in the sun is lit by the room rather
+than by the open sky. The lamps' housings cast no shadow of their own light.
+
 It is scenery. The demo says what is a mirror and where it goes::
 
     hall = Hall()
@@ -35,7 +41,7 @@ from OpenGLContext.scenegraph import basenodes, surfaces
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 
 __all__ = ['WIDTH', 'LENGTH', 'HEIGHT', 'TILE', 'BRICK', 'WALLS', 'BAYS', 'PILASTERS',
-           'WINDOWS', 'WINDOW_WIDTH', 'STEPS', 'Finishes', 'Part', 'Hall']
+           'WINDOWS', 'WINDOW_WIDTH', 'STEPS', 'SUN', 'Finishes', 'Part', 'Hall']
 
 #: The room's size in metres: across x, along z, and up. The width and length
 #: are whole numbers of floor tiles, border included.
@@ -76,6 +82,10 @@ WINDOW_WIDTH = 2.2
 
 #: The dais's steps, lowest first: (height of the tread, z of its front edge).
 STEPS: Tuple[Tuple[float, float], ...] = ((0.15, -9.9), (0.3, -10.25), (0.45, -10.6))
+
+#: The sunlight's direction: low, from beyond the right wall, so each window
+#: lays a patch of light several metres across the floor.
+SUN = (-0.6, -0.45, -0.66)
 
 #: How far in front of its wall a hung surface stands, and its frame's depth.
 STANDOFF = 0.1
@@ -174,12 +184,21 @@ class Hall:
         merged: Dict[Tuple[str, int], List[Part]] = {}
         for part in self.parts():
             merged.setdefault((part.group, id(part.material)), []).append(part)
-        scenery = [surfaces.shape(surfaces.merge([part.geometry for part in parts]),
-                                  parts[0].material)
-                   for parts in merged.values()]
+        scenery = []
+        for parts in merged.values():
+            placed = surfaces.shape(surfaces.merge([part.geometry for part in parts]),
+                                    parts[0].material)
+            # A lamp's housing stands between its light and the room.
+            placed.children[0].castsShadow = parts[0].material is not self.finish.lamp
+            scenery.append(placed)
+        # The room's environment light is what can be seen inside it: the
+        # lamps, the sunlit floor and the sky through the windows.
+        inside = basenodes.Transform(translation=(0.0, HEIGHT / 2, 0.0), children=[
+            basenodes.Zone(size=(WIDTH + 0.4, HEIGHT + 0.4, LENGTH + 0.4), blend=0.2,
+                           settings=[basenodes.ZoneEnvironment(capture=True, intensity=0.4)])])
         return ([basenodes.Viewpoint(position=(0.0, 1.7, 9.0), description='Hall'),
                  basenodes.NavigationInfo(headlight=False, type=['WALK']),
-                 basenodes.DirectionalLight(direction=(-0.3, -1.0, -0.4), intensity=0.3),
+                 basenodes.DirectionalLight(direction=SUN, intensity=6.0), inside,
                  basenodes.Background(
                      skyColor=[(0.30, 0.46, 0.72), (0.55, 0.68, 0.86), (0.82, 0.85, 0.87)],
                      skyAngle=[1.1, 1.52],
@@ -374,7 +393,7 @@ class Hall:
 
     def _lamps(self) -> List[Any]:
         """The light each column's lamp gives the room."""
-        return [basenodes.PointLight(location=(x, 3.7, z), intensity=0.6,
+        return [basenodes.PointLight(location=(x, 3.7, z), intensity=2.0,
                                      color=(1.0, 0.95, 0.85), attenuation=(1.0, 0.0, 0.02),
                                      radius=30.0)
                 for x, z in self._column_places()]
