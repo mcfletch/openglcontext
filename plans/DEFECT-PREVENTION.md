@@ -556,6 +556,96 @@ counts are simpleparse, whose tests assert inside a helper not named for it
 some with the check in a decorator; renaming the helper, or an explicit
 assertion, clears them.
 
+### openglcontext adopts every rule
+
+openglcontext had findings under all seven rules (829 in all). Each was
+resolved as a defect in the code or in the rule; none was exempted to make
+the gate pass. The engine's table selects every rule (the default), and the
+gate runs in preflight.
+
+Fixed in the rules:
+
+- OGC131 does not report a table that lives for one call (a local bound only
+  to containers the function makes, used in place and never passed on,
+  returned or stored), a display compared or measured and dropped, or a lookup
+  whose entry is checked to hold the object (`entry[0] is x`,
+  `table.get(id(x)) is x`). 74 findings.
+- OGC161 takes a `script` scope, declared by the project: programs run as
+  `python tests/x.py` or as a subprocess driver, which do their work at import
+  by design. Nothing in the syntax marks a file as a program (the `bin/`
+  modules have `__main__` guards and are imported too), so the project names
+  its programs. A scope glob starting `!` removes paths from a scope. 121
+  findings.
+- OGC201 required a `type: ignore` reason in a form mypy rejects; the reason
+  now follows a second `#`.
+- OGC222 follows calls to helpers defined in the same module, or methods on
+  the test's own class, through the helpers they call. 23 findings.
+- The configuration lookup took an enclosing project's table when the
+  nearest `pyproject.toml` had none; the nearest `pyproject.toml` is now the
+  project.
+- The result cache was keyed on the package version, so an edited rule in an
+  editable install served old findings; it is keyed on the package's source.
+
+Fixed in the code, among others:
+
+- 243 `noqa` comments naming ruff codes the project ignores, and 11
+  `type: ignore`s in tests mypy does not check, removed; 38 `type: ignore`s
+  removed by fixing their cause, one of them in PyOpenGL (`vbo.VBO` typed as
+  None).
+- Tables keyed on `id()`: tiles, zones, emitters, crowds, the batching memo,
+  joint palettes and a per-context texture cache now key on the object, and
+  one scenegraph walker (`scenegraph/walk.reachable`) replaces nine. Real
+  defects among them: a joint palette that could give a new mesh a collected
+  mesh's range, a terrain collider table that did not hold its tiles, a
+  scene observer recording nodes outside its scene, and an audio aim timer
+  never cleared.
+- Fonts delete their display lists in the context that made them, through a
+  shared `contextresources.ContextNames` that geometry vertex arrays use too.
+  The font provider shares one font between contexts, so lists were being
+  called in contexts that never compiled them.
+- 66 tests that turned a crash, a hang or a first-party import error into a
+  skip now fail, and skip only where `gl_available`, `profile_unavailable`,
+  `offscreen_unavailable` or `testing.network.unreachable` says the machine
+  lacks something. 69 tests that asserted nothing assert what their names
+  promise.
+- Configuration read at import in the capture path, `terrain_view` and the
+  test configuration moved to the first use.
+
+Seven `noqa` lines remain in the engine, each with its reason on the line. Two
+files are exempted by `per-file-ignores`: the tutorials `tests/glprint.py`
+(OGC141; a Windows-only NeHe lesson) and `tests/hud_demo.py` (OGC201),
+since tutorial code is not edited for tooling.
+
+Findings per project after these changes, every rule (a project's gate runs
+the rules its table selects):
+
+| Project | OGC131 | OGC141 | OGC161 | OGC201 | OGC221 | OGC222 | OGC223 |
+|---|---|---|---|---|---|---|---|
+| workspace-tools | 0 | 0 | 0 | 3 | 0 | 1 | 0 |
+| openglcontext-checks | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| pyopengl-glut-binaries | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| pyopengl | 0 | 0 | 58 | 218 | 12 | 135 | 8 |
+| pyopengl-accelerate | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| simpleparse | 0 | 0 | 1 | 2 | 0 | 0 | 0 |
+| pydispatcher | 4 | 0 | 0 | 0 | 0 | 6 | 0 |
+| pyvrml97 | 19 | 0 | 0 | 5 | 0 | 5 | 0 |
+| pyvrml97-accelerate | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| ttfquery | 0 | 0 | 4 | 0 | 0 | 1 | 1 |
+| opengl_extrusions | 0 | 0 | 1 | 1 | 1 | 4 | 0 |
+| opengl_decimate | 0 | 0 | 2 | 2 | 0 | 0 | 0 |
+| omi_physics | 0 | 0 | 0 | 7 | 0 | 3 | 0 |
+| omi_audio | 0 | 0 | 2 | 3 | 0 | 6 | 1 |
+| pyopengl-video | 0 | 0 | 0 | 0 | 0 | 7 | 1 |
+| openglcontext | 0 | 0 | 0 | 0 | 0 | 0 | 0 |
+| openglcontext-qt | 0 | 0 | 3 | 6 | 0 | 0 | 0 |
+| openglcontext-editor | 3 | 0 | 0 | 10 | 2 | 1 | 0 |
+| openglcontext-forest-demo | 0 | 0 | 11 | 0 | 2 | 1 | 0 |
+| openglcontext-marble-demo | 0 | 0 | 4 | 0 | 0 | 0 | 0 |
+| openglcontext-marble-editor | 0 | 0 | 3 | 20 | 0 | 0 | 0 |
+| glisteel | 2 | 0 | 2 | 24 | 0 | 3 | 0 |
+| glisteel-editor | 0 | 0 | 2 | 22 | 0 | 0 | 0 |
+| twig-bb | 5 | 0 | 16 | 68 | 1 | 12 | 0 |
+
 ## Questions for the maintainer
 
 - Name and home of the rule package: a new sibling `openglcontext-checks`
