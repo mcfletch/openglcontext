@@ -46,8 +46,9 @@ def _targets(pattern, text):
         yield explicit or bare
 
 
-def _document(page, target):
-    """The document ``target`` names, seen from ``page``, without its suffix."""
+def _document(target):
+    """The document ``target`` names, seen from a page at the top of ``docs/``, without
+    its suffix."""
     if target.startswith('/'):
         return target[1:]
     if target.startswith('../'):
@@ -66,7 +67,7 @@ class TestEveryLinkLandsSomewhere:
                     ('api/', 'tutorials/')
                 ):
                     continue
-                name = _document(page, target)
+                name = _document(target)
                 if not (DOCS / ('%s.rst' % (name,))).is_file():
                     broken.append('%s -> %s' % (page.name, target))
         assert not broken, 'links to a page that is not there: %s' % (broken,)

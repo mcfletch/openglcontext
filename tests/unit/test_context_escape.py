@@ -26,7 +26,7 @@ class _Context(context_module.Context):
         self.handlers.append((kind, name, function))
         return function
 
-    def OnQuit(self, event=None):
+    def OnQuit(self, _event=None):
         self.quits += 1
 
     def suppressRedraw(self):
@@ -61,7 +61,7 @@ class TestOverridingIt:
                 super().__init__()
                 self.paused = 0
 
-            def OnEscape(self, event=None):
+            def OnEscape(self, _event=None):
                 self.paused += 1
 
         held = _Paused()

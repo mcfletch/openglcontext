@@ -82,7 +82,7 @@ class _Context:
     def __init__(self):
         self.redraws = 0
 
-    def triggerRedraw(self, force=0):
+    def triggerRedraw(self, _force=0):
         self.redraws += 1
 
 

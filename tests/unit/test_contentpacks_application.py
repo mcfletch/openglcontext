@@ -137,13 +137,13 @@ class TestAFirstRun:
         assert game.needed_to_start() == []
 
     def test_declining_fetches_nothing(self, game) -> None:
-        assert not game.ensure_base(consent=lambda packs: False)
+        assert not game.ensure_base(consent=lambda _packs: False)
         assert game.needed_to_start() != []
 
     def test_a_later_run_asks_nothing(self, game) -> None:
         game.ensure_base()
         asked = []
-        assert game.ensure_base(consent=lambda packs: asked.append(1) or True)
+        assert game.ensure_base(consent=lambda _packs: asked.append(1) or True)
         assert asked == []
 
     def test_a_download_that_fails_raises_an_ioerror(self, tmp_path,
@@ -170,7 +170,7 @@ class TestOnTheConsole:
     def test_it_lists_the_packs_and_asks(self, game) -> None:
         said = io.StringIO()
         consent = application.ask_on_console(stream=said,
-                                             answer=lambda prompt: 'y')
+                                             answer=lambda _prompt: 'y')
         assert consent(game.needed_to_start())
         text = said.getvalue()
         assert 'The cars' in text and 'BSD-3-Clause' in text
@@ -178,18 +178,18 @@ class TestOnTheConsole:
     @pytest.mark.parametrize('answer', ['', 'n', 'no', 'maybe'])
     def test_anything_but_yes_declines(self, game, answer) -> None:
         consent = application.ask_on_console(stream=io.StringIO(),
-                                             answer=lambda prompt: answer)
+                                             answer=lambda _prompt: answer)
         assert not consent(game.needed_to_start())
 
     def test_the_end_of_input_declines(self, game) -> None:
-        def closed(prompt):
+        def closed(_prompt):
             raise EOFError
         consent = application.ask_on_console(stream=io.StringIO(),
                                              answer=closed)
         assert not consent(game.needed_to_start())
 
     def test_a_script_says_yes_in_advance(self, game) -> None:
-        def never(prompt):
+        def never(_prompt):
             raise AssertionError('asked')
         consent = application.ask_on_console(assume_yes=True,
                                              stream=io.StringIO(), answer=never)
@@ -206,5 +206,5 @@ class TestOnTheConsole:
     def test_the_reply_is_read_with_input_when_it_is_asked(
             self, game, monkeypatch) -> None:
         consent = application.ask_on_console(stream=io.StringIO())
-        monkeypatch.setattr('builtins.input', lambda prompt: 'yes')
+        monkeypatch.setattr('builtins.input', lambda _prompt: 'yes')
         assert consent(game.needed_to_start())

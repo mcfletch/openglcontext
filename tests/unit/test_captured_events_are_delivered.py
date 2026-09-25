@@ -30,7 +30,7 @@ class _Manager(eventmanager.EventManager):
 
     type = 'examine'
 
-    def ProcessEvent(self, event):
+    def ProcessEvent(self, _event):
         return True
 
 

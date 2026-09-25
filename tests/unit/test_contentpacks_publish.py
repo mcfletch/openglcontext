@@ -15,7 +15,7 @@ import pytest
 from OpenGLContext.contentpacks import ContentPack, ContentStore, archive, publish, catalog
 
 
-def a_pack(tmp_path, **named):
+def a_pack(**named):
     fields = dict(
         key='glisteel/ashdown',
         title='Ashdown',
@@ -48,7 +48,7 @@ class TestInstallingWhatWasBuilt:
 
     def test_it_lands_where_a_fetched_pack_would(self, tmp_path) -> None:
         built = an_archive(tmp_path)
-        pack = a_pack(tmp_path, sha256=archive.digest(built))
+        pack = a_pack(sha256=archive.digest(built))
         store = ContentStore('glisteel', root=str(tmp_path / 'store'))
         where = publish.install(pack, store, str(tmp_path / 'dist'))
         assert where == store.directory_for(pack)
@@ -57,7 +57,7 @@ class TestInstallingWhatWasBuilt:
 
     def test_a_pack_already_here_is_left_alone(self, tmp_path) -> None:
         built = an_archive(tmp_path)
-        pack = a_pack(tmp_path, sha256=archive.digest(built))
+        pack = a_pack(sha256=archive.digest(built))
         store = ContentStore('glisteel', root=str(tmp_path / 'store'))
         publish.install(pack, store, str(tmp_path / 'dist'))
         marker = os.path.join(store.directory_for(pack), 'mine.txt')
@@ -73,14 +73,14 @@ class TestInstallingWhatWasBuilt:
         next."""
         an_archive(tmp_path)
         store = ContentStore('glisteel', root=str(tmp_path / 'store'))
-        first = a_pack(tmp_path, sha256=archive.digest(
+        first = a_pack(sha256=archive.digest(
             str(tmp_path / 'dist' / 'glisteel-ashdown.tar.gz')))
         publish.install(first, store, str(tmp_path / 'dist'))
 
         (tmp_path / 'build' / 'ashdown' / 'trees' / 'oak.npz').write_bytes(b'2')
         rebuilt = archive.write(str(tmp_path / 'build' / 'ashdown'),
                                 str(tmp_path / 'dist' / 'glisteel-ashdown.tar.gz'))
-        second = a_pack(tmp_path, sha256=archive.digest(rebuilt))
+        second = a_pack(sha256=archive.digest(rebuilt))
         where = publish.install(second, store, str(tmp_path / 'dist'),
                                 replace=True)
 
@@ -91,7 +91,7 @@ class TestInstallingWhatWasBuilt:
         """A file the new world does not have is gone, rather than surviving
         beside it as something no build accounts for."""
         built = an_archive(tmp_path)
-        pack = a_pack(tmp_path, sha256=archive.digest(built))
+        pack = a_pack(sha256=archive.digest(built))
         store = ContentStore('glisteel', root=str(tmp_path / 'store'))
         stale = os.path.join(publish.install(pack, store, str(tmp_path / 'dist')),
                              'gone.txt')
@@ -106,35 +106,33 @@ class TestInstallingWhatWasBuilt:
                                                               tmp_path) -> None:
         """The digest is the whole point of recording one."""
         an_archive(tmp_path)
-        pack = a_pack(tmp_path, sha256='00' * 32)
+        pack = a_pack(sha256='00' * 32)
         store = ContentStore('glisteel', root=str(tmp_path / 'store'))
         with pytest.raises(archive.DigestMismatch):
             publish.install(pack, store, str(tmp_path / 'dist'))
 
     def test_a_pack_nobody_built_says_which(self, tmp_path) -> None:
         (tmp_path / 'dist').mkdir()
-        pack = a_pack(tmp_path)
+        pack = a_pack()
         store = ContentStore('glisteel', root=str(tmp_path / 'store'))
         with pytest.raises(IOError) as raised:
             publish.install(pack, store, str(tmp_path / 'dist'))
         assert 'glisteel-ashdown.tar.gz' in str(raised.value)
 
-    def test_the_file_it_looks_for_is_the_one_the_registry_names(self,
-                                                                 tmp_path
+    def test_the_file_it_looks_for_is_the_one_the_registry_names(self
                                                                  ) -> None:
         """A registry's URL is where the file will be; its name is what it is
         called here, so what is installed is what will be served."""
-        assert publish.built(a_pack(tmp_path), '/tmp/dist') == \
+        assert publish.built(a_pack(), '/tmp/dist') == \
             os.path.join('/tmp/dist', 'glisteel-ashdown.tar.gz')
 
 
 class TestAttachingThemToARelease:
-    def test_the_repository_comes_from_the_url_the_registry_names(self,
-                                                                  tmp_path
+    def test_the_repository_comes_from_the_url_the_registry_names(self
                                                                   ) -> None:
         """One source of truth: a pack fetched from a repository is published
         to that repository."""
-        assert publish.repository(a_pack(tmp_path).url) == 'mcfletch/glisteel'
+        assert publish.repository(a_pack().url) == 'mcfletch/glisteel'
 
     def test_a_url_that_is_not_a_release_asset_says_so(self) -> None:
         with pytest.raises(ValueError):
@@ -172,7 +170,7 @@ class TestAttachingThemToARelease:
             return 0
 
         publish.push('mcfletch/glisteel', 'content-v1', ['a.tar.gz'],
-                     run=runner, ask=lambda argv: (0, '{"id": 1}'))
+                     run=runner, ask=lambda _argv: (0, '{"id": 1}'))
         assert ran[0][1:3] == ['release', 'upload']
         assert '--clobber' in ran[0]
         assert self.after_terminator(ran[0]) == [
@@ -184,7 +182,7 @@ class TestAttachingThemToARelease:
         with pytest.raises(IOError) as raised:
             publish.push('mcfletch/glisteel', 'content-v1', ['a.tar.gz'],
                          run=lambda argv: ran.append(argv) or 0,
-                         ask=lambda argv: (4, 'HTTP 401: Bad credentials'))
+                         ask=lambda _argv: (4, 'HTTP 401: Bad credentials'))
         assert ran == [], 'it went on to create a release'
         assert 'Bad credentials' in str(raised.value)
 
@@ -192,14 +190,14 @@ class TestAttachingThemToARelease:
         ran = []
         publish.push('mcfletch/glisteel', '-v1', ['-a.tar.gz'],
                      run=lambda argv: ran.append(argv) or 0,
-                     ask=lambda argv: (0, '{}'))
+                     ask=lambda _argv: (0, '{}'))
         assert self.after_terminator(ran[0]) == [
             '-v1', os.path.abspath('-a.tar.gz')]
 
     def test_an_upload_that_failed_is_said_rather_than_passed_over(self) -> None:
         with pytest.raises(IOError):
             publish.push('mcfletch/glisteel', 'content-v1', ['a.tar.gz'],
-                         run=lambda argv: 2, ask=lambda argv: (0, '{}'))
+                         run=lambda _argv: 2, ask=lambda _argv: (0, '{}'))
 
     def test_without_the_command_it_says_what_to_install(self) -> None:
         def ask(argv):
@@ -207,7 +205,7 @@ class TestAttachingThemToARelease:
 
         with pytest.raises(IOError) as raised:
             publish.push('mcfletch/glisteel', 'content-v1', ['a.tar.gz'],
-                         run=lambda argv: 0, ask=ask)
+                         run=lambda _argv: 0, ask=ask)
         assert publish.GITHUB in str(raised.value)
 
 
@@ -334,7 +332,7 @@ class TestTheReleaseCommand:
 
     def test_a_refusal_is_said_and_writes_no_registry(self, tmp_path,
                                                       capsys) -> None:
-        def declare(build):
+        def declare(_build):
             raise SystemExit('no art to pack')
         release = a_release(tmp_path, declare)
         assert publish.main(release, []) == 2
@@ -371,7 +369,7 @@ class TestTheReleaseCommand:
         ran = []
         assert publish.main(release, ['--push'],
                             run=lambda argv: ran.append(argv) or 0,
-                            ask=lambda argv: (0, '{}')) == 0
+                            ask=lambda _argv: (0, '{}')) == 0
         attached = [os.path.basename(one) for one in ran[0][ran[0].index(
             'content-v1') + 1:]]
         assert attached == ['glisteel-cars.tar.gz', 'glisteel-art.tar.gz',

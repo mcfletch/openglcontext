@@ -52,7 +52,7 @@ class TestTheLocaleSphinxRunsUnder:
     def test_sphinx_is_started_in_that_environment(self, build_docs, monkeypatch, tmp_path):
         started = {}
 
-        def check_call(command, **kwargs):
+        def check_call(_command, **kwargs):
             started.update(kwargs)
 
         monkeypatch.setenv('LC_ALL', 'xx_NOWHERE.UTF-8')

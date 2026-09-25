@@ -119,9 +119,8 @@ class TestTheAnswerIsAlwaysAnAnswer:
 
     @pytest.mark.parametrize('name,path', BACKENDS,
                              ids=[b[0] for b in BACKENDS])
-    @pytest.mark.parametrize('capability,why', ANSWERING,
-                             ids=[c[0] for c in ANSWERING])
-    def test_every_path_out_returns_something(self, name, path, capability, why):
+    @pytest.mark.parametrize('capability', [entry[0] for entry in ANSWERING])
+    def test_every_path_out_returns_something(self, name, path, capability):
         for node in ast.walk(ast.parse(_source(path))):
             if isinstance(node, ast.FunctionDef) and node.name == capability:
                 returns = [child for child in ast.walk(node)
@@ -195,7 +194,7 @@ class TestTheContractIsStatedOnce:
         applied = []
 
         class _Backend(Context):
-            def applyVSync(self, definition=None):
+            def applyVSync(self, _definition=None):
                 applied.append(bool(self.contextDefinition.vsync))
                 return True
 

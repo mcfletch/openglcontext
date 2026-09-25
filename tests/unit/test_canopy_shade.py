@@ -74,7 +74,7 @@ class TestWhoElseCanReadIt:
     def _terrain(self):
         return SplatTerrain(_field(), ['grass'], control=None,
                             canopy=_stand(), sun=SUN,
-                            material_fn=lambda name, res: {'color': name})
+                            material_fn=lambda name, _res: {'color': name})
 
     def test_a_terrain_says_how_lit_each_place_is(self) -> None:
         assert self._terrain().shading.shape == (129, 129)
@@ -96,7 +96,7 @@ class TestWhoElseCanReadIt:
 
     def test_a_terrain_with_no_trees_is_lit_by_the_land_alone(self) -> None:
         bare = SplatTerrain(_field(), ['grass'], control=None, sun=SUN,
-                            material_fn=lambda name, res: {'color': name})
+                            material_fn=lambda name, _res: {'color': name})
         assert float(bare.shading.min()) > 0.99
 
 

@@ -188,7 +188,7 @@ class TestBloomWrapDefensive:
             def begin(self, w, h):
                 sizes.append((w, h))
 
-        monkeypatch.setattr(bloom, 'bloom_enabled', lambda source=None: True)
+        monkeypatch.setattr(bloom, 'bloom_enabled', lambda _source=None: True)
         monkeypatch.setattr(bloom, 'BloomPass', _Recording)
         p = _FlatEffectsMixin()
         p.context = _Window(640, 480)
@@ -197,21 +197,21 @@ class TestBloomWrapDefensive:
         assert sizes == [(640, 480)]
 
     def test_begin_bloom_disabled_returns_false(self, monkeypatch):
-        monkeypatch.setattr(bloom, 'bloom_enabled', lambda source=None: False)
+        monkeypatch.setattr(bloom, 'bloom_enabled', lambda _source=None: False)
         p = _FlatEffectsMixin()
         p.context = _Window(64, 64)
         assert p._begin_bloom() is False
         assert p._bloom_active is False
 
     def test_a_pass_that_cannot_composite_draws_straight_to_the_window(self, monkeypatch):
-        monkeypatch.setattr(bloom, 'bloom_enabled', lambda source=None: True)
+        monkeypatch.setattr(bloom, 'bloom_enabled', lambda _source=None: True)
         p = CompatPass.__new__(CompatPass)
         p.context = _Window(64, 64)
         assert p._begin_bloom() is False
         assert p._bloom_active is False
 
     def test_begin_bloom_zero_window_returns_false(self, monkeypatch):
-        monkeypatch.setattr(bloom, 'bloom_enabled', lambda source=None: True)
+        monkeypatch.setattr(bloom, 'bloom_enabled', lambda _source=None: True)
         p = _FlatEffectsMixin()
         p.context = _Window(0, 0)
         assert p._begin_bloom() is False
@@ -226,9 +226,9 @@ class TestBloomWrapDefensive:
                 calls.append((w, h))
                 raise RuntimeError("simulated bloom setup failure")
 
-        monkeypatch.setattr(bloom, 'bloom_enabled', lambda source=None: True)
+        monkeypatch.setattr(bloom, 'bloom_enabled', lambda _source=None: True)
         monkeypatch.setattr(bloom, 'BloomPass', _BoomPass)
-        monkeypatch.setattr(_FlatEffectsMixin, '_bloomOff', lambda self: None)
+        monkeypatch.setattr(_FlatEffectsMixin, '_bloomOff', lambda _self: None)
         p = _FlatEffectsMixin()
         p.context = _Window(64, 64)
         with caplog.at_level('ERROR'):
@@ -241,14 +241,14 @@ class TestBloomWrapDefensive:
     def test_a_composite_that_fails_is_reported_once_and_bloom_switched_off(
             self, monkeypatch, caplog):
         class _BoomPass:
-            def begin(self, w, h):
+            def begin(self, _w, _h):
                 return True
 
-            def composite(self, rects=None, clear=False):
+            def composite(self, *_args, **_named):
                 raise RuntimeError("simulated composite failure")
 
-        monkeypatch.setattr(bloom, 'bloom_enabled', lambda source=None: True)
-        monkeypatch.setattr(_FlatEffectsMixin, '_bloomOff', lambda self: None)
+        monkeypatch.setattr(bloom, 'bloom_enabled', lambda _source=None: True)
+        monkeypatch.setattr(_FlatEffectsMixin, '_bloomOff', lambda _self: None)
         p = _FlatEffectsMixin()
         p.context = _Window(64, 64)
         p._bloom_pass = _BoomPass()

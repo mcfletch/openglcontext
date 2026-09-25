@@ -44,10 +44,10 @@ class _Context:
     def isCapturingEvents(self, name):
         return self.captured.get(name) is not None
 
-    def triggerRedraw(self, force=0):
+    def triggerRedraw(self, _force=0):
         self.redraws += 1
 
-    def examineCenter(self, event):
+    def examineCenter(self, _event):
         return np.array(tuple(self._centre) + (1.0,), dtype='d')
 
 
@@ -344,7 +344,7 @@ class TestTheOrbitIsTheCustomisationPoint:
         marker = object()
 
         class _Mine(examinemanager.ExamineManager):
-            def OnBuildOrbit(self, platform, centre, event, width, height):
+            def OnBuildOrbit(self, *_args):
                 self.orbit = marker
 
         context = _Context()
@@ -357,14 +357,14 @@ class TestTheOrbitIsTheCustomisationPoint:
         class _TurnOnly:
             centre = np.zeros((4,), dtype='d')
 
-            def rotate(self, x, y):
+            def rotate(self, _x, _y):
                 return np.array([0.0, 0.0, 10.0, 1.0], 'd'), None
 
             def cancel(self):
                 return self.rotate(0, 0)
 
         class _Mine(examinemanager.ExamineManager):
-            def OnBuildOrbit(self, platform, centre, event, width, height):
+            def OnBuildOrbit(self, *_args):
                 self.orbit = _TurnOnly()
 
         context, platform = _Context(), _platform()

@@ -647,7 +647,7 @@ class TestBuildingEmittersFromADocument:
 
     def test_a_uri_the_resolver_refuses_is_reported_and_dropped(self, caplog):
         """An out-of-bounds reference costs the sound, not the scene."""
-        def refusing(uri):
+        def refusing(_uri):
             raise OSError('outside the document origin')
 
         with caplog.at_level('WARNING'):

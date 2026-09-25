@@ -49,7 +49,7 @@ def test_the_frame_presented_is_the_composited_one(render_scene):
 @pytest.mark.usefixtures('env')
 def test_the_glow_stays_inside_its_view(render_scene):
     """A bright box at the edge of one view does not light the view beside it."""
-    def layout(context):
+    def layout(_context):
         # The box sits at the right-hand edge of the left view; the right view
         # looks at empty space.
         return ViewLayout.split(View(_camera(-2.4), name='glowing'),
@@ -79,7 +79,7 @@ def test_one_view_glows_as_it_always_has(render_scene):
 @pytest.mark.usefixtures('env')
 def test_what_the_views_stop_covering_is_cleared(render_scene):
     """With bloom on, a band given up by the views keeps nothing of an earlier frame."""
-    def layout(context):
+    def layout(_context):
         drawn = []
 
         def arrangement(width, height):

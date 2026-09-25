@@ -41,7 +41,7 @@ def rooted(monkeypatch):
     """Give an AudioSource a document base, as a loaded scene would."""
     def apply(base: Optional[str]):
         monkeypatch.setattr(audio.protofunctions, "root",
-                            lambda node: _Root(base) if base is not None else None)
+                            lambda _node: _Root(base) if base is not None else None)
     return apply
 
 

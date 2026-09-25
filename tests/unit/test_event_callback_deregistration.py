@@ -41,7 +41,7 @@ class _Handler:
     def __init__(self, seen):
         self.seen = seen
 
-    def screenshot(self, event=None):
+    def screenshot(self, _event=None):
         self.seen.append(self)
 
 

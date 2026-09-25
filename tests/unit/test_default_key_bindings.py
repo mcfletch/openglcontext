@@ -122,7 +122,7 @@ class Probe(ScreenshotMixin, EventHandlerMixin):
         self.initializeEventManagers()
         self.setupDefaultEventCallbacks()
 
-    def toggleDebugOverlay(self, event=None):
+    def toggleDebugOverlay(self, _event=None):
         self.toggled += 1
         return True
 

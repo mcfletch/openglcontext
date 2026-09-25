@@ -17,10 +17,10 @@ class _Raiser:
 
     pickable = False
 
-    def Render(self, mode: Any = None, **_named: Any) -> None:
+    def Render(self, *_args: Any, **_named: Any) -> None:
         raise ValueError('this node cannot draw')
 
-    def RenderTransparent(self, mode: Any = None, **_named: Any) -> None:
+    def RenderTransparent(self, *_args: Any, **_named: Any) -> None:
         raise ValueError('this node cannot draw')
 
 
@@ -32,10 +32,10 @@ class _Drawn:
     def __init__(self) -> None:
         self.drawn = 0
 
-    def Render(self, mode: Any = None, **_named: Any) -> None:
+    def Render(self, *_args: Any, **_named: Any) -> None:
         self.drawn += 1
 
-    def RenderTransparent(self, mode: Any = None, **_named: Any) -> None:
+    def RenderTransparent(self, *_args: Any, **_named: Any) -> None:
         self.drawn += 1
 
 
@@ -55,7 +55,7 @@ def _records(nodes: list[Any], transparent: int) -> list[tuple[Any, ...]]:
 
 
 @pytest.fixture
-def compat_pass(gl_context_compat: Any) -> Any:
+def compat_pass(gl_context_compat: Any) -> Any:  # noqa: ARG001 made current for the pass
     pass_object = FlatPass.__new__(FlatPass)
     pass_object.context = _Context()
     pass_object.failed: list[tuple[str, Any, BaseException]] = []

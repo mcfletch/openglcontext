@@ -384,23 +384,23 @@ class TestAFailedConstructionReleasesWhatItTook:
 
         monkeypatch.setattr(
             eglcontext.EGLContext, '_selectDevice',
-            lambda self: DeviceInfo(index=0, handle=object(), driver='test'),
+            lambda _self: DeviceInfo(index=0, handle=object(), driver='test'),
         )
         monkeypatch.setattr(
             eglcontext.EGLContext, '_openDisplay',
-            lambda self, device: 'display',
+            lambda _self, _device: 'display',
         )
         monkeypatch.setattr(
-            eglcontext.EGLContext, '_chooseConfig', lambda self, definition: 'config'
+            eglcontext.EGLContext, '_chooseConfig', lambda _self, _definition: 'config'
         )
         monkeypatch.setattr(
-            eglcontext.EGLContext, '_createContext', lambda self, config: 'context'
+            eglcontext.EGLContext, '_createContext', lambda _self, _config: 'context'
         )
         monkeypatch.setattr(
             eglcontext.EGLContext, '_createSurface',
-            lambda self, config, width, height: 'surface',
+            lambda _self, _config, _width, _height: 'surface',
         )
-        monkeypatch.setattr(eglcontext.EGLContext, '_makeCurrent', lambda self: None)
+        monkeypatch.setattr(eglcontext.EGLContext, '_makeCurrent', lambda _self: None)
         monkeypatch.setattr(
             eglcontext.EGLContext, '_releaseEGL',
             lambda self: released.append(
@@ -454,7 +454,7 @@ class TestResizingRefusesADegenerateSize:
         made = []
         monkeypatch.setattr(
             eglcontext.EGLContext, '_createSurface',
-            lambda self, config, width, height: made.append((width, height)),
+            lambda _self, _config, width, height: made.append((width, height)),
         )
         instance = eglcontext.EGLContext.__new__(eglcontext.EGLContext)
         with pytest.raises(eglcontext.EGLContextError) as caught:

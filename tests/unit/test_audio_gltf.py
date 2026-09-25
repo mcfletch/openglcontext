@@ -326,7 +326,7 @@ class TestAudioInsideTheDocument:
         wav = wav_bytes()
         encoded = base64.b64encode(wav).decode('ascii')
         return self.embedded(
-            lambda data: {'bufferView': 0, 'mimeType': 'audio/wav'},
+            lambda _data: {'bufferView': 0, 'mimeType': 'audio/wav'},
             buffers=[{'uri': 'data:application/octet-stream;base64,' + encoded,
                       'byteLength': len(wav)}],
             bufferViews=[{'buffer': 0, 'byteOffset': 0, 'byteLength': len(wav)}],

@@ -21,7 +21,7 @@ class RecordingContext:
     def __init__(self):
         self.redraws = 0
 
-    def triggerRedraw(self, force=0):
+    def triggerRedraw(self, _force=0):
         self.redraws += 1
 
 
@@ -39,7 +39,7 @@ class TestDrainAsksForAnotherFrame:
     def test_an_unsignalled_batch_asks_for_a_frame(self, monkeypatch):
         """The fence has not signalled, so the batch needs another render."""
         monkeypatch.setattr(asyncpick, 'glClientWaitSync',
-                            lambda fence, flags, timeout: 0)
+                            lambda _fence, _flags, _timeout: 0)
         mixin = _mixin([{'fence': object()}])
         mode = _mode()
         mixin.drainAsyncPicks(mode)
@@ -49,10 +49,10 @@ class TestDrainAsksForAnotherFrame:
     def test_a_resolved_batch_asks_for_nothing(self, monkeypatch):
         """Nothing is left in flight, so the loop is free to go quiet."""
         monkeypatch.setattr(asyncpick, 'glClientWaitSync',
-                            lambda fence, flags, timeout: asyncpick.GL_ALREADY_SIGNALED)
+                            lambda _fence, _flags, _timeout: asyncpick.GL_ALREADY_SIGNALED)
         resolved = []
         mixin = _mixin([{'fence': object()}])
-        mixin._resolveBatch = lambda mode, batch, block=False: resolved.append(batch)
+        mixin._resolveBatch = lambda _mode, batch, **_named: resolved.append(batch)
         mode = _mode()
         mixin.drainAsyncPicks(mode)
         assert resolved and not mixin._async_batches
@@ -77,13 +77,13 @@ class TestFlushingWhatIsInFlight:
         blocked = []
         mixin = _mixin([{'fence': object()}, {'fence': object()}])
         mixin._resolveBatch = (
-            lambda mode, batch, block=False: blocked.append(block))
+            lambda _mode, _batch, block=False: blocked.append(block))
         assert mixin.flushAsyncPicks(_mode()) == 2
         assert blocked == [True, True], 'each batch is waited for, not polled'
 
     def test_the_queue_is_empty_afterwards(self):
         mixin = _mixin([{'fence': object()}])
-        mixin._resolveBatch = lambda mode, batch, block=False: None
+        mixin._resolveBatch = lambda *_args, **_named: None
         mixin.flushAsyncPicks(_mode())
         assert not mixin._async_batches
 
@@ -101,6 +101,6 @@ class TestFlushingWhatIsInFlight:
         seen = []
         mixin = _mixin([{'fence': object()}])
         mixin._resolveBatch = (
-            lambda mode, batch, block=False: seen.append(mode))
+            lambda mode, _batch, **_named: seen.append(mode))
         mixin.flushAsyncPicks()
         assert seen == [mixin]

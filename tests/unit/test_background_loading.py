@@ -35,7 +35,7 @@ def watching_imports():
     seen = []
 
     class Watcher:
-        def find_spec(self, name, path=None, target=None):
+        def find_spec(self, name, _path=None, _target=None):
             seen.append((threading.current_thread(), name))
             return None
 

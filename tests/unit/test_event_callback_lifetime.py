@@ -54,7 +54,7 @@ def test_a_handler_held_by_a_live_object_keeps_working(manager):
 def test_a_handler_with_no_owner_is_collected(manager):
     # The classic silent failure: a lambda built inline has no other reference,
     # so it is gone before the first event is ever dispatched.
-    manager.registerCallback('k', function=lambda event=None: None)
+    manager.registerCallback('k', function=lambda _event=None: None)
     gc.collect()
     assert deliver(manager) == 0
 

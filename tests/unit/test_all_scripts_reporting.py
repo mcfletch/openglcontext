@@ -71,7 +71,7 @@ class TestTheShaderCompileHarnessSkips:
                 raise raised
 
         monkeypatch.setattr(
-            Context, 'getOffscreenContextType', classmethod(lambda cls: Refuses)
+            Context, 'getOffscreenContextType', classmethod(lambda _cls: Refuses)
         )
 
     @pytest.mark.parametrize(
@@ -94,7 +94,7 @@ class TestTheShaderCompileHarnessSkips:
         """macOS today: nothing registered can render without a window."""
         harness = self._harness()
         monkeypatch.setattr(
-            Context, 'getOffscreenContextType', classmethod(lambda cls: None)
+            Context, 'getOffscreenContextType', classmethod(lambda _cls: None)
         )
         assert harness._make_context() is None
 

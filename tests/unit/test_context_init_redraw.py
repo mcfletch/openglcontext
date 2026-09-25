@@ -66,7 +66,7 @@ class TestARedrawAskedForDuringStartUp:
 
     def test_deferral_ends_with_initialisation(self, monkeypatch):
         _stayOnThisThread(monkeypatch)
-        held = _Context(lambda self: None)
+        held = _Context(lambda _self: None)
         held.DoInit()
         held.triggerRedraw(1)
         assert held.drawn == 1
@@ -75,7 +75,7 @@ class TestARedrawAskedForDuringStartUp:
         """A context that failed to start must still be able to draw a message."""
         _stayOnThisThread(monkeypatch)
 
-        def explode(self):
+        def explode(_self):
             raise RuntimeError('no model')
         held = _Context(explode)
         with pytest.raises(RuntimeError, match='no model'):
@@ -84,7 +84,7 @@ class TestARedrawAskedForDuringStartUp:
 
     def test_a_context_that_asks_for_nothing_draws_nothing(self, monkeypatch):
         _stayOnThisThread(monkeypatch)
-        held = _Context(lambda self: None)
+        held = _Context(lambda _self: None)
         held.DoInit()
         assert held.drawn == 0
 
@@ -97,7 +97,7 @@ class TestARedrawAskedForDuringStartUp:
         that was deferring before initialisation is still deferring after it.
         """
         _stayOnThisThread(monkeypatch)
-        held = _Context(lambda self: None)
+        held = _Context(lambda _self: None)
         held.deferRedraw = True
         held.DoInit()
         assert held.deferRedraw is True

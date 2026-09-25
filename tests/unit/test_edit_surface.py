@@ -68,11 +68,11 @@ class _Event(MouseEvent):
         return self._modifiers
 
 
-def _flat(x, z):
+def _flat(x, _z):
     return np.zeros_like(np.asarray(x, 'd'))
 
 
-def _slope(x, z):
+def _slope(x, _z):
     """Ground that climbs one in four towards +x."""
     return 0.25 * np.asarray(x, 'd')
 

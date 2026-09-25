@@ -46,7 +46,7 @@ def _patch_gl(monkeypatch, width, height, fill, has_back_buffer=True):
     # some earlier test happened to leave one behind.
     monkeypatch.setattr(capture, 'glBindFramebuffer', lambda _t, _f: None)
 
-    def fake_read(x, y, w, h, fmt, typ):
+    def fake_read(_x, y, w, h, _fmt, _typ):
         # emulate glReadPixels honouring the y-offset + height we pass it
         return b''.join(bytes(fill(px, y + py)) for py in range(h) for px in range(w))
 
@@ -55,7 +55,7 @@ def _patch_gl(monkeypatch, width, height, fill, has_back_buffer=True):
 
 def test_read_back_buffer_flips_to_top_down(monkeypatch):
     # bottom row (y=0) is red, next row green -> after flip, row 0 must be the top
-    def fill(x, y):
+    def fill(_x, y):
         return (255, 0, 0) if y == 0 else (0, 255, 0)
     _patch_gl(monkeypatch, 3, 2, fill)
     pixels, w, h = capture.read_back_buffer()
@@ -65,7 +65,7 @@ def test_read_back_buffer_flips_to_top_down(monkeypatch):
 
 
 def test_read_back_buffer_excludes_hud(monkeypatch):
-    def fill(x, y):
+    def fill(_x, y):
         return (y, 0, 0)
     _patch_gl(monkeypatch, 2, 5, fill)
     pixels, w, h = capture.read_back_buffer(hud_height=2)
@@ -117,7 +117,7 @@ class TestWhichBufferTheFrameIsIn:
 
     def test_the_read_asks_for_the_buffer_that_is_there(self, monkeypatch):
         asked = []
-        _patch_gl(monkeypatch, 2, 2, lambda x, y: (1, 2, 3),
+        _patch_gl(monkeypatch, 2, 2, lambda _x, _y: (1, 2, 3),
                   has_back_buffer=False)
         monkeypatch.setattr(capture, 'glReadBuffer', asked.append)
         capture.read_back_buffer()
@@ -125,21 +125,21 @@ class TestWhichBufferTheFrameIsIn:
 
     def test_and_the_back_buffer_where_there_is_one(self, monkeypatch):
         asked = []
-        _patch_gl(monkeypatch, 2, 2, lambda x, y: (1, 2, 3))
+        _patch_gl(monkeypatch, 2, 2, lambda _x, _y: (1, 2, 3))
         monkeypatch.setattr(capture, 'glReadBuffer', asked.append)
         capture.read_back_buffer()
         assert asked == [capture.GL_BACK]
 
 
 def test_capture_to_png_skips_blank(monkeypatch, tmp_path):
-    _patch_gl(monkeypatch, 2, 2, lambda x, y: (0, 0, 0))
+    _patch_gl(monkeypatch, 2, 2, lambda _x, _y: (0, 0, 0))
     out = tmp_path / 'blank.png'
     assert capture.capture_to_png(str(out)) is False
     assert not out.exists()
 
 
 def test_capture_to_png_writes_content(monkeypatch, tmp_path):
-    _patch_gl(monkeypatch, 2, 2, lambda x, y: (5, 5, 5))
+    _patch_gl(monkeypatch, 2, 2, lambda _x, _y: (5, 5, 5))
     out = tmp_path / 'content.png'
     assert capture.capture_to_png(str(out)) is True
     assert out.exists()
@@ -149,8 +149,8 @@ class TestSettleCapture:
     def test_waits_for_min_frames(self, monkeypatch, tmp_path):
         saved = []
         monkeypatch.setattr(capture, 'read_back_buffer',
-                            lambda hud=0: (np.ones((1, 1, 3), np.uint8), 1, 1))
-        monkeypatch.setattr(capture, 'save_png', lambda p, px: saved.append(p) or True)
+                            lambda _hud=0: (np.ones((1, 1, 3), np.uint8), 1, 1))
+        monkeypatch.setattr(capture, 'save_png', lambda p, _px: saved.append(p) or True)
         s = capture.SettleCapture(str(tmp_path / 'o.png'), delay=0.0, min_frames=3)
         assert s.tick() is False and s.tick() is False   # frames 1, 2
         assert s.tick() is True                          # frame 3 fires
@@ -163,8 +163,8 @@ class TestSettleCapture:
         clock = {'t': 100.0}
         monkeypatch.setattr(_time, 'perf_counter', lambda: clock['t'])
         monkeypatch.setattr(capture, 'read_back_buffer',
-                            lambda hud=0: (np.ones((1, 1, 3), np.uint8), 1, 1))
-        monkeypatch.setattr(capture, 'save_png', lambda p, px: True)
+                            lambda _hud=0: (np.ones((1, 1, 3), np.uint8), 1, 1))
+        monkeypatch.setattr(capture, 'save_png', lambda _p, _px: True)
         s = capture.SettleCapture(str(tmp_path / 'o.png'), delay=0.5, min_frames=1)
         assert s.tick() is False       # min_frames met but delay not elapsed
         clock['t'] = 100.6

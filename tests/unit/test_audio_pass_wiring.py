@@ -48,9 +48,9 @@ class FakeContext:
 def test_the_pass_drives_scene_audio_from_its_entry_point(name, cls, monkeypatch):
     """``__call__`` must reach ``renderAudio`` whatever ``Render`` does."""
     calls = []
-    monkeypatch.setattr(cls, 'Render', lambda self, context, mode: None)
+    monkeypatch.setattr(cls, 'Render', lambda *_args, **_named: None)
     monkeypatch.setattr(_flat.FlatPass, 'renderAudio',
-                        lambda self, context: calls.append(context) or 0)
+                        lambda _self, context: calls.append(context) or 0)
 
     instance = cls.__new__(cls)
     instance.paths = {}
@@ -78,7 +78,7 @@ def test_no_pass_overrides_the_entry_point(name, cls):
 
 def test_a_failure_in_the_audio_update_never_costs_a_frame(monkeypatch, caplog):
     """A sound card that vanishes mid-session is a log line, not a black window."""
-    def explode(context, paths, now=None):
+    def explode(*_args, **_named):
         raise RuntimeError('the sound card fell out')
 
     monkeypatch.setattr(audioscene, 'update', explode)
@@ -112,8 +112,8 @@ def test_the_pass_places_view_attachments_from_its_entry_point(name, cls,
     true, and no pass overrides it.
     """
     seen = []
-    monkeypatch.setattr(cls, 'Render', lambda self, context, mode: None)
-    monkeypatch.setattr(_flat.FlatPass, 'renderAudio', lambda self, ctx: 0)
+    monkeypatch.setattr(cls, 'Render', lambda *_args, **_named: None)
+    monkeypatch.setattr(_flat.FlatPass, 'renderAudio', lambda *_args, **_named: 0)
 
     class Context(FakeContext):
         def placeViewAttachments(self, pass_):
@@ -132,8 +132,8 @@ def test_the_pass_places_view_attachments_from_its_entry_point(name, cls,
 
 def test_a_context_with_nothing_pinned_to_the_view_is_unaffected(monkeypatch):
     """The hook is optional: most contexts have nothing attached to the camera."""
-    monkeypatch.setattr(_flat.FlatPass, 'Render', lambda self, ctx, mode: None)
-    monkeypatch.setattr(_flat.FlatPass, 'renderAudio', lambda self, ctx: 0)
+    monkeypatch.setattr(_flat.FlatPass, 'Render', lambda *_args, **_named: None)
+    monkeypatch.setattr(_flat.FlatPass, 'renderAudio', lambda *_args, **_named: 0)
     instance = _flat.FlatPass.__new__(_flat.FlatPass)
     instance.paths = {}
     instance.nodePaths = {}
@@ -147,12 +147,12 @@ def test_a_context_with_nothing_pinned_to_the_view_is_unaffected(monkeypatch):
 def test_view_attachments_are_placed_before_the_scene_is_gathered(monkeypatch):
     """Order is the whole point: after the camera, before anything is drawn."""
     order = []
-    monkeypatch.setattr(_flat.FlatPass, 'renderAudio', lambda self, ctx: 0)
+    monkeypatch.setattr(_flat.FlatPass, 'renderAudio', lambda *_args, **_named: 0)
     monkeypatch.setattr(_flat.FlatPass, 'Render',
-                        lambda self, ctx, mode: order.append('render'))
+                        lambda *_args, **_named: order.append('render'))
 
     class Context(FakeContext):
-        def placeViewAttachments(self, pass_):
+        def placeViewAttachments(self, _pass):
             order.append('place')
 
     instance = _flat.FlatPass.__new__(_flat.FlatPass)

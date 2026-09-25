@@ -25,7 +25,7 @@ def _line(length=120.0, height=12.0, points=25):
 
 
 def _ground(depth=6.0):
-    def at(x, z):
+    def at(_x, z):
         return np.zeros_like(np.asarray(z, 'd')) + (12.0 - depth)
     return at
 
@@ -103,7 +103,7 @@ class TestItReachesTheGround:
             == pytest.approx(6.0, abs=0.35)
 
     def test_it_follows_ground_that_is_not_level(self) -> None:
-        def sloping(x, z):
+        def sloping(_x, z):
             return 12.0 - np.asarray(z, 'd') * 0.05
         body = _built(ground=sloping)['body']
         low = body.positions[body.positions[:, 2] > 100.0][:, 1].min()

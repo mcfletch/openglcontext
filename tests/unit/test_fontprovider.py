@@ -25,7 +25,7 @@ class _FakeProvider(FontProvider):
         super().__init__()
         self.name = name
 
-    def get(self, fontStyle=None, mode=None):
+    def get(self, _fontStyle=None, _mode=None):
         return self.name
 
 

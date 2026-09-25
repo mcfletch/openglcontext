@@ -344,7 +344,7 @@ class TestAJobTheFrameLoopPolls:
             self, store) -> None:
         released = threading.Event()
 
-        def slow(pack, progress, cancel):
+        def slow(_pack, _progress, _cancel):
             released.wait(10.0)
             return '/content'
 

@@ -29,7 +29,7 @@ class TestTheUserAgent:
         monkeypatch.setattr(cc0, "cache_dir", lambda: str(tmp_path))
         sent = []
 
-        def opened(url, redirects=None, timeout=30, agent=None):
+        def opened(*_args, agent=None, **_named):
             sent.append(agent or cc0.resolver.user_agent())
             raise OSError("offline")
 
@@ -42,13 +42,13 @@ class TestTheUserAgent:
 class TestTheDownloadIsBounded:
     def test_an_over_size_archive_is_refused(self, monkeypatch):
         monkeypatch.setattr(cc0, "_api_download_link",
-                            lambda asset, resolution: "https://x.invalid/a.zip")
+                            lambda _asset, _resolution: "https://x.invalid/a.zip")
         monkeypatch.setattr(cc0, "_read_capped", _refuse)
         with pytest.raises(ValueError):
             cc0._download("Bark012")
 
 
-def _refuse(url, max_bytes):
+def _refuse(_url, max_bytes):
     raise ValueError("resource is over the %d-byte limit" % (max_bytes,))
 
 
@@ -59,7 +59,7 @@ class TestTheArchiveIsBounded:
         blob = _archive({"Bark012_1K_Color.jpg": b"\0" * (4 * 1024 * 1024)})
         monkeypatch.setattr(cc0, "cache_dir", lambda: str(tmp_path))
         monkeypatch.setattr(cc0, "_download",
-                            lambda asset, resolution: zipfile.ZipFile(io.BytesIO(blob)))
+                            lambda _asset, _resolution: zipfile.ZipFile(io.BytesIO(blob)))
         with pytest.raises(ValueError):
             cc0.material("bark", max_member_bytes=1024)
 
@@ -68,7 +68,7 @@ class TestTheArchiveIsBounded:
                          "Bark012_1K_NormalGL.jpg": b"jpeg-ish"})
         monkeypatch.setattr(cc0, "cache_dir", lambda: str(tmp_path))
         monkeypatch.setattr(cc0, "_download",
-                            lambda asset, resolution: zipfile.ZipFile(io.BytesIO(blob)))
+                            lambda _asset, _resolution: zipfile.ZipFile(io.BytesIO(blob)))
         got = cc0.material("bark")
         assert set(got) == {"color", "normal"}
         assert open(got["color"], "rb").read() == b"jpeg-ish"
@@ -77,7 +77,7 @@ class TestTheArchiveIsBounded:
         blob = _archive({"Bark012_1K_Color.jpg": b"\0" * (4 * 1024 * 1024)})
         monkeypatch.setattr(cc0, "cache_dir", lambda: str(tmp_path))
         monkeypatch.setattr(cc0, "_download",
-                            lambda asset, resolution: zipfile.ZipFile(io.BytesIO(blob)))
+                            lambda _asset, _resolution: zipfile.ZipFile(io.BytesIO(blob)))
         assert cc0.try_material("bark", max_member_bytes=1024) is None
 
 
@@ -108,12 +108,12 @@ class TestWhereTheArchiveMayComeFrom:
         """Make the API answer with ``link`` and record what gets fetched."""
         fetched = []
 
-        def _api(asset, resolution):
+        def _api(_asset, _resolution):
             return cc0._require_download_host(link)
 
         monkeypatch.setattr(cc0, "_api_download_link", _api)
         monkeypatch.setattr(cc0, "_read_capped",
-                            lambda url, cap: fetched.append(url) or b"")
+                            lambda url, _cap: fetched.append(url) or b"")
         return fetched
 
     def test_an_ambientcg_link_is_followed(self, monkeypatch):

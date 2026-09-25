@@ -10,7 +10,7 @@ import pytest
 from OpenGLContext.edit.surface import height_gradient, snap_to_height
 
 
-def _ramp(x, z):
+def _ramp(x, _z):
     """Ground rising one in ten towards the east."""
     return np.asarray(x, dtype='d') * 0.1
 
@@ -30,7 +30,7 @@ class TestWhichWayTheGroundRises:
         assert east == pytest.approx(0.1, rel=1e-3)
 
     def test_flat_ground_rises_nowhere(self) -> None:
-        east, north = height_gradient(lambda x, z: np.zeros(np.shape(x)),
+        east, north = height_gradient(lambda x, _z: np.zeros(np.shape(x)),
                                       5.0, 5.0)
         assert (east, north) == pytest.approx((0.0, 0.0))
 
@@ -63,7 +63,7 @@ class TestPullingAPointOntoAContour:
     def test_flat_ground_leaves_the_point_where_it_is(self) -> None:
         """There is no nearest contour on a plain, and guessing one would move
         the point somewhere the designer did not click."""
-        def flat(x, z):
+        def flat(x, _z):
             return np.zeros(np.shape(x))
         assert snap_to_height(flat, 12.0, 34.0, 5.0) == pytest.approx((12.0, 34.0))
 

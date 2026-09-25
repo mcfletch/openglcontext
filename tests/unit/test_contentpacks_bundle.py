@@ -249,7 +249,7 @@ class TestARegistryThatFailsToLoad:
         bad = bundle(tmp_path, {'key': 'glisteel/x', 'copyright': ''},
                      name='bad.zip')
         monkeypatch.setattr(resolver, 'fetch_to_cache',
-                            lambda url, **_named: bad)
+                            lambda _url, **_named: bad)
         with pytest.raises(catalog.BadCatalog):
             fetch.fetch_registry('https://example.invalid/bad.zip', store)
         assert store.registries() == []

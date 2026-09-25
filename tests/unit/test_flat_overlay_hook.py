@@ -52,4 +52,4 @@ class TestTheOverlayHook:
     @PASSES
     def test_a_context_with_no_screen_is_not_an_error(self, module, name):
         """A plain Context has no ScreenMixin; it simply draws no overlay."""
-        assert 'getattr(context, \'renderShaderOverlay\', None)' in _render_of(module)
+        assert 'getattr(context, \'renderShaderOverlay\', None)' in _render_of(module), name

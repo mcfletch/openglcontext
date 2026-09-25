@@ -43,7 +43,7 @@ class TestComputingAside:
             gate.wait(5.0)
             seen.append(args)
             return args
-        work = BackgroundCompute(compute, lambda payload: None,
+        work = BackgroundCompute(compute, lambda _payload: None,
                                  merge=lambda old, new: (old[0] or new[0], old[1] or new[1]))
         try:
             work.request(True, False)          # started, and held at the gate
@@ -90,7 +90,7 @@ class TestAFailedRequest:
 
         def compute(value):
             raise ValueError(value)
-        work = BackgroundCompute(compute, lambda payload: None,
+        work = BackgroundCompute(compute, lambda _payload: None,
                                  failed=lambda args, error: failed.append(
                                      (args, str(error), threading.current_thread())))
         try:
@@ -109,7 +109,7 @@ class TestAFailedRequest:
         def compute():
             work.stop()
             stopped.append(True)
-        work = BackgroundCompute(compute, lambda payload: None)
+        work = BackgroundCompute(compute, lambda _payload: None)
         work.request()
         work._thread.join(5.0)
         assert stopped == [True] and not work.alive

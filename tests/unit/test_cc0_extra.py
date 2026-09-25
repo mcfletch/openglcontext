@@ -70,7 +70,7 @@ class _Resp:
 
 
 def _install_fake_net(monkeypatch, api_json, zip_bytes=None):
-    def fake_open_url(url, redirects=None, timeout=None):
+    def fake_open_url(url, redirects=None, **_named):
         assert isinstance(url, cc0.resolver.CheckedURL)
         assert isinstance(redirects, cc0.resolver.AllowedHosts)
         if "api/v2" in url:

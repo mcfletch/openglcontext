@@ -47,10 +47,10 @@ class Recorder(ToolMode):
     def on_release(self, pointer):
         return self._note('release', pointer.button)
 
-    def on_move(self, pointer):
+    def on_move(self, _pointer):
         return self._note('move')
 
-    def on_key(self, name, modifiers):
+    def on_key(self, name, _modifiers):
         return self._note('key', name)
 
 
@@ -261,7 +261,7 @@ class TestTheWheel:
         class Sizing(ToolMode):
             notches = 0
 
-            def on_wheel(self, pointer, notches):
+            def on_wheel(self, _pointer, notches):
                 self.notches += notches
                 return True
 

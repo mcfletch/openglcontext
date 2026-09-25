@@ -26,7 +26,7 @@ class _Bindings:
     def __init__(self):
         self.order = []
 
-    def addEventHandler(self, kind, **named):
+    def addEventHandler(self, _kind, **named):
         # The real registry keys on all three: Ctrl+PageDown and PageDown are
         # different bindings of the same key name.
         key = (named.get('name'), named.get('state', 0),

@@ -68,7 +68,7 @@ class _Event(MouseEvent):
         return self._modifiers
 
 
-def _pixel_of(point, event=None):
+def _pixel_of(point):
     """The window pixel a world point is drawn at, by the test camera."""
     view, projection, viewport = _matrices()
     clip = np.dot(np.append(np.asarray(point, 'd'), 1.0),

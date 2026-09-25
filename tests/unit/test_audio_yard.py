@@ -56,7 +56,7 @@ def driven(yard):
 
 
 @pytest.fixture
-def yard(engine):
+def yard(engine):  # noqa: ARG001 an AudioEngine is open while the yard plays
     return driven(AudioYard(sample_rate=RATE))
 
 

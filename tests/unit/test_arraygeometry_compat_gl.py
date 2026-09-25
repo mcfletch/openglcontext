@@ -53,7 +53,7 @@ def gl_context(gl_window):
 
 
 @pytest.fixture
-def geometry(gl_context):
+def geometry(gl_context):  # noqa: ARG001 made current for the arrays
     return arraygeometry.ArrayGeometry(POSITIONS, COLORS, NORMALS, TEXCOORDS)
 
 

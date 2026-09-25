@@ -273,7 +273,7 @@ class TestMorphAndSkin:
             def __init__(self):
                 self.count = 0
 
-            def apply(self, worlds):
+            def apply(self, _worlds):
                 self.count += 1
 
         skin = Recorder()

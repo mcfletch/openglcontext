@@ -52,7 +52,7 @@ class TestDrain:
             def __init__(self, tag):
                 self.tag = tag
 
-            def RenderTransparent(self, mode):
+            def RenderTransparent(self, *_args, **_named):
                 calls.append(self.tag)
 
         fp = _bare_pass()
@@ -76,11 +76,11 @@ class TestDrain:
         drawn = []
 
         class Boom:
-            def RenderTransparent(self, mode):
+            def RenderTransparent(self, *_args, **_named):
                 raise RuntimeError("bad shape")
 
         class Ok:
-            def RenderTransparent(self, mode):
+            def RenderTransparent(self, *_args, **_named):
                 drawn.append(True)
 
         fp = _bare_pass()

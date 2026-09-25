@@ -132,7 +132,7 @@ class TestQuittingReallyReleases:
         # The base class ends the process; what is under test is what happens
         # before it does.
         monkeypatch.setattr(context_module.Context, 'OnQuit',
-                            lambda self, event=None: told.append('exited'))
+                            lambda *_args, **_named: told.append('exited'))
         monkeypatch.setenv('OPENGLCONTEXT_HIDDEN', '1')
         glfwinteractivecontext = pytest.importorskip(
             'OpenGLContext.glfwinteractivecontext', exc_type=ImportError)

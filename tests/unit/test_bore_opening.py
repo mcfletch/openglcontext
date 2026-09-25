@@ -79,7 +79,7 @@ class TestTheMouthAndNothingElse:
         assert not found(at, wide * 1.05)
 
     def test_a_bore_the_hill_covers_all_the_way_is_never_open(self) -> None:
-        deep = bore_opening(line(), lambda x, z: np.full(np.shape(x), 90.0))
+        deep = bore_opening(line(), lambda x, _z: np.full(np.shape(x), 90.0))
         x = np.linspace(-60.0, 60.0, 41)
         assert not deep(x, np.zeros_like(x)).any()
 
