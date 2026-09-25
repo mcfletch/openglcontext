@@ -608,8 +608,12 @@ When a test may skip
 A skip says the machine lacks something the test needs. Decide it with a
 check that does not run the code under test, before that code runs: the
 ``gl_context`` fixtures and ``gl_available()`` for a GL target,
-``pytest.importorskip`` for an optional package, ``sys.platform`` for a
-platform. Do not catch an exception from the code under test and skip on it.
+``profile_unavailable(profile)`` for a context of one profile,
+``offscreen_unavailable(profile)`` for a windowless one (all three in
+``OpenGLContext.testing.glcontext``), ``pytest.importorskip`` for an optional
+package, ``sys.platform`` for a platform. The two ``*_unavailable`` functions
+return the reason to skip, or ``None``, and ask once per profile for the
+process. Do not catch an exception from the code under test and skip on it.
 A loader that raises, a viewer that hangs or a renderer that crashes is then
 reported as skipped, in a run that reads green.
 

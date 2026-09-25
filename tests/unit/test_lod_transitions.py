@@ -22,7 +22,7 @@ Rendered fixed-function in a hidden GLFW (compatibility) context.
 import numpy as np
 import pytest
 
-from OpenGLContext.testing.glcontext import GLUnavailable, hidden_window
+from OpenGLContext.testing.glcontext import gl_available, hidden_window
 
 from OpenGLContext.scenegraph.quadrics import Sphere, Cone
 
@@ -43,11 +43,10 @@ CHANNEL_DELTA = 12
 @pytest.fixture(scope='module')
 def gl_ctx():
     """One window for the whole module: nothing here changes its state."""
-    try:
-        with hidden_window('lod', size=(S, S), profile='any') as window:
-            yield window
-    except GLUnavailable as err:
-        pytest.skip(str(err))
+    if not gl_available():
+        pytest.skip('no GL target available')
+    with hidden_window('lod', size=(S, S), profile='any') as window:
+        yield window
 
 
 def _coords(kind, level):

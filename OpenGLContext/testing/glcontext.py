@@ -799,3 +799,27 @@ def profile_unavailable(profile: str) -> str | None:
                 'this test is about a %s context and asking for one here '
                 'failed: %s' % (profile, err))
     return _PROFILE_REFUSALS[profile]
+
+
+#: Why a windowless context of each profile asked about could not be had, by
+#: profile name; ``None`` where it could.
+_OFFSCREEN_REFUSALS: Dict[str, Optional[str]] = {}
+
+
+def offscreen_unavailable(profile: str = 'core') -> str | None:
+    """Why this machine will not give a windowless ``profile`` context, or ``None``.
+
+    Asked of :func:`offscreen_window` once per profile for the process. Only
+    :class:`GLUnavailable` is a reason: any other exception is raised to the
+    caller, since it is a defect in the offscreen path rather than a machine
+    without one.
+    """
+    if profile not in _OFFSCREEN_REFUSALS:
+        try:
+            with offscreen_window('probe %s' % (profile,), profile=profile):
+                _OFFSCREEN_REFUSALS[profile] = None
+        except GLUnavailable as err:
+            _OFFSCREEN_REFUSALS[profile] = (
+                'this test is about a windowless %s context and this machine '
+                'will not give one: %s' % (profile, err))
+    return _OFFSCREEN_REFUSALS[profile]

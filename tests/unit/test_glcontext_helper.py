@@ -31,6 +31,21 @@ glfw_only = pytest.mark.skipif(
            % (glcontext.WINDOWING_VARIABLE,))
 
 
+def _require(*profiles):
+    """Skip unless this driver gives a context of each of ``profiles``."""
+    for profile in profiles:
+        reason = glcontext.profile_unavailable(profile)
+        if reason:
+            pytest.skip(reason)
+
+
+def _require_windowless():
+    """Skip unless this machine gives a windowless core context."""
+    reason = glcontext.offscreen_unavailable('core')
+    if reason:
+        pytest.skip(reason)
+
+
 class TestAskingForAContextThatCannotBeGiven:
     """Every refusal is one exception with a reason in it."""
 
@@ -79,31 +94,25 @@ class TestAskingForAContextThatCannotBeGiven:
 class TestTheWindowItGives:
     def test_the_context_is_current_inside_the_block(self):
         from OpenGL.GL import GL_VERSION, glGetString
-        try:
-            with hidden_window('current'):
-                assert glGetString(GL_VERSION) is not None
-        except GLUnavailable as err:
-            pytest.skip(str(err))
+        _require('core')
+        with hidden_window('current'):
+            assert glGetString(GL_VERSION) is not None
 
     @glfw_only
     def test_it_is_never_mapped(self):
         glfw = pytest.importorskip('glfw')
-        try:
-            with hidden_window('hidden') as window:
-                if glcontext.backend() != 'glfw':
-                    # A CGL context has no window to be mapped or not.
-                    pytest.skip('there is no window under the %s backend'
-                                % (glcontext.backend(),))
-                assert not glfw.get_window_attrib(window, glfw.VISIBLE)
-        except GLUnavailable as err:
-            pytest.skip(str(err))
+        _require('core')
+        with hidden_window('hidden') as window:
+            if glcontext.backend() != 'glfw':
+                # A CGL context has no window to be mapped or not.
+                pytest.skip('there is no window under the %s backend'
+                            % (glcontext.backend(),))
+            assert not glfw.get_window_attrib(window, glfw.VISIBLE)
 
     def test_it_is_the_size_that_was_asked_for(self):
-        try:
-            with hidden_window('sized', size=(96, 48)) as handle:
-                assert glcontext.framebuffer_size(handle) == (96, 48)
-        except GLUnavailable as err:
-            pytest.skip(str(err))
+        _require('core')
+        with hidden_window('sized', size=(96, 48)) as handle:
+            assert glcontext.framebuffer_size(handle) == (96, 48)
 
     @glfw_only
     def test_a_hint_the_caller_names_reaches_the_window(self):
@@ -121,28 +130,24 @@ class TestTheWindowItGives:
         window GLFW made.
         """
         glfw = pytest.importorskip('glfw')
-        try:
-            with hidden_window('fixed', hints={'RESIZABLE': 0}) as window:
-                if glcontext.backend() != 'glfw':
-                    pytest.skip('the context did not come from GLFW')
-                assert not glfw.get_window_attrib(window, glfw.RESIZABLE)
-        except GLUnavailable as err:
-            pytest.skip(str(err))
+        _require('core')
+        with hidden_window('fixed', hints={'RESIZABLE': 0}) as window:
+            if glcontext.backend() != 'glfw':
+                pytest.skip('the context did not come from GLFW')
+            assert not glfw.get_window_attrib(window, glfw.RESIZABLE)
 
     @glfw_only
     def test_a_hint_one_window_asked_for_is_not_given_to_the_next(self):
         """GLFW hints are process-global and sticky, so without a reset the
         window a test gets is the one the *previous* test asked for."""
         glfw = pytest.importorskip('glfw')
-        try:
-            with hidden_window('fixed', hints={'RESIZABLE': 0}):
-                pass
-            with hidden_window('plain') as window:
-                if glcontext.backend() != 'glfw':
-                    pytest.skip('the context did not come from GLFW')
-                assert glfw.get_window_attrib(window, glfw.RESIZABLE)
-        except GLUnavailable as err:
-            pytest.skip(str(err))
+        _require('core')
+        with hidden_window('fixed', hints={'RESIZABLE': 0}):
+            pass
+        with hidden_window('plain') as window:
+            if glcontext.backend() != 'glfw':
+                pytest.skip('the context did not come from GLFW')
+            assert glfw.get_window_attrib(window, glfw.RESIZABLE)
 
     def test_a_core_context_is_forward_compatible(self):
         """The same context :mod:`OpenGLContext.glfwcontext` opens for a real
@@ -154,11 +159,9 @@ class TestTheWindowItGives:
             GL_CONTEXT_FLAGS,
             glGetIntegerv,
         )
-        try:
-            with hidden_window('forward'):
-                flags = int(glGetIntegerv(GL_CONTEXT_FLAGS))
-        except GLUnavailable as err:
-            pytest.skip(str(err))
+        _require('core')
+        with hidden_window('forward'):
+            flags = int(glGetIntegerv(GL_CONTEXT_FLAGS))
         assert flags & GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT
 
     def test_a_compatibility_context_is_not(self):
@@ -169,11 +172,9 @@ class TestTheWindowItGives:
             GL_CONTEXT_FLAGS,
             glGetIntegerv,
         )
-        try:
-            with hidden_window('compat', profile='compatibility'):
-                flags = int(glGetIntegerv(GL_CONTEXT_FLAGS))
-        except GLUnavailable as err:
-            pytest.skip(str(err))
+        _require('compatibility')
+        with hidden_window('compat', profile='compatibility'):
+            flags = int(glGetIntegerv(GL_CONTEXT_FLAGS))
         assert not flags & GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT
 
     def test_a_core_context_follows_a_compatibility_one(self):
@@ -182,13 +183,11 @@ class TestTheWindowItGives:
         rather than take the one it asked for."""
         from OpenGL.GL import GL_CONTEXT_PROFILE_MASK, glGetIntegerv
         from OpenGL.GL import GL_CONTEXT_CORE_PROFILE_BIT
-        try:
-            with hidden_window('compat-first', profile='compatibility'):
-                pass
-            with hidden_window('core-after'):
-                mask = int(glGetIntegerv(GL_CONTEXT_PROFILE_MASK))
-        except GLUnavailable as err:
-            pytest.skip(str(err))
+        _require('core', 'compatibility')
+        with hidden_window('compat-first', profile='compatibility'):
+            pass
+        with hidden_window('core-after'):
+            mask = int(glGetIntegerv(GL_CONTEXT_PROFILE_MASK))
         assert mask & GL_CONTEXT_CORE_PROFILE_BIT
 
 
@@ -396,28 +395,22 @@ class TestTheWindowlessContext:
 
     def test_the_context_is_current_inside_the_block(self):
         from OpenGL.GL import GL_VERSION, glGetString
-        try:
-            with glcontext.offscreen_window('current'):
-                assert glGetString(GL_VERSION) is not None
-        except GLUnavailable as err:
-            pytest.skip(str(err))
+        _require_windowless()
+        with glcontext.offscreen_window('current'):
+            assert glGetString(GL_VERSION) is not None
 
     def test_it_is_the_size_that_was_asked_for(self):
-        try:
-            with glcontext.offscreen_window('sized', size=(96, 48)) as handle:
-                assert glcontext.framebuffer_size(handle) == (96, 48)
-        except GLUnavailable as err:
-            pytest.skip(str(err))
+        _require_windowless()
+        with glcontext.offscreen_window('sized', size=(96, 48)) as handle:
+            assert glcontext.framebuffer_size(handle) == (96, 48)
 
     def test_it_is_the_profile_that_was_asked_for(self):
         from OpenGL.GL import (
             GL_CONTEXT_CORE_PROFILE_BIT, GL_CONTEXT_PROFILE_MASK, glGetIntegerv,
         )
-        try:
-            with glcontext.offscreen_window('core'):
-                mask = int(glGetIntegerv(GL_CONTEXT_PROFILE_MASK))
-        except GLUnavailable as err:
-            pytest.skip(str(err))
+        _require_windowless()
+        with glcontext.offscreen_window('core'):
+            mask = int(glGetIntegerv(GL_CONTEXT_PROFILE_MASK))
         assert mask & GL_CONTEXT_CORE_PROFILE_BIT
 
     def test_a_frame_drawn_into_it_reads_back(self):
@@ -428,38 +421,75 @@ class TestTheWindowlessContext:
             GL_COLOR_BUFFER_BIT, GL_RGB, GL_UNSIGNED_BYTE, glClear,
             glClearColor, glReadPixels, glViewport,
         )
-        try:
-            with glcontext.offscreen_window('drawn', size=(32, 16)):
-                glViewport(0, 0, 32, 16)
-                glClearColor(0.0, 1.0, 0.0, 1.0)
-                glClear(GL_COLOR_BUFFER_BIT)
-                raw = glReadPixels(0, 0, 32, 16, GL_RGB, GL_UNSIGNED_BYTE)
-        except GLUnavailable as err:
-            pytest.skip(str(err))
+        _require_windowless()
+        with glcontext.offscreen_window('drawn', size=(32, 16)):
+            glViewport(0, 0, 32, 16)
+            glClearColor(0.0, 1.0, 0.0, 1.0)
+            glClear(GL_COLOR_BUFFER_BIT)
+            raw = glReadPixels(0, 0, 32, 16, GL_RGB, GL_UNSIGNED_BYTE)
         pixels = np.frombuffer(bytes(raw), dtype=np.uint8).reshape(16, 32, 3)
         assert float(pixels[..., 1].mean()) > 250
 
     def test_two_can_be_alive_at_once(self):
         """A resource cached against one context must not be handed to the
         next, and a test that proves it needs both at the same time."""
-        try:
-            with glcontext.offscreen_window('one') as first:
-                with glcontext.offscreen_window('two') as second:
-                    assert first is not second
-                    glcontext.make_current(first)
-                    glcontext.make_current(second)
-        except GLUnavailable as err:
-            pytest.skip(str(err))
+        _require_windowless()
+        with glcontext.offscreen_window('one') as first:
+            with glcontext.offscreen_window('two') as second:
+                assert first is not second
+                glcontext.make_current(first)
+                glcontext.make_current(second)
 
     def test_a_hint_is_ignored_rather_than_refused(self):
         """``hints`` is GLFW's vocabulary and means nothing without a window;
         a caller passing one is asking about a window it said it did not
-        want."""
-        try:
-            with glcontext.offscreen_window('hinted', hints={'RESIZABLE': 0}):
-                pass
-        except GLUnavailable as err:
-            pytest.skip(str(err))
+        want. The context is the one the same call without it gives."""
+        from OpenGL.GL import GL_VERSION, glGetString
+        _require_windowless()
+        with glcontext.offscreen_window('hinted', size=(40, 20),
+                                        hints={'RESIZABLE': 0}) as handle:
+            assert glGetString(GL_VERSION) is not None
+            assert glcontext.framebuffer_size(handle) == (40, 20)
+
+
+class TestWhetherAWindowlessContextCanBeHad:
+    """Asked once per profile, of :func:`offscreen_window` itself."""
+
+    @pytest.fixture(autouse=True)
+    def nothing_remembered(self, monkeypatch):
+        monkeypatch.setattr(glcontext, '_OFFSCREEN_REFUSALS', {})
+
+    def test_it_is_worked_out_once_per_profile(self, monkeypatch):
+        import contextlib
+        opened = []
+
+        @contextlib.contextmanager
+        def offscreen(title, profile='core', **named):
+            opened.append(profile)
+            yield object()
+
+        monkeypatch.setattr(glcontext, 'offscreen_window', offscreen)
+        for profile in ('core', 'core', 'compatibility'):
+            assert glcontext.offscreen_unavailable(profile) is None
+        assert opened == ['core', 'compatibility']
+
+    def test_a_refusal_is_the_reason_to_skip(self, monkeypatch):
+        def refuse(title, profile='core', **named):
+            raise GLUnavailable('no EGL here')
+
+        monkeypatch.setattr(glcontext, 'offscreen_window', refuse)
+        reason = glcontext.offscreen_unavailable('core')
+        assert 'core' in reason and 'no EGL here' in reason
+
+    def test_any_other_failure_is_not_a_reason(self, monkeypatch):
+        """A defect in the offscreen path fails the test that asked, rather
+        than reading as a machine without the backend."""
+        def broken(title, profile='core', **named):
+            raise TypeError('a defect')
+
+        monkeypatch.setattr(glcontext, 'offscreen_window', broken)
+        with pytest.raises(TypeError, match='a defect'):
+            glcontext.offscreen_unavailable('core')
 
 
 if __name__ == '__main__':

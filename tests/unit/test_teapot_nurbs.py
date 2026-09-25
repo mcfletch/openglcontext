@@ -8,7 +8,7 @@ arrays.
 import numpy as np
 import pytest
 
-from OpenGLContext.testing.glcontext import GLUnavailable, hidden_window
+from OpenGLContext.testing.glcontext import gl_available, hidden_window
 
 from OpenGLContext.scenegraph import teapot_nurbs_data as data
 from OpenGLContext.scenegraph import teapot_nurbs
@@ -335,12 +335,11 @@ def test_empty_input_returns_empty_tangents():
 @pytest.fixture(scope='module')
 def gl_context():
     """One window for the whole module, with no alpha in what is read back."""
-    try:
-        with hidden_window('teapot-test', profile='any',
-                           hints={'ALPHA_BITS': 0}) as window:
-            yield window
-    except GLUnavailable as err:
-        pytest.skip(str(err))
+    if not gl_available():
+        pytest.skip('no GL target available')
+    with hidden_window('teapot-test', profile='any',
+                       hints={'ALPHA_BITS': 0}) as window:
+        yield window
 
 
 @pytest.mark.core_profile

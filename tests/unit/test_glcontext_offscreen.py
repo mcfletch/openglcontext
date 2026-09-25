@@ -88,8 +88,8 @@ class TestTheSizeIsReadableWhicheverBackendItIs:
     know what made it."""
 
     def test_it_is_the_size_that_was_asked_for(self):
-        try:
-            with glcontext.hidden_window('sized', size=(96, 48)) as window:
-                assert glcontext.framebuffer_size(window) == (96, 48)
-        except GLUnavailable as err:
-            pytest.skip(str(err))
+        reason = glcontext.profile_unavailable('core')
+        if reason:
+            pytest.skip(reason)
+        with glcontext.hidden_window('sized', size=(96, 48)) as window:
+            assert glcontext.framebuffer_size(window) == (96, 48)
