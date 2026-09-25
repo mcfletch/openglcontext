@@ -156,13 +156,19 @@ every body, and the manager calls it once per collision:
    events.subscribe(on_blow, body=crates, phases=('begin', 'persist'), above=1.0)
    events.subscribe(on_any, phases=('begin', 'end'))      # every body
    events.subscribe(on_plate, body=plate, kinds=('trigger',),
-                    phases=('enter', 'exit'))             # a pressure plate
+                    phases=('enter', 'exit'))             # a trigger's events
    subscription = events.subscribe(on_glass, body=pane, among=projectiles)
    subscription.cancel()
 
+   plate = events.occupancy(plate_body)                  # a pressure plate
+   if plate.occupied: ...                                # anything on it?
+
 ``body`` is a ``PhysicsBody``, the ``Transform`` it drives, a body index, an
 ``omi_physics.contactevents.BodyRef``, or a list of any of them; left out, the
-subscription covers every body. ``among`` narrows the other side the same way:
+subscription covers every body. ``events.occupancy(trigger)`` keeps what is
+inside a trigger volume from its ``enter`` and ``exit`` events: its
+``occupants`` set and its ``occupied`` flag change as each frame is delivered,
+a body removed while inside leaves it, and ``cancel()`` stops it. ``among`` narrows the other side the same way:
 "did I hit one of these". ``skip_static=True`` leaves out static bodies, for a
 subscription about what a body hit rather than what it landed on.
 
@@ -338,6 +344,33 @@ asking for ``'persist'`` adds an object per touching pair per step, about 5% on
 the same pile. The world's own ``add_contact_listener``, ``contact_log`` and
 ``set_contact_filter`` are there for an application without a manager; see
 omi_physics' README.
+
+.. _physics-movers:
+
+Doors, lifts and platforms
+--------------------------
+
+A kinematic body moves at the velocity it is given and nothing pushes it.
+``omi_physics.kinematic.KinematicMover`` sends one to a place at a speed and
+stops it there: set ``target``, call ``update(dt)`` once a frame before the
+manager advances, and the body travels at ``speed`` metres per second and is
+placed exactly on the target when it arrives. What stands on it is carried.
+
+.. code-block:: python
+
+   from omi_physics.kinematic import KinematicMover
+
+   door = KinematicMover(world, door_body.index, speed=1.5)
+   plate = manager.events.occupancy(plate_body)
+
+   def OnIdle(self):
+       x, y, z = DOOR_SHUT
+       door.target = (x, y + 2.2, z) if plate.occupied else DOOR_SHUT
+       door.update(dt)
+       manager.advance(dt)
+
+``omi_physics.kinematic.KinematicAnimator`` follows a function of time
+instead, for a lift that never stops or an arm that sweeps.
 
 .. _cooking:
 
@@ -804,8 +837,9 @@ Demos
      - A hitscan shot from the camera, reported with ``report_hit``; a crate
        it hits is knocked away and pings
    * - ``w``
-     - Puts a weight on the pressure plate, a trigger that opens the door on
-       ``enter`` and closes it on ``exit``
+     - Puts a weight on the pressure plate. The plate is an ``occupancy``, and
+       the door is a kinematic body an ``omi_physics.kinematic.KinematicMover``
+       sends up while the plate is occupied and down when it is not
 
 The rest are scripts in ``tests/``. The test suite also runs each one as a
 visual-regression test: it exits after a set number of frames, captures the

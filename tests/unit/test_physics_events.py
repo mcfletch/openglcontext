@@ -596,3 +596,43 @@ class TestTheLogIsKeptOnlyForSubscribers:
         mgr.events.subscribe(heard.append, body=crate)
         run(mgr, 0.5)
         assert [hit.phase for hit in heard] == ['begin']
+
+
+class TestOccupancy:
+    def pad(self, mgr):
+        return TestTriggers().pad(mgr)
+
+    def test_it_holds_what_is_on_the_trigger(self) -> None:
+        mgr = manager()
+        add_floor(mgr)
+        pad = self.pad(mgr)
+        crate = add_crate(mgr, position=(0, 2, 0))
+        held = mgr.events.occupancy(pad)
+        assert not held.occupied
+        run(mgr, 1.0)
+        assert held.occupied and held.occupants == {crate}
+        mgr.world.linear_velocity[crate.index] = (0, 8, 0)
+        run(mgr, 0.3)
+        assert not held.occupied and held.occupants == set()
+
+    def test_a_body_removed_while_on_it_leaves_it(self) -> None:
+        mgr = manager()
+        add_floor(mgr)
+        pad = self.pad(mgr)
+        crate = add_crate(mgr, position=(0, 2, 0))
+        held = mgr.events.occupancy(pad)
+        run(mgr, 1.0)
+        mgr.remove(crate)
+        run(mgr, 1.0 / 60.0)
+        assert not held.occupied
+
+    def test_it_can_be_let_go_of(self) -> None:
+        mgr = manager()
+        add_floor(mgr)
+        pad = self.pad(mgr)
+        crate = add_crate(mgr, position=(0, 2, 0))
+        held = mgr.events.occupancy(pad)
+        held.cancel()
+        run(mgr, 1.0)
+        assert not held.occupied
+        assert crate.index is not None

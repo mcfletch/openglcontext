@@ -36,8 +36,10 @@ from omi_audio import synth
 from omi_audio.clip import DEFAULT_SAMPLE_RATE
 from omi_physics import model
 from omi_physics.contactevents import PairPreview, Verdict
+from omi_physics.kinematic import KinematicMover
 from omi_physics.raycast import raycast
 
+from OpenGLContext.events.framestep import FrameStep
 from OpenGLContext.physics.events import Collision
 from OpenGLContext.physics.manager import PhysicsManager
 from OpenGLContext.scenegraph import basenodes, surfaces
@@ -129,9 +131,11 @@ def _shape(geometry: Any, material: Any) -> Any:
 class CollisionYard:
     """The demo's world, its subscriptions and its sounds, with no GL and no window.
 
-    The context puts :meth:`scene` in front of the camera, calls :meth:`step`
-    once a frame and forwards key presses to :meth:`drop`, :meth:`launch`,
-    :meth:`mend`, :meth:`fire`, :meth:`toggle_weight` and :meth:`toggle_cap`.
+    The context puts :meth:`scene` in front of the camera and each frame
+    waits :meth:`frames`' ``wait()``, takes its ``step()`` of the clock and
+    hands that to :meth:`step`. It forwards key presses to :meth:`drop`,
+    :meth:`launch`, :meth:`mend`, :meth:`fire`, :meth:`toggle_weight` and
+    :meth:`toggle_cap`.
     """
 
     def __init__(self, sample_rate: int = DEFAULT_SAMPLE_RATE) -> None:
@@ -153,7 +157,8 @@ class CollisionYard:
             'shard': self.world.add_filter(model.CollisionFilter(
                 collisionSystems=('shard',), notCollideWithSystems=('ball',))),
         }
-        self.frame_cap: Optional[float] = None
+        #: The time step of each frame, and the cap the ``c`` key sets.
+        self.frames = FrameStep(longest=0.1)
         self.sounds: List[Tuple[str, np.ndarray, float]] = []
 
         self._box((30.0, 1.0, 30.0), (0.0, -0.5, 0.0), self.finish.floor,
@@ -170,17 +175,17 @@ class CollisionYard:
         self.weight = self._box((0.7, 0.7, 0.7), WEIGHT_PARKED, self.finish.weight,
                                 model.DYNAMIC, mass=40.0)
         self.door = self._box(DOOR_SIZE, DOOR_CENTRE, self.finish.door, model.KINEMATIC)
+        self._door = KinematicMover(self.world, _index(self.door), speed=DOOR_SPEED)
         for x in PANE_X.values():
             self._frame(x, PANE_Z, PANE_SIZE[0], PANE_SIZE[1])
         self._frame(DOOR_CENTRE[0], DOOR_CENTRE[2], DOOR_SIZE[0],
                     DOOR_SIZE[1] + DOOR_TRAVEL)
-        self._on_plate: Set[Any] = set()
 
         self.events.subscribe(self._thud, body=self.crates + list(self.balls.values()),
                               phases=('begin', 'persist'), above=IMPACT_FLOOR)
         self.events.subscribe(self._struck, body=self.crates, kinds=('hit',))
-        self.events.subscribe(self._on_plate_changed, body=self.plate,
-                              kinds=('trigger',), phases=('enter', 'exit'))
+        #: What is standing on the pressure plate.
+        self.on_plate = self.events.occupancy(self.plate)
         self.world.set_contact_filter(self._verdict)
         self.mend()
 
@@ -281,16 +286,10 @@ class CollisionYard:
             return Verdict.IGNORE_PAIR
         return Verdict.SOLVE
 
-    def _on_plate_changed(self, hit: Collision) -> None:
-        if hit.phase == 'enter':
-            self._on_plate.add(hit.other)
-        else:
-            self._on_plate.discard(hit.other)
-
     @property
     def plate_pressed(self) -> bool:
         """Whether anything is standing on the pressure plate."""
-        return bool(self._on_plate)
+        return self.on_plate.occupied
 
     # -- the panes ------------------------------------------------------------
     def _shatter(self, name: str, point: np.ndarray, push: np.ndarray) -> None:
@@ -354,10 +353,14 @@ class CollisionYard:
         on_plate = abs(self.world.position[self.weight.index][0] - x) < 1.0
         self._place(self.weight, WEIGHT_PARKED if on_plate else (x, 1.5, z))
 
+    @property
+    def frame_cap(self) -> Optional[float]:
+        """The shortest frame the demo keeps to, in seconds; None for no cap."""
+        return self.frames.cap
+
     def toggle_cap(self) -> Optional[float]:
         """Cap the frame time at :data:`CAPPED_FRAME`, or lift the cap; return the cap."""
-        self.frame_cap = None if self.frame_cap else CAPPED_FRAME
-        return self.frame_cap
+        return self.frames.toggle_cap(CAPPED_FRAME)
 
     def _place(self, body: PhysicsBody, position: Sequence[float],
                velocity: Sequence[float] = (0.0, 0.0, 0.0)) -> None:
@@ -373,21 +376,11 @@ class CollisionYard:
         """How high the middle of the door is, in metres."""
         return float(self.world.position[self.door.index][1])
 
-    def _drive_door(self, dt: float) -> None:
-        """Move the door towards open or shut, stopping exactly at either."""
-        target = DOOR_CENTRE[1] + (DOOR_TRAVEL if self.plate_pressed else 0.0)
-        height = self.door_height()
-        gap = target - height
-        speed = 0.0 if abs(gap) < 1e-6 else float(np.sign(gap)) * DOOR_SPEED
-        if abs(gap) <= DOOR_SPEED * dt:
-            x, _y, z = DOOR_CENTRE
-            self.world.place_body(_index(self.door), position=(x, target, z))
-            speed = 0.0
-        self.world.linear_velocity[self.door.index] = (0.0, speed, 0.0)
-
     def step(self, dt: float, engine: Any) -> List[str]:
         """Advance the yard by ``dt`` seconds and play what was struck; return the sounds' names."""
-        self._drive_door(dt)
+        x, y, z = DOOR_CENTRE
+        self._door.target = (x, y + (DOOR_TRAVEL if self.plate_pressed else 0.0), z)
+        self._door.update(dt)
         self.manager.advance(dt)
         sounds, self.sounds = self.sounds, []
         if engine is not None:
@@ -406,6 +399,7 @@ def main() -> int:                              # pragma: no cover - needs a win
     from OpenGLContext import testingcontext
     from OpenGLContext.audio import scene as audioscene
     from OpenGLContext.contextdefinition import ContextDefinition
+    from OpenGLContext.events import systemtime
 
     base: Any = testingcontext.getInteractive()
 
@@ -424,13 +418,12 @@ def main() -> int:                              # pragma: no cover - needs a win
                                  ('w', self.yard.toggle_weight), ('c', self.OnCap)):
                 self.addEventHandler('keypress', name=key,
                                      function=lambda event, handler=handler: handler())
-            self._last = time.time()
+            self.yard.frames.step(systemtime.systemTime())
             print(__doc__, flush=True)
 
         def OnFire(self) -> None:
             platform = self.getViewPlatform()
-            forward = platform.quaternion * [0.0, 0.0, -1.0, 0.0]
-            self.yard.fire(platform.position[:3], forward[:3])
+            self.yard.fire(platform.position[:3], platform.forward())
 
         def OnCap(self) -> None:
             cap = self.yard.toggle_cap()
@@ -438,11 +431,9 @@ def main() -> int:                              # pragma: no cover - needs a win
                   flush=True)
 
         def OnIdle(self, *args: Any) -> int:
-            cap = self.yard.frame_cap
-            if cap:
-                time.sleep(max(0.0, cap - (time.time() - self._last)))
-            now = time.time()
-            dt, self._last = min(now - self._last, 0.1), now
+            frames = self.yard.frames
+            time.sleep(frames.wait(systemtime.systemTime()))
+            dt = frames.step(systemtime.systemTime())
             self.yard.step(dt, audioscene.existing_engine(self))
             self.triggerRedraw(1)
             return 1

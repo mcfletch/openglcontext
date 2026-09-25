@@ -212,6 +212,31 @@ and run faster or slower. Its event types are ``start``, ``stop``, ``pause``,
 carries how far through the cycle the timer is, from 0 to 1.
 :doc:`tutorials/nehe6_timer` walks through a complete example.
 
+A simulation's time step
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+An application that advances its own simulation from ``OnIdle`` reads the
+engine's clock, ``OpenGLContext.events.systemtime.systemTime()``, once a frame.
+A bounded capture puts that clock on a fixed step per frame, so a captured run
+lands on the same picture every time; ``time.time()`` does not follow it.
+``OpenGLContext.events.framestep.FrameStep`` turns the readings into steps:
+
+.. code-block:: python
+
+   from OpenGLContext.events import systemtime
+   from OpenGLContext.events.framestep import FrameStep
+
+   self.frames = FrameStep(start=systemtime.systemTime(), longest=0.1)
+
+   def OnIdle(self, *args):
+       time.sleep(self.frames.wait(systemtime.systemTime()))
+       self.world.advance(self.frames.step(systemtime.systemTime()))
+
+``step(now)`` is the seconds since the previous step, at most ``longest``, so a
+stall does not hand the simulation one step as long as the stall. ``cap`` is
+the shortest frame in seconds (None for none), ``wait(now)`` is how long to
+wait to keep to it, and ``toggle_cap(seconds)`` sets or lifts it.
+
 Collisions
 ----------
 

@@ -91,6 +91,8 @@ OpenGLContext/
 │   ├── gizmo.py      # The tri-axis handle; a drag held to one axis
 │   └── controlnet.py # A NURBS node's control points, as pickable markers
 ├── events/           # Cross-backend event generation and dispatch -- docs/eventmodel.rst
+│   ├── framestep.py  # A simulation's time step each frame, from the clock:
+│   │                 # the longest step and a frame cap -- no GL
 │   └── wheel.py      # Rotation reports into whole notches, for the backends
 │                     # whose toolkit states a detent size
 ├── loaders/          # File formats into the scenegraph -- docs/loading.rst, gltf.rst, vrml97.rst
@@ -150,7 +152,8 @@ OpenGLContext/
 ├── __pyinstaller/    # PyInstaller hooks, found by entry point -- docs/packaging.rst
 ├── physics/          # Rigid bodies, colliders, gravity zones -- docs/physics.rst
 │   └── events.py     # Collision subscriptions: a callback per body, delivered
-│                     # once a frame -- docs/physics.rst#physics-collisions
+│                     # once a frame, and a trigger's occupancy
+│                     # -- docs/physics.rst#physics-collisions
 ├── resources/        # Generated Python modules holding icons and shader text
 ├── py.typed          # The engine's declarations are real -- docs/typing.rst
 ├── scenegraph/       # VRML97-style nodes

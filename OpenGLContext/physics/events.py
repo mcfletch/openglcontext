@@ -39,7 +39,7 @@ if TYPE_CHECKING:
 
     from .manager import PhysicsManager
 
-__all__ = ['Collision', 'CollisionEvents', 'HitEvent', 'Subscription']
+__all__ = ['Collision', 'CollisionEvents', 'HitEvent', 'Occupancy', 'Subscription']
 
 log = logging.getLogger(__name__)
 
@@ -151,6 +151,41 @@ class Subscription:
         return kind in self.kinds and phase in self.phases
 
 
+class Occupancy:
+    """What is inside one trigger volume, kept from its enter and exit events.
+
+    Made by :meth:`CollisionEvents.occupancy`. A pressure plate is pressed
+    while :attr:`occupied`; a volume that counts what is in it reads
+    :attr:`occupants`. A body removed from the world while inside leaves it,
+    since removal ends its overlaps with an ``'exit'``.
+    """
+
+    def __init__(self) -> None:
+        #: The bodies inside, named as a :class:`Collision` names its other
+        #: side: the ``PhysicsBody``, or the ``BodyRef`` of a body with none.
+        self.occupants: set[Any] = set()
+        self._subscription: Subscription | None = None
+
+    @property
+    def occupied(self) -> bool:
+        """Whether anything is inside."""
+        return bool(self.occupants)
+
+    def heard(self, hit: Collision) -> None:
+        """Take one ``'enter'`` or ``'exit'`` into account."""
+        if hit.phase == 'enter':
+            self.occupants.add(hit.other)
+        else:
+            self.occupants.discard(hit.other)
+
+    def cancel(self) -> None:
+        """Stop keeping track; :attr:`occupants` is emptied."""
+        if self._subscription is not None:
+            self._subscription.cancel()
+            self._subscription = None
+        self.occupants.clear()
+
+
 class CollisionEvents:
     """The subscriptions of one physics manager, and their delivery.
 
@@ -238,6 +273,18 @@ class CollisionEvents:
         else:
             self._index(subscription)
         return subscription
+
+    def occupancy(self, trigger: Any) -> Occupancy:
+        """An :class:`Occupancy` of ``trigger``: what is inside it, kept up to date.
+
+        ``trigger`` is a body with a trigger shape, named as :meth:`subscribe`
+        names a body. The set changes as each frame's events are delivered.
+        """
+        held = Occupancy()
+        held._subscription = self.subscribe(held.heard, body=trigger,
+                                            kinds=('trigger',),
+                                            phases=('enter', 'exit'))
+        return held
 
     def resolve(self, target: Any) -> list[BodyRef]:
         """The :class:`BodyRef` of each body ``target`` names.
