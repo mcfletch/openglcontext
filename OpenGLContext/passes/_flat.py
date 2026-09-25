@@ -1727,7 +1727,8 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
                     # that this context is current.
                     PBRMesh.flush_pending_deletes(self)
                 except Exception:
-                    pass
+                    log.debug('deleting collected meshes\' vertex arrays failed',
+                              exc_info=True)
 
                 # Finalize MRT selection buffer: keep the id->path map for next
                 # frame's per-pixel pick lookups (read on demand from the FBO --
@@ -1802,6 +1803,19 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         else:
             self.legacyBackgroundRender( frame.camera, frame.modelView )
 
+    def resetMeshDrawState( self ) -> None:
+        """Put back the winding and culling a PBR mesh may have changed.
+
+        After each view's geometry, so a mesh's clockwise winding or disabled
+        culling never reaches the next view or the next frame. Nothing to do
+        for a scene of VRML97 geometry alone.
+        """
+        try:
+            from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+            PBRMesh.reset_draw_state( self )
+        except Exception:
+            log.debug( 'resetting the mesh draw state failed', exc_info=True )
+
     def _endView( self, frame: 'ViewFrame' ) -> None:
         """Undo what :meth:`_beginView` set that the next view must not inherit."""
         if frame.view.style.wireframe:
@@ -1872,16 +1886,7 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
             self.shaderRenderTransmissive(toRender, transmissive, id_map)
             self.shaderRenderTransparent(toRender, id_map)
 
-            # Restore winding/cull GL defaults after each view's geometry, so a
-            # PBR mesh's CW winding or disabled culling never leaks into the
-            # next view or past this frame. No-op for pure VRML97 scenes.
-            # Guarded lazy import keeps the generic pass free of a hard PBR
-            # dependency.
-            try:
-                from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-                PBRMesh.reset_draw_state(self)
-            except Exception:
-                pass
+            self.resetMeshDrawState()
         finally:
             self.clearPlanarReflection()
             self._endView( frame )
@@ -2057,11 +2062,7 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
                     self.viewCopies = len( self.viewerEyes )
                 self.shaderRenderOpaque( group, id_map )
                 drawn.update( id( record[4] ) for record in group )
-            try:
-                from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-                PBRMesh.reset_draw_state( self )
-            except Exception:
-                pass
+            self.resetMeshDrawState()
         finally:
             self.viewerEyes = None
             self.viewCopies = 0

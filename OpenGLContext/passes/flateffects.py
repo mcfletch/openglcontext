@@ -147,6 +147,8 @@ class _FlatEffectsMixin(PassResources):
 
     _bloom_pass: Optional["BloomPass"] = None
     _bloom_active = False
+    #: What switches bloom off for good if it raises.
+    _bloom_guard: Optional[LayerGuard] = None
     #: Whether this pass's colour can be composited through the HDR bloom
     #: chain: its shaders write linear HDR while bloom is on. A pass whose
     #: output is already display-referred says False and draws straight to
@@ -890,45 +892,65 @@ class _FlatEffectsMixin(PassResources):
         return forced + kept
 
     # -- HDR bloom wrap ----------------------------------------------------
+    def _bloomGuard(self) -> LayerGuard:
+        """What switches bloom off for good if starting or compositing it raises."""
+        if self._bloom_guard is None:
+            self._bloom_guard = LayerGuard('bloom', off=self._bloomOff, logger=log)
+        return self._bloom_guard
+
+    def _bloomOff(self) -> None:
+        """Draw to the window again: a frame that failed in bloom may be bound to its target."""
+        from OpenGL.GL import glBindFramebuffer, GL_FRAMEBUFFER
+        self._bloom_active = False
+        previous = getattr(self._bloom_pass, 'previous', 0)
+        try:
+            glBindFramebuffer(GL_FRAMEBUFFER, previous)
+        except Exception:
+            log.debug('binding the framebuffer bloom drew over failed', exc_info=True)
+
     def _begin_bloom(self) -> bool:
         """Start rendering into the HDR bloom target, if bloom is enabled. The scene
-        renders to a linear HDR FBO; _end_bloom composites the glow back to screen."""
+        renders to a linear HDR FBO; _end_bloom composites the glow back to screen.
+
+        A failure to start is logged once, and bloom stays off from then on.
+        """
         from OpenGLContext.passes import bloom
+        self._bloom_active = False
         if not self.supports_bloom or not bloom.bloom_enabled(self):
-            self._bloom_active = False
             return False
         # The window, not the pass's viewport: with several views the viewport
         # is one view's tile, and the target holds all of them.
         w, h = (int(value) for value in self.context.getViewPort())
-        if not w or not h:
-            self._bloom_active = False
+        if not w or not h or self._bloomGuard().failed:
             return False
-        try:
-            if self._bloom_pass is None:
-                self._bloom_pass = bloom.BloomPass()
-            self._bloom_pass.begin(w, h)
-            self._bloom_active = True
-            return True
-        except Exception:
-            self._bloom_active = False
-            return False
+        self._bloom_active = bool(self._bloomGuard().run(self._startBloom, w, h))
+        return self._bloom_active
+
+    def _startBloom(self, width: int, height: int) -> bool:
+        from OpenGLContext.passes import bloom
+        if self._bloom_pass is None:
+            self._bloom_pass = bloom.BloomPass()
+        self._bloom_pass.begin(width, height)
+        return True
 
     def _end_bloom(self) -> None:
         """Composite the glow onto the frame, each view within its own rectangle.
 
         Called once the views are drawn and before anything is drawn over them,
         so the overlay is not bloomed and the frame presented is the finished
-        one.
+        one. A layout that leaves part of the window to no view has the window
+        cleared first. A failure is logged once, and bloom stays off from then on.
         """
+        from OpenGLContext.multiview.views import covers
         frames = getattr(self, 'viewFrames', None) or ()
         rects = [frame.rect for frame in frames] if len(frames) > 1 else None
-        try:
-            assert self._bloom_pass is not None
-            self._bloom_pass.composite(rects)
-        except Exception:
-            pass
+        width, height = (int(value) for value in self.context.getViewPort())
+        pass_ = self._bloom_pass
         self._bloom_active = False
-
+        if pass_ is not None:
+            self._bloomGuard().run(
+                pass_.composite, rects,
+                clear=rects is not None and not covers(rects, width, height))
 
 def _turned(frame: Any) -> bool:
     """Whether a mirror view's camera has been reflected an odd number of times."""

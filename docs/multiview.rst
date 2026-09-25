@@ -670,7 +670,8 @@ camera. Work that depends only on the scene is done once for all views:
   can see its range, and every one keeps it while the scene has a mirror, since
   a mirror may show a light no view looks at.
 - Bloom - blurs and composites each view inside its own rectangle, so a
-  bright object at the edge of one view does not glow into the next.
+  bright object at the edge of one view does not glow into the next. What no
+  view covers is cleared to black, as it is without bloom.
 - Transparency - transparent shapes are sorted back to front for each view's
   own camera.
 

@@ -216,7 +216,9 @@ material turns one on by setting its properties.
 Emissive glow is part of the basic model. Set ``emissiveColor`` for a surface
 that gives off its own light, and raise ``emissiveStrength`` above 1 to make it
 brighter than white. With bloom on (``OPENGLCONTEXT_BLOOM=1``, off by
-default), those areas spread a glow.
+default), those areas spread a glow. Where the driver cannot build or
+composite the bloom targets, the failure is logged once and frames are drawn
+without bloom from then on.
 
 .. rst-class:: technical
 

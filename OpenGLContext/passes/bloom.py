@@ -28,7 +28,7 @@ from OpenGL.GL import (
     GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_BINDING,
     GL_CLAMP_TO_EDGE, GL_LINEAR,
     GL_TEXTURE_MIN_FILTER, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_WRAP_S,
-    GL_TEXTURE_WRAP_T, GL_DEPTH_TEST, GL_BLEND,
+    GL_TEXTURE_WRAP_T, GL_DEPTH_TEST, GL_BLEND, GL_SCISSOR_TEST,
     GL_VERTEX_SHADER, GL_FRAGMENT_SHADER, GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT,
     GL_DEPTH_COMPONENT24, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER,
     glGenFramebuffers, glBindFramebuffer, glFramebufferTexture2D, glDeleteFramebuffers,
@@ -214,6 +214,11 @@ class BloomPass(object):
         self._targets: Optional[_Targets] = None
 
     @property
+    def previous(self) -> int:
+        """The framebuffer that was bound when :meth:`begin` ran, which the glow goes to."""
+        return self._prev_fbo
+
+    @property
     def size(self) -> Optional[Tuple[int, int]]:
         """What the scene target is sized for, or None while there is none."""
         return self._targets.size if self._targets else None
@@ -273,12 +278,15 @@ class BloomPass(object):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         return True
 
-    def composite(self, rects: Optional[Sequence[Rect]] = None) -> None:
+    def composite(self, rects: Optional[Sequence[Rect]] = None,
+                  clear: bool = False) -> None:
         """Bright-pass + blur the HDR scene and composite it to the previous target.
 
         ``rects`` are the views' rectangles in window pixels; each is blurred
         and composited on its own, its samples clamped inside it. None is the
-        whole window as one.
+        whole window as one. ``clear`` clears the previous target to black
+        first, for rectangles that leave part of the window uncovered, which
+        the composite would otherwise leave holding an earlier frame.
 
         Does nothing where :meth:`begin` has not run: there is no scene to
         composite, and every name below would be missing.
@@ -330,6 +338,11 @@ class BloomPass(object):
 
         # 3. composite scene + bloom -> the target that was bound before begin()
         glBindFramebuffer(GL_FRAMEBUFFER, self._prev_fbo)
+        if clear:
+            glDisable(GL_SCISSOR_TEST)
+            glViewport(0, 0, w, h)
+            glClearColor(0.0, 0.0, 0.0, 1.0)
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glUseProgram(chain.composite)
         self._bind_tex(chain.composite, 'scene', targets.scene_tex, 0)
         self._bind_tex(chain.composite, 'bloom', targets.ping_tex[blurred], 1)

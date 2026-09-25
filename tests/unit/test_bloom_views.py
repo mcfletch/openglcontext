@@ -71,3 +71,28 @@ def test_one_view_glows_as_it_always_has(render_scene, env):
     box = np.flatnonzero(frame[HEIGHT // 2, :, 0] > 240)
     # The glow extends past the box on both sides.
     assert lit[0] < box[0] - 2 and lit[-1] > box[-1] + 2
+
+
+def test_what_the_views_stop_covering_is_cleared(render_scene, env):
+    """With bloom on, a band given up by the views keeps nothing of an earlier frame."""
+    from OpenGLContext.multiview.views import ViewStyle
+
+    def layout(context):
+        drawn = []
+
+        def arrangement(width, height):
+            drawn.append(1)
+            # The first frame fills the window; the rest leave a band.
+            band = 0 if len(drawn) < 2 else 60
+            half = (width - band) // 2
+            return [(band, 0, half, height), (band + half, 0, width - band - half, height)]
+
+        red = ViewStyle(background=(1.0, 0.0, 0.0))
+        return ViewLayout([View(_camera(-2.0), name='left', style=red),
+                           View(_camera(2.0), name='right', style=red)],
+                          arrangement=arrangement)
+
+    frames = frames_of(render_scene, [_glowing_box(0.0)], frames=3,
+                       size=(WIDTH, HEIGHT), layout=layout)
+    assert frames[0][:, :55, 0].min() > 100            # a view was here
+    assert frames[-1][:, :55].max() < 40               # ...and is not now

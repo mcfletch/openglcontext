@@ -221,28 +221,47 @@ class TestBloomWrapDefensive:
         assert p._begin_bloom() is False
         assert p._bloom_active is False
 
-    def test_begin_bloom_swallows_setup_failure(self, monkeypatch):
+    def test_a_bloom_that_cannot_start_is_reported_once_and_switched_off(
+            self, monkeypatch, caplog):
         from OpenGLContext.passes import bloom
+        calls = []
 
         class _BoomPass:
             def begin(self, w, h):
+                calls.append((w, h))
                 raise RuntimeError("simulated bloom setup failure")
 
         monkeypatch.setattr(bloom, 'bloom_enabled', lambda source=None: True)
         monkeypatch.setattr(bloom, 'BloomPass', _BoomPass)
+        monkeypatch.setattr(_FlatEffectsMixin, '_bloomOff', lambda self: None)
         p = _FlatEffectsMixin()
         p.context = _Window(64, 64)
-        p._bloom_pass = None
-        assert p._begin_bloom() is False
+        with caplog.at_level('ERROR'):
+            assert p._begin_bloom() is False
+            assert p._begin_bloom() is False
         assert p._bloom_active is False
+        assert len(calls) == 1
+        assert 'simulated bloom setup failure' in caplog.text
 
-    def test_end_bloom_swallows_composite_failure(self):
+    def test_a_composite_that_fails_is_reported_once_and_bloom_switched_off(
+            self, monkeypatch, caplog):
+        from OpenGLContext.passes import bloom
+
         class _BoomPass:
-            def composite(self):
+            def begin(self, w, h):
+                return True
+
+            def composite(self, rects=None, clear=False):
                 raise RuntimeError("simulated composite failure")
 
+        monkeypatch.setattr(bloom, 'bloom_enabled', lambda source=None: True)
+        monkeypatch.setattr(_FlatEffectsMixin, '_bloomOff', lambda self: None)
         p = _FlatEffectsMixin()
+        p.context = _Window(64, 64)
         p._bloom_pass = _BoomPass()
-        p._bloom_active = True
-        p._end_bloom()                # must not raise
+        with caplog.at_level('ERROR'):
+            assert p._begin_bloom() is True
+            p._end_bloom()                # must not raise
         assert p._bloom_active is False
+        assert 'simulated composite failure' in caplog.text
+        assert p._begin_bloom() is False  # off from now on
