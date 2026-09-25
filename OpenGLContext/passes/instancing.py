@@ -968,9 +968,9 @@ def draw_instanced_mesh(gpu: Any, modelviews: Any, object_ids: Any,
     Uses a VAO + per-instance VBO cached on ``gpu`` (built once by
     :func:`_build_instance_vao`, reused every frame): the per-instance data is
     re-uploaded into the persistent VBO and the draw is issued -- no VAO/VBO churn.
-    The instance modelviews are eye-space (view*model), so the buffer is re-uploaded
-    each frame even for a static scene; cluster culling (see the plan) is what lets
-    a cached, spatially-sorted buffer skip the re-upload. Returns the count drawn.
+    The instance modelviews are eye-space (view*model), so they change whenever
+    the camera moves; the buffer is filled only when what is packed differs from
+    what it holds, which in a still frame it does not. Returns the count drawn.
 
     ``copies`` draws every instance that many times over, for a shared draw of
     the ``vertex`` multi-view strategy: the per-instance attributes advance
@@ -993,10 +993,13 @@ def draw_instanced_mesh(gpu: Any, modelviews: Any, object_ids: Any,
         vao, inst_vbo = _build_instance_vao(gpu, arr, stride)
         glBindVertexArray(vao)
     else:
-        inst_vbo = gpu._instance_vbo
-        inst_vbo.set_array(arr)
         glBindVertexArray(vao)
-        inst_vbo.bind()   # re-upload into the persistent buffer the VAO references
+        held = getattr(gpu, '_instance_uploaded', None)
+        if held is None or held.shape != arr.shape or not np.array_equal(held, arr):
+            inst_vbo = gpu._instance_vbo
+            inst_vbo.set_array(arr)
+            inst_vbo.bind()   # re-upload into the persistent buffer the VAO references
+    gpu._instance_uploaded = arr
     draw_mode = int(getattr(gpu, 'draw_mode', GL_TRIANGLES))
     divisor = max(int(copies), 1)
     if getattr(gpu, '_instance_divisor', 1) != divisor:

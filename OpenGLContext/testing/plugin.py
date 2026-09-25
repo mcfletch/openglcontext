@@ -512,3 +512,24 @@ def check_failing_layer() -> Callable[..., Any]:
     """:func:`OpenGLContext.testing.layers.check_failing_layer`."""
     from OpenGLContext.testing.layers import check_failing_layer as check
     return check
+
+
+@pytest.fixture
+def check_still_frame() -> Callable[..., Any]:
+    """:func:`OpenGLContext.testing.stillframe.check_still_frame`."""
+    from OpenGLContext.testing.stillframe import check_still_frame as check
+    return check
+
+
+@pytest.fixture
+def scene_context() -> Callable[..., Any]:
+    """:func:`OpenGLContext.testing.scenes.scene_context`, skipping where there is no GL.
+
+    ``with scene_context(children) as context:`` in a test; the test is
+    skipped where no core-profile context can be made here.
+    """
+    from OpenGLContext.testing import scenes
+    refused = profile_unavailable('core')
+    if refused:
+        pytest.skip(refused)
+    return scenes.scene_context

@@ -1006,6 +1006,8 @@ class PBRPass(flatcore.FlatPass):
     use_shaders: bool = True
     #: The one buffer every instanced group's material array is uploaded to.
     _instance_material_ubo: Optional[int] = None
+    #: What :attr:`_instance_material_ubo` was last filled with.
+    _instance_material_data: Optional[np.ndarray] = None
 
     def disposeResources(self) -> None:
         """Release the instanced groups' material buffer, then the rest."""
@@ -1159,8 +1161,9 @@ class PBRPass(flatcore.FlatPass):
 
     def _bind_material_array(self, materials: list) -> int:
         """Pack N materials into one std140 array UBO and bind it at the material
-        binding. Reuses one persistent buffer on the pass (orphan + re-upload each
-        call) instead of gen/deleting a UBO per group per frame. The array element
+        binding. Reuses one persistent buffer on the pass, filled (orphaning the
+        previous storage) only when the packed materials differ from what it
+        holds, so a still frame of one group fills nothing. The array element
         layout matches the single-material block, so the shader indexes
         ``materials[i]`` for instance material i. Returns the buffer."""
         blocks = [pack_material_block(m) for m in materials]
@@ -1169,11 +1172,15 @@ class PBRPass(flatcore.FlatPass):
         if buf is None:
             buf = int(glGenBuffers(1))
             self._instance_material_ubo = buf
-        glBindBuffer(GL_UNIFORM_BUFFER, buf)
-        # glBufferData (not SubData) orphans the previous storage, so a still-in-
-        # flight draw from an earlier chunk this frame keeps its own data.
-        glBufferData(GL_UNIFORM_BUFFER, data.nbytes, data, GL_DYNAMIC_DRAW)
-        glBindBuffer(GL_UNIFORM_BUFFER, 0)
+            self._instance_material_data = None
+        held = self._instance_material_data
+        if held is None or held.shape != data.shape or not np.array_equal(held, data):
+            glBindBuffer(GL_UNIFORM_BUFFER, buf)
+            # glBufferData (not SubData) orphans the previous storage, so a still-in-
+            # flight draw from an earlier chunk this frame keeps its own data.
+            glBufferData(GL_UNIFORM_BUFFER, data.nbytes, data, GL_DYNAMIC_DRAW)
+            glBindBuffer(GL_UNIFORM_BUFFER, 0)
+            self._instance_material_data = data
         glBindBufferBase(GL_UNIFORM_BUFFER, MATERIAL_UBO_BINDING, buf)
         return buf
 

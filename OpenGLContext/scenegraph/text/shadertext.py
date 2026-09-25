@@ -44,6 +44,9 @@ class ShaderTextRenderer:
         self._texture: int | None = None
         self._vao: int | None = None
         self._vbo: int | None = None
+        #: The vertex bytes :attr:`_vbo` holds, so text drawn again unchanged
+        #: is not uploaded again.
+        self._uploaded: bytes | None = None
         self._initialized = False
         self._atlas_module: Any = None
 
@@ -137,6 +140,7 @@ class ShaderTextRenderer:
             # Create VAO and VBO for quad rendering
             self._vao = glGenVertexArrays(1)
             self._vbo = glGenBuffers(1)
+            self._uploaded = None
 
             self._initialized = True
             return True
@@ -318,10 +322,14 @@ class ShaderTextRenderer:
 
         vertex_data = array(vertices, 'f')
 
-        # Bind VAO and upload vertex data
+        # The buffer is filled only when this text's quads differ from what it
+        # holds: the same string drawn again in a still frame uploads nothing.
         glBindVertexArray(vao)
         glBindBuffer(GL_ARRAY_BUFFER, buffer)
-        glBufferData(GL_ARRAY_BUFFER, vertex_data.nbytes, vertex_data, GL_DYNAMIC_DRAW)
+        packed = vertex_data.tobytes()
+        if packed != self._uploaded:
+            glBufferData(GL_ARRAY_BUFFER, vertex_data.nbytes, vertex_data, GL_DYNAMIC_DRAW)
+            self._uploaded = packed
 
         # Use unlit shader for text
         shader_program.use(lit=False)
