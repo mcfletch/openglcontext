@@ -14,6 +14,8 @@ import pytest
 
 from OpenGLContext.scenegraph import surfaces
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.scenegraph import basenodes
 
 SIZE = 128
 
@@ -221,7 +223,6 @@ def test_a_polygon_is_a_flat_disc_of_so_many_sides():
 
 
 def test_a_shape_wears_its_material_where_it_is_put():
-    from OpenGLContext.scenegraph.pbrmesh import PBRMesh
     material = surfaces.pbr_material(surfaces.plaster(16))
     placed = surfaces.shape(surfaces.panel(1.0, 1.0), material,
                             translation=(1.0, 2.0, 3.0), rotation=(0.0, 1.0, 0.0, 0.5))
@@ -325,7 +326,6 @@ def test_a_piece_placed_in_its_parent_carries_its_frame_with_it():
 
 def test_placing_agrees_with_a_transform_turning_it():
     """The same points a VRML97 Transform with that rotation puts them at."""
-    from OpenGLContext.scenegraph import basenodes
     block = surfaces.block((1.0, 2.0, 3.0))
     rotation = (0.3, 0.8, -0.5, 1.1)
     transform = basenodes.Transform(translation=(1.0, -2.0, 0.5), rotation=rotation)

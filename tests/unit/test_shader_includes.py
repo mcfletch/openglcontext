@@ -17,6 +17,7 @@ from OpenGLContext.passes import shaderpass as SP
 from OpenGLContext.passes.pbrpass import pbr_feature_defines, PBR_OPTIONAL_FEATURES
 
 from OpenGLContext.testing.paths import tests_root
+from OpenGLContext.passes import shadowcaps
 TESTS_DIR = str(tests_root(__file__))
 COMPILE_CHECK = os.path.join(TESTS_DIR, "helpers", "_shader_compile_check.py")
 
@@ -132,7 +133,6 @@ class TestResolveShadowConfig:
     def test_detection_failure_uses_conservative_baseline(self, monkeypatch):
         """If capability detection raises, resolve_shadow_config must not
         propagate the error -- it returns the safe 1-light, no-cube-array baseline."""
-        from OpenGLContext.passes import shadowcaps
 
         def boom(_ctx):
             raise RuntimeError("no context")

@@ -8,11 +8,17 @@ import types
 
 import numpy as np
 import pytest
+from vrml.vrml97 import nodepath, nodetypes
 
 from OpenGLContext.passes.shadowmixin import ShadowMapMixin
 from OpenGLContext.passes.shadowcaps import ShadowCapabilities
-from OpenGLContext.passes import shadowmath
+from OpenGLContext.passes import _flat, flatcore, shadowmath
 from OpenGLContext.scenegraph.light import SpotLight, PointLight, DirectionalLight
+import OpenGLContext.passes.instancing as inst
+from OpenGLContext import frustum
+from OpenGLContext.arrays import dot
+from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.scenegraph.boundingvolume import AABoundingBox, UnboundedVolume
 
 
 CAPS = ShadowCapabilities.from_features(set(), (3, 3))
@@ -217,13 +223,13 @@ class TestDirectionalCullsOncePerLight:
             self.cull_frusta.append((np.asarray(view), np.asarray(proj)))
             return list(tr)
 
-        def depth(occ, view, proj, grouping=None):
+        def depth(_occ, _view, _proj, grouping=None):  # noqa: ARG001 _renderDepth is called with grouping=
             self.depth_calls += 1
 
         m._cullOccluders = cull
         m._renderDepth = depth
         m._shared_map = lambda: types.SimpleNamespace(
-            bind_layer=lambda *a: True, unbind=lambda: None)
+            bind_layer=lambda *_a: True, unbind=lambda: None)
         return m
 
     def _render(self, m):
@@ -261,23 +267,23 @@ class TestDirectionalGroupsOncePerLight:
         m._array_layers = lambda: 4
         m._toRender_cache = [_record(np.eye(4), FakeVolume(_unit_box()))]
         m._caster_aabb = ShadowMapMixin._casterWorldAABBCorners(m._toRender_cache)
-        m._cullOccluders = lambda tr, v, p: list(tr)
+        m._cullOccluders = lambda tr, _v, _p: list(tr)
         self.group_calls = 0
         self.groupings_seen = []
 
         sentinel = ([], list(m._toRender_cache))
 
-        def grouping(records):
+        def grouping(_records):
             self.group_calls += 1
             return sentinel
 
-        def depth(occ, view, proj, grouping=None):
+        def depth(_occ, _view, _proj, grouping=None):
             self.groupings_seen.append(grouping)
 
         m._depthGrouping = grouping
         m._renderDepth = depth
         m._shared_map = lambda: types.SimpleNamespace(
-            bind_layer=lambda *a: True, unbind=lambda: None)
+            bind_layer=lambda *_a: True, unbind=lambda: None)
         self.sentinel = sentinel
         return m
 
@@ -307,7 +313,7 @@ class TestDepthGroupingCache:
         m = ShadowMapMixin()
         m.instancing_enabled = True
         m.instanceMinimum = lambda: 2
-        m.batchingFunctions = lambda: (lambda path: 'geo', lambda path: True)
+        m.batchingFunctions = lambda: (lambda _path: 'geo', lambda _path: True)
         m._caster_sig = ('sceneA',)
         return m
 
@@ -316,7 +322,6 @@ class TestDepthGroupingCache:
         return [(_shared_path(i)) for i in range(n)]
 
     def setup_method(self):
-        import OpenGLContext.passes.instancing as inst
         self._real = inst.build_instance_groups
         self.calls = 0
 
@@ -391,7 +396,6 @@ class TestLightSpaceModelviews:
     batched matmul, not a Python loop of per-member dots."""
 
     def test_matches_per_member_dot(self):
-        from OpenGLContext.arrays import dot
         light_view = shadowmath.look_at_matrix((0, 8, 0), (0, -1, 0)).astype('f')
         members = [_record(np.diag([1, 1, 1, 1]).astype('f'), None),
                    _record((np.eye(4) + np.arange(16).reshape(4, 4) * 0.01).astype('f'), None),
@@ -432,17 +436,17 @@ class TestSpotMapReuse:
         m._toRender_cache = [_record(np.eye(4), FakeVolume(_unit_box()))]
         m._caster_points = np.array([[0, 0, 0], [2, 2, 2], [-2, -2, -2]], dtype='d')
         m._caster_sig = ('sceneA',)
-        m._lightInView = lambda pos, node: True
+        m._lightInView = lambda _pos, _node: True
         m._array_layers = lambda: 4
-        m._cullOccluders = lambda tr, v, p: list(tr)
+        m._cullOccluders = lambda tr, _v, _p: list(tr)
         self.binds = 0
         self.depths = 0
 
-        def bind_layer(*a):
+        def bind_layer(*_a):
             self.binds += 1
             return True
 
-        def render_depth(occ, v, p):
+        def render_depth(_occ, _v, _p):
             self.depths += 1
 
         m._renderDepth = render_depth
@@ -490,7 +494,7 @@ class TestSpotMapReuse:
         m._renderSpot(path, path[0], 0, 0)
         # Simulate the depth array being reallocated (new GL texture id).
         m._shared_map = lambda: types.SimpleNamespace(
-            texture=99, bind_layer=lambda *a: (setattr(self, 'binds', self.binds+1) or True),
+            texture=99, bind_layer=lambda *_a: (setattr(self, 'binds', self.binds+1) or True),
             unbind=lambda: None)
         m._renderSpot(path, path[0], 0, 0)
         assert self.depths == 2
@@ -519,17 +523,17 @@ class TestPointMapReuse:
         m._toRender_cache = [_record(np.eye(4), FakeVolume(_unit_box()))]
         m._caster_points = np.array([[0, 0, 0], [1, 1, 1]], dtype='d')
         m._caster_sig = ('sceneA',)
-        m._lightInView = lambda pos, node: True
-        m._cullOccluders = lambda tr, v, p: list(tr)
+        m._lightInView = lambda _pos, _node: True
+        m._cullOccluders = lambda tr, _v, _p: list(tr)
         self.faces = 0
         self.depths = 0
 
-        def bind_face(face, size=None):
+        def bind_face(_face, _size=None):
             self.faces += 1
             return True
 
-        m._renderDepth = lambda occ, v, p: setattr(self, 'depths', self.depths + 1)
-        m._map_cube = lambda slot: types.SimpleNamespace(
+        m._renderDepth = lambda _occ, _v, _p: setattr(self, 'depths', self.depths + 1)
+        m._map_cube = lambda _slot: types.SimpleNamespace(
             texture=5, bind_face=bind_face, unbind=lambda: None)
         return m
 
@@ -556,13 +560,13 @@ class TestSpotSlotOwnership:
         m._toRender_cache = [_record(np.eye(4), FakeVolume(_unit_box()))]
         m._caster_points = np.array([[0, 0, 0], [2, 2, 2], [-2, -2, -2]], dtype='d')
         m._caster_sig = ('sceneA',)
-        m._lightInView = lambda pos, node: True
+        m._lightInView = lambda _pos, _node: True
         m._array_layers = lambda: 4
-        m._cullOccluders = lambda tr, v, p: list(tr)
+        m._cullOccluders = lambda tr, _v, _p: list(tr)
         self.depths = 0
-        m._renderDepth = lambda occ, v, p: setattr(self, 'depths', self.depths + 1)
+        m._renderDepth = lambda _occ, _v, _p: setattr(self, 'depths', self.depths + 1)
         m._shared_map = lambda: types.SimpleNamespace(
-            texture=7, bind_layer=lambda *a: True, unbind=lambda: None)
+            texture=7, bind_layer=lambda *_a: True, unbind=lambda: None)
         return m
 
     def test_returning_light_reclaiming_layer_rerenders(self):
@@ -589,13 +593,13 @@ class TestDepthCacheCommit:
         m._toRender_cache = [_record(np.eye(4), FakeVolume(_unit_box()))]
         m._caster_points = np.array([[0, 0, 0], [2, 2, 2]], dtype='d')
         m._caster_sig = ('sceneA',)
-        m._lightInView = lambda pos, node: True
+        m._lightInView = lambda _pos, _node: True
         m._array_layers = lambda: 4
-        m._cullOccluders = lambda tr, v, p: list(tr)
+        m._cullOccluders = lambda tr, _v, _p: list(tr)
         self.depths = 0
-        m._renderDepth = lambda occ, v, p: setattr(self, 'depths', self.depths + 1)
+        m._renderDepth = lambda _occ, _v, _p: setattr(self, 'depths', self.depths + 1)
         m._shared_map = lambda: types.SimpleNamespace(
-            texture=7, bind_layer=lambda *a: bind_ok[0], unbind=lambda: None)
+            texture=7, bind_layer=lambda *_a: bind_ok[0], unbind=lambda: None)
         return m
 
     def test_failed_bind_does_not_mark_fresh(self):
@@ -618,8 +622,6 @@ def _real_transform_shape_path():
     ``path[-1].boundingVolume(mode)`` are backed by the vrml dependency cache --
     the identity contract _casterSignature relies on.
     """
-    from vrml.vrml97 import nodepath
-    from OpenGLContext.scenegraph import basenodes
     shape = basenodes.Shape(geometry=basenodes.Box(size=(2, 2, 2)))
     transform = basenodes.Transform(translation=(0, 0, 0), children=[shape])
     return transform, nodepath.NodePath([transform, shape])
@@ -638,8 +640,6 @@ class TestCasterSignatureIdentityContract:
     """
 
     def _mixin_with_path(self, path):
-        from vrml.vrml97 import nodetypes
-        from OpenGLContext.passes import _flat, flatcore
         # The caster pool is drawn from the frame's own gather, so this is the
         # real pass with the real path in it -- _casterSignature then runs on
         # real transformMatrix()/boundingVolume() ids, which is the point.
@@ -738,7 +738,6 @@ class TestCasterGeometryInBatches:
         assert found[0] is None and found[1] is not None
 
     def test_an_unbounded_volume_answers_nothing(self):
-        from OpenGLContext.scenegraph.boundingvolume import UnboundedVolume
         found = ShadowMapMixin._casterGeometryBatch(
             [_record(np.eye(4), UnboundedVolume())])
         assert found == [None]
@@ -778,9 +777,6 @@ class TestTheMemoHitsAcrossFrames:
     """
 
     def _pass_over(self, count=4):
-        from OpenGLContext import frustum
-        from OpenGLContext.passes import _flat, flatcore
-        from OpenGLContext.scenegraph import basenodes
         moves = [basenodes.Transform(
             translation=(index * 3.0, 0, 0),
             children=[basenodes.Shape(geometry=basenodes.Box(size=(1, 1, 1)))])
@@ -867,7 +863,6 @@ class TestFarCascadeCullCompleteness:
     @staticmethod
     def _ground_caster(corners, label):
         """An AABoundingBox caster centred on the ground under a corner set."""
-        from OpenGLContext.scenegraph.boundingvolume import AABoundingBox
         c = corners.mean(axis=0)
         bv = AABoundingBox(center=(float(c[0]), 0.0, float(c[2])), size=(2, 2, 2))
         return (None, None, np.eye(4), bv, label)

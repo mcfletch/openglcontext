@@ -43,11 +43,12 @@ def solid_style():
 
 def _stub_font(provider, monkeypatch, name):
     """Answer provider.get without needing a font file on this machine."""
-    monkeypatch.setattr(provider, 'get', lambda fontStyle=None, mode=None: name)
+    monkeypatch.setattr(provider, 'get', lambda _fontStyle=None, _mode=None: name)
 
 
+@pytest.mark.usefixtures('isolated_registry')
 def test_solid_provider_selected_in_shader_mode(
-    isolated_registry, solid_style, monkeypatch
+    solid_style, monkeypatch
 ):
     """A FontStyle3D in a core-profile context gets the solid provider."""
     solid = toolsfont.ToolsSolidFontProvider
@@ -65,8 +66,9 @@ def test_solid_provider_selected_in_shader_mode(
     assert font == 'solid'
 
 
+@pytest.mark.usefixtures('isolated_registry')
 def test_outline_provider_skipped_in_shader_mode(
-    isolated_registry, solid_style, monkeypatch
+    solid_style, monkeypatch
 ):
     """The outline font draws through the fixed-function pipeline only."""
     outline = toolsfont.ToolsOutlineFontProvider
@@ -88,7 +90,7 @@ class TestACharacterTheFontFileHasNoGlyphFor:
 
     class _NoGlyphs:
         """A ``_toolsfont.Font`` that knows no characters at all."""
-        def getGlyph(self, char):
+        def getGlyph(self, _char):
             return None
 
     @pytest.fixture

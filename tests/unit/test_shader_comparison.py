@@ -80,19 +80,19 @@ Press 't' to test right side against reference
         self.addEventHandler('keyboard', name='d', function=self.toggle_difference)
         self.addEventHandler('keyboard', name='l', function=self.cycle_light)
 
-    def cycle_light(self, event):
+    def cycle_light(self, _event):
         """Cycle through light types"""
         self.light_type = (self.light_type + 1) % len(self.light_types)
         print(f"Light type: {self.light_types[self.light_type]}")
         self.triggerRedraw()
 
-    def toggle_difference(self, event):
+    def toggle_difference(self, _event):
         """Toggle difference highlighting mode"""
         self.show_difference = not self.show_difference
         print(f"Difference highlighting: {'ON' if self.show_difference else 'OFF'}")
         self.triggerRedraw()
 
-    def print_comparison(self, event):
+    def print_comparison(self, _event):
         """Print pixel comparison statistics using the comparison framework"""
         # Capture both halves
         self.left_capture.capture_left_half()

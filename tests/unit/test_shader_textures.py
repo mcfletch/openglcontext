@@ -22,6 +22,7 @@ from OpenGLContext.scenegraph.basenodes import *
 
 # Path to test textures
 from OpenGLContext.testing.paths import tests_root
+from OpenGLContext.passes import renderpass
 TEXTURE_DIR = os.path.join(str(tests_root(__file__)), 'wrls')
 
 
@@ -206,16 +207,15 @@ Test textures from: {}
         light = DirectionalLight(direction=(0.5, -1.0, -0.5), intensity=1.0)
         return sceneGraph(children=shapes + [light])
 
-    def toggle_shader(self, event):
+    def toggle_shader(self, _event):
         """Toggle shader mode"""
-        from OpenGLContext.passes import renderpass
         if renderpass.FLAT is not None:
             renderpass.FLAT.use_shaders = not renderpass.FLAT.use_shaders
             mode = "SHADER" if renderpass.FLAT.use_shaders else "LEGACY"
             print(f"Rendering mode: {mode}")
         self.triggerRedraw()
 
-    def next_scene(self, event):
+    def next_scene(self, _event):
         """Load next scene"""
         self.scene_index = (self.scene_index + 1) % len(self.scenes)
         self._load_scene()

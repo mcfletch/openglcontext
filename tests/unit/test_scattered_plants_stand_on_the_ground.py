@@ -27,6 +27,8 @@ from OpenGLContext.scenegraph.basenodes import (
 )
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.transform import Transform
+from OpenGLContext.loaders.tiles3d.vegetation import scatter_disc
+from OpenGLContext.scenegraph.terrain import HeightField
 
 
 def _placements(positions=((0.0, 12.0, 0.0),), scale=1.0):
@@ -143,8 +145,6 @@ class TestSeating:
 class TestSeatingOnRealGround:
     def test_a_disc_of_shrubs_meets_a_hillside(self) -> None:
         """End to end: scatter over a height field, and every foot is on it."""
-        from OpenGLContext.loaders.tiles3d.vegetation import scatter_disc
-        from OpenGLContext.scenegraph.terrain import HeightField
 
         def hilly(x, z):
             return 18.0 * np.sin(np.asarray(x, 'd') / 30.0) \

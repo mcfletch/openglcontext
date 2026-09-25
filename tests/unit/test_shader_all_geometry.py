@@ -22,6 +22,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.scenegraph.gear import Gear
+from OpenGLContext.passes import renderpass
 import numpy as np
 
 
@@ -138,18 +139,16 @@ Testing: Box, Sphere, Cone, Cylinder, Gear
         self.addEventHandler('keyboard', name='f', function=self.toggle_shader)
         self.addEventHandler('keyboard', name='c', function=self.capture_pixel)
 
-    def toggle_shader(self, event):
+    def toggle_shader(self, _event):
         """Toggle FlatPass shader mode"""
-        from OpenGLContext.passes import renderpass
         if renderpass.FLAT is not None:
             renderpass.FLAT.use_shaders = not renderpass.FLAT.use_shaders
             mode_name = "SHADER" if renderpass.FLAT.use_shaders else "LEGACY"
             print(f"Rendering mode: {mode_name}")
         self.triggerRedraw()
 
-    def capture_pixel(self, event):
+    def capture_pixel(self, _event):
         """Capture and print center pixel color"""
-        from OpenGLContext.passes import renderpass
         viewport = glGetIntegerv(GL_VIEWPORT)
         x, y = viewport[2] // 2, viewport[3] // 2
         pixel = glReadPixels(x, y, 1, 1, GL_RGB, GL_FLOAT)

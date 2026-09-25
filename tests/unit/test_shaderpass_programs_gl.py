@@ -36,7 +36,7 @@ SUB_PROGRAMS = (
 
 
 @pytest.fixture
-def compiled(gl_context):
+def compiled(gl_context):  # noqa: ARG001 requested for its effect: the GL context the programs compile in
     program = VRML97ShaderProgram()
     assert program.compile(), 'the lit program did not compile'
     return program

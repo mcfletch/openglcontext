@@ -11,6 +11,8 @@ import pytest
 from OpenGLContext.passes.shadowpool import (
     _CascadeControllerMixin, _ShadowMapPoolMixin,
 )
+from OpenGLContext.passes.shadowmap import ShadowMapArray
+from OpenGLContext.passes.shadowmap import ShadowMapCubeArray
 
 
 class FakeProg:
@@ -137,7 +139,6 @@ class TestShadowMapPool:
         assert _pool()._array_layers() == FakeProg.MAX_SHADOW_LIGHTS * FakeProg.MAX_CASCADES
 
     def test_shared_map_created_and_cached(self):
-        from OpenGLContext.passes.shadowmap import ShadowMapArray
         p = _pool()
         arr = p._shared_map()
         assert isinstance(arr, ShadowMapArray)
@@ -145,7 +146,6 @@ class TestShadowMapPool:
         assert p._shared_map() is arr             # cached
 
     def test_cube_array_map_created_and_cached(self):
-        from OpenGLContext.passes.shadowmap import ShadowMapCubeArray
         p = _pool()
         ca = p._cube_array_map()
         assert isinstance(ca, ShadowMapCubeArray)

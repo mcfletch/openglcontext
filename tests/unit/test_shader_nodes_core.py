@@ -13,6 +13,12 @@ is the uniform the render pass supplies for exactly this.
 
 import numpy as np
 import pytest
+from tests.unit.glrender import base_env
+from OpenGLContext.scenegraph.basenodes import Transform
+from OpenGLContext.scenegraph.shaders import FloatUniform3f, GLSLObject, GLSLShader, Shader, ShaderAttribute, ShaderBuffer, ShaderGeometry, ShaderSlice
+from OpenGLContext.passes import renderpass
+from OpenGLContext.capture import read_back_buffer
+from OpenGLContext import glfwcontext
 
 pytest.importorskip("glfw")
 
@@ -44,18 +50,11 @@ TRIANGLE = [
 @pytest.fixture(autouse=True)
 def shader_paths(monkeypatch):
     """The VRML97 flat pass: these nodes render through its shader path."""
-    from tests.unit.glrender import base_env
     base_env(monkeypatch)
     monkeypatch.delenv('OPENGLCONTEXT_RENDERER', raising=False)
 
 
 def shader_scene():
-    from OpenGLContext.scenegraph.basenodes import Transform
-    from OpenGLContext.scenegraph.shaders import (
-        FloatUniform3f, GLSLObject, GLSLShader, Shader, ShaderAttribute,
-        ShaderBuffer, ShaderGeometry, ShaderSlice,
-    )
-
     buffer = ShaderBuffer(buffer=TRIANGLE)
     return [Transform(children=[ShaderGeometry(
         DEF='CoreShaderGeometry',
@@ -76,14 +75,10 @@ def shader_scene():
 
 class TestShaderGeometryDrawsUnderCore:
     def test_nothing_failed_to_render(self, render_scene):
-        from OpenGLContext.passes import renderpass
         render_scene(shader_scene(), frames=3)
         assert renderpass.FLAT.failures.summary() == []
 
     def test_the_triangle_reaches_the_framebuffer(self, render_scene):
-        from OpenGLContext.capture import read_back_buffer
-        from OpenGLContext import glfwcontext
-
         frames = []
         original = glfwcontext.GLFWContext.SwapBuffers
 
@@ -102,6 +97,5 @@ class TestShaderGeometryDrawsUnderCore:
 
     def test_the_attribute_arrays_do_not_leak_into_the_next_shape(self, render_scene):
         """Each shape's attribute state is its own, so two of them both draw."""
-        from OpenGLContext.passes import renderpass
         render_scene(shader_scene() + shader_scene(), frames=3)
         assert renderpass.FLAT.failures.summary() == []

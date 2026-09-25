@@ -26,7 +26,7 @@ def font_file():
 
 
 @pytest.fixture
-def glyph(font_file, gl_context):
+def glyph(font_file, gl_context):  # noqa: ARG001 requested for its effect: the GL context the glyph is built in
     """The 'O' of some font: an outer contour plus a hole."""
     font = toolsfont._SolidFont(font_file, quality=3)
     font.ensureGlyphs('O')

@@ -10,8 +10,15 @@ import subprocess
 import sys
 import textwrap
 import time
+import os
+import types
 
 import pytest
+
+try:
+    import psutil
+except ImportError:  # psutil is a development extra; os.kill answers without it
+    psutil = None
 
 from OpenGLContext.testing.subprocess_runner import (
     DEFAULT_TIMEOUT,
@@ -114,13 +121,8 @@ def _pid_alive(pid: int) -> bool:
     there takes only the signals it can turn into a terminate, and refuses the
     question. psutil knows how to ask on either.
     """
-    try:
-        import psutil
-    except ImportError:
-        pass
-    else:
+    if psutil is not None:
         return psutil.pid_exists(pid)
-    import os
 
     try:
         os.kill(pid, 0)
@@ -160,7 +162,6 @@ def test_kill_process_tree_with_psutil_kills_children():
 def test_kill_process_tree_tolerates_vanished_processes(monkeypatch):
     """A child or parent that exits between enumeration and kill is ignored,
     and every other process in the tree is still killed."""
-    import types
 
     fake = types.ModuleType('psutil')
     killed = []
@@ -177,7 +178,7 @@ def test_kill_process_tree_tolerates_vanished_processes(monkeypatch):
             raise NoSuchProcess()
 
     class _Process(_Vanished):
-        def children(self, recursive=False):
+        def children(self, recursive=False):  # noqa: ARG002 psutil.Process.children, called with recursive=True
             return [_Vanished(1), _Vanished(2)]
 
     fake.NoSuchProcess = NoSuchProcess

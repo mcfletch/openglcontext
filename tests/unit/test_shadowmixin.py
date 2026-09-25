@@ -3,11 +3,20 @@ import types
 
 import numpy as np
 import pytest
+from vrml import protofunctions
+from vrml.vrml97 import nodepath, nodetypes
 
 from OpenGLContext.passes.shadowmixin import ShadowMapMixin
 from OpenGLContext.passes.shadowcaps import ShadowCapabilities
-from OpenGLContext.passes import shadowmath
+from OpenGLContext.passes import _flat, flatcore, shadowmath, shadowmixin
 from OpenGLContext.scenegraph.light import SpotLight, PointLight, DirectionalLight
+from OpenGLContext import frustum as frustum_module
+from OpenGLContext.scenegraph.appearance import Appearance
+from OpenGLContext.scenegraph.boundingvolume import AABoundingBox, BoundingVolume, UnboundedVolume
+from OpenGLContext.scenegraph.box import Box
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.shape import Shape
+from OpenGLContext.scenegraph.transform import Transform
 
 
 CAPS = ShadowCapabilities.from_features(set(), (3, 3))       # cube supported
@@ -198,12 +207,12 @@ class TestSpotUsesCasterPool:
         m.shader_program = types.SimpleNamespace(MAX_CASCADES=4, MAX_SHADOW_LIGHTS=4)
         m.shadow_resolution = 512
         m._toRender_cache = []
-        m._lightInView = lambda pos, node: True
+        m._lightInView = lambda _pos, _node: True
         m._array_layers = lambda: 4
-        m._cullOccluders = lambda tr, v, p: []
-        m._renderDepth = lambda occ, v, p: None
+        m._cullOccluders = lambda _tr, _v, _p: []
+        m._renderDepth = lambda _occ, _v, _p: None
         m._shared_map = lambda: types.SimpleNamespace(
-            texture=1, bind_layer=lambda *a: True, unbind=lambda: None)
+            texture=1, bind_layer=lambda *_a: True, unbind=lambda: None)
         return m
 
     def test_spot_near_far_derived_from_caster_points(self):
@@ -230,13 +239,11 @@ class TestBiasConstants:
     and front-face culling is no longer stacked on top of the offsets (3.14)."""
 
     def test_bias_uses_named_constant(self):
-        from OpenGLContext.passes import shadowmixin
         m = ShadowMapMixin()
         assert shadowmixin.light_depth_bias(object()) == shadowmixin.SHADOW_DEPTH_BIAS
         assert m._normalOffset() == shadowmixin.SHADOW_NORMAL_OFFSET
 
     def test_polygon_offset_constants_present(self):
-        from OpenGLContext.passes import shadowmixin
         assert hasattr(shadowmixin, 'SHADOW_POLYGON_OFFSET_FACTOR')
         assert hasattr(shadowmixin, 'SHADOW_POLYGON_OFFSET_UNITS')
 
@@ -248,7 +255,6 @@ class TestLightDirectionConsistency:
     way. Inverse-transpose would desynchronise the two."""
 
     def test_matches_lighting_path_under_nonuniform_scale(self):
-        import numpy as np
         # rotation about Z composed with a non-uniform scale (shear in the 3x3)
         theta = 0.6
         c, s = np.cos(theta), np.sin(theta)
@@ -271,7 +277,6 @@ class TestFrustumPlanesNormalized:
     valid when the frustum planes are normalized. Lock the builder default."""
 
     def test_frustum_builder_normalizes_planes(self):
-        from OpenGLContext import frustum as frustum_module
         proj = shadowmath.perspective_matrix(np.pi / 3, 1.0, 1.0, 100.0)
         view = shadowmath.look_at_matrix((0, 0, 10), (0, 0, -1))
         mp = (view.astype('d') @ proj.astype('d')).astype('f')
@@ -286,7 +291,7 @@ class _FakeCubeMap:
         self.faces_bound = []
         self.texture = 42
 
-    def bind_face(self, face, size=None):
+    def bind_face(self, face, _size=None):
         self.faces_bound.append(face)
         return True
 
@@ -316,10 +321,10 @@ class TestCubeFaceClearing:
         m.shadow_cube_resolution = 512
         m._toRender_cache = []
         self.smap = _FakeCubeMap()
-        m._map_cube = lambda slot: self.smap
+        m._map_cube = lambda _slot: self.smap
         self.draws = []
-        m._renderDepth = lambda occ, v, p: self.draws.append(occ)
-        m._cullOccluders = lambda tr, v, p: cull_result
+        m._renderDepth = lambda occ, _v, _p: self.draws.append(occ)
+        m._cullOccluders = lambda _tr, _v, _p: cull_result
         return m
 
     def _render(self, m):
@@ -433,10 +438,10 @@ class TestRenderShadowMapsGuards:
         m = ShadowMapMixin()
         m.use_shadows = True
         m.shader_program = types.SimpleNamespace(
-            program=1, use=lambda **named: None,
-            init_shadow_samplers=lambda: None, set_shadow_count=lambda count: None)
+            program=1, use=lambda **_named: None,
+            init_shadow_samplers=lambda: None, set_shadow_count=lambda _count: None)
         m._ensureShadowCaps = lambda: None
-        m._applyPerLightShadowSettings = lambda caps: None
+        m._applyPerLightShadowSettings = lambda _caps: None
         m.getModelView = lambda: np.identity(4)
         m.projection = np.identity(4)
         m.pool = 0
@@ -495,16 +500,9 @@ class TestWhereACallerSetsTheOptOut:
     """
 
     def shape(self, **named):
-        from OpenGLContext.scenegraph.box import Box
-        from OpenGLContext.scenegraph.shape import Shape
-
         return Shape(geometry=Box(), **named)
 
     def test_it_is_a_declared_field(self):
-        from vrml import protofunctions
-
-        from OpenGLContext.scenegraph.shape import Shape
-
         declared = {f.name for f in protofunctions.getFields(Shape)}
         assert 'castsShadow' in declared
 
@@ -515,11 +513,6 @@ class TestWhereACallerSetsTheOptOut:
         assert not self.shape(castsShadow=False).castsShadow
 
     def test_the_caster_pool_leaves_out_a_shape_that_opted_out(self):
-        from vrml.vrml97 import nodepath, nodetypes
-
-        from OpenGLContext.passes import _flat, flatcore
-        from OpenGLContext.scenegraph.transform import Transform
-
         casting, opted_out = self.shape(), self.shape(castsShadow=False)
         # The real pass over real paths: the caster pool is drawn from the
         # frame's own gather, which is what walks a path to its node.
@@ -535,12 +528,6 @@ class TestWhereACallerSetsTheOptOut:
 
     def test_an_impostor_casts_no_shadow(self):
         """Its card faces the camera, which a light's depth pass does not."""
-        from vrml.vrml97 import nodepath, nodetypes
-
-        from OpenGLContext.passes import _flat, flatcore
-        from OpenGLContext.scenegraph.appearance import Appearance
-        from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
-        from OpenGLContext.scenegraph.transform import Transform
 
         solid = self.shape()
         card = self.shape(appearance=Appearance(material=PBRMaterial(octahedralViews=8)))
@@ -572,11 +559,9 @@ class TestCullOccludersTogether:
         return view, proj
 
     def _box(self, size=1.0):
-        from OpenGLContext.scenegraph.boundingvolume import AABoundingBox
         return AABoundingBox(center=(0, 0, 0), size=(size, size, size))
 
     def test_it_agrees_with_each_box_asked_alone(self):
-        from OpenGLContext import frustum as frustum_module
         view, proj = self._light()
         rng = np.random.default_rng(3)
         records = []
@@ -593,7 +578,6 @@ class TestCullOccludersTogether:
         assert kept == expected
 
     def test_a_volume_of_another_kind_answers_for_itself(self):
-        from OpenGLContext.scenegraph.boundingvolume import BoundingVolume, UnboundedVolume
         view, proj = self._light()
         far = np.eye(4)
         far[3, :3] = (500.0, 0.0, 0.0)
@@ -613,8 +597,6 @@ class TestTheLocalBoxMemo:
         return view, proj
 
     def test_a_volume_is_measured_once(self, monkeypatch):
-        from OpenGLContext.passes import shadowmixin
-        from OpenGLContext.scenegraph.boundingvolume import AABoundingBox
         measured = []
         real = shadowmixin._local_box
         monkeypatch.setattr(shadowmixin, '_local_box',
@@ -627,7 +609,6 @@ class TestTheLocalBoxMemo:
         assert len(measured) == 1
 
     def test_a_new_volume_is_measured_again(self):
-        from OpenGLContext.scenegraph.boundingvolume import AABoundingBox
         mixin = ShadowMapMixin()
         near = _record(np.eye(4), AABoundingBox(center=(0, 0, 0), size=(1, 1, 1)))
         assert mixin._cullOccluders([near], *self._light()) == [near]

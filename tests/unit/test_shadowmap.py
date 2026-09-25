@@ -14,7 +14,7 @@ class _Recorder:
         self.calls = []
 
     def make(self, name, ret=1):
-        def fn(*args, **kwargs):
+        def fn(*_args, **_kwargs):
             self.calls.append(name)
             return ret
         return fn
@@ -37,7 +37,7 @@ def _patch_gl(monkeypatch):
     for name in _PATCHED:
         monkeypatch.setattr(shadowmap, name, rec.make(name), raising=False)
     monkeypatch.setattr(shadowmap, 'glCheckFramebufferStatus',
-                        lambda *a: shadowmap.GL_FRAMEBUFFER_COMPLETE, raising=False)
+                        lambda *_a: shadowmap.GL_FRAMEBUFFER_COMPLETE, raising=False)
     return rec
 
 
@@ -100,7 +100,7 @@ class TestWhatEnsureAnswers:
     def test_a_driver_that_refuses_answers_nothing(self, monkeypatch, build, names):
         _patch_gl(monkeypatch)
 
-        def refuse(*args, **named):
+        def refuse(*_args, **_named):
             raise RuntimeError('out of memory')
 
         monkeypatch.setattr(shadowmap, 'glGenFramebuffers', refuse, raising=False)

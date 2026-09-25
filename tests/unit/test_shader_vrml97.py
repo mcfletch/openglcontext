@@ -21,6 +21,8 @@ from OpenGL.arrays import vbo
 from OpenGLContext.arrays import array
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.passes.shaderpass import get_shader_program, VRML97ShaderProgram
+from OpenGLContext.passes import renderpass
+from OpenGLContext.scenegraph.box import yieldVertices
 import numpy as np
 
 class TestContext(BaseContext):
@@ -76,23 +78,22 @@ Current mode: LEGACY (fixed-function)
         self.addEventHandler('keyboard', name='f', function=self.toggle_flatpass_shader)
         self.addEventHandler('keyboard', name='c', function=self.capture_comparison)
 
-    def toggle_shader(self, event):
+    def toggle_shader(self, _event):
         """Toggle between shader and legacy rendering (manual test)"""
         self.use_shader = not self.use_shader
         mode_name = "SHADER (manual)" if self.use_shader else "LEGACY"
         print(f"Switched to {mode_name} rendering mode")
         self.triggerRedraw()
 
-    def toggle_flatpass_shader(self, event):
+    def toggle_flatpass_shader(self, _event):
         """Toggle FlatPass shader mode (integrated rendering)"""
-        from OpenGLContext.passes import renderpass
         if renderpass.FLAT is not None:
             renderpass.FLAT.use_shaders = not renderpass.FLAT.use_shaders
             mode_name = "ENABLED" if renderpass.FLAT.use_shaders else "DISABLED"
             print(f"FlatPass shader mode: {mode_name}")
         self.triggerRedraw()
 
-    def capture_comparison(self, event):
+    def capture_comparison(self, _event):
         """Capture and compare pixel values"""
         # Read a pixel from the center of the screen
         viewport = glGetIntegerv(GL_VIEWPORT)
@@ -172,7 +173,6 @@ Current mode: LEGACY (fixed-function)
 
     def _render_box_with_shader(self, mode):
         """Render a box using the shader with VAO/VBO"""
-        from OpenGLContext.scenegraph.box import yieldVertices
 
         # Get or create VBO for box
         box_data = mode.cache.getData(self.shape.geometry, 'shader_vbo')

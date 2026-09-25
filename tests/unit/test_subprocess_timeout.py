@@ -12,6 +12,11 @@ import time
 
 import pytest
 
+try:
+    import psutil
+except ImportError:  # psutil is a development extra; os.kill answers without it
+    psutil = None
+
 from OpenGLContext.testing import subprocess_runner
 from OpenGLContext.testing.subprocess_runner import run_test, run_test_with_popen
 
@@ -23,11 +28,7 @@ def _pid_alive(pid: int) -> bool:
     there takes only the signals it can turn into a terminate, and refuses the
     question. psutil knows how to ask on either.
     """
-    try:
-        import psutil
-    except ImportError:
-        pass
-    else:
+    if psutil is not None:
         return psutil.pid_exists(pid)
     try:
         os.kill(pid, 0)

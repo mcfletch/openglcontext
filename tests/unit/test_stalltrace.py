@@ -23,6 +23,7 @@ from OpenGLContext.stalltrace import (
     StackSampler, StallJournal, describe_episode, hot_functions, hot_stacks,
     install, read_episodes, stack_of,
 )
+from OpenGLContext.looptrace import LoopTrace
 
 
 class FakeClock:
@@ -115,12 +116,12 @@ class TestHotFunctions:
 
     # The same leaf, reached from three different lines of the same caller --
     # which is what a real sampled stall looks like.
-    ROUTES = [
+    ROUTES = (
         (('collide.py', 379, 'closest_point'), ('char.py', 524, 'step')),
         (('collide.py', 379, 'closest_point'), ('char.py', 569, 'step')),
         (('collide.py', 371, 'closest_point'), ('char.py', 571, 'step')),
         (('render.py', 12, 'draw'), ('main.py', 3, 'loop')),
-    ]
+    )
 
     def test_one_function_reached_many_ways_is_tallied_once(self):
         found = {entry['name']: entry for entry in hot_functions(self.ROUTES)}
@@ -269,10 +270,10 @@ class StubSampler:
         self._complete = complete
         self.count = len(self.stacks)
 
-    def between(self, start, end):
+    def between(self, start, _end):
         return [(start, stack) for stack in self.stacks]
 
-    def complete_since(self, when):
+    def complete_since(self, _when):
         return self._complete
 
 
@@ -500,14 +501,10 @@ class TestReadingItBack:
 
 class TestInstalling:
     def test_nothing_is_installed_without_the_variable(self, monkeypatch):
-        from OpenGLContext.looptrace import LoopTrace
-
         monkeypatch.delenv('OPENGLCONTEXT_STALL_TRACE', raising=False)
         assert install(LoopTrace()) is None
 
     def test_the_variable_names_the_file(self, monkeypatch, tmp_path):
-        from OpenGLContext.looptrace import LoopTrace
-
         target = tmp_path / 'run.jsonl'
         monkeypatch.setenv('OPENGLCONTEXT_STALL_TRACE', str(target))
         trace = LoopTrace(stall_ms=20.0)
@@ -521,8 +518,6 @@ class TestInstalling:
 
     def test_the_journal_hears_the_trace_it_was_installed_on(
             self, monkeypatch, tmp_path):
-        from OpenGLContext.looptrace import LoopTrace
-
         monkeypatch.setenv('OPENGLCONTEXT_STALL_TRACE',
                            str(tmp_path / 'run.jsonl'))
         clock = FakeClock()

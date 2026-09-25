@@ -32,7 +32,10 @@ from OpenGL.GL import *
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.scenegraph.gear import Gear
 from OpenGLContext.arrays import array
+from OpenGLContext.passes import renderpass
+from OpenGLContext.testing.framebuffer_comparison import compare_images, FramebufferCapture
 import numpy as np
+from OpenGLContext.testing.paths import tests_root
 
 
 class TestScene:
@@ -510,27 +513,24 @@ Press 'q' - Quit
         print(f"  {scene.description}")
         self.triggerRedraw()
 
-    def toggle_shader(self, event):
+    def toggle_shader(self, _event):
         """Toggle shader mode"""
-        from OpenGLContext.passes import renderpass
         if renderpass.FLAT is not None:
             renderpass.FLAT.use_shaders = not renderpass.FLAT.use_shaders
             mode = "SHADER" if renderpass.FLAT.use_shaders else "LEGACY"
             print(f"Rendering mode: {mode}")
         self.triggerRedraw()
 
-    def next_scene(self, event):
+    def next_scene(self, _event):
         """Load next scene"""
         self.load_scene(self.scene_index + 1)
 
-    def prev_scene(self, event):
+    def prev_scene(self, _event):
         """Load previous scene"""
         self.load_scene(self.scene_index - 1)
 
-    def screenshot(self, event):
+    def screenshot(self, _event):
         """Take a comparison screenshot"""
-        from OpenGLContext.passes import renderpass
-        from OpenGLContext.testing.framebuffer_comparison import FramebufferCapture, compare_images
 
         capture = FramebufferCapture()
         pixels = capture.capture()
@@ -539,7 +539,6 @@ Press 'q' - Quit
         scene = TEST_SCENES[self.scene_index]
 
         # Save screenshot
-        from OpenGLContext.testing.paths import tests_root
         screenshot_dir = os.path.join(str(tests_root(__file__)), 'screenshots')
         os.makedirs(screenshot_dir, exist_ok=True)
         filename = os.path.join(screenshot_dir, f"{scene.name.lower().replace(' ', '_')}_{mode}.npy")

@@ -82,7 +82,8 @@ class TestAgainstARealContext:
     boolean either way.
     """
 
-    def test_it_answers_without_raising(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_it_answers_without_raising(self):
         for interval in (0, 1):
             assert swapcontrol.set_swap_interval(interval) in (True, False)
 

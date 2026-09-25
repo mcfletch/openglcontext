@@ -251,9 +251,11 @@ class TestComputeScreenSpaceBBoxes:
 # --------------------------------------------------------------------------- #
 class _FakeBuffer:
     _initialized = False
-    id_map: dict = {}
 
-    def read_pixel(self, x, y):    # pragma: no cover - not reached in these tests
+    def __init__(self):
+        self.id_map = {}
+
+    def read_pixel(self, _x, _y):    # pragma: no cover - not reached in these tests
         raise AssertionError("should not read from an uninitialized buffer")
 
 

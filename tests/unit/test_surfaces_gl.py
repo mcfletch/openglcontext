@@ -40,7 +40,8 @@ def _scene(*walls, light=(0.0, -1.0, -1.0)):
             basenodes.DirectionalLight(direction=light, intensity=1.0)] + list(walls)
 
 
-def test_the_top_row_of_a_surface_is_the_top_of_the_wall(render_scene, env):
+@pytest.mark.usefixtures('env')
+def test_the_top_row_of_a_surface_is_the_top_of_the_wall(render_scene):
     size = 32
     base = np.zeros((size, size, 3))
     base[:size // 2] = (1.0, 0.0, 0.0)          # row 0 onwards: the top
@@ -56,7 +57,8 @@ def test_the_top_row_of_a_surface_is_the_top_of_the_wall(render_scene, env):
     assert bottom[..., 2].mean() > bottom[..., 0].mean() + 30
 
 
-def test_relief_rising_up_a_wall_faces_down_and_falling_faces_up(render_scene, env):
+@pytest.mark.usefixtures('env')
+def test_relief_rising_up_a_wall_faces_down_and_falling_faces_up(render_scene):
     """Lit from above and in front, the relief that faces up is the brighter."""
     size = 64
     grey = np.full((size, size, 3), 0.6)

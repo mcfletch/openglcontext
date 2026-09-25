@@ -15,13 +15,17 @@ shader path; the quadric ``Sphere`` still uses legacy client-state calls that ar
 invalid in a core context.
 """
 
+import gc
+
 import pytest
 
 glfw = pytest.importorskip("glfw")
 
+from OpenGLContext import testingcontext
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.events.mouseevents import MouseButtonEvent
-from OpenGLContext.testing.glcontext import profile_unavailable
+from OpenGLContext.testing.glcontext import profile_unavailable, release_current
+from OpenGLContext.passes import pbrpass, renderpass, selection, selectionbuffers
 
 
 @pytest.fixture
@@ -39,15 +43,13 @@ def pick_context(monkeypatch):
     monkeypatch.setenv('OPENGLCONTEXT_NO_VSYNC', '1')
     monkeypatch.setenv('PYOPENGL_PLATFORM', 'egl')
 
-    from OpenGLContext.passes import selection
     monkeypatch.setattr(selection.SelectionMixin, 'use_mrt_selection', False)
 
     # renderer_is_pbr() caches the OPENGLCONTEXT_RENDERER verdict process-wide on
     # first read. These tests run under the plain core pass (no pbr env), so clear
     # the cache here and again at teardown: otherwise a stale verdict leaks either
     # into or out of this fixture and flips another test's pass class.
-    from OpenGLContext.passes import pbrpass
-    pbrpass._renderer_is_pbr_cache = None
+    pbrpass.reset_renderer_cache()
 
     windows = []
     contexts = []
@@ -55,7 +57,6 @@ def pick_context(monkeypatch):
     def build(children, warm=3):
         if not glfw.init():
             pytest.skip("glfw init failed")
-        from OpenGLContext import testingcontext
         Base = testingcontext.getInteractive()
         sg = basenodes.sceneGraph(children=children)
 
@@ -64,7 +65,7 @@ def pick_context(monkeypatch):
                 self.sg = sg
                 self.contextDefinition.pickAsync = False
                 self.addEventHandler('mousebutton', button=0, state=1,
-                                     function=lambda e: None)
+                                     function=lambda _e: None)
 
         reason = profile_unavailable('core')
         if reason:
@@ -74,10 +75,6 @@ def pick_context(monkeypatch):
         win = getattr(inst, 'window', None)
         if win is not None:
             windows.append(win)
-        try:
-            glfw.swap_interval(0)
-        except Exception:
-            pass
         for _ in range(warm):
             glfw.poll_events()
             inst.OnDraw(force=1)
@@ -92,18 +89,14 @@ def pick_context(monkeypatch):
     # then destroys the window. Destroying the handle directly leaves those
     # caches holding names for a context that is gone, which the next window
     # the driver gives the same address to reads back as its own.
-    import gc
     for inst in contexts:
         inst.releaseWindow()
     contexts.clear()
     windows.clear()
     gc.collect()
-    try:
-        glfw.make_context_current(None)
-    except Exception:
-        pass
+    release_current()
     gc.collect()
-    pbrpass._renderer_is_pbr_cache = None
+    pbrpass.reset_renderer_cache()
 
 
 def _box_target(size=(4, 4, 4), color=(0.2, 0.8, 0.3)):
@@ -201,9 +194,8 @@ class TestOptimizedColourPick:
         # With the pick FBO unavailable, the loop scissors the pick region of the
         # main framebuffer instead, renders there and reads it back. The pick must
         # still resolve to the shape.
-        from OpenGLContext.passes import selectionbuffers
         monkeypatch.setattr(selectionbuffers.SelectionFBO, 'bind',
-                            lambda self, *a: False)
+                            lambda _self, *_a: False)
         target, children = _box_target()
         inst = pick_context(children)
         w, h = inst.getViewPort()
@@ -215,10 +207,9 @@ class TestOptimizedColourPick:
         # An object whose bounding volume yields no computable screen bbox is
         # conservatively included at every pick point rather than culled by the 2D
         # test. Force indeterminate bounds and confirm the shape still resolves.
-        from OpenGLContext.passes import selection
         monkeypatch.setattr(
             selection.SelectionMixin, '_computeScreenSpaceBBoxes',
-            lambda self, toRender, vp_w, vp_h: [None] * len(toRender))
+            lambda _self, toRender, _vp_w, _vp_h: [None] * len(toRender))
         target, children = _box_target()
         inst = pick_context(children)
         w, h = inst.getViewPort()
@@ -228,7 +219,6 @@ class TestOptimizedColourPick:
     def test_empty_events_returns_before_touching_the_gpu(self, pick_context):
         target, children = _box_target()
         pick_context(children)          # warm a context so renderpass.FLAT exists
-        from OpenGLContext.passes import renderpass
         fp = renderpass.FLAT
         before = fp._selection_fbo
         # No events: the loop returns immediately, never creating the pick FBO.
@@ -240,9 +230,8 @@ class TestOptimizedColourPick:
         # The finally-block guards the default-framebuffer rebind so a driver hiccup
         # there cannot leak out of the pick. Force that rebind to raise and confirm
         # the pick still resolved and the frame did not crash.
-        from OpenGLContext.passes import selection
 
-        def boom(*a, **k):
+        def boom(*_a, **_k):
             raise RuntimeError("no current context")
 
         monkeypatch.setattr(selection, 'glBindFramebuffer', boom)

@@ -13,12 +13,12 @@ from OpenGLContext.scenegraph.box import Box
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.scenegraph.switch import Switch
+from OpenGLContext.passes.flatcore import FlatPass
 
 
 @pytest.fixture
 def watched():
     """A pass watching a graph with one Switch in it."""
-    from OpenGLContext.passes.flatcore import FlatPass
     shape = Shape(geometry=Box())
     switch = Switch(choice=[Group(children=[shape])], whichChoice=0)
     scene = Group(children=[switch])

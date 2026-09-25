@@ -12,8 +12,8 @@ import pytest
 
 
 from OpenGL.GL import (
-    GL_FRAMEBUFFER, GL_FRAMEBUFFER_COMPLETE, glCheckFramebufferStatus,
-    glGetIntegerv, GL_MAX_TEXTURE_IMAGE_UNITS,
+    GL_FRAMEBUFFER, GL_FRAMEBUFFER_COMPLETE, GL_MAX_TEXTURE_IMAGE_UNITS, GL_VERSION,
+    glCheckFramebufferStatus, glGetIntegerv, glGetString, glViewport,
 )
 
 from OpenGLContext.passes import shadowmap
@@ -36,8 +36,8 @@ def _complete():
 # --------------------------------------------------------------------------- #
 # save/restore target helpers
 # --------------------------------------------------------------------------- #
-def test_save_and_restore_target_roundtrip(gl_context):
-    from OpenGL.GL import glViewport
+@pytest.mark.usefixtures('gl_context')
+def test_save_and_restore_target_roundtrip():
     glViewport(0, 0, 40, 30)
     fbo, viewport = _save_target()
     assert fbo == 0
@@ -50,7 +50,8 @@ def test_save_and_restore_target_roundtrip(gl_context):
 # ShadowMapArray (directional CSM)
 # --------------------------------------------------------------------------- #
 class TestShadowMapArray:
-    def test_bind_layer_creates_complete_fbo(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_bind_layer_creates_complete_fbo(self):
         arr = ShadowMapArray(size=256, layers=4)
         assert arr.bind_layer(0) is True
         assert arr.fbo is not None and arr.depth_texture is not None
@@ -62,31 +63,35 @@ class TestShadowMapArray:
         arr.cleanup()
         assert arr.fbo is None and arr.depth_texture is None
 
-    def test_resize_recreates_storage(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_resize_recreates_storage(self):
         arr = ShadowMapArray(size=128, layers=2)
         assert arr.bind_layer(0) is True
         assert arr.bind_layer(0, size=256, layers=4) is True   # different -> recreate
         assert (arr.size, arr.layers) == (256, 4)
         arr.cleanup()
 
-    def test_incomplete_fbo_reports_failure(self, gl_context, monkeypatch):
-        monkeypatch.setattr(shadowmap, 'glCheckFramebufferStatus', lambda t: 0)
+    @pytest.mark.usefixtures('gl_context')
+    def test_incomplete_fbo_reports_failure(self, monkeypatch):
+        monkeypatch.setattr(shadowmap, 'glCheckFramebufferStatus', lambda _t: 0)
         arr = ShadowMapArray(size=128, layers=2)
         assert arr.bind_layer(0) is False
 
-    def test_storage_error_is_caught(self, gl_context, monkeypatch):
-        def boom(*a, **k):
+    @pytest.mark.usefixtures('gl_context')
+    def test_storage_error_is_caught(self, monkeypatch):
+        def boom(*_a, **_k):
             raise RuntimeError("no immutable array storage")
         monkeypatch.setattr(shadowmap, 'glTexStorage3D', boom)
         arr = ShadowMapArray(size=128, layers=2)
         assert arr.bind_layer(0) is False
         assert arr._initialized is False
 
-    def test_cleanup_swallows_delete_errors(self, gl_context, monkeypatch):
+    @pytest.mark.usefixtures('gl_context')
+    def test_cleanup_swallows_delete_errors(self, monkeypatch):
         arr = ShadowMapArray(size=128, layers=2)
         assert arr.bind_layer(0) is True
 
-        def boom(*a, **k):
+        def boom(*_a, **_k):
             raise RuntimeError("delete failed")
         monkeypatch.setattr(shadowmap, 'glDeleteFramebuffers', boom)
         monkeypatch.setattr(shadowmap, 'glDeleteTextures', boom)
@@ -99,17 +104,17 @@ class TestShadowMapArray:
 # ShadowMapCubeArray (packed point cubes) -- needs GL 4.0 cube-map-array
 # --------------------------------------------------------------------------- #
 def _has_cube_array():
-    from OpenGL.GL import glGetString, GL_VERSION
     ver = glGetString(GL_VERSION)
     try:
         major = int(bytes(ver).split(b'.')[0])
-    except Exception:      # pragma: no cover - version string parse fallback
+    except (TypeError, ValueError):  # pragma: no cover - no version string, or not a number
         return False
     return major >= 4
 
 
 class TestShadowMapCubeArray:
-    def test_bind_face_creates_complete_fbo(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_bind_face_creates_complete_fbo(self):
         if not _has_cube_array():
             pytest.skip("no GL 4.0 cube-map-array")
         ca = ShadowMapCubeArray(size=128, num_cubes=2)
@@ -121,7 +126,8 @@ class TestShadowMapCubeArray:
         ca.cleanup()
         assert ca.depth_texture is None
 
-    def test_resize_recreates(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_resize_recreates(self):
         if not _has_cube_array():
             pytest.skip("no GL 4.0 cube-map-array")
         ca = ShadowMapCubeArray(size=64, num_cubes=1)
@@ -130,28 +136,31 @@ class TestShadowMapCubeArray:
         assert (ca.size, ca.num_cubes) == (128, 2)
         ca.cleanup()
 
-    def test_incomplete_reports_failure(self, gl_context, monkeypatch):
+    @pytest.mark.usefixtures('gl_context')
+    def test_incomplete_reports_failure(self, monkeypatch):
         if not _has_cube_array():
             pytest.skip("no GL 4.0 cube-map-array")
-        monkeypatch.setattr(shadowmap, 'glCheckFramebufferStatus', lambda t: 0)
+        monkeypatch.setattr(shadowmap, 'glCheckFramebufferStatus', lambda _t: 0)
         ca = ShadowMapCubeArray(size=64, num_cubes=1)
         assert ca.bind_face(0, 0) is False
 
-    def test_storage_error_is_caught(self, gl_context, monkeypatch):
-        def boom(*a, **k):
+    @pytest.mark.usefixtures('gl_context')
+    def test_storage_error_is_caught(self, monkeypatch):
+        def boom(*_a, **_k):
             raise RuntimeError("no cube array storage")
         monkeypatch.setattr(shadowmap, 'glTexStorage3D', boom)
         ca = ShadowMapCubeArray(size=64, num_cubes=1)
         assert ca.bind_face(0, 0) is False
         assert ca._initialized is False
 
-    def test_cleanup_swallows_delete_errors(self, gl_context, monkeypatch):
+    @pytest.mark.usefixtures('gl_context')
+    def test_cleanup_swallows_delete_errors(self, monkeypatch):
         if not _has_cube_array():
             pytest.skip("no GL 4.0 cube-map-array")
         ca = ShadowMapCubeArray(size=64, num_cubes=1)
         assert ca.bind_face(0, 0) is True
 
-        def boom(*a, **k):
+        def boom(*_a, **_k):
             raise RuntimeError("delete failed")
         monkeypatch.setattr(shadowmap, 'glDeleteFramebuffers', boom)
         monkeypatch.setattr(shadowmap, 'glDeleteTextures', boom)
@@ -163,7 +172,8 @@ class TestShadowMapCubeArray:
 # ShadowMapCube (single-cube fallback)
 # --------------------------------------------------------------------------- #
 class TestShadowMapCube:
-    def test_bind_face_creates_complete_fbo(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_bind_face_creates_complete_fbo(self):
         cube = ShadowMapCube(size=128)
         assert cube.bind_face(0) is True
         assert cube.texture == cube.depth_texture
@@ -174,31 +184,35 @@ class TestShadowMapCube:
         cube.cleanup()
         assert cube.depth_texture is None
 
-    def test_resize_recreates(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_resize_recreates(self):
         cube = ShadowMapCube(size=64)
         assert cube.bind_face(0) is True
         assert cube.bind_face(0, size=128) is True
         assert cube.size == 128
         cube.cleanup()
 
-    def test_incomplete_reports_failure(self, gl_context, monkeypatch):
-        monkeypatch.setattr(shadowmap, 'glCheckFramebufferStatus', lambda t: 0)
+    @pytest.mark.usefixtures('gl_context')
+    def test_incomplete_reports_failure(self, monkeypatch):
+        monkeypatch.setattr(shadowmap, 'glCheckFramebufferStatus', lambda _t: 0)
         cube = ShadowMapCube(size=64)
         assert cube.bind_face(0) is False
 
-    def test_storage_error_is_caught(self, gl_context, monkeypatch):
-        def boom(*a, **k):
+    @pytest.mark.usefixtures('gl_context')
+    def test_storage_error_is_caught(self, monkeypatch):
+        def boom(*_a, **_k):
             raise RuntimeError("no cube storage")
         monkeypatch.setattr(shadowmap, 'glTexStorage2D', boom)
         cube = ShadowMapCube(size=64)
         assert cube.bind_face(0) is False
         assert cube._initialized is False
 
-    def test_cleanup_swallows_delete_errors(self, gl_context, monkeypatch):
+    @pytest.mark.usefixtures('gl_context')
+    def test_cleanup_swallows_delete_errors(self, monkeypatch):
         cube = ShadowMapCube(size=64)
         assert cube.bind_face(0) is True
 
-        def boom(*a, **k):
+        def boom(*_a, **_k):
             raise RuntimeError("delete failed")
         monkeypatch.setattr(shadowmap, 'glDeleteFramebuffers', boom)
         monkeypatch.setattr(shadowmap, 'glDeleteTextures', boom)
@@ -206,7 +220,8 @@ class TestShadowMapCube:
         assert cube.fbo is None and cube.depth_texture is None
 
 
-def test_max_texture_units_available(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_max_texture_units_available():
     # sanity: the shadow path assumes a real unit budget to pack into
     assert int(glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS)) >= 16
 

@@ -12,9 +12,10 @@ import pytest
 
 
 from OpenGL.GL import (
-    GL_COLOR_ATTACHMENT1, GL_COLOR_BUFFER_BIT, GL_FRAMEBUFFER, GL_FRAMEBUFFER_COMPLETE,
-    glBindFramebuffer, glClear, glClearColor, glDrawBuffers, glReadPixels, glViewport,
-    GL_RGBA, GL_UNSIGNED_BYTE,
+    GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT,
+    GL_FRAMEBUFFER, GL_FRAMEBUFFER_COMPLETE, GL_NO_ERROR, GL_RGBA, GL_UNSIGNED_BYTE,
+    glBindFramebuffer, glCheckFramebufferStatus, glClear, glClearColor, glDrawBuffers, glGetError,
+    glReadPixels, glViewport,
 )
 
 from OpenGLContext.passes import selectionbuffers
@@ -44,12 +45,14 @@ class TestSelectionFBO:
         assert fbo.depth_renderbuffer is None
         assert fbo._initialized is False
 
-    def test_bind_rejects_zero_region(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_bind_rejects_zero_region(self):
         fbo = SelectionFBO()
         assert fbo.bind(0, 0, 0, 0) is False
         assert fbo._initialized is False
 
-    def test_bind_creates_complete_fbo(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_bind_creates_complete_fbo(self):
         fbo = SelectionFBO()
         assert fbo.bind(0, 0, 8, 8) is True
         assert fbo.fbo is not None
@@ -58,7 +61,8 @@ class TestSelectionFBO:
         assert glCheckFramebufferComplete() is True
         fbo.unbind()
 
-    def test_read_pixel_roundtrips_cleared_colour(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_read_pixel_roundtrips_cleared_colour(self):
         fbo = SelectionFBO()
         assert fbo.bind(0, 0, 8, 8) is True
         glViewport(0, 0, 8, 8)
@@ -67,7 +71,8 @@ class TestSelectionFBO:
         assert fbo.read_pixel(2, 2) == 0x0000FFFF
         fbo.unbind()
 
-    def test_reuse_when_region_fits_keeps_same_fbo(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_reuse_when_region_fits_keeps_same_fbo(self):
         fbo = SelectionFBO()
         assert fbo.bind(0, 0, 8, 8) is True
         first = fbo.fbo
@@ -76,39 +81,43 @@ class TestSelectionFBO:
         assert fbo.fbo == first
         assert fbo.current_width == 8
 
-    def test_size_is_clamped_to_max(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_size_is_clamped_to_max(self):
         fbo = SelectionFBO(max_width=4, max_height=4)
         assert fbo.bind(0, 0, 100, 100) is True
         assert fbo.current_width == 4
         assert fbo.current_height == 4
 
-    def test_incomplete_framebuffer_reported_as_failure(self, gl_context, monkeypatch):
+    @pytest.mark.usefixtures('gl_context')
+    def test_incomplete_framebuffer_reported_as_failure(self, monkeypatch):
         # A driver returning an incomplete status must make bind() fail and leave
         # no resources bound/initialized.
         monkeypatch.setattr(selectionbuffers, 'glCheckFramebufferStatus',
-                            lambda target: 0)
+                            lambda _target: 0)
         fbo = SelectionFBO()
         assert fbo.bind(0, 0, 8, 8) is False
         assert fbo._initialized is False
         assert fbo.fbo is None
 
-    def test_gl_error_during_creation_is_caught(self, gl_context, monkeypatch):
-        def boom(*a, **k):
+    @pytest.mark.usefixtures('gl_context')
+    def test_gl_error_during_creation_is_caught(self, monkeypatch):
+        def boom(*_a, **_k):
             raise RuntimeError("simulated driver failure")
         monkeypatch.setattr(selectionbuffers, 'glTexImage2D', boom)
         fbo = SelectionFBO()
         assert fbo.bind(0, 0, 8, 8) is False
         assert fbo._initialized is False
 
-    def test_cleanup_swallows_delete_errors(self, gl_context, monkeypatch):
+    @pytest.mark.usefixtures('gl_context')
+    def test_cleanup_swallows_delete_errors(self, monkeypatch):
         fbo = SelectionFBO()
         assert fbo.bind(0, 0, 8, 8) is True
         monkeypatch.setattr(selectionbuffers, 'glDeleteFramebuffers',
-                            lambda *a: (_ for _ in ()).throw(RuntimeError("x")))
+                            lambda *_a: (_ for _ in ()).throw(RuntimeError("x")))
         monkeypatch.setattr(selectionbuffers, 'glDeleteTextures',
-                            lambda *a: (_ for _ in ()).throw(RuntimeError("x")))
+                            lambda *_a: (_ for _ in ()).throw(RuntimeError("x")))
         monkeypatch.setattr(selectionbuffers, 'glDeleteRenderbuffers',
-                            lambda *a: (_ for _ in ()).throw(RuntimeError("x")))
+                            lambda *_a: (_ for _ in ()).throw(RuntimeError("x")))
         fbo._cleanup()   # must not raise despite every delete throwing
         assert fbo.fbo is None
         assert fbo.color_texture is None
@@ -117,7 +126,6 @@ class TestSelectionFBO:
 
 
 def glCheckFramebufferComplete():
-    from OpenGL.GL import glCheckFramebufferStatus
     return glCheckFramebufferStatus(GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE
 
 
@@ -132,12 +140,14 @@ class TestSelectionBufferFBO:
         assert sb._initialized is False
         assert sb.id_map == {}
 
-    def test_ensure_size_rejects_zero(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_ensure_size_rejects_zero(self):
         sb = SelectionBufferFBO()
         assert sb.ensure_size(0, 0) is False
         assert sb._initialized is False
 
-    def test_ensure_size_creates_mrt_and_is_complete(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_ensure_size_creates_mrt_and_is_complete(self):
         sb = SelectionBufferFBO()
         assert sb.ensure_size(32, 24) is True
         assert sb.fbo is not None
@@ -149,14 +159,16 @@ class TestSelectionBufferFBO:
         assert glCheckFramebufferComplete() is True
         sb.unbind()
 
-    def test_ensure_size_is_idempotent_for_same_size(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_ensure_size_is_idempotent_for_same_size(self):
         sb = SelectionBufferFBO()
         assert sb.ensure_size(32, 32) is True
         first = sb.fbo
         assert sb.ensure_size(32, 32) is True
         assert sb.fbo == first
 
-    def test_resize_recreates_resources(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_resize_recreates_resources(self):
         sb = SelectionBufferFBO()
         assert sb.ensure_size(16, 16) is True
         # A different size must run the cleanup+recreate branch, adopting the new
@@ -166,7 +178,8 @@ class TestSelectionBufferFBO:
         assert (sb.width, sb.height) == (48, 48)
         assert sb._initialized is True
 
-    def test_bind_false_before_init(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_bind_false_before_init(self):
         sb = SelectionBufferFBO()
         assert sb.bind() is False
 
@@ -174,18 +187,19 @@ class TestSelectionBufferFBO:
         sb = SelectionBufferFBO()
         assert sb.read_pixel(1, 1) == (0, 1.0)
 
-    def test_read_pixel_out_of_bounds_returns_empty(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_read_pixel_out_of_bounds_returns_empty(self):
         sb = SelectionBufferFBO()
         assert sb.ensure_size(16, 16) is True
         assert sb.read_pixel(-1, 0) == (0, 1.0)
         assert sb.read_pixel(0, 999) == (0, 1.0)
 
-    def test_read_pixel_decodes_id_and_depth(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_read_pixel_decodes_id_and_depth(self):
         sb = SelectionBufferFBO()
         assert sb.ensure_size(16, 16) is True
         sb.bind()
         glViewport(0, 0, 16, 16)
-        from OpenGL.GL import GL_DEPTH_BUFFER_BIT
         glClearColor(0, 0, 0, 0)
         glClear(GL_DEPTH_BUFFER_BIT)
         _fill_id_texture((5, 6, 7, 0))       # id = 5 | 6<<8 | 7<<16
@@ -195,7 +209,8 @@ class TestSelectionBufferFBO:
         assert depth == pytest.approx(1.0, abs=1e-3)
         sb.unbind()
 
-    def test_clear_zeroes_the_id_buffer(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_clear_zeroes_the_id_buffer(self):
         sb = SelectionBufferFBO()
         assert sb.ensure_size(16, 16) is True
         sb.bind()
@@ -207,10 +222,10 @@ class TestSelectionBufferFBO:
         assert sb.read_pixel(8, 8)[0] == 0
         sb.unbind()
 
-    def test_blit_before_init_is_noop(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_blit_before_init_is_noop(self):
         """Nothing allocated, so the screen keeps what it had and no GL error
         is left behind."""
-        from OpenGL.GL import GL_NO_ERROR, glGetError
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
         glViewport(0, 0, 96, 96)
         glClearColor(0.0, 0.0, 1.0, 1.0)
@@ -225,12 +240,12 @@ class TestSelectionBufferFBO:
         px = np.frombuffer(bytes(raw), dtype=np.uint8).ravel()
         assert tuple(px[:3]) == (0, 0, 255)
 
-    def test_blit_copies_scene_colour_to_default_framebuffer(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_blit_copies_scene_colour_to_default_framebuffer(self):
         sb = SelectionBufferFBO()
         assert sb.ensure_size(96, 96) is True
         sb.bind()
         glViewport(0, 0, 96, 96)
-        from OpenGL.GL import GL_COLOR_ATTACHMENT0
         glDrawBuffers(1, [GL_COLOR_ATTACHMENT0])   # scene colour attachment
         glClearColor(1.0, 0.0, 0.0, 1.0)
         glClear(GL_COLOR_BUFFER_BIT)
@@ -248,27 +263,30 @@ class TestSelectionBufferFBO:
         sb.set_id_map(mapping)
         assert sb.id_map is mapping
 
-    def test_incomplete_framebuffer_reported_as_failure(self, gl_context, monkeypatch):
+    @pytest.mark.usefixtures('gl_context')
+    def test_incomplete_framebuffer_reported_as_failure(self, monkeypatch):
         monkeypatch.setattr(selectionbuffers, 'glCheckFramebufferStatus',
-                            lambda target: 0)
+                            lambda _target: 0)
         sb = SelectionBufferFBO()
         assert sb.ensure_size(16, 16) is False
         assert sb._initialized is False
         assert sb.fbo is None
 
-    def test_gl_error_during_creation_is_caught(self, gl_context, monkeypatch):
-        def boom(*a, **k):
+    @pytest.mark.usefixtures('gl_context')
+    def test_gl_error_during_creation_is_caught(self, monkeypatch):
+        def boom(*_a, **_k):
             raise RuntimeError("simulated driver failure")
         monkeypatch.setattr(selectionbuffers, 'glTexImage2D', boom)
         sb = SelectionBufferFBO()
         assert sb.ensure_size(16, 16) is False
         assert sb._initialized is False
 
-    def test_cleanup_swallows_delete_errors(self, gl_context, monkeypatch):
+    @pytest.mark.usefixtures('gl_context')
+    def test_cleanup_swallows_delete_errors(self, monkeypatch):
         sb = SelectionBufferFBO()
         assert sb.ensure_size(16, 16) is True
 
-        def raiser(*a):
+        def raiser(*_a):
             raise RuntimeError("x")
         monkeypatch.setattr(selectionbuffers, 'glDeleteFramebuffers', raiser)
         monkeypatch.setattr(selectionbuffers, 'glDeleteTextures', raiser)
@@ -282,5 +300,4 @@ class TestSelectionBufferFBO:
 
 
 def _both_attachments():
-    from OpenGL.GL import GL_COLOR_ATTACHMENT0
     return [GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1]

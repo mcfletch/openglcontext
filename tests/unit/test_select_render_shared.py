@@ -6,15 +6,19 @@ GL_RGBA, the other reads GL_RGB unshifted). They now both delegate to the shared
 `_flat._color_select_render`, passing their own packing/format so behaviour is
 preserved while the body lives in one place.
 """
+import pytest
 from OpenGL.GL import GL_RGB, GL_RGBA
+import numpy as np
 
 from OpenGLContext.passes import _flat, flatcompat
+from OpenGLContext import frustum
+from OpenGLContext.scenegraph import basenodes
 
 
 def _capture(monkeypatch):
     seen = {}
 
-    def fake(pass_obj, mode, toRender, events, **kw):
+    def fake(_pass_obj, _mode, _toRender, _events, **kw):
         seen.update(kw)
         seen['delegated'] = True
     monkeypatch.setattr(_flat, '_color_select_render', fake)
@@ -52,7 +56,6 @@ class TestTheBodyItself:
     """
 
     def _scene(self, count=3):
-        from OpenGLContext.scenegraph import basenodes
         moves = [basenodes.Transform(
             translation=(index * 3.0 - 3.0, 0, -8.0),
             children=[basenodes.Shape(
@@ -63,24 +66,20 @@ class TestTheBodyItself:
         return basenodes.sceneGraph(children=moves)
 
     def _pass(self, scene):
-        import numpy as np
-        from OpenGLContext import frustum
         passing = flatcompat.FlatPass.__new__(flatcompat.FlatPass)
         _flat.SGObserver.__init__(passing, scene, [])
         passing.frustum = frustum.Frustum(planes=np.zeros((0, 4), 'f'))
         return passing
 
-    def _drive(self, gl_context, events):
+    def _drive(self, events):
         """Run the helper over a real render set and report what it drew."""
-        import numpy as np
-        from OpenGL.GL import GL_RGB
         scene = self._scene()
         passing = self._pass(scene)
         toRender = passing.renderSet(np.identity(4, 'f'))
         drawn = []
         for record in toRender:
             node = record[5]
-            node.Render = lambda mode=None, _n=node: drawn.append(_n)
+            node.Render = lambda mode=None, _n=node: drawn.append(_n)  # noqa: ARG005 the pass calls Render(mode=...)
 
         class Definition:
             debugSelection = False
@@ -103,7 +102,8 @@ class TestTheBodyItself:
             setup_fixed_function=True, require_pick_enabled=False)
         return toRender, drawn
 
-    def test_every_record_is_drawn_in_its_own_colour(self, gl_context_compat):
+    @pytest.mark.usefixtures('gl_context_compat')
+    def test_every_record_is_drawn_in_its_own_colour(self):
         """One draw per record, of the node the record carries."""
         class Event:
             def getPickPoint(self):
@@ -112,12 +112,12 @@ class TestTheBodyItself:
             def setObjectPaths(self, paths):
                 self.paths = paths
 
-        toRender, drawn = self._drive(gl_context_compat,
-                                      {'a': Event()})
+        toRender, drawn = self._drive({'a': Event()})
 
         assert len(toRender) == 3
         assert drawn == [record[5] for record in toRender]
 
-    def test_no_pick_points_draws_nothing(self, gl_context_compat):
-        _toRender, drawn = self._drive(gl_context_compat, {})
+    @pytest.mark.usefixtures('gl_context_compat')
+    def test_no_pick_points_draws_nothing(self):
+        _toRender, drawn = self._drive({})
         assert drawn == []

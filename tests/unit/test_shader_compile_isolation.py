@@ -19,10 +19,10 @@ def _prepared(monkeypatch, failing_labels):
     sp._compiled = False
     sp._ok = False
     monkeypatch.setattr(shaderpass, 'resolve_shadow_config', lambda: (0, False))
-    monkeypatch.setattr(shaderpass, 'glUseProgram', lambda *a, **k: None, raising=False)
+    monkeypatch.setattr(shaderpass, 'glUseProgram', lambda *_a, **_k: None, raising=False)
     sp.init_shadow_samplers = lambda: None
 
-    def fake_compile_one(label, *a, **k):
+    def fake_compile_one(label, *_a, **_k):
         return None if label in failing_labels else 'prog_%s' % label
     sp._compile_one = fake_compile_one
     return sp

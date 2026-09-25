@@ -1,5 +1,6 @@
 """Unit tests for shadow capability detection logic (no GL context)."""
 import pytest
+import OpenGL.GL as GL
 
 from OpenGLContext.passes.shadowcaps import ShadowCapabilities
 
@@ -104,34 +105,28 @@ class TestVramQuery:
     """_query_vram_mb reads the vendor meminfo extension when present."""
 
     def test_nvidia_nvx_reports_total_vram(self, monkeypatch):
-        import OpenGL.GL as GL
-        monkeypatch.setattr(GL, 'glGetIntegerv', lambda enum: 8 * 1024 * 1024)
+        monkeypatch.setattr(GL, 'glGetIntegerv', lambda _enum: 8 * 1024 * 1024)
         mb = ShadowCapabilities._query_vram_mb({'GL_NVX_gpu_memory_info'})
         assert mb == 8 * 1024   # KB -> MB
 
     def test_amd_ati_meminfo_list_first_element(self, monkeypatch):
-        import OpenGL.GL as GL
         monkeypatch.setattr(GL, 'glGetIntegerv',
-                            lambda enum: [4 * 1024 * 1024, 0, 0, 0])
+                            lambda _enum: [4 * 1024 * 1024, 0, 0, 0])
         mb = ShadowCapabilities._query_vram_mb({'GL_ATI_meminfo'})
         assert mb == 4 * 1024
 
     def test_amd_ati_meminfo_scalar(self, monkeypatch):
-        import OpenGL.GL as GL
-        monkeypatch.setattr(GL, 'glGetIntegerv', lambda enum: 2 * 1024 * 1024)
+        monkeypatch.setattr(GL, 'glGetIntegerv', lambda _enum: 2 * 1024 * 1024)
         mb = ShadowCapabilities._query_vram_mb({'GL_ATI_meminfo'})
         assert mb == 2 * 1024
 
     def test_no_meminfo_extension_returns_zero(self, monkeypatch):
-        import OpenGL.GL as GL
         monkeypatch.setattr(GL, 'glGetIntegerv',
-                            lambda enum: pytest.fail("must not query"))
+                            lambda _enum: pytest.fail("must not query"))
         assert ShadowCapabilities._query_vram_mb(set()) == 0
 
     def test_query_exception_returns_zero(self, monkeypatch):
-        import OpenGL.GL as GL
-
-        def boom(enum):
+        def boom(_enum):
             raise RuntimeError("no GL")
 
         monkeypatch.setattr(GL, 'glGetIntegerv', boom)
@@ -155,7 +150,6 @@ class TestListExtensions:
     def test_context_extension_manager_failure_falls_through(self, monkeypatch):
         """A context whose ExtensionManager.listGL() raises must not crash;
         detection falls back to the core-profile enumeration."""
-        import OpenGL.GL as GL
 
         class _Exts:
             def listGL(self):
@@ -165,7 +159,7 @@ class TestListExtensions:
             extensions = _Exts()
 
         # Force the glGetStringi fallback to also fail so we get a clean set().
-        def boom(*a, **k):
+        def boom(*_a, **_k):
             raise RuntimeError("no GL")
 
         monkeypatch.setattr(GL, 'glGetIntegerv', boom)
@@ -173,9 +167,7 @@ class TestListExtensions:
         assert result == set()
 
     def test_fallback_enumeration_failure_returns_empty(self, monkeypatch):
-        import OpenGL.GL as GL
-
-        def boom(*a, **k):
+        def boom(*_a, **_k):
             raise RuntimeError("no GL")
 
         monkeypatch.setattr(GL, 'glGetIntegerv', boom)
@@ -185,10 +177,9 @@ class TestListExtensions:
 class TestDetectErrorPaths:
     def test_unit_query_failure_defaults_to_16(self, monkeypatch):
         """If GL_MAX_TEXTURE_IMAGE_UNITS can't be read, detect assumes 16."""
-        import OpenGL.GL as GL
-        monkeypatch.setattr(GL, 'glGetString', lambda enum: b"3.3.0 NVIDIA")
+        monkeypatch.setattr(GL, 'glGetString', lambda _enum: b"3.3.0 NVIDIA")
 
-        def boom(enum):
+        def boom(_enum):
             raise RuntimeError("no GL")
 
         monkeypatch.setattr(GL, 'glGetIntegerv', boom)
@@ -198,9 +189,8 @@ class TestDetectErrorPaths:
 
     def test_total_failure_uses_baseline(self, monkeypatch):
         """A GL query that raises outright degrades to the default 3.3 caps."""
-        import OpenGL.GL as GL
 
-        def boom(enum):
+        def boom(_enum):
             raise RuntimeError("no context")
 
         monkeypatch.setattr(GL, 'glGetString', boom)

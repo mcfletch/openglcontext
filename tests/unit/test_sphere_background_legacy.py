@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 from vrml import cache
+from OpenGL import GL
 
 from OpenGLContext.scenegraph.background import Background
 
@@ -34,7 +35,6 @@ class _Mode:
 
 
 def _frame(near):
-    from OpenGL import GL
     GL.glViewport(0, 0, SIZE, SIZE)
     GL.glClearColor(0, 0, 0, 1)
     GL.glMatrixMode(GL.GL_PROJECTION)
@@ -61,16 +61,18 @@ def _covered(image):
     return (np.abs(image.astype(int) - sky).max(axis=-1) <= 3).mean()
 
 
-def test_a_near_plane_inside_the_sphere_sees_the_sky_everywhere(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_a_near_plane_inside_the_sphere_sees_the_sky_everywhere():
     assert _covered(_frame(0.1)) == pytest.approx(1.0)
 
 
-def test_a_near_plane_beyond_the_sphere_sees_it_too(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_a_near_plane_beyond_the_sphere_sees_it_too():
     """An orbit camera fifty units out puts its near plane at one."""
     assert _covered(_frame(5.0)) == pytest.approx(1.0)
 
 
-def test_the_depth_range_is_left_clipping_afterwards(gl_context):
-    from OpenGL import GL
+@pytest.mark.usefixtures('gl_context')
+def test_the_depth_range_is_left_clipping_afterwards():
     _frame(5.0)
     assert not GL.glIsEnabled(GL.GL_DEPTH_CLAMP)

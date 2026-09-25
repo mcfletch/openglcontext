@@ -17,7 +17,7 @@ from OpenGLContext.passes import shaderpass
 from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
 
 
-def _prog(monkeypatch, uses=()):
+def _prog(monkeypatch):
     """A compiled-looking program with GL calls counted, not executed."""
     sp = VRML97ShaderProgram.__new__(VRML97ShaderProgram)
     sp._compiled = True
@@ -40,12 +40,12 @@ def _prog(monkeypatch, uses=()):
     sp.SHADOW_CUBE_BASE = 6
     counts = {'use': 0, 'sampler': 0, 'getint': 0}
     monkeypatch.setattr(shaderpass, 'glUseProgram',
-                        lambda p: counts.__setitem__('use', counts['use'] + 1),
+                        lambda _p: counts.__setitem__('use', counts['use'] + 1),
                         raising=False)
     monkeypatch.setattr(shaderpass, 'glGetIntegerv',
-                        lambda *a: counts.__setitem__('getint', counts['getint'] + 1) or 999,
+                        lambda *_a: counts.__setitem__('getint', counts['getint'] + 1) or 999,
                         raising=False)
-    sp._set_uniform1i = lambda *a, **k: counts.__setitem__('sampler', counts['sampler'] + 1)
+    sp._set_uniform1i = lambda *_a, **_k: counts.__setitem__('sampler', counts['sampler'] + 1)
     if hasattr(sp, 'begin_frame'):
         sp.begin_frame()
     return sp, counts
@@ -90,7 +90,7 @@ class TestActiveProgramTracking:
         # set_matrices/set_object_id resolve their default program through
         # _program_for_default, which must not touch GL.
         monkeypatch.setattr(shaderpass, 'glGetIntegerv',
-                            lambda *a: (_ for _ in ()).throw(
+                            lambda *_a: (_ for _ in ()).throw(
                                 AssertionError("must not round-trip GL for the program")),
                             raising=False)
         sp, counts = _prog(monkeypatch)

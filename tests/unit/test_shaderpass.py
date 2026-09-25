@@ -7,7 +7,21 @@ an OpenGL context. Tests that require OpenGL use the test context.
 
 import unittest
 import numpy as np
-from math import pi
+from math import cos, pi, sin
+import inspect
+import os
+from unittest import mock
+from OpenGLContext.passes import shaderpass
+from OpenGLContext.passes.shaderpass import (
+    configure_light_from_node, configure_material_from_node, get_shader_program, normal_matrix,
+    SHADER_DIR, ShaderRenderMode, texture_transform_matrix, VRML97ShaderProgram,
+)
+from OpenGLContext.scenegraph import shadergeometry
+from OpenGLContext.scenegraph.shadergeometry import get_or_build_vao, VBO_STRIDE, VertexFormat
+from OpenGLContext.testing import framebuffer_comparison
+from OpenGLContext.testing.framebuffer_comparison import (
+    compare_images, ComparisonResult, FramebufferCapture,
+)
 
 
 class TestShaderPassModule(unittest.TestCase):
@@ -15,39 +29,25 @@ class TestShaderPassModule(unittest.TestCase):
 
     def test_import_module(self) -> None:
         """Module should import without errors"""
-        from OpenGLContext.passes import shaderpass
         self.assertIsNotNone(shaderpass)
 
     def test_import_classes(self) -> None:
         """Key classes should be importable"""
-        from OpenGLContext.passes.shaderpass import (
-            VRML97ShaderProgram,
-            ShaderRenderMode,
-            get_shader_program,
-        )
         self.assertIsNotNone(VRML97ShaderProgram)
         self.assertIsNotNone(ShaderRenderMode)
         self.assertIsNotNone(get_shader_program)
 
     def test_import_helper_functions(self) -> None:
         """Helper functions should be importable"""
-        from OpenGLContext.passes.shaderpass import (
-            configure_light_from_node,
-            configure_material_from_node,
-        )
         self.assertIsNotNone(configure_light_from_node)
         self.assertIsNotNone(configure_material_from_node)
 
     def test_shader_dir_exists(self) -> None:
         """Shader directory should exist"""
-        import os
-        from OpenGLContext.passes.shaderpass import SHADER_DIR
         self.assertTrue(os.path.isdir(SHADER_DIR))
 
     def test_shader_files_exist(self) -> None:
         """Required shader files should exist"""
-        import os
-        from OpenGLContext.passes.shaderpass import SHADER_DIR
 
         expected_files = [
             'vrml97_lighting.vert',
@@ -69,7 +69,6 @@ class TestVRML97ShaderProgramNoGL(unittest.TestCase):
 
     def test_init(self) -> None:
         """Constructor should initialize attributes"""
-        from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
 
         program = VRML97ShaderProgram()
         self.assertIsNone(program.program)
@@ -79,7 +78,6 @@ class TestVRML97ShaderProgramNoGL(unittest.TestCase):
 
     def test_get_shader_program_singleton(self) -> None:
         """get_shader_program should return same instance"""
-        from OpenGLContext.passes import shaderpass
 
         # The programs are kept per context, and with none current this test
         # adds an entry of its own; the next test finds the table as it was.
@@ -98,10 +96,6 @@ class TestShaderRenderMode(unittest.TestCase):
 
     def test_shader_mode_flag(self) -> None:
         """ShaderRenderMode should have shader_mode=True"""
-        from OpenGLContext.passes.shaderpass import (
-            ShaderRenderMode,
-            VRML97ShaderProgram
-        )
 
         class MockMode:
             some_attr = "test"
@@ -116,10 +110,6 @@ class TestShaderRenderMode(unittest.TestCase):
 
     def test_attribute_delegation(self) -> None:
         """ShaderRenderMode should delegate unknown attributes to base mode"""
-        from OpenGLContext.passes.shaderpass import (
-            ShaderRenderMode,
-            VRML97ShaderProgram
-        )
 
         class MockMode:
             some_attr = "test_value"
@@ -149,7 +139,6 @@ class _TexNode:
 def _reference_texture_matrix(node):
     """The original hand-written five-matrix construction, kept here as an
     independent oracle for the collapsed texture_transform_matrix()."""
-    from math import cos, sin
     if node is None:
         return np.eye(3, dtype='f')
     tx, ty = node.translation
@@ -177,12 +166,10 @@ class TestTextureTransformMatrix(unittest.TestCase):
     function callable without a GL context (the old tests could not call it)."""
 
     def test_identity_for_none(self) -> None:
-        from OpenGLContext.passes.shaderpass import texture_transform_matrix
         np.testing.assert_array_almost_equal(
             texture_transform_matrix(None), np.eye(3, dtype='f'))
 
     def test_matches_reference_across_cases(self) -> None:
-        from OpenGLContext.passes.shaderpass import texture_transform_matrix
         cases = [
             _TexNode(),                                        # all-identity fields
             _TexNode(translation=(0.5, 0.25)),
@@ -199,23 +186,20 @@ class TestTextureTransformMatrix(unittest.TestCase):
 
     def test_center_pivots_rotation(self) -> None:
         """A rotation about a non-zero center leaves that center fixed in UV."""
-        from OpenGLContext.passes.shaderpass import texture_transform_matrix
         node = _TexNode(center=(0.5, 0.5), rotation=pi / 2)
         m = texture_transform_matrix(node)
         fixed = m @ np.array([0.5, 0.5, 1.0], dtype='f')
         np.testing.assert_array_almost_equal(fixed[:2], [0.5, 0.5])
 
     def test_affine_helpers_build_expected_matrices(self) -> None:
-        from math import cos, sin
-        from OpenGLContext.passes import shaderpass as sp
         np.testing.assert_array_almost_equal(
-            sp._affine2d_translate(0.5, 0.25),
+            shaderpass._affine2d_translate(0.5, 0.25),
             [[1, 0, 0.5], [0, 1, 0.25], [0, 0, 1]])
         np.testing.assert_array_almost_equal(
-            sp._affine2d_scale(2.0, 0.5), [[2, 0, 0], [0, 0.5, 0], [0, 0, 1]])
+            shaderpass._affine2d_scale(2.0, 0.5), [[2, 0, 0], [0, 0.5, 0], [0, 0, 1]])
         c, s = cos(0.7), sin(0.7)
         np.testing.assert_array_almost_equal(
-            sp._affine2d_rotate(0.7), [[c, -s, 0], [s, c, 0], [0, 0, 1]])
+            shaderpass._affine2d_rotate(0.7), [[c, -s, 0], [s, c, 0], [0, 0, 1]])
 
 
 class TestSetUniformCollapse(unittest.TestCase):
@@ -223,7 +207,6 @@ class TestSetUniformCollapse(unittest.TestCase):
     and delegate to one shared _set_uniform(name, value, program, upload) body."""
 
     def _prog(self):
-        from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
         sp = VRML97ShaderProgram.__new__(VRML97ShaderProgram)
         calls = []
         sp._set_uniform = lambda name, value, program, upload: calls.append(
@@ -231,31 +214,28 @@ class TestSetUniformCollapse(unittest.TestCase):
         return sp, calls
 
     def test_int_wrapper_normalizes_and_picks_setter(self) -> None:
-        from OpenGLContext.passes import shaderpass as m
         sp, calls = self._prog()
         sp._set_uniform1i('flag', 3.9)
         name, value, program, upload = calls[-1]
         self.assertEqual(value, 3)
         self.assertIs(type(value), int)
-        self.assertIs(upload, m.glUniform1i)
+        self.assertIs(upload, shaderpass.glUniform1i)
         self.assertIsNone(program)
 
     def test_vec_wrapper_normalizes_to_float_tuple(self) -> None:
-        from OpenGLContext.passes import shaderpass as m
         sp, calls = self._prog()
         sp._set_uniform3f('c', (1, 2, 3), program=7)
         name, value, program, upload = calls[-1]
         self.assertEqual(value, (1.0, 2.0, 3.0))
         self.assertTrue(all(isinstance(v, float) for v in value))
-        self.assertIs(upload, m._UPLOAD_3FV)
+        self.assertIs(upload, shaderpass._UPLOAD_3FV)
         self.assertEqual(program, 7)
 
     def test_shared_body_skips_unchanged_and_uploads_changed(self) -> None:
-        from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
         sp = VRML97ShaderProgram.__new__(VRML97ShaderProgram)
         sp.program = 1
         sp._uniform_value_cache = {}
-        sp._get_location = lambda name, program: 5
+        sp._get_location = lambda _name, _program: 5
         uploaded = []
         def upload(loc, value):
             return uploaded.append((loc, value))
@@ -265,13 +245,12 @@ class TestSetUniformCollapse(unittest.TestCase):
         self.assertEqual(uploaded, [(5, 3), (5, 4)])
 
     def test_shared_body_skips_when_location_absent(self) -> None:
-        from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
         sp = VRML97ShaderProgram.__new__(VRML97ShaderProgram)
         sp.program = 1
         sp._uniform_value_cache = {}
-        sp._get_location = lambda name, program: -1
+        sp._get_location = lambda _name, _program: -1
         uploaded = []
-        sp._set_uniform('x', 3, None, lambda loc, value: uploaded.append(value))
+        sp._set_uniform('x', 3, None, lambda _loc, value: uploaded.append(value))
         self.assertEqual(uploaded, [])
 
 
@@ -280,16 +259,10 @@ class TestShaderGeometryModule(unittest.TestCase):
 
     def test_import_module(self) -> None:
         """Module should import without errors"""
-        from OpenGLContext.scenegraph import shadergeometry
         self.assertIsNotNone(shadergeometry)
 
     def test_import_functions(self) -> None:
         """Key names should be importable"""
-        from OpenGLContext.scenegraph.shadergeometry import (
-            VBO_STRIDE,
-            VertexFormat,
-            get_or_build_vao,
-        )
         self.assertIsNotNone(get_or_build_vao)
         self.assertEqual(VBO_STRIDE, 32)  # both interleaved layouts
         self.assertEqual(VertexFormat.T2F_N3F_V3F['position_offset'], 20)
@@ -301,23 +274,16 @@ class TestFramebufferComparison(unittest.TestCase):
 
     def test_import_module(self) -> None:
         """Module should import without errors"""
-        from OpenGLContext.testing import framebuffer_comparison
         self.assertIsNotNone(framebuffer_comparison)
 
     def test_import_classes(self) -> None:
         """Key classes should be importable"""
-        from OpenGLContext.testing.framebuffer_comparison import (
-            FramebufferCapture,
-            ComparisonResult,
-            compare_images,
-        )
         self.assertIsNotNone(FramebufferCapture)
         self.assertIsNotNone(ComparisonResult)
         self.assertIsNotNone(compare_images)
 
     def test_comparison_result_identical(self) -> None:
         """ComparisonResult should report identical images as matching"""
-        from OpenGLContext.testing.framebuffer_comparison import ComparisonResult
 
         img = np.ones((100, 100, 3), dtype=np.float32) * 0.5
         result = ComparisonResult(img, img)
@@ -330,7 +296,6 @@ class TestFramebufferComparison(unittest.TestCase):
 
     def test_comparison_result_different(self) -> None:
         """ComparisonResult should detect differences"""
-        from OpenGLContext.testing.framebuffer_comparison import ComparisonResult
 
         img1 = np.zeros((100, 100, 3), dtype=np.float32)
         img2 = np.ones((100, 100, 3), dtype=np.float32)
@@ -343,7 +308,6 @@ class TestFramebufferComparison(unittest.TestCase):
 
     def test_comparison_result_shape_mismatch(self) -> None:
         """ComparisonResult should handle shape mismatches"""
-        from OpenGLContext.testing.framebuffer_comparison import ComparisonResult
 
         img1 = np.zeros((100, 100, 3), dtype=np.float32)
         img2 = np.zeros((50, 50, 3), dtype=np.float32)
@@ -357,7 +321,6 @@ class TestNormalMatrix(unittest.TestCase):
     """normal_matrix must equal inv(M[:3,:3]).T without a per-shape LAPACK call."""
 
     def test_matches_inverse_transpose_random(self) -> None:
-        from OpenGLContext.passes.shaderpass import normal_matrix
         rng = np.random.default_rng(7)
         for _ in range(200):
             M = np.eye(4, dtype='f')
@@ -370,8 +333,6 @@ class TestNormalMatrix(unittest.TestCase):
     def test_rotation_maps_to_itself(self) -> None:
         # For an orthonormal (pure-rotation) modelview the normal matrix is the
         # rotation itself; a translation in the 4th row must not affect it.
-        from OpenGLContext.passes.shaderpass import normal_matrix
-        from math import cos, sin, pi
         a = pi / 5
         R = np.eye(4, dtype='f')
         R[:3, :3] = [[cos(a), -sin(a), 0], [sin(a), cos(a), 0], [0, 0, 1]]
@@ -379,7 +340,6 @@ class TestNormalMatrix(unittest.TestCase):
         self.assertTrue(np.abs(normal_matrix(R) - R[:3, :3]).max() < 1e-4)
 
     def test_singular_falls_back_to_upper_3x3(self) -> None:
-        from OpenGLContext.passes.shaderpass import normal_matrix
         M = np.eye(4, dtype='f')
         M[:3, :3] = 0.0
         out = normal_matrix(M)
@@ -392,7 +352,6 @@ class TestDepthProgram(unittest.TestCase):
     the shadow pass instead of falling back to the full lit+shadow shader."""
 
     def _program(self, depth):
-        from OpenGLContext.passes import shaderpass
         p = shaderpass.VRML97ShaderProgram.__new__(shaderpass.VRML97ShaderProgram)
         p._compiled = True
         p._ok = True  # simulate a fully-linked program
@@ -401,8 +360,6 @@ class TestDepthProgram(unittest.TestCase):
         return p
 
     def test_use_depth_prefers_depth_program(self):
-        from unittest import mock
-        from OpenGLContext.passes import shaderpass
         p = self._program(depth=42)
         with mock.patch.object(shaderpass, 'glUseProgram') as gu:
             result = p.use_depth()
@@ -411,8 +368,6 @@ class TestDepthProgram(unittest.TestCase):
 
     def test_use_depth_falls_back_when_absent(self):
         # backward-compat: a program with no depth program still binds the lit one
-        from unittest import mock
-        from OpenGLContext.passes import shaderpass
         p = self._program(depth=None)
         with mock.patch.object(shaderpass, 'glUseProgram'):
             result = p.use_depth()
@@ -420,8 +375,6 @@ class TestDepthProgram(unittest.TestCase):
 
     def test_compile_source_compiles_shadow_depth(self):
         # lock that the base VRML97 compile path builds the depth program
-        import inspect
-        from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
         src = inspect.getsource(VRML97ShaderProgram.compile)
         self.assertIn('shadow_depth.vert', src)
         self.assertIn('self.depth_program', src)

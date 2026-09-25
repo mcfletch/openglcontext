@@ -29,6 +29,7 @@ from OpenGLContext.arrays import array, zeros
 from OpenGLContext.events.mouseevents import MouseButtonEvent
 import numpy as np
 import random
+from OpenGLContext.testing.paths import tests_root
 
 
 class SelectionBenchmark:
@@ -265,11 +266,10 @@ class BenchmarkContext(BaseContext):
         print("=" * 60, flush=True)
 
         # Save results to file
-        from OpenGLContext.testing.paths import tests_root
         output_dir = tests_root(__file__) / 'benchmark_results'
         output_dir.mkdir(exist_ok=True)
 
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now().astimezone().strftime('%Y%m%d_%H%M%S')
         output_file = output_dir / f'selection_benchmark_{timestamp}.json'
 
         with open(output_file, 'w') as f:

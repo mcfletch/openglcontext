@@ -16,7 +16,7 @@ CATALOG = [
 def test_returns_deterministic_cache_path_and_fetches_once(monkeypatch, tmp_path):
     reads = []
     monkeypatch.setattr(gltf.samples, 'fetch_sample_catalog',
-                        lambda cache_dir=None: CATALOG)
+                        lambda _cache_dir=None: CATALOG)
 
     class _Resp:
         """Serves its body once and is then exhausted, as a real one is."""
@@ -24,7 +24,7 @@ def test_returns_deterministic_cache_path_and_fetches_once(monkeypatch, tmp_path
         def __init__(self):
             self._left = b'\x89PNG'
 
-        def read(self, n=-1):
+        def read(self, _n=-1):
             if self._left:
                 reads.append(1)
             data, self._left = self._left, b''
@@ -34,10 +34,10 @@ def test_returns_deterministic_cache_path_and_fetches_once(monkeypatch, tmp_path
             pass
 
     class _Opener:
-        def open(self, url, timeout=None):
+        def open(self, _request, timeout=None):  # noqa: ARG002 OpenerDirector.open, called with timeout=
             return _Resp()
     monkeypatch.setattr(resolver.urllib.request, 'build_opener',
-                        lambda *a, **k: _Opener())
+                        lambda *_a, **_k: _Opener())
 
     url = CATALOG[0]['screenshot_url']
     path = gltf.cache_reference_screenshot('Widget', cache_dir=str(tmp_path))
@@ -50,11 +50,11 @@ def test_returns_deterministic_cache_path_and_fetches_once(monkeypatch, tmp_path
 
 
 def test_unknown_model_returns_none(monkeypatch, tmp_path):
-    monkeypatch.setattr(gltf.samples, 'fetch_sample_catalog', lambda cache_dir=None: CATALOG)
+    monkeypatch.setattr(gltf.samples, 'fetch_sample_catalog', lambda _cache_dir=None: CATALOG)
     assert gltf.cache_reference_screenshot('Nope', cache_dir=str(tmp_path)) is None
 
 
 def test_reference_screenshot_url_lookup(monkeypatch):
-    monkeypatch.setattr(gltf.samples, 'fetch_sample_catalog', lambda cache_dir=None: CATALOG)
+    monkeypatch.setattr(gltf.samples, 'fetch_sample_catalog', lambda _cache_dir=None: CATALOG)
     assert gltf.reference_screenshot_url('Widget') == CATALOG[0]['screenshot_url']
     assert gltf.reference_screenshot_url('Nope') is None

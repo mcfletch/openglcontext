@@ -84,7 +84,8 @@ def _bare(buffer):
 
 
 class TestProcessPickEventsFromBuffer:
-    def test_mapped_id_dispatches_path_and_depth(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_mapped_id_dispatches_path_and_depth(self):
         sb = _buffer_with_id()
         sel = _bare(sb)
         path = ['transform', 'shape']
@@ -99,7 +100,8 @@ class TestProcessPickEventsFromBuffer:
         assert ev.modelViewMatrix is sel.modelView
         assert mode.context.processed == [ev]
 
-    def test_unmapped_id_dispatches_empty_path(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_unmapped_id_dispatches_empty_path(self):
         sb = _buffer_with_id()
         sel = _bare(sb)
         sb.set_id_map({})               # id present in buffer but not in the map
@@ -109,7 +111,8 @@ class TestProcessPickEventsFromBuffer:
         assert ev.paths == [[]]
         assert mode.context.processed == [ev]
 
-    def test_uninitialized_buffer_is_a_noop(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_uninitialized_buffer_is_a_noop(self):
         sb = SelectionBufferFBO()       # never ensure_size'd -> not initialized
         sel = _bare(sb)
         mode = FakeMode()
@@ -119,7 +122,8 @@ class TestProcessPickEventsFromBuffer:
         assert ev.paths is None
         assert mode.context.processed == []
 
-    def test_empty_events_returns_immediately(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_empty_events_returns_immediately(self):
         sel = _bare(_buffer_with_id())
         sel.processPickEventsFromBuffer(FakeMode(), {})   # no error, no work
 

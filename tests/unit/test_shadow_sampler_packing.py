@@ -54,7 +54,7 @@ def _active_samplers(frag, n, cube_array):
     return out
 
 
-def _shadow_units(samplers, n, cube_array):
+def _shadow_units(n, cube_array):
     """Distinct fragment texture image units the packed lit shader spends."""
     material = 1                                   # diffuseTexture at unit 0
     fixed = 2                                      # shadowArray + shadowArrayRaw
@@ -114,7 +114,7 @@ class TestFragmentSourcePacking:
         # Every active shadow sampler maps to exactly one texture unit.
         shadow = [k for k in samplers if 'shadow' in k.lower()]
         assert len(shadow) == (3 if cube_array else 2 + n)
-        assert _shadow_units(samplers, n, cube_array) <= 16
+        assert _shadow_units(n, cube_array) <= 16
 
     def test_shadow_include_marker_expanded(self):
         src = shaderpass.load_fragment_source('vrml97_lighting.frag', 4, cube_array=False)

@@ -60,7 +60,7 @@ class _PassProgram:
 
     def __getattr__(self, name):
         if name in self._ACCEPTED:
-            return lambda *args, **named: None
+            return lambda *_args, **_named: None
         raise AttributeError(name)
 
 
@@ -97,12 +97,14 @@ def compiled(position_name='aPosition', attributes=(), source=None):
 
 
 class TestTheEngineNamesAreBound:
-    def test_a_shader_naming_the_engine_arrays_needs_no_declaration(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_shader_naming_the_engine_arrays_needs_no_declaration(self):
         program, _ = compiled()
         assert glGetAttribLocation(program, 'aPosition') == vs.LOC_POSITION
         assert glGetAttribLocation(program, 'aNormal') == vs.LOC_NORMAL
 
-    def test_a_shader_input_says_what_this_shader_calls_it(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_shader_input_says_what_this_shader_calls_it(self):
         program, _ = compiled(
             'vertexInput',
             [ShaderInput(semantic='POSITION', name='vertexInput')])
@@ -110,14 +112,16 @@ class TestTheEngineNamesAreBound:
         # The names it did not rename still arrive where the table says.
         assert glGetAttribLocation(program, 'aNormal') == vs.LOC_NORMAL
 
-    def test_a_layout_qualifier_in_the_source_outranks_the_table(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_layout_qualifier_in_the_source_outranks_the_table(self):
         """GLSL 3.30 4.3.8.2: the qualifier wins over glBindAttribLocation."""
         source = (VERTEX % ('aPosition', 'aPosition')).replace(
             'in vec3 aPosition;', 'layout(location = 7) in vec3 aPosition;')
         program, _ = compiled(source=source)
         assert glGetAttribLocation(program, 'aPosition') == 7
 
-    def test_an_unknown_semantic_is_reported_rather_than_bound_anywhere(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_an_unknown_semantic_is_reported_rather_than_bound_anywhere(self):
         with pytest.raises(KeyError) as raised:
             compiled('vertexInput',
                      [ShaderInput(semantic='SPARKLE_0', name='vertexInput')])
@@ -125,14 +129,15 @@ class TestTheEngineNamesAreBound:
 
 
 class TestTheShapeDraws:
-    def test_the_geometry_is_drawn_with_the_appearances_own_program(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_the_geometry_is_drawn_with_the_appearances_own_program(self):
         drawn = []
         shape = Shape(
             geometry=Sphere(radius=1.0),
             appearance=Shader(objects=[compiled()[1]]),
         )
 
-        def record(*args, **named):
+        def record(*_args, **named):
             drawn.append(named['mode'].shader_program.program)
             return 1
 
@@ -142,40 +147,44 @@ class TestTheShapeDraws:
         assert drawn, 'the geometry was never asked to draw'
         assert glGetAttribLocation(drawn[0], 'aPosition') == vs.LOC_POSITION
 
-    def test_the_pass_gets_its_own_program_back_afterwards(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_the_pass_gets_its_own_program_back_afterwards(self):
         shape = Shape(geometry=Box(), appearance=Shader(objects=[compiled()[1]]))
         mode = _Mode()
         sentinel = mode.shader_program
-        shape.geometry.render = lambda *a, **k: 1
+        shape.geometry.render = lambda *_a, **_k: 1
         shape.Render(mode=mode)
         assert mode.shader_program is sentinel
 
-    def test_selection_draws_with_the_passs_program_not_the_appearances(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_selection_draws_with_the_passs_program_not_the_appearances(self):
         """Picking paints an id colour; the appearance's shader would paint its own."""
         drawn = []
         shape = Shape(geometry=Box(), appearance=Shader(objects=[compiled()[1]]))
-        shape.geometry.render = lambda *a, **k: drawn.append(
+        shape.geometry.render = lambda *_a, **k: drawn.append(
             k['mode'].shader_program)
         mode = _Mode()
         mode.visible = False
         shape.Render(mode=mode)
         assert drawn == [mode.shader_program]
 
-    def test_a_shape_with_no_appearance_at_all_goes_through_the_pass(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_shape_with_no_appearance_at_all_goes_through_the_pass(self):
         """An unset SFNode field reads as a null node, not as ``None``."""
         drawn = []
         shape = Shape(geometry=Box())
-        shape.geometry.render = lambda *a, **k: drawn.append(
+        shape.geometry.render = lambda *_a, **k: drawn.append(
             k['mode'].shader_program)
         mode = _Mode()
         shape.Render(mode=mode)
         assert drawn == [mode.shader_program]
 
-    def test_an_ordinary_appearance_still_goes_through_the_pass(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_an_ordinary_appearance_still_goes_through_the_pass(self):
         """The branch must not catch the node every other shape in a scene uses."""
         drawn = []
         shape = Shape(geometry=Box(), appearance=Appearance(material=Material()))
-        shape.geometry.render = lambda *a, **k: drawn.append(
+        shape.geometry.render = lambda *_a, **k: drawn.append(
             k['mode'].shader_program)
         mode = _Mode()
         shape.Render(mode=mode)

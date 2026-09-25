@@ -9,6 +9,8 @@ it last looked.
 A static camera never notices: the tiles resident at the start stay resident.
 Drive across the world and the ground stops arriving.
 """
+from typing import ClassVar
+
 import numpy as np
 import pytest
 
@@ -17,12 +19,14 @@ from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.scenegraph.walk import reachable
+from OpenGLContext.loaders.tiles3d.procedural import build_terrain_tileset
+from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
 
 
 class _ShapeObserver(SGObserver):
     """An observer that tracks Shapes, as the render pass tracks renderables."""
 
-    INTERESTING_TYPES = [Shape]
+    INTERESTING_TYPES: ClassVar[list[type]] = [Shape]
 
 
 def _shape(x=0.0):
@@ -84,8 +88,6 @@ class TestTheStreamingTerrainNode:
 
     def test_its_visible_tiles_reach_the_observer(self, tmp_path) -> None:
         pytest.importorskip('pygltflib')
-        from OpenGLContext.loaders.tiles3d.procedural import build_terrain_tileset
-        from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
 
         path = build_terrain_tileset(str(tmp_path), extent=512, levels=2,
                                      tile_res=9)

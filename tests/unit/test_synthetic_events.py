@@ -123,7 +123,7 @@ class TestDispatch:
         """The injector's cheaper route: no render, context-level handlers only."""
         context = FakeContext()
         seen = []
-        context.getEventManager = lambda kind: _Manager(seen)
+        context.getEventManager = lambda _kind: _Manager(seen)
         synthetic.dispatch(context, {'type': 'mousebutton', 'button': 0,
                                      'state': 1, 'x': 4, 'y': 5})
         assert len(seen) == 1
@@ -203,7 +203,7 @@ class TestWhatAContextCannotTake:
 
     def test_a_direct_delivery_with_no_manager_is_refused(self):
         context = FakeContext()
-        context.getEventManager = lambda kind: None
+        context.getEventManager = lambda _kind: None
         assert synthetic.dispatch(
             context, {'type': 'mousemove', 'x': 1, 'y': 2}) is False
 

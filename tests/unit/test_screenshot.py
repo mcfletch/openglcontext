@@ -8,11 +8,15 @@ the swap.  That split is what most of this file is about.
 """
 import os
 import sys
+import importlib
+import inspect
 
 import pytest
+import numpy as np
 
-from OpenGLContext import screenshot, userpaths
+from OpenGLContext import capture, screenshot, userpaths
 from OpenGLContext.context import Context
+from OpenGLContext.passes._flat import presentFrame
 
 
 class Recorder(screenshot.ScreenshotMixin):
@@ -27,7 +31,7 @@ class Recorder(screenshot.ScreenshotMixin):
         self.redraws = 0
 
     def addEventHandler(self, type, name='', state=None, modifiers=None,
-                        function=None, **named):
+                        function=None, **_named):
         self.bound.append({
             'type': type, 'name': name, 'state': state,
             'modifiers': tuple(modifiers) if modifiers else None,
@@ -37,10 +41,10 @@ class Recorder(screenshot.ScreenshotMixin):
     def find(self, name):
         return [entry for entry in self.bound if entry['name'] == name]
 
-    def triggerRedraw(self, force=0):
+    def triggerRedraw(self, _force=0):
         self.redraws += 1
 
-    def OnSaveImage(self, event=None):
+    def OnSaveImage(self, _event=None):
         self.did.append('saved')
         return (640, 480)
 
@@ -79,15 +83,13 @@ class Saver(screenshot.ScreenshotMixin):
 @pytest.fixture
 def written(monkeypatch, tmp_path):
     """Saving records the path it would have written, and writes nothing."""
-    import numpy as np
-    from OpenGLContext import capture
 
     paths = []
     monkeypatch.setattr(capture, 'ensure_pillow', lambda: True)
     monkeypatch.setattr(capture, 'read_back_buffer',
-                        lambda *a, **k: (np.zeros((4, 4, 3), 'B'), 4, 4))
+                        lambda *_a, **_k: (np.zeros((4, 4, 3), 'B'), 4, 4))
     monkeypatch.setattr(capture, 'save_png',
-                        lambda path, pixels: paths.append(path) or True)
+                        lambda path, _pixels: paths.append(path) or True)
     monkeypatch.setattr(userpaths, 'picturesdirectory', lambda: str(tmp_path))
     monkeypatch.setattr(sys, 'argv', ['/opt/venv/bin/oglc-gltf'])
     return paths
@@ -195,22 +197,18 @@ class TestThePassPresentsTheFrame:
     @pytest.mark.parametrize('module', ['OpenGLContext.passes._flat',
                                         'OpenGLContext.passes.flatcompat'])
     def test_it_asks_the_context_to_present(self, module):
-        import importlib
-        import inspect
         source = inspect.getsource(
             importlib.import_module(module).FlatPass.Render)
         assert 'presentFrame' in source
         assert 'context.SwapBuffers()' not in source
 
     def test_presenting_takes_the_picture_and_swaps(self, recorder):
-        from OpenGLContext.passes._flat import presentFrame
         recorder.requestScreenshot()
         presentFrame(recorder)
         assert recorder.did == ['saved', 'swapped']
 
     def test_a_context_that_cannot_present_is_still_swapped(self):
         """Anything duck-typed as a context keeps working as it did."""
-        from OpenGLContext.passes._flat import presentFrame
 
         class Older:
             did = None
@@ -302,8 +300,6 @@ class TestWhenNoPictureCanBeWritten:
 
     @pytest.fixture
     def capture(self, monkeypatch, tmp_path):
-        from OpenGLContext import capture
-
         monkeypatch.setattr(userpaths, 'picturesdirectory', lambda: str(tmp_path))
         monkeypatch.setattr(sys, 'argv', ['/opt/venv/bin/oglc-gltf'])
         return capture
@@ -313,7 +309,7 @@ class TestWhenNoPictureCanBeWritten:
         written = []
         monkeypatch.setattr(capture, 'ensure_pillow', lambda: None)
         monkeypatch.setattr(capture, 'save_png',
-                            lambda path, pixels: written.append(path) or True)
+                            lambda path, _pixels: written.append(path) or True)
         assert Saver().OnSaveImage() == (0, 0)
         assert written == []
 
@@ -328,23 +324,20 @@ class TestWhenNoPictureCanBeWritten:
         assert Unsized().OnSaveImage() == (0, 0)
 
     def test_a_write_that_fails_says_so(self, capture, monkeypatch):
-        import numpy as np
-
         monkeypatch.setattr(capture, 'ensure_pillow', lambda: True)
         monkeypatch.setattr(capture, 'read_back_buffer',
-                            lambda *a, **k: (np.zeros((4, 4, 3), 'B'), 4, 4))
-        monkeypatch.setattr(capture, 'save_png', lambda path, pixels: False)
+                            lambda *_a, **_k: (np.zeros((4, 4, 3), 'B'), 4, 4))
+        monkeypatch.setattr(capture, 'save_png', lambda _path, _pixels: False)
         assert Saver().OnSaveImage() == (0, 0)
 
     def test_a_template_that_can_only_name_one_file_gives_up(self, capture,
                                                              monkeypatch,
                                                              tmp_path):
         """Without ``%(count)s`` every try is the same name, and it is taken."""
-        import numpy as np
 
         monkeypatch.setattr(capture, 'ensure_pillow', lambda: True)
         monkeypatch.setattr(capture, 'read_back_buffer',
-                            lambda *a, **k: (np.zeros((4, 4, 3), 'B'), 4, 4))
+                            lambda *_a, **_k: (np.zeros((4, 4, 3), 'B'), 4, 4))
         target = tmp_path / 'only.png'
         target.write_bytes(b'')
         assert Saver().OnSaveImage(template=str(target)) == (0, 0)

@@ -16,6 +16,10 @@ import numpy as np
 import pytest
 
 from vrml import cache
+from OpenGL.GL import (
+    GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_FRAMEBUFFER, GL_RGB, GL_UNSIGNED_BYTE,
+    glBindFramebuffer, glClear, glClearColor, glReadPixels, glViewport,
+)
 
 from OpenGLContext.scenegraph import spherebackground
 from OpenGLContext.scenegraph.background import Background
@@ -59,11 +63,6 @@ class _Mode:
 
 def _frame(background, clear=True):
     """Draw the background alone and read the frame back, top row first."""
-    from OpenGL.GL import (
-        GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_FRAMEBUFFER, GL_RGB,
-        GL_UNSIGNED_BYTE, glBindFramebuffer, glClear, glClearColor,
-        glReadPixels, glViewport,
-    )
     glBindFramebuffer(GL_FRAMEBUFFER, 0)
     glViewport(0, 0, SIZE, SIZE)
     glClearColor(0, 0, 0, 1)
@@ -87,7 +86,7 @@ class TestAGradientSky:
     """Red overhead grading to blue at the horizon and below."""
 
     @pytest.fixture
-    def image(self, gl_context):
+    def image(self, gl_context):  # noqa: ARG002 requested for its effect: the GL context the frame is drawn in
         return _frame(_bound(
             skyColor=[RED, BLUE], skyAngle=[math.pi / 2.0],
             groundColor=[BLUE], groundAngle=[],
@@ -120,7 +119,7 @@ class TestSkyAndGround:
     """A ground colour paints the lower half."""
 
     @pytest.fixture
-    def image(self, gl_context):
+    def image(self, gl_context):  # noqa: ARG002 requested for its effect: the GL context the frame is drawn in
         return _frame(_bound(
             skyColor=[BLUE], skyAngle=[],
             groundColor=[GREEN, GREEN], groundAngle=[math.pi / 2.0],
@@ -138,7 +137,8 @@ class TestSkyAndGround:
 class TestOneColourAllOver:
     """A single sky colour with no angle spans the sphere."""
 
-    def test_the_whole_frame_is_that_colour(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_the_whole_frame_is_that_colour(self):
         image = _frame(_bound(skyColor=[RED])).astype(int)
         for band in (_band(image, 0, 12), _band(image, SIZE - 12, SIZE)):
             assert band[0] > 120, band.tolist()
@@ -146,17 +146,20 @@ class TestOneColourAllOver:
 
 
 class TestWhenThereIsNothingToDraw:
-    def test_no_colours_leaves_the_frame_alone(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_no_colours_leaves_the_frame_alone(self):
         background = _bound(skyColor=[], skyAngle=[],
                             groundColor=[], groundAngle=[])
         assert _frame(background, clear=False).max() == 0
 
-    def test_an_unbound_background_draws_nothing(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_an_unbound_background_draws_nothing(self):
         background = Background(skyColor=[RED])
         background.bound = 0
         assert _frame(background, clear=False).max() == 0
 
-    def test_a_later_pass_draws_nothing(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_later_pass_draws_nothing(self):
         """The background is the first thing in a frame or it is nothing."""
         background = _bound(skyColor=[RED])
         mode = _Mode()
@@ -167,7 +170,8 @@ class TestWhenThereIsNothingToDraw:
 class TestTheCompiledSphereIsReused:
     """The vertex buffers are cached against the pass, keyed on the fields."""
 
-    def test_a_second_draw_reuses_the_first(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_second_draw_reuses_the_first(self):
         background = _bound(skyColor=[RED, BLUE], skyAngle=[math.pi / 2.0])
         mode = _Mode()
         background.RenderShader(mode=mode, clear=False)
@@ -176,7 +180,8 @@ class TestTheCompiledSphereIsReused:
         background.RenderShader(mode=mode, clear=False)
         assert mode.cache.getData(background, 'shader_bg') is first
 
-    def test_changing_a_colour_rebuilds_it(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_changing_a_colour_rebuilds_it(self):
         background = _bound(skyColor=[RED, BLUE], skyAngle=[math.pi / 2.0])
         mode = _Mode()
         background.RenderShader(mode=mode, clear=False)
@@ -192,22 +197,26 @@ class TestWhatItAnswers:
     still has to clear can ask any of them without knowing which it holds.
     """
 
-    def test_drawing_answers_one(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_drawing_answers_one(self):
         background = _bound(skyColor=[RED, BLUE], skyAngle=[math.pi / 2.0])
         assert background.RenderShader(mode=_Mode(), clear=False) == 1
 
-    def test_an_unbound_background_answers_zero(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_an_unbound_background_answers_zero(self):
         background = Background(skyColor=[RED])
         background.bound = 0
         assert background.RenderShader(mode=_Mode(), clear=False) == 0
 
-    def test_a_later_pass_answers_zero(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_a_later_pass_answers_zero(self):
         background = _bound(skyColor=[RED])
         mode = _Mode()
         mode.passCount = 1
         assert background.RenderShader(mode=mode, clear=False) == 0
 
-    def test_the_compatibility_path_answers_the_same(self, gl_context_compat):
+    @pytest.mark.usefixtures('gl_context_compat')
+    def test_the_compatibility_path_answers_the_same(self):
         """``Render`` is the fixed-function route to the same picture, and it
         answers the way the shader route does."""
         background = _bound(skyColor=[RED, BLUE], skyAngle=[math.pi / 2.0])
@@ -229,11 +238,6 @@ class TestTheFixedFunctionRouteDrawsTheSphere:
     """
 
     def _frame_compat(self, background):
-        from OpenGL.GL import (
-            GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_FRAMEBUFFER, GL_RGB,
-            GL_UNSIGNED_BYTE, glBindFramebuffer, glClear, glClearColor,
-            glReadPixels, glViewport,
-        )
         glBindFramebuffer(GL_FRAMEBUFFER, 0)
         glViewport(0, 0, SIZE, SIZE)
         glClearColor(0, 0, 0, 1)
@@ -243,7 +247,8 @@ class TestTheFixedFunctionRouteDrawsTheSphere:
         image = np.frombuffer(raw, dtype=np.uint8).reshape(SIZE, SIZE, 3)[::-1]
         return drawn, image.astype(int)
 
-    def test_a_gradient_with_no_images_is_drawn(self, gl_context_compat):
+    @pytest.mark.usefixtures('gl_context_compat')
+    def test_a_gradient_with_no_images_is_drawn(self):
         background = _bound(
             skyColor=[RED, BLUE], skyAngle=[math.pi / 2.0],
             groundColor=[BLUE], groundAngle=[],
@@ -252,7 +257,8 @@ class TestTheFixedFunctionRouteDrawsTheSphere:
         assert drawn == 1
         assert image.max() > 20, image.reshape(-1, 3).mean(0).tolist()
 
-    def test_the_second_frame_reuses_the_first(self, gl_context_compat):
+    @pytest.mark.usefixtures('gl_context_compat')
+    def test_the_second_frame_reuses_the_first(self):
         """The display lists are kept against the pass, under a key of the
         sphere's own."""
         background = _bound(skyColor=[RED, BLUE], skyAngle=[math.pi / 2.0])

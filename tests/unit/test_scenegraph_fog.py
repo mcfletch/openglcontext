@@ -19,6 +19,7 @@ import pytest
 from OpenGLContext.scenegraph.fog import (
     FOG_EXPONENTIAL, FOG_LINEAR, FOG_NONE, Fog,
 )
+from vrml.vrml97 import nodetypes
 
 
 def scaled(factor):
@@ -101,7 +102,6 @@ class TestBinding:
     """``Fog`` is bindable, so a scene may hold several and one applies."""
 
     def test_a_fog_is_bindable(self):
-        from vrml.vrml97 import nodetypes
         assert isinstance(Fog(), nodetypes.Bindable)
 
     def test_a_fog_is_not_drawn_and_has_no_bounding_volume_of_its_own(self):

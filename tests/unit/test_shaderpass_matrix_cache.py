@@ -20,9 +20,9 @@ PROG = 7
 def rec(monkeypatch):
     counts = {'mv4': 0, 'm3': 0, 'normal_solve': 0}
     monkeypatch.setattr(shaderpass, 'glUniformMatrix4fv',
-                        lambda *a: counts.__setitem__('mv4', counts['mv4'] + 1))
+                        lambda *_a: counts.__setitem__('mv4', counts['mv4'] + 1))
     monkeypatch.setattr(shaderpass, 'glUniformMatrix3fv',
-                        lambda *a: counts.__setitem__('m3', counts['m3'] + 1))
+                        lambda *_a: counts.__setitem__('m3', counts['m3'] + 1))
     real_normal = shaderpass.normal_matrix
 
     def counting_normal(m):
@@ -38,7 +38,7 @@ def _program():
     p._location_cache = {}
     p.program = PROG
     p.vertex_color_program = PROG + 1
-    p._get_location = lambda name, program=None: 1     # always a valid location
+    p._get_location = lambda _name, _program=None: 1     # always a valid location
     return p
 
 

@@ -18,7 +18,7 @@ def _field():
     return HeightField(np.linspace(0, 1, 33 * 33).reshape(33, 33), 4096.0, 10.0)
 
 
-def _mask(x, z):
+def _mask(x, _z):
     return 0.5 + 0.5 * np.sin(np.asarray(x) * 0.05)
 
 
@@ -91,7 +91,7 @@ class TestEachPlaceOnce:
         assert blocks.built == 2 * built
 
     def test_an_empty_disc_is_empty_arrays(self):
-        blocks, _field_ = _blocks(mask=lambda x, z: np.zeros(np.shape(x)))
+        blocks, _field_ = _blocks(mask=lambda x, _z: np.zeros(np.shape(x)))
         points, yaws, scales = blocks.disc(0.0, 0.0, 50.0)
         assert points.shape == (0, 3) and len(yaws) == len(scales) == 0
 

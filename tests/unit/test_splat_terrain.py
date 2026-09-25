@@ -28,21 +28,21 @@ def test_default_material_fn_falls_back_to_cc0():
 
 def test_bounding_volume_spans_extent_and_triple_relief():
     node = SplatTerrain(_hf(), ["floor"], "control.png",
-                        material_fn=lambda *a, **k: {})
+                        material_fn=lambda *_a, **_k: {})
     bv = node.boundingVolume(None)
     assert tuple(float(v) for v in bv.size) == (100.0, 30.0, 100.0)
 
 
 def test_render_is_noop_in_shadow_pass():
     node = SplatTerrain(_hf(), ["floor"], "control.png",
-                        material_fn=lambda *a, **k: {})
+                        material_fn=lambda *_a, **_k: {})
     assert node.render(types.SimpleNamespace(shadow_pass=True, visible=True)) == 1
     assert node.patch._gl is None                  # never initialized GL
 
 
 def test_a_terrain_switched_off_draws_nothing_and_casts_nothing(monkeypatch):
     node = SplatTerrain(_hf(), ["floor"], "control.png",
-                        material_fn=lambda *a, **k: {})
+                        material_fn=lambda *_a, **_k: {})
     made = []
     monkeypatch.setattr(GroundPatch, '_init_gl', lambda patch: made.append(patch))
     node.drawn = False
@@ -53,14 +53,14 @@ def test_a_terrain_switched_off_draws_nothing_and_casts_nothing(monkeypatch):
 
 def test_dispose_before_init_is_a_noop():
     node = SplatTerrain(_hf(), ["floor"], "control.png",
-                        material_fn=lambda *a, **k: {})
+                        material_fn=lambda *_a, **_k: {})
     node.dispose()                                 # nothing allocated yet
     assert node._patch is None
 
 
 def test_sun_direction_is_normalized():
     node = SplatTerrain(_hf(), ["floor"], "control.png", sun=(0.0, -2.0, 0.0),
-                        material_fn=lambda *a, **k: {})
+                        material_fn=lambda *_a, **_k: {})
     assert np.isclose(np.linalg.norm(node.sun), 1.0)
 
 
@@ -75,7 +75,7 @@ class TestAnOpeningToldAfterTheFirstDraw:
 
     def test_the_mesh_is_cut_by_it(self) -> None:
         node = SplatTerrain(_hf(), ["floor"], "control.png",
-                            material_fn=lambda *a, **k: {})
+                            material_fn=lambda *_a, **_k: {})
         def inside(patch):
             corners = patch.vertices[patch.indices.reshape(-1, 3), :3]
             middle = corners.mean(axis=1)
@@ -86,7 +86,7 @@ class TestAnOpeningToldAfterTheFirstDraw:
 
     def test_the_mesh_it_replaced_is_let_go_at_the_next_draw(self) -> None:
         node = SplatTerrain(_hf(), ["floor"], "control.png",
-                            material_fn=lambda *a, **k: {})
+                            material_fn=lambda *_a, **_k: {})
         first = node.patch
         released = []
         first.dispose = lambda: released.append(True)
@@ -105,7 +105,8 @@ def gl(gl_window):
     return gl_window('splat', forward_compatible=True)
 
 
-def test_canopy_shadow_is_baked_into_the_sun_texture(gl, tmp_path):
+@pytest.mark.usefixtures('gl')
+def test_canopy_shadow_is_baked_into_the_sun_texture(tmp_path):
     """With a canopy occlusion grid the terrain bakes a darkened sun-shadow
     texture (the tree-shadow path) rather than the bare sun term."""
     tex = tmp_path / "layer.png"
@@ -117,7 +118,7 @@ def test_canopy_shadow_is_baked_into_the_sun_texture(gl, tmp_path):
     hf = HeightField(grid, 100.0, 10.0)
     canopy = np.array([[10.0, 0.0, 3.0]], 'd')      # one canopy disc (x, z, radius)
     node = SplatTerrain(hf, ["floor"], str(ctl),
-                        material_fn=lambda name, res: {"color": str(tex)},
+                        material_fn=lambda _name, _res: {"color": str(tex)},
                         canopy=canopy)
     mode = types.SimpleNamespace(matrix=np.eye(4, dtype='f4'),
                                  projection=np.eye(4, dtype='f4'),

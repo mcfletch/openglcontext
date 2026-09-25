@@ -147,7 +147,7 @@ def test_mirrors_facing_mirrors_plan_a_bounded_number_of_bounces():
 
         def plan():
             return len(planner.plan([frame], ATLAS, budget,
-                                    inside=lambda frame: front + back,
+                                    inside=lambda _frame: front + back,
                                     bounces=3).candidates)
         return plan
     check_scaling(prepare, n=4, most=4.5, measure='count')
@@ -161,7 +161,7 @@ class _Counting:
     def __init__(self):
         self.handed = 0
 
-    def update_instances(self, positions, yaws, scales, shades=None):
+    def update_instances(self, positions, _yaws, _scales, _shades=None):
         self.handed += len(positions)
 
 

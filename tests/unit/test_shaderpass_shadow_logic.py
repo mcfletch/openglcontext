@@ -20,19 +20,19 @@ class FakeProgram(_ShadowUniformMixin):
         self.MAX_CASCADES = 4
         self.calls = []
 
-    def _set_uniform1i(self, name, value, program):
+    def _set_uniform1i(self, name, value, _program):
         self.calls.append(('1i', name, value))
 
-    def _set_uniform1f(self, name, value, program):
+    def _set_uniform1f(self, name, value, _program):
         self.calls.append(('1f', name, value))
 
-    def _set_uniform3f(self, name, value, program):
+    def _set_uniform3f(self, name, value, _program):
         self.calls.append(('3f', name, value))
 
-    def _set_cascade_matrix(self, slot, cascade, matrix):
+    def _set_cascade_matrix(self, slot, cascade, _matrix):
         self.calls.append(('cascade', slot, cascade))
 
-    def _bind_shadow_texture(self, unit, target, texture_id):
+    def _bind_shadow_texture(self, unit, _target, texture_id):
         self.calls.append(('bindtex', unit, texture_id))
 
     def _pcss_sampler_object(self):

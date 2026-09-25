@@ -46,10 +46,9 @@ def loaded(objects, timeout=30.0):
     raise AssertionError('shader source never arrived: %s' % (missing,))
 
 
-def test_every_shader_object_the_samples_declare_compiles(
-    gl_context, in_the_tests_directory
-):
-    import shaderobjects
+@pytest.mark.usefixtures('gl_context', 'in_the_tests_directory')
+def test_every_shader_object_the_samples_declare_compiles():
+    import shaderobjects  # noqa: PLC0415 importable only from tests/, which the fixture puts on sys.path
 
     objects = [appearance.objects[0] for appearance in shaderobjects.shaders]
     loaded(objects)

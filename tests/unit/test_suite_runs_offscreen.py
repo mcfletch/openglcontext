@@ -14,6 +14,9 @@ import subprocess
 import sys
 
 import pytest
+from OpenGLContext.testing import subprocess_runner
+import inspect
+from OpenGLContext import renderoptions
 
 
 def test_the_run_is_offscreen_by_default():
@@ -36,8 +39,6 @@ def test_a_subprocess_test_inherits_it():
 
 def test_the_runner_passes_it_through_its_own_overrides():
     """It merges over ``os.environ`` rather than replacing it."""
-    from OpenGLContext.testing import subprocess_runner
-    import inspect
     source = inspect.getsource(subprocess_runner.run_test_with_popen)
     assert '{**os.environ,' in source, 'a clean env would drop the default'
 
@@ -48,7 +49,6 @@ def test_it_can_be_turned_off_to_watch_something(monkeypatch):
     ``setdefault`` rather than an assignment, so an explicit setting in the
     environment survives.
     """
-    from OpenGLContext import renderoptions
     monkeypatch.setenv('OPENGLCONTEXT_HIDDEN', '0')
     assert not renderoptions.env_flag('OPENGLCONTEXT_HIDDEN', True)
 
@@ -56,5 +56,4 @@ def test_it_can_be_turned_off_to_watch_something(monkeypatch):
 @pytest.mark.parametrize('name', ['OPENGLCONTEXT_HIDDEN', 'OPENGLCONTEXT_NO_VSYNC'])
 def test_the_switch_is_one_the_renderer_knows_about(name):
     """A variable nothing reads would be a setting that quietly does nothing."""
-    from OpenGLContext import renderoptions
     assert name in renderoptions.ENVIRONMENT

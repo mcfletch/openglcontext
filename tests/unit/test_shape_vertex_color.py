@@ -49,7 +49,7 @@ class Plain(node.Node):
     PROTO = 'PlainTestGeometry'
     colors = None
 
-    def render(self, **named: Any) -> int:
+    def render(self, **_named: Any) -> int:
         DRAWN.append(self)
         return 1
 

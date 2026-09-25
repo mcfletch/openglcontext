@@ -10,6 +10,7 @@ between them, and passing nothing means there is nothing to undo.
 import pytest
 
 from OpenGLContext.scenegraph.shaders import ShaderAttribute
+from OpenGLContext.scenegraph import shaders
 
 
 class _Recorder:
@@ -20,8 +21,6 @@ class _Recorder:
 
 @pytest.fixture
 def attribute(monkeypatch):
-    from OpenGLContext.scenegraph import shaders
-
     recorder = _Recorder()
     monkeypatch.setattr(shaders, 'glDisableVertexAttribArray',
                         recorder.disabled.append)

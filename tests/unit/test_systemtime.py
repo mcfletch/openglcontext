@@ -8,6 +8,8 @@ worth per frame drawn, however long the frame took to render.
 import pytest
 
 from OpenGLContext.events import systemtime
+import time
+from OpenGLContext.events.timer import Timer
 
 
 @pytest.fixture(autouse=True)
@@ -19,7 +21,6 @@ def restore_the_wall_clock():
 
 
 def test_the_default_source_is_the_wall_clock():
-    import time
     assert abs(systemtime.systemTime() - time.time()) < 1.0
 
 
@@ -44,7 +45,6 @@ def test_setting_none_restores_the_wall_clock():
 
 def test_the_timer_subsystem_advances_against_the_installed_source():
     """A Timer polled with no time of its own reads the installed clock."""
-    from OpenGLContext.events.timer import Timer
 
     clock = [1000.0]
     systemtime.setTimeSource(lambda: clock[0])

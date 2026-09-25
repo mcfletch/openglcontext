@@ -19,6 +19,9 @@ import pytest
 glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.passes import shadowmath
+from tests.unit.glrender import base_env
+from tests.unit.glrender import frames_of
 
 
 #: The wall the shadows land on: far enough back to fill the frame, wide enough
@@ -37,7 +40,6 @@ BOX_CENTRE = (1.5, 1.5, WALL_FACE + BOX / 2.0)
 @pytest.fixture(autouse=True)
 def shadowed_env(monkeypatch):
     """Shadows on, in the core profile, with the frame-rate probe out of it."""
-    from tests.unit.glrender import base_env
     base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='1', OPENGLCONTEXT_SHADOW_CASCADES='3')
 
 
@@ -99,7 +101,6 @@ def pole_scene():
 
 def foot_gap(render_scene):
     """Pixels between the pole's foot and the nearest shadow it casts."""
-    from tests.unit.glrender import frames_of
     image = frames_of(render_scene, pole_scene(), frames=6)[-1].astype(int)
     lit = frames_of(render_scene, pole_scene(), frames=6, shadows=False)[-1].astype(int)
     if image.shape != lit.shape:
@@ -119,7 +120,6 @@ def foot_gap(render_scene):
 
 def frame(render_scene, light):
     """The last frame the wall scene draws with ``light`` in it."""
-    from tests.unit.glrender import frames_of
     return frames_of(render_scene, wall_scene(light), frames=6)[-1].astype(int)
 
 
@@ -229,7 +229,6 @@ def test_more_slack_than_asked_for_still_holds_the_contact(render_scene, monkeyp
     already subject to, so a generous bias cannot detach the contact -- which is
     what a bias in the map's own depth units did, and the reason for the unit.
     """
-    from OpenGLContext.passes import shadowmath
     generous = shadowmath.depth_bias_terms
 
     monkeypatch.setattr(
@@ -248,9 +247,8 @@ def test_a_bias_in_depth_units_cannot_do_both(render_scene, monkeypatch):
     -- a flat offset, the shape the shader used to be given -- for the texel one
     reproduces the gap; the tests above say the texel conversion does not have it.
     """
-    from OpenGLContext.passes import shadowmath
 
-    def flat_offset(projection, texel_bias, resolution):
+    def flat_offset(_projection, texel_bias, _resolution):
         return (0.0, 0.0, 0.0015 * texel_bias)
 
     monkeypatch.setattr(shadowmath, 'depth_bias_terms', flat_offset)

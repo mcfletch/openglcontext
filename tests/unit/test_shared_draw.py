@@ -15,6 +15,7 @@ from OpenGLContext.passes._flat import FlatPass
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.reflector import PlanarReflector
+from OpenGLContext.scenegraph.text.text import Text
 
 
 def _shape(appearance=None, geometry=None):
@@ -47,7 +48,6 @@ class TestOneDrawForEveryView:
         assert not passing.sharesDraw(_record(_shape(), transparent=True))
 
     def test_geometry_that_does_not_say_so_is_drawn_per_view(self, passing):
-        from OpenGLContext.scenegraph.text.text import Text
         assert not passing.sharesDraw(_record(_shape(geometry=Text(string=['a']))))
 
     def test_a_mirror_reads_a_reflection_per_view(self, passing):
@@ -67,7 +67,7 @@ class TestOneDrawForEveryView:
 
     def test_a_set_that_culls_its_own_copies_is_drawn_per_view(self, passing):
         shape = _shape()
-        shape.visiblePlacements = lambda *args, **named: None
+        shape.visiblePlacements = lambda *_args, **_named: None
         assert not passing.sharesDraw(_record(shape))
 
 
