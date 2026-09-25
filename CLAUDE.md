@@ -132,6 +132,8 @@ OpenGLContext/
 │   ├── renderpass.py # Chooses between the two and caches the choice
 │   ├── disposal.py   # The chain that deletes a pass's GL objects on a scene
 │   │                 # swap or a context's teardown -- docs/renderpasses.rst
+│   ├── framestate.py # What one frame shares among its stages (the walk of
+│   │                 # the scene), dropped when the frame ends
 │   ├── pbrpass.py    # Metallic/roughness uber-shader -- docs/ubershader.rst
 │   ├── ibl.py        # Image-based lighting probe
 │   ├── reflection.py # Planar reflections' arithmetic: which surfaces are

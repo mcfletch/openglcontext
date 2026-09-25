@@ -106,6 +106,7 @@ class ZonesMixin(PassResources):
 
         def applyViewFrame(self, frame: Any, gl: bool = True) -> None: ...
         def renderSet(self, matrix: Any, gathered: Any) -> List[Any]: ...
+        def frameGather(self) -> Any: ...
         def setupViewLighting(self, view: Any, lighting: Any,
                               fitted: bool = True) -> None: ...
         def shaderRenderOpaque(self, records: Any, frustum: Any) -> Any: ...
@@ -743,10 +744,10 @@ class ZonesMixin(PassResources):
         from OpenGLContext.multiview.strategy import ViewFrame
         from OpenGLContext.passes import shadowmath
         from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-        gathered = getattr(self, '_frameGather', None)
+        gathered = self.frameGather()
         template = self.activeFrame if self.activeFrame is not None else (frames[0] if frames else None)
         shader = self.shader_program
-        if gathered is None or template is None or shader is None:
+        if template is None or shader is None:
             return None
         probe = self._ibl_probe
         target = self._captureTarget

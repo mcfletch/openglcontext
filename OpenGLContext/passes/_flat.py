@@ -14,8 +14,9 @@ a context and caches the choice across frames.
 """
 from __future__ import annotations
 
+import contextlib
 from typing import (
-    Any, Callable, Dict, List, NamedTuple, Optional, Sequence, Tuple,
+    Any, Callable, Dict, Iterator, List, NamedTuple, Optional, Sequence, Tuple,
     TYPE_CHECKING,
 )
 
@@ -38,6 +39,7 @@ import numpy
 from OpenGLContext import frustum
 from OpenGLContext.passes import reflection
 from OpenGLContext.passes.disposal import let_go
+from OpenGLContext.passes.framestate import FrameState
 from OpenGLContext.debug.logs import getTraceback
 from OpenGLContext.passes.renderfailures import describe
 from vrml.vrml97 import nodetypes
@@ -157,10 +159,8 @@ class SGObserver( object ):
     #: The ``(N,4,4)`` array :meth:`_worldMatrices` fills each frame, kept so a
     #: frame allocates nothing for a scene whose size has not changed.
     _matrixBuffer: Optional[Any] = None
-    #: What :meth:`gatherPaths` last worked out, for the rest of that frame to
-    #: read rather than walk the scene again. The gather is the frame's first
-    #: act, so anything after it in the same frame is reading this frame's.
-    _gathered: Optional['GatheredPaths'] = None
+    #: The frame being drawn, from :meth:`drawingFrame`; None between frames.
+    frameState: Optional[FrameState] = None
     #: What the last :meth:`selectLevels` chose for: the path generation, the
     #: level-of-detail nodes' world matrices as the transform cache handed them
     #: over, and the camera. A frame matching all three is choosing again what
@@ -1291,13 +1291,11 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         few thousand objects was making tens of thousands of them to reach a
         node the gather already had in hand.
 
-        ``gathered`` is this frame's walk of the scene, when the caller has one:
-        a frame drawn through several views culls one table once per view.
-        Left out, the scene is walked here and the walk published for the rest
-        of the frame.
+        ``gathered`` is the walk of the scene to cull; left out, it is the
+        frame's (:meth:`frameGather`).
         """
         if gathered is None:
-            gathered = self.gatherPaths()
+            gathered = self.frameGather()
         paths, volumes, matrices, own = (gathered.paths, gathered.volumes,
                                          gathered.matrices, gathered.own)
         if not paths:
@@ -1336,28 +1334,41 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         toRender.sort( key = lambda x: x[0])
         return toRender
 
-    def gatherPaths( self ) -> GatheredPaths:
-        """Walk the scene and publish what this frame found, for one frame.
+    @contextlib.contextmanager
+    def drawingFrame( self ) -> Iterator[FrameState]:
+        """Hold one frame's :class:`~OpenGLContext.passes.framestate.FrameState`.
 
-        :meth:`takeGather` is how the rest of the frame reads it. See
+        :attr:`frameState` is the new state inside the block and what it was
+        before once the block ends, however it ends: a walk of the scene
+        describes the frame that made it, and the next frame must not read it.
+        """
+        previous, self.frameState = self.frameState, FrameState()
+        try:
+            yield self.frameState
+        finally:
+            self.frameState = previous
+
+    def gatherPaths( self ) -> GatheredPaths:
+        """Walk the scene, and keep the walk for the rest of the frame being drawn.
+
+        :meth:`frameGather` is how the rest of the frame reads it. See
         :meth:`_walkPaths` for what the table holds.
         """
-        gathered = self._gathered = self._walkPaths()
+        gathered = self._walkPaths()
+        if self.frameState is not None:
+            self.frameState.gathered = gathered
         return gathered
 
-    def takeGather( self ) -> GatheredPaths:
-        """This frame's gather, taken, or a fresh walk where there is none.
+    def frameGather( self ) -> GatheredPaths:
+        """This frame's walk of the scene, walked now if the frame has none.
 
-        A handoff rather than a cache. The table describes the scene as it
-        stood when it was walked, so it may be read in the frame that built it
-        and nowhere else -- a table left lying about would answer next frame's
-        questions with last frame's transforms, and nothing would say so. Taking
-        it is what makes that impossible: :meth:`gatherPaths` publishes one,
-        whoever needs it takes it, and a caller that finds none walks the scene
-        itself rather than reading something stale.
+        Outside a frame -- a depth pass driven on its own, a test -- every
+        asking walks the scene, since there is no frame the answer belongs to.
         """
-        gathered, self._gathered = self._gathered, None
-        return gathered if gathered is not None else self._walkPaths()
+        state = self.frameState
+        if state is not None and state.gathered is not None:
+            return state.gathered
+        return self.gatherPaths()
 
     def _walkPaths( self ) -> GatheredPaths:
         """Everything this frame needs to know about every renderable path.
@@ -1370,8 +1381,8 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         the scenegraph's own caches, and a scene has as many of them as it has
         shapes -- so the frame pays for one walk rather than three.
 
-        The table stands for the frame that built it and is kept as
-        :attr:`_gathered` for the rest of that frame to read. It says nothing
+        The table stands for the frame that built it, and :meth:`gatherPaths`
+        keeps it in the frame's state for the rest of that frame. It says nothing
         about *where* anything is seen from: the camera enters afterwards, which
         is what lets one table serve the colour pass and a light's depth pass
         alike.
@@ -1848,10 +1859,6 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
             self.clearPlanarReflection()
             self._endView( frame )
 
-    #: This frame's walk of the scene, kept from :meth:`prepareViews` to
-    #: :meth:`finishViews` for the draws that cull it through another camera.
-    _frameGather: Optional[GatheredPaths] = None
-
     #: The cameras the shape being drawn is seen from, as points in the eye
     #: space it is drawn in, while one draw serves several views; None for a
     #: draw that serves one. What a shape choosing its detail by distance
@@ -2299,7 +2306,12 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         self.multiviewStrategy = self.chooseMultiview()
 
     def __call__( self, context: Any ) -> bool:
-        """Overall rendering pass interface for the context client"""
+        """Draw one frame of ``context``'s scene; see :meth:`drawingFrame`."""
+        with self.drawingFrame():
+            return self._drawFrame( context )
+
+    def _drawFrame( self, context: Any ) -> bool:
+        """Everything a frame does, from placing the views to presenting it."""
         # These values are temporarily stored locally, we are
         # in the context lock, so we're not causing conflicts
         if self.MAX_LIGHTS == -1:
@@ -2481,10 +2493,9 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         self.chooseLevels( [
             viewer_for( frame.camera, frame.modelView, frame.projection )
             for frame in frames ] )
+        # Kept for the frame: the shadow casters, each mirror view and each
+        # zone capture read the same walk.
         gathered = self.gatherPaths()
-        # Kept for the frame: each mirror view culls the same walk through its
-        # own camera (renderReflections).
-        self._frameGather = gathered
         for frame in frames:
             self.applyViewFrame( frame, gl=False )
             # Nodes the zones hide from this view's camera are left out of its
@@ -2544,7 +2555,6 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         that stopped part-way through its views leaves nothing confined to a
         tile for the frame after it.
         """
-        self._frameGather = None
         glDisable( GL_SCISSOR_TEST )
         width, height = self.context.getViewPort()
         glViewport( 0, 0, int(width), int(height) )

@@ -174,8 +174,9 @@ class TestTheShadowPoolReadsTheGather:
         passing, _moves = self._pass(4)
         seen = self._counting(monkeypatch)
 
-        toRender = passing.renderSet(np.eye(4, dtype='f'))
-        passing._shadowCasterRecords()
+        with passing.drawingFrame():
+            toRender = passing.renderSet(np.eye(4, dtype='f'))
+            passing._shadowCasterRecords()
 
         assert len(toRender) == 4
         assert len(seen) == 4

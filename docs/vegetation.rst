@@ -153,7 +153,8 @@ pops as the disc re-centres. Each species uses its own salted grid, so
 species do not compete for the same cells.
 
 Because a cell's plant never changes, the scatter is kept by the block: the
-grid is cut into squares about 32 metres wide
+grid is cut into squares at least 32 metres wide, and an eighth of the
+disc's radius wide for a far rung whose disc is larger
 (``vegetation.grid.ScatterBlocks``), each scattered the first time a disc
 reaches it, with its plants' sizes and light, and kept while the camera is
 within twice the disc's radius of it. A disc is assembled from the blocks it

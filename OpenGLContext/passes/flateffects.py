@@ -94,7 +94,7 @@ class _FlatEffectsMixin(PassResources):
                               drawing: Any) -> Any: ...
 
         multiviewStrategy: Optional[str]
-        _frameGather: Any
+        def frameGather(self) -> Any: ...
         _pathGeneration: int
         activeFrame: Any
         view: Any
@@ -365,9 +365,7 @@ class _FlatEffectsMixin(PassResources):
         self._reflection_applied = None
         if not self.planarReflectionsEnabled():
             return
-        gathered = getattr(self, '_frameGather', None)
-        if gathered is None:
-            return
+        gathered = self.frameGather()
         from OpenGLContext.passes.reflectionatlas import ReflectionAtlas
         from OpenGLContext.passes.reflectionplanner import ReflectionPlanner
         if self._reflection_planner is None:
@@ -458,7 +456,7 @@ class _FlatEffectsMixin(PassResources):
         (:func:`~OpenGLContext.passes.reflection.mirror_generation`).
         """
         from OpenGLContext.passes.reflection import mirror_generation, shape_reflector
-        gathered = self._frameGather
+        gathered = self.frameGather()
         key = (self._pathGeneration, mirror_generation(), len(gathered.nodes))
         known = self._sceneMirrors
         if known is None or known[0] != key:
@@ -478,7 +476,7 @@ class _FlatEffectsMixin(PassResources):
         indices = self.sceneMirrors()
         if not len(indices):
             return []
-        gathered = self._frameGather
+        gathered = self.frameGather()
         if frame.frustum is None:
             frame.frustum = frustum.Frustum.fromViewingMatrix(frame.modelproj, normalize=1)
         current, self.frustum = self.frustum, frame.frustum
@@ -512,7 +510,7 @@ class _FlatEffectsMixin(PassResources):
             texels = frame.rect[3] / max(fov(frame.projection), 1e-6)
         self.applyViewFrame(frame, gl=False)
         eye = np.linalg.inv(np.asarray(frame.modelView, 'd'))[3, :3]
-        records = [record for record in self.renderSet(frame.modelView, self._frameGather)
+        records = [record for record in self.renderSet(frame.modelView)
                    if not record[0][0] and not too_small(record, eye, texels)]
         frame.visiblePlacements = self.visiblePlacements or {}
         return records

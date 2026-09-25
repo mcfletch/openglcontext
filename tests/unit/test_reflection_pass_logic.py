@@ -182,7 +182,7 @@ class _FailingPlanner:
 def _failing_pass():
     effects = _pass()
     effects.shader_program = _Program()
-    effects._frameGather = object()
+    effects.frameGather = lambda: object()
     effects.activeFrame = None
     effects.mirrorsZoned = lambda: False
     effects._reflection_planner = planner = _FailingPlanner()

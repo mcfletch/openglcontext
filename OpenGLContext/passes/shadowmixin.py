@@ -106,7 +106,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         _caster_points: Optional[np.ndarray]
 
         def getModelView(self) -> np.ndarray: ...
-        def takeGather(self) -> Any: ...
+        def frameGather(self) -> Any: ...
         def batchingFunctions(self) -> Tuple[Any, Any]: ...
 
     use_shadows: bool = False
@@ -681,12 +681,12 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
 
         Every question here -- the node at the end of a path, where it is, what
         bounds it -- the frame's gather has already asked and answered, so the
-        pool takes that table
-        (:meth:`~OpenGLContext.passes._flat.FlatPass.takeGather`) rather than
-        walking the scene a second time. A depth pass driven on its own, with no
-        gather before it, walks the scene itself.
+        pool reads that table
+        (:meth:`~OpenGLContext.passes._flat.SGObserver.frameGather`) rather than
+        walking the scene a second time. A depth pass driven outside a frame
+        walks the scene itself.
         """
-        gathered = self.takeGather()
+        gathered = self.frameGather()
         records = []
         for path, node, tmatrix, bvolume in zip(
                 gathered.paths, gathered.nodes, gathered.own, gathered.volumes):

@@ -17,22 +17,33 @@ Compatibility Contexts <profiles>`.
 The Frame Sequence
 ------------------
 
-On each visible frame the core ``FlatPass`` runs these steps in order:
+On each visible frame the core ``FlatPass`` runs these steps in order. Every
+step up to and including the reflections runs once a frame, whatever the
+number of views; the steps after them run once for each view.
 
 - Views - place the context's :doc:`view layout <multiview>` in the window and
   work out each view's camera. A context that sets no layout has one view: its
   own view platform, filling the window.
 
-- Gather - walk the scene once, choose the level of detail for all views at
-  once, then cull and sort the result against each view's frustum.
+- Zones and audio - place the scene's :doc:`zones <zones>` and bring the
+  scene's sounds up to date with the camera.
+
+- Gather - choose the level of detail for all views at once, walk the scene
+  once, then cull and sort the walk against each view's frustum.
 
 - Selection - resolve mouse-pick events, either from the object-id render
   target (MRT) or with the unlit program, each through the camera of the view
   the event happened in.
 
 - Shadow maps - when shadows are on, render each shadow-casting light's depth
-  into its map, once for every view (see :doc:`Shadows <shadows>`). Shadows
-  are on by default in the core profile.
+  into its map, once, for every view to read (see :doc:`Shadows <shadows>`).
+  Shadows are on by default in the core profile.
+
+- Environment - prepare the image-based lighting probe, building it the first
+  time it is needed (see :doc:`PBR <pbr>`).
+
+- Zone captures - draw this frame's share of the zone probes' cube faces (see
+  :doc:`Zones <zones>`).
 
 - Reflections - draw the reflection of every mirror in every view into the
   reflection atlas, each through its own mirrored camera, before any view is
@@ -353,13 +364,17 @@ Each frame needs three values for every renderable path: the node at its end,
 its world transform, and its bounding volume. The frustum cull, the shadow
 pass's caster pool and the draw all use them. Each value comes through a
 scenegraph cache, and a scene has one of each per shape, so the pass reads
-them once. ``gatherPaths()`` walks the scene and publishes a ``GatheredPaths``
-table, and the rest of the frame reads it with ``takeGather()``.
+them once. ``gatherPaths()`` walks the scene into a ``GatheredPaths`` table,
+and the rest of the frame reads it with ``frameGather()``: each view's cull,
+the shadow pass's caster pool, every mirror view and every zone capture.
 
-The table is valid only for the frame that built it. ``takeGather()`` removes
-the table as it returns it, so the next frame cannot read last frame's
-transforms by mistake. A caller that finds no table walks the scene itself. A
-depth pass run on its own through ``renderGeometry()`` is such a caller.
+The table is valid only for the frame that built it, so it is kept in the
+frame's state rather than on the pass. ``FlatPass.drawingFrame()`` opens a
+``FrameState`` (``passes/framestate.py``) as the pass is called for a frame,
+and drops it in a ``finally`` when the frame ends, whether it finished or
+raised. ``pass_.frameState`` is the open one, or None between frames. Outside a
+frame, ``frameGather()`` walks the scene each time it is asked; a depth pass
+run on its own through ``renderGeometry()`` is such a caller.
 
 The table stores the world transforms in two forms:
 
@@ -431,28 +446,55 @@ divide the work:
 - ``flatcompat.py`` -- the compatibility-profile pass, using the
   fixed-function pipeline (``glLight*``, ``glMaterial*``).
 - ``flatcore.py`` -- the core-profile pass described on this page.
+- ``flateffects.py`` -- the effects the core pass sequences: image-based
+  lighting, transmission, planar reflections, bloom and cluster culling.
 - ``renderpass.py`` -- chooses which ``FlatPass`` subclass renders a context
   (by profile and renderer) and caches the choice across frames.
+- ``framestate.py`` -- the state one frame shares among its stages, dropped
+  when the frame ends (see above).
+- ``disposal.py`` -- the chain that deletes a pass's GL objects (see
+  :ref:`pass-resources`).
 - ``shaderpass.py`` -- ``VRML97ShaderProgram``, which compiles the
   :ref:`shader programs <shader-programs>` from the GLSL sources in
-  ``shaders/``.
+  ``shaders/``; ``shaderpass_shadow.py`` holds its shadow uniforms.
+- ``shadersource.py`` -- the shader text: ``#include`` resolution, the
+  per-driver defines, the geometry stage a shared multi-view draw adds, and
+  the ``required``/``optional`` input markers.
 - ``pbrpass.py`` -- the physically based (metallic/roughness) renderer, a
   Cook-Torrance uber-shader. See :doc:`Physically Based Rendering <pbr>` and
   the :doc:`shader walkthrough <ubershader>`.
 - ``ibl.py`` -- image-based (environment) lighting: the precomputed
   irradiance, prefilter and BRDF lookup-table probe.
-- ``shadowmap.py``, ``shadowmixin.py``, ``shadowcaps.py``, ``shadowmath.py`` --
-  the shadow subsystem shared by the VRML97 and PBR lit shaders. See
-  :doc:`Shadows <shadows>`.
+- ``shadowmap.py``, ``shadowmixin.py``, ``shadowpool.py``, ``shadowcaps.py``,
+  ``shadowmath.py`` -- the shadow subsystem shared by the VRML97 and PBR lit
+  shaders. See :doc:`Shadows <shadows>`.
+- ``reflection.py``, ``reflectionplanner.py``, ``reflectiontiles.py``,
+  ``reflectionatlas.py`` -- planar reflections: which shapes are mirrors, which
+  mirror views a frame draws, how they are packed, and the texture they are
+  drawn into. See :doc:`Reflections <reflections>`.
+- ``zonepass.py``, ``zonelayers.py``, ``zoneprobes.py`` -- zones: placing them,
+  what they give each draw, and capturing their probes. See :doc:`Zones
+  <zones>`.
+- ``bloom.py`` -- the HDR target and the glow composited from it.
 - ``transmission.py`` -- the backdrop capture for glass
   (``KHR_materials_transmission``).
 - ``instancing.py`` -- collapsing repeated shapes into one draw. See
   :doc:`Instanced Geometry <instancing>`.
-- ``selection.py`` -- colour and object-id picking.
+- ``selection.py``, ``selectionbuffers.py``, ``asyncpick.py`` -- colour and
+  object-id picking, the framebuffers it reads, and the readback that waits
+  for no frame.
+- ``gputimer.py`` -- GPU time of a stretch of a frame, read a few frames later
+  without waiting.
+- ``renderstats.py`` -- what the frame cost in shapes and draws, for the
+  developer overlay.
+- ``renderfailures.py`` -- what could not be drawn, counted per cause and
+  reported once.
+- ``layerguard.py`` -- an optional frame layer, switched off at its first
+  failure while the frame is drawn without it.
 - ``viewpointbinding.py`` -- binds the scene's active Viewpoint to the view
   platform in the core-profile path.
 
 The views a frame is drawn for are in ``OpenGLContext/multiview/``: the layout,
 the drawing strategy the driver supports, and the ``ViewFrame`` holding one
-view's camera, frustum and draw list. The sequence above runs once for each
-view; see :doc:`Several views on one window <multiview>`.
+view's camera, frustum and draw list. See :doc:`Several views on one window
+<multiview>`.
