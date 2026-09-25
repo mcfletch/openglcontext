@@ -43,6 +43,9 @@ class ViewerOptions:
     #: None chooses one from the source, which is what a named file settles;
     #: this is for a URL that serves a scene from a path with no suffix.
     format: Optional[str] = None
+    #: A content pack to open instead of a source, by key: one the engine
+    #: publishes, such as ``openglcontext/gallery``, fetched on first use.
+    pack: Optional[str] = None
 
     #: Open with four views of the scene -- the plan, the front and left
     #: elevations, and the camera the viewer would otherwise have had alone.

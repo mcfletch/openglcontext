@@ -12,9 +12,10 @@ through :mod:`OpenGLContext.contentpacks`. One command covers the whole of that:
     ./release-assets.py --push          # ...and attach it to the release tag
 
 ``--install`` is what makes a content release testable before it is a release:
-the demo then opens out of this machine's own store, with nothing published
-and no network reached. `oglc-view` opens the archive directly either way:
-naming a member with `#` unpacks it and opens that member.
+``oglc-view --pack openglcontext/gallery`` then opens it out of this machine's
+own store, with nothing published and no network reached. ``oglc-view`` also
+opens the archive directly: naming a member with ``#`` unpacks it and opens
+that member.
 
 **Building the world needs Blender and openglcontext-editor.** The hall is
 authored and exported by the Blender add-on in

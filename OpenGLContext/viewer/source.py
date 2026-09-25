@@ -18,16 +18,19 @@ import os
 from typing import TYPE_CHECKING, Optional, Tuple
 
 from OpenGLContext import atomicfiles, userpaths
-from OpenGLContext.contentpacks import archive
+from OpenGLContext.contentpacks import ContentPack, ContentStore
+from OpenGLContext.contentpacks import archive, catalog, fetch
 from OpenGLContext.loaders import resolver
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.resolver import is_url
+from OpenGLContext.viewer.commentary import say
 
 if TYPE_CHECKING:
     from OpenGLContext.loaders.gltf.scene import GLTFScene
 
-__all__ = ['ARCHIVE_SUFFIXES', 'SCENE_SUFFIXES', 'UnknownMember', 'is_archive',
-           'is_url', 'load_gltf_source', 'open_archive', 'resolve_source',
+__all__ = ['ARCHIVE_SUFFIXES', 'ENGINE_REGISTRY', 'SCENE_SUFFIXES',
+           'UnknownMember', 'is_archive', 'is_url', 'load_gltf_source',
+           'open_archive', 'open_pack', 'pack_named', 'resolve_source',
            'split_member']
 
 #: What is taken to be an archive, and which extractor reads it.
@@ -43,6 +46,14 @@ SCENE_SUFFIXES = ('.glb', '.gltf', '.wrl', '.wrz', '.vrml', '.x3d', '.obj')
 #: Ceiling on an archive fetched from a URL. A world is tens of megabytes; this
 #: is the same order as a content pack and far below what would exhaust memory.
 MAX_ARCHIVE_BYTES = 512 * 1024 * 1024
+
+
+#: The content packs the engine itself publishes: the demo worlds.
+ENGINE_REGISTRY = os.path.join(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__))), 'packs.json')
+
+#: The application name the engine's own packs are stored under.
+ENGINE_STORE = 'openglcontext'
 
 
 class UnknownMember(ValueError):
@@ -192,6 +203,38 @@ def _listing(where: str, most: int = 12) -> str:
                    for leaf in files if leaf != UNPACKED or root != where)
     shown = ', '.join(names[:most])
     return shown + (', ...' if len(names) > most else '') if names else '(nothing)'
+
+
+def pack_named(key: str, registry: str = ENGINE_REGISTRY) -> ContentPack:
+    """The pack ``key`` in ``registry``; :class:`UnknownMember` if none."""
+    packs = catalog.merge(catalog.load(registry))
+    found = catalog.pack_for_key(key, packs)
+    if found is None:
+        raise UnknownMember('there is no content pack %r; there are: %s'
+                            % (key, ', '.join(pack.key for pack in packs)))
+    return found
+
+
+def open_pack(key: str, registry: str = ENGINE_REGISTRY,
+              store: Optional[ContentStore] = None) -> str:
+    """The scene a content pack holds, fetching the pack if it is not here.
+
+    ``key`` names a pack in ``registry`` -- the engine's own demo worlds by
+    default -- and the pack is found in, or fetched into, ``store`` (the
+    engine's own store by default) through
+    :func:`~OpenGLContext.contentpacks.fetch.fetch_pack`: its digest checked,
+    its unpacking bounded, and a second run finding it without a download.
+    Naming the key is the consent; what is fetched, how large it is and whose
+    it is are printed before the download. The pack's marker is the scene.
+    """
+    pack = pack_named(key, registry)
+    where = store if store is not None else ContentStore(ENGINE_STORE)
+    root = where.root_for(pack)
+    if root is None:
+        say('Fetching %s (%s) -- %s\n' % (pack.title, pack.human_size(),
+                                          pack.copyright))
+        root = fetch.fetch_pack(pack, where)
+    return os.path.join(root, pack.marker)
 
 
 def resolve_source(source: Optional[str],

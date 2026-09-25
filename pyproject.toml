@@ -139,6 +139,8 @@ OpenGLContext = [
     # resolves to `Any` in the projects built on it, and their own typecheck
     # gates pass without having checked a single call into the engine.
     "py.typed",
+    # The content packs the engine publishes: `oglc-view --pack` reads it.
+    "packs.json",
     # The node namespace is filled from the plugin registry as it loads, so its
     # names exist only at run time; `scripts/write_basenodes_stub.py` writes the
     # declarations and this ships them.

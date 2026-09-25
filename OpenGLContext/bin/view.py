@@ -97,7 +97,9 @@ from OpenGLContext.viewer.adapters import (  # noqa: E402
 )
 from OpenGLContext.viewer.sceneviewer import ViewerContext  # noqa: E402
 from OpenGLContext.viewer.options import ViewerOptions  # noqa: E402
-from OpenGLContext.viewer.source import UnknownMember, resolve_source  # noqa: E402
+from OpenGLContext.viewer.source import (  # noqa: E402
+    UnknownMember, open_pack, resolve_source,
+)
 
 
 # -- command line ---------------------------------------------------------
@@ -150,6 +152,12 @@ def build_parser(prog: str = 'oglc-view') -> argparse.ArgumentParser:
     parser.add_argument('source', nargs='?',
                         help='scene file path, http(s) URL, or archive#member '
                              '(or set GLTF=...)')
+    parser.add_argument('--pack', metavar='KEY',
+                        help='open a content pack the engine publishes, by key '
+                             '(openglcontext/gallery is the level-of-detail '
+                             'demo world); fetched and checked against its '
+                             'digest the first time, then opened from this '
+                             "machine's store")
     parser.add_argument('--format', metavar='NAME',
                         help='read the source as this format instead of guessing '
                              'from its name (%s); for a URL that serves a scene '
@@ -292,6 +300,11 @@ def _list_cameras(source: str, format: Optional[str] = None) -> int:
 def main(argv: Optional[list[str]] = None, prog: str = 'oglc-view') -> Any:
     parser = build_parser(prog)
     options = parser.parse_args(argv, namespace=ViewerOptions())
+    if options.pack:
+        try:
+            options.source = open_pack(options.pack)
+        except (IOError, UnknownMember) as error:
+            parser.error(str(error))
     source = options.source or os.environ.get('GLTF')
     if options.list_cameras:
         if not source:

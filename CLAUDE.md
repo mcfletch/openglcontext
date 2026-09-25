@@ -82,7 +82,8 @@ OpenGLContext/
 │                     # download job -- docs/contentpacks.rst
 ├── packs.json        # The content packs this project publishes: the
 │                     # bust-gallery world's URL, digest and terms, written
-│                     # by release-assets.py -- docs/lod.rst
+│                     # by release-assets.py, read by oglc-view --pack
+│                     # -- docs/lod.rst
 ├── debug/            # Developer aids: buffer dumps, GL state, leak counts
 ├── demos/            # A view inside a Tk or wx application -- docs/embedding.rst
 │                     # (the Qt one is in the openglcontext-qt distribution)

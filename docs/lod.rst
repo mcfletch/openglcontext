@@ -18,7 +18,7 @@ Walk through it
 
 .. code-block:: bash
 
-   oglc-view https://github.com/mcfletch/openglcontext/releases/download/content-v1/gallery-world.tar.gz
+   oglc-view --pack openglcontext/gallery
 
 .. figure:: images/demos/gallery.jpg
    :alt: A long hall of marble busts on plinths, two rows receding to a far wall under dark ceiling beams, on a parquet floor
@@ -31,10 +31,15 @@ The gallery is a hall of 120 marble busts on plinths. Each bust is a
 six-level chain, from 17,456 triangles down to 544, declared with
 ``MSFT_lod``. The hall has a polished parquet floor, white plaster walls and
 dark beams overhead. The world is CC0 art published as a :doc:`content pack
-<contentpacks>`. The viewer unpacks the archive once into a per-user directory
-and opens the world inside it, so a second run downloads nothing. This archive
-holds one scene. For an archive with several, name the scene after ``#``, as
-in ``...tar.gz#gallery.glb``.
+<contentpacks>` the engine publishes. ``--pack`` fetches it the first time
+(12 MB, checked against the digest in the engine's registry) into the
+engine's own content store and opens it from there on every later run. The
+archive also opens by its URL, which unpacks it into the viewer's archive
+directory instead:
+
+.. code-block:: bash
+
+   oglc-view https://github.com/mcfletch/openglcontext/releases/download/content-v1/gallery-world.tar.gz
 
 Two suns shine into the hall at an angle from above the roof, and a weak
 upward light stands in for light reflected from the floor. The shell of the
@@ -79,7 +84,7 @@ fly-through:
 
 .. code-block:: bash
 
-   oglc-view <the archive> \
+   oglc-view --pack openglcontext/gallery \
        --capture-video walk.mp4 --fly-through --video-seconds 16
 
 See :ref:`Recording a video <video>`.

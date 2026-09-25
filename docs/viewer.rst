@@ -27,10 +27,17 @@ Opening a scene
    oglc-view path/to/model.obj
    oglc-view path/to/tileset.json
    oglc-view https://example.com/model.glb
+   oglc-view --pack openglcontext/gallery
    GLTF=path/to/model.gltf oglc-view
 
 The viewer turns on the core profile, the PBR renderer, the GLFW backend and
 shadows itself. No environment variables are needed.
+
+``--pack KEY`` opens a :doc:`content pack <contentpacks>` the engine publishes
+(``OpenGLContext/packs.json``): ``openglcontext/gallery`` is the
+:ref:`level-of-detail demo world <lod-demo>`. The first run prints the pack's
+title, size and terms and fetches it into the engine's content store, checked
+against its digest; later runs open it from there without a download.
 
 Supported formats
 ~~~~~~~~~~~~~~~~~

@@ -249,3 +249,58 @@ class TestAnUnpackingThatDidNotFinish:
             viewersource.open_archive(world, cache_dir=cache)
         assert [name for name in os.listdir(cache)
                 if not name.endswith('.lock')] == []
+
+
+class TestAPackTheEngineOffers:
+    """``oglc-view --pack openglcontext/gallery``: the engine's own registry,
+    its store, and the digest check a content pack gets."""
+
+    def installed(self, tmp_path):
+        import json
+        from OpenGLContext.contentpacks import ContentStore, archive, catalog
+        from OpenGLContext.contentpacks import publish
+        world = tmp_path / 'built'
+        world.mkdir()
+        (world / 'gallery.glb').write_bytes(b'glTF')
+        dist = tmp_path / 'dist'
+        dist.mkdir()
+        built = archive.write(str(world), str(dist / 'gallery-world.tar.gz'))
+        registry = tmp_path / 'packs.json'
+        registry.write_text(json.dumps({'namespace': 'openglcontext', 'packs': [{
+            'key': 'openglcontext/gallery', 'title': 'Gallery',
+            'url': 'https://github.com/mcfletch/openglcontext/releases/'
+                   'download/content-v1/gallery-world.tar.gz',
+            'directory': 'gallery', 'archive': 'tar',
+            'approximate_bytes': os.path.getsize(built),
+            'sha256': archive.digest(built), 'copyright': 'CC0',
+            'marker': 'gallery.glb'}]}))
+        store = ContentStore('openglcontext', root=str(tmp_path / 'store'),
+                             search=[])
+        pack, = catalog.load(str(registry))
+        publish.install(pack, store, str(dist))
+        return str(registry), store
+
+    def test_an_installed_pack_opens_from_the_store(self, tmp_path):
+        registry, store = self.installed(tmp_path)
+        found = viewersource.open_pack('openglcontext/gallery',
+                                       registry=registry, store=store)
+        assert found == os.path.join(store.root_for(
+            viewersource.pack_named('openglcontext/gallery', registry)),
+            'gallery.glb')
+
+    def test_a_key_the_registry_does_not_hold_says_what_it_does(self,
+                                                                 tmp_path):
+        registry, store = self.installed(tmp_path)
+        with pytest.raises(viewersource.UnknownMember) as raised:
+            viewersource.open_pack('openglcontext/nothing', registry=registry,
+                                   store=store)
+        assert 'openglcontext/gallery' in str(raised.value)
+
+    def test_the_engines_registry_ships_in_the_wheel(self):
+        import tomllib
+        here = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))
+        with open(os.path.join(here, 'pyproject.toml'), 'rb') as handle:
+            data = tomllib.load(handle)['tool']['setuptools']['package-data']
+        assert 'packs.json' in data['OpenGLContext']
+        assert os.path.isfile(viewersource.ENGINE_REGISTRY)
