@@ -390,10 +390,11 @@ them. ``renderpass._passes``, ``shaderpass._shader_programs``,
 ``Teapot._buffers`` and ``shadertext._renderers`` are all mappings for this
 reason, and so are the GL names an object holds of its own: the vertex array
 objects each geometry node keeps (``scenegraph.shadergeometry.get_or_build_vao``)
-and the display lists a font compiles for its characters
-(``scenegraph.text.font.Font``). Those are kept one set per context the object
-is drawn in, and deleted in that context when the object is collected or the
-context is torn down.
+the display lists a font compiles for its characters
+(``scenegraph.text.font.Font``), and the list a ``displaylist.DisplayList``
+holds. Those are kept one set per context the object is drawn in (a
+``DisplayList``'s, in the context current when it is made), and deleted in that
+context when the object is collected or the context is torn down.
 
 An object's names cannot be deleted from its ``__del__``: a finaliser runs on
 whichever thread the collector does, with whatever context is current there,
