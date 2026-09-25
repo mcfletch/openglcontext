@@ -1,6 +1,6 @@
 # Defect prevention: gates for the defect classes the reviews keep finding
 
-Status: In progress. Items 1 and 2 of the order of work are done (see [Baseline, ruff rules](#baseline-ruff-rules) and [Baseline, OGC rules](#baseline-ogc-rules)).
+Status: In progress. Items 1, 2 and 5 of the order of work are done (see [Baseline, ruff rules](#baseline-ruff-rules), [Baseline, OGC rules](#baseline-ogc-rules) and [The post-edit gates](#the-post-edit-gates)); items 3, 4, 6 and 7 are under way.
 
 ## Why
 
@@ -654,6 +654,27 @@ the rules its table selects):
 | glisteel | 2 | 0 | 2 | 24 | 0 | 3 | 0 |
 | glisteel-editor | 0 | 0 | 2 | 22 | 0 | 0 | 0 |
 | twig-bb | 5 | 0 | 16 | 68 | 1 | 12 | 0 |
+
+## The post-edit gates
+
+Item 5 landed on 2026-09-25. `tools/editcheck.py` in the workspace root takes
+the paths of edited files, finds each file's project (the nearest
+`pyproject.toml`, looked up in `tools/preflight.toml`) and runs that project's
+ruff on the file, `oglc-check --force-exclude` on it (skipped where the
+project's own run would not check it), and mypy through one `dmypy` daemon per
+typecheck run of `.preflight-venv`. A daemon starts on first use, restarts when
+`preflight.py --rebuild-env` rebuilds the environment, and stops after an hour
+idle; runs in one project queue on its lock, others do not wait. A warm edit
+costs 0.18 to 0.25 s in all; a daemon's first run costs 0.6 s (pydispatcher)
+to 7.4 s (openglcontext-editor), about 15 s for openglcontext.
+
+It runs as a Claude Code `PostToolUse` hook on `Edit`, `Write` and
+`MultiEdit` (`.claude/settings.json`), silent on success and exit 2 with the
+findings on standard error otherwise, and as a git pre-commit hook
+(`tools/git-hooks/pre-commit`, installed per repository by hand; the loop is
+in `tools/editcheck.py`'s docstring). `--staged` checks the working-tree copy
+of each staged file, not the staged copy. The Claude hook names
+`.venv/bin/python`, so it does not run on Windows as written.
 
 ## Decided
 
