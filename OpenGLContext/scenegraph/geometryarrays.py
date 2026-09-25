@@ -231,8 +231,15 @@ def render_geometry(
     arrays: GeometryArrays,
     owner: Any = None,
     where: str = 'geometry',
+    ccw: bool = True,
+    solid: bool = True,
 ) -> bool:
     """Bind ``arrays`` and draw them through the program the pass has bound.
+
+    ``ccw`` is the triangles' own winding and ``solid`` whether their back
+    faces are culled; the front face is turned over where the modelview
+    mirrors (:func:`~OpenGLContext.scenegraph.winding.apply_winding_cull`),
+    so a geometry under a negative scale shows its outside.
 
     Returns False when the pass has no program to draw with, which is how a
     geometry node says "not this pass".
@@ -250,6 +257,8 @@ def render_geometry(
     report_missing_inputs(
         bound, arrays, shader_program.required_inputs(bound),
         mode=mode, node=owner, where=where)
+    from OpenGLContext.scenegraph.winding import apply_winding_cull
+    apply_winding_cull(mode, ccw, solid)
     glBindVertexArray(vao)
     try:
         draw_geometry(arrays, mode)

@@ -33,6 +33,7 @@ from typing import Any, Optional, Tuple
 
 log = logging.getLogger(__name__)
 from OpenGLContext import arrays
+from OpenGLContext.scenegraph.winding import apply_winding_cull
 from OpenGLContext.scenegraph.shadergeometry import (
     get_or_build_vao, SHARED_LAYOUT,
 )
@@ -190,6 +191,10 @@ class _SurfaceRenderer(object):
         stride, color_offset, normal_offset, vertex_offset = interleaved_layout(
             has_colors)
         program = vc_prog if has_colors else shader_program.program
+        # The surface's own winding and culling, turned over under a mirror.
+        surface = self._face_source()
+        apply_winding_cull(mode, bool(getattr(surface, 'ccw', True)),
+                           bool(getattr(surface, 'solid', True)))
 
         # The VAO is cached beside the buffers it describes: a tessellation
         # change makes new buffers, which rebuilds the VAO, and so does a change

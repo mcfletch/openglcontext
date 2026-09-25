@@ -201,15 +201,14 @@ class ArrayGeometry(object):
         )
 
         objectType, startIndex, count = self.arguments
-        apply_winding_cull(mode, self.ccw == GL_CCW, bool(self.solid))
-
         return render_geometry(mode, GeometryArrays.separate(
             count=count,
             draw_mode=objectType,
             positions=self.vertices,
             normals=self.normals,
             texcoords=self.textures,
-        ), owner=self, where='ArrayGeometry')
+        ), owner=self, where='ArrayGeometry', ccw=self.ccw == GL_CCW,
+            solid=bool(self.solid))
     def draw( self ) -> None:
         """Does the actual rendering after the arrays are set up
 

@@ -350,9 +350,6 @@ class IndexedPolygons(
             return 1
         index_vbo = self._get_index_vbo(mode)
 
-        from OpenGLContext.scenegraph.winding import apply_winding_cull
-        apply_winding_cull(mode, bool(self.ccw), bool(self.solid))
-
         from OpenGLContext.scenegraph.geometryarrays import (
             GeometryArrays, render_geometry,
         )
@@ -363,7 +360,8 @@ class IndexedPolygons(
             positions=vbos.coord,
             normals=vbos.normal if lit else None,
             texcoords=vbos.texCoord if textured else None,
-        ), owner=self, where='IndexedPolygons')
+        ), owner=self, where='IndexedPolygons', ccw=bool(self.ccw),
+            solid=bool(self.solid))
         return 1
 
     def drawTransparent(self, constant: int, mode: Any = None) -> None:

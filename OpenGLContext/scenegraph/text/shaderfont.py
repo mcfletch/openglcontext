@@ -159,20 +159,37 @@ class ShaderBitmapFont(font.NoDepthBufferMixIn, font.Font):
 
         viewport_width = viewport[2]
         viewport_height = viewport[3]
-
-        # Calculate text position - we need to convert from model space
-        # For now, render at a fixed screen position
-        # TODO: proper model-to-screen coordinate conversion
+        anchor = self.anchor(mode, viewport_width, viewport_height)
+        if anchor is None:
+            return
 
         text = '\n'.join(line.base for line in lines)
         renderer = get_text_renderer(self._char_height)
-
-        # Render at bottom-left with some margin
         renderer.render_text(
-            text, 10, 30, shader_program,
+            text, anchor[0], anchor[1], shader_program,
             viewport_width, viewport_height,
             color=(1.0, 1.0, 1.0, 1.0)
         )
+
+    @staticmethod
+    def anchor(mode: Any, width: float, height: float) -> tuple[float, float] | None:
+        """Where the node's origin falls in the viewport, in pixels from its bottom left.
+
+        The glyphs are drawn upright from there, as ``glRasterPos`` and
+        ``glBitmap`` draw a bitmap font: the origin moves with the node's
+        transform, the glyphs face the viewer at their own size. None where
+        the origin is behind the eye.
+        """
+        matrix = getattr(mode, 'matrix', None)
+        projection = getattr(mode, 'projection', None)
+        if matrix is None or projection is None:
+            return None
+        clip = np.array((0.0, 0.0, 0.0, 1.0)) @ np.asarray(matrix, 'd') @ np.asarray(
+            projection, 'd')
+        if clip[3] <= 1e-9:
+            return None
+        return ((clip[0] / clip[3] + 1.0) * 0.5 * float(width),
+                (clip[1] / clip[3] + 1.0) * 0.5 * float(height))
 
     def _render_legacy(self, lines: Any, fontStyle: Any, mode: Any) -> None:
         """Render using legacy OpenGL (compatibility mode).

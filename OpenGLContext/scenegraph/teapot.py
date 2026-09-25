@@ -28,6 +28,7 @@ import logging
 
 from OpenGLContext import contextresources
 from OpenGLContext.scenegraph import tessellationlod
+from OpenGLContext.scenegraph.winding import apply_winding_cull
 from OpenGLContext.scenegraph.vertexsemantics import (
     LOC_TEXCOORD, LOC_NORMAL, LOC_POSITION, LOC_TANGENT,
 )
@@ -409,13 +410,11 @@ class Teapot(nodetypes.Geometry, node.Node):
         bufs = self._buffers[(self._gl_context(), steps)]
 
         def draw() -> None:
-            cull_was_enabled = glIsEnabled(GL_CULL_FACE)
             # Interior faces are the reversed copies of the shell; cull backfaces
             # so exterior shows from outside and interior through the mouth,
-            # without coincident-face z-fighting.
-            glEnable(GL_CULL_FACE)
-            glCullFace(GL_BACK)
-            glFrontFace(GL_CCW)
+            # without coincident-face z-fighting. Through the pass's record of
+            # the cull state, which turns the front face over under a mirror.
+            apply_winding_cull(mode, True, True)
             if not self.solid:
                 glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
             self._draw_shader_array(bufs['base_vao'], bufs['base_count'])
@@ -423,8 +422,6 @@ class Teapot(nodetypes.Geometry, node.Node):
                 self._draw_shader_array(bufs['lid_vao'], bufs['lid_count'])
             if not self.solid:
                 glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
-            if not cull_was_enabled:
-                glDisable(GL_CULL_FACE)
 
         self._with_scaled_matrix(mode, shader_program, draw)
 

@@ -533,3 +533,13 @@ def scene_context() -> Callable[..., Any]:
     if refused:
         pytest.skip(refused)
     return scenes.scene_context
+
+
+@pytest.fixture
+def check_mirrored_render() -> Callable[..., Any]:
+    """:func:`OpenGLContext.testing.mirrored.check_mirrored_render`, skipping where there is no GL."""
+    from OpenGLContext.testing.mirrored import check_mirrored_render as check
+    refused = profile_unavailable('core')
+    if refused:
+        pytest.skip(refused)
+    return check
