@@ -38,7 +38,7 @@ def delta(report: bool = True) -> List[Any]:
     from a key binding in a running context.
     """
     objects = gc.get_objects()
-    new = [item for item in objects if id(item) not in whole_set]
+    new = [item for item in objects if id(item) not in whole_set]  # noqa: OGC131 addresses by design: holding the objects would keep all of them alive (module docstring)
     if report:
         for item in new:
             print('new', type(item), item)

@@ -320,7 +320,7 @@ class _IdentityCache:
 
     def get(self, obj: Any) -> Optional[int]:
         found = self._entries.get(id(obj))
-        return None if found is None else found[1]
+        return found[1] if found is not None and found[0] is obj else None
 
     def set(self, obj: Any, index: int) -> int:
         self._entries[id(obj)] = (obj, index)
