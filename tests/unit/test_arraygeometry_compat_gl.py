@@ -88,7 +88,7 @@ def test_the_sorted_transparent_draw_covers_the_same_triangle(geometry):
 
 
 @pytest.mark.usefixtures('gl_context')
-def test_a_geometry_without_the_optional_arrays_still_draws(gl_context):
+def test_a_geometry_without_the_optional_arrays_still_draws():
     """Colour, normal and texture arrays are optional; a position array is not."""
     plain = arraygeometry.ArrayGeometry(POSITIONS)
     assert plain.componentCounts == (3, 0, 0, 0)

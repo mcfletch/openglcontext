@@ -12,21 +12,21 @@ def gl_context(gl_window):
 
 
 @pytest.mark.usefixtures('gl_context')
-def test_state_captures_the_named_arguments(gl_context):
+def test_state_captures_the_named_arguments():
     captured = state.State()
     assert 'GL_LIGHTING' in captured
     assert 'GL_VENDOR' in captured
 
 
 @pytest.mark.usefixtures('gl_context')
-def test_diff_of_an_unchanged_context_is_empty(gl_context):
+def test_diff_of_an_unchanged_context_is_empty():
     """The multi-valued state -- the clear colour, the viewport -- compares."""
     before = state.State()
     assert state.State().diff(before) == {}
 
 
 @pytest.mark.usefixtures('gl_context')
-def test_diff_reports_a_changed_flag(gl_context):
+def test_diff_reports_a_changed_flag():
     glDisable(GL_LIGHTING)
     before = state.State()
     glEnable(GL_LIGHTING)
@@ -35,7 +35,7 @@ def test_diff_reports_a_changed_flag(gl_context):
 
 
 @pytest.mark.usefixtures('gl_context')
-def test_diff_reports_a_changed_multi_valued_setting(gl_context):
+def test_diff_reports_a_changed_multi_valued_setting():
     glClearColor(0.0, 0.0, 0.0, 1.0)
     before = state.State()
     glClearColor(1.0, 0.0, 0.0, 1.0)

@@ -50,7 +50,7 @@ def test_an_image_larger_than_the_child_limit_is_refused():
 
 
 @pytest.mark.usefixtures('gl_context')
-def test_the_driver_limit_caps_the_atlas_size(gl_context):
+def test_the_driver_limit_caps_the_atlas_size():
     """With no size asked for, the atlas is as big as the driver allows."""
     manager = AtlasManager(max_size=None)
     size = manager.calculate_max_size()

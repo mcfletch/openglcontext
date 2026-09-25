@@ -50,7 +50,7 @@ def isolated_registry():
 
 
 @pytest.mark.usefixtures('isolated_registry')
-def test_shader_provider_preferred_over_glut_in_legacy_mode(isolated_registry):
+def test_shader_provider_preferred_over_glut_in_legacy_mode():
     """On-screen (non-shader) rendering should pick the texture-atlas provider."""
     glut = _FakeProvider("glut")
     shader = _ShaderProvider("shader")
@@ -65,7 +65,7 @@ def test_shader_provider_preferred_over_glut_in_legacy_mode(isolated_registry):
 
 
 @pytest.mark.usefixtures('isolated_registry')
-def test_glut_used_as_fallback_when_no_shader_provider(isolated_registry):
+def test_glut_used_as_fallback_when_no_shader_provider():
     """Without a texture-atlas provider, the legacy provider still works."""
     glut = _FakeProvider("glut")
     glut.registerProvider(glut)
@@ -77,7 +77,7 @@ def test_glut_used_as_fallback_when_no_shader_provider(isolated_registry):
 
 
 @pytest.mark.usefixtures('isolated_registry')
-def test_legacy_provider_skipped_in_shader_mode(isolated_registry):
+def test_legacy_provider_skipped_in_shader_mode():
     """Core-profile (shader) mode must not fall back to a GLUT provider."""
     glut = _FakeProvider("glut")
     glut.registerProvider(glut)
@@ -89,7 +89,7 @@ def test_legacy_provider_skipped_in_shader_mode(isolated_registry):
 
 
 @pytest.mark.usefixtures('isolated_registry')
-def test_shader_provider_selected_in_shader_mode(isolated_registry):
+def test_shader_provider_selected_in_shader_mode():
     """Shader mode selects the shader-compatible provider."""
     glut = _FakeProvider("glut")
     shader = _ShaderProvider("shader")

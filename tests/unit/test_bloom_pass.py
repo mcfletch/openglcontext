@@ -23,7 +23,7 @@ def gl_context(gl_window):
 
 
 @pytest.mark.usefixtures('gl_context')
-def test_bloom_spreads_a_halo(gl_context):
+def test_bloom_spreads_a_halo():
     W = H = 96
     bp = BloomPass()
 
@@ -71,7 +71,7 @@ def test_bloom_enabled_reads_env(monkeypatch):
 
 
 @pytest.mark.usefixtures('gl_context')
-def test_same_size_begin_reuses_targets(gl_context):
+def test_same_size_begin_reuses_targets():
     """A second begin() at the same size must not reallocate the scene target."""
     bp = BloomPass()
     bp.begin(64, 64)
@@ -84,7 +84,7 @@ def test_same_size_begin_reuses_targets(gl_context):
 
 
 @pytest.mark.usefixtures('gl_context')
-def test_resize_reallocates_targets(gl_context):
+def test_resize_reallocates_targets():
     """begin() at a new size releases the old targets and allocates fresh ones."""
     bp = BloomPass()
     bp.begin(64, 64)

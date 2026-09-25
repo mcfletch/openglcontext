@@ -310,7 +310,7 @@ class TestTheContextKey:
 
 
 @pytest.mark.usefixtures('gl_context')
-def test_a_backend_names_the_context_to_pyopengl_by_its_handle(gl_context):
+def test_a_backend_names_the_context_to_pyopengl_by_its_handle():
     handle = contextresources.current_handle()
     assert not isinstance(handle, contextresources.ContextKey)
     assert handle == contextdata.getContext()

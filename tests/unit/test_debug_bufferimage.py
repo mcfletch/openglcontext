@@ -39,7 +39,7 @@ def _clear_rect(x: int, y: int, width: int, height: int,
 
 
 @pytest.mark.usefixtures('gl_context')
-def test_depth_normalises_a_uniform_buffer(gl_context):
+def test_depth_normalises_a_uniform_buffer():
     """A depth dump of a cleared buffer is an image, not an exception."""
     _clear(depth=1.0)
     image = bufferimage.depth(0, 0, WIDTH, HEIGHT)
@@ -48,7 +48,7 @@ def test_depth_normalises_a_uniform_buffer(gl_context):
 
 
 @pytest.mark.usefixtures('gl_context')
-def test_depth_values_stay_inside_a_byte(gl_context):
+def test_depth_values_stay_inside_a_byte():
     """The far plane is white: the depth range is scaled across the byte."""
     _clear(depth=1.0)
     image = bufferimage.depth(0, 0, WIDTH, HEIGHT, normalise=False)
@@ -56,7 +56,7 @@ def test_depth_values_stay_inside_a_byte(gl_context):
 
 
 @pytest.mark.usefixtures('gl_context')
-def test_depth_normalisation_spans_the_byte(gl_context):
+def test_depth_normalisation_spans_the_byte():
     """Normalising puts the nearest depth at black and the furthest at white."""
     _clear(depth=1.0)
     _clear_rect(0, 0, WIDTH, HEIGHT // 2, depth=0.5)
@@ -65,7 +65,7 @@ def test_depth_normalisation_spans_the_byte(gl_context):
 
 
 @pytest.mark.usefixtures('gl_context')
-def test_depth_reads_the_rectangle_it_is_asked_for(gl_context):
+def test_depth_reads_the_rectangle_it_is_asked_for():
     """The x,y origin is honoured rather than being read from the corner."""
     _clear(depth=1.0)
     _clear_rect(8, 4, 4, 4, depth=0.0)
@@ -76,7 +76,7 @@ def test_depth_reads_the_rectangle_it_is_asked_for(gl_context):
 
 
 @pytest.mark.usefixtures('gl_context')
-def test_stencil_reads_the_rectangle_it_is_asked_for(gl_context):
+def test_stencil_reads_the_rectangle_it_is_asked_for():
     """The stencil dump honours x,y as well."""
     _clear(stencil=3)
     _clear_rect(8, 4, 4, 4, stencil=7)
@@ -85,7 +85,7 @@ def test_stencil_reads_the_rectangle_it_is_asked_for(gl_context):
 
 
 @pytest.mark.usefixtures('gl_context')
-def test_the_default_rectangle_is_the_whole_viewport(gl_context):
+def test_the_default_rectangle_is_the_whole_viewport():
     """No rectangle given means the viewport."""
     _clear()
     assert bufferimage.depth().size == (WIDTH, HEIGHT)
@@ -93,7 +93,7 @@ def test_the_default_rectangle_is_the_whole_viewport(gl_context):
 
 
 @pytest.mark.usefixtures('gl_context')
-def test_flip_puts_the_first_gl_row_at_the_bottom(gl_context):
+def test_flip_puts_the_first_gl_row_at_the_bottom():
     """GL numbers rows from the bottom, PIL from the top; ``flip`` reconciles.
 
     The dump is not mirrored left to right either way, so a patch on the right

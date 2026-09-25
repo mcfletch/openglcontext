@@ -104,7 +104,7 @@ def gl_context(gl_window):
 
 
 @pytest.mark.usefixtures('gl_context')
-def test_frustum_extraction_matches_glfrustum(gl_context):
+def test_frustum_extraction_matches_glfrustum():
     """Frustum planes pulled from GL match the near/far fed to glFrustum.
 
     The near/far planes extracted from the projection matrix must reproduce the
