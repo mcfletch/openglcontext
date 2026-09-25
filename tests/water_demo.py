@@ -43,7 +43,7 @@ not merely flatten but comes back as a longer one that was never in the
 water.
 
 Every sheet is built with `on_gpu=True`: uploaded once, then moved by the
-four `wave_time` writes in `OnIdle`. Nothing is re-meshed and nothing is
+five `wave_time` writes in `OnIdle` (three pools, the lake and the river). Nothing is re-meshed and nothing is
 re-uploaded to make the water move.
 
 Each pool is also a `Volume`, and the camera position goes to `submerge`
@@ -327,7 +327,7 @@ class TestContext(BaseContext):
 
     def OnIdle(self, event=None):
         when = systemtime.systemTime() - self._start
-        # The whole per-frame cost of moving four bodies of water: one uniform
+        # The whole per-frame cost of moving five bodies of water: one uniform
         # each. The meshes were uploaded in OnInit and are not touched again.
         for mesh in self.meshes:
             mesh.wave_time = when

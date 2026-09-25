@@ -418,8 +418,9 @@ from one end to the other. Each pool holds a grid of floats placed on the
 surface with ``wave_height`` once a frame, so you can see the scale of the
 waves. Over one pool, ``STILL`` (left) is flat to the millimetre, ``FLOWING``
 (middle) spans 0.34 m from trough to crest, and ``CHOPPY`` (right) spans
-1.58 m. Every sheet is built with ``on_gpu=True``, so a frame costs four
-``wave_time`` writes and no uploads. Behind the river is a 180 m ``LAKE``,
+1.58 m. Every sheet is built with ``on_gpu=True``, so a frame costs five
+``wave_time`` writes (the three pools, the lake and the river) and no
+uploads. Behind the river is a 180 m ``LAKE``,
 meshed by ``mesh_across``. The demo runs with ``OPENGLCONTEXT_SHADOWS=0``.
 
 Keys:
@@ -582,9 +583,9 @@ Limits
 - No physics body. Buoyancy and drag code can read ``wave_height``; the object
   being moved decides what to do with it.
 
-- Refraction comes from the material. Water is a :doc:`PBR <pbr>` material
-  with transmission and an index of refraction of 1.33; there is no
-  screen-space refraction.
+- Water does not refract what is behind it. It is a blended :doc:`PBR <pbr>`
+  material with an index of refraction of 1.33, which sets its reflectance;
+  the bed shows through its transparency undisplaced.
 
 - A volume is a box. To give a sloping river a medium, cut it into several
   boxes.
