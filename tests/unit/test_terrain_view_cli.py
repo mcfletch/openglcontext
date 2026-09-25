@@ -3,17 +3,14 @@
 ground clamp and object collision). OnInit and the OnIdle movement loop drive a live
 window + streaming and are covered by the terrain render/subprocess tests, not here."""
 import os
+import subprocess
+import sys
 import types
 
 import numpy as np
 import pytest
 
-from OpenGLContext.testing.gl_env import import_unconfigured
-
-# The viewer settles the renderer as it is imported, being a program; these
-# tests read its non-GL helpers, so the settling is put back.
-T = import_unconfigured('OpenGLContext.bin.terrain_view')
-
+from OpenGLContext.bin import terrain_view as T
 from OpenGLContext.loaders.tiles3d import procedural as P
 from OpenGLContext.loaders.tiles3d.scatter import Scatter
 
@@ -52,6 +49,40 @@ class TestMain:
         T.main([])
         assert ran.get('size') == 'default'
         assert T.TerrainContext.config.source is None
+
+    def test_the_renderer_is_settled_when_the_viewer_starts(self, monkeypatch):
+        for name in ('OPENGLCONTEXT_RENDERER', 'OPENGLCONTEXT_IBL',
+                     'OPENGLCONTEXT_SHADOWS', 'OPENGLCONTEXT_SHADOW_CASCADES'):
+            monkeypatch.delenv(name, raising=False)
+        monkeypatch.setenv('OPENGLCONTEXT_IBL', 'full')
+        monkeypatch.setattr(T.TerrainContext, 'ContextMainLoop',
+                            classmethod(lambda cls: None))
+        T.main([])
+        assert os.environ['OPENGLCONTEXT_RENDERER'] == 'pbr'
+        assert os.environ['OPENGLCONTEXT_SHADOWS'] == '1'
+        assert os.environ['OPENGLCONTEXT_SHADOW_CASCADES'] == '3'
+        assert os.environ['OPENGLCONTEXT_IBL'] == 'full', 'a choice made is kept'
+
+    def test_importing_the_viewer_configures_nothing(self):
+        """A test or an application importing it for a helper gets no renderer."""
+        program = (
+            'import os, sys\n'
+            'before = {k: v for k, v in os.environ.items() if k.startswith("OPENGLCONTEXT_")}\n'
+            'import OpenGLContext.bin.terrain_view\n'
+            'after = {k: v for k, v in os.environ.items() if k.startswith("OPENGLCONTEXT_")}\n'
+            'sys.stdout.write(repr(sorted(set(after.items()) ^ set(before.items()))))\n'
+        )
+        environ = {k: v for k, v in os.environ.items()
+                   if not k.startswith('OPENGLCONTEXT_')}
+        done = subprocess.run([sys.executable, '-c', program], env=environ,
+                              capture_output=True, text=True, timeout=120)
+        assert done.returncode == 0, done.stderr
+        assert done.stdout == '[]'
+
+    def test_the_context_class_is_built_once_and_nothing_else_is_made_up(self):
+        assert T.TerrainContext is T.terrain_context()
+        assert issubclass(T.TerrainContext, T.TerrainViewer)
+        assert not hasattr(T, 'NoSuchContext')
 
     def test_size_flag_is_parsed_into_the_loop(self, monkeypatch):
         seen = {}

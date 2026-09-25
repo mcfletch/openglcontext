@@ -28,6 +28,7 @@ Controls:
     - / =              slower / faster (fly & sprint speed)
 """
 import argparse
+import functools
 import math
 import os
 import sys
@@ -35,12 +36,6 @@ import tempfile
 import time
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, cast
-
-os.environ.setdefault("OPENGLCONTEXT_RENDERER", "pbr")
-os.environ.setdefault("OPENGLCONTEXT_IBL", "off")
-os.environ.setdefault("OPENGLCONTEXT_BACKEND", "glfw")
-os.environ.setdefault("OPENGLCONTEXT_SHADOWS", "1")          # sun shadows through the canopy
-os.environ.setdefault("OPENGLCONTEXT_SHADOW_CASCADES", "3")
 
 import numpy as np
 from OpenGLContext import testingcontext
@@ -68,10 +63,22 @@ from OpenGLContext.loaders import cc0
 from OpenGLContext.loaders.tiles3d.frustum import view_projection
 
 if TYPE_CHECKING:
-    from OpenGLContext.context import Context as BaseContext
+    from OpenGLContext.context import Context as _ContextBase
     from OpenGLContext.loaders.tiles3d.scatter import Scatter
 else:
-    BaseContext = testingcontext.getInteractive()
+    _ContextBase = object
+
+#: What the viewer sets the renderer to as it starts, before its context class
+#: is chosen: the PBR pass, since terrain tiles are PBR glTF; sun shadows
+#: through the canopy; and the GLFW backend for the core profile. A variable
+#: already set keeps its value.
+TERRAIN_DEFAULTS = {
+    "OPENGLCONTEXT_RENDERER": "pbr",
+    "OPENGLCONTEXT_IBL": "off",
+    "OPENGLCONTEXT_BACKEND": "glfw",
+    "OPENGLCONTEXT_SHADOWS": "1",
+    "OPENGLCONTEXT_SHADOW_CASCADES": "3",
+}
 
 HOLD = 0.6           # seconds a key event keeps driving movement; wide enough to bridge
                      # the OS char-repeat initial delay when only 'keypress' events come
@@ -127,7 +134,10 @@ def _walkable_spawn(height_fn: "P.HeightFn") -> tuple[float, float, float]:
     return best[0], _surface(height_fn, *best), best[1]
 
 
-class TerrainContext(BaseContext):
+class TerrainViewer(_ContextBase):
+    """The terrain viewer, over whichever interactive context
+    :func:`terrain_context` puts beneath it."""
+
     config: Any = None
     # Members supplied by the interactive runtime base (event + navigation mixins)
     # that the minimal type-check-time ``Context`` alias does not expose.
@@ -567,15 +577,41 @@ def build_parser() -> argparse.ArgumentParser:
     return p
 
 
+@functools.cache
+def terrain_context() -> Any:
+    """The viewer over the interactive context the environment names, built once.
+
+    Naming a base class chooses a window system, so it happens when the viewer
+    starts rather than when this module is imported.
+    """
+    base: Any = testingcontext.getInteractive()
+
+    class TerrainContext(TerrainViewer, base):
+        pass
+
+    TerrainContext.__qualname__ = TerrainContext.__name__
+    return TerrainContext
+
+
+def __getattr__(name: str) -> Any:
+    """``TerrainContext``, the viewer's context class, built on first use."""
+    if name == "TerrainContext":
+        return terrain_context()
+    raise AttributeError("module %r has no attribute %r" % (__name__, name))
+
+
 def main(argv: list[str] | None = None) -> Any:
     args = build_parser().parse_args(argv)
     if args.source and args.dem:
         build_parser().error("give either a tileset.json or --dem, not both")
-    TerrainContext.config = args
+    for name, value in TERRAIN_DEFAULTS.items():
+        os.environ.setdefault(name, value)
+    context = terrain_context()
+    context.config = args
     if args.size:
         w, h = (int(v) for v in args.size.lower().split("x"))
-        return TerrainContext.ContextMainLoop(size=(w, h))
-    return TerrainContext.ContextMainLoop()
+        return context.ContextMainLoop(size=(w, h))
+    return context.ContextMainLoop()
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry point
