@@ -39,8 +39,8 @@ from .store import ContentStore
 log = logging.getLogger(__name__)
 
 __all__ = ['Cancelled', 'FLOOR', 'FetchJob', 'HEADROOM', 'REGISTRY_LIMIT',
-           'TooLarge', 'fetch_limit', 'fetch_pack', 'fetch_registry',
-           'missing_base', 'wanted_for']
+           'TooLarge', 'base_fetches', 'fetch_limit', 'fetch_pack',
+           'fetch_registry', 'missing_base', 'wanted_for']
 
 #: How much larger than its published size a pack is allowed to be. A size
 #: drifts between releases, and a fetch that fails on the last megabyte is worse
@@ -95,17 +95,33 @@ def missing_base(packs: Sequence[ContentPack],
     floor. Empty where an application ships all of its own art, which is the
     answer for anything that declares no base pack.
 
-    What a base pack needs is asked for, and fetched, **within** that base pack,
-    so an application fetching this set passes the base pack as ``within``.
+    The list to show the user for consent: titles, sizes and terms. What a
+    base pack needs lands within that base pack, so fetch the set through
+    :func:`base_fetches`, which pairs each pack with the one it lands in.
     """
     wanted: list[ContentPack] = []
-    for pack in packs:
-        if not pack.base:
+    for one, _within in base_fetches(packs, store):
+        if one not in wanted:
+            wanted.append(one)
+    return wanted
+
+
+def base_fetches(packs: Sequence[ContentPack], store: ContentStore
+                 ) -> list[tuple[ContentPack, ContentPack]]:
+    """What a first run fetches, each paired with the base pack it lands in.
+
+    ``(pack, within)`` for every base pack not on this machine and every pack
+    it needs, where ``within`` is that base pack -- the pack itself, for the
+    base pack. :class:`FetchJob` takes the pairs as they are, and a caller
+    fetching in the foreground passes each ``within`` to :func:`fetch_pack`.
+    A pack two base packs need is fetched into each.
+    """
+    wanted: list[tuple[ContentPack, ContentPack]] = []
+    for base in packs:
+        if not base.base:
             continue
-        for one in store.missing(catalog.with_needed(pack, packs),
-                                 within=pack):
-            if one not in wanted:
-                wanted.append(one)
+        for one in store.missing(catalog.with_needed(base, packs), within=base):
+            wanted.append((one, base))
     return wanted
 
 
@@ -256,20 +272,34 @@ class FetchJob:
     spans the whole set, weighted by the sizes the user was shown.
     """
 
-    def __init__(self, packs: Sequence[ContentPack], store: ContentStore,
+    def __init__(self,
+                 packs: Sequence[ContentPack | tuple[ContentPack,
+                                                     ContentPack | None]],
+                 store: ContentStore,
                  fetch: Fetch | None = None, cache_dir: str | None = None,
                  on_progress: Callable[[], None] | None = None,
                  within: ContentPack | None = None) -> None:
-        self.packs = list(packs)
+        #: Each pack, and the pack it lands within (None for its own place).
+        #: ``packs`` may give that pairing itself, as :func:`base_fetches`
+        #: does; a bare pack takes ``within``.
+        self.wanted: list[tuple[ContentPack, ContentPack | None]] = [
+            one if isinstance(one, tuple) else (one, within) for one in packs]
+        self.packs = [one for one, _ in self.wanted]
         self.store = store
         self.cache_dir = cache_dir
-        #: The pack this job was started for. Everything in it lands under that
-        #: one's directory, which is what a world and the art it needs are.
+        #: The pack this job was started for, where it was started for one.
         self.within = within
-        self._fetch: Fetch = fetch if fetch is not None else (
-            lambda pack, progress, cancel: fetch_pack(
-                pack, store, progress, cancel, cache_dir=cache_dir,
-                within=within))
+        self._fetch_within: Callable[[ContentPack, ContentPack | None,
+                                      resolver.Progress, resolver.Cancel], str]
+        if fetch is not None:
+            self._fetch_within = (
+                lambda pack, _within, progress, cancel: fetch(
+                    pack, progress, cancel))
+        else:
+            self._fetch_within = (
+                lambda pack, where, progress, cancel: fetch_pack(
+                    pack, store, progress, cancel, cache_dir=cache_dir,
+                    within=where))
         #: Called after each :meth:`poll` that saw something change, so a caller
         #: can ask for a redraw without polling for a difference.
         self.on_progress = on_progress
@@ -355,21 +385,27 @@ class FetchJob:
         self.failed, self.cancelled = failed, cancelled
         self.state = current or self.state
         self.finished = ended
-        if ended and failed is None and not cancelled:
-            self.fraction = 1.0
+        if ended:
+            if cancelled:
+                self.state = 'cancelled'
+            elif failed is not None:
+                self.state = 'failed: %s' % (failed,)
+            else:
+                self.state, self.fraction = 'done', 1.0
         if changed and self.on_progress is not None:
             self.on_progress()
 
     def _work(self) -> None:
         """The worker. Everything it writes is written under the lock."""
         try:
-            for pack in self.packs:
+            for pack, within in self.wanted:
                 with self._lock:
                     if self._stop:
                         raise Cancelled('the download was stopped')
                     self._current = pack.title
                     before = self._done_bytes
-                root = self._fetch(pack, self._progress(before), self._stopping)
+                root = self._fetch_within(pack, within, self._progress(before),
+                                          self._stopping)
                 with self._lock:
                     self._roots.append(root)
                     self._done_bytes = before + pack.approximate_bytes
@@ -377,7 +413,7 @@ class FetchJob:
             with self._lock:
                 self._cancelled = True
         except BaseException as error:      # published, never raised at a caller
-            log.warning('fetching content failed: %s', error)
+            log.warning('fetching content failed: %s', error, exc_info=error)
             with self._lock:
                 self._failed = error
         finally:

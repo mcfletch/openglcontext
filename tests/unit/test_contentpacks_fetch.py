@@ -639,3 +639,64 @@ class TestWhereARegistryMayComeFrom:
             fetch.fetch_registry(url, store, cache_dir=cache)
         assert asked == []
         assert store.registries() == []
+
+
+class TestTheFirstRunWithAPackTheBaseNeeds:
+    """What a base pack needs is fetched within it, and found there next run."""
+
+    def packs(self, where, base):
+        make_tarball(where, 'cars.tar.gz')
+        make_tarball(where, 'shared.tar.gz', members=('shared/a.bin',))
+        cars = pack(base + '/cars.tar.gz', key='glisteel/cars',
+                    directory='cars', base=True,
+                    sha256=digest_of(where / 'cars.tar.gz'),
+                    needs=('glisteel/shared',))
+        shared = pack(base + '/shared.tar.gz', key='glisteel/shared',
+                      directory='shared', marker='shared')
+        return catalog.merge([cars, shared])
+
+    def test_each_is_paired_with_the_base_pack_it_lands_in(
+            self, served, store, cache) -> None:
+        where, base = served
+        packs = self.packs(where, base)
+        assert [(one.key, within.key) for one, within in
+                fetch.base_fetches(packs, store)] == [
+            ('glisteel/cars', 'glisteel/cars'),
+            ('glisteel/shared', 'glisteel/cars')]
+
+    def test_a_job_of_them_is_not_asked_for_again(self, served, store,
+                                                  cache) -> None:
+        where, base = served
+        packs = self.packs(where, base)
+        job = drive(fetch.FetchJob(fetch.base_fetches(packs, store), store,
+                                   cache_dir=cache))
+        assert job.failed is None
+        assert fetch.missing_base(packs, store) == []
+        assert fetch.base_fetches(packs, store) == []
+
+
+class TestWhatAFinishedJobSays:
+    def test_a_job_that_arrived_says_so(self, served, store, cache) -> None:
+        where, base = served
+        make_tarball(where, 'a.tar.gz')
+        job = drive(fetch.FetchJob([pack(base + '/a.tar.gz')], store,
+                                   cache_dir=cache))
+        assert job.state == 'done'
+
+    def test_a_failed_job_says_so(self, served, store, cache, caplog) -> None:
+        _, base = served
+        job = drive(fetch.FetchJob([pack(base + '/absent.tar.gz')], store,
+                                   cache_dir=cache))
+        assert job.state.startswith('failed')
+        assert any(record.exc_info for record in caplog.records), (
+            'the failure was logged without its traceback')
+
+    def test_a_cancelled_job_says_so(self, served, store, cache) -> None:
+        where, base = served
+        make_tarball(where, 'a.tar.gz', ['f%d' % n for n in range(8)],
+                     big=64 * 1024)
+        job = fetch.FetchJob([pack(base + '/a.tar.gz')], store,
+                             cache_dir=cache)
+        job.cancel()
+        drive(job)
+        assert job.state == 'cancelled'

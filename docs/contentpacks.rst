@@ -424,12 +424,23 @@ Art the application cannot start without is an ordinary pack marked
    wanted = fetch.missing_base(packs, store)
    if wanted:
        ask_the_user(wanted)            # title, combined size, terms
-       fetch.FetchJob(wanted, store)
+       job = fetch.FetchJob(fetch.base_fetches(packs, store), store)
 
-``missing_base`` returns every base pack that is not on this machine, together
-with the packs those need. It returns an empty list for an application that
-ships all of its own art, and for one whose base packs are already
-downloaded.
+``missing_base`` returns the packs a first run still has to fetch: every base
+pack whose content is not on this machine, and every pack a base pack needs
+that is not yet unpacked within it. It returns an empty list for an
+application that ships all of its own art, and for one whose base packs are
+already downloaded. Show it to the user for consent.
+
+A pack a base pack needs unpacks *within* that base pack, so fetch the set
+through ``base_fetches``, which pairs each pack with the base pack it lands
+in. ``FetchJob`` takes those pairs as they are. In the foreground, fetch each
+pair with ``fetch.fetch_pack(pack, store, within=base)``. Fetched without its
+``within``, a needed pack would land in a directory of its own, and the next
+run's ``missing_base`` would ask for it again.
+
+When the job finishes, ``job.state`` is ``'done'``, ``'cancelled'`` or
+``'failed: '`` and the reason; a failure is also logged with its traceback.
 
 .. _offline:
 
@@ -516,9 +527,12 @@ every application:
    tag, paths)``. This runs the GitHub CLI. It creates the release at that tag
    the first time, and replaces the release's assets after that. A GitHub
    release asset can be up to 2 GB, with no limit on the number of assets and
-   no bandwidth charge, at a stable URL of the form
+   no bandwidth charge, at a URL of the form
    ``https://github.com/<owner>/<repo>/releases/download/<tag>/<file>``. Use a
-   tag only for content, separate from the code's release tags.
+   tag only for content, separate from the code's release tags. A rebuilt pack
+   pushed to the same tag keeps its URL and changes its bytes; the registry's
+   new ``sha256`` is what makes installed copies update (see :ref:`Installing
+   <installing>`), so give every pack you rebuild in place a digest.
 
 #. Publish the preview pictures with the registry, because a chooser shows
    them before anything is downloaded.
