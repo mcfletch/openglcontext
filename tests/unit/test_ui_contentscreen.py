@@ -232,3 +232,15 @@ class TestReopening:
         again.poll()
         assert again.progress.text == contentscreen.DONE
         assert finished == []
+
+
+class TestAHeading:
+    def test_it_is_above_the_offer(self):
+        screen = ContentScreen([ASHDOWN], heading='2 sets, 32 MB in all')
+        column = screen.panel.children[0]
+        assert column.children[0] is screen.heading
+        assert screen.panel.find('heading').text == '2 sets, 32 MB in all'
+
+    def test_none_is_no_line(self):
+        screen = ContentScreen([ASHDOWN])
+        assert screen.panel.find('heading') is None

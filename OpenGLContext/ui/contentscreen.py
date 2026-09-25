@@ -72,7 +72,9 @@ class ContentScreen:
     chosen pack (the first, with ``together``), and returns the
     :class:`~OpenGLContext.contentpacks.fetch.FetchJob` it started, or None.
     ``on_finished(job)`` is called once when that job ends, however it ended,
-    and ``on_close()`` once when the screen is closed. ``job`` is a download
+    and ``on_close()`` once when the screen is closed. ``heading`` is a line
+    shown above the offer (the size of the whole catalogue, say). ``job`` is a
+    download
     already under way (one a closed screen started) to show from the start;
     one that has already ended is shown and not reported again.
 
@@ -88,7 +90,8 @@ class ContentScreen:
                  on_close: Optional[Callable[[], None]] = None,
                  title: str = '', together: bool = False,
                  columns: int = COLUMNS,
-                 job: Optional[FetchJob] = None) -> None:
+                 job: Optional[FetchJob] = None,
+                 heading: str = '') -> None:
         self.packs: List[ContentPack] = []
         self.wanted = wanted
         self.together = together
@@ -119,6 +122,10 @@ class ContentScreen:
                                self.close_button])]
         if not together:
             body.insert(0, self.chooser)
+        #: The line above the offer; empty shows none.
+        self.heading = Label(text=heading, wrap=True, name='heading')
+        if heading:
+            body.insert(0, self.heading)
         self.panel = Panel(title=title or _('Content'), scrim=True, modal=True,
                            preferredColumns=columns,
                            children=[Column(spacing=4, children=body)])
