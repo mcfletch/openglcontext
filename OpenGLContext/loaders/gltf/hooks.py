@@ -178,11 +178,10 @@ def register(kind: str, factory: Optional[Factory] = None, *,
              advance: Optional[Advance] = None) -> Any:
     """Bind ``kind`` to a factory, as a decorator or as a call.
 
-    The engine claims the bare lowercase names it documents and ships, so an
-    application naming its own kinds keeps them out of that namespace --
-    ``glisteel:rail``, ``twigbb:teleporter``. A convention, read by nothing, so
-    that a kind a game invents today does not collide with one the engine
-    ships later.
+    The engine claims the bare lowercase names it documents and ships. An
+    application names its own kinds with a prefix -- ``glisteel:rail``,
+    ``twigbb:teleporter`` -- so they cannot collide with a kind the engine
+    ships later; nothing enforces the prefix.
     """
     def bind(bound: Factory) -> Factory:
         _REGISTRY[kind] = Registration(kind, bound, shareable, advance)

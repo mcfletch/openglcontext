@@ -120,7 +120,7 @@ class GLTFScene(object):
         self.node_morph: dict = {}
         # sky: the OMI_environment_sky record the active scene selected, or None.
         # The Background it describes is already in `group`; this is the record
-        # itself, so a caller can report a sky nothing here can draw yet.
+        # itself, so a caller can report a sky the engine does not draw.
         self.sky: Any = None
         # skins: Skin objects, one per skinned mesh node.
         self.skins: list = []
@@ -405,11 +405,9 @@ def _meter_exposure(light_meter: list, center: Sequence[float]) -> float:
     so that it maps to a fixed target. Never brightens (result <= 1.0), so
     normalized test scenes (intensity ~1) and IBL/analytic-lit scenes stay at 1.0.
 
-    The contributions are **added**, because that is what illuminance does. A
-    hall with twenty lamps down it is brighter than the same hall with one, and
-    a meter reading only the strongest lamp returns the same number for both --
-    so the room lit the way a room is lit comes out over by about the number of
-    lamps in it.
+    The contributions are added, as illuminance adds: a hall with twenty lamps
+    down it is brighter than the same hall with one, and the exposure brings
+    both to the same target.
     """
     if not light_meter:
         return 1.0

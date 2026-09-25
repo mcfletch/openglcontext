@@ -274,8 +274,7 @@ class TilesTerrain(Group):
         different for the grass as they are for the ground.
 
         A world names one kind of plant or a set of them. The set is the record
-        with a ``species`` list in it; the bare record is the one plant, which
-        is what a world baked before there were sets of them carries.
+        with a ``species`` list in it; a record without one is a single plant.
         """
         if not record or self.field is None or self.ground is None:
             return

@@ -16,16 +16,16 @@ is the distance the streamer is already willing for the drawn surface to stand
 from the real one. So one level never moves the ground further than the level
 above it was allowed to be wrong by.
 
-**What is drawn is what is collided against.** The height field a world carries
-is the one surface every reader agrees about -- the car, the camera, the seat of
-a scattered plant -- so the grain goes into *it*, and the tiles are meshed from
-the same function; the coarser levels are that surface with its finer bands left
-off, which is ordinary level of detail. A band the field's own grid could not
-hold would be relief a player sees and walks straight through, and
-:meth:`Relief.no_finer_than` cuts those before anything draws them.
+What is drawn is what is collided against. The height field a world carries is
+the one surface every reader uses -- the car, the camera, the seat of a
+scattered plant -- so the grain goes into it, and the tiles are meshed from the
+same function; the coarser levels are that surface with its finer bands left
+off. A band the field's own grid could not hold would be relief a player sees
+and walks through, and :meth:`Relief.no_finer_than` removes those before
+anything draws them.
 
-``where`` is the other half of agreeing: ground that was *worked* has no grain
-in it, and a road is ground that was worked.
+``where`` says how much grain each place gets: ground that was worked, such as
+a road, has none.
 
 Its bake-time use is :mod:`OpenGLContext_editor.bake.layers`, which meshes each
 tile of ground from the height function with its own relief added, and
@@ -92,14 +92,17 @@ class Relief:
 
     def __post_init__(self) -> None:
         if self.finest <= 0.0:
-            raise ValueError("a feature smaller than nothing is not a feature")
+            raise ValueError(
+                "relief's finest feature must be larger than 0 m, not %r"
+                % (self.finest,))
         if self.coarsest < self.finest:
             raise ValueError(
                 "relief runs from its coarsest feature (%r) down to its finest "
                 "(%r)" % (self.coarsest, self.finest))
         if self.samples_per_feature < 2.0:
             raise ValueError(
-                "a feature sampled fewer than twice is speckle, not relief")
+                "relief needs at least 2 samples per feature, not %r"
+                % (self.samples_per_feature,))
 
     def wavelengths(self) -> tuple[float, ...]:
         """Every feature size this relief is made of, coarsest first."""

@@ -60,8 +60,8 @@ def _salted(seed: np.uint32, salt: int) -> np.uint32:
     all of them together and leave two species standing in each other's places.
     The salt is avalanched before it is mixed in, so adjacent salts -- which is
     what a species index is -- give unrelated streams. Salt 0 is the seed
-    itself, because ``_mix32(0)`` is 0: an unsalted scatter is the scatter that
-    was there before there were salts to ask for.
+    itself, because ``_mix32(0)`` is 0, so a scatter with salt 0 is the
+    unsalted one.
     """
     # Mixed as a one-element array: array arithmetic wraps silently, where
     # numpy's scalar arithmetic reports the wrap the hash is made of.
@@ -196,15 +196,14 @@ def world_grid_scatter(cx: float, cz: float, radius: float, density: float,
         world-anchored (a cell's fate never changes as the disc recentres, no popping).
     :param scale_range: how far the per-instance scale spreads either side of
         ``scale_mul``, as multiples of it. A scatter of identical plants reads as a
-        printed pattern, so each is scaled by its own cell's hash -- but what the
-        spread is *around* is the caller's: a species that says it is 0.4 m tall and
-        averages 0.28 m is 0.4 m of nothing. A range about 1 keeps the mean where the
-        caller put it; the default is the half-to-full spread this has always had.
+        printed pattern, so each is scaled by its own cell's hash within this
+        range. A range centred on 1 keeps the mean at ``scale_mul``, so a species
+        that says it is 0.4 m tall averages 0.4 m; the default spreads from half
+        to full size.
     :param salt: which grid this is. Ground cover is several species at once, each at
         its own density; a salt of its own gives each one an independent
         world-anchored grid, so no two species stand in the same places and each keeps
-        the pop-free property separately. Any integer. The default is the one grid
-        there has always been.
+        the pop-free property separately. Any integer; 0 is the unsalted grid.
     :returns: ``(positions Nx3 float32, yaws N float32, scales N float32)``,
         empty where ``density`` is 0 or less.
     """

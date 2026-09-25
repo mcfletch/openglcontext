@@ -164,3 +164,12 @@ Red/Green throughout, against real physics — no mocks of the collider:
    whether a re-bake of the shipped baked world is acceptable now.
 3. **Whether the tunnel `portals` need any collider at all**, or the `bore`
    plus the carriageway is enough once the mouth is open.
+
+## Barrier kerb height (landed)
+
+`BarrierProfile.kerb` was 0.35 m. On the Beacon track a car at 69 km/h climbed
+it (a road wheel is 0.33 m in radius), the bodywork passed over the open
+railing, and the car rode along the top of the barrier into the trees; the
+autopilot could not finish a lap there. The kerb is 0.5 m: half again a wheel,
+up to the bodywork, and still 12.7 degrees of downward view for a driver in
+the near lane against the twelve `TestWhatADriverCanSeePastTheBarrier` asks for.

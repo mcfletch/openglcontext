@@ -25,11 +25,10 @@ containment core, kept in one auditable place. It enforces:
 :func:`safe_url`, :func:`fetch_url` and :func:`decode_data_uri` are the
 fetch/decode primitives; :class:`Resolver` ties them to one document's origin.
 
-**These are public names**, not the engine's own business: a loader in another
-distribution -- ``OpenGLContext_editor`` reading a baked level's sidecar, an
-application reading a format this project has never heard of -- is held to the
-same policy by importing the same names, and a containment rule with a second
-implementation somewhere else is a containment rule with a hole in it.
+These names are public. A loader in another distribution --
+``OpenGLContext_editor`` reading a baked level's sidecar, an application
+reading its own format -- imports them to be held to the same policy rather
+than implementing containment again.
 """
 
 __all__ = [
@@ -674,9 +673,8 @@ def _report(progress: Optional[Progress], done: int,
             total: Optional[int]) -> None:
     """Tell a watcher how far along we are, and survive it if it falls over.
 
-    Reporting is the caller's business: a progress bar that raises is a broken
-    progress bar, not a failed download, and losing a 450 MB fetch to one would
-    be an absurd trade.
+    An exception from ``progress`` is logged and the download goes on: a
+    progress display that fails does not end a fetch.
     """
     if progress is None:
         return

@@ -177,9 +177,8 @@ def mesh_across(side: float, style: "Optional[WaterStyle]" = None,
 
     From the *wavelength*, not from a count picked once: one count cannot suit
     both a pond and a lake the size of a valley. A sheet meshed too coarsely
-    for its own wave samples it under the Nyquist limit, where the wave does
-    not merely flatten but returns as a longer one that was never in the
-    water -- which is what open water looks like when it looks like concrete.
+    for its own wave samples it under the Nyquist limit, where the wave
+    aliases to a longer one that is not in the water.
 
     Bounded at both ends. Never above ``limit``, because a sheet is one draw
     and that is what it costs, in the file of a baked world as much as in the
@@ -407,9 +406,8 @@ def water_surface(x0: float, x1: float, z0: float, z1: float,
     of the wave the surface can actually hold, and a sheet meshed too coarsely
     for its wavelength is a flat sheet with a strange normal.
 
-    ``when`` is the time to build it at, in seconds. ``ripple`` overrides the
-    style's steepness, and is there because a caller that had one before this
-    had styles still means it.
+    ``when`` is the time to build it at, in seconds. ``ripple``, where given,
+    overrides the style's steepness.
 
     ``on_gpu`` meshes it **flat** and puts the style in the mesh's
     ``waveStyle`` field for the card instead: the surface is uploaded once and
@@ -494,8 +492,8 @@ def water_ribbon(course: Any, width: Any, style: Optional[WaterStyle] = None,
     metres across, either one number or one per point, so a river carrying more
     is wider further down.
 
-    A lake is one flat plane and a river is not, which is the whole reason this
-    exists: a sheet at a level cannot follow a course downhill. The wave field
+    A lake is one flat plane; a river runs downhill, which a sheet at one
+    level cannot follow. The wave field
     is the same one a sheet uses and is still taken from world position, so a
     river meeting a lake agrees with it along the join.
 

@@ -1,10 +1,8 @@
 """What grows on the ground between the trees.
 
-A wood with bare ground under it is trees standing on a lawn. What makes the
-floor of one read as a floor is *cover*, and a floor is not one plant repeated:
-it is grass and fern and nettle and shrub, each at its own density and its own
-size. :class:`GroundCover` takes a set of :class:`CoverSpecies` and draws each
-through the whole distance chain.
+A forest floor is covered with several plants -- grass, fern, nettle, shrub --
+each at its own density and its own size. :class:`GroundCover` takes a set of
+:class:`CoverSpecies` and draws each through the whole distance chain.
 
 Each species is drawn at three reaches, because what the eye can tell apart
 falls away with distance faster than the cost of drawing it does:
@@ -34,13 +32,13 @@ says where the grass and the leaf litter are, and it already has the road's
 corridor painted out of them, so :func:`control_weight` turns that map into the
 mask and nothing else has to know about the road.
 
-How it is *lit* is decided by the ground as well. A terrain under a canopy is
+How it is lit is decided by the ground as well. A terrain under a canopy is
 already darkened by it -- see
-:meth:`~OpenGLContext.scenegraph.terrain.splat.SplatTerrain.shade` -- and cover
-that ignores that is a row of lamps on the forest floor, so ``shade`` hands the
-same figure to each instance.
+:meth:`~OpenGLContext.scenegraph.terrain.splat.SplatTerrain.shade` -- and
+``shade`` hands the same figure to each instance, so cover is as dark as the
+ground it stands on.
 
-**The scatter is the expensive half and it touches no GL**, so a caller with a
+The scatter is the expensive half and it touches no GL, so a caller with a
 worker thread runs :meth:`GroundCover.compute_near` there and calls
 :meth:`GroundCover.apply_near` on the render thread with what came back;
 :meth:`GroundCover.update` is the same work done in line. :meth:`GroundCover.select`
@@ -189,9 +187,8 @@ class CoverSpecies(Varied, Node):
     how tall one is in metres, ``cardWidth`` how wide its card is as a fraction
     of that, and ``sunLevel`` how flatly the card is lit.
 
-    **Where it grows, not just how much.** Undergrowth is not evenly spread:
-    ferns stand in beds and shrubs in thickets, with grass through and between
-    them. ``patchiness`` runs from 0 -- as likely here as anywhere, which is
+    Undergrowth is not evenly spread: ferns stand in beds and shrubs in
+    thickets, with grass through and between them. ``patchiness`` runs from 0 -- as likely here as anywhere, which is
     what a grass or a small flower wants -- to 1, gathered into beds with bare
     ground between; ``patchMetres`` is how far across one bed is.
 
@@ -736,7 +733,7 @@ class GroundCover(Group):
                                       scales[within],
                                       None if lit is None else lit[within])
 
-    # -- the whole thing in line, for a caller with no worker ------------------
+    # -- scatter and selection in line, for a caller with no worker -----------
 
     def update(self, position: Any) -> None:
         """Bring the cover up to date for a camera here; call once a frame.

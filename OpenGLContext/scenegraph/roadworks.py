@@ -69,45 +69,26 @@ INWARD = 'inward'
 class BarrierProfile:
     """What stands on the edge of a structure to keep a car on it, in metres.
 
-    A barrier has to be tall enough to hold a car and low enough to see past,
-    and those pull opposite ways. What settles it is that they apply to
-    different parts of it: a solid ``kerb`` is what a wheel meets, and an open
-    railing above it takes the barrier to its full ``height`` while being almost
-    entirely holes.
+    A barrier has to be tall enough to hold a car and low enough to see past.
+    The two apply to different parts of it: a solid ``kerb`` is what a wheel
+    meets, and an open railing above it takes the barrier to its full
+    ``height`` while being mostly holes. A driver sees down past the kerb and
+    through the railing, which matters on a deck built over a view;
+    :meth:`sightline` is that angle.
 
-    **What a driver can see down past is the kerb**, because the railing is
-    looked through. That is the whole reason for the shape. A deck forty metres
-    over a valley is built there *because* of what is under it, and a solid wall
-    at eye height turns the crossing into a corridor and hides the only thing
-    the structure was for. :meth:`sightline` is that as a number.
-
-    **And it has to hold a car**, which is what decides how low the kerb may
-    go. A solid part of 0.35 m looks like a parapet and restrains nothing: a
-    road wheel is 0.33 m in radius, so it climbs one at any speed, the bodywork
-    passes over a railing that is by design almost entirely holes, and the car
-    ends up riding along the top of the barrier. That is not a thought
-    experiment -- it is the shipped Beacon track at 69 km/h, two wheels in the
-    air, mired in the trees a few seconds later, and it was the whole of why
-    the autopilot could not finish a lap there.
-
-    So the solid part is waist-high on the car it restrains rather than
-    ankle-high: taller than a wheel by half again, and up to where the bodywork
-    is, so a wheel meets a face instead of a ramp. The railing above is
-    unchanged and still almost entirely holes, so what a driver sees down past
-    it changes in degree and not in kind.
-
-    **The two pull against each other and 0.5 m is where they meet**: half a
-    metre is a wheel and a half, it reaches the bodywork, and it still leaves a
-    driver in the near lane 12.7 degrees of downward view, against the twelve
-    that :class:`TestWhatADriverCanSeePastTheBarrier` asks for. There is no
-    room in that for a taller kerb, so a deck that needs a stronger parapet
-    wants a different shape rather than a bigger number here.
+    The kerb's height is set by the car it has to hold. A road wheel is about
+    0.33 m in radius and climbs a lower kerb, after which the bodywork rides
+    over the railing, so the default of 0.5 m is half again a wheel and
+    reaches the bodywork. It still leaves a driver in the near lane 12.7
+    degrees of downward view past a deck's edge
+    (``tests/unit/test_roadworks.py`` holds that at twelve or more). A deck
+    that needs a stronger parapet wants a different shape rather than a taller
+    kerb.
 
     ``rails`` is how many horizontal bars the railing has and ``rail_depth``
     how thick one is; ``post_spacing`` and ``post_width`` are the uprights
-    carrying them. A ``kerb`` at or above ``height`` is a **wall**, and no
-    railing is built -- which is what a causeway a metre over a marsh wants,
-    since there is nothing under it to see.
+    carrying them. A ``kerb`` at or above ``height`` is a wall, and no railing
+    is built: a causeway a metre over a marsh has nothing under it to see.
     """
 
     height: float = 1.1

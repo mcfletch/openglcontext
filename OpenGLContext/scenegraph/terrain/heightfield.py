@@ -191,11 +191,10 @@ class HeightField:
             stops where the opening starts rather than a cell either side of it.
 
         A height field is a surface, so a hill with a road running *through* it
-        has no way to say it is hollow. ``holes`` is that way. The rule is the
-        one :class:`~OpenGLContext.physics.heightfield.HeightFieldColliders`
-        applies, to the letter, so the surface a player sees and the surface a
-        car meets are the same surface — agreeing by construction rather than by
-        care. Pass the same callable to both.
+        cannot be hollow without ``holes``. The rule is the one
+        :class:`~OpenGLContext.physics.heightfield.HeightFieldColliders`
+        applies, so given the same callable the surface a player sees and the
+        surface a car meets are the same surface.
 
         The vertices of the grid stay where they are and keep their indices;
         what the cut needs is appended after them.
