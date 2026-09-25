@@ -29,27 +29,6 @@ from OpenGLContext.testing.subprocess_runner import (
 )
 from OpenGLContext.testing.event_injector import EventSender
 
-# Disable vsync for the whole test run (inherited by GL subprocess tests via the
-# environment). On Wayland a vsync swap blocks on a compositor frame callback,
-# which a leaked GL context from an abnormally-terminated earlier test can wedge,
-# hanging every later swap. Off, swaps never block on the compositor, so one
-# flaky/killed GL test cannot stall the rest of the suite. Respected by
-# glfwcontext; harmless on other backends.
-os.environ.setdefault('OPENGLCONTEXT_NO_VSYNC', '1')
-
-# Render offscreen for the whole run (inherited by GL subprocess tests via the
-# environment). A suite with hundreds of GL tests in it otherwise opens, maps
-# and destroys hundreds of windows, which flash over whatever the person running
-# it is doing and steal focus while they type. A hidden window renders and reads
-# back identically -- every capture and every glReadPixels sees the same pixels
-# -- and on Wayland it is also the only way a swap is guaranteed not to block on
-# a compositor that has nothing to show. Respected by glfwcontext; the Qt
-# backend says it cannot and opens one anyway.
-#
-# Set OPENGLCONTEXT_HIDDEN=0 to watch a test render, which is how you find out
-# why one looks wrong.
-os.environ.setdefault('OPENGLCONTEXT_HIDDEN', '1')
-
 # Timeout settings
 DEFAULT_TIMEOUT = 30  # Most tests
 SLOW_TEST_TIMEOUT = 120  # Heavy initialization (NURBS, large scenes)
@@ -363,9 +342,34 @@ def interactive_runner(subprocess_runner, event_sender):
     return run
 
 
-# Pytest markers for test categorization
+@pytest.hookimpl(tryfirst=True)
 def pytest_configure(config):
-    """Register custom markers."""
+    """Settle how the session's windows are drawn, and register custom markers.
+
+    First among the configure hooks, so that the plugins' own start-up and
+    every child process launched from then on inherit the settings.
+    """
+    # Disable vsync for the whole test run (inherited by GL subprocess tests via the
+    # environment). On Wayland a vsync swap blocks on a compositor frame callback,
+    # which a leaked GL context from an abnormally-terminated earlier test can wedge,
+    # hanging every later swap. Off, swaps never block on the compositor, so one
+    # flaky/killed GL test cannot stall the rest of the suite. Respected by
+    # glfwcontext; harmless on other backends.
+    os.environ.setdefault('OPENGLCONTEXT_NO_VSYNC', '1')
+
+    # Render offscreen for the whole run (inherited by GL subprocess tests via the
+    # environment). A suite with hundreds of GL tests in it otherwise opens, maps
+    # and destroys hundreds of windows, which flash over whatever the person running
+    # it is doing and steal focus while they type. A hidden window renders and reads
+    # back identically -- every capture and every glReadPixels sees the same pixels
+    # -- and on Wayland it is also the only way a swap is guaranteed not to block on
+    # a compositor that has nothing to show. Respected by glfwcontext; the Qt
+    # backend says it cannot and opens one anyway.
+    #
+    # Set OPENGLCONTEXT_HIDDEN=0 to watch a test render, which is how you find out
+    # why one looks wrong.
+    os.environ.setdefault('OPENGLCONTEXT_HIDDEN', '1')
+
     config.addinivalue_line(
         "markers", "slow: marks tests as slow (deselect with '-m \"not slow\"')"
     )
