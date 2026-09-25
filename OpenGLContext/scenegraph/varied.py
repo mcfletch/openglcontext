@@ -21,8 +21,9 @@ class Varied:
     """Mixin for a :class:`vrml.node.Node` class: :meth:`varied` copies."""
 
     if TYPE_CHECKING:
-        # What the node class this is mixed into provides.
-        def copy(self: _Self) -> _Self: ...
+        # What the node class this is mixed into provides, with
+        # vrml.node.Node.copy's signature so the two bases agree.
+        def copy(self, copier: Any = None) -> Any: ...
 
     def varied(self: _Self, **fields: Any) -> _Self:
         """A copy of this node with ``fields`` set on it; this one is unchanged."""
