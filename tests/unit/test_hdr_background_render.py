@@ -221,19 +221,42 @@ def test_dispose_frees_compiled_skybox(gl_context):
 
 
 def test_free_render_data_deletes_real_objects(gl_context):
+    from OpenGL.GL import glIsBuffer, glIsTexture, glIsVertexArray
     from OpenGLContext.scenegraph import hdrbackground as H
     from OpenGLContext.scenegraph.hdrbackground import HDRBackground
     bg = HDRBackground(image=_panorama())
-    render_data = bg.compile(_Mode())
-    H._free_render_data(render_data)            # real texture/VBO/VAO teardown
+    bg.bound = 1
+    _render_frame(bg)                           # binds every object it made
+    (render_data,) = bg._render_data.values()
+    tex, vert_vbo, index_vbo, _program, _locations, vao = render_data
+    names = [int(vert_vbo), int(index_vbo)]
+    assert glIsTexture(tex) and glIsVertexArray(vao)
+    assert all(glIsBuffer(name) for name in names)
+
+    H._free_render_data(render_data)
     bg._render_data = {}
 
+    assert not glIsTexture(tex)
+    assert not glIsVertexArray(vao)
+    assert not any(glIsBuffer(name) for name in names)
 
-def test_free_render_data_ignores_falsey_and_broken_data(gl_context):
+
+def test_free_render_data_ignores_falsey_and_broken_data(gl_context, caplog):
+    import logging
+    from OpenGL.GL import GL_NO_ERROR, glGetError
     from OpenGLContext.scenegraph import hdrbackground as H
-    H._free_render_data(None)                    # nothing to free -> early return
-    # A malformed tuple exercises every teardown except-guard without crashing.
+    caplog.set_level(logging.DEBUG, logger=H.log.name)
+    assert H._free_render_data(None) is None     # nothing to free
+    assert caplog.records == []
+    # A malformed tuple reaches every teardown guard; each one logs and the
+    # teardown carries on to the next object.
     H._free_render_data((None, object(), object(), None, None, None))
+    messages = [record.getMessage() for record in caplog.records]
+    assert sum('buffer teardown' in m for m in messages) == 2
+    assert any('VAO teardown' in m for m in messages)
+    while glGetError() != GL_NO_ERROR:           # the context is still usable
+        pass
+    assert glGetError() == GL_NO_ERROR
 
 
 if __name__ == '__main__':

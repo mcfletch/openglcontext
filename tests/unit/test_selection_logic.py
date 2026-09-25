@@ -259,16 +259,24 @@ class _FakeBuffer:
 
 class TestProcessPickEventsFromBufferEarlyOut:
     def test_empty_events_returns(self):
+        """With nothing to pick, the buffer is not even fetched."""
         sel = _bare()
-        # No buffer needed; must return before touching one.
-        sel.processPickEventsFromBuffer(mode=None, events={})
+        fetched = []
+        sel._getSelectionBuffer = lambda: fetched.append(1)
+        assert sel.processPickEventsFromBuffer(mode=None, events={}) is None
+        assert fetched == []
 
     def test_uninitialized_buffer_falls_back(self):
+        """An unready buffer is not read and no event is dispatched from it,
+        leaving the events to the rendered pick."""
         sel = _bare()
         buf = _FakeBuffer()
         sel._getSelectionBuffer = lambda: buf
         sel.matrix = identity(4, 'f')
         sel.viewport = (0, 0, 16, 16)
-        # read_pixel must not be called when the buffer isn't initialized.
-        sel.processPickEventsFromBuffer(
-            mode=None, events={'k': FakeEvent('mousebutton', 1, 1)})
+        dispatched = []
+        sel._dispatchPickEvent = lambda *args: dispatched.append(args)
+        event = FakeEvent('mousebutton', 1, 1)
+        sel.processPickEventsFromBuffer(mode=None, events={'k': event})
+        assert dispatched == []
+        assert event.paths is None

@@ -5,6 +5,7 @@ pick there returns garbage. The transparent passes must disable blending on the
 object-id attachment (indexed blend enable) whenever MRT picking is active.
 """
 import inspect
+import logging
 
 import pytest
 
@@ -19,11 +20,16 @@ class TestDisableObjectIdBlendHelper:
         assert calls == [(_flat.GL_BLEND, _flat.OBJECT_ID_ATTACHMENT)]
         assert _flat.OBJECT_ID_ATTACHMENT == 1
 
-    def test_swallows_driver_error(self, monkeypatch):
+    def test_swallows_driver_error(self, monkeypatch, caplog):
+        """A driver without indexed enables keeps its blend state; the
+        failure is logged rather than raised into the pass."""
         def boom(cap, i):
             raise RuntimeError("no indexed blend")
         monkeypatch.setattr(_flat, 'glDisablei', boom)
-        _flat.disable_object_id_blend()   # must not raise
+        caplog.set_level(logging.DEBUG, logger=_flat.log.name)
+        assert _flat.disable_object_id_blend() is None
+        assert [r.getMessage() for r in caplog.records] == [
+            'indexed blend disable unavailable: no indexed blend']
 
 
 class TestTransparentPassesGuardObjectId:

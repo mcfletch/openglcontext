@@ -118,4 +118,6 @@ class TestWhatAShapeSays:
             def configure_appearance(self, appearance, mode):
                 pass
 
-        _shape()._render_shader(Recording(Plain()))
+        shape = _shape()
+        shape._render_shader(Recording(Plain()))
+        assert DRAWN == [shape.geometry]

@@ -396,9 +396,18 @@ class TestDisposeShadowMaps:
         assert m._depth_grouping_cache is None
 
     def test_idempotent(self):
+        """A second dispose frees nothing twice and leaves everything empty."""
         m = ShadowMapMixin()
+        arr, cube = self._Pool(), self._Pool()
+        m._shared_array = arr
+        m._maps_cube = {0: cube}
         m.disposeShadowMaps()
-        m.disposeShadowMaps()   # nothing allocated -> no crash
+        m.disposeShadowMaps()
+        assert arr.cleaned == cube.cleaned == 1
+        assert m._shared_array is None
+        assert m._shared_cube_array is None
+        assert m._maps_cube is None
+        assert m._depth_map_cache is None
 
 
 class TestRenderShadowMapsGuards:

@@ -117,12 +117,24 @@ def test_instance_buffer_delete_frees_its_store(monkeypatch):
 
 def test_delete_gl_swallows_bad_handles(monkeypatch):
     """A double-free or absent GL context must not crash teardown -- every
-    per-object delete is guarded, so freeing already-dead handles is a no-op."""
-    def boom(*a):
-        raise RuntimeError("no current GL context")
-    monkeypatch.setattr(ig, 'glDeleteVertexArrays', boom)
-    monkeypatch.setattr(ig, 'glDeleteBuffers', boom)
-    monkeypatch.setattr(ig, 'glDeleteTextures', boom)
-    monkeypatch.setattr(ig, 'glDeleteProgram', boom)
-    # Must not raise despite every underlying delete throwing.
-    ig.delete_gl(vaos=[1], buffers=[2], textures=[3], programs=[4])
+    per-object delete is guarded, so one failing delete does not stop the
+    ones after it."""
+    attempted = []
+
+    def boom(name):
+        def delete(*args):
+            attempted.append((name, args))
+            raise RuntimeError("no current GL context")
+        return delete
+    for name in ('glDeleteVertexArrays', 'glDeleteBuffers',
+                 'glDeleteTextures', 'glDeleteProgram'):
+        monkeypatch.setattr(ig, name, boom(name))
+    assert ig.delete_gl(vaos=[1, 5], buffers=[2], textures=[3],
+                        programs=[4]) is None
+    assert attempted == [
+        ('glDeleteVertexArrays', (1, [1])),
+        ('glDeleteVertexArrays', (1, [5])),
+        ('glDeleteBuffers', (1, [2])),
+        ('glDeleteTextures', ([3],)),
+        ('glDeleteProgram', (4,)),
+    ]

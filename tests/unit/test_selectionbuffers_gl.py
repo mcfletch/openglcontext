@@ -208,9 +208,22 @@ class TestSelectionBufferFBO:
         sb.unbind()
 
     def test_blit_before_init_is_noop(self, gl_context):
+        """Nothing allocated, so the screen keeps what it had and no GL error
+        is left behind."""
+        from OpenGL.GL import GL_NO_ERROR, glGetError
+        glBindFramebuffer(GL_FRAMEBUFFER, 0)
+        glViewport(0, 0, 96, 96)
+        glClearColor(0.0, 0.0, 1.0, 1.0)
+        glClear(GL_COLOR_BUFFER_BIT)
+        while glGetError() != GL_NO_ERROR:
+            pass
         sb = SelectionBufferFBO()
-        # No GL error, no exception when nothing has been allocated.
         sb.blit_to_screen(96, 96)
+        assert glGetError() == GL_NO_ERROR
+        assert sb.fbo is None
+        raw = glReadPixels(48, 48, 1, 1, GL_RGBA, GL_UNSIGNED_BYTE)
+        px = np.frombuffer(bytes(raw), dtype=np.uint8).ravel()
+        assert tuple(px[:3]) == (0, 0, 255)
 
     def test_blit_copies_scene_colour_to_default_framebuffer(self, gl_context):
         sb = SelectionBufferFBO()
