@@ -237,7 +237,10 @@ coarsest level, and a reader without ``MSFT_lod`` draws the finest level.
 ``"octahedralHemi": true`` (the default) stores only the upper hemisphere of
 directions and uses the whole atlas for it. Use it for an object that stands
 on the ground and is never seen from below. ``"octahedralHemi": false`` stores
-the whole sphere, for an object that can be seen from any side.
+the whole sphere, for an object that can be seen from any side. The flag may
+be written as a boolean, a number, or a word (``"false"``, ``"no"``, ``"0"``,
+as a Blender custom property often holds it); anything else is logged and is
+the hemisphere.
 
 .. _impostor-size:
 

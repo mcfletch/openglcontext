@@ -102,3 +102,32 @@ class TestAMaterialThatDoesNot:
 
         assert material.octahedralViews == 0
         assert 'lots' in caplog.text
+
+
+class TestALayoutWrittenAsText:
+    """A Blender custom property is as often the string ``"false"`` as the
+    boolean, and the two mean the same layout."""
+
+    @pytest.mark.parametrize('written, hemisphere', [
+        ('false', False), ('False', False), ('0', False), ('no', False),
+        ('true', True), ('yes', True), (0, False), (1, True),
+    ])
+    def test_the_layout_is_read_from_text(self, tmp_path, written, hemisphere):
+        material = _material_of(tmp_path, _document(
+            {'octahedralViews': 8, 'octahedralHemi': written}))
+
+        assert bool(material.octahedralHemi) is hemisphere
+
+    def test_a_layout_that_is_no_flag_is_the_hemisphere_and_said(
+            self, tmp_path, caplog):
+        material = _material_of(tmp_path, _document(
+            {'octahedralViews': 8, 'octahedralHemi': 'upper'}))
+
+        assert material.octahedralHemi
+        assert 'upper' in caplog.text
+
+    @pytest.mark.parametrize('views', [float('inf'), 1e999, 2.5, -8])
+    def test_a_count_that_is_no_whole_number_is_no_impostor(self, tmp_path, views):
+        document = _document({'octahedralViews': 8})
+        document['materials'][0]['extras']['octahedralViews'] = views
+        assert _material_of(tmp_path, document).octahedralViews == 0

@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any, Callable, List, Optional
 from OpenGLContext.scenegraph.pbrmaterial import (
     PBRMaterial, PBRTexture, uv_transform_matrix,
 )
+from OpenGLContext.loaders.documentvalues import DocumentValues
 from OpenGLContext.loaders.resolver import Resolver
 from OpenGLContext.loaders.gltf import hooks
 from OpenGLContext.loaders.gltf.textures import _info, _texture_holder, _pil_for_texinfo
@@ -235,21 +236,21 @@ def _octahedral_impostor(mat: Any) -> dict:
     """``octahedralViews``/``octahedralHemi`` where the material declares them.
 
     A grid of fewer than two views a side is one picture, which is an ordinary
-    textured card and wants none of this.
+    textured card and wants none of this. A count that is no whole number is
+    reported and the material is an ordinary one; a layout is a flag, written
+    as a boolean, a number or a word such as ``"false"``.
     """
     extras = getattr(mat, 'extras', None)
     if not isinstance(extras, dict):
         return {}
-    try:
-        views = int(extras.get(IMPOSTOR_VIEWS, 0) or 0)
-    except (TypeError, ValueError):
-        log.warning('%r is not a number of views; the material is drawn as an '
-                    'ordinary one', extras.get(IMPOSTOR_VIEWS))
-        return {}
+    values = DocumentValues(logger=log)
+    views = values.integer(extras.get(IMPOSTOR_VIEWS), 0, 'the impostor views',
+                           minimum=0, maximum=2 ** 31 - 1)
     if views < 2:
         return {}
     return {'octahedralViews': views,
-            'octahedralHemi': bool(extras.get(IMPOSTOR_HEMI, True))}
+            'octahedralHemi': values.flag(extras.get(IMPOSTOR_HEMI), True,
+                                          'the impostor hemisphere')}
 
 
 def _build_material(g: "pygltflib.GLTF2", material_index: Optional[int],
