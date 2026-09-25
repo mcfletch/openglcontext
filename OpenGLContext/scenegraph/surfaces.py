@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, Sequence, Tuple
+from typing import Any, NamedTuple, Sequence, Tuple
 
 import numpy as np
 
@@ -31,6 +31,7 @@ __all__ = [
     'GOLD', 'COPPER', 'STEEL', 'BRONZE', 'SILVER', 'Maps', 'tileable_noise',
     'fbm', 'marble', 'checkered_marble', 'brick', 'plaster', 'sandstone',
     'brushed_metal', 'normal_map', 'to_srgb', 'images', 'pbr_material',
+    'Geometry', 'panel', 'polygon', 'block', 'shape',
 ]
 
 #: Metals' reflectance at normal incidence, linear, which is a metal's base
@@ -264,3 +265,125 @@ def pbr_material(maps: Maps, relief: float = 2.0, **factors: Any) -> Any:
     settings = dict(baseColor=(1.0, 1.0, 1.0), metallic=1.0, roughness=1.0)
     settings.update(factors)
     return PBRMaterial(textures=textures, **settings)
+
+
+# --- geometry that wears a surface at its size -----------------------------------
+
+class Geometry(NamedTuple):
+    """A mesh to wear a surface: the arrays a ``PBRMesh`` takes.
+
+    ``texcoords`` are in repeats of the surface, so a surface keeps the size
+    it was made for however large the mesh is; ``tangents`` run the way the
+    texture's u runs, with a handedness of 1, which a normal map is read
+    along. Triangles wind counter-clockwise seen from the side the normals
+    face.
+    """
+
+    positions: np.ndarray
+    normals: np.ndarray
+    texcoords: np.ndarray
+    tangents: np.ndarray
+    indices: np.ndarray
+
+
+def _facing_z(positions: np.ndarray, indices: Sequence[int], repeat: float,
+              origin: Tuple[float, float]) -> Geometry:
+    """Points in the xy plane, facing +z, textured by the metre from ``origin``."""
+    count = len(positions)
+    at = np.asarray(positions, 'f')
+    texcoords = ((at[:, :2] - np.asarray(origin, 'f')) / float(repeat)).astype('f')
+    return Geometry(at, np.tile(np.array([0.0, 0.0, 1.0], 'f'), (count, 1)), texcoords,
+                    np.tile(np.array([1.0, 0.0, 0.0, 1.0], 'f'), (count, 1)),
+                    np.asarray(indices, np.uint32))
+
+
+def panel(width: float, height: float, repeat: float = 1.0) -> Geometry:
+    """A ``width`` by ``height`` rectangle centred in its own xy plane, facing +z.
+
+    The surface repeats every ``repeat`` metres, starting at the bottom-left
+    corner.
+    """
+    half_w, half_h = width / 2.0, height / 2.0
+    corners = [(-half_w, -half_h, 0.0), (half_w, -half_h, 0.0),
+               (half_w, half_h, 0.0), (-half_w, half_h, 0.0)]
+    return _facing_z(np.array(corners), [0, 1, 2, 0, 2, 3], repeat, (-half_w, -half_h))
+
+
+def polygon(radius: float, sides: int = 8, repeat: float = 1.0) -> Geometry:
+    """A regular polygon of ``sides`` round its own origin in the xy plane, facing +z.
+
+    Its corners are ``radius`` from the centre, the first a half-step round
+    from +x so that an octagon stands on a flat side. The surface repeats
+    every ``repeat`` metres.
+    """
+    angles = [math.pi / sides + index * 2.0 * math.pi / sides for index in range(sides)]
+    rim = [(radius * math.cos(angle), radius * math.sin(angle), 0.0) for angle in angles]
+    fan = [index for side in range(sides) for index in (0, 1 + side, 1 + (side + 1) % sides)]
+    return _facing_z(np.array([(0.0, 0.0, 0.0)] + rim), fan, repeat, (-radius, -radius))
+
+
+def _turned(geometry: Geometry, rotation: np.ndarray, offset: np.ndarray) -> Geometry:
+    turn = rotation.astype('f')
+    tangents = geometry.tangents.copy()
+    tangents[:, :3] = tangents[:, :3] @ turn.T
+    return Geometry((geometry.positions @ turn.T + offset).astype('f'),
+                    (geometry.normals @ turn.T).astype('f'), geometry.texcoords,
+                    tangents, geometry.indices)
+
+
+def _about(axis: int, angle: float) -> np.ndarray:
+    """The rotation by ``angle`` radians about axis 0, 1 or 2."""
+    cos, sin = math.cos(angle), math.sin(angle)
+    first, second = [index for index in range(3) if index != axis]
+    turn = np.identity(3)
+    turn[first, first] = turn[second, second] = cos
+    turn[second, first], turn[first, second] = sin, -sin
+    if axis == 1:
+        turn = turn.T
+    return turn
+
+
+def block(size: Sequence[float], repeat: float = 1.0) -> Geometry:
+    """A box of ``size`` (x, y, z) centred on its own origin, each face outward.
+
+    Every face is textured by the metre from its own corner, so a slab or a
+    column wears its surface at the surface's size on every side, where a
+    ``Box`` stretches one texture across each face.
+    """
+    x, y, z = (float(value) for value in size)
+    half_pi = math.pi / 2.0
+    faces = (
+        (panel(x, y, repeat), np.identity(3), (0.0, 0.0, z / 2)),
+        (panel(x, y, repeat), _about(1, math.pi), (0.0, 0.0, -z / 2)),
+        (panel(z, y, repeat), _about(1, half_pi), (x / 2, 0.0, 0.0)),
+        (panel(z, y, repeat), _about(1, -half_pi), (-x / 2, 0.0, 0.0)),
+        (panel(x, z, repeat), _about(0, -half_pi), (0.0, y / 2, 0.0)),
+        (panel(x, z, repeat), _about(0, half_pi), (0.0, -y / 2, 0.0)),
+    )
+    parts = [_turned(face, turn, np.asarray(offset, 'f')) for face, turn, offset in faces]
+    return Geometry(
+        np.concatenate([part.positions for part in parts]),
+        np.concatenate([part.normals for part in parts]),
+        np.concatenate([part.texcoords for part in parts]),
+        np.concatenate([part.tangents for part in parts]),
+        np.concatenate([part.indices + 4 * index for index, part in enumerate(parts)]
+                       ).astype(np.uint32))
+
+
+def shape(geometry: Geometry, material: Any,
+          translation: Sequence[float] = (0.0, 0.0, 0.0),
+          rotation: Sequence[float] = (0.0, 1.0, 0.0, 0.0)) -> Any:
+    """A ``Transform`` holding ``geometry`` wearing ``material``, placed in the scene.
+
+    ``rotation`` is VRML97's axis and angle in radians.
+    """
+    from OpenGLContext.scenegraph import basenodes
+    from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+
+    mesh = PBRMesh(positions=geometry.positions, normals=geometry.normals,
+                   texcoords=geometry.texcoords, tangents=geometry.tangents,
+                   indices=geometry.indices, material=material)
+    return basenodes.Transform(
+        translation=tuple(translation), rotation=tuple(rotation),
+        children=[basenodes.Shape(geometry=mesh,
+                                  appearance=basenodes.Appearance(material=material))])

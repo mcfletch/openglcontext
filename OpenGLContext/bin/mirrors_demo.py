@@ -29,25 +29,25 @@ Keys:
 
 Walk with the arrow keys; the developer overlay shows each frame's mirror
 views, their draws, texels and GPU time.
+
+The room is :mod:`OpenGLContext.bin.mirrorhall`, which has no mirrors of its
+own; everything here is about the mirrors.
 """
 from __future__ import annotations
 
 import logging
-import math
 import sys
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Tuple
 
-import numpy as np
-
+from OpenGLContext.bin.mirrorhall import Hall
 from OpenGLContext.scenegraph import basenodes, surfaces
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
-from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 from OpenGLContext.scenegraph.water import STILL, water_surface
 
 log = logging.getLogger(__name__)
 
-__all__ = ['BOUNCES', 'BUDGETS', 'INTERVALS', 'Finishes', 'MirrorHall', 'main']
+__all__ = ['BOUNCES', 'BUDGETS', 'INTERVALS', 'MirrorHall', 'main']
 
 #: The ``reflectionViews`` the ``b`` key steps through; 0 is the strategy's own.
 BUDGETS: Tuple[int, ...] = (0, 1, 2, 4)
@@ -57,69 +57,6 @@ BOUNCES: Tuple[int, ...] = (2, 3, 1)
 
 #: The corridor intervals the ``i`` key steps through.
 INTERVALS: Tuple[int, ...] = (3, 1, 6)
-
-
-def _panel(width: float, height: float, texture: float = 1.0) -> Tuple[np.ndarray, ...]:
-    """A flat rectangle in its own xy plane, facing +z.
-
-    Its texture coordinates are in units of ``texture`` metres, so a surface
-    repeats at the size it was drawn for however large the panel is.
-    """
-    half_w, half_h = width / 2.0, height / 2.0
-    positions = np.array([(-half_w, -half_h, 0), (half_w, -half_h, 0),
-                          (half_w, half_h, 0), (-half_w, half_h, 0)], 'f')
-    normals = np.array([(0, 0, 1)] * 4, 'f')
-    texcoords = ((positions[:, :2] + (half_w, half_h)) / texture).astype('f')
-    return positions, normals, texcoords, np.array([0, 1, 2, 0, 2, 3], np.uint32)
-
-
-def _octagon(radius: float) -> Tuple[np.ndarray, ...]:
-    """A flat octagon in its own xy plane, facing +z: a round window."""
-    angles = [math.pi / 8 + index * math.pi / 4 for index in range(8)]
-    rim = [(radius * math.cos(a), radius * math.sin(a), 0.0) for a in angles]
-    positions = np.array([(0.0, 0.0, 0.0)] + rim, 'f')
-    normals = np.array([(0, 0, 1)] * 9, 'f')
-    texcoords = (positions[:, :2] / (2 * radius) + 0.5).astype('f')
-    indices = np.array([index for side in range(8)
-                        for index in (0, 1 + side, 1 + (side + 1) % 8)], np.uint32)
-    return positions, normals, texcoords, indices
-
-
-def _surface(arrays: Tuple[np.ndarray, ...], material: PBRMaterial,
-             translation: Sequence[float], rotation: Sequence[float] = (0, 1, 0, 0)) -> Any:
-    positions, normals, texcoords, indices = arrays
-    # The panels lie in their own xy plane, so +x is the tangent a normal map
-    # is read along.
-    tangents = np.tile(np.array([1.0, 0.0, 0.0, 1.0], 'f'), (len(positions), 1))
-    mesh = PBRMesh(positions=positions, normals=normals, texcoords=texcoords,
-                   tangents=tangents, indices=indices, material=material)
-    return basenodes.Transform(translation=tuple(translation), rotation=tuple(rotation),
-                               children=[basenodes.Shape(
-                                   geometry=mesh,
-                                   appearance=basenodes.Appearance(material=material))])
-
-
-def _block(size: Sequence[float], translation: Sequence[float], material: Any) -> Any:
-    return basenodes.Transform(translation=tuple(translation), children=[basenodes.Shape(
-        geometry=basenodes.Box(size=tuple(size)),
-        appearance=basenodes.Appearance(material=material))])
-
-
-class Finishes:
-    """The hall's materials, made once: stone, brick, plaster and four metals."""
-
-    def __init__(self) -> None:
-        self.floor = surfaces.checkered_marble(512, tiles=2)
-        self.brick = surfaces.pbr_material(surfaces.brick(256))
-        self.plaster = surfaces.pbr_material(surfaces.plaster(256), relief=0.5)
-        self.sandstone = surfaces.pbr_material(surfaces.sandstone(256))
-        self.gilt = surfaces.pbr_material(surfaces.brushed_metal(128, surfaces.GOLD, 0.22))
-        self.bronze = surfaces.pbr_material(surfaces.brushed_metal(128, surfaces.BRONZE, 0.35))
-        self.columns = [surfaces.pbr_material(surfaces.brushed_metal(128, colour, rough))
-                        for colour, rough in ((surfaces.GOLD, 0.25), (surfaces.COPPER, 0.3),
-                                              (surfaces.STEEL, 0.2), (surfaces.BRONZE, 0.32))]
-        self.lamp = PBRMaterial(baseColor=(1.0, 0.95, 0.85), metallic=0.0, roughness=0.4,
-                                emissiveColor=(1.0, 0.9, 0.7), emissiveStrength=3.0)
 
 
 class MirrorHall:
@@ -150,74 +87,33 @@ class MirrorHall:
         self.window = PlanarReflector(replace=True, interval=1)
         self.children: List[Any] = self._build()
 
-    # -- the hall ----------------------------------------------------------
+    # -- the mirrors -------------------------------------------------------
     def _build(self) -> List[Any]:
-        finish = Finishes()
+        hall = Hall()
+        # A mirror is a material carrying a reflector: silvered metal, polished
+        # marble, or glass that shows only what it reflects.
         silver = PBRMaterial(baseColor=surfaces.SILVER, metallic=1.0, roughness=0.02,
                              reflector=self.mirror)
         corridor = PBRMaterial(baseColor=surfaces.SILVER, metallic=1.0, roughness=0.03,
                                reflector=self.corridor)
-        marble = surfaces.pbr_material(finish.floor, reflector=self.floor)
+        marble = surfaces.pbr_material(hall.finish.floor, reflector=self.floor)
         window = PBRMaterial(baseColor=(0.6, 0.8, 0.9), metallic=0.0, roughness=0.05,
                              reflector=self.window)
-        children: List[Any] = [
-            basenodes.Viewpoint(position=(0.0, 1.7, 9.0), description='Hall'),
-            basenodes.NavigationInfo(headlight=False, type=['WALK']),
-            basenodes.DirectionalLight(direction=(-0.3, -1.0, -0.4), intensity=0.3),
-            # The floor's texture is two tiles of a metre each way.
-            _surface(_panel(16.0, 24.0, texture=2.0), marble, (0.0, 0.0, 0.0),
-                     (1, 0, 0, -math.pi / 2)),
-            _surface(_panel(6.0, 3.0), silver, (0.0, 2.0, -11.9)),
-            _block((6.4, 3.4, 0.1), (0.0, 2.0, -11.97), finish.gilt),
-            _surface(_octagon(1.5), window, (7.9, 2.0, 0.0), (0, 1, 0, -math.pi / 2)),
-        ]
+        # Water is a mirror whatever it is made of.
+        pool = water_surface(1.5, 5.5, -6.0, -2.0, level=0.25, resolution=9,
+                             style=STILL, on_gpu=True)
+        scene = hall.room() + [hall.floor(marble)]
+        scene += hall.hang(surfaces.panel(6.0, 3.0), silver, 'far', along=0.0, height=2.0,
+                           frame=hall.finish.gilt, border=0.2)
+        scene += hall.hang(surfaces.polygon(1.5), window, 'right', along=0.0, height=2.0)
         for index in range(10):
-            z = -9.0 + 2.0 * index
-            children.append(_surface(_panel(1.0, 1.4), corridor, (-7.9, 1.8, z),
-                                     (0, 1, 0, math.pi / 2)))
-            children.append(_block((0.08, 1.6, 1.2), (-7.96, 1.8, z), finish.bronze))
-        children += self._walls(finish) + self._pool(finish) + self._props(finish)
-        return children
-
-    @staticmethod
-    def _walls(finish: Finishes) -> List[Any]:
-        """Four brick walls and a plaster ceiling, faced into the room."""
-        brick, plaster = finish.brick, finish.plaster
-        half_pi = math.pi / 2
-        return [
-            _surface(_panel(16.0, 4.4), brick, (0.0, 2.2, -12.0)),
-            _surface(_panel(16.0, 4.4), brick, (0.0, 2.2, 12.0), (0, 1, 0, math.pi)),
-            _surface(_panel(24.0, 4.4), brick, (-8.0, 2.2, 0.0), (0, 1, 0, half_pi)),
-            _surface(_panel(24.0, 4.4), brick, (8.0, 2.2, 0.0), (0, 1, 0, -half_pi)),
-            _surface(_panel(16.0, 24.0, texture=3.0), plaster, (0.0, 4.4, 0.0),
-                     (1, 0, 0, half_pi)),
-        ]
-
-    @staticmethod
-    def _pool(finish: Finishes) -> List[Any]:
-        water = water_surface(1.5, 5.5, -6.0, -2.0, level=0.25, resolution=9,
-                              style=STILL, on_gpu=True)
-        rim = finish.sandstone
-        return [basenodes.Shape(geometry=water,
-                                appearance=basenodes.Appearance(material=water.material)),
-                _block((4.4, 0.3, 0.2), (3.5, 0.15, -6.1), rim),
-                _block((4.4, 0.3, 0.2), (3.5, 0.15, -1.9), rim),
-                _block((0.2, 0.3, 4.0), (1.4, 0.15, -4.0), rim),
-                _block((0.2, 0.3, 4.0), (5.6, 0.15, -4.0), rim)]
-
-    @staticmethod
-    def _props(finish: Finishes) -> List[Any]:
-        """Four columns of brushed metal, each with a lamp over it that lights the room."""
-        found: List[Any] = []
-        for index, metal in enumerate(finish.columns):
-            x, z = -4.5 + 3.0 * index, -7.0 + 5.0 * (index % 2)
-            found.append(_block((0.6, 3.0, 0.6), (x, 1.5, z), metal))
-            found.append(_block((0.3, 0.3, 0.3), (x, 3.3, z), finish.lamp))
-            found.append(basenodes.PointLight(location=(x, 3.7, z), intensity=0.6,
-                                              color=(1.0, 0.95, 0.85),
-                                              attenuation=(1.0, 0.0, 0.02),
-                                              radius=30.0))
-        return found
+            scene += hall.hang(surfaces.panel(1.0, 1.4), corridor, 'left',
+                               along=-9.0 + 2.0 * index, height=1.8,
+                               frame=hall.finish.bronze)
+        scene.append(basenodes.Shape(geometry=pool,
+                                     appearance=basenodes.Appearance(material=pool.material)))
+        scene += hall.basin(1.5, 5.5, -6.0, -2.0)
+        return scene
 
     # -- the keys ----------------------------------------------------------
     def press(self, key: str, definition: Any) -> str:

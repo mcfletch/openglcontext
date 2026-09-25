@@ -128,3 +128,69 @@ def test_the_module_needs_nothing_but_numpy_to_import():
         elif isinstance(node, ast.ImportFrom) and node.level == 0:
             imported.add(node.module.split('.')[0])
     assert imported <= {'__future__', 'dataclasses', 'typing', 'math', 'numpy'}
+
+
+# --- geometry that wears a surface at its size ------------------------------------
+
+def _faces(geometry):
+    """Each triangle's corners, and its winding normal."""
+    corners = geometry.positions[geometry.indices.reshape(-1, 3)]
+    winding = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+    return corners, winding
+
+
+def _texture_runs_along_the_tangents(geometry):
+    """On every triangle, u grows along the tangent and v along normal x tangent."""
+    triangles = geometry.indices.reshape(-1, 3)
+    for a, b, c in triangles:
+        p = geometry.positions[[a, b, c]].astype('d')
+        uv = geometry.texcoords[[a, b, c]].astype('d')
+        edges, steps = np.array([p[1] - p[0], p[2] - p[0]]), np.array([uv[1] - uv[0], uv[2] - uv[0]])
+        along_u, along_v = np.linalg.solve(steps, edges)
+        tangent = geometry.tangents[a, :3]
+        bitangent = np.cross(geometry.normals[a], tangent) * geometry.tangents[a, 3]
+        assert np.dot(along_u, tangent) > 0.99 * np.linalg.norm(along_u)
+        assert np.dot(along_v, bitangent) > 0.99 * np.linalg.norm(along_v)
+
+
+def test_a_panel_repeats_its_surface_every_so_many_metres():
+    panel = surfaces.panel(4.0, 3.0, repeat=2.0)
+    assert np.ptp(panel.texcoords[:, 0]) == pytest.approx(2.0)
+    assert np.ptp(panel.texcoords[:, 1]) == pytest.approx(1.5)
+    _corners, winding = _faces(panel)
+    assert (winding[:, 2] > 0).all() and np.allclose(panel.normals, (0, 0, 1))
+    _texture_runs_along_the_tangents(panel)
+
+
+def test_a_block_faces_out_on_every_side_and_is_textured_by_the_metre():
+    block = surfaces.block((2.0, 1.0, 0.5), repeat=0.5)
+    corners, winding = _faces(block)
+    centres = corners.mean(axis=1)
+    assert (np.einsum('ij,ij->i', winding, centres) > 0).all()
+    assert len(block.positions) == 24 and len(block.indices) == 36
+    spans = {tuple(np.round(np.ptp(block.texcoords[face * 4:face * 4 + 4], axis=0), 6))
+             for face in range(6)}
+    assert spans == {(4.0, 2.0), (1.0, 2.0), (4.0, 1.0)}
+    _texture_runs_along_the_tangents(block)
+
+
+def test_a_polygon_is_a_flat_disc_of_so_many_sides():
+    octagon = surfaces.polygon(1.5, sides=8, repeat=1.0)
+    _corners, winding = _faces(octagon)
+    assert len(octagon.indices) == 3 * 8 and (winding[:, 2] > 0).all()
+    assert np.linalg.norm(octagon.positions[1:, :2], axis=1) == pytest.approx(np.full(8, 1.5))
+    assert np.ptp(octagon.texcoords[:, 0]) == pytest.approx(np.ptp(octagon.positions[:, 0]))
+    _texture_runs_along_the_tangents(octagon)
+
+
+def test_a_shape_wears_its_material_where_it_is_put():
+    from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+    material = surfaces.pbr_material(surfaces.plaster(16))
+    placed = surfaces.shape(surfaces.panel(1.0, 1.0), material,
+                            translation=(1.0, 2.0, 3.0), rotation=(0.0, 1.0, 0.0, 0.5))
+    assert tuple(placed.translation) == (1.0, 2.0, 3.0)
+    assert tuple(placed.rotation) == pytest.approx((0.0, 1.0, 0.0, 0.5))
+    [held] = placed.children
+    assert held.appearance.material is material
+    assert isinstance(held.geometry, PBRMesh)
+    assert held.geometry.tangents is not None and len(held.geometry.tangents) == 4
