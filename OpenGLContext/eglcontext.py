@@ -64,7 +64,8 @@ try it and fall back.
 import ctypes
 import logging
 import os
-from typing import Any, Iterable, List, Literal, Mapping, Optional, Sequence
+import threading
+from typing import Any, Dict, Iterable, List, Literal, Mapping, Optional, Sequence
 
 from OpenGL import EGL
 from OpenGL.GL import glFlush
@@ -316,12 +317,26 @@ def selectDevice(environ: Optional[Mapping[str, str]] = None) -> DeviceInfo:
 #: context that terminated on its way out would take its siblings with it.
 #: Keyed by the handle rather than by the wrapper, which is a new object each
 #: call.  A process holds one or two of these, so the map never grows.
-_DISPLAY_USES: dict = {}
+_DISPLAY_USES: Dict[int, int] = {}
+#: Held while :data:`_DISPLAY_USES` is read and changed, since a context may be
+#: built or released on any thread.
+_DISPLAY_LOCK = threading.Lock()
 
 
-def _displayKey(display: Any) -> int:
-    """The address the display wrapper carries, which is its identity."""
-    return ctypes.cast(display, ctypes.c_void_p).value or 0
+def _address(handle: Any) -> int:
+    """The address an EGL handle wrapper carries, which is its identity; 0 for none."""
+    return ctypes.cast(handle, ctypes.c_void_p).value or 0
+
+
+def _letGo(display: Any, context: Any) -> None:
+    """Leave the calling thread with no context, if ``context`` is its current one.
+
+    A context that is not current is left alone, and so is whichever one is:
+    releasing one of two must not take the other off the thread.
+    """
+    if context is not None and _address(EGL.eglGetCurrentContext()) == _address(context):
+        EGL.eglMakeCurrent(
+            display, EGL.EGL_NO_SURFACE, EGL.EGL_NO_SURFACE, EGL.EGL_NO_CONTEXT)
 
 
 def openDisplay(device: DeviceInfo) -> Any:
@@ -337,10 +352,11 @@ def openDisplay(device: DeviceInfo) -> Any:
     major, minor = EGL.EGLint(), EGL.EGLint()
     if not EGL.eglInitialize(display, major, minor):
         raise EGLContextError('eglInitialize failed for %r' % (device,))
-    key = _displayKey(display)
-    _DISPLAY_USES[key] = _DISPLAY_USES.get(key, 0) + 1
+    key = _address(display)
+    with _DISPLAY_LOCK:
+        _DISPLAY_USES[key] = users = _DISPLAY_USES.get(key, 0) + 1
     log.debug('EGL %d.%d on %r, %d user(s)', major.value, minor.value,
-              device, _DISPLAY_USES[key])
+              device, users)
     return display
 
 
@@ -350,13 +366,16 @@ def closeDisplay(display: Any) -> bool:
     Answers whether it was terminated, which is what a test asking "did that
     one take the display down with it" wants to know.
     """
-    key = _displayKey(display)
-    remaining = _DISPLAY_USES.get(key, 0) - 1
-    if remaining > 0:
-        _DISPLAY_USES[key] = remaining
-        return False
-    _DISPLAY_USES.pop(key, None)
-    EGL.eglTerminate(display)
+    key = _address(display)
+    with _DISPLAY_LOCK:
+        remaining = _DISPLAY_USES.get(key, 0) - 1
+        if remaining > 0:
+            _DISPLAY_USES[key] = remaining
+            return False
+        _DISPLAY_USES.pop(key, None)
+        # Inside the lock: a context opening the display on another thread
+        # between the count and the terminate would be handed a dead one.
+        EGL.eglTerminate(display)
     return True
 
 
@@ -484,9 +503,7 @@ class PbufferContext:
         """
         if self.display is None:
             return
-        EGL.eglMakeCurrent(
-            self.display, EGL.EGL_NO_SURFACE, EGL.EGL_NO_SURFACE, EGL.EGL_NO_CONTEXT
-        )
+        _letGo(self.display, self.context)
         if self.surface is not None:
             EGL.eglDestroySurface(self.display, self.surface)
             self.surface = None
@@ -751,9 +768,7 @@ class EGLContext(
         """
         if self.display is None:
             return
-        EGL.eglMakeCurrent(
-            self.display, EGL.EGL_NO_SURFACE, EGL.EGL_NO_SURFACE, EGL.EGL_NO_CONTEXT
-        )
+        _letGo(self.display, self.context)
         if self.surface is not None:
             EGL.eglDestroySurface(self.display, self.surface)
             self.surface = None

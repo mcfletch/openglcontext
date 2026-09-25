@@ -679,7 +679,7 @@ class TestTheDisplayIsSharedRatherThanOwned:
             second = eglcontext.openDisplay(device)
         except eglcontext.EGLContextError as err:
             pytest.skip(str(err))
-        assert eglcontext._displayKey(first) == eglcontext._displayKey(second)
+        assert eglcontext._address(first) == eglcontext._address(second)
         assert eglcontext.closeDisplay(second) is False
         assert eglcontext.closeDisplay(first) is True
 
@@ -698,6 +698,22 @@ class TestTheDisplayIsSharedRatherThanOwned:
             assert glGetString(GL_VERSION) is not None
         finally:
             first.release()
+
+    def test_releasing_one_leaves_the_current_one_current(self):
+        """Letting go of a context that is not current un-currents nothing."""
+        try:
+            first = eglcontext.PbufferContext(width=16, height=16)
+        except eglcontext.EGLContextError as err:
+            pytest.skip(str(err))
+        try:
+            second = eglcontext.PbufferContext(width=16, height=16)
+            first.make_current()
+            second.release()
+            current = eglcontext.EGL.eglGetCurrentContext()
+            assert eglcontext._address(current) == eglcontext._address(first.context)
+        finally:
+            first.release()
+        assert not eglcontext._address(eglcontext.EGL.eglGetCurrentContext())
 
     def test_releasing_twice_is_harmless(self):
         try:
