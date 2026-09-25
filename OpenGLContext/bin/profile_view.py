@@ -1,11 +1,13 @@
 #! /usr/bin/env python
 """VRML97 load-and-view demonstration/test"""
-import os
+import OpenGL
 
-# Before anything imports an API namespace: the entry points are built with
-# whatever error checking was configured when PyOpenGL first read its
-# settings, so an assignment after that has no effect and says so.
-os.environ.setdefault('PYOPENGL_ERROR_CHECKING', '0')
+# The package has been imported by now (OpenGLContext imports it), so its
+# environment variables have been read. The package attribute is still read:
+# PyOpenGL's flags module copies it when the first API namespace imports that
+# module, and the entry points are built with whatever it copied. Measuring
+# the engine rather than the per-call glGetError is what this harness is for.
+OpenGL.ERROR_CHECKING = False
 
 from typing import Any                                       # noqa: E402
 from OpenGLContext import testingcontext                     # noqa: E402
