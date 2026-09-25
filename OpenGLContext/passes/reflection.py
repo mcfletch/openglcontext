@@ -43,12 +43,13 @@ log = logging.getLogger(__name__)
 
 __all__ = [
     'REFLECTION_UNIT', 'REFLECTION_UNITS_NEEDED', 'FLATNESS', 'GUARD',
-    'ROUGHEST', 'WATER_DISTORTION', 'WATER_REFLECTOR', 'Plane', 'MeshPlane',
-    'MirrorView', 'shape_reflector', 'reflector_for', 'surface_roughness', 'is_reflector',
-    'is_water', 'mirror_generation', 'fit_plane',
+    'ROUGHEST', 'WATER_REFLECTOR', 'Plane', 'MeshPlane', 'NDCRect', 'WHOLE',
+    'TEXEL_STEP', 'TileRect', 'MirrorView', 'shape_material', 'shape_reflector',
+    'reflector_for', 'surface_roughness', 'is_reflector',
+    'is_water', 'mirror_generation', 'fit_plane', 'fan', 'mesh_plane',
     'surface_plane', 'local_plane', 'place_plane', 'world_corners',
     'box_corners', 'guarded', 'contains', 'tile_bounds', 'mirror_matrix', 'eye_plane',
-    'oblique_projection', 'screen_rect', 'crop_matrix', 'plan_mirror',
+    'oblique_projection', 'screen_rect', 'crop_matrix', 'texels', 'plan_mirror',
     'tile_transform', 'atlas_lookup', 'fov', 'too_small', 'SMALLEST',
 ]
 
@@ -87,6 +88,14 @@ def is_water(record: Any) -> bool:
     return bool(getattr(getattr(record[5], 'geometry', None), 'waveStyle', None))
 
 
+def shape_material(shape: Any) -> Any:
+    """The material a shape is drawn with: its appearance's, else its mesh's own."""
+    material = getattr(getattr(shape, 'appearance', None), 'material', None)
+    if material is None:
+        material = getattr(getattr(shape, 'geometry', None), 'material', None)
+    return material
+
+
 def shape_reflector(shape: Any) -> Optional[PlanarReflector]:
     """The reflector a shape's surface mirrors the scene by, or None.
 
@@ -94,12 +103,8 @@ def shape_reflector(shape: Any) -> Optional[PlanarReflector]:
     whose material names none, and None for everything else -- and for a
     reflector switched off, which leaves the surface reflecting the probe.
     """
-    appearance = getattr(shape, 'appearance', None)
-    material = getattr(appearance, 'material', None)
     geometry = getattr(shape, 'geometry', None)
-    if material is None:
-        material = getattr(geometry, 'material', None)
-    reflector = getattr(material, 'reflector', None)
+    reflector = getattr(shape_material(shape), 'reflector', None)
     if reflector:
         return reflector if reflector.enabled else None
     if getattr(geometry, 'waveStyle', None):
@@ -117,21 +122,15 @@ def surface_roughness(material: Any) -> float:
 
     A glTF material commonly carries a factor of 1 and the roughness itself in
     the green channel of its metallic-roughness map, so the factor alone says
-    nothing about how sharp a reflection it gives. The map's mean is worked
-    out once per image and kept on the texture.
+    nothing about how sharp a reflection it gives. The map's mean is the
+    texture's :meth:`~OpenGLContext.scenegraph.pbrmaterial.PBRTexture.mean_roughness`.
     """
     factor = float(getattr(material, 'roughness', 0.0) or 0.0)
     textures = getattr(material, 'textures', None) or {}
     texture = textures.get('metallicRoughness')
-    image = getattr(texture, 'image', None)
-    if texture is None or image is None:
+    if texture is None or getattr(texture, 'image', None) is None:
         return factor
-    known = getattr(texture, '_mean_roughness', None)
-    if known is None or known[0] is not image:
-        green = np.asarray(image.convert('RGB'))[..., 1]
-        known = (image, float(green.mean()) / 255.0)
-        texture._mean_roughness = known
-    return factor * known[1]
+    return factor * float(texture.mean_roughness())
 
 
 def is_reflector(record: Any) -> bool:
@@ -238,81 +237,128 @@ def fit_plane(positions: ArrayLike, indices: Optional[ArrayLike] = None) -> Opti
     return MeshPlane(centre, normal, flat, box_corners(points))
 
 
-#: Each geometry's fit, kept while the geometry lives and redone when its
-#: point array is replaced.
-_FITS: "weakref.WeakKeyDictionary[Any, Tuple[int, Optional[MeshPlane]]]" = \
-    weakref.WeakKeyDictionary()
+class _Fit(NamedTuple):
+    """A geometry's plane, and the inputs it was worked out from.
+
+    The arrays are held, not their ``id()``, so an array released and a new
+    one given its address is never taken for the one fitted.
+    """
+
+    water: bool
+    positions: Any
+    indices: Any
+    ccw: bool
+    plane: Optional[MeshPlane]
+
+    def serves(self, water: bool, positions: Any, indices: Any, ccw: bool) -> bool:
+        """Whether this fit is the one those inputs give."""
+        return (self.water == water and self.positions is positions
+                and self.indices is indices and self.ccw == ccw)
 
 
-def _geometry_points(geometry: Any) -> Tuple[Any, Any]:
-    """A geometry's vertex positions and triangle indices, or ``(None, None)``."""
+#: Each geometry's plane, kept while the geometry lives and worked out again
+#: when its point array, its index array, its ``ccw`` or its being water
+#: changes. An array edited in place is not seen; a geometry whose points move
+#: is given a new array, as a deformed mesh is.
+_FITS: "weakref.WeakKeyDictionary[Any, _Fit]" = weakref.WeakKeyDictionary()
+
+
+def _geometry_points(geometry: Any) -> Tuple[Any, Any, bool]:
+    """A geometry's vertex positions, what its faces are indexed by, and
+    whether those are polygons.
+
+    ``positions`` and its triangles' ``indices`` for a mesh, ``coord.point``
+    and the ``coordIndex`` polygons for an ``IndexedFaceSet``, and
+    ``(None, None, False)`` for neither.
+    """
     positions = getattr(geometry, 'positions', None)
     if positions is not None and len(positions):
         indices = getattr(geometry, 'indices', None)
-        return positions, (indices if indices is not None and len(indices) else None)
+        return positions, (indices if indices is not None and len(indices) else None), False
     coord = getattr(geometry, 'coord', None)
     points = getattr(coord, 'point', None)
     if points is None or not len(points):
-        return None, None
-    return points, _fan(getattr(geometry, 'coordIndex', ()))
+        return None, None, False
+    return points, getattr(geometry, 'coordIndex', None), True
 
 
-def _fan(polygons: Any) -> Optional[np.ndarray]:
-    """``coordIndex`` polygons, each fanned into triangles."""
-    triangles: list = []
-    face: list = []
-    for index in list(polygons) + [-1]:
-        if index >= 0:
-            face.append(int(index))
-            continue
-        for second in range(1, len(face) - 1):
-            triangles.extend((face[0], face[second], face[second + 1]))
-        face = []
-    return np.array(triangles, 'i8') if triangles else None
+def fan(polygons: Any) -> Optional[np.ndarray]:
+    """``coordIndex`` polygons, each fanned into triangles, or None for none.
+
+    Polygons are separated by -1; the last needs no -1 after it, and one of
+    fewer than three corners makes no triangle.
+    """
+    indices = np.asarray(polygons if polygons is not None else (), 'i8').reshape(-1)
+    if not len(indices):
+        return None
+    ends = np.flatnonzero(indices < 0)
+    starts = np.r_[0, ends + 1]
+    stops = np.r_[ends, len(indices)]
+    corners = stops - starts
+    counts = np.maximum(corners - 2, 0)
+    if not counts.sum():
+        return None
+    # Each triangle is (first, first + k, first + k + 1) of its polygon.
+    first = np.repeat(starts, counts)
+    step = np.arange(int(counts.sum())) - np.repeat(np.cumsum(counts) - counts, counts) + 1
+    return np.stack([indices[first], indices[first + step],
+                     indices[first + step + 1]], axis=1).reshape(-1)
+
+
+def _fit(geometry: Any, water: bool) -> Optional[MeshPlane]:
+    """A geometry's plane in its own space, from its fit if it has one."""
+    positions, indices, polygons = _geometry_points(geometry)
+    if positions is None:
+        return None
+    ccw = bool(getattr(geometry, 'ccw', True))
+    try:
+        known = _FITS.get(geometry)
+    except TypeError:                      # pragma: no cover - not weakly referable
+        known = None
+    if known is not None and known.serves(water, positions, indices, ccw):
+        return known.plane
+    if water:
+        fitted = _water_plane(positions)
+    else:
+        fitted = fit_plane(positions, fan(indices) if polygons else indices)
+        if fitted is not None and not ccw:
+            fitted = fitted._replace(normal=-fitted.normal)
+        if fitted is not None and not fitted.flat:
+            log.warning('%s is marked as a mirror and is not flat; it reflects '
+                        'the environment probe', type(geometry).__name__)
+    try:
+        _FITS[geometry] = _Fit(water, positions, indices, ccw, fitted)
+    except TypeError:                      # pragma: no cover - not weakly referable
+        pass
+    return fitted
 
 
 def mesh_plane(geometry: Any) -> Optional[MeshPlane]:
     """A geometry's plane in its own space, fitted once and kept.
 
     None where the geometry has no points or is not flat; a mesh that is not
-    flat is reported once, when it is first asked about.
+    flat is reported once, when it is first asked about. The normal faces the
+    side the faces' winding makes the front, which ``ccw`` False turns over.
     """
-    positions, indices = _geometry_points(geometry)
-    if positions is None:
-        return None
-    try:
-        known = _FITS.get(geometry)
-    except TypeError:                      # pragma: no cover - not weakly referable
-        known = None
-    if known is not None and known[0] == id(positions):
-        fitted = known[1]
-    else:
-        fitted = fit_plane(positions, indices)
-        if fitted is not None and not fitted.flat:
-            log.warning('%s is marked as a mirror and is not flat; it reflects '
-                        'the environment probe', type(geometry).__name__)
-        try:
-            _FITS[geometry] = (id(positions), fitted)
-        except TypeError:                  # pragma: no cover - not weakly referable
-            pass
+    fitted = _fit(geometry, water=False)
     if fitted is None or not fitted.flat:
         return None
     return fitted
 
 
-def _water_plane(geometry: Any) -> Optional[MeshPlane]:
+def _water_plane(positions: Any) -> Optional[MeshPlane]:
     """A water sheet's plane in its own space: its mean level, facing up.
 
     A sheet is meshed flat in its own x and z and its wave is a displacement
     of that, so its plane is found from its level rather than fitted to
     points the wave may already have moved.
     """
-    positions = np.asarray(getattr(geometry, 'positions', ()), 'd').reshape(-1, 3)
-    if not len(positions):
+    points = np.asarray(positions, 'd').reshape(-1, 3)
+    if not len(points):
         return None
-    level = float(positions[:, 1].mean())
+    level = float(points[:, 1].mean())
     return MeshPlane(np.array([0.0, level, 0.0]), np.array([0.0, 1.0, 0.0]),
-                     True, box_corners(positions))
+                     True, box_corners(points))
 
 
 def local_plane(record: Any) -> Optional[MeshPlane]:
@@ -321,7 +367,7 @@ def local_plane(record: Any) -> Optional[MeshPlane]:
     if geometry is None:
         return None
     if is_water(record):
-        return _water_plane(geometry)
+        return _fit(geometry, water=True)
     return mesh_plane(geometry)
 
 
@@ -464,7 +510,8 @@ def crop_matrix(rect: NDCRect) -> np.ndarray:
 TEXEL_STEP = 8
 
 
-def _texels(extent: float) -> int:
+def texels(extent: float) -> int:
+    """``extent`` texels rounded up to a whole :data:`TEXEL_STEP`, at least one step."""
     return max(TEXEL_STEP, int(np.ceil(extent / TEXEL_STEP)) * TEXEL_STEP)
 
 
@@ -526,7 +573,7 @@ def plan_mirror(plane: Optional[Plane], corners: ArrayLike, view: Any,
     width = (crop[2] - crop[0]) / 2.0 * float(view_rect[2]) * scale
     height = (crop[3] - crop[1]) / 2.0 * float(view_rect[3]) * scale
     return MirrorView(point, normal, mirrored, clipped, mirrored @ projection,
-                      crop, rect, (_texels(width), _texels(height)))
+                      crop, rect, (texels(width), texels(height)))
 
 
 def fov(projection: Any) -> float:

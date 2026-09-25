@@ -233,13 +233,8 @@ class _Surface(NamedTuple):
 COPLANAR = 3
 
 
-def _material(record: Any) -> Any:
-    appearance = getattr(record[5], 'appearance', None)
-    return getattr(appearance, 'material', None)
-
-
 def _scaled(size: Tuple[int, int], scale: float) -> Tuple[int, int]:
-    return (reflection._texels(size[0] * scale), reflection._texels(size[1] * scale))
+    return (reflection.texels(size[0] * scale), reflection.texels(size[1] * scale))
 
 
 class ReflectionPlanner:
@@ -327,7 +322,7 @@ class ReflectionPlanner:
         viewer = frame.view.viewer if isinstance(frame.view, ReflectedView) else eye
         if self.allowed is not None and not self.allowed(record, viewer):
             return None
-        rough = reflection.surface_roughness(_material(record))
+        rough = reflection.surface_roughness(reflection.shape_material(record[5]))
         if rough > reflection.ROUGHEST and not reflector.replace:
             return None
         local = reflection.local_plane(record)

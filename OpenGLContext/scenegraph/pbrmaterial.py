@@ -7,7 +7,7 @@ and colour factors are VRML fields; texture maps are held as light-weight
 ``baseColor``, ``metallicRoughness``, ``normal``, ``occlusion``, ``emissive``)
 so PIL-backed images need not be squeezed into VRML field types.
 """
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 
@@ -32,6 +32,21 @@ class PBRTexture(object):
         self.min_filter = min_filter
         self.mag_filter = mag_filter
         self._per_context: dict[int, Any] = {}      # id(context) -> Texture
+        #: The image :meth:`mean_roughness` was worked out for, and its answer.
+        self._mean_roughness: Optional[Tuple[Any, float]] = None
+
+    def mean_roughness(self) -> float:
+        """The mean of the image's green channel, from 0 to 1.
+
+        The green channel is roughness in a glTF metallic-roughness map. Worked
+        out from a copy of at most 256 texels a side, once per image: a new
+        ``image`` is measured again.
+        """
+        image = self.image
+        known = self._mean_roughness
+        if known is None or known[0] is not image:
+            known = self._mean_roughness = (image, _green_mean(image))
+        return known[1]
 
     def cached(self, mode: Any) -> Any:
         ctx = getattr(mode, 'context', None)
@@ -65,6 +80,19 @@ class PBRTexture(object):
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min_f)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
                         int(self.mag_filter) if self.mag_filter else GL_LINEAR)
+
+
+def _green_mean(image: Any) -> float:
+    """The mean of a PIL image's green channel, from 0 to 1."""
+    from PIL import ImageStat
+    if image.mode not in ('RGB', 'RGBA', 'RGBX'):
+        image = image.convert('RGB')
+    # The channel alone, so an alpha of 0 weighs nothing into the reduction.
+    green = image.getchannel('G')
+    factor = max(1, max(green.size) // 256)
+    if factor > 1:
+        green = green.reduce(factor)
+    return float(ImageStat.Stat(green).mean[0]) / 255.0
 
 
 class TextureChannels(Dict[str, Any]):

@@ -382,3 +382,173 @@ def test_making_a_mesh_water_moves_the_mirror_generation():
     before = reflection.mirror_generation()
     mesh.waveStyle = WaterStyle()
     assert reflection.mirror_generation() > before
+
+
+# --- the fitted plane is kept while its inputs are --------------------------------
+
+XZ_QUAD = np.array([(-1, 0, -1), (-1, 0, 1), (1, 0, 1), (1, 0, -1)], 'f')
+
+
+def test_a_replaced_point_array_is_fitted_again_every_time():
+    """The kept fit is the fit of the array the mesh holds now, even where a
+    new array is given the address a released one had."""
+    mesh = PBRMesh(positions=QUAD.copy(), indices=QUAD_INDICES)
+    for turn in range(40):
+        facing_up = turn % 2 == 1
+        mesh.positions = None
+        mesh.positions = np.array(XZ_QUAD if facing_up else QUAD, 'f')
+        normal = reflection.mesh_plane(mesh).normal
+        expected = (0.0, 1.0, 0.0) if facing_up else (0.0, 0.0, 1.0)
+        assert tuple(normal) == pytest.approx(expected, abs=1e-6), turn
+
+
+def test_replaced_indices_turn_the_plane_over():
+    mesh = PBRMesh(positions=QUAD.copy(), indices=QUAD_INDICES)
+    assert reflection.mesh_plane(mesh).normal[2] == pytest.approx(1.0)
+    mesh.indices = QUAD_INDICES[::-1].copy()
+    assert reflection.mesh_plane(mesh).normal[2] == pytest.approx(-1.0)
+
+
+def test_a_mesh_plane_is_fitted_once_while_the_mesh_is_unchanged():
+    mesh = PBRMesh(positions=QUAD.copy(), indices=QUAD_INDICES)
+    assert reflection.mesh_plane(mesh) is reflection.mesh_plane(mesh)
+
+
+def test_still_waters_plane_is_worked_out_once():
+    record = _water_record(0.5)
+    assert reflection.local_plane(record) is reflection.local_plane(record)
+
+
+def test_water_whose_sheet_is_replaced_reflects_at_its_new_level():
+    record = _water_record(0.5)
+    geometry = record[5].geometry
+    assert reflection.local_plane(record).point[1] == pytest.approx(0.5)
+    geometry.positions = geometry.positions + np.array([0.0, 1.0, 0.0], 'f')
+    assert reflection.local_plane(record).point[1] == pytest.approx(1.5)
+
+
+def test_a_mesh_made_water_reflects_at_its_level_not_its_fit():
+    """One geometry asked about as a mirror and then as water answers each."""
+    tilted = np.array([(-1, 0, -1), (1, 0, -1), (1, 1, 1)], 'f')
+    mesh = PBRMesh(positions=tilted, indices=np.array([0, 2, 1], np.uint32))
+    record = ((False,), None, np.identity(4, 'f'), None, (), Shape(
+        geometry=mesh, appearance=Appearance(material=PBRMaterial(
+            reflector=PlanarReflector()))))
+    assert reflection.local_plane(record).normal[1] != pytest.approx(1.0)
+    mesh.waveStyle = STILL
+    assert tuple(reflection.local_plane(record).normal) == pytest.approx((0.0, 1.0, 0.0))
+
+
+# --- VRML97 IndexedFaceSet mirrors ---------------------------------------------------
+
+def _face_set(points, coord_index, ccw=True):
+    from OpenGLContext.scenegraph import basenodes
+    return basenodes.IndexedFaceSet(
+        coord=basenodes.Coordinate(point=np.asarray(points, 'f')),
+        coordIndex=list(coord_index), ccw=ccw)
+
+
+def _face_set_record(geometry):
+    material = PBRMaterial(metallic=1.0, roughness=0.0, reflector=PlanarReflector())
+    shape = Shape(geometry=geometry, appearance=Appearance(material=material))
+    return ((False,), None, np.identity(4, 'f'), None, (), shape)
+
+
+@pytest.mark.parametrize('ccw,facing', [(True, 1.0), (False, -1.0)])
+def test_a_face_set_mirror_faces_the_side_its_winding_says(ccw, facing):
+    """``ccw FALSE`` names the other side of the same winding as the front."""
+    record = _face_set_record(_face_set(QUAD, [0, 1, 2, 3, -1], ccw=ccw))
+    point, normal = reflection.surface_plane(record)
+    assert tuple(normal) == pytest.approx((0.0, 0.0, facing))
+
+
+def test_turning_a_face_set_over_turns_its_plane_over():
+    geometry = _face_set(QUAD, [0, 1, 2, 3, -1])
+    assert reflection.mesh_plane(geometry).normal[2] == pytest.approx(1.0)
+    geometry.ccw = False
+    assert reflection.mesh_plane(geometry).normal[2] == pytest.approx(-1.0)
+
+
+def test_a_face_set_of_many_cornered_polygons_is_fanned():
+    """Two pentagons, the second without a closing -1, both facing +z."""
+    angles = np.linspace(0.0, 2.0 * np.pi, 6)[:5]
+    ring = np.c_[np.cos(angles), np.sin(angles), np.zeros(5)]
+    points = np.concatenate([ring, ring + (3.0, 0.0, 0.0)])
+    geometry = _face_set(points, [0, 1, 2, 3, 4, -1, 5, 6, 7, 8, 9])
+    assert reflection.fan([0, 1, 2, 3, 4, -1, 5, 6, 7]).tolist() == [
+        0, 1, 2, 0, 2, 3, 0, 3, 4, 5, 6, 7]
+    fitted = reflection.mesh_plane(geometry)
+    assert tuple(fitted.normal) == pytest.approx((0.0, 0.0, 1.0))
+
+
+def test_a_face_set_with_no_polygon_is_read_as_triangles_in_order():
+    assert reflection.fan([]) is None
+    assert reflection.fan([0, 1, -1]) is None
+    geometry = _face_set(QUAD[:3], [])
+    assert tuple(reflection.mesh_plane(geometry).normal) == pytest.approx((0.0, 0.0, 1.0))
+
+
+def test_a_face_set_without_points_is_no_mirror():
+    from OpenGLContext.scenegraph import basenodes
+    record = _face_set_record(basenodes.IndexedFaceSet())
+    assert reflection.surface_plane(record) is None
+
+
+# --- a map's roughness is worked out once per image ---------------------------------
+
+def test_a_roughness_maps_mean_is_kept_on_its_texture():
+    from PIL import Image
+    material = _textured(0.2)
+    texture = material.textures['metallicRoughness']
+    assert texture.mean_roughness() == pytest.approx(0.2, abs=0.01)
+    pixels = np.zeros((4, 4, 3), np.uint8)
+    pixels[..., 1] = 204
+    texture.image = Image.fromarray(pixels, 'RGB')
+    assert texture.mean_roughness() == pytest.approx(0.8, abs=0.01)
+
+
+def test_a_large_roughness_maps_mean_is_its_greens_mean():
+    from PIL import Image
+    from OpenGLContext.scenegraph.pbrmaterial import PBRTexture
+    rows = np.linspace(0, 255, 3000).astype(np.uint8)
+    pixels = np.zeros((3000, 2000, 4), np.uint8)
+    pixels[..., 1] = rows[:, None]
+    pixels[..., 0] = 255
+    texture = PBRTexture(Image.fromarray(pixels, 'RGBA'))
+    assert texture.mean_roughness() == pytest.approx(rows.mean() / 255.0, abs=0.01)
+
+
+@pytest.mark.parametrize('mode', ['L', 'P', 'I;16'])
+def test_a_roughness_map_in_any_mode_has_a_mean(mode):
+    from PIL import Image
+    from OpenGLContext.scenegraph.pbrmaterial import PBRTexture
+    image = Image.new('RGB', (8, 8), (0, 128, 0)).convert(mode)
+    expected = np.asarray(image.convert('RGB'))[..., 1].mean() / 255.0
+    assert PBRTexture(image).mean_roughness() == pytest.approx(expected, abs=0.01)
+
+
+def test_a_mesh_drawn_with_its_own_material_is_as_rough_as_that_material():
+    """A mesh with no appearance material is drawn with the one it carries."""
+    from OpenGLContext.multiview.strategy import ViewFrame
+    from OpenGLContext.multiview.views import View
+    from OpenGLContext.passes.reflectionplanner import ReflectionPlanner
+    from OpenGLContext.passes.reflectiontiles import Budget
+    rough = PBRMaterial(roughness=0.9, reflector=PlanarReflector())
+    shape = Shape(geometry=PBRMesh(positions=QUAD, indices=QUAD_INDICES, material=rough))
+    assert reflection.shape_material(shape) is rough
+    record = ((False,), None, np.asarray(_placement(translate=(0.0, 1.5, -5.0)), 'f'),
+              None, (), shape)
+    view = _look_at((1.0, 1.6, 3.0), (0.0, 1.5, -5.0))
+    projection = _perspective(aspect=2.0)
+    frame = ViewFrame(View(), None, VIEW_RECT, view, projection, view @ projection, None)
+    frame.toRender = [record]
+    plan = ReflectionPlanner().plan([frame], (512, 512),
+                                    Budget(views=4, separate_views=4, texels=10 ** 9))
+    assert plan.draws == []
+
+
+def test_the_public_names_are_the_ones_other_modules_use():
+    for name in ('NDCRect', 'WHOLE', 'TEXEL_STEP', 'TileRect', 'mesh_plane', 'texels',
+                 'shape_material', 'fan'):
+        assert name in reflection.__all__
+    assert 'WATER_DISTORTION' not in reflection.__all__

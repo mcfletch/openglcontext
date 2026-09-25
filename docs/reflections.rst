@@ -101,8 +101,15 @@ the sky. That is an object that is only a mirror, such as a magic window.
 
 A mirror must be flat. Its plane is fitted to the mesh: the mean of its points
 and the direction they vary least in, turned to the side its triangles face. A
-mesh with a point more than 1% of its size off that plane is reported once in
-the log and reflects the probe.
+VRML97 ``IndexedFaceSet`` mirror faces the side its ``ccw`` field names the
+front, and its polygons may have any number of corners. A mesh with a point
+more than 1% of its size off that plane is reported once in the log and
+reflects the probe.
+
+The fit is made once and kept while the geometry holds the same point and
+index arrays. Giving it a new array fits the plane again; changing the values
+of the array it holds does not, so a mirror that moves its points gives its
+geometry a new array, as a deformed mesh does.
 
 Water is a mirror
 ~~~~~~~~~~~~~~~~~
