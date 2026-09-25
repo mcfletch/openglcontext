@@ -90,6 +90,13 @@ Ready-made screens
    * - ``console.console_panel(registry=...)``
      - A console with scrollback, an input line and a command registry; see
        :ref:`console`.
+   * - ``contentscreen.ContentScreen(packs, on_fetch=..., wanted=...)``
+     - Content packs on offer, each with the size of the whole set it
+       fetches and its terms, a Download and a Stop button, and a progress
+       bar whose text says how far a download is, or that it failed (and
+       why) or was stopped. ``screen.panel`` is the panel to push; call
+       ``screen.poll()`` once a frame. ``together=True`` offers every pack as
+       one set, for a first run's base packs. See :doc:`contentpacks`.
 
 Every button can be clicked with the pointer. The keys on a dialog are
 accelerators, not the only way to use it.
@@ -907,7 +914,8 @@ Where things are
      - Editing on a copy.
    * - ``ui.generate``
      - A settings page generated from a node's fields.
-   * - ``ui.dialogs``, ``ui.settings``, ``ui.bindings``, ``ui.console``
+   * - ``ui.dialogs``, ``ui.settings``, ``ui.bindings``, ``ui.console``,
+       ``ui.contentscreen``
      - The ready-made screens.
    * - ``renderoptions``
      - How a pass reads a rendering setting.

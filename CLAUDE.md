@@ -197,6 +197,8 @@ OpenGLContext/
 │   ├── widgets.py    # Label/Button/Toggle/Select/Slider/Text+NumberField
 │   ├── hudwidgets.py # The in-world HUD: reticule, meters, messages -- docs/hud.rst
 │   ├── debugoverlay.py  # The developer overlay, fed by registered providers
+│   ├── contentscreen.py # Downloading content packs: the offer, its terms,
+│   │                 # a progress bar, Stop -- docs/contentpacks.rst
 │   ├── viewchrome.py # A window of several views: each one's name, axes and
 │   │                 # controls, and the splitters between them -- docs/multiview.rst
 │   ├── tooltip.py    # What a control says when the pointer rests on it

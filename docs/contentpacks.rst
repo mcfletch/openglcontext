@@ -460,6 +460,8 @@ the registries added to the store.
   sizes and terms and asks yes or no; ``application.console_progress()``
   prints a percentage on one line.
 - ``base_job()`` - the same set as a ``FetchJob``, for a window.
+  ``OpenGLContext.ui.contentscreen.ContentScreen`` shows the consent and the
+  progress (see :ref:`contentscreen`).
 - ``base_directory()`` - where the art is now: the base pack's root once it
   is installed, else ``fallback``; ``application.NotInstalled`` if neither.
 - ``library()`` - an ``AssetLibrary`` whose root is ``base_directory()``,
@@ -486,6 +488,43 @@ again.
 
 When the job finishes, ``job.state`` is ``'done'``, ``'cancelled'`` or
 ``'failed: '`` and the reason; a failure is also logged with its traceback.
+
+.. _contentscreen:
+
+The download screen
+~~~~~~~~~~~~~~~~~~~
+
+``OpenGLContext.ui.contentscreen.ContentScreen`` is the overlay screen a
+player downloads content on. It shows what is on offer, one pack at a time,
+with the size of the whole set choosing it fetches (the pack and what it
+needs), each pack's terms, and a progress bar whose text names the pack being
+fetched and ends as ``Done.``, ``Stopped.`` or ``Could not download:`` and the
+reason. The result stays on screen until the next download starts.
+
+.. code-block:: python
+
+   from OpenGLContext.contentpacks import fetch
+   from OpenGLContext.ui.contentscreen import ContentScreen
+
+   store = CONTENT.store()
+   screen = ContentScreen(
+       catalog.offered(CONTENT.registry()),
+       wanted=lambda pack: fetch.wanted_for(pack, CONTENT.registry(), store),
+       on_fetch=lambda pack: fetch.FetchJob(
+           fetch.wanted_for(pack, CONTENT.registry(), store), store,
+           within=pack, on_progress=context.triggerRedraw),
+       on_finished=lambda job: refresh_the_library())
+   context.pushOverlay(screen.panel)
+
+   def OnIdle(self):                   # once a frame
+       screen.poll()
+
+``on_fetch(pack)`` returns the job it made (the screen starts it), or None to
+start nothing. Stop cancels the job. ``on_finished(job)`` is called once when
+the job ends, however it ended, and ``on_close()`` once when the screen is
+closed. ``offer(packs)`` replaces what is on offer. For a first run,
+``ContentScreen(CONTENT.needed_to_start(), together=True, on_fetch=lambda
+pack: CONTENT.base_job())`` offers the base packs as one set.
 
 .. _offline:
 
