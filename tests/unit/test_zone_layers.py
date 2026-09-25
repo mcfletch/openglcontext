@@ -170,7 +170,7 @@ class TestCaptureSchedule:
         schedule = CaptureSchedule(bounces=2)
         assert schedule.request('naos') and not schedule.request('naos')
         assert schedule.layer('naos') is None
-        for capture in range(2):
+        for _capture in range(2):
             assert schedule.next(lambda key: 0.0) == 'naos'
             assert schedule.faces('naos', 6) == [0, 1, 2, 3, 4, 5]
             assert schedule.drawn('naos', 6)
@@ -254,3 +254,17 @@ class TestTheTable:
         direct = environment_layers(zones, *BOX, scene_probe)
         tabled = environment_layers(zones, *BOX, scene_probe, table=table)
         assert direct.key == tabled.key
+
+
+def test_the_table_weighs_every_zone_at_a_point_as_each_would():
+    rng = np.random.default_rng(9)
+    pairs = [(room(size=float(rng.uniform(2, 20)), blend=float(rng.choice([0.0, 3.0])),
+                   environment=ZoneEnvironment()), tuple(rng.uniform(-30, 30, 3)))
+             for _ in range(30)]
+    zones = place(*pairs)
+    table = zonelayers.ZoneTable(zones)
+    for _ in range(10):
+        point = rng.uniform(-30, 30, 3)
+        found = zonelayers.point_weights(table, point)
+        for zone in zones:
+            assert found[id(zone)] == pytest.approx(zone.weight(point), abs=1e-9)

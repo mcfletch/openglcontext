@@ -1127,7 +1127,8 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
             return 0
         try:
             from OpenGLContext.audio import scene as audioscene
-            return audioscene.update( context, paths, zones=self.zones )
+            return audioscene.update( context, paths, zones=self.zones,
+                                      table=self.zoneTable )
         except Exception as err:
             log.warning(
                 "Failure updating scene audio: %s", getTraceback( err ),

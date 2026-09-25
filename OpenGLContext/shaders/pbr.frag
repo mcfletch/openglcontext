@@ -967,7 +967,8 @@ void main() {
     // Without it the control works on one machine and not another, and stops
     // working mid-session wherever `auto` degrades full -> analytic.
     ambDiffuse = envIrradiance(Nw) * albedo * (1.0 - metallic) * ao;
-    irrBack = envIrradiance(-Nw);
+    // Only a surface that transmits diffuse light reads what arrives behind it.
+    if (diffuseTransFactorEff > 0.0) irrBack = envIrradiance(-Nw);
     if (iblMode != 0) {                // a probe (split-sum LUT) or the analytic sky
         vec3 pre = planarReflected(envRadiance(Rw, roughness), N, roughness);
         vec2 ab = iblMode == 2 ? texture(brdfLUT, vec2(NdotV, roughness)).rg
