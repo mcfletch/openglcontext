@@ -11,9 +11,15 @@ The environment those memos are read from is the shipped plugin's to restore --
 rather than for this directory.
 """
 
+import os
+import shutil
+import stat
 from collections.abc import Iterator
 
 import pytest
+
+from OpenGLContext import renderoptions
+from OpenGLContext.passes import pbrpass, shadersource, shadowcaps
 
 
 @pytest.fixture(autouse=True)
@@ -28,9 +34,6 @@ def reset_environment_memos() -> Iterator[None]:
     environment reads are -- they cannot change while a context lives -- and a
     test that fakes a failing GL query has to reach the query to see it fail.
     """
-    from OpenGLContext import renderoptions
-    from OpenGLContext.passes import pbrpass, shadersource, shadowcaps
-
     def clear() -> None:
         pbrpass.reset_renderer_cache()
         renderoptions.reset_env_cache()
@@ -67,7 +70,9 @@ def render_scene(monkeypatch):
     hold it. :mod:`tests.unit.glrender` is the machinery, and carries the rest
     of what those modules share.
     """
-    from tests.unit import glrender
+    # glrender skips its importer where glfw is not installed, which at the
+    # top of this conftest would stop the directory's collection.
+    from tests.unit import glrender  # noqa: PLC0415 skips without glfw
 
     yield from glrender.render_scene_factory(monkeypatch)
 
@@ -82,9 +87,6 @@ def posix_modes(tmp_path_factory):
     every directory -- so the mode says nothing there, and a test that reads it
     is asking a question the platform does not answer.
     """
-    import os
-    import stat
-
     probe = tmp_path_factory.mktemp('modes') / 'private'
     os.makedirs(str(probe), mode=0o700, exist_ok=True)
     return not stat.S_IMODE(os.stat(str(probe)).st_mode) & (stat.S_IRWXG | stat.S_IRWXO)
@@ -94,8 +96,6 @@ def posix_modes(tmp_path_factory):
 def blender():
     """The ``blender`` executable on the path; a test asking for it is skipped
     where there is none, since Blender is an optional tool here."""
-    import shutil
-
     found = shutil.which('blender')
     if found is None:
         pytest.skip('Blender is not installed')

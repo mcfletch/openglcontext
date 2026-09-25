@@ -17,11 +17,21 @@ The GL fixtures a *project built on the engine* uses ship in
 its render passes, which counts what each pass did.
 """
 
+import contextlib
+import gc
+
 import pytest
 
 glfw = pytest.importorskip("glfw")
 
-from OpenGLContext.scenegraph import basenodes
+from OpenGLContext import glfwcontext, testingcontext
+from OpenGLContext.capture import read_back_buffer
+from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.events.mouseevents import MouseButtonEvent
+from OpenGLContext.passes import (
+    flatcore, flateffects, instancing, pbrpass, renderpass, selection, shadowmixin,
+)
+from OpenGLContext.scenegraph import basenodes, pbrmesh
 from OpenGLContext.testing.glcontext import profile_unavailable
 
 
@@ -52,8 +62,6 @@ def frames_of(render_scene, children, **named):
     context will not let the front buffer be read at all. It is also where
     ``SettleCapture`` reads, so this sees what a screenshot would.
     """
-    from OpenGLContext.capture import read_back_buffer
-    from OpenGLContext import glfwcontext
 
     frames = []
     original = glfwcontext.GLFWContext.SwapBuffers
@@ -97,11 +105,6 @@ def render_scene_factory(monkeypatch):
 
     def run(children, frames=4, picks=None, mrt=True, shadows=None, layout=None,
             size=None):
-        from OpenGLContext.passes import (
-            instancing, selection, flateffects, shadowmixin, pbrpass, flatcore,
-        )
-        from OpenGLContext.scenegraph import pbrmesh
-
         if shadows is not None:
             # use_shadows is a class attribute resolved from the environment at
             # import time, so set it directly for a deterministic per-test verdict.
@@ -119,13 +122,15 @@ def render_scene_factory(monkeypatch):
 
         monkeypatch.setattr(instancing, 'draw_instanced_mesh', counting_draw)
 
-        orig_single = pbrmesh._MeshGPU.draw
+        # pbrmesh names its per-context GPU record privately, though the
+        # instancing pass and the tiles uploader build and draw it too.
+        orig_single = pbrmesh._MeshGPU.draw  # noqa: SLF001 no public name for the mesh's GPU record
 
         def counting_single(self, *args, **named):
             counters['single'] += 1
             return orig_single(self, *args, **named)
 
-        monkeypatch.setattr(pbrmesh._MeshGPU, 'draw', counting_single)
+        monkeypatch.setattr(pbrmesh._MeshGPU, 'draw', counting_single)  # noqa: SLF001 as above
 
         def _spy(cls, name, key):
             orig = getattr(cls, name)
@@ -137,8 +142,10 @@ def render_scene_factory(monkeypatch):
             monkeypatch.setattr(cls, name, wrapper)
 
         _spy(shadowmixin.ShadowMapMixin, 'renderShadowMaps', 'shadow')
-        _spy(flateffects._FlatEffectsMixin, 'shaderRenderTransmissive', 'transmissive')
-        _spy(flateffects._FlatEffectsMixin, '_end_bloom', 'bloom')
+        # The flat pass's effects mixin is private to it; counting its
+        # transmission and bloom steps is this instrumentation's job.
+        _spy(flateffects._FlatEffectsMixin, 'shaderRenderTransmissive', 'transmissive')  # noqa: SLF001 counts the pass's own step
+        _spy(flateffects._FlatEffectsMixin, '_end_bloom', 'bloom')  # noqa: SLF001 counts the pass's own step
         _spy(selection.SelectionMixin, 'shaderSelectRenderOptimized', 'legacy_pick')
 
         if not mrt:
@@ -147,14 +154,12 @@ def render_scene_factory(monkeypatch):
         if not glfw.init():
             pytest.skip("glfw init failed")
 
-        from OpenGLContext import testingcontext
         Base = testingcontext.getInteractive()
 
         sg = basenodes.sceneGraph(children=children)
 
         class _Ctx(Base):
             if size is not None:
-                from OpenGLContext.contextdefinition import ContextDefinition
                 contextDefinition = ContextDefinition(size=size)
 
             def OnInit(self):
@@ -164,7 +169,7 @@ def render_scene_factory(monkeypatch):
                 if picks is not None:
                     self.contextDefinition.pickAsync = False
                     self.addEventHandler('mousebutton', button=0, state=1,
-                                         function=lambda e: None)
+                                         function=lambda _event: None)
 
         reason = profile_unavailable('core')
         if reason:
@@ -174,12 +179,9 @@ def render_scene_factory(monkeypatch):
         win = getattr(inst, 'window', None)
         if win is not None:
             windows.append(win)
-        try:
+        with contextlib.suppress(glfw.GLFWError):
             glfw.swap_interval(0)
-        except Exception:
-            pass
 
-        from OpenGLContext.events.mouseevents import MouseButtonEvent
         w, h = inst.getViewPort()
         pick_points = picks(w, h) if callable(picks) else picks
         for i in range(frames):
@@ -208,10 +210,6 @@ def render_scene_factory(monkeypatch):
     # `OnQuit`. Destroying the handle here instead is a second free of a window
     # the context released, which the driver reports from wherever the freed
     # memory is next touched.
-    import gc
-
-    from OpenGLContext.passes import renderpass
-
     for inst in contexts:
         inst.releaseWindow()
     # `renderpass.FLAT` is a module global holding the pass that last rendered,
@@ -222,8 +220,6 @@ def render_scene_factory(monkeypatch):
     contexts.clear()
     windows.clear()
     gc.collect()
-    try:
+    with contextlib.suppress(glfw.GLFWError):
         glfw.make_context_current(None)
-    except Exception:
-        pass
     gc.collect()

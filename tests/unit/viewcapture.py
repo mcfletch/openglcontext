@@ -24,6 +24,7 @@ from collections.abc import Mapping, Sequence
 
 import numpy as np
 import pytest
+from PIL import Image
 
 from OpenGLContext.testing.glcontext import gl_available
 from OpenGLContext.testing.paths import tests_root
@@ -90,8 +91,6 @@ def view_frame(args: Sequence[str], out: str, *,
 
 def read_frame(path: str) -> np.ndarray:
     """The PNG at ``path`` as an ``(h, w, 3)`` int array of RGB."""
-    from PIL import Image
-
     with Image.open(path) as image:
         return np.asarray(image.convert('RGB')).astype(int)
 
