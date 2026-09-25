@@ -449,7 +449,7 @@ def test_the_axis_helper_honours_the_modifier_rule():
     mode.bindings = list(mode.bindings) + [
         modes.KeyBinding(command='lookup', keys=['<up>'], modifier='ctrl')]
     inputs = _Inputs(['<up>'], {'<up>': (0, 1, 0)})
-    assert mode._axis(inputs, 'forward', 'back') == 0.0
+    assert mode._axis(inputs, 'forward', 'back') == 0.0  # noqa: SLF001 the reading of one input axis, tested apart from a frame
 
 
 @pytest.mark.parametrize('name,index', [('shift', 0), ('ctrl', 1), ('alt', 2)])
@@ -733,11 +733,11 @@ class TestTurningBelongsToEveryMode:
 
         mode = Spin(name='spin', turnAcceleration=4.0)
         platform, inputs = _Platform(), _Inputs(held={'e'})
-        mode._turn(0.1, inputs, platform)
+        mode._turn(0.1, inputs, platform)  # noqa: SLF001 one turn step, tested apart from a frame
         first = platform.yaw
         platform.yaw = 0.0
         for _ in range(20):
-            mode._turn(0.1, inputs, platform)
+            mode._turn(0.1, inputs, platform)  # noqa: SLF001 one turn step, tested apart from a frame
         assert platform.yaw / 20 > first, "the ramp did not build up"
 
 

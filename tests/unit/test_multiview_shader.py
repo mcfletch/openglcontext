@@ -256,13 +256,13 @@ class TestOnTheDriver:
         shader = VRML97ShaderProgram()
         assert shader.compile()
         compiled = []
-        build = shader._compile_program_set
+        build = shader._compile_program_set  # noqa: SLF001 wraps the program-set build to count how often it runs
 
         def counted(views, strategy='geometry'):
             compiled.append(views)
             return build(views, strategy)
 
-        shader._compile_program_set = counted
+        shader._compile_program_set = counted  # noqa: SLF001 wraps the program-set build to count how often it runs
         for views in (3, 4, 2, 3):
             assert shader.select_program_set(views)
             shader.select_program_set(0)

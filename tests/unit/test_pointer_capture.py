@@ -242,9 +242,9 @@ def test_a_backend_with_no_grab_still_reports_that_it_cannot():
 
 def test_a_mouse_look_mode_actually_grabs_through_the_backend():
     context = _MixinFirst()
-    context._applyPointerCapture(True)
+    context._applyPointerCapture(True)  # noqa: SLF001 the backend hook a mouse-look mode drives is this test's subject
     assert context.captures == [True]
-    context._applyPointerCapture(False)
+    context._applyPointerCapture(False)  # noqa: SLF001 the backend hook a mouse-look mode drives is this test's subject
     assert context.captures == [True, False]
 
 

@@ -30,8 +30,8 @@ class TestExtTextureGating:
 
     def test_every_ext_channel_has_sampler_and_flag_names(self):
         for chan in pbrpass.PBR_EXT_UNITS:
-            assert chan in pbrpass._PBR_EXT_SAMPLER
-            assert chan in pbrpass._PBR_EXT_HAS
+            assert chan in pbrpass._PBR_EXT_SAMPLER  # noqa: SLF001 the pass's channel tables, which the shader's samplers are held to
+            assert chan in pbrpass._PBR_EXT_HAS  # noqa: SLF001 the pass's channel tables, which the shader's samplers are held to
 
     def test_ext_units_do_not_collide_with_core_units(self):
         core = set(pbrpass.PBR_UNITS.values())

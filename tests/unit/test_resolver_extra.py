@@ -41,7 +41,7 @@ def test_fetch_returns_cached_bytes_without_reresolving(tmp_path):
     first = r.fetch("a.bin")
     # Prime the cache with a sentinel and confirm the second fetch serves it,
     # proving the cache-hit shortcut runs rather than re-reading the file.
-    r._cache["a.bin"] = b"CACHED"
+    r._cache["a.bin"] = b"CACHED"  # noqa: SLF001 seeds the resolver's in-memory cache
     assert first == b"payload"
     assert r.fetch("a.bin") == b"CACHED"
 
@@ -136,7 +136,7 @@ class TestUserAgent:
         original = urllib.request.build_opener
         urllib.request.build_opener = lambda *_handlers: FakeOpener()
         try:
-            resolver._open_url('https://example.invalid/a.zip')
+            resolver._open_url('https://example.invalid/a.zip')  # noqa: SLF001 the opener is this test's subject
         finally:
             urllib.request.build_opener = original
         assert seen['url'] == 'https://example.invalid/a.zip'

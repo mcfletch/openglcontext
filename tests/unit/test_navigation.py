@@ -275,7 +275,7 @@ class TestRetargetingKeepsTheChosenMode:
         context = Ctx(definition, _Platform())
         first = context.getNavigation()
         first.select('fly')
-        context._platform = _Platform()
+        context._platform = _Platform()  # noqa: SLF001 stands a fake platform on the context
         second = context.getNavigation()
         assert second is first, "the manager was rebuilt from scratch"
         assert definition.movementMode.name == 'fly'
@@ -287,7 +287,7 @@ class TestSelectableIsDecidedOnce:
         definition.movementModes = [modes.WalkMode(name='walk'),
                                     modes.SwimMode(name='swim')]
         manager = NavigationManager(definition, _Platform())
-        assert [mode.name for mode in manager._selectable()] == ['walk']
+        assert [mode.name for mode in manager._selectable()] == ['walk']  # noqa: SLF001 the modes a manager offers have no public accessor
 
     def test_deciding_does_not_ask_the_platform(self):
         """``enter_when`` is a call into the world; it cannot decide this."""
@@ -306,5 +306,5 @@ class TestSelectableIsDecidedOnce:
         definition.movementModes = [Counting(name='swim')]
         manager = NavigationManager(definition, platform)
         platform.asked = 0
-        manager._selectable()
+        manager._selectable()  # noqa: SLF001 the modes a manager offers have no public accessor
         assert platform.asked == 0

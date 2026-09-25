@@ -13,7 +13,7 @@ from OpenGLContext.passes._flat import FlatPass
 
 def _pass(shader_program):
     p = FlatPass.__new__(FlatPass)
-    p._shader_program_instance = shader_program
+    p._shader_program_instance = shader_program  # noqa: SLF001 stands a shader program on the pass without compiling one
     return p
 
 

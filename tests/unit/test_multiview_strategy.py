@@ -186,9 +186,9 @@ class TestDetect:
         """A driver hands a dead context's address to the next one."""
         MultiviewCapabilities.detect()
         key = contextresources.context_key()
-        assert key in multiview._DETECTED
+        assert key in multiview._DETECTED  # noqa: SLF001 the per-context detection memo, which must let a dead context go
         contextresources.context_lost()
-        assert key not in multiview._DETECTED
+        assert key not in multiview._DETECTED  # noqa: SLF001 the per-context detection memo, which must let a dead context go
 
     @pytest.mark.usefixtures('gl_context')
     def test_a_driver_that_answers_nothing_is_asked_once(self, monkeypatch):

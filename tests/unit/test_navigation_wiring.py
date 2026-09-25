@@ -152,7 +152,7 @@ def test_updating_navigation_without_modes_moves_nothing():
     assert context.navigation is None
     assert context.platform.moved == [] and context.platform.jumped == 0
     assert not context.contextDefinition.movementMode
-    assert context._pointerCaptured is False
+    assert context._pointerCaptured is False  # noqa: SLF001 whether the pointer is captured has no public reader
 
 
 def test_the_current_mode_is_published_on_the_context_definition():
@@ -245,8 +245,8 @@ def test_the_pick_optimiser_keeps_a_move_while_mouse_look_is_in_force():
     context = _SamplingContext(_fps_definition())
     context.getNavigation().select('fps')
     optimiser = SelectionMixin.__new__(SelectionMixin)
-    optimiser._has_mousemove_handlers = None
-    kept = optimiser._optimizePickEvents(context, {('move', (1, 2)): _Move(1, 2)})
+    optimiser._has_mousemove_handlers = None  # noqa: SLF001 the pick-event filter is this test's subject
+    kept = optimiser._optimizePickEvents(context, {('move', (1, 2)): _Move(1, 2)})  # noqa: SLF001 the pick-event filter is this test's subject
     assert len(kept) == 1
 
 

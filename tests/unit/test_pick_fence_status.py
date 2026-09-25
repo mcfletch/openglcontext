@@ -22,10 +22,10 @@ class TestFenceStatus:
                             lambda *_a, **_k: GL_TIMEOUT_EXPIRED, raising=False)
         read = {'n': 0}
         sel = _bare()
-        sel._readPBO = lambda *_a, **_k: read.__setitem__('n', read['n'] + 1)
+        sel._readPBO = lambda *_a, **_k: read.__setitem__('n', read['n'] + 1)  # noqa: SLF001 counts the buffer reads a fence status allows
         # A batch that, if read, would raise (proving it is not read on timeout).
         b = {'fence': object(), 'n': 2, 'events': ['e'], 'id_map': {}}
-        sel._resolveBatch(mode=None, b=b, block=True)
+        sel._resolveBatch(mode=None, b=b, block=True)  # noqa: SLF001 the batch resolve under each fence status is this test's subject
         assert read['n'] == 0, "must not read the PBO when the fence timed out"
 
     def test_signalled_batch_is_read(self, monkeypatch):
@@ -37,9 +37,9 @@ class TestFenceStatus:
             reached['hit'] = True
             raise RuntimeError("stop after reaching the read")   # short-circuit
         sel = _bare()
-        sel._readPBO = fake_read
+        sel._readPBO = fake_read  # noqa: SLF001 counts the buffer reads a fence status allows
         b = {'fence': object(), 'n': 1, 'events': [], 'id_map': {},
              'id_pid': 1, 'dz_pid': 2}
         with pytest.raises(RuntimeError):
-            sel._resolveBatch(mode=None, b=b, block=True)
+            sel._resolveBatch(mode=None, b=b, block=True)  # noqa: SLF001 the batch resolve under each fence status is this test's subject
         assert reached['hit'], "a signalled fence must proceed to read the PBO"

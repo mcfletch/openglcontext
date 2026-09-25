@@ -308,7 +308,7 @@ class TestBadSurfaces:
 
     def test_a_node_that_cannot_be_tessellated_does_not_raise_through_render(self):
         """The node logs and draws nothing rather than taking the frame down."""
-        assert _surface(uDimension=5)._build_geometry() is None
+        assert _surface(uDimension=5)._build_geometry() is None  # noqa: SLF001 the geometry build with no GL is what this test asks for
 
 
 class TestInterleaving:

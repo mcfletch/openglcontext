@@ -55,7 +55,7 @@ class TestWhetherTheFramesAreRead:
         """
         monkeypatch.setenv('OPENGLCONTEXT_AUTO_EXIT_FRAMES', '5')
         context = bounded_context()
-        context._autoExitFrames = None
+        context._autoExitFrames = None  # noqa: SLF001 takes away the frame bound, so only the flag says it is a capture
         assert context.renderingForCapture is True
 
 

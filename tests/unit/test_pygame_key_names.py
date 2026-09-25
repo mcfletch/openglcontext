@@ -19,7 +19,7 @@ from OpenGLContext.screenshot import ScreenshotMixin
 
 @pytest.fixture
 def translate():
-    return PygameXEvent()._translateKey
+    return PygameXEvent()._translateKey  # noqa: SLF001 the key-name translation is this module's subject
 
 
 FUNCTION_KEYS = ['f1', 'f2', 'f5', 'f9', 'f10', 'f12', 'f15']

@@ -96,7 +96,7 @@ def test_loader_uses_matrix_transform_for_matrix_nodes():
         matrix = tuple(_gltf_flat(Rz180_col))
         translation = scale = rotation = None
 
-    t = gltf.transforms._transform_for(FakeNode())
+    t = gltf.transforms._transform_for(FakeNode())  # noqa: SLF001 the glTF node-to-Transform step has no public name in the loader
     assert isinstance(t, MatrixTransform)
     applied = _applied(t)
     p = np.array([1.0, 0.0, 0.0, 1.0])
@@ -110,7 +110,7 @@ def test_loader_uses_trs_when_no_matrix():
         scale = None
         rotation = None
 
-    t = gltf.transforms._transform_for(FakeNode())
+    t = gltf.transforms._transform_for(FakeNode())  # noqa: SLF001 the glTF node-to-Transform step has no public name in the loader
     assert isinstance(t, Transform) and not isinstance(t, MatrixTransform)
     assert tuple(t.translation) == (1.0, 2.0, 3.0)
 
@@ -119,7 +119,7 @@ def test_local_matrix_rv_uses_baked_matrix():
     """Bounds use the exact baked matrix for MatrixTransform nodes."""
     flat = _gltf_flat(np.diag([-1.0, -1.0, 1.0, 1.0]))
     mt = MatrixTransform(localMatrix=np.asarray(flat).reshape(4, 4))
-    rv = gltf.transforms._local_matrix_rv(mt)
+    rv = gltf.transforms._local_matrix_rv(mt)  # noqa: SLF001 a Transform's local matrix has no public reader in the loader
     assert np.allclose(rv, np.asarray(flat).reshape(4, 4))
 
 

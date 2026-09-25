@@ -27,7 +27,7 @@ class TestDefaultRenderPassesSceneSwap(unittest.TestCase):
     def test_first_call_creates_flat_for_current_scenegraph(self) -> None:
         sg = object()
         ctx = self._make_context(sg)
-        runner = self.renderpass._defaultRenderPasses()
+        runner = self.renderpass._defaultRenderPasses()  # noqa: SLF001 the default pass runner's construction is this test's subject
 
         with mock.patch('OpenGLContext.passes.flatcompat.FlatPass') as FlatPassCls:
             FlatPassCls.return_value.scene = sg
@@ -40,7 +40,7 @@ class TestDefaultRenderPassesSceneSwap(unittest.TestCase):
         """When context.getSceneGraph() returns a different sg, FLAT is recreated."""
         sg_a = object()
         sg_b = object()
-        runner = self.renderpass._defaultRenderPasses()
+        runner = self.renderpass._defaultRenderPasses()  # noqa: SLF001 the default pass runner's construction is this test's subject
 
         with mock.patch('OpenGLContext.passes.flatcompat.FlatPass') as FlatPassCls:
             flat_a = mock.MagicMock()
@@ -62,7 +62,7 @@ class TestDefaultRenderPassesSceneSwap(unittest.TestCase):
     def test_same_scenegraph_reuses_flat(self) -> None:
         """When the scenegraph is unchanged, FLAT is reused."""
         sg = object()
-        runner = self.renderpass._defaultRenderPasses()
+        runner = self.renderpass._defaultRenderPasses()  # noqa: SLF001 the default pass runner's construction is this test's subject
 
         with mock.patch('OpenGLContext.passes.flatcompat.FlatPass') as FlatPassCls:
             flat = mock.MagicMock()

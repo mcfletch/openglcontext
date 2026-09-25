@@ -21,7 +21,7 @@ class _ChunkedResponse:
 
     def __init__(self, data, chunk=1024, length=True):
         self._data = data
-        self._chunk = chunk
+        self.chunk = chunk
         self._offset = 0
         self.headers = {'Content-Length': str(len(data))} if length else {}
         self.closed = False
@@ -31,7 +31,7 @@ class _ChunkedResponse:
         # how many pieces a body arrives in however large the reader's ask is.
         if n is None or n < 0:
             n = len(self._data) - self._offset
-        n = min(n, self._chunk)
+        n = min(n, self.chunk)
         piece = self._data[self._offset:self._offset + n]
         self._offset += len(piece)
         return piece
@@ -77,7 +77,7 @@ class TestStreaming:
         """
         made = serve(chunk=8192)
         resolver.fetch_to_cache('https://example.com/b.bin', cache_dir=str(tmp_path))
-        assert made['response']._chunk <= resolver.DOWNLOAD_CHUNK_BYTES
+        assert made['response'].chunk <= resolver.DOWNLOAD_CHUNK_BYTES
 
     def test_a_response_with_no_content_length_still_arrives(self, serve, payload,
                                                              tmp_path):

@@ -296,7 +296,7 @@ def test_a_mirror_left_without_a_reflection_asks_for_another_frame():
         plan = planner.plan([_frame(records)], ATLAS, one)
         finished.append(not plan.unfinished)
     assert finished[-1]
-    assert len(planner._held) == 3
+    assert len(planner._held) == 3  # noqa: SLF001 the tiles the planner holds between frames
 
 
 def test_reaching_its_interval_does_not_ask_for_a_frame():
@@ -666,7 +666,7 @@ def test_a_mirror_with_no_reflection_yet_is_drawn_and_the_view_redone_once_it_ha
     kept, incomplete = planner.contents(plan, outer, [back], {})
     assert kept == [back] and not incomplete
     inner = lookup_key(outer.view, back[4])
-    assert planner._held[outer.key].missing == {inner}
+    assert planner._held[outer.key].missing == {inner}  # noqa: SLF001 the tiles the planner holds between frames
 
 
 def test_keeping_only_some_tiles_gives_back_the_rest():
@@ -675,7 +675,7 @@ def test_keeping_only_some_tiles_gives_back_the_rest():
     plan = planner.plan([_frame(records)], ATLAS, BIG)
     keep = plan.draws[0].key
     planner.keep_only({keep})
-    assert set(planner._held) == {keep} and set(planner.packer.tiles) == {keep}
+    assert set(planner._held) == {keep} and set(planner.packer.tiles) == {keep}  # noqa: SLF001 the tiles the planner holds between frames
 
 
 def test_the_plan_carries_the_budget_it_was_made_within():

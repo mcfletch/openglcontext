@@ -342,11 +342,11 @@ class TestThreaded:
         threaded, threaded_heard = landing(ThreadedPhysicsManager)
         for _ in range(60):
             plain.advance(4 * STEP)
-            sim = threaded._sim
+            sim = threaded._sim  # noqa: SLF001 steps the threaded manager's world by hand, with no thread running
             with sim.with_world():
                 for _ in range(4):
                     threaded.world.step(STEP)
-                    sim._publish()
+                    sim._publish()  # noqa: SLF001 publishes a snapshot with no thread running
             threaded.advance(4 * STEP)
         assert [(h.phase, round(h.time, 6)) for h in threaded_heard] == [
             (h.phase, round(h.time, 6)) for h in plain_heard]
@@ -464,11 +464,11 @@ class TestRemoving:
 
 def tick(mgr, steps=1):
     """Run ``steps`` ticks of a threaded manager's simulation on this thread."""
-    sim = mgr._sim
+    sim = mgr._sim  # noqa: SLF001 steps the threaded manager's world by hand, with no thread running
     with sim.with_world():
         for _ in range(steps):
             mgr.world.step(STEP)
-            sim._publish()
+            sim._publish()  # noqa: SLF001 publishes a snapshot with no thread running
 
 
 class TestThreadedRemoval:

@@ -49,8 +49,8 @@ def batching(monkeypatch):
         return key(shape), instanceable(shape)
 
     def fresh(shape):
-        key = passing._keyFor(shape, instance_collapse_is_enabled())
-        return key, key is not None and bool(passing._instanceable(shape))
+        key = passing._keyFor(shape, instance_collapse_is_enabled())  # noqa: SLF001 the batching memo's key, which this test holds to its inputs
+        return key, key is not None and bool(passing._instanceable(shape))  # noqa: SLF001 the batching memo's key, which this test holds to its inputs
     return ask, fresh
 
 
@@ -179,8 +179,8 @@ class _Path(tuple):
 def _levels_pass(paths):
     passing = FlatPass.__new__(FlatPass)
     passing.paths = {}
-    passing._pathGeneration = 0
-    passing._levelChoice = None
+    passing._pathGeneration = 0  # noqa: SLF001 starts the level memo this test holds to its inputs from empty
+    passing._levelChoice = None  # noqa: SLF001 starts the level memo this test holds to its inputs from empty
     passing.paths[lod.LOD] = paths
     return passing
 

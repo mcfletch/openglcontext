@@ -127,10 +127,10 @@ def test_a_double_sided_mesh_leaves_culling_as_the_pass_records_it():
     double-sided mesh culled."""
     mode = types.SimpleNamespace(matrix=np.eye(4), shader_mode=False)
     set_cull_state(mode, False, GL.GL_CCW)            # a double-sided mesh before
-    _square(solid=False)._render_legacy(mode)
-    assert bool(GL.glIsEnabled(GL.GL_CULL_FACE)) is bool(mode._cull_enabled)
-    _square(solid=True)._render_legacy(mode)
-    assert bool(GL.glIsEnabled(GL.GL_CULL_FACE)) is bool(mode._cull_enabled) is True
+    _square(solid=False)._render_legacy(mode)  # noqa: SLF001 the fixed-function draw is this test's subject
+    assert bool(GL.glIsEnabled(GL.GL_CULL_FACE)) is bool(mode._cull_enabled)  # noqa: SLF001 the pass's face-cull memo, which must match GL's state
+    _square(solid=True)._render_legacy(mode)  # noqa: SLF001 the fixed-function draw is this test's subject
+    assert bool(GL.glIsEnabled(GL.GL_CULL_FACE)) is bool(mode._cull_enabled) is True  # noqa: SLF001 the pass's face-cull memo, which must match GL's state
 
 
 @pytest.mark.usefixtures('compat')

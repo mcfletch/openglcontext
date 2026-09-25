@@ -142,10 +142,10 @@ class TestPBRTextureGL:
         tex = PBRTexture(Image.new("RGBA", (2, 2), (1, 2, 3, 255)))
         mode = types.SimpleNamespace(context=_Context())
         tex.cached(mode)
-        assert len(tex._per_context) == 1
+        assert len(tex._per_context) == 1  # noqa: SLF001 the per-context texture table, which must give up a dead context's entry
         mode.context = None
         gc.collect()
-        assert len(tex._per_context) == 0
+        assert len(tex._per_context) == 0  # noqa: SLF001 the per-context texture table, which must give up a dead context's entry
 
     @pytest.mark.usefixtures('gl')
     def test_cached_builds_once_and_applies_sampler(self):

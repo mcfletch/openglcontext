@@ -41,7 +41,7 @@ class TestTheDeltaIsAPath:
     def _traversed(self, manager, scene):
         _root, onto, off = scene
         instance = manager.__new__(manager)
-        return instance._traversalPaths(_Event(lastPath=off, newPath=onto))
+        return instance._traversalPaths(_Event(lastPath=off, newPath=onto))  # noqa: SLF001 the paths a change sends events along are this module's subject
 
     def test_it_gives_one_path(self, manager, scene):
         assert len(self._traversed(manager, scene)) == 1

@@ -97,7 +97,7 @@ def lightmap_image(tmp_path_factory):
     np = pytest.importorskip("numpy")
     image_mod = pytest.importorskip("PIL.Image")
     out = str(tmp_path_factory.mktemp("lm") / "lightmap.png")
-    if not rendering._capture(out, mode="lightmap", env={'OPENGLCONTEXT_IBL': 'off'}):
+    if not rendering.capture_scene(out, mode="lightmap", env={'OPENGLCONTEXT_IBL': 'off'}):
         pytest.skip("OpenGL context unavailable for lightmap render test")
     return np.asarray(image_mod.open(out).convert("RGB")).astype(int)
 

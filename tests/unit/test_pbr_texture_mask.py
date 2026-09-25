@@ -64,10 +64,10 @@ class TestTheShader:
 
     def test_each_name_reads_its_bit(self):
         source = _source()
-        for channel, name in pbrpass._PBR_HAS.items():
+        for channel, name in pbrpass._PBR_HAS.items():  # noqa: SLF001 the pass's channel tables, which the shader's uniforms are held to
             bit = pbrpass.PBR_TEXTURE_BITS[channel]
             assert '#define %s ((materialTextures & %d) != 0)' % (name, bit) in source
-        for channel, name in pbrpass._PBR_EXT_HAS.items():
+        for channel, name in pbrpass._PBR_EXT_HAS.items():  # noqa: SLF001 the pass's channel tables, which the shader's uniforms are held to
             bit = pbrpass.PBR_TEXTURE_BITS[channel]
             assert '#define %s ((materialTextures & %d) != 0)' % (name, bit) in source
 

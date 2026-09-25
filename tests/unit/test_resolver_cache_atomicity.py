@@ -132,8 +132,8 @@ def test_inflight_map_is_emptied(fake_download):
     """The single-flight map drops each key once its last waiter leaves."""
     payload, cache_dir, _ = fake_download
     resolver.fetch_to_cache('https://example.com/x.hdr', cache_dir=cache_dir)
-    assert resolver._INFLIGHT == {}, "in-flight download slots leaked: %r" % (
-        resolver._INFLIGHT,)
+    assert resolver._INFLIGHT == {}, "in-flight download slots leaked: %r" % (  # noqa: SLF001 the in-flight download table, which must be empty afterwards
+        resolver._INFLIGHT,)  # noqa: SLF001 the in-flight download table, which must be empty afterwards
 
 
 def test_no_temp_files_left_behind(fake_download):

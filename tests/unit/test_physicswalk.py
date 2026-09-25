@@ -152,7 +152,7 @@ class TestAvailableEverywhere:
     def test_setup_binds_the_toggle_key_and_remembers_the_free_navigator(self):
         host = _started()
         assert ('keyboard', 'g', 1, host.togglePhysics) in host.handlers
-        assert host._freeManager is host.movementManager
+        assert host._freeManager is host.movementManager  # noqa: SLF001 the navigator physics hands back to has no public name
 
 
 # -- switching between the avatar and the free-fly camera --------------------
@@ -385,7 +385,7 @@ class TestStepPhysics:
         """Wall-clock between frames is clamped, so a stall is not a giant step."""
         host = _started()
         host.enablePhysics(True)
-        host._physicsLast -= 10.0
+        host._physicsLast -= 10.0  # noqa: SLF001 stands in for ten seconds of wall clock passing between frames
         before = np.asarray(host.physicsPlatform.character.position, dtype='d').copy()
         host.stepPhysics()
         after = np.asarray(host.physicsPlatform.character.position, dtype='d')
@@ -497,7 +497,7 @@ class TestMovementKeys:
     def test_a_movement_key_only_wakes_the_frame_loop(self):
         host = self._walking()
         before = host.redraws
-        host._physicsKey(None)
+        host._physicsKey(None)  # noqa: SLF001 the key handler, called as the event loop would
         assert host.redraws > before
 
     def test_the_fly_key_swaps_the_mode_and_tells_the_character(self):
@@ -550,7 +550,7 @@ class TestClearance:
         host = _started()
         host.enablePhysics(True)
         character = host.physicsPlatform.character
-        assert physicswalk._clearance(character, 0.3) == 4
+        assert physicswalk._clearance(character, 0.3) == 4  # noqa: SLF001 the headroom measurement is this test's subject
 
 
 class TestZoneGravity:

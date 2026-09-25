@@ -69,9 +69,9 @@ class TestTheProgramAPI:
         program = PBRShaderProgram.__new__(PBRShaderProgram)
         program.program = 7
         uploaded = []
-        program._set_uniform1i = lambda name, value, prog=None: uploaded.append(  # noqa: ARG005 the signature of ShaderProgram._set_uniform*
+        program._set_uniform1i = lambda name, value, prog=None: uploaded.append(  # noqa: ARG005,SLF001 the signature of ShaderProgram._set_uniform*; records the uniforms the pass sets
             (name, int(value)))
-        program._set_uniform3f = lambda name, value, prog=None: uploaded.append(  # noqa: ARG005 the signature of ShaderProgram._set_uniform*
+        program._set_uniform3f = lambda name, value, prog=None: uploaded.append(  # noqa: ARG005,SLF001 the signature of ShaderProgram._set_uniform*; records the uniforms the pass sets
             (name, tuple(float(v) for v in value)))
         return program, uploaded
 
@@ -101,7 +101,7 @@ class TestWhichObjectsAreLookedUp:
 
     def _pass(self, grid):
         pass_ = FlatPass.__new__(FlatPass)
-        pass_._lightGrid = grid
+        pass_._lightGrid = grid  # noqa: SLF001 stands the grid on the pass, as a frame's walk would
         self.sampled = []
 
         class Shader:
