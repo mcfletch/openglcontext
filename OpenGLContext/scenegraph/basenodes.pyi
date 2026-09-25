@@ -36,6 +36,7 @@ from OpenGLContext.scenegraph.extrusions import PolyCylinder as PolyCylinder
 from OpenGLContext.scenegraph.fog import Fog as Fog
 from OpenGLContext.scenegraph.gear import Gear as Gear
 from OpenGLContext.scenegraph.group import Group as Group
+from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight as ImageBasedLight
 from OpenGLContext.scenegraph.imagetexture import ImageTexture as ImageTexture
 from OpenGLContext.scenegraph.imagetexture import MMImageTexture as MMImageTexture
 from OpenGLContext.scenegraph.imagetexture import PixelTexture as PixelTexture
@@ -110,6 +111,14 @@ from OpenGLContext.scenegraph.texturetransform import TextureTransform as Textur
 from OpenGLContext.scenegraph.timesensor import TimeSensor as TimeSensor
 from OpenGLContext.scenegraph.transform import Transform as Transform
 from OpenGLContext.scenegraph.viewpoint import Viewpoint as Viewpoint
+from OpenGLContext.scenegraph.zone import Zone as Zone
+from OpenGLContext.scenegraph.zone import ZoneAudio as ZoneAudio
+from OpenGLContext.scenegraph.zone import ZoneEnvironment as ZoneEnvironment
+from OpenGLContext.scenegraph.zone import ZoneGravity as ZoneGravity
+from OpenGLContext.scenegraph.zone import ZoneLights as ZoneLights
+from OpenGLContext.scenegraph.zone import ZoneMirrors as ZoneMirrors
+from OpenGLContext.scenegraph.zone import ZoneReverb as ZoneReverb
+from OpenGLContext.scenegraph.zone import ZoneVisibility as ZoneVisibility
 from vrml.route import IS as IS
 from vrml.route import ROUTE as ROUTE
 from vrml.vrml97.basenodes import Anchor as Anchor
@@ -173,6 +182,7 @@ __all__ = [
     'Gear',
     'Group',
     'IS',
+    'ImageBasedLight',
     'ImageTexture',
     'IndexedFaceSet',
     'IndexedLineSet',
@@ -237,5 +247,13 @@ __all__ = [
     'Viewpoint',
     'VisibilitySensor',
     'WorldInfo',
+    'Zone',
+    'ZoneAudio',
+    'ZoneEnvironment',
+    'ZoneGravity',
+    'ZoneLights',
+    'ZoneMirrors',
+    'ZoneReverb',
+    'ZoneVisibility',
     'sceneGraph',
 ]

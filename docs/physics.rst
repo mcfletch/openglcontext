@@ -65,7 +65,8 @@ The loader, the nodes and the simulation all use the same structures.
      - ``motion`` / ``collider`` / ``trigger``, materials, collision filters
      - ``model.Motion``, ``Collider``, ``Trigger``, ``Material``, ``CollisionFilter``
    * - ``OMI_physics_gravity``
-     - global gravity *and* per-volume gravity zones
+     - global gravity *and* per-volume gravity zones; also a zone's gravity
+       (:doc:`zones`)
      - ``model.Gravity``
    * - ``OMI_physics_joint``
      - limits + drives between bodies

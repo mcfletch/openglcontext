@@ -177,6 +177,11 @@ Lighting and shadows
      - milliseconds
      - 0 (none)
      - A GPU time the reflections aim to stay under.
+   * - ``OPENGLCONTEXT_ZONE_CAPTURE_FACES``
+     - 1 to 6
+     - 6
+     - How many faces of a zone's environment probe are drawn in one frame.
+       Fewer spreads a capture over frames. See :doc:`zones`.
 
 How much work per frame
 -----------------------

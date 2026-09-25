@@ -233,6 +233,14 @@ class ContextDefinition( node.Node ):
     reflectionMilliseconds = field.newField(
         "reflectionMilliseconds", "SFFloat", 1,
         lambda: renderoptions.env_number('OPENGLCONTEXT_REFLECTION_MS', 0.0))
+    #: How many faces of a zone's environment probe are drawn in one frame, of
+    #: the one zone being captured: 6 captures a zone in a frame, fewer spreads
+    #: a capture over frames (env: OPENGLCONTEXT_ZONE_CAPTURE_FACES). See
+    #: docs/zones.rst.
+    zoneCaptureFaces = field.newField(
+        "zoneCaptureFaces", "SFInt32", 1,
+        lambda: int(renderoptions.env_number(
+            'OPENGLCONTEXT_ZONE_CAPTURE_FACES', 6, integer=True)))
     #: Collapse shapes sharing one geometry into a single instanced draw
     #: (env: OPENGLCONTEXT_INSTANCING).
     instancing = field.newField( "instancing", "SFBool", 1,
@@ -302,6 +310,8 @@ class ContextDefinition( node.Node ):
                 'optionLabels': renderoptions.LABELS['ibl']},
         'iblIntensity': {'label': 'Environment intensity', 'minimum': 0.0,
                          'maximum': 2.0, 'step': 0.05},
+        'zoneCaptureFaces': {'label': 'Zone capture faces per frame', 'minimum': 1,
+                             'maximum': 6, 'step': 1},
         'transmission': {'label': 'Glass refraction',
                          'options': renderoptions.CHOICES['transmission'],
                          'optionLabels': renderoptions.LABELS['transmission']},
@@ -334,8 +344,8 @@ class ContextDefinition( node.Node ):
     RENDERING_FIELDS = (
         'shadows', 'shadowsSoft', 'shadowCascades', 'maximumLights',
         'bloom', 'ibl', 'iblIntensity', 'transmission', 'planarReflections',
-        'reflectionViews', 'reflectionBounces', 'instancing', 'gpuSkinning', 'tessellationLOD',
-        'multisampleSamples', 'vsync',
+        'reflectionViews', 'reflectionBounces', 'zoneCaptureFaces', 'instancing',
+        'gpuSkinning', 'tessellationLOD', 'multisampleSamples', 'vsync',
     )
     #: Fields a settings screen shows under "Interface": how the overlay itself
     #: is drawn and how much of the display the window takes, as opposed to what

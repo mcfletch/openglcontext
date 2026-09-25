@@ -55,6 +55,7 @@ class TilesTerrain(Group):
     ground: Any = None
     vegetation: Any = None
     cover: Any = None
+    zones: Any = None
 
     def __init__(self, tileset_path: str, memory_budget: int = 256 * 1024 * 1024,
                  max_sse: float = 16.0, fovy: Optional[float] = None,
@@ -129,6 +130,14 @@ class TilesTerrain(Group):
         if vegetation and extras.get('vegetation'):
             self._mount_cover(extras['vegetation'].get('cover'), base_uri,
                               extras.get('terrain'))
+        #: The world's zones, when it names a document of them: the loaded
+        #: :class:`~OpenGLContext.loaders.gltf.scene.GLTFScene`, whose
+        #: ``zones`` and ``sounds`` an application may want. Its group is
+        #: mounted with the landscape, so the pass finds the zones in it.
+        self.zones: Any = None
+        self._zone_node: Any = None
+        if extras.get('zones'):
+            self._mount_zones(extras['zones'], base_uri, cache_dir)
         if self.drawn_as_tiles and self.ground is not None:
             # What the tiles' ground is drawn with is what the field's ground is
             # made of: one blend, one control map, one baked light, whichever
@@ -136,7 +145,7 @@ class TilesTerrain(Group):
             # light is not baked until the canopy over it is known.
             self.runtime.uploader.ground = self.ground.ground
         self._mounted = [node for node in (self._field_node, self.cover,
-                                           self.vegetation)
+                                           self.vegetation, self._zone_node)
                          if node is not None]
         self.children = list(self._mounted)
 
@@ -221,6 +230,25 @@ class TilesTerrain(Group):
         self.vegetation = VegetationField(
             table['positions'], table['yaws'], table['heights'], species,
             species_id=table['species'])
+
+    def _mount_zones(self, record: Any, base_uri: str,
+                     cache_dir: Optional[str]) -> None:
+        """Load the world's zones, from the glTF document its extras name.
+
+        ``record`` is ``{"document": "zones.gltf"}``: a document of
+        ``OGLC_zone`` nodes and whatever they name -- emitters and their
+        audio, lights -- in the world's own coordinates, beside the tileset.
+        See ``docs/zones.rst``.
+        """
+        from OpenGLContext.loaders.gltf import loader
+        name = record.get('document') if isinstance(record, dict) else record
+        if not name:
+            return
+        if fetch.is_url(base_uri):
+            self.zones = loader.load_gltf_url(base_uri + name, cache_dir=cache_dir)
+        else:
+            self.zones = loader.load_gltf(os.path.join(base_uri, name))
+        self._zone_node = self.zones.group
 
     def _mount_cover(self, record: Any, base_uri: str,
                      terrain: Any) -> None:

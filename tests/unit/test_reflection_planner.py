@@ -427,3 +427,15 @@ def test_a_view_drawn_without_a_mirrors_reflection_is_drawn_again_once_it_has_on
     assert waiting.valid
     third = plan(NOTHING)
     assert not {c.key: c for c in third.candidates}[outer.key].valid
+
+
+def test_a_mirror_in_a_mirror_is_allowed_by_where_the_viewer_stands():
+    """Zones switch mirrors on and off for the camera inside them; a mirror
+    seen in a mirror is asked about the viewer, not the reflected camera."""
+    planner = _settled_planner()
+    front, back = _mirror(), _behind()
+    asked = []
+    planner.allowed = lambda record, eye: asked.append(tuple(np.round(eye, 6))) or True
+    planner.plan([_frame([front])], ATLAS, BIG, inside=lambda frame: [back])
+    assert len(asked) == 2
+    assert asked[0] == asked[1] == pytest.approx((0.0, 1.6, 3.0))

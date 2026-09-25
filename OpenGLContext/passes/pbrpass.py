@@ -25,6 +25,7 @@ from OpenGL.GL import (
     glUseProgram, glActiveTexture, glBindTexture, glGetIntegerv,
     glGenBuffers, glBindBuffer, glBufferData, glBindBufferBase,
     glGetUniformBlockIndex, glUniformBlockBinding, glUniformMatrix4fv,
+    glUniform1iv, glUniform4fv,
 )
 from OpenGL.GL import shaders as GL_shaders
 
@@ -38,6 +39,7 @@ from OpenGLContext.passes import reflection
 from OpenGLContext.passes.reflection import REFLECTION_UNIT, REFLECTION_UNITS_NEEDED
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, material_to_pbr
 from OpenGLContext.passes.ibl import IBL_UNITS, _IBL_SAMPLER
+from OpenGLContext.passes.zonelayers import MAX_ZONE_LAYERS, ZonePack
 from OpenGLContext.scenegraph.skinning import SKIN_PALETTE_UNIT, palette_supported
 
 log = logging.getLogger(__name__)
@@ -393,10 +395,18 @@ class PBRShaderProgram(VRML97ShaderProgram):
             # mirror reflects the environment probe alone.
             self.planar_reflection_supported = (
                 self.texture_budget >= REFLECTION_UNITS_NEEDED)
+            # A zone's own environment probe is a layer of the cube-map array
+            # the scene's probe then lives in, which needs the same GL 4.0 /
+            # ARB_texture_cube_map_array support the point-shadow cube arrays
+            # do -- and the #extension line that support already enables.
+            self.zone_probes_supported = bool(self.shadow_cube_array)
             ext_defines = ['#define PBR_EXT_TEXTURES %d'
                            % (1 if ext_textures_supported(self.texture_budget) else 0),
                            '#define PBR_PLANAR_REFLECTION %d'
-                           % (1 if self.planar_reflection_supported else 0)]
+                           % (1 if self.planar_reflection_supported else 0),
+                           '#define PBR_ZONE_PROBES %d'
+                           % (1 if self.zone_probes_supported else 0),
+                           '#define MAX_ZONE_LAYERS %d' % (MAX_ZONE_LAYERS,)]
             # Vertex-shader skinning needs a texture unit of its own for the
             # joint palette; a driver whose combined budget does not reach it
             # compiles the skinning out and the deform stays on the CPU.
@@ -441,6 +451,11 @@ class PBRShaderProgram(VRML97ShaderProgram):
     #: Whether this driver has the texture unit the joint palette needs; False
     #: until a program has been compiled against a real context.
     skinning_supported: bool = False
+
+    #: Whether zones may have environment probes of their own: the scene's
+    #: probe is then a cube-map array, and must be built as one. False until a
+    #: program has been compiled against a real context.
+    zone_probes_supported: bool = False
 
     #: The fragment and vertex defines the lit program was compiled with, so a
     #: set compiled for several views is compiled the same way.
@@ -640,6 +655,39 @@ class PBRShaderProgram(VRML97ShaderProgram):
         self._set_uniform3f('lightGridAmbient', ambient, target)
         self._set_uniform3f('lightGridDirectional', directional, target)
         self._set_uniform3f('lightGridDirection', direction, target)
+
+    def set_zones(self, pack: Optional[ZonePack] = None, program: Any = None) -> None:
+        """Hand the next draw the zones reaching it, or none.
+
+        ``pack`` is what :func:`~OpenGLContext.passes.zonelayers.environment_layers`
+        worked out for the object. Loose uniforms rather than a block, for the
+        reason the light grid's are: they belong to the object, and the pass
+        uploads them only when the object's zones differ from the last draw's.
+        """
+        target = program if program is not None else self.program
+        if pack is None or pack.count == 0:
+            self._set_uniform1i('zoneLayers', 0, target)
+            return
+        loc = self._get_location('zoneKind', target)
+        if loc != -1:
+            glUniform1iv(loc, MAX_ZONE_LAYERS, pack.kinds)
+        loc = self._get_location('zoneToLocal', target)
+        if loc != -1:
+            # Row-vector, as the engine's matrices are, which GL reads as the
+            # column-vector matrix the shader multiplies by.
+            glUniformMatrix4fv(loc, MAX_ZONE_LAYERS, GL_FALSE, pack.to_local)
+        loc = self._get_location('zoneShape', target)
+        if loc != -1:
+            glUniform4fv(loc, MAX_ZONE_LAYERS, pack.shape)
+        loc = self._get_location('zoneLight', target)
+        if loc != -1:
+            glUniform4fv(loc, MAX_ZONE_LAYERS, pack.light)
+        self._set_uniform1i('zoneLayers', pack.count, target)
+
+    def set_lights_off(self, mask: int = 0, program: Any = None) -> None:
+        """Switch off the lights in slots whose bits are set in ``mask``, for the next draw."""
+        target = program if program is not None else self.program
+        self._set_uniform1i('lightsOff', int(mask), target)
 
     def set_vertex_color(self, enabled: bool) -> None:
         """Enable/disable per-vertex color (glTF COLOR_0) modulation of baseColor."""
@@ -1052,6 +1100,11 @@ class PBRPass(flatcore.FlatPass):
             geom._apply_draw_state(self)
         if hasattr(shader, 'set_vertex_color'):
             shader.set_vertex_color(getattr(geom, 'colors', None) is not None)
+
+        # The whole group draws as one, reached by the zones any member is.
+        apply_zones = getattr(self, 'applyZonesToGroup', None)
+        if apply_zones is not None:
+            apply_zones(shader, group.members, prog)
 
         gpu = geom.instanceGPU(self)
         bases = instance_joint_bases(self, group)

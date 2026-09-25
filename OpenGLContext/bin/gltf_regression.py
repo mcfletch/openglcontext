@@ -241,9 +241,13 @@ def render_view(spec: gltf_demos.SceneSpec, camera: int | None, model: str, out:
     """Render one scene/camera to ``out``. Returns ``(ok, stats)`` where ``stats``
     holds the viewer-reported ``load_seconds``/``fps`` for the run (empty on failure)."""
     w, h = size
-    common = ['--no-physics', '--no-shadows', '--capture', out,
+    common = ['--no-physics', '--capture', out,
               '--frames', str(frames), '--capture-delay', repr(delay),
               '--size', '%dx%d' % (w, h), '--background', spec.capture_background]
+    # Shadows are left out unless the scene says they are part of what it
+    # shows: a capture with them is slower and depends on the cascade fit.
+    if not spec.shadows:
+        common.append('--no-shadows')
     if camera is None:
         args = [model, '--no-cameras', '--no-rotate',
                 '--yaw', repr(spec.yaw), '--elevation', repr(spec.elevation),

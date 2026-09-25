@@ -34,6 +34,12 @@ _CHUNK_BIN = 0x004E4942
 
 Converter = Callable[[Any], Any]
 
+#: Top-level properties glTF 2.1 adds to the core that pygltflib's ``GLTF2``
+#: has no field for. Each is kept, as the JSON gave it, as an attribute of the
+#: same name on the decoded document, so a 2.1 reader finds it where a 2.0
+#: document's own arrays are. See :mod:`OpenGLContext.loaders.gltf.shapes`.
+CORE_21 = ('shapes',)
+
 #: One decode plan per dataclass, resolved on first sight and reused. This is the
 #: cache dataclasses_json lacks: the plan is the whole cost, and there are 28
 #: classes against thousands of objects.
@@ -122,7 +128,11 @@ def decode_gltf(source: "str | bytes | bytearray | dict") -> "pygltflib.GLTF2":
     if not isinstance(document, dict):
         raise ValueError('glTF document must be a JSON object, not %s'
                          % type(document).__name__)
-    return _decode(pygltflib.GLTF2, document)
+    gltf = _decode(pygltflib.GLTF2, document)
+    for name in CORE_21:
+        if name in document:
+            setattr(gltf, name, document[name])
+    return gltf
 
 
 def load_glb(data: bytes) -> "pygltflib.GLTF2":

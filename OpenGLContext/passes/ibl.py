@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import os
 import logging
-from typing import Any, Callable, Optional
+from typing import Any, Callable, List, Optional, Tuple
 
 import numpy as np
 
@@ -36,15 +36,17 @@ from OpenGL.GL import (
     GL_TEXTURE_MIN_FILTER, GL_TEXTURE_MAG_FILTER,
     GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_TEXTURE_WRAP_R,
     GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR, GL_CLAMP_TO_EDGE, GL_REPEAT,
+    GL_TEXTURE_CUBE_MAP_ARRAY,
     GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_COMPLETE,
     GL_FRAMEBUFFER_BINDING, GL_TEXTURE_BINDING_2D,
     GL_VIEWPORT, GL_DEPTH_TEST, GL_CULL_FACE, GL_BLEND,
     GL_VERTEX_SHADER, GL_FRAGMENT_SHADER,
     GL_RGB, GL_FLOAT,
     glGenTextures, glDeleteTextures, glBindTexture, glActiveTexture,
-    glTexStorage2D, glTexSubImage2D, glTexParameteri, glGenerateMipmap,
-    glGenFramebuffers, glDeleteFramebuffers, glBindFramebuffer,
-    glFramebufferTexture2D, glCheckFramebufferStatus,
+    glTexStorage2D, glTexStorage3D, glTexSubImage2D, glTexSubImage3D, glTexParameteri,
+    glGenerateMipmap, glGenFramebuffers, glDeleteFramebuffers, glBindFramebuffer,
+    glFramebufferTexture2D, glFramebufferTextureLayer, glCheckFramebufferStatus,
+    glCopyImageSubData,
     glGenVertexArrays, glDeleteVertexArrays, glBindVertexArray,
     glDrawArrays, glViewport, glUseProgram, glEnable, glDisable,
     glGetIntegerv, glGetUniformLocation, glUniform1i, glUniform1f,
@@ -360,7 +362,16 @@ def _uni1f(prog: int, name: str, value: float) -> None:
 
 
 class IBLProbe(object):
-    """Precomputed IBL textures (irradiance + prefiltered-specular cubes + BRDF LUT)."""
+    """Precomputed IBL textures (irradiance + prefiltered-specular cubes + BRDF LUT).
+
+    With ``layers`` of nought the irradiance and prefiltered maps are plain
+    cube maps. With ``layers`` of one or more they are cube-map arrays of that
+    many layers (GL 4.0 or ``ARB_texture_cube_map_array``): layer 0 holds the
+    scene's environment, and :meth:`convolve` fills any other layer from an
+    environment cube of the caller's, which is how a zone's captured probe
+    shares the two texture units the scene's probe is read from. See
+    :mod:`OpenGLContext.passes.zoneprobes`.
+    """
 
     ENV_SIZE = 128
     IRR_SIZE = 32
@@ -368,14 +379,29 @@ class IBLProbe(object):
     PRE_LEVELS = 5
     LUT_SIZE = 256
 
-    def __init__(self) -> None:
+    def __init__(self, layers: int = 0) -> None:
         self._built = False
         self._failed = False
         self._source_gen: Optional[int] = None   # equirect_env_generation() at last build
+        #: Cube-map array layers, or 0 for plain cube maps.
+        self.layers = max(0, int(layers))
         self.env: Optional[int] = None
         self.irradiance: Optional[int] = None
         self.prefilter: Optional[int] = None
         self.brdf: Optional[int] = None
+        #: The convolution programs, kept while the probe lives once a layer
+        #: other than the scene's has been filled, since zones fill theirs
+        #: one at a time over many frames.
+        self._convolvers: Optional[Tuple[int, int]] = None
+        #: Counts the times the layers past the scene's were lost -- the arrays
+        #: were rebuilt or grown without a copy -- so whoever filled them can
+        #: tell it must fill them again.
+        self.lost = 0
+
+    @property
+    def arrayed(self) -> bool:
+        """Whether the maps are cube-map arrays with room for more than the scene."""
+        return self.layers > 0
 
     @property
     def ready(self) -> bool:
@@ -412,6 +438,22 @@ class IBLProbe(object):
         return self.ready
 
     # -- construction ------------------------------------------------------
+    def _make_map(self, size: int, levels: int = 1) -> int:
+        """An irradiance or prefiltered map: a cube, or an array of :attr:`layers`."""
+        if not self.arrayed:
+            return self._make_cube(size, levels)
+        tex = int(glGenTextures(1))
+        glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, tex)
+        glTexStorage3D(GL_TEXTURE_CUBE_MAP_ARRAY, levels, GL_RGBA16F, size, size,
+                       6 * self.layers)
+        for name in (GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_TEXTURE_WRAP_R):
+            glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, name, GL_CLAMP_TO_EDGE)
+        minf = GL_LINEAR_MIPMAP_LINEAR if levels > 1 else GL_LINEAR
+        glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_MIN_FILTER, minf)
+        glTexParameteri(GL_TEXTURE_CUBE_MAP_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+        glBindTexture(GL_TEXTURE_CUBE_MAP_ARRAY, 0)
+        return tex
+
     def _make_cube(self, size: int, levels: int = 1) -> int:
         # Immutable storage: glTexStorage2D allocates all 6 faces x all mip levels
         # consistently, so every level is attachment-complete. Per-level
@@ -494,10 +536,20 @@ class IBLProbe(object):
 
     def _render_cube_faces(self, fbo: int, prog: int, cube: int, size: int,
                            level: int,
-                           setup: Optional[Callable[[int], None]] = None) -> None:
+                           setup: Optional[Callable[[int], None]] = None,
+                           layer: Optional[int] = None) -> None:
+        """Draw ``prog`` once into each face of ``cube`` at mip ``level``.
+
+        ``layer`` is the cube to draw into when ``cube`` is a cube-map array,
+        and None for a plain cube map.
+        """
         for face in range(6):
-            glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-                                   GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, cube, level)
+            if layer is None:
+                glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                       GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, cube, level)
+            else:
+                glFramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+                                          cube, level, 6 * layer + face)
             if face == 0:
                 st = int(glCheckFramebufferStatus(GL_FRAMEBUFFER))
                 if st != GL_FRAMEBUFFER_COMPLETE:
@@ -539,21 +591,38 @@ class IBLProbe(object):
 
     def _build_irradiance(self, fbo: int, irr_prog: int) -> None:
         """Convolve the env cube into a diffuse-irradiance cube (Lambertian ambient)."""
-        self.irradiance = irradiance = self._make_cube(self.IRR_SIZE, levels=1)
-        env = self.env
+        self.irradiance = self._make_map(self.IRR_SIZE, levels=1)
+        self._fill_irradiance(fbo, irr_prog, self.env, 0)
+
+    def _layer(self, layer: int) -> Optional[int]:
+        """The array layer to draw into, or None where the maps are plain cubes."""
+        return layer if self.arrayed else None
+
+    def _fill_irradiance(self, fbo: int, irr_prog: int, env: Optional[int],
+                         layer: int) -> None:
+        """Convolve the cube ``env`` into the irradiance map's ``layer``."""
+        irradiance = self.irradiance
+        if irradiance is None:
+            return
 
         def bind_env(prog: int) -> None:
             glActiveTexture(GL_TEXTURE0)
             glBindTexture(GL_TEXTURE_CUBE_MAP, env or 0)
             _uni1i(prog, 'envMap', 0)
         self._render_cube_faces(fbo, irr_prog, irradiance, self.IRR_SIZE, 0,
-                                setup=bind_env)
+                                setup=bind_env, layer=self._layer(layer))
 
     def _build_prefilter(self, fbo: int, pre_prog: int) -> None:
         """GGX-importance-sample the env cube into a per-roughness specular mip chain."""
-        self.prefilter = prefilter = self._make_cube(self.PRE_SIZE,
-                                                    levels=self.PRE_LEVELS)
-        env = self.env
+        self.prefilter = self._make_map(self.PRE_SIZE, levels=self.PRE_LEVELS)
+        self._fill_prefilter(fbo, pre_prog, self.env, 0)
+
+    def _fill_prefilter(self, fbo: int, pre_prog: int, env: Optional[int],
+                        layer: int) -> None:
+        """Prefilter the cube ``env`` into the specular map's ``layer``, every mip."""
+        prefilter = self.prefilter
+        if prefilter is None:
+            return
         for lvl in range(self.PRE_LEVELS):
             size = max(1, self.PRE_SIZE >> lvl)
             roughness = lvl / float(max(1, self.PRE_LEVELS - 1))
@@ -565,7 +634,7 @@ class IBLProbe(object):
                 _uni1f(prog, 'roughness', roughness)
                 _uni1f(prog, 'envResolution', float(self.ENV_SIZE))
             self._render_cube_faces(fbo, pre_prog, prefilter, size, lvl,
-                                    setup=bind_env_rough)
+                                    setup=bind_env_rough, layer=self._layer(layer))
 
     def _build_brdf_lut(self, fbo: int, brdf_prog: int) -> int:
         """Render the environment-independent split-sum BRDF integration LUT.
@@ -658,16 +727,197 @@ class IBLProbe(object):
         irradiance, prefilter, brdf = self.irradiance, self.prefilter, self.brdf
         if irradiance is None or prefilter is None or brdf is None:
             return
+        target = GL_TEXTURE_CUBE_MAP_ARRAY if self.arrayed else GL_TEXTURE_CUBE_MAP
         glActiveTexture(GL_TEXTURE0 + IBL_UNITS['irradiance'])
-        glBindTexture(GL_TEXTURE_CUBE_MAP, irradiance)
+        glBindTexture(target, irradiance)
         glActiveTexture(GL_TEXTURE0 + IBL_UNITS['prefilter'])
-        glBindTexture(GL_TEXTURE_CUBE_MAP, prefilter)
+        glBindTexture(target, prefilter)
         glActiveTexture(GL_TEXTURE0 + IBL_UNITS['brdf'])
         glBindTexture(GL_TEXTURE_2D, brdf)
         glActiveTexture(GL_TEXTURE0)
         program._set_uniform1f('prefilterMaxLod', self.max_lod, program.program)
 
+    # -- layers past the scene's --------------------------------------------
+    def convolve(self, env: int, layer: int) -> bool:
+        """Fill ``layer`` of the arrays from the environment cube ``env``.
+
+        ``env`` is a mip-mapped ``RGBA16F`` cube of :attr:`ENV_SIZE` faces,
+        which the prefilter samples at lower mips to keep fireflies out of the
+        rough end. Layer 0 is the scene's own, and a plain-cube probe has no
+        other layer, so either is refused. Returns whether the layer was
+        filled; the caller's framebuffer, viewport and program are restored
+        either way.
+        """
+        if not self.arrayed or not 0 < layer < self.layers or not self.ready:
+            return False
+        prev_fbo = int(glGetIntegerv(GL_FRAMEBUFFER_BINDING))
+        prev_vp = glGetIntegerv(GL_VIEWPORT)
+        vao = fbo = None
+        glDisable(GL_DEPTH_TEST)
+        glDisable(GL_CULL_FACE)
+        glDisable(GL_BLEND)
+        try:
+            if self._convolvers is None:
+                self._convolvers = (_compile('ibl_irradiance.frag'),
+                                    _compile('ibl_prefilter.frag'))
+            irr_prog, pre_prog = self._convolvers
+            vao = glGenVertexArrays(1)
+            glBindVertexArray(vao)
+            fbo = glGenFramebuffers(1)
+            glBindFramebuffer(GL_FRAMEBUFFER, fbo)
+            self._fill_irradiance(fbo, irr_prog, env, layer)
+            self._fill_prefilter(fbo, pre_prog, env, layer)
+            return True
+        except Exception as err:
+            log.error("IBL layer %d could not be filled: %s", layer, err)
+            return False
+        finally:
+            glUseProgram(0)
+            glBindVertexArray(0)
+            if vao is not None:
+                glDeleteVertexArrays(1, [vao])
+            glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo)
+            if fbo is not None:
+                glDeleteFramebuffers(1, [fbo])
+            glActiveTexture(GL_TEXTURE0)
+            glViewport(int(prev_vp[0]), int(prev_vp[1]), int(prev_vp[2]), int(prev_vp[3]))
+            glEnable(GL_DEPTH_TEST)
+            glEnable(GL_CULL_FACE)
+
+    def upload_light(self, light: Any, layer: int = 0) -> bool:
+        """Fill ``layer`` from an already-convolved image-based light.
+
+        ``light`` is an :class:`~OpenGLContext.scenegraph.imagebasedlight.ImageBasedLight`:
+        its specular mip chain goes into the prefiltered map, resampled to
+        this probe's size, and its irradiance is evaluated from its
+        coefficients into the irradiance map. A light with fewer mips than
+        the probe repeats its roughest for the rest. Nothing is drawn. Layer
+        0 of a plain-cube probe is its only one. Returns whether it was filled.
+        """
+        if not self.ready or self.irradiance is None or self.prefilter is None:
+            return False
+        if layer and not (self.arrayed and 0 < layer < self.layers):
+            return False
+        from PIL import Image
+        target = GL_TEXTURE_CUBE_MAP_ARRAY if self.arrayed else GL_TEXTURE_CUBE_MAP
+        try:
+            glBindTexture(target, self.irradiance)
+            for face, pixels in enumerate(light.irradiance_faces(self.IRR_SIZE)):
+                self._upload_face(target, 0, layer, face, pixels)
+            glBindTexture(target, self.prefilter)
+            count = len(light.specular)
+            for level in range(self.PRE_LEVELS):
+                size = max(1, self.PRE_SIZE >> level)
+                for face, pixels in enumerate(
+                        light.specular_faces(min(level, count - 1))):
+                    if pixels.shape[0] != size:
+                        pixels = np.stack([np.asarray(Image.fromarray(
+                            np.ascontiguousarray(pixels[..., channel])).resize(
+                                (size, size), Image.BILINEAR))  # type: ignore[attr-defined]
+                            for channel in range(3)], -1)
+                    self._upload_face(target, level, layer, face, pixels)
+            return True
+        except Exception as err:
+            log.error("IBL layer %d could not take the image-based light: %s", layer, err)
+            return False
+        finally:
+            glBindTexture(target, 0)
+
+    def read_layer(self, layer: int = 0) -> Tuple[List[np.ndarray], List[List[np.ndarray]]]:
+        """The irradiance faces and the prefiltered mip chain of one layer, as float RGB.
+
+        What :meth:`upload_light` puts in, read back: six ``(n, n, 3)``
+        irradiance faces, and for each prefilter mip six faces. This is how a
+        bake keeps what a capture made (``OpenGLContext_editor.bake.probes``).
+        """
+        from OpenGL.GL import glGetTexImage, GL_PACK_ALIGNMENT, glPixelStorei
+        target = GL_TEXTURE_CUBE_MAP_ARRAY if self.arrayed else GL_TEXTURE_CUBE_MAP
+        glPixelStorei(GL_PACK_ALIGNMENT, 1)
+
+        def faces_of(texture: Optional[int], level: int, size: int) -> List[np.ndarray]:
+            glBindTexture(target, texture or 0)
+            try:
+                if self.arrayed:
+                    data = np.asarray(glGetTexImage(target, level, GL_RGB, GL_FLOAT),
+                                      dtype=np.float32).reshape(-1, size, size, 3)
+                    return [data[6 * layer + face].copy() for face in range(6)]
+                return [np.asarray(glGetTexImage(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face,
+                                                 level, GL_RGB, GL_FLOAT),
+                                   dtype=np.float32).reshape(size, size, 3)
+                        for face in range(6)]
+            finally:
+                glBindTexture(target, 0)
+        irradiance = faces_of(self.irradiance, 0, self.IRR_SIZE)
+        mips = [faces_of(self.prefilter, level, max(1, self.PRE_SIZE >> level))
+                for level in range(self.PRE_LEVELS)]
+        return irradiance, mips
+
+    def _upload_face(self, target: int, level: int, layer: int, face: int,
+                     pixels: np.ndarray) -> None:
+        data = np.ascontiguousarray(pixels, dtype=np.float32)
+        height, width = data.shape[0], data.shape[1]
+        if target == GL_TEXTURE_CUBE_MAP_ARRAY:
+            glTexSubImage3D(target, level, 0, 0, 6 * layer + face, width, height, 1,
+                            GL_RGB, GL_FLOAT, data)
+        else:
+            glTexSubImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, level, 0, 0,
+                            width, height, GL_RGB, GL_FLOAT, data)
+
+    def grow(self, layers: int) -> None:
+        """Make room for at least ``layers`` layers, keeping those already filled.
+
+        The arrays are reallocated at the next power of two and the old layers
+        copied across with ``glCopyImageSubData`` (GL 4.3). Where that call is
+        missing the scene's layer is built again and the rest are lost, which
+        :attr:`lost` counts.
+        """
+        if not self.arrayed or layers <= self.layers:
+            return
+        wanted = 1 << max(0, int(layers) - 1).bit_length()
+        old = (self.irradiance, self.prefilter, self.layers)
+        if not self.ready or old[0] is None or old[1] is None:
+            self.layers = wanted
+            return
+        self.layers = wanted
+        irradiance = self._make_map(self.IRR_SIZE, levels=1)
+        prefilter = self._make_map(self.PRE_SIZE, levels=self.PRE_LEVELS)
+        kept = False
+        if bool(glCopyImageSubData):
+            try:
+                depth = 6 * old[2]
+                glCopyImageSubData(old[0], GL_TEXTURE_CUBE_MAP_ARRAY, 0, 0, 0, 0,
+                                   irradiance, GL_TEXTURE_CUBE_MAP_ARRAY, 0, 0, 0, 0,
+                                   self.IRR_SIZE, self.IRR_SIZE, depth)
+                for lvl in range(self.PRE_LEVELS):
+                    size = max(1, self.PRE_SIZE >> lvl)
+                    glCopyImageSubData(old[1], GL_TEXTURE_CUBE_MAP_ARRAY, lvl, 0, 0, 0,
+                                       prefilter, GL_TEXTURE_CUBE_MAP_ARRAY, lvl, 0, 0, 0,
+                                       size, size, depth)
+                kept = True
+            except Exception as err:
+                log.warning("IBL layers could not be copied into the grown arrays: %s",
+                            err)
+        glDeleteTextures([old[0], old[1]])
+        self.irradiance, self.prefilter = irradiance, prefilter
+        if not kept:
+            self.lost += 1
+            self._rebuild_scene_layer()
+
+    def _rebuild_scene_layer(self) -> None:
+        """Fill layer 0 again from the environment cube the probe still holds."""
+        if self.env is not None and self.ready:
+            self._source_gen = None      # the next ensure_built rebuilds everything
+
     def release(self) -> None:
+        if self.arrayed and (self.irradiance is not None or self.prefilter is not None):
+            self.lost += 1
+        if self._convolvers is not None:
+            for prog in self._convolvers:
+                try:
+                    glDeleteProgram(prog)
+                except Exception as err:
+                    log.debug("IBL convolution program teardown: %s", err)
+            self._convolvers = None
         for attr in ('env', 'irradiance', 'prefilter'):
             tex = getattr(self, attr, None)
             if tex is not None:

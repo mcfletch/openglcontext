@@ -332,6 +332,8 @@ Documentation
    tiles3d
    terrain
    vegetation
+   zones
+   zones-internals
    water
    roads
    baking
@@ -377,6 +379,7 @@ Documentation
    :caption: Reference
 
    environment
+   extensions/OGLC_zone
    typing
    numeric_arrays
    api/index

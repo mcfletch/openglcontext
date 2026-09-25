@@ -13,7 +13,7 @@ from __future__ import annotations
 import contextlib
 import os
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 from OpenGL.GL import (
@@ -56,6 +56,11 @@ class _FlatEffectsMixin:
 
         def _restoreShapeId(self, masked: Any) -> None: ...
 
+        def applyZones(self, shader: Any, path: Any, tmatrix: Any, bvolume: Any,
+                       program: Any = None) -> None: ...
+        def mirrorsZoned(self) -> bool: ...
+        def refreshZones(self, records: Sequence[Any]) -> None: ...
+        def mirrorAllowed(self, record: Any, eye: Any) -> bool: ...
         def applyLightGrid(self, shader: Any, node: Any, tmatrix: Any,
                            bvolume: Any, program: Any = None) -> None: ...
 
@@ -174,7 +179,10 @@ class _FlatEffectsMixin:
         probe = None
         if mode == 'full':
             if self._ibl_probe is None:
-                self._ibl_probe = ibl.IBLProbe()
+                # A program that reads zone probes reads the scene's from a
+                # cube-map array too, so the probe is built as one.
+                self._ibl_probe = ibl.IBLProbe(
+                    layers=1 if getattr(shader, 'zone_probes_supported', False) else 0)
             if self._ibl_probe.ensure_built():   # builds with its own programs bound
                 probe = self._ibl_probe
             else:
@@ -325,6 +333,8 @@ class _FlatEffectsMixin:
         if self._reflection_planner is None:
             self._reflection_planner = ReflectionPlanner()
         planner = self._reflection_planner
+        # Zones may say which mirrors draw a reflection from where a camera is.
+        planner.allowed = self.mirrorAllowed if self.mirrorsZoned() else None
         target = float(renderoptions.number(
             self, 'reflectionMilliseconds',
             renderoptions.env_number_once('OPENGLCONTEXT_REFLECTION_MS', 0.0)))
@@ -700,6 +710,7 @@ class _FlatEffectsMixin:
 
         self.transparent = (mode == 'blend')
         debugFrustum = self.context.contextDefinition.debugBBox
+        self.refreshZones([record for _obj_index, record in records])
         try:
             for _obj_index, record in records:
                 _key, mvmatrix, tmatrix, bvolume, path, node = record
@@ -708,6 +719,7 @@ class _FlatEffectsMixin:
                 shader.set_matrices(mvmatrix, self.projection, program=prog)
                 masked = self._writeShapeId(shader, path, node, prog, id_map)
                 self.applyLightGrid(shader, node, tmatrix, bvolume, prog)
+                self.applyZones(shader, path, tmatrix, bvolume, prog)
                 self.applyPlanarReflection(shader, record, prog)
                 try:
                     if mode == 'blend':

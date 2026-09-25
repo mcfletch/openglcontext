@@ -284,6 +284,16 @@ Worlds and content
   scattered on a world-anchored grid instead of stored, canopy shade on
   everything under the trees, and how a plant meets the ground.
 
+- :doc:`Zones <zones>` -- regions of space whose settings hold inside them:
+  a room lit by an environment captured inside it, lamps that light only
+  their room, ambience and reverb heard only in a place, nodes and mirrors
+  shown only from inside, and gravity volumes, from code, from glTF's
+  ``OGLC_zone`` and in a streamed world.
+
+- :doc:`Zone Internals <zones-internals>` -- how zones are placed, layered
+  by priority, weighted per fragment, captured into probe layers, and handed
+  to the audio and physics engines.
+
 - :doc:`Water <water>` -- lakes, rivers and choppy weather from one wave field
   computed from world position and time and applied in the vertex shader,
   glints as a river's level of detail, and the view from underwater, where the
@@ -415,6 +425,11 @@ Reference
   values, the default, and the page that describes the feature. Also how
   invalid values are handled, and how to build a clean environment for a
   reproducible render.
+
+- :doc:`OGLC_zone <extensions/OGLC_zone>` -- the specification of the glTF
+  extension that marks a region and the extensions that apply inside it, for
+  glTF 2.0 with ``KHR_implicit_shapes`` and glTF 2.1, with its JSON schema
+  and examples.
 
 - :doc:`Type Declarations <typing>` -- the ``py.typed`` marker that lets a
   type checker check a project's calls into the engine, the generated stub

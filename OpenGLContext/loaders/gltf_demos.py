@@ -51,6 +51,8 @@ class SceneSpec:
     eye: Optional[Tuple[float, float, float]] = None      # explicit camera position
     look_at: Optional[Tuple[float, float, float]] = None  # + target => interior shot
     bloom: bool = False             # HDR bloom (emissive glow halo) -- for emissive scenes
+    shadows: bool = False           # render with shadow maps: for a scene whose lights'
+                                    # shadows are part of what it shows
     upstream: bool = True           # a Khronos reference screenshot exists for comparison
     anim_time: Optional[float] = None  # pin animation to this time (s) for a posed,
                                        # deterministic capture; None => bind pose
@@ -387,8 +389,9 @@ DEMO_SCENES: Tuple[SceneSpec, ...] = (
                           'the whole model renders the village as a speck.'),
     # -- local Parthenon: every baked camera, no upstream reference --------
     SceneSpec('Parthenon', source='@parthenon', background='sky', upstream=False,
-              cameras=(0, 1, 2, 3, 4, 5, 6, 7, 8, 9),
-              description='Local Parthenon build, one shot per baked camera.'),
+              cameras=(0, 1, 2, 3, 4, 5, 6, 7, 8, 9), shadows=True,
+              description='Local Parthenon build, one shot per baked camera: '
+                          'zoned rooms lit through their doors, with shadows.'),
 )
 
 #: The roster entries that exist to exercise **one glTF feature** rather than to

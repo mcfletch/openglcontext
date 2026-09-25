@@ -50,6 +50,13 @@
 #define PBR_PLANAR_REFLECTION 0
 #endif
 
+// A zone's own environment probe is a layer of a cube-map array the scene's
+// probe shares (GL 4.0 / ARB_texture_cube_map_array, enabled with the shadow
+// cube arrays). At 0 a zone scales the scene's environment and has no probe.
+#ifndef PBR_ZONE_PROBES
+#define PBR_ZONE_PROBES 0
+#endif
+
 // Light/shadow enums, the scene light-uniform block, and encodeObjectId().
 #include "_lights_inc.glsl"
 // PI / INV_PI + piecewise sRGB transfer functions.
@@ -334,10 +341,35 @@ uniform vec3 lightGridDirection;
 // The probe cubes are world-oriented, sampled via eyeToWorld (declared below).
 uniform int iblMode;
 uniform float iblIntensity;
+#if PBR_ZONE_PROBES
+// Layer 0 is the scene's environment; a zone with a probe of its own has
+// another layer, named by its zoneLight.z.
+uniform samplerCubeArray irradianceMap;   // diffuse irradiance (full)
+uniform samplerCubeArray prefilterMap;    // roughness-mip prefiltered specular (full)
+vec3 probeIrradiance(vec3 d, float layer) {
+    return texture(irradianceMap, vec4(d, layer)).rgb;
+}
+vec3 probeRadiance(vec3 d, float lod, float layer) {
+    return textureLod(prefilterMap, vec4(d, layer), lod).rgb;
+}
+#else
 uniform samplerCube irradianceMap;   // diffuse irradiance (full)
 uniform samplerCube prefilterMap;    // roughness-mip prefiltered specular (full)
+vec3 probeIrradiance(vec3 d, float layer) { return texture(irradianceMap, d).rgb; }
+vec3 probeRadiance(vec3 d, float lod, float layer) {
+    return textureLod(prefilterMap, d, lod).rgb;
+}
+#endif
 uniform sampler2D brdfLUT;           // split-sum (scale, bias) integration (full)
 uniform float prefilterMaxLod;       // highest mip level of prefilterMap
+
+// The zones this draw reaches; see _zone_inc.glsl.
+#include "_zone_inc.glsl"
+
+// One bit per light, set where that light does not light this draw: a light a
+// zone controls, for an object outside every zone naming it. Nought -- every
+// light on -- for any draw no zone has a say over.
+uniform int lightsOff;
 
 uniform mat4 eyeToWorld;
 
@@ -433,6 +465,54 @@ vec3 envColor(vec3 dir) {
     vec3 c = mix(horizon, sky, smoothstep(0.45, 1.0, t));
     c = mix(c, ground, smoothstep(0.45, 0.0, t));
     return c;
+}
+
+// The environment's diffuse irradiance arriving from direction `d` (world
+// space), as the mode and the zones this fragment is in make it. Scaled by
+// iblIntensity except where there is no environment and the flat
+// sceneAmbient stands in.
+vec3 envIrradiance(vec3 d) {
+    if (iblMode == 2) {
+        vec3 c = probeIrradiance(d, 0.0) * zoneScene;
+#if PBR_ZONE_PROBES
+        for (int i = 0; i < zoneLayers; ++i) {
+            if (zoneShare[i] > 0.0) c += probeIrradiance(d, zoneLight[i].z) * zoneShare[i];
+        }
+#endif
+        return c * iblIntensity;
+    }
+    if (iblMode == 1) {
+        // envColor is a single radiance sample; a Lambertian surface needs the
+        // cosine-weighted hemispherical *irradiance*. Approximate that integral
+        // by dividing the radiance by PI (finding 4.4) so the analytic diffuse
+        // level matches the prefiltered-probe path instead of being ~PI too
+        // bright.
+        return envColor(d) * INV_PI * iblIntensity * zoneAll;
+    }
+    return sceneAmbient * zoneAll;
+}
+
+// The environment's radiance arriving from direction `d`, prefiltered for a
+// surface of perceptual roughness `rough`. With the environment off there is
+// nothing to reflect, and the flat ambient stands in for the few lobes (sheen)
+// that ask regardless.
+vec3 envRadiance(vec3 d, float rough) {
+    if (iblMode == 2) {
+        float lod = rough * prefilterMaxLod;
+        vec3 c = probeRadiance(d, lod, 0.0) * zoneScene;
+#if PBR_ZONE_PROBES
+        for (int i = 0; i < zoneLayers; ++i) {
+            if (zoneShare[i] > 0.0) c += probeRadiance(d, lod, zoneLight[i].z) * zoneShare[i];
+        }
+#endif
+        return c * iblIntensity;
+    }
+    if (iblMode == 1) {
+        // Fade the reflection toward the average sky tone for rough surfaces.
+        return mix(envColor(d), vec3(0.5, 0.52, 0.55), rough * 0.8)
+             * iblIntensity * zoneAll;
+    }
+    return sceneAmbient * zoneAll;
 }
 
 // Karis' analytic environment-BRDF approximation (Siggraph 2014 mobile course):
@@ -602,6 +682,10 @@ void main() {
         Nc = normalize(mat3(Tc, Bc, Ngeom) * cTex);
     }
 #endif
+    // Which zones this fragment is in, and how far: every environment term
+    // below reads the shares this leaves.
+    zoneShares((eyeToWorld * vec4(vPosition, 1.0)).xyz,
+               PBR_ZONE_PROBES != 0 && iblMode == 2);
     vec3 V = normalize(toViewer(vPosition));
     float NdotV = max(dot(N, V), 1e-4);
     float NcdotV = max(dot(Nc, V), 1e-4);   // clearcoat normal · view
@@ -611,9 +695,7 @@ void main() {
     // applied, and where there was nothing to mirror it shows the sky.
     if (hasPlanarReflection && planarReplace) {
         vec3 Rs = normalize(mat3(eyeToWorld) * reflect(-V, N));
-        vec3 sky = iblMode == 2 ? textureLod(prefilterMap, Rs, 0.0).rgb * iblIntensity
-                 : iblMode == 1 ? envColor(Rs) * iblIntensity
-                 : sceneAmbient;
+        vec3 sky = envRadiance(Rs, 0.0);
         fragColor = vec4(displayed(planarReflected(sky, N, 0.0) * exposure), alpha);
         fragObjectId = encodeObjectId(effectiveObjectId());
         return;
@@ -756,6 +838,7 @@ void main() {
     for (int i = 0; i < MAX_LIGHTS; i++) {
         if (i >= numLights) break;
         if (lightType[i] == LIGHT_OFF) continue;
+        if ((lightsOff & (1 << i)) != 0) continue;   // a zone's light, off for this draw
 
         vec3 L; float atten = 1.0;
         if (lightType[i] == LIGHT_DIRECTIONAL) {
@@ -887,35 +970,18 @@ void main() {
     // a thin translucent surface (leaf, lampshade, wax) also scatters the light hitting
     // its far side through to the camera, so it glows with the environment behind it.
     vec3 irrBack = vec3(0.0);
-    if (iblMode == 2) {                // full IBL probe (split-sum)
-        vec3 irr = texture(irradianceMap, Nw).rgb * iblIntensity;
-        vec3 pre = planarReflected(
-            textureLod(prefilterMap, Rw, roughness * prefilterMaxLod).rgb * iblIntensity,
-            N, roughness);
-        vec2 ab  = texture(brdfLUT, vec2(NdotV, roughness)).rg;
-        ambDiffuse  = irr * albedo * (1.0 - metallic) * ao;
+    // iblIntensity scales the analytic path exactly as it scales the probe.
+    // Without it the control works on one machine and not another, and stops
+    // working mid-session wherever `auto` degrades full -> analytic.
+    ambDiffuse = envIrradiance(Nw) * albedo * (1.0 - metallic) * ao;
+    irrBack = envIrradiance(-Nw);
+    if (iblMode != 0) {                // a probe (split-sum LUT) or the analytic sky
+        vec3 pre = planarReflected(envRadiance(Rw, roughness), N, roughness);
+        vec2 ab = iblMode == 2 ? texture(brdfLUT, vec2(NdotV, roughness)).rg
+                               : envBRDFApprox(NdotV, roughness);
         ambSpecular = pre * (F0 * ab.x + specF90 * ab.y) * ao;
-        irrBack = texture(irradianceMap, -Nw).rgb * iblIntensity;
-    } else if (iblMode == 1) {         // analytic environment + analytic split-sum
-        // envColor is a single radiance sample; a Lambertian surface needs the
-        // cosine-weighted hemispherical *irradiance*. Approximate that integral by
-        // dividing the radiance by PI (finding 4.4) so the analytic diffuse level
-        // matches the prefiltered-probe path instead of being ~PI too bright.
-        // iblIntensity scales this path exactly as it scales the probe above.
-        // Without it the control works on one machine and not another, and
-        // stops working mid-session wherever `auto` degrades full -> analytic.
-        vec3 envDiffuse = envColor(Nw) * INV_PI * iblIntensity;
-        // fade the reflection toward the average sky tone for rough surfaces
-        vec3 envSpec = planarReflected(mix(envColor(Rw), vec3(0.5, 0.52, 0.55),
-                                           roughness * 0.8) * iblIntensity, N, roughness);
-        vec2 ab = envBRDFApprox(NdotV, roughness);
-        ambDiffuse  = envDiffuse * albedo * (1.0 - metallic) * ao;
-        ambSpecular = envSpec * (F0 * ab.x + specF90 * ab.y) * ao;
-        irrBack = envColor(-Nw) * INV_PI * iblIntensity;
     } else {                           // off: flat ambient, no reflection
-        ambDiffuse  = sceneAmbient * albedo * (1.0 - metallic) * ao;
         ambSpecular = vec3(0.0);
-        irrBack = sceneAmbient;
     }
     // Baked irradiance joins the environment terms: it is light arriving at the
     // surface, so it multiplies albedo for the diffuse lobe and goes through the
@@ -954,10 +1020,10 @@ void main() {
     if (ccFactorEff > 0.0) {           // clearcoat reflects the environment too
         // Reflect about the COAT normal (Nc), and use NcdotV for its Fresnel.
         vec3 Rwc = normalize(e2w * reflect(-V, Nc));
-        vec3 ccEnv = (iblMode == 2)
-            ? textureLod(prefilterMap, Rwc, ccRoughEff * prefilterMaxLod).rgb * iblIntensity
-            : mix(envColor(Rwc), vec3(0.5, 0.52, 0.55),
-                  ccRoughEff * 0.8) * iblIntensity;
+        // With the environment off the coat still reflects the analytic sky.
+        vec3 ccEnv = iblMode != 0 ? envRadiance(Rwc, ccRoughEff)
+            : mix(envColor(Rwc), vec3(0.5, 0.52, 0.55), ccRoughEff * 0.8)
+              * iblIntensity * zoneAll;
         float ccFr = F_Schlick(NcdotV, 0.04);
         float ccAtt = 1.0 - ccFactorEff * ccFr;
         ambDiffuse *= ccAtt;
@@ -976,18 +1042,9 @@ void main() {
         float sheenRough = clamp(sheenRoughEff, 0.0, 1.0);
         float sheenE;                 // Charlie directional albedo E(NdotV, roughness)
         vec3 sheenRadiance;
-        if (iblMode == 2) {
-            sheenE = texture(brdfLUT, vec2(NdotV, sheenRough)).b;
-            sheenRadiance = textureLod(prefilterMap, Rw,
-                                       sheenRough * prefilterMaxLod).rgb * iblIntensity;
-        } else if (iblMode == 1) {
-            sheenE = mix(0.04, 0.72, sheenRough) * (1.0 - 0.4 * NdotV);   // analytic fit
-            sheenRadiance = mix(envColor(Rw), vec3(0.5, 0.52, 0.55),
-                                sheenRough * 0.8) * iblIntensity;
-        } else {
-            sheenE = mix(0.04, 0.72, sheenRough) * (1.0 - 0.4 * NdotV);
-            sheenRadiance = sceneAmbient;
-        }
+        sheenE = iblMode == 2 ? texture(brdfLUT, vec2(NdotV, sheenRough)).b
+                              : mix(0.04, 0.72, sheenRough) * (1.0 - 0.4 * NdotV);   // analytic fit
+        sheenRadiance = envRadiance(Rw, sheenRough);
         float sheenMax = max(max(sheenColorEff.r, sheenColorEff.g), sheenColorEff.b);
         float sheenScaling = 1.0 - sheenMax * sheenE;
         diffuseTerm *= sheenScaling;

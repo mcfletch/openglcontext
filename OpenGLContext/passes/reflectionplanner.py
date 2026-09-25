@@ -78,12 +78,14 @@ class ReflectedView:
     What a mirror view is drawn as, so that the mirrors seen in it are keyed
     by it: kept by the planner for as long as its mirror stays in view, so
     the reflections drawn for it one frame are read in it the next. Every
-    other attribute is the view it is seen from.
+    other attribute is the view it is seen from. ``viewer`` is where the
+    camera at the start of the chain of mirrors stands, in the world.
     """
 
-    def __init__(self, source: Any, key: Hashable) -> None:
+    def __init__(self, source: Any, key: Hashable, viewer: np.ndarray) -> None:
         self.source = source
         self.key = key
+        self.viewer = viewer
 
     @property
     def depth(self) -> int:
@@ -204,6 +206,11 @@ class ReflectionPlanner:
         self.schedule = ReflectionSchedule()
         self.frame = 0
         self._held: Dict[Hashable, _Held] = {}
+        #: Whether a mirror's reflection may be drawn for a camera at ``eye``:
+        #: ``allowed(record, eye)``, or None where every mirror may. The pass
+        #: sets it from the scene's zones; see
+        #: :meth:`~OpenGLContext.passes.zonepass.ZonesMixin.mirrorAllowed`.
+        self.allowed: Optional[Callable[[Any, np.ndarray], bool]] = None
         self._crowded: Set[Hashable] = set()
         self._views: Dict[Hashable, ReflectedView] = {}
         #: The reflections in the atlas that a mirror view may read.
@@ -255,6 +262,10 @@ class ReflectionPlanner:
         reflector = reflection.reflector_for(record)
         if reflector is None:
             return None
+        # Zones decide by where the viewer stands, not a reflected camera.
+        viewer = frame.view.viewer if isinstance(frame.view, ReflectedView) else eye
+        if self.allowed is not None and not self.allowed(record, viewer):
+            return None
         rough = reflection.surface_roughness(_material(record))
         if rough > reflection.ROUGHEST and not reflector.replace:
             return None
@@ -290,8 +301,12 @@ class ReflectionPlanner:
     def _view_for(self, entry: _Seen) -> ReflectedView:
         """The view ``entry``'s mirror shows, the same one while it stays in view."""
         view = self._views.get(entry.key)
-        if view is None or view.source is not entry.frame.view:
-            view = self._views[entry.key] = ReflectedView(entry.frame.view, entry.key)
+        source = entry.frame.view
+        viewer = source.viewer if isinstance(source, ReflectedView) else entry.eye
+        if view is None or view.source is not source:
+            view = self._views[entry.key] = ReflectedView(source, entry.key, viewer)
+        # The camera moves while the mirror stays in view.
+        view.viewer = viewer
         return view
 
     def _inside(self, entries: Sequence[_Seen],
