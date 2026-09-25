@@ -856,10 +856,9 @@ class TestCycleViewpointPhysics:
 
 class TestPhysicsSeams:
     def test_yaw_from_platform_reads_the_camera_heading(self):
-        from OpenGLContext import quaternion
+        from OpenGLContext.move.viewplatform import ViewPlatform
         inst = _inst()
-        inst.platform = types.SimpleNamespace(
-            quaternion=quaternion.fromXYZR(0, 1, 0, 0.0))
+        inst.platform = ViewPlatform(orientation=(0, 1, 0, 0.0))
         assert abs(inst.yawFromPlatform()) < 1e-6       # identity faces -Z
 
     def test_setup_physics_returns_early_for_a_capture_run(self):

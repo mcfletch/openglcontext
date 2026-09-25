@@ -16,6 +16,7 @@ from OpenGLContext.scenegraph.vegetation import world_grid_scatter
 from OpenGLContext.scenegraph.vegetation.clumps import _decimate_ribbons
 from OpenGLContext.scenegraph.instancedgl import SHADER_DIR
 from OpenGLContext.move.terrainwalk import TerrainWalkMixin
+from OpenGLContext.move.viewplatform import ViewPlatform
 from OpenGLContext.loaders.tiles3d.vegetation import poisson_thin
 
 
@@ -284,6 +285,7 @@ class _FakePlatform:
     def position(self): return self._p
     def setPosition(self, p): self._p = np.array(p, 'd')
     def setYaw(self, yaw): self.quaternion = quaternion.fromXYZR(0, 1, 0, yaw)
+    forward = ViewPlatform.forward
 
 
 class _Walker(TerrainWalkMixin):
