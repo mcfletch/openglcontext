@@ -82,7 +82,7 @@ class TestApplyWindingCull:
         mode = types.SimpleNamespace(matrix=IDENT)
         set_cull_state(mode, False, GL_CCW)          # a double-sided mesh
         winding.apply_winding_cull(mode, ccw=True, solid=True)
-        assert mode._cull_enabled is True
+        assert mode._cull_enabled is True  # noqa: SLF001 the pass's record of the cull state, which is what is under test
         set_cull_state(mode, False, GL_CCW)          # the next double-sided mesh
         assert not glIsEnabled(GL_CULL_FACE)
 

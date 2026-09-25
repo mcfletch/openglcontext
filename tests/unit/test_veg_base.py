@@ -33,16 +33,16 @@ def test_render_is_a_noop_when_not_visible():
 
 def test_stream_is_abstract():
     with pytest.raises(NotImplementedError):
-        _node()._stream()
+        _node()._stream()  # noqa: SLF001 the hooks a vegetation layer subclass implements
 
 
 def test_draw_is_abstract():
     with pytest.raises(NotImplementedError):
-        _node()._draw(None)
+        _node()._draw(None)  # noqa: SLF001 the hooks a vegetation layer subclass implements
 
 
 def test_base_upload_constants_is_a_noop():
-    assert _node()._upload_constants({}) is None
+    assert _node()._upload_constants({}) is None  # noqa: SLF001 the hooks a vegetation layer subclass implements
 
 
 if __name__ == '__main__':

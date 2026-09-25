@@ -152,9 +152,9 @@ class TestSupersession:
 
     def test_each_request_bumps_the_token(self):
         host = _Host()
-        first = host._loadToken
+        first = host._loadToken  # noqa: SLF001 the token that tells a stale load from the current one
         host.requestScene(lambda: 'A')
-        assert host._loadToken == first + 1
+        assert host._loadToken == first + 1  # noqa: SLF001 the token that tells a stale load from the current one
 
 
 class TestWhatTheHostIsTold:

@@ -72,7 +72,7 @@ def test_the_tip_is_drawn_once_the_pointer_has_rested(window):
     rendered = True
     deadline = time.monotonic() + TOOLTIP_PAUSE * 2.5
     while time.monotonic() < deadline:
-        rendered = context._loopIteration(trace, rendered)
+        rendered = context._loopIteration(trace, rendered)  # noqa: SLF001 one iteration of the backend's main loop, driven by the test
         if drawn and any(isinstance(tree, Tooltip) for tree in drawn[-1]):
             break
     assert drawn and any(isinstance(tree, Tooltip) for tree in drawn[-1]), \
@@ -87,9 +87,9 @@ def test_a_window_with_nothing_pending_stays_idle(window):
     rendered = True
     deadline = time.monotonic() + TOOLTIP_PAUSE * 2.5
     while time.monotonic() < deadline:
-        rendered = context._loopIteration(trace, rendered)
+        rendered = context._loopIteration(trace, rendered)  # noqa: SLF001 one iteration of the backend's main loop, driven by the test
     settled = len(drawn)
     deadline = time.monotonic() + 0.3
     while time.monotonic() < deadline:
-        rendered = context._loopIteration(trace, rendered)
+        rendered = context._loopIteration(trace, rendered)  # noqa: SLF001 one iteration of the backend's main loop, driven by the test
     assert len(drawn) == settled

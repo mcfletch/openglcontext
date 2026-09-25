@@ -66,6 +66,17 @@ def _inside(widget, view):
             and widget.rect.y + widget.rect.height <= y + height)
 
 
+class _RecordingStack:
+    """An overlay stack that keeps what is pushed on it, for a menu to open on."""
+
+    def __init__(self):
+        self.pushed = []
+
+    def push(self, panel):
+        self.pushed.append(panel)
+        return panel
+
+
 class TestWhatItPutsInEachView:
     def test_a_name_an_axis_triad_and_the_button(self):
         chrome = _chrome()
@@ -431,7 +442,7 @@ class TestTheScenesCameras:
                             forward=(-0.5, -0.7, -0.5), up=(0.0, 1.0, 0.0), fov=0.8)]
 
     def _menu(self, cameras, layout=None):
-        stack = TestTheViewsOwnMenu()._stack()
+        stack = _RecordingStack()
         chrome = _chrome(layout, stack=stack, cameras=cameras)
         label = _of(chrome, ViewLabel)[3]            # the angled view
         chrome.pointer_pressed(*label.rect.centre)
@@ -454,7 +465,7 @@ class TestTheScenesCameras:
 
     def test_choosing_one_looks_through_it(self):
         changed = []
-        stack = TestTheViewsOwnMenu()._stack()
+        stack = _RecordingStack()
         chrome = _chrome(stack=stack, cameras=self._cameras(),
                          on_arrange=lambda: changed.append(True))
         label = _of(chrome, ViewLabel)[3]
@@ -471,19 +482,10 @@ class TestTheScenesCameras:
 class TestTheViewsOwnMenu:
     """What a click on the view's name opens."""
 
-    def _stack(self):
-        class _Stack:
-            def __init__(self):
-                self.pushed = []
-
-            def push(self, panel):
-                self.pushed.append(panel)
-                return panel
-        return _Stack()
 
     def _opened(self, layout=None, **named):
         layout = layout if layout is not None else _layout()
-        stack = self._stack()
+        stack = _RecordingStack()
         chrome = _chrome(layout, stack=stack, **named)
         label = _of(chrome, ViewLabel)[0]
         chrome.pointer_pressed(*label.rect.centre)

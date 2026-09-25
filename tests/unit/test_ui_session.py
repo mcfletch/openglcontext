@@ -92,7 +92,6 @@ class TestDraft:
             seen.append(args)
 
         protofunctions.getField(target, 'lights').watch(target, receiver)
-        target._test_receiver = receiver     # dispatcher holds receivers weakly
         session.draft.lights = 2
         session.commit()
         assert seen, "committing did not notify the field's watchers"

@@ -53,16 +53,16 @@ def _viewer(**named):
     viewer.platform = _Platform()
     viewer.viewpoints = []
     viewer.cameraIndex = 0
-    viewer._cameraNames = []
+    viewer._cameraNames = []  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
     viewer.modelTransform = None
-    viewer._defaultModelRotation = (0, 1, 0, 0.0)
-    viewer._animations = []
-    viewer._animationNames = []
-    viewer._animationIndex = 0
-    viewer._animationPlaying = viewer.options.animate
-    viewer._animationClock = 0.0
-    viewer._animationLast = None
-    viewer._player = None
+    viewer._defaultModelRotation = (0, 1, 0, 0.0)  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
+    viewer._animations = []  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
+    viewer._animationNames = []  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
+    viewer._animationIndex = 0  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
+    viewer._animationPlaying = viewer.options.animate  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
+    viewer._animationClock = 0.0  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
+    viewer._animationLast = None  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
+    viewer._player = None  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
     viewer.physicsWalking = False
     viewer.physicsPlatform = None
     viewer.triggerRedraw = lambda count=1: None  # noqa: ARG005 triggerRedraw's signature

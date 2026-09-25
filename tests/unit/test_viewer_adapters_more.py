@@ -178,7 +178,7 @@ class TestAimingAtRealGeometry:
         return types.SimpleNamespace(
             content_uri='leaf.glb', children=[],
             world_transform=np.eye(4), content_transform=np.eye(4),
-            _scene=types.SimpleNamespace(center=center))
+            scene=types.SimpleNamespace(center=center))
 
     def test_it_descends_to_the_first_tile_with_content(self):
         leaf = types.SimpleNamespace(content_uri='c.glb', children=[])
@@ -200,7 +200,7 @@ class TestAimingAtRealGeometry:
         root = self._root((0.0, 0.0, 0.0), 10.0,
                           content_uri=None, children=[leaf])
         center, radius = TilesAdapter().boundsOf(
-            root, lambda tile: (tile._scene, None))
+            root, lambda tile: (tile.scene, None))
         assert np.allclose(center, [2.0, 0.0, 1.0])
         assert radius == 10.0
 
@@ -209,7 +209,7 @@ class TestAimingAtRealGeometry:
         leaf = self._leaf((100.0, 0.0, 0.0))
         root = self._root((0.0, 0.0, 0.0), 1.0,
                           content_uri=None, children=[leaf])
-        center, _ = adapter.boundsOf(root, lambda tile: (tile._scene, None))
+        center, _ = adapter.boundsOf(root, lambda tile: (tile.scene, None))
         assert np.allclose(center, [0.0, 0.0, 0.0])
 
     def test_a_tile_that_will_not_load_leaves_the_bounding_centre(self):

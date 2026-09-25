@@ -153,7 +153,7 @@ class TestTheCommandLineFillsIn:
         nobody will find."""
         parser = view.build_parser()
         reachable = set()
-        for action in parser._actions:
+        for action in parser._actions:  # noqa: SLF001 argparse has no public list of a parser's actions
             if action.dest not in ('help',):
                 reachable.add(action.dest)
         assert set(OPTION_NAMES) <= reachable, set(OPTION_NAMES) - reachable
@@ -161,7 +161,7 @@ class TestTheCommandLineFillsIn:
     def test_the_parser_carries_no_defaults_of_its_own(self):
         """Every default is the dataclass's, so the two cannot drift."""
         parser = view.build_parser()
-        for action in parser._actions:
+        for action in parser._actions:  # noqa: SLF001 argparse has no public list of a parser's actions
             if action.dest == 'help':
                 continue
             assert action.default is argparse.SUPPRESS, action.dest
@@ -251,12 +251,12 @@ class TestWhatTheCommandLineRefuses:
 
 class TestOneOptionOneEntry:
     def test_capture_and_capture_image_are_one_option(self):
-        spelled = [action.option_strings for action in build_parser()._actions
+        spelled = [action.option_strings for action in build_parser()._actions  # noqa: SLF001 argparse has no public list of a parser's actions
                    if 'capture' == action.dest]
         assert spelled == [['--capture', '--capture-image']]
 
     def test_the_recording_length_says_it_also_times_a_fly_through(self):
-        action, = [action for action in build_parser()._actions
+        action, = [action for action in build_parser()._actions  # noqa: SLF001 argparse has no public list of a parser's actions
                    if action.dest == 'video_seconds']
         assert 'fly-through' in action.help
 

@@ -181,9 +181,9 @@ class TestTheFieldAndTheColliderCutTheSame:
         colliders = HeightFieldColliders(world, field, chunk=field.extent,
                                          holes=circle)
         total = 0.0
-        for i in range(colliders._across):
-            for j in range(colliders._across):
-                points, indices = colliders._patch(i, j)
+        for i in range(colliders._across):  # noqa: SLF001 the colliders' chunk grid, walked patch by patch
+            for j in range(colliders._across):  # noqa: SLF001 the colliders' chunk grid, walked patch by patch
+                points, indices = colliders._patch(i, j)  # noqa: SLF001 the colliders' chunk grid, walked patch by patch
                 total += area_of(points, indices)
         assert total == pytest.approx(drawn, rel=1e-6)
 

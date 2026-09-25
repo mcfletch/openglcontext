@@ -44,7 +44,7 @@ class TestTheCommandLineFillsInTheOptions:
 
     def test_the_command_line_and_the_dataclass_describe_one_viewer(self):
         """Anything the parser can set has to be somewhere to put it."""
-        actions = V.build_parser()._actions
+        actions = V.build_parser()._actions  # noqa: SLF001 argparse has no public list of a parser's actions
         named = {a.dest for a in actions} - {'help'}
         assert named <= set(OPTION_NAMES), sorted(named - set(OPTION_NAMES))
 

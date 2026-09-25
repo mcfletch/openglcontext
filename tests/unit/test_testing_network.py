@@ -49,7 +49,7 @@ def test_a_cached_asset_needs_no_host(closed, tmp_path):
 
 def test_a_host_is_asked_once(listening, tmp_path, monkeypatch):
     asked = []
-    real = network._connection_refused
+    real = network._connection_refused  # noqa: SLF001 wrapped to count the probes the module makes
     monkeypatch.setattr(network, '_connection_refused',
                         lambda host, port: asked.append((host, port)) or real(host, port))
     for name in ('a.glb', 'b.glb'):

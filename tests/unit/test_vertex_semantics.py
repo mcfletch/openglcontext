@@ -98,7 +98,7 @@ class TestThePassAgreesWithIt:
         assert shader_program.compile(), 'the VRML97 programs did not compile'
         for attribute in ('aPosition', 'aNormal', 'aTexCoord', 'aColor'):
             expected = vs.BY_ATTRIBUTE[attribute].location
-            for held in VRML97ShaderProgram._PROGRAM_ATTRS:
+            for held in VRML97ShaderProgram._PROGRAM_ATTRS:  # noqa: SLF001 the attributes the shader program holds its programs under
                 program = getattr(shader_program, held, None)
                 if not program:
                     continue

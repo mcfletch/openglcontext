@@ -149,7 +149,7 @@ class TestWhenTheFileGoesAwayMidSession:
     def test_a_failed_write_stops_the_journal_and_not_the_game(self, tmp_path):
         target = tmp_path / 'session.jsonl'
         journal = SessionJournal(target)
-        journal._handle.close()                 # as a full disk or a lost mount
+        journal._handle.close()  # noqa: SLF001 closes the journal's file under it, as a full disk or a lost mount would
         journal({'kind': 'mark', 'name': 'after'})
         assert journal.disabled
         journal({'kind': 'mark', 'name': 'later'})      # must not raise

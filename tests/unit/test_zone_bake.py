@@ -66,8 +66,8 @@ class TestAContextNamesItsRenderer:
         monkeypatch.delenv('OPENGLCONTEXT_RENDERER', raising=False)
         pbrpass.reset_renderer_cache()
         try:
-            chosen = renderpass._core_flatpass_class(SimpleNamespace(renderer='pbr'))
-            plain = renderpass._core_flatpass_class(SimpleNamespace(renderer=None))
+            chosen = renderpass._core_flatpass_class(SimpleNamespace(renderer='pbr'))  # noqa: SLF001 the choice renderpass makes between the core passes
+            plain = renderpass._core_flatpass_class(SimpleNamespace(renderer=None))  # noqa: SLF001 the choice renderpass makes between the core passes
         finally:
             pbrpass.reset_renderer_cache()
         assert chosen is pbrpass.PBRPass

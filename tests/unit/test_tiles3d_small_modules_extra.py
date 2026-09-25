@@ -87,11 +87,11 @@ def test_evict_releases_drawable_and_fires_callback():
         tile = object()                            # hashes by identity, as a tile does
         drawable = object()
         rt.residency.set_renderable(tile, 100)     # 100 bytes, budget 0 -> over
-        rt._drawables[tile] = drawable
-        rt._evict(want=[], pinned=[])
+        rt._drawables[tile] = drawable  # noqa: SLF001 the runtime's resident tiles, which eviction is asked about
+        rt._evict(want=[], pinned=[])  # noqa: SLF001 the runtime's eviction step, driven without a frame
         assert released == [drawable]
         assert evicted == [(tile, drawable)]
-        assert tile not in rt._drawables
+        assert tile not in rt._drawables  # noqa: SLF001 the runtime's resident tiles, which eviction is asked about
     finally:
         rt.shutdown()
 

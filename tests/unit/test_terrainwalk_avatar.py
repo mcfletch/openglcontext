@@ -207,7 +207,7 @@ class TestWalking:
         press(host, 'w')
         run(host, 1.0)
         x, y, z = eye(host)
-        assert y == pytest.approx(host._tw_hf.height_at(x, z) + host.eye_height,
+        assert y == pytest.approx(host._tw_hf.height_at(x, z) + host.eye_height,  # noqa: SLF001 the height field the walk mixin holds, which it does not expose
                                   abs=1e-6)
 
     def test_retuning_the_mode_retunes_the_walk(self):
@@ -258,7 +258,7 @@ class TestFlying:
         press(host, ' ')                      # rise
         run(host, 1.0)
         x, y, z = eye(host)
-        assert y > host._tw_hf.height_at(x, z) + host.eye_height + 1.0
+        assert y > host._tw_hf.height_at(x, z) + host.eye_height + 1.0  # noqa: SLF001 the height field the walk mixin holds, which it does not expose
 
     def test_the_ground_is_still_a_floor_while_flying(self):
         host = walking()
@@ -266,7 +266,7 @@ class TestFlying:
         press(host, 'c')                      # sink
         run(host, 2.0)
         x, y, z = eye(host)
-        assert y >= host._tw_hf.height_at(x, z) + host.eye_height - 1e-6
+        assert y >= host._tw_hf.height_at(x, z) + host.eye_height - 1e-6  # noqa: SLF001 the height field the walk mixin holds, which it does not expose
 
 
 class TestJumping:
@@ -276,10 +276,10 @@ class TestJumping:
         run(host, 2.0 / 60.0)
         press(host, ' ', state=0)
         x, y, z = eye(host)
-        assert y > host._tw_hf.height_at(x, z) + host.eye_height
+        assert y > host._tw_hf.height_at(x, z) + host.eye_height  # noqa: SLF001 the height field the walk mixin holds, which it does not expose
         run(host, 2.0)
         x, y, z = eye(host)
-        assert y == pytest.approx(host._tw_hf.height_at(x, z) + host.eye_height,
+        assert y == pytest.approx(host._tw_hf.height_at(x, z) + host.eye_height,  # noqa: SLF001 the height field the walk mixin holds, which it does not expose
                                   abs=1e-6)
 
 
@@ -303,7 +303,7 @@ class TestFreeFly:
 
     def test_handing_the_camera_back_and_taking_it_again(self):
         host = walking()
-        manager = host._freeManager
+        manager = host._freeManager  # noqa: SLF001 the free-flying manager the walk mixin sets aside, which it does not expose
         host.togglePhysics()
         assert host.physicsWalking is False and manager.bound is True
         host.platform.setPosition((10.0, 400.0, 10.0))
@@ -312,7 +312,7 @@ class TestFreeFly:
         run(host, 0.2)
         x, y, z = eye(host)
         assert (x, z) == pytest.approx((10.0, 10.0), abs=1e-3)
-        assert y == pytest.approx(host._tw_hf.height_at(x, z) + host.eye_height,
+        assert y == pytest.approx(host._tw_hf.height_at(x, z) + host.eye_height,  # noqa: SLF001 the height field the walk mixin holds, which it does not expose
                                   abs=1e-6)
 
 
@@ -344,7 +344,7 @@ class TestBeforeAnyTerrain:
         character.position[:] = (3.0, -40.0, 7.0)   # well under the old ground
         character.vy = -2.0
         character.grounded = False
-        host._tw_hf = None
+        host._tw_hf = None  # noqa: SLF001 the height field the walk mixin holds, which it does not expose
         host.standAvatarOnTerrain()
         host.resolveTerrain()
         assert tuple(character.position) == (3.0, -40.0, 7.0)

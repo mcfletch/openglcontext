@@ -58,7 +58,7 @@ def test_a_world_naming_zones_mounts_them(tmp_path):
 def test_the_zones_stay_when_the_tiles_change(tmp_path):
     terrain = TilesTerrain(_world(tmp_path), workers=1)
     try:
-        terrain.children = list(terrain._mounted)
+        terrain.children = list(terrain._mounted)  # noqa: SLF001 the tiles the terrain has mounted, swapped in as its children
         assert terrain.zones.group in terrain.children
     finally:
         terrain.shutdown()

@@ -121,7 +121,7 @@ class TestWhatIsDrawnNear:
     def test_the_near_rung_takes_the_trees_around_the_camera(self) -> None:
         field = _field(count=600, near_radius=60.0)
         field.update((0.0, 0.0, 0.0))
-        drawn = np.concatenate([rows for rows in field.near._pending.values()])
+        drawn = np.concatenate([rows for rows in field.near._pending.values()])  # noqa: SLF001 the rows the near rung has staged for its next draw
         distance = np.hypot(drawn[:, 0], drawn[:, 2])
         assert len(drawn)
         assert float(distance.max()) <= 60.0
@@ -131,16 +131,16 @@ class TestWhatIsDrawnNear:
         field = VegetationField(positions, yaws, heights, [_species()],
                                 species_id=kind, near_radius=60.0)
         field.update((0.0, 0.0, 0.0))
-        drawn = np.concatenate([rows for rows in field.near._pending.values()])
+        drawn = np.concatenate([rows for rows in field.near._pending.values()])  # noqa: SLF001 the rows the near rung has staged for its next draw
         within = np.hypot(positions[:, 0], positions[:, 2]) <= 60.0
         assert len(drawn) == int(within.sum())
 
     def test_moving_the_camera_moves_the_near_set(self) -> None:
         field = _field(count=600, near_radius=60.0)
         field.update((0.0, 0.0, 0.0))
-        here = sum(len(rows) for rows in field.near._pending.values())
+        here = sum(len(rows) for rows in field.near._pending.values())  # noqa: SLF001 the rows the near rung has staged for its next draw
         field.update((600.0, 0.0, 600.0))
-        drawn = np.concatenate([rows for rows in field.near._pending.values()])
+        drawn = np.concatenate([rows for rows in field.near._pending.values()])  # noqa: SLF001 the rows the near rung has staged for its next draw
         assert here or True
         if len(drawn):
             assert float(np.hypot(drawn[:, 0] - 600.0,
@@ -427,7 +427,7 @@ class TestTheForestStandsInItsOwnShade:
     def test_the_near_geometry_carries_it(self) -> None:
         field = self._field(shade=self._shade())
         field.update((-200.0, 0.0, 0.0))
-        rows = np.concatenate(list(field.near._pending.values()))
+        rows = np.concatenate(list(field.near._pending.values()))  # noqa: SLF001 the rows the near rung has staged for its next draw
         assert float(rows[:, 5].min()) < 0.3
 
     def test_the_cards_carry_it(self) -> None:

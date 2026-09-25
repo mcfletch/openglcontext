@@ -45,7 +45,7 @@ class TestWhatItReports:
     def test_it_says_which_camera_is_bound(self):
         viewer = _Viewer()
         viewer.viewpoints = ('a', 'b', 'c')
-        viewer._cameraNames = ('front', 'side', 'top')
+        viewer._cameraNames = ('front', 'side', 'top')  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
         viewer.cameraIndex = 1
         assert rows(viewer)['camera'] == '2/3 side'
 
@@ -60,9 +60,9 @@ class TestWhatItReports:
 
     def test_an_animation_is_reported_when_there_is_one(self):
         viewer = _Viewer()
-        viewer._animations = ('a',)
-        viewer._animationNames = ('idle',)
-        viewer._animationPlaying = True
+        viewer._animations = ('a',)  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
+        viewer._animationNames = ('idle',)  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
+        viewer._animationPlaying = True  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
         assert rows(viewer)['animation'] == '1/1 idle (playing)'
 
     def test_a_scene_with_no_animation_does_not_mention_it(self):

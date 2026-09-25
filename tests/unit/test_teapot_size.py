@@ -40,7 +40,7 @@ def _camera_back(distance):
 
 def _drawn_matrix(size, view):
     recorder = _Recorder()
-    Teapot(size=size)._with_scaled_matrix(_Mode(view), recorder, lambda: None)
+    Teapot(size=size)._with_scaled_matrix(_Mode(view), recorder, lambda: None)  # noqa: SLF001 the size scaling Teapot applies inside its draw, which has no public reader
     return recorder.matrices[0] if recorder.matrices else np.asarray(view, dtype='d')
 
 

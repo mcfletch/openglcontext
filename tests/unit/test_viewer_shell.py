@@ -43,16 +43,16 @@ def _viewer(source=None, **named):
     viewer.platform = _Platform()
     viewer.viewpoints = []
     viewer.cameraIndex = 0
-    viewer._cameraNames = []
+    viewer._cameraNames = []  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
     viewer.modelTransform = None
-    viewer._defaultModelRotation = (0, 1, 0, 0.0)
-    viewer._animations = []
-    viewer._animationNames = []
-    viewer._animationIndex = 0
-    viewer._animationPlaying = True
-    viewer._animationClock = 0.0
-    viewer._animationLast = None
-    viewer._player = None
+    viewer._defaultModelRotation = (0, 1, 0, 0.0)  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
+    viewer._animations = []  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
+    viewer._animationNames = []  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
+    viewer._animationIndex = 0  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
+    viewer._animationPlaying = True  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
+    viewer._animationClock = 0.0  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
+    viewer._animationLast = None  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
+    viewer._player = None  # noqa: SLF001 the state SceneViewerMixin.OnInit sets, set here on a viewer made without a window
     viewer.physicsWalking = False
     viewer.physicsPlatform = None
     viewer.sceneLoaded = False
@@ -254,7 +254,7 @@ class TestSteppingThroughTheShelf:
     def _viewer(self):
         viewer = _viewer(GLTF_MODEL)
         viewer.prepareSource()
-        viewer._library = self.SHELF
+        viewer._library = self.SHELF  # noqa: SLF001 the shelf of sources the viewer cycles through, set without a window
         viewer.cycled = []
         viewer.cycleViewpoint = viewer.cycled.append
         return viewer

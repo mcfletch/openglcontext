@@ -109,11 +109,11 @@ class TestAskedOnce:
 
         monkeypatch.setattr(glcontext, '_display_listens', lambda *_args: True)
         monkeypatch.setattr(subprocess, 'run', run)
-        glcontext._client_opens.cache_clear()
+        glcontext._client_opens.cache_clear()  # noqa: SLF001 the per-display memo, cleared around the test
         try:
             assert display_answers(':%d' % NOBODY)
             assert display_answers(':%d' % NOBODY)
             assert display_answers(':%d' % (NOBODY - 1))
         finally:
-            glcontext._client_opens.cache_clear()
+            glcontext._client_opens.cache_clear()  # noqa: SLF001 the per-display memo, cleared around the test
         assert ran == [':%d' % NOBODY, ':%d' % (NOBODY - 1)]

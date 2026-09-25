@@ -60,7 +60,7 @@ def test_scene_glb_color_normal_and_mask(tmp_path):
          "maps": {"normal": normal}, "alpha_mode": "MASK"},
         {"indices": np.array([0, 2, 3], "u4"), "color": (0.5, 0.5, 0.5, 1.0)},
     ]
-    glb = F._scene_glb(p, uv, prims)
+    glb = F._scene_glb(p, uv, prims)  # noqa: SLF001 the GLB writer the foliage module builds its tiles with
     scene = gltf.load_gltf(glb)
     assert scene.group is not None
 

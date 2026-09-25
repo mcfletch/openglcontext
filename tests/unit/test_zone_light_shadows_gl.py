@@ -18,7 +18,7 @@ from tests.unit.glrender import base_env
 def lit(monkeypatch):
     base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='1', OPENGLCONTEXT_SHADOW_CASCADES='1')
     drawn = []
-    real = shadowmixin.ShadowMapMixin._renderLight
+    real = shadowmixin.ShadowMapMixin._renderLight  # noqa: SLF001 wrapped to record each light the pass draws a shadow for
 
     def recording(self, path, light_node, *args, **named):
         drawn.append(light_node)

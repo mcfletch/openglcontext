@@ -116,7 +116,7 @@ def test_the_shader_measures_as_the_arithmetic_does(program, kind, params, sprea
     rng = np.random.default_rng(abs(hash((kind, params))) % 2 ** 32)
     points = rng.uniform(-spread, spread, (COUNT, 3))
     points[:8] = 0.0                                  # the centre, several times
-    wanted = zones._distance(kind, params, points)
+    wanted = zones._distance(kind, params, points)  # noqa: SLF001 the arithmetic the shader is compared with
     found = _drawn(program, kind, params, points)
     assert (wanted < 0).any() and (wanted > 0).any()  # both sides of the surface
     assert found == pytest.approx(wanted, abs=2e-4)

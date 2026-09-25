@@ -545,7 +545,7 @@ class TestWhatCountsAsAStall:
         clock = iter([0.0, 0.001, 0.002, 0.500])
 
         session = telemetry.start(context, target)
-        session._clock = lambda: next(clock)
+        session._clock = lambda: next(clock)  # noqa: SLF001 telemetry.start takes no clock, and the test sets the frame times
         context.OnDraw()
         context.OnDraw()
         session.close()
@@ -557,7 +557,7 @@ class TestWhatCountsAsAStall:
         clock = iter([0.0, 0.001, 0.002, 0.100, 0.101, 0.400])
 
         session = telemetry.start(context, target)
-        session._clock = lambda: next(clock)
+        session._clock = lambda: next(clock)  # noqa: SLF001 telemetry.start takes no clock, and the test sets the frame times
         for _ in range(3):
             context.OnDraw()
         session.close()

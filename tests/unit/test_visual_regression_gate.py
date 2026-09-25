@@ -35,7 +35,7 @@ def test_identical_images_match(tmp_path):
     _write(ref, (10, 120, 240))
     _write(res, (10, 120, 240))
 
-    stats = tas._compare_images(ref, res)
+    stats = tas._compare_images(ref, res)  # noqa: SLF001 the gate's own helper in tests/test_all_scripts.py
     assert stats['is_match'] is True
     assert stats['percent_different'] == 0.0
 
@@ -47,7 +47,7 @@ def test_black_frame_fails_against_reference(tmp_path):
     _write(ref, (200, 200, 200))
     _write(res, (0, 0, 0))
 
-    stats = tas._compare_images(ref, res)
+    stats = tas._compare_images(ref, res)  # noqa: SLF001 the gate's own helper in tests/test_all_scripts.py
     assert stats['is_match'] is False
 
 
@@ -57,13 +57,13 @@ def test_shape_mismatch_fails(tmp_path):
     Image.fromarray(np.zeros((16, 16, 3), np.uint8), 'RGB').save(ref)
     Image.fromarray(np.zeros((32, 32, 3), np.uint8), 'RGB').save(res)
 
-    stats = tas._compare_images(ref, res)
+    stats = tas._compare_images(ref, res)  # noqa: SLF001 the gate's own helper in tests/test_all_scripts.py
     assert stats['is_match'] is False
 
 
 def test_max_diff_bound_is_not_tautological():
     """The gate must not treat every image as a match via a 255 ceiling."""
-    src = inspect.getsource(tas._compare_images)
+    src = inspect.getsource(tas._compare_images)  # noqa: SLF001 the gate's own helper in tests/test_all_scripts.py
     assert 'max_diff <= 255' not in src, "tautological bound still present (2.9)"
 
 
@@ -89,7 +89,7 @@ class TestAFrameThatWasNeverCaptured:
 
     def test_no_capture_is_a_failure_not_a_pass(self, tmp_path):
         script = self._script(tmp_path, 'print("ran, drew nothing")\n')
-        result = tas._run_visual_test(script, timeout=60)
+        result = tas._run_visual_test(script, timeout=60)  # noqa: SLF001 the gate's own helper in tests/test_all_scripts.py
         assert result.status == 'no_capture', (
             'a script that wrote no frame reported %r' % (result.status,))
 
@@ -98,13 +98,13 @@ class TestAFrameThatWasNeverCaptured:
         ``REQUIRED_EXTENSION_MISSING``, which is the code a script says "there
         was nothing here to draw" with and is a skip rather than a failure."""
         script = self._script(tmp_path, 'raise SystemExit(1)\n')
-        result = tas._run_visual_test(script, timeout=60)
+        result = tas._run_visual_test(script, timeout=60)  # noqa: SLF001 the gate's own helper in tests/test_all_scripts.py
         assert result.status == 'fail'
 
     def test_a_script_with_nothing_to_draw_is_still_a_skip(self, tmp_path):
         script = self._script(
             tmp_path, 'raise SystemExit(%d)\n' % tas.REQUIRED_EXTENSION_MISSING)
-        result = tas._run_visual_test(script, timeout=60)
+        result = tas._run_visual_test(script, timeout=60)  # noqa: SLF001 the gate's own helper in tests/test_all_scripts.py
         assert result.status == 'skip'
 
     def test_last_runs_frame_is_not_this_runs_evidence(self, tmp_path):
@@ -115,7 +115,7 @@ class TestAFrameThatWasNeverCaptured:
         tas.RESULT_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
         _write(stale, (10, 20, 30))
         try:
-            result = tas._run_visual_test(script, timeout=60)
+            result = tas._run_visual_test(script, timeout=60)  # noqa: SLF001 the gate's own helper in tests/test_all_scripts.py
             assert result.status == 'no_capture'
             assert not stale.exists(), 'the stale frame was left to be compared'
         finally:

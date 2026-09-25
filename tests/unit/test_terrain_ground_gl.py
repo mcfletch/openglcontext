@@ -155,7 +155,7 @@ def test_the_constants_are_sent_once_not_per_patch(tmp_path):
         finally:
             ground.glUniform1f = before
         assert sent == []
-        program = shading._gl['prog']
+        program = shading._gl['prog']  # noqa: SLF001 the program the ground shading compiled, which it does not expose
         found = np.zeros(1, 'f')
         glGetUniformfv(program, glGetUniformLocation(program, 'detailScale'), found)
         assert found[0] == pytest.approx(ground.DETAIL_SCALE)

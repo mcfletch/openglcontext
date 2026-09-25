@@ -31,8 +31,8 @@ def _listening_server(path: str) -> socket.socket:
     AF_UNIX socket directly, so the stand-in server speaks whichever transport
     the sender will use on this platform.
     """
-    server = event_injector._stream_socket()
-    event_injector._bind_listener(server, path)
+    server = event_injector._stream_socket()  # noqa: SLF001 the module's own transport helpers, so the stand-in server speaks the sender's transport
+    event_injector._bind_listener(server, path)  # noqa: SLF001 the module's own transport helpers, so the stand-in server speaks the sender's transport
     server.listen(1)
     return server
 
@@ -125,7 +125,7 @@ class TestEventInjector:
 
         sender = EventSender('/tmp/test.sock')
         assert sender.socket_path == '/tmp/test.sock'
-        assert sender._socket is None
+        assert sender._socket is None  # noqa: SLF001 a sender opens no listening socket, which has no public reader
 
     def test_event_sender_connect_nonexistent(self):
         """EventSender.connect returns False for nonexistent socket."""
@@ -227,10 +227,11 @@ class TestVisualRegressionTest:
         assert test.save_reference(pixels)
         assert test.has_reference
 
-        # Load reference
-        assert test.load_reference()
-        assert test._reference_pixels is not None
-        np.testing.assert_array_equal(test._reference_pixels, pixels)
+        # Load reference, into a test that has not seen it: it compares
+        # identical to what was saved.
+        loaded = VisualRegressionTest('my_test', str(tmp_path))
+        assert loaded.load_reference()
+        assert loaded.compare(pixels).max_diff == 0.0
 
     def test_compare_identical_images(self, tmp_path):
         """VisualRegressionTest detects identical images."""
@@ -243,7 +244,7 @@ class TestVisualRegressionTest:
         result = test.compare(pixels)
         assert result is not None
         assert result.max_diff == 0.0
-        assert test._status == 'pass'
+        assert test.generate_report_data()['status'] == 'pass'
 
     def test_compare_different_images(self, tmp_path):
         """VisualRegressionTest detects different images."""
@@ -258,7 +259,7 @@ class TestVisualRegressionTest:
 
         assert result is not None
         assert result.max_diff == 255.0
-        assert test._status == 'fail'
+        assert test.generate_report_data()['status'] == 'fail'
 
     def test_generate_report_data(self, tmp_path):
         """VisualRegressionTest generates report data."""
@@ -357,18 +358,18 @@ class TestEventInjectionMixin:
 
         class FakeContext(EventInjectionMixin):
             def __init__(self):
-                self._managers = {
+                self.managers = {
                     t: FakeManager()
                     for t in ('mousebutton', 'mousemove', 'keyboard', 'keypress')
                 }
 
             def getEventManager(self, event_type):
-                return self._managers.get(event_type)
+                return self.managers.get(event_type)
 
             def ProcessEvent(self, event):
                 # What the real EventHandlerMixin does: look the manager up by
                 # the event's own type and hand it over.
-                manager = self._managers.get(event.type)
+                manager = self.managers.get(event.type)
                 if manager is not None:
                     manager.ProcessEvent(event)
 
@@ -382,11 +383,11 @@ class TestEventInjectionMixin:
         is well-formed and keyed correctly, with no GL context required.
         """
         ctx = self._fake_context()
-        ctx._dispatch_injected_event(
+        ctx._dispatch_injected_event(  # noqa: SLF001 the dispatch poll_injected_events feeds, reached without a socket
             {'type': 'mousebutton', 'x': 100, 'y': 120, 'button': 0, 'state': 1}
         )
 
-        events = ctx._managers['mousebutton'].events
+        events = ctx.managers['mousebutton'].events
         assert len(events) == 1
         evt = events[0]
         assert evt.button == 0
@@ -397,10 +398,10 @@ class TestEventInjectionMixin:
     def test_inject_keyboard_also_emits_keypress(self):
         """A pressed key drives both keyboard and keypress managers (3.28)."""
         ctx = self._fake_context()
-        ctx._dispatch_injected_event({'type': 'keyboard', 'key': 'a', 'state': 1})
+        ctx._dispatch_injected_event({'type': 'keyboard', 'key': 'a', 'state': 1})  # noqa: SLF001 the dispatch poll_injected_events feeds, reached without a socket
 
-        assert len(ctx._managers['keyboard'].events) == 1
-        press = ctx._managers['keypress'].events
+        assert len(ctx.managers['keyboard'].events) == 1
+        press = ctx.managers['keypress'].events
         assert len(press) == 1
         assert press[0].name == 'a'
 
