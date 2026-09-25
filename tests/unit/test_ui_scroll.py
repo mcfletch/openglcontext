@@ -7,7 +7,7 @@ from OpenGLContext.ui.layout import Column
 from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.scroll import ScrollViewport
-from OpenGLContext.ui.widgets import Button, Label
+from OpenGLContext.ui.widgets import Button, Label, Select, Slider
 
 
 @pytest.fixture
@@ -116,7 +116,6 @@ class TestScrollingPastTheControls:
 
     @pytest.fixture
     def page(self, metrics):
-        from OpenGLContext.ui.widgets import Select, Slider
         slider = Slider(minimum=0, maximum=10, value=5, name='slider')
         select = Select(options=['low', 'high'], value='low', name='select')
         view = ScrollViewport(name='view', flex=1, children=[
@@ -249,7 +248,6 @@ class TestTheBarDoesNotCrowdTheContent:
 
     @pytest.fixture
     def viewport(self, metrics):
-        from OpenGLContext.ui.widgets import Label
         view = ScrollViewport(children=[Label(text='x', height=1000)])
         view.arrange(Rect(0, 0, 300, 200), metrics)
         return view
@@ -261,7 +259,6 @@ class TestTheBarDoesNotCrowdTheContent:
         assert viewport.barRect().right == viewport.rect.right
 
     def test_nothing_is_reserved_when_there_is_no_bar(self, metrics):
-        from OpenGLContext.ui.widgets import Label
         view = ScrollViewport(children=[Label(text='x', height=10)])
         view.arrange(Rect(0, 0, 300, 200), metrics)
         assert view.viewRect() == view.rect

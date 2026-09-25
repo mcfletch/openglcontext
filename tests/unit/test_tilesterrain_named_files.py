@@ -22,9 +22,12 @@ pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders.tiles3d import fetch
 from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
+from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
+from OpenGLContext.scenegraph.terrain import control_map, HeightField, LayerRule
 
 sys.path.insert(0, os.path.dirname(__file__))
 from test_clump_glb import _glb_bytes, _ribbon
+from PIL import Image
 
 ZONES = os.path.join(os.path.dirname(__file__), '..', '..', 'docs', 'extensions',
                      'examples', 'OGLC_zone-2.0.gltf')
@@ -90,10 +93,6 @@ class TestAFileBesideATileset:
 
 def _landscape(world, extras):
     """A sample tileset in ``world`` with a flat field terrain and ``extras``."""
-    from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
-    from OpenGLContext.scenegraph.terrain import (
-        HeightField, LayerRule, control_map,
-    )
     path = build_sample_tileset(str(world))
     document = json.load(open(path))
     field = HeightField.from_function(
@@ -116,7 +115,6 @@ def _landscape(world, extras):
 def _plants(world):
     """A clump and a card in ``world``; the cover record naming them."""
     (world / 'grass.glb').write_bytes(_glb_bytes(*_ribbon()))
-    from PIL import Image
     Image.new('RGBA', (4, 4), (40, 120, 40, 255)).save(str(world / 'blade.png'))
     np.savez(str(world / 'trees.npz'),
              positions=np.zeros((1, 3), 'f4'), yaws=np.zeros(1, 'f4'),

@@ -9,7 +9,7 @@ strip rather than also landing on the world behind it.
 import pytest
 
 from OpenGLContext.edit.tools import Pointer, ToolManager, ToolMode
-from OpenGLContext.ui.metrics import REFERENCE_METRICS
+from OpenGLContext.ui.metrics import FontMetrics, REFERENCE_METRICS
 from OpenGLContext.ui.toolpalette import ToolButton, ToolPalette
 
 VIEWPORT = (1280, 720)
@@ -111,7 +111,6 @@ class TestTheRoomItTakes:
 
     def test_the_answer_is_in_reference_pixels_at_any_scale(self) -> None:
         """A HUD scales what it is told to keep clear, so this must not."""
-        from OpenGLContext.ui.metrics import FontMetrics
         palette, _tools = _palette()
         doubled = FontMetrics(char_width=16, char_height=32, scale=2.0)
         assert palette.room(doubled) == pytest.approx(palette.room(), rel=0.15)

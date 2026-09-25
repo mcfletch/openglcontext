@@ -10,11 +10,16 @@ import pathlib
 import socket
 import tempfile
 import threading
+import sys
 
 import numpy as np
 import pytest
 
 from OpenGLContext.testing import event_injector
+from OpenGLContext.testing.event_injector import EventInjectionMixin, EventSender
+from OpenGLContext.testing.framebuffer_comparison import VisualRegressionTest
+from OpenGLContext.testing.report_generator import _status_color
+from OpenGLContext.testing.subprocess_runner import build_command, kill_process_tree
 
 
 def _listening_server(path: str) -> socket.socket:
@@ -97,7 +102,6 @@ class TestSubprocessRunner:
 
     def test_build_command_without_coverage(self):
         """build_command creates basic command without coverage."""
-        from OpenGLContext.testing.subprocess_runner import build_command
 
         cmd = build_command('/path/to/test.py', with_coverage=False)
         assert '/path/to/test.py' in cmd
@@ -105,7 +109,6 @@ class TestSubprocessRunner:
 
     def test_build_command_with_coverage(self):
         """build_command includes coverage arguments."""
-        from OpenGLContext.testing.subprocess_runner import build_command
 
         cmd = build_command('/path/to/test.py', with_coverage=True)
         assert 'coverage' in cmd
@@ -114,7 +117,6 @@ class TestSubprocessRunner:
 
     def test_build_command_with_args(self):
         """build_command appends additional arguments."""
-        from OpenGLContext.testing.subprocess_runner import build_command
 
         cmd = build_command('/path/to/test.py', args=['--arg1', '--arg2'], with_coverage=False)
         assert '--arg1' in cmd
@@ -126,7 +128,6 @@ class TestEventInjector:
 
     def test_event_sender_initialization(self):
         """EventSender initializes with socket path."""
-        from OpenGLContext.testing.event_injector import EventSender
 
         sender = EventSender('/tmp/test.sock')
         assert sender.socket_path == '/tmp/test.sock'
@@ -134,7 +135,6 @@ class TestEventInjector:
 
     def test_event_sender_connect_nonexistent(self):
         """EventSender.connect returns False for nonexistent socket."""
-        from OpenGLContext.testing.event_injector import EventSender
 
         sender = EventSender('/tmp/nonexistent_socket_12345.sock')
         result = sender.connect(timeout=0.1)
@@ -142,7 +142,6 @@ class TestEventInjector:
 
     def test_event_sender_socket_communication(self):
         """EventSender can send events over socket."""
-        from OpenGLContext.testing.event_injector import EventSender
 
         # Create a server socket
         socket_path = tempfile.mktemp(suffix='.sock')
@@ -178,7 +177,6 @@ class TestEventInjector:
 
     def test_event_sender_send_mousebutton(self):
         """EventSender.send_mousebutton creates correct event."""
-        from OpenGLContext.testing.event_injector import EventSender
 
         socket_path = tempfile.mktemp(suffix='.sock')
         server = _listening_server(socket_path)
@@ -217,7 +215,6 @@ class TestVisualRegressionTest:
 
     def test_initialization(self, tmp_path):
         """VisualRegressionTest initializes correctly."""
-        from OpenGLContext.testing.framebuffer_comparison import VisualRegressionTest
 
         test = VisualRegressionTest('my_test', str(tmp_path))
         assert test.test_name == 'my_test'
@@ -226,7 +223,6 @@ class TestVisualRegressionTest:
 
     def test_save_and_load_reference(self, tmp_path):
         """VisualRegressionTest can save and load reference images."""
-        from OpenGLContext.testing.framebuffer_comparison import VisualRegressionTest
 
         test = VisualRegressionTest('my_test', str(tmp_path))
 
@@ -244,7 +240,6 @@ class TestVisualRegressionTest:
 
     def test_compare_identical_images(self, tmp_path):
         """VisualRegressionTest detects identical images."""
-        from OpenGLContext.testing.framebuffer_comparison import VisualRegressionTest
 
         test = VisualRegressionTest('my_test', str(tmp_path))
 
@@ -258,7 +253,6 @@ class TestVisualRegressionTest:
 
     def test_compare_different_images(self, tmp_path):
         """VisualRegressionTest detects different images."""
-        from OpenGLContext.testing.framebuffer_comparison import VisualRegressionTest
 
         test = VisualRegressionTest('my_test', str(tmp_path), max_diff_threshold=10)
 
@@ -274,7 +268,6 @@ class TestVisualRegressionTest:
 
     def test_generate_report_data(self, tmp_path):
         """VisualRegressionTest generates report data."""
-        from OpenGLContext.testing.framebuffer_comparison import VisualRegressionTest
 
         test = VisualRegressionTest('my_test', str(tmp_path))
 
@@ -320,7 +313,6 @@ class TestTestReportGenerator:
 
     def test_status_colors(self):
         """Status colors are assigned correctly."""
-        from OpenGLContext.testing.report_generator import _status_color
 
         assert _status_color('pass') == '#28a745'  # Green
         assert _status_color('fail') == '#dc3545'  # Red
@@ -347,7 +339,6 @@ class TestKillProcessTree:
 
     def test_kill_nonexistent_process(self):
         """kill_process_tree handles nonexistent processes gracefully."""
-        from OpenGLContext.testing.subprocess_runner import kill_process_tree
 
         psutil = pytest.importorskip('psutil')
         absent = 999999999
@@ -360,7 +351,6 @@ class TestEventInjectionMixin:
 
     def test_mixin_attributes(self):
         """EventInjectionMixin has expected attributes."""
-        from OpenGLContext.testing.event_injector import EventInjectionMixin
 
         assert hasattr(EventInjectionMixin, 'setup_event_injection')
         assert hasattr(EventInjectionMixin, 'poll_injected_events')
@@ -368,7 +358,6 @@ class TestEventInjectionMixin:
 
     def _fake_context(self):
         """A minimal EventInjectionMixin host with recording event managers."""
-        from OpenGLContext.testing.event_injector import EventInjectionMixin
 
         class FakeManager:
             def __init__(self):
@@ -433,7 +422,6 @@ class TestConftest:
     def test_subprocess_result_properties(self):
         """conftest re-exports the package TestResult as its result type (3.27)."""
         # Import from conftest
-        import sys
         from OpenGLContext.testing.paths import tests_root
         sys.path.insert(0, str(tests_root(__file__)))   # conftest lives in the tests root
         from conftest import SubprocessResult

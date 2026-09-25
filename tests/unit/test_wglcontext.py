@@ -16,11 +16,20 @@ visible in a passing run on a machine with no WGL.
 """
 
 import sys
+import inspect
 
 import pytest
+import OpenGL.GL as gl
+import numpy as np
+from OpenGL.GL import (
+    GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_RGB, GL_UNSIGNED_BYTE, glClear, glClearColor,
+    glReadPixels,
+)
 
-from OpenGLContext import contextdefinition, wglcontext
+from OpenGLContext import context as contextmodule, contextdefinition, plugins, wglcontext
 from OpenGLContext.events import synthetic
+from OpenGLContext.video.recorder import RecordingMixin
+from OpenGLContext.viewer.capture import SettleCaptureMixin
 
 windows_only = pytest.mark.skipif(
     sys.platform != 'win32', reason='WGL is the Windows binding for OpenGL')
@@ -96,7 +105,6 @@ class TestTheBuffersADefinitionAsksFor:
     def test_every_key_is_one_the_offscreen_module_takes(self):
         """The two are separate packages, so the shape of the call between them
         is worth stating rather than discovering at run time."""
-        import inspect
 
         from OpenGL.WGL import offscreen
 
@@ -150,10 +158,6 @@ class TestOffscreenRendering:
 
     @pytest.fixture
     def renderer(self):
-        from OpenGL.GL import (
-            GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, glClear, glClearColor,
-        )
-
         class KnownColour(wglcontext.WGLContext):
             """Clears to a colour no default framebuffer would hold by accident."""
 
@@ -171,8 +175,6 @@ class TestOffscreenRendering:
 
     def test_the_frame_holds_what_was_drawn(self, renderer):
         """The whole point: pixels come back, and they are the ones asked for."""
-        import numpy as np
-        from OpenGL.GL import GL_RGB, GL_UNSIGNED_BYTE, glReadPixels
 
         renderer.OnDraw(force=1)
         renderer.setCurrent()
@@ -298,8 +300,6 @@ class TestResizing:
 
     @pytest.fixture
     def context(self):
-        from OpenGL.GL import GL_COLOR_BUFFER_BIT, glClear, glClearColor
-
         class KnownColour(wglcontext.WGLContext):
             def Render(self, mode=None):
                 wglcontext.WGLContext.Render(self, mode)
@@ -314,9 +314,6 @@ class TestResizing:
             context.close()
 
     def test_the_frame_comes_back_at_the_new_size(self, context):
-        import numpy as np
-        from OpenGL.GL import GL_RGB, GL_UNSIGNED_BYTE, glReadPixels
-
         context.OnResize(48, 24)
         context.OnDraw(force=1)
         context.setCurrent()
@@ -402,14 +399,10 @@ class TestWhetherAnythingWantsAnotherFrame:
     """
 
     def test_a_context_with_nothing_pending_wants_none(self):
-        from OpenGLContext import context as contextmodule
-
         instance = contextmodule.Context.__new__(contextmodule.Context)
         assert instance.wantsMoreFrames() is False
 
     def test_a_settle_capture_wants_frames_until_it_has_taken_one(self):
-        from OpenGLContext.viewer.capture import SettleCaptureMixin
-
         class Viewer(SettleCaptureMixin):
             pass
 
@@ -422,8 +415,6 @@ class TestWhetherAnythingWantsAnotherFrame:
         assert viewer.wantsMoreFrames() is False
 
     def test_a_recording_wants_frames_while_it_is_running(self):
-        from OpenGLContext.video.recorder import RecordingMixin
-
         class Viewer(RecordingMixin):
             pass
 
@@ -437,8 +428,6 @@ class TestWhetherAnythingWantsAnotherFrame:
         """A viewer that records *and* captures has two of these in its bases,
         and the frames one of them still wants are frames the loop must draw
         whatever the other says."""
-        from OpenGLContext.video.recorder import RecordingMixin
-        from OpenGLContext.viewer.capture import SettleCaptureMixin
 
         class Base:
             def wantsMoreFrames(self):
@@ -462,8 +451,6 @@ class TestFinishingAFrame:
     which is what a readback, a capture or an encode after it depends on."""
 
     def test_it_flushes(self, monkeypatch):
-        import OpenGL.GL as gl
-
         flushed = []
         monkeypatch.setattr(gl, 'glFlush', lambda: flushed.append(True))
         instance = wglcontext.WGLContext.__new__(wglcontext.WGLContext)
@@ -509,19 +496,14 @@ class TestItIsRegisteredAsABackend:
     RuntimeError naming the backends that are there."""
 
     def test_the_context_is_registered(self):
-        from OpenGLContext import plugins
-
         assert plugins.Context.match('wgl').name == 'wgl'
 
     def test_the_interactive_slot_is_the_same_class(self):
         """A context nothing can click on has no separate interactive form."""
-        from OpenGLContext import plugins
 
         assert (plugins.InteractiveContext.match('wgl').load()
                 is plugins.Context.match('wgl').load())
 
     def test_the_vrml_context_is_registered(self):
-        from OpenGLContext import plugins
-
         loaded = plugins.VRMLContext.match('wgl').load()
         assert issubclass(loaded, wglcontext.WGLContext)

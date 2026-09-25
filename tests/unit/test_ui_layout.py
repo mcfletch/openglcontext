@@ -7,6 +7,9 @@ from OpenGLContext.ui.layout import Column, Grid, Row
 from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.widgets import Button, Label, Select, Spacer
+from OpenGLContext.hud import distribute
+from OpenGLContext.ui.scroll import _offsetTree
+from OpenGLContext.ui.skin import DEFAULT_SKIN
 
 
 @pytest.fixture
@@ -260,7 +263,6 @@ class TestGridRowsAreTargets:
         assert len(painted.calls('rect')) == 2
 
     def test_the_row_the_keyboard_is_in_is_washed(self, metrics):
-        from OpenGLContext.ui.panel import Panel
         button = Button(text='on')
         grid = Grid(children=[Label(text='Shadows'), button], columns=2)
         panel = Panel(children=[grid])
@@ -279,7 +281,6 @@ class TestGridRowsAreTargets:
 
     def test_the_rows_move_with_the_content_when_it_scrolls(self, grid):
         """Row rectangles come from the cells, which a scroll has already moved."""
-        from OpenGLContext.ui.scroll import _offsetTree
         before = grid.rowRects()[0].y
         _offsetTree(grid, 0, 37)
         assert grid.rowRects()[0].y == before + 37
@@ -289,7 +290,6 @@ class _Recorder:
     """A renderer that records what it was asked to draw."""
 
     def __init__(self):
-        from OpenGLContext.ui.skin import DEFAULT_SKIN
         self.metrics = FontMetrics(8, 16, 2)
         self.skin = DEFAULT_SKIN
         self.recorded = []
@@ -413,19 +413,16 @@ class TestDistributeLeavesItsArgumentAlone:
     """The sizes a caller measured are still the sizes it measured."""
 
     def test_the_caller_s_list_is_not_written_through(self):
-        from OpenGLContext.hud import distribute
         row = Row(children=[Spacer(), Spacer()])
         measured = [10, 10]
         distribute(row.layoutChildren(), measured, 80)
         assert measured == [10, 10]
 
     def test_the_shares_still_come_back(self):
-        from OpenGLContext.hud import distribute
         row = Row(children=[Spacer(), Spacer()])
         assert sum(distribute(row.layoutChildren(), [10, 10], 80)) == 100
 
     def test_nothing_flexible_gives_the_sizes_back_unchanged(self):
-        from OpenGLContext.hud import distribute
         row = Row(children=[Label(text='a'), Label(text='b')])
         measured = [10, 20]
         assert distribute(row.layoutChildren(), measured, 80) == [10, 20]

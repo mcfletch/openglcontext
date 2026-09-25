@@ -10,15 +10,17 @@ What is tested here is the selection and the bookkeeping, which need no GL: what
 each rung is asked to draw as the camera moves, and that the two rungs cover the
 forest between them without drawing a tree twice.
 """
+import json
 import numpy as np
 import pytest
 from vrml import node
 from vrml.protofunctions import getFields
 
 from OpenGLContext.scenegraph.vegetation.field import (
-    TreeSpecies,
-    VegetationField,
+    TreeSpecies, VegetationField, VIEW_MARGIN, VIEW_SPREAD,
 )
+from OpenGLContext.loaders.documentvalues import DocumentError, DocumentValues
+from OpenGLContext.loaders.tiles3d.frustum import Frustum, view_projection
 
 
 def _species(name='fir'):
@@ -255,20 +257,17 @@ class TestTheSpeciesDescription:
 
     def test_it_survives_a_round_trip_through_json(self) -> None:
         """A baked world carries its species list in the tileset."""
-        import json
         entry = _species()
         back = TreeSpecies.from_json(json.loads(json.dumps(entry.to_json())))
         assert back.to_json() == entry.to_json()
 
     def test_a_species_naming_no_mesh_is_refused(self) -> None:
-        from OpenGLContext.loaders.documentvalues import DocumentError
         record = dict(_species().to_json(), mesh=3)
         with pytest.raises(DocumentError, match='tree species mesh is 3'):
             TreeSpecies.from_json(record)
 
     def test_a_card_width_that_is_no_number_is_the_default(self) -> None:
         said: list = []
-        from OpenGLContext.loaders.documentvalues import DocumentValues
         record = dict(_species().to_json(), cardWidth='wide', solid='trunk')
         back = TreeSpecies.from_json(record, DocumentValues(warn=said.append))
         assert back.cardWidth == pytest.approx(0.55)
@@ -287,7 +286,6 @@ class TestChosenAgainstTheView:
     view-projection, the cards are chosen against the frustum itself."""
 
     def _matrix(self, eye, look, aspect=1.78):
-        from OpenGLContext.loaders.tiles3d.frustum import view_projection
         return view_projection(eye, look, (0, 1, 0), 0.9, aspect, 1.0, 6000.0)
 
     def _drawn(self, field):
@@ -365,13 +363,11 @@ class TestTheEdgeOfTheViewIsNeverSeen:
     distance, because at a kilometre a degree is a lot of metres."""
 
     def _matrix(self, eye, look):
-        from OpenGLContext.loaders.tiles3d.frustum import view_projection
         return view_projection(eye, look, (0, 1, 0), 0.9, 1.78, 1.0, 6000.0)
 
     def test_a_card_just_outside_a_distant_edge_is_still_drawn(self) -> None:
         eye = (0.0, 20.0, 0.0)
         matrix = self._matrix(eye, (0.0, 20.0, 1000.0))
-        from OpenGLContext.loaders.tiles3d.frustum import Frustum
         planes = np.asarray(Frustum.from_matrix(np.asarray(matrix)).planes)
         # A point a kilometre away, twenty metres outside the left plane.
         out = np.array([[0.0, 20.0, 1000.0]])
@@ -383,9 +379,6 @@ class TestTheEdgeOfTheViewIsNeverSeen:
         assert len(field.impostors[0].pos) == 1
 
     def test_the_slack_grows_with_distance(self) -> None:
-        from OpenGLContext.scenegraph.vegetation.field import (
-            VIEW_MARGIN, VIEW_SPREAD,
-        )
         assert VIEW_SPREAD > 0.0 and VIEW_MARGIN > 0.0
 
     def test_what_is_squarely_behind_is_still_dropped(self) -> None:

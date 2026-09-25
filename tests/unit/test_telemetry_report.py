@@ -7,8 +7,11 @@ when it did.
 """
 
 
+import json
 from OpenGLContext.telemetry import report
 from OpenGLContext.telemetry.replay import Recording
+from OpenGLContext import entropy, telemetry
+from OpenGLContext.ui.debugoverlay import telemetry_provider
 
 
 def session(*records):
@@ -128,7 +131,6 @@ class TestWhatThePlayerWasDoing:
 
 class TestTheCommand:
     def test_it_reads_a_file_and_prints_it(self, tmp_path, capsys):
-        import json
         target = tmp_path / 'session.jsonl'
         target.write_text('\n'.join(json.dumps(record) for record in [
             {'kind': 'header', 'version': 1, 'argv': ['twig-bb']}, FRAMES]))
@@ -145,17 +147,12 @@ class TestTheOverlaySection:
     told to "turn recording on and reproduce it" needs to see that it is."""
 
     def test_there_is_no_section_when_nothing_is_being_recorded(self):
-        from OpenGLContext.ui.debugoverlay import telemetry_provider
-
         class Context:
             telemetry = None
 
         assert telemetry_provider(Context())() == []
 
     def test_a_recording_shows_its_file_and_how_far_it_has_got(self, tmp_path):
-        from OpenGLContext import telemetry
-        from OpenGLContext.ui.debugoverlay import telemetry_provider
-
         class Context:
             telemetry = None
 
@@ -173,9 +170,6 @@ class TestTheOverlaySection:
             session.close()
 
     def test_a_recording_shows_the_seed_it_can_be_run_again_from(self, tmp_path):
-        from OpenGLContext import entropy, telemetry
-        from OpenGLContext.ui.debugoverlay import telemetry_provider
-
         class Context:
             telemetry = None
 
@@ -188,9 +182,6 @@ class TestTheOverlaySection:
             session.close()
 
     def test_a_replay_shows_how_far_through_the_recording_it_is(self, tmp_path):
-        from OpenGLContext import telemetry
-        from OpenGLContext.ui.debugoverlay import telemetry_provider
-
         class Context:
             telemetry = None
 
@@ -216,8 +207,6 @@ class TestTheOverlaySection:
     def test_a_replay_says_whether_it_is_doing_what_was_recorded(self, tmp_path):
         """The question somebody watching a replay has; see
         :class:`OpenGLContext.telemetry.replay.MarkComparison`."""
-        from OpenGLContext import telemetry
-        from OpenGLContext.ui.debugoverlay import telemetry_provider
 
         class Context:
             telemetry = None

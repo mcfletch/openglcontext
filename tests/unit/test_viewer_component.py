@@ -20,6 +20,12 @@ from OpenGLContext.testing.paths import tests_root
 from OpenGLContext.viewer import ViewerOptions
 from OpenGLContext.viewer.sceneviewer import ViewerContext, SceneViewerMixin
 from OpenGLContext.viewer.source import load_gltf_source
+from OpenGLContext.context import Context
+from OpenGLContext.move.physicswalk import PhysicsWalkMixin
+from OpenGLContext.multiview.grid import Grid
+from OpenGLContext.viewer.asyncscene import AsyncSceneMixin
+from OpenGLContext.viewer.caption import CaptionMixin
+from OpenGLContext.viewer.capture import SettleCaptureMixin
 
 MODEL = os.path.join(str(tests_root(__file__)), 'wrls', 'instanced_lattice.gltf')
 
@@ -209,9 +215,6 @@ class TestTheMixinsComposeCleanly:
 
     def test_no_viewer_mix_in_shadows_a_context_member_by_accident(self):
         from OpenGLContext import testingcontext
-        from OpenGLContext.viewer.asyncscene import AsyncSceneMixin
-        from OpenGLContext.viewer.capture import SettleCaptureMixin
-        from OpenGLContext.viewer.caption import CaptionMixin
 
         # The platform's own interactive context, which is what ViewerContext
         # is composed over.
@@ -233,8 +236,6 @@ class TestTheMixinsComposeCleanly:
         and asked nobody would pass too -- so the context's own answer is made
         an unmistakable one and looked for.
         """
-        from OpenGLContext.context import Context
-        from OpenGLContext.viewer.sceneviewer import ViewerContext
 
         viewer = ViewerContext.__new__(ViewerContext)
         viewer.settleCapture = None
@@ -277,7 +278,6 @@ class TestTheOverridableSeams:
 
     def test_walking_is_available_on_the_component(self):
         """It comes from the context, not from the viewer."""
-        from OpenGLContext.move.physicswalk import PhysicsWalkMixin
         assert issubclass(ViewerContext, PhysicsWalkMixin)
         for seam in ('enablePhysics', 'buildPhysicsWorld', 'spawnAvatar',
                      'moveAvatarToViewpoint', 'stepPhysics'):
@@ -293,7 +293,6 @@ class TestTheOverridableSeams:
 
 class TestTheGridTheOrthographicViewsAreRuledBy:
     def test_the_scene_carries_one(self, scene):
-        from OpenGLContext.multiview.grid import Grid
         viewer = _viewer()
         viewer.source = MODEL
         viewer.buildScenegraph(scene)

@@ -17,13 +17,13 @@ pytest.importorskip("pygltflib")
 
 from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
 from OpenGLContext.scenegraph.zone import ENVIRONMENT, Zone
+from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
 
 EXAMPLE = os.path.join(os.path.dirname(__file__), '..', '..', 'docs', 'extensions',
                        'examples', 'OGLC_zone-2.0.gltf')
 
 
 def _world(directory, zones=True):
-    from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
     path = build_sample_tileset(str(directory))
     document = json.load(open(path))
     if zones:

@@ -6,13 +6,19 @@ events it sinks.
 """
 
 import pytest
+from PIL import Image
 
 from OpenGLContext.events.inputstate import InputState
 from OpenGLContext.ui.layout import Column
-from OpenGLContext.ui.metrics import FontMetrics
+from OpenGLContext.ui.metrics import FontMetrics, FontMetrics as Metrics
 from OpenGLContext.ui.overlay import OverlayMixin, OverlayStack
 from OpenGLContext.ui.panel import Panel
-from OpenGLContext.ui.widgets import Button, Label
+from OpenGLContext.ui.widgets import Button, Label, TextField
+from OpenGLContext.events import systemtime
+from OpenGLContext.ui.menu import Menu, MenuItem
+from OpenGLContext.ui.pictures import PictureCache
+from OpenGLContext.ui.scroll import ScrollViewport
+from OpenGLContext.ui.tooltip import Tooltip, TOOLTIP_PAUSE
 
 
 @pytest.fixture
@@ -272,8 +278,6 @@ class TestStack:
         assert not stack.capturing()
 
     def test_the_wheel_goes_to_the_top_panel(self, metrics):
-        from OpenGLContext.ui.scroll import ScrollViewport
-        from OpenGLContext.ui.widgets import Label
         stack = OverlayStack()
         view = ScrollViewport(name='view', flex=1,
                               children=[Label(text='line\n' * 80)])
@@ -356,7 +360,6 @@ class TestContextRouting:
         assert context.dispatched == []
 
     def test_a_typed_character_reaches_a_field(self, context):
-        from OpenGLContext.ui.widgets import TextField
         entry = TextField(name='e', value='')
         panel = Panel(children=[Column(children=[entry])])
         context.pushOverlay(panel)
@@ -389,7 +392,6 @@ class TestContextRouting:
         assert context.redraws > before
 
     def test_a_wheel_notch_reaches_the_overlay(self, context):
-        from OpenGLContext.ui.scroll import ScrollViewport
         view = ScrollViewport(name='view', flex=1,
                               children=[Label(text='line\n' * 80)])
         panel = Panel(fill=True, children=[view])
@@ -578,7 +580,6 @@ class _FakeRenderer:
     """Stands in for OverlayRenderer: only the picture cache is read."""
 
     def __init__(self, cacheDirectory):
-        from OpenGLContext.ui.pictures import PictureCache
         self.gl = _FakeGL()
         self.pictures = PictureCache(upload=self.gl.upload,
                                      delete=self.gl.delete, workers=0,
@@ -588,7 +589,6 @@ class _FakeRenderer:
 @pytest.fixture
 def png(tmp_path):
     """A real PNG on disk, so the cache has something to decode."""
-    from PIL import Image
 
     def make(name):
         path = tmp_path / name
@@ -790,7 +790,6 @@ class TestTellingThePointerWhatIsUnderIt:
         assert context.tooltipTree(now=0.0) is None
 
     def test_the_tip_comes_up_when_the_pointer_has_rested(self):
-        from OpenGLContext.ui.tooltip import Tooltip
         context, _panel, button = self._resting()
         tip = context.tooltipTree(now=10.0)
         assert isinstance(tip, Tooltip)
@@ -800,12 +799,10 @@ class TestTellingThePointerWhatIsUnderIt:
         context, _panel, _button = self._resting()
         context.tooltipTree(now=10.0)
         trees = context.screenTrees(FontMetrics(8, 16, 2), now=10.0)
-        from OpenGLContext.ui.tooltip import Tooltip
         assert isinstance(trees[-1], Tooltip)
 
     def test_it_is_laid_out_beside_the_pointer_as_it_is_drawn(self):
         """The frame that draws the tip gives it a size and a place."""
-        from OpenGLContext.ui.tooltip import Tooltip
         context, _panel, button = self._resting()
         trees = context.screenTrees(FontMetrics(8, 16, 2), now=10.0)
         tip = trees[-1]
@@ -815,7 +812,6 @@ class TestTellingThePointerWhatIsUnderIt:
 
     def test_the_frame_it_appears_in_is_asked_for(self):
         """A window drawing on demand draws nothing more once the pointer is still."""
-        from OpenGLContext.ui.tooltip import TOOLTIP_PAUSE
         context, _panel, _button = self._resting()
         assert context.redrawsAt[-1] == pytest.approx(TOOLTIP_PAUSE)
 
@@ -840,7 +836,6 @@ class TestTellingThePointerWhatIsUnderIt:
         assert context.tooltipTree(now=10.0) is None
 
     def test_the_tip_stays_inside_the_window(self):
-        from OpenGLContext.ui.metrics import FontMetrics as Metrics
         context = FakeContext()
         panel = dialog(modal=False)
         button = panel.find('ok')
@@ -863,7 +858,6 @@ class TestTellingThePointerWhatIsUnderIt:
 
 class TestPanelsThatMoveOverTime:
     def _chosen(self, context):
-        from OpenGLContext.ui.menu import Menu, MenuItem
         menu = Menu(items=[MenuItem(text='Go')], linger=0.2)
         context.overlays.push(menu)
         context.layoutOverlays()
@@ -873,14 +867,12 @@ class TestPanelsThatMoveOverTime:
         return menu
 
     def test_a_frame_puts_away_a_menu_whose_choice_has_lingered(self):
-        from OpenGLContext.events import systemtime
         context = FakeContext()
         menu = self._chosen(context)
         context.screenTrees(FontMetrics(8, 16, 2), now=systemtime.systemTime() + 1.0)
         assert menu.closed and not context.overlays.visible
 
     def test_one_drawn_before_then_is_still_up(self):
-        from OpenGLContext.events import systemtime
         context = FakeContext()
         menu = self._chosen(context)
         trees = context.screenTrees(FontMetrics(8, 16, 2), now=systemtime.systemTime())

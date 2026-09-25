@@ -13,6 +13,7 @@ import pytest
 from OpenGLContext.bin import terrain_view as T
 from OpenGLContext.loaders.tiles3d import procedural as P
 from OpenGLContext.loaders.tiles3d.scatter import Scatter
+from OpenGLContext.scenegraph.group import Group
 
 
 def _inst():
@@ -282,7 +283,6 @@ class TestSceneMutation:
 
 
 def _group():
-    from OpenGLContext.scenegraph.group import Group
     return Group()
 
 

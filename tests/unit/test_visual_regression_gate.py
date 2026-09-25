@@ -8,6 +8,7 @@ as the process exited 0. These tests pin the gate to real behaviour.
 
 import sys
 from pathlib import Path
+import inspect
 
 import numpy as np
 import pytest
@@ -62,7 +63,6 @@ def test_shape_mismatch_fails(tmp_path):
 
 def test_max_diff_bound_is_not_tautological():
     """The gate must not treat every image as a match via a 255 ceiling."""
-    import inspect
     src = inspect.getsource(tas._compare_images)
     assert 'max_diff <= 255' not in src, "tautological bound still present (2.9)"
 

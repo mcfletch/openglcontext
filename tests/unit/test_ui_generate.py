@@ -10,6 +10,7 @@ from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.widgets import (
     KeyCapture, Label, Select, Slider, TextField, Toggle,
 )
+from OpenGLContext.ui.geometry import Rect
 
 
 class Numbers(node.Node):
@@ -174,7 +175,6 @@ class TestContextDefinitionPage:
         assert len(editors) == len(ContextDefinition.RENDERING_FIELDS)
 
     def test_the_page_lays_out_without_a_gl_context(self):
-        from OpenGLContext.ui.geometry import Rect
         grid = generate.page_for(ContextDefinition(),
                                  include=ContextDefinition.RENDERING_FIELDS)
         grid.arrange(Rect(0, 0, 600, 800), FontMetrics(8, 16, 2))

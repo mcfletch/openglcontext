@@ -9,7 +9,9 @@ import sys
 import json
 
 
-from OpenGLContext.telemetry.journal import SessionJournal
+from OpenGLContext.telemetry.journal import default_path, SessionJournal
+from OpenGLContext import userpaths
+from OpenGLContext.telemetry import journal as journal_module
 
 
 def lines(path):
@@ -126,7 +128,6 @@ APPDATA_VARIABLE = 'APPDATA' if sys.platform == 'win32' else 'XDG_CONFIG_HOME'
 class TestWhereAJournalGoesByDefault:
     def test_it_lands_under_the_user_s_application_data(self, tmp_path,
                                                         monkeypatch):
-        from OpenGLContext.telemetry.journal import default_path
         monkeypatch.setenv(APPDATA_VARIABLE, str(tmp_path))
         found = default_path()
         assert found.parent == tmp_path / 'OpenGLContext' / 'telemetry'
@@ -134,14 +135,10 @@ class TestWhereAJournalGoesByDefault:
 
     def test_two_runs_do_not_write_the_same_file(self, tmp_path, monkeypatch):
         """The interesting session is rarely the one that has just finished."""
-        from OpenGLContext.telemetry.journal import default_path
         monkeypatch.setenv(APPDATA_VARIABLE, str(tmp_path))
         assert str(default_path()) != str(default_path('other'))
 
     def test_nowhere_to_put_it_falls_back_rather_than_failing(self, monkeypatch):
-        from OpenGLContext.telemetry import journal as journal_module
-        from OpenGLContext import userpaths
-
         def refuse():
             raise OSError('no home directory')
         monkeypatch.setattr(userpaths, 'appdatadirectory', refuse)

@@ -8,15 +8,16 @@ means a new adapter, a new scenegraph, new framing, and an avatar that has to be
 put somewhere in it.
 """
 import os
+import zipfile
 
 import pytest
 
 from OpenGLContext.testing.paths import tests_root
-from OpenGLContext.viewer import ViewerOptions
+from OpenGLContext.viewer import source as viewersource, ViewerOptions
 from OpenGLContext.viewer.adapters.gltf import GLTFAdapter
 from OpenGLContext.viewer.adapters.vrml import VRMLAdapter
 from OpenGLContext.viewer.library import Entry, Library, MODELS
-from OpenGLContext.viewer.sceneviewer import NO_MODIFIERS, ViewerContext
+from OpenGLContext.viewer.sceneviewer import CONTROL, NO_MODIFIERS, SceneViewerMixin, ViewerContext
 
 WRLS = os.path.join(str(tests_root(__file__)), 'wrls')
 GLTF_MODEL = os.path.join(WRLS, 'instanced_lattice.gltf')
@@ -84,8 +85,6 @@ class TestOpeningSomethingElse:
 
     def test_an_archive_holding_a_choice_says_what_it_holds(self, tmp_path, monkeypatch):
         """The listing is the answer to "then what", so the viewer shows it."""
-        import zipfile
-        from OpenGLContext.viewer import source as viewersource
         monkeypatch.setattr(viewersource, 'archive_cache_dir',
                             lambda: str(tmp_path / 'unpacked'))
         path = str(tmp_path / 'two.zip')
@@ -101,8 +100,6 @@ class TestOpeningSomethingElse:
 
     def test_starting_on_an_archive_holding_a_choice_exits_saying_so(
             self, tmp_path, monkeypatch, capsys):
-        import zipfile
-        from OpenGLContext.viewer import source as viewersource
         monkeypatch.setattr(viewersource, 'archive_cache_dir',
                             lambda: str(tmp_path / 'unpacked'))
         path = str(tmp_path / 'two.zip')
@@ -313,7 +310,6 @@ class TestSteppingThroughTheShelf:
         assert viewer.requested == []
 
     def test_the_keys_are_bound_to_it(self):
-        from OpenGLContext.viewer.sceneviewer import SceneViewerMixin
         assert hasattr(SceneViewerMixin, 'nextInLibrary')
         assert hasattr(SceneViewerMixin, 'previousInLibrary')
 
@@ -324,7 +320,6 @@ class TestSteppingThroughTheShelf:
         real manager, in :mod:`tests.unit.test_viewer_keys`; this is only that
         the two live on the same key and are told apart by Ctrl.
         """
-        from OpenGLContext.viewer.sceneviewer import CONTROL, SceneViewerMixin
         bound = {(binding.name, binding.modifiers): binding.method
                  for binding in SceneViewerMixin.viewerKeys}
         assert bound[('<pagedown>', CONTROL)] == 'nextInLibrary'

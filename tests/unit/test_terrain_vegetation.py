@@ -9,6 +9,7 @@ import os
 import math
 import numpy as np
 import pytest
+from PIL import Image
 
 from OpenGLContext import quaternion
 from OpenGLContext.scenegraph.terrain import HeightField
@@ -69,7 +70,6 @@ def test_mesh_counts_and_unit_normals():
 
 
 def test_from_image(tmp_path):
-    from PIL import Image
     arr = (np.linspace(0, 65535, 16 * 16).reshape(16, 16)).astype(np.uint16)
     p = tmp_path / "h.png"
     Image.fromarray(arr, mode="I;16").save(p)

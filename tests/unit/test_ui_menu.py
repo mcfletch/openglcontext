@@ -207,7 +207,6 @@ class TestChoosingWithTheKeyboard:
         assert chosen == ['Open']
 
     def test_a_separator_is_stepped_over(self) -> None:
-        from OpenGLContext.ui.widgets import Separator
         menu, _ = _menu([MenuItem(text='Cut'), Separator(),
                          MenuItem(text='Paste')])
         menu.key('<down>', (0, 0, 0))

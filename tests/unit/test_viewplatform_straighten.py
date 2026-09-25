@@ -9,6 +9,7 @@ import math
 import pytest
 
 from OpenGLContext.move.viewplatform import ViewPlatform, xytoa
+from OpenGLContext import quaternion
 
 #: Every 30 degrees of the compass, so each quadrant is covered.
 YAWS = [math.radians(d) for d in range(0, 360, 30)]
@@ -46,7 +47,6 @@ class TestStraighten:
     @pytest.mark.parametrize('yaw', YAWS)
     def test_pitch_is_removed_and_the_heading_kept(self, yaw: float) -> None:
         """Looking up 30 degrees then straightening keeps the compass bearing."""
-        from OpenGLContext import quaternion
         platform = ViewPlatform(orientation=(0, 1, 0, yaw))
         pitched = platform.quaternion * quaternion.fromXYZR(1, 0, 0, math.radians(30))
         platform.quaternion = pitched

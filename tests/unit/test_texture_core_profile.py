@@ -13,11 +13,15 @@ and it is what ``GL_CLAMP`` did for a texture with no border set.
 
 import numpy as np
 import pytest
+from OpenGL import GL as gl
 
 pytest.importorskip("glfw")
 PIL = pytest.importorskip("PIL.Image")
 
 from OpenGLContext.scenegraph import basenodes
+from OpenGLContext import glfwcontext, texture
+from OpenGLContext.capture import read_back_buffer
+from OpenGLContext.passes import renderpass
 
 
 
@@ -57,9 +61,6 @@ def textured_scene(repeat=True):
 
 class TestAnImageTextureDrawsUnderCore:
     def test_the_frame_is_not_black(self, render_scene):
-        from OpenGLContext.capture import read_back_buffer
-        from OpenGLContext import glfwcontext
-
         frames = []
         original = glfwcontext.GLFWContext.SwapBuffers
 
@@ -76,13 +77,11 @@ class TestAnImageTextureDrawsUnderCore:
         assert np.asarray(frames[-1]).max() > 0
 
     def test_nothing_failed_to_render(self, render_scene):
-        from OpenGLContext.passes import renderpass
         render_scene(textured_scene(), frames=3)
         assert renderpass.FLAT.failures.summary() == []
 
     def test_a_clamped_texture_renders_too(self, render_scene):
         """``repeatS``/``repeatT`` off asks for the clamp core actually has."""
-        from OpenGLContext.passes import renderpass
         render_scene(textured_scene(repeat=False), frames=3)
         assert renderpass.FLAT.failures.summary() == []
 
@@ -90,8 +89,6 @@ class TestAnImageTextureDrawsUnderCore:
 class TestBindingIsSeparateFromEnabling:
     def test_bind_touches_no_fixed_function_state(self, gl_context):
         """A shader needs the texture bound; the enable is a compatibility call."""
-        from OpenGL import GL as gl
-        from OpenGLContext import texture
 
         tex = texture.Texture()
         tex.store(3, gl.GL_RGB, 2, 2, b'\xff' * 12)
@@ -101,9 +98,6 @@ class TestBindingIsSeparateFromEnabling:
         assert gl.glGetIntegerv(gl.GL_TEXTURE_BINDING_2D) == tex.texture
 
     def test_enabling_is_what_a_compatibility_caller_asks_for(self, gl_context_compat):
-        from OpenGL import GL as gl
-        from OpenGLContext import texture
-
         tex = texture.Texture()
         tex.store(3, gl.GL_RGB, 2, 2, b'\xff' * 12)
         tex()

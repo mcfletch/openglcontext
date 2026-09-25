@@ -8,11 +8,15 @@ is 1.8 m however many kilometres across the dataset is. Sized off the extent
 instead, walking a city spawns a 300-metre giant standing above the rooftops,
 which is what "it will not let me drop down and explore" looks like.
 """
+import json
+import math
 import pytest
 
 from OpenGLContext.viewer import ViewerOptions
 from OpenGLContext.viewer.adapters.base import ViewerScene
 from OpenGLContext.viewer.sceneviewer import ViewerContext
+from OpenGLContext.loaders.tiles3d.boundingvolume import geodetic_to_ecef
+from OpenGLContext.viewer.adapters.tiles import TilesAdapter
 
 
 def _viewer(scene=None):
@@ -42,10 +46,6 @@ class TestAvatarScale:
 class TestTheTilesAdapterDeclaresIt:
     def test_a_geospatial_tileset_is_metric(self, tmp_path):
         """An Earth-centred tileset is in metres by specification."""
-        import json
-        import math
-        from OpenGLContext.loaders.tiles3d.boundingvolume import geodetic_to_ecef
-        from OpenGLContext.viewer.adapters.tiles import TilesAdapter
 
         origin = geodetic_to_ecef(-1.3856, 0.7617, 0.0)
         matrix = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, *origin, 1]
@@ -67,8 +67,6 @@ class TestTheTilesAdapterDeclaresIt:
 
     def test_a_local_tileset_is_left_undeclared(self, tmp_path):
         """A tileset that is not on the globe is in units of its own."""
-        import json
-        from OpenGLContext.viewer.adapters.tiles import TilesAdapter
 
         (tmp_path / 'tileset.json').write_text(json.dumps({
             'asset': {'version': '1.1'},

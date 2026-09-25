@@ -10,6 +10,7 @@ from OpenGLContext.scenegraph.fog import Fog
 from OpenGLContext.scenegraph.water.medium import LAVA, MEDIA, SLIME, WATER
 from OpenGLContext.scenegraph.water.submersion import apply, muffle_for, submerge
 from OpenGLContext.scenegraph.water.volumes import Volume, Volumes
+from OpenGLContext.audio import scene as audioscene
 
 
 class Engine:
@@ -30,7 +31,6 @@ def _with_engine(context):
     look-up submersion actually does -- including its refusal to open a device
     that is not already there.
     """
-    from OpenGLContext.audio import scene as audioscene
     engine = Engine()
     audioscene.attach(context, engine)
     return engine

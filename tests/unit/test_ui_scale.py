@@ -11,12 +11,17 @@ import pytest
 
 from OpenGLContext.ui import metrics as uimetrics
 from OpenGLContext.ui.geometry import Rect
-from OpenGLContext.ui.layout import Column
+from OpenGLContext.ui.layout import Column, Grid, Row
 from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.session import nodes_equal
-from OpenGLContext.ui.skin import DEFAULT_SKIN, Skin
+from OpenGLContext.ui.skin import DEFAULT_SKIN, NineSlice, Skin
 from OpenGLContext.ui.widgets import Button, Label
+from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.scenegraph.text import fonts
+from OpenGLContext.ui.overlay import OverlayMixin
+from OpenGLContext.ui.screen import ScreenMixin
+from OpenGLContext.ui.scroll import ScrollViewport
 
 
 @pytest.fixture
@@ -39,14 +44,12 @@ class TestChoosingAFontSize:
         assert uimetrics.font_size_for(1080, 1.5) > uimetrics.font_size_for(1080)
 
     def test_it_only_ever_asks_for_a_size_that_exists(self):
-        from OpenGLContext.scenegraph.text import fonts
         available = set(fonts.get_available_sizes())
         for height in range(240, 4321, 137):
             for scale in (0.5, 0.75, 1.0, 1.25, 2.0, 4.0):
                 assert uimetrics.font_size_for(height, scale) in available
 
     def test_an_absurd_scale_is_capped_by_the_largest_atlas(self):
-        from OpenGLContext.scenegraph.text import fonts
         assert uimetrics.font_size_for(2160, 10.0) == max(
             fonts.get_available_sizes())
 
@@ -77,7 +80,6 @@ class _FakeRenderer:
     """A text renderer's measurements, taken from the real shipped atlas."""
 
     def __init__(self, size):
-        from OpenGLContext.scenegraph.text import fonts
         _actual, module = fonts.get_closest_atlas(size)
         self.char_width = module.char_width
         self.char_height = module.char_height
@@ -97,7 +99,6 @@ class TestScalingASkin:
             DEFAULT_SKIN.panelFill)
 
     def test_artwork_is_shared_rather_than_copied(self):
-        from OpenGLContext.ui.skin import NineSlice
         art = NineSlice(url=['button.png'])
         skin = Skin(buttonImage=art)
         assert skin.scaled(2.0).buttonImage is art
@@ -206,10 +207,6 @@ class TestTheContextChoosesTheSize:
 
     @pytest.fixture
     def context(self):
-        from OpenGLContext.contextdefinition import ContextDefinition
-        from OpenGLContext.ui.overlay import OverlayMixin
-        from OpenGLContext.ui.screen import ScreenMixin
-
         class World:
             viewport = (1920, 1080)
 
@@ -255,15 +252,12 @@ class TestTheContextChoosesTheSize:
 
 class TestTheSettingIsOffered:
     def test_the_definition_carries_an_interface_scale(self):
-        from OpenGLContext.contextdefinition import ContextDefinition
         assert ContextDefinition().uiScale == 1.0
 
     def test_the_settings_screen_offers_it(self):
-        from OpenGLContext.contextdefinition import ContextDefinition
         assert 'uiScale' in ContextDefinition.INTERFACE_FIELDS
 
     def test_it_is_presented_as_a_slider_with_a_sensible_range(self):
-        from OpenGLContext.contextdefinition import ContextDefinition
         hint = ContextDefinition.UI_HINTS['uiScale']
         assert hint['minimum'] >= 0.5 and hint['maximum'] <= 3.0
 
@@ -285,14 +279,12 @@ class TestEveryLayoutMeasurementScales:
             Label(text='a').natural_size(doubled)[0] + 40)
 
     def test_the_spacing_between_a_rows_children_grows(self, doubled):
-        from OpenGLContext.ui.layout import Row
         one, two = Label(text='a', width=20), Label(text='b', width=20)
         Row(children=[one, two], spacing=5).arrange(
             Rect(0, 0, 500, 60), doubled)
         assert two.rect.x - one.rect.right == 10
 
     def test_a_boxs_padding_grows(self, doubled):
-        from OpenGLContext.ui.layout import Row
         child = Label(text='a', width=20)
         Row(children=[child], padding=6).arrange(Rect(0, 0, 500, 60), doubled)
         assert child.rect.x == 12
@@ -312,8 +304,6 @@ class TestEveryLayoutMeasurementScales:
         scaled one is a widget drawn to the wrong size at exactly the scale
         where being the wrong size matters.
         """
-        from OpenGLContext.ui.layout import Grid
-        from OpenGLContext.ui.scroll import ScrollViewport
         measured = []
 
         class Watched(Button):
@@ -330,7 +320,6 @@ class TestEveryLayoutMeasurementScales:
         assert measured and set(measured) == {expected}
 
     def test_a_scroll_viewport_steps_by_lines_not_by_pixels(self, doubled):
-        from OpenGLContext.ui.scroll import ScrollViewport
         def viewport(metrics):
             view = ScrollViewport(children=[Label(text='x', height=4000)])
             view.arrange(Rect(0, 0, 300, 200), metrics)

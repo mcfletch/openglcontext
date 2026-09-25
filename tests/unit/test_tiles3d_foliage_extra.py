@@ -1,6 +1,8 @@
 """Extra coverage for tiles3d.foliage: the CC0/bark texture-path branches and the
 multi-primitive scene builder options that the base foliage tests don't reach.
 """
+import os
+import tempfile
 import numpy as np
 import pytest
 
@@ -21,10 +23,8 @@ def _write_img(path, size=8, mode="RGB"):
 
 
 def test_procedural_ground_maps_writes_when_absent(tmp_path, monkeypatch):
-    import tempfile
     monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))
     maps = F.procedural_ground_maps(seed=97)
-    import os
     assert os.path.exists(maps["color"])          # freshly baked to the fake tmp
     # A second call reuses the cached file (no exception, same path).
     assert F.procedural_ground_maps(seed=97)["color"] == maps["color"]
@@ -79,7 +79,6 @@ def test_ground_patch_split_emits_rock_on_steep_slope():
 
 
 def test_branch_uses_real_bark_and_procedural_fallback(tmp_path, monkeypatch):
-    import tempfile
     bark = _write_img(tmp_path / "b.png")
     assert F.branch(bark_path=bark) is not None       # bark_path branch
     monkeypatch.setattr(tempfile, "gettempdir", lambda: str(tmp_path))

@@ -15,10 +15,14 @@ import weakref
 
 import numpy as np
 import pytest
+from omi_physics.world import PhysicsWorld
 
 pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders.tiles3d.physics_colliders import TerrainColliders
+from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
+from OpenGLContext.physics import gltf_world
+from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
 
 
 class _Tile:
@@ -78,7 +82,6 @@ class _Drawable:
 @pytest.fixture
 def _extractable(monkeypatch):
     """Read a patch straight off the stand-in drawable, with no glTF involved."""
-    from OpenGLContext.physics import gltf_world
     monkeypatch.setattr(
         gltf_world, 'extract_trimesh',
         lambda drawable, min_hull_size=0.0: (drawable.points, drawable.indices))
@@ -171,8 +174,6 @@ class TestTheDrawnSetIsTheColliderSet:
 
 class TestTheStreamerDrivesIt:
     def test_the_runtime_reports_what_it_drew(self, tmp_path) -> None:
-        from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
-        from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
         path = build_sample_tileset(str(tmp_path))
         seen = []
         terrain = TilesTerrain(path, workers=1)
@@ -186,10 +187,6 @@ class TestTheStreamerDrivesIt:
             terrain.shutdown()
 
     def test_a_streamed_world_holds_only_what_it_draws(self, tmp_path) -> None:
-        from omi_physics.world import PhysicsWorld
-
-        from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
-        from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
         path = build_sample_tileset(str(tmp_path))
         world = PhysicsWorld()
         terrain = TilesTerrain(path, physics_world=world, workers=1)

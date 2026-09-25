@@ -17,8 +17,11 @@ import pytest
 
 pytest.importorskip("pygltflib")
 
-from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
+from OpenGLContext.scenegraph.tilesterrain import _facing, TilesTerrain
 from OpenGLContext.scenegraph.vegetation.field import VegetationField
+from OpenGLContext.loaders.tiles3d.frustum import view_projection
+from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
+from OpenGLContext.scenegraph.terrain import control_map, HeightField, LayerRule
 
 COUNT = 300
 
@@ -41,7 +44,6 @@ def _trees(directory, count=COUNT, kinds=2, seed=5):
 
 
 def _world(directory, vegetation=True, **named):
-    from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
     path = build_sample_tileset(str(directory))
     document = json.load(open(path))
     if vegetation:
@@ -53,9 +55,6 @@ def _world(directory, vegetation=True, **named):
 
 def _landscape(directory, **named):
     """A world with a field terrain *and* a forest standing on it."""
-    from OpenGLContext.scenegraph.terrain import (
-        HeightField, LayerRule, control_map,
-    )
     path = _world(directory, **named)
     document = json.load(open(path))
     document.setdefault('extras', {})
@@ -162,8 +161,6 @@ class TestWhichWayTheCameraLooks:
     and the forest is behind you."""
 
     def _facing(self, eye, look):
-        from OpenGLContext.loaders.tiles3d.frustum import view_projection
-        from OpenGLContext.scenegraph.tilesterrain import _facing
         return _facing(view_projection(eye, look, (0, 1, 0), 0.8, 1.6, 1.0, 5000.0))
 
     def test_it_points_where_the_camera_points(self) -> None:
@@ -176,11 +173,9 @@ class TestWhichWayTheCameraLooks:
             assert np.allclose(self._facing(eye, look), want, atol=1e-6)
 
     def test_no_matrix_is_no_heading(self) -> None:
-        from OpenGLContext.scenegraph.tilesterrain import _facing
         assert _facing(None) is None
 
     def test_the_forest_faces_the_way_the_camera_does(self, tmp_path) -> None:
-        from OpenGLContext.loaders.tiles3d.frustum import view_projection
         terrain = TilesTerrain(_world(tmp_path), workers=1)
         try:
             eye = np.array([0.0, 30.0, 0.0])
@@ -250,11 +245,6 @@ class TestTheGroundCoverAWorldCarries:
     control map says the grass is -- which is also where the road is not."""
 
     def _covered(self, directory, cover=True, **named):
-        import json
-
-        from OpenGLContext.scenegraph.terrain import (
-            HeightField, LayerRule, control_map,
-        )
         path = _world(directory, **named)
         document = json.load(open(path))
         document.setdefault('extras', {})
@@ -311,7 +301,6 @@ class TestTheGroundCoverAWorldCarries:
     def test_it_needs_a_landscape_to_grow_on(self, tmp_path) -> None:
         """Cover sits on a height field; a world whose ground is tiles has
         none to sit on."""
-        import json
         path = _world(tmp_path)
         document = json.load(open(path))
         document['extras']['vegetation']['cover'] = {

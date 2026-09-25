@@ -11,11 +11,18 @@ the context as it was.
 import json
 import logging
 import threading
+import random
+import sys
 
 import pytest
 
-from OpenGLContext import telemetry
+from OpenGLContext import entropy, telemetry
 from OpenGLContext.telemetry import record as telemetry_record
+from OpenGLContext.events import systemtime
+from OpenGLContext.events.keyboardevents import KeyboardEvent
+from OpenGLContext.events.mouseevents import MouseButtonEvent
+from OpenGLContext.looptrace import LoopTrace
+from OpenGLContext.telemetry.journal import DEFAULT_MAX_BYTES
 
 
 class FakeContext:
@@ -54,7 +61,6 @@ class FakeContext:
 
 
 def key(name, state=1):
-    from OpenGLContext.events.keyboardevents import KeyboardEvent
     event = KeyboardEvent()
     event.name, event.state = name, state
     return event
@@ -125,7 +131,6 @@ class TestWhatIsRecorded:
 
     def test_a_click_is_recorded_as_having_gone_through_the_pick(
             self, context, target):
-        from OpenGLContext.events.mouseevents import MouseButtonEvent
         session = telemetry.start(context, target)
         event = MouseButtonEvent()
         event.button, event.state = 0, 1
@@ -256,7 +261,6 @@ class TestExceptions:
                    for record in records(target, 'exception'))
 
     def test_the_hooks_are_put_back_when_the_session_ends(self, context, target):
-        import sys
         before = sys.excepthook
         telemetry.start(context, target).close()
         assert sys.excepthook is before
@@ -341,7 +345,6 @@ class TestReplayingIntoAContext:
             driver.close()
 
     def test_a_replay_puts_the_clock_back_when_it_finishes(self, context, target):
-        from OpenGLContext.events import systemtime
         session = telemetry.start(context, target)
         context.OnDraw()
         session.close()
@@ -398,7 +401,6 @@ class TestTheClockWhileRecording:
 
     def readings(self, context, frames=4):
         """What the world's clock says at one fixed point in each frame."""
-        from OpenGLContext.events import systemtime
         found = []
         for _each in range(frames):
             found.append(systemtime.systemTime())
@@ -406,7 +408,6 @@ class TestTheClockWhileRecording:
         return found
 
     def test_it_stands_still_inside_one_frame(self, context, target):
-        from OpenGLContext.events import systemtime
         session = telemetry.start(context, target)
         try:
             context.OnDraw()
@@ -418,7 +419,6 @@ class TestTheClockWhileRecording:
                                                                target):
         """The file's own numbers, so a replay adding them up arrives at the
         same instants rather than at a second measurement of them."""
-        from OpenGLContext.events import systemtime
         session = telemetry.start(context, target)
         before = systemtime.systemTime()
         for _each in range(4):
@@ -433,7 +433,6 @@ class TestTheClockWhileRecording:
 
     def test_the_wall_clock_is_given_back_when_the_recording_stops(
             self, context, target):
-        from OpenGLContext.events import systemtime
         before = systemtime.timeSource()
         telemetry.start(context, target).close()
         assert systemtime.timeSource() is before
@@ -458,7 +457,6 @@ class TestTheClockWhileRecording:
 class TestTheExceptionHook:
     def test_one_nothing_caught_is_recorded_and_still_reported(
             self, context, target, monkeypatch):
-        import sys
         seen = []
         monkeypatch.setattr(sys, 'excepthook', lambda *args: seen.append(args))
         session = telemetry.start(context, target)
@@ -505,7 +503,6 @@ class TestTheEnvironmentSwitches:
     def test_a_ceiling_that_is_not_a_number_is_the_default(
             self, context, target, monkeypatch):
         """A mistyped diagnostic switch must not be why a game will not run."""
-        from OpenGLContext.telemetry.journal import DEFAULT_MAX_BYTES
         monkeypatch.setenv(telemetry.TELEMETRY_ENV, str(target))
         monkeypatch.setenv(telemetry.MAX_MB_ENV, 'lots')
         session = telemetry.install(context)
@@ -556,8 +553,6 @@ class TestWhatCountsAsAStall:
 
     def test_the_loop_s_own_threshold_is_what_a_backend_that_has_one_uses(
             self, context, target):
-        from OpenGLContext.looptrace import LoopTrace
-
         context.loopTrace = LoopTrace(stall_ms=200.0)
         clock = iter([0.0, 0.001, 0.002, 0.100, 0.101, 0.400])
 
@@ -575,16 +570,12 @@ class TestWhereTheRandomnessStarted:
     replay from its input alone."""
 
     def test_the_seed_is_in_the_journal(self, context, target):
-        from OpenGLContext import entropy
-
         entropy.reseed(4242)
         telemetry.start(context, target).close()
         assert records(target, 'entropy')[0]['seed'] == 4242
 
     def test_the_header_names_it_too_so_the_first_line_says_it(
             self, context, target):
-        from OpenGLContext import entropy
-
         entropy.reseed(4242)
         telemetry.start(context, target).close()
         assert records(target, 'header')[0]['seed'] == 4242
@@ -599,10 +590,6 @@ class TestWhereTheRandomnessStarted:
         assert found['numpy']
 
     def test_a_replay_starts_from_the_same_numbers(self, context, target):
-        import random
-
-        from OpenGLContext import entropy
-
         session = telemetry.start(context, target)
         expected = [random.random() for _ in range(3)]
         context.OnDraw()
@@ -617,8 +604,6 @@ class TestWhereTheRandomnessStarted:
             driver.close()
 
     def test_a_replay_takes_the_recorded_seed_for_its_own(self, context, target):
-        from OpenGLContext import entropy
-
         entropy.reseed(4242)
         session = telemetry.start(context, target)
         context.OnDraw()
@@ -633,7 +618,6 @@ class TestWhereTheRandomnessStarted:
 
     def test_a_journal_with_no_entropy_in_it_still_replays(self, tmp_path):
         """A file from before this was recorded, or one cut off early."""
-        import json
 
         target = tmp_path / 'old.jsonl'
         target.write_text('\n'.join(json.dumps(record) for record in [

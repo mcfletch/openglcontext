@@ -4,16 +4,15 @@ a mixed-case call used to AttributeError. The context now accepts either spellin
 and the base shadow stubs return None explicitly.
 """
 import pytest
+from OpenGLContext.context import Context
+from OpenGLContext.passes import _flat
 
 
 class TestViewportAlias:
     def test_context_accepts_both_spellings(self):
-        from OpenGLContext.context import Context
         assert Context.getViewport is Context.getViewPort
 
     def test_alias_returns_dimensions(self):
-        from OpenGLContext.context import Context
-
         class Fake:
             viewportDimensions = (640, 480)
         assert Context.getViewport.__get__(Fake())() == (640, 480)
@@ -21,8 +20,6 @@ class TestViewportAlias:
 
 class TestBaseShadowStubs:
     def test_stubs_return_none(self):
-        from OpenGLContext.passes import _flat
-
         class Fake:
             pass
         f = Fake()

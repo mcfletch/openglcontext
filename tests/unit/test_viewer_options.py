@@ -8,10 +8,14 @@ set of defaults; the parity test below is what keeps it that way.
 """
 import argparse
 import os
+import dataclasses
+import re
 
 import pytest
 
 from OpenGLContext.viewer.options import OPTION_NAMES, ViewerOptions
+from OpenGLContext.bin import view
+from OpenGLContext.bin.view import build_parser, parse_args
 
 
 class TestUsableWithoutACommandLine:
@@ -120,7 +124,6 @@ class TestTheWindow:
             'size': (640, 480)}
 
     def test_the_command_line_says_whether_to_fill_the_screen(self):
-        from OpenGLContext.bin import view
         assert view.parse_args(['m.glb', '--no-fullscreen']).fullscreen is False
         assert view.parse_args(['m.glb', '--fullscreen']).fullscreen is True
         assert view.parse_args(['m.glb']).fullscreen is None
@@ -130,7 +133,6 @@ class TestTheCommandLineFillsIn:
     """``parse_args`` returns a ``ViewerOptions``, not a bare namespace."""
 
     def _parsed(self, argv):
-        from OpenGLContext.bin import view
         return view.parse_args(argv)
 
     def test_parsing_yields_the_options_type(self):
@@ -148,7 +150,6 @@ class TestTheCommandLineFillsIn:
     def test_every_field_is_reachable_from_the_command_line(self):
         """A knob the library has and the command line cannot set is a knob
         nobody will find."""
-        from OpenGLContext.bin import view
         parser = view.build_parser()
         reachable = set()
         for action in parser._actions:
@@ -158,7 +159,6 @@ class TestTheCommandLineFillsIn:
 
     def test_the_parser_carries_no_defaults_of_its_own(self):
         """Every default is the dataclass's, so the two cannot drift."""
-        from OpenGLContext.bin import view
         parser = view.build_parser()
         for action in parser._actions:
             if action.dest == 'help':
@@ -175,7 +175,6 @@ class TestTheCommandLineFillsIn:
 
     def test_a_caller_may_parse_into_options_it_already_has(self):
         """The browser starts from its own defaults and lets the user override."""
-        from OpenGLContext.bin import view
         base = ViewerOptions(background='none', turntable=True)
         parsed = view.parse_args(['m.glb', '--yaw', '2.0'], options=base)
         assert parsed is base
@@ -193,7 +192,6 @@ class TestTheCommandLineFillsIn:
 
 class TestSourceIsStillOptional:
     def test_no_source_leaves_it_unset(self):
-        from OpenGLContext.bin import view
         assert view.parse_args([]).source is None
 
     def test_the_env_var_is_not_consumed_by_the_parser(self, monkeypatch):
@@ -231,7 +229,6 @@ class TestTheArrangementAViewerOpensIn:
         assert window.views.mode == 'single'
 
     def test_an_unpassed_views_option_is_none(self):
-        from OpenGLContext.bin.view import parse_args
         assert parse_args(['model.glb']).views is None
         assert parse_args(['model.glb', '--views', 'quad']).views == 'quad'
 
@@ -245,12 +242,10 @@ class TestWhatTheCommandLineRefuses:
         ['--video-seconds', 'nan'],
     ])
     def test_a_recording_of_no_length_or_rate(self, argv, capsys):
-        from OpenGLContext.bin.view import parse_args
         with pytest.raises(SystemExit):
             parse_args(['model.glb'] + argv)
 
     def test_a_positive_one_is_taken(self):
-        from OpenGLContext.bin.view import parse_args
         options = parse_args(['model.glb', '--video-fps', '24',
                               '--video-seconds', '2.5'])
         assert (options.video_fps, options.video_seconds) == (24, 2.5)
@@ -258,13 +253,11 @@ class TestWhatTheCommandLineRefuses:
 
 class TestOneOptionOneEntry:
     def test_capture_and_capture_image_are_one_option(self):
-        from OpenGLContext.bin.view import build_parser
         spelled = [action.option_strings for action in build_parser()._actions
                    if 'capture' == action.dest]
         assert spelled == [['--capture', '--capture-image']]
 
     def test_the_recording_length_says_it_also_times_a_fly_through(self):
-        from OpenGLContext.bin.view import build_parser
         action, = [action for action in build_parser()._actions
                    if action.dest == 'video_seconds']
         assert 'fly-through' in action.help
@@ -272,8 +265,6 @@ class TestOneOptionOneEntry:
 
 class TestTheViewerPageListsEveryField:
     def test_every_field_is_named_on_the_viewer_page(self):
-        import dataclasses
-        import re
         here = os.path.dirname(os.path.dirname(os.path.dirname(
             os.path.abspath(__file__))))
         with open(os.path.join(here, 'docs', 'viewer.rst'),

@@ -1,9 +1,11 @@
 """Editing a node on a copy: what makes Cancel real at every level."""
 
 import pytest
-from vrml import field, node
+from vrml import field, node, protofunctions
 
 from OpenGLContext.ui.session import SettingsSession
+from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.ui import session as session_module
 
 
 class Walk(node.Node):
@@ -85,7 +87,6 @@ class TestDraft:
 
     def test_watchers_of_a_field_hear_the_commit(self, session, target):
         seen = []
-        from vrml import protofunctions
 
         def receiver(*args, **named):
             seen.append(args)
@@ -152,7 +153,6 @@ class TestTransientFields:
             del type(target).TRANSIENT_FIELDS
 
     def test_the_context_definition_declares_the_mode_in_force_transient(self):
-        from OpenGLContext.contextdefinition import ContextDefinition
         assert 'movementMode' in ContextDefinition.TRANSIENT_FIELDS
 
 
@@ -292,7 +292,6 @@ class TestDirtyIsCheapToAsk:
 
     def test_asking_again_does_not_walk_the_tree_again(self, monkeypatch):
         """Nothing between two edits can change the answer, so it is kept."""
-        from OpenGLContext.ui import session as session_module
         session = SettingsSession(Settings())
         calls = []
         real = session_module.nodes_equal
@@ -303,7 +302,6 @@ class TestDirtyIsCheapToAsk:
         assert len(calls) == 1, "compared the whole tree once per question"
 
     def test_an_edit_makes_it_work_the_answer_out_again(self, monkeypatch):
-        from OpenGLContext.ui import session as session_module
         session = SettingsSession(Settings())
         assert not session.dirty
         session.draft.lights = 2

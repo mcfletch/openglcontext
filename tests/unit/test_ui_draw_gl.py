@@ -9,16 +9,30 @@ claim.
 
 import numpy as np
 import pytest
+from OpenGL.GL import (
+    GL_COLOR_BUFFER_BIT, GL_RGB, GL_UNSIGNED_BYTE, glClear, glClearColor, glCreateProgram,
+    glDeleteProgram, glIsProgram, glReadPixels, glViewport,
+)
+from PIL import Image, ImageDraw
 
 glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.ui.geometry import Rect
 from OpenGLContext.ui.layout import Column, Row
-from OpenGLContext.ui.overlay import OverlayStack
+from OpenGLContext.ui.overlay import OverlayMixin, OverlayStack
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.widgets import (
-    Button, Label, Slider, TextField, Toggle, PRIMARY,
+    Button, KeyCapture, Label, PRIMARY, Select, Separator, Slider, Spacer, TextField, Toggle,
 )
+from OpenGLContext.events.inputstate import InputState
+from OpenGLContext.scenegraph.text import shadertext
+from OpenGLContext.scenegraph.text.shadertext import get_text_renderer
+from OpenGLContext.testing import glcontext
+from OpenGLContext.ui.console import ConsoleView
+from OpenGLContext.ui.draw import OverlayRenderer
+from OpenGLContext.ui.screen import ScreenMixin
+from OpenGLContext.ui.scroll import ScrollViewport
+from OpenGLContext.ui.skin import NineSlice, Skin
 
 WIDTH = HEIGHT = 256
 
@@ -30,15 +44,12 @@ def gl_context(gl_window):
     # The cached atlases hold GL objects in this context, and the driver hands
     # the next window the same identifier often enough that leaving them would
     # make one test's textures another test's problem.
-    from OpenGLContext.scenegraph.text import shadertext
     shadertext.drop_text_renderers()
 
 
 @pytest.fixture
 def renderer(gl_context):
     """A renderer with its program and font atlas built, or a skip."""
-    from OpenGL.GL import glViewport
-    from OpenGLContext.ui.draw import OverlayRenderer
     glViewport(0, 0, WIDTH, HEIGHT)
     made = OverlayRenderer(16)
     if not made.initialize():
@@ -48,14 +59,12 @@ def renderer(gl_context):
 
 
 def clear(colour=(0.0, 0.0, 0.0, 1.0)):
-    from OpenGL.GL import glClear, glClearColor, GL_COLOR_BUFFER_BIT
     glClearColor(*colour)
     glClear(GL_COLOR_BUFFER_BIT)
 
 
 def frame():
     """The framebuffer as (height, width, 3) ints, bottom row first."""
-    from OpenGL.GL import glReadPixels, GL_RGB, GL_UNSIGNED_BYTE
     raw = glReadPixels(0, 0, WIDTH, HEIGHT, GL_RGB, GL_UNSIGNED_BYTE)
     return np.frombuffer(raw, dtype=np.uint8).reshape(HEIGHT, WIDTH, 3).astype(int)
 
@@ -129,7 +138,6 @@ def test_the_focus_glow_falls_outside_the_widget(renderer):
 
 
 def test_a_scissor_clips_what_is_drawn_outside_it(renderer):
-    from OpenGL.GL import glViewport
     glViewport(0, 0, WIDTH, HEIGHT)
     clear()
     assert renderer.begin((WIDTH, HEIGHT))
@@ -148,9 +156,6 @@ def test_every_widget_paints_without_error(renderer):
     Every state that is drawn differently is here: hovered, armed, disabled,
     focused, checked and unchecked, and a viewport that has to clip.
     """
-    from OpenGLContext.ui.console import ConsoleView
-    from OpenGLContext.ui.scroll import ScrollViewport
-    from OpenGLContext.ui.widgets import KeyCapture, Select, Separator, Spacer
 
     view = ConsoleView(name='log')
     view.write('an informational line')
@@ -214,7 +219,6 @@ def _stackOf(panel):
 
 def _ninepatch_image(path, size=32, border=8):
     """A frame whose corners are distinct, so stretching them would show."""
-    from PIL import Image, ImageDraw
     image = Image.new('RGBA', (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(image)
     draw.rectangle([0, 0, size - 1, size - 1], fill=(40, 60, 90, 255))
@@ -232,8 +236,6 @@ def _ninepatch_image(path, size=32, border=8):
 
 def test_a_nine_slice_keeps_its_corners_square(renderer, tmp_path):
     """One button image has to serve two button widths without distorting."""
-    from OpenGLContext.ui.geometry import Rect
-    from OpenGLContext.ui.skin import NineSlice
     path = _ninepatch_image(str(tmp_path / 'frame.png'))
     art = NineSlice(url=[path], border=(8, 8, 8, 8))
     clear()
@@ -249,8 +251,6 @@ def test_a_nine_slice_keeps_its_corners_square(renderer, tmp_path):
 
 
 def test_a_missing_skin_image_falls_back_to_the_flat_fill(renderer, tmp_path):
-    from OpenGLContext.ui.geometry import Rect
-    from OpenGLContext.ui.skin import NineSlice
     art = NineSlice(url=[str(tmp_path / 'absent.png')], border=(4, 4, 4, 4))
     clear()
     assert renderer.begin((WIDTH, HEIGHT))
@@ -261,7 +261,6 @@ def test_a_missing_skin_image_falls_back_to_the_flat_fill(renderer, tmp_path):
 
 
 def test_a_skinned_button_draws_its_artwork(renderer, tmp_path):
-    from OpenGLContext.ui.skin import NineSlice, Skin
     path = _ninepatch_image(str(tmp_path / 'button.png'))
     skin = Skin(buttonImage=NineSlice(url=[path], border=(8, 8, 8, 8)))
     button = Button(text='Play', name='play')
@@ -273,10 +272,6 @@ def test_a_skinned_button_draws_its_artwork(renderer, tmp_path):
 
 def test_the_context_hook_lays_out_and_draws(gl_context):
     """The path a real context takes: renderShaderOverlay with a live atlas."""
-    from OpenGL.GL import glViewport
-    from OpenGLContext.events.inputstate import InputState
-    from OpenGLContext.ui.overlay import OverlayMixin
-    from OpenGLContext.ui.screen import ScreenMixin
 
     class World:
         def __init__(self):
@@ -316,9 +311,6 @@ def test_the_context_hook_lays_out_and_draws(gl_context):
 
 
 def test_the_hook_does_nothing_with_no_overlay(gl_context):
-    from OpenGLContext.ui.overlay import OverlayMixin
-    from OpenGLContext.ui.screen import ScreenMixin
-
     class Context(OverlayMixin, ScreenMixin):
         def getViewPort(self):
             return (WIDTH, HEIGHT)
@@ -338,8 +330,6 @@ def test_two_windows_get_their_own_text_renderer(gl_context, gl_window):
     window's texture id is at best drawing the wrong thing and at worst a GL
     error.
     """
-    from OpenGLContext.scenegraph.text.shadertext import get_text_renderer
-    from OpenGLContext.testing import glcontext
 
     first = get_text_renderer(16)
     assert first.initialize()
@@ -356,13 +346,11 @@ def test_two_windows_get_their_own_text_renderer(gl_context, gl_window):
 
 
 def test_the_same_window_keeps_the_one_atlas(gl_context):
-    from OpenGLContext.scenegraph.text.shadertext import get_text_renderer
     assert get_text_renderer(16) is get_text_renderer(16)
 
 
 def test_a_context_can_let_its_text_renderers_go(gl_context):
     """What a window calls as it is destroyed, so nothing outlives its objects."""
-    from OpenGLContext.scenegraph.text import shadertext
     made = shadertext.get_text_renderer(16)
     made.initialize()
     shadertext.drop_text_renderers()
@@ -380,9 +368,6 @@ class TestTheContextDrawsItsOwnOverlay:
 
     @pytest.fixture
     def context(self, gl_context):
-        from OpenGL.GL import glViewport
-        from OpenGLContext.ui.overlay import OverlayMixin
-        from OpenGLContext.ui.screen import ScreenMixin
         glViewport(0, 0, WIDTH, HEIGHT)
 
         class Context(OverlayMixin, ScreenMixin):
@@ -495,8 +480,6 @@ class TestTheBatchDoesNotFlushForNothing:
 
 class TestClosingReleasesTheProgram:
     def test_close_deletes_the_program(self, gl_context):
-        from OpenGL.GL import glIsProgram
-        from OpenGLContext.ui.draw import OverlayRenderer
         made = OverlayRenderer(16)
         if not made.initialize():
             pytest.skip("no font atlas / program on this driver")
@@ -507,8 +490,6 @@ class TestClosingReleasesTheProgram:
 
     def test_closing_twice_is_harmless(self, gl_context):
         """The second close deletes nothing, not whatever reused the old names."""
-        from OpenGL.GL import glCreateProgram, glDeleteProgram, glIsProgram
-        from OpenGLContext.ui.draw import OverlayRenderer
         made = OverlayRenderer(16)
         if not made.initialize():
             pytest.skip("no font atlas / program on this driver")
@@ -527,7 +508,6 @@ class TestSkinArtworkUrls:
 
     @pytest.fixture
     def artwork(self, tmp_path):
-        from PIL import Image
         path = tmp_path / 'frame.png'
         Image.new('RGBA', (12, 12), (200, 40, 40, 255)).save(str(path))
         return path
@@ -539,7 +519,6 @@ class TestSkinArtworkUrls:
         assert renderer.imageTexture(artwork.as_uri()) is not None
 
     def test_the_first_url_that_loads_is_used(self, renderer, artwork):
-        from OpenGLContext.ui.skin import NineSlice
         image = NineSlice(url=[str(artwork.parent / 'missing.png'),
                                str(artwork)], border=(4, 4, 4, 4))
         renderer.begin((WIDTH, HEIGHT))
@@ -550,7 +529,6 @@ class TestSkinArtworkUrls:
 
     def test_artwork_that_cannot_be_read_falls_back_to_the_fill(self, renderer,
                                                                 tmp_path):
-        from OpenGLContext.ui.skin import NineSlice
         image = NineSlice(url=[str(tmp_path / 'nope.png')])
         renderer.begin((WIDTH, HEIGHT))
         try:
@@ -575,7 +553,6 @@ def test_a_picture_arriving_asks_the_context_for_a_frame(renderer):
     ``force=0`` because the decode finishes on a worker thread: it sets the
     redraw flag and wakes the loop rather than drawing from the wrong thread.
     """
-    from OpenGLContext.ui.draw import OverlayRenderer
     context = _Redrawable()
     made = OverlayRenderer.forContext(context, 16)
     if made is None:

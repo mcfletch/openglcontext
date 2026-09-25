@@ -17,6 +17,7 @@ from OpenGLContext.ui.hudwidgets import HUDLayer, TextBlock
 from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.viewer import caption as caption_module
 from OpenGLContext.viewer.caption import CaptionLayer, CaptionMixin
+from OpenGLContext.ui.debugoverlay import DebugPanel
 
 
 @pytest.fixture
@@ -91,7 +92,6 @@ class TestWhereItSits:
     """
 
     def test_it_is_not_in_the_developer_overlays_corner(self):
-        from OpenGLContext.ui.debugoverlay import DebugPanel
         assert caption_module.CAPTION_ANCHOR != str(DebugPanel().anchor)
 
     def test_it_is_along_the_bottom(self, metrics):

@@ -10,11 +10,12 @@ import pytest
 
 from OpenGLContext.ui.geometry import Rect
 from OpenGLContext.ui.hudwidgets import (
-    CIRCLE, CROSS, CROSS_DOT, DOT, NONE,
-    BarMeter, Crosshair, DamageIndicator, HUDGroup, HUDLayer, MessageQueue,
-    Readout, place,
+    BarMeter, CIRCLE, CROSS, CROSS_DOT, Crosshair, DamageIndicator, DOT, hud_text, HUDGroup,
+    HUDLayer, MessageQueue, NONE, place, Readout, ScreenWash,
 )
-from OpenGLContext.ui.metrics import FontMetrics
+from OpenGLContext.ui.metrics import FontMetrics, REFERENCE_METRICS
+from OpenGLContext.ui.layout import Column
+from OpenGLContext.ui.skin import NineSlice
 
 
 @pytest.fixture
@@ -94,7 +95,6 @@ class TestHUDLayer:
 
     def test_a_child_with_no_anchor_is_given_the_whole_layer(self, metrics):
         """An ordinary container still lays out the way it always does."""
-        from OpenGLContext.ui.layout import Column
         column = Column(children=[Readout(value='1')])
         layer = HUDLayer(children=[column], margin=0)
         layer.layout((800, 600), metrics)
@@ -431,7 +431,6 @@ class TestReadout:
         assert colour(readout.valueColour(skin)) == colour(skin.hudCritical)
 
     def test_an_icon_reserves_room_beside_the_text(self, metrics):
-        from OpenGLContext.ui.skin import NineSlice
         bare = Readout(value='42')
         iconed = Readout(value='42', icon=NineSlice(url=['nothing.png']),
                          iconSize=24)
@@ -540,7 +539,6 @@ class TestLegibility:
     def test_hud_text_is_drawn_over_its_own_shadow(self, metrics):
         layer = HUDLayer()
         renderer = self.renderer(layer, metrics)
-        from OpenGLContext.ui.hudwidgets import hud_text
         hud_text(renderer, Rect(0, 0, 100, 16), 'AMMO', (1, 1, 1, 1))
         assert [text for _rect, text, _colour in renderer.texts] \
             == ['AMMO', 'AMMO']
@@ -549,7 +547,6 @@ class TestLegibility:
         assert colour(shadow[2]) == colour(layer.activeSkin().hudShadow)
 
     def test_a_skin_with_no_shadow_draws_the_text_once(self, metrics):
-        from OpenGLContext.ui.hudwidgets import hud_text
         layer = HUDLayer()
         layer.activeSkin().hudShadow = (0, 0, 0, 0)
         renderer = self.renderer(layer, metrics)
@@ -574,7 +571,6 @@ class TestScreenWash:
     """
 
     def washed(self, **named):
-        from OpenGLContext.ui.hudwidgets import ScreenWash
         wash = ScreenWash(**named)
         wash.arrange(Rect(0, 0, 400, 300), metrics_at(8, 16))
         return wash
@@ -604,7 +600,6 @@ class TestScreenWash:
         assert self.washed(strength=-1.0).wash() is None
 
     def test_a_layer_that_was_never_arranged_draws_nothing(self):
-        from OpenGLContext.ui.hudwidgets import ScreenWash
         assert ScreenWash(strength=1.0).wash() is None
 
 
@@ -616,8 +611,6 @@ class TestRoomTakenBySomethingElse:
     """
 
     def _layer(self, **named):
-        from OpenGLContext.ui.hudwidgets import HUDLayer, Readout
-        from OpenGLContext.ui.metrics import REFERENCE_METRICS
         readout = Readout(anchor='top-left', value='here')
         layer = HUDLayer(children=[readout], **named)
         layer.layout((800, 600), REFERENCE_METRICS)
@@ -636,8 +629,6 @@ class TestRoomTakenBySomethingElse:
         assert readout.rect.x >= 60
 
     def test_the_bottom_and_the_right_can_be_reserved_too(self) -> None:
-        from OpenGLContext.ui.hudwidgets import HUDLayer, Readout
-        from OpenGLContext.ui.metrics import REFERENCE_METRICS
         corner = Readout(anchor='bottom-right', value='there')
         layer = HUDLayer(children=[corner], reserved=(0.0, 50.0, 30.0, 0.0))
         layer.layout((800, 600), REFERENCE_METRICS)
@@ -656,8 +647,6 @@ class TestAReadoutThatIsToldHowMuchRoomItHas:
     is anchored at the other end of it."""
 
     def _readout(self, value, **named):
-        from OpenGLContext.ui.hudwidgets import Readout
-        from OpenGLContext.ui.metrics import REFERENCE_METRICS
         readout = Readout(value=value, **named)
         return readout, REFERENCE_METRICS
 

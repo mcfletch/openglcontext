@@ -14,11 +14,14 @@ ran first.
 
 import pytest
 
-from OpenGLContext.ui.hudwidgets import HUDLayer, Readout
+from OpenGLContext.ui.hudwidgets import HUDLayer, MessageQueue, Readout
 from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.overlay import OverlayMixin
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.screen import ScreenMixin
+from OpenGLContext.events import systemtime
+from OpenGLContext.events.inputstate import InputState
+from OpenGLContext.ui.widgets import Button, RIPPLE_SECONDS
 
 
 @pytest.fixture
@@ -64,7 +67,6 @@ class Game(OverlayMixin, ScreenMixin, Window):
         self.captureSuspended = None
 
     def getInputState(self):
-        from OpenGLContext.events.inputstate import InputState
         if not hasattr(self, '_inputState'):
             self._inputState = InputState()
         return self._inputState
@@ -116,8 +118,6 @@ class TestLayers:
         exactly as it did when the session was recorded -- and a game whose own
         timings come from the same clock stays in step with what is drawn.
         """
-        from OpenGLContext.events import systemtime
-        from OpenGLContext.ui.hudwidgets import MessageQueue
         screen = Screen()
         queue = MessageQueue(duration=1.0)
         screen.addHUDLayer(HUDLayer(children=[queue]))
@@ -130,7 +130,6 @@ class TestLayers:
         assert [message.text for message in queue.messages] == ['fresh']
 
     def test_the_layers_are_ticked_before_they_are_drawn(self, metrics):
-        from OpenGLContext.ui.hudwidgets import MessageQueue
         screen = Screen()
         queue = MessageQueue(duration=1.0)
         screen.addHUDLayer(HUDLayer(children=[queue]))
@@ -229,7 +228,6 @@ class TestFramesWhileSomethingMoves:
     """A ripple across a control needs frames until it has finished."""
 
     def _rippling(self, now):
-        from OpenGLContext.ui.widgets import Button
         button = Button(text='Go')
         panel = Panel(children=[button])
         panel.layout((800, 600), FontMetrics(8, 16, 2))
@@ -242,7 +240,6 @@ class TestFramesWhileSomethingMoves:
         assert screen.redraws == 1
 
     def test_one_that_has_stopped_does_not(self):
-        from OpenGLContext.ui.widgets import RIPPLE_SECONDS
         screen = Screen()
         screen.redrawWhileAnimating([self._rippling(1.0)], 1.0 + RIPPLE_SECONDS * 2)
         assert screen.redraws == 0

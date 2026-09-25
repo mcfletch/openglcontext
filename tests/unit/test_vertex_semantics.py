@@ -6,6 +6,7 @@ import pytest
 from OpenGL.GL import glGetAttribLocation
 
 from OpenGLContext.scenegraph import vertexsemantics as vs
+from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
 
 SHADER_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -92,7 +93,6 @@ class TestTheShadersMatchIt:
 
 class TestThePassAgreesWithIt:
     def test_every_compiled_program_reads_position_where_the_table_says(self, gl_context):
-        from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
         shader_program = VRML97ShaderProgram()
         assert shader_program.compile(), 'the VRML97 programs did not compile'
         for attribute in ('aPosition', 'aNormal', 'aTexCoord', 'aColor'):

@@ -13,6 +13,9 @@ from OpenGLContext.viewer.framing import (
     DEFAULT_ELEVATION, DEFAULT_FOV, DEFAULT_MARGIN, DEFAULT_TILT,
     fit_sphere, look_from,
 )
+from OpenGLContext import quaternion
+from OpenGLContext.move.viewplatform import ViewPlatform
+from OpenGLContext.viewer import framing
 
 
 class TestFitSphere:
@@ -87,7 +90,6 @@ class TestLookFrom:
         negated and applied before the yaw; composed the other way round the
         camera aims as far above the target as it should be below it.
         """
-        from OpenGLContext import quaternion
         direction = np.asarray(target, dtype='d') - np.asarray(eye, dtype='d')
         direction = direction / np.linalg.norm(direction)
         yaw = atan2(direction[0], -direction[2])
@@ -187,8 +189,6 @@ class TestLookFromAimsWhereItSays:
 
     @staticmethod
     def rendered_direction(pose):
-        import numpy as np
-        from OpenGLContext.move.viewplatform import ViewPlatform
         platform = ViewPlatform()
         platform.setPosition(pose.position)
         if pose.quaternion is not None:
@@ -206,8 +206,6 @@ class TestLookFromAimsWhereItSays:
         (300.0, -400.0, -900.0),    # and turned as well
     ])
     def test_the_camera_faces_the_target(self, target):
-        import numpy as np
-        from OpenGLContext.viewer import framing
         eye = (0.0, 400.0, 900.0)
         wanted = np.asarray(target, dtype='d') - np.asarray(eye, dtype='d')
         wanted = wanted / np.linalg.norm(wanted)

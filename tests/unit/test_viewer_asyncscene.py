@@ -18,6 +18,7 @@ import time
 import pytest
 
 from OpenGLContext.viewer.asyncscene import AsyncSceneMixin
+from OpenGLContext import telemetry
 
 
 class _Host(AsyncSceneMixin):
@@ -256,7 +257,6 @@ class TestMountingASceneAgain:
     """
 
     def test_mounting_one_is_marked(self, tmp_path):
-        from OpenGLContext import telemetry
         host = _RecordedHost()
         session = telemetry.start(host, tmp_path / 'session.jsonl')
         try:
@@ -274,7 +274,6 @@ class TestMountingASceneAgain:
         assert marks[0]['frame'] == 1
 
     def test_a_replay_holds_it_until_the_frame_it_was_mounted_on(self, tmp_path):
-        from OpenGLContext import telemetry
         recorded = _RecordedHost()
         session = telemetry.start(recorded, tmp_path / 'session.jsonl')
         for _each in range(3):
@@ -300,7 +299,6 @@ class TestMountingASceneAgain:
     def test_a_failure_is_marked_and_held_the_same_way(self, tmp_path):
         """A level that would not load left the window on the menu at a
         particular frame, and the input after it was given to that menu."""
-        from OpenGLContext import telemetry
         recorded = _RecordedHost()
         session = telemetry.start(recorded, tmp_path / 'session.jsonl')
 
@@ -331,7 +329,6 @@ class TestMountingASceneAgain:
 
     def test_a_recording_that_mounted_nothing_holds_nothing_up(self, tmp_path):
         """A replay must never wait for something the recording never did."""
-        from OpenGLContext import telemetry
         recorded = _RecordedHost()
         session = telemetry.start(recorded, tmp_path / 'session.jsonl')
         recorded.OnDraw()
@@ -362,7 +359,6 @@ class TestWaitingForASceneARecordingAlreadyHad:
     """
 
     def recorded(self, tmp_path, frames=3):
-        from OpenGLContext import telemetry
         host = _RecordedHost()
         session = telemetry.start(host, tmp_path / 'session.jsonl')
         for _each in range(frames):
@@ -373,7 +369,6 @@ class TestWaitingForASceneARecordingAlreadyHad:
         return tmp_path / 'session.jsonl'
 
     def test_a_replay_past_the_frame_waits_for_the_load(self, tmp_path):
-        from OpenGLContext import telemetry
         journal = self.recorded(tmp_path)
         playing = _RecordedHost()
         driver = telemetry.start_replay(playing, journal)
@@ -395,7 +390,6 @@ class TestWaitingForASceneARecordingAlreadyHad:
 
     def test_a_load_that_never_arrives_gives_the_frame_back(self, tmp_path):
         """A replay is diagnostic equipment: it may not hang on one."""
-        from OpenGLContext import telemetry
         journal = self.recorded(tmp_path)
         playing = _RecordedHost()
         playing.sceneWaitSeconds = 0.05

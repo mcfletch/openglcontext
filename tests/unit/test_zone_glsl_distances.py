@@ -9,8 +9,12 @@ cylinder.
 """
 import numpy as np
 import pytest
+from OpenGL import GL
+from OpenGL.GL import shaders
 
 from OpenGLContext.scenegraph import zones
+from OpenGLContext.passes.shadersource import _resolve_includes
+from OpenGLContext.testing.glcontext import gl_available, hidden_window
 
 #: Sample points per shape.
 COUNT = 512
@@ -51,12 +55,8 @@ SHAPES = [
 
 @pytest.fixture(scope='module')
 def program():
-    from OpenGLContext.testing.glcontext import gl_available, hidden_window
     if not gl_available():
         pytest.skip('no GL context can be made here')
-    from OpenGL import GL
-    from OpenGL.GL import shaders
-    from OpenGLContext.passes.shadersource import _resolve_includes
     with hidden_window('zone distances', size=(COUNT, 1)):
         linked = shaders.compileProgram(
             shaders.compileShader(_VERTEX, GL.GL_VERTEX_SHADER),
@@ -68,7 +68,6 @@ def program():
 
 def _drawn(program, kind, params, points):
     """``zoneDistance`` for each of ``points``, as the shader works it out."""
-    from OpenGL import GL
     count = len(points)
     texture = GL.glGenTextures(1)
     GL.glBindTexture(GL.GL_TEXTURE_2D, texture)

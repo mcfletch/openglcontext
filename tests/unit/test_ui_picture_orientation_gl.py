@@ -13,6 +13,12 @@ somebody looks at a photograph.
 
 import numpy as np
 import pytest
+from OpenGL.GL import (
+    GL_COLOR_BUFFER_BIT, GL_RGB, GL_UNSIGNED_BYTE, glClear, glClearColor, glReadPixels, glViewport,
+)
+from OpenGLContext.scenegraph.text import shadertext
+from OpenGLContext.ui.draw import OverlayRenderer
+from OpenGLContext.ui.geometry import Rect
 
 Image = pytest.importorskip("PIL.Image")
 
@@ -30,14 +36,11 @@ def gl_context(gl_window):
     # The cached atlases hold GL objects in this context, and the driver hands
     # the next window the same identifier often enough that leaving them would
     # make one test's textures another test's problem.
-    from OpenGLContext.scenegraph.text import shadertext
     shadertext.drop_text_renderers()
 
 
 @pytest.fixture
 def renderer(gl_context):
-    from OpenGL.GL import glViewport
-    from OpenGLContext.ui.draw import OverlayRenderer
     glViewport(0, 0, WIDTH, HEIGHT)
     made = OverlayRenderer(16)
     if not made.initialize():
@@ -63,11 +66,6 @@ def _drawn(renderer, url):
     Returns ``(top_row, bottom_row)`` as RGB triples, where *top* means the top
     of the window as a person sees it.
     """
-    from OpenGL.GL import (
-        glClear, glClearColor, glReadPixels, GL_COLOR_BUFFER_BIT, GL_RGB,
-        GL_UNSIGNED_BYTE,
-    )
-    from OpenGLContext.ui.geometry import Rect
     found = renderer.imageTexture(url)
     assert found is not None, 'the picture would not load at all'
     texture, _width, _height = found

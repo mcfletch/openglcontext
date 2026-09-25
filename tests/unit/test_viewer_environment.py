@@ -7,6 +7,7 @@ which backdrop each spec asks for, including the unset case that means "whatever
 the image-based lighting probe loaded".
 """
 import pytest
+from PIL import Image
 
 from OpenGLContext.scenegraph.background import Background
 from OpenGLContext.scenegraph.light import DirectionalLight, PointLight
@@ -14,12 +15,11 @@ from OpenGLContext.viewer.environment import (
     background_for, count_lights, cube_background, hdr_background,
     horizon_background, sky_background,
 )
+from OpenGLContext.passes.ibl import _CUBE_FACES
 
 
 def _faces(directory, missing=None):
     """Write a real one-pixel image per cube face; return the prefix."""
-    from PIL import Image
-    from OpenGLContext.passes.ibl import _CUBE_FACES
     for suffix, _ in _CUBE_FACES:
         if suffix == missing:
             continue

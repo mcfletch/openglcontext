@@ -8,9 +8,9 @@ import pytest
 
 from OpenGLContext.edit.mapview import MapView, MapViewPlatform
 from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
-from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
+from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform, view_kind
 from OpenGLContext.multiview.views import View, ViewLayout
-from OpenGLContext.ui.menu import MenuItem
+from OpenGLContext.ui.menu import Menu, MenuItem
 from OpenGLContext.ui.metrics import REFERENCE_METRICS
 from OpenGLContext.ui.viewchrome import (
     AxisTriad,
@@ -21,6 +21,8 @@ from OpenGLContext.ui.viewchrome import (
     axis_directions,
     fitted,
 )
+from OpenGLContext.multiview.viewpoints import SceneCamera
+from OpenGLContext.ui.overlay import OverlayStack
 
 VIEWPORT = (800, 600)
 
@@ -163,7 +165,6 @@ class TestThroughTheOverlayStack:
     """What a window routes a press through, rather than the panel directly."""
 
     def _stacked(self, layout):
-        from OpenGLContext.ui.overlay import OverlayStack
         chrome = ViewChrome(layout=layout)
         stack = OverlayStack()
         stack.push(chrome)
@@ -210,7 +211,6 @@ class TestWhatTheSceneUnderneathStillHears:
     @pytest.mark.parametrize('key', ['<up>', '<down>'])
     def test_the_arrows_go_past_it_to_the_camera(self, key):
         """Up and down walk the camera; the chrome is furniture over it."""
-        from OpenGLContext.ui.overlay import OverlayStack
         chrome = _chrome()
         stack = OverlayStack()
         stack.push(chrome, viewport=VIEWPORT, metrics=REFERENCE_METRICS)
@@ -389,8 +389,6 @@ class TestTheMenuOnScreen:
     """What the name opens, as a real overlay stack puts it up."""
 
     def _opened(self):
-        from OpenGLContext.ui.menu import Menu
-        from OpenGLContext.ui.overlay import OverlayStack
         stack = OverlayStack()
         chrome = ViewChrome(layout=_layout(), stack=stack)
         stack.push(chrome, VIEWPORT, REFERENCE_METRICS)
@@ -414,7 +412,6 @@ class TestTheMenuOnScreen:
             assert menu.rect.contains(*row.rect.centre)
 
     def test_the_ways_of_looking_open_beside_it(self):
-        from OpenGLContext.ui.menu import Menu
         stack, _label, menu = self._opened()
         stack.layout(VIEWPORT, REFERENCE_METRICS)
         item = [row for row in menu.items() if str(row.text) == 'View'][0]
@@ -428,7 +425,6 @@ class TestTheScenesCameras:
     """The cameras the scene carries, offered by name in a view's menu."""
 
     def _cameras(self):
-        from OpenGLContext.multiview.viewpoints import SceneCamera
         return [SceneCamera(name='Porch', position=(0.0, 2.0, 10.0),
                             forward=(0.0, 0.0, -1.0), up=(0.0, 1.0, 0.0), fov=0.8),
                 SceneCamera(name='Roof', position=(5.0, 9.0, 5.0),
@@ -516,7 +512,6 @@ class TestTheViewsOwnMenu:
         assert ticked == ['Top']          # the quad's first view
 
     def test_choosing_one_points_the_view_that_way(self):
-        from OpenGLContext.multiview.cameras import view_kind
         _chrome_, view, items = self._opened()
         item = [one for one in _sub(items, 'View') if str(one.text) == 'Left'][0]
         item.on_activate(item)
@@ -564,7 +559,6 @@ class TestTheViewsOwnMenu:
         assert 'Zoom to fit' not in [str(item.text) for item in items]
 
     def test_zooming_to_fit_frames_what_the_window_says_there_is(self):
-        import numpy as np
         layout = _layout()
         low, high = (-50.0, 0.0, -50.0), (50.0, 20.0, 50.0)
         _chrome_, view, items = self._opened(layout, bounds=lambda: (low, high))

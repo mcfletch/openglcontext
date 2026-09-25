@@ -5,11 +5,20 @@ is testable by handing in a fake provider and reading the laid-out rows back.
 """
 
 import pytest
+from omi_audio.device import NullDevice
+from omi_audio.engine import AudioEngine
 
 from OpenGLContext.ui.debugoverlay import (
-    DebugOverlay, DebugSection, format_value,
+    audio_provider, DebugOverlay, DebugSection, Fixed, format_value, frame_provider,
+    install_default_providers, loop_provider, physics_provider, platform_provider, render_provider,
+    simulation_provider,
 )
 from OpenGLContext.ui.metrics import FontMetrics
+from OpenGLContext.audio import scene as audioscene
+from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.framecounter import FrameCounter
+from OpenGLContext.looptrace import LoopTrace
+from OpenGLContext.passes.renderstats import RenderStats
 
 
 @pytest.fixture
@@ -190,8 +199,6 @@ class TestBuiltInProviders:
         anything that updates sixty times a second, where 60, 59.97 and 60.1
         are three different widths in three consecutive frames.
         """
-        from OpenGLContext.framecounter import FrameCounter
-        from OpenGLContext.ui.debugoverlay import format_value, frame_provider
 
         counter = FrameCounter()
         for _index in range(10):
@@ -211,26 +218,19 @@ class TestBuiltInProviders:
 
     def test_a_whole_frame_rate_still_shows_its_decimals(self):
         """Exactly 60 fps must read 60.00, not 60."""
-        from OpenGLContext.ui.debugoverlay import Fixed, format_value
 
         assert format_value(Fixed(60.0)) == '60.00'
 
     def test_a_fixed_number_can_ask_for_more_or_fewer_decimals(self):
-        from OpenGLContext.ui.debugoverlay import Fixed, format_value
-
         assert format_value(Fixed(1.23456, decimals=3)) == '1.235'
         assert format_value(Fixed(1.6, decimals=0)) == '2'
 
     def test_an_ordinary_number_still_drops_its_trailing_zeros(self):
         """The position rows are not being changed; they are not twitching."""
-        from OpenGLContext.ui.debugoverlay import format_value
 
         assert format_value(512.0) == '512'
 
     def test_the_frame_provider_reports_the_windowed_rate(self):
-        from OpenGLContext.framecounter import FrameCounter
-        from OpenGLContext.ui.debugoverlay import frame_provider
-
         counter = FrameCounter()
         for _index in range(10):
             counter.addFrame(1 / 60.0)
@@ -246,8 +246,6 @@ class TestBuiltInProviders:
         assert rows['viewport'] == '800x600'
 
     def test_the_frame_provider_survives_a_context_with_no_counter(self):
-        from OpenGLContext.ui.debugoverlay import frame_provider
-
         class Context:
             frameCounter = None
 
@@ -257,9 +255,6 @@ class TestBuiltInProviders:
         assert dict(frame_provider(Context())())['fps'] == 0
 
     def test_the_render_provider_reports_the_features_in_use(self):
-        from OpenGLContext.contextdefinition import ContextDefinition
-        from OpenGLContext.ui.debugoverlay import render_provider
-
         class Context:
             contextDefinition = ContextDefinition(shadows=True, bloom=False)
             coreProfile = True
@@ -270,10 +265,6 @@ class TestBuiltInProviders:
         assert rows['bloom'] is False
 
     def test_the_render_provider_counts_what_the_pass_drew(self):
-        from OpenGLContext.contextdefinition import ContextDefinition
-        from OpenGLContext.passes.renderstats import RenderStats
-        from OpenGLContext.ui.debugoverlay import render_provider
-
         stats = RenderStats()
         stats.shapes = 120
         stats.instanceGroups = 3
@@ -292,10 +283,6 @@ class TestBuiltInProviders:
         assert 'mirror views' not in rows
 
     def test_the_render_provider_reports_the_mirror_views_a_frame_drew(self):
-        from OpenGLContext.contextdefinition import ContextDefinition
-        from OpenGLContext.passes.renderstats import RenderStats
-        from OpenGLContext.ui.debugoverlay import render_provider
-
         stats = RenderStats()
         stats.mirrorViews, stats.mirrorDraws, stats.mirrorTexels = 3, 5, 4096
         stats.mirrorMilliseconds = 0.75
@@ -310,8 +297,6 @@ class TestBuiltInProviders:
         assert str(rows['mirror ms']) == '0.75'
 
     def test_the_platform_provider_reports_where_the_camera_is(self):
-        from OpenGLContext.ui.debugoverlay import platform_provider
-
         class Platform:
             position = (1.0, 2.0, 3.0)
 
@@ -323,8 +308,6 @@ class TestBuiltInProviders:
         assert rows['position'] == (1.0, 2.0, 3.0)
 
     def test_the_physics_provider_counts_bodies_and_contacts(self):
-        from OpenGLContext.ui.debugoverlay import physics_provider
-
         class World:
             bodies = [object(), object()]
             contacts = [object()]
@@ -334,8 +317,6 @@ class TestBuiltInProviders:
         assert rows['contacts'] == 1
 
     def test_the_physics_provider_says_nothing_with_no_world(self):
-        from OpenGLContext.ui.debugoverlay import physics_provider
-
         assert physics_provider(lambda: None)() == []
 
 
@@ -346,12 +327,6 @@ class TestBuiltInProviders:
         device, no voice, or a gain of nothing -- and they are indistinguishable
         by listening.
         """
-        from omi_audio.device import NullDevice
-        from omi_audio.engine import AudioEngine
-
-        from OpenGLContext.audio import scene as audioscene
-        from OpenGLContext.contextdefinition import ContextDefinition
-        from OpenGLContext.ui.debugoverlay import audio_provider
 
         class Context:
             contextDefinition = ContextDefinition()
@@ -367,28 +342,18 @@ class TestBuiltInProviders:
             audioscene.close(context)
 
     def test_the_audio_provider_says_a_context_with_no_engine_is_idle(self):
-        from OpenGLContext.contextdefinition import ContextDefinition
-        from OpenGLContext.ui.debugoverlay import audio_provider
-
         class Context:
             contextDefinition = ContextDefinition()
 
         assert dict(audio_provider(Context())())['audio'] == 'idle'
 
     def test_the_audio_provider_survives_a_context_with_no_definition(self):
-        from OpenGLContext.ui.debugoverlay import audio_provider
-
         class Context:
             pass
 
         assert audio_provider(Context())() == []
 
     def test_the_default_sections_include_audio(self):
-        from OpenGLContext.contextdefinition import ContextDefinition
-        from OpenGLContext.ui.debugoverlay import (
-            DebugOverlay, install_default_providers,
-        )
-
         class Context:
             contextDefinition = ContextDefinition()
             coreProfile = True
@@ -417,7 +382,6 @@ class TestTheLoopProvider:
     @staticmethod
     def _traced(iterations):
         """A context whose loop trace has run ``iterations`` -- [(phase, s)...]."""
-        from OpenGLContext.looptrace import LoopTrace
 
         clock = _FakeClock()
         trace = LoopTrace(stall_ms=50.0, clock=clock)
@@ -433,16 +397,12 @@ class TestTheLoopProvider:
         return Context()
 
     def test_the_rate_is_wall_clock_not_the_renderers_own(self):
-        from OpenGLContext.ui.debugoverlay import loop_provider
-
         context = self._traced([[('draw', 0.100)]] * 10)
         rows = dict(loop_provider(context)())
         assert rows['loop fps'].value == pytest.approx(10.0)
         assert rows['loop ms'].value == pytest.approx(100.0)
 
     def test_the_worst_iteration_is_reported_beside_the_median(self):
-        from OpenGLContext.ui.debugoverlay import loop_provider
-
         context = self._traced([[('draw', 0.020)]] * 30
                                + [[('idle', 1.000)]]
                                + [[('draw', 0.020)]] * 30)
@@ -451,30 +411,22 @@ class TestTheLoopProvider:
         assert rows['worst ms'].value == pytest.approx(1000.0)
 
     def test_stalls_are_counted(self):
-        from OpenGLContext.ui.debugoverlay import loop_provider
-
         context = self._traced([[('draw', 0.020)]] * 5
                                + [[('idle', 0.500)]] * 3)
         assert dict(loop_provider(context)())['stalls'] == 3
 
     def test_the_last_stall_names_the_phase_that_ate_it(self):
-        from OpenGLContext.ui.debugoverlay import loop_provider
-
         context = self._traced([[('poll', 0.001), ('idle', 0.900),
                                  ('draw', 0.010)]])
         assert dict(loop_provider(context)())['last stall'] == 'idle 900ms'
 
     def test_a_loop_that_has_never_stalled_says_nothing_about_stalls(self):
-        from OpenGLContext.ui.debugoverlay import loop_provider
-
         context = self._traced([[('draw', 0.005)]] * 10)
         rows = dict(loop_provider(context)())
         assert rows['stalls'] == 0
         assert 'last stall' not in rows
 
     def test_every_phase_gets_its_own_row(self):
-        from OpenGLContext.ui.debugoverlay import loop_provider
-
         context = self._traced([[('poll', 0.001), ('idle', 0.010),
                                  ('draw', 0.005)]])
         rows = dict(loop_provider(context)())
@@ -484,7 +436,6 @@ class TestTheLoopProvider:
 
     def test_the_phases_come_out_worst_first(self):
         """A crowded panel should read top-down as most-to-least expensive."""
-        from OpenGLContext.ui.debugoverlay import loop_provider
 
         context = self._traced([[('poll', 0.001), ('idle', 0.010),
                                  ('draw', 0.005)]])
@@ -497,24 +448,16 @@ class TestTheLoopProvider:
         Rows of zeroes would read as a loop that is doing nothing, which is a
         worse answer than no rows at all.
         """
-        from OpenGLContext.ui.debugoverlay import loop_provider
 
         assert loop_provider(self._traced([])) () == []
 
     def test_a_context_with_no_trace_at_all_is_not_an_error(self):
-        from OpenGLContext.ui.debugoverlay import loop_provider
-
         class Context:
             loopTrace = None
 
         assert loop_provider(Context())() == []
 
     def test_the_section_is_registered_by_default(self):
-        from OpenGLContext.ui.debugoverlay import (
-            DebugOverlay, install_default_providers,
-        )
-        from OpenGLContext.looptrace import LoopTrace
-
         # A trace that has actually run, since a loop nobody drives is left out
         # on purpose and would make this pass for the wrong reason.
         trace = LoopTrace()
@@ -558,8 +501,6 @@ class TestTheSimulationProvider:
             return 119.6
 
     def test_the_achieved_rate_is_reported_against_the_one_asked_for(self):
-        from OpenGLContext.ui.debugoverlay import simulation_provider
-
         rows = dict(simulation_provider(lambda: self.Simulation())())
         assert rows['sim hz'].value == pytest.approx(119.6)
         assert rows['asked'].value == pytest.approx(120.0)
@@ -567,7 +508,6 @@ class TestTheSimulationProvider:
 
     def test_dropped_ticks_are_reported_only_when_there_are_some(self):
         """Zero is the healthy answer, and a healthy row is a row not worth space."""
-        from OpenGLContext.ui.debugoverlay import simulation_provider
 
         assert 'dropped' not in dict(simulation_provider(
             lambda: self.Simulation())())
@@ -579,8 +519,6 @@ class TestTheSimulationProvider:
         assert rows['dropped'] == 91
 
     def test_no_simulation_means_no_section(self):
-        from OpenGLContext.ui.debugoverlay import simulation_provider
-
         assert simulation_provider(lambda: None)() == []
 
 

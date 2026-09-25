@@ -7,6 +7,7 @@ scene's cameras, and the deprecating aliases that keep the old command names
 working.  Nothing here opens a GL context.
 """
 import os
+import importlib
 
 import pytest
 
@@ -115,7 +116,6 @@ class TestTheOldCommandNames:
         ('OpenGLContext.bin.tiles_view', VRML_WORLD),
     ])
     def test_an_alias_runs_the_one_viewer(self, module, source, monkeypatch, capsys):
-        import importlib
         alias = importlib.import_module(module)
         seen = {}
         monkeypatch.setattr(V, 'apply_render_env', lambda options: None)

@@ -8,13 +8,16 @@ coarsest. A dataset is somewhere to *be*, so it opens above its content, close
 enough that buildings are buildings.
 """
 import math
+import types
 
 import numpy as np
 import pytest
 
 from OpenGLContext.viewer import ViewerOptions
-from OpenGLContext.viewer.adapters.tiles import TilesAdapter, opening_pose
+from OpenGLContext.viewer.adapters.tiles import opening_aim, opening_pose, TilesAdapter
 from OpenGLContext.viewer.framing import fit_sphere
+from OpenGLContext.viewer.adapters.base import ViewerScene
+from OpenGLContext.viewer.sceneviewer import ViewerContext
 
 
 CENTRE = (100.0, 20.0, -50.0)
@@ -61,13 +64,11 @@ class TestTheViewerUsesIt:
 
     def test_a_scene_that_offers_no_pose_still_gets_the_fit(self):
         """Every other adapter is unchanged: no pose means frame the sphere."""
-        from OpenGLContext.viewer.adapters.base import ViewerScene
         assert ViewerScene(group=None).pose is None
 
 
 class TestFrameModelPrefersTheScenesOwnPose:
     def _viewer(self, scene):
-        from OpenGLContext.viewer.sceneviewer import ViewerContext
         viewer = ViewerContext.__new__(ViewerContext)
         viewer.options = ViewerOptions(source='tileset.json')
         viewer.scene = scene
@@ -76,7 +77,6 @@ class TestFrameModelPrefersTheScenesOwnPose:
         return viewer, applied
 
     def _scene(self, pose):
-        from OpenGLContext.viewer.adapters.base import ViewerScene
         return ViewerScene(group=None, center=CENTRE, radius=RADIUS, pose=pose)
 
     def test_the_scenes_pose_is_what_the_camera_takes(self):
@@ -113,7 +113,6 @@ class TestWhereOverTheDatasetItOpens:
 
     def _tileset(self):
         """A root spanning 2 km with content tiles across it."""
-        import types
 
         def tile(x, z, children=()):
             bv = types.SimpleNamespace(
@@ -139,21 +138,18 @@ class TestWhereOverTheDatasetItOpens:
         return root
 
     def test_the_aim_is_the_content_tile_nearest_the_middle(self):
-        from OpenGLContext.viewer.adapters.tiles import opening_aim
         aim, _radius = opening_aim(self._tileset())
         assert aim[0] == pytest.approx(0.0)
         assert aim[2] == pytest.approx(0.0)
         assert aim[1] == pytest.approx(150.0)   # at the content, not below it
 
     def test_a_tileset_with_no_content_falls_back_to_its_extent(self):
-        import types
         bv = types.SimpleNamespace(center=np.array([5.0, 6.0, 7.0]),
                                    bounding_sphere=lambda: (np.array([5.0, 6.0, 7.0]), 10.0))
         empty = types.SimpleNamespace(bounding_volume=bv, children=[],
                                       content_uri=None, content_uris=[],
                                       has_content=False)
         empty.iter_tiles = lambda: iter([empty])
-        from OpenGLContext.viewer.adapters.tiles import opening_aim
         aim, radius = opening_aim(empty)
         assert aim == pytest.approx((5.0, 6.0, 7.0))
         assert radius == pytest.approx(10.0)
@@ -165,13 +161,11 @@ class TestTheStandOffFollowsWhatIsBeingLookedAt:
     at the aim point, and the same fraction lands inside the object."""
 
     def test_one_big_object_is_seen_whole(self):
-        from OpenGLContext.viewer.adapters.tiles import opening_pose
         pose = opening_pose((0.0, 0.0, 0.0), 925.0, tile_radius=925.0)
         distance = np.linalg.norm(np.asarray(pose.position))
         assert distance > 925.0, distance
 
     def test_a_city_still_opens_low_over_its_streets(self):
-        from OpenGLContext.viewer.adapters.tiles import opening_pose
         # A city tile is a fraction of the dataset, so the dataset sets the
         # distance and the view stays down among the buildings.
         pose = opening_pose(CENTRE, RADIUS, tile_radius=430.0)

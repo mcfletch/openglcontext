@@ -20,6 +20,8 @@ import pytest
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.testing.glcontext import display_answers
 from OpenGLContext.testing.paths import tests_root
+from OpenGLContext import plugins
+from OpenGLContext.context import Context
 
 pytest.importorskip('tkinter')
 
@@ -99,9 +101,6 @@ class TestItIsRegistered:
     @pytest.mark.parametrize('kind', ['Context', 'InteractiveContext',
                                       'VRMLContext'])
     def test_the_name_resolves(self, kind):
-        from OpenGLContext import plugins
-        from OpenGLContext.context import Context
-
         found = Context.getContextType('tk', getattr(plugins, kind))
         assert found is not None and isinstance(found, type)
 

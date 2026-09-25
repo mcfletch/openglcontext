@@ -10,6 +10,7 @@ import numpy as np
 import pytest
 
 from OpenGLContext.scenegraph import winding
+from OpenGLContext.passes.instancing import set_cull_state
 from OpenGL.GL import GL_CCW, GL_CW
 
 IDENT = np.identity(4, 'f')
@@ -75,7 +76,6 @@ class TestApplyWindingCull:
     def test_the_pass_record_is_kept_with_what_gl_has(self, gl):
         """The pass records culling so a mesh sets it only on a change; VRML97
         geometry setting it past the record leaves the next mesh culled."""
-        from OpenGLContext.passes.instancing import set_cull_state
         mode = types.SimpleNamespace(matrix=IDENT)
         set_cull_state(mode, False, GL_CCW)          # a double-sided mesh
         winding.apply_winding_cull(mode, ccw=True, solid=True)

@@ -9,6 +9,8 @@ import http.server
 import json
 import math
 import threading
+import time
+import types
 
 import pytest
 
@@ -79,8 +81,6 @@ def test_url_tileset_with_external_reference(http_dir, tmp_path):
 
 def test_waiting_for_loads_shares_one_deadline(tmp_path):
     """The tiles and the cover wait within the one timeout between them."""
-    import time
-    import types
     path = build_sample_tileset(str(tmp_path))
     terrain = TilesTerrain(path, workers=1)
     given = []

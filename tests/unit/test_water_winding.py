@@ -15,7 +15,7 @@ about the wave field changes, so it looks like a material problem and is not.
 import numpy as np
 import pytest
 
-from OpenGLContext.scenegraph.water import STILL, CHOPPY, water_ribbon, water_surface
+from OpenGLContext.scenegraph.water import CHOPPY, STILL, water_glints, water_ribbon, water_surface
 
 
 def _facing(mesh):
@@ -61,7 +61,6 @@ class TestGlintsFaceUp:
     """A glint is a patch on the surface, and faces the way the surface does."""
 
     def test_every_triangle_is_wound_counter_clockwise(self):
-        from OpenGLContext.scenegraph.water import water_glints
         course = [(0.0, 0.0, float(z)) for z in range(0, 40, 4)]
         glints = water_glints(course, 6.0, spacing=5.0, style=STILL)
         if glints is None:

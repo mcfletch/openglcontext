@@ -6,8 +6,20 @@ a blit that forgets to flip fails immediately rather than at the far end of an
 encoder.
 """
 
+import sys
 import numpy as np
 import pytest
+from OpenGL.GL import (
+    GL_BACK, GL_COLOR_ATTACHMENT0, GL_COLOR_BUFFER_BIT, GL_FRAMEBUFFER, GL_FRAMEBUFFER_DEFAULT,
+    GL_FRONT, GL_FRONT_LEFT, GL_RGB, GL_RGBA, GL_SCISSOR_TEST, GL_TEXTURE_2D, GL_UNSIGNED_BYTE,
+    GL_VIEWPORT, glBindFramebuffer, glBindTexture, glClear, glClearColor, glDisable, glEnable,
+    glGetTexImage, glReadBuffer, glReadPixels, glScissor, glViewport,
+)
+from OpenGLContext import capture
+from OpenGLContext.capture import presented_buffer
+from OpenGLContext.events import systemtime
+from OpenGLContext.video import recorder, recorder as recorder_module
+from OpenGLContext.video.recorder import CaptureTarget, copy_frame, VideoRecorder
 
 pytest.importorskip('pyopengl_video')
 
@@ -29,7 +41,6 @@ def encoder_available(gl_context):
 
 @pytest.fixture(autouse=True)
 def restore_the_wall_clock():
-    from OpenGLContext.events import systemtime
     original = systemtime.timeSource()
     yield
     systemtime.setTimeSource(original)
@@ -37,10 +48,6 @@ def restore_the_wall_clock():
 
 def draw_a_distinctive_frame(index=0):
     """Fill the back buffer with something that differs top from bottom."""
-    from OpenGL.GL import (
-        GL_COLOR_BUFFER_BIT, GL_SCISSOR_TEST, glClear, glClearColor, glDisable,
-        glEnable, glScissor, glViewport,
-    )
     width, height = SIZE
     glViewport(0, 0, width, height)
     glClearColor(0.0, 0.0, 0.8, 1.0)
@@ -57,12 +64,6 @@ def draw_a_distinctive_frame(index=0):
 
 def read_back_buffer():
     """The finished frame as an array, in OpenGL's bottom-up order."""
-    from OpenGL.GL import (
-        GL_FRAMEBUFFER, GL_RGB, GL_UNSIGNED_BYTE, glBindFramebuffer,
-        glReadBuffer, glReadPixels,
-    )
-
-    from OpenGLContext.capture import presented_buffer
 
     width, height = SIZE
     glBindFramebuffer(GL_FRAMEBUFFER, 0)
@@ -81,10 +82,6 @@ class TestWhichBufferAFrameIsCopiedFrom:
     """
 
     def _asked_for(self, monkeypatch, source, has_back_buffer, **named):
-        from OpenGL.GL import GL_FRAMEBUFFER_DEFAULT, GL_VIEWPORT
-        from OpenGLContext import capture
-        from OpenGLContext.video import recorder
-
         asked = []
         monkeypatch.setattr(recorder, 'glReadBuffer', asked.append)
         monkeypatch.setattr(recorder, 'glBindFramebuffer', lambda _t, _f: None)
@@ -101,34 +98,24 @@ class TestWhichBufferAFrameIsCopiedFrom:
         return asked
 
     def test_a_frame_comes_from_the_back_buffer_where_there_is_one(self, monkeypatch):
-        from OpenGL.GL import GL_BACK
-
         assert self._asked_for(monkeypatch, 0, True) == [GL_BACK]
 
     def test_a_frame_comes_from_the_front_buffer_where_there_is_not(self, monkeypatch):
-        from OpenGL.GL import GL_FRONT
-
         assert self._asked_for(monkeypatch, 0, False) == [GL_FRONT]
 
     def test_another_framebuffer_is_read_at_its_colour_attachment(self, monkeypatch):
         """``GL_BACK`` means nothing on a framebuffer object, whatever the
         default framebuffer happens to have."""
-        from OpenGL.GL import GL_COLOR_ATTACHMENT0
 
         assert self._asked_for(monkeypatch, 7, False) == [GL_COLOR_ATTACHMENT0]
 
     def test_a_caller_naming_a_buffer_is_obeyed(self, monkeypatch):
-        from OpenGL.GL import GL_FRONT_LEFT
-
         assert self._asked_for(
             monkeypatch, 0, True, buffer=GL_FRONT_LEFT) == [GL_FRONT_LEFT]
 
 
 def read_texture(texture):
     """A GL_RGBA8 texture as an array, first row first."""
-    from OpenGL.GL import (
-        GL_RGBA, GL_TEXTURE_2D, GL_UNSIGNED_BYTE, glBindTexture, glGetTexImage,
-    )
     width, height = SIZE
     glBindTexture(GL_TEXTURE_2D, texture)
     raw = glGetTexImage(GL_TEXTURE_2D, 0, GL_RGBA, GL_UNSIGNED_BYTE)
@@ -137,7 +124,6 @@ def read_texture(texture):
 
 def test_copy_frame_turns_the_picture_the_right_way_up(gl_context):
     """The encoder reads a texture from its first row and calls that the top."""
-    from OpenGLContext.video.recorder import CaptureTarget, copy_frame
 
     draw_a_distinctive_frame()
     target = CaptureTarget(*SIZE)
@@ -153,8 +139,6 @@ def test_copy_frame_turns_the_picture_the_right_way_up(gl_context):
 
 
 def test_a_recording_writes_a_video_file(tmp_path, encoder_available):
-    from OpenGLContext.video.recorder import VideoRecorder
-
     path = tmp_path / 'clip.mp4'
     recorder = VideoRecorder(path, fps=FPS, size=SIZE)
     try:
@@ -171,8 +155,6 @@ def test_a_recording_writes_a_video_file(tmp_path, encoder_available):
 
 
 def test_a_recording_of_a_set_length_stops_itself(tmp_path, encoder_available):
-    from OpenGLContext.video.recorder import VideoRecorder
-
     recorder = VideoRecorder(tmp_path / 'short.mp4', fps=FPS, size=SIZE, seconds=0.2)
     try:
         taken = [recorder.capture() for _ in range(10)]
@@ -185,8 +167,6 @@ def test_a_recording_of_a_set_length_stops_itself(tmp_path, encoder_available):
 
 def test_a_recording_advances_the_world_one_frame_at_a_time(tmp_path, encoder_available):
     """The scene must move by exactly a frame per frame recorded."""
-    from OpenGLContext.events import systemtime
-    from OpenGLContext.video.recorder import VideoRecorder
 
     recorder = VideoRecorder(tmp_path / 'clock.mp4', fps=FPS, size=SIZE)
     try:
@@ -204,9 +184,6 @@ def test_a_recording_advances_the_world_one_frame_at_a_time(tmp_path, encoder_av
 
 
 def test_a_wall_clock_recording_leaves_the_engine_clock_alone(tmp_path, encoder_available):
-    from OpenGLContext.events import systemtime
-    from OpenGLContext.video.recorder import VideoRecorder
-
     recorder = VideoRecorder(tmp_path / 'wall.mp4', fps=FPS, size=SIZE,
                              fixed_step=False)
     try:
@@ -219,9 +196,6 @@ def test_a_wall_clock_recording_leaves_the_engine_clock_alone(tmp_path, encoder_
 
 def test_recording_without_the_encoder_package_says_what_to_install(monkeypatch):
     """A stack with no encoder bindings must name the extra that supplies them."""
-    import sys
-
-    from OpenGLContext.video import recorder as recorder_module
 
     # an entry of None is what makes `import pyopengl_video` fail
     monkeypatch.setitem(sys.modules, 'pyopengl_video', None)
@@ -232,7 +206,6 @@ def test_recording_without_the_encoder_package_says_what_to_install(monkeypatch)
 
 def test_a_recording_can_wait_for_the_scene_to_arrive(tmp_path, encoder_available):
     """A world that streams in needs a moment before it is worth recording."""
-    from OpenGLContext.video.recorder import VideoRecorder
 
     recorder = VideoRecorder(tmp_path / 'waited.mp4', fps=FPS, size=SIZE,
                              start_after=10.0)
@@ -250,7 +223,6 @@ def test_a_recording_can_wait_for_the_scene_to_arrive(tmp_path, encoder_availabl
 def test_waiting_for_the_scene_is_not_the_recording_finishing(tmp_path,
                                                               encoder_available):
     """Both look like a frame that was not kept; only one means close the file."""
-    from OpenGLContext.video.recorder import VideoRecorder
 
     recorder = VideoRecorder(tmp_path / 'waiting.mp4', fps=FPS, size=SIZE,
                              frames=2, start_after=10.0)

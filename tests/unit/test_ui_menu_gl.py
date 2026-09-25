@@ -9,10 +9,15 @@ shortcut is legible on the right of the row it belongs to.
 
 import numpy as np
 import pytest
+from OpenGL.GL import (
+    GL_COLOR_BUFFER_BIT, GL_RGB, GL_UNSIGNED_BYTE, glClear, glClearColor, glReadPixels, glViewport,
+)
 
 
 from OpenGLContext.ui.menu import Menu, MenuBar, MenuItem
 from OpenGLContext.ui.overlay import OverlayStack
+from OpenGLContext.scenegraph.text import shadertext
+from OpenGLContext.ui.draw import OverlayRenderer
 
 WIDTH = HEIGHT = 256
 
@@ -24,14 +29,11 @@ def gl_context(gl_window):
     # The cached atlases hold GL objects in this context, and the driver hands
     # the next window the same identifier often enough that leaving them would
     # make one test's textures another test's problem.
-    from OpenGLContext.scenegraph.text import shadertext
     shadertext.drop_text_renderers()
 
 
 @pytest.fixture
 def renderer(gl_context):
-    from OpenGL.GL import glViewport
-    from OpenGLContext.ui.draw import OverlayRenderer
     glViewport(0, 0, WIDTH, HEIGHT)
     made = OverlayRenderer(16)
     if not made.initialize():
@@ -41,13 +43,11 @@ def renderer(gl_context):
 
 
 def _clear(colour=(0.0, 0.0, 0.0, 1.0)):
-    from OpenGL.GL import glClear, glClearColor, GL_COLOR_BUFFER_BIT
     glClearColor(*colour)
     glClear(GL_COLOR_BUFFER_BIT)
 
 
 def _frame():
-    from OpenGL.GL import glReadPixels, GL_RGB, GL_UNSIGNED_BYTE
     raw = glReadPixels(0, 0, WIDTH, HEIGHT, GL_RGB, GL_UNSIGNED_BYTE)
     return np.frombuffer(raw, dtype=np.uint8).reshape(HEIGHT, WIDTH, 3).astype(int)
 

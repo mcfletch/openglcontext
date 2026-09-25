@@ -9,6 +9,7 @@ knows the answers.
 """
 import json
 import os
+import enum
 
 import pytest
 
@@ -155,8 +156,6 @@ class TestHowMuchOfARoadIsCarried:
         assert found == pytest.approx({'bridge': 200.0, 'tunnel': 500.0})
 
     def test_a_kind_that_is_an_enum_is_named_by_its_value(self):
-        import enum
-
         class Op(enum.Enum):
             TUNNEL = 'tunnel'
 

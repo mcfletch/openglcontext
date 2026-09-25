@@ -7,7 +7,7 @@ from OpenGLContext.ui.layout import Column, Row
 from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.widgets import (
-    Button, KeyCapture, Label, Slider, TextField, Toggle, PRIMARY,
+    Button, KeyCapture, Label, PRIMARY, Select, Slider, TextField, Toggle,
 )
 
 
@@ -309,8 +309,6 @@ class TestArrowKeysMoveBetweenItems:
     """
 
     def menu(self):
-        from OpenGLContext.ui.layout import Column
-        from OpenGLContext.ui.widgets import Button
         return Panel(children=[Column(children=[
             Button(text='One', name='one'),
             Button(text='Two', name='two'),
@@ -361,8 +359,6 @@ class TestArrowKeysMoveBetweenItems:
         assert chosen == [panel.find('two')]
 
     def test_a_widget_that_wants_the_arrow_keeps_it(self):
-        from OpenGLContext.ui.layout import Column
-        from OpenGLContext.ui.widgets import Button, Select
         chooser = Select(name='pick', options=['a', 'b'], value='a')
         panel = Panel(children=[Column(children=[
             chooser, Button(text='Go', name='go')])])
@@ -405,24 +401,20 @@ class TestWhatAWidgetIsToldToDo:
     build the tree and then walk back through it setting them."""
 
     def test_a_button_can_be_given_its_action(self) -> None:
-        from OpenGLContext.ui.widgets import Button
         pressed = []
         button = Button(text='Yes', on_activate=lambda widget: pressed.append(1))
         button.activate()
         assert pressed == [1]
 
     def test_a_toggle_can_be_given_what_to_do_when_it_moves(self) -> None:
-        from OpenGLContext.ui.widgets import Toggle
         seen = []
         toggle = Toggle(on_change=lambda widget: seen.append(widget.value))
         toggle.write(True)
         assert seen == [True]
 
     def test_the_fields_still_come_through(self) -> None:
-        from OpenGLContext.ui.widgets import Button
         button = Button(text='Yes', name='yes', on_activate=lambda w: None)
         assert button.text == 'Yes' and button.name == 'yes'
 
     def test_a_widget_given_neither_has_neither(self) -> None:
-        from OpenGLContext.ui.widgets import Button
         assert Button(text='Yes').on_activate is None

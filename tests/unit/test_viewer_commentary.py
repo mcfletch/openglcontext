@@ -13,7 +13,7 @@ that character and nothing else.
 import io
 import sys
 
-from OpenGLContext.viewer import commentary
+from OpenGLContext.viewer import commentary, sceneviewer
 
 
 def _console(encoding='cp1252'):
@@ -120,7 +120,6 @@ class TestTheViewerSaysThingsThroughIt:
     """A bare write to a console stream is the defect this module exists to end."""
 
     def test_the_scene_viewer_writes_to_neither_stream_directly(self):
-        from OpenGLContext.viewer import sceneviewer
         with open(sceneviewer.__file__, encoding='utf-8') as handle:
             source = handle.read()
         assert 'sys.stdout.write' not in source

@@ -23,6 +23,13 @@ from OpenGLContext.scenegraph.terrain.ground import (
 )
 from OpenGLContext.scenegraph.terrain.heightfield import HeightField
 from OpenGLContext.scenegraph.terrain.splat import SplatTerrain
+from OpenGLContext.loaders import gltf
+from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb
+from OpenGLContext.scenegraph.appearance import Appearance
+from OpenGLContext.scenegraph.group import Group
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.scenegraph.shape import Shape
 
 EXTENT = 100.0
 
@@ -113,11 +120,6 @@ class TestGroundThatArrivedInATile:
 
     def _tile(self, normals=True, indices=True):
         """A loaded tile: its subtree, and the material the document named."""
-        from OpenGLContext.scenegraph.appearance import Appearance
-        from OpenGLContext.scenegraph.group import Group
-        from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
-        from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-        from OpenGLContext.scenegraph.shape import Shape
         material = PBRMaterial(baseColor=(1.0, 1.0, 1.0))
         mesh = PBRMesh(
             positions=np.array([[0, 0, 0], [4, 0, 0], [0, 0, 4]], 'f'),
@@ -157,7 +159,6 @@ class TestGroundThatArrivedInATile:
         """A tile carries a road, a sign and a tree as well, and those are
         drawn as what they are."""
         tile, _named = self._tile()
-        from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
         assert mount_ground(tile, _shading(), PBRMaterial()) == 0
         assert not isinstance(tile.children[0].geometry, GroundPatch)
 
@@ -184,10 +185,6 @@ class TestTheNameSurvivesTheFile:
     back off the file it was written to."""
 
     def test_a_ground_material_is_indexed_by_its_name(self) -> None:
-        from OpenGLContext.loaders import gltf
-        from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb
-        from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
-        from OpenGLContext.scenegraph.pbrmesh import PBRMesh
         mesh = PBRMesh(
             positions=np.array([[0, 0, 0], [1, 0, 0], [0, 0, 1]], 'f'),
             normals=np.tile([0, 1, 0], (3, 1)).astype('f'),
@@ -198,10 +195,6 @@ class TestTheNameSurvivesTheFile:
         assert GROUND_MATERIAL in scene.materials
 
     def test_and_what_it_names_is_what_the_tile_draws(self) -> None:
-        from OpenGLContext.loaders import gltf
-        from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb
-        from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
-        from OpenGLContext.scenegraph.pbrmesh import PBRMesh
         mesh = PBRMesh(
             positions=np.array([[0, 0, 0], [1, 0, 0], [0, 0, 1]], 'f'),
             normals=np.tile([0, 1, 0], (3, 1)).astype('f'),

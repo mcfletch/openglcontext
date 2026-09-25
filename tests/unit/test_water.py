@@ -14,6 +14,7 @@ from OpenGLContext.scenegraph.water import (
     water_material,
     water_surface,
 )
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 
 
 def _basin(x, z):
@@ -115,7 +116,6 @@ class TestTheSurface:
         assert self._sheet().material.roughness == pytest.approx(WATER_ROUGHNESS)
 
     def test_a_caller_may_give_it_its_own(self):
-        from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
         mine = PBRMaterial(baseColor=(1.0, 0.0, 0.0))
         assert self._sheet(material=mine).material is mine
 

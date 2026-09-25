@@ -19,11 +19,13 @@ out of the directory. No GL here: this is the source resolution.
 import os
 import tarfile
 import zipfile
+import json
 
 import pytest
 
 from OpenGLContext.contentpacks.archive import UnsafeArchive
 from OpenGLContext.viewer import source as viewersource
+from OpenGLContext.contentpacks import archive, catalog, ContentStore, publish
 
 
 def _tar(path, names, payload=b'glTF-ish'):
@@ -248,9 +250,6 @@ class TestAPackTheEngineOffers:
     its store, and the digest check a content pack gets."""
 
     def installed(self, tmp_path):
-        import json
-        from OpenGLContext.contentpacks import ContentStore, archive, catalog
-        from OpenGLContext.contentpacks import publish
         world = tmp_path / 'built'
         world.mkdir()
         (world / 'gallery.glb').write_bytes(b'glTF')

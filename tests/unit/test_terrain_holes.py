@@ -15,6 +15,7 @@ import pytest
 
 from OpenGLContext.scenegraph.terrain import HeightField
 from OpenGLContext.scenegraph.terrain.holes import cut
+from OpenGLContext.physics.heightfield import HeightFieldColliders
 
 EXTENT = 160.0
 RADIUS = 37.0
@@ -173,8 +174,6 @@ class TestTheCutSurfaceIsStillTheSurface:
 
 class TestTheFieldAndTheColliderCutTheSame:
     def test_the_drawn_ground_and_the_driven_ground_have_the_same_area(self) -> None:
-        from OpenGLContext.physics.heightfield import HeightFieldColliders
-
         field = flat()
         vertices, indices = field.mesh(holes=circle)
         drawn = area_of(vertices, np.asarray(indices).reshape(-1, 3))

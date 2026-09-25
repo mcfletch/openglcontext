@@ -1,4 +1,5 @@
 """What zones give one draw, one camera and one listener -- with no GL."""
+import tracemalloc
 import numpy as np
 import pytest
 
@@ -327,7 +328,6 @@ class TestManyBoxesAtOnce:
 
     def test_a_first_frame_of_many_objects_over_many_zones_stays_small(self):
         """Twenty thousand boxes over fifty-six zones along a road, in no order."""
-        import tracemalloc
         rng = np.random.default_rng(32)
         placed = [(room(size=20.0, blend=5.0, environment=ZoneEnvironment()), (x, 0, 0))
                   for x in np.linspace(-1000, 1000, 56)]

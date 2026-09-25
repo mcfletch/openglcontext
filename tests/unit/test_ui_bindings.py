@@ -10,6 +10,7 @@ from OpenGLContext.move.navigation import NavigationManager
 from OpenGLContext.ui import bindings
 from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.overlay import OverlayMixin
+from OpenGLContext.events.inputstate import InputState
 
 
 @pytest.fixture
@@ -25,7 +26,6 @@ class World:
     def __init__(self, definition):
         self.contextDefinition = definition
         self.redraws = 0
-        from OpenGLContext.events.inputstate import InputState
         self.inputState = InputState()
 
     def getViewPort(self):

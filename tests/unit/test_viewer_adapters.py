@@ -19,6 +19,9 @@ from OpenGLContext.viewer.adapters import (
 )
 from OpenGLContext.viewer.adapters.gltf import GLTFAdapter
 from OpenGLContext.viewer.adapters.vrml import VRMLAdapter
+from OpenGLContext import plugins
+from OpenGLContext.scenegraph.background import Background
+from OpenGLContext.viewer.environment import count_lights
 
 WRLS = os.path.join(str(tests_root(__file__)), 'wrls')
 GLTF_MODEL = os.path.join(WRLS, 'instanced_lattice.gltf')
@@ -82,7 +85,6 @@ class TestChoosingAnAdapter:
 
     def test_the_longest_matching_key_wins(self):
         """``tileset.json`` has to beat ``.json``, whatever the registry order."""
-        from OpenGLContext import plugins
 
         class Broad(SceneAdapter):
             name = 'broad'
@@ -149,8 +151,6 @@ class TestTheVRMLAdapter:
 
     def test_the_worlds_own_background_and_lights_are_kept(self):
         """3shapes.wrl lights itself; the viewer must not rig over the top."""
-        from OpenGLContext.scenegraph.background import Background
-        from OpenGLContext.viewer.environment import count_lights
         scene = VRMLAdapter().load(VRML_MODEL)
         assert count_lights(scene.group) == 2
         assert [c for c in scene.group.children if isinstance(c, Background)]

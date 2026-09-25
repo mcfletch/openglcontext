@@ -10,10 +10,14 @@ fetched only when something asks for one, and failing to fetch it means an entry
 with no picture rather than no entry.
 """
 
+import os
 from OpenGLContext.viewer.library import (
     Entry, FEATURE_TESTS, Library, MODELS, WORLDS, default_library,
     sample_entries, world_entries,
 )
+from OpenGLContext.loaders import gltf, resolver
+from OpenGLContext.viewer import library as module
+from OpenGLContext.viewer.adapters import adapter_for
 
 
 class TestAnEntry:
@@ -86,21 +90,17 @@ class TestWhatIsOnTheShelf:
         all.  The entry carries the sample's own URL, which the glTF adapter
         fetches and caches like any other.
         """
-        from OpenGLContext.loaders import gltf
         entries = {entry.name: entry for entry in sample_entries()}
         assert 'Duck' in entries
         assert entries['Duck'].source == gltf.sample_model_url('Duck')
 
     def test_every_entry_names_a_path_or_a_url(self):
         """Nothing on the shelf may be unopenable."""
-        from OpenGLContext.loaders import resolver
-        import os
         for entry in sample_entries():
             assert resolver.is_url(entry.source) or os.path.exists(entry.source), \
                 entry.name
 
     def test_every_entry_is_a_source_an_adapter_recognises(self):
-        from OpenGLContext.viewer.adapters import adapter_for
         for entry in sample_entries():
             assert adapter_for(entry.source) is not None, entry.name
 
@@ -147,7 +147,6 @@ class TestWhatIsOnTheShelf:
 
     def test_building_the_shelf_touches_no_network(self, monkeypatch):
         """Opening a viewer must not wait on a catalogue download."""
-        from OpenGLContext.loaders import gltf
 
         def refuse(*args, **named):
             raise AssertionError('the library fetched something')
@@ -157,7 +156,6 @@ class TestWhatIsOnTheShelf:
 
 class TestPreviews:
     def test_pictures_are_filled_in_only_when_asked_for(self, monkeypatch):
-        from OpenGLContext.viewer import library as module
         monkeypatch.setattr(module, 'screenshot_urls',
                             lambda: {'Duck': 'https://x/duck.png'})
         library = Library([Entry(name='Duck', source='Duck', category=MODELS)])
@@ -166,15 +164,12 @@ class TestPreviews:
         assert withPictures.find('Duck').preview == 'https://x/duck.png'
 
     def test_an_entry_that_already_has_one_keeps_it(self, monkeypatch):
-        from OpenGLContext.viewer import library as module
         monkeypatch.setattr(module, 'screenshot_urls',
                             lambda: {'Duck': 'https://x/duck.png'})
         library = Library([Entry(name='Duck', source='Duck', preview='own.png')])
         assert library.withPreviews().find('Duck').preview == 'own.png'
 
     def test_being_offline_costs_pictures_and_nothing_else(self, monkeypatch):
-        from OpenGLContext.viewer import library as module
-
         def offline():
             raise IOError('no route to host')
         monkeypatch.setattr(module, 'screenshot_urls', offline)
@@ -182,8 +177,6 @@ class TestPreviews:
         assert library.withPreviews().find('Duck') is not None
 
     def test_the_catalogue_is_only_fetched_once(self, monkeypatch):
-        from OpenGLContext.loaders import gltf
-        from OpenGLContext.viewer import library as module
         module.screenshot_urls.cache_clear()
         calls = []
         monkeypatch.setattr(gltf, 'fetch_sample_catalog',

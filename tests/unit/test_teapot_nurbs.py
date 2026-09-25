@@ -10,7 +10,7 @@ import pytest
 
 from OpenGLContext.testing.glcontext import gl_available, hidden_window
 
-from OpenGLContext.scenegraph import teapot_nurbs_data as data
+from OpenGLContext.scenegraph import boundingvolume, teapot_nurbs_data as data
 from OpenGLContext.scenegraph import teapot_nurbs
 from OpenGLContext.scenegraph.teapot import Teapot
 
@@ -273,7 +273,6 @@ def test_use_glut_override(monkeypatch):
 
 
 def test_bounding_volume_scales_with_size():
-    from OpenGLContext.scenegraph import boundingvolume
     small = Teapot(size=1.0).boundingVolume(None)
     big = Teapot(size=2.0).boundingVolume(None)
     assert isinstance(small, boundingvolume.AABoundingBox)

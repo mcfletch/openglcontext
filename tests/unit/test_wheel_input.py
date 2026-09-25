@@ -15,17 +15,18 @@ fractions of one, where a notch is the sum of a stream of them.
 import pytest
 
 from OpenGLContext.context import Context
-from OpenGLContext.events import glutevents
+from OpenGLContext.events import glutevents, pygameevents
 from OpenGLContext.events.inputstate import InputState
 from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
 from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.overlay import OverlayMixin
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.scroll import ScrollViewport
-from OpenGLContext.ui.widgets import Label
+from OpenGLContext.ui.widgets import Button, Label
 
 glfw = pytest.importorskip('glfw')
 from OpenGLContext.events import glfwevents  # needs glfw
+from OpenGLContext import glfwcontext
 
 VIEWPORT = (800, 600)
 
@@ -71,7 +72,6 @@ class TestTheGLFWBackendReportsNotches:
 
     def test_the_scroll_callback_is_registered(self, monkeypatch):
         """Nothing else can be right if the platform is never asked."""
-        from OpenGLContext import glfwcontext
         registered = {}
         for name in ('key', 'char', 'mouse_button', 'cursor_pos',
                      'framebuffer_size', 'window_close', 'window_focus',
@@ -86,7 +86,6 @@ class TestTheGLFWBackendReportsNotches:
         assert 'scroll' in registered
 
     def test_the_registered_callback_reaches_the_handler(self, monkeypatch):
-        from OpenGLContext import glfwcontext
         seen = []
         monkeypatch.setattr(
             glfwcontext.glfw, 'set_scroll_callback',
@@ -229,7 +228,6 @@ class TestThePygameBackendReportsNotches:
             self.pos = (10, 10)
 
     def event(self, button, state=1):
-        from OpenGLContext.events import pygameevents
         return pygameevents.PygameMouseButtonEvent(
             self.Context(), self.Event(button), state)
 
@@ -238,7 +236,6 @@ class TestThePygameBackendReportsNotches:
         assert self.event(5).button == WHEEL_DOWN
 
     def test_a_notch_is_not_a_held_button(self):
-        from OpenGLContext.events import pygameevents
         before = list(pygameevents.PygameXEvent.CURRENTBUTTONSTATES)
         self.event(4)
         assert pygameevents.PygameXEvent.CURRENTBUTTONSTATES == before
@@ -387,7 +384,6 @@ class TestTheWheelScrollsThePanelUnderIt:
             self, context):
         """A notch is not a click, whatever button number carries it."""
         pressed = []
-        from OpenGLContext.ui.widgets import Button
         button = Button(text='Ok', name='ok')
         button.on_activate = lambda widget: pressed.append(widget)
         context.pushOverlay(Panel(fill=True, children=[button]))

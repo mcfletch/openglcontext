@@ -21,6 +21,7 @@ import sys
 import pytest
 
 from OpenGLContext.testing.paths import tests_root
+from OpenGLContext.testing.gl_env import gl_subprocess_env
 SHADER_DIR = os.path.join(str(tests_root(__file__).parent),
                           'OpenGLContext', 'shaders')
 
@@ -133,7 +134,6 @@ os._exit(0)
 def _run(*args):
     # Clean env so a leaked OPENGLCONTEXT_* setting from another test module can't
     # change how the wall renders; the DRIVER sets the variables it needs itself.
-    from OpenGLContext.testing.gl_env import gl_subprocess_env
     return subprocess.run([sys.executable, '-c', DRIVER, *args],
                           capture_output=True, text=True, timeout=180,
                           env=gl_subprocess_env())

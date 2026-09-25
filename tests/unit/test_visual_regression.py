@@ -9,9 +9,14 @@ those helpers do.
 """
 
 import pytest
+import numpy as np
 
 # Test directory paths
 from OpenGLContext.testing.paths import tests_root
+from OpenGLContext.testing import (
+    event_injector, framebuffer_comparison, report_generator, subprocess_runner,
+)
+from OpenGLContext.testing.framebuffer_comparison import ComparisonResult
 TESTS_DIR = tests_root(__file__)
 PROJECT_ROOT = TESTS_DIR.parent
 REFERENCE_IMAGES_DIR = TESTS_DIR / 'reference_images'
@@ -22,25 +27,21 @@ class TestModuleImports:
 
     def test_import_framebuffer_comparison(self):
         """Test framebuffer_comparison module imports."""
-        from OpenGLContext.testing import framebuffer_comparison
         assert framebuffer_comparison.FramebufferCapture is not None
         assert framebuffer_comparison.ComparisonResult is not None
 
     def test_import_subprocess_runner(self):
         """Test subprocess_runner module imports."""
-        from OpenGLContext.testing import subprocess_runner
         assert subprocess_runner.TestRunner is not None
         assert subprocess_runner.run_test is not None
 
     def test_import_event_injector(self):
         """Test event_injector module imports."""
-        from OpenGLContext.testing import event_injector
         assert event_injector.EventInjector is not None
         assert event_injector.EventSender is not None
 
     def test_import_report_generator(self):
         """Test report_generator module imports."""
-        from OpenGLContext.testing import report_generator
         assert report_generator.TestReportGenerator is not None
         assert report_generator.generate_report is not None
 
@@ -63,7 +64,6 @@ class TestBespokeFrameworkRetired:
         assert 'TestFullRegressionSuite' not in globals()
 
     def test_shared_framework_is_the_path(self):
-        from OpenGLContext.testing import framebuffer_comparison, report_generator
         assert framebuffer_comparison.ComparisonResult is not None
         assert report_generator.TestReportGenerator is not None
 
@@ -73,8 +73,6 @@ class TestComparisonResult:
 
     def test_identical_images_match(self):
         """Identical images should have zero difference."""
-        import numpy as np
-        from OpenGLContext.testing.framebuffer_comparison import ComparisonResult
 
         img = np.ones((100, 100, 3), dtype=np.uint8) * 128
         result = ComparisonResult(img, img)
@@ -87,8 +85,6 @@ class TestComparisonResult:
 
     def test_different_images_detected(self):
         """Different images should be detected."""
-        import numpy as np
-        from OpenGLContext.testing.framebuffer_comparison import ComparisonResult
 
         img1 = np.zeros((100, 100, 3), dtype=np.uint8)
         img2 = np.ones((100, 100, 3), dtype=np.uint8) * 255
@@ -101,8 +97,6 @@ class TestComparisonResult:
 
     def test_shape_mismatch_detected(self):
         """Shape mismatches should be detected."""
-        import numpy as np
-        from OpenGLContext.testing.framebuffer_comparison import ComparisonResult
 
         img1 = np.zeros((100, 100, 3), dtype=np.uint8)
         img2 = np.zeros((50, 50, 3), dtype=np.uint8)

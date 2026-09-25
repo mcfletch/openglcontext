@@ -10,7 +10,8 @@ no input, has no thumb to grab, and its value is somebody else's news.
 import pytest
 
 from OpenGLContext.ui.geometry import Rect
-from OpenGLContext.ui.widgets import ProgressBar
+from OpenGLContext.ui.widgets import BoundWidget, ProgressBar
+from OpenGLContext.ui import widgets
 
 
 class _Renderer:
@@ -117,10 +118,8 @@ class TestWhatItIsNot:
         assert not bar().focusable
 
     def test_it_is_not_a_control(self):
-        from OpenGLContext.ui.widgets import BoundWidget
         assert not isinstance(bar(), BoundWidget)
 
 
 def test_it_is_part_of_the_widget_set():
-    from OpenGLContext.ui import widgets
     assert 'ProgressBar' in widgets.__all__

@@ -18,6 +18,9 @@ from OpenGLContext.scenegraph.terrain.heightfield import HeightField
 from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
 from OpenGLContext.scenegraph.vegetation.field import _drawn
 from tests.unit.glrender import base_env, frames_of
+from OpenGLContext.move.viewplatform import ViewPlatform
+from OpenGLContext.multiview.views import View, ViewLayout
+from OpenGLContext.passes import renderpass
 
 EXTENT = 60.0
 WIDTH, HEIGHT = 240, 120
@@ -64,9 +67,6 @@ def _scene(images):
 
 
 def _two_views(context):
-    from OpenGLContext.move.viewplatform import ViewPlatform
-    from OpenGLContext.multiview.views import View, ViewLayout
-
     def camera(x):
         return ViewPlatform(position=(x, 1.7, 6.0), orientation=(0, 1, 0, 0))
 
@@ -74,7 +74,6 @@ def _two_views(context):
 
 
 def _drawn_frame(render_scene, env, images, strategy):
-    from OpenGLContext.passes import renderpass
     env.setenv('OPENGLCONTEXT_MULTIVIEW', strategy)
     frame = frames_of(render_scene, _scene(images), frames=3, size=(WIDTH, HEIGHT),
                       layout=_two_views)[-1].astype(int)
@@ -114,7 +113,6 @@ def test_mirrors_draw_the_ground_and_cards_once_however_many_there_are(
         render_scene, env, images, strategy):
     """Ground and vegetation share the mirror views' submission too, and no
     longer count against the budget of views that draw on their own."""
-    from OpenGLContext.passes import renderpass
     from tests.unit.test_planar_mirror_gl import _mirror
     env.setenv('OPENGLCONTEXT_MULTIVIEW', strategy)
     env.setenv('OPENGLCONTEXT_REFLECTION_VIEWS', '16')

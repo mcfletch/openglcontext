@@ -11,6 +11,8 @@ import pytest
 
 from OpenGLContext.move import modes
 from OpenGLContext.move.modes import walk_fly_modes
+from OpenGLContext.bin import view
+from OpenGLContext.move.physicswalk import PhysicsWalkMixin
 
 
 def _names(declared):
@@ -59,7 +61,6 @@ def test_the_modes_match_the_avatar_they_drive():
     A mode hands its speed down with every move, so the two cannot drift once
     walking has begun -- but the avatar exists before the first mode has
     stepped, and it should not spend that frame at some other speed."""
-    from OpenGLContext.move.physicswalk import PhysicsWalkMixin
     capabilities = PhysicsWalkMixin().characterCapabilities(2.0)
     walk, fly = walk_fly_modes(2.0)
     assert walk.walkSpeed == pytest.approx(capabilities.walkSpeed)
@@ -85,7 +86,6 @@ def test_mouse_look_walks_at_the_same_speed_as_walking_does():
 def test_the_gltf_viewer_names_what_its_modes_drive():
     """Its modes move the character controller; the camera is where the
     controller ends up."""
-    from OpenGLContext.bin import view
     context = view.TestContext.__new__(view.TestContext)
     context.physicsWalking = False
     context.physicsPlatform = 'the-controller'

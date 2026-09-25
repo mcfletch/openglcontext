@@ -9,6 +9,7 @@ from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.overlay import OverlayMixin
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.widgets import Slider, Toggle
+from OpenGLContext.events.inputstate import InputState
 
 
 @pytest.fixture
@@ -21,7 +22,6 @@ class World:
         self.contextDefinition = definition
         self.redraws = 0
         self.captureSuspended = None
-        from OpenGLContext.events.inputstate import InputState
         self.inputState = InputState()
 
     def getViewPort(self):

@@ -11,6 +11,7 @@ import logging
 import pytest
 
 from OpenGLContext.telemetry.recorder import SessionRecorder
+from OpenGLContext.telemetry import Keeping, NOT_RECORDING, Tee
 
 
 class FakeClock:
@@ -332,11 +333,9 @@ class TestMarkingWhenNobodyIsRecording:
     """
 
     def test_it_takes_a_mark_and_keeps_nothing(self) -> None:
-        from OpenGLContext.telemetry import NOT_RECORDING
         assert NOT_RECORDING.mark('drive-ended', why='hit a car') is None
 
     def test_it_says_it_is_not_recording(self) -> None:
-        from OpenGLContext.telemetry import NOT_RECORDING
         assert not NOT_RECORDING
 
     def test_and_a_real_recording_says_it_is(self, tmp_path) -> None:
@@ -358,7 +357,6 @@ class TestKeepingMarksInMemory:
     game reads back once the run is over."""
 
     def test_it_keeps_each_mark_in_order(self) -> None:
-        from OpenGLContext.telemetry import Keeping
         kept = Keeping()
         kept.mark('pass-begun', gap=40.0)
         kept.mark('pass-done', seconds=4.2)
@@ -366,7 +364,6 @@ class TestKeepingMarksInMemory:
             ('pass-begun', {'gap': 40.0}), ('pass-done', {'seconds': 4.2})]
 
     def test_stamped_with_the_time_its_clock_answers(self) -> None:
-        from OpenGLContext.telemetry import Keeping
         now = [0.0]
         kept = Keeping(clock=lambda: now[0])
         kept.mark('one')
@@ -375,7 +372,6 @@ class TestKeepingMarksInMemory:
         assert [when for when, _name, _fields in kept.marks] == [0.0, 2.5]
 
     def test_it_answers_the_marks_of_one_name(self) -> None:
-        from OpenGLContext.telemetry import Keeping
         kept = Keeping()
         for name in ('crash', 'driving', 'crash'):
             kept.mark(name)
@@ -383,11 +379,9 @@ class TestKeepingMarksInMemory:
             'crash', 'crash']
 
     def test_it_says_it_is_recording(self) -> None:
-        from OpenGLContext.telemetry import Keeping
         assert Keeping()
 
     def test_a_field_named_name_is_a_field(self) -> None:
-        from OpenGLContext.telemetry import Keeping
         kept = Keeping()
         kept.mark('picked-up', name='rocket launcher')
         assert kept.marks[0][2] == {'name': 'rocket launcher'}
@@ -406,7 +400,6 @@ class TestMarkingToSeveralRecorders:
                 if record.get('kind') == 'mark'] == ['crash']
 
     def test_it_is_recording_if_any_of_them_is(self) -> None:
-        from OpenGLContext.telemetry import NOT_RECORDING, Keeping, Tee
         assert Tee(NOT_RECORDING, Keeping())
         assert not Tee(NOT_RECORDING)
 

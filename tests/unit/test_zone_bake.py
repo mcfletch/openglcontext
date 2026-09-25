@@ -14,7 +14,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from OpenGLContext.passes import renderpass
+from OpenGLContext.passes import pbrpass, renderpass
 from OpenGLContext.passes.zonebake import ZoneBakePlan
 from OpenGLContext.testing.paths import tests_root
 
@@ -63,7 +63,6 @@ class TestAContextNamesItsRenderer:
     the process environment is left as it was."""
 
     def test_the_context_asking_for_pbr_gets_it(self, monkeypatch):
-        from OpenGLContext.passes import pbrpass
         monkeypatch.delenv('OPENGLCONTEXT_RENDERER', raising=False)
         pbrpass.reset_renderer_cache()
         try:

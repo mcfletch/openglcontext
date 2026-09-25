@@ -7,8 +7,12 @@ of it rather than under it.
 """
 
 
+import math
 import numpy as np
 import pytest
+from OpenGL.GL import (
+    GL_COLOR_BUFFER_BIT, GL_RGB, GL_UNSIGNED_BYTE, glClear, glClearColor, glReadPixels, glViewport,
+)
 
 
 from OpenGLContext.ui.debugoverlay import DebugOverlay
@@ -16,6 +20,8 @@ from OpenGLContext.ui.hudwidgets import (
     BarMeter, Crosshair, DamageIndicator, HUDLayer, MessageQueue,
 )
 from OpenGLContext.ui.panel import Panel
+from OpenGLContext.scenegraph.text import shadertext
+from OpenGLContext.ui.draw import OverlayRenderer
 
 WIDTH = HEIGHT = 256
 
@@ -27,14 +33,11 @@ def gl_context(gl_window):
     # The cached atlases hold GL objects in this context, and the driver hands
     # the next window the same identifier often enough that leaving them would
     # make one test's textures another test's problem.
-    from OpenGLContext.scenegraph.text import shadertext
     shadertext.drop_text_renderers()
 
 
 @pytest.fixture
 def renderer(gl_context):
-    from OpenGL.GL import glViewport
-    from OpenGLContext.ui.draw import OverlayRenderer
     glViewport(0, 0, WIDTH, HEIGHT)
     made = OverlayRenderer(16)
     if not made.initialize():
@@ -44,14 +47,12 @@ def renderer(gl_context):
 
 
 def clear(colour=(0.0, 0.0, 0.0, 1.0)):
-    from OpenGL.GL import glClear, glClearColor, GL_COLOR_BUFFER_BIT
     glClearColor(*colour)
     glClear(GL_COLOR_BUFFER_BIT)
 
 
 def frame():
     """The framebuffer as (height, width, 3) ints, bottom row first."""
-    from OpenGL.GL import glReadPixels, GL_RGB, GL_UNSIGNED_BYTE
     raw = glReadPixels(0, 0, WIDTH, HEIGHT, GL_RGB, GL_UNSIGNED_BYTE)
     return np.frombuffer(raw, dtype=np.uint8).reshape(HEIGHT, WIDTH, 3).astype(int)
 
@@ -132,7 +133,6 @@ def test_a_panel_is_drawn_over_the_hud(renderer):
 
 def test_a_damage_indicator_washes_the_edge_it_came_from(renderer):
     """The whole of what it is for: a player looks where the screen is lit."""
-    import math
 
     indicator = DamageIndicator(duration=1.0, thickness=40)
     layer = HUDLayer(margin=0, children=[indicator])
@@ -151,8 +151,6 @@ def test_a_damage_indicator_at_rest_draws_nothing(renderer):
 
 
 def test_a_damage_indicator_fades_out_of_the_frame(renderer):
-    import math
-
     indicator = DamageIndicator(duration=0.5, thickness=40)
     layer = HUDLayer(margin=0, children=[indicator])
     indicator.hurt(bearing=math.pi, intensity=1.0, now=0.0)

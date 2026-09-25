@@ -8,15 +8,21 @@ the rest, and every consumer of a baked world gets it without knowing.
 """
 import json
 import os
+import threading
 
 import numpy as np
 import pytest
+from omi_physics.raycast import raycast
+from omi_physics.world import PhysicsWorld
 
 pytest.importorskip("pygltflib")
 
 from OpenGLContext.scenegraph.terrain import HeightField, LayerRule, control_map
 from OpenGLContext.scenegraph.terrain.splat import SplatTerrain
 from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
+from OpenGLContext.loaders.documentvalues import DocumentError
+from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
+from OpenGLContext.physics.heightfield import HeightFieldColliders
 
 EXTENT = 512.0
 
@@ -28,7 +34,6 @@ def _hilly(x, z):
 
 def _world(directory, terrain=True, layers=('grass', 'rock')):
     """A tileset with one empty root and, optionally, a field terrain."""
-    from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
     path = build_sample_tileset(str(directory))
     document = json.load(open(path))
     if terrain:
@@ -52,12 +57,10 @@ def _mounted(terrain):
 
 class TestMountingTheField:
     def test_a_terrain_record_with_no_usable_extent_is_refused(self, tmp_path) -> None:
-        from OpenGLContext.loaders.documentvalues import DocumentError
         path = _world(tmp_path)
         document = json.load(open(path))
         document['extras']['terrain']['extent'] = 'wide'
         json.dump(document, open(path, 'w'))
-        import threading
         before = set(threading.enumerate())
         with pytest.raises(DocumentError, match="the terrain extent is 'wide'"):
             TilesTerrain(path, workers=1)
@@ -139,10 +142,6 @@ class TestWhatAGameDoesWithIt:
             terrain.shutdown()
 
     def test_colliders_can_be_built_from_it(self, tmp_path) -> None:
-        from omi_physics.raycast import raycast
-        from omi_physics.world import PhysicsWorld
-
-        from OpenGLContext.physics.heightfield import HeightFieldColliders
         terrain = TilesTerrain(_world(tmp_path), workers=1)
         try:
             world = PhysicsWorld()

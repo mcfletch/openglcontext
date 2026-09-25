@@ -4,9 +4,12 @@ These use lightweight fakes for the platform/context/scenegraph so the binding
 logic is exercised directly without a render context.
 """
 import pytest
+import numpy as np
 
-from OpenGLContext.scenegraph.basenodes import Viewpoint, sceneGraph
+from OpenGLContext.scenegraph.basenodes import sceneGraph, Transform, Viewpoint
 from OpenGLContext.passes import viewpointbinding
+from OpenGLContext import quaternion
+from OpenGLContext.passes.flatcore import FlatPass
 
 
 class FakePlatform:
@@ -47,10 +50,8 @@ class TestViewpointMoveTo:
             def __getitem__(self, i):
                 return vp
             def transformMatrix(self):
-                import numpy as np
                 return np.identity(4)
             def quaternion(self):
-                from OpenGLContext import quaternion
                 return quaternion.fromXYZR(0, 1, 0, 0)
         vp.moveTo(P(), ctx)
         fov, aspect, near, far = ctx.platform.frustum_calls[-1]
@@ -65,10 +66,8 @@ class TestViewpointMoveTo:
             def __getitem__(self, i):
                 return vp
             def transformMatrix(self):
-                import numpy as np
                 return np.identity(4)
             def quaternion(self):
-                from OpenGLContext import quaternion
                 return quaternion.fromXYZR(0, 1, 0, 0)
         vp.moveTo(P(), ctx)
         _fov, _aspect, near, far = ctx.platform.frustum_calls[-1]
@@ -123,8 +122,6 @@ class TestTheRenderPassesPaths:
     """Binding reads what the render pass found, as it goes on finding it."""
 
     def test_a_viewpoint_nested_in_a_transform_is_bound_where_it_stands(self):
-        from OpenGLContext.passes.flatcore import FlatPass
-        from OpenGLContext.scenegraph.basenodes import Transform
         inner = Viewpoint(position=(0, 0, 1), description='inner')
         sg = sceneGraph(children=[Transform(translation=(4, 0, 0),
                                             children=[inner])])
@@ -135,7 +132,6 @@ class TestTheRenderPassesPaths:
         assert tuple(round(v, 5) for v in ctx.platform.position) == (4, 0, 1, 1)
 
     def test_one_that_arrives_after_the_first_frame_can_be_bound(self):
-        from OpenGLContext.passes.flatcore import FlatPass
         sg = sceneGraph(children=[])
         found = FlatPass(sg, [])
         ctx = FakeContext(sg)
@@ -157,9 +153,7 @@ class _Path:
         return self._node
 
     def transformMatrix(self):
-        import numpy as np
         return np.identity(4)
 
     def quaternion(self):
-        from OpenGLContext import quaternion
         return quaternion.fromXYZR(0, 1, 0, 0)

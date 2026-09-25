@@ -11,14 +11,17 @@ would only make the test slower and less able to say which frame something
 happened on.
 """
 
+import random
 import pytest
 
-from OpenGLContext import telemetry
+from OpenGLContext import entropy, telemetry
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.events.keyboardevents import KeyboardEvent
 from OpenGLContext.events.mouseevents import MouseButtonEvent
 from OpenGLContext.move import modes
 from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
+from OpenGLContext.telemetry import report
+from OpenGLContext.telemetry.replay import Recording
 
 
 class _Platform:
@@ -190,9 +193,6 @@ def test_a_replay_leaves_the_recording_alone(recorded):
 
 
 def test_the_session_reads_back_as_a_report(recorded):
-    from OpenGLContext.telemetry import report
-    from OpenGLContext.telemetry.replay import Recording
-
     _original, path = recorded
     found = report.describe(Recording.read(path), events=True)
     assert 'keyboard' in found
@@ -206,10 +206,6 @@ class TestASessionThatDependsOnItsLuck:
     a different game."""
 
     def _rolls(self, path, replaying=False):
-        import random
-
-        from OpenGLContext import entropy, telemetry
-
         context = _Context()
         rolled = []
 
@@ -231,10 +227,6 @@ class TestASessionThatDependsOnItsLuck:
         return rolled
 
     def test_the_same_numbers_come_up(self, tmp_path):
-        import random
-
-        from OpenGLContext import entropy
-
         path = tmp_path / 'session.jsonl'
         recorded = self._rolls(path)
 
@@ -245,9 +237,6 @@ class TestASessionThatDependsOnItsLuck:
     def test_and_they_are_not_the_same_numbers_by_accident(self, tmp_path):
         """Without the recording they would differ, which is what makes the
         test above mean something."""
-        import random
-
-        from OpenGLContext import entropy
 
         path = tmp_path / 'session.jsonl'
         recorded = self._rolls(path)

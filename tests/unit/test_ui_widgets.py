@@ -10,9 +10,12 @@ from vrml import field, node
 from OpenGLContext.ui.geometry import Rect
 from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.widgets import (
-    Button, KeyCapture, Label, Select, Slider, Spacer, TextField, Toggle,
-    PRIMARY, DANGER,
+    Button, DANGER, key_label, KeyCapture, Label, PRIMARY, Select, Slider, Spacer, TextField,
+    Toggle,
 )
+from OpenGLContext.events.mouseevents import button_name
+from OpenGLContext.ui.panel import Panel
+from OpenGLContext.ui.skin import DEFAULT_SKIN
 
 
 @pytest.fixture
@@ -184,7 +187,6 @@ class TestTheSwitchAToggleDraws:
         assert knob.width == knob.height
 
     def test_it_asks_for_room_for_the_whole_switch(self, metrics):
-        from OpenGLContext.ui.skin import DEFAULT_SKIN
         assert (Toggle().natural_size(metrics)[0]
                 >= int(DEFAULT_SKIN.switchWidth))
 
@@ -218,7 +220,6 @@ class TestTheFocusRing:
 
     @pytest.fixture
     def button(self, metrics):
-        from OpenGLContext.ui.panel import Panel
         button = Button(text='ok')
         panel = Panel(children=[button])
         panel.layout((400, 200), metrics)
@@ -241,7 +242,6 @@ class TestTheFocusRing:
         assert painted.calls('border')[0][0].width > button.rect.width
 
     def test_an_unfocused_widget_draws_nothing(self, metrics):
-        from OpenGLContext.ui.panel import Panel
         button = Button(text='ok')
         panel = Panel(children=[button])
         panel.layout((400, 200), metrics)
@@ -259,8 +259,6 @@ class _Recorder:
     """
 
     def __init__(self):
-        from OpenGLContext.ui.metrics import FontMetrics
-        from OpenGLContext.ui.skin import DEFAULT_SKIN
         self.metrics = FontMetrics(8, 16, 2)
         self.skin = DEFAULT_SKIN
         self.recorded = []
@@ -564,11 +562,9 @@ class TestKeyCapture:
 class TestKeyNames:
     def test_a_space_is_named_rather_than_shown_blank(self):
         """Jump is bound to space, and a blank button reads as unbound."""
-        from OpenGLContext.ui.widgets import key_label
         assert key_label(' ') == '<space>'
 
     def test_an_ordinary_key_is_shown_as_it_is(self):
-        from OpenGLContext.ui.widgets import key_label
         assert key_label('w') == 'w'
         assert key_label('<up>') == '<up>'
 
@@ -579,15 +575,11 @@ class TestKeyNames:
         up on the page beside `w` and `<space>`, and `<mouse-0>` tells nobody
         which button that is.
         """
-        from OpenGLContext.events.mouseevents import button_name
-        from OpenGLContext.ui.widgets import key_label
         assert key_label(button_name(0)) == 'Left mouse'
         assert key_label(button_name(1)) == 'Right mouse'
         assert key_label(button_name(2)) == 'Middle mouse'
 
     def test_a_button_nobody_has_named_still_says_it_is_the_mouse(self):
-        from OpenGLContext.events.mouseevents import button_name
-        from OpenGLContext.ui.widgets import key_label
         assert key_label(button_name(7)) == 'Mouse 7'
 
     def test_a_key_capture_shows_a_captured_space_by_name(self):

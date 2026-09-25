@@ -18,6 +18,9 @@ from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
 from OpenGLContext.scenegraph.vegetation.clumps import InstancedClumps
 from OpenGLContext.scenegraph.vegetation.nearmesh import InstancedMeshLOD
 from OpenGLContext.scenegraph.vegetation import LOD_NEAR, LOD_FAR
+from OpenGLContext.scenegraph.terrain.heightfield import HeightField
+from OpenGLContext.scenegraph.terrain.splat import SplatTerrain
+from OpenGLContext.scenegraph.vegetation.cover import CoverSpecies, GroundCover
 
 
 def _uniformf(prog, name):
@@ -232,9 +235,6 @@ def test_meshlod_render_and_dispose_frees_everything(gl, tmp_path):
 
 
 def test_splat_terrain_render_restores_state_and_disposes(gl, tmp_path):
-    from OpenGLContext.scenegraph.terrain.heightfield import HeightField
-    from OpenGLContext.scenegraph.terrain.splat import SplatTerrain
-
     tex = tmp_path / "layer.png"
     Image.new("RGBA", (8, 8), (120, 110, 90, 255)).save(tex)
     ctl = tmp_path / "control.png"
@@ -263,7 +263,6 @@ def test_splat_terrain_render_restores_state_and_disposes(gl, tmp_path):
 def test_a_cover_retuned_after_it_is_drawn_sends_its_new_windows(gl, tmp_path):
     """A quality setting moves a cover's radii after its nodes have GL."""
     from OpenGLContext.scenegraph.terrain import HeightField
-    from OpenGLContext.scenegraph.vegetation.cover import CoverSpecies, GroundCover
     cover = GroundCover(HeightField(np.zeros((9, 9)), 256.0, 1.0),
                         CoverSpecies(name='grass', card=_tex_png(tmp_path)),
                         card_radius=90.0)

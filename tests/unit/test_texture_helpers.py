@@ -4,6 +4,7 @@ import pytest
 from OpenGL.GL import GL_MAX_TEXTURE_SIZE, GL_RGB, glGetIntegerv
 
 from OpenGLContext import texture
+from OpenGLContext.arrays import zeros
 
 
 def test_best_size_rounds_up_to_a_power_of_two(gl_context):
@@ -34,8 +35,6 @@ def test_binding_as_a_context_manager_yields_the_texture(gl_context_compat):
 
 
 def test_numpy_adapter_reports_a_mode_for_each_channel_count():
-    from OpenGLContext.arrays import zeros
-
     assert texture.NumpyAdapter(zeros((4, 4, 3), 'B')).mode == 'RGB'
     assert texture.NumpyAdapter(zeros((4, 4, 4), 'B')).mode == 'RGBA'
     assert texture.NumpyAdapter(zeros((4, 4, 1), 'B')).mode == 'L'
@@ -43,8 +42,6 @@ def test_numpy_adapter_reports_a_mode_for_each_channel_count():
 
 
 def test_get_length_format_of_an_adapter():
-    from OpenGLContext.arrays import zeros
-
     assert texture.getLengthFormat(
         texture.NumpyAdapter(zeros((4, 4, 3), 'B'))
     ) == (3, GL_RGB)

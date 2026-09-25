@@ -9,13 +9,13 @@ actually opens it.  The panels themselves are checked in
 from OpenGLContext.viewer import menu
 from OpenGLContext.viewer.library import Entry, Library
 from OpenGLContext.viewer.screens import ViewerScreensMixin
+from OpenGLContext.ui.overlay import OverlayStack
 
 
 class _Host(ViewerScreensMixin):
     """A viewer with the window taken out: an overlay stack and a library."""
 
     def __init__(self, library=None, source='model.glb'):
-        from OpenGLContext.ui.overlay import OverlayStack
         self._overlays = OverlayStack()
         self._library = library if library is not None else Library([
             Entry(name='Duck', source='Duck.glb'),

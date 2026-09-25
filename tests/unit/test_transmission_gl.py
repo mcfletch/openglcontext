@@ -7,6 +7,10 @@ pure resolve_mode / read-buffer logic is covered in test_transmission_capture.py
 """
 
 import pytest
+from OpenGL.GL import (
+    GL_ACTIVE_TEXTURE, GL_COLOR_BUFFER_BIT, GL_TEXTURE0, glClear, glClearColor, glGetIntegerv,
+    glViewport,
+)
 
 
 from OpenGLContext.passes import transmission
@@ -86,10 +90,6 @@ class TestEnsureSize:
 
 def test_capture_and_bind_roundtrip(gl_context):
     """capture() copies the default framebuffer and bind() activates the unit."""
-    from OpenGL.GL import (
-        glViewport, glClearColor, glClear, GL_COLOR_BUFFER_BIT,
-        glGetIntegerv, GL_ACTIVE_TEXTURE, GL_TEXTURE0,
-    )
     glViewport(0, 0, 64, 64)
     glClearColor(0.2, 0.4, 0.6, 1.0)
     glClear(GL_COLOR_BUFFER_BIT)

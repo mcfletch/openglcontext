@@ -13,14 +13,15 @@ needs a window, because uploading and deleting are two callables handed in.
 import threading
 
 import pytest
+from PIL import Image
 
-from OpenGLContext.ui.pictures import PictureCache
+from OpenGLContext.ui.pictures import decoderFor, PictureCache, registerDecoder, unregisterDecoder
+from OpenGLContext.ui import pictures
 
 
 @pytest.fixture
 def picture(tmp_path):
     """A real 4x2 PNG on disk, so a real decode has something to read."""
-    from PIL import Image
 
     def make(name, size=(4, 2)):
         path = tmp_path / name
@@ -184,7 +185,6 @@ class TestRemotePictures:
     def test_an_http_preview_is_fetched_into_the_cache_directory(self, gl, picture,
                                                                  monkeypatch):
         """A library of samples names its pictures by URL, not by path."""
-        from OpenGLContext.ui import pictures
         local = picture('remote.png')
         asked = []
 
@@ -198,8 +198,6 @@ class TestRemotePictures:
 
     def test_a_download_that_fails_is_a_missing_picture_not_a_crash(self, gl,
                                                                     monkeypatch):
-        from OpenGLContext.ui import pictures
-
         def fetch(url, **named):
             raise IOError('no route to host')
         monkeypatch.setattr(pictures, 'fetch_to_cache', fetch)
@@ -265,14 +263,10 @@ class TestFormatsTheImagingLibraryCannotRead:
     @pytest.fixture(autouse=True)
     def _clean_registry(self):
         """The registry is process-wide, so a test must not leak into the next."""
-        from OpenGLContext.ui.pictures import unregisterDecoder
         yield
         unregisterDecoder('.madeup')
 
     def test_a_decoder_can_be_taken_back(self):
-        from OpenGLContext.ui.pictures import (
-            decoderFor, registerDecoder, unregisterDecoder)
-
         def decode(_path):
             return None
         registerDecoder('.madeup', decode)
@@ -280,13 +274,9 @@ class TestFormatsTheImagingLibraryCannotRead:
         assert decoderFor('texture.madeup') is None
 
     def test_taking_back_a_suffix_nobody_registered_answers_none(self):
-        from OpenGLContext.ui.pictures import unregisterDecoder
         assert unregisterDecoder('.madeup') is None
 
     def test_a_registered_decoder_reads_a_suffix_pil_cannot(self, gl, tmp_path):
-        from PIL import Image
-
-        from OpenGLContext.ui.pictures import registerDecoder
         path = tmp_path / 'texture.madeup'
         path.write_bytes(b'not an image by any reckoning')
         registerDecoder('.madeup', lambda _p: Image.new('RGBA', (3, 5), (1, 2, 3, 4)))
@@ -298,7 +288,6 @@ class TestFormatsTheImagingLibraryCannotRead:
 
     def test_a_decoder_that_declines_leaves_the_picture_undrawn(self, gl, tmp_path):
         """Returning None is an optional dependency being absent, not a crash."""
-        from OpenGLContext.ui.pictures import registerDecoder
         path = tmp_path / 'texture.madeup'
         path.write_bytes(b'x')
         registerDecoder('.madeup', lambda _p: None)
@@ -307,8 +296,6 @@ class TestFormatsTheImagingLibraryCannotRead:
 
     def test_a_decoder_that_raises_is_a_failed_picture_and_not_a_failed_frame(
             self, gl, tmp_path):
-        from OpenGLContext.ui.pictures import registerDecoder
-
         def explode(_path):
             raise ValueError('bad container')
         path = tmp_path / 'texture.madeup'
@@ -319,9 +306,6 @@ class TestFormatsTheImagingLibraryCannotRead:
         assert cache.failures == 1
 
     def test_the_suffix_match_ignores_case(self, gl, tmp_path):
-        from PIL import Image
-
-        from OpenGLContext.ui.pictures import registerDecoder
         registerDecoder('.MadeUp', lambda _p: Image.new('RGBA', (2, 2)))
         path = tmp_path / 'texture.MADEUP'
         path.write_bytes(b'x')
@@ -331,7 +315,6 @@ class TestFormatsTheImagingLibraryCannotRead:
     def test_an_ordinary_picture_still_goes_straight_to_the_imaging_library(
             self, gl, picture):
         """The registry is a fallback for the unusual, not a layer over the usual."""
-        from OpenGLContext.ui.pictures import decoderFor
         assert decoderFor(picture('plain.png')) is None
         cache = PictureCache(upload=gl.upload, delete=gl.delete, workers=0)
         assert cache.get(picture('plain.png'), blocking=True) is not None

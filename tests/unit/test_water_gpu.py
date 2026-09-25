@@ -7,26 +7,24 @@ at another is worse than one that does neither -- so what is asserted hardest
 here is that they are the same numbers.
 """
 import re
+import os
 
 import pytest
 
 from OpenGLContext.passes import shadersource
-from OpenGLContext.scenegraph.water.surface import (
-    CHOPPY,
-    _TRAINS,
-)
+from OpenGLContext.scenegraph.water.surface import _GUST_TRAINS, _RIPPLE_TRAINS, _TRAINS, CHOPPY
+from OpenGLContext.passes.pbrpass import PBRShaderProgram
+from OpenGLContext.scenegraph.water import surface
 
 
 def _source(name):
     """A shader as the compiler sees it: includes resolved."""
-    import os
     return shadersource.preprocess_shader(
         os.path.join(shadersource.SHADER_DIR, name))
 
 
 def _include(name):
     """An include's own text; it carries no #version to preprocess."""
-    import os
     with open(os.path.join(shadersource.SHADER_DIR, name)) as handle:
         return handle.read()
 
@@ -76,14 +74,12 @@ class TestTheTwoFieldsAgree:
                     block)]
 
     def test_every_ripple_train_matches(self) -> None:
-        from OpenGLContext.scenegraph.water.surface import _RIPPLE_TRAINS
         shader = self._ripple_trains()
         assert len(shader) == len(_RIPPLE_TRAINS)
         for found, module in zip(shader, _RIPPLE_TRAINS, strict=True):
             assert found == pytest.approx(module, abs=1e-6)
 
     def test_every_gust_train_matches(self) -> None:
-        from OpenGLContext.scenegraph.water.surface import _GUST_TRAINS
         text = _include('_wave_inc.glsl')
         block = text[text.index('GUST_TRAINS'):text.index('float waveGust')]
         found = [tuple(float(n) for n in row) for row in re.findall(
@@ -93,7 +89,6 @@ class TestTheTwoFieldsAgree:
             assert shader == pytest.approx(module, abs=1e-6)
 
     def test_the_gust_constants_match(self) -> None:
-        from OpenGLContext.scenegraph.water import surface
         text = _include('_wave_inc.glsl')
         for name, value in (('GUST_CALM', surface.GUST_CALM),
                             ('GUST_PEAK', surface.GUST_PEAK),
@@ -129,7 +124,6 @@ class TestTurningItOn:
             self.set[name] = value
 
     def _program(self):
-        from OpenGLContext.passes.pbrpass import PBRShaderProgram
         program = self.Program()
         program.program = 1
         program.set_wave = PBRShaderProgram.set_wave.__get__(program)

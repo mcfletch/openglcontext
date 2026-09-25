@@ -12,6 +12,7 @@ import pytest
 
 from OpenGLContext.scenegraph.teapot import Teapot
 import OpenGLContext.scenegraph.teapot_nurbs as teapot_nurbs
+from OpenGLContext.scenegraph.teapot_nurbs import FLOATS_PER_VERTEX
 
 
 #: The sampling the caches are keyed by in these tests -- the finest the LOD
@@ -76,7 +77,6 @@ class TestBoundingVolumeFromMesh:
     def test_aabb_matches_tessellated_vertices(self):
         lo, hi = Teapot()._mesh_aabb()
         base_array, lid_array = Teapot._arrays[FINE]
-        from OpenGLContext.scenegraph.teapot_nurbs import FLOATS_PER_VERTEX
         verts = np.concatenate([  # T2F_N3F_V3F: position is floats 5..8
             np.asarray(base_array, 'f').reshape(-1, FLOATS_PER_VERTEX)[:, 5:8],
             np.asarray(lid_array, 'f').reshape(-1, FLOATS_PER_VERTEX)[:, 5:8],

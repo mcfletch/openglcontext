@@ -11,15 +11,10 @@ from vrml.protofunctions import getFields
 
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.water.surface import (
-    RIPPLE,
-    CHOPPY,
-    FLOWING,
-    STILL,
-    WaterStyle,
-    wave_height,
+    _fine_ripple, _heading, CHOPPY, FLOWING, RIPPLE, STILL, water_surface, WaterStyle, wave_height,
     wave_normal,
-    water_surface,
 )
+from OpenGLContext.scenegraph.water import BREEZE, LAKE, mesh_across, MESH_LIMIT, RIPPLE_SCALE
 
 
 def _grid(half=40.0, steps=17):
@@ -226,7 +221,6 @@ class TestALakeIsWater:
     """
 
     def test_a_lake_has_a_style_of_its_own(self) -> None:
-        from OpenGLContext.scenegraph.water import LAKE
         assert LAKE.amplitude > 0.0 and LAKE.wavelength > 0.0
 
     def test_it_is_gentler_than_weather(self) -> None:
@@ -240,9 +234,6 @@ class TestALakeIsWater:
     def test_a_sheet_carries_the_wave_it_is_asked_for(self) -> None:
         """Meshed for the wavelength rather than at a fixed count, so the
         surface actually holds the shape."""
-        import numpy as np
-        from OpenGLContext.scenegraph.water import LAKE, mesh_across
-        from OpenGLContext.scenegraph.water.surface import water_surface
         side = 400.0
         found = water_surface(0.0, side, 0.0, side, level=0.0,
                               resolution=mesh_across(side, LAKE), style=LAKE)
@@ -252,11 +243,9 @@ class TestALakeIsWater:
     def test_and_a_bigger_sheet_gets_more_of_them(self) -> None:
         """Up to the budget: past that a sheet is meshed as finely as it is
         worth meshing and the ripple carries the rest."""
-        from OpenGLContext.scenegraph.water import LAKE, mesh_across
         assert mesh_across(120.0, LAKE) > mesh_across(30.0, LAKE)
 
     def test_without_asking_for_a_million_of_them(self) -> None:
-        from OpenGLContext.scenegraph.water import LAKE, MESH_LIMIT, mesh_across
         assert mesh_across(20000.0, LAKE) <= MESH_LIMIT
 
 
@@ -269,7 +258,6 @@ class TestTheRippleIsTheStyles:
     """
 
     def test_a_style_says_how_far_its_ripple_repeats(self) -> None:
-        from OpenGLContext.scenegraph.water import RIPPLE_SCALE
         assert STILL.ripple == RIPPLE_SCALE
 
     def test_the_ripple_is_drawn_at_the_length_the_style_gives(self) -> None:
@@ -285,20 +273,16 @@ class TestABreeze:
     """Wind on sheltered water: a surface seen from its own bank."""
 
     def test_it_is_named(self) -> None:
-        from OpenGLContext.scenegraph.water import BREEZE
         assert BREEZE.name == 'breeze'
 
     def test_its_waves_are_a_stride_across_and_centimetres_high(self) -> None:
-        from OpenGLContext.scenegraph.water import BREEZE
         assert BREEZE.wavelength < 2.0
         assert 0.0 < BREEZE.amplitude < 0.05
 
     def test_its_ripple_is_finer_than_its_waves(self) -> None:
-        from OpenGLContext.scenegraph.water import BREEZE
         assert BREEZE.ripple < BREEZE.wavelength
 
     def test_it_moves(self) -> None:
-        from OpenGLContext.scenegraph.water import BREEZE
         assert BREEZE.moving()
 
 
@@ -310,7 +294,6 @@ class TestTheRippleIsNotALattice:
     @staticmethod
     def _slopes(style, when=0.0, cells=128):
         """The ripple's slope along x over a patch sixteen ripples across."""
-        from OpenGLContext.scenegraph.water.surface import _fine_ripple, _heading
         side = style.ripple * 16.0
         axis = np.arange(cells) * side / cells
         x, z = np.meshgrid(axis, axis, indexing='ij')
@@ -322,7 +305,6 @@ class TestTheRippleIsNotALattice:
         """Counted in its spectrum: each train is a pair of peaks, found as
         the local maxima of a windowed transform so that a wave not fitting
         the patch a whole number of times still counts once."""
-        from OpenGLContext.scenegraph.water import BREEZE
         slopes = self._slopes(BREEZE)
         window = np.outer(np.hanning(slopes.shape[0]), np.hanning(slopes.shape[1]))
         spectrum = np.abs(np.fft.fft2(slopes * window))
@@ -335,7 +317,6 @@ class TestTheRippleIsNotALattice:
 
     def test_it_moves_on_water_with_no_current(self) -> None:
         """A breeze on a pond moves the glitter, though the pond goes nowhere."""
-        from OpenGLContext.scenegraph.water import BREEZE
         assert not np.allclose(self._slopes(BREEZE, 0.0), self._slopes(BREEZE, 0.5))
 
     def test_still_water_holds_its_glitter(self) -> None:
@@ -352,7 +333,6 @@ class TestTheRippleVariesAsWindDoes:
     @staticmethod
     def _patches(style, when=0.0, patch=3.0, across=40):
         """The ripple's strength, as RMS slope, over a grid of patches."""
-        from OpenGLContext.scenegraph.water.surface import _fine_ripple, _heading
         side = style.ripple * patch
         cells = 12
         strengths = np.zeros((across, across))
@@ -367,12 +347,10 @@ class TestTheRippleVariesAsWindDoes:
         return strengths
 
     def test_some_of_the_surface_is_calmer_than_the_rest(self) -> None:
-        from OpenGLContext.scenegraph.water import BREEZE
         strengths = self._patches(BREEZE)
         assert strengths.max() > 2.5 * strengths.min()
 
     def test_the_gusts_move_across_the_water(self) -> None:
-        from OpenGLContext.scenegraph.water import BREEZE
         before = self._patches(BREEZE, 0.0, across=12)
         after = self._patches(BREEZE, 8.0, across=12)
         assert not np.allclose(before, after, rtol=0.1)
@@ -385,7 +363,6 @@ class TestTheRippleIsFilteredByDistance:
 
     @staticmethod
     def _rms(style, footprint):
-        from OpenGLContext.scenegraph.water.surface import _fine_ripple, _heading
         axis = np.linspace(0.0, style.ripple * 20.0, 97)
         x, z = np.meshgrid(axis, axis, indexing='ij')
         sx, sz = _fine_ripple(x, z, float(style.steepness), _heading(style),
@@ -393,15 +370,12 @@ class TestTheRippleIsFilteredByDistance:
         return float(np.sqrt(np.mean(sx * sx + sz * sz)))
 
     def test_close_to_the_camera_it_is_all_there(self) -> None:
-        from OpenGLContext.scenegraph.water import BREEZE
         assert self._rms(BREEZE, 0.0) == self._rms(BREEZE, BREEZE.ripple * 0.01)
 
     def test_where_a_pixel_covers_its_waves_it_is_gone(self) -> None:
-        from OpenGLContext.scenegraph.water import BREEZE
         assert self._rms(BREEZE, BREEZE.ripple * 2.0) == 0.0
 
     def test_in_between_the_finest_trains_go_first(self) -> None:
-        from OpenGLContext.scenegraph.water import BREEZE
         near = self._rms(BREEZE, 0.0)
         middle = self._rms(BREEZE, BREEZE.ripple * 0.3)
         assert 0.0 < middle < near

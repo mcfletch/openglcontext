@@ -3,8 +3,12 @@ robustness branches of the GL-teardown helpers (no real GL context needed).
 """
 import struct
 import types
+import json
+import os
 
 import numpy as np
+import OpenGL.GL as gl
+import pytest
 
 from OpenGLContext.loaders.tiles3d import gltf_uploader as U
 from OpenGLContext.loaders.tiles3d.gltf_uploader import (
@@ -44,9 +48,6 @@ def test_combined_scene_wraps_children_and_bounds():
 
 
 def test_combined_scene_loader_path(tmp_path):
-    import json
-    import os
-    import pytest
     pytest.importorskip("pygltflib")
     from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
     from OpenGLContext.loaders.tiles3d.tileset import build_runtime_tileset
@@ -136,8 +137,6 @@ def test_dispose_mesh_gpu_swallows_release_and_delete_errors():
 
 
 def test_dispose_material_textures_skips_missing_and_swallows_gl_errors(monkeypatch):
-    import OpenGL.GL as gl
-
     # One map with no per-context entry (skipped), one whose texture id is 0
     # (skipped), one that raises in glDeleteTextures (swallowed, then zeroed).
     class _Tex:
