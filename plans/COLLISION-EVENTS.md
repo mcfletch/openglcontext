@@ -560,12 +560,11 @@ Still open:
     sampled per step, and asks `impact_on` after each step, so it already
     hears every step; its crash and bump watches were also being edited in
     the main checkout, uncommitted, at the time.
-- Dependency floors. OpenGLContext imports `omi_physics.contactevents`, which
-  no released omi_physics has; its `omi_physics>=0.3.0` floor moves to the
-  release that carries it, as do the games' floors on both.
-
-## Open questions for the maintainer
-
+- Dependency floors: done 2026-09-25. omi_physics' `develop` is 0.4.0, the
+  version that will carry this API, and OpenGLContext, marble-demo and
+  twig-bb require `omi_physics>=0.4.0`. OpenGLContext's own `develop` still
+  says 3.0.0a5, which is published, so its next release needs a `--bump`.
+  The workspace root's `uv.lock` is regenerated with its next change.
 - Strong versus weak callback references. The plan holds them strongly and
   returns a `Subscription`, which differs from `addEventHandler`. The
   alternative is weak references with an `owner=` that ties a subscription's life
