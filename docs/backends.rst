@@ -184,6 +184,14 @@ not do it, so the application can offer the user an alternative.
      - Hides the pointer and reports unbounded motion, which mouse-look needs.
      - A window system that does not give a client the pointer, such as Qt's
        Wayland plugin. Turning is then limited to the window.
+   * - ``setPointerShape(name)``
+     - Shows the pointer named in ``OpenGLContext.context.CURSORS``;
+       ``''`` is the ordinary pointer. The overlay asks for the shape the
+       control under the pointer wants; see :ref:`pointer-feedback`.
+     - A shape the platform or its cursor theme has no picture for, which is
+       left as it was; the offscreen backends, which have no pointer; and, on
+       GLUT, Tk, wxPython and Qt, any shape while mouse-look holds the pointer
+       hidden. The overlay asks for none then, whatever the backend.
    * - ``setFullscreen(on)``
      - Switches a live window to full screen and back, keeping its GL context.
      - A machine with no monitor attached, or a session with no window
