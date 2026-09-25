@@ -268,3 +268,19 @@ class TestOneOptionOneEntry:
         action, = [action for action in build_parser()._actions
                    if action.dest == 'video_seconds']
         assert 'fly-through' in action.help
+
+
+class TestTheViewerPageListsEveryField:
+    def test_every_field_is_named_on_the_viewer_page(self):
+        import dataclasses
+        import re
+        here = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))
+        with open(os.path.join(here, 'docs', 'viewer.rst'),
+                  encoding='utf-8') as handle:
+            page = handle.read()
+        start = page.index('The fields, by group:')
+        listed = set(re.findall(r'``([a-z_]+)``',
+                                page[start:page.index('\n\n', start + 30)]))
+        assert [field.name for field in dataclasses.fields(ViewerOptions)
+                if field.name not in listed] == []

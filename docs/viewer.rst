@@ -57,10 +57,15 @@ Supported formats
      - ``vrml97``
      - A VRML97 *world*: shown where it was authored, with its own sky, lights
        and ``Viewpoint`` nodes. See :doc:`VRML97 <vrml97>`.
-   * - ``.obj``
+   * - ``.obj`` ``.obj.gz``
      - ``obj``
      - A Wavefront model. OBJ has no lights, cameras or sky, so the viewer
        supplies all three.
+   * - ``.zip`` ``.tar`` ``.tar.gz`` ``.tgz`` ``.tar.bz2`` ``.tar.xz``, with
+       ``#member``
+     - the member's
+     - An archive: the member named after ``#`` opens with the adapter for its
+       own format. See :ref:`Archives <viewer-archives>`.
    * - ``tileset.json``, or any JSON with both ``asset`` and ``root``
      - ``tiles3d``
      - An OGC 3D Tiles dataset, streamed and refined as you move. See :doc:`Streamed
@@ -491,8 +496,9 @@ No command line is involved:
 line fills in the same object, since ``argparse`` uses one as its namespace,
 so each flag and its field share one default. The fields, by group:
 
-- the source and ``format``;
-- cameras: ``camera``, ``no_cameras``;
+- the source: ``source``, ``format``, ``pack``, and ``views`` (one view or
+  four);
+- cameras: ``camera``, ``no_cameras``, ``list_cameras``;
 - auto-framing: ``yaw``, ``margin``, ``elevation``, ``tilt``, ``eye``,
   ``look_at``;
 - lighting and environment: ``lights``, ``shadows``, ``ibl_intensity``,
@@ -500,8 +506,11 @@ so each flag and its field share one default. The fields, by group:
 - animation: ``animate``, ``animation``, ``anim_time``, ``turntable``,
   ``no_rotate``;
 - ``physics``;
+- streamed datasets: ``sse``, ``memory``, ``no_recenter``, ``cache_dir``;
 - the window and capture: ``size``, ``fullscreen``, ``capture``,
-  ``capture_delay``, ``frames``.
+  ``capture_delay``, ``frames``;
+- recording: ``capture_video``, ``video_seconds``, ``video_fps``,
+  ``fly_through``.
 
 The component opens the window its context class asks for, 300x300 unless
 the class says otherwise. ``options.window()`` returns the ``size`` and
@@ -521,8 +530,9 @@ The viewer on each toolkit
 ``ViewerContext`` runs on the backend the environment and the user's
 configuration choose. ``viewerFor( name )`` returns the viewer class for a
 named :doc:`backend <backends>` instead: ``glfw``, ``glut``, ``pygame``,
-``tk``, ``qt`` or ``wx``. A backend whose toolkit is not installed raises
-``RuntimeError`` naming the ones that are available.
+``tk``, ``qt`` or ``wx``. A backend that is not registered, or whose toolkit
+is not installed, raises ``RuntimeError`` naming the registered backends; the
+import error logged before it says which toolkit is missing.
 
 The viewer in a window of its own
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
