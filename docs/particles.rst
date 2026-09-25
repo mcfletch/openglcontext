@@ -115,12 +115,24 @@ or the brazier itself), either with the **Engine Hook** panel of the
    * - ``density``
      - 1
      - Multiplies particles per second, the burst and ``maxParticles``.
-   * - any emitter field
+   * - an emitter field
      - the preset's
      - Set by name before ``scale`` and ``density`` are applied:
-       ``{"kind": "fire", "color": [0.3, 0.6, 1.0]}`` is a gas flame. A name
-       that is not one of the :ref:`fields <fields>`, or a value the field
-       does not accept, is logged and ignored.
+       ``{"kind": "fire", "color": [0.3, 0.6, 1.0]}`` is a gas flame. Every
+       :ref:`field <fields>` but ``externalURL`` may be set. A name that is
+       not one of them, or a value the field does not accept, is logged and
+       ignored.
+   * - ``texture``
+     - none
+     - A sprite image named relative to the document, read only when the
+       document was loaded from a file, and only from inside its directory.
+
+What a file asks for is held to the fields' ranges, before and after
+``scale`` and ``density`` multiply it: at most 2000 particles a second,
+a ``maxParticles`` and a ``burst`` of at most 20000, sizes of at most 20 and
+a speed of at most 100. ``scale`` (the object's own scale included) and
+``density`` are each at most 100. A value that is no finite number is
+logged and the preset's value is kept (``particlehooks.RANGES``).
 
 The ``sparks`` preset is a single burst, for a game to fire on an impact. An
 authored ``sparks`` emits a steady 60 a second instead, because nothing in a

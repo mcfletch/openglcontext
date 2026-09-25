@@ -101,7 +101,7 @@ def test_the_emitter_lands_in_hook_data():
 # --- parameters ---------------------------------------------------------------
 
 def test_any_emitter_field_may_be_given():
-    """The panel's fields are a convenience; every field is reachable."""
+    """The panel's fields are a convenience; every authorable field is reachable."""
     _scene, (emitter,) = _loaded({'kind': 'smoke', 'rate': 5,
                                   'color': [0.8, 0.1, 0.1], 'lifetime': 9})
     assert emitter.rate == pytest.approx(5.0)
@@ -201,3 +201,74 @@ def test_a_spent_effect_asks_for_nothing():
     scene, (emitter,) = _loaded({'kind': 'smoke'})
     emitter.enabled = False
     assert scene.advance(0.5) is False
+
+
+# --- a file the application does not control -------------------------------------
+
+CEILINGS = {'rate': 2000.0, 'maxParticles': 20000, 'burst': 20000,
+            'size': 20.0, 'endSize': 20.0, 'speed': 100.0}
+
+
+@pytest.mark.parametrize('hook', [
+    {'kind': 'fire', 'density': 1e7},
+    {'kind': 'fire', 'maxParticles': 4e9},
+    {'kind': 'sparks', 'burst': 10 ** 12, 'rate': 1e30},
+    {'kind': 'fire', 'scale': 1e9},
+    {'kind': 'fire', 'size': 1e6, 'speed': 1e6},
+    {'kind': 'fire', 'density': 1e300, 'scale': 1e300},
+])
+def test_no_tag_asks_for_more_than_the_fields_ceilings(hook):
+    """A file cannot size the particle pool, or a particle, past what the
+    emitter's own fields declare as their range."""
+    _scene, (emitter,) = _loaded(hook)
+    for name, ceiling in CEILINGS.items():
+        assert getattr(emitter, name) <= ceiling, name
+    assert np.all(np.isfinite(emitter.gravity))
+
+
+@pytest.mark.parametrize('name, value', [
+    ('rate', float('inf')), ('lifetime', float('nan')), ('spread', 'nan'),
+    ('size', -1.0), ('color', [1.0, 'x', 0.0]), ('gravity', [0, float('inf'), 0]),
+    ('blending', 'glitter'), ('enabled', 'maybe'), ('seed', 2 ** 40),
+])
+def test_a_value_no_emitter_can_have_is_its_preset_or_its_bound(name, value):
+    _scene, (emitter,) = _loaded({'kind': 'fire', name: value})
+    got = getattr(emitter, name)
+    assert np.all(np.isfinite(np.asarray(got, dtype='d'))) if name != 'blending' \
+        else got in ('additive', 'alpha')
+    if name == 'size':
+        assert emitter.size == 0.0
+    if name == 'seed':
+        assert -1 <= emitter.seed < 2 ** 31
+
+
+@pytest.mark.parametrize('texture', ['/etc/hostname', '../outside.png',
+                                     '../../etc/passwd'])
+def test_a_sprite_outside_the_documents_directory_is_refused(tmp_path, texture, caplog):
+    path = tmp_path / 'torch.glb'
+    write_glb(SceneNode(name='torch', hook={'kind': 'fire', 'texture': texture}),
+              path=str(path))
+    with caplog.at_level(logging.WARNING):
+        emitter, = _emitters(gltf.load_gltf(str(path)))
+    assert emitter.texture == ''
+    assert 'texture' in caplog.text
+
+
+def test_a_sprite_from_a_document_loaded_from_bytes_is_refused():
+    """With no directory to read beside, there is nowhere the path could mean."""
+    _scene, (emitter,) = _loaded({'kind': 'fire', 'texture': 'spark.png'})
+    assert emitter.texture == ''
+
+
+def test_a_sprite_beside_the_document_is_read_from_there(tmp_path):
+    (tmp_path / 'spark.png').write_bytes(b'')
+    path = tmp_path / 'torch.glb'
+    write_glb(SceneNode(name='torch', hook={'kind': 'fire', 'texture': 'spark.png'}),
+              path=str(path))
+    emitter, = _emitters(gltf.load_gltf(str(path)))
+    assert emitter.texture == str(tmp_path / 'spark.png')
+
+
+def test_the_emitters_url_is_not_authorable():
+    _scene, (emitter,) = _loaded({'kind': 'fire', 'externalURL': ['x.wrl']})
+    assert list(emitter.externalURL) == []
