@@ -465,3 +465,29 @@ class TestWritingAPackFromATreeWithLinks:
             archive.write(str(tree), str(out / 'a.tar.gz'))
         assert (out / 'a.tar.gz').read_bytes() == b'the last good build'
         assert os.listdir(out) == ['a.tar.gz']
+
+
+class TestWritingAPackFromACheckoutWithoutItsLargeFiles:
+    """A checkout made without ``git lfs pull`` holds a small text pointer in
+    place of each large file, under the file's own name."""
+
+    POINTER = (b'version https://git-lfs.github.com/spec/v1\n'
+               b'oid sha256:' + b'0' * 64 + b'\nsize 12345\n')
+
+    def test_a_pointer_is_refused_by_name(self, tmp_path):
+        tree = tmp_path / 'tree'
+        (tree / 'trees').mkdir(parents=True)
+        (tree / 'heightmap.png').write_bytes(b'\x89PNG\r\n\x1a\n')
+        (tree / 'trees' / 'fir.npz').write_bytes(self.POINTER)
+        with pytest.raises(IOError) as raised:
+            archive.write(str(tree), str(tmp_path / 'a.tar.gz'))
+        assert 'trees/fir.npz' in str(raised.value)
+        assert 'git lfs pull' in str(raised.value)
+        assert not (tmp_path / 'a.tar.gz').exists()
+
+    def test_a_file_that_only_mentions_one_is_packed(self, tmp_path):
+        tree = tmp_path / 'tree'
+        tree.mkdir()
+        (tree / 'README.txt').write_bytes(b'see ' + self.POINTER)
+        archive.write(str(tree), str(tmp_path / 'a.tar.gz'))
+        assert (tmp_path / 'a.tar.gz').exists()

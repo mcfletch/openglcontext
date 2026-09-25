@@ -518,6 +518,9 @@ every application:
    gzip header have a fixed timestamp, and entries have no owner and one file
    mode. The same content gives the same digest on any machine, so you can
    rebuild from a tag and show that the result is the released archive.
+   It refuses a tree holding a symbolic link or a Git LFS pointer (the small
+   text file a checkout made without ``git lfs pull`` holds in place of a large
+   one), naming each, so neither reaches a release.
 
 #. Measure the archive and take its digest with ``os.path.getsize(path)`` and
    ``archive.digest(path)``. Write the registry entry from those values, so

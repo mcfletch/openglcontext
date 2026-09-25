@@ -20,13 +20,14 @@ import os
 import sys
 import tarfile
 import zipfile
+from typing import Sequence
 
 from OpenGLContext import atomicfiles
 from OpenGLContext.loaders import resolver
 
-__all__ = ['DigestMismatch', 'EPOCH', 'MAX_ENTRIES', 'MAX_EXPANSION',
-           'MINIMUM_UNPACKED', 'TooLarge', 'UnreadableArchive', 'UnsafeArchive',
-           'check_digest', 'digest', 'extract', 'unpacked_limit', 'write']
+__all__ = ['DigestMismatch', 'EPOCH', 'LFS_POINTER', 'MAX_ENTRIES',
+           'MAX_EXPANSION', 'MINIMUM_UNPACKED', 'TooLarge', 'UnreadableArchive',
+           'UnsafeArchive', 'check_digest', 'digest', 'extract', 'unpacked_limit', 'write']
 
 #: How much of a file is hashed at a time. A base pack is tens of megabytes and
 #: is not held in memory to digest it.
@@ -162,10 +163,16 @@ def write(directory: str, path: str, compresslevel: int = 9) -> str:
     a link and a linked directory would otherwise be left out; copy the file
     into the tree instead.
 
+    A Git LFS pointer is refused too, naming every one found: a checkout made
+    without ``git lfs pull`` holds a small text file in place of each large
+    one, under the same name, and an archive of those would install and fail
+    only when a file is opened.
+
     The archive is written beside ``path`` and moved into place when complete,
     so a refused or interrupted write leaves the previous build where it was.
     """
     names = _entries(directory)
+    _refuse_pointers(directory, names)
     with atomicfiles.staged_file(path, 'wb') as raw:
         with gzip.GzipFile(filename='', mode='wb', fileobj=raw,
                            compresslevel=compresslevel,
@@ -210,6 +217,25 @@ def _entries(directory: str) -> list[str]:
             os.path.relpath(os.path.join(root, leaf), directory).replace(
                 os.sep, '/') for leaf in files)
     return sorted(names)
+
+
+#: How a Git LFS pointer file begins.
+LFS_POINTER = b'version https://git-lfs.github.com/spec/v1'
+
+
+def _refuse_pointers(directory: str, names: Sequence[str]) -> None:
+    """An ``IOError`` naming every Git LFS pointer among ``names``."""
+    found = []
+    for name in names:
+        with open(os.path.join(directory, *name.split('/')), 'rb') as handle:
+            if handle.read(len(LFS_POINTER)) == LFS_POINTER:
+                found.append(name)
+    if found:
+        raise IOError(
+            '%d files under %s are Git LFS pointers rather than content (%s); '
+            'run `git lfs pull` in the checkout and build again'
+            % (len(found), directory, ', '.join(found[:5])
+               + (', ...' if len(found) > 5 else '')))
 
 
 def digest(path: str) -> str:
