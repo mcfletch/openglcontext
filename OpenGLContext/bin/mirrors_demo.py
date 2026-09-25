@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import logging
 import sys
-from typing import Any
+from typing import Any, ClassVar
 
 from OpenGLContext.bin.mirrorhall import BAYS, Hall
 from OpenGLContext.scenegraph import basenodes, surfaces
@@ -72,7 +72,7 @@ class MirrorHall:
     """
 
     #: The keys :meth:`press` answers, and what each does.
-    KEYS: dict[str, str] = {
+    KEYS: ClassVar[dict[str, str]] = {
         'r': 'reflections on and off',
         'b': 'mirror views a frame may draw',
         'm': 'how deep mirrors seen in mirrors are followed',

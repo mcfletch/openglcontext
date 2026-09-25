@@ -345,6 +345,26 @@ def test_dispatch_capture_records_framebuffer(monkeypatch):
     assert captures['shot1']['pixels'] == [0, 1, 2, 3]
 
 
+def test_captures_are_per_context(monkeypatch):
+    """A capture taken by one context is not among another context's captures."""
+
+    class _FakeCapture:
+        width = 1
+        height = 1
+
+        def capture(self, **_named):
+            return [0]
+
+    monkeypatch.setattr(
+        'OpenGLContext.testing.framebuffer_comparison.FramebufferCapture',
+        _FakeCapture,
+    )
+    first, second = _fake_context(), _fake_context()
+    first._dispatch_injected_event({'type': 'capture', 'name': 'shot1'})
+    assert 'shot1' in first.get_injection_captures()
+    assert second.get_injection_captures() == {}
+
+
 def test_dispatch_exit_prefers_onquit():
     """An exit event closes the injector and calls OnQuit when present."""
     ctx = _fake_context()

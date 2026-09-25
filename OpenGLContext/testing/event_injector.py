@@ -268,7 +268,8 @@ class EventInjectionMixin:
     """
 
     _event_injector: Optional[EventInjector] = None
-    _injection_captures: dict[str, Any] = {}
+    #: Captures by name; each context has its own, made at its first use.
+    _injection_captures: dict[str, Any]
 
     if TYPE_CHECKING:
         # Provided by the concrete Context this mixin is composed into
@@ -387,7 +388,7 @@ class EventInjectionMixin:
 
         capture = FramebufferCapture()
         pixels = capture.capture(exclude_hud=True)
-        self._injection_captures[name] = {
+        self.get_injection_captures()[name] = {
             'pixels': pixels,
             'width': capture.width,
             'height': capture.height,
@@ -414,7 +415,8 @@ class EventInjectionMixin:
         Returns:
             Dict mapping capture names to capture data
         """
-        return self._injection_captures
+        captures: dict[str, Any] = vars(self).setdefault('_injection_captures', {})
+        return captures
 
 
 class EventSender:

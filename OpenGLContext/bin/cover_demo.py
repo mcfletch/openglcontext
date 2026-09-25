@@ -26,7 +26,7 @@ import math
 import os
 import sys
 from collections.abc import Callable, Sequence
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 import numpy as np
 from PIL import Image, ImageDraw
@@ -247,7 +247,7 @@ class Meadow:
     default); ``background`` scatters the cover on a worker thread.
     """
 
-    KEYS = {
+    KEYS: ClassVar[dict[str, str]] = {
         'o': 'the well\'s opening cut in the ground, or closed',
         'd': 'the cover at full density, half, or none',
     }

@@ -85,7 +85,7 @@ def _as_text(data: bytes | str) -> str:
 class OBJHandler(base.BaseHandler):
     """Scenegraph loader which loads individual OBJ files as scenegraphs"""
 
-    filename_extensions = [".obj", ".obj.gz"]
+    filename_extensions = (".obj", ".obj.gz")
 
     def defaultMaterial(self) -> Any:
         return basenodes.Appearance(

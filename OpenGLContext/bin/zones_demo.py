@@ -22,7 +22,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 from OpenGLContext.scenegraph import basenodes, surfaces
 
@@ -69,7 +69,7 @@ class ZoneCourt:
     that zone names. :meth:`press` answers a key.
     """
 
-    KEYS = {
+    KEYS: ClassVar[dict[str, str]] = {
         'z': 'the rooms\' zones off and on',
         't': 'the east room\'s statue shown only from inside, or always',
     }

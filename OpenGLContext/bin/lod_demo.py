@@ -21,7 +21,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 from OpenGLContext.scenegraph import basenodes, surfaces
 
@@ -71,7 +71,7 @@ class LODHall:
     ``columns`` the distance ``LOD`` nodes. :meth:`press` answers a key.
     """
 
-    KEYS = {
+    KEYS: ClassVar[dict[str, str]] = {
         't': 'each level tinted its own metal, or all bronze',
         'h': 'hysteresis off, or back on at its default',
     }

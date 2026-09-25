@@ -1,7 +1,7 @@
 """Base loader module for OpenGLContext"""
 
 import logging
-from typing import IO, Any, cast
+from typing import IO, Any, ClassVar, cast
 
 log = logging.getLogger(__name__)
 
@@ -9,7 +9,7 @@ log = logging.getLogger(__name__)
 class BaseHandler(object):
     """Base handler class providing common loading operations"""
 
-    filename_extensions: list[str] = []
+    filename_extensions: ClassVar[tuple[str, ...]] = ()
     # First three bytes of a gzip member: the two-byte magic number and the
     # only compression method the format defines (RFC 1952).
     GZIP_MAGIC = b"\037\213\010"

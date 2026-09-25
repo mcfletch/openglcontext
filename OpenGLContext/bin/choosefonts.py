@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 """Test of text objects"""
 
-from typing import Any
+from typing import Any, Sequence
 from OpenGLContext import testingcontext
 
 #: The backend is chosen at run time, so the class this subclasses is not one a
@@ -21,9 +21,9 @@ class TestContext(BaseContext):
     currentStyle = -1
     #: Family sets to browse, and the one being browsed.  Named here so that a
     #: machine with no TTF registry still has something to show.
-    families = ["SERIF", "SANS", "TYPEWRITER"]
+    families: Sequence[str] = ("SERIF", "SANS", "TYPEWRITER")
     family = "SERIF"
-    styles: list = []
+    styles: Sequence[str] = ()
     currentDefaultName = ""
 
     def setupFontProviders(self) -> None:

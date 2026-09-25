@@ -60,7 +60,7 @@ class State( dict ):
                 diffs[lkey] = (other[lkey],lvalue)
         return diffs
         
-    booleanarguments = [
+    booleanarguments = (
         ('GL_AUTO_NORMAL',GL_AUTO_NORMAL,'params returns a single Boolean value indicating whether 2-D map evaluation automatically generates surface normals.  See glMap2.'),
         ('GL_BLEND',GL_BLEND,'params returns a single Boolean value indicating whether blending is enabled.  See glBlendFunc.'),
     ##	('GL_BLEND_COLOR_EXT',GL_BLEND_COLOR_EXT,'params returns four values, the red, green, blue, and alpha values which are the components of the blend color.  See glBlendColorEXT.'),
@@ -301,8 +301,8 @@ class State( dict ):
         ('GL_VIEWPORT',GL_VIEWPORT,'params returns four values:  the x and y window coordinates of the viewport, follow by its width and height.  See glViewport.'),
         ('GL_ZOOM_X',GL_ZOOM_X,'params returns one value, the x pixel zoom factor.  See glPixelZoom.'),
         ('GL_ZOOM_Y',GL_ZOOM_Y,'params returns one value, the y pixel zoom factor.  See glPixelZoom.'),
-    ]
-    intarguments = [
+    )
+    intarguments = (
         ('GL_ACCUM_ALPHA_BITS',GL_ACCUM_ALPHA_BITS,'params returns one value, the number of alpha bitplanes in the accumulation buffer.'),
         ('GL_ACCUM_BLUE_BITS',GL_ACCUM_BLUE_BITS,'params returns one value, the number of blue bitplanes in the accumulation buffer.'),
         ('GL_ACCUM_CLEAR_VALUE',GL_ACCUM_CLEAR_VALUE,'params returns four values:  the red, green, blue, and alpha values used to clear the accumulation buffer.  Integer values, if requested, are linearly mapped from the internal floating-point representation such that 1.0 returns the most positive representable integer value, and -1.0 returns the most negative representable integer value.  See glClearAccum.'),
@@ -330,11 +330,11 @@ class State( dict ):
         ('GL_CURRENT_RASTER_INDEX',GL_CURRENT_RASTER_INDEX,'params returns one value, the color index of the current raster position. See glRasterPos.'),
         ('GL_DEPTH_BITS',GL_DEPTH_BITS,'params returns one value, the number of bitplanes in the depth buffer.'),
         ('GL_DEPTH_FUNC',GL_DEPTH_FUNC,'params returns one value, the symbolic constant that indicates the depth comparison function. See glDepthFunc.'),
-    ]
+    )
 
-    stringarguments = [
+    stringarguments = (
         ('GL_VENDOR', GL_VENDOR, '''Returns the company responsible for this GL implementation.  This name does not change from release to release.  For	Silicon Graphics the string is "SGI".'''),
         ('GL_RENDERER', GL_RENDERER, '''Returns the name of the renderer.	This name is typically specific to a particular configuration of a hardware platform. It	does not change	from release to	release.  The renderer strings for Silicon Graphics graphic engines are listed in	the MACHINE DEPENDENCIES section below.'''),
         ('GL_VERSION', GL_VERSION, '''Returns a version or release number.  For SGI releases prior to Irix 5.3 the string is "1.0".  For	Irix 5.3 and subsequent releases the format is GL version> Irix	 patch ";	for example in	the Irix 5.3 release the string	is "1.0	Irix 5.3".'''),
     ##	('GL_EXTENSIONS', GL_EXTENSIONS, '''Returns a space-separated list of supported extensions to GL.'''),
-    ]
+    )

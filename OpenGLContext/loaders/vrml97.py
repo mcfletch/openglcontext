@@ -78,7 +78,7 @@ class VRML97Handler(base.BaseHandler):
     during parsing.
     """
 
-    filename_extensions = [".wrl", ".wrl.gz", ".wrz", ".vrml", ".vrml.gz"]
+    filename_extensions = (".wrl", ".wrl.gz", ".wrz", ".vrml", ".vrml.gz")
     LOCK = threading.RLock()
 
     def __init__(self, prototypes: dict[str, Any]) -> None:

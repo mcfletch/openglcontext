@@ -17,7 +17,7 @@ import urllib.parse
 from urllib.request import url2pathname
 from io import BytesIO
 from collections.abc import Sequence
-from typing import Any, IO, Optional
+from typing import Any, ClassVar, IO, Optional
 from OpenGL._bytes import as_8_bit
 from OpenGLContext.loaders.resolver import (
     Resolver,
@@ -219,7 +219,8 @@ class _Loader(object):
         file = open(path, "rb")
         return (path, file, path, None)
 
-    loadedHandlers: dict[str, Any] = {}
+    #: Handler for each filename extension, shared by every Loader.
+    loadedHandlers: ClassVar[dict[str, Any]] = {}
 
     def loadHandlers(self) -> None:
         """Load all registered handlers"""

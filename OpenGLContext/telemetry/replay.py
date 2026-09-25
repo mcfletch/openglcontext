@@ -41,7 +41,7 @@ import json
 import logging
 from pathlib import Path
 from collections.abc import Callable, Iterable
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 from OpenGLContext.events import systemtime
 from OpenGLContext.loaders.documentvalues import DocumentValues
@@ -94,7 +94,7 @@ class Recording:
     """One session as data."""
 
     #: Which list each repeated kind of record collects into.
-    BUCKETS = {
+    BUCKETS: ClassVar[dict[str, str]] = {
         'input': 'inputs', 'frames': 'blocks', 'exception': 'exceptions',
         'log': 'messages', 'mark': 'marks', 'state': 'states',
     }
