@@ -256,7 +256,8 @@ car hits and the surface objects stand on then stay the same:
    ground = HeightFieldColliders(physics_world, field, holes=mouth)
 
 ``holes`` may be set at any time; a ``SplatTerrain`` cuts its mesh again at
-its next draw. Setting ``holes`` on a ``TilesTerrain`` also passes it to that
+its next draw. ``oglc-cover`` (:ref:`the ground cover demo <cover-demo>`) cuts
+a well into a hillside this way, and its ``o`` key closes and opens it. Setting ``holes`` on a ``TilesTerrain`` also passes it to that
 terrain's :ref:`ground cover <wheretheygrow>`. Anything you place yourself using only
 ``field.sample`` stands in mid-air across the opening, so check ``holes`` for
 it too.

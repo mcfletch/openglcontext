@@ -127,6 +127,10 @@ Installing the package puts these commands on your path:
    read back, and columns between them chosen by distance, with keys to tint
    each level and to switch hysteresis off. See :ref:`The levels-of-detail
    demo <lod-hall>`.
+``oglc-cover``
+   A meadow of grass, ferns and flowers over low hills, with a well cut into
+   the ground, with keys to close the well and to thin the cover. See
+   :ref:`The ground cover demo <cover-demo>`.
 ``oglc-character-sheet``
    Draws every clip a rigged character plays as one picture, with a row per
    view and a column per moment of the cycle, plus an overview sheet and an

@@ -11,7 +11,8 @@ between the two they cross-fade, so a tree changes from card to branches with
 no visible step. Ground cover is not stored at all: it is scattered on a
 world-anchored grid around the camera and re-chosen as the camera moves. All
 plants read the same :ref:`canopy shade <canopyshade>`, so the ground under a
-wood is dark. The application supplies the plant art; the toolkit ships none.
+wood is dark. The application supplies the plant art; the toolkit ships none,
+and ``oglc-cover`` (:ref:`below <cover-demo>`) draws its own.
 
 .. figure:: images/gallery/showcase/forest-walk.jpg
    :alt: A hillside of firs over undergrowth, seen from standing height
@@ -130,6 +131,28 @@ field. ``clumpMesh`` and ``clumpFarMesh`` name meshes in the ``.glb``. A string
 of digits that matches no mesh name selects the mesh at that position in the
 file. With an empty ``clumpFarMesh`` the near mesh is drawn once over the
 whole disc, with no second level.
+
+.. _cover-demo:
+
+Walk through it
+~~~~~~~~~~~~~~~
+
+.. code-block:: bash
+
+   oglc-cover
+
+A meadow over low hills, with rock on a ridge to the north and a stone well
+cut into the ground. Three species grow on it: grass, drawn as geometry in two
+levels of detail near the camera and as cards beyond; ferns, gathered in beds
+(``patchiness`` 0.85, ``patchMetres`` 18); and flowers in smaller clumps. The
+cover grows on the control map's meadow layer through ``control_weight``, so
+none grows on the rock. The well is an opening (``holes``): the terrain's mesh
+is cut round it and nothing grows over it. ``o`` closes the opening and opens
+it again, and ``d`` steps ``density_scale`` through 1, 0.5 and 0. The plants'
+cards and the grass's clump are drawn by the demo itself and written to the
+per-user cache the first time it runs. ``OpenGLContext.bin.cover_demo.Meadow``
+builds the scene, and the :doc:`cover_meadow tutorial <tutorials/cover_meadow>`
+walks through it.
 
 Distance levels
 ~~~~~~~~~~~~~~~
