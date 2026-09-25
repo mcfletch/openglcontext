@@ -433,6 +433,53 @@ derives from ``PassResources`` and overrides the method the same way;
 ``disposal.let_go(owner, attribute)`` releases one held object and clears the
 attribute, logging a failure rather than raising it.
 
+.. _gl-state:
+
+GL state a draw changes
+-----------------------
+
+A draw that switches blending on, binds its own framebuffer, uses its own
+program or narrows the scissor puts each back when it is done, whether it
+finishes or raises part way. Left behind, a scissor clips the next view, an
+offscreen framebuffer takes the next frame and a reversed cull face turns the
+next pass inside out. ``passes.glstate`` does this with context managers, each
+of which sets the state on entry and restores what was there before in a
+``finally``:
+
+.. code-block:: python
+
+   from OpenGLContext.passes import glstate
+
+   with glstate.enabled(GL_BLEND), glstate.bound_framebuffer(target):
+       draw()
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Manager
+     - For the block
+   * - ``enabled(*caps)``, ``disabled(*caps)``, ``switched(enable=, disable=)``
+     - Capabilities on or off; each is put back as it was.
+   * - ``bound_framebuffer(fbo, target=GL_FRAMEBUFFER, restore=None)``
+     - A framebuffer bound. ``GL_FRAMEBUFFER`` binds the draw and read targets
+       and puts both back.
+   * - ``program(name, restore=None)``
+     - A program in use.
+   * - ``scissor(x, y, width, height)``
+     - Drawing clipped to a rectangle; the test and the box are put back.
+   * - ``cull_face(mode)``
+     - The face culled.
+
+What was there before is asked of GL on entry. A draw issued once per node
+that already knows it, from the pass's own record of the bound program say,
+passes ``restore=`` to keep the query off its path.
+``glstate.frame_baseline(enable=, disable=, cull_face=, framebuffer=)`` sets
+the state a frame or a pass starts from outright, so nothing an earlier frame
+left behind reaches it. The ``OGC151`` rule of :doc:`openglcontext-checks
+<checks>` holds the engine's draw code to these managers or a
+``try``/``finally``.
+
 .. _passes:
 
 The passes package
@@ -458,6 +505,8 @@ divide the work:
   (by profile and renderer) and caches the choice across frames.
 - ``framestate.py`` -- the state one frame shares among its stages, dropped
   when the frame ends (see above).
+- ``glstate.py`` -- context managers that set GL state for a block and put it
+  back (see :ref:`gl-state`).
 - ``disposal.py`` -- the chain that deletes a pass's GL objects (see
   :ref:`pass-resources`).
 - ``shaderpass.py`` -- ``VRML97ShaderProgram``, which compiles the

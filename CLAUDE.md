@@ -147,6 +147,9 @@ OpenGLContext/
 │   │                 # swap or a context's teardown -- docs/renderpasses.rst
 │   ├── framestate.py # What one frame shares among its stages (the walk of
 │   │                 # the scene), dropped when the frame ends
+│   ├── glstate.py    # GL state set for a block and put back however it
+│   │                 # ends (enabled, bound_framebuffer, program, scissor),
+│   │                 # and the baseline a frame starts from -- docs/renderpasses.rst
 │   ├── pbrpass.py    # Metallic/roughness uber-shader -- docs/ubershader.rst
 │   ├── ibl.py        # Image-based lighting probe
 │   ├── reflection.py # Planar reflections' arithmetic: which surfaces are

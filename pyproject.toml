@@ -463,6 +463,9 @@ script = [
 # baked props, cover, zones, content-pack registries, key bindings and
 # session journals -- which OGC101, OGC102 and OGC111 hold to DocumentValues,
 # a size check and the resolver.
+# The modules that draw, which OGC151 holds to restoring the GL state they
+# change: every module of the engine.
+pass = ["OpenGLContext/**"]
 loader = [
     "OpenGLContext/loaders/**",
     "OpenGLContext/scenegraph/*hooks.py",
@@ -475,6 +478,19 @@ loader = [
     "OpenGLContext/move/bindingstore.py",
     "OpenGLContext/events/synthetic.py",
     "OpenGLContext/telemetry/replay.py",
+]
+
+# The engine's GL state managers (passes/glstate.py), which OGC151 accepts a
+# state change inside.
+[tool.openglcontext-checks.sanctioned]
+OGC151 = [
+    "OpenGLContext.passes.glstate.enabled",
+    "OpenGLContext.passes.glstate.disabled",
+    "OpenGLContext.passes.glstate.switched",
+    "OpenGLContext.passes.glstate.bound_framebuffer",
+    "OpenGLContext.passes.glstate.program",
+    "OpenGLContext.passes.glstate.scissor",
+    "OpenGLContext.passes.glstate.cull_face",
 ]
 
 [tool.openglcontext-checks.per-file-ignores]
@@ -490,8 +506,10 @@ loader = [
 "tests/glprint.py" = ["OGC141"]
 
 # The modules that implement the sanctioned APIs do what the rules report:
-# the resolver decodes a data URI once check_size has passed it.
+# the resolver decodes a data URI once check_size has passed it, and the GL
+# state managers change the state they restore.
 "OpenGLContext/loaders/resolver.py" = ["OGC102"]
+"OpenGLContext/passes/glstate.py" = ["OGC151"]
 
 # uv decides whether its cached metadata for a source tree is still current
 # from pyproject.toml, setup.py and setup.cfg alone. This project's version

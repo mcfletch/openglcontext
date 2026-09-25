@@ -168,7 +168,8 @@ The rules and what to use instead
    ``glUseProgram`` or ``glCullFace`` that no ``finally`` in the same function
    restores: a draw that raises leaves the state for the next view or frame.
    Restore it in a ``finally``, or through a context manager named in
-   ``sanctioned``.
+   ``sanctioned``; the engine's are in ``OpenGLContext.passes.glstate``
+   (see :ref:`gl-state`).
 
 ``OGC131`` -- ``id()`` as a key
    ``id(x)`` as a subscript, dict or set key, ``in`` operand, ``get``/
