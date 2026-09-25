@@ -837,6 +837,22 @@ openglcontext and pyopengl. What is pending:
   What that agent committed and what it left is in its last commits and in
   `plans/pending/` in the workspace root, where it saves any unfinished change
   as a patch.
+- openglcontext, item 7, state when it stopped: committed are the engine
+  APIs (05bf7c3: `InstancedMeshLOD.stage()`, a `drawn` switch on the
+  instanced nodes, `FetchJob.wait()`, `processexit.flush_and_exit`, public
+  views for the names twig-bb read), the `look_at` fix (4618122), the
+  environment reads through renderoptions with `os.environ`/`os.getenv`
+  banned (a230572; `viewer/sceneviewer.py` is still exempt and can lose the
+  exemption now that de5f152 landed), UP006/UP007/UP035 fixed but not
+  selected (7669be0), and `passes/glstate.py` with OGC151's pass scope
+  (331d420). Not done: OGC151's 176 findings and its selection; the ratchets
+  over `OpenGLContext/**` (about 1,000 findings); SLF001 in tests/unit (about
+  1,200, mostly white-box files needing per-file-ignores) and in the demo
+  scripts (106, tutorials to exempt); selecting the rules and RUF100;
+  trimming `open_audit_sanctioned`. Unfinished worker changes, if any, are
+  patches in the workspace root's `plans/pending/`; run `git status` first.
+  The full unit and visual suites were not run after a230572. twig-bb's
+  `test_each_health_pack_draws_a_different_picture` failed once under load.
 - pyopengl, item 7: the code fixes are committed; the rule selection and four
   handler narrowings wait on the maintainer's uncommitted pyopengl work, as
   patches in the workspace root's `plans/pending/`
