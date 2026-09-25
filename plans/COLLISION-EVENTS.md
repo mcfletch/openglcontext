@@ -565,6 +565,9 @@ Still open:
   twig-bb require `omi_physics>=0.4.0`. OpenGLContext's own `develop` still
   says 3.0.0a5, which is published, so its next release needs a `--bump`.
   The workspace root's `uv.lock` is regenerated with its next change.
+
+## Open questions for the maintainer
+
 - Strong versus weak callback references. The plan holds them strongly and
   returns a `Subscription`, which differs from `addEventHandler`. The
   alternative is weak references with an `owner=` that ties a subscription's life
