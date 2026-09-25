@@ -43,6 +43,7 @@ yes or a no.
 from __future__ import annotations
 
 import contextlib
+import functools
 import os
 import socket
 import sys
@@ -145,7 +146,8 @@ def display_answers(name: str | None = None,
     Where something does answer, a client is run to see whether it is a server
     this process may use -- being listened to is not being let in, and the
     authority a client needs is the client's own business.  With no client to
-    run, a display that accepts a connection is taken at its word.
+    run, a display that accepts a connection is taken at its word.  The client
+    runs once per display in a process; several test modules ask at import.
     """
     display = (os.environ.get('DISPLAY', '') if name is None else name).strip()
     if not _display_listens(display, directory, min(timeout, 2.0)):
@@ -154,6 +156,12 @@ def display_answers(name: str | None = None,
         import tkinter  # noqa: F401
     except ImportError:
         return True
+    return _client_opens(display, timeout)
+
+
+@functools.lru_cache(maxsize=None)
+def _client_opens(display: str, timeout: float) -> bool:
+    """Whether a client opens a window on ``display``, run once per display."""
     import subprocess
     try:
         opened = subprocess.run(

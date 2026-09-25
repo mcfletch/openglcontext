@@ -90,3 +90,30 @@ class TestAgainstARealClient:
         if not display:
             pytest.skip('this machine names no display')
         assert display_answers() == self._client_opens(display)
+
+
+class TestAskedOnce:
+    """Three test modules ask at import time; the client runs once per display."""
+
+    def test_the_client_is_run_once_for_a_display(self, monkeypatch):
+        pytest.importorskip('tkinter')
+        from OpenGLContext.testing import glcontext
+        ran = []
+
+        class Opened:
+            returncode = 0
+
+        def run(*args, **named):
+            ran.append(named['env']['DISPLAY'])
+            return Opened()
+
+        monkeypatch.setattr(glcontext, '_display_listens', lambda *a: True)
+        monkeypatch.setattr(subprocess, 'run', run)
+        glcontext._client_opens.cache_clear()
+        try:
+            assert display_answers(':%d' % NOBODY)
+            assert display_answers(':%d' % NOBODY)
+            assert display_answers(':%d' % (NOBODY - 1))
+        finally:
+            glcontext._client_opens.cache_clear()
+        assert ran == [':%d' % NOBODY, ':%d' % (NOBODY - 1)]
