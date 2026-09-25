@@ -244,6 +244,8 @@ Other settings:
 - ``density_scale`` - a multiplier on the density of every species in the
   set (default 1). A quality setting changes it to draw less cover in the same
   proportions; 0 draws none. A species with a ``density`` of 0 draws none.
+  A new value, like new radii followed by ``retune()``, is scattered at the
+  next ``update`` wherever the camera stands.
 - ``COVER_JITTER`` (1.7) - how far a plant may move from its grid cell. If
   plants stayed inside their cells, the set would still look like a grid of
   diagonal rows from thirty metres away.

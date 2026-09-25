@@ -169,6 +169,25 @@ class TestThinningTheWholeFieldAtOnce:
         assert len(thin.rungs[0].cards.pos) \
             < 0.4 * len(full.rungs[0].cards.pos)
 
+    def test_a_setting_changed_while_standing_still_is_drawn_at_once(self) -> None:
+        """A quality screen is used standing still; its change cannot wait for
+        the camera to walk far enough to scatter again."""
+        cover = _cover(card_radius=100.0)
+        cover.update((0.0, 0.0, 0.0))
+        full = len(cover.rungs[0].cards.pos)
+        cover.density_scale = 0.25
+        cover.update((0.0, 0.0, 0.0))
+        assert len(cover.rungs[0].cards.pos) < 0.4 * full
+
+    def test_a_radius_retuned_while_standing_still_is_drawn_at_once(self) -> None:
+        cover = _cover(card_radius=100.0)
+        cover.update((0.0, 0.0, 0.0))
+        cover.card_radius = 50.0
+        cover.retune()
+        cover.update((0.0, 0.0, 0.0))
+        cards = cover.rungs[0].cards.pos
+        assert float(np.hypot(cards[:, 0], cards[:, 2]).max()) <= 50.0
+
     def test_every_species_is_thinned_together(self) -> None:
         """A field that dropped one plant entirely would change what the
         ground is made of, not how much of it there is."""

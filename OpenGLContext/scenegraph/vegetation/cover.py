@@ -486,10 +486,7 @@ class GroundCover(Group):
         #: How many times a disc has been scattered, which is the cost a caller
         #: wondering what the cover is spending should watch.
         self.selections = 0
-        #: A multiplier on every species' density, which is what a quality
-        #: setting moves: a machine that cannot draw this much cover wants less
-        #: of all of it, in proportion, rather than a different set of plants.
-        self.density_scale = 1.0
+        self._density_scale = 1.0
         #: Whether :meth:`update` scatters on a worker thread; see
         #: :class:`~OpenGLContext.scenegraph.vegetation.streaming.BackgroundCompute`.
         self.background = bool(background)
@@ -549,6 +546,19 @@ class GroundCover(Group):
         self._told('canopy', value)
 
     @property
+    def density_scale(self) -> float:
+        """A multiplier on every species' density, which is what a quality
+        setting moves: a machine that cannot draw this much cover wants less of
+        all of it, in proportion, rather than a different set of plants. A new
+        value is scattered at the next :meth:`update`, wherever the camera is."""
+        return self._density_scale
+
+    @density_scale.setter
+    def density_scale(self, value: float) -> None:
+        self._density_scale = float(value)
+        self._near_at = self._far_at = None
+
+    @property
     def scattered(self) -> int:
         """How many blocks of ground have been scattered, over this cover's life.
 
@@ -572,10 +582,13 @@ class GroundCover(Group):
 
         Called at build, and whenever a quality setting moves a radius: the
         windows are what make one rung hand off to the next without a seam, so
-        they cannot be left where a previous radius put them.
+        they cannot be left where a previous radius put them. The discs are
+        scattered again at the new radii at the next :meth:`update`.
         """
         self.card_radius = max(self.card_radius, self.clump_radius)
         self.far_radius = max(self.far_radius, self.card_radius)
+        self._near_at = self._far_at = None
+        self._drawn_at = None
         for rung in self.rungs:
             rung.retune(self.clump_radius, self.card_radius, self.far_radius)
 
