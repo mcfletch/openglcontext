@@ -8,7 +8,7 @@ centralises that decision so all geometry types share the mirror-aware logic.
 """
 from typing import Any
 
-from OpenGL.GL import GL_CCW, GL_CW, GL_CULL_FACE, glFrontFace, glEnable, glDisable
+from OpenGL.GL import GL_CCW, GL_CW
 
 
 def _det3(mv: Any) -> float:
@@ -43,10 +43,14 @@ def front_face(ccw: bool, mv: Any = None, mirrored: bool = False) -> int:
 
 
 def apply_winding_cull(mode: Any, ccw: bool, solid: bool) -> None:
-    """Set mirror-aware front face and back-face culling for a geometry draw."""
-    glFrontFace(front_face(ccw, getattr(mode, 'matrix', None),
-                           bool(getattr(mode, 'mirroredDraw', False))))
-    if solid:
-        glEnable(GL_CULL_FACE)
-    else:
-        glDisable(GL_CULL_FACE)
+    """Set mirror-aware front face and back-face culling for a geometry draw.
+
+    Through the pass's record of what GL has
+    (:func:`~OpenGLContext.passes.instancing.set_cull_state`), which the PBR
+    meshes and the instanced layers read to skip a call that changes nothing:
+    set past it, the record would be wrong for the next of those.
+    """
+    from OpenGLContext.passes.instancing import set_cull_state
+    set_cull_state(mode, bool(solid),
+                   front_face(ccw, getattr(mode, 'matrix', None),
+                              bool(getattr(mode, 'mirroredDraw', False))))

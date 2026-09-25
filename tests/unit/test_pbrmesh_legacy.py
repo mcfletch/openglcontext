@@ -110,3 +110,28 @@ def test_the_map_is_not_left_bound_for_the_next_shape(gl_context_compat):
     appearance.renderPost(token, mode=mode)
     assert not GL.glIsEnabled(GL.GL_TEXTURE_2D)
     assert GL.glGetIntegerv(GL.GL_TEXTURE_BINDING_2D) == 0
+
+
+def test_a_double_sided_mesh_leaves_culling_as_the_pass_records_it(gl_context_compat):
+    """The pass keeps what it last set for culling and sets it again only on a
+    change; a mesh that turns culling on behind it leaves the next
+    double-sided mesh culled."""
+    import types
+    from OpenGL import GL
+    mode = types.SimpleNamespace(matrix=np.eye(4), shader_mode=False)
+    from OpenGLContext.passes.instancing import set_cull_state
+    set_cull_state(mode, False, GL.GL_CCW)            # a double-sided mesh before
+    _square(solid=False)._render_legacy(mode)
+    assert bool(GL.glIsEnabled(GL.GL_CULL_FACE)) is bool(mode._cull_enabled)
+    _square(solid=True)._render_legacy(mode)
+    assert bool(GL.glIsEnabled(GL.GL_CULL_FACE)) is bool(mode._cull_enabled) is True
+
+
+def test_a_mirrored_solid_mesh_is_seen_from_the_front(render_scene, compat):
+    """A mirroring transform turns the triangles' winding over; the front face
+    follows it, as it does in the core profile."""
+    mirrored = basenodes.Transform(scale=(-1.0, 1.0, 1.0),
+                                   children=_scene(_square())[2:])
+    scene = _scene(_square())[:2] + [mirrored]
+    red, _green, _blue = _centre(render_scene, scene)
+    assert red > 40

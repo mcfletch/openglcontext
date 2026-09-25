@@ -350,11 +350,8 @@ class IndexedPolygons(
             return 1
         index_vbo = self._get_index_vbo(mode)
 
-        glFrontFace(GL_CCW if self.ccw else GL_CW)
-        if self.solid:
-            glEnable(GL_CULL_FACE)
-        else:
-            glDisable(GL_CULL_FACE)
+        from OpenGLContext.scenegraph.winding import apply_winding_cull
+        apply_winding_cull(mode, bool(self.ccw), bool(self.solid))
 
         from OpenGLContext.scenegraph.geometryarrays import (
             GeometryArrays, render_geometry,

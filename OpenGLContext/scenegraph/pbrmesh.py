@@ -12,6 +12,7 @@ only sets up the VAO and issues the draw.
 """
 from __future__ import annotations
 
+import weakref
 from typing import Any, Optional, Tuple
 
 import numpy as np
@@ -122,16 +123,22 @@ class _MeshGPU(object):
         if self.idx_vbo is not None:
             self.idx_vbo.unbind()
 
-    def unchecked(self, program: int) -> bool:
+    def unchecked(self, program: int, owner: Any) -> bool:
         """Whether these arrays have not yet been checked against ``program``; now they have.
 
         :func:`~OpenGLContext.scenegraph.geometryarrays.report_missing_inputs`
-        is asked once per program rather than on every draw.
+        is asked once per program rather than on every draw. ``owner`` is the
+        set of programs ``program`` belongs to (the pass's shader program),
+        held weakly: GL gives a deleted program's name to the next one made,
+        and a pass built again checks its own programs afresh.
         """
-        checked = self.__dict__.setdefault('_checked', set())
-        if program in checked:
+        checked = self.__dict__.get('_checked')
+        if checked is None:
+            checked = self.__dict__['_checked'] = weakref.WeakKeyDictionary()
+        seen = checked.setdefault(owner, set())
+        if program in seen:
             return False
-        checked.add(program)
+        seen.add(program)
         return True
 
     def vertexArrays(self) -> Any:
@@ -709,7 +716,7 @@ class PBRMesh(node.Node):
             # Against the program now bound -- the depth pass draws these same
             # arrays and asks for less than the lit program does.
             bound = sp.bound_program() or sp.program
-            if gpu.unchecked(bound):
+            if gpu.unchecked(bound, sp):
                 report_missing_inputs(
                     bound, gpu.vertexArrays(), sp.required_inputs(bound),
                     mode=mode, node=self, where='PBRMesh')
@@ -745,7 +752,11 @@ class PBRMesh(node.Node):
         The compatibility profile's pass. Positions and normals are the posed
         ones, deformed on the CPU; vertex colours are drawn through
         ``GL_COLOR_MATERIAL``; ``textured`` says a base colour map is bound,
-        and the first set of texture coordinates is supplied for it.
+        and the first set of texture coordinates is supplied for it. Culling
+        and the front face go through the pass's record of them
+        (:meth:`_apply_draw_state`), as in the core profile, so a mirrored
+        mesh is wound the right way round and a double-sided one leaves
+        culling as the record says.
         """
         from OpenGL import GL
         positions, normals = self.positions, self.normals
@@ -771,9 +782,9 @@ class PBRMesh(node.Node):
             GL.glColorPointer(4, GL.GL_FLOAT, 0, self.colors)
             GL.glColorMaterial(GL.GL_FRONT_AND_BACK, GL.GL_AMBIENT_AND_DIFFUSE)
             GL.glEnable(GL.GL_COLOR_MATERIAL)
-        culled = bool(self.solid)
-        if not culled:
-            GL.glDisable(GL.GL_CULL_FACE)
+        self._apply_draw_state(mode)
+        two_sided = not self._wants_cull(mode)
+        if two_sided:
             GL.glLightModeli(GL.GL_LIGHT_MODEL_TWO_SIDE, GL.GL_TRUE)
         for array in arrays:
             GL.glEnableClientState(array)
@@ -788,9 +799,8 @@ class PBRMesh(node.Node):
                 GL.glDisableClientState(array)
             if self.colors is not None:
                 GL.glDisable(GL.GL_COLOR_MATERIAL)
-            if not culled:
+            if two_sided:
                 GL.glLightModeli(GL.GL_LIGHT_MODEL_TWO_SIDE, GL.GL_FALSE)
-                GL.glEnable(GL.GL_CULL_FACE)
         return 1
 
     # -- skinning -----------------------------------------------------------

@@ -72,6 +72,17 @@ class TestApplyWindingCull:
         assert not glIsEnabled(GL_CULL_FACE)
         assert int(glGetIntegerv(GL_FRONT_FACE)) == GL_CCW
 
+    def test_the_pass_record_is_kept_with_what_gl_has(self, gl):
+        """The pass records culling so a mesh sets it only on a change; VRML97
+        geometry setting it past the record leaves the next mesh culled."""
+        from OpenGLContext.passes.instancing import set_cull_state
+        mode = types.SimpleNamespace(matrix=IDENT)
+        set_cull_state(mode, False, GL_CCW)          # a double-sided mesh
+        winding.apply_winding_cull(mode, ccw=True, solid=True)
+        assert mode._cull_enabled is True
+        set_cull_state(mode, False, GL_CCW)          # the next double-sided mesh
+        assert not glIsEnabled(GL_CULL_FACE)
+
     def test_missing_matrix_uses_base_winding(self, gl):
         mode = types.SimpleNamespace()          # no .matrix attribute
         winding.apply_winding_cull(mode, ccw=False, solid=True)

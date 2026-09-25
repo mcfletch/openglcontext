@@ -238,14 +238,27 @@ class TestAMeshAsksOncePerProgram:
     drawn with it, not on every draw: the answer changes only with the arrays,
     and new arrays are a new GPU record."""
 
+    class _Programs:
+        """Stands for a pass's set of programs, which owns their names."""
+
     def test_the_first_draw_with_a_program_is_checked(self):
         from OpenGLContext.scenegraph.pbrmesh import _MeshGPU
         gpu = _MeshGPU.__new__(_MeshGPU)
-        assert gpu.unchecked(7)
-        assert not gpu.unchecked(7)
+        owner = self._Programs()
+        assert gpu.unchecked(7, owner)
+        assert not gpu.unchecked(7, owner)
 
     def test_another_program_is_checked_on_its_own(self):
         from OpenGLContext.scenegraph.pbrmesh import _MeshGPU
         gpu = _MeshGPU.__new__(_MeshGPU)
-        gpu.unchecked(7)
-        assert gpu.unchecked(9)
+        owner = self._Programs()
+        gpu.unchecked(7, owner)
+        assert gpu.unchecked(9, owner)
+
+    def test_a_name_gl_gives_again_to_a_new_set_is_checked_again(self):
+        """GL reuses a deleted program's name; a pass built again compiles
+        new programs that may be given the old names."""
+        from OpenGLContext.scenegraph.pbrmesh import _MeshGPU
+        gpu = _MeshGPU.__new__(_MeshGPU)
+        gpu.unchecked(7, self._Programs())
+        assert gpu.unchecked(7, self._Programs())

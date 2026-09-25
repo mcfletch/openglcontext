@@ -131,6 +131,7 @@ class FlatPass( _flat.FlatPass ):
 
             self.renderOpaque( frame.toRender )
             self.renderTransparent( frame.toRender )
+            self.resetMeshDrawState()
         finally:
             self._endView( frame )
 
