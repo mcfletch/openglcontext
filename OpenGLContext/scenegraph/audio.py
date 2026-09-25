@@ -353,6 +353,12 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
                           'maximum': 10.0, 'step': 0.1},
     }
 
+    #: How much of the emitter the zones let through, from 0 to 1: the share
+    #: of the zones naming it that the listener is in, set each frame by
+    #: :func:`OpenGLContext.audio.areas.apply_zones`. 1 for an emitter no
+    #: zone names. Not a field, since it is worked out rather than authored.
+    zoneGain = 1.0
+
     #: The fields that make up the record's ``positional`` sub-object.
     POSITIONAL_FIELDS = ('shapeType', 'coneInnerAngle', 'coneOuterAngle',
                           'coneOuterGain', 'distanceModel', 'maxDistance',
@@ -388,7 +394,7 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
         """
         record = self._record
         record.type = self.type
-        record.gain = self.gain
+        record.gain = self.gain * self.zoneGain
         if not record.positional_audio:
             record.positional = None
         else:

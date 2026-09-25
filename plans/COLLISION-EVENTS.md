@@ -528,7 +528,7 @@ Still open:
   work in the same files (`docs/audio.rst`, `docs/documentation.rst`,
   `docs/physics.rst`). The branch also moves the `tests/reference_images`
   gitlink to the reference repository's `bless/physics-events` branch
-  (`df06883`), which has to reach that repository's `main` and GitHub.
+  (`aeefc92`), which has to reach that repository's `main` and GitHub.
   omi_physics, marble-demo and twig-bb have been fast-forwarded on `develop`;
   nothing is pushed.
 - Preflight for openglcontext has to run once the branch is in `develop`.

@@ -416,7 +416,20 @@ blow.
 Background sound for an area
 ----------------------------
 
-Each area gets its own looping emitter. For a round area, place it at the
+A zone (:doc:`zones`) plays an area's ambience: a global emitter named by a
+``ZoneAudio`` is heard only while the camera is inside the zone and fades out
+over its ``blend``, and a ``ZoneReverb`` gives everything heard there the
+reverb of the place. A glTF file declares both with ``OGLC_zone``; the render
+pass sets the gains and the reverb each frame.
+
+.. code-block:: python
+
+   birds = AudioEmitter(type='global', sources=[
+       AudioSource(url=['sounds/birds.ogg'], loop=True, autoplay=True)])
+   forest = Transform(translation=(0, 10, -40), children=[
+       Zone(size=(80, 30, 60), blend=15.0, settings=[ZoneAudio(emitters=[birds])])])
+
+Without zones, each area gets its own looping emitter. For a round area, place it at the
 centre with ``distanceModel='linear'``: it is at full level within
 ``refDistance`` and fades to silence at ``maxDistance``.
 

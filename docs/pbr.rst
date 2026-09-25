@@ -505,6 +505,12 @@ tone-mapped in the same way as lit geometry, so the sky and the lit surfaces
 match. A ``CubeBackground`` of six LDR JPEG faces is cheaper, but it does not
 light the scene.
 
+A zone changes the environment lighting inside a region: a room can be lit
+at a fraction of the sky's strength, or by a probe captured inside it, so a
+roofed room is dark and lit through its door while the street outside keeps
+the sky. The change is worked out per fragment, and lightmaps and light grids
+are not scaled by it. See :doc:`zones`.
+
 In ``auto`` mode, environment lighting adapts to the frame rate. When the
 frame rate falls below 45 frames a second it steps down to ``analytic``, then
 to ``off``; after a sustained period above 75 it steps back up. Choosing a

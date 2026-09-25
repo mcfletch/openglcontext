@@ -70,7 +70,8 @@ def close(context: Any) -> None:
         engine.close()
 
 
-def update(context: Any, paths: Sequence[Any], now: Optional[float] = None) -> int:
+def update(context: Any, paths: Sequence[Any], now: Optional[float] = None,
+           zones: Sequence[Any] = ()) -> int:
     """Keep ``context``'s sounds in step with its camera, for one frame.
 
     ``paths`` are the render pass's collected ``Auditory`` node paths.  An empty
@@ -79,6 +80,10 @@ def update(context: Any, paths: Sequence[Any], now: Optional[float] = None) -> i
 
     ``now`` is absolute seconds, because VRML97's ``startTime`` and ``stopTime``
     are absolute; it is taken from the wall clock when not given.
+
+    ``zones`` are the frame's placed zones: the emitters they name are heard
+    only while the camera is inside them, and the reverb is theirs. See
+    :func:`OpenGLContext.audio.areas.apply_zones`.
 
     Returns how many nodes were driven, for a debug overlay.
     """
@@ -96,6 +101,10 @@ def update(context: Any, paths: Sequence[Any], now: Optional[float] = None) -> i
     platform = _view_platform(context)
     if platform is not None:
         engine.listen(platform)
+    if zones:
+        from OpenGLContext.audio.areas import apply_zones
+        apply_zones(engine, [path[-1] for path in paths], zones,
+                    engine.listener.position)
     return update_scene_audio(engine, paths,
                               time.time() if now is None else now)
 

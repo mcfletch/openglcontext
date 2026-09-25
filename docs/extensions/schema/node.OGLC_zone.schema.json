@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OGLC_zone node extension",
+  "type": "object",
+  "description": "A region of space, and the extensions that apply inside it.",
+  "allOf": [{"$ref": "glTFProperty.schema.json"}],
+  "properties": {
+    "shape": {
+      "allOf": [{"$ref": "glTFid.schema.json"}],
+      "description": "The index of the region's shape: in the core shapes array of a glTF 2.1 document, or in the KHR_implicit_shapes extension's shapes array of a glTF 2.0 document. The shape is a box, sphere, capsule or cylinder; a plane bounds no volume and is not a zone's shape."
+    },
+    "priority": {
+      "type": "integer",
+      "default": 0,
+      "description": "Where zones overlap, the higher priority's setting for an extension is the one applied. A tie goes to the zone with the smaller shape volume."
+    },
+    "blend": {
+      "type": "number",
+      "minimum": 0,
+      "default": 0,
+      "description": "Metres beyond the shape's surface over which the zone's effect fades from full to nothing, weighted by a smoothstep of the signed distance to the surface. 0 is a hard edge."
+    },
+    "environment": {
+      "type": "object",
+      "description": "The image-based lighting of what is drawn inside the zone.",
+      "properties": {
+        "intensity": {
+          "type": "number",
+          "minimum": 0,
+          "default": 1,
+          "description": "Multiplies the environment's diffuse and specular light inside the zone."
+        },
+        "capture": {
+          "description": "true captures an environment probe from the shape's centre; an object gives the position, in the node's own frame. The probe replaces the scene's environment inside the zone, scaled by intensity.",
+          "oneOf": [
+            {"type": "boolean"},
+            {
+              "type": "object",
+              "properties": {
+                "position": {
+                  "type": "array",
+                  "items": {"type": "number"},
+                  "minItems": 3,
+                  "maxItems": 3,
+                  "default": [0, 0, 0]
+                }
+              }
+            }
+          ],
+          "default": false
+        }
+      }
+    },
+    "reverb": {
+      "type": "object",
+      "description": "The reverb heard while the camera is inside the zone.",
+      "properties": {
+        "level": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.4,
+                  "description": "How loud the reverb is against the dry sound."},
+        "decay": {"type": "number", "minimum": 0, "default": 1.5,
+                  "description": "Seconds for a sound to fall by 60 dB."},
+        "damping": {"type": "number", "minimum": 0, "maximum": 1, "default": 0.4,
+                    "description": "How much of the high frequencies each return loses."}
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "description": "Extension name to the block that extension takes at scene level (or as this specification gives it where the extension has none), or false to switch the extension off inside the zone.",
+      "additionalProperties": {
+        "oneOf": [{"type": "object"}, {"const": false}]
+      }
+    },
+    "extras": {}
+  },
+  "required": ["shape"]
+}

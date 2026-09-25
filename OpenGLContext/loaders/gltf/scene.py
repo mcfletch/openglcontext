@@ -59,6 +59,7 @@ from OpenGLContext.loaders.gltf.accessors import (
 )
 from OpenGLContext.loaders.gltf import environment_sky
 from OpenGLContext.loaders.gltf import hooks as hookreg
+from OpenGLContext.loaders.gltf import imagebased, zoning
 from OpenGLContext.loaders.gltf.meshes import _primitive_shape
 from OpenGLContext.loaders.gltf.transforms import (
     _transform_for, _local_matrix_rv, _world_box, framing_bounds,
@@ -169,6 +170,13 @@ class GLTFScene(object):
         # trigger volumes, whatever a game's own kind put there. Empty for a
         # document that carries no tag, or one loaded with the mechanism off.
         self.hook_data: dict = {}
+        # zones: the Zone node built for each glTF node carrying OGLC_zone, in
+        # document order. They are in the scenegraph under their node's
+        # transform already; this is for an application that wants to find
+        # one. See OpenGLContext.scenegraph.zone.
+        self.zones: list = []
+        # environment: the scene's EXT_lights_image_based light, or None.
+        self.environment: Any = None
 
     def advance(self, when: float) -> bool:
         """Move whatever a hook asked to be moved to ``when``, in seconds.
@@ -576,6 +584,14 @@ class _SceneBuilder:
         # hook_data they write. One runner for the whole load, so an unknown
         # kind is reported once rather than once per primitive.
         self.hooks = hookreg.HookRunner(g, resolver)
+        # OGLC_zone: the regions this document declares, and what each emitter
+        # index was built as, so a zone can name the emitters it plays.
+        self.zoning = zoning.ZoneReader(g)
+        # EXT_lights_image_based: the document's prefiltered environments, for
+        # its scene and its zones to name.
+        self.image_lights = imagebased.read_lights(g, resolver)
+        self.emitter_nodes: dict = {}
+        self._zone_placed: list = []
 
     def mesh_shapes(self, mesh_index: int,
                     world: Optional[np.ndarray] = None,
@@ -713,6 +729,9 @@ class _SceneBuilder:
                     self.light_meter.append((light, wpos))
         if self.audio_document.emitters:
             children.extend(self._audio_emitters(node))
+        zone = self.zoning.zone_for(node, node_index)
+        if zone is not None:
+            children.append(zone)
         for child in (node.children or []):
             children.append(self.build(child, world, ancestry, node_visible))
         return self._place(node, node_index, group, children, world)
@@ -900,7 +919,45 @@ class _SceneBuilder:
             resolve=self.resolver.resolve)
         self.built_emitters.extend(
             (emitter.name, node) for emitter, node in zip(emitters, built))
+        self._index_emitters(emitters, built)
         return built
+
+    def _index_emitters(self, emitters: list, built: list) -> None:
+        """Note which emitter index each built node plays, for the zones."""
+        for emitter, node in zip(emitters, built):
+            for index, declared in enumerate(self.audio_document.emitters):
+                if declared is emitter:
+                    self.emitter_nodes.setdefault(index, []).append(node)
+
+    def _image_light(self, index: int) -> Any:
+        """The ``EXT_lights_image_based`` light at ``index``, or None."""
+        if 0 <= index < len(self.image_lights):
+            return self.image_lights[index]
+        return None
+
+    def _zone_emitters(self, index: int) -> list:
+        """The emitter nodes a zone naming emitter ``index`` controls.
+
+        Those the document places on its nodes or scene, or, for a global
+        emitter the document places nowhere, one built at the root of the
+        scene for the zone to play.
+        """
+        found = self.emitter_nodes.get(index)
+        if found:
+            return list(found)
+        declared = self.audio_document.emitters
+        if not 0 <= index < len(declared):
+            return []
+        emitter = declared[index]
+        if emitter.type != audiomodel.GLOBAL:
+            return []
+        built = audionodes.emitters_from_document(
+            self.audio_document, [emitter], library=self.audio_library,
+            resolve=self.resolver.resolve)
+        self.built_emitters.extend((emitter.name, node) for node in built)
+        self._index_emitters([emitter], built)
+        self._zone_placed.extend(built)
+        return list(built)
 
     def _name_sounds(self) -> dict:
         """Register every named emitter under a DEF, and index it by its glTF name.
@@ -965,6 +1022,20 @@ class _SceneBuilder:
         active = _active_scene(g)
         if self.audio_document.emitters and active is not None:
             root_children.extend(self._audio_emitters(active, scene=True))
+        # Zones name lights, emitters and nodes anywhere in the document, so
+        # their borrowed blocks are read once every node has been built.
+        self.zoning.finish(node_transform=self.node_transforms.get,
+                           light=self.node_light.get,
+                           emitters=self._zone_emitters,
+                           place=self._zone_placed.append,
+                           image_light=self._image_light)
+        root_children.extend(self._zone_placed)
+        # The scene's own image-based light is mounted at the root, where the
+        # render pass finds it and lights everything no zone covers with it.
+        environment = None if active is None else imagebased.scene_light(
+            _extension_holder(active)['extensions'], self.image_lights)
+        if environment is not None:
+            root_children.append(environment)
         # The scene's OMI_environment_sky, as a Background beside the model. The
         # ordinary Background pass finds and binds it, and a viewer that adds a
         # backdrop when a scene brought none leaves this one alone.
@@ -1009,6 +1080,8 @@ class _SceneBuilder:
         scene.materials = self._name_materials()
         scene.sounds = self._name_sounds()
         scene.hook_data = self.hooks.scene_data
+        scene.zones = list(self.zoning.zones)
+        scene.environment = environment
         top = getattr(g, 'extensions', None) or {}
         scene.extensions = top if isinstance(top, dict) else {}
         if self.skins:

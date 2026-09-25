@@ -190,7 +190,9 @@ def collision_world_from_scene(
 ) -> Tuple[PhysicsWorld, Optional[Tuple[np.ndarray, np.ndarray]]]:
     """Build a :class:`PhysicsWorld` whose static geometry is the model's mesh.
 
-    ``group`` is the root scenegraph node.
+    ``group`` is the root scenegraph node. Every zone in it that carries
+    gravity becomes a gravity volume of the world; see
+    :mod:`OpenGLContext.physics.zones`.
 
     Returns ``(world, bounds)`` where bounds is ``(lo, hi)`` of the collision
     geometry (``None`` if the model had no extractable triangles). ``min_hull_size``
@@ -199,6 +201,10 @@ def collision_world_from_scene(
     """
     world = PhysicsWorld(gravity=model.Gravity(gravity=gravity, direction=(0, -1, 0)),
                          default_linear_damping=0.2, default_angular_damping=1.0)
+    # A zone carrying OMI_physics_gravity is a gravity volume over its shape.
+    from OpenGLContext.physics.zones import gravity_volumes, scene_zones
+    for volume in gravity_volumes(scene_zones(group)):
+        world.add_gravity_volume(volume)
     result = extract_trimesh(group, min_hull_size=min_hull_size)
     if result is None or not len(result[1]):
         return world, None
