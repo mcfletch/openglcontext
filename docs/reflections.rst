@@ -155,7 +155,8 @@ it).
    panel's *Distortion*.
 3. On the **material** tab, open **Engine Hook**, tick it, and type ``mirror``
    as the **Kind**. The panel offers *Resolution* (``scale``), *Redraw Every*
-   (``interval``), *Priority* and *Distortion*, and the line under them shows
+   (``interval``), *Priority*, *Distortion* and *Reflectance*
+   (``reflectance``), and the line under them shows
    the block the file will carry, for example
    ``OGLC_hook: {"interval": 2, "kind": "mirror"}``. A field left at its default
    is not written.
@@ -433,7 +434,7 @@ Limits
   the scene's HDR or cubemap sky where it has one, and a procedural one
   otherwise, which a VRML97 ``Background``'s colours do not change.
 - Sixteen mirror views per submission; more cost another submission.
-- A driver whose fragment stage has 32 texture units or fewer compiles
+- A driver whose fragment stage has fewer than 32 texture units compiles
   reflections out, and every mirror reflects the probe.
 - An exception while drawing reflections -- a driver refusing the atlas's
   framebuffer format, for one -- is logged once with its traceback and

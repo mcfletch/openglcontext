@@ -2124,7 +2124,7 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         selection buffer, the overlay.  A caller that wants only the geometry,
         drawn from a matrix of its own choosing, asks for it here: rendering the
         scene from a light's point of view to fill a depth map is what this is
-        for.  See docs/tutorials/shadow_1.html.
+        for.  The ``shadow_1`` tutorial (``tests/shadow_1.py``) walks through it.
         """
         toRender = self.renderSet( mvmatrix )
         self.renderOpaque( toRender )
