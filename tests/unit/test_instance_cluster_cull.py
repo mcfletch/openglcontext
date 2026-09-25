@@ -70,7 +70,7 @@ class TestClusterCull:
 
     def test_all_visible_keeps_everything(self):
         pts = np.random.RandomState(3).rand(30, 3)
-        kept, _ = self._run(pts, lambda mn, mx: True, lambda r: True)
+        kept, _ = self._run(pts, lambda _mn, _mx: True, lambda _r: True)
         assert sorted(kept) == list(range(30))
 
     def test_offscreen_cluster_skips_per_instance_tests(self):
@@ -79,10 +79,10 @@ class TestClusterCull:
         far = np.random.RandomState(5).rand(16, 3) + 1000.0
         pts = np.concatenate([near, far])
 
-        def cluster_visible(mn, mx):
+        def cluster_visible(mn, _mx):
             return mn[0] < 500.0  # far blob (x ~ 1000) is outside
 
-        kept, calls = self._run(pts, cluster_visible, lambda r: True, cluster_size=16)
+        kept, calls = self._run(pts, cluster_visible, lambda _r: True, cluster_size=16)
         # The far instances are culled without any per-instance test on them.
         assert all(r < 16 for r in kept)
         assert calls['instance'] <= 16   # only the near cluster is expanded
@@ -90,7 +90,7 @@ class TestClusterCull:
     def test_boundary_cluster_falls_back_to_per_instance(self):
         pts = np.random.RandomState(6).rand(8, 3)
         # Cluster is "maybe visible"; per-instance test keeps only even records.
-        kept, calls = self._run(pts, lambda mn, mx: True,
+        kept, calls = self._run(pts, lambda _mn, _mx: True,
                                 lambda r: r % 2 == 0, cluster_size=8)
         assert sorted(kept) == [0, 2, 4, 6]
         assert calls['instance'] == 8

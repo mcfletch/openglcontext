@@ -87,6 +87,8 @@ class TestLoadingFromAUrl:
         texture.loadBackground([str(tmp_path / 'absent.png')])
 
         assert not texture.image
+        assert 'absent.png' in caplog.text
+        assert {record.levelname for record in caplog.records} == {'WARNING'}
 
     def test_the_first_url_that_works_is_used(self, bomb, real_png):
         """VRML97 lists alternatives; a bad one must not end the list."""
@@ -115,6 +117,7 @@ class TestLoadingFromBytes:
         texture.loadFromData(_png(30000, 30000))
 
         assert not texture.image
+        assert caplog.records
 
     def test_rubbish_is_refused(self):
         texture = basenodes.ImageTexture()

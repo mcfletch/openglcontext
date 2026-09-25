@@ -60,15 +60,15 @@ def test_a_layer_switched_back_on_draws_again():
 def test_texture_rgba_accepts_in_memory_image(monkeypatch):
     """A PIL image uploads directly -- no filesystem path, no file written."""
     calls = {}
-    monkeypatch.setattr(ig, 'glGenTextures', lambda n: 77)
-    monkeypatch.setattr(ig, 'glBindTexture', lambda *a: None)
+    monkeypatch.setattr(ig, 'glGenTextures', lambda _n: 77)
+    monkeypatch.setattr(ig, 'glBindTexture', lambda *_a: None)
     monkeypatch.setattr(ig, 'glTexImage2D',
                         lambda *a: calls.__setitem__('uploaded', a))
-    monkeypatch.setattr(ig, 'glGenerateMipmap', lambda *a: None)
-    monkeypatch.setattr(ig, 'glTexParameteri', lambda *a: None)
+    monkeypatch.setattr(ig, 'glGenerateMipmap', lambda *_a: None)
+    monkeypatch.setattr(ig, 'glTexParameteri', lambda *_a: None)
     # Image.open must not be touched when an image is passed in.
     monkeypatch.setattr(ig.Image, 'open',
-                        lambda *a, **k: (_ for _ in ()).throw(AssertionError("opened a file")))
+                        lambda *_a, **_k: (_ for _ in ()).throw(AssertionError("opened a file")))
 
     img = Image.new("RGB", (4, 2), (10, 20, 30))
     tid = ig.texture_rgba(img, clamp=False)
@@ -81,8 +81,8 @@ def test_setup_instance_attribs_advances_per_instance(monkeypatch):
     ptrs = []
     divs = []
     monkeypatch.setattr(ig, 'glVertexAttribPointer',
-                        lambda loc, sz, typ, norm, stride, off: ptrs.append((loc, sz, stride)))
-    monkeypatch.setattr(ig, 'glEnableVertexAttribArray', lambda loc: None)
+                        lambda loc, sz, _typ, _norm, stride, _off: ptrs.append((loc, sz, stride)))
+    monkeypatch.setattr(ig, 'glEnableVertexAttribArray', lambda _loc: None)
     monkeypatch.setattr(ig, 'glVertexAttribDivisor', lambda loc, d: divs.append((loc, d)))
 
     ig.setup_instance_attribs(3, 4, 5)
@@ -97,12 +97,12 @@ def test_instance_buffer_grows_only_when_capacity_exceeded(monkeypatch):
     it (``glBufferData`` with no data) before the ``glBufferSubData`` rewrite, so a
     frame's write never waits on the previous frame's still-drawing store."""
     events = []
-    monkeypatch.setattr(ig, 'glGenBuffers', lambda n: 5)
-    monkeypatch.setattr(ig, 'glBindBuffer', lambda *a: None)
+    monkeypatch.setattr(ig, 'glGenBuffers', lambda _n: 5)
+    monkeypatch.setattr(ig, 'glBindBuffer', lambda *_a: None)
     monkeypatch.setattr(ig, 'glBufferData',
-                        lambda tgt, size, data, usage: events.append(('data', size, data is None)))
+                        lambda _tgt, size, data, _usage: events.append(('data', size, data is None)))
     monkeypatch.setattr(ig, 'glBufferSubData',
-                        lambda tgt, off, size, data: events.append(('sub', size)))
+                        lambda _tgt, _off, size, _data: events.append(('sub', size)))
 
     buf = ig.InstanceBuffer()
     assert buf.id == 5 and buf.capacity == 0
@@ -122,8 +122,8 @@ def test_instance_buffer_grows_only_when_capacity_exceeded(monkeypatch):
 
 
 def test_instance_buffer_delete_frees_its_store(monkeypatch):
-    monkeypatch.setattr(ig, 'glGenBuffers', lambda n: 42)
-    monkeypatch.setattr(ig, 'glBindBuffer', lambda *a: None)
+    monkeypatch.setattr(ig, 'glGenBuffers', lambda _n: 42)
+    monkeypatch.setattr(ig, 'glBindBuffer', lambda *_a: None)
     freed = {}
     monkeypatch.setattr(ig, 'delete_gl', lambda **k: freed.update(k))
     buf = ig.InstanceBuffer()

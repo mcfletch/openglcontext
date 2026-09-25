@@ -48,7 +48,8 @@ def _read_cube_face(tex, face_offset, size):
     return arr
 
 
-def test_equirect_panorama_projected_onto_env_cube(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_equirect_panorama_projected_onto_env_cube():
 
     ibl.set_equirect_env(_striped_equirect())
     try:
@@ -74,7 +75,8 @@ def test_equirect_panorama_projected_onto_env_cube(gl_context):
         ibl.set_equirect_env(None)
 
 
-def test_irradiance_carries_the_environment_hue(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_irradiance_carries_the_environment_hue():
     """The convolved irradiance for an up-facing normal must pick up the red sky."""
 
     ibl.set_equirect_env(_striped_equirect())
@@ -92,7 +94,8 @@ def test_irradiance_carries_the_environment_hue(gl_context):
         ibl.set_equirect_env(None)
 
 
-def test_shared_include_compiles_both_shaders(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_shared_include_compiles_both_shaders():
     """Both hdr_background.frag (skybox) and ibl_equirect.frag (reflection) compile
     through the shared _cubemap_inc.glsl dirToEquirect, so they can't desync."""
 

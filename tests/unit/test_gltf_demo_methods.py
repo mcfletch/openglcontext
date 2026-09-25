@@ -82,7 +82,7 @@ class TestLoadScene:
         assert inst._ref_current == 'Duck' and inst.overlayError is False
 
     def test_failed_load_flags_the_overlay(self, monkeypatch):
-        def boom(name):
+        def boom(_name):
             raise RuntimeError('decode error line one\nline two')
         monkeypatch.setattr(D.gltf, 'load_sample', boom)
         inst = _inst()
@@ -93,7 +93,7 @@ class TestLoadScene:
 
 
 class TestRequestCurrentModel:
-    def test_kicks_off_a_background_load_of_the_indexed_model(self, monkeypatch):
+    def test_kicks_off_a_background_load_of_the_indexed_model(self):
         inst = _inst()
         inst.catalog = _catalog('Duck', 'Helmet')
         inst.index = 1
@@ -104,7 +104,7 @@ class TestRequestCurrentModel:
         assert inst._pending_name == 'Helmet'
         assert 'Helmet' in recorded['label']
 
-    def test_request_initial_scene_pulls_the_current_model(self, monkeypatch):
+    def test_request_initial_scene_pulls_the_current_model(self):
         inst = _inst()
         called = {}
         inst._request_current_model = lambda: called.setdefault('ran', True)
@@ -171,7 +171,7 @@ class TestApplyPhysicsProfile:
         inst._ref_current = 'VirtualCity'                   # profile: physics + fly
         inst.physicsWalking = True
         inst.physicsPlatform = platform = types.SimpleNamespace(
-            set_fly=lambda value: None)
+            set_fly=lambda _value: None)
         inst.switched = []
         inst.enablePhysics = lambda on: inst.switched.append(on) or True
         return inst, platform
@@ -197,7 +197,7 @@ class TestApplyPhysicsProfile:
 class TestResolveBackgroundCube:
     def test_cube_profile_selects_the_env_skybox(self, monkeypatch):
         monkeypatch.setattr(D, 'profile_for',
-                            lambda name: D.ModelProfile(background='cube'))
+                            lambda _name: D.ModelProfile(background='cube'))
         cfg = D.demo_config([])
         assert D.resolve_background(cfg, 'Whatever') == 'cube'
 
@@ -210,7 +210,7 @@ class TestBuildAndPhysics:
         inst.options = D.demo_config([])
         parent = {}
         monkeypatch.setattr(D.ViewerContext, 'buildScenegraph',
-                            lambda self, scene: parent.setdefault('scene', scene))
+                            lambda _self, scene: parent.setdefault('scene', scene))
         inst.buildScenegraph('SCENE')
         assert parent['scene'] == 'SCENE'
         assert inst.overlayText == '[1/1] Duck'
@@ -221,7 +221,7 @@ class TestBuildAndPhysics:
         inst._ref_current = 'Duck'                          # default profile: no physics
         inst.options = D.demo_config([])
         inst.physicsPlatform = None
-        monkeypatch.setattr(D.ViewerContext, 'setupWalking', lambda self: None)
+        monkeypatch.setattr(D.ViewerContext, 'setupWalking', lambda _self: None)
         inst.setupWalking()
         assert inst.options.physics is False
 
@@ -232,7 +232,7 @@ class TestBuildAndPhysics:
         inst.sg = object()
         seen = {}
         inst.physicsPlatform = types.SimpleNamespace(set_fly=lambda v: seen.setdefault('fly', v))
-        monkeypatch.setattr(D.ViewerContext, 'setupWalking', lambda self: None)
+        monkeypatch.setattr(D.ViewerContext, 'setupWalking', lambda _self: None)
         inst.setupWalking()
         assert inst.options.physics is True and seen['fly'] is True
 
@@ -278,28 +278,28 @@ class TestTheReferencePicture:
     def test_it_sits_beside_the_caption_in_the_same_layer(self):
         inst = _inst()
         inst._hudLayers = []
-        inst.triggerRedraw = lambda force=0: None
+        inst.triggerRedraw = lambda _force=0: None
         layer = inst.setupCaption()
         assert inst.referencePicture in layer.children
 
 
 class TestMain:
     def test_configures_and_enters_the_loop(self, monkeypatch):
-        monkeypatch.setattr(D, 'apply_environment', lambda args: None)
-        monkeypatch.setattr(D, 'apply_render_env', lambda args: None)
+        monkeypatch.setattr(D, 'apply_environment', lambda _args: None)
+        monkeypatch.setattr(D, 'apply_render_env', lambda _args: None)
         ran = {}
         monkeypatch.setattr(D.TestContext, 'ContextMainLoop',
-                            classmethod(lambda cls, size=None: ran.setdefault('size', size)))
+                            classmethod(lambda _cls, size=None: ran.setdefault('size', size)))
         D.main([])
         assert D.TestContext.options.no_cameras is True
         assert 'size' in ran
 
     def test_size_flag_reaches_the_loop(self, monkeypatch):
-        monkeypatch.setattr(D, 'apply_environment', lambda args: None)
-        monkeypatch.setattr(D, 'apply_render_env', lambda args: None)
+        monkeypatch.setattr(D, 'apply_environment', lambda _args: None)
+        monkeypatch.setattr(D, 'apply_render_env', lambda _args: None)
         seen = {}
         monkeypatch.setattr(D.TestContext, 'ContextMainLoop',
-                            classmethod(lambda cls, size=None: seen.setdefault('size', size)))
+                            classmethod(lambda _cls, size=None: seen.setdefault('size', size)))
         D.main(['--size', '1024x768'])
         assert seen['size'] == (1024, 768)
 

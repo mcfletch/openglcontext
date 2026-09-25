@@ -47,12 +47,13 @@ def colours(monkeypatch):
     return recorded
 
 
+@pytest.mark.usefixtures('gl_context_compat')
 class TestTheControlPointRamp:
-    def test_one_colour_per_point(self, gl_context_compat, glyph, colours):
+    def test_one_colour_per_point(self, glyph, colours):
         glyph.renderControlPoints()
         assert len(colours) == len(SQUARE)
 
-    def test_the_blue_channel_rises_along_the_contour(self, gl_context_compat,
+    def test_the_blue_channel_rises_along_the_contour(self,
                                                       glyph, colours):
         glyph.renderControlPoints()
         blues = [b for (_r, _g, b) in colours]
@@ -60,32 +61,33 @@ class TestTheControlPointRamp:
         assert blues[0] == 0.0
         assert blues[-1] > blues[0], blues
 
-    def test_no_channel_leaves_the_unit_range(self, gl_context_compat, glyph, colours):
+    def test_no_channel_leaves_the_unit_range(self, glyph, colours):
         glyph.renderControlPoints()
         for colour in colours:
             for channel in colour:
                 assert 0.0 <= channel <= 1.0, colour
 
-    def test_off_curve_points_are_red(self, gl_context_compat, glyph, colours):
+    def test_off_curve_points_are_red(self, glyph, colours):
         glyph.renderControlPoints()
         for (_point, on_curve), (red, _g, _b) in zip(SQUARE, colours):
             assert red == (0.0 if on_curve else 1.0)
 
-    def test_an_empty_contour_draws_nothing(self, gl_context_compat, glyph, colours):
+    def test_an_empty_contour_draws_nothing(self, glyph, colours):
         glyph.contours = [[]]
         glyph.renderControlPoints()
         assert colours == []
 
 
+@pytest.mark.usefixtures('gl_context_compat')
 class TestTheContourHulls:
     """The hull pass draws each segment twice, as a GL_LINES pair."""
 
-    def test_it_emits_a_colour_per_vertex(self, gl_context_compat, glyph, colours):
+    def test_it_emits_a_colour_per_vertex(self, glyph, colours):
         glyph.renderContours()
         # first point, then both ends of each interior point, then the last
         assert len(colours) == 1 + 2 * (len(SQUARE) - 2) + 1
 
-    def test_off_curve_points_are_the_yellow_ones(self, gl_context_compat,
+    def test_off_curve_points_are_the_yellow_ones(self,
                                                   glyph, colours):
         glyph.renderContours()
         assert (1.0, 1.0, 0.0) in colours

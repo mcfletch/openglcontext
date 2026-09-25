@@ -51,7 +51,7 @@ def test_provider_selection_skips_glut_on_non_glut_context():
         format = "bitmap"
         shader_compatible = True
 
-        def get(self, fontStyle=None, mode=None):
+        def get(self, _fontStyle=None, _mode=None):
             selected.append("shader")
             return "shader-font"
 

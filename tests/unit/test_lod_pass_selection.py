@@ -120,7 +120,7 @@ class TestWhatTheWindowMakesOfASize:
 class TestAMalformedNode:
     def test_one_bad_node_does_not_stop_the_others(self, caplog):
         class _Broken(lod.LOD):
-            def selectAt(self, distance, scale, tangent):
+            def selectAt(self, _distance, _scale, _tangent):
                 raise ValueError('no centre')
 
         broken = _Broken(level=_levels(), range=[10.0])
@@ -133,7 +133,7 @@ class TestAMalformedNode:
 
     def test_a_bad_node_is_reported_once_not_every_frame(self, caplog):
         class _Broken(lod.LOD):
-            def selectAt(self, distance, scale, tangent):
+            def selectAt(self, _distance, _scale, _tangent):
                 raise ValueError('no centre')
 
         rendering = _pass([_Broken(level=_levels(), range=[10.0])])

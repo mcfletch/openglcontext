@@ -42,31 +42,31 @@ class TestWhenItIsPassedOver:
     def test_a_backend_whose_toolkit_is_absent_is_skipped(self):
         reason = plugin.context_skip_reason(
             {'OPENGLCONTEXT_BACKEND': 'nosuchtoolkit'},
-            available=lambda name: False)
+            available=lambda _name: False)
         assert reason and 'nosuchtoolkit' in reason
 
     def test_a_backend_that_is_there_runs(self):
         assert plugin.context_skip_reason(
             {'OPENGLCONTEXT_BACKEND': 'glfw'},
-            available=lambda name: True) is None
+            available=lambda _name: True) is None
 
     def test_a_profile_this_driver_will_not_give_is_skipped(self):
         reason = plugin.context_skip_reason(
             {'OPENGLCONTEXT_PROFILE': 'compatibility'},
-            available=lambda name: True,
-            profile_available=lambda profile: 'this driver is core-only')
+            available=lambda _name: True,
+            profile_available=lambda _profile: 'this driver is core-only')
         assert reason == 'this driver is core-only'
 
     def test_a_profile_it_will_give_runs(self):
         assert plugin.context_skip_reason(
             {'OPENGLCONTEXT_PROFILE': 'core'},
-            available=lambda name: True,
-            profile_available=lambda profile: None) is None
+            available=lambda _name: True,
+            profile_available=lambda _profile: None) is None
 
     def test_asking_for_no_kind_in_particular_asks_no_questions(self):
         """An unmarked test must not open a probe window to be told it did not
         need one."""
-        def refuse(*args, **named):            # pragma: no cover - not called
+        def refuse(*_args, **_named):            # pragma: no cover - not called
             raise AssertionError('nothing should have been asked')
         assert plugin.context_skip_reason(
             {}, available=refuse, profile_available=refuse) is None

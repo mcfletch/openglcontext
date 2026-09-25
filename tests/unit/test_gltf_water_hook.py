@@ -116,7 +116,7 @@ def test_a_written_out_style_may_say_how_fine_its_ripple_is():
     assert style.wavelength == pytest.approx(water.BREEZE.wavelength)
 
 
-def test_an_unknown_style_name_is_still_water(caplog):
+def test_an_unknown_style_name_is_still_water():
     """A misspelling loads a pond rather than failing the file."""
     _scene, shape = _loaded({'kind': 'water', 'style': 'stil'})
     assert _copy_of(shape.geometry.waveStyle, water.STILL)
@@ -265,7 +265,7 @@ def test_a_malformed_water_value_loads_as_water(tag):
     assert np.isfinite(style.amplitude) and np.all(np.isfinite(style.flow))
 
 
-def test_a_negative_depth_is_no_depth(caplog):
+def test_a_negative_depth_is_no_depth():
     """A box reaching up out of the water is not what a depth means."""
     scene, _shape = _loaded({'kind': 'water', 'depth': -6.0})
     body, = scene.hook_data['water']

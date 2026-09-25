@@ -167,7 +167,7 @@ def test_a_material_hook_may_return_a_node_in_the_shapes_place():
     """What the hook made stands where the loader's own ``Shape`` would have."""
     material = _tagged_material(extras={'OGLC_hook': 'probe'})
     made = Group()
-    with bound('probe', lambda ctx: made):
+    with bound('probe', lambda _ctx: made):
         scene = gltf.load_gltf(write_glb(_quad(material)))
     assert _shapes(scene.group) == []
     assert made in list(scene.group.children[0].children)
@@ -306,7 +306,7 @@ def test_a_node_tag_reaches_the_hook_with_the_group_and_the_children():
 
 def test_a_node_hook_returning_none_leaves_the_transform_and_children():
     """The hook augmented and nothing else changed."""
-    with bound('probe', lambda ctx: None):
+    with bound('probe', lambda _ctx: None):
         scene = gltf.load_gltf(write_glb(_tagged_node('probe', name='lake')))
     placed = scene.getDEF('lake')
     assert isinstance(placed, Transform)
@@ -316,7 +316,7 @@ def test_a_node_hook_returning_none_leaves_the_transform_and_children():
 def test_a_node_hook_may_stand_under_the_transform():
     """``(node, False)``: the node's TRS still places what the hook made."""
     made = Group()
-    with bound('probe', lambda ctx: (made, False)):
+    with bound('probe', lambda _ctx: (made, False)):
         scene = gltf.load_gltf(write_glb(
             _tagged_node('probe', name='lake', translation=(5.0, 0.0, 0.0))))
     placed = scene.getDEF('lake')
@@ -328,7 +328,7 @@ def test_a_node_hook_may_stand_under_the_transform():
 def test_a_node_hook_may_take_the_nodes_own_slot():
     """``(node, True)``: the Transform is gone and the hook owns the placement."""
     made = Group()
-    seen = Recorder(result=lambda ctx: (made, True))
+    seen = Recorder(result=lambda _ctx: (made, True))
     with bound('probe', seen):
         scene = gltf.load_gltf(write_glb(
             _tagged_node('probe', name='lake', translation=(5.0, 0.0, 0.0))))
@@ -356,7 +356,7 @@ def test_one_kind_may_replace_one_node_and_not_another():
 ])
 def test_the_def_resolves_to_whatever_is_in_the_slot(result, expected):
     """``getDEF`` finds the same name it would have found."""
-    with bound('probe', lambda ctx: result):
+    with bound('probe', lambda _ctx: result):
         scene = gltf.load_gltf(write_glb(_tagged_node('probe', name='lake')))
     placed = scene.getDEF('lake')
     assert isinstance(placed, expected)
@@ -374,7 +374,7 @@ def _descendants(node, out=None):
 
 def test_a_node_hook_returning_a_bare_node_is_refused():
     """The pair says whether the node was replaced; a node alone does not."""
-    with bound('probe', lambda ctx: Group()):
+    with bound('probe', lambda _ctx: Group()):
         with pytest.raises(ValueError, match='replacing'):
             gltf.load_gltf(write_glb(_tagged_node('probe', name='lake')))
 
@@ -407,10 +407,10 @@ def test_advance_uses_what_the_kind_was_bound_to_when_it_loaded():
     later is somebody else's."""
     moved = []
     with bound('probe', lambda ctx: ctx.collect('body') and None,
-               advance=lambda data, when: moved.append('loaded') or True):
+               advance=lambda _data, _when: moved.append('loaded') or True):
         scene = gltf.load_gltf(write_glb(_tagged_node('probe', name='lake')))
-    with bound('probe', lambda ctx: None,
-               advance=lambda data, when: moved.append('later') or True):
+    with bound('probe', lambda _ctx: None,
+               advance=lambda _data, _when: moved.append('later') or True):
         assert scene.advance(1.0) is True
     assert moved == ['loaded']
 
@@ -466,7 +466,7 @@ def test_a_node_tag_round_trips_through_the_writer():
 def test_register_works_as_a_decorator_and_as_a_call():
     try:
         @hooks.register('probe')
-        def probe(ctx):
+        def probe(_ctx):
             return None
         assert hooks.registered('probe').factory is probe
         assert hooks.registered('probe').shareable is True

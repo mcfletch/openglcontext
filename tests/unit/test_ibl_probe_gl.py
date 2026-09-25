@@ -25,7 +25,8 @@ class _FakeProgram:
         self.calls.append((name, value, program))
 
 
-def test_float_render_capability_probe_true_on_real_gpu(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_float_render_capability_probe_true_on_real_gpu():
     """A live desktop GL context can render an RGBA16F FBO, so the probe passes
     and caches its verdict for the process."""
     ibl._FLOAT_RENDER_CAP['checked'] = False
@@ -38,12 +39,14 @@ def test_float_render_capability_probe_true_on_real_gpu(gl_context):
     assert ibl.probe_float_render_capability() is True    # cached path
 
 
-def test_gl_context_present_true_with_live_context(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_gl_context_present_true_with_live_context():
     assert ibl._gl_context_present() is True
 
 
+@pytest.mark.usefixtures('gl_context')
 class TestProceduralBuild:
-    def test_build_bind_and_release(self, gl_context, monkeypatch):
+    def test_build_bind_and_release(self, monkeypatch):
         monkeypatch.delenv('OPENGLCONTEXT_ENV_HDR', raising=False)
         monkeypatch.delenv('OPENGLCONTEXT_ENV_CUBEMAP', raising=False)
         ibl.set_equirect_env(None)
@@ -63,7 +66,7 @@ class TestProceduralBuild:
         probe.release()
         assert probe.env is None and probe.brdf is None
 
-    def test_second_ensure_built_is_cached(self, gl_context, monkeypatch):
+    def test_second_ensure_built_is_cached(self, monkeypatch):
         monkeypatch.delenv('OPENGLCONTEXT_ENV_HDR', raising=False)
         monkeypatch.delenv('OPENGLCONTEXT_ENV_CUBEMAP', raising=False)
         ibl.set_equirect_env(None)
@@ -75,7 +78,7 @@ class TestProceduralBuild:
         assert probe.env == env_tex
         probe.release()
 
-    def test_env_change_triggers_rebuild(self, gl_context, monkeypatch):
+    def test_env_change_triggers_rebuild(self, monkeypatch):
         monkeypatch.delenv('OPENGLCONTEXT_ENV_HDR', raising=False)
         monkeypatch.delenv('OPENGLCONTEXT_ENV_CUBEMAP', raising=False)
         ibl.set_equirect_env(None)
@@ -93,7 +96,8 @@ class TestProceduralBuild:
 
 
 class TestCubemapEnvSource:
-    def test_cubemap_faces_uploaded_into_env(self, gl_context, monkeypatch):
+    @pytest.mark.usefixtures('gl_context')
+    def test_cubemap_faces_uploaded_into_env(self, monkeypatch):
         """When a cubemap face set is configured, its faces are uploaded into the
         env cube rather than the procedural studio env being rendered."""
         monkeypatch.delenv('OPENGLCONTEXT_ENV_HDR', raising=False)
@@ -102,7 +106,7 @@ class TestCubemapEnvSource:
         size = IBLProbe.ENV_SIZE
         faces = {off: np.full((size, size, 3), 0.5, dtype=np.float32)
                  for off in range(6)}
-        monkeypatch.setattr(ibl, 'load_cubemap_faces', lambda prefix, s: faces)
+        monkeypatch.setattr(ibl, 'load_cubemap_faces', lambda _prefix, _s: faces)
         probe = IBLProbe()
         try:
             assert probe.ensure_built() is True
@@ -112,7 +116,8 @@ class TestCubemapEnvSource:
 
 
 class TestBuildFailureFallback:
-    def test_build_exception_degrades_to_not_ready(self, gl_context, monkeypatch):
+    @pytest.mark.usefixtures('gl_context')
+    def test_build_exception_degrades_to_not_ready(self, monkeypatch):
         """If _build raises, ensure_built swallows it and reports not-ready so the
         caller falls back to the analytic path."""
         ibl.set_equirect_env(None)
@@ -128,7 +133,8 @@ class TestBuildFailureFallback:
 
 
 class TestDefensiveTeardown:
-    def test_release_swallows_texture_delete_errors(self, gl_context, monkeypatch):
+    @pytest.mark.usefixtures('gl_context')
+    def test_release_swallows_texture_delete_errors(self, monkeypatch):
         """A GL failure while freeing probe textures must not escape release()."""
         ibl.set_equirect_env(None)
         probe = IBLProbe()
@@ -144,9 +150,10 @@ class TestDefensiveTeardown:
 
 
 class TestCapabilityProbeDefensive:
-    def test_gl_error_during_probe_reports_incapable(self, gl_context, monkeypatch):
+    @pytest.mark.usefixtures('gl_context')
+    def test_gl_error_during_probe_reports_incapable(self, monkeypatch):
         """A raised GL error while trialling the RGBA16F FBO degrades to False."""
-        def boom(*a, **k):
+        def boom(*_a, **_k):
             raise RuntimeError("simulated immutable-storage failure")
 
         # a function object is truthy, so the `not glTexStorage2D` early-out is
@@ -155,32 +162,33 @@ class TestCapabilityProbeDefensive:
         assert ibl._run_float_render_capability_probe() is False
 
 
+@pytest.mark.usefixtures('gl_context')
 class TestBuildDefensive:
     def _procedural(self, monkeypatch):
         monkeypatch.delenv('OPENGLCONTEXT_ENV_HDR', raising=False)
         monkeypatch.delenv('OPENGLCONTEXT_ENV_CUBEMAP', raising=False)
         ibl.set_equirect_env(None)
 
-    def test_incomplete_cube_fbo_degrades_to_not_ready(self, gl_context, monkeypatch):
+    def test_incomplete_cube_fbo_degrades_to_not_ready(self, monkeypatch):
         """An incomplete cube FBO (status != COMPLETE) aborts the build; ensure_built
         swallows it and reports not-ready for the analytic fallback."""
         self._procedural(monkeypatch)
-        monkeypatch.setattr(ibl, 'glCheckFramebufferStatus', lambda target: 0)
+        monkeypatch.setattr(ibl, 'glCheckFramebufferStatus', lambda _target: 0)
         probe = IBLProbe()
         assert probe.ensure_built() is False
         assert probe.ready is False
         assert probe._failed is True
 
-    def test_incomplete_final_fbo_raises_and_degrades(self, gl_context, monkeypatch):
+    def test_incomplete_final_fbo_raises_and_degrades(self, monkeypatch):
         """A BRDF-LUT stage that returns an incomplete status raises out of _build;
         ensure_built degrades to not-ready."""
         self._procedural(monkeypatch)
         probe = IBLProbe()
-        monkeypatch.setattr(probe, '_build_brdf_lut', lambda fbo, prog: 0)
+        monkeypatch.setattr(probe, '_build_brdf_lut', lambda _fbo, _prog: 0)
         assert probe.ensure_built() is False
         assert probe._failed is True
 
-    def test_program_teardown_errors_do_not_break_build(self, gl_context, monkeypatch):
+    def test_program_teardown_errors_do_not_break_build(self, monkeypatch):
         """A GL failure while freeing the transient build programs is swallowed and
         the probe still builds successfully."""
         self._procedural(monkeypatch)
@@ -194,13 +202,13 @@ class TestBuildDefensive:
         assert probe.ready is True
         probe.release()
 
-    def test_equirect_teardown_errors_do_not_break_build(self, gl_context, monkeypatch):
+    def test_equirect_teardown_errors_do_not_break_build(self, monkeypatch):
         """The equirect env path frees a temporary source texture + program in a
         finally; delete failures there must not escape the build."""
         monkeypatch.delenv('OPENGLCONTEXT_ENV_CUBEMAP', raising=False)
         ibl.set_equirect_env(np.ones((8, 16, 3), dtype=np.float32))
 
-        def boom(*a, **k):
+        def boom(*_a, **_k):
             raise RuntimeError("teardown delete failed")
 
         monkeypatch.setattr(ibl, 'glDeleteTextures', boom)

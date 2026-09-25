@@ -34,9 +34,9 @@ class FakeContext(glfwevents.EventHandlerMixin):
 
 
 def _mock_sizes(monkeypatch, window_size, fb_size, cursor):
-    monkeypatch.setattr(glfwevents.glfw, "get_window_size", lambda w: window_size)
-    monkeypatch.setattr(glfwevents.glfw, "get_framebuffer_size", lambda w: fb_size)
-    monkeypatch.setattr(glfwevents.glfw, "get_cursor_pos", lambda w: cursor)
+    monkeypatch.setattr(glfwevents.glfw, "get_window_size", lambda _w: window_size)
+    monkeypatch.setattr(glfwevents.glfw, "get_framebuffer_size", lambda _w: fb_size)
+    monkeypatch.setattr(glfwevents.glfw, "get_cursor_pos", lambda _w: cursor)
 
 
 def test_cursor_scaled_to_framebuffer_2x(monkeypatch):

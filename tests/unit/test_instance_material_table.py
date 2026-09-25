@@ -37,7 +37,7 @@ def rec(shape):
     return ((False, [], 0.0), [[1]], [[1]], None, [shape], shape)
 
 
-def instanceable(path):
+def instanceable(_path):
     return True
 
 

@@ -25,7 +25,7 @@ def make_ctx():
     ctx.overlayText = ''
     ctx.overlayError = False
     ctx.redraws = 0
-    ctx.triggerRedraw = lambda *a: setattr(ctx, 'redraws', ctx.redraws + 1)
+    ctx.triggerRedraw = lambda *_a: setattr(ctx, 'redraws', ctx.redraws + 1)
     return ctx
 
 

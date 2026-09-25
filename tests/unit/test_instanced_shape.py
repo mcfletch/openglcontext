@@ -182,7 +182,7 @@ class TestGroupingCountsInstances:
                                   translations=[(i, 0, 0) for i in range(12)]))
         groups, singles = build_instance_groups(
             [_record(node)], min_instances=8,
-            instanceable=lambda path: True)
+            instanceable=lambda _path: True)
         assert len(groups) == 1 and singles == []
         assert len(groups[0]) == 12
 
@@ -191,7 +191,7 @@ class TestGroupingCountsInstances:
                               placements=placement_matrices(
                                   translations=[(0, 0, 0), (1, 0, 0)]))
         groups, singles = build_instance_groups(
-            [_record(node)], min_instances=8, instanceable=lambda path: True)
+            [_record(node)], min_instances=8, instanceable=lambda _path: True)
         assert groups == [] and len(singles) == 1
 
     def test_placements_and_plain_shapes_count_together(self) -> None:
@@ -202,7 +202,7 @@ class TestGroupingCountsInstances:
         plain = [Shape(geometry=geometry) for _ in range(3)]
         groups, _ = build_instance_groups(
             [_record(node)] + [_record(s) for s in plain],
-            min_instances=8, instanceable=lambda path: True)
+            min_instances=8, instanceable=lambda _path: True)
         assert len(groups) == 1
         assert len(groups[0]) == 9
 
@@ -211,7 +211,7 @@ class TestGroupingCountsInstances:
                               placements=placement_matrices(
                                   translations=[(0, 0, 0)] * 6))
         groups, _ = build_instance_groups(
-            [_record(node)], min_instances=2, instanceable=lambda path: True)
+            [_record(node)], min_instances=2, instanceable=lambda _path: True)
         assert len(groups[0].members) == 1
 
 
@@ -258,14 +258,14 @@ class TestDrawingItWithoutInstancing:
 
         mode = Mode()
         before = np.array(mode.matrix)
-        node.geometry.depthDraw = lambda mode: True
+        node.geometry.depthDraw = lambda _mode: True
         node.Render(mode=mode)
         assert np.allclose(mode.matrix, before)
 
     def test_with_no_placements_it_draws_nothing(self) -> None:
         node = InstancedShape(geometry=_mesh())
         seen = []
-        node.geometry.render = lambda mode=None, **named: seen.append(1)
+        node.geometry.render = lambda _mode=None, **_named: seen.append(1)
 
         class Mode:
             shader_mode = True

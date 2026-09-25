@@ -211,7 +211,7 @@ class TestAVoidUnderTheGround:
     def test_a_hole_that_covers_everything_leaves_no_ground(self) -> None:
         world = PhysicsWorld()
         HeightFieldColliders(world, _field(), reach=EXTENT,
-                             holes=lambda x, z: np.ones(np.shape(x), bool)
+                             holes=lambda x, _z: np.ones(np.shape(x), bool)
                              ).update((0.0, 0.0, 0.0))
         assert _ground_under(world, 0.0, 0.0) is None
         assert _ground_under(world, 300.0, -300.0) is None

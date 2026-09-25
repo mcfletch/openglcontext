@@ -73,7 +73,7 @@ class TestBaseCompiler:
 
     def test_call_swallows_compile_error_to_dummy(self):
         class Boom(ArrayGeometryCompiler):
-            def compile(self, *a, **k):
+            def compile(self, *_a, **_k):
                 raise ValueError("kaboom")
         assert Boom(_quad())(mode=_mode()) is DUMMY_RENDER
 
@@ -295,7 +295,7 @@ class TestExpandedArraysDefensive:
                                 metaIndex=2, coordIndex=2)   # non-numeric channel
 
         class _Corrupt(ArrayGeometryCompiler):
-            def tessellate(self, polygons=None, sources=None):
+            def tessellate(self, _polygons=None, _sources=None):
                 return [good, good2, bad]
 
         result = _Corrupt(ifs).expandedArrays()

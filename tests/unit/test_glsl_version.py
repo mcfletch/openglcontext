@@ -11,7 +11,8 @@ from OpenGLContext.scenegraph.shaders import glsl_version
 from OpenGLContext.scenegraph import shaders
 
 
-def test_the_running_driver_reports_a_major_and_a_minor(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_the_running_driver_reports_a_major_and_a_minor():
     major, minor = glsl_version()
     assert isinstance(major, int) and isinstance(minor, int)
     # The engine's shaders are #version 330 core, so anything that runs them
@@ -30,5 +31,5 @@ def test_the_running_driver_reports_a_major_and_a_minor(gl_context):
 )
 def test_a_vendor_suffix_is_not_part_of_the_version(monkeypatch, reported, expected):
 
-    monkeypatch.setattr(shaders, 'glGetString', lambda which: reported)
+    monkeypatch.setattr(shaders, 'glGetString', lambda _which: reported)
     assert shaders.glsl_version() == expected

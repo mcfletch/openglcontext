@@ -103,7 +103,7 @@ class TestFromAFunction:
         assert float(field.sample(EXTENT / 2, 0.0)) == pytest.approx(100.0)
 
     def test_level_ground_is_not_a_division_by_zero(self) -> None:
-        field = HeightField.from_function(lambda x, z: np.zeros_like(np.asarray(x, 'd')),
+        field = HeightField.from_function(lambda x, _z: np.zeros_like(np.asarray(x, 'd')),
                                           res=9, extent=EXTENT)
         assert np.isfinite(field.sample(0.0, 0.0))
         assert float(field.sample(37.0, -12.0)) == pytest.approx(0.0)

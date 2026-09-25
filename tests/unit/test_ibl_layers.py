@@ -64,7 +64,7 @@ class TestATurnedLight:
 
 
 @pytest.fixture
-def probe(gl_context, monkeypatch):
+def probe(gl_context, monkeypatch):  # noqa: ARG001 gl_context is the context the probe is built in
     """A built probe with room for the scene's layer and three more."""
     monkeypatch.delenv('OPENGLCONTEXT_ENV_HDR', raising=False)
     monkeypatch.delenv('OPENGLCONTEXT_ENV_CUBEMAP', raising=False)

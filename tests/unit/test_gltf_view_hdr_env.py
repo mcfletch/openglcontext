@@ -48,7 +48,7 @@ def test_is_hdr_environment():
     assert not environment._is_hdr_environment('')
 
 
-def test_hdr_url_routes_to_env_hdr(monkeypatch):
+def test_hdr_url_routes_to_env_hdr():
     url = 'https://dl.polyhaven.org/x/studio_small_03_1k.hdr'
     view.apply_render_env(_Args(environment=url))
     assert os.environ['OPENGLCONTEXT_ENV_HDR'] == url
@@ -56,20 +56,20 @@ def test_hdr_url_routes_to_env_hdr(monkeypatch):
     assert os.environ['OPENGLCONTEXT_IBL'] == 'full'
 
 
-def test_catalogue_name_routes_to_env_hdr(monkeypatch):
+def test_catalogue_name_routes_to_env_hdr():
     view.apply_render_env(_Args(environment='studio_small_03'))
     assert os.environ['OPENGLCONTEXT_ENV_HDR'] == hdri.CATALOG['studio_small_03'].url
     assert os.environ['OPENGLCONTEXT_IBL'] == 'full'
 
 
-def test_cubemap_prefix_still_routes_to_cubemap(monkeypatch):
+def test_cubemap_prefix_still_routes_to_cubemap():
     view.apply_render_env(_Args(environment='/env/pimbackground_'))
     assert os.environ['OPENGLCONTEXT_ENV_CUBEMAP'] == '/env/pimbackground_'
     assert 'OPENGLCONTEXT_ENV_HDR' not in os.environ
     assert os.environ['OPENGLCONTEXT_IBL'] == 'full'
 
 
-def test_background_none_with_hdr_keeps_ibl_on(monkeypatch):
+def test_background_none_with_hdr_keeps_ibl_on():
     # A black backdrop but an HDR env must NOT force IBL off (metals still reflect it).
     view.apply_render_env(_Args(environment='studio_small_03', background='none'))
     assert os.environ.get('OPENGLCONTEXT_IBL') != 'off'

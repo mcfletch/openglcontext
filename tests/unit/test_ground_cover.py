@@ -94,7 +94,7 @@ class TestWhereItGrows:
                               cover.rungs[0].cards.pos[:, 2]).max()) <= 91.0
 
     def test_it_sits_on_the_ground(self) -> None:
-        def sloping(x, z):
+        def sloping(x, _z):
             return np.asarray(x, 'd') * 0.0 + 7.0
         field = HeightField(np.ones((33, 33)), EXTENT, 7.0)
         cover = GroundCover(field, _species(), card_radius=80.0)
@@ -151,7 +151,7 @@ class TestWhereItGrows:
 
 
 class TestWhereItDoesNot:
-    def _control(self, layers=('grass', 'rock')):
+    def _control(self):
         field = _field()
         rules = [LayerRule(slope=(0.0, 1e9)), LayerRule(slope=(1e8, 1e9))]
         painted = np.zeros((64, 64))
@@ -236,7 +236,7 @@ class TestWhereTheGroundIsNotThere:
     def test_it_is_the_mask_and_the_hole_together(self) -> None:
         """Neither answers the other's question: the mask says what ground
         this plant grows on, the hole says whether there is ground at all."""
-        grew = _cover(card_radius=300.0, mask=lambda x, z: np.where(
+        grew = _cover(card_radius=300.0, mask=lambda x, _z: np.where(
             np.asarray(x, 'd') > 0.0, 1.0, 0.0))
         grew.holes = self._hole()
         grew.update((0.0, 0.0, 0.0))
@@ -254,7 +254,7 @@ class TestItStandsInTheSameLightAsTheGroundDoes:
     fifth, reads as a row of lamps on the forest floor."""
 
     def _shade(self):
-        def at(x, z):
+        def at(x, _z):
             return np.where(np.asarray(x, 'd') < 0.0, 0.2, 1.0)
         return at
 
@@ -289,7 +289,7 @@ class _Recording:
     def __init__(self):
         self.shades = None
 
-    def update_instances(self, positions, yaws, scales, shades=None):
+    def update_instances(self, positions, _yaws, _scales, shades=None):
         self.pos, self.shades = positions, shades
 
 
@@ -417,7 +417,7 @@ class TestTheWorkerIsLetGo:
         cover = _cover(card_radius=100.0, background=True)
         failures = []
 
-        def mask(x, z):
+        def mask(x, _z):
             if not failures:
                 failures.append(True)
                 raise RuntimeError('a mask that fails once')

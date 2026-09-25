@@ -104,7 +104,7 @@ class TestWritingAChain:
             raw = handle.read()
         assert len(raw) == 20 + struct.unpack('<I', raw[12:16])[0]
 
-    def test_a_buffer_name_with_a_directory_in_it_is_refused(self, tmp_path):
+    def test_a_buffer_name_with_a_directory_in_it_is_refused(self):
         writer = GLTFWriter()
         for name in ('../bust.bin', 'levels/bust.bin', '/tmp/bust.bin', '..'):
             with pytest.raises(ValueError):

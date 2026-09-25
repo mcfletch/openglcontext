@@ -96,7 +96,7 @@ class TestAskingForAContextThatCannotBeGiven:
             self, monkeypatch):
         glfw = pytest.importorskip('glfw')
         monkeypatch.setattr(glfw, 'create_window',
-                            lambda *args, **named: None)
+                            lambda *_args, **_named: None)
         with pytest.raises(GLUnavailable, match='32x24 core'):
             with hidden_window('nope', size=(32, 24)):
                 pass                                   # pragma: no cover - never runs
@@ -218,7 +218,7 @@ class TestWhetherThisMachineCanRenderAtAll:
             self, monkeypatch):
         monkeypatch.setattr(glcontext, '_DESCRIPTION', None)
 
-        def refuse(*args, **named):
+        def refuse(*_args, **_named):
             raise GLUnavailable('no GL here')
 
         monkeypatch.setattr(glcontext, 'hidden_window', refuse)
@@ -288,7 +288,7 @@ class TestWhatTheRendererIs:
             self, monkeypatch):
         monkeypatch.setattr(glcontext, '_DESCRIPTION', None)
 
-        def refuse(*args, **named):
+        def refuse(*_args, **_named):
             raise GLUnavailable('no GL here')
 
         monkeypatch.setattr(glcontext, 'hidden_window', refuse)
@@ -304,7 +304,8 @@ class TestWhatTheRendererIs:
 class TestTheFixtures:
     """What a test in another project gets by turning the plugin on."""
 
-    def test_gl_context_is_current(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_gl_context_is_current(self):
         assert glGetString(GL_VERSION) is not None
 
     def test_gl_window_makes_the_window_it_is_asked_for(self, gl_window):
@@ -476,7 +477,7 @@ class TestWhetherAWindowlessContextCanBeHad:
         opened = []
 
         @contextlib.contextmanager
-        def offscreen(title, profile='core', **named):
+        def offscreen(_title, profile='core', **_named):
             opened.append(profile)
             yield object()
 
@@ -486,7 +487,7 @@ class TestWhetherAWindowlessContextCanBeHad:
         assert opened == ['core', 'compatibility']
 
     def test_a_refusal_is_the_reason_to_skip(self, monkeypatch):
-        def refuse(title, profile='core', **named):
+        def refuse(_title, _profile='core', **_named):
             raise GLUnavailable('no EGL here')
 
         monkeypatch.setattr(glcontext, 'offscreen_window', refuse)
@@ -496,7 +497,7 @@ class TestWhetherAWindowlessContextCanBeHad:
     def test_any_other_failure_is_not_a_reason(self, monkeypatch):
         """A defect in the offscreen path fails the test that asked, rather
         than reading as a machine without the backend."""
-        def broken(title, profile='core', **named):
+        def broken(_title, _profile='core', **_named):
             raise TypeError('a defect')
 
         monkeypatch.setattr(glcontext, 'offscreen_window', broken)

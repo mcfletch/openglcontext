@@ -252,11 +252,11 @@ class TestRemoteSourceRouting:
 
     @staticmethod
     def _patch_loaders(monkeypatch, calls):
-        def url_loader(s, *a, **k):
+        def url_loader(s, *_a, **_k):
             calls['url'] = s
             return 'URLSCENE'
 
-        def file_loader(s, *a, **k):
+        def file_loader(s, *_a, **_k):
             calls['file'] = s
             return 'FILESCENE'
 

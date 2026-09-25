@@ -28,7 +28,7 @@ IDENT = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
 MIRROR_X = [[-1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]   # det < 0
 
 
-def _one_key(path):
+def _one_key(_path):
     return 'shared'      # every record shares a geometry/material key
 
 

@@ -55,12 +55,12 @@ def test_the_output_directory_is_made_absolute(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     recorded = {}
 
-    def record(base, frames, template, script_name):
+    def record(_base, _frames, template, script_name):
         recorded.update(template=template, script_name=script_name)
         raise SystemExit(0)
 
     monkeypatch.setattr(gltest, 'saveAndExitClass', record)
-    monkeypatch.setattr(gltest, 'contextClass', lambda configs: object)
+    monkeypatch.setattr(gltest, 'contextClass', lambda _configs: object)
     with pytest.raises(SystemExit):
         gltest.main(['-s', script, '-o', 'shots'])
     assert os.path.isabs(recorded['template'])

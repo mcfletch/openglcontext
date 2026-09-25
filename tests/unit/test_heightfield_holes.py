@@ -56,7 +56,7 @@ class TestAFieldWithNothingMissing:
     def test_a_hole_that_catches_nothing_changes_nothing(self) -> None:
         field = flat()
 
-        def nowhere(x, z):
+        def nowhere(x, _z):
             return np.zeros(np.shape(x), dtype=bool)
 
         assert np.array_equal(field.mesh(holes=nowhere)[1], field.mesh()[1])
@@ -142,7 +142,7 @@ class TestTheDrawnSurfaceAndTheCollidedOneAgree:
 class _NoWorld:
     """Enough of a physics world to build patches without stepping one."""
 
-    def add_body(self, *args, **named):
+    def add_body(self, *_args, **_named):
         return object()
 
     def remove_body(self, *args, **named):
@@ -181,7 +181,7 @@ class TestTheTerrainNodeCarriesItThrough:
         # The control map is a path here, as in the node's own cases: what is
         # under test is the mesh, and loading an image needs a GL context.
         return SplatTerrain(flat(), ['ground'], 'control.png',
-                            material_fn=lambda *a, **k: {}, holes=holes)
+                            material_fn=lambda *_a, **_k: {}, holes=holes)
 
     def test_it_takes_a_holes_callable(self) -> None:
         assert self.make(holes=middle).holes is middle
@@ -207,32 +207,32 @@ class TestAStreamedWorldsGround:
     draw, so setting them in between is in time.
     """
 
-    def test_the_ground_starts_with_none(self, tmp_path) -> None:
-        node = _tiles_terrain(tmp_path)
+    def test_the_ground_starts_with_none(self) -> None:
+        node = _tiles_terrain()
         assert node.holes is None and node.ground.holes is None
 
-    def test_setting_them_reaches_the_ground(self, tmp_path) -> None:
-        node = _tiles_terrain(tmp_path)
+    def test_setting_them_reaches_the_ground(self) -> None:
+        node = _tiles_terrain()
         node.holes = middle
         assert node.ground.holes is middle
 
-    def test_the_mesh_it_would_upload_has_the_hole_in_it(self, tmp_path) -> None:
-        node = _tiles_terrain(tmp_path)
+    def test_the_mesh_it_would_upload_has_the_hole_in_it(self) -> None:
+        node = _tiles_terrain()
         whole = node.field.mesh()[1].size
         node.holes = middle
         assert node.field.mesh(holes=node.holes)[1].size < whole
 
-    def test_clearing_them_puts_the_ground_back(self, tmp_path) -> None:
-        node = _tiles_terrain(tmp_path)
+    def test_clearing_them_puts_the_ground_back(self) -> None:
+        node = _tiles_terrain()
         node.holes = middle
         node.holes = None
         assert node.ground.holes is None
 
 
-def _tiles_terrain(tmp_path):
+def _tiles_terrain():
     """A `TilesTerrain` with a field and a ground, built without a GL context."""
     node = TilesTerrain.__new__(TilesTerrain)
     node.field = flat()
     node.ground = SplatTerrain(node.field, ['ground'], 'control.png',
-                               material_fn=lambda *a, **k: {})
+                               material_fn=lambda *_a, **_k: {})
     return node

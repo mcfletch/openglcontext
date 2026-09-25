@@ -285,7 +285,7 @@ class TestPlantsThatGrowInPatches:
     def test_patchiness_still_stops_where_the_ground_says_no(self) -> None:
         """A bed of ferns does not grow through the mask that keeps cover off
         the rock and out of the road."""
-        def nothing_west(x, z):
+        def nothing_west(x, _z):
             return np.where(np.asarray(x, 'd') < 0.0, 0.0, 1.0)
         cover = _cover([_species('fern', density=3.0, patchiness=1.0)],
                        card_radius=120.0, mask=nothing_west)
@@ -302,13 +302,13 @@ class TestWhatGrowsUnderTheTreesAndWhatDoesNot:
 
     def _stand(self, west=1.2, east=0.15):
         """Closed canopy on the west side, a thin scatter on the east."""
-        def at(x, z):
+        def at(x, _z):
             return np.where(np.asarray(x, 'd') < 0.0, west, east)
         return at
 
     def _edges(self):
         """Closed canopy fading out to open ground, west to east."""
-        def at(x, z):
+        def at(x, _z):
             return np.clip((100.0 - np.asarray(x, 'd')) / 200.0, 0.0, 1.0)
         return at
 

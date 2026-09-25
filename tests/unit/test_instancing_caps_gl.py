@@ -18,8 +18,15 @@ def gl_context(gl_window):
     return gl_window('caps', size=(32, 32))
 
 
-def test_detect_capabilities_reports_live_context(gl_context):
-    instancing._CAPS_CACHE = None
+@pytest.fixture(autouse=True)
+def no_remembered_capabilities(monkeypatch):
+    """Each test detects the capabilities afresh, and what it detected is
+    forgotten when it ends: the answer is kept at module level."""
+    monkeypatch.setattr(instancing, '_CAPS_CACHE', None)
+
+
+@pytest.mark.usefixtures('gl_context')
+def test_detect_capabilities_reports_live_context():
     caps = instancing.detect_capabilities(force=True)
     # A real GL 3.3+ context reports a plausible version and a non-trivial UBO
     # size, and enumerates at least one extension.
@@ -29,19 +36,19 @@ def test_detect_capabilities_reports_live_context(gl_context):
     assert caps.max_materials() >= 1
 
 
-def test_detect_capabilities_is_cached(gl_context):
-    instancing._CAPS_CACHE = None
+@pytest.mark.usefixtures('gl_context')
+def test_detect_capabilities_is_cached():
     first = instancing.detect_capabilities(force=True)
     # Second unforced call returns the very same cached object (no re-query).
     assert instancing.detect_capabilities() is first
 
 
-def test_detect_capabilities_degrades_on_query_failure(gl_context, monkeypatch):
+@pytest.mark.usefixtures('gl_context')
+def test_detect_capabilities_degrades_on_query_failure(monkeypatch):
     """A driver that raises on every integer query falls back per field to the safe
     3.3 baseline (no version, no UBO size, no extensions) rather than propagating."""
-    instancing._CAPS_CACHE = None
 
-    def boom(*a, **k):
+    def boom(*_a, **_k):
         raise RuntimeError("simulated driver query failure")
 
     monkeypatch.setattr(GL, 'glGetIntegerv', boom)
@@ -50,7 +57,6 @@ def test_detect_capabilities_degrades_on_query_failure(gl_context, monkeypatch):
     assert caps.max_uniform_block_size == 16384
     assert caps.ssbo is False
     assert len(caps.extensions) == 0
-    instancing._CAPS_CACHE = None
 
 
 if __name__ == '__main__':

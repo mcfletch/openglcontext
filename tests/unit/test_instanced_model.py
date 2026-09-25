@@ -145,7 +145,7 @@ class TestABlendedSetDrawsEveryCopy:
         mode = self._Recorder()
         original = getattr(type(shape).__mro__[1], method)
 
-        def record(self_, mode=None):
+        def record(_node, mode=None):
             mode.seen.append(np.asarray(mode.matrix, 'f').copy())
 
         setattr(type(shape).__mro__[1], method, record)

@@ -9,6 +9,7 @@ turns a description into a vertex array object.
 import gc
 
 import numpy as np
+import pytest
 from OpenGL.GL import (
     GL_TRIANGLE_STRIP, GL_UNSIGNED_SHORT,
     GL_VERTEX_ATTRIB_ARRAY_ENABLED, GL_VERTEX_ATTRIB_ARRAY_SIZE,
@@ -78,8 +79,9 @@ class TestDescribingWhatAGeometryHas:
         assert arrays.indexed
 
 
+@pytest.mark.usefixtures('gl_context')
 class TestBindingThem:
-    def test_each_semantic_is_enabled_at_the_location_the_table_says(self, gl_context):
+    def test_each_semantic_is_enabled_at_the_location_the_table_says(self):
         arrays = GeometryArrays.separate(
             count=3, positions=a_buffer(), normals=a_buffer(),
             texcoords=a_buffer(columns=2))
@@ -97,7 +99,7 @@ class TestBindingThem:
         finally:
             glBindVertexArray(0)
 
-    def test_an_interleaved_buffer_records_its_stride(self, gl_context):
+    def test_an_interleaved_buffer_records_its_stride(self):
         arrays = GeometryArrays.interleaved(
             a_buffer(columns=8), VertexFormat.T2F_N3F_V3F, count=3)
         vao = bind_geometry(arrays)
@@ -108,7 +110,7 @@ class TestBindingThem:
         finally:
             glBindVertexArray(0)
 
-    def test_a_second_bind_of_the_same_arrays_reuses_the_object(self, gl_context):
+    def test_a_second_bind_of_the_same_arrays_reuses_the_object(self):
         class Owner:
             pass
         owner, arrays = Owner(), GeometryArrays.separate(
@@ -116,7 +118,7 @@ class TestBindingThem:
         assert bind_geometry(arrays, owner=owner) == bind_geometry(
             arrays, owner=owner)
 
-    def test_new_buffers_rebuild_it_rather_than_binding_stale_pointers(self, gl_context):
+    def test_new_buffers_rebuild_it_rather_than_binding_stale_pointers(self):
         """A data change makes new VBOs; the recorded pointers must follow."""
         class Owner:
             pass
@@ -130,6 +132,7 @@ class TestBindingThem:
         assert replacement in cached_refs
 
 
+@pytest.mark.usefixtures('gl_context')
 class TestLettingThemGo:
     """A node's vertex array objects are released when the node is collected,
     and forgotten when the context that issued them is torn down."""
@@ -137,7 +140,7 @@ class TestLettingThemGo:
     class Owner:
         pass
 
-    def test_a_collected_owner_s_object_is_deleted_at_the_next_bind(self, gl_context):
+    def test_a_collected_owner_s_object_is_deleted_at_the_next_bind(self):
         keeper, kept = self.Owner(), GeometryArrays.separate(count=3, positions=a_buffer())
         bind_geometry(kept, owner=keeper)
         owner = self.Owner()
@@ -149,7 +152,7 @@ class TestLettingThemGo:
         bind_geometry(kept, owner=keeper)          # builds nothing new
         assert not glIsVertexArray(vao)
 
-    def test_a_lost_context_s_objects_are_deleted_and_forgotten(self, gl_context):
+    def test_a_lost_context_s_objects_are_deleted_and_forgotten(self):
         owner = self.Owner()
         arrays = GeometryArrays.separate(count=3, positions=a_buffer())
         vao = bind_geometry(arrays, owner=owner)

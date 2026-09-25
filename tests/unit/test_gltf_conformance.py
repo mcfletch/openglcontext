@@ -128,7 +128,7 @@ def _recorded(spec, camera):
         return json.load(handle)
 
 
-def stale_reason(spec, camera, recorded):
+def stale_reason(spec, recorded):
     """Why this baseline is not a picture of this view, or ``None``.
 
     A baseline is a picture of one scene under one set of parameters.  Change
@@ -185,7 +185,7 @@ def test_baseline_was_rendered_for_this_view(spec, camera):
     recorded = _recorded(spec, camera)
     if not recorded:
         pytest.skip('no sidecar beside this baseline to read')
-    reason = stale_reason(spec, camera, recorded)
+    reason = stale_reason(spec, recorded)
     assert reason is None, (
         "the %s baseline is of a different view: %s. Re-render it, review "
         "against the Khronos reference, then: oglc-gltf-regression --bless "
@@ -208,7 +208,7 @@ def test_view_matches_baseline(spec, camera, tmp_path):
     # Before rendering rather than after: comparing a frame against a baseline
     # of another view can only fail, and two minutes of rendering buys a
     # pixel count in place of the reason.
-    reason = stale_reason(spec, camera, _recorded(spec, camera))
+    reason = stale_reason(spec, _recorded(spec, camera))
     if reason is not None:
         pytest.fail("the %s baseline is of a different view: %s. Re-bless it "
                     "(oglc-gltf-regression --bless --only %s)"

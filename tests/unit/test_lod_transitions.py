@@ -168,11 +168,12 @@ KINDS = ['sphere', 'cone', 'cylinder']
 VIEW_NAMES = list(VIEWS)
 
 
+@pytest.mark.usefixtures('gl_ctx')
 @pytest.mark.core_profile
 class TestQuadricLodPop:
     @pytest.mark.parametrize('view', VIEW_NAMES)
     @pytest.mark.parametrize('kind', KINDS)
-    def test_every_transition_is_bounded(self, gl_ctx, kind, view):
+    def test_every_transition_is_bounded(self, kind, view):
         imgs = [_render(*_coords(kind, lvl), view=view) for lvl in range(4)]
         pops = [_object_pop(imgs[i], imgs[i + 1]) for i in range(3)]
         assert max(pops) <= MAX_OBJECT_POP, (
@@ -182,12 +183,12 @@ class TestQuadricLodPop:
 
     @pytest.mark.parametrize('view', VIEW_NAMES)
     @pytest.mark.parametrize('kind', KINDS)
-    def test_near_transition_is_subtle(self, gl_ctx, kind, view):
+    def test_near_transition_is_subtle(self, kind, view):
         pop = _object_pop(_render(*_coords(kind, 0), view=view),
                           _render(*_coords(kind, 1), view=view))
         assert pop <= MAX_NEAR_POP, f"{kind}/{view} L0->L1 pop {pop:.3f}"
 
-    def test_metric_catches_a_violent_halving(self, gl_ctx):
+    def test_metric_catches_a_violent_halving(self):
         """A sphere that halves its slice count (the old aggressive schedule)
         pops far past the budget -- proving the metric actually measures pop."""
         fine = _render(*Sphere(radius=1.0).sphere(PI / 12))
@@ -204,9 +205,10 @@ class TestNoGapAtCoarseLod:
     seam gap is backfilled on screen by the far wall; their precise closure guard
     is TestClosure in test_quadric_lod (phi divides 2*pi -> the ring closes)."""
 
+    @pytest.mark.usefixtures('gl_ctx')
     @pytest.mark.parametrize('view', VIEW_NAMES)
     @pytest.mark.parametrize('kind', KINDS)
-    def test_lod2_renders_solid_no_interior_gap(self, gl_ctx, kind, view):
+    def test_lod2_renders_solid_no_interior_gap(self, kind, view):
         holes = _interior_holes(_render(*_coords(kind, 2), cull=True, view=view))
         assert holes < 0.01, f"{kind}/{view} LOD2 shows an interior gap ({holes:.3f})"
 

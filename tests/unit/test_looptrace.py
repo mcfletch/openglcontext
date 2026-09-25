@@ -234,7 +234,7 @@ class TestListeners:
     def test_a_listener_hears_every_iteration(self, clock):
         heard = []
         trace = LoopTrace(stall_ms=50.0, clock=clock)
-        trace.subscribe(lambda d, p, s: heard.append((round(d, 3), s)))
+        trace.subscribe(lambda d, _p, s: heard.append((round(d, 3), s)))
         _iterate(trace, clock, [('draw', 0.010)])
         _iterate(trace, clock, [('idle', 0.500)])
         assert heard == [(0.010, False), (0.500, True)]
@@ -242,14 +242,14 @@ class TestListeners:
     def test_a_listener_is_given_the_phases(self, clock):
         heard = []
         trace = LoopTrace(clock=clock)
-        trace.subscribe(lambda d, p, s: heard.append(p))
+        trace.subscribe(lambda _d, p, _s: heard.append(p))
         _iterate(trace, clock, [('idle', 0.010)])
         assert heard[0]['idle'] == pytest.approx(0.010)
 
     def test_a_listener_that_raises_does_not_take_the_loop_down(self, clock, caplog):
         """A trace is diagnostic equipment; it does not get to break the frame."""
         trace = LoopTrace(clock=clock)
-        trace.subscribe(lambda d, p, s: 1 / 0)
+        trace.subscribe(lambda _d, _p, _s: 1 / 0)
         with caplog.at_level(logging.ERROR, logger='OpenGLContext.looptrace'):
             _iterate(trace, clock, [('draw', 0.010)])
         assert trace.summary()['iterations'] == 1
@@ -259,7 +259,7 @@ class TestListeners:
         heard = []
         trace = LoopTrace(clock=clock)
         for index in range(3):
-            trace.subscribe(lambda d, p, s, i=index: heard.append(i))
+            trace.subscribe(lambda _d, _p, _s, i=index: heard.append(i))
         _iterate(trace, clock, [('draw', 0.010)])
         assert sorted(heard) == [0, 1, 2]
 

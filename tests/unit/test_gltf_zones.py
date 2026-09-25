@@ -207,7 +207,7 @@ class TestReading:
         body['nodes'].append({'name': 'secret',
                               'extras': {'OGLC_hook': 'test:stand-in'}})
         body['scenes'][0]['nodes'].append(1)
-        hooks.register('test:stand-in', lambda ctx: (Group(), True))
+        hooks.register('test:stand-in', lambda _ctx: (Group(), True))
         try:
             scene = load(body)
         finally:
@@ -233,7 +233,7 @@ class TestRegistry:
 
     def test_an_application_can_add_a_reader(self):
 
-        def read(block, reading):
+        def read(block, _reading):
             return ZoneReverb(level=float(block['wet']))
         zoning.register_scoped('GAME_echo', read)
         try:

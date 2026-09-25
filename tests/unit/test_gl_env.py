@@ -67,7 +67,7 @@ class TestTheBackendThisMachineWants:
 
     def test_the_preferred_one_is_taken_where_it_imports(self):
         environ = {}
-        assert gl_env.settle_gl_backend(environ, available=lambda n: True) \
+        assert gl_env.settle_gl_backend(environ, available=lambda _n: True) \
             == gl_env.GL_BACKENDS[0]
         assert environ['OPENGLCONTEXT_BACKEND'] == gl_env.GL_BACKENDS[0]
 
@@ -80,7 +80,7 @@ class TestTheBackendThisMachineWants:
 
     def test_a_choice_already_made_is_left_alone(self):
         environ = {'OPENGLCONTEXT_BACKEND': 'glut'}
-        assert gl_env.settle_gl_backend(environ, available=lambda n: True) == 'glut'
+        assert gl_env.settle_gl_backend(environ, available=lambda _n: True) == 'glut'
         assert environ['OPENGLCONTEXT_BACKEND'] == 'glut'
 
     def test_nothing_is_named_where_none_will_import(self):
@@ -88,7 +88,7 @@ class TestTheBackendThisMachineWants:
         names the backend and the package to install, and this would hide it
         behind a choice nobody made."""
         environ = {}
-        assert gl_env.settle_gl_backend(environ, available=lambda n: False) is None
+        assert gl_env.settle_gl_backend(environ, available=lambda _n: False) is None
         assert 'OPENGLCONTEXT_BACKEND' not in environ
 
 

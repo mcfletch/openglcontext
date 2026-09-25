@@ -62,7 +62,7 @@ def _prim(attr_map, **attr_indices):
 class TestDracoArraysAttributeBranches:
     def test_point_cloud_without_faces_raises(self, monkeypatch):
         monkeypatch.setattr(draco_mod, '_decode_blob',
-                            lambda g, ext, r: _FakeMesh(None, {10: np.zeros((3, 3))}))
+                            lambda _g, _ext, _r: _FakeMesh(None, {10: np.zeros((3, 3))}))
         prim = _prim({'POSITION': 10}, POSITION=0)
         with pytest.raises(ValueError, match='point cloud'):
             draco_mod.draco_arrays(GLTF2(), prim, None)
@@ -70,7 +70,7 @@ class TestDracoArraysAttributeBranches:
     def test_missing_position_attribute_id_raises(self, monkeypatch):
         # The map lists POSITION but the stream has no matching unique id.
         monkeypatch.setattr(draco_mod, '_decode_blob',
-                            lambda g, ext, r: _FakeMesh(np.array([[0, 1, 2]]), {}))
+                            lambda _g, _ext, _r: _FakeMesh(np.array([[0, 1, 2]]), {}))
         prim = _prim({'POSITION': 10}, POSITION=0)
         with pytest.raises(ValueError, match='no POSITION'):
             draco_mod.draco_arrays(GLTF2(), prim, None)
@@ -84,7 +84,7 @@ class TestDracoArraysAttributeBranches:
         tex = np.tile([0.25, 0.75], (n, 1))
         faces = np.array([[0, 1, 2]], dtype=np.uint32)
         mesh = _FakeMesh(faces, {10: pos, 11: tan, 12: col, 13: joints, 14: tex})
-        monkeypatch.setattr(draco_mod, '_decode_blob', lambda g, ext, r: mesh)
+        monkeypatch.setattr(draco_mod, '_decode_blob', lambda _g, _ext, _r: mesh)
 
         g = GLTF2()
         g.accessors = [
@@ -111,7 +111,7 @@ class TestDracoArraysAttributeBranches:
         # while the mesh still decodes from POSITION.
         pos = np.zeros((3, 3), dtype=np.float64)
         mesh = _FakeMesh(np.array([[0, 1, 2]], dtype=np.uint32), {10: pos})
-        monkeypatch.setattr(draco_mod, '_decode_blob', lambda g, ext, r: mesh)
+        monkeypatch.setattr(draco_mod, '_decode_blob', lambda _g, _ext, _r: mesh)
         prim = _prim({'POSITION': 10, 'NORMAL': 99}, POSITION=0, NORMAL=1)
         with caplog.at_level('WARNING'):
             out = draco_mod.draco_arrays(GLTF2(), prim, None)

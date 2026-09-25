@@ -403,7 +403,7 @@ class TestAnAnimatedFinestLevel:
 
 
 class TestReconcilingTheCoverage:
-    def test_a_level_left_out_takes_its_coverage_with_it(self, tmp_path, caplog):
+    def test_a_level_left_out_takes_its_coverage_with_it(self, tmp_path):
         """Three thresholds for two levels would cull a level early."""
         node = _the_lod(_loaded(tmp_path, _document(ids=[1, 99])))
 

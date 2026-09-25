@@ -56,10 +56,10 @@ def _handler(result):
     """A handler whose parse returns ``result`` over an empty file."""
 
     class Handler(base.BaseHandler):
-        def getData(self, baseURL, filename, file):
+        def getData(self, _baseURL, _filename, _file):
             return b''
 
-        def parse(self, data, baseURL, filename, file, *args, **named):
+        def parse(self, _data, _baseURL, _filename, _file, *_args, **_named):
             return result
 
     return Handler()

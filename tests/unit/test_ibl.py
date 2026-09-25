@@ -120,7 +120,7 @@ class TestEquirectSource:
         ibl.set_equirect_env(None)
         monkeypatch.setenv('OPENGLCONTEXT_ENV_HDR', '/some/panorama.hdr')
         loaded = np.zeros((2, 4, 3), dtype=np.float32)
-        monkeypatch.setattr(ibl, 'load_equirect_hdr', lambda src: loaded)
+        monkeypatch.setattr(ibl, 'load_equirect_hdr', lambda _src: loaded)
         out = ibl.resolve_equirect_source()
         assert out is loaded
 
@@ -128,7 +128,7 @@ class TestEquirectSource:
         ibl.set_equirect_env(None)
         monkeypatch.setenv('OPENGLCONTEXT_ENV_HDR', '/nonexistent.hdr')
 
-        def boom(src):
+        def boom(_src):
             raise IOError("cannot read")
 
         monkeypatch.setattr(ibl, 'load_equirect_hdr', boom)
@@ -164,13 +164,13 @@ class TestLoadEquirectHDR:
 
     def test_local_path_decoded_directly(self, monkeypatch):
         decoded = np.zeros((2, 4, 3), dtype=np.float32)
-        monkeypatch.setattr(hdr, 'load_hdr', lambda path: decoded)
+        monkeypatch.setattr(hdr, 'load_hdr', lambda _path: decoded)
         assert ibl.load_equirect_hdr('/local/pano.hdr') is decoded
 
 
 class TestGLContextPresent:
     def test_absent_context_when_query_raises(self, monkeypatch):
-        def boom(enum):
+        def boom(_enum):
             raise RuntimeError("no current context")
 
         monkeypatch.setattr(ibl, 'glGetString', boom)

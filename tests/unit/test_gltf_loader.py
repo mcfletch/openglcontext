@@ -29,7 +29,7 @@ from OpenGLContext import userpaths
 from OpenGLContext.loaders.gltf import look_orientation
 
 
-def _triangle_glb(with_normals=False, indices=True):
+def _triangle_glb(indices=True):
     pos = np.array([[0, 0, 0], [2, 0, 0], [0, 2, 0]], dtype=np.float32)
     blob = pos.tobytes()
     accessors = [Accessor(bufferView=0, componentType=5126, count=3, type='VEC3',
@@ -747,7 +747,7 @@ class TestCacheDir:
             def __init__(self):
                 self._left = b'glTFdummy'
 
-            def read(self, n=-1):
+            def read(self, _n=-1):
                 data, self._left = self._left, b''
                 return data
 
@@ -757,10 +757,10 @@ class TestCacheDir:
         # The fetch now goes through a redirect-guarded opener, so
         # patch build_opener rather than urlopen.
         class _Opener:
-            def open(self, url, timeout=None):
+            def open(self, _url, **_named):
                 return _Resp()
         monkeypatch.setattr(resolver.urllib.request, 'build_opener',
-                            lambda *a, **k: _Opener())
+                            lambda *_a, **_k: _Opener())
         data = resolver.fetch_url('http://example.invalid/x.glb')
         assert data == b'glTFdummy'
         assert (tmp_path / 'c').is_dir()
@@ -795,7 +795,7 @@ class TestCachePurge:
             def __init__(self):
                 self._left = b'glTFx'
 
-            def read(self, n=-1):
+            def read(self, _n=-1):
                 data, self._left = self._left, b''
                 return data
 
@@ -803,10 +803,10 @@ class TestCachePurge:
                 pass
 
         class _Opener:
-            def open(self, url, timeout=None):
+            def open(self, _url, **_named):
                 return _Resp()
         monkeypatch.setattr(resolver.urllib.request, 'build_opener',
-                            lambda *a, **k: _Opener())
+                            lambda *_a, **_k: _Opener())
         url = 'http://example.invalid/x.glb'
         resolver.fetch_url(url)                       # populate the cache
         key = hashlib.sha1(url.encode('utf-8')).hexdigest() + '.glb'
@@ -842,7 +842,7 @@ class TestSameOriginFetch:
     def test_cross_origin_and_file_rejected_without_fetching(self, monkeypatch):
         called = {'n': 0}
 
-        def boom(*a, **k):
+        def boom(*_a, **_k):
             called['n'] += 1
             raise AssertionError("must not fetch")
         monkeypatch.setattr(resolver.urllib.request, 'urlopen', boom)
@@ -867,7 +867,7 @@ class TestSameOriginFetch:
             def __init__(self):
                 self._rest = b'OK'
 
-            def read(self, n=-1):
+            def read(self, _n=-1):
                 data, self._rest = self._rest, b''
                 return data
 
@@ -876,7 +876,7 @@ class TestSameOriginFetch:
         seen = {}
 
         class _Opener:
-            def open(self, request, timeout=None):
+            def open(self, request, **_named):
                 # A Request rather than a bare URL: the fetch identifies itself
                 # with a User-Agent, which some asset hosts require.
                 seen['url'] = request.full_url
@@ -885,7 +885,7 @@ class TestSameOriginFetch:
         # Patch build_opener: the fetch is now made through a redirect-guarded
         # opener rather than a bare urlopen.
         monkeypatch.setattr(resolver.urllib.request, 'build_opener',
-                            lambda *a, **k: _Opener())
+                            lambda *_a, **_k: _Opener())
         # A sub-resource is cached on disk now, so the shared cache would answer
         # from a previous run of this test and no request would be made at all.
         monkeypatch.setattr(resolver, 'default_cache_dir',

@@ -132,7 +132,7 @@ def test_what_each_way_the_probe_can_end_means(returncode, faults):
 def test_a_probe_that_cannot_be_launched_leaves_the_teardown_alone():
     """A machine that will not start a child process will not open a window on
     this backend either, so there is nothing for the workaround to protect."""
-    def refuse(command):
+    def refuse(_command):
         raise OSError('no')
 
     assert glfwteardown.teardown_faults(run=refuse) is False

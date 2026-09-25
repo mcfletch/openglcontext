@@ -44,7 +44,7 @@ def registered(monkeypatch):
 
     for name, _handler in REGISTRATIONS:
         monkeypatch.setattr(glutcontext, name, recorder(name))
-    monkeypatch.setattr(glutcontext, 'glutSetWindow', lambda windowID: None)
+    monkeypatch.setattr(glutcontext, 'glutSetWindow', lambda _windowID: None)
 
     context = GLUTContext.__new__(GLUTContext)
     context.windowID = 1

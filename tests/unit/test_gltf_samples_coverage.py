@@ -18,7 +18,7 @@ class TestCatalogParsingSkipsNonMatchingRows:
             "[![Box](Box/screenshot/screenshot.jpg)](Box/README.md) | a box |\n"
         )
         monkeypatch.setattr(samples, 'fetch_url',
-                            lambda url, cache=None: md.encode('utf-8'))
+                            lambda _url, _cache=None: md.encode('utf-8'))
         rows = samples.fetch_sample_catalog()
         assert [r['name'] for r in rows] == ['Box']
         assert rows[0]['screenshot_url'].endswith('Box/screenshot/screenshot.jpg')
@@ -28,7 +28,7 @@ class TestLoadSampleVariantFallback:
     def test_first_successful_variant_returned(self, monkeypatch):
         seen = []
 
-        def fake_load(url, cache_dir=None):
+        def fake_load(url, _cache_dir=None):
             seen.append(url)
             return 'SCENE'
 
@@ -40,7 +40,7 @@ class TestLoadSampleVariantFallback:
     def test_all_variants_fail_reraises_last_error(self, monkeypatch):
         attempts = []
 
-        def fake_load(url, cache_dir=None):
+        def fake_load(url, _cache_dir=None):
             attempts.append(url)
             raise IOError("no such variant: %s" % url)
 
@@ -68,7 +68,7 @@ class TestOpeningASampleByURL:
     def test_a_sample_url_that_is_there_is_loaded_as_it_is(self, monkeypatch):
         asked = []
 
-        def fake(url, cache_dir=None):
+        def fake(url, _cache_dir=None):
             asked.append(url)
             return 'SCENE'
         monkeypatch.setattr('OpenGLContext.loaders.gltf.load_gltf_url', fake)
@@ -78,7 +78,7 @@ class TestOpeningASampleByURL:
     def test_a_missing_binary_variant_falls_back_to_the_gltf_one(self, monkeypatch):
         asked = []
 
-        def fake(url, cache_dir=None):
+        def fake(url, _cache_dir=None):
             asked.append(url)
             if url.endswith('.glb'):
                 raise IOError('404')
@@ -91,7 +91,7 @@ class TestOpeningASampleByURL:
         """No guessing at variants for somebody else's server."""
         asked = []
 
-        def fake(url, cache_dir=None):
+        def fake(url, _cache_dir=None):
             asked.append(url)
             raise IOError('404')
         monkeypatch.setattr('OpenGLContext.loaders.gltf.load_gltf_url', fake)
@@ -101,7 +101,7 @@ class TestOpeningASampleByURL:
 
     def test_the_error_it_raises_is_the_last_thing_that_went_wrong(self,
                                                                   monkeypatch):
-        def fake(url, cache_dir=None):
+        def fake(_url, _cache_dir=None):
             raise IOError('no route to host')
         monkeypatch.setattr('OpenGLContext.loaders.gltf.load_gltf_url', fake)
         with pytest.raises(IOError, match='no route to host'):
@@ -110,7 +110,7 @@ class TestOpeningASampleByURL:
     def test_load_sample_still_works_by_name(self, monkeypatch):
         asked = []
 
-        def fake(url, cache_dir=None):
+        def fake(url, _cache_dir=None):
             asked.append(url)
             return 'SCENE'
         monkeypatch.setattr('OpenGLContext.loaders.gltf.load_gltf_url', fake)

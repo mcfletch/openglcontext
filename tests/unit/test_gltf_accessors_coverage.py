@@ -128,7 +128,7 @@ class TestStrideAndCountValidation:
     """
 
     @staticmethod
-    def _g(count, stride, ncomp=3, acc_type='VEC3', nbytes=96):
+    def _g(count, stride, acc_type='VEC3', nbytes=96):
         g = pygltflib.GLTF2()
         g.accessors = [Accessor(bufferView=0, componentType=5126, count=count,
                                 type=acc_type, byteOffset=0)]

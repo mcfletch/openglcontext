@@ -62,7 +62,8 @@ def _sphere_pixels(a):
     return a[mask]
 
 
-def test_hdri_skybox_and_reflection(tmp_path, cached_hdri):
+@pytest.mark.usefixtures('cached_hdri')
+def test_hdri_skybox_and_reflection(tmp_path):
     glb = tmp_path / "mirror.glb"
     glb.write_bytes(_mirror_glb_bytes())
 

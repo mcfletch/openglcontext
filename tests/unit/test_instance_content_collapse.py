@@ -49,7 +49,7 @@ class TestCollapseGrouping:
         recs = [rec(FakeShape(m1)), rec(FakeShape(m2)), rec(FakeShape(m3))]
         groups, singles = build_instance_groups(
             recs, min_instances=2, key=geometry_content_key,
-            instanceable=lambda p: True)
+            instanceable=lambda _p: True)
         assert len(groups) == 1
         assert len(groups[0].members) == 3
         assert singles == []
@@ -60,6 +60,6 @@ class TestCollapseGrouping:
         recs = [rec(FakeShape(mesh(0))) for _ in range(3)]
         groups, singles = build_instance_groups(
             recs, min_instances=2, key=geometry_instance_key,
-            instanceable=lambda p: True)
+            instanceable=lambda _p: True)
         assert groups == []
         assert len(singles) == 3

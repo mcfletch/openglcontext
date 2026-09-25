@@ -38,8 +38,8 @@ def ctx():
     counts = {'down': 0, 'up': 0}
     # Held strongly: pydispatch connects handlers with weak references.
     handlers = [
-        lambda e: counts.__setitem__('down', counts['down'] + 1),
-        lambda e: counts.__setitem__('up', counts['up'] + 1),
+        lambda _e: counts.__setitem__('down', counts['down'] + 1),
+        lambda _e: counts.__setitem__('up', counts['up'] + 1),
     ]
     c.addEventHandler('keyboard', name='<right>', state=1, function=handlers[0])
     c.addEventHandler('keyboard', name='<right>', state=0, function=handlers[1])

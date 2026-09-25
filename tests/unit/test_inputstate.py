@@ -371,7 +371,7 @@ class TestAClickOnAScreenIsNotAnInput:
             def getInputState(self):
                 return self._state
 
-            def overlaySinks(self, event):
+            def overlaySinks(self, _event):
                 return sinks
 
         return _Guarded()

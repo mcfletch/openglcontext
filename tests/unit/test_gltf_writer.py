@@ -526,7 +526,7 @@ class TestABytesDocumentCanSayWhereItCameFrom:
         holder = _find_shapes(scene.group)[0].appearance.material.textures['baseColor']
         assert holder.image.getpixel((0, 0)) == (200, 30, 40, 255)
 
-    def test_without_one_the_reference_is_simply_not_found(self, tmp_path):
+    def test_without_one_the_reference_is_simply_not_found(self):
         """No base, no directory to look in -- the material loads untextured
         rather than reaching somewhere it was not pointed."""
         material = PBRMaterial()

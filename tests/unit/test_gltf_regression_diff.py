@@ -180,11 +180,11 @@ class TestRenderView:
         return SceneSpec('Duck', yaw=-0.6, elevation=0.05, tilt=0.0, margin=0.9, **kw)
 
     def _patch(self, monkeypatch, recorder, stdout='CAPTURE_STATS load_seconds=1.0 fps=42\n'):
-        def fake_run(cmd, **kw):
+        def fake_run(cmd, **_kw):
             recorder['cmd'] = cmd
             return types.SimpleNamespace(stdout=stdout)
         monkeypatch.setattr(R.subprocess, 'run', fake_run)
-        monkeypatch.setattr(R.os.path, 'exists', lambda p: True)
+        monkeypatch.setattr(R.os.path, 'exists', lambda _p: True)
 
     def test_auto_frame_run_passes_framing_flags_and_reads_stats(self, monkeypatch):
         rec = {}
@@ -226,7 +226,7 @@ class TestRenderView:
         assert '--anim-time' in rec['cmd']
 
     def test_timeout_reports_failure(self, monkeypatch):
-        def boom(cmd, **kw):
+        def boom(cmd, **_kw):
             raise subprocess.TimeoutExpired(cmd, 120)
         monkeypatch.setattr(R.subprocess, 'run', boom)
         ok, stats = R.render_view(self._spec(), None, 'm.glb', 'o.png',
@@ -239,29 +239,29 @@ class TestResolveModelUrl:
         p = tmp_path / 'm.glb'
         p.write_bytes(b'x')
         monkeypatch.setattr(R.gltf_demos, 'resolve_source',
-                            lambda spec, parth=None: (str(p), True))
+                            lambda _spec, _parth=None: (str(p), True))
         src, is_url = R.resolve_model_url(SceneSpec('L'))
         assert src == str(p) and is_url is False
 
     def test_missing_local_source_resolves_to_none(self, monkeypatch):
         monkeypatch.setattr(R.gltf_demos, 'resolve_source',
-                            lambda spec, parth=None: ('/no/such.glb', True))
+                            lambda _spec, _parth=None: ('/no/such.glb', True))
         src, is_url = R.resolve_model_url(SceneSpec('L'))
         assert src is None and is_url is False
 
     def test_sample_uses_the_glb_url_when_the_cache_confirms_it(self, monkeypatch):
         monkeypatch.setattr(R.gltf_demos, 'resolve_source',
-                            lambda spec, parth=None: ('Duck', False))
+                            lambda _spec, _parth=None: ('Duck', False))
         monkeypatch.setattr(R.gltf, 'sample_model_url', lambda n: 'https://x/%s.glb' % n)
-        monkeypatch.setattr(R, '_cached_url_path', lambda url, cache: '/cache/hit')
+        monkeypatch.setattr(R, '_cached_url_path', lambda _url, _cache: '/cache/hit')
         src, is_url = R.resolve_model_url(SceneSpec('Duck', source=None))
         assert src == 'https://x/Duck.glb' and is_url is True
 
     def test_sample_falls_back_to_the_gltf_url_when_no_glb(self, monkeypatch):
         monkeypatch.setattr(R.gltf_demos, 'resolve_source',
-                            lambda spec, parth=None: ('Duck', False))
+                            lambda _spec, _parth=None: ('Duck', False))
         monkeypatch.setattr(R.gltf, 'sample_model_url', lambda n: 'https://x/%s.glb' % n)
-        def miss(url, cache):
+        def miss(_url, _cache):
             raise RuntimeError('not cached')
         monkeypatch.setattr(R, '_cached_url_path', miss)
         src, is_url = R.resolve_model_url(SceneSpec('Duck', source=None))
@@ -269,7 +269,7 @@ class TestResolveModelUrl:
 
     def test_a_scene_named_by_url_is_handed_to_the_viewer_as_that_url(self, monkeypatch):
         monkeypatch.setattr(R.gltf_demos, 'resolve_source',
-                            lambda spec, parth=None: ('https://x/s.glb', False))
+                            lambda _spec, _parth=None: ('https://x/s.glb', False))
         src, is_url = R.resolve_model_url(SceneSpec('S', source='https://x/s.glb'))
         assert src == 'https://x/s.glb' and is_url is True
 
@@ -279,26 +279,26 @@ class TestResolveModel:
         p = tmp_path / 'm.glb'
         p.write_bytes(b'x')
         monkeypatch.setattr(R.gltf_demos, 'resolve_source',
-                            lambda spec, parth=None: (str(p), True))
+                            lambda _spec, _parth=None: (str(p), True))
         assert R.resolve_model(SceneSpec('L')) == str(p)
 
     def test_sample_resolves_via_the_glb_cache(self, monkeypatch):
         monkeypatch.setattr(R.gltf_demos, 'resolve_source',
-                            lambda spec, parth=None: ('Duck', False))
+                            lambda _spec, _parth=None: ('Duck', False))
         monkeypatch.setattr(R.gltf, 'sample_model_url', lambda n: 'https://x/%s.glb' % n)
-        monkeypatch.setattr(R, '_cached_url_path', lambda url, cache: '/cache/Duck.glb')
+        monkeypatch.setattr(R, '_cached_url_path', lambda _url, _cache: '/cache/Duck.glb')
         assert R.resolve_model(SceneSpec('Duck', source=None)) == '/cache/Duck.glb'
 
     def test_sample_mirrors_the_multi_file_gltf_when_the_glb_is_absent(
             self, monkeypatch, tmp_path):
         monkeypatch.setattr(R.gltf_demos, 'resolve_source',
-                            lambda spec, parth=None: ('Duck', False))
-        def miss(url, cache):
+                            lambda _spec, _parth=None: ('Duck', False))
+        def miss(_url, _cache):
             raise RuntimeError('no glb')
         monkeypatch.setattr(R, '_cached_url_path', miss)
         monkeypatch.setattr(R, '_MIRROR_DIR', str(tmp_path))
         # the mirrored .gltf has no external buffers/images, so nothing more downloads
-        def fake_dl(url, dst):
+        def fake_dl(_url, dst):
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             with open(dst, 'w') as fh:
                 json.dump({'buffers': [], 'images': []}, fh)
@@ -309,9 +309,9 @@ class TestResolveModel:
     def test_a_scene_named_by_url_is_fetched_from_that_url(self, monkeypatch):
         asked = []
         monkeypatch.setattr(R.gltf_demos, 'resolve_source',
-                            lambda spec, parth=None: ('https://x/s.glb', False))
+                            lambda _spec, _parth=None: ('https://x/s.glb', False))
         monkeypatch.setattr(R, '_cached_url_path',
-                            lambda url, cache: asked.append(url) or '/cache/s.glb')
+                            lambda url, _cache: asked.append(url) or '/cache/s.glb')
         out = R.resolve_model(SceneSpec('S', source='https://x/s.glb'))
         assert out == '/cache/s.glb'
         assert asked == ['https://x/s.glb']
@@ -320,11 +320,11 @@ class TestResolveModel:
         # The Khronos .gltf mirror is for catalogue samples; a URL scene names one
         # file, so a failed fetch is the end of it rather than a second guess.
         monkeypatch.setattr(R.gltf_demos, 'resolve_source',
-                            lambda spec, parth=None: ('https://x/s.glb', False))
-        def unreachable(url, cache):
+                            lambda _spec, _parth=None: ('https://x/s.glb', False))
+        def unreachable(_url, _cache):
             raise RuntimeError('offline')
         monkeypatch.setattr(R, '_cached_url_path', unreachable)
-        monkeypatch.setattr(R, '_dl', lambda url, dst: pytest.fail(
+        monkeypatch.setattr(R, '_dl', lambda _url, _dst: pytest.fail(
             'mirrored a URL scene as if it were a Khronos sample'))
         assert R.resolve_model(SceneSpec('S', source='https://x/s.glb')) is None
 
@@ -342,9 +342,9 @@ class TestRenderScenes:
         out_dir = tmp_path / 'out'
         base_dir = tmp_path / 'base'
         monkeypatch.setattr(R, 'resolve_model_url',
-                            lambda spec, parth: ('https://x/Duck.glb', True))
+                            lambda _spec, _parth: ('https://x/Duck.glb', True))
 
-        def fake_render(spec, camera, model, out, size, frames, delay, env):
+        def fake_render(_spec, _camera, _model, out, _size, _frames, _delay, _env):
             _png(out, (10, 20, 30))          # leave a render on disk
             return True, {'load_seconds': 1.0}
         monkeypatch.setattr(R, 'render_view', fake_render)
@@ -359,8 +359,8 @@ class TestRenderScenes:
     def test_failed_render_is_reported_and_leaves_no_metadata(
             self, monkeypatch, tmp_path, capsys):
         monkeypatch.setattr(R, 'resolve_model_url',
-                            lambda spec, parth: ('https://x/Duck.glb', True))
-        monkeypatch.setattr(R, 'render_view', lambda *a, **k: (False, {}))
+                            lambda _spec, _parth: ('https://x/Duck.glb', True))
+        monkeypatch.setattr(R, 'render_view', lambda *_a, **_k: (False, {}))
         out_dir = tmp_path / 'out'
         R.render_scenes([SceneSpec('Duck', source=None)], str(out_dir),
                         str(tmp_path / 'b'), None, self._args(), self._prov())
@@ -368,10 +368,10 @@ class TestRenderScenes:
         assert not (out_dir / 'Duck.json').exists()
 
     def test_unavailable_model_is_skipped(self, monkeypatch, tmp_path, capsys):
-        monkeypatch.setattr(R, 'resolve_model_url', lambda spec, parth: (None, False))
+        monkeypatch.setattr(R, 'resolve_model_url', lambda _spec, _parth: (None, False))
         called = {}
         monkeypatch.setattr(R, 'render_view',
-                            lambda *a, **k: called.setdefault('ran', True))
+                            lambda *_a, **_k: called.setdefault('ran', True))
         R.render_scenes([SceneSpec('Gone', source=None)], str(tmp_path / 'o'),
                         str(tmp_path / 'b'), None, self._args(), self._prov())
         assert 'ran' not in called                      # never tried to render
@@ -386,7 +386,7 @@ class TestBuildReportAndRun:
             json.dump({'scene': slug}, fh)
 
     def test_matching_baseline_is_not_a_regression(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', lambda scene: None)
+        monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', lambda _scene: None)
         out_dir = str(tmp_path / 'out')
         base_dir = str(tmp_path / 'base')
         self._stage(out_dir, 'Duck', (40, 40, 40))
@@ -398,7 +398,7 @@ class TestBuildReportAndRun:
         assert n == 0 and os.path.exists(report)
 
     def test_diverging_baseline_counts_as_a_regression(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', lambda scene: None)
+        monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', lambda _scene: None)
         out_dir = str(tmp_path / 'out')
         base_dir = str(tmp_path / 'base')
         self._stage(out_dir, 'Duck', (250, 250, 250))
@@ -411,7 +411,7 @@ class TestBuildReportAndRun:
 
     def test_upstream_screenshot_failure_does_not_break_the_report(
             self, monkeypatch, tmp_path):
-        def boom(scene):
+        def boom(_scene):
             raise RuntimeError('offline')
         monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', boom)
         out_dir = str(tmp_path / 'out')
@@ -425,7 +425,7 @@ class TestBuildReportAndRun:
         assert os.path.exists(report)
 
     def test_missing_baseline_is_skipped_not_failed(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', lambda scene: None)
+        monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', lambda _scene: None)
         out_dir = str(tmp_path / 'out')
         self._stage(out_dir, 'Duck')
         report = str(tmp_path / 'report.html')
@@ -438,7 +438,7 @@ class TestBuildReportAndRun:
         upstream = tmp_path / 'up.png'
         _png(str(upstream), (5, 6, 7))
         monkeypatch.setattr(R.gltf, 'cache_reference_screenshot',
-                            lambda scene: str(upstream))
+                            lambda _scene: str(upstream))
         out_dir = str(tmp_path / 'out')
         base_dir = str(tmp_path / 'base')
         self._stage(out_dir, 'Duck', (40, 40, 40))
@@ -453,7 +453,7 @@ class TestBuildReportAndRun:
 
     def test_unreadable_metadata_and_a_missing_render_are_reported_as_errors(
             self, monkeypatch, tmp_path):
-        monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', lambda scene: None)
+        monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', lambda _scene: None)
         out_dir = tmp_path / 'out'
         out_dir.mkdir()
         (out_dir / 'Broken.json').write_text('this is not json {')     # unreadable meta
@@ -463,13 +463,13 @@ class TestBuildReportAndRun:
         assert n == 0 and os.path.exists(report)                       # error, not regression
 
     def test_full_run_renders_then_reports(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', lambda scene: None)
+        monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', lambda _scene: None)
         monkeypatch.setattr(R, '_provenance', lambda: {
             'git': 'g', 'rendered_at': 't', 'gl_renderer': 'r', 'gl_version': 'v'})
         out_dir = str(tmp_path / 'out')
         base_dir = str(tmp_path / 'base')
 
-        def fake_render_scenes(scenes, od, br, parth, args, prov):
+        def fake_render_scenes(_scenes, od, _br, _parth, _args, _prov):
             self._stage(od, 'Duck', (40, 40, 40))          # produce one render
         monkeypatch.setattr(R, 'render_scenes', fake_render_scenes)
         os.makedirs(base_dir)
@@ -482,10 +482,10 @@ class TestBuildReportAndRun:
         assert R.run(args) == 0
 
     def test_report_only_run_rebuilds_without_rendering(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', lambda scene: None)
+        monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', lambda _scene: None)
         # if rendering were attempted the test would spawn GL; assert it is not.
         monkeypatch.setattr(R, 'render_scenes',
-                            lambda *a, **k: pytest.fail('render_scenes ran'))
+                            lambda *_a, **_k: pytest.fail('render_scenes ran'))
         out_dir = str(tmp_path / 'out')
         base_dir = str(tmp_path / 'base')
         self._stage(out_dir, 'Duck', (40, 40, 40))
@@ -498,7 +498,7 @@ class TestBuildReportAndRun:
         assert R.run(args) == 0
 
     def test_main_report_only_returns_the_regression_count(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', lambda scene: None)
+        monkeypatch.setattr(R.gltf, 'cache_reference_screenshot', lambda _scene: None)
         out_dir = str(tmp_path / 'out')
         base_dir = str(tmp_path / 'base')
         self._stage(out_dir, 'Duck', (255, 255, 255))
@@ -575,7 +575,7 @@ class TestFetchHelpers:
                 return b'payload'
         asked = []
 
-        def opened(url, timeout=0):
+        def opened(url, **_named):
             asked.append(url)
             return _Resp()
         monkeypatch.setattr(R.resolver, 'open_url', opened)
@@ -589,8 +589,8 @@ class TestFetchHelpers:
 class TestResolveModelMirror:
     def test_mirror_downloads_external_buffers_and_images(self, monkeypatch, tmp_path):
         monkeypatch.setattr(R.gltf_demos, 'resolve_source',
-                            lambda spec, parth=None: ('Duck', False))
-        def miss(url, cache):
+                            lambda _spec, _parth=None: ('Duck', False))
+        def miss(_url, _cache):
             raise RuntimeError('no glb')
         monkeypatch.setattr(R, '_cached_url_path', miss)
         monkeypatch.setattr(R, '_MIRROR_DIR', str(tmp_path))
@@ -616,12 +616,12 @@ class TestResolveModelMirror:
 
     def test_mirror_failure_returns_none(self, monkeypatch, tmp_path, capsys):
         monkeypatch.setattr(R.gltf_demos, 'resolve_source',
-                            lambda spec, parth=None: ('Duck', False))
-        def miss(url, cache):
+                            lambda _spec, _parth=None: ('Duck', False))
+        def miss(_url, _cache):
             raise RuntimeError('no glb')
         monkeypatch.setattr(R, '_cached_url_path', miss)
         monkeypatch.setattr(R, '_MIRROR_DIR', str(tmp_path))
-        def boom(url, dst):
+        def boom(_url, _dst):
             raise RuntimeError('network down')
         monkeypatch.setattr(R, '_dl', boom)
         assert R.resolve_model(SceneSpec('Duck', source=None)) is None

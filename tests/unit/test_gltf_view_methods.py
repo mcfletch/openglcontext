@@ -50,7 +50,7 @@ class _StubAdapter:
     def __init__(self, cameras):
         self.cameras = cameras
 
-    def load(self, source):
+    def load(self, _source):
         return types.SimpleNamespace(cameras=self.cameras)
 
 
@@ -349,7 +349,7 @@ class TestMainDispatch:
     def test_list_cameras_prints_names_and_exits_zero(self, tmp_path, monkeypatch, capsys):
         model = tmp_path / 'm.glb'
         model.write_bytes(b'x')
-        monkeypatch.setattr(V, 'adapter_for', lambda src: _StubAdapter(
+        monkeypatch.setattr(V, 'adapter_for', lambda _src: _StubAdapter(
             [{'name': 'front'}, {}]))
         rc = V.main([str(model), '--list-cameras'])
         assert rc == 0
@@ -366,7 +366,7 @@ class TestMainDispatch:
         monkeypatch.setattr(sys, 'stdout', stream)
         model = tmp_path / 'm.glb'
         model.write_bytes(b'x')
-        monkeypatch.setattr(V, 'adapter_for', lambda src: _StubAdapter(
+        monkeypatch.setattr(V, 'adapter_for', lambda _src: _StubAdapter(
             [{'name': 'front'}, {'name': '俯瞰'}]))
         assert V.main([str(model), '--list-cameras']) == 0
         stream.flush()
@@ -377,20 +377,20 @@ class TestMainDispatch:
     def test_missing_source_opens_the_shelf(self, monkeypatch):
         """``oglc-view`` on its own is a program, not a usage message."""
         monkeypatch.delenv('GLTF', raising=False)
-        monkeypatch.setattr(V, 'apply_render_env', lambda args: None)
+        monkeypatch.setattr(V, 'apply_render_env', lambda _args: None)
         ran = []
         monkeypatch.setattr(V.TestContext, 'ContextMainLoop',
-                            classmethod(lambda cls, **window: ran.append(True)))
+                            classmethod(lambda _cls, **_window: ran.append(True)))
         V.main([])
         assert ran == [True]
 
     def test_normal_run_configures_and_enters_the_loop(self, tmp_path, monkeypatch):
         model = tmp_path / 'm.glb'
         model.write_bytes(b'x')
-        monkeypatch.setattr(V, 'apply_render_env', lambda args: None)   # no env leak
+        monkeypatch.setattr(V, 'apply_render_env', lambda _args: None)   # no env leak
         ran = {}
         monkeypatch.setattr(V.TestContext, 'ContextMainLoop',
-                            classmethod(lambda cls, **window: ran.update(window)))
+                            classmethod(lambda _cls, **window: ran.update(window)))
         V.main([str(model)])
         assert V.TestContext.options.source == str(model)
         assert 'size' in ran
@@ -398,10 +398,10 @@ class TestMainDispatch:
     def test_size_flag_reaches_the_loop(self, tmp_path, monkeypatch):
         model = tmp_path / 'm.glb'
         model.write_bytes(b'x')
-        monkeypatch.setattr(V, 'apply_render_env', lambda args: None)
+        monkeypatch.setattr(V, 'apply_render_env', lambda _args: None)
         seen = {}
         monkeypatch.setattr(V.TestContext, 'ContextMainLoop',
-                            classmethod(lambda cls, **window: seen.update(window)))
+                            classmethod(lambda _cls, **window: seen.update(window)))
         V.main([str(model), '--size', '640x480'])
         assert seen['size'] == (640, 480)
 
@@ -449,7 +449,7 @@ class TestAsyncLoading:
         inst._pendingScene = None
         inst.overlayText = ''
         inst.overlayError = False
-        inst.triggerRedraw = lambda n: None
+        inst.triggerRedraw = lambda _n: None
         return inst
 
     def test_request_scene_runs_the_producer_off_thread(self):
@@ -479,7 +479,7 @@ class TestScreenshotQueue:
     def test_request_screenshot_sets_the_pending_flag(self):
         inst = _inst()
         inst._screenshotPending = False
-        inst.triggerRedraw = lambda n: None
+        inst.triggerRedraw = lambda _n: None
         inst.requestScreenshot()
         assert inst._screenshotPending is True
 
@@ -496,13 +496,13 @@ class _Player:
 
 
 class TestAnimationControl:
-    def test_setup_animation_binds_a_player_and_shows_the_first_pose(self, capsys):
+    def test_setup_animation_binds_a_player_and_shows_the_first_pose(self):
         inst = _inst()
         inst.options = _config(animate=True, anim_time=None)
         player = _Player()
         scene = types.SimpleNamespace(
             animations=[types.SimpleNamespace(name='clip')],
-            player=lambda idx, loop: player)
+            player=lambda _index, **_named: player)
         inst.setupAnimation(scene)
         assert inst._player is player
         assert player.evaluated == [0.0]                 # first frame shown at once
@@ -563,13 +563,13 @@ class TestAnimationControl:
         inst._cameraNames = []
         inst.cameraIndex = 0
         inst.physicsWalking = False
-        inst.triggerRedraw = lambda n: None
+        inst.triggerRedraw = lambda _n: None
         inst.toggleAnimation()
         assert inst._animationPlaying is False
 
     def test_cycle_animation_rebinds_a_player_for_the_new_index(self, monkeypatch):
         monkeypatch.setattr(anim_mod, 'Player',
-                            lambda *a, **k: _Player(duration=3.0))
+                            lambda *_a, **_k: _Player(duration=3.0))
         inst = _inst()
         inst._animations = ['a', 'b']
         inst._animationNames = ['walk', 'run']
@@ -577,14 +577,14 @@ class TestAnimationControl:
         inst._player = _Player()
         # The scene is what builds a player, so it keeps the skins wired.
         inst.scene = types.SimpleNamespace(
-            player=lambda index=0, loop=True: _Player())
+            player=lambda _index=0, **_named: _Player())
         inst.source = 'm.glb'
         inst.viewpoints = []
         inst._cameraNames = []
         inst.cameraIndex = 0
         inst.physicsWalking = False
         inst._animationPlaying = True
-        inst.triggerRedraw = lambda n: None
+        inst.triggerRedraw = lambda _n: None
         inst.nextAnimation()
         assert inst._animationIndex == 1
 
@@ -607,7 +607,7 @@ class TestTurntableToggle:
         inst.options = _config(turntable=True)            # currently spinning
         inst.modelTransform = types.SimpleNamespace(rotation=(0, 1, 0, 1.0))
         inst._defaultModelRotation = (0, 1, 0, 0.0)
-        inst.triggerRedraw = lambda n: None
+        inst.triggerRedraw = lambda _n: None
         inst.toggleTurntable()
         assert inst.options.turntable is False
         assert inst.modelTransform.rotation == (0, 1, 0, 0.0)
@@ -644,7 +644,7 @@ class TestCameraSelection:
         inst._animationPlaying = True
         inst.getSceneGraph = lambda: types.SimpleNamespace(
             boundViewpoint=bound)
-        inst.triggerRedraw = lambda n: None
+        inst.triggerRedraw = lambda _n: None
         return inst
 
     def test_cycle_viewpoint_advances_and_binds(self):
@@ -684,9 +684,9 @@ class TestPhysicsInputHandlers:
         seen = {}
         inst.physicsPlatform = types.SimpleNamespace(
             jump=lambda: None, character=types.SimpleNamespace(flying=False),
-            set_fly=lambda v: seen.setdefault('fly', v), look=lambda d: None,
-            submerged=False, turn=lambda d: None,
-            set_move=lambda **k: None, set_fly_move=lambda **k: None)
+            set_fly=lambda v: seen.setdefault('fly', v), look=lambda _d: None,
+            submerged=False, turn=lambda _d: None,
+            set_move=lambda **_k: None, set_fly_move=lambda **_k: None)
         inst.physicsWalking = True
         inst.contextDefinition = ContextDefinition(
             movementModes=walk_fly_modes())
@@ -751,7 +751,7 @@ class TestMainListCamerasEdges:
     def test_list_cameras_reports_when_a_model_has_none(self, tmp_path, monkeypatch, capsys):
         model = tmp_path / 'm.glb'
         model.write_bytes(b'x')
-        monkeypatch.setattr(V, 'adapter_for', lambda src: _StubAdapter([]))
+        monkeypatch.setattr(V, 'adapter_for', lambda _src: _StubAdapter([]))
         assert V.main([str(model), '--list-cameras']) == 0
         assert 'no cameras defined' in capsys.readouterr().out
 
@@ -791,7 +791,7 @@ class TestTurntableStart:
         inst.options = _config(turntable=False)
         inst.modelTransform = types.SimpleNamespace(rotation=(0, 1, 0, 0.0))
         inst._defaultModelRotation = (0, 1, 0, 0.0)
-        inst.triggerRedraw = lambda n: None
+        inst.triggerRedraw = lambda _n: None
         inst.toggleTurntable()
         assert inst.options.turntable is True
         assert isinstance(inst._turntableStart, float)
@@ -814,7 +814,7 @@ class TestRequestAndPollExtras:
         inst._loadToken = 0
         inst.overlayText = ''
         inst.overlayError = False
-        inst.triggerRedraw = lambda n: None
+        inst.triggerRedraw = lambda _n: None
 
         def boom():
             raise RuntimeError('decode failed')
@@ -829,7 +829,7 @@ class TestRequestAndPollExtras:
     def test_poll_applies_a_loaded_scene(self):
         inst = _inst()
         inst._loadLock = threading.Lock()
-        inst.triggerRedraw = lambda n: None
+        inst.triggerRedraw = lambda _n: None
         applied = {}
         inst.applyLoadedScene = lambda s: applied.setdefault('scene', s)
         inst._pendingScene = ('SCENE', None)
@@ -858,7 +858,7 @@ class TestCycleViewpointPhysics:
         inst._animationIndex = 0
         inst._animationPlaying = True
         inst.getSceneGraph = lambda: types.SimpleNamespace(boundViewpoint=vp0)
-        inst.triggerRedraw = lambda n: None
+        inst.triggerRedraw = lambda _n: None
         inst.previousCamera()                                   # wraps 0 -> 1
         assert inst.cameraIndex == 1
         assert 'eye' in moved                              # avatar teleported
@@ -938,7 +938,7 @@ class TestSwitchingAnimations:
         def player(self, index=0, loop=True):
             self.asked.append((index, loop))
             return types.SimpleNamespace(duration=1.0, node_transforms={},
-                                         node_morph={}, evaluate=lambda t: None)
+                                         node_morph={}, evaluate=lambda _t: None)
 
     def _viewer(self, scene):
         inst = _inst()
@@ -955,7 +955,7 @@ class TestSwitchingAnimations:
         inst._cameraNames = []
         inst.cameraIndex = 0
         inst.physicsWalking = False
-        inst.triggerRedraw = lambda n=1: None
+        inst.triggerRedraw = lambda _n=1: None
         return inst
 
     def test_the_scene_is_what_makes_the_new_player(self):
@@ -1048,7 +1048,7 @@ class TestTheFlyThrough:
     def test_the_turntable_does_not_restart_it(self):
         clock = [0.0]
         inst = self._viewer(clock)
-        inst.triggerRedraw = lambda n=1: None
+        inst.triggerRedraw = lambda _n=1: None
         inst.modelTransform = None
         inst.buildScenegraph(self._scene(0.0, 10.0))
         clock[0] = 5.0

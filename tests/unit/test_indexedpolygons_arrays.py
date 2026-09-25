@@ -27,7 +27,7 @@ def node():
 
 def test_without_buffer_objects_the_holder_carries_client_arrays(node, monkeypatch):
     """A driver with no VBO support is given the arrays, not buffer objects."""
-    monkeypatch.setattr(vbo, 'get_implementation', lambda *args: None)
+    monkeypatch.setattr(vbo, 'get_implementation', lambda *_args: None)
     holder = node.get_vbos(None)
     assert isinstance(holder, indexedpolygons.Holder)
     assert not isinstance(holder, indexedpolygons.VBOHolder)
@@ -36,7 +36,7 @@ def test_without_buffer_objects_the_holder_carries_client_arrays(node, monkeypat
 
 
 def test_a_node_without_normals_leaves_that_array_empty(node, monkeypatch):
-    monkeypatch.setattr(vbo, 'get_implementation', lambda *args: None)
+    monkeypatch.setattr(vbo, 'get_implementation', lambda *_args: None)
     holder = node.get_vbos(None)
     assert holder.normal is None
     assert holder.color is None
