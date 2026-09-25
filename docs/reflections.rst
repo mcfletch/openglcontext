@@ -396,6 +396,11 @@ and samples the overlay's rows.
 Demos
 -----
 
+The :doc:`mirrors tutorial <tutorials/mirrors_room>` builds a small room with
+one of each: a mirror on the wall, a pair sharing a reflector with one of them
+``varied()``, a polished floor and a pool, and the keys to change the budget
+and read what a frame's reflections cost.
+
 ``oglc-mirrors`` builds a hall in code with every kind of mirror on this page:
 a silvered mirror over a dais at the far end, a corridor of ten mirrors
 sharing one reflector down the left wall, a floor of polished marble tiles in
