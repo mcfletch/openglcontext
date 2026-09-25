@@ -27,7 +27,7 @@ floor at y = 0; the ``far`` wall is at -z.
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -35,7 +35,7 @@ from OpenGLContext.scenegraph import basenodes, surfaces
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 
 __all__ = ['WIDTH', 'LENGTH', 'HEIGHT', 'TILE', 'BRICK', 'WALLS', 'BAYS', 'PILASTERS',
-           'WINDOWS', 'WINDOW_WIDTH', 'STEPS', 'Finishes', 'Hall']
+           'WINDOWS', 'WINDOW_WIDTH', 'STEPS', 'Finishes', 'Part', 'Hall']
 
 #: The room's size in metres: across x, along z, and up. The width and length
 #: are whole numbers of floor tiles, border included.
@@ -117,10 +117,25 @@ class Finishes:
                                 emissiveColor=(1.0, 0.9, 0.7), emissiveStrength=3.0)
 
 
+class Part(NamedTuple):
+    """One piece of the hall: which group of it, what it wears, and its mesh,
+    already in the room's space."""
+
+    group: str
+    material: Any
+    geometry: surfaces.Geometry
+
+
 def _block(size: Sequence[float], translation: Sequence[float], material: Any,
            rotation: Sequence[float] = (0.0, 1.0, 0.0, 0.0), chamfer: float = 0.0) -> Any:
     return surfaces.shape(surfaces.block(size, chamfer=chamfer), material, translation,
                           rotation)
+
+
+def _part(group: str, material: Any, geometry: surfaces.Geometry,
+          translation: Sequence[float], rotation: Sequence[float] = (0.0, 1.0, 0.0, 0.0)
+          ) -> Part:
+    return Part(group, material, surfaces.placed(geometry, translation, rotation))
 
 
 def _on_wall(wall: str, along: float, height: float, offset: float
@@ -149,7 +164,19 @@ class Hall:
         self.finish = Finishes()
 
     def room(self) -> List[Any]:
-        """Everything in the hall but its floor and what the demo hangs in it."""
+        """Everything in the hall but its floor and what the demo hangs in it.
+
+        The scenery is :meth:`parts` merged into one shape for each group and
+        material -- a wall's brick, a wall's moldings, the dais's treads -- so
+        a view draws a few dozen shapes, not a few hundred small ones, and
+        still leaves out the groups it cannot see.
+        """
+        merged: Dict[Tuple[str, int], List[Part]] = {}
+        for part in self.parts():
+            merged.setdefault((part.group, id(part.material)), []).append(part)
+        scenery = [surfaces.shape(surfaces.merge([part.geometry for part in parts]),
+                                  parts[0].material)
+                   for parts in merged.values()]
         return ([basenodes.Viewpoint(position=(0.0, 1.7, 9.0), description='Hall'),
                  basenodes.NavigationInfo(headlight=False, type=['WALK']),
                  basenodes.DirectionalLight(direction=(-0.3, -1.0, -0.4), intensity=0.3),
@@ -158,8 +185,12 @@ class Hall:
                      skyAngle=[1.1, 1.52],
                      groundColor=[(0.25, 0.30, 0.20), (0.38, 0.42, 0.30)],
                      groundAngle=[1.35])]
-                + self._walls() + self._moldings() + self._pilasters()
-                + self._windows() + self._dais() + self._columns())
+                + scenery + self._lamps())
+
+    def parts(self) -> List[Part]:
+        """Every piece of the hall's scenery, each on its own, in the room's space."""
+        return (self._walls() + self._moldings() + self._pilasters() + self._windows()
+                + self._dais() + self._columns())
 
     def floor(self, field: Any, border: Any) -> List[Any]:
         """The floor: ``field`` inside a border one tile wide of ``border``.
@@ -207,19 +238,21 @@ class Hall:
               rim: float = 0.3) -> List[Any]:
         """A pool's basin from ``x0``-``x1``, ``z0``-``z1``: a sandstone rim ``rim``
         metres high, and a floor of glazed tiles 10 cm across."""
-        stone, thick = self.finish.sandstone, 0.2
+        thick = 0.2
         middle_x, middle_z = (x0 + x1) / 2.0, (z0 + z1) / 2.0
         across, deep = x1 - x0 + 2 * thick, z1 - z0
+        sides = [surfaces.placed(surfaces.block(size), at) for size, at in (
+            ((across, rim, thick), (middle_x, rim / 2, z0 - thick / 2)),
+            ((across, rim, thick), (middle_x, rim / 2, z1 + thick / 2)),
+            ((thick, rim, deep), (x0 - thick / 2, rim / 2, middle_z)),
+            ((thick, rim, deep), (x1 + thick / 2, rim / 2, middle_z)))]
         bottom = surfaces.panel(x1 - x0, z1 - z0, repeat=0.8)
-        return [_block((across, rim, thick), (middle_x, rim / 2, z0 - thick / 2), stone),
-                _block((across, rim, thick), (middle_x, rim / 2, z1 + thick / 2), stone),
-                _block((thick, rim, deep), (x0 - thick / 2, rim / 2, middle_z), stone),
-                _block((thick, rim, deep), (x1 + thick / 2, rim / 2, middle_z), stone),
+        return [surfaces.shape(surfaces.merge(sides), self.finish.sandstone),
                 surfaces.shape(bottom, self.finish.pool, (middle_x, 0.01, middle_z),
                                (1.0, 0.0, 0.0, -math.pi / 2))]
 
     # -- the walls ---------------------------------------------------------------
-    def _walls(self) -> List[Any]:
+    def _walls(self) -> List[Part]:
         """Four brick walls, the right one open at its windows, and a plaster ceiling."""
         walls = []
         for wall, (axis, _at, _rotation) in WALLS.items():
@@ -227,13 +260,13 @@ class Hall:
             openings = [(_across(wall, along), low, high) for along, low, high in WINDOWS
                         ] if wall == 'right' else []
             walls += self._brickwork(wall, span, openings)
-        walls.append(surfaces.shape(surfaces.panel(WIDTH, LENGTH, repeat=3.0),
-                                    self.finish.plaster, (0.0, HEIGHT, 0.0),
-                                    (1.0, 0.0, 0.0, math.pi / 2)))
+        walls.append(_part('ceiling', self.finish.plaster,
+                           surfaces.panel(WIDTH, LENGTH, repeat=3.0), (0.0, HEIGHT, 0.0),
+                           (1.0, 0.0, 0.0, math.pi / 2)))
         return walls
 
     def _brickwork(self, wall: str, span: float,
-                   openings: Sequence[Tuple[float, float, float]]) -> List[Any]:
+                   openings: Sequence[Tuple[float, float, float]]) -> List[Part]:
         """``wall`` in pieces round ``openings`` (across, sill, head), its courses in line.
 
         ``brick()`` has four bricks across a repeat, so the repeat is four
@@ -255,10 +288,10 @@ class Hall:
                 across = (left + right) / 2
                 along = across if _across(wall, 1.0) > 0 else -across
                 at, rotation = _on_wall(wall, along, (bottom + top) / 2, 0.0)
-                pieces.append(surfaces.shape(geometry, self.finish.brick, at, rotation))
+                pieces.append(_part(wall, self.finish.brick, geometry, at, rotation))
         return pieces
 
-    def _moldings(self) -> List[Any]:
+    def _moldings(self) -> List[Part]:
         """A skirting, a dado rail and a three-stepped cornice round every wall."""
         runs: List[Tuple[float, float, float]] = [
             (SKIRTING / 2, SKIRTING, 0.025), (DADO, 0.06, 0.035),
@@ -269,28 +302,28 @@ class Hall:
             span = WIDTH if axis == 2 else LENGTH
             for height, tall, depth in runs:
                 at, rotation = _on_wall(wall, 0.0, height, depth / 2)
-                found.append(_block((span, tall, depth), at, self.finish.molding, rotation))
+                found.append(_part(wall, self.finish.molding,
+                                   surfaces.block((span, tall, depth)), at, rotation))
         return found
 
-    def _pilasters(self) -> List[Any]:
+    def _pilasters(self) -> List[Part]:
         """Half columns of pale marble, on a base and under a capital, between the bays."""
         shaft_bottom, shaft_top = 0.24, CORNICE - 0.16
         shaft = surfaces.cylinder(0.16, shaft_top - shaft_bottom, sides=16, arc=math.pi,
                                   repeat=0.5)
+        base, capital = surfaces.block((0.44, shaft_bottom, 0.22)), surfaces.block((0.44, 0.16, 0.24))
         found = []
         for wall, places in PILASTERS.items():
             for along in places:
                 at, rotation = _on_wall(wall, along, (shaft_bottom + shaft_top) / 2, 0.0)
-                found.append(surfaces.shape(shaft, self.finish.pilaster, at, rotation))
-                base, _ = _on_wall(wall, along, shaft_bottom / 2, 0.11)
-                found.append(_block((0.44, shaft_bottom, 0.22), base, self.finish.molding,
-                                    rotation))
-                capital, _ = _on_wall(wall, along, shaft_top + 0.08, 0.12)
-                found.append(_block((0.44, 0.16, 0.24), capital, self.finish.molding,
-                                    rotation))
+                found.append(_part(wall, self.finish.pilaster, shaft, at, rotation))
+                below, _ = _on_wall(wall, along, shaft_bottom / 2, 0.11)
+                found.append(_part(wall, self.finish.molding, base, below, rotation))
+                above, _ = _on_wall(wall, along, shaft_top + 0.08, 0.12)
+                found.append(_part(wall, self.finish.molding, capital, above, rotation))
         return found
 
-    def _windows(self) -> List[Any]:
+    def _windows(self) -> List[Part]:
         """Each window's stone surround, sill and bronze glazing bars."""
         stone, bars, found = self.finish.sandstone, self.finish.bronze, []
         for along, low, high in WINDOWS:
@@ -298,37 +331,50 @@ class Hall:
             for side in (-1, 1):
                 at, rotation = _on_wall('right', along + side * (WINDOW_WIDTH / 2 + 0.075),
                                         (low + high) / 2 + 0.05, -0.05)
-                found.append(_block((0.15, tall + 0.3, 0.4), at, stone, rotation))
+                found.append(_part('right', stone, surfaces.block((0.15, tall + 0.3, 0.4)),
+                                   at, rotation))
             head, rotation = _on_wall('right', along, high + 0.1, -0.05)
-            found.append(_block((WINDOW_WIDTH + 0.3, 0.2, 0.4), head, stone, rotation))
+            found.append(_part('right', stone, surfaces.block((WINDOW_WIDTH + 0.3, 0.2, 0.4)),
+                               head, rotation))
             sill, _ = _on_wall('right', along, low - 0.04, 0.02)
-            found.append(_block((WINDOW_WIDTH + 0.4, 0.08, 0.34), sill, stone, rotation))
+            found.append(_part('right', stone, surfaces.block((WINDOW_WIDTH + 0.4, 0.08, 0.34)),
+                               sill, rotation))
             mullion, _ = _on_wall('right', along, (low + high) / 2, -0.12)
-            found.append(_block((0.05, tall, 0.05), mullion, bars, rotation))
+            found.append(_part('right', bars, surfaces.block((0.05, tall, 0.05)),
+                               mullion, rotation))
             transom, _ = _on_wall('right', along, low + 0.7 * tall, -0.12)
-            found.append(_block((WINDOW_WIDTH, 0.05, 0.05), transom, bars, rotation))
+            found.append(_part('right', bars, surfaces.block((WINDOW_WIDTH, 0.05, 0.05)),
+                               transom, rotation))
         return found
 
-    def _dais(self) -> List[Any]:
+    def _dais(self) -> List[Part]:
         """Marble steps up to the far wall, each edged with a brass nosing."""
         wide, back, found = WIDTH - 0.02, -LENGTH / 2, []
         for rise, front in STEPS:
-            found.append(_block((wide, rise, front - back), (0.0, rise / 2, (front + back) / 2),
-                                self.finish.treads))
-            found.append(_block((wide, 0.03, 0.05), (0.0, rise - 0.01, front + 0.005),
-                                self.finish.nosing))
+            found.append(_part('dais', self.finish.treads,
+                               surfaces.block((wide, rise, front - back)),
+                               (0.0, rise / 2, (front + back) / 2)))
+            found.append(_part('dais', self.finish.nosing, surfaces.block((wide, 0.03, 0.05)),
+                               (0.0, rise - 0.01, front + 0.005)))
         return found
 
-    def _columns(self) -> List[Any]:
-        """Four columns of brushed metal, their edges chamfered 5 mm, each with a
-        lamp over it that lights the room."""
-        found: List[Any] = []
-        for index, metal in enumerate(self.finish.columns):
-            x, z = -4.5 + 3.0 * index, -7.0 + 5.0 * (index % 2)
-            found.append(_block((0.6, 3.0, 0.6), (x, 1.5, z), metal, chamfer=0.005))
-            found.append(_block((0.3, 0.3, 0.3), (x, 3.3, z), self.finish.lamp))
-            found.append(basenodes.PointLight(location=(x, 3.7, z), intensity=0.6,
-                                              color=(1.0, 0.95, 0.85),
-                                              attenuation=(1.0, 0.0, 0.02),
-                                              radius=30.0))
+    @staticmethod
+    def _column_places() -> List[Tuple[float, float]]:
+        return [(-4.5 + 3.0 * index, -7.0 + 5.0 * (index % 2)) for index in range(4)]
+
+    def _columns(self) -> List[Part]:
+        """Four columns of brushed metal, their edges chamfered 5 mm, each under a lamp."""
+        found = []
+        for (x, z), metal in zip(self._column_places(), self.finish.columns):
+            found.append(_part('columns', metal, surfaces.block((0.6, 3.0, 0.6), chamfer=0.005),
+                               (x, 1.5, z)))
+            found.append(_part('columns', self.finish.lamp, surfaces.block((0.3, 0.3, 0.3)),
+                               (x, 3.3, z)))
         return found
+
+    def _lamps(self) -> List[Any]:
+        """The light each column's lamp gives the room."""
+        return [basenodes.PointLight(location=(x, 3.7, z), intensity=0.6,
+                                     color=(1.0, 0.95, 0.85), attenuation=(1.0, 0.0, 0.02),
+                                     radius=30.0)
+                for x, z in self._column_places()]

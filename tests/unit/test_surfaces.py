@@ -288,3 +288,26 @@ def test_pieces_moved_and_merged_are_one_mesh():
     assert len(both.positions) == 8 and len(both.indices) == 12
     assert both.positions[:4, 0].max() == pytest.approx(-0.5)
     assert both.indices[6:].min() == 4
+
+
+def test_a_piece_placed_in_its_parent_carries_its_frame_with_it():
+    """Turned a quarter about y and moved, a panel facing +z faces +x there."""
+    panel = surfaces.panel(2.0, 1.0)
+    placed = surfaces.placed(panel, (5.0, 1.0, 0.0), (0.0, 1.0, 0.0, math.pi / 2))
+    assert np.allclose(placed.normals, (1.0, 0.0, 0.0), atol=1e-6)
+    assert np.allclose(placed.tangents[:, :3], (0.0, 0.0, -1.0), atol=1e-6)
+    assert np.allclose(placed.positions.mean(axis=0), (5.0, 1.0, 0.0), atol=1e-6)
+    assert np.allclose(placed.texcoords, panel.texcoords)
+    _texture_runs_along_the_tangents(placed)
+
+
+def test_placing_agrees_with_a_transform_turning_it():
+    """The same points a VRML97 Transform with that rotation puts them at."""
+    from OpenGLContext.scenegraph import basenodes
+    block = surfaces.block((1.0, 2.0, 3.0))
+    rotation = (0.3, 0.8, -0.5, 1.1)
+    transform = basenodes.Transform(translation=(1.0, -2.0, 0.5), rotation=rotation)
+    matrix = np.asarray(transform.localMatrices().data[0], 'd')
+    expected = (np.c_[block.positions, np.ones(len(block.positions))] @ matrix)[:, :3]
+    placed = surfaces.placed(block, (1.0, -2.0, 0.5), rotation)
+    assert np.allclose(placed.positions, expected, atol=1e-5)

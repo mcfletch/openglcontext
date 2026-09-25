@@ -80,14 +80,12 @@ def test_a_frame_borders_the_surface_behind_it(hall):
 
 def test_a_basin_rims_the_pool_it_is_given_and_tiles_its_bottom(hall):
     basin = hall.basin(1.0, 3.0, -4.0, -2.0)
-    rim = _blocks(basin, hall.finish.sandstone)
+    [(rim_low, rim_high)] = _blocks(basin, hall.finish.sandstone)
     [(low, high)] = _blocks(basin, hall.finish.pool)
-    assert len(rim) == 4
     assert 0.0 < low[1] and high[1] < 0.05 and high[1] - low[1] < 1e-6  # above the floor
     assert (low[0], high[0], low[2], high[2]) == pytest.approx((1.0, 3.0, -4.0, -2.0))
-    reach = np.concatenate([np.array([lo, hi]) for lo, hi in rim])
-    assert reach[:, 0].min() < 1.0 and reach[:, 0].max() > 3.0
-    assert reach[:, 2].min() < -4.0 and reach[:, 2].max() > -2.0
+    assert rim_low[0] < 1.0 and rim_high[0] > 3.0
+    assert rim_low[2] < -4.0 and rim_high[2] > -2.0
 
 
 def test_a_wall_the_hall_does_not_have_is_refused(hall):
@@ -98,6 +96,24 @@ def test_a_wall_the_hall_does_not_have_is_refused(hall):
 # --- what breaks the room up -------------------------------------------------------
 
 from OpenGLContext.bin.mirrorhall import BAYS, PILASTERS, STEPS, WINDOWS  # noqa: E402
+
+
+def _pieces(hall, material):
+    """Every piece of the hall's scenery wearing ``material``, as world bounds."""
+    return [(part.geometry.positions.min(axis=0), part.geometry.positions.max(axis=0))
+            for part in hall.parts() if part.material is material]
+
+
+def test_the_room_draws_its_scenery_merged(hall):
+    """A shape for each group of the room and material, holding every piece."""
+    parts = hall.parts()
+    worn = {id(part.material) for part in parts}
+    shapes = [record for record in _records(hall.room())
+              if id(record[5].appearance.material) in worn]
+    assert len(shapes) == len({(p.group, id(p.material)) for p in parts})
+    assert len(shapes) * 4 < len(parts)
+    assert sum(len(r[5].geometry.indices) for r in shapes) == sum(
+        len(p.geometry.indices) for p in parts)
 
 
 def _blocks(nodes, material):
@@ -116,7 +132,7 @@ def test_the_windows_open_onto_a_sky(hall):
     from OpenGLContext.scenegraph.basenodes import Background
     room = hall.room()
     assert any(isinstance(node, Background) for node in room)
-    brick = _blocks(room, hall.finish.brick)
+    brick = _pieces(hall, hall.finish.brick)
     for along, low, high in WINDOWS:
         middle = np.array([WIDTH / 2, (low + high) / 2, along])
         covering = [(lo, hi) for lo, hi in brick
@@ -125,7 +141,7 @@ def test_the_windows_open_onto_a_sky(hall):
 
 
 def test_the_floor_steps_up_to_the_far_wall(hall):
-    treads = sorted(_blocks(hall.room(), hall.finish.treads), key=lambda box: box[1][1])
+    treads = sorted(_pieces(hall, hall.finish.treads), key=lambda box: box[1][1])
     assert [round(float(hi[1]), 3) for _lo, hi in treads] == [rise for rise, _front in STEPS]
     fronts = [float(hi[2]) for _lo, hi in treads]
     assert fronts == sorted(fronts, reverse=True)
@@ -133,7 +149,7 @@ def test_the_floor_steps_up_to_the_far_wall(hall):
 
 
 def test_every_step_has_a_nosing_along_its_edge(hall):
-    nosings = _blocks(hall.room(), hall.finish.nosing)
+    nosings = _pieces(hall, hall.finish.nosing)
     assert len(nosings) == len(STEPS)
     for rise, front in STEPS:
         [edge] = [(lo, hi) for lo, hi in nosings if abs(float(hi[1]) - rise) < 0.02]
@@ -145,14 +161,13 @@ def test_half_columns_stand_between_the_bays(hall):
     for wall, bays in BAYS.items():
         for pilaster in PILASTERS[wall]:
             assert min(abs(pilaster - bay) for bay in bays) > 0.6
-    columns = [record for record in _records(hall.room())
-               if record[5].appearance.material is hall.finish.pilaster]
+    columns = _pieces(hall, hall.finish.pilaster)
     assert len(columns) == sum(len(places) for places in PILASTERS.values())
 
 
 @pytest.mark.parametrize('height', [0.09, 0.9, 4.25])
 def test_a_molding_runs_the_length_of_every_wall_at_its_height(hall, height):
-    runs = [(lo, hi) for lo, hi in _blocks(hall.room(), hall.finish.molding)
+    runs = [(lo, hi) for lo, hi in _pieces(hall, hall.finish.molding)
             if lo[1] - 0.05 <= height <= hi[1] + 0.05]
     for axis, span in ((0, WIDTH), (2, LENGTH)):
         assert any(float(hi[axis] - lo[axis]) > span * 0.9 for lo, hi in runs)

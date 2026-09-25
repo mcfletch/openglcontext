@@ -32,7 +32,7 @@ __all__ = [
     'fbm', 'marble', 'checkered_marble', 'marble_tiles', 'tiles', 'brick', 'plaster',
     'sandstone',
     'brushed_metal', 'normal_map', 'to_srgb', 'images', 'pbr_material',
-    'Geometry', 'panel', 'polygon', 'block', 'prism', 'cylinder', 'moved', 'merge',
+    'Geometry', 'panel', 'polygon', 'block', 'prism', 'cylinder', 'moved', 'placed', 'merge',
     'shape',
 ]
 
@@ -494,6 +494,24 @@ def moved(geometry: Geometry, offset: Sequence[float]) -> Geometry:
     """``geometry`` shifted by ``offset`` metres, its texture where it was."""
     return geometry._replace(
         positions=(geometry.positions + np.asarray(offset, 'f')).astype('f'))
+
+
+def placed(geometry: Geometry, translation: Sequence[float] = (0.0, 0.0, 0.0),
+           rotation: Sequence[float] = (0.0, 1.0, 0.0, 0.0)) -> Geometry:
+    """``geometry`` turned and moved into its parent's space, as a ``Transform``
+    with that ``translation`` and ``rotation`` (axis and angle) would place it.
+
+    Its normals and tangents turn with it and its texture stays where it was,
+    so pieces placed about a room can be merged into one mesh.
+    """
+    x, y, z, angle = (float(value) for value in rotation)
+    length = math.sqrt(x * x + y * y + z * z) or 1.0
+    axis = np.array([x, y, z]) / length
+    cos, sin = math.cos(angle), math.sin(angle)
+    cross = np.array([[0.0, -axis[2], axis[1]], [axis[2], 0.0, -axis[0]],
+                      [-axis[1], axis[0], 0.0]])
+    turn = cos * np.identity(3) + (1.0 - cos) * np.outer(axis, axis) + sin * cross
+    return _turned(geometry, turn, np.asarray(translation, 'f'))
 
 
 def merge(parts: Sequence[Geometry]) -> Geometry:
