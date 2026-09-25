@@ -36,6 +36,14 @@ To use PBR for your own scene, set the renderer:
 
    OPENGLCONTEXT_RENDERER=pbr python your_script.py
 
+or have the context class ask for it, which leaves the environment of the
+process, and so every other context in it, as it was:
+
+.. code-block:: python
+
+   class MyContext(BaseContext):
+       renderer = 'pbr'
+
 PBR needs the core profile, which is the default. If the PBR renderer cannot
 start, the plain :doc:`core renderer <renderpasses>` is used instead.
 

@@ -212,7 +212,8 @@ A zone can also be lit by a probe the file ships already convolved: an
 ``{"light": n}`` (``ZoneEnvironment(light=...)`` from code), which the
 loader makes an :ref:`ImageBasedLight <image-based-light-node>` node of. It is uploaded
 into its layer the first time the zone is needed and nothing is drawn, which
-is how a baked world should carry its places' environments. A scene's own
+is how a baked world should carry its places' environments (see
+:ref:`Baking zone lights <zone-bake>`). A scene's own
 ``{"light": n}`` lights everything no zone covers. A four-channel PNG face is
 read as RGBD HDR, other images as the values they hold.
 
@@ -270,6 +271,40 @@ second squared and ``replace`` and ``stop`` as the extension defines them.
 volume for every such zone to the physics world it builds, and
 :func:`OpenGLContext.physics.zones.gravity_volumes` gives them to a world
 built another way.
+
+.. _zone-bake:
+
+Baking zone lights
+------------------
+
+``OpenGLContext.passes.zonebake.bake_zone_lights(context)`` captures every
+capturing zone once and returns what it captured, so a world can ship its
+zones' environments as ``EXT_lights_image_based`` lights instead of drawing
+them while it is played. It stands the camera at each zone's capture point and
+draws frames until the zone's captures are finished, 40 frames at most
+(``frames_per_zone``), then reads the probe layer back. Each result is a
+``BakedZoneLight``: the ``Zone`` node, the six irradiance faces and the
+prefiltered mips, in linear light.
+
+.. code-block:: python
+
+   from OpenGLContext.eglcontext import EGLContext
+   from OpenGLContext.passes.zonebake import bake_zone_lights
+
+   class Baker(EGLContext):
+       renderer = 'pbr'
+       def OnInit(self):
+           self.sg = sceneGraph(children=[sky, sun, world])
+
+   with Baker(size=(256, 256), ibl='full') as context:
+       lights = bake_zone_lights(context, before_frame=stream_around)
+
+The context needs the PBR renderer and the ``full`` probe, asked for on the
+class and the definition as above. ``before_frame(eye)`` is called before
+every frame, which is where a streamed world loads what surrounds the camera.
+The scheduling is ``ZoneBakePlan``, which holds no GL.
+OpenGLContext-editor's ``bake_probes`` writes the results into a baked world's
+zones document.
 
 Zones in a streamed world
 -------------------------

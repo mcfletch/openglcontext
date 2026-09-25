@@ -140,6 +140,12 @@ class CaptureSchedule:
         capture = self._captures.get(key)
         return None if capture is None else capture.layer
 
+    def settled(self, key: Hashable) -> bool:
+        """Whether ``key``'s probe has been captured and none of its captures
+        is still to be drawn."""
+        capture = self._captures.get(key)
+        return capture is not None and capture.done > 0 and capture.wanted == 0
+
     @property
     def waiting(self) -> bool:
         """Whether any capture is still to be drawn."""

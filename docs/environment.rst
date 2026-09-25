@@ -83,7 +83,8 @@ Choosing the renderer
    * - ``OPENGLCONTEXT_RENDERER``
      - ``pbr``
      - unset
-     - ``pbr`` selects the metallic/roughness renderer. See :doc:`PBR <pbr>`.
+     - ``pbr`` selects the metallic/roughness renderer. A context class may
+       set ``renderer = 'pbr'`` for itself instead. See :doc:`PBR <pbr>`.
    * - ``OPENGLCONTEXT_MULTIVIEW``
      - ``auto``, ``vertex``, ``geometry``, ``sequential``
      - ``auto``

@@ -59,18 +59,22 @@ def report_render_failures() -> None:
         FLAT.reportFailures()
 
 
-def _core_flatpass_class() -> type:
+def _core_flatpass_class( context: Any = None ) -> type:
     """Core-profile pass class, guarding the experimental PBR import.
+
+    The PBR pass where ``context`` names it as its :attr:`renderer
+    <OpenGLContext.context.Context.renderer>`, or where
+    ``OPENGLCONTEXT_RENDERER`` does.
 
     The dispatcher must not name ``pbrpass`` unconditionally: an import-time fault
     anywhere in the PBR chain (pbrpass -> pbrmaterial/transmission/ibl/flatcore)
     would otherwise break plain core rendering for every user, PBR or not. The PBR
     path is attempted defensively and falls back to the base core ``FlatPass``.
     """
-    want_pbr = False
+    want_pbr = getattr( context, 'renderer', None ) == 'pbr'
     try:
         from OpenGLContext.passes.pbrpass import renderer_is_pbr
-        want_pbr = renderer_is_pbr()
+        want_pbr = want_pbr or renderer_is_pbr()
     except Exception as err:
         log.warning("PBR renderer detection failed (%s); using plain core", err)
     if want_pbr:
@@ -132,7 +136,7 @@ class _defaultRenderPasses( object ):
 
         def build() -> Any:
             if context.contextDefinition.profile == 'core':
-                FlatPass = _core_flatpass_class()
+                FlatPass = _core_flatpass_class( context )
             else:
                 log.info( 'Using compatibility profile' )
                 from OpenGLContext.passes.flatcompat import FlatPass

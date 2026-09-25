@@ -298,6 +298,12 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     #: ``None`` leaves the choice to the definition, and thence to
     #: ``OPENGLCONTEXT_PROFILE``.  See :meth:`resolveDefinition`.
     profile: str | None = None
+    #: The core-profile renderer a subclass needs: ``'pbr'`` draws this
+    #: context with the metallic/roughness pass whatever
+    #: ``OPENGLCONTEXT_RENDERER`` says, so a tool that needs it (a bake) asks
+    #: for it without changing the process environment every later context
+    #: reads.  ``None`` leaves the choice to ``OPENGLCONTEXT_RENDERER``.
+    renderer: str | None = None
 
     ### State flags/values
     # Set to false to trigger a redraw on the next available iteration

@@ -153,6 +153,8 @@ OpenGLContext/
 │   ├── gputimer.py   # GPU time of a stretch of a frame, read without waiting
 │   ├── renderstats.py # What a frame cost in shapes and draws, for the
 │   │                 # developer overlay -- docs/hud.rst
+│   ├── zonebake.py   # Every capturing zone captured once and read back,
+│   │                 # for a world to ship as image lights -- docs/zones.rst
 │   ├── layerguard.py # An optional frame layer, switched off at its first
 │   │                 # failure while the frame is drawn without it
 │   ├── shadow*.py    # Shadow mapping -- docs/shadows.rst

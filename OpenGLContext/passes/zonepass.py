@@ -609,6 +609,30 @@ class ZonesMixin(PassResources):
         layer = schedule.layer(key)
         return SCENE_PROBE if layer is None else float(layer)
 
+    def zoneCaptureSettled(self, zone: Any) -> bool:
+        """Whether the ``Zone`` node ``zone`` has been captured and has no
+        capture still to be drawn -- what a bake waits for before it reads
+        :meth:`zoneLightImage`."""
+        schedule = self._zoneCaptures
+        return schedule is not None and schedule.settled(id(zone))
+
+    def zoneLightImage(self, zone: Any) -> Optional[Tuple[Any, Any]]:
+        """``(irradiance, mips)`` of the ``Zone`` node ``zone``'s captured
+        probe, read back from the GPU, or None before its first capture.
+
+        ``irradiance`` is six float32 faces and ``mips`` the prefiltered
+        levels, each six faces, as
+        :meth:`~OpenGLContext.passes.ibl.IBLProbe.read_layer` answers them.
+        Call it with the context current.
+        """
+        schedule = self._zoneCaptures
+        probe = getattr(self, '_ibl_probe', None)
+        layer = None if schedule is None else schedule.layer(id(zone))
+        if layer is None or probe is None:
+            return None
+        found: Tuple[Any, Any] = probe.read_layer(layer)
+        return found
+
     def uploadImageLights(self, probe: Any) -> None:
         """Put every image-based light waiting for its layer into it, and the scene's into layer 0."""
         schedule = self._zoneCaptures
