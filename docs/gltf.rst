@@ -396,6 +396,14 @@ scan: an installed package cannot add a kind to somebody else's viewer by being
 present. Setting ``OPENGLCONTEXT_GLTF_HOOKS=0`` leaves every tag in every file
 unread.
 
+A kind's parameters can still name a resource: a particle ``texture`` is a
+file name. The engine's kinds resolve such a name through the document's
+``Resolver``, as the loader resolves a buffer or an image, so a file cannot
+reach outside its own directory or origin with one; an application's own kind
+that takes a path from its parameters resolves it with ``ctx.resolver`` in the
+same way. :ref:`What a glTF file may ask the engine to do <asks>` gives the
+limits on each of the engine's kinds.
+
 The engine claims the bare lowercase names it documents and ships — ``water``,
 ``mirror`` (:ref:`mirror-hook`), ``fire``, ``smoke`` and ``sparks`` — so an application naming its own keeps
 them out of that namespace: ``glisteel:rail``, ``twigbb:teleporter``. A
@@ -421,6 +429,10 @@ no application code at all:
      - a material
      - A surface that moves as water, and a volume that can be swum in —
        :ref:`Authoring water in a model <authoring>`.
+   * - ``mirror``
+     - a material or an object
+     - Surfaces that reflect the scene in their own planes —
+       :ref:`Authoring mirrors in a model <mirror-hook>`.
    * - ``fire``, ``smoke``, ``sparks``
      - an object
      - A particle effect standing where the object stands —

@@ -116,6 +116,57 @@ Rules for each loader
        number of bytes an accessor may request is limited. The engine reads a chain
        through the glTF loader above.
 
+.. _asks:
+
+What a glTF file may ask the engine to do
+-----------------------------------------
+
+Beyond geometry and materials, a glTF file can ask the engine for behaviour
+through three extensions. Each selects among things the running program
+provides; none names code, a module or a command.
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Extension
+     - What a file can ask for, and the limits on it
+   * - :ref:`OGLC_hook <hooks>`
+     - A kind from the registry: whatever the application registered, and the
+       engine's own ``water``, ``mirror``, ``fire``, ``smoke`` and ``sparks``.
+       A ``water`` surface moves and bounds a volume; its ``depth`` is at least
+       0 and its ``medium`` one the engine has. A ``mirror`` is drawn within
+       the frame's :doc:`reflection budget <reflections>`, at a ``scale`` from
+       0.05 to 1 of its rectangle on screen. A ``fire``, ``smoke`` or
+       ``sparks`` emitter holds at most 20000 particles and emits at most 2000
+       a second, and a ``texture`` it names is resolved through the
+       ``Resolver``, so it is read only from inside the directory of a
+       document loaded from a file. ``externalURL`` cannot be set.
+   * - :doc:`OGLC_zone <extensions/OGLC_zone>`
+     - A region of space whose lighting, sound, reverb, visibility, mirrors
+       and gravity differ inside it. Each extension inside a zone is read by a
+       reader the program registered. A zone that captures its own environment
+       probe renders the scene into a cube map; the engine captures at most
+       one zone a frame.
+   * - ``EXT_lights_image_based``
+     - Environment lighting shipped as images. The images are read through
+       the ``Resolver`` like any other, and decoded under :ref:`Pillow's
+       pixel limit <images>`. A light with an image that cannot be read, or
+       coefficients that are not nine rows of three numbers, is left out.
+
+Every value these extensions read is checked before it is used
+(``loaders.documentvalues.DocumentValues``). A value that is not a finite
+number of the right kind is logged once for the document and replaced by its
+default, and a value outside its range is logged and taken as the nearer end
+of it. A hook that raises is logged, and the material or node that carried it
+loads as an ordinary one. None of these ends a load.
+
+The number of tagged objects and zones in a file is not limited: a file with
+a thousand ``fire`` objects makes a thousand emitters. Setting
+``OPENGLCONTEXT_GLTF_HOOKS=0`` leaves every ``OGLC_hook`` tag in every file
+unread, which an application that shows models from sources it does not trust,
+and has no use for the tags, can set for its process.
+
 .. _images:
 
 Images
