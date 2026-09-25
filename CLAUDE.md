@@ -195,6 +195,9 @@ OpenGLContext/
 ├── video/            # H.264 capture of the colour buffer -- docs/recording.rst
 ├── viewer/           # The embeddable viewer behind oglc-view -- docs/viewer.rst
 │   └── adapters/     # One per format; what oglc-view dispatches on
+├── atomicfiles.py    # A file or directory written whole or not at all:
+│                     # staged beside its path, moved in with one rename, and
+│                     # a lock for two processes writing the same one
 ├── hud.py            # Screen-space layout GUINode/GUIBox use (see ui/)
 ├── outline.py        # The scenegraph as rows, for a tree control -- no GL, no
 │                     # toolkit -- docs/embedding.rst
