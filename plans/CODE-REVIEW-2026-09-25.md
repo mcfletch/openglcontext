@@ -526,7 +526,8 @@ Every finding has a status above. Still to do before a release:
 - Publishing steps, each the maintainer's: omi_audio 0.4.0a1 (BIN-3), then opengl_decimate 0.2.0a1 (LIB-D25, ED-M5; its first PyPI release, before the editor), push the engine's `content-v1` release (CP-1, DOC-26), then an OpenGLContext release carrying the new APIs glisteel now calls (`telemetry.Keeping`, `scenegraph.roadcourse`, `audio.vehicle`, `contentpacks.Application`, `ui.contentscreen`), and raise glisteel's floor to it.
 - `tools/preflight.py --rebuild-env` over every project: 69 of 69 gates green after the fixes it prompted (the ground-cover and LOD tutorials added to the docs build, the editor typed against the engine's new types, `zones_demo` re-blessed for the surface texture-coordinate fix, and a first baseline for `tests/mirrors_room.py`).
 - The questions for the maintainer are under each `Needs input` finding.
-- Follow-up: [DEFECT-PREVENTION.md](DEFECT-PREVENTION.md), the plan for gates that catch the recurring defect classes, with the catalogue in [DEFECT-CATALOGUE.md](DEFECT-CATALOGUE.md).
+- Follow-up: [DEFECT-PREVENTION.md](DEFECT-PREVENTION.md), the plan for gates that catch the recurring defect classes, with the catalogue in [DEFECT-CATALOGUE.md](DEFECT-CATALOGUE.md). It is parked with items 1 to 6 done; its "Parked, 2026-09-25" section lists what is pending (openglcontext's own ruff ratchets and engine APIs, pyopengl's selection waiting on uncommitted work, unclaimed viewer edits that fail `test_viewer_component`, publishing openglcontext-checks, and a full preflight run).
+- Publishing, added since: openglcontext-checks 0.1.0a1 (its mypy plugin is enabled in openglcontext, whose tox typecheck environment needs it installed).
 
 ## Scope and method
 

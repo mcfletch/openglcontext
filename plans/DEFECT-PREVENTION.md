@@ -1,6 +1,6 @@
 # Defect prevention: gates for the defect classes the reviews keep finding
 
-Status: In progress. Items 1, 2, 5 and 6 of the order of work are done (see [Baseline, ruff rules](#baseline-ruff-rules), [Baseline, OGC rules](#baseline-ogc-rules), [The post-edit gates](#the-post-edit-gates) and [The test conventions](#the-test-conventions)); items 3, 4 and 7 are under way (see [Parked, 2026-09-25](#parked-2026-09-25)).
+Status: Parked. Items 1 to 6 of the order of work are done, and item 7 in every project but openglcontext and pyopengl; what is pending is under [Parked, 2026-09-25](#parked-2026-09-25).
 
 ## Why
 
@@ -813,50 +813,59 @@ readback with `flushPendingPicks` (e9a40d9).
 
 ## Parked, 2026-09-25
 
-Work stopped on a session limit with items 3, 4, 6 and part of 7 mid-change.
-Everything finished is committed; what is below is uncommitted in the working
-trees, as the agents left it, and may not pass its gates yet. Each change is
-to be finished (tests, gates) or discarded by whoever resumes it; nothing here
-is to be committed as it stands without its tests passing.
+Items 1 to 6 are done and committed. Item 7 is done in every project but
+openglcontext and pyopengl. What is pending:
 
-- openglcontext (items 3, 4, 6): the checked types and `JSONObject` in the
-  loaders, tiles3d manifest and tileset, hooks, vegetation, contentpacks
-  catalog and viewer (item 4, which also owns openglcontext's OGC111 hits and
-  the mypy plugin, whose first commit is in openglcontext-checks as 192e7ba).
-  Item 6 resumed and is recorded under
-  [The test conventions](#the-test-conventions). Item 3
-  has resumed and is recorded under
-  [Baseline, sanctioned-API rules](#baseline-sanctioned-api-rules), item 4
-  under [The checked types](#the-checked-types). The edits to
-  `docs/_static/oglc.css` and `docs/structure.rst` predate this work and are
-  not the agents'.
-- Item 7, ruff ratchets. Done and committed: opengl_extrusions, ttfquery,
-  pydispatcher, simpleparse, omi_audio, opengl_decimate, pyopengl-video,
-  pyvrml97, pyopengl-glut-binaries, marble-editor, openglcontext-checks (all
-  but PLC0415, one import in `tests/test_config.py`), openglcontext-forest,
-  openglcontext-qt. Mid-change, uncommitted: omi_physics (about 20 files; the
-  suite in both accelerator modes and the CHANGELOG were next),
-  openglcontext-editor (about 90 files; unused-argument fixes in the tests
-  were next), glisteel (about 47 files), glisteel-editor (about 19),
-  twig-bb (5; SLF001 was next). Not started: marble-demo (make
-  `level.Wall._OFFSET` public there, which removes the editor's one noqa),
-  and openglcontext itself, which waits for items 3, 4 and 6. pyopengl was
-  started (a generator fix was next); its working tree also holds the
-  maintainer's own uncommitted work, which is not part of this.
-- Engine APIs the applications need, found by item 7: a public way to stage
-  `InstancedMeshLOD.compute_pending()`'s result (the forest assigns
-  `_pending`, as the engine's docstring says to), and a public on/off switch
-  for the instanced vegetation and terrain nodes (a profiling tool sets
-  `_disabled`).
-- Maintainer questions raised along the way: ttfquery's `Registry.load`,
-  `save` and `describe.openFont` leave files open, and its `.coverage` is
-  committed; pydispatcher's `BoundMethodWeakref.__new__` signature change
-  wants a release note, and its CI could now lint; simpleparse's three
-  unused public keywords and its `_generator` alias; omi_audio's
-  `impact_clip(tuning)`; pyvrml97's two new deprecations and the
-  `Lineariser` renames need a changelog; pyopengl-video's Windows interop
-  change is untested on Windows; the forest's `showMenu`/`closeMenu`/
-  `showCredits` event parameters.
+- openglcontext, item 7: under way when work stopped. Its brief, in order:
+  the engine APIs the other projects asked for (a public way to stage
+  `InstancedMeshLOD.compute_pending()`'s result; a public on/off switch for
+  the instanced vegetation and terrain nodes; `FetchJob.wait(timeout)`; a
+  public view, or a reasoned noqa, for each private engine name twig-bb's
+  tests read: `PBRMaterial._ubo_version`, `PBRMesh._deform_version`,
+  `PBRMesh._skin_matrices`, the mixer's `_writable()`,
+  `PhysicsViewPlatform._world_dir`, `audio.scene._engines`,
+  `ui.pictures._decoders`; `flush_and_exit` moved out of
+  `OpenGLContext.testing`, which shipped games now import), then removing the
+  `# noqa: SLF001` lines those projects carry meanwhile; routing the ~40
+  `os.environ` reads outside `renderoptions` through its read-once functions
+  and banning direct reads (TID251); the GL state context managers OGC151
+  needs, then resolving its ~255 findings and selecting it; the
+  `tiles3d/frustum.look_at` divide-by-zero that `numpy_errors = "raise"`
+  exposes (`tests/tiles3d/test_streaming.py` fails on it); trimming
+  `open_audit_sanctioned` of modules item 4 converted; and the 19 ruff rules
+  across the engine (baselines in [Baseline, ruff rules](#baseline-ruff-rules)).
+  What that agent committed and what it left is in its last commits and in
+  `plans/pending/` in the workspace root, where it saves any unfinished change
+  as a patch.
+- pyopengl, item 7: the code fixes are committed; the rule selection and four
+  handler narrowings wait on the maintainer's uncommitted pyopengl work, as
+  patches in the workspace root's `plans/pending/`
+  (`2026-09-25-pyopengl-ruff-select.patch`, which applies now, and
+  `2026-09-25-pyopengl-handler-narrowing.patch`, after the error-path record
+  changes land), with the report beside them. PLC0415 (about 1,300 of 2,141
+  are one line the generator templates emit), SLF001 and ARG need generator
+  and `pyproject.toml` changes in files the maintainer has modified.
+- Uncommitted viewer edits in openglcontext that no agent made
+  (`viewer/sceneviewer.py`, `viewer/environment.py`, `docs/embedding.rst`,
+  `docs/viewer.rst`, `docs/structure.rst`, `docs/_static/oglc.css`,
+  `tests/unit/test_viewer_for_backend.py`, a `pyproject.toml` hunk): they move
+  the viewer's render settings into `resolveDefinition`, and
+  `tests/unit/test_viewer_component.py` fails with them in the tree.
+- A twig-bb full-suite run once reported one failure whose name was cut off;
+  31 reruns passed. Suspected: its wall-clock tests with millisecond budgets,
+  which twig-bb does not mark `serial`.
+- Publishing: openglcontext-checks is not on PyPI, so the mypy plugin is
+  enabled only in openglcontext, and openglcontext's tox typecheck
+  environment will not build until it is published; with omi_audio 0.4.0a1
+  and opengl_decimate 0.2.0a1, it goes out before the engine.
+- A full `tools/preflight.py --rebuild-env` has not been run since items 3, 4,
+  6 and 7 landed; it is the first step when this resumes.
+- Decided by the maintainer: the public API changes the item-7 agents made
+  (renamed or newly public names, removed unused parameters, the two
+  pyvrml97 deprecations) stand. Still open: ttfquery's unclosed files and
+  committed `.coverage`; simpleparse's three unused public keywords;
+  omi_audio's `impact_clip(tuning)`; pydispatcher's CI lint job; marble-editor
+  declaring a marble-demo floor; the forest's unused `event` parameters.
 
 ## Decided
 
