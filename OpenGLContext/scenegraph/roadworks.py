@@ -1136,13 +1136,13 @@ def _ring(centre: np.ndarray, right: np.ndarray, up: np.ndarray,
     quads = (np.stack([a, c, b, b, c, d], axis=-1) if outwards > 0
              else np.stack([a, b, c, b, d, c], axis=-1))
     triangles = quads.reshape(-1, 3)
-    # A corner of the face is carried against one point of the arch, so the
-    # quad that turns it has two corners in the same place: half of it is a
-    # triangle and the other half is nothing.
-    flat = ((triangles[:, 0] == triangles[:, 1])
-            | (triangles[:, 1] == triangles[:, 2])
-            | (triangles[:, 2] == triangles[:, 0]))
-    return _mesh(positions, triangles[~flat].ravel().astype(np.uint32),
+    # A corner of the face is carried against one point of the arch, repeated
+    # in its own slot, so the quad that turns it has two corners in the same
+    # place: half of it is a triangle and the other half has no area.
+    corners = positions[triangles]
+    area = np.linalg.norm(np.cross(corners[:, 1] - corners[:, 0],
+                                   corners[:, 2] - corners[:, 0]), axis=1)
+    return _mesh(positions, triangles[area > 1e-9].ravel().astype(np.uint32),
                  material)
 
 

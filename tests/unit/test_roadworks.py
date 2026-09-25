@@ -230,6 +230,15 @@ class TestATunnel:
         assert float(upright[:, 1].max()) == pytest.approx(top, abs=0.01)
         assert float(upright[:, 1].min()) <= -tunnel.springing
 
+    def test_the_portal_face_has_no_triangle_of_no_area(self) -> None:
+        """A corner of the face turns against one arch point, which leaves
+        half of that quad with two corners in one place."""
+        portals = tunnel_meshes(_straight(height=0.0), ROAD)['portals']
+        corners = portals.positions[np.asarray(portals.indices).reshape(-1, 3)]
+        area = np.linalg.norm(np.cross(corners[:, 1] - corners[:, 0],
+                                       corners[:, 2] - corners[:, 0]), axis=1)
+        assert float(area.min()) > 1e-6
+
     def test_it_follows_a_bend(self) -> None:
         angle = np.linspace(0.0, np.pi / 2, 24)
         line = np.stack([300.0 * np.cos(angle), np.zeros(24),
