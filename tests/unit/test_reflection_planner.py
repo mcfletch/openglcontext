@@ -706,5 +706,47 @@ def test_a_reflected_view_copied_without_its_source_says_so():
     view = ReflectedView(VIEW, 'key', np.zeros(3))
     bare = ReflectedView.__new__(ReflectedView)
     with pytest.raises(AttributeError):
-        bare.source
+        _ = bare.source
     assert copy.copy(view).source is VIEW
+
+
+# --- the branches a mirror is left out by ------------------------------------------
+
+def test_a_wireframe_view_looks_for_no_mirror():
+    from OpenGLContext.multiview.views import ViewStyle
+    view = View(style=ViewStyle(wireframe=True))
+    plan = ReflectionPlanner().plan([_frame([_mirror()], view=view)], ATLAS, BIG)
+    assert plan.draws == [] and plan.lookups == {}
+
+
+def test_a_mirror_its_zone_refuses_is_not_drawn():
+    planner = ReflectionPlanner()
+    planner.allowed = lambda record, eye: False
+    assert planner.plan([_frame([_mirror()])], ATLAS, BIG).draws == []
+
+
+def test_a_bent_mirror_and_a_flattened_one_are_not_drawn():
+    bent = _mirror()
+    bent[5].geometry.positions = np.array(
+        [(-1, -1, 0), (1, -1, 0), (1, 1, 0.5), (-1, 1, 0)], 'f')
+    squashed = _mirror(2.0)
+    squashed[2][:3, :3] = np.diag([1.0, 1.0, 0.0])
+    assert ReflectionPlanner().plan([_frame([bent, squashed])], ATLAS, BIG).draws == []
+
+
+def test_a_mirror_moved_to_another_plane_is_planned_afresh():
+    planner = _settled_planner()
+    record = _mirror(reflector=PlanarReflector(interval=100))
+    planner.plan([_frame([record])], ATLAS, BIG)
+    record[2][3, 2] -= 0.5
+    later = planner.plan([_frame([record])], ATLAS, NOTHING)
+    assert later.candidates[0].age is None
+    assert later.lookup(later.frames[0], record) is None
+
+
+def test_a_still_camera_has_no_drift():
+    planner = _settled_planner()
+    record = _mirror(reflector=PlanarReflector(interval=100))
+    planner.plan([_frame([record])], ATLAS, BIG)
+    later = planner.plan([_frame([record])], ATLAS, NOTHING)
+    assert later.candidates[0].valid and later.candidates[0].drift == 0.0
