@@ -10,7 +10,7 @@ import pytest
 
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.passes import reflection
-from OpenGLContext.passes.flateffects import _FlatEffectsMixin
+from OpenGLContext.passes.reflectionpass import ReflectionsMixin
 from OpenGLContext.passes.reflectionatlas import FILL
 from OpenGLContext.scenegraph.boundingvolume import AABoundingBox
 
@@ -25,7 +25,7 @@ class _Context:
 
 
 def _pass(strategy='vertex', **fields):
-    effects = _FlatEffectsMixin()
+    effects = ReflectionsMixin()
     effects.context = _Context(ContextDefinition(**fields))
     effects.multiviewStrategy = strategy
     return effects
@@ -98,7 +98,7 @@ class _Shader:
 
 
 def test_a_run_of_shapes_that_are_not_mirrors_sets_nothing():
-    effects = _FlatEffectsMixin()
+    effects = ReflectionsMixin()
     effects.view = object()
     shader = _Shader()
     effects._reflection_lookups = {}
@@ -108,7 +108,7 @@ def test_a_run_of_shapes_that_are_not_mirrors_sets_nothing():
 
 
 def test_a_mirror_reads_its_own_lookup_and_the_next_shape_none():
-    effects = _FlatEffectsMixin()
+    effects = ReflectionsMixin()
     effects.view = view = object()
     mirror, plain = object(), object()
     lookup = object()
@@ -126,7 +126,7 @@ def test_a_mirror_seen_in_a_mirror_falls_back_to_its_reflection_seen_directly():
     """Until its reflection for that mirror's view is drawn, a mirror seen in a
     mirror shows the one the viewer sees, not the probe."""
     from OpenGLContext.passes.reflectionplanner import ReflectedView, view_key
-    effects, shader = _FlatEffectsMixin(), _Shader()
+    effects, shader = ReflectionsMixin(), _Shader()
     main, mirror, inner = object(), object(), object()
     through = ReflectedView(main, 'key', np.zeros(3))
     direct = object()

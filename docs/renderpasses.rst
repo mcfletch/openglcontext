@@ -447,7 +447,10 @@ divide the work:
   fixed-function pipeline (``glLight*``, ``glMaterial*``).
 - ``flatcore.py`` -- the core-profile pass described on this page.
 - ``flateffects.py`` -- the effects the core pass sequences: image-based
-  lighting, transmission, planar reflections, bloom and cluster culling.
+  lighting, transmission, bloom and cluster culling.
+- ``reflectionpass.py`` -- the pass's planar reflections: planning a frame's
+  mirror views, drawing them into the atlas, and telling each mirror drawn
+  which tile it reads.
 - ``renderpass.py`` -- chooses which ``FlatPass`` subclass renders a context
   (by profile and renderer) and caches the choice across frames.
 - ``framestate.py`` -- the state one frame shares among its stages, dropped

@@ -145,6 +145,8 @@ OpenGLContext/
 │   ├── ibl.py        # Image-based lighting probe
 │   ├── reflection.py # Planar reflections' arithmetic: which surfaces are
 │   │                 # mirrors, their planes, a mirror's camera -- docs/reflections.rst
+│   ├── reflectionpass.py     # The pass's side: a frame's mirror views drawn
+│   │                         # into the atlas, and each mirror told its tile
 │   ├── reflectionplanner.py  # A frame's mirrors: what to draw and read -- no GL
 │   ├── reflectiontiles.py    # The atlas packer and the schedule -- no GL
 │   ├── reflectionatlas.py    # The texture every reflection is a tile of
