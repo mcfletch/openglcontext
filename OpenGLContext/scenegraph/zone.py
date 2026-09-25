@@ -211,7 +211,8 @@ class Zone(nodetypes.Children, node.Node):
         """The zone's setting decided under ``key``, or None where it has none."""
         for item in self.settings or ():
             if getattr(item, 'SETTING', None) == key:
-                return item
+                found: ZoneSetting = item
+                return found
         return None
 
     def keys(self) -> List[str]:
@@ -256,7 +257,8 @@ class PlacedZone:
         """A point in the zone's own frame, in the world."""
         point = np.ones(4)
         point[:3] = tuple(local)
-        return (point @ self.matrix)[:3]
+        world: np.ndarray = (point @ self.matrix)[:3]
+        return world
 
 
 def placed_zones(found: Iterable[Tuple[Zone, Any]],

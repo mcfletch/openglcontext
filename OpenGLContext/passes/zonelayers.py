@@ -409,7 +409,9 @@ def pack_reach(found: Reach, layers: Sequence[float]) -> ZonePack:
     stack = []
     for (zone, inside), layer in zip(found.stack, layers, strict=True):
         setting = zone.setting(ENVIRONMENT)
-        intensity = max(float(setting.intensity), 0.0) if _lit(zone) else 0.0
+        intensity = (max(float(setting.intensity), 0.0)
+                     if isinstance(setting, ZoneEnvironment) and bool(setting.enabled)
+                     else 0.0)
         stack.append((zone, inside, intensity, float(layer)))
     return _pack(stack, found.limited)
 
@@ -472,7 +474,7 @@ def light_decision(placed: Sequence[PlacedZone], minimum: Any, maximum: Any
     dark = False
     for zone, inside in stacked(reaching):
         setting = zone.setting(LIGHTS)
-        if not bool(setting.enabled):
+        if setting is None or not bool(setting.enabled):
             dark = dark or inside
             continue
         on.update(id(light) for light in getattr(setting, 'lights', None) or ())

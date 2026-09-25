@@ -18,7 +18,7 @@ scene pays a dictionary lookup per draw. A scene with no zones pays one test.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Hashable, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -30,6 +30,7 @@ from OpenGLContext.scenegraph import zone as zonenodes
 from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
 from OpenGLContext.scenegraph.zone import (
     AUDIO, ENVIRONMENT, LIGHTS, MIRRORS, REVERB, VISIBILITY, PlacedZone,
+    ZoneVisibility,
 )
 
 log = logging.getLogger(__name__)
@@ -67,7 +68,7 @@ class _ObjectZones:
         #: The bounding sphere's centre in the object's own frame, homogeneous.
         self.local: Optional[np.ndarray] = None
         self.radius = 0.0
-        self.centre: Optional[np.ndarray] = None
+        self.centre: Optional[Tuple[float, float, float]] = None
         self.slack = 0.0
         self.version = -1
         #: :func:`~OpenGLContext.passes.zonelayers.light_decision`, and the
@@ -99,6 +100,16 @@ class ZonesMixin:
         activeFrame: Any
         view: Any
         visiblePlacements: Any
+        matrix: Any
+        _reflection_lookups: Dict[Any, Any]
+
+        def applyViewFrame(self, frame: Any, gl: bool = True) -> None: ...
+        def renderSet(self, matrix: Any, gathered: Any) -> List[Any]: ...
+        def setupViewLighting(self, view: Any, lighting: Any,
+                              fitted: bool = True) -> None: ...
+        def shaderRenderOpaque(self, records: Any, frustum: Any) -> Any: ...
+        def clearPlanarReflection(self) -> None: ...
+        def currentBackground(self) -> Any: ...
 
     #: Every zone this frame, placed.
     _zones: List[PlacedZone] = []
@@ -249,7 +260,7 @@ class ZonesMixin:
         if objects is None:
             objects = self._zoneObjects = {}
         held = objects.get(id(path))
-        if not self._current(held, tmatrix):
+        if held is None or not self._current(held, tmatrix):
             self._classify([(path, tmatrix, bvolume)])
             held = objects[id(path)]
         if held.slots != self._slotVersion:
@@ -336,10 +347,12 @@ class ZonesMixin:
                    else [[] for _ in items])
         spheres = [self._sphere(matrix, bounds) for _path, matrix, bounds in items]
         slack = np.zeros(len(items))
-        bounded = [index for index, sphere in enumerate(spheres) if sphere is not None]
+        bounded = [(index, sphere) for index, sphere in enumerate(spheres)
+                   if sphere is not None]
         if bounded and self._slackTable is not None:
-            slack[bounded] = self._slackTable.sphere_slack(
-                [spheres[i][2] for i in bounded], [spheres[i][1] for i in bounded])
+            slack[[index for index, _sphere in bounded]] = self._slackTable.sphere_slack(
+                [sphere[2] for _index, sphere in bounded],
+                [sphere[1] for _index, sphere in bounded])
         cell = self._zoneCell
         lit = bool(self._controlledLights or self._lightZones)
         for index, ((path, matrix, _bounds), reaching) in enumerate(zip(items, reached, strict=True)):
@@ -650,11 +663,12 @@ class ZonesMixin:
         self.uploadImageLights(probe)
         camera = self._frameCamera(frames)
         if camera is not None:
-            for zone in self._environmentZones:
-                setting = zone.setting(ENVIRONMENT)
-                if bool(getattr(setting, 'capture', False)) and zone.weight(camera) >= 1.0:
-                    schedule.camera_inside(id(zone.zone))
-        by_key = {id(zone.zone): zone for zone in self._environmentZones}
+            for placed in self._environmentZones:
+                setting = placed.setting(ENVIRONMENT)
+                if bool(getattr(setting, 'capture', False)) and placed.weight(camera) >= 1.0:
+                    schedule.camera_inside(id(placed.zone))
+        by_key: Dict[Hashable, PlacedZone] = {
+            id(zone.zone): zone for zone in self._environmentZones}
         key = schedule.next(lambda k: self._captureDistance(by_key.get(k), camera))
         if key is None:
             return
@@ -825,7 +839,7 @@ class ZonesMixin:
         named: Dict[int, List[Tuple[Tuple[int, float], bool, float]]] = {}
         for zone in self._zones:
             setting = zone.setting(VISIBILITY)
-            if setting is None or not bool(setting.enabled):
+            if not isinstance(setting, ZoneVisibility) or not bool(setting.enabled):
                 continue
             weight = zone.weight(point)
             for node in getattr(setting, 'nodes', None) or ():

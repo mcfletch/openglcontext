@@ -234,10 +234,12 @@ class TestDrawingItWithoutInstancing:
 
         mode = Mode()
 
-        def watch(mode=None, **named):
+        def watch(mode):
             seen.append(np.array(mode.matrix))
+            return True
 
-        node.geometry.render = watch
+        # A shadow pass draws a mesh through its depth-only draw.
+        node.geometry.depthDraw = watch
         node.Render(mode=mode)
         assert len(seen) == 3
         assert [float(m[3, 0]) for m in seen] == [1.0, 2.0, 3.0]
@@ -256,7 +258,7 @@ class TestDrawingItWithoutInstancing:
 
         mode = Mode()
         before = np.array(mode.matrix)
-        node.geometry.render = lambda mode=None, **named: None
+        node.geometry.depthDraw = lambda mode: True
         node.Render(mode=mode)
         assert np.allclose(mode.matrix, before)
 

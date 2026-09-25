@@ -39,8 +39,8 @@ def _face(g: Any, index: Any, resolver: Any) -> Optional[np.ndarray]:
     raw = _image_bytes(g, index, resolver)
     if raw is None:
         return None
-    image = Image.open(io.BytesIO(raw))
-    image = image.convert('RGBA' if image.mode in ('RGBA', 'LA', 'PA') else 'RGB')
+    opened = Image.open(io.BytesIO(raw))
+    image = opened.convert('RGBA' if opened.mode in ('RGBA', 'LA', 'PA') else 'RGB')
     return decode_rgbd(np.asarray(image)).astype('f4')
 
 

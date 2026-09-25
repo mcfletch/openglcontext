@@ -247,12 +247,14 @@ class CaptureTarget:
         viewport = glGetIntegerv(GL_VIEWPORT)
         self._viewport = tuple(int(v) for v in viewport)  # type: ignore[assignment]
         self._ensure()
+        assert self._fbo is not None and self._depth is not None
         glBindFramebuffer(GL_FRAMEBUFFER, self._fbo)
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
                                   GL_RENDERBUFFER, self._depth)
 
     def face(self, face: int) -> None:
         """Point the drawing at ``face`` of the cube, cleared."""
+        assert self.cube is not None, 'face() is called between begin() and end()'
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
                                GL_TEXTURE_CUBE_MAP_POSITIVE_X + face, self.cube, 0)
         status = int(glCheckFramebufferStatus(GL_FRAMEBUFFER))

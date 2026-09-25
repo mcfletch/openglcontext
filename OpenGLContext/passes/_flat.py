@@ -728,7 +728,8 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         """
         batchers = getattr(self, 'batchers', None)
         if batchers is not None:
-            return batchers()
+            functions: Tuple[Any, Any] = batchers()
+            return functions
         return self._instanceKey, self._instanceable
 
     @staticmethod

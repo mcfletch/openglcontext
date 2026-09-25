@@ -1308,7 +1308,8 @@ class MiniMap(HUDWidget):
                float(self.inset), int(self.detail), bool(self.closed))
         held = self.__dict__.get('_strokes')
         if held is not None and held[0] == key and held[1] is self.route:
-            return held[2]
+            strokes: List[Tuple[Tuple[float, float], Tuple[float, float]]] = held[2]
+            return strokes
         found = self._strokes()
         self.__dict__['_strokes'] = (key, self.route, found)
         return found

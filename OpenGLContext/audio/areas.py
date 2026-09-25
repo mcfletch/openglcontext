@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Any, Sequence
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 __all__ = ['box_gain', 'apply_zones']
 
@@ -41,7 +42,7 @@ def box_gain(position: Sequence[float], centre: Sequence[float],
 
 
 def apply_zones(engine: Any, emitters: Sequence[Any], zones: Sequence[Any],
-                position: Sequence[float], table: Any = None) -> None:
+                position: ArrayLike, table: Any = None) -> None:
     """Set each zone-controlled emitter's gain, and the reverb, for a listener at ``position``.
 
     ``emitters`` are the scene's :class:`~OpenGLContext.scenegraph.audio.AudioEmitter`

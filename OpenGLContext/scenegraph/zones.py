@@ -139,7 +139,8 @@ class PlacedShape:
     def local(self, points: ArrayLike) -> np.ndarray:
         """World points ``(..., 3)`` in the shape's own frame."""
         pts = np.asarray(points, dtype='d')
-        return pts @ self.to_local[:3, :3] + self.to_local[3, :3]
+        local: np.ndarray = pts @ self.to_local[:3, :3] + self.to_local[3, :3]
+        return local
 
     def distance(self, points: ArrayLike) -> np.ndarray:
         """Signed distance in metres from each world point to the surface.
@@ -337,7 +338,7 @@ def _distance(kind: str, params: Sequence[float], p: np.ndarray) -> np.ndarray:
     if kind == BOX:
         return _box(p, np.asarray(params, dtype='d'))
     if kind == SPHERE:
-        return np.linalg.norm(p, axis=-1) - params[0]
+        return np.asarray(np.linalg.norm(p, axis=-1) - params[0])
     if kind == ELLIPSOID:
         return _ellipsoid(p, np.asarray(params, dtype='d'))
     r1, r2, h = params
@@ -350,7 +351,7 @@ def _box(p: np.ndarray, half: np.ndarray) -> np.ndarray:
     q = np.abs(p) - half
     outside = np.linalg.norm(np.maximum(q, 0.0), axis=-1)
     inside = np.minimum(q.max(axis=-1), 0.0)
-    return outside + inside
+    return np.asarray(outside + inside)
 
 
 def _ellipsoid(p: np.ndarray, radii: np.ndarray) -> np.ndarray:
@@ -365,18 +366,18 @@ def _round_cone(p: np.ndarray, r1: float, r2: float, h: float) -> np.ndarray:
     across = np.hypot(p[..., 0], p[..., 2])
     up = p[..., 1] + h / 2.0
     if h <= 1e-12:
-        return np.hypot(across, up) - max(r1, r2)
+        return np.asarray(np.hypot(across, up) - max(r1, r2))
     b = (r1 - r2) / h
     if abs(b) >= 1.0:
         # One sphere swallows the other: the shape is the larger sphere.
         centre = 0.0 if r1 >= r2 else h
-        return np.hypot(across, up - centre) - max(r1, r2)
+        return np.asarray(np.hypot(across, up - centre) - max(r1, r2))
     a = math.sqrt(1.0 - b * b)
     k = -b * across + a * up
     lower = np.hypot(across, up) - r1
     upper = np.hypot(across, up - h) - r2
     side = across * a + up * b - r1
-    return np.where(k < 0.0, lower, np.where(k > a * h, upper, side))
+    return np.asarray(np.where(k < 0.0, lower, np.where(k > a * h, upper, side)))
 
 
 def _capped_cone(p: np.ndarray, r1: float, r2: float, h: float) -> np.ndarray:
@@ -394,7 +395,8 @@ def _capped_cone(p: np.ndarray, r1: float, r2: float, h: float) -> np.ndarray:
     cbx = qx - k1x + k2x * t
     cby = qy - k1y + k2y * t
     sign = np.where((cbx < 0.0) & (cay < 0.0), -1.0, 1.0)
-    return sign * np.sqrt(np.minimum(cax * cax + cay * cay, cbx * cbx + cby * cby))
+    return np.asarray(sign * np.sqrt(np.minimum(cax * cax + cay * cay,
+                                                cbx * cbx + cby * cby)))
 
 
 def _orthonormal(axes: np.ndarray) -> np.ndarray:

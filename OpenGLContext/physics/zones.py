@@ -15,7 +15,9 @@ import numpy as np
 from omi_physics import model
 from omi_physics.gravity import GravityVolume
 
-from OpenGLContext.scenegraph.zone import GRAVITY, PlacedZone, Zone, placed_zones
+from OpenGLContext.scenegraph.zone import (
+    GRAVITY, PlacedZone, Zone, ZoneGravity, placed_zones,
+)
 from OpenGLContext.scenegraph.zones import PlacedShape
 
 __all__ = ['ZoneRegion', 'gravity_volumes', 'scene_zones']
@@ -42,7 +44,7 @@ def gravity_volumes(zones: Iterable[PlacedZone]) -> List[GravityVolume]:
     volumes = []
     for zone in zones:
         setting = zone.setting(GRAVITY)
-        if setting is None or not bool(setting.enabled):
+        if not isinstance(setting, ZoneGravity) or not bool(setting.enabled):
             continue
         rotation = zone.matrix[:3, :3]
         direction = np.asarray(setting.direction, dtype='d') @ rotation
