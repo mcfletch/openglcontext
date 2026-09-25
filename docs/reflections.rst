@@ -65,6 +65,12 @@ The node's fields are read every frame, so a change takes effect on the next.
      - False
      - True shows the reflection in place of the surface's shading.
 
+Each number is drawn within a range: ``scale`` from 0.05 to 1, ``interval``
+at least 1, ``priority`` at least 0, ``distortion`` from 0 to 1 and
+``reflectance`` from 0 to 1 (``reflector.LIMITS``). A value outside its range
+is drawn as the nearer end of it, and a value that is no finite number, such
+as a NaN, as the field's default.
+
 One reflector held by the materials of a set of mirrors tunes them together.
 Those of them that lie in one plane -- a wall of mirrors, a floor laid in two
 materials -- are also one reflection: one mirror view in each view that sees
@@ -127,7 +133,9 @@ The parameters are the ``PlanarReflector`` fields above, all optional:
 ``scale``, ``interval``, ``priority``, ``distortion``, ``reflectance``, and
 ``replace`` where
 the place's own default -- off on a material, on on an object -- is not the
-one wanted.
+one wanted. A value that is no number of the right kind is logged and left at
+its default, and one outside the field's range is logged and taken as the
+nearer end of it, so a malformed tag loads as a mirror.
 
 In Blender
 ~~~~~~~~~~
@@ -427,3 +435,8 @@ Limits
 - Sixteen mirror views per submission; more cost another submission.
 - A driver whose fragment stage has 32 texture units or fewer compiles
   reflections out, and every mirror reflects the probe.
+- An exception while drawing reflections -- a driver refusing the atlas's
+  framebuffer format, for one -- is logged once with its traceback and
+  switches planar reflections off for the rest of the session. Every mirror
+  reflects the probe from then on, and every frame is drawn
+  (``passes.layerguard.LayerGuard``).

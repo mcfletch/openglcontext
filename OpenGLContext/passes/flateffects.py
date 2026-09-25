@@ -22,6 +22,7 @@ from OpenGL.GL import (
 )
 
 from OpenGLContext import renderoptions
+from OpenGLContext.passes.layerguard import LayerGuard
 from OpenGLContext.debug.logs import getTraceback
 from OpenGLContext.scenegraph import fog as fognode
 
@@ -110,6 +111,8 @@ class _FlatEffectsMixin:
     _reflection_atlas: Optional["ReflectionAtlas"] = None
     _reflection_planner: Optional["ReflectionPlanner"] = None
     _reflection_timer: Optional["GpuTimer"] = None
+    #: What switches reflections off for good if drawing them raises.
+    _reflection_guard: Optional[LayerGuard] = None
     #: What each mirror in each view reads this frame, by
     #: :func:`~OpenGLContext.passes.reflectionplanner.key_for`.
     _reflection_lookups: Dict[Any, "Lookup"] = {}
@@ -267,6 +270,8 @@ class _FlatEffectsMixin:
         if self._planar_reflections is None:
             self._planar_reflections = bool(getattr(
                 self.shader_program, 'planar_reflection_supported', False))
+        if self._reflection_guard is not None and self._reflection_guard.failed:
+            return False
         return self._planar_reflections and renderoptions.flag(
             self, 'planarReflections',
             renderoptions.env_flag_once('OPENGLCONTEXT_PLANAR_REFLECTIONS', True))
@@ -317,7 +322,25 @@ class _FlatEffectsMixin:
         what can serve several views in one shared submission, the rest a
         view at a time. The views' own camera is looked through again
         afterwards.
+
+        An exception from any of it is logged once and switches planar
+        reflections off (:class:`~OpenGLContext.passes.layerguard.LayerGuard`):
+        every mirror reflects the environment probe from then on, and the
+        frame is drawn.
         """
+        if self._reflection_guard is None:
+            self._reflection_guard = LayerGuard(
+                'planar reflection', off=self._reflectionsOff, logger=log)
+        self._reflection_guard.run(self._renderReflections, frames, lighting)
+
+    def _reflectionsOff(self) -> None:
+        """Leave nothing a mirror would read: each reflects the probe."""
+        self._reflection_lookups = {}
+        self._previous_lookups = {}
+        self._reflection_applied = None
+        self._incompleteMirrors = set()
+
+    def _renderReflections(self, frames: List[Any], lighting: Any) -> None:
         previous = self._reflection_lookups
         self._previous_lookups = {}
         self._reflection_lookups = {}

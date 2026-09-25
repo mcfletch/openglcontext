@@ -95,6 +95,8 @@ OpenGLContext/
 ├── loaders/          # File formats into the scenegraph -- docs/loading.rst, gltf.rst, vrml97.rst
 │   ├── background.py # The pool a url field hands its fetch to, and the rule
 │   │                 # that its imports are made by the submitting thread
+│   ├── documentvalues.py  # A document's numbers, flags and names, checked:
+│   │                 # a default or a bound and one report, never a raise
 │   ├── gltf/         # glTF 2.0 / GLB
 │   │   └── lod.py    # MSFT_lod: a node's coarser levels, and when each is
 │   │                 # worth drawing -- docs/gltf.rst#lod. Making them is
@@ -135,6 +137,8 @@ OpenGLContext/
 │   ├── reflectiontiles.py    # The atlas packer and the schedule -- no GL
 │   ├── reflectionatlas.py    # The texture every reflection is a tile of
 │   ├── gputimer.py   # GPU time of a stretch of a frame, read without waiting
+│   ├── layerguard.py # An optional frame layer, switched off at its first
+│   │                 # failure while the frame is drawn without it
 │   ├── shadow*.py    # Shadow mapping -- docs/shadows.rst
 │   ├── instancing.py # Collapsing repeated shapes -- docs/instancing.rst
 │   └── shaderpass.py # VRML97ShaderProgram -- compiles and holds the programs

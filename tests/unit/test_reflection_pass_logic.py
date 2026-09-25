@@ -162,3 +162,43 @@ def test_a_driver_without_the_texture_unit_never_reflects():
     program.planar_reflection_supported = False
     effects.shader_program = program
     assert not effects.planarReflectionsEnabled()
+
+
+# --- a failure in the reflection pass ---------------------------------------------
+
+class _FailingPlanner:
+    """A planner whose every plan raises, as a driver refusing the atlas does."""
+
+    def __init__(self):
+        self.allowed = None
+        self.calls = 0
+        self.schedule = None
+
+    def plan(self, *args, **named):
+        self.calls += 1
+        raise RuntimeError('the reflection atlas is incomplete (0x8cd6)')
+
+
+def _failing_pass():
+    effects = _pass()
+    effects.shader_program = _Program()
+    effects._frameGather = object()
+    effects.activeFrame = None
+    effects.mirrorsZoned = lambda: False
+    effects._reflection_planner = planner = _FailingPlanner()
+    effects._reflection_lookups = {'stale': object()}
+    return effects, planner
+
+
+def test_a_failing_reflection_pass_switches_reflections_off_and_keeps_the_frame(caplog):
+    """Every mirror reflects the probe from then on; the frame is drawn."""
+    effects, planner = _failing_pass()
+    with caplog.at_level('ERROR'):
+        effects.renderReflections([], None)
+        effects.renderReflections([], None)
+    assert planner.calls == 1
+    assert not effects.planarReflectionsEnabled()
+    assert effects._reflection_lookups == {}
+    failures = [r for r in caplog.records if 'reflection' in r.getMessage().lower()]
+    assert len(failures) == 1
+    assert failures[0].exc_info is not None

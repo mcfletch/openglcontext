@@ -351,7 +351,7 @@ class ReflectionPlanner:
             held = None
         mirror = reflection.plan_mirror(plane, corners, frame.modelView,
                                         frame.projection, frame.rect,
-                                        float(reflector.scale), crop=crop)
+                                        reflector.bounded('scale'), crop=crop)
         if mirror is None:
             return None
         valid = (held is not None and not held.provisional and not held.redo
@@ -422,8 +422,8 @@ class ReflectionPlanner:
         area = (x1 - x0) * (y1 - y0) / 4.0 * float(rect[2]) * float(rect[3])
         age = None if seen.held is None else self.frame - seen.held.drawn
         return Candidate(
-            key=seen.key, area=area, priority=float(seen.reflector.priority),
-            interval=int(seen.reflector.interval),
+            key=seen.key, area=area, priority=seen.reflector.bounded('priority'),
+            interval=int(seen.reflector.bounded('interval')),
             texels=seen.mirror.size[0] * seen.mirror.size[1],
             age=age, valid=seen.valid, drift=self._drift(seen) if seen.valid else 0.0,
             separate=separate)
@@ -566,8 +566,8 @@ class ReflectionPlanner:
             bounds=reflection.tile_bounds(held.tile.rect, atlas),
             normal=(float(mirror.normal[0]), float(mirror.normal[1]),
                     float(mirror.normal[2])),
-            distortion=float(seen.reflector.distortion),
+            distortion=seen.reflector.bounded('distortion'),
             replace=bool(seen.reflector.replace),
             rough=seen.rough,
             provisional=held.provisional,
-            reflectance=float(seen.reflector.reflectance))
+            reflectance=seen.reflector.bounded('reflectance'))

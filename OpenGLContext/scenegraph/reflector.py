@@ -21,11 +21,25 @@ How the reflections are drawn, and what they cost, is
 """
 from __future__ import annotations
 
+from typing import Dict, Optional, Tuple
+
 from vrml import field, node
 
+from OpenGLContext.loaders import documentvalues
 from OpenGLContext.scenegraph.varied import Varied
 
-__all__ = ['PlanarReflector', 'WATER', 'WATER_DISTORTION']
+__all__ = ['PlanarReflector', 'LIMITS', 'WATER', 'WATER_DISTORTION']
+
+#: The range each numeric field is drawn within, ``(minimum, maximum)``, None
+#: where it is open. :meth:`PlanarReflector.bounded` reads a field through it,
+#: and the ``mirror`` hook reads a file's values through it.
+LIMITS: Dict[str, Tuple[Optional[float], Optional[float]]] = {
+    'scale': (0.05, 1.0),
+    'interval': (1, None),
+    'priority': (0.0, None),
+    'distortion': (0.0, 1.0),
+    'reflectance': (0.0, 1.0),
+}
 
 
 class PlanarReflector(Varied, node.Node):
@@ -75,6 +89,17 @@ class PlanarReflector(Varied, node.Node):
         'reflectance': {'label': 'Reflectance', 'minimum': 0.0, 'maximum': 1.0,
                         'step': 0.01},
     }
+
+    def bounded(self, name: str) -> float:
+        """Field ``name`` within :data:`LIMITS`, as the planner draws with it.
+
+        A value that is no finite number is the field's default, and one
+        outside its range is the nearer end, so a NaN an application wrote
+        costs the mirror its setting rather than the frame.
+        """
+        minimum, maximum = LIMITS[name]
+        default = getattr(type(self), name).defaultobj
+        return documentvalues.bounded(getattr(self, name), default, minimum, maximum)
 
 
 #: How far, in view widths, a unit of water's tilt from flat pushes its lookup.

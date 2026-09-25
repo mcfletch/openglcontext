@@ -510,3 +510,25 @@ def test_a_mirror_view_is_never_keyed_as_one_that_came_before_it():
         del view
     assert len(keys) == 200
     assert view_key(VIEW) == view_key(VIEW)
+
+
+# --- values code set on a reflector ----------------------------------------------
+
+@pytest.mark.parametrize('field, value', [
+    ('scale', float('nan')), ('scale', float('inf')), ('scale', -1.0),
+    ('interval', 0), ('interval', -5), ('priority', float('nan')),
+    ('distortion', float('nan')), ('reflectance', float('inf')),
+])
+def test_a_reflector_field_no_mirror_can_have_is_planned_within_bounds(field, value):
+    """An application writing NaN into a field gets a mirror drawn at the
+    field's default or bound, not a planner raising every frame."""
+    reflector = PlanarReflector(interval=3)
+    setattr(reflector, field, value)
+    record = _mirror(reflector=reflector)
+    frame = _frame([record])
+    plan = ReflectionPlanner().plan([frame], ATLAS, BIG)
+    draw, = plan.draws
+    lookup = plan.lookup(frame, record)
+    assert np.isfinite(lookup.distortion) and np.isfinite(lookup.reflectance)
+    assert 0.0 <= lookup.reflectance <= 1.0
+    assert draw.mirror.size[0] >= 8

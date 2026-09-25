@@ -57,6 +57,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 
+from OpenGLContext.loaders.documentvalues import DocumentValues
+
 log = logging.getLogger(__name__)
 
 __all__ = [
@@ -244,6 +246,9 @@ class HookContext:
     #: The dict that becomes :attr:`GLTFScene.hook_data`, keyed by kind.
     scene_data: Dict[str, Any]
     world_matrix: Any = None
+    #: What a hook reads its parameters through: each value a hook cannot use
+    #: is reported once for the whole document.
+    values: DocumentValues = field(default_factory=DocumentValues)
 
     # the material point
     primitive: Any = None
@@ -294,6 +299,7 @@ class HookRunner:
         self.resolver = resolver
         self.scene_data: Dict[str, Any] = {}
         self.on = enabled() if on is None else bool(on)
+        self.values = DocumentValues()
         self._unknown: set = set()
 
     def _bound(self, holder: Any) -> Optional[Tuple[HookTag, Registration]]:
@@ -322,7 +328,8 @@ class HookRunner:
     def _context(self, at: str, tag: HookTag, **named: Any) -> HookContext:
         return HookContext(at=at, kind=tag.kind, params=dict(tag.params),
                            document=self.document, resolver=self.resolver,
-                           scene_data=self.scene_data, **named)
+                           scene_data=self.scene_data, values=self.values,
+                           **named)
 
     def material(self, primitive: Any, material_def: Any, mesh: Any,
                  material: Any, shape: Any, bounds: Any,

@@ -146,3 +146,39 @@ def test_water_puts_a_reflector_on_its_material():
 
 def test_the_engines_water_material_reflects():
     assert water.water_material().reflector is WATER
+
+
+# --- values a file should not have given ----------------------------------------
+
+@pytest.mark.parametrize('params, name, expected', [
+    ({'interval': float('inf')}, 'interval', 3),
+    ({'interval': 1e999}, 'interval', 3),
+    ({'interval': 0}, 'interval', 1),
+    ({'interval': 2.5}, 'interval', 3),
+    ({'scale': 'nan'}, 'scale', 0.5),
+    ({'scale': float('nan')}, 'scale', 0.5),
+    ({'scale': 1e9}, 'scale', 1.0),
+    ({'scale': 0.0}, 'scale', 0.05),
+    ({'priority': -4.0}, 'priority', 0.0),
+    ({'distortion': float('-inf')}, 'distortion', 0.0),
+    ({'reflectance': 7.0}, 'reflectance', 1.0),
+    ({'replace': 'maybe'}, 'replace', False),
+])
+def test_a_value_no_mirror_can_have_is_its_default_or_its_bound(params, name, expected):
+    """One malformed number is a mirror at its default, not a load that fails
+    or a frame that fails every time the mirror is in view."""
+    from OpenGLContext.scenegraph.mirrorhooks import reflector_for
+    value = getattr(reflector_for(params), name)
+    if isinstance(expected, bool):
+        assert bool(value) is expected
+    else:
+        assert value == pytest.approx(expected)
+
+
+def test_an_infinite_interval_in_a_file_loads():
+    """``1e999`` in a JSON chunk is read as infinity."""
+    scene = _load(SceneNode(mesh=_quad({'kind': 'mirror', 'interval': 1e999,
+                                        'scale': float('nan')})))
+    reflector = _material_of(scene).reflector
+    assert reflector.interval == 3
+    assert reflector.scale == pytest.approx(0.5)

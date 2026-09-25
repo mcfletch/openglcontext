@@ -24,15 +24,18 @@ optional:
 
 ``scale``
     Resolution as a share of the mirror's rectangle on screen, each way.
-    Default 0.5.
+    Default 0.5, from 0.05 to 1.
 ``interval``
-    The most frames the reflection goes without being drawn again. Default 3.
+    The most frames the reflection goes without being drawn again. Default 3,
+    at least 1.
 ``priority``
     Weight against the other mirrors in view when the frame's budget is short.
-    Default 1.
+    Default 1, at least 0.
 ``distortion``
     View widths of offset per unit of the surface normal's tilt from the
-    plane: how far a normal map breaks the reflection up. Default 0.
+    plane: how far a normal map breaks the reflection up. Default 0, at most 1.
+``reflectance``
+    The share of the light the mirror reflects. Default 0.97, from 0 to 1.
 ``replace``
     Whether the surface shows only the reflection. False on a material, True
     on an object; either may say otherwise.
@@ -43,11 +46,12 @@ its plane by more than 1% of its size reports so and reflects the sky.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Iterator
+from typing import Any, Dict, Iterator, Optional
 
+from OpenGLContext.loaders.documentvalues import DocumentValues
 from OpenGLContext.loaders.gltf import hooks
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
-from OpenGLContext.scenegraph.reflector import PlanarReflector
+from OpenGLContext.scenegraph.reflector import LIMITS, PlanarReflector
 from OpenGLContext.scenegraph.shape import Shape
 
 log = logging.getLogger(__name__)
@@ -58,39 +62,43 @@ __all__ = ['KIND', 'PARAMETERS', 'reflector_for', 'hook_for', 'mirror_material',
 #: What a document names this hook.
 KIND = 'mirror'
 
-#: Each parameter a tag may give, and the type its value is read as.
+#: Each parameter a tag may give, and the type its value is read as. A
+#: number is held to :data:`~OpenGLContext.scenegraph.reflector.LIMITS`.
 PARAMETERS: Dict[str, type] = {
     'scale': float, 'interval': int, 'priority': float, 'distortion': float,
     'reflectance': float, 'replace': bool,
 }
 
 
-def reflector_for(params: Dict[str, Any], replace: bool = False) -> PlanarReflector:
+def reflector_for(params: Dict[str, Any], replace: bool = False,
+                  values: Optional[DocumentValues] = None) -> PlanarReflector:
     """The reflector a tag's parameters describe.
 
-    A value that cannot be read as its parameter's type is reported and left
-    at the default: a misspelling in a custom property is a model to load
-    rather than a file to refuse.
+    A value that cannot be read as its parameter's type, or is no finite
+    number, is reported and left at the default; one outside
+    :data:`~OpenGLContext.scenegraph.reflector.LIMITS` is reported and is the
+    nearer end of the range. A misspelling in a custom property is a model to
+    load rather than a file to refuse. ``values`` reports each problem once
+    for a whole load; without one, once for this call.
     """
-    values: Dict[str, Any] = {'replace': replace}
+    values = values if values is not None else DocumentValues(logger=log)
+    default = PlanarReflector()
+    found: Dict[str, Any] = {'replace': values.flag(
+        params.get('replace'), replace, 'the mirror replace')}
     for name, kind in PARAMETERS.items():
-        if name not in params:
+        if kind is bool:
             continue
-        raw = params[name]
-        try:
-            if kind is bool:
-                value: Any = raw if isinstance(raw, bool) else str(raw).strip().lower() in (
-                    '1', 'true', 'yes', 'on')
-            elif isinstance(raw, bool):
-                raise ValueError(raw)
-            else:
-                value = kind(float(raw)) if kind is int else kind(raw)
-        except (TypeError, ValueError):
-            log.warning('the mirror %s %r is not a number; it is left at its '
-                        'default', name, raw)
-            continue
-        values[name] = value
-    return PlanarReflector(**values)
+        minimum, maximum = LIMITS[name]
+        what = 'the mirror %s' % (name,)
+        if kind is int:
+            found[name] = values.integer(
+                params.get(name), getattr(default, name), what,
+                minimum=None if minimum is None else int(minimum),
+                maximum=None if maximum is None else int(maximum))
+        else:
+            found[name] = values.number(params.get(name), getattr(default, name),
+                                        what, minimum=minimum, maximum=maximum)
+    return PlanarReflector(**found)
 
 
 def hook_for(reflector: PlanarReflector) -> Dict[str, Any]:
@@ -128,9 +136,10 @@ def mirror_hook(ctx: "hooks.HookContext") -> None:
     """Make a tagged material or object a mirror, and leave it where it is."""
     if ctx.at == 'material':
         if not getattr(ctx.material, 'reflector', None):
-            ctx.material.reflector = reflector_for(ctx.params)
+            ctx.material.reflector = reflector_for(ctx.params, values=ctx.values)
         return None
-    material = mirror_material(reflector_for(ctx.params, replace=True))
+    material = mirror_material(reflector_for(ctx.params, replace=True,
+                                             values=ctx.values))
     for shape in _shapes(ctx.children):
         shape.appearance.material = material
         if hasattr(shape.geometry, 'material'):
