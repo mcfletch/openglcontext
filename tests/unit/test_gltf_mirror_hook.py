@@ -122,11 +122,12 @@ def test_an_object_mirror_takes_the_parameters_too():
 
 def test_a_material_reflector_round_trips_through_the_writer():
     mesh = _quad()
-    mesh.material.reflector = PlanarReflector(scale=0.75, interval=5, priority=2.0)
+    mesh.material.reflector = PlanarReflector(scale=0.75, interval=5, priority=2.0,
+                                              reflectance=0.85)
     material = _material_of(_load(SceneNode(mesh=mesh)))
     reflector = material.reflector
-    assert (reflector.scale, reflector.interval, reflector.priority) == \
-        pytest.approx((0.75, 5, 2.0))
+    assert (reflector.scale, reflector.interval, reflector.priority,
+            reflector.reflectance) == pytest.approx((0.75, 5, 2.0, 0.85))
 
 
 def test_a_disabled_reflector_is_not_written():
