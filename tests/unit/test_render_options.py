@@ -8,8 +8,19 @@ pin one from the shell.
 """
 
 
+import pathlib
+import re
+
+from vrml import protofunctions
+
 from OpenGLContext import renderoptions
 from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.passes import bloom, flatcore, ibl
+from OpenGLContext.passes.flatcore import FlatPass
+from OpenGLContext.passes.flateffects import _FlatEffectsMixin as FlatEffectsMixin
+from OpenGLContext.passes.pbrpass import PBRPass
+from OpenGLContext.passes.shadowpool import _CascadeControllerMixin
+from OpenGLContext.scenegraph import tessellationlod
 
 
 class FakeContext:
@@ -88,14 +99,12 @@ class TestDefaults:
 
 class TestPassesHonourTheFields:
     def test_a_pass_reads_shadows_from_the_definition(self):
-        from OpenGLContext.passes.flatcore import FlatPass
         render = FlatPass.__new__(FlatPass)
         render.context = FakeContext(ContextDefinition(shadows=False))
         assert not render.use_shadows
 
     def test_an_explicit_assignment_still_wins(self):
         """A test or a demo that turns shadows off on one pass keeps working."""
-        from OpenGLContext.passes.flatcore import FlatPass
         render = FlatPass.__new__(FlatPass)
         render.context = FakeContext(ContextDefinition(shadows=True))
         render.use_shadows = False
@@ -108,7 +117,6 @@ class TestPassesHonourTheFields:
         module, a demo staging its next model -- must not silently flip a live
         pass; the field is the thing that is meant to change at runtime.
         """
-        from OpenGLContext.passes.flatcore import FlatPass
         monkeypatch.setenv('OPENGLCONTEXT_SHADOWS', '0')
         render = FlatPass.__new__(FlatPass)
         render.context = FakeContext(ContextDefinition())
@@ -117,7 +125,6 @@ class TestPassesHonourTheFields:
         assert not render.use_shadows
 
     def test_the_field_still_outranks_a_settled_environment(self, monkeypatch):
-        from OpenGLContext.passes.flatcore import FlatPass
         monkeypatch.setenv('OPENGLCONTEXT_SHADOWS', '0')
         definition = ContextDefinition()
         render = FlatPass.__new__(FlatPass)
@@ -127,67 +134,56 @@ class TestPassesHonourTheFields:
         assert render.use_shadows
 
     def test_soft_shadows_come_from_the_definition(self):
-        from OpenGLContext.passes.flatcore import FlatPass
         render = FlatPass.__new__(FlatPass)
         render.context = FakeContext(ContextDefinition(shadowsSoft=True))
         assert render.shadow_soft
 
     def test_instancing_comes_from_the_definition(self):
-        from OpenGLContext.passes.flatcore import FlatPass
         render = FlatPass.__new__(FlatPass)
         render.context = FakeContext(ContextDefinition(instancing=False))
         assert not render.instancing_enabled
 
     def test_the_light_limit_comes_from_the_definition(self):
-        from OpenGLContext.passes.flatcore import FlatPass
         render = FlatPass.__new__(FlatPass)
         render.context = FakeContext(ContextDefinition(maximumLights=2))
         assert render.maxLights(8) == 2
 
     def test_the_light_limit_never_exceeds_what_the_shader_has(self):
-        from OpenGLContext.passes.flatcore import FlatPass
         render = FlatPass.__new__(FlatPass)
         render.context = FakeContext(ContextDefinition(maximumLights=64))
         assert render.maxLights(8) == 8
 
     def test_zero_lights_means_no_lights_at_all(self):
-        from OpenGLContext.passes.flatcore import FlatPass
         render = FlatPass.__new__(FlatPass)
         render.context = FakeContext(ContextDefinition(maximumLights=0))
         assert render.maxLights(8) == 0
 
     def test_the_pbr_pass_reads_instancing_from_the_definition(self):
-        from OpenGLContext.passes.pbrpass import PBRPass
         render = PBRPass.__new__(PBRPass)
         render.context = FakeContext(ContextDefinition(instancing=False))
         assert not render.instancing_enabled
 
     def test_the_pbr_pass_reads_the_light_limit_from_the_definition(self):
-        from OpenGLContext.passes.pbrpass import PBRPass
         render = PBRPass.__new__(PBRPass)
         render.context = FakeContext(ContextDefinition(maximumLights=3))
         assert render.maxLights(8) == 3
 
     def test_transmission_can_be_turned_off_from_the_definition(self):
-        from OpenGLContext.passes.flateffects import _FlatEffectsMixin as FlatEffectsMixin
         render = FlatEffectsMixin.__new__(FlatEffectsMixin)
         render.context = FakeContext(ContextDefinition(transmission='off'))
-        render._transmission_mode = None
-        render._gl_renderer = 'NVIDIA'
+        render._transmission_mode = None  # noqa: SLF001 clears the pass's memo so the definition decides
+        render._gl_renderer = 'NVIDIA'  # noqa: SLF001 stands in for the renderer string a GL context would report
         assert render.transmissionMode() == 'off'
 
     def test_ibl_can_be_pinned_from_the_definition(self):
-        from OpenGLContext.passes import ibl
         assert ibl.resolve_ibl_mode('NVIDIA', probe=lambda: True,
                                     requested='analytic') == 'analytic'
 
     def test_ibl_auto_still_probes(self):
-        from OpenGLContext.passes import ibl
         assert ibl.resolve_ibl_mode('llvmpipe', probe=lambda: True,
                                     requested='auto') == 'analytic'
 
     def test_bloom_can_be_turned_on_from_the_definition(self):
-        from OpenGLContext.passes import bloom
         assert bloom.bloom_enabled(FakePass(ContextDefinition(bloom=True)))
 
     def test_bloom_stays_off_by_default(self):
@@ -196,7 +192,6 @@ class TestPassesHonourTheFields:
         ).bloom_enabled(FakePass(ContextDefinition()))
 
     def test_tessellation_lod_can_be_turned_off_from_the_definition(self):
-        from OpenGLContext.scenegraph import tessellationlod
 
         class Mode:
             context = FakeContext(ContextDefinition(tessellationLOD=False))
@@ -204,7 +199,6 @@ class TestPassesHonourTheFields:
         assert not tessellationlod.lod_enabled(Mode())
 
     def test_the_shadow_cascade_count_can_be_pinned_from_the_definition(self):
-        from OpenGLContext.passes.shadowpool import _CascadeControllerMixin
 
         class Program:
             MAX_CASCADES = 4
@@ -212,7 +206,7 @@ class TestPassesHonourTheFields:
         render = _CascadeControllerMixin.__new__(_CascadeControllerMixin)
         render.context = FakeContext(ContextDefinition(shadowCascades=2))
         render.shader_program = Program()
-        assert render._effectiveCascades() == 2
+        assert render._effectiveCascades() == 2  # noqa: SLF001 the cascade count the pass settles on has no public reader
 
 
 class TestEnvironmentIsReadOnceAndOnlyOnce:
@@ -251,7 +245,6 @@ class TestEnvironmentIsReadOnceAndOnlyOnce:
     def test_instancing_does_not_re_read_the_environment_each_frame(
             self, monkeypatch):
         """The property said one thing and the helper beside it did another."""
-        from OpenGLContext.passes import flatcore
         renderoptions.reset_env_cache()
         monkeypatch.setenv('OPENGLCONTEXT_INSTANCING', '1')
         flat = flatcore.FlatPass.__new__(flatcore.FlatPass)
@@ -261,7 +254,6 @@ class TestEnvironmentIsReadOnceAndOnlyOnce:
 
     def test_the_instance_minimum_is_not_frozen_at_import(self, monkeypatch):
         """Read at import, ``monkeypatch.setenv`` could never reach it."""
-        from OpenGLContext.passes import flatcore
         renderoptions.reset_env_cache()
         monkeypatch.setenv('OPENGLCONTEXT_INSTANCE_MIN', '7')
         flat = flatcore.FlatPass.__new__(flatcore.FlatPass)
@@ -323,7 +315,6 @@ class TestEveryHintReachesTheScreen:
         assert not unreachable, sorted(unreachable)
 
     def test_every_hint_names_a_field_that_exists(self):
-        from vrml import protofunctions
         definition = ContextDefinition()
         for name in ContextDefinition.UI_HINTS:
             assert protofunctions.getField(definition, name) is not None, name
@@ -374,8 +365,6 @@ class TestACleanRenderingEnvironment:
 
     def test_every_variable_the_package_reads_is_listed(self):
         """The next one added is exactly the one nobody would think to clear."""
-        import pathlib
-        import re
         root = pathlib.Path(renderoptions.__file__).parent
         seen = set()
         for path in root.rglob('*.py'):

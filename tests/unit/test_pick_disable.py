@@ -36,23 +36,23 @@ class _StubContext:
 
 class TestPickingDefault:
     def test_enabled_by_default(self):
-        assert cd._get_default_picking() is True
+        assert cd._get_default_picking() is True  # noqa: SLF001 the pickEnabled field's default, which the environment sets
         assert bool(cd.ContextDefinition().pickEnabled) is True
 
     def test_env_disables(self, monkeypatch):
         for v in ('0', 'off', 'false', 'no', 'none'):
             monkeypatch.setenv('OPENGLCONTEXT_PICKING', v)
-            assert cd._get_default_picking() is False, v
+            assert cd._get_default_picking() is False, v  # noqa: SLF001 the pickEnabled field's default, which the environment sets
 
     def test_a_blank_variable_is_the_default(self, monkeypatch):
         """What an unexported shell variable expands to: the same as unset."""
         monkeypatch.setenv('OPENGLCONTEXT_PICKING', '')
-        assert cd._get_default_picking() is True
+        assert cd._get_default_picking() is True  # noqa: SLF001 the pickEnabled field's default, which the environment sets
 
     def test_env_enables(self, monkeypatch):
         for v in ('1', 'on', 'true', 'yes'):
             monkeypatch.setenv('OPENGLCONTEXT_PICKING', v)
-            assert cd._get_default_picking() is True, v
+            assert cd._get_default_picking() is True, v  # noqa: SLF001 the pickEnabled field's default, which the environment sets
 
     def test_field_settable(self):
         d = cd.ContextDefinition()

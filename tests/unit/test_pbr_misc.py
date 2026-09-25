@@ -55,7 +55,7 @@ class TestNamedConstants:
 
 class TestDrawUncachedFencedOut:
     def test_production_node_has_no_test_draw_path(self):
-        assert not hasattr(pbrmesh._MeshGPU, 'draw_uncached')
+        assert not hasattr(pbrmesh._MeshGPU, 'draw_uncached')  # noqa: SLF001 the GPU record a PBRMesh draws through is what must carry no test path
 
 
 if __name__ == '__main__':
