@@ -333,6 +333,11 @@ markers = [
     "serial: marks tests that need a quiet machine (no concurrent GPU/CPU load); wall-clock timing checks whose ratio compresses under load. Run them alone with '-m serial' after a '-m \"not serial\"' bulk pass.",
 ]
 
+# The OGC rules (openglcontext-checks) this project is clean of, held by the
+# workspace preflight. A rule joins the list once the engine is clean of it.
+[tool.openglcontext-checks]
+select = ["OGC131", "OGC141", "OGC161", "OGC201", "OGC221", "OGC222", "OGC223"]
+
 # The modules the test rules (OGC221 to OGC223) read: the unit tests and the
 # modules beside them that they import, and the pytest modules of tests/.
 # The other scripts in tests/ are the demos and tutorials the visual suite

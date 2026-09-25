@@ -380,3 +380,36 @@ class TestAFontsDisplayListsAreHeldPerContext:
         assert not glIsList(made)
         again, _metrics = font.getChar('a')
         assert glIsList(again)
+
+
+class TestADisplayListIsDeletedInItsOwnContext:
+    """A display list is a name in the context current when it was made."""
+
+    def test_a_collected_list_leaves_the_current_context_s_lists_alone(
+            self, two_compatible_contexts):
+        import gc
+        from OpenGL.GL import glGenLists, glIsList
+        from OpenGLContext.displaylist import DisplayList
+        first, second, current = two_compatible_contexts
+        current(first)
+        mine = DisplayList()
+        made = mine.list
+        current(second)
+        theirs = int(glGenLists(1))
+        del mine
+        gc.collect()
+        assert glIsList(theirs), 'a list of the context current at collection was deleted'
+        current(first)
+        assert glIsList(made)
+        fresh = DisplayList()       # making a list here deletes the collected one
+        # GL may hand the freed name straight back to the new list.
+        assert fresh.list == made or not glIsList(made)
+
+    def test_a_lost_context_takes_its_lists(self, two_compatible_contexts):
+        from OpenGL.GL import glIsList
+        from OpenGLContext.displaylist import DisplayList
+        first, _second, current = two_compatible_contexts
+        current(first)
+        kept = DisplayList()
+        contextresources.context_lost()
+        assert not glIsList(kept.list)

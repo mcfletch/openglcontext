@@ -1,17 +1,29 @@
 """Holder for a single display-list"""
-from typing import Any, Optional
+from typing import Optional
 
 from OpenGL.GL import *
+
+from OpenGLContext import contextresources
+
+#: Every display list's name, by the context that made it: a collected
+#: holder's list is deleted the next time that context makes a list, and a
+#: context that is torn down takes its lists with it.
+_LISTS = contextresources.ContextNames(
+    '_contextLists', lambda name: glDeleteLists(name, 1))
+
 
 class DisplayList( object ):
     """Holder for an OpenGL compiled display list
 
-    This object holds onto a display list until the
-    object is deleted.  It provides start and end
-    methods for the list-definition phase and a
-    default call method for execution.
+    This object holds onto a display list until the object is collected.  It
+    provides start and end methods for the list-definition phase and a default
+    call method for execution.
+
+    The list is a name in the context current when the holder is made, and is
+    deleted there: once the holder is collected, the next time that context
+    makes a list, or when the context is torn down.
     """
-    __slots__ = ('list','__weakref__')
+    __slots__ = ('list', '_contextLists', '__weakref__')
 
     #: The list's GL name, or None once it has been released.
     list: Optional[int]
@@ -22,9 +34,12 @@ class DisplayList( object ):
         See:
             glGenLists
         """
+        lists = _LISTS.entries(self)
         self.list = glGenLists (1)
         if self.list == 0:
             raise RuntimeError( """Unable to generate a new display-list, context may not support display lists""")
+        if lists is not None:
+            lists['list'] = self.list
     def start( self, mode: int = GL_COMPILE ) -> None:
         """Start defining the display-list
 
@@ -52,28 +67,3 @@ class DisplayList( object ):
         if self.list is None:
             raise RuntimeError( """Display list has already been released""" )
         glCallList( self.list )
-    def __del__( self, glDeleteLists: Any = glDeleteLists ) -> None:
-        """Release the display-list, if there is still a context holding it.
-
-        A display list outlives its context whenever the window closes before the
-        garbage collector runs -- at interpreter shutdown, or in a test that
-        renders into a context it then destroys. ``glDeleteLists`` against a dead
-        or absent context raises ``GL_INVALID_OPERATION``, and an exception from
-        ``__del__`` cannot propagate: Python prints it to stderr and continues.
-        There is nothing to release in that case (the context took its lists with
-        it), so the error is genuinely nothing to report -- but it must be caught
-        here rather than left to surface as unraisable noise.
-
-        See:
-            glDeleteLists
-        """
-        try:
-            if self.list is not None:
-                glDeleteLists( self.list, 1 )
-            self.list = None
-        except AttributeError:
-            # Interpreter shutdown has already torn the module's globals down.
-            pass
-        except Exception:
-            # No current context, or one that no longer knows this list.
-            self.list = None
