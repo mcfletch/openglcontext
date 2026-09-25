@@ -129,9 +129,12 @@ class TestTheFreeFlyStepFollowsTheSceneToo:
         assert viewer.movementManager.STEPDISTANCE == pytest.approx(25.0)
 
     def test_no_manager_yet_is_not_an_error(self):
-        viewer = _viewer(radius=100.0)
+        """The modes are scaled now; the free-fly step waits for its manager."""
+        viewer = _viewer(radius=MOVEMENT_REFERENCE_RADIUS * 100)
         viewer.declareMovementModes()
         viewer.scaleMovementSpeeds()          # nothing bound yet: mounts first
+        assert viewer.movementManager is None
+        assert _speeds(viewer)['fly'].flySpeed == pytest.approx(FLY_SPEED * 100)
 
 
 def test_a_manager_bound_after_the_scene_is_scaled_when_it_arrives():

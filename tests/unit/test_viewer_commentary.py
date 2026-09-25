@@ -60,9 +60,14 @@ class TestSay:
         assert stream.buffer.getvalue()          # without a flush of our own
 
     def test_no_stdout_at_all_is_not_an_error(self, monkeypatch):
-        """A frozen bundle built without a console has ``sys.stdout`` of None."""
+        """A frozen bundle built without a console has ``sys.stdout`` of None.
+
+        The line is dropped, not moved to stderr in its place."""
+        other = _console()
         monkeypatch.setattr(sys, 'stdout', None)
-        commentary.say('Loading something ...\n')
+        monkeypatch.setattr(sys, 'stderr', other)
+        assert commentary.say('Loading something ...\n') is None
+        assert _written(other) == ''
 
     def test_it_is_written_to_whatever_stdout_is_at_the_time(self, monkeypatch):
         """Captured output, a log window, a pipe -- the stream is looked up per
@@ -103,8 +108,12 @@ class TestWarn:
         assert '\\u2764' in written        # and not this one
 
     def test_no_stderr_at_all_is_not_an_error(self, monkeypatch):
+        """The warning is dropped, not mixed into what stdout carries."""
+        other = _console()
         monkeypatch.setattr(sys, 'stderr', None)
-        commentary.warn('ERROR: something\n')
+        monkeypatch.setattr(sys, 'stdout', other)
+        assert commentary.warn('ERROR: something\n') is None
+        assert _written(other) == ''
 
 
 class TestTheViewerSaysThingsThroughIt:

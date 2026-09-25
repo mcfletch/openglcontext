@@ -239,7 +239,15 @@ class TestTheBrowseScreen:
 
     def test_it_lays_out(self, library, metrics):
         """A tree that cannot be measured is a screen that cannot be shown."""
-        menu.browse_screen(library).layout((1280, 720), metrics)
+        panel = menu.browse_screen(library)
+        panel.layout((1280, 720), metrics)
+        assert not panel.rect.empty
+        assert panel.rect.x >= 0 and panel.rect.y >= 0
+        assert panel.rect.right <= 1280 and panel.rect.top <= 720
+        for name in ('entry', 'open', 'cancel'):
+            placed = panel.find(name).rect
+            assert not placed.empty, name
+            assert panel.rect.x <= placed.x and placed.right <= panel.rect.right, name
 
 
 class TestManyEntries:
@@ -258,8 +266,14 @@ class TestManyEntries:
         panel.layout((1280, 720), metrics)
         assert len(panel.find('entry').visible()) <= menu.SHOWN
 
-    def test_it_lays_out_as_fast_with_three_hundred_as_with_three(self, big, metrics):
-        menu.browse_screen(big).layout((1280, 720), metrics)
+    def test_it_lays_out_the_same_widgets_with_three_hundred_as_with_three(
+            self, big, library, metrics):
+        """The band is one widget however many entries it holds, so the layout
+        of a large shelf costs what the layout of a small one does."""
+        large, small = menu.browse_screen(big), menu.browse_screen(library)
+        large.layout((1280, 720), metrics)
+        small.layout((1280, 720), metrics)
+        assert len(list(large.walk())) == len(list(small.walk()))
 
     def test_a_page_at_a_time_is_offered(self, big):
         """Two hundred presses of an arrow key is not browsing."""

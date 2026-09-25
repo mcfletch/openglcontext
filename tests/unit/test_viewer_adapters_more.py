@@ -152,7 +152,10 @@ class TestTheTilesAdapter:
 
     def test_shutting_down_before_loading_is_harmless(self):
         from OpenGLContext.viewer.adapters.tiles import TilesAdapter
-        TilesAdapter().shutdown()
+        adapter = TilesAdapter()
+        adapter.shutdown()
+        assert adapter.terrain is None
+        assert adapter.update(_Viewer()) is False     # still answers as unloaded
 
 
 class TestAimingAtRealGeometry:
@@ -276,7 +279,10 @@ class TestTuningAStream:
         """The viewer offers its options to whichever adapter it picked."""
         from OpenGLContext.viewer.adapters.gltf import GLTFAdapter
         from OpenGLContext.viewer.options import ViewerOptions
-        GLTFAdapter().configure(ViewerOptions())
+        adapter = GLTFAdapter()
+        before = dict(vars(adapter))
+        adapter.configure(ViewerOptions(sse=4.0, memory=128))
+        assert vars(adapter) == before
 
 
 class _Viewer:

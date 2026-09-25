@@ -195,7 +195,15 @@ class TestTheDefaultHooks:
             AsyncSceneMixin().applyFailedLoad(None)
 
     def test_the_loading_label_hook_is_optional(self):
-        AsyncSceneMixin().onSceneLoading('anything')
+        """A host without its own label hook still loads what it asked for."""
+        class _Unlabelled(_Host):
+            onSceneLoading = AsyncSceneMixin.onSceneLoading
+
+        host = _Unlabelled()
+        host.requestScene(lambda: 'SCENE', 'Loading Duck ...')
+        assert _settled(host)
+        assert host.applied == ['SCENE'] and host.failures == []
+        assert host.labels == []
 
 
 class _RecordedHost(_Host):
