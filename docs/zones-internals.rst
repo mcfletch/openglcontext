@@ -212,6 +212,13 @@ mirror was drawn for its camera. After the sixth face the cube is mip-mapped
 and ``IBLProbe.convolve`` fills the zone's layer with the same irradiance and
 prefilter programs the scene's probe uses.
 
+A capture that raises while it is drawn is logged once with its traceback,
+and that zone is given no more captures (``CaptureSchedule.failed``); the
+other zones' layers are kept. A zone whose whole cube the probe refuses
+``ATTEMPTS`` (3) times is given up the same way, with a warning. Either way
+the zone reads the scene's environment until the probes are lost and made
+again, when every zone is captured afresh.
+
 While a zone is being captured for the first time, its own layer reads
 ``NO_ENVIRONMENT`` (probe index -2), so the first capture holds the direct
 light and what is seen through the zone's openings. Outside a capture, a zone

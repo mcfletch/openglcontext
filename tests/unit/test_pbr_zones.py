@@ -745,6 +745,131 @@ class TestOneZoneMoving:
                 assert reach.stack[0][0].zone is zoned.zones[4].zone
 
 
+class CaptureProbe(ImageProbe):
+    """A probe arrays of captures go into; ``takes`` says whether it takes one."""
+
+    ENV_SIZE = 4
+
+    def __init__(self, takes=True):
+        super().__init__()
+        self.takes, self.convolved = takes, []
+
+    def convolve(self, cube, layer):
+        self.convolved.append(layer)
+        return self.takes
+
+
+class CaptureTarget:
+    """Where the faces go, and whether each stretch of them ended a whole cube."""
+
+    size, cube = 4, 1
+
+    def __init__(self):
+        self.begun, self.ended = 0, []
+
+    def begin(self):
+        self.begun += 1
+
+    def face(self, face):
+        pass
+
+    def end(self, whole):
+        self.ended.append(whole)
+
+    def release(self):
+        self.released = True
+
+
+class CapturingPass(ZonedPass):
+    """A pass with one capturing room, drawing its captures into nothing."""
+
+    def __init__(self, probe, draw=None):
+        self.room = Zone(size=(10, 10, 10), settings=[ZoneEnvironment(capture=True)])
+        super().__init__([(self.room, at(0))])
+        self._ibl_probe = probe
+        self._captureTarget = CaptureTarget()
+        self.activeFrame = type('Frame', (), {'view': None, 'camera': None,
+                                              'modelView': at(50)})()
+        self.drawn = draw or (lambda records: None)
+        self.shader_program = type('Program', (), {
+            'use': lambda self, lit=True: None,
+            'set_hdr_output': lambda self, on: None})()
+
+    def frameGather(self):
+        return None
+
+    def applyViewFrame(self, frame, gl=True):
+        pass
+
+    def renderSet(self, matrix, gathered=None):
+        return []
+
+    def currentBackground(self):
+        return None
+
+    def setupViewLighting(self, view, lighting, fitted=True):
+        pass
+
+    def shaderRenderOpaque(self, records, id_map=None):
+        self.drawn(records)
+
+    def clearPlanarReflection(self):
+        pass
+
+    def frames(self, count):
+        """Draw ``count`` frames' shares of the captures, asking for the room's layer."""
+        lighting = ('full', self._ibl_probe)
+        for _frame in range(count):
+            self.renderZoneProbes([], lighting)
+            self.zoneProbeLayer(self.placeZones()[0])
+
+
+class TestCaptures:
+    def test_a_cube_is_mip_mapped_only_when_its_last_face_is_drawn(self, monkeypatch):
+        monkeypatch.setenv('OPENGLCONTEXT_ZONE_CAPTURE_FACES', '2')
+        zoned = CapturingPass(CaptureProbe())
+        zoned.frames(4)
+        assert zoned._captureTarget.ended == [False, False, True]
+        assert zoned._ibl_probe.convolved == [1]
+
+    def test_a_failed_capture_is_not_drawn_again_and_the_others_are_kept(self, caplog):
+        def broken(records):
+            raise RuntimeError('no program')
+        zoned = CapturingPass(CaptureProbe(), draw=broken)
+        with caplog.at_level('ERROR', logger='OpenGLContext.passes.zonepass'):
+            zoned.frames(5)
+        assert zoned._captureTarget.begun == 1
+        assert zoned._captureTarget.ended == [False]
+        assert zoned._zoneCaptures is not None and zoned._zoneCaptures.given_up(zoned.room)
+        failures = [r for r in caplog.records if 'capture failed' in r.getMessage()]
+        assert len(failures) == 1 and failures[0].exc_info is not None
+        assert zoned.zoneProbeLayer(zoned.zones[0]) == -1.0
+
+    def test_a_probe_that_will_not_take_a_capture_stops_being_asked(self, caplog):
+        from OpenGLContext.passes.zoneprobes import ATTEMPTS
+        zoned = CapturingPass(CaptureProbe(takes=False))
+        with caplog.at_level('WARNING', logger='OpenGLContext.passes.zonepass'):
+            zoned.frames(ATTEMPTS + 5)
+        assert zoned._ibl_probe.convolved == [1] * ATTEMPTS
+        assert len([r for r in caplog.records if 'did not take' in r.getMessage()]) == 1
+
+    def test_the_capture_target_goes_with_the_passs_gl_objects(self):
+        zoned = CapturingPass(CaptureProbe())
+        target = zoned._captureTarget
+        zoned.disposeResources()
+        assert target.released and zoned._captureTarget is None
+
+    def test_a_zone_given_up_is_captured_again_once_the_probes_are_lost(self):
+        def broken(records):
+            raise RuntimeError('no program')
+        zoned = CapturingPass(CaptureProbe(), draw=broken)
+        zoned.frames(2)
+        zoned.drawn = lambda records: None
+        zoned._ibl_probe.lost += 1
+        zoned.frames(3)
+        assert zoned._ibl_probe.convolved
+
+
 class TestPassState:
     def test_no_state_is_shared_between_passes_through_the_class(self):
         for name, value in vars(ZonesMixin).items():

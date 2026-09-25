@@ -25,6 +25,9 @@ business and has no GL in it:
 * At most one zone is captured in a frame, the nearest to the camera first,
   and :data:`FACES_PER_FRAME` limits how many of its faces are drawn in one
   frame, so a scene arriving with many zones spreads the work over frames.
+* A zone whose capture fails to draw, or whose whole cube the probe refuses
+  :data:`ATTEMPTS` times, is asked for no more captures until the probes are
+  lost, and reads the scene's environment meanwhile.
 
 :class:`CaptureTarget` is the GL side: the cube the faces are drawn into and
 the depth buffer they share.
@@ -53,7 +56,7 @@ from OpenGL.GL import (
 
 log = logging.getLogger(__name__)
 
-__all__ = ['BOUNCES', 'FACES_PER_FRAME', 'CaptureSchedule', 'CaptureTarget']
+__all__ = ['ATTEMPTS', 'BOUNCES', 'FACES_PER_FRAME', 'CaptureSchedule', 'CaptureTarget']
 
 #: How many times a zone is captured when it is first needed. Each capture
 #: after the first sees the zone lit by the one before, one bounce more.
@@ -65,6 +68,10 @@ BOUNCES = 2
 #: ``OPENGLCONTEXT_ZONE_CAPTURE_FACES`` overrides it.
 FACES_PER_FRAME = 6
 
+#: How many whole cubes of one zone the probe may refuse to take into its
+#: layer before the zone is given up until the probes are lost.
+ATTEMPTS = 3
+
 
 @dataclass
 class _Capture:
@@ -75,6 +82,9 @@ class _Capture:
     wanted: int = 0
     inside: bool = False
     face: int = 0
+    #: Whole cubes the probe would not take, and whether the zone was given up.
+    refused: int = 0
+    failed: bool = False
 
 
 class CaptureSchedule:
@@ -159,7 +169,7 @@ class CaptureSchedule:
     def camera_inside(self, key: Hashable) -> None:
         """The camera is inside ``key``'s zone: capture it again, once."""
         capture = self._captures.get(key)
-        if capture is None or capture.inside:
+        if capture is None or capture.inside or capture.failed:
             return
         capture.inside = True
         capture.wanted = max(capture.wanted, 1)
@@ -172,11 +182,38 @@ class CaptureSchedule:
         self._free.sort()
 
     def lost(self) -> None:
-        """Every probe past the scene's was lost: capture each again."""
+        """Every probe past the scene's was lost: capture each again, those given up too."""
         for capture in self._captures.values():
             capture.done = 0
             capture.face = 0
             capture.wanted = self.bounces
+            capture.refused = 0
+            capture.failed = False
+
+    def failed(self, key: Hashable) -> None:
+        """Drawing ``key``'s capture failed: ask for none of it until :meth:`lost`."""
+        capture = self._captures[key]
+        capture.wanted = 0
+        capture.face = 0
+        capture.failed = True
+
+    def refused(self, key: Hashable) -> bool:
+        """The probe would not take ``key``'s whole cube into its layer.
+
+        Returns whether the zone is given up, which it is once this has
+        happened :data:`ATTEMPTS` times; until then the capture is drawn again.
+        """
+        capture = self._captures[key]
+        capture.refused += 1
+        if capture.refused < ATTEMPTS:
+            return False
+        self.failed(key)
+        return True
+
+    def given_up(self, key: Hashable) -> bool:
+        """Whether ``key``'s captures were given up after a failure."""
+        capture = self._captures.get(key)
+        return capture is not None and capture.failed
 
     def next(self, nearness: Callable[[Hashable], float]) -> Optional[Hashable]:
         """The zone to capture now, the nearest by ``nearness`` first, or None.

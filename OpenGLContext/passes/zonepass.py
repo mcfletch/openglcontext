@@ -827,8 +827,19 @@ class ZonesMixin(PassResources):
                 self._probeVersion += 1
             self._probeVersion += 1
         faces = schedule.faces(key, self.zoneCaptureFaces())
-        whole = self._drawCapture(zone, faces, frames, lighting)
-        if whole is None:
+        whole = bool(faces) and faces[-1] == 5
+        name = getattr(zone.zone, 'DEF', None) or 'unnamed'
+        try:
+            drawn = self._drawCapture(zone, faces, frames, lighting, whole)
+        except Exception:
+            # One zone's capture failing leaves the others' probes, and the
+            # zone reads the scene's environment until the probes are lost.
+            log.exception('zone %r capture failed; it is lit by the scene\'s '
+                          'environment until the probes are made again', name)
+            schedule.failed(key)
+            self._probeVersion += 1
+            return
+        if not drawn:
             return
         if schedule.drawn(key, len(faces)):
             layer = schedule.layer_of(key)
@@ -838,8 +849,11 @@ class ZonesMixin(PassResources):
                 schedule.finished(key)
                 self._probeVersion += 1
                 log.info('zone %r captured into probe layer %d (capture %d)',
-                         getattr(zone.zone, 'DEF', None) or key, layer,
-                         schedule.captured(key))
+                         name, layer, schedule.captured(key))
+            elif schedule.refused(key):
+                log.warning('zone %r: the probe did not take its capture into '
+                            'layer %s; it is lit by the scene\'s environment '
+                            'until the probes are made again', name, layer)
         # The frame after this one draws what was captured, and the next
         # capture if one is waiting.
         self._askForFrame()
@@ -876,17 +890,22 @@ class ZonesMixin(PassResources):
             return None
 
     def _drawCapture(self, zone: PlacedZone, faces: Sequence[int],
-                     frames: Sequence[Any], lighting: Any) -> Optional[bool]:
-        """Draw ``faces`` of ``zone``'s cube; None where nothing could be drawn."""
+                     frames: Sequence[Any], lighting: Any, whole: bool) -> bool:
+        """Draw ``faces`` of ``zone``'s cube; False where there was nothing to draw from.
+
+        ``whole`` says these faces finish the cube, whose mips are then made
+        once the last is drawn. What drawing raises is raised, with the
+        caller's target, view and program put back.
+        """
         from OpenGLContext import frustum as frustummodule
         from OpenGLContext.multiview.strategy import ViewFrame
         from OpenGLContext.passes import shadowmath
         from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-        gathered = self.frameGather()
         template = self.activeFrame if self.activeFrame is not None else (frames[0] if frames else None)
         shader = self.shader_program
         if template is None or shader is None:
-            return None
+            return False
+        gathered = self.frameGather()
         probe = self._ibl_probe
         target = self._captureTarget
         if target is None or target.size != probe.ENV_SIZE:
@@ -901,11 +920,12 @@ class ZonesMixin(PassResources):
         # A capture is seen from somewhere no mirror was drawn for, so the
         # mirrors in it show the probe rather than another view's reflection.
         lookups = getattr(self, '_reflection_lookups', None)
-        self._reflection_lookups = {}
-        self._zoneCapturing = zone.zone
-        self._probeVersion += 1
+        completed = False
         target.begin()
         try:
+            self._reflection_lookups = {}
+            self._zoneCapturing = zone.zone
+            self._probeVersion += 1
             for face in faces:
                 view = shadowmath.cube_face_view(centre, face)
                 modelproj = np.dot(view, projection)
@@ -924,13 +944,9 @@ class ZonesMixin(PassResources):
                 shader.set_hdr_output(True)
                 PBRMesh.reset_draw_state(self)
                 self.shaderRenderOpaque(records, None)
-            return True
-        except Exception as err:
-            log.error('zone capture failed: %s', err)
-            self._zoneCaptures = None
-            return None
+            completed = True
         finally:
-            target.end(whole=True)
+            target.end(whole=whole and completed)
             PBRMesh.reset_draw_state(self)
             shader.use(lit=True)
             shader.set_hdr_output(bool(getattr(self, '_bloom_active', False)))
@@ -940,6 +956,7 @@ class ZonesMixin(PassResources):
             self.clearPlanarReflection()
             if active is not None:
                 self.applyViewFrame(active, gl=False)
+        return True
 
     @staticmethod
     def _captureDepth(template: Any) -> Tuple[float, float]:
