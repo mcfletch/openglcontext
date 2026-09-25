@@ -4,7 +4,7 @@
 Streams every model in the KhronosGroup/glTF-Sample-Models 2.0 catalogue and shows
 it with the shared ``oglc-gltf`` viewer's PBR scene/lighting/framing, adding only what
 is specific to browsing: catalogue navigation and the reference-screenshot thumbnail
-overlaid top-right so a rendering can be compared against the reference.
+overlaid top-right so a rendering can be compared against the reference::
 
     n / Page Down   next model
     p / Page Up     previous model

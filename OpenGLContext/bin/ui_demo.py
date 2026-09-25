@@ -1,10 +1,10 @@
 #! /usr/bin/env python
 """Overlay UI demonstration: the settings screen, the console and a skin.
 
-Run it and press the keys it prints:
+Run it and press the keys it prints::
 
-    oglc-ui                 # the default flat skin
-    oglc-ui --skin          # the same screens, painted with nine-slice artwork
+    oglc-ui-demo            # the default flat skin
+    oglc-ui-demo --skin     # the same screens, painted with nine-slice artwork
 
     F10   the settings screen -- every rendering feature the pass reads
     F9    the console, with the engine's own log going into it

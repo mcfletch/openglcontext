@@ -1,7 +1,7 @@
 """The widgets an overlay panel is built from.
 
 Each is a scenegraph node, so a screen can be authored in a file and its parts
-``DEF``/``USE``d like anything else, and each carries typed fields, which is
+shared through ``DEF`` and ``USE`` like anything else, and each carries typed fields, which is
 where validation, defaults and serialisation come from.
 
 **The pointer is the interaction.**  Every widget has a rectangle, measured at

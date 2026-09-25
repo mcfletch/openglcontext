@@ -473,12 +473,14 @@ class InstanceGroup:
     """A set of render records that draw together as one instanced call.
 
     Attributes:
-        key       -- the shared instance key (see ``geometry_instance_key``).
-        geometry  -- the shared geometry node (drawn once, instanced N times).
-        appearance-- a representative appearance (material/texture) for the group.
-        members   -- the render records, in scene order. One instance each,
-                     except for a record standing for a whole placement set (see
-                     :func:`record_placements`), which is as many as it holds.
+
+    - ``key`` - the shared instance key (see ``geometry_instance_key``).
+    - ``geometry`` - the shared geometry node (drawn once, instanced N times).
+    - ``appearance`` - a representative appearance (material/texture) for the
+      group.
+    - ``members`` - the render records, in scene order. One instance each,
+      except for a record standing for a whole placement set (see
+      :func:`record_placements`), which is as many as it holds.
 
     ``len(group)`` is the number of *instances* -- what the draw costs and what
     the batch threshold is about -- which is not the number of members when a
@@ -742,15 +744,14 @@ class GLCapabilities(object):
 
     Baseline instancing (``glDrawElementsInstanced`` + ``glVertexAttribDivisor``)
     is core since GL 3.1, so it is assumed present. The remaining flags gate
-    optional faster paths added in later stages:
+    optional faster paths:
 
-        ssbo               -- GL 4.3 shader-storage buffers: an unbounded
-                              per-instance material array (no UBO 16 KB cap).
-        multi_draw_indirect-- GL 4.3: draw many groups in one call.
-        bindless_texture   -- ARB_bindless_texture: per-instance *textures*, so
-                              instances can differ by texture set, not just
-                              material factors -- effectively per-instance
-                              appearance without a program switch.
+    - ``ssbo`` - GL 4.3 shader-storage buffers: an unbounded per-instance
+      material array (no UBO 16 KB cap).
+    - ``multi_draw_indirect`` - GL 4.3: draw many groups in one call.
+    - ``bindless_texture`` - ARB_bindless_texture: per-instance *textures*, so
+      instances can differ by texture set, not only by material factors, which
+      is per-instance appearance without a program switch.
     """
 
     __slots__ = ('version', 'max_uniform_block_size', 'ssbo',

@@ -19,7 +19,7 @@ a fixed orbit.
 from math import atan2, pi
 from typing import Any, Optional, Sequence, Tuple, Union, cast
 
-from OpenGLContext.arrays import array, negative, radians, dot
+from numpy import array, dot, negative, radians
 from OpenGLContext import quaternion
 from OpenGLContext.quaternion import Quaternion
 from vrml.vrml97 import transformmatrix
@@ -246,6 +246,15 @@ class ViewPlatform(object):
         """
         return self.frustum[-2:]
 
+    def forward(self) -> Any:
+        """The unit direction the camera looks along, in world coordinates.
+
+        An ``(x, y, z)`` array: where a ray cast from the view goes -- a
+        hitscan shot, a pick, a line of sight -- with :attr:`position` as its
+        origin.
+        """
+        return (self.quaternion * [0.0, 0.0, -1.0, 0.0])[:3]
+
     def relativePosition(self, x: float = 0.0, y: float = 0.0, z: float = 0.0) -> Any:
         """Calculate a view-relative position from current position/orientation"""
         delta = self.quaternion * [x, y, z, 0.0]
@@ -292,8 +301,7 @@ class ViewPlatform(object):
         that is, where the camera-relative horizon matches the
         object-space horizon.
         """
-        ### get the "forward" direction...
-        x, y, z, w = self.quaternion * [0.0, 0.0, -1.0, 0.0]
+        x, y, z = self.forward()
         # angle around y is the x,z angle only...
         # angles should start where x = 0 and z = 1
         angle = xytoa(x, -z) - (pi / 2)

@@ -12,7 +12,7 @@ pass will return a dictionary with the changed
 OpenGL state values mapped to the original and
 new values.
 
-Usage example:
+Usage example::
 
     s = state.State ()
     if self.context.lastState:

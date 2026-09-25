@@ -3,7 +3,7 @@
 A recording is a copy and an encode per frame. The frame the renderer has just
 drawn is blitted into a texture the video encoder has been told about, and the
 encoder reads that texture in place -- on the GPU, where the renderer left it --
-so nothing but the compressed result crosses the bus.
+so nothing but the compressed result crosses the bus::
 
     from OpenGLContext.video.recorder import VideoRecorder
 
@@ -109,15 +109,15 @@ def copy_frame(framebuffer: int, size: tuple[int, int],
                source: int = 0, buffer: int | None = None) -> None:
     """Copy the frame just drawn into `framebuffer`, turning it the right way up.
 
-    framebuffer -- where to put it, usually a :class:`CaptureTarget`'s
-    size -- the destination's size; a source of another size is scaled into it,
-        which is what keeps a recording going across a window resize
-    source -- the framebuffer to read, the default one by default
-    buffer -- which of its buffers; by default the one the finished frame is
-        in, which is the back buffer on a window and the front one on a surface
-        nothing presents, and a framebuffer object's first colour attachment.
-        Naming a buffer the framebuffer does not have is GL_INVALID_OPERATION
-        rather than a quiet fallback, so it is asked rather than assumed.
+    - ``framebuffer`` - where to put it, usually a :class:`CaptureTarget`'s
+    - ``size`` - the destination's size; a source of another size is scaled
+      into it, so a recording keeps going across a window resize
+    - ``source`` - the framebuffer to read, the default one by default
+    - ``buffer`` - which of its buffers; by default the one the finished frame
+      is in: the back buffer on a window, the front one on a surface nothing
+      presents, and a framebuffer object's first colour attachment. Naming a
+      buffer the framebuffer does not have is GL_INVALID_OPERATION rather than
+      a quiet fallback, so it is asked rather than assumed.
 
     **The destination's Y coordinates run backwards on purpose.** OpenGL's
     framebuffer starts at the bottom left and a video encoder reads a texture
@@ -151,20 +151,23 @@ def copy_frame(framebuffer: int, size: tuple[int, int],
 class VideoRecorder:
     """Writes the frames a context draws to a video file.
 
-    path -- the ``.mp4`` to write
-    fps -- frames per second, as a number or an exact ``(numerator,
-        denominator)`` pair
-    size -- the recording's size; by default the viewport at the first frame.
-        A recording keeps the size it started at, and a window resized later is
-        scaled into it.
-    seconds/frames -- how long to record. Given neither, it records until closed.
-    start_after -- seconds of real time to let pass before the first frame is
-        kept. A world that streams its content in arrives over the first few
-        seconds, and a recording that starts immediately is a recording of it
-        arriving.
-    fixed_step -- advance the engine's clock a frame at a time while recording
-    encoder -- anything else is passed to the encoder: ``bitrate``, ``preset``,
-        ``tuning``, ``gop``, ``bframes``; see the pyopengl-video documentation.
+    - ``path`` - the ``.mp4`` to write
+    - ``fps`` - frames per second, as a number or an exact
+      ``(numerator, denominator)`` pair
+    - ``size`` - the recording's size; by default the viewport at the first
+      frame. A recording keeps the size it started at, and a window resized
+      later is scaled into it.
+    - ``seconds``, ``frames`` - how long to record. Given neither, it records
+      until closed.
+    - ``start_after`` - seconds of real time to let pass before the first frame
+      is kept. A world that streams its content in arrives over the first few
+      seconds, and a recording that starts immediately is a recording of it
+      arriving.
+    - ``fixed_step`` - advance the engine's clock a frame at a time while
+      recording
+    - ``encoder`` - anything else is passed to the encoder: ``bitrate``,
+      ``preset``, ``tuning``, ``gop``, ``bframes``; see the pyopengl-video
+      documentation.
     """
 
     def __init__(self, path: str | Path, fps: float | tuple[int, int] = 60,

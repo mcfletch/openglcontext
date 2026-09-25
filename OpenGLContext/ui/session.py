@@ -120,8 +120,8 @@ def nodes_equal(left: Any, right: Any) -> bool:
 def apply_node(source: Any, destination: Any) -> None:
     """Copy every field of ``source`` into ``destination``, in place.
 
-    Sub-nodes are recursed into rather than replaced, so a node ``USE``d
-    elsewhere keeps its identity and everything watching it keeps working.  A
+    Sub-nodes are recursed into rather than replaced, so a node shared through
+    ``USE`` elsewhere keeps its identity and everything watching it keeps working.  A
     field is written only when it actually changed, so committing a page where
     nothing moved wakes nobody.
     """

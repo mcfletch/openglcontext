@@ -77,8 +77,7 @@ class TestContext(BaseContext):
     def fire(self):
         '''The gun fires along the camera's view.'''
         platform = self.getViewPlatform()
-        forward = platform.quaternion * [0.0, 0.0, -1.0, 0.0]
-        self.yard.fire(platform.position[:3], forward[:3])
+        self.yard.fire(platform.position[:3], platform.forward())
 
     def OnIdle(self, *args):
         '''The engine's clock rather than the wall's, so a capture advances

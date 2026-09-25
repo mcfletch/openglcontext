@@ -22,6 +22,7 @@ from OpenGLContext.move import modes as movemodes
 from OpenGLContext.move.terrainwalk import TerrainWalkMixin
 from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
 from OpenGLContext.scenegraph.terrain import HeightField
+from OpenGLContext.move.viewplatform import ViewPlatform
 
 
 # -- the ground ---------------------------------------------------------------
@@ -52,6 +53,8 @@ class _Platform:
     def setOrientation(self, orientation):
         x, y, z, r = orientation
         self.quaternion = quaternion.fromXYZR(x, y, z, r)
+
+    forward = ViewPlatform.forward
 
 
 class _Manager:

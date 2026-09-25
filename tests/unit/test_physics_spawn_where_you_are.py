@@ -14,6 +14,7 @@ from omi_physics import model
 from omi_physics.world import PhysicsWorld
 from OpenGLContext import quaternion
 from OpenGLContext.move.physicswalk import PhysicsWalkMixin
+from OpenGLContext.move.viewplatform import ViewPlatform
 
 
 def _floor(size=6000.0):
@@ -42,6 +43,8 @@ class _Platform:
     def setOrientation(self, orientation):
         x, y, z, r = orientation
         self.quaternion = quaternion.fromXYZR(x, y, z, r)
+
+    forward = ViewPlatform.forward
 
 
 class _Host(PhysicsWalkMixin):

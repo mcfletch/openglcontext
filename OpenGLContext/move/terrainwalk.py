@@ -406,7 +406,7 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
 
     def _tw_forward(self) -> Tuple[float, float]:
         """Horizontal unit forward vector ``(fx, fz)`` from the platform orientation."""
-        fx, _fy, fz, _w = self.platform.quaternion * [0.0, 0.0, -1.0, 0.0]
+        fx, _fy, fz = self.platform.forward()
         n = math.hypot(fx, fz) or 1.0
         return fx / n, fz / n
 

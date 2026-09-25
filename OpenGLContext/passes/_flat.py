@@ -178,9 +178,9 @@ class SGObserver( object ):
     def __init__( self, scene: Any, contexts: Any ) -> None:
         """Initialize the FlatPass for this scene and set of contexts
 
-        scene -- the scenegraph to manage as a flattened hierarchy
-        contexts -- set of (weakrefs to) contexts to be serviced,
-            normally is a reference to Context.allContexts
+        - ``scene`` - the scenegraph to manage as a flattened hierarchy
+        - ``contexts`` - set of (weakrefs to) contexts to be serviced, normally
+          a reference to ``Context.allContexts``
         """
         self.scene = scene
         self.contexts = contexts
@@ -462,10 +462,8 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         use_shaders -- whether to use shader-based rendering (core-profile compatible)
         shader_mode -- indicates shader mode is active (for geometry nodes to check)
         shader_program -- the VRML97ShaderProgram instance when use_shaders is True
-
-
-        passCount -- not used, always set to 0 for code that expects
-            a passCount to be available.
+        passCount -- not used, always set to 0 for code that expects a
+        passCount to be available.
         transform -- ignored, legacy code only
     """
     passCount = 0
@@ -752,12 +750,13 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
                            skip: Optional[set] = None) -> None:
         """Render opaque geometry using shaders.
 
-        Args:
-            toRender: List of (sortKey, mvmatrix, tmatrix, bvolume, path, node) tuples
-            id_map: Optional dict to populate with {object_id: path} for MRT selection.
-                   If provided, object IDs will be set for each rendered object.
-            skip: Optional set of toRender indices to omit (transmissive shapes,
-                   which draw in shaderRenderTransmissive after the backdrop capture).
+        - ``toRender`` - list of (sortKey, mvmatrix, tmatrix, bvolume, path,
+          node) tuples
+        - ``id_map`` - optional dict to populate with {object_id: path} for MRT
+          selection; where given, object IDs are set for each rendered object
+        - ``skip`` - optional set of toRender indices to omit (transmissive
+          shapes, which draw in shaderRenderTransmissive after the backdrop
+          capture)
         """
         self.transparent = False
         debugFrustum = self.context.contextDefinition.debugBBox
@@ -853,10 +852,10 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
     def shaderRenderTransparent(self, toRender: List, id_map: Optional[Dict] = None) -> None:
         """Render transparent geometry using shaders.
 
-        Args:
-            toRender: List of (sortKey, mvmatrix, tmatrix, bvolume, path, node) tuples
-            id_map: Optional dict to populate with {object_id: path} for MRT selection.
-                   If provided, object IDs will be set for each rendered object.
+        - ``toRender`` - list of (sortKey, mvmatrix, tmatrix, bvolume, path,
+          node) tuples
+        - ``id_map`` - optional dict to populate with {object_id: path} for MRT
+          selection; where given, object IDs are set for each rendered object
         """
         # Blended surfaces (glTF alphaMode=BLEND, or VRML97 transparency>0) draw
         # after all opaque geometry, back-to-front, with depth writes disabled so
@@ -1238,7 +1237,7 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         identity comparison per node, because the scenegraph's transform cache
         hands back the same matrix object while a node is unmoved.
 
-        The matrices themselves are kept rather than their ``id``s: a freed
+        The matrices themselves are kept rather than their ``id()`` values: a freed
         matrix's address can be handed to the one that replaced it, and a
         comparison against an address nothing holds would then read a move as a
         stillness. Holding them also costs one frame of four-by-fours.

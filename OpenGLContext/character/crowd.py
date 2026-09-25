@@ -11,7 +11,7 @@ arrays with a figure axis on them. Figures that are doing *the same kind of
 thing* -- the same layers, the same masks, the same clips, whatever their
 weights and wherever their clocks stand -- are gathered into a group and
 answered together; a figure doing something no other figure is doing forms a
-group of one and costs what it always did.
+group of one and costs what it always did::
 
     crowd = Crowd()
     for model in cast:

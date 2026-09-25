@@ -10,18 +10,18 @@ changes, and it depends on no content we may not read.
 
 The pieces, in the order a path goes through them:
 
-=======================  =====================================================
-:func:`build`            Walkable triangles, by slope, with their neighbours
-                         found by shared edges.
-:meth:`NavMesh.cell_at`  Which cell a point stands on.
-:meth:`NavMesh.corridor` A* over the cells for the run of them a route
-                         crosses.
-:meth:`NavMesh.visible`  Whether the line between two points stays on the
-                         mesh.
-:meth:`NavMesh.path`     A corridor, **string-pulled** through the portals
-                         between its cells, and freed of the corners the
-                         corridor rather than the geometry put there.
-=======================  =====================================================
+=========================  =====================================================
+:func:`build`              Walkable triangles, by slope, with their neighbours
+                           found by shared edges.
+:meth:`NavMesh.cell_at`    Which cell a point stands on.
+:meth:`NavMesh.corridor`   A* over the cells for the run of them a route
+                           crosses.
+:meth:`NavMesh.visible`    Whether the line between two points stays on the
+                           mesh.
+:meth:`NavMesh.path`       A corridor, string-pulled through the portals
+                           between its cells, and freed of the corners the
+                           corridor rather than the geometry put there.
+=========================  =====================================================
 
 The string pull matters more than it sounds. A path that followed cell centres
 zigzags across an empty room — a bot walking the staircase of triangle centres

@@ -15,6 +15,7 @@ from OpenGLContext.move import physicswalk
 from OpenGLContext.move.physicswalk import PhysicsWalkMixin, yaw_from_orientation
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.scenegraph.transform import Transform
+from OpenGLContext.move.viewplatform import ViewPlatform
 
 
 # -- worlds to walk in -------------------------------------------------------
@@ -84,6 +85,8 @@ class _Platform:
         from OpenGLContext import quaternion
         x, y, z, r = orientation
         self.quaternion = quaternion.fromXYZR(x, y, z, r)
+
+    forward = ViewPlatform.forward
 
 
 class _Definition:

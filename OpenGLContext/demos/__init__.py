@@ -8,11 +8,11 @@ toolkit owning the main loop.
 Three programs, one per toolkit with a GUI library behind it, deliberately the
 same program three times so they can be read against one another:
 
-===============================  ===================================
-:mod:`OpenGLContext.demos.tk_viewer`   ``ttk.Treeview``, ``root.mainloop()``
-:mod:`OpenGLContext.demos.wx_viewer`   ``wx.TreeCtrl``, ``wx.App.MainLoop()``
-``OpenGLContext_qt.demos.qt_viewer``   ``QTreeView``, ``QApplication.exec()``
-===============================  ===================================
+======================================  ==========================================
+:mod:`OpenGLContext.demos.tk_viewer`    ``ttk.Treeview``, ``root.mainloop()``
+:mod:`OpenGLContext.demos.wx_viewer`    ``wx.TreeCtrl``, ``wx.App.MainLoop()``
+``OpenGLContext_qt.demos.qt_viewer``    ``QTreeView``, ``QApplication.exec()``
+======================================  ==========================================
 
 Each is run as a module, with an optional scene to open::
 

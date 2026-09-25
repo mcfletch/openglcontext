@@ -431,7 +431,7 @@ class PhysicsWalkMixin(object):
 
     def yawFromPlatform(self) -> float:
         """Heading the free-fly camera is currently looking along."""
-        forward = self.platform.quaternion * [0.0, 0.0, -1.0, 0.0]
+        forward = self.platform.forward()
         return float(np.arctan2(forward[0], -forward[2]))
 
     # -- the frame --------------------------------------------------------

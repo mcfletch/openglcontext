@@ -51,19 +51,19 @@ class Teapot(nodetypes.Geometry, node.Node):
     :mod:`OpenGLContext.scenegraph.teapot_nurbs`); tessellation happens once per
     LOD level, lazily, on the first render at that level within a GL context.
 
-    Attributes:
-        size: Scale factor for the teapot (default 1.0).  Matches the sizing
-            of ``glutSolidTeapot(size)``.
-        solid: If True, render filled polygons; if False, render wireframe.
-        lid: If True (default), render the teapot lid; if False, omit the
-            entire lid (the eight lid patches).
-        useGlut: If True, render with the legacy ``glutSolidTeapot`` endpoint
-            (when GLUT is available and not in shader mode), kept for
-            comparison.  Default False: use the NURBS-tessellated mesh.
-        steps: GLU domain-distance sampling for the tessellation; larger is
-            finer.  0.0 (the default) picks the sampling from the camera
-            distance instead.  Around 4.0 gives facet sizes close to
-            ``glutSolidTeapot``'s.
+    Fields:
+
+    - ``size`` - scale factor for the teapot (default 1.0). Matches the sizing
+      of ``glutSolidTeapot(size)``.
+    - ``solid`` - if True, render filled polygons; if False, render wireframe.
+    - ``lid`` - if True (default), render the teapot lid; if False, omit the
+      entire lid (the eight lid patches).
+    - ``useGlut`` - if True, render with the legacy ``glutSolidTeapot``
+      endpoint (when GLUT is available and not in shader mode), kept for
+      comparison. Default False: use the NURBS-tessellated mesh.
+    - ``steps`` - GLU domain-distance sampling for the tessellation; larger is
+      finer. 0.0 (the default) picks the sampling from the camera distance
+      instead. Around 4.0 gives facet sizes close to ``glutSolidTeapot``'s.
     """
     PROTO = 'Teapot'
     size = field.newField('size', 'SFFloat', 1, 1.0)

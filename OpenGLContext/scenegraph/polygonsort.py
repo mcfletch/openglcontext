@@ -2,7 +2,7 @@
 
 Alpha blending is order-dependent, so transparent triangles are drawn back to
 front.  Sorting them means one distance per triangle and an index array in the
-sorted order:
+sorted order::
 
     from OpenGLContext.triangleutilities import centers
     from OpenGLContext.scenegraph import polygonsort
