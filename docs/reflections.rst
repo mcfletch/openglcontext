@@ -55,7 +55,7 @@ The node's fields are read every frame, so a change takes effect on the next.
    * - ``reflectance``
      - 0.97
      - The share of the light the mirror reflects. A silvered mirror loses a
-       few percent, which is what tells it from an opening onto the same room.
+       few percent; at 1, a mirror looks like an opening onto the same room.
        Water carries 1, since its Fresnel term already decides how much it
        reflects.
    * - ``enabled``
@@ -197,8 +197,8 @@ required: a viewer that does not know it draws the surface as an ordinary one.
      }]
    }
 
-The same block may be written in ``extras`` instead, which is what a Blender
-custom property becomes; the extension wins where a holder carries both. A
+The same block may be written in ``extras`` instead, where a Blender custom
+property is exported; the extension wins where a holder carries both. A
 bare string, ``"OGLC_hook": "mirror"``, is the kind with every default.
 
 The engine's glTF writer (:doc:`baking`) writes a material's reflector back out
@@ -316,7 +316,7 @@ The budget is for a whole frame, across every view.
      - ``OPENGLCONTEXT_REFLECTION_ATLAS``
      - 0.5
      - The atlas's size as a share of the window's pixels. A frame's drawn
-       tiles are budgeted to half the atlas, which is what its shelves pack.
+       tiles are budgeted to half the atlas, and its shelves pack that half.
    * - ``reflectionMilliseconds``
      - ``OPENGLCONTEXT_REFLECTION_MS``
      - 0 (none)

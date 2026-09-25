@@ -423,7 +423,7 @@ whole process tree and not the runner. A context exits by itself after
 ``OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME`` are set, it writes a screenshot
 there before exiting.
 
-**Build the child's environment rather than copying the parent's.** The
+Build the child's environment rather than copying the parent's. The
 parent's environment can hold ``OPENGLCONTEXT_*`` variables set by tests or
 by imported programs. A child started with ``dict(os.environ)`` renders with
 all of them, so its result depends on which tests ran first.
@@ -473,7 +473,7 @@ loop starts and run no simulation.
 Time in a capture
 ~~~~~~~~~~~~~~~~~
 
-**A capture counts frames, not seconds.** A scene animated by the wall clock
+A capture counts frames, not seconds. A scene animated by the wall clock
 reaches a different point on a fast machine than on a slow one. Under
 ``OPENGLCONTEXT_AUTO_EXIT_FRAMES`` the engine's time source is a
 ``FixedStepClock`` that starts at zero and advances one frame's worth per

@@ -301,7 +301,7 @@ The surface
 shoulder, the grass verge and the lane markings, laid out across the same
 section the profile sweeps.
 
-**Wetness runs from 0 to 1.** It darkens the albedo, to 45% when fully wet,
+Wetness runs from 0 to 1. It darkens the albedo, to 45% when fully wet,
 and lowers the roughness from 0.72 to 0.12. A wet road is nearly a mirror, and
 its reflections come from the :ref:`environment lighting
 <environment-lighting>`; there is no separate reflection pass. A game can
@@ -614,7 +614,7 @@ A bore is also lit by lamps, in two ways:
   lamp. ``tunnel_lamps(points, tunnel)`` returns where the fittings are, so a
   game can place a few real lights at the ones nearest the driver.
 
-**The lamp light baked into the lining is light, not a tint.** The lining's
+The lamp light baked into the lining is light, not a tint. The lining's
 material sets ``bakedLight`` (``OGLC_materials_baked_light`` in a glTF file;
 see :ref:`bakedlight`). This tells the renderer that the mesh's ``COLOR_0``
 is light computed when the world was built. The three colour channels are
@@ -641,7 +641,7 @@ the camera along a whole span, and in structural concrete under strong sun it
 renders white. The darker material is not used on a solid wall, whose outer
 face is lit only by the sky.
 
-**Every surface faces outward**, towards where it is seen from. Sections are
+Every surface faces outward, towards where it is seen from. Sections are
 wound so that this holds whichever order a section is written in, and when a
 section is mirrored for the other side of the road. A face wound the other way
 gets a normal pointing into the solid and renders unlit; on a causeway that
@@ -687,7 +687,7 @@ the origin facing -Z, and each placement turns it to face the traffic. A
 ``sign_mesh`` builds the same sign as a single mesh reading from one texture
 atlas.
 
-**The signs follow Ontario's designs.** A warning is a black symbol on a
+The signs follow Ontario's designs. A warning is a black symbol on a
 yellow diamond, with the advised speed on a rectangular tab below it. A speed
 limit is a white rectangle reading MAXIMUM, the number, and km/h. Drivers
 recognise the shape before they read the sign, so each plate's geometry is cut
@@ -733,7 +733,7 @@ the road is empty. Passing an 80 km/h car at racing speed takes a couple of
 hundred metres; a road through a wood with trees at the verge offers about
 half that.
 
-**The posted limit is set, not derived**, because it is a decision rather
+The posted limit is set, not derived, because it is a decision rather
 than a measurement. ``ProceduralWorld.posted`` (80 km/h by default; 0 for an
 unposted road) is repeated along the circuit every 1500 m, skipping places
 where a warning already stands, because two plates close together read as one
@@ -788,14 +788,14 @@ both edges. Its squares are sized from the row depth so they come out square,
 and there is an even number of them, so the crown falls on a joint and the two
 halves of the line mirror each other.
 
-**The line's chequer is geometry; the banner's is a texture.** From the
+The line's chequer is geometry; the banner's is a texture. From the
 driver's seat the line is seen nearly edge-on. A texture nine times wider than
 it is deep loses its pattern to the mipmap level that angle selects, and shows
 as a plain white bar. Each square on the road is therefore its own flat-colour
 quad, which stays a chequer at any angle and distance. The banner is seen face
 on, so a texture works there and costs less.
 
-**The whole marker is one draw.** The steel, the banner and the two road
+The whole marker is one draw. The steel, the banner and the two road
 paints are four corners of one image (``gantry_atlas``), so the frame and the
 line share one material and a tile writes them as one mesh.
 ``OpenGLContext.scenegraph.atlasmesh`` provides this, and the warning signs
@@ -829,14 +829,14 @@ and a physics world collides with it, each from the same description.
    obstacles = PropColliders(physics_world, world.props)
    obstacles.update(car_position)                   # once a frame
 
-**The collision body does not come from the tiles.** Tile geometry is
+The collision body does not come from the tiles. Tile geometry is
 level-of-detail geometry that loads and unloads as the camera moves, and a
 collider built from it would let a car drive through a rock when the tile
 behind it is swapped. Props are stored in the tileset's ``extras``, like the
 road, and the game creates bodies for the ones within reach. A world can hold
 hundreds of boulders, and the physics broadphase pays for every body it holds.
 
-**A prop names the shape its measurements describe.** A ``box`` stops a car.
+A prop names the shape its measurements describe. A ``box`` stops a car.
 A ``dome`` is driven over: a stone lying in the grass is part of the ground,
 and a box the same size would be a kerb across the hillside. See
 :ref:`Physics <physics-props>`.
@@ -906,7 +906,7 @@ The editor's road layer therefore writes each road into the tileset's
 The centreline is written at a coarse spacing; a game resamples it for its
 own purposes.
 
-**A fast vehicle should not drive on the tiles.** Tile geometry is
+A fast vehicle should not drive on the tiles. Tile geometry is
 level-of-detail geometry: two resolutions of one curve can be most of a metre
 apart, and the surface steps under the wheels every time the streamer refines
 a tile. Build the carriageway's collider from the centreline and the

@@ -164,7 +164,7 @@ every body, and the manager calls it once per collision:
 ``omi_physics.contactevents.BodyRef``, or a list of any of them; left out, the
 subscription covers every body. ``among`` narrows the other side the same way:
 "did I hit one of these". ``skip_static=True`` leaves out static bodies, for a
-body that cares what it hit rather than what it landed on.
+subscription about what a body hit rather than what it landed on.
 
 Each callback receives a ``Collision``, turned to face the subscribed body:
 
