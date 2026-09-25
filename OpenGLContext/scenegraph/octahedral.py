@@ -20,9 +20,11 @@ Two layouts, and a chain says which it used:
     The whole sphere, the lower half folded into the corners. For something
     seen from any side -- a rock, an asteroid, a thing in flight.
 
-Nothing here touches GL. The shader samples this mapping and the baker renders
-against it, and they are only the same impostor if they are the same
-arithmetic, so the arithmetic is in one place and is tested on its own.
+Nothing here touches GL. The baker lays out its views with this module, and
+``octahedralUV`` in ``pbr.vert`` is the same arithmetic in GLSL, which the
+shader reads them back with. ``tests/unit/test_octahedral_mapping.py`` tests
+this module, and ``tests/unit/test_octahedral_impostor_gl.py`` renders an
+impostor and checks that the shader picks the tile this module names.
 
 Reference:
     Cigolle et al., *A Survey of Efficient Representations for Independent Unit
