@@ -209,8 +209,8 @@ class MultiViewMixin(_Host):
         return super().ProcessEvent(event)
 
     def hasMouseMoveHandlers(self) -> bool:
-        """The drags are read here, which the handler registry does not see."""
-        if self.views is not None:
+        """True while a view is being dragged, which the handler registry does not see."""
+        if self.views is not None and self.views.gestures.dragging:
             return True
         return bool(super().hasMouseMoveHandlers())
 

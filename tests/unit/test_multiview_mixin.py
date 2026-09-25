@@ -202,8 +202,20 @@ class TestThePointer:
         window.ProcessEvent(event)
         assert window.dispatched[-1] is event
 
-    def test_the_pointers_movements_are_asked_for(self):
-        assert _window().hasMouseMoveHandlers()
+    def test_the_pointers_movements_are_asked_for_during_a_drag(self):
+        """The mix-in's own answer; the overlay beside it answers for hovering."""
+        window = _window(arrangement='quad')
+
+        def asks():
+            return MultiViewMixin.hasMouseMoveHandlers(window)
+
+        assert not asks()
+        front = window.views.named('front')
+        x, y, width, height = front.rect
+        window.ProcessEvent(_Event(x + width // 2, y + height // 2))
+        assert asks()
+        window.ProcessEvent(_Event(x + width // 2, y + height // 2, state=0))
+        assert not asks()
 
     def test_a_resize_tells_each_view_its_own_size(self):
         window = _window(arrangement='quad')

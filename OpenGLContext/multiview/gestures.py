@@ -59,6 +59,11 @@ class ViewGestures:
         self.views = views
         self._held: Optional[View] = None
 
+    @property
+    def dragging(self) -> bool:
+        """Whether a gesture is under way: a button went down and has not come up."""
+        return self._held is not None
+
     def drives(self, view: Optional[View]) -> bool:
         """Whether this view is one it moves the camera of."""
         if view is None or view.camera is None:
