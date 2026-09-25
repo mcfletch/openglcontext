@@ -10,6 +10,7 @@ Two Python-2 remnants broke ``loaders/obj.py``:
 import os
 
 import pytest
+from PIL import Image
 
 from OpenGLContext.loaders.obj import OBJHandler
 from OpenGLContext.scenegraph import basenodes
@@ -40,7 +41,6 @@ class TestMaterialTexture:
         mtl = tmp_path / 'model.mtl'
         mtl.write_text('newmtl mat\nKd 1 0 0\nmap_Kd brick.png\n')
         # a genuine 1x1 PNG so the ImageTexture's async load doesn't log noise
-        from PIL import Image
         Image.new('RGB', (1, 1), (255, 0, 0)).save(str(tmp_path / 'brick.png'))
 
         handler = OBJHandler()

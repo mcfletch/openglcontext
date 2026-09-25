@@ -1,6 +1,7 @@
 """One bundle, several commands, chosen by the name it was run under."""
 
 import os
+import sys
 
 import pytest
 
@@ -38,7 +39,6 @@ def test_the_remaining_arguments_are_left_for_the_command():
     seen = []
 
     def record():
-        import sys
         seen.append(list(sys.argv))
         return 0
 

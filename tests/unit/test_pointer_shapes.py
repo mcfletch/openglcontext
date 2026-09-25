@@ -9,11 +9,13 @@ an exception or a pointer left in a half-set state -- which is what lets a
 window fall back to saying it some other way.
 """
 import pytest
+from OpenGL import GLUT
 
 glfw = pytest.importorskip('glfw')
 
 from OpenGLContext.glfwcontext import GLFWContext
 from OpenGLContext.testing import glcontext
+from OpenGLContext.context import Context, CURSORS
 
 #: Every name the backend offers.
 NAMES = sorted(GLFWContext.CURSOR_SHAPES)
@@ -91,7 +93,6 @@ def test_a_context_with_no_window_sets_nothing():
 
 def test_a_context_that_cannot_change_it_says_so():
     """The base class answers for every backend that has no cursors."""
-    from OpenGLContext.context import Context
     assert not Context.setPointerShape(object(), 'hand')
 
 
@@ -127,7 +128,6 @@ class TestEveryBackendSpeaksTheSameWords:
         return found
 
     def test_each_table_is_written_in_the_engines_names(self):
-        from OpenGLContext.context import CURSORS
         for module, shapes in self._backends().items():
             for name in shapes:
                 assert name in CURSORS, (module, name)
@@ -137,7 +137,6 @@ class TestEveryBackendSpeaksTheSameWords:
             assert 'arrow' in shapes, module
 
     def test_a_backend_that_offers_none_answers_no(self):
-        from OpenGLContext.context import Context
         assert not Context.setPointerShape(object(), 'hand')
 
     def test_the_backend_this_run_uses_offers_them(self):
@@ -148,7 +147,6 @@ class TestMouseLookKeepsThePointerHidden:
     """A backend whose hidden pointer is itself a cursor shape refuses another."""
 
     def test_glut_refuses_a_shape_while_the_pointer_is_grabbed(self, monkeypatch):
-        from OpenGL import GLUT
         from OpenGLContext.glutcontext import GLUTContext
         set_to = []
         monkeypatch.setattr(GLUT, 'glutSetWindow', lambda window: None)
@@ -167,7 +165,6 @@ class TestNoWrongPicture:
     """A backend with no "not allowed" pointer answers False rather than show another."""
 
     def test_glut_has_no_not_allowed_pointer(self, monkeypatch):
-        from OpenGL import GLUT
         from OpenGLContext.glutcontext import GLUTContext
         set_to = []
         monkeypatch.setattr(GLUT, 'glutSetWindow', lambda window: None)

@@ -11,25 +11,25 @@ import inspect
 
 import numpy as np
 import pytest
+from vrml.vrml97 import nodetypes
 
-from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.scenegraph import basenodes, nurbs
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.testing.glcontext import profile_unavailable
 from OpenGLContext.testing.mirrored import check_mirrored_render, mirrored_render
+from OpenGLContext.testing.scenes import drawn_image, scene_context
 
 TRIANGLE = [(-1, -1, 0), (1, -1, 0), (0.5, 1, 0)]
 KNOT = [0, 0, 0, 0, 1, 1, 1, 1]
 
 
 def _nurbs_surface():
-    from OpenGLContext.scenegraph import nurbs
     return nurbs.NurbsSurface(
         controlPoint=[[v / 3.0 - 0.3, u / 3.0 - 0.5, 0.0] for v in range(4) for u in range(4)],
         uDimension=4, vDimension=4, uKnot=KNOT, vKnot=KNOT)
 
 
 def _trimmed_surface():
-    from OpenGLContext.scenegraph import nurbs
     return nurbs.TrimmedSurface(surface=_nurbs_surface())
 
 
@@ -72,7 +72,6 @@ NO_FACES = {
 
 
 def _geometry_classes():
-    from vrml.vrml97 import nodetypes
     found = {name for name, value in vars(basenodes).items()
              if inspect.isclass(value) and issubclass(value, nodetypes.Geometry)}
     return found | {'PBRMesh'}
@@ -103,7 +102,6 @@ def test_a_mirrored_geometry_is_its_mirror_image(name, renderer):
 
 def _text_columns(mirror):
     """The columns bitmap text at x = 1 lights, drawn plain or mirrored."""
-    from OpenGLContext.testing.scenes import drawn_image, scene_context
     placed = basenodes.Transform(translation=(1.0, 0.0, -4.0), children=[
         basenodes.Shape(geometry=basenodes.Text(string=['FR']),
                         appearance=basenodes.Appearance(material=basenodes.Material()))])

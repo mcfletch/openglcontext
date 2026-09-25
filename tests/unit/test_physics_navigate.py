@@ -19,6 +19,7 @@ import time
 
 import numpy as np
 import pytest
+import tests.physics_navigate as nav
 
 from OpenGLContext.events import synthetic
 from OpenGLContext.testing.glcontext import gl_available
@@ -29,7 +30,6 @@ gl = pytest.mark.skipif(not gl_available(), reason='no GL target available')
 @pytest.fixture
 def navigator():
     """The demo, on whatever backend this run uses, let go afterwards"""
-    import tests.physics_navigate as nav
 
     context = nav.TestContext()
     try:

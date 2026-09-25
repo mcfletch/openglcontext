@@ -9,10 +9,15 @@ driver.
 """
 import numpy as np
 import pytest
+from vrml.nodepath import NodePath
+from vrml.vrml97 import nodepath as vrml_nodepath
 
 from OpenGLContext import frustum
 from OpenGLContext.passes._flat import FlatPass
 from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.frustum import boxes_outside
+from OpenGLContext.passes import _flat, flatcore, instancing
+from OpenGLContext.scenegraph.instancedshape import InstancedShape
 
 
 def _shape(size=(2, 2, 2)):
@@ -114,7 +119,6 @@ class TestOneTableForTheWholeFrame:
 
     def test_a_node_that_draws_nothing_is_marked_and_left_unbounded(self):
         """An instanced set with every copy taken is the resting state of a pool."""
-        from OpenGLContext.scenegraph.instancedshape import InstancedShape
         scene, _moves = _scene(2)
         empty = InstancedShape(geometry=basenodes.Box(size=(1, 1, 1)),
                                placements=[])
@@ -148,7 +152,6 @@ class TestTheShadowPoolReadsTheGather:
     """
 
     def _pass(self, count=4):
-        from OpenGLContext.passes import _flat, flatcore
         moves = [basenodes.Transform(translation=(index * 3.0, 0, 0),
                                      children=[_shape()])
                  for index in range(count)]
@@ -159,7 +162,6 @@ class TestTheShadowPoolReadsTheGather:
         return passing, moves
 
     def _counting(self, monkeypatch):
-        from vrml.vrml97 import nodepath as vrml_nodepath
         seen = []
         real = vrml_nodepath._NodePath.transformMatrix
 
@@ -235,7 +237,6 @@ class TestTheRecordCarriesItsNode:
             assert record[5] is record[4][-1]
 
     def test_the_caster_pool_carries_it_too(self):
-        from OpenGLContext.passes import _flat, flatcore
         scene, _moves = _scene(3)
         passing = flatcore.FlatPass.__new__(flatcore.FlatPass)
         _flat.SGObserver.__init__(passing, scene, [])
@@ -246,8 +247,6 @@ class TestTheRecordCarriesItsNode:
 
     def test_grouping_a_frame_walks_no_paths(self, gather, monkeypatch):
         """What the record carrying its node is for: the readers stop asking."""
-        from vrml.nodepath import NodePath
-        from OpenGLContext.passes import instancing
         passing, _moves = gather
         records = passing.renderSet(np.eye(4, dtype='f'))
 
@@ -330,7 +329,6 @@ class TestBoxesOutside:
     """``frustum.boxes_outside``: the one plane test every cull shares."""
 
     def test_it_is_the_eight_corner_decision(self):
-        from OpenGLContext.frustum import boxes_outside
         rng = np.random.default_rng(11)
         count = 300
         low = rng.uniform(-3, 1, (count, 3))
@@ -353,7 +351,6 @@ class TestBoxesOutside:
         assert list(found) == list(expected)
 
     def test_one_box_under_many_matrices(self):
-        from OpenGLContext.frustum import boxes_outside
         matrices = np.tile(np.eye(4), (3, 1, 1))
         matrices[:, 3, 0] = (0.0, 50.0, -50.0)
         planes = np.array([(1.0, 0.0, 0.0, 10.0), (-1.0, 0.0, 0.0, 10.0)])

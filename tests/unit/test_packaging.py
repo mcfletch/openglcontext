@@ -2,7 +2,7 @@
 
 import pytest
 
-from OpenGLContext import packaging
+from OpenGLContext import packaging, plugins
 
 
 def test_the_kept_backend_is_not_excluded():
@@ -56,7 +56,6 @@ def test_an_application_on_something_else_leaves_tkinter_out():
 def test_every_backend_the_engine_registers_can_be_kept():
     """A name that selects a backend at run time has to be a name a bundle can
     be built for, or the backend cannot be shipped."""
-    from OpenGLContext import plugins
 
     for plugin in plugins.InteractiveContext.all():
         assert plugin.name in packaging.BACKEND_MODULES

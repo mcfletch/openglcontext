@@ -14,6 +14,8 @@ import pytest
 
 from omi_physics.raycast import raycast
 from omi_physics.world import PhysicsWorld
+from omi_physics import model
+from omi_physics.vehicle import car_wheels, RaycastVehicle, VehicleTuning
 from OpenGLContext.physics.road import RoadColliders
 from OpenGLContext.scenegraph.road import RoadProfile
 
@@ -148,8 +150,6 @@ class TestOneSurfaceEverywhere:
 class TestACarOnIt:
     def _driven(self, seconds=25.0):
         """A car at full throttle along a long straight, and where it got to."""
-        from omi_physics import model
-        from omi_physics.vehicle import RaycastVehicle, VehicleTuning, car_wheels
         line = _straight(length=3000.0)
         world = PhysicsWorld()
         road = RoadColliders(world, line, PROFILE, reach=250.0)

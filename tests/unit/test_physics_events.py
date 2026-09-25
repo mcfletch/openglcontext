@@ -6,6 +6,8 @@ already in hand and the normal turned to face the body it subscribed to. These
 tests drive real ``omi_physics`` worlds through a :class:`PhysicsManager`.
 """
 import logging
+import gc
+import threading
 
 import numpy as np
 import pytest
@@ -261,7 +263,6 @@ class TestLifetime:
         crate = add_crate(mgr)
         heard = []
         mgr.events.subscribe(lambda hit: heard.append(hit), body=crate)
-        import gc
         gc.collect()
         run(mgr, 1.0)
         assert len(heard) == 1
@@ -520,7 +521,6 @@ class TestALateSubscription:
 
 class TestTheThreadedWorldIsLocked:
     def test_a_hit_waits_for_the_world(self) -> None:
-        import threading
         mgr = manager(ThreadedPhysicsManager)
         crate = add_crate(mgr, position=(0, 5, 0))
         hit = raycast(mgr.world, (-4, 5, 0), (1, 0, 0))

@@ -13,6 +13,7 @@ import textwrap
 import pytest
 
 from OpenGLContext.processexit import flush_and_exit
+from OpenGLContext.testing import process_exit
 
 
 def test_flush_and_exit_saves_active_coverage(monkeypatch):
@@ -138,6 +139,4 @@ def test_a_game_exits_without_importing_the_test_machinery():
 
 
 def test_the_testing_package_names_the_same_helper():
-    from OpenGLContext.testing import process_exit
-
     assert process_exit.flush_and_exit is flush_and_exit

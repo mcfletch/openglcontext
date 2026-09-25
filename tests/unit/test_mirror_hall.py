@@ -96,6 +96,7 @@ def test_a_wall_the_hall_does_not_have_is_refused(hall):
 # --- what breaks the room up -------------------------------------------------------
 
 from OpenGLContext.bin.mirrorhall import BAYS, PILASTERS, STEPS, WINDOWS
+from OpenGLContext.scenegraph.basenodes import Background, DirectionalLight
 
 
 def _pieces(hall, material):
@@ -129,7 +130,6 @@ def _blocks(nodes, material):
 
 
 def test_the_windows_open_onto_a_sky(hall):
-    from OpenGLContext.scenegraph.basenodes import Background
     room = hall.room()
     assert any(isinstance(node, Background) for node in room)
     brick = _pieces(hall, hall.finish.brick)
@@ -154,7 +154,6 @@ def test_only_the_lamp_housings_cast_no_shadow(hall):
 
 def test_the_sun_comes_in_through_the_windows_well_onto_the_floor(hall):
     """Each window lays its light on the floor inside, reaching metres into the room."""
-    from OpenGLContext.scenegraph.basenodes import DirectionalLight
     [sun] = [node for node in hall.room() if isinstance(node, DirectionalLight)]
     direction = np.asarray(sun.direction, 'd')
     for along, low, high in WINDOWS:

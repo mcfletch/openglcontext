@@ -7,6 +7,7 @@ pointer, and the context is what knows how to take it.
 
 import pytest
 
+from OpenGLContext import glfwcontext
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.move import modes
 from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
@@ -163,7 +164,6 @@ def test_the_glfw_backend_disables_the_cursor_to_capture(monkeypatch):
     """GLFW's disabled cursor is the one that reports unbounded motion; hidden
     still stops at the screen edge, which is what mouse-look cannot use."""
     glfw = pytest.importorskip('glfw')
-    from OpenGLContext import glfwcontext
     calls = []
     monkeypatch.setattr(glfw, 'set_input_mode',
                         lambda window, mode, value: calls.append((mode, value)))
@@ -180,7 +180,6 @@ def test_raw_motion_is_asked_for_when_the_platform_has_it(monkeypatch):
     """Unaccelerated motion is what a view wants; pointer acceleration is a
     desktop convenience that makes a turn depend on how fast it started."""
     glfw = pytest.importorskip('glfw')
-    from OpenGLContext import glfwcontext
     calls = []
     monkeypatch.setattr(glfw, 'set_input_mode',
                         lambda window, mode, value: calls.append((mode, value)))
@@ -193,7 +192,6 @@ def test_raw_motion_is_asked_for_when_the_platform_has_it(monkeypatch):
 
 def test_capturing_without_a_window_is_refused():
     pytest.importorskip('glfw')
-    from OpenGLContext import glfwcontext
     context = glfwcontext.GLFWContext.__new__(glfwcontext.GLFWContext)
     context.window = None
     assert not context.setPointerCapture(True)

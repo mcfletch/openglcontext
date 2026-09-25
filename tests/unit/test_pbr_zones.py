@@ -14,15 +14,28 @@ import sys
 
 import numpy as np
 import pytest
+from PIL import Image
+from omi_physics import model
+from omi_physics.gravity import GravityVolume, InfiniteRegion
 
 from OpenGLContext.passes.shaderpass import SHADER_DIR
 from OpenGLContext.passes.zonepass import ZonesMixin
 from OpenGLContext.scenegraph.basenodes import (
-    AudioEmitter, PointLight, Transform, Zone, ZoneAudio, ZoneEnvironment,
-    ZoneGravity, ZoneLights, ZoneMirrors, ZoneReverb, ZoneVisibility,
+    AudioEmitter, PointLight, Switch, Transform, Zone, ZoneAudio, ZoneEnvironment, ZoneGravity,
+    ZoneLights, ZoneMirrors, ZoneReverb, ZoneVisibility,
 )
 from OpenGLContext.scenegraph.zone import placed_zones
 from OpenGLContext.testing.paths import tests_root
+from OpenGLContext.audio.areas import apply_zones
+from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.passes import pbrpass
+from OpenGLContext.passes.zonelayers import environment_layers, MAX_ZONE_LAYERS
+from OpenGLContext.passes.zoneprobes import ATTEMPTS, FACES_PER_FRAME
+from OpenGLContext.physics.gltf_world import collision_world_from_scene
+from OpenGLContext.physics.zones import gravity_volumes, GravityZones, scene_zones
+from OpenGLContext.scenegraph import zones
+from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
+from OpenGLContext.testing.glcontext import gl_available
 
 TESTS_DIR = str(tests_root(__file__))
 CAPTURE = os.path.join(TESTS_DIR, 'helpers', '_zone_capture.py')
@@ -67,20 +80,17 @@ class TestShaderSource:
         assert re.search(r'if \(\(lightsOff & \(1 << i\)\) != 0\) continue;', source)
 
     def test_the_include_and_the_arithmetic_agree_on_the_shapes(self):
-        from OpenGLContext.scenegraph import zones
         source = _source('_zone_inc.glsl')
         for kind in zones.SHAPES + (zones.ELLIPSOID,):
             assert 'kind == %d' % zones.shader_kind(kind) in source or \
                 zones.shader_kind(kind) == 5      # the fall-through: a cylinder
 
     def test_the_layer_count_matches(self):
-        from OpenGLContext.passes.zonelayers import MAX_ZONE_LAYERS
         assert '#define MAX_ZONE_LAYERS %d' % MAX_ZONE_LAYERS in _source('_zone_inc.glsl')
 
 
 class TestTheProgramAPI:
     def _program(self, monkeypatch):
-        from OpenGLContext.passes import pbrpass
         program = pbrpass.PBRShaderProgram.__new__(pbrpass.PBRShaderProgram)
         program.program = 7
         calls = []
@@ -99,7 +109,6 @@ class TestTheProgramAPI:
         assert calls == [('zoneLayers', 0)]
 
     def test_a_pack_uploads_every_array_then_the_count(self, monkeypatch):
-        from OpenGLContext.passes.zonelayers import MAX_ZONE_LAYERS, environment_layers
         program, calls = self._program(monkeypatch)
         zones = placed_zones([(Zone(size=(10, 10, 10), settings=[ZoneEnvironment()]),
                                np.identity(4))])
@@ -317,7 +326,6 @@ class FakeEngine:
 
 class TestAudio:
     def test_zone_emitters_are_heard_inside_and_the_reverb_is_the_zones(self):
-        from OpenGLContext.audio.areas import apply_zones
         birds, music = AudioEmitter(type='global'), AudioEmitter(type='global')
         zones = placed_zones([(Zone(size=(10, 10, 10), blend=2.0, settings=[
             ZoneAudio(emitters=[birds]), ZoneReverb(level=0.5, decay=2.0)]), at(0))])
@@ -333,7 +341,6 @@ class TestAudio:
         assert engine.reverb.level == 0.0
 
     def test_zones_with_no_reverb_leave_the_applications_alone(self):
-        from OpenGLContext.audio.areas import apply_zones
         zones = placed_zones([(Zone(size=(10, 10, 10), settings=[
             ZoneEnvironment(intensity=0.2)]), at(0))])
         engine = FakeEngine(level=0.3, decay=2.5)
@@ -342,7 +349,6 @@ class TestAudio:
             assert (engine.reverb.level, engine.reverb.decay) == (0.3, 2.5)
 
     def test_a_reverb_zone_is_laid_over_the_applications_reverb(self):
-        from OpenGLContext.audio.areas import apply_zones
         zones = placed_zones([(Zone(size=(10, 10, 10), blend=2.0, settings=[
             ZoneReverb(level=0.6, decay=3.0)]), at(0))])
         engine = FakeEngine(level=0.3, decay=1.0)
@@ -354,7 +360,6 @@ class TestAudio:
         assert (engine.reverb.level, engine.reverb.decay) == pytest.approx((0.3, 1.0))
 
     def test_the_application_changing_its_reverb_is_kept(self):
-        from OpenGLContext.audio.areas import apply_zones
         zones = placed_zones([(Zone(size=(10, 10, 10), settings=[
             ZoneReverb(level=0.6)]), at(0))])
         engine = FakeEngine(level=0.1)
@@ -375,7 +380,6 @@ class TestAudio:
 
 class TestGravity:
     def test_a_zone_is_a_gravity_volume_over_its_shape(self):
-        from OpenGLContext.physics.zones import gravity_volumes, scene_zones
         turned = Transform(translation=(0, 10, 0), rotation=(0, 0, 1, np.pi), children=[
             Zone(size=(4, 4, 4), priority=3, settings=[
                 ZoneGravity(gravity=2.0, direction=(0, -1, 0), replace=True)])])
@@ -387,18 +391,12 @@ class TestGravity:
         assert volume.field.replace
 
     def test_a_zone_a_switch_shows_is_found_and_one_it_hides_is_not(self):
-        from OpenGLContext.physics.zones import scene_zones
-        from OpenGLContext.scenegraph.basenodes import Switch
         shown, hidden = (Zone(settings=[ZoneGravity()]), Zone(settings=[ZoneGravity()]))
         found = scene_zones(Transform(children=[
             Switch(choice=[shown, hidden], whichChoice=0)]))
         assert [placed.zone for placed in found] == [shown]
 
     def test_a_world_follows_zones_placed_again(self):
-        from OpenGLContext.physics.gltf_world import collision_world_from_scene
-        from OpenGLContext.physics.zones import GravityZones, scene_zones
-        from omi_physics.gravity import GravityVolume, InfiniteRegion
-        from omi_physics import model
         zone = Zone(size=(4, 4, 4), settings=[ZoneGravity()])
         world, _bounds = collision_world_from_scene(Transform(children=[zone]))
         own = world.add_gravity_volume(GravityVolume(model.Gravity(), InfiniteRegion()))
@@ -412,7 +410,6 @@ class TestGravity:
         assert world.gravity_volumes == [own]
 
     def test_a_collision_world_carries_the_volumes(self):
-        from OpenGLContext.physics.gltf_world import collision_world_from_scene
         scene = Transform(children=[Zone(size=(4, 4, 4), settings=[ZoneGravity()])])
         world, _bounds = collision_world_from_scene(scene)
         assert len(world.gravity_volumes) == 1
@@ -421,7 +418,6 @@ class TestGravity:
 # -- renders ------------------------------------------------------------------
 
 def _render(tmp_path_factory, mode, renderer='pbr'):
-    from OpenGLContext.testing.glcontext import gl_available
     if not gl_available():
         pytest.skip('no GL context can be made here')
     out = str(tmp_path_factory.mktemp('zones') / ('%s-%s.png' % (mode, renderer)))
@@ -430,7 +426,6 @@ def _render(tmp_path_factory, mode, renderer='pbr'):
     assert done.returncode == 0, 'zone render (%s) failed:\n%s' % (mode, done.stderr[-3000:])
     assert os.path.exists(out), 'zone render (%s) wrote nothing:\n%s' % (
         mode, done.stderr[-3000:])
-    from PIL import Image
     return np.asarray(Image.open(out).convert('RGB'), dtype='d')
 
 
@@ -500,7 +495,6 @@ class TestHelpersFailLoudly:
 
     @pytest.fixture(autouse=True)
     def gl(self):
-        from OpenGLContext.testing.glcontext import gl_available
         if not gl_available():
             pytest.skip('no GL context can be made here')
 
@@ -732,7 +726,6 @@ class ImageProbe:
 
 class TestImageLightsWhileZonesMove:
     def test_an_image_lit_zone_keeps_its_layer_while_another_zone_moves(self):
-        from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
         lit = Zone(size=(10, 10, 10), settings=[ZoneEnvironment(light=ImageBasedLight())])
         lift = Zone(size=(2, 2, 2), settings=[ZoneEnvironment(intensity=0.5)])
         zoned = ZonedPass([(lit, at(0)), (lift, at(30))])
@@ -950,7 +943,6 @@ class TestCaptures:
         assert zoned.zoneProbeLayer(zoned.zones[0]) == -1.0
 
     def test_a_probe_that_will_not_take_a_capture_stops_being_asked(self, caplog):
-        from OpenGLContext.passes.zoneprobes import ATTEMPTS
         zoned = CapturingPass(CaptureProbe(takes=False))
         with caplog.at_level('WARNING', logger='OpenGLContext.passes.zonepass'):
             zoned.frames(ATTEMPTS + 5)
@@ -988,8 +980,6 @@ class TestPassState:
         assert zoned.zoneCaptureFaces() == 2
 
     def test_the_definition_and_the_probes_agree_on_the_faces(self, monkeypatch):
-        from OpenGLContext.contextdefinition import ContextDefinition
-        from OpenGLContext.passes.zoneprobes import FACES_PER_FRAME
         monkeypatch.delenv('OPENGLCONTEXT_ZONE_CAPTURE_FACES', raising=False)
         assert ContextDefinition().zoneCaptureFaces == FACES_PER_FRAME
         assert ZonedPass([]).zoneCaptureFaces() == FACES_PER_FRAME

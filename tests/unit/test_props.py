@@ -6,6 +6,7 @@ is that they are *placed* -- a mesh and a body at one spot, neither of which
 moves -- and that is the thing an engine can own. What each one looks like is
 art, and the only kind generated here is the one a landscape supplies for free.
 """
+import json
 import numpy as np
 import pytest
 
@@ -15,6 +16,7 @@ from OpenGLContext.scenegraph.props import (
     rock_material,
     rock_mesh,
 )
+from OpenGLContext.loaders.documentvalues import DocumentError
 
 
 class TestARock:
@@ -114,7 +116,6 @@ class TestWhatAPropCarries:
         assert one.yaw == 0.5 and one.scale == 1.5
 
     def test_it_survives_a_round_trip_through_json(self) -> None:
-        import json
         one = Prop(kind='rock', position=(1.0, 2.0, 3.0), yaw=0.25, scale=0.8,
                    radius=1.2, height=1.6)
         assert Prop.from_json(json.loads(json.dumps(one.to_json()))) == one
@@ -147,8 +148,6 @@ if __name__ == '__main__':
 
 
 def test_a_prop_that_names_no_kind_is_refused():
-    from OpenGLContext.loaders.documentvalues import DocumentError
-    from OpenGLContext.scenegraph.props import Prop
     with pytest.raises(DocumentError, match='prop kind is 3'):
         Prop.from_json({'kind': 3})
     assert Prop.from_json({'kind': 'boulder', 'shape': 'cone'}).shape == 'box'

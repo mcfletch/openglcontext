@@ -20,6 +20,8 @@ from OpenGLContext.multiview.grid import (
     spacing_for,
 )
 from OpenGLContext.multiview.views import View, ViewStyle
+from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.scenegraph.boundingvolume import boundingSphere
 
 SIZE = (400, 300)
 
@@ -171,8 +173,6 @@ class TestTheNodeAViewDraws:
 
     def test_it_adds_nothing_to_the_scenes_bounds(self):
         """It is ruled to each view rather than placed, so framing ignores it."""
-        from OpenGLContext.scenegraph import basenodes
-        from OpenGLContext.scenegraph.boundingvolume import boundingSphere
         box = basenodes.Shape(geometry=basenodes.Box(size=(2, 2, 2)))
         alone = boundingSphere([box])
         assert alone is not None

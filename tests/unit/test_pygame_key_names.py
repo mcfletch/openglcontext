@@ -13,6 +13,8 @@ import pytest
 pygame = pytest.importorskip('pygame')
 
 from OpenGLContext.events.pygameevents import PygameXEvent
+from OpenGLContext.events import pygameevents
+from OpenGLContext.screenshot import ScreenshotMixin
 
 
 @pytest.fixture
@@ -31,7 +33,6 @@ class TestTheFunctionKeys:
         assert translate(name) == '<%s>' % (name.upper(),)
 
     def test_the_screenshot_key_is_the_one_that_is_bound(self, translate):
-        from OpenGLContext.screenshot import ScreenshotMixin
         assert translate(pygame.key.name(pygame.K_F2)) == \
             ScreenshotMixin.screenshotKey
 
@@ -110,7 +111,6 @@ def test_a_synthetic_release_is_named_the_same_way():
     ``clearHeldKeys`` sends it, so a key held as the window lost focus must
     come back with the name its press carried or nothing can let go of it.
     """
-    from OpenGLContext.events import pygameevents
     sent = []
 
     class Host(pygameevents.EventHandlerMixin):

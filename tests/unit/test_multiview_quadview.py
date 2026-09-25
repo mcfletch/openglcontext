@@ -12,6 +12,10 @@ import pytest
 from OpenGLContext.edit.orbitview import OrbitViewPlatform
 from OpenGLContext.multiview.cameras import OrthoViewPlatform
 from OpenGLContext.multiview.quad import QuadView
+from OpenGLContext.events.keyboardevents import KeypressEvent
+from OpenGLContext.events.mouseevents import MouseButtonEvent, MouseMoveEvent, WHEEL_DOWN, WHEEL_UP
+from OpenGLContext.multiview.viewpoints import SceneCamera
+from OpenGLContext.multiview.views import View
 
 WINDOW = (800, 600)
 LOW, HIGH = (-0.3, 0.0, -0.2), (0.3, 1.8, 0.2)
@@ -139,7 +143,6 @@ class TestDragging:
         assert front.camera.view.centre == centre
 
     def test_a_view_that_is_not_the_quads_is_left_alone(self):
-        from OpenGLContext.multiview.views import View
         quad = _quad()
         assert not quad.press(View(), 10, 10, 2)
         assert not quad.wheel(View(), 10, 10, 1)
@@ -171,14 +174,12 @@ class TestEngineEvents:
     """``handle`` reads the context's own events and routes them through the layout."""
 
     def _button(self, quad, x, y, button, state):
-        from OpenGLContext.events.mouseevents import MouseButtonEvent
         event = MouseButtonEvent()
         event.button, event.state, event.modifiers = button, state, (0, 0, 0)
         event.pickPoint = (x, y)
         return event
 
     def _move(self, x, y):
-        from OpenGLContext.events.mouseevents import MouseMoveEvent
         event = MouseMoveEvent()
         event.pickPoint = (x, y)
         event.modifiers = (0, 0, 0)
@@ -198,7 +199,6 @@ class TestEngineEvents:
         assert front.camera.view.centre == moved
 
     def test_a_wheel_notch_zooms_the_view_under_the_pointer(self):
-        from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
         quad = _quad()
         top = quad.view('top')
         span = top.camera.view.span
@@ -210,7 +210,6 @@ class TestEngineEvents:
         assert top.camera.view.span == pytest.approx(span)
 
     def test_an_event_it_has_no_use_for_is_left_for_others(self):
-        from OpenGLContext.events.keyboardevents import KeypressEvent
         quad = _quad()
         assert not quad.handle(KeypressEvent())
 
@@ -219,7 +218,6 @@ class TestWhatThePerspectiveViewOpensOn:
     """Thirty degrees round from the front, or the scene's own camera."""
 
     def _camera(self, name='cam', position=(3.0, 1.0, 4.0)):
-        from OpenGLContext.multiview.viewpoints import SceneCamera
         forward = -np.asarray(position, 'd') / np.linalg.norm(position)
         return SceneCamera(name=name, position=position, forward=tuple(forward),
                            up=(0.0, 1.0, 0.0), fov=0.8)

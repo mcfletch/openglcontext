@@ -11,11 +11,15 @@ lit up). Skips cleanly when no GL context can be created.
 """
 
 import pytest
+from OpenGL.GL import GL_NO_ERROR, glGetError
 
 glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.scenegraph import basenodes
 from tests.unit.glrender import base_env, frames_of
+from OpenGLContext.passes import ibl
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 
 def test_the_render_environment_does_not_adapt(monkeypatch):
@@ -28,7 +32,6 @@ def test_the_render_environment_does_not_adapt(monkeypatch):
     render is a capture in every respect that matters.  The shadow cascades are
     pinned here for the same reason.
     """
-    from OpenGLContext.passes import ibl
 
     base_env(monkeypatch)
     assert not ibl.ibl_is_adaptive()
@@ -48,7 +51,6 @@ def _key_light():
 
 
 def _no_gl_error():
-    from OpenGL.GL import glGetError, GL_NO_ERROR
     return int(glGetError()) == GL_NO_ERROR
 
 
@@ -110,8 +112,6 @@ class TestBloomRender:
 class TestTransmissiveRender:
     def test_glass_shape_runs_transmissive_pass(self, render_scene, monkeypatch):
         base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0', OPENGLCONTEXT_INSTANCE_MIN='999')
-        from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-        from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 
         glass = PBRMesh(
             positions=[(-.7, -.7, 0), (.7, -.7, 0), (.7, .7, 0), (-.7, .7, 0)],
@@ -132,8 +132,6 @@ class TestTransmissiveRender:
     def test_blend_mode_transmission_runs(self, render_scene, monkeypatch):
         base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0', OPENGLCONTEXT_INSTANCE_MIN='999',
                   OPENGLCONTEXT_TRANSMISSION='blend')
-        from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-        from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 
         glass = PBRMesh(
             positions=[(-.7, -.7, 0), (.7, -.7, 0), (.7, .7, 0), (-.7, .7, 0)],

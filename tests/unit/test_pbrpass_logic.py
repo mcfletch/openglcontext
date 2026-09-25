@@ -139,7 +139,6 @@ class TestMaterialUBOInvalidation:
 
 
 def test_an_impostor_setting_is_uploaded_only_when_it_changes(monkeypatch):
-    from OpenGLContext.passes import pbrpass
     program = pbrpass.PBRShaderProgram()
     program.program = 5
     sent = []

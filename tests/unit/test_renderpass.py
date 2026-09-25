@@ -3,13 +3,13 @@
 
 import unittest
 from unittest import mock
+from OpenGLContext.passes import renderpass
 
 
 class TestDefaultRenderPassesSceneSwap(unittest.TestCase):
     """The cached FLAT FlatPass must be rebuilt when the active scenegraph is replaced."""
 
     def setUp(self) -> None:
-        from OpenGLContext.passes import renderpass
         self.renderpass = renderpass
         self._saved_flat = renderpass.FLAT
         renderpass.FLAT = None

@@ -36,6 +36,9 @@ configure it as they start. What no reading of source can see is a module that
 imports a program, which is what this module checks.
 """
 
+from OpenGLContext.testing import plugin
+from OpenGLContext.viewer.environment import VIEWER_DEFAULTS
+
 
 def test_what_collection_changed_is_only_what_a_program_settled():
     """The other half of the rule, which no reading of a test module can check.
@@ -53,8 +56,6 @@ def test_what_collection_changed_is_only_what_a_program_settled():
     import and into their startup, or importing them through
     :func:`~OpenGLContext.testing.gl_env.import_unconfigured`.
     """
-    from OpenGLContext.testing import plugin
-    from OpenGLContext.viewer.environment import VIEWER_DEFAULTS
 
     #: What the viewer settles as it is imported.
     expected = set(VIEWER_DEFAULTS)

@@ -13,6 +13,7 @@ import os
 import re
 
 import pytest
+import numpy as np
 
 from OpenGLContext.passes.pbrpass import PBR_UNITS, _PBR_HAS, _PBR_SAMPLER
 from OpenGLContext.passes.shaderpass import SHADER_DIR
@@ -108,7 +109,6 @@ def _quad_profile(image):
     only their own lit pixels, so nothing here depends on the capture's window
     size, aspect or framing.
     """
-    import numpy as np
     lit = image.mean(2) > 8
     on = lit.any(0)
     runs, start = [], None

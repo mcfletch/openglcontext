@@ -15,6 +15,7 @@ from OpenGLContext.physics.gltf_world import (
     extract_trimesh, collision_world_from_scene, _fan_triangulate,
     _mesh_positions_indices, _local_matrix,
 )
+from OpenGLContext.scenegraph.instancedshape import InstancedShape, placement_matrices
 
 
 def _quad_ifs(z=0.0):
@@ -159,9 +160,6 @@ class TestAPlacementSetIsCollectedAtEveryPlacement:
     drawn, or a car drives through a tree it can see."""
 
     def _forest(self, spacing=20.0, count=3):
-        from OpenGLContext.scenegraph.instancedshape import (
-            InstancedShape, placement_matrices,
-        )
         return InstancedShape(
             geometry=_quad_ifs(),
             placements=placement_matrices(
@@ -188,6 +186,5 @@ class TestAPlacementSetIsCollectedAtEveryPlacement:
         assert points[:, 0].min() == pytest.approx(99.0)
 
     def test_a_set_with_no_placements_contributes_nothing(self) -> None:
-        from OpenGLContext.scenegraph.instancedshape import InstancedShape
         empty = InstancedShape(geometry=_quad_ifs())
         assert extract_trimesh(basenodes.Group(children=[empty])) is None

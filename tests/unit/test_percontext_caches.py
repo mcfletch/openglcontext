@@ -11,13 +11,17 @@ and the displaced pass is dropped still holding GL objects in a context that is
 alive and can never be told to let go of them.
 """
 
+import contextlib
+import gc
 import pytest
+from OpenGL.GL import glGenLists, glIsList
 
 from OpenGLContext import contextresources
 from OpenGLContext.passes import renderpass, shaderpass
 from OpenGLContext.testing import glcontext
 from OpenGLContext.scenegraph import teapot
-from OpenGLContext.scenegraph.text import shadertext
+from OpenGLContext.scenegraph.text import font, shadertext
+from OpenGLContext.displaylist import DisplayList
 
 
 @pytest.fixture
@@ -160,7 +164,6 @@ class TestClosingAWindowLetsGoOfItsOwnContext:
         """Two windows, closed in turn: whichever was left current when the
         first of them went is the one the caches would hear about, and the
         other one's programs would stay reachable for ever."""
-        import contextlib
 
         if not glcontext.gl_available():
             pytest.skip('no GL target available')
@@ -305,13 +308,11 @@ class _ListFont:
     @staticmethod
     def make(lists=True):
         """A font whose characters are lists, or with ``lists`` false are not."""
-        from OpenGLContext.scenegraph.text import font
 
         class ListFont(font.Font):
             made = 0
 
             def createChar(self, char, mode=None):
-                from OpenGL.GL import glGenLists
                 ListFont.made += 1
                 name = int(glGenLists(1)) if lists else None
                 return name, font.CharacterMetrics(char, 1.0, 1.0)
@@ -354,8 +355,6 @@ class TestAFontsDisplayListsAreHeldPerContext:
             self, two_compatible_contexts):
         """Deleted where they were made, when that context is next current;
         never in whichever context the collector happened to run under."""
-        import gc
-        from OpenGL.GL import glGenLists, glIsList
         first, second, current = two_compatible_contexts
         current(first)
         font = _ListFont.make()
@@ -371,7 +370,6 @@ class TestAFontsDisplayListsAreHeldPerContext:
         assert not glIsList(made)
 
     def test_a_lost_context_s_lists_are_deleted(self, two_compatible_contexts):
-        from OpenGL.GL import glIsList
         first, second, current = two_compatible_contexts
         current(first)
         font = _ListFont.make()
@@ -387,9 +385,6 @@ class TestADisplayListIsDeletedInItsOwnContext:
 
     def test_a_collected_list_leaves_the_current_context_s_lists_alone(
             self, two_compatible_contexts):
-        import gc
-        from OpenGL.GL import glGenLists, glIsList
-        from OpenGLContext.displaylist import DisplayList
         first, second, current = two_compatible_contexts
         current(first)
         mine = DisplayList()
@@ -406,8 +401,6 @@ class TestADisplayListIsDeletedInItsOwnContext:
         assert fresh.list == made or not glIsList(made)
 
     def test_a_lost_context_takes_its_lists(self, two_compatible_contexts):
-        from OpenGL.GL import glIsList
-        from OpenGLContext.displaylist import DisplayList
         first, _second, current = two_compatible_contexts
         current(first)
         kept = DisplayList()

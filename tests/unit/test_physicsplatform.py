@@ -13,6 +13,7 @@ from omi_physics import model
 from omi_physics.world import PhysicsWorld
 from omi_physics.character import CharacterCapabilities
 from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
+from OpenGLContext.physics.manager import PhysicsManager
 
 
 def _ground_world():
@@ -245,7 +246,6 @@ def test_apply_impulse_launches_the_capsule_and_lifts_the_camera():
 
 def test_a_walker_with_a_body_is_heard_entering_a_trigger():
     """The platform's body enters triggers, so a subscription on it hears a pad."""
-    from OpenGLContext.physics.manager import PhysicsManager
     manager = PhysicsManager(world=_ground_world())
     world = manager.world
     world.fixed_dt = 1.0 / 60.0

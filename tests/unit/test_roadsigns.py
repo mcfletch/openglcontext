@@ -21,6 +21,7 @@ from OpenGLContext.scenegraph.roadsigns import (
     sign_meshes,
     sign_texture,
 )
+from OpenGLContext.loaders.gltf.writer import ExternalImage
 
 
 class TestTheObject:
@@ -116,7 +117,6 @@ class TestTheFace:
         assert sign_material('crest').texture('baseColor') is not None
 
     def test_a_caller_may_supply_the_image(self) -> None:
-        from OpenGLContext.loaders.gltf.writer import ExternalImage
         material = sign_material('crest', image=ExternalImage('signs/crest.png',
                                                               srgb=True))
         assert material.texture('baseColor').uri == 'signs/crest.png'
@@ -229,7 +229,6 @@ class TestOneTextureForEveryKind:
         assert 'post' in cells
 
     def test_the_post_s_patch_is_a_flat_colour(self) -> None:
-        import numpy as np
         image, cells = sign_atlas(('dip',))
         u0, v0, u1, v1 = cells['post']
         found = np.asarray(image.convert('RGB'), 'd')

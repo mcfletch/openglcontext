@@ -11,6 +11,7 @@ import numpy as np
 from PIL import Image
 
 from OpenGLContext.testing.paths import tests_root
+from OpenGLContext.loaders import gltf
 TESTS_DIR = str(tests_root(__file__))
 CAPTURE = os.path.join(TESTS_DIR, "helpers", "_pbr_capture.py")
 
@@ -180,7 +181,6 @@ def test_pbr_teapot_reads_as_celadon(teapot_image):
 @pytest.mark.skipif(not _have_internet(), reason="no internet for glTF sample download")
 def test_gltf_box_renders(tmp_path):
     """A Khronos sample glTF (Box) loads from the network and renders under PBR."""
-    from OpenGLContext.loaders import gltf
     out = str(tmp_path / "box.png")
     if not _capture(out, mode="gltf", source=gltf.sample_model_url("BoxTextured")):
         pytest.skip("OpenGL/network unavailable")

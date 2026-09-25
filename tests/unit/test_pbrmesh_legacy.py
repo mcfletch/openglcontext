@@ -4,15 +4,20 @@
 from its arrays, lit through the ``glMaterial`` its ``PBRMaterial`` sets, so a
 glTF model is seen in either profile.
 """
+import types
 import numpy as np
 import pytest
+from OpenGL import GL
+from PIL import Image
+from vrml import cache
 
 glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.scenegraph import basenodes
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from tests.unit.glrender import base_env, frames_of
+from OpenGLContext.passes.instancing import set_cull_state
 
 SIZE = 64
 
@@ -72,14 +77,12 @@ def _textured_square():
 
 
 def _chequer(first, second):
-    from PIL import Image
     image = Image.new('RGB', (2, 2))
     image.putdata([first, second, second, first])
     return image
 
 
 def test_the_base_colour_map_is_drawn(render_scene, compat):
-    from OpenGLContext.scenegraph.pbrmaterial import PBRTexture
     blue = (20, 40, 230)
     material = PBRMaterial(baseColor=(1, 1, 1), metallic=0.0, roughness=1.0,
                            textures={'baseColor': PBRTexture(_chequer(blue, blue), srgb=True)})
@@ -91,9 +94,6 @@ def test_the_base_colour_map_is_drawn(render_scene, compat):
 
 def test_the_map_is_not_left_bound_for_the_next_shape(gl_context_compat):
     """``Appearance.renderPost`` takes back what its ``render`` bound."""
-    from OpenGL import GL
-    from vrml import cache
-    from OpenGLContext.scenegraph.pbrmaterial import PBRTexture
 
     class _Context:
         """What the texture's cache keys on: the context drawing."""
@@ -118,10 +118,7 @@ def test_a_double_sided_mesh_leaves_culling_as_the_pass_records_it(gl_context_co
     """The pass keeps what it last set for culling and sets it again only on a
     change; a mesh that turns culling on behind it leaves the next
     double-sided mesh culled."""
-    import types
-    from OpenGL import GL
     mode = types.SimpleNamespace(matrix=np.eye(4), shader_mode=False)
-    from OpenGLContext.passes.instancing import set_cull_state
     set_cull_state(mode, False, GL.GL_CCW)            # a double-sided mesh before
     _square(solid=False)._render_legacy(mode)
     assert bool(GL.glIsEnabled(GL.GL_CULL_FACE)) is bool(mode._cull_enabled)

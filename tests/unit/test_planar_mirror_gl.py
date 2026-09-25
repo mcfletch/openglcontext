@@ -9,6 +9,8 @@ import os
 
 import numpy as np
 import pytest
+from OpenGL import GL as gl
+from OpenGL.GL import GL_POINTS
 
 glfw = pytest.importorskip("glfw")
 
@@ -17,6 +19,16 @@ from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 from tests.unit.glrender import base_env, frames_of
+from OpenGLContext import glfwcontext, renderoptions
+from OpenGLContext.bin.mirrors_demo import MirrorHall
+from OpenGLContext.capture import read_back_buffer
+from OpenGLContext.move.viewplatform import ViewPlatform
+from OpenGLContext.multiview.strategy import MultiviewCapabilities
+from OpenGLContext.multiview.views import View, ViewLayout
+from OpenGLContext.passes import reflection, renderpass, shaderpass
+from OpenGLContext.passes.reflection import REFLECTION_UNIT
+from OpenGLContext.passes.reflectionatlas import ReflectionAtlas
+from OpenGLContext.passes.reflectionplanner import ReflectionPlanner
 
 SIZE = (160, 120)
 
@@ -111,9 +123,6 @@ def test_the_mirror_is_drawn_from_its_own_reflection_not_the_screen(render_scene
 
 
 def test_each_view_sees_the_mirror_from_where_it_stands(render_scene, env):
-    from OpenGLContext.move.viewplatform import ViewPlatform
-    from OpenGLContext.multiview.views import View, ViewLayout
-
     def layout(context):
         left = View(ViewPlatform(position=(0.0, 0.0, 6.0), orientation=(0, 1, 0, 0)),
                     name='left')
@@ -140,8 +149,6 @@ def _mirror_draws(render_scene, env, strategy, mirrors):
     Behind the camera stand two walls, one above the mirrors' centre line and
     one below, so every mirror of the row sees both of them and nothing else.
     """
-    from OpenGLContext.multiview.strategy import MultiviewCapabilities
-    from OpenGLContext.passes import renderpass
     env.setenv('OPENGLCONTEXT_MULTIVIEW', strategy)
     env.setenv('OPENGLCONTEXT_REFLECTION_VIEWS',
                os.environ.get('OPENGLCONTEXT_REFLECTION_VIEWS') or '16')
@@ -171,7 +178,6 @@ def test_mirror_views_share_one_set_of_programs_however_many_there_are(
         render_scene, env, strategy):
     """The count of mirror views changes as the camera turns; compiling a set
     of programs for each count stalls the frame that first meets it."""
-    from OpenGLContext.passes import renderpass
     env.setenv('OPENGLCONTEXT_REFLECTION_VIEWS', '8')
     _mirror_draws(render_scene, env, strategy, 3)
     sets = renderpass.FLAT.shader_program.__dict__.get('_program_sets', {})
@@ -203,11 +209,6 @@ def test_a_reflection_reused_after_a_small_move_matches_a_fresh_one(
     tile by projection buys. (Half a metre leaves half a percent of the
     mirror off by parallax, which is the bound this is measured against.)
     """
-    from OpenGLContext import glfwcontext
-    from OpenGLContext.capture import read_back_buffer
-    from OpenGLContext.move.viewplatform import ViewPlatform
-    from OpenGLContext.multiview.views import ViewLayout
-    from OpenGLContext.passes import renderpass
 
     frames = []
     original = glfwcontext.GLFWContext.SwapBuffers
@@ -277,7 +278,6 @@ def _yellow_rows(frame):
 
 def test_a_polished_floor_reflects_the_lamp_standing_on_it(render_scene, env):
     """A dielectric floor reflects faintly looking down, and it reflects the lamp."""
-    from OpenGLContext import renderoptions
     lit = frames_of(render_scene, _lamp_room(), frames=3, size=SIZE)[-1]
     env.setenv('OPENGLCONTEXT_PLANAR_REFLECTIONS', '0')
     renderoptions.reset_env_cache()
@@ -314,8 +314,6 @@ def test_twelve_mirrors_draw_alike_whichever_way_they_are_drawn(render_scene, en
 
 def test_a_still_scene_asks_for_frames_until_its_mirrors_settle(render_scene, env):
     """Drawn only when asked, the hall asks until every mirror is settled, then stops."""
-    from OpenGLContext.bin.mirrors_demo import MirrorHall
-    from OpenGLContext.passes import renderpass
     env.setenv('OPENGLCONTEXT_REFLECTION_VIEWS', '2')
     rendered = render_scene(MirrorHall().children, frames=1, size=(320, 180))
     context = rendered.context
@@ -366,8 +364,6 @@ def test_a_still_scene_settles_with_each_mirror_in_the_other(render_scene, env):
     what the wall mirror shows."""
     scene = _floor_and_wall()
     frames = []
-    from OpenGLContext import glfwcontext
-    from OpenGLContext.capture import read_back_buffer
     original = glfwcontext.GLFWContext.SwapBuffers
 
     def capturing(self):
@@ -450,7 +446,6 @@ def test_a_shape_made_a_mirror_while_out_of_view_is_found_in_a_mirror(render_sce
     back = scene[-1].children[0].appearance.material
     reflector, back.reflector = back.reflector, None
     rendered = render_scene(scene, frames=4, size=SIZE)
-    from OpenGLContext.capture import read_back_buffer
     context = rendered.context
     before = _red_anywhere(read_back_buffer()[0])
     back.reflector = reflector
@@ -461,7 +456,6 @@ def test_a_shape_made_a_mirror_while_out_of_view_is_found_in_a_mirror(render_sce
 
 
 def test_a_scene_without_mirrors_looks_at_no_shape_for_one(render_scene, env, monkeypatch):
-    from OpenGLContext.passes import reflection
     asked = []
     real = reflection.reflector_for
     monkeypatch.setattr(reflection, 'reflector_for',
@@ -472,8 +466,6 @@ def test_a_scene_without_mirrors_looks_at_no_shape_for_one(render_scene, env, mo
 
 
 def test_the_planner_looks_only_at_the_mirrors(render_scene, env, monkeypatch):
-    from OpenGLContext.passes import reflection
-    from OpenGLContext.passes.reflectionplanner import ReflectionPlanner
     asked = []
     real = ReflectionPlanner._surface
     monkeypatch.setattr(ReflectionPlanner, '_surface',
@@ -488,7 +480,6 @@ def test_the_planner_looks_only_at_the_mirrors(render_scene, env, monkeypatch):
 def _points_behind(z=9.0):
     """A cloud of points behind the camera: one draw cannot serve several
     views with it, and only a mirror sees it."""
-    from OpenGL.GL import GL_POINTS
     grid = np.array([(x, y, 0.0) for x in np.linspace(-2, 2, 5)
                      for y in np.linspace(-2, 2, 5)], 'f')
     mesh = PBRMesh(positions=grid, normals=np.tile((0, 0, 1), (len(grid), 1)),
@@ -503,8 +494,6 @@ def test_a_mirror_view_seeing_what_a_shared_draw_refuses_is_a_separate_view(
         render_scene, env, behind, views):
     """What counts is what the mirror's own camera sees, which here is behind
     the viewer's: with one separate view a frame, only one mirror is drawn."""
-    from OpenGLContext.passes import renderpass
-    from OpenGLContext.passes.reflectionplanner import ReflectionPlanner
     env.setenv('OPENGLCONTEXT_REFLECTION_VIEWS', '4')
     env.setenv('OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS', '1')
     scene = _room(_mirror(x=-2.5, size=3.0, reflector=PlanarReflector(interval=1)),
@@ -528,9 +517,6 @@ def test_a_mirror_view_seeing_what_a_shared_draw_refuses_is_a_separate_view(
 def test_the_atlas_is_not_on_its_unit_while_it_is_drawn_into(render_scene, env):
     """A program able to sample the texture it draws into makes a feedback
     loop; with no mirror seen in a mirror, nothing is on the unit."""
-    from OpenGL import GL as gl
-    from OpenGLContext.passes.reflection import REFLECTION_UNIT
-    from OpenGLContext.passes.reflectionatlas import ReflectionAtlas
     found = []
     real = ReflectionAtlas.begin
 
@@ -550,7 +536,6 @@ def test_mirror_views_are_drawn_one_at_a_time_where_the_shared_programs_fail(
         render_scene, env):
     """A driver refusing the programs one draw serves several views with
     leaves each mirror view drawn in turn, and the mirrors reflect as before."""
-    from OpenGLContext.passes import renderpass, shaderpass
     env.setenv('OPENGLCONTEXT_MULTIVIEW', 'vertex')
 
     def pair():

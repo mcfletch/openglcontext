@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 import pygltflib
 import pytest
+from tests.unit.test_mirrors_demo import _placed
 
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.gltf import hooks
@@ -84,7 +85,6 @@ def test_the_pool_is_water_and_a_mirror(scene):
 
 def test_every_mirror_faces_into_the_room(scene):
     """Blender's planes face where they were turned, and the file keeps it."""
-    from tests.unit.test_mirrors_demo import _placed
     records = _placed(scene.group)
     mirrors = [record for record in records if reflection.is_reflector(record)]
     assert len(mirrors) == 14

@@ -8,15 +8,21 @@ import logging
 
 import numpy as np
 import pytest
+from PIL import Image
 
 from OpenGLContext.multiview.strategy import ViewFrame, view_records
 from OpenGLContext.passes import reflection
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.scenegraph.appearance import Appearance
 from OpenGLContext.scenegraph.water import STILL
+from OpenGLContext.multiview.views import View
+from OpenGLContext.passes.reflectionplanner import ReflectionPlanner
+from OpenGLContext.passes.reflectiontiles import Budget
+from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.scenegraph.water.surface import WaterStyle
 
 #: A unit quad in its own xy plane, facing +z by its winding.
 QUAD = np.array([(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)], 'f')
@@ -313,8 +319,6 @@ def test_the_view_table_carries_a_mirror_view_exactly():
 # --- how rough a mirror is ---------------------------------------------------
 
 def _textured(roughness_texel, factor=1.0):
-    from PIL import Image
-    from OpenGLContext.scenegraph.pbrmaterial import PBRTexture
     pixels = np.zeros((4, 4, 3), np.uint8)
     pixels[..., 1] = int(roughness_texel * 255)
     return PBRMaterial(roughness=factor, textures={
@@ -332,10 +336,6 @@ def test_a_roughness_map_scales_the_factor():
 
 
 def test_a_polished_textured_floor_is_a_mirror():
-    from OpenGLContext.passes.reflectionplanner import ReflectionPlanner
-    from OpenGLContext.passes.reflectiontiles import Budget
-    from OpenGLContext.multiview.strategy import ViewFrame
-    from OpenGLContext.multiview.views import View
     record = _mirror_record(placement=_placement(translate=(0.0, 1.5, -5.0)))
     material = _textured(0.05)
     material.reflector = reflection.reflector_for(record)
@@ -354,9 +354,6 @@ def test_a_polished_textured_floor_is_a_mirror():
 def test_making_a_shape_a_mirror_moves_the_mirror_generation():
     """A pass remembers which of the scene's shapes are mirrors until one of
     the fields that decide it is set."""
-    from OpenGLContext.scenegraph import basenodes
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
-    from OpenGLContext.scenegraph.reflector import PlanarReflector
     material = PBRMaterial()
     appearance = basenodes.Appearance(material=material)
     shape = basenodes.Shape(appearance=appearance)
@@ -375,9 +372,6 @@ def test_making_a_shape_a_mirror_moves_the_mirror_generation():
 
 def test_making_a_mesh_water_moves_the_mirror_generation():
     """A mesh with a wave is water, and water is a mirror."""
-    import numpy as np
-    from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-    from OpenGLContext.scenegraph.water.surface import WaterStyle
     mesh = PBRMesh(positions=np.zeros((3, 3), 'f'), indices=np.arange(3, dtype=np.uint32))
     before = reflection.mirror_generation()
     mesh.waveStyle = WaterStyle()
@@ -442,7 +436,6 @@ def test_a_mesh_made_water_reflects_at_its_level_not_its_fit():
 # --- VRML97 IndexedFaceSet mirrors ---------------------------------------------------
 
 def _face_set(points, coord_index, ccw=True):
-    from OpenGLContext.scenegraph import basenodes
     return basenodes.IndexedFaceSet(
         coord=basenodes.Coordinate(point=np.asarray(points, 'f')),
         coordIndex=list(coord_index), ccw=ccw)
@@ -489,7 +482,6 @@ def test_a_face_set_with_no_polygon_is_read_as_triangles_in_order():
 
 
 def test_a_face_set_without_points_is_no_mirror():
-    from OpenGLContext.scenegraph import basenodes
     record = _face_set_record(basenodes.IndexedFaceSet())
     assert reflection.surface_plane(record) is None
 
@@ -497,7 +489,6 @@ def test_a_face_set_without_points_is_no_mirror():
 # --- a map's roughness is worked out once per image ---------------------------------
 
 def test_a_roughness_maps_mean_is_kept_on_its_texture():
-    from PIL import Image
     material = _textured(0.2)
     texture = material.textures['metallicRoughness']
     assert texture.mean_roughness() == pytest.approx(0.2, abs=0.01)
@@ -508,8 +499,6 @@ def test_a_roughness_maps_mean_is_kept_on_its_texture():
 
 
 def test_a_large_roughness_maps_mean_is_its_greens_mean():
-    from PIL import Image
-    from OpenGLContext.scenegraph.pbrmaterial import PBRTexture
     rows = np.linspace(0, 255, 3000).astype(np.uint8)
     pixels = np.zeros((3000, 2000, 4), np.uint8)
     pixels[..., 1] = rows[:, None]
@@ -520,8 +509,6 @@ def test_a_large_roughness_maps_mean_is_its_greens_mean():
 
 @pytest.mark.parametrize('mode', ['L', 'P', 'I;16'])
 def test_a_roughness_map_in_any_mode_has_a_mean(mode):
-    from PIL import Image
-    from OpenGLContext.scenegraph.pbrmaterial import PBRTexture
     image = Image.new('RGB', (8, 8), (0, 128, 0)).convert(mode)
     expected = np.asarray(image.convert('RGB'))[..., 1].mean() / 255.0
     assert PBRTexture(image).mean_roughness() == pytest.approx(expected, abs=0.01)
@@ -529,10 +516,6 @@ def test_a_roughness_map_in_any_mode_has_a_mean(mode):
 
 def test_a_mesh_drawn_with_its_own_material_is_as_rough_as_that_material():
     """A mesh with no appearance material is drawn with the one it carries."""
-    from OpenGLContext.multiview.strategy import ViewFrame
-    from OpenGLContext.multiview.views import View
-    from OpenGLContext.passes.reflectionplanner import ReflectionPlanner
-    from OpenGLContext.passes.reflectiontiles import Budget
     rough = PBRMaterial(roughness=0.9, reflector=PlanarReflector())
     shape = Shape(geometry=PBRMesh(positions=QUAD, indices=QUAD_INDICES, material=rough))
     assert reflection.shape_material(shape) is rough

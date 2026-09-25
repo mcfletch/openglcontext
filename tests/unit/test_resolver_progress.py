@@ -9,6 +9,7 @@ Streaming fixes all three at once, and the memory one matters even for a
 caller that wants neither of the others.
 """
 import os
+import tracemalloc
 
 import pytest
 
@@ -209,7 +210,6 @@ class TestMemory:
     size = 16 * 1024 * 1024
 
     def peak_while(self, action):
-        import tracemalloc
         tracemalloc.start()
         try:
             action()

@@ -4,6 +4,7 @@
 does. The hall is held to what the page says is in it, and drawn once for
 real.
 """
+from pathlib import Path
 import numpy as np
 import pytest
 
@@ -11,6 +12,7 @@ from OpenGLContext.bin.mirrors_demo import BOUNCES, BUDGETS, INTERVALS, MirrorHa
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.passes import reflection
 from OpenGLContext.scenegraph.shape import Shape
+from OpenGLContext.bin import mirrors_demo
 
 
 def _placed(node, matrix=None, out=None):
@@ -119,7 +121,6 @@ def test_the_help_names_every_key():
 
 def test_the_command_is_installed():
     import tomllib
-    from pathlib import Path
     project = tomllib.loads((Path(__file__).resolve().parents[2]
                              / 'pyproject.toml').read_text(encoding='utf-8'))
     assert project['project']['scripts']['oglc-mirrors'] == \
@@ -139,8 +140,6 @@ def test_the_hall_draws_its_mirrors(render_scene, monkeypatch):
 
 def test_help_prints_usage_and_opens_no_window(capsys):
     """``oglc-mirrors --help`` answers on the console and exits."""
-    import pytest
-    from OpenGLContext.bin import mirrors_demo
     with pytest.raises(SystemExit) as stopped:
         mirrors_demo.main(['--help'])
     assert stopped.value.code == 0

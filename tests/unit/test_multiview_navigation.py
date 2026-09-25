@@ -14,7 +14,7 @@ import pytest
 from OpenGLContext.edit.mapview import MapView, MapViewPlatform
 from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
 from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP, button_name
-from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
+from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform, point_view
 from OpenGLContext.multiview.navigation import (
     PAN,
     ROTATE,
@@ -27,6 +27,8 @@ from OpenGLContext.multiview.navigation import (
     plan_mode,
 )
 from OpenGLContext.multiview.views import View
+from OpenGLContext.move.modes import KeyBinding
+from OpenGLContext.multiview.viewpoints import look_through, SceneCamera
 
 SIZE = (400, 300)
 NONE = (0, 0, 0)
@@ -229,7 +231,6 @@ class TestWhatASettingsScreenSees:
             assert binding.label
 
     def test_every_binding_is_a_key_binding_node(self):
-        from OpenGLContext.move.modes import KeyBinding
         navigation = navigation_for(_plan())
         assert all(isinstance(binding, KeyBinding)
                    for _mode, binding in navigation.binding_table())
@@ -251,7 +252,6 @@ class TestAfterTheCameraIsReplaced:
     """Pointing a view elsewhere can give it a new camera; the pointer follows it."""
 
     def test_a_drag_moves_the_camera_point_view_gave_the_view(self):
-        from OpenGLContext.multiview.cameras import point_view
         view = _elevation()
         navigation_for(view)
         assert point_view(view, 'perspective')
@@ -263,7 +263,6 @@ class TestAfterTheCameraIsReplaced:
         assert view.camera.view.heading != heading
 
     def test_a_drag_moves_the_camera_look_through_gave_the_view(self):
-        from OpenGLContext.multiview.viewpoints import SceneCamera, look_through
         view = _elevation()
         navigation_for(view)
         camera = SceneCamera(name='cam', position=(0.0, 2.0, 10.0),
@@ -276,7 +275,6 @@ class TestAfterTheCameraIsReplaced:
         assert not np.allclose(view.camera.view.target(), target)
 
     def test_a_rebinding_survives_a_new_camera_of_the_same_family(self):
-        from OpenGLContext.multiview.cameras import point_view
         view = _plan()
         navigation_for(view).rebind(ZOOM_DRAG, [button_name(1)])
         assert point_view(view, 'front')
@@ -285,7 +283,6 @@ class TestAfterTheCameraIsReplaced:
         assert navigation.keys_for(ZOOM_DRAG) == (button_name(1),)
 
     def test_a_new_family_starts_from_its_own_bindings(self):
-        from OpenGLContext.multiview.cameras import point_view
         view = _elevation()
         navigation_for(view)
         point_view(view, 'perspective')

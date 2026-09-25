@@ -10,6 +10,7 @@ was built from: every module in the artifact must still exist. That catches the
 whole class rather than one named file.
 """
 import zipfile
+import tarfile
 
 import pytest
 
@@ -64,7 +65,6 @@ class TestStaleMembers:
         assert stale_members(w, str(source)) == ["OpenGLContext/shaders/gone.frag"]
 
     def test_an_sdist_is_checked_through_its_top_level_prefix(self, tmp_path, source):
-        import tarfile
         path = tmp_path / "openglcontext-3.0.0a1.tar.gz"
         with tarfile.open(path, "w:gz") as t:
             for name in ("openglcontext-3.0.0a1/OpenGLContext/__init__.py",
@@ -76,7 +76,6 @@ class TestStaleMembers:
 
     def test_files_outside_the_package_are_ignored(self, tmp_path, source):
         # readme/licence live at the sdist root, not in the tree's package dir.
-        import tarfile
         path = tmp_path / "openglcontext-3.0.0a1.tar.gz"
         with tarfile.open(path, "w:gz") as t:
             for name in ("openglcontext-3.0.0a1/readme.txt",

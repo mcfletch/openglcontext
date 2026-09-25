@@ -7,6 +7,7 @@ from OpenGLContext.scenegraph.pbrmaterial import (
     PBRMaterial, PBRTexture, material_is_transparent, material_to_pbr,
     uv_transform_matrix,
 )
+from OpenGLContext.scenegraph.basenodes import Appearance, Material
 
 
 class TestPBRMaterialDefaults:
@@ -31,7 +32,6 @@ class TestPBRMaterialDefaults:
         assert m.texture('normal') is None
 
     def test_fits_in_appearance_slot(self):
-        from OpenGLContext.scenegraph.basenodes import Appearance
         m = PBRMaterial()
         a = Appearance(material=m)
         assert a.material is m
@@ -44,7 +44,6 @@ class TestUpConversion:
         assert 0.0 < f['roughness'] <= 1.0
 
     def test_shininess_maps_to_roughness(self):
-        from OpenGLContext.scenegraph.basenodes import Material
         shiny = material_to_pbr(Material(diffuseColor=(1, 0, 0), shininess=0.9))
         dull = material_to_pbr(Material(diffuseColor=(1, 0, 0), shininess=0.1))
         # higher shininess -> lower roughness
@@ -53,7 +52,6 @@ class TestUpConversion:
         assert shiny['metallic'] == 0.0
 
     def test_roughness_clamped(self):
-        from OpenGLContext.scenegraph.basenodes import Material
         f = material_to_pbr(Material(shininess=1.0))
         assert f['roughness'] >= 0.04
 
@@ -114,10 +112,11 @@ class TestUVTransform:
 
 from PIL import Image
 from OpenGL.GL import (
-    GL_CLAMP_TO_EDGE, GL_LINEAR, GL_NEAREST, GL_REPEAT, GL_TEXTURE_2D,
-    GL_TEXTURE_MAG_FILTER, GL_TEXTURE_WRAP_S, glBindTexture, glGetError,
-    glGetTexParameteriv, GL_NO_ERROR,
+    GL_CLAMP_TO_EDGE, GL_LINEAR, GL_NEAREST, GL_NO_ERROR, GL_REPEAT, GL_TEXTURE_2D,
+    GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER, GL_TEXTURE_WRAP_S, glBindTexture, glGetError,
+    glGetTexParameteriv,
 )
+import OpenGL.GL as GLmod
 import gc
 import types
 
@@ -182,8 +181,6 @@ class TestPBRTextureGL:
         # A driver that cannot generate mipmaps -> _apply_sampler must degrade the
         # min filter to plain GL_LINEAR rather than a mipmap filter (else sampling
         # an incomplete mip chain renders black).
-        import OpenGL.GL as GLmod
-        from OpenGL.GL import GL_TEXTURE_MIN_FILTER
 
         def _boom(_target):
             raise RuntimeError("no mipmaps on this driver")

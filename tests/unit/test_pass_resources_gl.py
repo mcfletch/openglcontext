@@ -15,6 +15,7 @@ from OpenGL import GL
 from OpenGLContext.scenegraph import basenodes
 from tests.unit.glrender import base_env
 from tests.unit.test_planar_mirror_gl import _room
+from OpenGLContext.passes import renderpass
 
 SIZE = (160, 120)
 
@@ -97,7 +98,6 @@ def _swap(context):
 
 
 def test_a_scene_swap_releases_the_outgoing_passs_gl_objects(render_scene, env):
-    from OpenGLContext.passes import renderpass
     rendered = render_scene(_room(), frames=3, size=SIZE)
     context = rendered.context
     outgoing = renderpass.current_pass()
@@ -119,7 +119,6 @@ def test_a_scene_swap_releases_the_outgoing_passs_gl_objects(render_scene, env):
 
 
 def test_disposing_twice_is_harmless(render_scene, env):
-    from OpenGLContext.passes import renderpass
     render_scene(_room(), frames=2, size=SIZE)
     pass_ = renderpass.current_pass()
     held = _names(pass_)
@@ -131,7 +130,6 @@ def test_disposing_twice_is_harmless(render_scene, env):
 
 def test_a_pass_draws_again_after_disposing(render_scene, env):
     """What disposing drops is made again on the next frame that needs it."""
-    from OpenGLContext.passes import renderpass
     rendered = render_scene(_room(), frames=2, size=SIZE)
     pass_ = renderpass.current_pass()
     before = {kind for kind, _name in _names(pass_)}

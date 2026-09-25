@@ -8,6 +8,10 @@ backgrounds use -- has to be declared as package data, or a pip install has the
 modules and none of the files they open.
 """
 import tomllib
+import glob
+import subprocess
+import sys
+import zipfile
 
 import pytest
 
@@ -81,7 +85,6 @@ class TestRuntimeDataIsDeclaredAsPackageData:
         assert 'resources/environment/*.jpg' in self._patterns()
 
     def test_every_declared_pattern_matches_something(self):
-        import glob
         package = ROOT / 'OpenGLContext'
         for pattern in self._patterns():
             assert glob.glob(str(package / pattern)), pattern
@@ -126,9 +129,6 @@ class TestTheTypeDeclarationsShip:
         A pattern that matches a file in the checkout can still miss the
         wheel, so this builds one and looks inside it.
         """
-        import subprocess
-        import sys
-        import zipfile
 
         result = subprocess.run(
             [sys.executable, '-m', 'pip', 'wheel', '--no-deps',

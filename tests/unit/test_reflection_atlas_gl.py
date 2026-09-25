@@ -1,9 +1,11 @@
 """The reflection atlas and the GPU timer, against a real context."""
 import numpy as np
 import pytest
+from OpenGL import GL as gl
 
 from OpenGLContext.passes.gputimer import GpuTimer
 from OpenGLContext.passes.reflectionatlas import LEVELS, ReflectionAtlas, atlas_size
+from OpenGLContext.passes.reflectiontiles import GUTTER
 
 
 @pytest.fixture
@@ -17,7 +19,6 @@ def test_the_atlas_is_a_share_of_the_windows_pixels():
 
 
 def test_a_cleared_tile_holds_nothing_and_its_neighbour_is_untouched(gl_context):
-    from OpenGL import GL as gl
     atlas = ReflectionAtlas()
     try:
         assert atlas.ensure_size(64, 32)
@@ -43,7 +44,6 @@ def test_a_cleared_tile_holds_nothing_and_its_neighbour_is_untouched(gl_context)
 
 
 def test_the_timer_measures_without_waiting(gl_context):
-    from OpenGL import GL as gl
     timer = GpuTimer()
     try:
         for _ in range(12):
@@ -67,7 +67,6 @@ def test_ending_a_timer_that_never_began_does_nothing(gl_context):
 def test_each_reading_is_numbered_and_carries_what_its_frame_was_tagged(gl_context):
     """The newest reading stays until another arrives; its number says when
     one has, and its tag is what the measured frame was drawn with."""
-    from OpenGL import GL as gl
     timer = GpuTimer()
     try:
         assert timer.reading == 0 and timer.tag is None
@@ -90,7 +89,6 @@ def test_each_reading_is_numbered_and_carries_what_its_frame_was_tagged(gl_conte
 
 
 def _texels(texture, width, height):
-    from OpenGL import GL as gl
     gl.glBindTexture(gl.GL_TEXTURE_2D, texture)
     found = np.frombuffer(gl.glGetTexImage(gl.GL_TEXTURE_2D, 0, gl.GL_RGBA, gl.GL_FLOAT),
                           np.float32).reshape(height, width, 4)
@@ -99,7 +97,6 @@ def _texels(texture, width, height):
 
 
 def _fill(atlas, colour):
-    from OpenGL import GL as gl
     previous = atlas.begin()
     gl.glScissor(0, 0, *atlas.size)
     gl.glClearColor(*colour)
@@ -109,7 +106,6 @@ def _fill(atlas, colour):
 
 def test_clearing_a_tile_clears_its_gutter_and_nothing_past_it(gl_context):
     """The blurred levels a rough mirror reads reach into the gutter."""
-    from OpenGLContext.passes.reflectiontiles import GUTTER
     atlas = ReflectionAtlas()
     try:
         atlas.ensure_size(64, 32)
@@ -158,7 +154,6 @@ def test_keeping_copies_only_the_tiles_named(gl_context):
 def test_the_atlas_leaves_the_state_it_found(gl_context):
     """Clear colour, the texture on the active unit and both framebuffer
     bindings are as they were after every call."""
-    from OpenGL import GL as gl
     texture = int(gl.glGenTextures(1))
     read, draw = (int(name) for name in gl.glGenFramebuffers(2))
     atlas = ReflectionAtlas()

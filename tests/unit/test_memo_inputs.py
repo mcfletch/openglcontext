@@ -9,15 +9,19 @@ each zone is.
 """
 import numpy as np
 import pytest
+from PIL import Image
 
 from OpenGLContext.passes import reflection
 
 from OpenGLContext.passes.pbrpass import PBRPass, instance_collapse_is_enabled
-from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.scenegraph import basenodes, lod, zone as zonemodule
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 from OpenGLContext.testing.memo import check_memo_inputs
+from OpenGLContext.passes.flatcore import FlatPass
+from OpenGLContext.scenegraph.water.surface import WaterStyle
+from OpenGLContext.scenegraph.zone import Zone, ZoneSetting
 
 
 def _mesh(offset=0.0):
@@ -29,7 +33,6 @@ def _mesh(offset=0.0):
 
 
 def _texture():
-    from PIL import Image
     return PBRTexture(Image.new('RGB', (2, 2)), srgb=True)
 
 
@@ -82,7 +85,6 @@ def test_the_batching_memo_follows_a_pbr_shape(batching):
 
 
 def _water_style():
-    from OpenGLContext.scenegraph.water.surface import WaterStyle
     return WaterStyle()
 
 
@@ -175,18 +177,15 @@ class _Path(tuple):
 
 
 def _levels_pass(paths):
-    from OpenGLContext.passes.flatcore import FlatPass
     passing = FlatPass.__new__(FlatPass)
     passing.paths = {}
     passing._pathGeneration = 0
     passing._levelChoice = None
-    from OpenGLContext.scenegraph import lod
     passing.paths[lod.LOD] = paths
     return passing
 
 
 def _viewer(distance):
-    from OpenGLContext.scenegraph import lod
     modelview = np.identity(4, 'd')
     modelview[3, 2] = -distance
     return lod.Viewer(modelview, lod.viewer_tangent(60.0))
@@ -205,7 +204,6 @@ def _fresh_levels(nodes, distance):
 
 
 def test_the_level_memo_follows_every_field_deciding_a_level():
-    from OpenGLContext.scenegraph import lod
     plain = lod.LOD(level=[basenodes.Group(), basenodes.Group(),
                            basenodes.Group()], range=[5.0, 10.0])
     covered = lod.ScreenCoverageLOD(
@@ -234,7 +232,6 @@ def test_the_level_memo_follows_every_field_deciding_a_level():
 
 def test_the_level_memo_follows_the_hysteresis_band():
     """A band narrowed while the viewer stands inside it lets the coarser level in."""
-    from OpenGLContext.scenegraph import lod
     node = lod.LOD(level=[basenodes.Group(), basenodes.Group()], range=[10.0])
     passing = _levels_pass([_Path(node, np.identity(4, 'd'))])
     distance = [9.0]
@@ -254,8 +251,6 @@ def test_the_level_memo_follows_the_hysteresis_band():
 # --- the zone placement memo --------------------------------------------------
 
 def test_the_zone_placement_follows_every_field_placing_a_zone():
-    from OpenGLContext.scenegraph import zone as zonemodule
-    from OpenGLContext.scenegraph.zone import Zone
     node = Zone(shapeType='box', size=(2, 2, 2))
     matrix = np.identity(4, 'd')
     cache = {}
@@ -283,8 +278,6 @@ def test_the_zone_placement_follows_every_field_placing_a_zone():
 
 
 def test_a_zone_setting_edited_in_place_makes_a_new_placement():
-    from OpenGLContext.scenegraph import zone as zonemodule
-    from OpenGLContext.scenegraph.zone import Zone
     settings = _zone_settings()
     node = Zone(shapeType='box', size=(2, 2, 2), settings=settings)
     matrix = np.identity(4, 'd')
@@ -298,7 +291,6 @@ def test_a_zone_setting_edited_in_place_makes_a_new_placement():
 
 
 def _zone_settings():
-    from OpenGLContext.scenegraph.zone import ZoneSetting
     classes = [cls for cls in _subclasses(ZoneSetting) if 'enabled' in dir(cls)]
     return [classes[0]()]
 

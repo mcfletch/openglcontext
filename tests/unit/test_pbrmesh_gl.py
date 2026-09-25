@@ -12,11 +12,13 @@ import numpy as np
 import pytest
 
 from vrml.cache import Cache
-from OpenGL.GL import (
-    GL_POINTS, GL_TRIANGLES, glGetError, GL_NO_ERROR,
-)
+from OpenGL.GL import GL_CCW, GL_NO_ERROR, GL_POINTS, GL_TRIANGLES, glGetError
+from OpenGL import GL
 
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh, _MeshGPU
+from OpenGLContext.passes import instancing
+from OpenGLContext.scenegraph.basenodes import Shape
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 
 
 @pytest.fixture
@@ -190,8 +192,6 @@ class TestResourcesAndQueue:
 
     def test_a_rebuilt_instance_vao_is_given_the_divisor_it_is_drawn_with(self, gl):
         """The divisor is state of the VAO, so a new VAO starts from its own."""
-        from OpenGL import GL
-        from OpenGLContext.passes import instancing
         gpu = _full_mesh()._gpu(_mode())
         modelviews = [np.eye(4, dtype='f')] * 2
 
@@ -239,11 +239,9 @@ class TestBoundingAndMisc:
         assert vol is not None
 
     def test_front_face_bad_matrix_defaults_ccw(self):
-        from OpenGL.GL import GL_CCW
         assert PBRMesh(positions=np.zeros((3, 3), 'f'))._front_face(np.eye(2)) == GL_CCW
 
     def test_front_face_none_matrix_defaults_ccw(self):
-        from OpenGL.GL import GL_CCW
         assert PBRMesh(positions=np.zeros((3, 3), 'f'))._front_face(None) == GL_CCW
 
     def test_morph_weights_move_the_deform_version(self):
@@ -269,7 +267,6 @@ class TestBoundingAndMisc:
         assert mesh.positions.shape == (2, 3)
 
     def test_sort_key_reports_material_transparency(self):
-        from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
         opaque = PBRMesh(positions=np.zeros((3, 3), 'f'), material=None)
         assert opaque.sortKey(None, None)[0] is False
         clear = PBRMesh(positions=np.zeros((3, 3), 'f'),
@@ -330,7 +327,6 @@ class TestDrawingIntoADepthMap:
         assert empty.depthDraw(self._depth_mode()) is True
 
     def test_a_shape_draws_its_mesh_into_the_depth_map_that_way(self, gl):
-        from OpenGLContext.scenegraph.basenodes import Shape
         mesh = _full_mesh()
         drawn = []
         mesh.depthDraw = lambda mode: drawn.append(mode) or True

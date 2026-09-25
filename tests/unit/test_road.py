@@ -14,8 +14,9 @@ import pytest
 
 from OpenGLContext.scenegraph import road as road_module
 from OpenGLContext.scenegraph.road import (
-    RoadProfile, resample_polyline, road_mesh, road_surface, road_texture,
-    tarmac_material,
+    bank_profile, banked_sections, corner_speed, cornering_radius, LINE_ALBEDO, morphed_sections,
+    plan_curvature, resample_polyline, road_mesh, road_surface, road_texture, RoadProfile,
+    superelevation, sweep_frames, TARMAC_ALBEDO, tarmac_material, widened_sections,
 )
 
 
@@ -274,7 +275,6 @@ class TestASectionThatChangesAlongTheRoad:
         return np.stack([x, np.zeros(count), np.zeros(count)], axis=-1)
 
     def test_a_road_with_one_section_is_unchanged(self) -> None:
-        from OpenGLContext.scenegraph.road import morphed_sections, road_surface
         line = self._line()
         profile = RoadProfile()
         plain = road_surface(line, profile)[0]
@@ -283,7 +283,6 @@ class TestASectionThatChangesAlongTheRoad:
         assert np.allclose(plain, held)
 
     def test_a_full_blend_gives_the_other_section(self) -> None:
-        from OpenGLContext.scenegraph.road import morphed_sections, road_surface
         line = self._line()
         profile = RoadProfile()
         deck = profile.on_structure()
@@ -292,7 +291,6 @@ class TestASectionThatChangesAlongTheRoad:
         assert np.allclose(blended, road_surface(line, deck)[0])
 
     def test_a_taper_runs_between_the_two(self) -> None:
-        from OpenGLContext.scenegraph.road import morphed_sections, road_surface
         line = self._line()
         profile = RoadProfile()
         blend = np.linspace(0.0, 1.0, len(line))
@@ -304,7 +302,6 @@ class TestASectionThatChangesAlongTheRoad:
         assert np.all(np.diff(verge) >= -1e-6)
 
     def test_the_road_is_still_one_surface(self) -> None:
-        from OpenGLContext.scenegraph.road import morphed_sections, road_surface
         line = self._line()
         profile = RoadProfile()
         blend = np.concatenate([np.zeros(8), np.linspace(0, 1, 5), np.ones(8)])
@@ -315,7 +312,6 @@ class TestASectionThatChangesAlongTheRoad:
         assert len(indices) == (len(line) - 1) * (ring - 1) * 6
 
     def test_a_section_per_point_is_required(self) -> None:
-        from OpenGLContext.scenegraph.road import morphed_sections, road_surface
         line = self._line()
         profile = RoadProfile()
         with pytest.raises(ValueError):
@@ -323,7 +319,6 @@ class TestASectionThatChangesAlongTheRoad:
                 profile, profile, np.zeros(3)))
 
     def test_a_mesh_takes_them_too(self) -> None:
-        from OpenGLContext.scenegraph.road import morphed_sections, road_mesh
         line = self._line()
         profile = RoadProfile()
         mesh = road_mesh(line, profile, sections=morphed_sections(
@@ -331,7 +326,6 @@ class TestASectionThatChangesAlongTheRoad:
         assert len(mesh.positions) == len(line) * len(profile.section())
 
     def test_two_profiles_of_different_shape_cannot_be_blended(self) -> None:
-        from OpenGLContext.scenegraph.road import morphed_sections
         with pytest.raises(ValueError):
             morphed_sections(RoadProfile(), RoadProfile(verge_width=0.0),
                              np.zeros(4))
@@ -368,7 +362,6 @@ class TestTheCutOverAStructure:
             == profile.on_structure().section().shape
 
     def test_blending_the_two_narrows_the_road(self) -> None:
-        from OpenGLContext.scenegraph.road import morphed_sections
         profile = RoadProfile()
         blend = morphed_sections(profile, profile.on_structure(),
                                  np.array([0.0, 1.0]))
@@ -387,8 +380,6 @@ class TestThePaintIsWhereTheRoadIs:
     @staticmethod
     def _bands(profile, size=512):
         """Where the tarmac starts and stops across the painted image."""
-        import numpy as np
-        from OpenGLContext.scenegraph.road import TARMAC_ALBEDO, road_texture
         found = np.asarray(road_texture(size, profile=profile), dtype='d') / 255.0
         row = found[0]
         dark = row.max(axis=-1) < max(TARMAC_ALBEDO) * 2.5
@@ -396,25 +387,17 @@ class TestThePaintIsWhereTheRoadIs:
         return columns.min() / size, (columns.max() + 1) / size
 
     def test_the_tarmac_is_as_wide_as_the_carriageway(self) -> None:
-        from OpenGLContext.scenegraph.road import RoadProfile
         profile = RoadProfile(lane_width=3.6, lanes=2)
         first, last = self._bands(profile)
         painted = (last - first) * profile.total_width
         assert painted == pytest.approx(profile.carriageway_width, abs=0.25)
 
     def test_a_wider_road_paints_a_wider_carriageway(self) -> None:
-        from OpenGLContext.scenegraph.road import RoadProfile
         narrow = self._bands(RoadProfile(lane_width=3.0, lanes=2))
         wide = self._bands(RoadProfile(lane_width=3.6, lanes=4))
         assert (wide[1] - wide[0]) > (narrow[1] - narrow[0])
 
     def test_the_edge_lines_are_at_the_edge_of_the_carriageway(self) -> None:
-        import numpy as np
-        from OpenGLContext.scenegraph.road import (
-            LINE_ALBEDO,
-            RoadProfile,
-            road_texture,
-        )
         profile = RoadProfile(lane_width=3.6, lanes=2)
         size = 512
         found = np.asarray(road_texture(size, profile=profile), dtype='d') / 255.0
@@ -425,12 +408,6 @@ class TestThePaintIsWhereTheRoadIs:
         assert paint.min() / size == pytest.approx(edge, abs=0.03)
 
     def test_and_the_dashes_run_down_the_crown(self) -> None:
-        import numpy as np
-        from OpenGLContext.scenegraph.road import (
-            LINE_ALBEDO,
-            RoadProfile,
-            road_texture,
-        )
         found = np.asarray(road_texture(512, profile=RoadProfile()),
                            dtype='d') / 255.0
         middle = found[:, 256]
@@ -439,31 +416,25 @@ class TestThePaintIsWhereTheRoadIs:
 
 class TestHowFastABankedCornerAllows:
     def test_a_flat_corner_is_the_grip_it_has(self) -> None:
-        from OpenGLContext.scenegraph.road import corner_speed
         assert corner_speed(100.0, grip=1.0) == pytest.approx(math.sqrt(9.81 * 100.0))
 
     def test_banking_a_corner_makes_it_faster(self) -> None:
-        from OpenGLContext.scenegraph.road import corner_speed
         assert corner_speed(315.0, bank=0.3) > corner_speed(315.0, bank=0.0)
 
     def test_the_bank_is_the_sign_free_part_of_it(self) -> None:
         """Left or right, a corner leans into itself and gains the same."""
-        from OpenGLContext.scenegraph.road import corner_speed
         assert corner_speed(200.0, bank=-0.25) == pytest.approx(
             corner_speed(200.0, bank=0.25))
 
     def test_a_bank_steep_enough_needs_no_tyre_at_all(self) -> None:
         """Past ``grip * bank == 1`` the road holds a car of any speed."""
-        from OpenGLContext.scenegraph.road import corner_speed
         assert not math.isfinite(corner_speed(100.0, grip=1.0, bank=1.5))
 
     def test_a_banked_corner_may_be_tighter_for_the_same_speed(self) -> None:
-        from OpenGLContext.scenegraph.road import cornering_radius
         speed = 200.0 / 3.6
         assert cornering_radius(speed, bank=0.3) < cornering_radius(speed) * 0.7
 
     def test_the_radius_and_the_speed_are_each_other(self) -> None:
-        from OpenGLContext.scenegraph.road import corner_speed, cornering_radius
         speed = 180.0 / 3.6
         found = cornering_radius(speed, grip=0.9, bank=0.2)
         assert corner_speed(found, grip=0.9, bank=0.2) == pytest.approx(speed)
@@ -472,21 +443,17 @@ class TestHowFastABankedCornerAllows:
 class TestTheBankACornerAsks:
     def test_it_balances_a_car_at_the_speed_it_is_given(self) -> None:
         """No sideways grip is needed at the speed the bank is chosen for."""
-        from OpenGLContext.scenegraph.road import superelevation
         radius, speed = 400.0, 40.0
         found = float(superelevation(radius, speed, maximum=10.0))
         assert found == pytest.approx(speed * speed / (9.81 * radius))
 
     def test_a_straight_asks_for_none(self) -> None:
-        from OpenGLContext.scenegraph.road import superelevation
         assert float(superelevation(1e9, 55.0)) == pytest.approx(0.0, abs=1e-6)
 
     def test_it_never_leans_further_than_it_is_allowed(self) -> None:
-        from OpenGLContext.scenegraph.road import superelevation
         assert float(superelevation(20.0, 55.0, maximum=0.3)) == pytest.approx(0.3)
 
     def test_it_answers_an_array_of_corners_at_once(self) -> None:
-        from OpenGLContext.scenegraph.road import superelevation
         found = superelevation(np.array([1e9, 4000.0, 1200.0]), 55.0, maximum=0.3)
         assert found.shape == (3,)
         assert found[0] < found[1] < found[2]
@@ -494,19 +461,16 @@ class TestTheBankACornerAsks:
 
 class TestTheCurvatureOfAPlan:
     def test_a_straight_has_none(self) -> None:
-        from OpenGLContext.scenegraph.road import plan_curvature
         found = plan_curvature(resample_polyline(_straight(length=200.0), 5.0))
         assert np.allclose(found, 0.0, atol=1e-6)
 
     def test_a_circle_is_one_over_its_radius(self) -> None:
-        from OpenGLContext.scenegraph.road import plan_curvature
         line = resample_polyline(_bend(radius=120.0, count=257), 4.0)
         found = plan_curvature(line, baseline=30.0)
         assert np.allclose(np.abs(found[6:-6]), 1.0 / 120.0, rtol=0.02)
 
     def test_it_is_positive_where_the_road_turns_right(self) -> None:
         """``_bend`` runs anticlockwise seen from above, which is a left turn."""
-        from OpenGLContext.scenegraph.road import plan_curvature
         line = resample_polyline(_bend(radius=120.0, count=257), 4.0)
         assert plan_curvature(line)[10] < 0.0
         assert plan_curvature(line[::-1])[10] > 0.0
@@ -525,13 +489,11 @@ class TestTheBankAlongARoad:
         return resample_polyline(np.vstack([run, arc[1:], out[1:]]), spacing)
 
     def test_a_straight_road_is_not_banked(self) -> None:
-        from OpenGLContext.scenegraph.road import bank_profile
         found = bank_profile(resample_polyline(_straight(length=400.0), 5.0),
                              speed=55.0)
         assert np.allclose(found, 0.0, atol=1e-6)
 
     def test_a_corner_leans_into_itself(self) -> None:
-        from OpenGLContext.scenegraph.road import bank_profile
         line = self._circuit()
         found = bank_profile(line, speed=55.0)
         # A right-hand bend banks positive: the right side of the road, which
@@ -540,13 +502,11 @@ class TestTheBankAlongARoad:
         assert found.min() > -1e-6
 
     def test_it_never_exceeds_what_it_is_allowed(self) -> None:
-        from OpenGLContext.scenegraph.road import bank_profile
         found = bank_profile(self._circuit(radius=60.0), speed=55.0,
                              maximum=0.25)
         assert found.max() <= 0.25 + 1e-9
 
     def test_it_is_taken_up_gradually_rather_than_at_a_vertex(self) -> None:
-        from OpenGLContext.scenegraph.road import bank_profile
         profile = RoadProfile()
         line = self._circuit()
         found = bank_profile(line, speed=55.0, profile=profile, gradient=0.01)
@@ -558,7 +518,6 @@ class TestTheBankAlongARoad:
     def test_the_lean_is_taken_up_before_the_corner_starts(self) -> None:
         """A runoff straddles the entry: the road is already leaning when it
         gets there, rather than rolling once it is in the bend."""
-        from OpenGLContext.scenegraph.road import bank_profile
         line = self._circuit(straight=400.0)
         found = bank_profile(line, speed=55.0)
         entry = int(np.searchsorted(
@@ -567,7 +526,6 @@ class TestTheBankAlongARoad:
         assert found[entry] > 0.02
 
     def test_a_quicker_transition_starts_closer_to_the_corner(self) -> None:
-        from OpenGLContext.scenegraph.road import bank_profile
         line = self._circuit()
 
         def onset(found):
@@ -578,7 +536,6 @@ class TestTheBankAlongARoad:
 
     def test_a_road_that_cannot_reach_the_bank_takes_what_it_can(self) -> None:
         """A corner shorter than its own runoff is banked less, not stepped."""
-        from OpenGLContext.scenegraph.road import bank_profile
         line = self._circuit(radius=60.0, straight=200.0)
         found = bank_profile(line, speed=55.0, gradient=0.001, maximum=0.3)
         assert 0.0 < found.max() < 0.3
@@ -586,7 +543,6 @@ class TestTheBankAlongARoad:
 
 class TestABankedSurface:
     def _banked(self, bank, profile=None, points=None):
-        from OpenGLContext.scenegraph.road import banked_sections, road_surface
         profile = profile or RoadProfile()
         line = points if points is not None else _straight(length=100.0)
         lean = np.full(len(line), bank)
@@ -595,7 +551,6 @@ class TestABankedSurface:
         return road_surface(line, profile, sections=sections, bank=lean)
 
     def test_an_unbanked_road_is_the_road_it_always_was(self) -> None:
-        from OpenGLContext.scenegraph.road import road_surface
         plain = road_surface(_straight(), RoadProfile())[0]
         assert np.allclose(self._banked(0.0)[0], plain)
 
@@ -667,13 +622,11 @@ class TestALineWithNoLengthInASegment:
         return np.insert(line, at, line[at], axis=0)
 
     def test_the_doubled_point_keeps_an_up_vector(self) -> None:
-        from OpenGLContext.scenegraph.road import sweep_frames
         _right, up = sweep_frames(self._doubled(5))
         assert np.linalg.norm(up[5]) == pytest.approx(1.0, abs=1e-9), (
             "the ring there has no up vector: %r" % (up[5],))
 
     def test_it_gets_the_frame_the_road_has_there(self) -> None:
-        from OpenGLContext.scenegraph.road import sweep_frames
         right, up = sweep_frames(self._doubled(5))
         assert np.allclose(right[5], right[4], atol=1e-9)
         assert np.allclose(up[5], up[4], atol=1e-9)
@@ -681,7 +634,6 @@ class TestALineWithNoLengthInASegment:
     def test_a_doubled_point_at_the_end_keeps_its_frame(self) -> None:
         """Where a caller closes a loop by repeating the first point onto a
         line that already ended with it."""
-        from OpenGLContext.scenegraph.road import sweep_frames
         line = _straight(length=100.0, count=11)
         line = np.vstack([line, line[-1:]])
         _right, up = sweep_frames(line)
@@ -713,14 +665,12 @@ class TestASweepThatComesBackToItsStart:
         return np.vstack([ring, ring[:1]]) if repeat else ring
 
     def test_an_open_sweep_is_unchanged(self) -> None:
-        from OpenGLContext.scenegraph.road import sweep_frames
         line = self._loop()
         assert np.allclose(sweep_frames(line)[0],
                            sweep_frames(line, closed=False)[0])
 
     def test_the_seam_gets_the_frame_its_neighbours_have(self) -> None:
         """Round a circle every across vector is radial, the seam included."""
-        from OpenGLContext.scenegraph.road import sweep_frames
         line = self._loop()
         right, _up = sweep_frames(line, closed=True)
         radial = line / np.linalg.norm(line, axis=1, keepdims=True)
@@ -730,7 +680,6 @@ class TestASweepThatComesBackToItsStart:
     def test_a_line_that_already_repeats_its_first_point(self) -> None:
         """The shape a baked circuit arrives in: the closing ring is the
         opening one, so the two cuts have to coincide."""
-        from OpenGLContext.scenegraph.road import banked_sections
         profile = RoadProfile()
         line = self._loop(repeat=True)
         lean = np.full(len(line), 0.10)
@@ -746,7 +695,6 @@ class TestASweepThatComesBackToItsStart:
     def test_frames_can_be_supplied_for_a_stretch_of_a_longer_road(self) -> None:
         """A chunk of a road cannot be swept on its own: the frame at its ends
         depends on the points either side, which the chunk does not have."""
-        from OpenGLContext.scenegraph.road import sweep_frames
         profile = RoadProfile()
         line = self._loop(count=48)
         right, up = sweep_frames(line, closed=True)
@@ -758,7 +706,6 @@ class TestASweepThatComesBackToItsStart:
 
 class TestARoadThatWidensToLetSomebodyPast:
     def _sections(self, profile, widening):
-        from OpenGLContext.scenegraph.road import widened_sections
         base = np.tile(profile.section(), (len(widening), 1, 1))
         return widened_sections(base, widening, profile)
 
@@ -801,9 +748,6 @@ class TestARoadThatWidensToLetSomebodyPast:
         assert np.allclose(found, profile.widened(2.4).section())
 
     def test_it_composes_with_the_cut_a_structure_takes(self) -> None:
-        from OpenGLContext.scenegraph.road import (
-            morphed_sections, widened_sections,
-        )
         profile = RoadProfile()
         found = widened_sections(
             morphed_sections(profile, profile.on_structure(),
@@ -814,7 +758,6 @@ class TestARoadThatWidensToLetSomebodyPast:
                            profile.on_structure().widened(3.0).section())
 
     def test_a_widening_of_the_wrong_length_is_refused(self) -> None:
-        from OpenGLContext.scenegraph.road import widened_sections
         profile = RoadProfile()
         with pytest.raises(ValueError, match='widening'):
             widened_sections(np.tile(profile.section(), (3, 1, 1)),
@@ -825,9 +768,6 @@ class TestBankingAWidenedRoad:
     def test_the_crown_is_taken_out_to_the_edge_the_road_actually_has(self) -> None:
         """The camber is gone across the whole carriageway, not across the
         width the road would have had if it had not widened."""
-        from OpenGLContext.scenegraph.road import (
-            banked_sections, widened_sections,
-        )
         profile = RoadProfile(crossfall=0.02, lane_width=3.6, lanes=2)
         wide = widened_sections(np.tile(profile.section(), (2, 1, 1)),
                                 np.full(2, 4.0), profile)

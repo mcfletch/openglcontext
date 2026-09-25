@@ -9,12 +9,17 @@ import os
 
 
 import logging
+from types import SimpleNamespace
 
 import pytest
+import numpy as np
 
 pytest.importorskip("glfw")
 
 from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.passes import renderpass
+from OpenGLContext.scenegraph.frommesh import mesh_from_primitive
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 
 
 
@@ -42,7 +47,6 @@ def shader_paths(monkeypatch):
 
 class TestTheFailureIsRecordedAndCountedOnce:
     def test_the_pass_holds_the_cause_it_could_not_draw(self, render_scene):
-        from OpenGLContext.passes import renderpass
         render_scene(failing_scene(), frames=4)
         summary = renderpass.FLAT.failures.summary()
         assert len(summary) == 1
@@ -56,7 +60,6 @@ class TestTheFailureIsRecordedAndCountedOnce:
         assert len(tracebacks) == 1
 
     def test_a_scene_that_draws_records_nothing(self, render_scene):
-        from OpenGLContext.passes import renderpass
         render_scene([
             basenodes.Shape(geometry=basenodes.Box(size=(2, 2, 2)),
                             appearance=basenodes.Appearance(
@@ -73,7 +76,6 @@ class TestTheFailureIsRecordedAndCountedOnce:
         uniform says the geometry brought them, so a shape that has none of them
         draws correctly and is not a failure to report.
         """
-        from OpenGLContext.passes import renderpass
         geometry = [basenodes.Box(size=(1, 1, 1)), basenodes.Sphere(radius=1.0),
                     basenodes.Cylinder(radius=0.5), basenodes.Cone()]
         render_scene([
@@ -90,7 +92,6 @@ class TestAGeometryThatCannotFeedTheShader:
     """The other half of the check: an array the shader has no default for."""
 
     def test_a_mesh_without_normals_is_named(self, render_scene, caplog):
-        from OpenGLContext.passes import renderpass
         with caplog.at_level(logging.ERROR, logger='OpenGLContext.passes._flat'):
             render_scene(unlit_normals_scene(), frames=2)
         summary = renderpass.FLAT.failures.summary()
@@ -104,11 +105,6 @@ class TestAGeometryThatCannotFeedTheShader:
 
 def unlit_normals_scene():
     """A mesh the PBR program has nothing to shade: no normals at all."""
-    import numpy as np
-    from types import SimpleNamespace
-
-    from OpenGLContext.scenegraph.frommesh import mesh_from_primitive
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 
     positions = np.array([
         [-4, -4, -20], [4, -4, -20], [4, 4, -20],
@@ -122,7 +118,6 @@ def unlit_normals_scene():
 
 class TestTheRunSaysWhatNeverDrew:
     def test_reporting_names_the_failure(self, render_scene, caplog):
-        from OpenGLContext.passes import renderpass
         render_scene(failing_scene(), frames=2)
         caplog.clear()
         with caplog.at_level(logging.WARNING):
@@ -130,7 +125,6 @@ class TestTheRunSaysWhatNeverDrew:
         assert 'this geometry cannot draw' in caplog.text
 
     def test_reporting_with_no_pass_at_all_is_quiet(self, monkeypatch, caplog):
-        from OpenGLContext.passes import renderpass
         monkeypatch.setattr(renderpass, 'FLAT', None)
         with caplog.at_level(logging.DEBUG):
             renderpass.report_render_failures()
@@ -138,7 +132,6 @@ class TestTheRunSaysWhatNeverDrew:
 
     def test_quitting_reports(self, render_scene, monkeypatch):
         """``OnQuit`` calls ``os._exit``, so the report has to happen before it."""
-        from OpenGLContext.passes import renderpass
         rendered = render_scene(failing_scene(), frames=2)
         reported = []
         monkeypatch.setattr(renderpass, 'report_render_failures',

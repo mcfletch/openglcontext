@@ -21,6 +21,7 @@ tests lock the parts we control so a newly added shader can't break the contract
 """
 import os
 import re
+import inspect
 
 import pytest
 
@@ -90,7 +91,6 @@ class TestSelectionFBOProvidesAttachment1:
     supply attachment 1 and enable both draw buffers."""
 
     def _src(self):
-        import inspect
         # The selection FBOs (attachment 1 + both draw buffers) live in
         # selectionbuffers; the pick policy in selection drives them.
         return inspect.getsource(selection) + inspect.getsource(selectionbuffers)

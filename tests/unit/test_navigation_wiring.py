@@ -5,6 +5,8 @@ import pytest
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.move import modes
 from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
+from OpenGLContext.events import glfwevents
+from OpenGLContext.passes.selection import SelectionMixin
 
 
 class _Key:
@@ -240,7 +242,6 @@ def test_a_context_with_no_modes_leaves_the_optimisation_alone():
 
 
 def test_the_pick_optimiser_keeps_a_move_while_mouse_look_is_in_force():
-    from OpenGLContext.passes.selection import SelectionMixin
     context = _SamplingContext(_fps_definition())
     context.getNavigation().select('fps')
     optimiser = SelectionMixin.__new__(SelectionMixin)
@@ -319,7 +320,6 @@ def test_pointer_motion_uses_the_pick_points_origin():
     the system uses.  The GLFW callback reports y downward and flips it; a
     backend that fed the raw value would invert mouse-look's vertical and
     nothing else, which is the hardest kind of sign error to see."""
-    from OpenGLContext.events import glfwevents
 
     class Backend(glfwevents.EventHandlerMixin):
         def __init__(self):

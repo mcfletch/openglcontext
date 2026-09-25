@@ -4,11 +4,15 @@ What the mix-in gives a context: the arrangements, the views' furniture, and
 the window's own camera left driving the perspective one. Headless -- a
 stand-in context with no window at all, as the overlay's own cases use.
 """
+import numpy as np
 from OpenGLContext.events.inputstate import InputState
 from OpenGLContext.multiview.mixin import MultiViewMixin
 from OpenGLContext.multiview.views import ViewLayout
 from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.overlay import OverlayMixin
+from OpenGLContext.passes import viewpointbinding
+from OpenGLContext.passes.flatcore import FlatPass
+from OpenGLContext.scenegraph.basenodes import sceneGraph, Viewpoint
 
 VIEWPORT = (800, 600)
 LOW, HIGH = (-10.0, 0.0, -10.0), (10.0, 6.0, 10.0)
@@ -153,7 +157,6 @@ class TestSwitchingBetweenThem:
 
 class TestWhatTheViewsAreFittedTo:
     def test_what_there_is_to_see_is_in_every_view(self):
-        import numpy as np
         window = _window(arrangement='quad')
         corners = [(x, y, z) for x in (LOW[0], HIGH[0]) for y in (LOW[1], HIGH[1])
                    for z in (LOW[2], HIGH[2])]
@@ -183,7 +186,6 @@ class TestWhatTheViewsAreFittedTo:
 
 class TestThePointer:
     def test_a_drag_in_an_elevation_moves_that_view(self):
-        import numpy as np
         window = _window(arrangement='quad')
         front = window.views.named('front')
         before = np.array(front.camera.view.centre)
@@ -238,9 +240,6 @@ class TestTheScenesCameras:
     """The cameras the window's scene carries reach every view's menu."""
 
     def test_the_views_menu_is_offered_the_scenes_cameras(self):
-        from OpenGLContext.passes import viewpointbinding
-        from OpenGLContext.passes.flatcore import FlatPass
-        from OpenGLContext.scenegraph.basenodes import Viewpoint, sceneGraph
         window = _window(arrangement='quad')
         graph = sceneGraph(children=[Viewpoint(description='Porch')])
         window.getSceneGraph = lambda: graph

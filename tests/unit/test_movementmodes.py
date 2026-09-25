@@ -2,9 +2,12 @@
 
 import pytest
 from vrml import node
+import numpy as np
 
 from OpenGLContext.events.inputstate import InputState
 from OpenGLContext.move import modes
+from OpenGLContext import quaternion
+from OpenGLContext.move.modes import FPSMode, WalkMode
 
 
 class _Platform:
@@ -603,8 +606,6 @@ class _Gaze:
         self.pitch += delta
 
     def gaze(self):
-        import numpy as np
-        from OpenGLContext import quaternion
         q = (quaternion.fromXYZR(1, 0, 0, self.pitch)
              * quaternion.fromXYZR(0, 1, 0, self.yaw))
         return np.asarray(q.matrix())[:3, :3] @ np.array([0.0, 0.0, -1.0])
@@ -631,7 +632,6 @@ class _Mouse:
 
 
 def test_moving_the_mouse_right_turns_the_view_right():
-    from OpenGLContext.move.modes import FPSMode
     platform = _Gaze()
     FPSMode(name='fps').update(0.016, _Mouse(dx=100), platform)
     assert platform.gaze()[0] > 0, 'the view swung left for a rightward mouse'
@@ -639,21 +639,18 @@ def test_moving_the_mouse_right_turns_the_view_right():
 
 def test_pushing_the_mouse_forward_looks_up():
     """Forward is *up* the screen, which in pick-point coordinates is +y."""
-    from OpenGLContext.move.modes import FPSMode
     platform = _Gaze()
     FPSMode(name='fps').update(0.016, _Mouse(dy=100), platform)
     assert platform.gaze()[1] > 0, 'pushing the mouse forward looked down'
 
 
 def test_an_inverted_mouse_looks_down_instead():
-    from OpenGLContext.move.modes import FPSMode
     platform = _Gaze()
     FPSMode(name='fps', invertLook=True).update(0.016, _Mouse(dy=100), platform)
     assert platform.gaze()[1] < 0
 
 
 def test_the_turn_command_turns_right():
-    from OpenGLContext.move.modes import WalkMode
     platform = _Gaze()
     mode = WalkMode(name='walk')
 
@@ -676,7 +673,6 @@ def test_the_turn_command_turns_right():
 
 
 def test_the_look_up_command_looks_up():
-    from OpenGLContext.move.modes import WalkMode
     platform = _Gaze()
     mode = WalkMode(name='walk')
 

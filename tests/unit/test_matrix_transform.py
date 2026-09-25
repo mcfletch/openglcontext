@@ -10,7 +10,7 @@ import pytest
 
 from vrml.vrml97 import nodepath
 
-from OpenGLContext.scenegraph.transform import MatrixTransform
+from OpenGLContext.scenegraph.transform import MatrixTransform, Transform
 from OpenGLContext.loaders import gltf
 
 
@@ -76,7 +76,6 @@ def test_setLocalMatrix_invalidates_cache():
 
 def test_setLocalMatrix_moves_the_paths_below_it():
     """A path whose matrix was already worked out follows the new matrix."""
-    from OpenGLContext.scenegraph.transform import Transform
     mt = MatrixTransform(localMatrix=np.identity(4))
     below = nodepath.NodePath([]) + [mt] + [Transform(translation=(0, 0, 1))]
     below.transformMatrix()
@@ -105,8 +104,6 @@ def test_loader_uses_matrix_transform_for_matrix_nodes():
 
 
 def test_loader_uses_trs_when_no_matrix():
-    from OpenGLContext.scenegraph.transform import Transform
-
     class FakeNode:
         matrix = None
         translation = [1.0, 2.0, 3.0]

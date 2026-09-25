@@ -7,6 +7,7 @@ from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.events.inputstate import InputState
 from OpenGLContext.move import modes
 from OpenGLContext.move.navigation import NavigationManager
+from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
 
 
 class _Platform:
@@ -260,8 +261,6 @@ class TestRetargetingKeepsTheChosenMode:
         assert manager.platform is fresh
 
     def test_a_context_reuses_the_manager_when_only_the_platform_moves(self):
-        from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
-
         class Ctx(ViewPlatformMixin):
             def __init__(self, definition, platform):
                 self.contextDefinition = definition

@@ -13,11 +13,13 @@ import os
 import subprocess
 import sys
 import types
+from math import cos, pi, sin
 
 import pytest
 
 import numpy as np
 from vrml.cache import Cache
+from OpenGL.GL import GL_CCW, GL_CW
 
 from OpenGLContext.scenegraph import pbrmesh
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
@@ -66,7 +68,6 @@ def test_gpu_cache_is_per_node(monkeypatch):
 
 def test_front_face_winding_from_determinant_sign():
     """Front-face winding follows the modelview parity (direct 3x3 determinant)."""
-    from OpenGL.GL import GL_CCW, GL_CW
 
     mesh = _mesh()
     assert mesh._front_face(np.identity(4, 'f')) == GL_CCW
@@ -75,7 +76,6 @@ def test_front_face_winding_from_determinant_sign():
     # even negative scale -> parity restored -> CCW
     assert mesh._front_face(np.diag([-1.0, -1.0, 1.0, 1.0]).astype('f')) == GL_CCW
     # a rotation (determinant +1) stays CCW; must ignore the translation row
-    from math import cos, sin, pi
     a = pi / 3
     R = np.identity(4, 'f')
     R[:3, :3] = [[cos(a), -sin(a), 0], [sin(a), cos(a), 0], [0, 0, 1]]
@@ -84,7 +84,6 @@ def test_front_face_winding_from_determinant_sign():
 
 
 def test_front_face_handles_missing_matrix():
-    from OpenGL.GL import GL_CCW
     assert _mesh()._front_face(None) == GL_CCW
 
 

@@ -21,6 +21,8 @@ import pytest
 
 from OpenGLContext import quaternion
 from OpenGLContext.move import orbit
+from OpenGLContext.move.dragwatcher import DragWatcher
+from OpenGLContext.move.trackball import Trackball
 
 WIDTH, HEIGHT = 800, 600
 
@@ -369,25 +371,21 @@ class TestTheDragMeasureItself:
     trackball share."""
 
     def test_the_same_movement_measures_the_same_either_way(self):
-        from OpenGLContext.move.dragwatcher import DragWatcher
         watcher = DragWatcher(40, 300, WIDTH, HEIGHT)
         left = watcher.uniformFractions(10, 300)
         right = watcher.uniformFractions(70, 300)
         assert left[0] == pytest.approx(-right[0])
 
     def test_it_measures_against_the_whole_window(self):
-        from OpenGLContext.move.dragwatcher import DragWatcher
         watcher = DragWatcher(0, 0, WIDTH, HEIGHT)
         assert watcher.uniformFractions(WIDTH, HEIGHT) == pytest.approx(
             (1.0, 1.0))
 
     def test_no_movement_is_no_fraction(self):
-        from OpenGLContext.move.dragwatcher import DragWatcher
         watcher = DragWatcher(123, 45, WIDTH, HEIGHT)
         assert watcher.uniformFractions(123, 45) == (0.0, 0.0)
 
     def test_a_window_with_no_size_does_not_divide_by_zero(self):
-        from OpenGLContext.move.dragwatcher import DragWatcher
         watcher = DragWatcher(0, 0, 0, 0)
         assert watcher.uniformFractions(10, 10) == (0.0, 0.0)
 
@@ -397,7 +395,6 @@ class TestTheTrackballIsSymmetricToo:
     lopsided as the orbit's was."""
 
     def _swing(self, start, delta):
-        from OpenGLContext.move.trackball import Trackball
         facing = quaternion.fromXYZR(0, 1, 0, 0.0)
         made = Trackball(np.array([0.0, 0.0, 10.0, 1.0], 'd'), facing,
                          (0.0, 0.0, 0.0), start[0], start[1], WIDTH, HEIGHT,
@@ -412,5 +409,4 @@ class TestTheTrackballIsSymmetricToo:
 
     def test_it_still_answers_to_update(self):
         """The name the manager called it by before."""
-        from OpenGLContext.move.trackball import Trackball
         assert Trackball.update is Trackball.rotate

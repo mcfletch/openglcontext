@@ -10,6 +10,8 @@ import pytest
 
 from OpenGLContext.multiview import strategy as multiview
 from OpenGLContext.multiview.strategy import MultiviewCapabilities
+from OpenGLContext import contextresources, renderoptions
+from OpenGLContext.contextdefinition import ContextDefinition
 
 
 def caps(extensions=(), version=(3, 3), viewports=16):
@@ -122,8 +124,6 @@ class TestChoice:
 
 class TestRequested:
     def test_the_definition_field_says_which_strategy_is_wanted(self):
-        from OpenGLContext.contextdefinition import ContextDefinition
-
         class Source:
             contextDefinition = ContextDefinition(multiview='sequential')
 
@@ -133,16 +133,12 @@ class TestRequested:
         assert multiview.requested_strategy(object()) == 'auto'
 
     def test_the_environment_pins_the_default(self, monkeypatch):
-        from OpenGLContext import renderoptions
-        from OpenGLContext.contextdefinition import ContextDefinition
-
         monkeypatch.setenv('OPENGLCONTEXT_MULTIVIEW', 'sequential')
         renderoptions.reset_env_cache()
         assert ContextDefinition().multiview == 'sequential'
 
     def test_the_environment_is_what_a_pass_asks_for(self, monkeypatch):
         """A definition whose field nobody set answers with the variable's pin."""
-        from OpenGLContext.contextdefinition import ContextDefinition
 
         class Source:
             contextDefinition = ContextDefinition()
@@ -152,7 +148,6 @@ class TestRequested:
 
     def test_the_environment_is_read_once(self, monkeypatch):
         """A start-up switch: the definition's field is what changes at run time."""
-        from OpenGLContext.contextdefinition import ContextDefinition
 
         class Source:
             contextDefinition = ContextDefinition()
@@ -163,8 +158,6 @@ class TestRequested:
         assert multiview.requested_strategy(Source()) == 'sequential'
 
     def test_the_environment_variable_is_a_rendering_one(self):
-        from OpenGLContext import renderoptions
-
         assert 'OPENGLCONTEXT_MULTIVIEW' in renderoptions.ENVIRONMENT
 
 
@@ -189,7 +182,6 @@ class TestDetect:
 
     def test_a_context_that_dies_is_forgotten(self, gl_context):
         """A driver hands a dead context's address to the next one."""
-        from OpenGLContext import contextresources
         MultiviewCapabilities.detect()
         key = contextresources.context_key()
         assert key in multiview._DETECTED

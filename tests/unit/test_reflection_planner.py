@@ -4,14 +4,15 @@
 under a microscope: given the frame's views, it says which mirror views to
 draw into which tiles, and what each mirror in each view reads.
 """
+import copy
 import numpy as np
 import pytest
 
 from OpenGLContext.multiview.strategy import ViewFrame
-from OpenGLContext.multiview.views import View
+from OpenGLContext.multiview.views import View, ViewStyle
 from OpenGLContext.passes import reflection
 from OpenGLContext.passes.reflectionplanner import (
-    ReflectedView, ReflectionPlanner, lookup_key, view_key,
+    CANDIDATES_PER_VIEW, lookup_key, ReflectedView, ReflectionPlanner, view_key,
 )
 from OpenGLContext.passes.reflectiontiles import Budget
 from OpenGLContext.scenegraph.appearance import Appearance
@@ -131,7 +132,6 @@ NOTHING = Budget(views=0, separate_views=0, texels=0)
 
 def _settled_planner():
     """A planner past the frames a pass settles in, so what it draws is kept."""
-    from OpenGLContext.passes.reflectionplanner import SETTLE_FRAMES
     planner = ReflectionPlanner()
     planner.frame = SETTLE_FRAMES
     return planner
@@ -256,6 +256,7 @@ def test_a_mirror_too_large_for_the_room_left_is_drawn_at_half_scale():
 # --- settling, and a frame that is not finished -------------------------------
 
 from OpenGLContext.passes.reflectionplanner import SETTLE_FRAMES
+from OpenGLContext.passes.reflection import MirrorView
 
 
 def _settled(planner, records, budget=BIG):
@@ -613,7 +614,6 @@ def test_a_mirror_whose_crop_moved_reads_its_old_tile_until_redrawn():
 def test_facing_mirrors_stop_being_followed_at_a_multiple_of_the_view_budget():
     """A hall of facing mirrors at six bounces plans no more than the views
     the budget could draw several times over."""
-    from OpenGLContext.passes.reflectionplanner import CANDIDATES_PER_VIEW
     records = [_mirror(x) for x in (-2.0, 0.0, 2.0)] + [_behind(6.0)]
     records[3][2][3, 0] = 0.0
     budget = Budget(views=2, separate_views=2, texels=10 ** 9)
@@ -692,7 +692,6 @@ def test_the_plan_carries_the_budget_it_was_made_within():
 
 def test_whether_a_mirror_view_draws_apart_is_asked_of_its_own_camera():
     """Nested mirror views are asked too, each with the mirror's own view."""
-    from OpenGLContext.passes.reflection import MirrorView
     asked = []
     front, back = _mirror(), _behind()
     plan = _settled_planner().plan(
@@ -704,7 +703,6 @@ def test_whether_a_mirror_view_draws_apart_is_asked_of_its_own_camera():
 
 
 def test_a_reflected_view_copied_without_its_source_says_so():
-    import copy
     view = ReflectedView(VIEW, 'key', np.zeros(3))
     bare = ReflectedView.__new__(ReflectedView)
     with pytest.raises(AttributeError):
@@ -715,7 +713,6 @@ def test_a_reflected_view_copied_without_its_source_says_so():
 # --- the branches a mirror is left out by ------------------------------------------
 
 def test_a_wireframe_view_looks_for_no_mirror():
-    from OpenGLContext.multiview.views import ViewStyle
     view = View(style=ViewStyle(wireframe=True))
     plan = ReflectionPlanner().plan([_frame([_mirror()], view=view)], ATLAS, BIG)
     assert plan.draws == [] and plan.lookups == {}

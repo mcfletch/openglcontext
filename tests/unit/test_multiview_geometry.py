@@ -12,8 +12,16 @@ import pytest
 glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.scenegraph import basenodes
-from OpenGLContext.multiview.views import View, ViewLayout
+from OpenGLContext.multiview.views import View, ViewLayout, ViewStyle
 from tests.unit.glrender import base_env, frames_of
+from OpenGLContext.events.mouseevents import MouseButtonEvent
+from OpenGLContext.move.followcam import look_at_orientation
+from OpenGLContext.move.viewplatform import ViewPlatform
+from OpenGLContext.multiview import strategy as multiview
+from OpenGLContext.multiview.strategy import MultiviewCapabilities
+from OpenGLContext.passes import renderpass
+from OpenGLContext.passes.pbrpass import PBRShaderProgram
+from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
 
 WIDTH, HEIGHT = 240, 160
 
@@ -39,8 +47,6 @@ def _scene():
 
 
 def _looking(eye):
-    from OpenGLContext.move.followcam import look_at_orientation
-    from OpenGLContext.move.viewplatform import ViewPlatform
     return ViewPlatform(position=eye, orientation=look_at_orientation(eye, (0, 0, 0)))
 
 
@@ -68,7 +74,6 @@ def env(request, monkeypatch):
 @pytest.fixture(params=['geometry', 'vertex'])
 def shared(request, gl_context):
     """A strategy that draws once for every view, where this driver runs it."""
-    from OpenGLContext.multiview import strategy as multiview
     multiview.reset_detected()
     if request.param not in multiview.MultiviewCapabilities.detect().available():
         pytest.skip('this driver cannot run the %s strategy' % request.param)
@@ -77,7 +82,6 @@ def shared(request, gl_context):
 
 
 def _render(render_scene, strategy):
-    from OpenGLContext.passes import renderpass
     draws = []
     frames = frames_of(render_scene, _scene(), frames=3, shadows=True,
                        size=(WIDTH, HEIGHT), layout=_layout(strategy))
@@ -118,7 +122,6 @@ def test_the_single_view_programs_are_back_after_the_frame(render_scene, env,
 
 def test_a_click_in_a_shared_view_picks_through_that_view(render_scene, env,
                                                           shared):
-    from OpenGLContext.events.mouseevents import MouseButtonEvent
     rendered = render_scene(_scene(), frames=2, picks=[], shadows=True,
                             size=(WIDTH, HEIGHT), layout=_layout(shared))
     context = rendered.context
@@ -153,7 +156,6 @@ def test_an_instanced_crowd_is_drawn_once_for_every_view(render_scene, env,
              for x in (-1.5, -0.5, 0.5, 1.5) for z in (-1.0, 1.0)]
 
     def render(strategy):
-        from OpenGLContext.passes import renderpass
         frames = frames_of(render_scene, _scene() + crowd, frames=3, shadows=True,
                            size=(WIDTH, HEIGHT), layout=_layout(strategy))
         return frames[-1], renderpass.FLAT.stats
@@ -168,8 +170,6 @@ def test_an_instanced_crowd_is_drawn_once_for_every_view(render_scene, env,
 def test_programs_that_will_not_compile_leave_the_views_drawn_in_turn(
         render_scene, env, shared, monkeypatch):
     """A driver that offers a strategy and then fails to build it still draws."""
-    from OpenGLContext.passes.pbrpass import PBRShaderProgram
-    from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
     attempts = []
 
     def refuse(self, views, strategy='geometry'):
@@ -178,7 +178,6 @@ def test_programs_that_will_not_compile_leave_the_views_drawn_in_turn(
 
     monkeypatch.setattr(VRML97ShaderProgram, '_compile_program_set', refuse)
     monkeypatch.setattr(PBRShaderProgram, '_compile_program_set', refuse)
-    from OpenGLContext.passes import renderpass
     frames = frames_of(render_scene, _scene(), frames=5, shadows=True,
                        size=(WIDTH, HEIGHT), layout=_layout(shared))
     assert renderpass.FLAT.multiviewStrategy == 'sequential'
@@ -193,7 +192,6 @@ def test_programs_that_will_not_compile_leave_the_views_drawn_in_turn(
 
 def test_more_views_than_the_driver_has_viewports_are_drawn_in_turn(
         render_scene, env, shared, monkeypatch):
-    from OpenGLContext.multiview.strategy import MultiviewCapabilities
     monkeypatch.setattr(MultiviewCapabilities, 'max_views', property(lambda self: 2))
     _frame, _flat, draws = _render(render_scene, shared)
     _frame, _flat, sequential = _render(render_scene, 'sequential')
@@ -202,7 +200,6 @@ def test_more_views_than_the_driver_has_viewports_are_drawn_in_turn(
 
 def test_a_wireframe_view_beside_shared_ones_draws_its_own_lines(render_scene, env, shared):
     """Polygon mode holds for every viewport, so a wireframe view is drawn apart."""
-    from OpenGLContext.multiview.views import ViewStyle
 
     def build(context):
         layout = _layout(shared)(context)

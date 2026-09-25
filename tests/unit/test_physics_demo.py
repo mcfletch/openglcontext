@@ -11,6 +11,7 @@ import pytest
 
 from omi_physics import model
 from omi_physics.gravity import SphereRegion
+import glfw
 
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.physics.demo import DemoScene, disable_vsync
@@ -21,7 +22,6 @@ _STATIC_CODE = 0
 
 def test_disable_vsync_swallows_a_raising_swap_interval(monkeypatch):
     """disable_vsync ignores any error from glfw.swap_interval (no current context)."""
-    import glfw
 
     asked = []
 

@@ -5,9 +5,11 @@ extension textures (transmission / iridescence-thickness / ...) live at units 16
 and must be gated on GL_MAX_TEXTURE_IMAGE_UNITS so a 16-unit min-spec GPU (or
 llvmpipe) still compiles and renders -- just without those extras.
 """
+import urllib.request
 import pytest
 
 from OpenGLContext.passes import pbrpass
+from OpenGLContext.loaders import gltf
 
 
 class TestExtTextureGating:
@@ -39,8 +41,6 @@ class TestExtTextureGating:
 
 
 def _has_network():
-    import urllib.request
-    from OpenGLContext.loaders import gltf
     try:
         urllib.request.urlopen(gltf.SAMPLE_MODELS_BASE + '/README.md', timeout=6).close()
         return True
@@ -51,7 +51,6 @@ def _has_network():
 @pytest.mark.skipif(not _has_network(), reason="needs network for sample models")
 class TestExtTextureLoaderParse:
     def _materials(self, name):
-        from OpenGLContext.loaders import gltf
         scene = gltf.load_sample(name)
         out = []
 

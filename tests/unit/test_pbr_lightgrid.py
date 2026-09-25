@@ -15,9 +15,15 @@ import re
 import sys
 
 import pytest
+import numpy as np
 
 from OpenGLContext.passes.shaderpass import SHADER_DIR
 from OpenGLContext.testing.paths import tests_root
+from OpenGLContext.passes._flat import FlatPass
+from OpenGLContext.passes.pbrpass import PBRShaderProgram
+from OpenGLContext.scenegraph.basenodes import Appearance, Shape
+from OpenGLContext.scenegraph.lightgrid import LightGrid
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 
 TESTS_DIR = str(tests_root(__file__))
 CAPTURE = os.path.join(TESTS_DIR, "helpers", "_pbr_capture.py")
@@ -59,7 +65,6 @@ class TestTheProgramAPI:
     """``set_light_grid`` with nothing means "no grid", not "a black one"."""
 
     def _program(self):
-        from OpenGLContext.passes.pbrpass import PBRShaderProgram
         program = PBRShaderProgram.__new__(PBRShaderProgram)
         program.program = 7
         uploaded = []
@@ -94,8 +99,6 @@ class TestWhichObjectsAreLookedUp:
     """
 
     def _pass(self, grid):
-        import numpy as np
-        from OpenGLContext.passes._flat import FlatPass
         pass_ = FlatPass.__new__(FlatPass)
         pass_._lightGrid = grid
         self.sampled = []
@@ -106,15 +109,11 @@ class TestWhichObjectsAreLookedUp:
         return pass_, Shader(), np.identity(4, dtype='d')
 
     def _shape(self, lightmap=False):
-        from OpenGLContext.scenegraph.basenodes import Appearance, Shape
-        from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
         textures = {'lightmap': object()} if lightmap else {}
         return Shape(appearance=Appearance(
             material=PBRMaterial(textures=textures)))
 
     def _grid(self):
-        import numpy as np
-        from OpenGLContext.scenegraph.lightgrid import LightGrid
         return LightGrid(counts=[2, 2, 2], ambient=np.ones((8, 3), dtype='f'),
                          directional=np.zeros((8, 3), dtype='f'),
                          direction=np.tile((0.0, 1.0, 0.0), (8, 1)).astype('f'))
@@ -135,7 +134,6 @@ class TestWhichObjectsAreLookedUp:
         assert self.sampled == []
 
     def test_a_shape_with_no_material_is_sampled(self):
-        from OpenGLContext.scenegraph.basenodes import Shape
         pass_, shader, matrix = self._pass(self._grid())
         pass_.applyLightGrid(shader, Shape(), matrix, None)
         assert len(self.sampled) == 1
@@ -145,11 +143,9 @@ class TestWhereTheObjectIs:
     """The lookup is taken at the middle of what is drawn."""
 
     def _pass(self):
-        from OpenGLContext.passes._flat import FlatPass
         return FlatPass.__new__(FlatPass)
 
     def _placed(self, x):
-        import numpy as np
         matrix = np.identity(4, dtype='d')
         matrix[3, :3] = (x, 0.0, 0.0)       # row-vector convention
         return matrix
@@ -200,7 +196,6 @@ def test_the_lit_object_has_a_lit_side_and_a_shaded_one(lightgrid_image):
     Its absence is what an ambient-only reading looks like: a disc in one flat
     colour, which reads as a cut-out rather than as a figure.
     """
-    import numpy as np
     left, _right = _halves(lightgrid_image)
     drawn = left.sum(2) > 20
     rows = np.nonzero(drawn)[0]

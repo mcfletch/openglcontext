@@ -4,10 +4,12 @@ paths, the app-data fallback, and the best-effort OSError swallows.
 import io
 import os
 import urllib.request
+import tempfile
 
 import pytest
 
 from OpenGLContext.loaders import resolver
+from OpenGLContext import userpaths
 
 
 # --- is_url -------------------------------------------------------------------
@@ -47,13 +49,10 @@ def test_fetch_returns_cached_bytes_without_reresolving(tmp_path):
 # --- default_cache_dir app-data fallback -------------------------------------
 
 def testdefault_cache_dir_falls_back_to_tempdir_on_oserror(monkeypatch):
-    from OpenGLContext import userpaths
-
     def boom():
         raise OSError("no home")
 
     monkeypatch.setattr(userpaths, "appdatadirectory", boom)
-    import tempfile
     path = resolver.default_cache_dir()
     assert path.startswith(tempfile.gettempdir())
     assert path.endswith(os.path.join("OpenGLContext", "asset_cache"))
@@ -127,7 +126,6 @@ class TestUserAgent:
     """
 
     def test_a_fetch_sends_a_user_agent_naming_the_project(self):
-        from OpenGLContext.loaders import resolver
         seen = {}
 
         class FakeOpener:
@@ -158,8 +156,6 @@ class TestSubResourcesAreCachedOnDisk:
     """
 
     def _resolver(self, monkeypatch, calls):
-        from OpenGLContext.loaders import resolver
-
         def fake(url, cache_dir=None, max_bytes=None, progress=None,
                  cancel=None):
             calls.append(url)
@@ -190,7 +186,6 @@ class TestSubResourcesAreCachedOnDisk:
         assert len(calls) == 1
 
     def test_the_size_cap_is_still_applied(self, monkeypatch):
-        from OpenGLContext.loaders import resolver
         seen = {}
 
         def fake(url, cache_dir=None, max_bytes=None, progress=None,
@@ -205,7 +200,6 @@ class TestSubResourcesAreCachedOnDisk:
 
     def test_a_reference_off_the_origin_never_reaches_the_fetch(self, monkeypatch):
         """The policy is enforced before anything is downloaded, as before."""
-        from OpenGLContext.loaders import resolver
         calls = []
         monkeypatch.setattr(
             resolver, 'fetch_url',
@@ -216,7 +210,6 @@ class TestSubResourcesAreCachedOnDisk:
         assert calls == []
 
     def test_a_local_document_still_reads_from_disk(self, tmp_path):
-        from OpenGLContext.loaders import resolver
         (tmp_path / 't.png').write_bytes(b'LOCAL')
         found = resolver.Resolver(base_dir=str(tmp_path))
         assert found.fetch('t.png') == b'LOCAL'

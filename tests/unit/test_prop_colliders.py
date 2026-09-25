@@ -13,6 +13,7 @@ moment the tile behind it swaps.
 import numpy as np
 import pytest
 from omi_physics.world import PhysicsWorld
+from omi_physics import model
 
 from OpenGLContext.physics.props import PropColliders
 from OpenGLContext.scenegraph.props import Prop
@@ -124,7 +125,6 @@ class TestWhatABodyIs:
 
     def test_a_car_stops_against_one(self) -> None:
         """The point of the whole thing."""
-        from omi_physics import model
         world = _world()
         ground = world.add_shape(model.Shape.box((400.0, 2.0, 400.0)))
         world.add_body(model.Motion(type=model.STATIC),
@@ -191,7 +191,6 @@ class TestAPropThatIsNotABlock:
     def test_a_wheel_rides_over_one_rather_than_stopping_against_it(self) -> None:
         """The point of the whole thing: a stone in the road is a bump, and a
         block the same size is a wall."""
-        from omi_physics import model
         world = _world()
         ground = world.add_shape(model.Shape.box((400.0, 2.0, 400.0)))
         world.add_body(model.Motion(type=model.STATIC),
@@ -212,7 +211,6 @@ class TestAPropThatIsNotABlock:
     def test_a_stone_is_something_to_stand_on(self) -> None:
         """Dropped onto one, a body comes to rest above the ground it lies on
         rather than on the ground beside it."""
-        from omi_physics import model
         world = _world()
         ground = world.add_shape(model.Shape.box((400.0, 2.0, 400.0)))
         world.add_body(model.Motion(type=model.STATIC),

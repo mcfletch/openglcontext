@@ -7,9 +7,10 @@ a view is the same walk whether a `ttk.Treeview`, a `QTreeView` or a
 See `OpenGLContext/demos/` for the three that do, and `plans/EMBEDDING-EXAMPLES.md`.
 """
 import gc
+import weakref
 
 import pytest
-from vrml import protofunctions
+from vrml import fieldtypes, node as vnode, protofunctions
 
 from OpenGLContext.outline import SceneOutline, nodeChildren, nodeSummary
 from OpenGLContext.scenegraph import basenodes
@@ -92,7 +93,6 @@ class TestWhatItTraverses:
     def test_one_field_that_will_not_be_read_does_not_stop_the_walk(self):
         """A tool that shows somebody else's file has to survive what is in
         it: the rest of the scene is still worth showing."""
-        from vrml import node as vnode
 
         class Awkward(vnode.Node):
             PROTO = 'Awkward'
@@ -270,7 +270,6 @@ class TestWatchingForChanges:
     def test_a_closed_outline_lets_go_of_the_scene(self):
         """The rows are what hold it: a viewer that opens one model after
         another must not keep every one of them."""
-        import weakref
 
         scene = basenodes.sceneGraph(children=[basenodes.PointLight()])
         held = weakref.ref(scene.children[0])
@@ -317,8 +316,6 @@ class TestSummarisingANode:
         assert all(len(value) <= 60 for _, value in nodeSummary(node, width=60))
 
     def test_a_value_that_will_not_be_read_is_reported_as_such(self):
-        from vrml import fieldtypes, node as vnode
-
         class Awkward(vnode.Node):
             PROTO = 'Awkward'
 

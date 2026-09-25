@@ -12,16 +12,14 @@ import pytest
 
 from OpenGLContext.scenegraph.road import RoadProfile
 from OpenGLContext.scenegraph.roadworks import (
-    BarrierProfile,
-    BridgeProfile,
-    bore_shade,
-    tunnel_lamps,
+    _rail_heights, barrier_material, barrier_wall, BarrierProfile, bore_shade, bore_sky,
+    bridge_meshes, BridgeProfile, causeway_meshes, concrete_material, tunnel_lamps, tunnel_meshes,
     TunnelProfile,
-    bridge_meshes,
-    causeway_meshes,
-    concrete_material,
-    tunnel_meshes,
 )
+from OpenGLContext.loaders.documentvalues import DocumentValues
+from OpenGLContext.loaders.gltf.materials import _MATERIAL_EXT_HANDLERS
+from OpenGLContext.loaders.gltf.writer import write_glb
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 
 ROAD = RoadProfile()
 
@@ -635,12 +633,10 @@ class TestTheBarrierIsNotTheStructure:
     barrier on it."""
 
     def test_a_parapet_is_darker_than_the_deck(self) -> None:
-        from OpenGLContext.scenegraph.roadworks import barrier_material
         assert sum(barrier_material().baseColor) \
             < sum(concrete_material().baseColor)
 
     def test_the_parapets_wear_it(self) -> None:
-        from OpenGLContext.scenegraph.roadworks import barrier_material
         meshes = bridge_meshes(_straight(), ROAD, _valley)
         assert meshes['parapet'].material is not meshes['deck'].material
         assert tuple(meshes['parapet'].material.baseColor) \
@@ -712,11 +708,9 @@ class TestTheRailingOnADeck:
 
     def test_the_bars_run_between_the_kerb_and_the_top(self) -> None:
         barrier = BarrierProfile(height=1.1, kerb=0.35, rails=2)
-        from OpenGLContext.scenegraph.roadworks import _rail_heights
         assert _rail_heights(barrier) == pytest.approx([0.725, 1.1])
 
     def test_the_topmost_bar_is_the_top_of_the_barrier(self) -> None:
-        from OpenGLContext.scenegraph.roadworks import _rail_heights
         for count in (1, 2, 3, 5):
             barrier = BarrierProfile(rails=count)
             assert _rail_heights(barrier)[-1] == pytest.approx(barrier.height)
@@ -896,7 +890,6 @@ class TestABoreIsLitOnce:
         """What concrete a bore is lined with is the caller's; whether the
         scene lights it a second time is not, because the shade baked along it
         only means anything if nothing else is added to it."""
-        from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
         wanted = PBRMaterial(baseColor=(0.5, 0.5, 0.5))
         found = self._bore(material=wanted)['bore'].material
         assert tuple(found.baseColor) == tuple(wanted.baseColor)
@@ -916,7 +909,6 @@ class TestBakedLightSurvivesABake:
     """
 
     def test_a_written_bore_says_so_in_the_file(self, tmp_path) -> None:
-        from OpenGLContext.loaders.gltf.writer import write_glb
         line = np.stack([np.zeros(24), np.zeros(24), np.linspace(0, 120, 24)],
                         axis=-1)
         path = tmp_path / 'bore.glb'
@@ -924,7 +916,6 @@ class TestBakedLightSurvivesABake:
         assert b'OGLC_materials_baked_light' in path.read_bytes()
 
     def test_and_an_ordinary_surface_does_not(self, tmp_path) -> None:
-        from OpenGLContext.loaders.gltf.writer import write_glb
         line = np.stack([np.zeros(24), np.zeros(24), np.linspace(0, 120, 24)],
                         axis=-1)
         path = tmp_path / 'deck.glb'
@@ -932,8 +923,6 @@ class TestBakedLightSurvivesABake:
         assert b'OGLC_materials_baked_light' not in path.read_bytes()
 
     def test_and_a_reader_takes_it_back_off_the_file(self) -> None:
-        from OpenGLContext.loaders.documentvalues import DocumentValues
-        from OpenGLContext.loaders.gltf.materials import _MATERIAL_EXT_HANDLERS
         handler = _MATERIAL_EXT_HANDLERS['OGLC_materials_baked_light']
         assert handler({}, lambda *args, **named: None, DocumentValues()) == {
             'bakedLight': True}
@@ -964,7 +953,6 @@ class TestABoreIsDarkBecauseItIsEnclosed:
         assert float(colors[:, 3].max()) > 0.98
 
     def test_and_what_it_sees_falls_off_as_the_road_goes_in(self) -> None:
-        from OpenGLContext.scenegraph.roadworks import bore_sky
         line = np.stack([np.zeros(60), np.zeros(60),
                          np.linspace(0, 300, 60)], axis=-1)
         sky = bore_sky(line)
@@ -995,7 +983,6 @@ class TestTheWallACarMeetsOnADeck:
     """
 
     def _wall(self, points=None, **kwargs):
-        from OpenGLContext.scenegraph.roadworks import barrier_wall
         return barrier_wall(points if points is not None else _straight(),
                             **kwargs)
 
@@ -1014,7 +1001,6 @@ class TestTheWallACarMeetsOnADeck:
         assert wall.positions[:, 2].max() > 1.0
 
     def test_it_is_as_tall_as_the_barrier_is(self) -> None:
-        from OpenGLContext.scenegraph.roadworks import BarrierProfile
         wall = self._wall(barrier=BarrierProfile(height=1.4))
         above = wall.positions[:, 1].max() - 40.0
         assert above == pytest.approx(1.4, abs=0.2)

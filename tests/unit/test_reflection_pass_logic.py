@@ -5,6 +5,7 @@ definition, or from the environment where nothing set the field; a shape too
 small to see in a mirror is left out of it; and each shape drawn is told the
 reflection it reads, once per change.
 """
+import types
 import numpy as np
 import pytest
 
@@ -12,8 +13,12 @@ from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.passes import reflection
 from OpenGLContext.passes.reflectionpass import ReflectionsMixin
 from OpenGLContext.passes.reflectionatlas import FILL
-from OpenGLContext.passes.reflectionplanner import lookup_key
+from OpenGLContext.passes.reflectionplanner import (
+    lookup_key, ReflectedView, ReflectionPlanner, SETTLE_FRAMES,
+)
 from OpenGLContext.scenegraph.boundingvolume import AABoundingBox
+from OpenGLContext import renderoptions
+from OpenGLContext.passes.reflectiontiles import Budget
 
 
 class _Context:
@@ -57,7 +62,6 @@ def test_the_environment_sets_what_the_definition_leaves(monkeypatch):
 
 
 def test_every_setting_is_a_rendering_one():
-    from OpenGLContext import renderoptions
     for name in ('OPENGLCONTEXT_PLANAR_REFLECTIONS', 'OPENGLCONTEXT_REFLECTION_VIEWS',
                  'OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS', 'OPENGLCONTEXT_REFLECTION_ATLAS',
                  'OPENGLCONTEXT_REFLECTION_MS'):
@@ -126,7 +130,6 @@ def test_a_mirror_reads_its_own_lookup_and_the_next_shape_none():
 def test_a_mirror_seen_in_a_mirror_falls_back_to_its_reflection_seen_directly():
     """Until its reflection for that mirror's view is drawn, a mirror seen in a
     mirror shows the one the viewer sees, not the probe."""
-    from OpenGLContext.passes.reflectionplanner import ReflectedView
     effects, shader = ReflectionsMixin(), _Shader()
     main, mirror, inner = object(), object(), object()
     through = ReflectedView(main, 'key', np.zeros(3))
@@ -222,7 +225,6 @@ class _Timer:
 
 
 def _timed_pass(timer):
-    from OpenGLContext.passes.reflectionplanner import ReflectionPlanner
     effects = _pass(reflectionMilliseconds=5.0)
     effects.shader_program = _Program()
     effects.frameGather = lambda: _Gathered()
@@ -298,8 +300,6 @@ class _LitProgram(_Program):
 
 def _drawing_pass(records, **fields):
     """A pass whose scene is ``records``' mirrors, drawing nothing on the GPU."""
-    import types
-    from OpenGLContext.passes.reflectionplanner import ReflectionPlanner, SETTLE_FRAMES
     effects = ReflectionsMixin()
     effects.context = _Context(ContextDefinition(**fields))
     effects.multiviewStrategy = 'vertex'
@@ -358,7 +358,6 @@ def test_switching_reflections_off_gives_back_the_atlas_and_every_tile():
 def test_a_new_atlas_is_read_only_where_this_frame_drew():
     """Tiles kept from before hold nothing in an atlas made this frame."""
     from tests.unit.test_reflection_planner import _frame, _mirror
-    from OpenGLContext.passes.reflectiontiles import Budget
     kept, drawn = _mirror(-1.5), _mirror(1.5)
     effects = _drawing_pass([kept, drawn])
     planner = effects._reflection_planner

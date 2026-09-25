@@ -16,6 +16,9 @@ from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
 from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
 from OpenGLContext.multiview.gestures import ViewGestures
 from OpenGLContext.multiview.views import View, ViewLayout
+from OpenGLContext.context import Context
+from OpenGLContext.events.keyboardevents import KeypressEvent
+from OpenGLContext.events.mouseevents import MouseButtonEvent, MouseMoveEvent
 
 WINDOW = (800, 600)
 
@@ -156,14 +159,12 @@ class TestAGestureStaysWithItsView:
 
 class TestReadingTheContextsEvents:
     def _button(self, x, y, button, state):
-        from OpenGLContext.events.mouseevents import MouseButtonEvent
         event = MouseButtonEvent()
         event.button, event.state, event.modifiers = button, state, (0, 0, 0)
         event.pickPoint = (x, y)
         return event
 
     def _move(self, x, y):
-        from OpenGLContext.events.mouseevents import MouseMoveEvent
         event = MouseMoveEvent()
         event.pickPoint = (x, y)
         event.modifiers = (0, 0, 0)
@@ -183,7 +184,6 @@ class TestReadingTheContextsEvents:
         assert not gestures.handle(self._button(*_centre_of(layout.views[0]), 2, 1))
 
     def test_a_key_is_none_of_its_business(self):
-        from OpenGLContext.events.keyboardevents import KeypressEvent
         gestures, _layout = _laid_out()
         assert not gestures.handle(KeypressEvent())
 
@@ -244,7 +244,6 @@ class TestAHandRolledEvent:
         assert layout.active is layout.views[1]
 
     def test_the_context_records_it_for_picking(self):
-        from OpenGLContext.context import Context
         context = Context.__new__(Context)
         context.contextDefinition = None
         context.pickEvents = {}

@@ -10,6 +10,7 @@ import pytest
 
 from OpenGLContext.passes.pbrpass import pack_material_block, MATERIAL_BLOCK_WORDS
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph import basenodes
 
 
 def test_block_is_224_bytes():
@@ -22,7 +23,6 @@ def test_block_is_224_bytes():
 
 
 def test_iridescence_vec4_after_uv_transform():
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
     m = PBRMaterial()
     m.iridescence = 0.7
     m.iridescenceIor = 1.6
@@ -99,7 +99,6 @@ def test_none_material_is_neutral_grey():
 
 
 def test_vrml97_material_up_converts():
-    from OpenGLContext.scenegraph import basenodes
     vm = basenodes.Material(diffuseColor=(0.2, 0.5, 0.9), shininess=0.0)
     buf = pack_material_block(vm)
     assert np.allclose(buf[0:3], (0.2, 0.5, 0.9))

@@ -15,6 +15,7 @@ import pytest
 
 from OpenGLContext import context as context_module
 from OpenGLContext.passes import ibl
+from OpenGLContext.viewer import capture as viewer_capture
 
 
 def bounded_context():
@@ -83,8 +84,6 @@ class TestTheViewerAsksBothQuestions:
 
     @staticmethod
     def viewer():
-        from OpenGLContext.viewer import capture as viewer_capture
-
         class Viewer(viewer_capture.SettleCaptureMixin,
                      context_module.Context):
             pass

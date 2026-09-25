@@ -7,9 +7,15 @@ reads is packed on the CPU in the std140 layout the shader declares.
 """
 import numpy as np
 import pytest
+from OpenGL import GL
 
 from OpenGLContext.multiview import strategy as multiview
 from OpenGLContext.passes import shadersource
+from OpenGLContext.move.followcam import look_at_orientation
+from OpenGLContext.move.viewplatform import ViewPlatform
+from OpenGLContext.multiview.views import View
+from OpenGLContext.passes.pbrpass import PBRShaderProgram
+from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
 
 
 PBR_VERTEX = shadersource.preprocess_shader('pbr.vert', ['#define PBR_SKINNING 1'])
@@ -140,14 +146,11 @@ class TestTheGeometryStage:
 
 
 def _platform(position, look=(0.0, 0.0, 0.0), ortho=None):
-    from OpenGLContext.move.followcam import look_at_orientation
-    from OpenGLContext.move.viewplatform import ViewPlatform
     return ViewPlatform(position=position,
                         orientation=look_at_orientation(position, look))
 
 
 def _frame(camera, rect):
-    from OpenGLContext.multiview.views import View
     view = View(camera)
     view.rect = rect
     model = np.asarray(camera.modelMatrix(), 'f')
@@ -217,7 +220,6 @@ class TestOnTheDriver:
         return found
 
     def test_the_lit_programs_link_with_the_geometry_stage(self, programs):
-        from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
         shader = VRML97ShaderProgram()
         assert shader.compile()
         assert shader.select_program_set(4)
@@ -225,7 +227,6 @@ class TestOnTheDriver:
         shader.select_program_set(0)
 
     def test_the_pbr_program_links_with_the_geometry_stage(self, programs):
-        from OpenGLContext.passes.pbrpass import PBRShaderProgram
         shader = PBRShaderProgram()
         assert shader.compile()
         plain = shader.program
@@ -235,7 +236,6 @@ class TestOnTheDriver:
         assert shader.program == plain
 
     def test_the_lit_programs_link_with_the_vertex_routing(self, gl_context):
-        from OpenGLContext.passes.pbrpass import PBRShaderProgram
         multiview.reset_detected()
         if 'vertex' not in multiview.MultiviewCapabilities.detect().available():
             pytest.skip('this driver has no vertex-stage viewport index')
@@ -249,7 +249,6 @@ class TestOnTheDriver:
     def test_a_set_compiled_for_more_views_serves_fewer(self, programs):
         """Sets are compiled for a power of two of views, so a frame whose count
         of views changes compiles a set only when it passes the next one."""
-        from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
         shader = VRML97ShaderProgram()
         assert shader.compile()
         compiled = []
@@ -268,8 +267,6 @@ class TestOnTheDriver:
         shader.select_program_set(0)
 
     def test_the_table_layout_is_the_drivers(self, programs):
-        from OpenGL import GL
-        from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
         shader = VRML97ShaderProgram()
         assert shader.compile() and shader.select_program_set(3)
         assert shader.program_set == 4

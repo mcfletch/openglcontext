@@ -10,11 +10,15 @@ reached GL.
 import os
 import re
 import types
+from types import SimpleNamespace
 
 import pytest
+from OpenGL import GL as gl
+from PIL import Image
 
 from OpenGLContext.passes import pbrpass
 from OpenGLContext.passes.shaderpass import SHADER_DIR
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
 
 
 def _source():
@@ -113,12 +117,6 @@ class TestTheUnits:
         The maps have never been drawn, so the draw is what uploads them, and
         an upload binds the new texture on whichever unit is active.
         """
-        from types import SimpleNamespace
-
-        from OpenGL import GL as gl
-        from PIL import Image
-
-        from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
 
         shader_program = pbrpass.PBRShaderProgram()
         assert shader_program.compile(), 'the PBR programs did not compile'

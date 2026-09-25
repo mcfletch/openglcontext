@@ -13,6 +13,12 @@ glfw = pytest.importorskip("glfw")
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.multiview.views import View, ViewLayout, ViewStyle
 from tests.unit.glrender import base_env, frames_of
+from OpenGLContext.events.mouseevents import MouseButtonEvent
+from OpenGLContext.move.viewplatform import ViewPlatform
+from OpenGLContext.multiview import strategy as multiview
+from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
+from OpenGLContext.multiview.grid import Grid
+from OpenGLContext.passes import _flat, renderpass
 
 WIDTH, HEIGHT = 200, 100
 
@@ -34,7 +40,6 @@ def _scene():
 
 
 def _camera(x):
-    from OpenGLContext.move.viewplatform import ViewPlatform
     return ViewPlatform(position=(x, 0, 6), orientation=(0, 1, 0, 0))
 
 
@@ -124,7 +129,6 @@ class TestPickingThroughTheViewClicked:
         point at a time, because presses of one button in one frame are the
         same question asked twice and only the later is kept.
         """
-        from OpenGLContext.events.mouseevents import MouseButtonEvent
         for _warm in range(2):
             press = MouseButtonEvent()
             press.button, press.state, press.modifiers = 0, 1, (0, 0, 0)
@@ -180,7 +184,6 @@ class TestPickingThroughTheViewClicked:
 
 def _ruled(context):
     """Two top views of the same ground, the left one ruled."""
-    from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
     black = (0.0, 0.0, 0.0)
     left = View(OrthoViewPlatform(OrthoView('top', span=20.0)), name='ruled',
                 style=ViewStyle(background=black, grid=True))
@@ -190,7 +193,6 @@ def _ruled(context):
 
 
 def _grid_scene():
-    from OpenGLContext.multiview.grid import Grid
     return [Grid(colour=(1.0, 1.0, 0.0), heavyColour=(1.0, 1.0, 0.0))]
 
 
@@ -228,20 +230,14 @@ class TestCompatibilityProfile:
 
 class TestTheStrategy:
     def test_a_frame_of_several_views_settles_how_it_is_drawn(self, render_scene, env):
-        from OpenGLContext.multiview import strategy as multiview
-        from OpenGLContext.passes import renderpass
         render_scene(_scene(), frames=2, size=(WIDTH, HEIGHT), layout=_side_by_side)
         assert renderpass.FLAT.multiviewStrategy in multiview.STRATEGIES
 
     def test_one_view_asks_the_driver_nothing(self, render_scene, env):
-        from OpenGLContext.passes import renderpass
         render_scene(_scene(), frames=2, size=(WIDTH, HEIGHT))
         assert renderpass.FLAT.multiviewStrategy is None
 
     def test_a_pinned_strategy_is_the_one_drawn_with(self, render_scene, env):
-        from OpenGLContext.multiview import strategy as multiview
-        from OpenGLContext.passes import renderpass
-
         def layout(context):
             context.contextDefinition.multiview = 'sequential'
             return _side_by_side(context)
@@ -253,8 +249,6 @@ class TestTheStrategy:
 
     def test_a_strategy_chosen_while_running_is_the_one_drawn_with(self, render_scene, env):
         """The settings screen's field takes effect on the next frame."""
-        from OpenGLContext.multiview import strategy as multiview
-        from OpenGLContext.passes import renderpass
 
         def layout(context):
             context.contextDefinition.multiview = 'sequential'
@@ -356,7 +350,6 @@ class TestAViewThroughTheWindowsCamera:
 class TestAViewThatRaises:
     def test_the_next_frame_is_not_confined_to_its_tile(self, render_scene, env, monkeypatch):
         """A view that fails part-way leaves no scissor rectangle behind it."""
-        from OpenGLContext.passes import _flat
 
         original = _flat.FlatPass.renderViewShader
         calls = []

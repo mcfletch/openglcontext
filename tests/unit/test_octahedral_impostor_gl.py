@@ -21,8 +21,12 @@ import subprocess
 import sys
 
 import pytest
+import numpy as np
+from PIL import Image
 
-from OpenGLContext.scenegraph import octahedral
+from OpenGLContext.scenegraph import basenodes, octahedral
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 GRID = 8
 ATLAS = 256
@@ -54,7 +58,6 @@ def expected_cell(axis, angle):
     ``angle`` about ``axis`` turns that direction by the inverse in the
     object's own space, which is what the atlas is indexed by.
     """
-    import numpy as np
 
     x, y, z = axis
     length = (x * x + y * y + z * z) ** 0.5
@@ -212,11 +215,6 @@ def test_a_small_atlas_reads_nothing_of_the_neighbouring_views(render_scene, mon
     The view the camera sees is green and every other view red, so any red on
     screen is the filter reaching across the tile's edge into a neighbour.
     """
-    import numpy as np
-    from PIL import Image
-    from OpenGLContext.scenegraph import basenodes
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
-    from OpenGLContext.scenegraph.pbrmesh import PBRMesh
     from tests.unit.glrender import base_env, frames_of
 
     base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0', OPENGLCONTEXT_INSTANCE_MIN='999')

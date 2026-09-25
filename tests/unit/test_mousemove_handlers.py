@@ -4,8 +4,10 @@ lives on the EventManager (`hasReceivers`), and the context asks the relevant
 managers instead of walking the registry itself.
 """
 import pytest
+from pydispatch import dispatcher
 
 from OpenGLContext.events.eventmanager import EventManager
+from OpenGLContext.context import Context
 
 
 class _MoveManager(EventManager):
@@ -41,8 +43,6 @@ class TestManagerHasReceivers:
 
 class TestHasMouseMoveHandlersDelegates:
     def _ctx(self, managers):
-        from OpenGLContext.context import Context
-
         class Fake:
             def getEventManager(self, t):
                 return managers.get(t)
@@ -99,7 +99,6 @@ class TestWalkingATableThatIsChanging:
     """The scan reads a registry other things are free to edit underneath it."""
 
     def test_a_row_dropped_mid_scan_does_not_break_the_scan(self):
-        from pydispatch import dispatcher
         doomed, living = _Sender(), _Sender()
 
         def drop():

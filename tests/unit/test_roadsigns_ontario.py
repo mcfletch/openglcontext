@@ -12,16 +12,8 @@ import numpy as np
 import pytest
 
 from OpenGLContext.scenegraph.roadsigns import (
-    LEGEND,
-    REGULATORY_FACE,
-    WARNING_FACE,
-    WARNINGS,
-    SignFace,
-    SignProfile,
-    sign_atlas,
-    sign_mesh,
-    sign_meshes,
-    sign_texture,
+    ADVISORY_SHAPE, LEGEND, REGULATORY_FACE, sign_atlas, sign_mesh, sign_meshes, sign_texture,
+    SignFace, SignProfile, WARNING_FACE, WARNINGS,
 )
 
 
@@ -127,7 +119,6 @@ class TestTheAdvisoryTab:
                         WARNING_FACE).sum() > 300
 
     def test_and_it_stands_below_the_diamond(self) -> None:
-        from OpenGLContext.scenegraph.roadsigns import ADVISORY_SHAPE
         profile = SignProfile()
         plate = sign_meshes(SignFace('bend-left', 60))['plate']
         heights = np.asarray(plate.positions)[:, 1]

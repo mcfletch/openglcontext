@@ -14,6 +14,8 @@ glfw = pytest.importorskip("glfw")
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.multiview.views import View, ViewLayout
 from tests.unit.glrender import base_env, frames_of
+from OpenGLContext.move.followcam import look_at_orientation
+from OpenGLContext.move.viewplatform import ViewPlatform
 
 WIDTH, HEIGHT = 240, 120
 
@@ -35,8 +37,6 @@ def _scene():
 
 
 def _looking(eye, target=(0.0, -1.0, 0.0)):
-    from OpenGLContext.move.followcam import look_at_orientation
-    from OpenGLContext.move.viewplatform import ViewPlatform
     return ViewPlatform(position=eye, orientation=look_at_orientation(eye, target))
 
 

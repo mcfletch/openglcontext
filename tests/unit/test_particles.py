@@ -7,6 +7,7 @@ death, compaction, budget -- is asserted about here with no GL context at all.
 
 import math
 import types
+import tracemalloc
 
 import numpy as np
 import pytest
@@ -269,8 +270,6 @@ class TestBudget:
         assert p.age.shape == (100,)
 
     def test_stepping_a_full_pool_allocates_little(self):
-        import tracemalloc
-
         p = pool(capacity=2000, seed=9)
         p.emit(2000, lifetime=1000.0)
         p.step(0.016)

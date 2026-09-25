@@ -7,10 +7,16 @@ dragged in one of these views moves in that view's plane.
 Headless: an orthographic view is a direction, a centre, a scale and two
 matrices.
 """
+import math
 import numpy as np
 import pytest
 
-from OpenGLContext.multiview.cameras import DIRECTIONS, OrthoView, OrthoViewPlatform
+from OpenGLContext.multiview.cameras import (
+    DIRECTIONS, OrthoView, OrthoViewPlatform, point_view, shown_by, view_kind,
+)
+from OpenGLContext.edit.mapview import MapView, MapViewPlatform
+from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
+from OpenGLContext.multiview.views import View
 
 VIEWPORT = (400, 300)
 
@@ -45,7 +51,6 @@ class TestTheDirections:
         assert near < far
 
     def test_top_is_the_plan_view_a_map_draws(self):
-        from OpenGLContext.edit.mapview import MapView
         ortho = OrthoView('top', centre=(5.0, 0.0, -3.0), span=40.0)
         plan = MapView(centre=(5.0, -3.0), span=40.0)
         for point in [(9.0, 2.0, -1.0), (0.0, -4.0, -12.0)]:
@@ -196,10 +201,6 @@ class TestPointingAViewSomewhereElse:
     """What the view-name menu does: the kinds a view can be switched to."""
 
     def _views(self):
-        from OpenGLContext.edit.mapview import MapView, MapViewPlatform
-        from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
-        from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
-        from OpenGLContext.multiview.views import View
         plan = View(MapViewPlatform(MapView(centre=(10.0, -4.0), span=200.0),
                                     (400, 300)), name='plan')
         front = View(OrthoViewPlatform(OrthoView('front', centre=(1.0, 2.0, 3.0),
@@ -211,7 +212,6 @@ class TestPointingAViewSomewhereElse:
         return plan, front, angled
 
     def test_it_says_what_kind_a_view_is(self):
-        from OpenGLContext.multiview.cameras import view_kind
         plan, front, angled = self._views()
         assert view_kind(plan) == 'top'
         assert view_kind(front) == 'front'
@@ -221,7 +221,6 @@ class TestPointingAViewSomewhereElse:
 
     def test_an_elevation_turns_to_another_axis_in_place(self):
         """The camera is the same object, so whatever holds it keeps working."""
-        from OpenGLContext.multiview.cameras import point_view, view_kind
         _plan, front, _angled = self._views()
         camera = front.camera
         assert point_view(front, 'left')
@@ -231,8 +230,6 @@ class TestPointingAViewSomewhereElse:
         assert camera.view.span == pytest.approx(50.0)
 
     def test_a_turning_camera_becomes_an_elevation_looking_at_the_same_place(self):
-        from OpenGLContext.multiview.cameras import point_view, view_kind
-        from OpenGLContext.multiview.cameras import OrthoViewPlatform
         _plan, _front, angled = self._views()
         target = angled.camera.view.target()
         assert point_view(angled, 'front')
@@ -242,8 +239,6 @@ class TestPointingAViewSomewhereElse:
         assert angled.camera.viewport == (400, 300)
 
     def test_an_elevation_becomes_a_turning_camera_on_the_same_subject(self):
-        from OpenGLContext.edit.orbitview import OrbitViewPlatform
-        from OpenGLContext.multiview.cameras import point_view, view_kind
         _plan, front, _angled = self._views()
         assert point_view(front, 'perspective')
         assert isinstance(front.camera, OrbitViewPlatform)
@@ -252,8 +247,6 @@ class TestPointingAViewSomewhereElse:
 
     def test_how_much_it_shows_survives_the_switch(self):
         """A view of a 50-unit subject stays a view of a 50-unit subject."""
-        import math
-        from OpenGLContext.multiview.cameras import point_view
         _plan, front, _angled = self._views()
         point_view(front, 'perspective')
         orbit = front.camera.view
@@ -261,7 +254,6 @@ class TestPointingAViewSomewhereElse:
         assert shown == pytest.approx(50.0, rel=1e-6)
 
     def test_flat_and_perspective_are_the_same_camera_switched(self):
-        from OpenGLContext.multiview.cameras import point_view, view_kind
         _plan, _front, angled = self._views()
         camera = angled.camera
         assert point_view(angled, 'ortho')
@@ -273,21 +265,17 @@ class TestPointingAViewSomewhereElse:
 
     def test_a_plan_view_of_an_editor_turns_like_any_other(self):
         """A MapView is the top view; pointing it elsewhere gives it a camera."""
-        from OpenGLContext.multiview.cameras import point_view, view_kind
         plan, _front, _angled = self._views()
         assert point_view(plan, 'right')
         assert view_kind(plan) == 'right'
         assert plan.camera.view.centre == pytest.approx((10.0, 0.0, -4.0))
 
     def test_a_kind_nobody_has_is_refused(self):
-        from OpenGLContext.multiview.cameras import point_view
         _plan, front, _angled = self._views()
         with pytest.raises(ValueError):
             point_view(front, 'sideways')
 
     def test_a_view_with_no_camera_cannot_be_pointed(self):
-        from OpenGLContext.multiview.cameras import point_view, view_kind
-        from OpenGLContext.multiview.views import View
         plain = View(name='plain')
         assert not point_view(plain, 'top')
         assert view_kind(plain) is None
@@ -297,13 +285,10 @@ class TestASmallSubjectAcrossASwitch:
     """A view of a two-unit object stays a view of a two-unit object."""
 
     def _front(self):
-        from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
-        from OpenGLContext.multiview.views import View
         return View(OrthoViewPlatform(OrthoView('front', span=2.0), (400, 300)),
                     name='front')
 
     def test_a_round_trip_keeps_what_the_view_shows(self):
-        from OpenGLContext.multiview.cameras import point_view, shown_by
         view = self._front()
         before = shown_by(view.camera.view)
         point_view(view, 'perspective')
@@ -314,7 +299,6 @@ class TestASmallSubjectAcrossASwitch:
         assert after[1] == pytest.approx(before[1])
 
     def test_the_turning_camera_can_be_dollied_closer(self):
-        from OpenGLContext.multiview.cameras import point_view
         view = self._front()
         point_view(view, 'perspective')
         orbit = view.camera.view
@@ -323,7 +307,6 @@ class TestASmallSubjectAcrossASwitch:
         assert orbit.distance == pytest.approx(distance * 0.5)
 
     def test_the_turning_camera_can_look_up_from_below(self):
-        from OpenGLContext.multiview.cameras import point_view
         view = self._front()
         point_view(view, 'perspective')
         orbit = view.camera.view

@@ -13,14 +13,15 @@ from OpenGL.GL import GL_FRAGMENT_SHADER, GL_VERTEX_SHADER
 from OpenGL.GL import shaders as gl_shaders
 from OpenGL.arrays import vbo
 
-from OpenGLContext.passes.shadersource import (
-    input_markers, required_inputs,
-)
+from OpenGLContext.passes.shadersource import input_markers, preprocess_shader, required_inputs
 from OpenGLContext.scenegraph import vertexsemantics
 from OpenGLContext.scenegraph.geometryarrays import (
     GeometryArrays, MissingVertexInput, forget_checked_programs,
     program_inputs, report_missing_inputs,
 )
+from OpenGLContext.passes.pbrpass import PBRShaderProgram
+from OpenGLContext.passes.shaderpass import ShaderAppearanceProgram, VRML97ShaderProgram
+from OpenGLContext.scenegraph.pbrmesh import _MeshGPU
 
 FRAGMENT = """#version 330 core
 out vec4 fragColor;
@@ -103,9 +104,6 @@ class TestWhatTheEnginesShadersRequire:
 
     def test_every_program_a_pass_binds_says_what_it_needs(self):
         """A declaration whose optionality is unstated is one nobody decided."""
-        from OpenGLContext.passes.pbrpass import PBRShaderProgram
-        from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
-        from OpenGLContext.passes.shadersource import preprocess_shader
 
         unmarked = []
         for name in sorted(set(PBRShaderProgram.VERTEX_SOURCES.values())
@@ -119,8 +117,6 @@ class TestWhatTheEnginesShadersRequire:
 
 class TestTheProgramAnswersForWhatIsBound:
     def test_the_depth_program_asks_for_less_than_the_lit_one(self, gl_context):
-        from OpenGLContext.passes.pbrpass import PBRShaderProgram
-
         shader_program = PBRShaderProgram()
         assert shader_program.compile(), 'the PBR programs did not compile'
         assert shader_program.required_inputs(shader_program.program) == (
@@ -130,7 +126,6 @@ class TestTheProgramAnswersForWhatIsBound:
 
     def test_an_appearances_own_program_is_owed_nothing(self):
         """What a Shader node's GLSL can be drawn without is its author's."""
-        from OpenGLContext.passes.shaderpass import ShaderAppearanceProgram
 
         appearance = ShaderAppearanceProgram(7)
         assert appearance.bound_program() == 7
@@ -138,7 +133,6 @@ class TestTheProgramAnswersForWhatIsBound:
 
     def test_a_program_from_somewhere_else_is_owed_nothing(self, gl_context):
         """Only the shaders the engine compiled are ones it can speak for."""
-        from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
 
         shader_program = VRML97ShaderProgram()
         assert shader_program.compile(), 'the VRML97 programs did not compile'
@@ -242,14 +236,12 @@ class TestAMeshAsksOncePerProgram:
         """Stands for a pass's set of programs, which owns their names."""
 
     def test_the_first_draw_with_a_program_is_checked(self):
-        from OpenGLContext.scenegraph.pbrmesh import _MeshGPU
         gpu = _MeshGPU.__new__(_MeshGPU)
         owner = self._Programs()
         assert gpu.unchecked(7, owner)
         assert not gpu.unchecked(7, owner)
 
     def test_another_program_is_checked_on_its_own(self):
-        from OpenGLContext.scenegraph.pbrmesh import _MeshGPU
         gpu = _MeshGPU.__new__(_MeshGPU)
         owner = self._Programs()
         gpu.unchecked(7, owner)
@@ -258,7 +250,6 @@ class TestAMeshAsksOncePerProgram:
     def test_a_name_gl_gives_again_to_a_new_set_is_checked_again(self):
         """GL reuses a deleted program's name; a pass built again compiles
         new programs that may be given the old names."""
-        from OpenGLContext.scenegraph.pbrmesh import _MeshGPU
         gpu = _MeshGPU.__new__(_MeshGPU)
         gpu.unchecked(7, self._Programs())
         assert gpu.unchecked(7, self._Programs())

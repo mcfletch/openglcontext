@@ -16,6 +16,13 @@ from OpenGLContext.move.physicswalk import PhysicsWalkMixin, yaw_from_orientatio
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.scenegraph.transform import Transform
 from OpenGLContext.move.viewplatform import ViewPlatform
+from OpenGLContext import quaternion
+from OpenGLContext.move.navigation import NavigationManager
+from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
+from OpenGLContext.passes import renderpass
+from OpenGLContext.physics.gltf_world import collision_world_from_scene
+from OpenGLContext.physics.zones import ZoneRegion
+from OpenGLContext.scenegraph.zone import placed_zones, Zone, ZoneGravity
 
 
 # -- worlds to walk in -------------------------------------------------------
@@ -75,14 +82,12 @@ class _Platform:
 
     def __init__(self, position=(0.0, 0.0, 0.0)):
         self.position = np.array(tuple(position) + (1.0,), dtype='d')
-        from OpenGLContext import quaternion
         self.quaternion = quaternion.fromXYZR(0, 1, 0, 0)
 
     def setPosition(self, position):
         self.position = np.array(tuple(position) + (1.0,), dtype='d')
 
     def setOrientation(self, orientation):
-        from OpenGLContext import quaternion
         x, y, z, r = orientation
         self.quaternion = quaternion.fromXYZR(x, y, z, r)
 
@@ -137,7 +142,6 @@ def _started(scene=None):
 class TestAvailableEverywhere:
     def test_view_platform_mixin_provides_walking(self):
         """Any context with a view platform can be asked to walk."""
-        from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
         assert issubclass(ViewPlatformMixin, PhysicsWalkMixin)
 
     def test_a_context_that_never_walks_starts_switched_off(self):
@@ -225,7 +229,6 @@ class TestBuildPhysicsWorldSeam:
 
     def test_a_host_may_supply_a_world_it_built_itself(self):
         """A terrain or level context has its own world; it never comes from `sg`."""
-        from OpenGLContext.physics.gltf_world import collision_world_from_scene
         built = collision_world_from_scene(_floor_scene())
 
         class _OwnWorld(_Host):
@@ -461,7 +464,6 @@ class _NavigatingHost(_Host):
     navigation = None
 
     def getNavigation(self):
-        from OpenGLContext.move.navigation import NavigationManager
         modes = getattr(self.contextDefinition, 'movementModes', None)
         if not modes:
             return None
@@ -560,9 +562,6 @@ class TestZoneGravity:
         return scene
 
     def test_the_world_follows_a_zone_the_pass_has_moved(self, monkeypatch):
-        from OpenGLContext.passes import renderpass
-        from OpenGLContext.physics.zones import ZoneRegion
-        from OpenGLContext.scenegraph.zone import Zone, ZoneGravity, placed_zones
         zone = Zone(size=(4.0, 4.0, 4.0), settings=[ZoneGravity(gravity=2.0)])
         host = _started(self.scene(zone))
         assert host.enablePhysics(True)
@@ -584,8 +583,6 @@ class TestZoneGravity:
         assert not volume.contains(np.array([0.0, 5.0, 0.0]))
 
     def test_without_a_pass_the_world_keeps_what_it_was_built_with(self, monkeypatch):
-        from OpenGLContext.passes import renderpass
-        from OpenGLContext.scenegraph.zone import Zone, ZoneGravity
         host = _started(self.scene(Zone(size=(4.0, 4.0, 4.0), settings=[ZoneGravity()])))
         assert host.enablePhysics(True)
         before = list(host.gravityZones.world.gravity_volumes)
