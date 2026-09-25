@@ -716,6 +716,29 @@ class PBRMesh(node.Node):
         gpu.draw(mode)
         return 1
 
+    def depthDraw(self, mode: Any) -> bool:
+        """Draw the mesh's positions into a depth map; False where it needs :meth:`render`.
+
+        What a shadow pass needs of a mesh is its positions, where the pass has
+        put it, and which of its faces are culled: the vertex array, the cull
+        state and the draw, where :meth:`render` also answers for materials,
+        vertex colours and the colour pass's diagnostics. A mesh posed by a
+        skeleton reads its joints through the whole draw.
+        """
+        if self.skin_joints is not None:
+            return False
+        if self.positions is None or not len(self.positions):
+            return True
+        gpu = self._gpu(mode)      # re-uploads morph-deformed buffers if stale
+        self._apply_draw_state(mode)
+        sp = getattr(mode, 'shader_program', None)
+        if sp is not None:
+            # The uniform outlives the draw that set it: a skinned caster
+            # before this one would otherwise pose it.
+            sp.set_skinning(None)
+        gpu.draw(mode)
+        return True
+
     def _render_legacy(self, mode: Any, textured: bool = False) -> int:
         """Draw through the fixed-function pipeline, from client-side arrays.
 

@@ -117,7 +117,9 @@ class Shape(basenodes.Shape):
         # Shadow depth pass: only positions matter, skip appearance/material/texture.
         # Matrices and program are configured by the shadow pass itself.
         if getattr(mode, 'shadow_pass', False):
-            self.geometry.render(textured=False, mode=mode)
+            depth = getattr(self.geometry, 'depthDraw', None)
+            if depth is None or not depth(mode):
+                self.geometry.render(textured=False, mode=mode)
             return
 
         # The one colour geometry with no material of its own is drawn in --

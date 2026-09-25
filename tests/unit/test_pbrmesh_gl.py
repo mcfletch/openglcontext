@@ -257,3 +257,61 @@ class TestBoundingAndMisc:
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+class _DepthProgram:
+    """What a depth draw asks of the pass's program: whether it is skinned."""
+
+    def __init__(self):
+        self.skinning = []
+        self.program = 0
+
+    def set_skinning(self, base):
+        self.skinning.append(base)
+
+
+class TestDrawingIntoADepthMap:
+    """``depthDraw``: a mesh draws its positions into a shadow map with the
+    least the depth pass needs, and says when it needs the whole draw."""
+
+    def _depth_mode(self):
+        return _mode(shadow_pass=True, shader_program=_DepthProgram())
+
+    def test_a_plain_mesh_draws_itself(self, gl):
+        mode = self._depth_mode()
+        assert _full_mesh().depthDraw(mode) is True
+        assert glGetError() == GL_NO_ERROR
+        # The uniform outlives the draw that set it: a plain mesh says it is
+        # not skinned, whatever drew before it.
+        assert mode.shader_program.skinning == [None]
+
+    def test_an_unindexed_mesh_draws_itself(self, gl):
+        assert _full_mesh(indices=None).depthDraw(self._depth_mode()) is True
+        assert glGetError() == GL_NO_ERROR
+
+    def test_a_morphed_mesh_is_drawn_posed(self, gl):
+        mesh = TestDynamicDeform()._morph_mesh()
+        mode = self._depth_mode()
+        gpu = mesh._gpu(mode)
+        before = gpu._uploaded_morph_version
+        mesh.set_morph_weights([1.0])
+        assert mesh.depthDraw(mode) is True
+        assert gpu._uploaded_morph_version != before
+
+    def test_a_skinned_mesh_asks_for_the_whole_draw(self, gl):
+        mesh = _full_mesh()
+        mesh.skin_joints = np.zeros((3, 4), 'f')
+        assert mesh.depthDraw(self._depth_mode()) is False
+
+    def test_an_empty_mesh_draws_nothing(self, gl):
+        empty = PBRMesh(positions=np.zeros((0, 3), 'f'))
+        assert empty.depthDraw(self._depth_mode()) is True
+
+    def test_a_shape_draws_its_mesh_into_the_depth_map_that_way(self, gl):
+        from OpenGLContext.scenegraph.basenodes import Shape
+        mesh = _full_mesh()
+        drawn = []
+        mesh.depthDraw = lambda mode: drawn.append(mode) or True
+        mode = self._depth_mode()
+        Shape(geometry=mesh).Render(mode=mode)
+        assert drawn == [mode]
