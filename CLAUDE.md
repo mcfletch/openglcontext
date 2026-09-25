@@ -191,6 +191,8 @@ OpenGLContext/
 │   ├── geometryarrays.py   # What a geometry offers a shader, and binding it
 │   ├── vertexsemantics.py  # Which attribute location each vertex array is read at
 │   ├── road*.py      # Roads, roadworks, signs -- docs/roads.rst
+│   ├── roadcourse.py # Where something is on a road at run time: along it,
+│   │                 # off it, across it -- no GL -- docs/roads.rst#roadcourse
 │   ├── particles.py  # Emitters, presets, one instanced draw -- docs/particles.rst
 │   ├── particlehooks.py  # The fire, smoke and sparks OGLC_hook kinds
 │   ├── water/        # Wave field, surface, medium -- docs/water.rst

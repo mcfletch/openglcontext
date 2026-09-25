@@ -914,6 +914,46 @@ cross-section in the ``extras`` instead, which gives one surface at one
 resolution everywhere. See :ref:`colliding with a world that streams
 <roadcolliders>`. A walker is slow and tolerant enough to use the tiles.
 
+.. _roadcourse:
+
+Where something is on a road
+----------------------------
+
+``OpenGLContext.scenegraph.roadcourse.RoadCourse`` answers what a game asks
+of a road while it runs, from the centreline alone:
+
+.. code-block:: python
+
+   from OpenGLContext.scenegraph.roadcourse import RoadCourse
+
+   road = RoadCourse(entry['centreline'], closed=entry['closed'],
+                     bank=entry['bank'] or None)
+   car = road.tracker()                   # one per car
+   index, off = car.nearest(position)     # nearest point, metres off the line
+   station = car.station_of(position)     # metres along the road
+   right = road.across(index)             # unit vector to the road's right
+
+- ``nearest(position, hint=None)`` returns the index of the nearest
+  centreline point and the distance from the line, in the centreline's units,
+  measured across the ground (x and z).
+- ``station_of(position, hint=None)`` returns the distance along the road,
+  between the samples, from 0 to ``length``. On a closed road ``length``
+  includes the segment back to the first point.
+- ``across(index)`` returns the unit vector across the road towards its right,
+  rolled by ``bank`` where the road leans.
+- ``stations``, ``segments``, ``point(index)`` and ``bank_at(index)`` are the
+  line itself.
+
+Without a hint each question scans the whole line. With one -- the index a
+position was near last time -- it searches ``window`` points either side
+(``WINDOW``, 32, by default) and scans the whole line only when the answer
+lies on the window's edge or further than ``near_enough`` (default 25) off the
+line. A ``Tracker`` keeps the hint for one caller, so a car asking every
+physics step costs a window of the line rather than all of it;
+``tracker.forget()`` makes the next question a full scan, for a car that has
+been moved somewhere unrelated. Outside the corner of a sampled line two
+segments can be equally near, and either answer is returned.
+
 Limits
 ------
 
