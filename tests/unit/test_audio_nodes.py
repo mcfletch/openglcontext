@@ -462,8 +462,14 @@ class TestVRML97Sound:
         sound.stopAudio()
         assert engine.active_voices == 0
 
-    def test_stopping_a_sound_that_never_started_is_harmless(self, engine):
-        audionodes.Sound().stopAudio()
+    def test_stopping_a_sound_that_never_started_leaves_it_ready_to_play(self, engine):
+        playing = self.make()
+        playing.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
+        sound = self.make()
+        sound.stopAudio()
+        assert engine.active_voices == 1, 'another sound was silenced'
+        sound.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
+        assert engine.active_voices == 2
 
     def test_a_sound_with_no_direction_is_heard_from_every_side(self, engine):
         """A zero ``direction`` has no front to tell from its back, so the
@@ -562,15 +568,24 @@ class TestVRML97Sound:
 class TestEngineNotRequired:
     """A scene must build and run with no engine at all."""
 
-    def test_updating_with_no_engine_does_nothing(self):
-        emitter = audionodes.AudioEmitter(
-            sources=[audionodes.AudioSource(url=['beep'])])
+    def test_updating_with_no_engine_leaves_the_emitter_as_it_was(self, engine):
+        """Nothing is started, timed or consumed, so an engine that arrives
+        later plays the emitter from the beginning."""
+        source = audionodes.AudioSource(url=['beep'])
+        emitter = audionodes.AudioEmitter(sources=[source])
         emitter.updateAudio(None, translation(), 0.0)
         emitter.stopAudio()
+        assert emitter.repeatsAt(source) is None
+        emitter.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
+        assert engine.active_voices == 1
 
-    def test_a_sound_node_updates_with_no_engine(self):
-        audionodes.Sound(source=basenodes.AudioClip(url=['x'])).updateAudio(
-            None, translation(), 0.0)
+    def test_a_sound_updated_with_no_engine_plays_once_one_arrives(self, engine):
+        clip = basenodes.AudioClip(url=['beep'], loop=True)
+        sound = audionodes.Sound(source=clip)
+        sound.updateAudio(None, translation(), 0.0)
+        sound.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
+        assert engine.active_voices == 1
+        assert clip.isActive
 
 
 class TestListenerFollowsTheCamera:

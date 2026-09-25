@@ -109,7 +109,14 @@ class TestItPlaysThroughTheEngine:
         _frame(track, engine, _Vehicle(speed=30.0), FRAME)
         assert engine.active_voices == 3
 
-    def test_no_engine_is_a_silent_run(self) -> None:
+    def test_a_run_with_no_engine_still_drives_the_nodes(self, engine) -> None:
+        """The soundtrack keeps its nodes current with no engine to play them,
+        and an engine that arrives later starts the loops from there."""
         track = VehicleSoundtrack(sample_rate=RATE)
-        track.update(FRAME, _Vehicle(speed=30.0))
-        track.node.updateAudio(None, np.identity(4), 0.0)
+        for step in range(120):
+            track.update(FRAME, _Vehicle(speed=50.0, throttle=1.0))
+            track.node.updateAudio(None, np.identity(4), step * FRAME)
+        assert track.motor.playbackRate == pytest.approx(track.sound.motor.rate)
+        assert track.wind.gain > 0.1
+        _frame(track, engine, _Vehicle(speed=50.0, throttle=1.0), 120 * FRAME)
+        assert engine.active_voices == 3

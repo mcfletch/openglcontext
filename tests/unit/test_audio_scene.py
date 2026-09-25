@@ -84,7 +84,14 @@ class TestEngineLifetime:
         assert audioscene.existing_engine(context) is None
 
     def test_closing_a_context_that_never_had_one_is_harmless(self, context):
-        audioscene.close(context)
+        other = FakeContext()
+        try:
+            kept = audioscene.engine_for(other)
+            audioscene.close(context)
+            assert audioscene.existing_engine(context) is None
+            assert audioscene.existing_engine(other) is kept
+        finally:
+            audioscene.close(other)
 
     def test_two_contexts_get_two_engines(self):
         first, second = FakeContext(), FakeContext()
@@ -156,7 +163,11 @@ class TestUpdating:
 
         bare = Bare()
         try:
-            audioscene.update(bare, [FakePath(emitter())], now=0.0)
+            audioscene.engine_for(bare).clips.put('beep', synth.tone(440.0, 5.0))
+            assert audioscene.update(bare, [FakePath(emitter())], now=0.0) == 1
+            engine = audioscene.existing_engine(bare)
+            assert engine.active_voices == 1
+            assert np.allclose(engine.listener.position, (0.0, 0.0, 0.0))
         finally:
             audioscene.close(bare)
 
