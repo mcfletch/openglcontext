@@ -33,7 +33,9 @@ def test_the_blender_file_ships_beside_it():
 
 def test_the_lake_is_water(scene):
     body, = scene.hook_data['water']
-    assert body.style is water.BREEZE
+    # The lake's own copy of the style it names, not the preset itself.
+    assert body.style is not water.BREEZE and body.style.name == water.BREEZE.name
+    assert body.style.amplitude == water.BREEZE.amplitude
     assert body.volume.contains((0.0, -1.0, 0.0))
 
 
