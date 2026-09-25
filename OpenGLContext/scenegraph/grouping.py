@@ -1,5 +1,5 @@
 """Common implementation for grouping-type nodes"""
-from typing import Any, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, List, Optional, Tuple
 
 from OpenGL.GL import *
 from vrml.vrml97 import nodetypes
@@ -11,6 +11,12 @@ import weakref
 class ChildrenSensitiveField( node.MFNode ):
     """Field sub-class/mix-in for checking children for sensitivity"""
     fieldType = "MFNode"
+    if TYPE_CHECKING:
+        # The descriptor protocol MFNode provides, stated for a checker that
+        # cannot see through pyvrml97's field classes: reading a node's
+        # ``children`` gives its list, and a list of nodes is what is set.
+        def __get__( self, client: Any, cls: Any = None ) -> Any: ...
+        def __set__( self, client: Any, value: Any ) -> None: ...
     def checkSensitive( self, client: Any, value: Any ) -> Any:
         """Check value to see if there are any sensor children"""
         client.sensitive = 0
