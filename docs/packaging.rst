@@ -81,6 +81,8 @@ entry script runs the command matching the name it was started under:
 
 .. code-block:: python
 
+   import sys
+
    from OpenGLContext.packaging.multicall import command_modules, run
 
    COMMANDS = {

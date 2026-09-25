@@ -352,10 +352,12 @@ of these strategies:
 - ``convex`` - the convex hull.
 - ``decompose`` - a compound of convex pieces, for concave moving bodies.
 - ``trimesh`` - the triangles themselves, for static world geometry.
-- ``auto`` (the default) - ``trimesh`` for static geometry and ``convex`` for
-  moving bodies, changing to ``decompose`` when a moving body is very concave.
+- ``auto`` (the default) - ``trimesh`` for static geometry that comes with
+  triangle indices, and otherwise ``convex``, changing to ``decompose`` when
+  the shape is very concave.
 
-To add colliders to a glTF file ahead of time, run the ``physics-cook`` tool:
+To add colliders to a glTF file ahead of time, run the ``physics_cook``
+module:
 
 .. code-block:: bash
 
@@ -456,7 +458,7 @@ analytically, not as meshes. A four-kilometre landscape would be millions of
 triangles as a collision mesh, while a height-field lookup costs the same
 anywhere on it.
 
-It overrides three of the methods above and adds no work to the frame loop:
+It overrides the three methods above that make and resolve the physics world:
 
 - ``buildPhysicsWorld()`` gives the character an empty world.
 - ``spawnAvatar()`` stands the avatar on the ground below the camera the scene
@@ -464,6 +466,13 @@ It overrides three of the methods above and adds no work to the frame loop:
   search.
 - ``resolvePhysicsStep()`` lifts the avatar to the surface and pushes it out
   of the trunks after each step.
+
+It also keeps the avatar at one metre to the unit (``physicsAvatarScale()``;
+a height field is already in metres), sizes it from its own ``eye_height``
+and ``player_radius`` (``characterCapabilities()``), declares mouse-look,
+walking and flying unless the host declared movement modes of its own
+(``applyMovementModes()``), and holds a free-flying camera on the ground and
+out of the trunks after each frame's events (``DoEventCascade()``).
 
 The surface acts as a floor, not a rail: a jump rises, and an avatar arriving
 from the air falls onto it. Trunks stop a walker but not a flier, because
@@ -799,8 +808,6 @@ Demos
        ``enter`` and closes it on ``exit``
 
 The rest are scripts in ``tests/``. The test suite also runs each one as a
-visual-regression test: it exits after a set number of frames, captures the
-frame, and compares it with a reference image. The test suite also runs each one as a
 visual-regression test: it exits after a set number of frames, captures the
 frame, and compares it with a reference image.
 

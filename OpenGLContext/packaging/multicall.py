@@ -10,6 +10,8 @@ the way ``busybox`` does it.
 
 An application declares the commands in the script it freezes::
 
+    import sys
+
     from OpenGLContext.packaging.multicall import run
 
     COMMANDS = {
