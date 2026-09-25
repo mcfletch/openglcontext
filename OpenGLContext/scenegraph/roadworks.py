@@ -26,7 +26,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from dataclasses import field as dataclass_field
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, Sequence
 
 import numpy as np
 
@@ -39,7 +39,7 @@ __all__ = [
     'BarrierProfile', 'BridgeProfile', 'CausewayProfile', 'TunnelProfile',
     'bridge_meshes', 'causeway_meshes', 'tunnel_meshes', 'barrier_wall',
     'bore_opening', 'bore_shade', 'bore_sky', 'tunnel_lamps',
-    'BORE_APPROACH_CELLS', 'BORE_INSET',
+    'BORE_APPROACH_CELLS', 'BORE_INSET', 'BoreCut',
     'concrete_material', 'barrier_material', 'lamp_material',
 ]
 
@@ -610,6 +610,86 @@ def bore_opening(points: Any, ground: HeightFn,
         return found.reshape(shape)
 
     return opened
+
+
+@dataclass(frozen=True)
+class BoreCut:
+    """How a road's bores are cut out of the ground it runs through.
+
+    ``tunnel`` is the bore's shape (its ``clearance``, ``margin`` and
+    ``portal_border`` are what a mouth is measured by), ``inset`` how far
+    inside the face the opening is drawn and ``approach`` how far in front of
+    each face the road's own width is cleared, in metres
+    (:func:`bore_opening`). A baked world records these with its road
+    (:meth:`to_json`), so the bake that cut the tiles and the game that cuts
+    the collider build the same mouths (:meth:`openings`); each cuts the
+    surface it has, the bake its height function and the game its field.
+    """
+
+    tunnel: TunnelProfile = dataclass_field(default_factory=TunnelProfile)
+    inset: float = BORE_INSET
+    approach: float = 0.0
+
+    def to_json(self) -> Dict[str, float]:
+        """This cut as a baked road carries it."""
+        return {'clearance': float(self.tunnel.clearance),
+                'margin': float(self.tunnel.margin),
+                'portalBorder': float(self.tunnel.portal_border),
+                'inset': float(self.inset),
+                'approach': float(self.approach)}
+
+    @classmethod
+    def from_json(cls, record: Any, values: Any = None) -> 'BoreCut':
+        """The cut a road record states; the defaults where it states none.
+
+        A figure that is no number is its default and one below nought is
+        nought, each reported once through ``values`` (a
+        :class:`~OpenGLContext.loaders.documentvalues.DocumentValues`).
+        """
+        from OpenGLContext.loaders.documentvalues import DocumentValues
+        values = values if values is not None else DocumentValues()
+        record = record if isinstance(record, dict) else {}
+        plain = TunnelProfile()
+        return cls(
+            tunnel=TunnelProfile(
+                clearance=values.number(record.get('clearance'), plain.clearance,
+                                        'bore clearance', minimum=0.0),
+                margin=values.number(record.get('margin'), plain.margin,
+                                     'bore margin', minimum=0.0),
+                portal_border=values.number(record.get('portalBorder'),
+                                            plain.portal_border,
+                                            'bore portalBorder', minimum=0.0)),
+            inset=values.number(record.get('inset'), BORE_INSET, 'bore inset',
+                                minimum=0.0),
+            approach=values.number(record.get('approach'), 0.0,
+                                   'bore approach', minimum=0.0))
+
+    def openings(self, runs: Sequence[Any], ground: HeightFn,
+                 profile: Optional[RoadProfile] = None
+                 ) -> "Optional[Callable[[Any, Any], np.ndarray]]":
+        """Every mouth of every bore in ``runs`` as one ``holes(x, z) -> mask``,
+        or None where there is none.
+
+        ``runs`` are the centreline under each bore, (N, 3) at the road
+        surface's height; a run of one point has no direction to build a mouth
+        along and is passed over. ``ground`` and ``profile`` are as for
+        :func:`bore_opening`.
+        """
+        mouths = [bore_opening(run, ground, profile=profile,
+                               tunnel=self.tunnel, inset=self.inset,
+                               approach=self.approach)
+                  for run in runs if len(np.asarray(run)) > 1]
+        if not mouths:
+            return None
+
+        def opened(x: Any, z: Any) -> np.ndarray:
+            shape = np.broadcast_shapes(np.shape(np.asarray(x, dtype='d')),
+                                        np.shape(np.asarray(z, dtype='d')))
+            found = np.zeros(shape, dtype=bool)
+            for mouth in mouths:
+                found |= mouth(x, z)
+            return found
+        return opened
 
 
 def _faces_of(line: np.ndarray) -> "tuple[np.ndarray, np.ndarray]":

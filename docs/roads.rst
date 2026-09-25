@@ -506,6 +506,23 @@ run-time grid. ``OpenGLContext_editor.world.road.RoadPath.bore_openings``
 returns every mouth in one mask, and ``HeightfieldLayer(holes=...)`` cuts the
 tiles with it. The run-time mask then only has to cut the collider's field.
 
+The tiles and the collider are cut with the same mouths only if both are built
+from the same figures, so a baked road records them: its entry in the
+tileset's ``extras.roads`` carries ``bores``, a ``BoreCut`` -- the tunnel's
+``clearance``, ``margin`` and ``portalBorder``, the ``inset`` and the
+``approach`` in metres. ``BoreCut.openings(runs, ground, profile)`` builds the
+one mask for every bore of a road, and a game builds its collider's with the
+cut the world recorded:
+
+.. code-block:: python
+
+   from OpenGLContext.scenegraph.roadworks import BoreCut
+   cut = BoreCut.from_json(road_record.get('bores'))
+   holes = cut.openings(tunnel_runs, field.sample, profile=road_profile)
+
+Each side cuts the surface it has: the bake its height function, the game its
+field, which is the same ground sampled on a grid.
+
 The portal must also be *dug*, which is authoring work:
 ``OpenGLContext_editor.world.road.conform_terrain`` lowers the ground around
 each portal to the top of its face, and lets it rise from there at the slope
