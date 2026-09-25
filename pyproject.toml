@@ -86,8 +86,12 @@ all = ["OpenGLContext[pygame,glfw,gltf,draco,audio,accelerate]"]
 # the module pages is PyOpenGL's `directdocs`, which is in the PyOpenGL
 # repository rather than in the PyOpenGL distribution, so it is not here: point
 # DIRECTDOCS at a checkout of it.
-docs = ["sphinx>=7", "furo", "sphinxcontrib-mermaid"]
-dev = ["OpenGLContext[all]","pytest", "pytest-cov", "pytest-html", "pytest-timeout", "psutil", "ruff", "mypy"]
+# sphinxcontrib-mermaid imports yaml without declaring it.
+docs = ["sphinx>=7", "furo", "sphinxcontrib-mermaid", "pyyaml"]
+# The development environment builds the documentation too: the workspace
+# syncs each project's dev extra, and a docs extra it skipped would leave
+# `build-docs.py` without sphinxcontrib-mermaid.
+dev = ["OpenGLContext[all,docs]","pytest", "pytest-cov", "pytest-html", "pytest-timeout", "psutil", "ruff", "mypy"]
 
 [project.scripts]
 oglc-test = "OpenGLContext.bin.gltest:main"
