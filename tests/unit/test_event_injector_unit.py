@@ -329,7 +329,7 @@ def test_dispatch_capture_records_framebuffer(monkeypatch):
         width = 4
         height = 3
 
-        def capture(self, exclude_hud=False):
+        def capture(self, **_named):
             return [0, 1, 2, 3]
 
     monkeypatch.setattr(
@@ -373,7 +373,7 @@ def test_dispatch_exit_falls_back_to_flush_and_exit(monkeypatch):
     )
 
     class Ctx(EventInjectionMixin):
-        def getEventManager(self, event_type):
+        def getEventManager(self, _event_type):
             return None
 
     ctx = Ctx()
@@ -417,7 +417,7 @@ def test_setup_event_injection_parses_argv(monkeypatch):
             ctx._event_injector.close()
 
 
-def test_poll_injected_events_dispatches_each(monkeypatch):
+def test_poll_injected_events_dispatches_each():
     """poll_injected_events routes every polled event through dispatch."""
     ctx = _fake_context()
 
