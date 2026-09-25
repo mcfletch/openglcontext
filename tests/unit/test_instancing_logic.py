@@ -10,6 +10,7 @@ import numpy as np
 from OpenGLContext.passes.instancing import (
     geometry_instance_key, geometry_texture_key, geometry_content_key,
     geometry_content_instance_key, InstanceGroup, GLCapabilities,
+    draw_instanced_mesh,
 )
 
 
@@ -209,5 +210,4 @@ class TestDrawInstancedMeshEmpty:
     def test_empty_instance_set_draws_nothing(self):
         # Zero instances returns 0 before touching the gpu or issuing any GL call,
         # so it is safe to call with no mesh and no context.
-        from OpenGLContext.passes.instancing import draw_instanced_mesh
         assert draw_instanced_mesh(gpu=None, modelviews=[], object_ids=[]) == 0

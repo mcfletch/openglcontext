@@ -7,6 +7,7 @@ exercised end-to-end by test_passes_render_gl.
 """
 
 import pytest
+import OpenGL.GL as GL
 
 
 from OpenGLContext.passes import instancing
@@ -38,7 +39,6 @@ def test_detect_capabilities_is_cached(gl_context):
 def test_detect_capabilities_degrades_on_query_failure(gl_context, monkeypatch):
     """A driver that raises on every integer query falls back per field to the safe
     3.3 baseline (no version, no UBO size, no extensions) rather than propagating."""
-    import OpenGL.GL as GL
     instancing._CAPS_CACHE = None
 
     def boom(*a, **k):

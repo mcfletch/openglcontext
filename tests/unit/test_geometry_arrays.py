@@ -6,18 +6,23 @@ description all of those turn into, keyed by the vertex semantics
 ``vertexsemantics`` declares, and ``bind_geometry`` is the one function that
 turns a description into a vertex array object.
 """
+import gc
+
 import numpy as np
 from OpenGL.GL import (
     GL_TRIANGLE_STRIP, GL_UNSIGNED_SHORT,
     GL_VERTEX_ATTRIB_ARRAY_ENABLED, GL_VERTEX_ATTRIB_ARRAY_SIZE,
     GL_VERTEX_ATTRIB_ARRAY_STRIDE,
     glBindVertexArray, glGetVertexAttribiv,
+    glIsVertexArray,
 )
 from OpenGL.arrays import vbo
 
 from OpenGLContext.scenegraph import vertexsemantics as vs
 from OpenGLContext.scenegraph.geometryarrays import GeometryArrays, bind_geometry
 from OpenGLContext.scenegraph.shadergeometry import VertexFormat
+from OpenGLContext import contextresources
+from OpenGLContext.contextresources import context_key
 
 
 def a_buffer(rows=3, columns=3):
@@ -121,7 +126,6 @@ class TestBindingThem:
         replacement = a_buffer()
         bind_geometry(
             GeometryArrays.separate(count=3, positions=replacement), owner=owner)
-        from OpenGLContext.contextresources import context_key
         cached_refs, _vao = owner._shader_vao_cache.by_context[context_key()][0]
         assert replacement in cached_refs
 
@@ -134,8 +138,6 @@ class TestLettingThemGo:
         pass
 
     def test_a_collected_owner_s_object_is_deleted_at_the_next_bind(self, gl_context):
-        import gc
-        from OpenGL.GL import glIsVertexArray
         keeper, kept = self.Owner(), GeometryArrays.separate(count=3, positions=a_buffer())
         bind_geometry(kept, owner=keeper)
         owner = self.Owner()
@@ -148,8 +150,6 @@ class TestLettingThemGo:
         assert not glIsVertexArray(vao)
 
     def test_a_lost_context_s_objects_are_deleted_and_forgotten(self, gl_context):
-        from OpenGL.GL import glIsVertexArray
-        from OpenGLContext import contextresources
         owner = self.Owner()
         arrays = GeometryArrays.separate(count=3, positions=a_buffer())
         vao = bind_geometry(arrays, owner=owner)

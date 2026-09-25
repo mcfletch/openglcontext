@@ -8,6 +8,7 @@ with before the digits can be read.
 import pytest
 
 from OpenGLContext.scenegraph.shaders import glsl_version
+from OpenGLContext.scenegraph import shaders
 
 
 def test_the_running_driver_reports_a_major_and_a_minor(gl_context):
@@ -28,7 +29,6 @@ def test_the_running_driver_reports_a_major_and_a_minor(gl_context):
     ],
 )
 def test_a_vendor_suffix_is_not_part_of_the_version(monkeypatch, reported, expected):
-    from OpenGLContext.scenegraph import shaders
 
     monkeypatch.setattr(shaders, 'glGetString', lambda which: reported)
     assert shaders.glsl_version() == expected

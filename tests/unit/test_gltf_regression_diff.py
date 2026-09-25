@@ -8,6 +8,7 @@ import json
 import os
 import subprocess
 import types
+import tracemalloc
 
 import pytest
 
@@ -16,6 +17,8 @@ from PIL import Image
 
 from OpenGLContext.bin import gltf_regression as R
 from OpenGLContext.loaders.gltf_demos import SceneSpec
+from OpenGLContext.loaders import resolver
+from OpenGLContext.testing.glcontext import gl_available
 
 
 def _png(path, color, size=(16, 16)):
@@ -521,7 +524,6 @@ class TestProvenance:
         and a reader comparing two baselines is told the wrong thing about the
         one difference that most changes a frame.
         """
-        from OpenGLContext.testing.glcontext import gl_available
 
         if not gl_available():
             pytest.skip('no GL context can be created in this process')
@@ -631,16 +633,13 @@ class TestTheCachedModelPath:
     cache key, and a cached one is not read to learn where it is."""
 
     def test_a_cache_hit_is_not_read(self, tmp_path):
-        import tracemalloc
-        from OpenGLContext.bin import gltf_regression
-        from OpenGLContext.loaders import resolver
         url = 'https://example.invalid/model.glb'
         path = resolver.cached_path(url, str(tmp_path))
         with open(path, 'wb') as handle:
             handle.write(b'\0' * (16 * 1024 * 1024))
         tracemalloc.start()
         try:
-            found = gltf_regression._cached_url_path(url, str(tmp_path))
+            found = R._cached_url_path(url, str(tmp_path))
             peak = tracemalloc.get_traced_memory()[1]
         finally:
             tracemalloc.stop()

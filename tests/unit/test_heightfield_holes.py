@@ -22,7 +22,8 @@ import numpy as np
 import pytest
 
 from OpenGLContext.physics.heightfield import HeightFieldColliders
-from OpenGLContext.scenegraph.terrain import HeightField
+from OpenGLContext.scenegraph.terrain import HeightField, SplatTerrain
+from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
 
 
 def flat(res=17, extent=160.0):
@@ -179,7 +180,6 @@ class TestTheTerrainNodeCarriesItThrough:
     def make(self, holes=None):
         # The control map is a path here, as in the node's own cases: what is
         # under test is the mesh, and loading an image needs a GL context.
-        from OpenGLContext.scenegraph.terrain import SplatTerrain
         return SplatTerrain(flat(), ['ground'], 'control.png',
                             material_fn=lambda *a, **k: {}, holes=holes)
 
@@ -231,8 +231,6 @@ class TestAStreamedWorldsGround:
 
 def _tiles_terrain(tmp_path):
     """A `TilesTerrain` with a field and a ground, built without a GL context."""
-    from OpenGLContext.scenegraph.terrain import SplatTerrain
-    from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
     node = TilesTerrain.__new__(TilesTerrain)
     node.field = flat()
     node.ground = SplatTerrain(node.field, ['ground'], 'control.png',

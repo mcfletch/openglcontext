@@ -15,6 +15,9 @@ import pytest
 pytest.importorskip("pygltflib")
 
 from tests.unit.viewcapture import view_frame
+from OpenGLContext.loaders.resolver import fetch_to_cache
+from OpenGLContext.testing.network import unreachable
+from tests.unit.test_ibl_cubemap_render import _mirror_glb
 
 HDRI_URL = ('https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/'
             'studio_small_03_1k.hdr')
@@ -23,8 +26,6 @@ HDRI_URL = ('https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/'
 @pytest.fixture(scope='module')
 def cached_hdri():
     """Fetch the panorama once through the Resolver; skip the module if offline."""
-    from OpenGLContext.loaders.resolver import fetch_to_cache
-    from OpenGLContext.testing.network import unreachable
     reason = unreachable(HDRI_URL)
     if reason:
         pytest.skip(reason)
@@ -32,7 +33,6 @@ def cached_hdri():
 
 
 def _mirror_glb_bytes():
-    from tests.unit.test_ibl_cubemap_render import _mirror_glb
     return _mirror_glb()
 
 

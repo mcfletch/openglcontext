@@ -6,6 +6,7 @@ import numpy as np
 
 from OpenGLContext.passes.instancing import (
     geometry_content_key, build_instance_groups,
+    geometry_instance_key,
 )
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
@@ -56,7 +57,6 @@ class TestCollapseGrouping:
     def test_identity_key_would_not_collapse(self):
         # Contrast: the identity key keeps distinct nodes separate (why Stage 3
         # needs a content key).
-        from OpenGLContext.passes.instancing import geometry_instance_key
         recs = [rec(FakeShape(mesh(0))) for _ in range(3)]
         groups, singles = build_instance_groups(
             recs, min_instances=2, key=geometry_instance_key,

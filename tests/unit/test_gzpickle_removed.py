@@ -10,6 +10,9 @@ import importlib
 
 import pytest
 
+from OpenGLContext.loaders.loader import Loader
+from OpenGLContext.loaders.obj import OBJHandler
+
 
 def test_gzpickle_module_is_gone():
     with pytest.raises(ModuleNotFoundError):
@@ -22,8 +25,6 @@ def test_vrml2pklgz_module_is_gone():
 
 
 def test_the_loaders_still_load_and_none_takes_a_pickle():
-    from OpenGLContext.loaders.loader import Loader
-    from OpenGLContext.loaders.obj import OBJHandler
 
     assert isinstance(Loader.findHandler('scene.obj'), OBJHandler)
     assert Loader.findHandler('scene.wrl') is not None

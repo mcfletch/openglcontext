@@ -5,6 +5,7 @@ IridescenceSuzanne). Loader-level tests (no GL) plus the std140 packing of the
 iridescence factors into the material block.
 """
 import json
+import base64
 
 import numpy as np
 import pytest
@@ -13,10 +14,10 @@ pygltflib = pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders import gltf
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.passes.pbrpass import pack_material_block, MATERIAL_BLOCK_WORDS
 
 
 def _tri_gltf_with_material(material_ext):
-    import base64
     pos = np.array([(0, 0, 0), (1, 0, 0), (0, 1, 0)], '<f4')
     blob = pos.tobytes()
     uri = 'data:application/octet-stream;base64,' + base64.b64encode(blob).decode()
@@ -91,7 +92,6 @@ class TestIridescenceParse:
 
 class TestIridescenceUBO:
     def test_packed_into_material_block(self):
-        from OpenGLContext.passes.pbrpass import pack_material_block, MATERIAL_BLOCK_WORDS
         mat = PBRMaterial(baseColor=(1, 1, 1))
         mat.iridescence = 0.5
         mat.iridescenceIor = 1.7

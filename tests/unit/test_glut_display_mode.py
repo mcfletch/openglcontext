@@ -9,6 +9,8 @@ publishes no accumulation-buffer framebuffer config -- freeglut finds no
 matching config and aborts the process before any window exists, under either
 profile.
 """
+import inspect
+
 import pytest
 
 pytest.importorskip('OpenGL.GLUT')
@@ -50,6 +52,5 @@ def test_a_compatibility_context_is_asked_for_by_name():
     for GL 3.2 and above may answer with a core context -- so a request for the
     fixed-function pipeline has to say so rather than say nothing.
     """
-    import inspect
     source = inspect.getsource(GLUTContext.__init__)
     assert 'GLUT_COMPATIBILITY_PROFILE' in source

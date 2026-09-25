@@ -13,11 +13,14 @@ import pytest
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.gltf import hooks
 from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb
-from OpenGLContext.scenegraph import water
+from OpenGLContext.scenegraph import water, basenodes
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.reflector import WATER, PlanarReflector
 from OpenGLContext.scenegraph.shape import Shape
+from OpenGLContext.loaders.documentvalues import DocumentValues
+from OpenGLContext.scenegraph.appearance import Appearance
+from OpenGLContext.scenegraph.mirrorhooks import mirror_hook, reflector_for
 
 
 def _quad(tag=None, colour=(0.8, 0.8, 0.8), metallic=1.0, roughness=0.0):
@@ -136,8 +139,6 @@ def test_an_object_tag_leaves_other_objects_on_the_same_mesh_alone():
 
 
 def _object_hook(children, params=None):
-    from OpenGLContext.loaders.documentvalues import DocumentValues
-    from OpenGLContext.scenegraph.mirrorhooks import mirror_hook
     ctx = hooks.HookContext(at='node', kind='mirror', params=params or {}, document=None,
                             resolver=None, scene_data={}, values=DocumentValues(),
                             children=children)
@@ -146,8 +147,6 @@ def _object_hook(children, params=None):
 
 
 def test_an_object_tag_reaches_the_shapes_under_its_levels_and_choices():
-    from OpenGLContext.scenegraph import basenodes
-    from OpenGLContext.scenegraph.appearance import Appearance
 
     def shape():
         return Shape(geometry=_quad(), appearance=Appearance(material=PBRMaterial()))
@@ -227,7 +226,6 @@ def test_the_engines_water_material_reflects():
 def test_a_value_no_mirror_can_have_is_its_default_or_its_bound(params, name, expected):
     """One malformed number is a mirror at its default, not a load that fails
     or a frame that fails every time the mirror is in view."""
-    from OpenGLContext.scenegraph.mirrorhooks import reflector_for
     value = getattr(reflector_for(params), name)
     if isinstance(expected, bool):
         assert bool(value) is expected

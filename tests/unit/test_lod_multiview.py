@@ -12,6 +12,7 @@ import pytest
 from OpenGLContext.passes import _flat
 from OpenGLContext.scenegraph import lod
 from OpenGLContext.scenegraph.transform import Transform
+from OpenGLContext.passes.shadowmath import ortho_matrix
 
 
 class _Path(list):
@@ -148,7 +149,6 @@ class TestTheLensOfACamera:
         assert viewer.tangent == pytest.approx(lod.viewer_tangent(60.0))
 
     def test_an_orthographic_projection_gives_its_half_height(self):
-        from OpenGLContext.passes.shadowmath import ortho_matrix
 
         projection = ortho_matrix(-8.0, 8.0, -4.0, 4.0, 0.0, 100.0)
         viewer = lod.viewer_for(object(), _at(3.0), projection)

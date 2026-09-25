@@ -11,8 +11,11 @@ height function -- which is how one is authored -- sampled into the grid a
 renderer and a collider can use, with the datum and the relief taken from what
 the function actually does over that square.
 """
+import io
+
 import numpy as np
 import pytest
+from PIL import Image
 
 from OpenGLContext.scenegraph.terrain.heightfield import HeightField
 
@@ -147,8 +150,6 @@ class TestWritingOneOut:
     def test_it_is_written_at_sixteen_bits(self) -> None:
         """Eight bits over five hundred metres of relief is two-metre steps,
         which a car drives over as a staircase."""
-        from PIL import Image
-        import io
         field = HeightField.from_function(_bowl, res=65, extent=EXTENT)
         buffer = io.BytesIO()
         field.save_image(buffer, format='PNG')

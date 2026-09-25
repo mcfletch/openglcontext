@@ -8,6 +8,7 @@ the format has one writer and one reader and they agree.
 import json
 
 import pytest
+import numpy as np
 
 pytest.importorskip('pygltflib')
 
@@ -17,6 +18,7 @@ from OpenGLContext.loaders.gltf.writer import (
 )
 from OpenGLContext.scenegraph.zone import AUDIO, ENVIRONMENT, REVERB
 from OpenGLContext.scenegraph.zones import BOX
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 BIRDS = GlobalSound('birdsong', 'audio/birdsong.wav', gain=0.45)
 SURF = GlobalSound('surf', 'audio/surf.wav', gain=0.55)
@@ -97,8 +99,6 @@ class TestTheDocumentAsText:
         assert document['asset']['version'] == '2.0'
 
     def test_a_document_with_mesh_data_needs_a_glb(self):
-        import numpy as np
-        from OpenGLContext.scenegraph.pbrmesh import PBRMesh
         writer = _written(_forest())
         writer.add_mesh(PBRMesh(positions=np.zeros((3, 3), 'f'),
                                 indices=np.array([0, 1, 2], 'u4')))

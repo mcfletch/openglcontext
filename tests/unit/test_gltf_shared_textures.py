@@ -17,13 +17,15 @@ import json
 
 import numpy as np
 import pytest
+from PIL import Image
 
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.gltf import textures
+from OpenGLContext.passes.instancing import geometry_content_key
+from OpenGLContext.scenegraph.shape import Shape
 
 
 def _png(colour=(200, 120, 40), size=8):
-    from PIL import Image
     image = Image.new('RGB', (size, size), colour)
     buffer = io.BytesIO()
     image.save(buffer, format='PNG')
@@ -71,7 +73,6 @@ def _write(tmp_path, name, png, **named):
 
 
 def _texture_of(scene):
-    from OpenGLContext.scenegraph.shape import Shape
     stack = [scene.group]
     while stack:
         node = stack.pop()
@@ -102,8 +103,6 @@ class TestTheSameImageTwice:
 
     def test_which_is_what_lets_them_batch(self, tmp_path) -> None:
         """The point of it: one texture is one draw."""
-        from OpenGLContext.passes.instancing import geometry_content_key
-        from OpenGLContext.scenegraph.shape import Shape
         png = _png()
         scenes = [gltf.load_gltf(_write(tmp_path, name, png))
                   for name in ('a.gltf', 'b.gltf')]
@@ -148,7 +147,6 @@ class TestWhatIsNotShared:
             'metallicRoughnessTexture'] = {'index': 0}
         open(path, 'w').write(json.dumps(document))
         scene = gltf.load_gltf(path)
-        from OpenGLContext.scenegraph.shape import Shape
         stack, found = [scene.group], None
         while stack:
             node = stack.pop()

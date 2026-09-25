@@ -10,6 +10,8 @@ import numpy as np
 import pytest
 
 from OpenGLContext.passes import ibl
+from OpenGLContext.passes.shadersource import preprocess_shader
+from tests.unit.test_hdr_loader import encode_flat
 
 
 @pytest.fixture(autouse=True)
@@ -54,7 +56,6 @@ def test_env_hdr_path_from_environment(monkeypatch):
 
 def test_load_equirect_hdr_from_local_file(tmp_path):
     # Build a tiny valid Radiance file via the decoder's own round-trip helpers.
-    from tests.unit.test_hdr_loader import encode_flat
     src = (np.linspace(0, 4, 8 * 16 * 3, dtype=np.float32).reshape(8, 16, 3))
     p = tmp_path / 'tiny.hdr'
     p.write_bytes(encode_flat(src))
@@ -107,7 +108,6 @@ def test_explicit_full_is_still_gated_by_probe(monkeypatch):
 def test_dir_to_equirect_is_shared_by_both_shaders():
     """The equirect UV mapping lives once in _cubemap_inc.glsl and both the skybox
     and the reflection shader pull it from there (kept in lock-step)."""
-    from OpenGLContext.passes.shadersource import preprocess_shader
     sky = preprocess_shader('hdr_background.frag')
     refl = preprocess_shader('ibl_equirect.frag')
     # hdr_background.frag is routed through the include preprocessor.

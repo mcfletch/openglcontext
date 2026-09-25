@@ -20,6 +20,7 @@ from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.gltf import draco as draco_mod
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from tests.unit.viewcapture import view_frame
+from OpenGLContext.testing.network import unreachable
 
 
 # Draco AttributeType enum -> glTF semantic
@@ -360,7 +361,6 @@ class TestKhronosDuckDraco:
         return gltf.load_gltf_url('%s/%s/Duck.gltf' % (self.BASE, variant), cache)
 
     def test_duck_draco_counts_match_uncompressed(self, tmp_path):
-        from OpenGLContext.testing.network import unreachable
         cache = str(tmp_path)
         reason = unreachable('%s/glTF/Duck.gltf' % (self.BASE,), cache)
         if reason:

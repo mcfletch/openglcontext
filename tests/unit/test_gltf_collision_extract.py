@@ -2,6 +2,8 @@
 accounting (the O(M^2) fix) and the min-AABB box substitution for small static
 sub-components. No GL.
 """
+import time
+
 import numpy as np
 import pytest
 
@@ -35,7 +37,6 @@ class TestOffsetAccounting:
     def test_scales_linearly_not_quadratically(self):
         # O(M^2) offset accumulation makes 4x the meshes cost ~16x; the running
         # counter keeps it ~linear. Use a generous bound (linear ~4x, quad ~16x).
-        import time
 
         def build(m):
             return Transform(children=[_shape(np.array([i * 0.5, 0, 0], 'f'))

@@ -3,7 +3,9 @@ share one instanced draw: a batch has a single front-face winding, so mixing +de
 and -det instances mis-culls and mis-lights the negatively-scaled ones
 (NegativeScaleTest). The grouping must split them by winding sign.
 """
-from OpenGLContext.passes.instancing import build_instance_groups
+import numpy as np
+
+from OpenGLContext.passes.instancing import build_instance_groups, winding_signs
 
 
 class FakeGeometry:
@@ -66,15 +68,11 @@ def _det3_sign(mv):
 
 class TestWindingSigns:
     def test_each_matrix_gets_its_own_sign(self):
-        from OpenGLContext.passes.instancing import winding_signs
-        import numpy as np
         scaled = np.diag([2.0, -3.0, 1.0, 1.0])
         assert winding_signs([IDENT, MIRROR_X, scaled, np.eye(4, dtype='f')]) == [1, -1, -1, 1]
 
     def test_matrices_that_do_not_stack_are_answered_one_at_a_time(self):
-        from OpenGLContext.passes.instancing import winding_signs
         assert winding_signs([IDENT, MIRROR_X[:3], None]) == [1, -1, 1]
 
     def test_none_is_nothing(self):
-        from OpenGLContext.passes.instancing import winding_signs
         assert winding_signs([]) == []

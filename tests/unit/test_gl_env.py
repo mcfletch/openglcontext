@@ -15,6 +15,7 @@ import os
 import pytest
 
 from OpenGLContext.testing import gl_env
+from OpenGLContext import renderoptions
 
 
 class TestThePlatformThisMachineWants:
@@ -216,7 +217,6 @@ class TestTellingConfigurationFromInfrastructure:
         """One question, one answer: a suite that disagreed with the engine
         about which variables decide a render would build children the
         engine's own tools would not."""
-        from OpenGLContext import renderoptions
 
         assert gl_env.CONFIGURATION_PREFIXES is \
             renderoptions.CONFIGURATION_PREFIXES
@@ -225,7 +225,6 @@ class TestTellingConfigurationFromInfrastructure:
         """``renderoptions.ENVIRONMENT`` names what the engine reads; the rule
         has to cover all of it, or a variable would be dropped by one and kept
         by the other."""
-        from OpenGLContext import renderoptions
 
         missed = [name for name in renderoptions.ENVIRONMENT
                   if not gl_env.is_configuration(name)]

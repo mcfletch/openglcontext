@@ -9,6 +9,8 @@ These tests drive the dispatch stack headlessly (no GL context) with
 delay/interval set to 0 so each pumpKeyRepeats() deterministically emits one
 repeat -- no real-time sleeping.
 """
+import inspect
+
 import glfw
 import pytest
 
@@ -150,11 +152,9 @@ class TestSpecialKeysAreNotCharacters:
     """
 
     def test_a_function_key_has_a_name_in_the_key_mapping(self):
-        from OpenGLContext.events import glfwevents
         assert glfwevents.keyboardMapping[glfw.KEY_F10] == '<F10>'
 
     def test_a_function_key_produces_a_keyboard_event(self):
-        from OpenGLContext.events import glfwevents
 
         class Recorder(glfwevents.EventHandlerMixin):
             def __init__(self):
@@ -170,8 +170,7 @@ class TestSpecialKeysAreNotCharacters:
 
     def test_the_overlay_demo_binds_its_screens_where_they_arrive(self):
         """The demo is the worked example, so its bindings have to be right."""
-        import inspect
-        from OpenGLContext.bin import ui_demo
+        from OpenGLContext.bin import ui_demo  # noqa: PLC0415 ui_demo opens the windowing backend as it imports; only this test reads it
         source = inspect.getsource(ui_demo.UIDemoContext.OnInit)
         assert "addEventHandler('keyboard'" in source
         assert "addEventHandler('keypress'" not in source

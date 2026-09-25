@@ -17,6 +17,7 @@ from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
+from OpenGLContext.loaders.gltf.scene import _light_node
 
 FLAG = 'OGLC_castsShadow'
 
@@ -112,7 +113,6 @@ def test_what_a_custom_property_writes_is_read(written, expected):
 
 def _sun(extras=None, casts=None):
     """A directional light on its own node, as a file carries one."""
-    from OpenGLContext.loaders.gltf.scene import _light_node
     definition = {'type': 'directional', 'intensity': 3.0}
     if casts is not None:
         definition['castShadows'] = casts

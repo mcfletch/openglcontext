@@ -24,6 +24,8 @@ from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.scenegraph.transform import Transform
+from OpenGLContext import __version__
+from OpenGLContext.scenegraph.instancedshape import InstancedShape
 
 
 # --- fixtures -----------------------------------------------------------------
@@ -408,7 +410,6 @@ class TestTheNodeGraph:
 
 def _placement_sets(scene):
     """The InstancedShape nodes a loaded scene holds."""
-    from OpenGLContext.scenegraph.instancedshape import InstancedShape
     return [n for n in _flatten(scene.group) if isinstance(n, InstancedShape)]
 
 
@@ -462,7 +463,6 @@ class TestTheWriterObject:
         assert doc.get('scenes') == [{'nodes': []}]
 
     def test_the_generator_string_is_the_engine_and_its_version(self):
-        from OpenGLContext import __version__
         assert __version__ in gltf_writer.GENERATOR
 
 

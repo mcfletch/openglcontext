@@ -6,6 +6,7 @@ whether that channel carries a transform (high bits of texCoordMask) so the shad
 applies the shared uvTransform only to those channels.
 """
 import io
+import math
 
 import numpy as np
 import pytest
@@ -20,6 +21,7 @@ from pygltflib import (
 )
 
 from OpenGLContext.loaders import gltf
+from OpenGLContext.scenegraph.pbrmaterial import uv_transform_matrix
 
 # transform-applies bits are the channel bit << 8
 T_BASECOLOR = 1 << 8
@@ -131,12 +133,10 @@ class TestUVTransformMatrix:
                 M[1][0] * u + M[1][1] * v + M[1][2])
 
     def test_pure_offset_translates(self):
-        from OpenGLContext.scenegraph.pbrmaterial import uv_transform_matrix
         M = uv_transform_matrix(offset=(0.5, 0.25))
         assert self._apply(M, 0.0, 0.0) == (0.5, 0.25)
 
     def test_scale_multiplies(self):
-        from OpenGLContext.scenegraph.pbrmaterial import uv_transform_matrix
         M = uv_transform_matrix(scale=(1.5, 2.0))
         assert self._apply(M, 1.0, 1.0) == (1.5, 2.0)
 
@@ -146,8 +146,6 @@ class TestUVTransformMatrix:
         # V-down, so the spec matrix's sense is inverted). A 90-degree rotation must
         # send (u=1, v=0) to (0, -1); the un-negated spec matrix would give (0, +1)
         # and the cell renders "Error".
-        import math
-        from OpenGLContext.scenegraph.pbrmaterial import uv_transform_matrix
         M = uv_transform_matrix(rotation=math.pi / 2)
         u2, v2 = self._apply(M, 1.0, 0.0)
         assert abs(u2 - 0.0) < 1e-6 and abs(v2 - (-1.0)) < 1e-6

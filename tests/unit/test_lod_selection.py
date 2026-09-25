@@ -5,13 +5,18 @@ Pure Python -- no GL. VRML97's ``LOD`` names its levels finest-first and gives
 way to level ``i + 1``; ``center`` is the point in the node's own coordinates
 those distances are measured to.
 """
+import os
+import subprocess
+import sys
+
 import numpy as np
 import pytest
 from pydispatch import dispatcher
 
-from OpenGLContext.scenegraph.lod import LOD
+from OpenGLContext.scenegraph.lod import LOD, distance_to_viewer
 from OpenGLContext.scenegraph.switch import SWITCH_CHANGE_SIGNAL
 from OpenGLContext.scenegraph.transform import Transform
+from OpenGLContext.testing.paths import tests_root
 
 
 def _levels(count=3):
@@ -117,7 +122,6 @@ class TestWhereTheDistanceIsMeasuredFrom:
         assert tuple(node.center) == (0.0, 3.0, 0.0)
 
     def test_the_distance_of_a_placed_node_uses_that_centre(self):
-        from OpenGLContext.scenegraph.lod import distance_to_viewer
 
         node = LOD(level=_levels(), range=[10.0], center=(0.0, 0.0, -4.0))
         # Local -> eye: shifted six along -z, so the centre sits ten away.
@@ -137,11 +141,7 @@ class TestAgainstTheRenderer:
     """
 
     def _report(self):
-        import os
-        import subprocess
-        import sys
 
-        from OpenGLContext.testing.paths import tests_root
 
         harness = os.path.join(str(tests_root(__file__)), 'helpers',
                                '_lod_harness.py')

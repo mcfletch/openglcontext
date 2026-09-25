@@ -5,6 +5,7 @@ collapse into one instanced draw (each instance indexes its own material).
 from OpenGLContext.passes.instancing import (
     geometry_texture_key, build_instance_groups, group_material_table,
 )
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 
 
 class FakeGeometry:
@@ -23,7 +24,6 @@ def real_material(baseColor):
     The table groups by what a material *says*, so telling two of them apart
     means giving them different factors rather than different names.
     """
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
     return PBRMaterial(baseColor=baseColor)
 
 

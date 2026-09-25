@@ -23,7 +23,10 @@ from OpenGLContext.scenegraph.vegetation.cover import (
     CLUMP_LOD_FRAC,
     CoverSpecies,
     GroundCover,
+    read_cover_manifest,
 )
+from OpenGLContext.loaders.documentvalues import DocumentValues, DocumentError
+from tests.unit.test_clump_glb import _many_glb_bytes, _ribbon, _two_blades
 
 EXTENT = 4096.0
 
@@ -593,7 +596,6 @@ class TestWhatABakedWorldCarries:
         assert not len(back.canopy)
 
     def test_a_density_that_is_no_number_is_the_default_and_reported(self) -> None:
-        from OpenGLContext.loaders.documentvalues import DocumentValues
         said: list = []
         back = CoverSpecies.from_json({'name': 'grass', 'card': 'g.png',
                                        'density': 'thick', 'canopy': [0.2, 'x']},
@@ -603,7 +605,6 @@ class TestWhatABakedWorldCarries:
         assert len(said) == 2
 
     def test_a_species_with_no_card_is_refused(self) -> None:
-        from OpenGLContext.loaders.documentvalues import DocumentError
         with pytest.raises(DocumentError, match='cover species card is None'):
             CoverSpecies.from_json({'name': 'grass'})
 
@@ -620,7 +621,6 @@ def _plant_file(tmp_path):
 
     What a baked plant is -- every rung against the one texture they share.
     """
-    from tests.unit.test_clump_glb import _many_glb_bytes, _ribbon, _two_blades
     path = tmp_path / "fern.glb"
     path.write_bytes(_many_glb_bytes([("near", *_two_blades()),
                                       ("far", *_ribbon(n_rings=2))]))
@@ -638,7 +638,6 @@ class TestACoverManifest:
         (directory / 'cover.json').write_text(json.dumps({'species': species}))
 
     def test_its_species_name_files_beside_it(self, tmp_path) -> None:
-        from OpenGLContext.scenegraph.vegetation.cover import read_cover_manifest
         self._write(tmp_path, [{'name': 'grass', 'card': 'grass.png', 'clump': 'g.glb'}])
         found = read_cover_manifest(str(tmp_path))
         root = os.path.realpath(str(tmp_path))
@@ -646,14 +645,11 @@ class TestACoverManifest:
             ('grass', os.path.join(root, 'grass.png'), os.path.join(root, 'g.glb'))]
 
     def test_a_species_naming_a_file_outside_it_is_refused(self, tmp_path) -> None:
-        from OpenGLContext.scenegraph.vegetation.cover import read_cover_manifest
         self._write(tmp_path, [{'name': 'grass', 'card': '../../etc/passwd'}])
         with pytest.raises(IOError, match='escapes the base directory'):
             read_cover_manifest(str(tmp_path))
 
     def test_a_manifest_that_lists_no_species_is_refused(self, tmp_path) -> None:
-        from OpenGLContext.loaders.documentvalues import DocumentError
-        from OpenGLContext.scenegraph.vegetation.cover import read_cover_manifest
         (tmp_path / 'cover.json').write_text('{"plants": []}')
         with pytest.raises(DocumentError, match='cover species is None'):
             read_cover_manifest(str(tmp_path))

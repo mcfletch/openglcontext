@@ -1,7 +1,12 @@
 """The shared demo metadata (OpenGLContext.loaders.gltf_demos) is the single
 source of truth for how each glTF demo is framed and lit. These guard its shape
 and the derivations the browser demo and doc-image gallery build from it."""
+import importlib.util
+import os
+
 from OpenGLContext.loaders import gltf_demos
+from OpenGLContext.bin import gltf_demo
+from OpenGLContext.testing.paths import tests_root
 
 
 class TestSceneSpec:
@@ -81,7 +86,6 @@ class TestScenePublishedElsewhere:
 
 class TestSharedDerivations:
     def test_demo_env_background_roster_comes_from_shared_module(self):
-        from OpenGLContext.bin import gltf_demo
         assert set(gltf_demo._ENV_BACKGROUND) == set(gltf_demos.ENV_BACKGROUND_MODELS)
         # and a representative reflective model still resolves to a lit background
         cfg = gltf_demo.demo_config([])
@@ -97,16 +101,12 @@ class TestSharedDerivations:
     def test_self_lit_lamp_is_browsed_against_a_lit_background(self):
         # LightsPunctualLamp's own bulb lights only its shade: on black the light
         # meter stops the camera down to near-nothing and the model disappears.
-        from OpenGLContext.bin import gltf_demo
         cfg = gltf_demo.demo_config([])
         assert gltf_demo.resolve_background(cfg, 'LightsPunctualLamp') == 'sky'
         # a model with no lighting opinion of its own still browses on black
         assert gltf_demo.resolve_background(cfg, 'Duck') == 'none'
 
     def test_doc_gallery_framing_comes_from_shared_module(self):
-        import importlib.util
-        import os
-        from OpenGLContext.testing.paths import tests_root
         path = os.path.join(str(tests_root(__file__).parent),
                             'scripts', 'generate_doc_images.py')
         spec = importlib.util.spec_from_file_location('gen_doc_images', path)

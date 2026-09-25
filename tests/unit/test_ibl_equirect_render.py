@@ -11,6 +11,18 @@ full viewer. Skips cleanly when a GL context can't be created.
 
 import numpy as np
 import pytest
+from OpenGL.GL import (
+    glBindTexture,
+    glGetTexImage,
+    GL_TEXTURE_CUBE_MAP,
+    GL_TEXTURE_CUBE_MAP_POSITIVE_X,
+    GL_RGB,
+    GL_FLOAT,
+)
+
+from OpenGLContext.passes import ibl
+from OpenGLContext.passes.ibl import _compile
+from OpenGLContext.scenegraph.hdrbackground import HDRBackground
 
 
 @pytest.fixture
@@ -29,10 +41,6 @@ def _striped_equirect(h=64, w=128):
 
 
 def _read_cube_face(tex, face_offset, size):
-    from OpenGL.GL import (
-        glBindTexture, glGetTexImage, GL_TEXTURE_CUBE_MAP,
-        GL_TEXTURE_CUBE_MAP_POSITIVE_X, GL_RGB, GL_FLOAT,
-    )
     glBindTexture(GL_TEXTURE_CUBE_MAP, tex)
     raw = glGetTexImage(GL_TEXTURE_CUBE_MAP_POSITIVE_X + face_offset, 0,
                         GL_RGB, GL_FLOAT)
@@ -41,7 +49,6 @@ def _read_cube_face(tex, face_offset, size):
 
 
 def test_equirect_panorama_projected_onto_env_cube(gl_context):
-    from OpenGLContext.passes import ibl
 
     ibl.set_equirect_env(_striped_equirect())
     try:
@@ -69,7 +76,6 @@ def test_equirect_panorama_projected_onto_env_cube(gl_context):
 
 def test_irradiance_carries_the_environment_hue(gl_context):
     """The convolved irradiance for an up-facing normal must pick up the red sky."""
-    from OpenGLContext.passes import ibl
 
     ibl.set_equirect_env(_striped_equirect())
     try:
@@ -89,8 +95,6 @@ def test_irradiance_carries_the_environment_hue(gl_context):
 def test_shared_include_compiles_both_shaders(gl_context):
     """Both hdr_background.frag (skybox) and ibl_equirect.frag (reflection) compile
     through the shared _cubemap_inc.glsl dirToEquirect, so they can't desync."""
-    from OpenGLContext.passes.ibl import _compile
-    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
 
     HDRBackground._shader = None
     HDRBackground._shader_locations = None

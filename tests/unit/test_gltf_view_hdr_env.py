@@ -10,6 +10,7 @@ import pytest
 
 from OpenGLContext.bin import view
 from OpenGLContext.viewer import environment
+from OpenGLContext.loaders import hdri
 
 _ENV_VARS = ('OPENGLCONTEXT_ENV_HDR', 'OPENGLCONTEXT_ENV_CUBEMAP',
              'OPENGLCONTEXT_IBL')
@@ -50,7 +51,6 @@ def test_is_hdr_environment():
 def test_hdr_url_routes_to_env_hdr(monkeypatch):
     url = 'https://dl.polyhaven.org/x/studio_small_03_1k.hdr'
     view.apply_render_env(_Args(environment=url))
-    import os
     assert os.environ['OPENGLCONTEXT_ENV_HDR'] == url
     assert 'OPENGLCONTEXT_ENV_CUBEMAP' not in os.environ
     assert os.environ['OPENGLCONTEXT_IBL'] == 'full'
@@ -58,15 +58,12 @@ def test_hdr_url_routes_to_env_hdr(monkeypatch):
 
 def test_catalogue_name_routes_to_env_hdr(monkeypatch):
     view.apply_render_env(_Args(environment='studio_small_03'))
-    import os
-    from OpenGLContext.loaders import hdri
     assert os.environ['OPENGLCONTEXT_ENV_HDR'] == hdri.CATALOG['studio_small_03'].url
     assert os.environ['OPENGLCONTEXT_IBL'] == 'full'
 
 
 def test_cubemap_prefix_still_routes_to_cubemap(monkeypatch):
     view.apply_render_env(_Args(environment='/env/pimbackground_'))
-    import os
     assert os.environ['OPENGLCONTEXT_ENV_CUBEMAP'] == '/env/pimbackground_'
     assert 'OPENGLCONTEXT_ENV_HDR' not in os.environ
     assert os.environ['OPENGLCONTEXT_IBL'] == 'full'
@@ -75,7 +72,6 @@ def test_cubemap_prefix_still_routes_to_cubemap(monkeypatch):
 def test_background_none_with_hdr_keeps_ibl_on(monkeypatch):
     # A black backdrop but an HDR env must NOT force IBL off (metals still reflect it).
     view.apply_render_env(_Args(environment='studio_small_03', background='none'))
-    import os
     assert os.environ.get('OPENGLCONTEXT_IBL') != 'off'
     assert 'OPENGLCONTEXT_ENV_HDR' in os.environ
 

@@ -2,8 +2,25 @@
 --list-cameras integration (the latter skip if no GL / pygltflib)."""
 import os
 import subprocess
+import argparse
 
 import pytest
+import numpy as np
+from pygltflib import (
+    GLTF2,
+    Scene,
+    Node,
+    Mesh,
+    Primitive,
+    Attributes,
+    Accessor,
+    BufferView,
+    Buffer,
+    Material,
+    PbrMetallicRoughness,
+    Camera,
+    Perspective,
+)
 
 from OpenGLContext.testing.gl_env import import_unconfigured
 
@@ -15,6 +32,7 @@ view = import_unconfigured('OpenGLContext.bin.view')
 
 from OpenGLContext.viewer import source
 from tests.unit.viewcapture import PROJECT_ROOT, view_command, view_frame
+from OpenGLContext.viewer.options import ViewerOptions
 
 
 class TestParseArgs:
@@ -144,11 +162,6 @@ class TestApplyRenderEnv:
 
 def _named_camera_glb():
     """A minimal GLB with two named perspective cameras."""
-    import numpy as np
-    from pygltflib import (
-        GLTF2, Scene, Node, Mesh, Primitive, Attributes, Accessor, BufferView,
-        Buffer, Material, PbrMetallicRoughness, Camera, Perspective,
-    )
     pos = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float32)
     blob = pos.tobytes()
     g = GLTF2()
@@ -202,7 +215,6 @@ def test_capture_named_camera(camera_glb, tmp_path):
 
 def test_capture_differs_between_cameras(camera_glb, tmp_path):
     """Selecting different named cameras produces different captures."""
-    import numpy as np
     outs = {
         cam: view_frame([camera_glb, '--camera', cam, '--frames', '6',
                          '--capture-delay', '0.2', '--no-shadows'],
@@ -297,7 +309,6 @@ class TestEyeLookAtCamera:
         assert view._parse_vec3('-14.0,4,-3') == (-14.0, 4.0, -3.0)
 
     def test_bad_vec3_rejected(self):
-        import argparse
         with pytest.raises(argparse.ArgumentTypeError):
             view._parse_vec3('1,2')
 
@@ -312,7 +323,6 @@ class TestEyeLookAtCamera:
 
     def test_an_explicit_eye_and_target_aim_the_platform(self):
         """--eye/--look-at bypasses auto-framing and points the camera itself."""
-        from OpenGLContext.viewer.options import ViewerOptions
         inst = view.TestContext.__new__(view.TestContext)
 
         class _Platform:

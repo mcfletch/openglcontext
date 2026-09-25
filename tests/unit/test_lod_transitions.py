@@ -24,7 +24,7 @@ import pytest
 
 from OpenGLContext.testing.glcontext import gl_available, hidden_window
 
-from OpenGLContext.scenegraph.quadrics import Sphere, Cone
+from OpenGLContext.scenegraph.quadrics import Sphere, Cone, lod_phi
 
 from OpenGL.GL import *
 from OpenGL.GLU import gluPerspective
@@ -51,7 +51,6 @@ def gl_ctx():
 
 def _coords(kind, level):
     """(coords, indices) for a unit quadric of ``kind`` at LOD ``level``."""
-    from OpenGLContext.scenegraph.quadrics import lod_phi
     if kind == 'sphere':
         return Sphere(radius=1.0).compileArrays(level)
     phi = lod_phi(Cone._BASE_PHI, level, 2 * PI)

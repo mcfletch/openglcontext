@@ -1,6 +1,11 @@
 """Unit tests for the glTF loader using an in-memory synthetic GLB (no GL, no net)."""
 import os
 from typing import ClassVar
+import base64
+import hashlib
+import io
+import socket
+import time
 
 import numpy as np
 import pytest
@@ -9,12 +14,19 @@ pygltflib = pytest.importorskip("pygltflib")
 from pygltflib import (
     GLTF2, Scene, Node, Mesh, Primitive, Attributes, Accessor, BufferView,
     Buffer, Material, PbrMetallicRoughness,
+    Image as GLTFImage, Sampler, Texture, NormalMaterialTexture, Camera, Perspective,
+    Sparse as AccessorSparse, AccessorSparseIndices, AccessorSparseValues, Animation,
+    AnimationChannel, AnimationChannelTarget, AnimationSampler,
 )
+from OpenGL.GL import GL_POINTS, GL_LINES
+from PIL import Image as PILImage
 
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders import resolver
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext import userpaths
+from OpenGLContext.loaders.gltf import look_orientation
 
 
 def _triangle_glb(with_normals=False, indices=True):
@@ -124,9 +136,6 @@ class TestSyntheticGLB:
 def _normal_mapped_triangle_glb():
     """A UV-mapped triangle whose material carries a (tiny, flat) normalTexture but
     no TANGENT attribute -- the case where the loader must synthesize tangents."""
-    import io
-    from PIL import Image as PILImage
-    from pygltflib import Image as GLTFImage, Sampler, Texture, NormalMaterialTexture
     pos = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float32)
     uv = np.array([[0, 0], [1, 0], [0, 1]], dtype=np.float32)
     buf = io.BytesIO()
@@ -215,7 +224,6 @@ class TestTangentEstimation:
 def _triangle_with_cameras_glb(names=(None,)):
     """A triangle plus one perspective camera per entry in ``names`` (None = unnamed),
     each translated to a distinct +Z position so their poses differ."""
-    from pygltflib import Camera, Perspective
     pos = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float32)
     blob = pos.tobytes()
     g = GLTF2()
@@ -263,7 +271,6 @@ class TestViewpointNodes:
         assert len(scene.viewpoints) == len(scene.cameras) == 3
 
     def test_viewpoint_pose_and_name(self):
-        from OpenGLContext.loaders.gltf import look_orientation
         scene = gltf.load_gltf(_triangle_with_cameras_glb(names=('aerial',)))
         vp = scene.viewpoints[0]
         assert vp.description == 'aerial'
@@ -395,7 +402,6 @@ class TestMeterExposure:
 
 
 def _have_internet():
-    import socket
     try:
         socket.create_connection(("raw.githubusercontent.com", 443), timeout=5).close()
         return True
@@ -472,12 +478,10 @@ class TestPrimitiveMode:
 
     def test_points_primitive_rendered_as_points(self):
         # mode 0 = POINTS: now drawn as GL_POINTS (glTF mode == GL enum), not skipped
-        from OpenGL.GL import GL_POINTS
         mesh = _find_shape(gltf.load_gltf(_quad_strip_glb(0)).group).geometry
         assert mesh is not None and mesh.draw_mode == GL_POINTS
 
     def test_line_primitive_rendered_as_lines(self):
-        from OpenGL.GL import GL_LINES
         mesh = _find_shape(gltf.load_gltf(_quad_strip_glb(1)).group).geometry  # LINES
         assert mesh is not None and mesh.draw_mode == GL_LINES
 
@@ -522,8 +526,6 @@ class TestAlphaMode:
 
 class TestSparseAccessor:
     def test_sparse_substitution_applied(self):
-        from pygltflib import (Sparse as AccessorSparse, AccessorSparseIndices,
-                               AccessorSparseValues)
         base = np.array([[0, 0, 0], [0, 0, 0], [0, 0, 0], [0, 0, 0]], dtype=np.float32)
         sidx = np.array([1, 3], dtype=np.uint16)
         svals = np.array([[5, 6, 7], [8, 9, 10]], dtype=np.float32)
@@ -603,8 +605,7 @@ class TestBufferDecodeCache:
         pos = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], dtype=np.float32)
         nrm = np.tile([0, 0, 1], (3, 1)).astype(np.float32)
         blob = pos.tobytes() + nrm.tobytes()
-        import base64 as _b64
-        uri = 'data:application/octet-stream;base64,' + _b64.b64encode(blob).decode()
+        uri = 'data:application/octet-stream;base64,' + base64.b64encode(blob).decode()
         g = GLTF2()
         g.scene = 0
         g.scenes = [Scene(nodes=[0])]
@@ -731,7 +732,6 @@ class TestCacheDir:
     shared world-writable system temp root."""
 
     def test_cache_dir_is_user_scoped(self):
-        from OpenGLContext import userpaths
         d = resolver.default_cache_dir()
         assert 'cache' in os.path.basename(d).lower()
         base = userpaths.appdatadirectory()
@@ -771,7 +771,6 @@ class TestCachePurge:
     its mtime tracks last use and the eviction keeps the working set."""
 
     def test_purge_removes_only_stale_entries(self, tmp_path):
-        import time
         cache = tmp_path / 'c'
         cache.mkdir()
         fresh, stale = cache / 'fresh.bin', cache / 'stale.bin'
@@ -787,8 +786,6 @@ class TestCachePurge:
         assert resolver.purge_cache(cache_dir=str(tmp_path / 'nope')) == 0
 
     def test_cache_hit_touches_entry(self, tmp_path, monkeypatch):
-        import time
-        import hashlib
         cache = tmp_path / 'c'
         monkeypatch.setattr(resolver, 'default_cache_dir', lambda: str(cache))
 
@@ -1089,8 +1086,6 @@ class TestAnimationPointerLive:
             BufferView(buffer=0, byteOffset=len(head) + times.nbytes,
                        byteLength=vals.nbytes)]
         g.buffers = [Buffer(byteLength=len(head) + len(extra))]
-        from pygltflib import (Animation, AnimationChannel, AnimationChannelTarget,
-                               AnimationSampler)
         g.animations = [Animation(
             samplers=[AnimationSampler(input=1, output=2, interpolation='LINEAR')],
             channels=[AnimationChannel(sampler=0, target=AnimationChannelTarget(

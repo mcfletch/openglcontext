@@ -12,8 +12,13 @@ Where it grows is decided by the ground itself: the splat control map already
 says where the grass and the leaf litter are, and it already has the road's
 corridor painted out of them.
 """
+import gc
+import json
+import weakref
+
 import numpy as np
 import pytest
+from PIL import Image
 
 from OpenGLContext.scenegraph.terrain import HeightField, LayerRule, control_map
 from OpenGLContext.scenegraph.vegetation.cover import (
@@ -60,7 +65,6 @@ class TestWhatItHolds:
         assert 'grass' in repr(_species())
 
     def test_it_survives_a_round_trip_through_json(self) -> None:
-        import json
         entry = _species(clump='c.glb', density=2.5)
         back = CoverSpecies.from_json(json.loads(json.dumps(entry.to_json())))
         assert back.to_json() == entry.to_json()
@@ -333,7 +337,6 @@ class TestNothingToGrow:
 
 class TestAControlMapThatIsNotSquare:
     def test_each_axis_is_read_across_its_own_width(self) -> None:
-        from PIL import Image
         pixels = np.zeros((16, 64, 4), 'u1')
         pixels[:, 56:64, 0] = 255                  # the eastern eighth is grass
         weigh = control_weight(Image.fromarray(pixels), ['grass'],
@@ -342,7 +345,6 @@ class TestAControlMapThatIsNotSquare:
         assert weigh(np.array([0.0]), np.array([0.0]))[0] == 0.0
 
     def test_a_map_taller_than_it_is_wide_is_read_too(self) -> None:
-        from PIL import Image
         pixels = np.zeros((64, 16, 4), 'u1')
         pixels[56:64, :, 0] = 255                  # the southern eighth
         weigh = control_weight(Image.fromarray(pixels), ['grass'],
@@ -430,8 +432,6 @@ class TestTheWorkerIsLetGo:
             cover.shutdown()
 
     def test_a_cover_dropped_without_shutdown_stops_its_thread(self) -> None:
-        import gc
-        import weakref
         cover = _cover(card_radius=100.0, background=True)
         cover.update((0.0, 0.0, 0.0))
         assert cover.wait(5.0)

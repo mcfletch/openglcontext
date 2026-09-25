@@ -25,6 +25,7 @@ from OpenGLContext.testing.glcontext import display_answers
 pytest.importorskip('OpenGL.GLUT')
 
 from OpenGLContext.testing.paths import tests_root
+from OpenGLContext import glutcontext
 
 DRIVER = tests_root(__file__) / 'helpers' / '_glut_init_drive.py'
 
@@ -52,13 +53,11 @@ class TestTheInitialisationGuard:
     """The part that needs no display."""
 
     def test_it_says_whether_glut_has_been_initialised(self):
-        from OpenGLContext import glutcontext
 
         assert callable(glutcontext.glutInitialised)
 
     def test_asking_twice_initialises_once(self):
         """The whole reason for the guard: a second ``glutInit`` exits."""
-        from OpenGLContext import glutcontext
 
         assert callable(glutcontext.ensureGlutInitialised)
 

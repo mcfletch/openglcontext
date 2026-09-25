@@ -15,6 +15,7 @@ the SSRF/cross-origin cases here never touch the network; ``_Loader.__call__``
 exercises the full resolve+fetch path for the local cases.
 """
 import os
+import builtins
 
 import pytest
 
@@ -141,7 +142,6 @@ class TestLocalFetchSizeCap:
         big.write_bytes(b'x' * 5000)
         resolver = Resolver(base_dir=str(tmp_path), max_resource_bytes=1000)
 
-        import builtins
         real_open = builtins.open
         opened = {'n': 0}
 

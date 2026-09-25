@@ -11,6 +11,7 @@ on the card is two attributes on the geometry, and those are numbers.
 """
 import numpy as np
 import pytest
+import pygltflib
 
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.gltf import hooks
@@ -220,7 +221,6 @@ def test_each_body_keeps_its_own_surface():
 
 def test_a_lake_with_coarser_levels_records_each_level_once():
     """``MSFT_lod`` on a tagged node: the finest level drawn is the one recorded."""
-    import pygltflib
     document = pygltflib.GLTF2.load_from_bytes(write_glb([
         SceneNode(mesh=_sheet('water')),
         SceneNode(mesh=_sheet({'kind': 'water'}, side=2.0))]))

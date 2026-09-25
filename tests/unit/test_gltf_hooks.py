@@ -10,13 +10,15 @@ No GL and no network: a document is bytes, and a loaded scene is nodes.
 """
 import contextlib
 import logging
+import base64
+import json
 
 import numpy as np
 import pytest
 
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.gltf import hooks
-from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb
+from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb, GLTFWriter
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
@@ -240,8 +242,6 @@ def test_a_shareable_hook_is_given_no_world_matrix():
 
 def _instanced_with_tagged_material(translations):
     """A node drawing one tagged triangle at each of ``translations``."""
-    import base64
-    import json
     positions = np.array([(0, 0, 0), (1, 0, 0), (0, 1, 0)], dtype='<f4')
     moved = np.asarray(translations, dtype='<f4')
     blob = positions.tobytes() + moved.tobytes()
@@ -447,7 +447,6 @@ def test_the_extension_spelling_round_trips():
 
 def test_a_written_hook_extension_is_declared_used():
     """A reader is told which extensions a document carries."""
-    from OpenGLContext.loaders.gltf.writer import GLTFWriter
     writer = GLTFWriter()
     writer.add_node(SceneNode(mesh=_quad(_tagged_material(hook={'kind': 'probe'}))))
     assert hooks.EXTENSION in writer.document()['extensionsUsed']

@@ -21,6 +21,8 @@ from pygltflib import (
 
 from OpenGLContext.loaders import gltf
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.passes.pbrpass import pack_material_block, MATERIAL_BLOCK_WORDS
+from tests.unit.test_gltf_loader import _triangle_glb
 
 # texCoord-mask bit per channel (must match the loader + shader).
 BIT_BASECOLOR = 1
@@ -116,7 +118,6 @@ class TestSecondUVSet:
 
     def test_no_second_uv_when_absent(self):
         # a plain single-UV model must not sprout a texcoords1 array
-        from tests.unit.test_gltf_loader import _triangle_glb
         scene = gltf.load_gltf(_triangle_glb())
         mesh = _find_shape(scene.group).geometry
         assert getattr(mesh, 'texcoords1', None) is None
@@ -124,7 +125,6 @@ class TestSecondUVSet:
 
 class TestMaterialBlockPacking:
     def test_texcoordmask_packed_into_ubo(self):
-        from OpenGLContext.passes.pbrpass import pack_material_block, MATERIAL_BLOCK_WORDS
         mat = PBRMaterial(baseColor=(1, 1, 1))
         mat.texCoordMask = BIT_NORMAL | BIT_OCCLUSION
         buf = pack_material_block(mat)

@@ -10,6 +10,10 @@ import pytest
 from OpenGLContext import contextresources
 from OpenGLContext.scenegraph.hdrbackground import HDRBackground
 from OpenGLContext.passes import ibl
+import OpenGLContext.loaders.resolver as resolver
+import OpenGLContext.scenegraph.hdrbackground as H
+from OpenGLContext.loaders import background
+from tests.unit.test_hdr_loader import encode_new_rle, encode_flat
 from vrml.vrml97 import nodetypes
 
 
@@ -43,7 +47,6 @@ def test_set_image_none_clears_ibl_env():
 
 
 def test_load_background_from_local_hdr(tmp_path):
-    from tests.unit.test_hdr_loader import encode_new_rle
     src = _panorama(16, 32)
     p = tmp_path / "sky.hdr"
     p.write_bytes(encode_new_rle(src))
@@ -74,8 +77,6 @@ def test_is_a_background_node():
 
 def test_url_field_assignment_triggers_load(tmp_path):
     """Assigning .url loads in the background; waiting for it installs the panorama."""
-    from OpenGLContext.loaders import background
-    from tests.unit.test_hdr_loader import encode_flat
     p = tmp_path / "viaurl.hdr"
     p.write_bytes(encode_flat(_panorama(8, 16)))
     bg = HDRBackground()
@@ -108,7 +109,6 @@ def test_setimage_defers_stale_render_data_for_gl_thread():
 
     # Draining frees each queued item exactly once and empties the queue.
     freed = []
-    import OpenGLContext.scenegraph.hdrbackground as H
     orig = H._free_render_data
     H._free_render_data = lambda rd: freed.append(rd)
     try:
@@ -131,8 +131,6 @@ def test_setimage_none_also_defers_stale_render_data():
 
 def test_deleting_url_clears_the_panorama(tmp_path):
     """`del bg.url` runs the field's fdel, which clears the installed image."""
-    from OpenGLContext.loaders import background
-    from tests.unit.test_hdr_loader import encode_flat
     p = tmp_path / "todelete.hdr"
     p.write_bytes(encode_flat(_panorama(8, 16)))
     bg = HDRBackground()
@@ -161,8 +159,6 @@ def test_setimage_redraws_live_contexts():
 
 def test_load_background_http_url_fetches_to_cache(tmp_path, monkeypatch):
     """An http(s) url is fetched to the asset cache before decoding."""
-    from tests.unit.test_hdr_loader import encode_flat
-    import OpenGLContext.loaders.resolver as resolver
     cached = tmp_path / "remote.hdr"
     cached.write_bytes(encode_flat(_panorama(8, 16)))
     calls = []

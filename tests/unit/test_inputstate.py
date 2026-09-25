@@ -9,6 +9,11 @@ once.
 import pytest
 
 from OpenGLContext.events.inputstate import InputState
+from OpenGLContext.events import mouseevents
+from OpenGLContext.events.mouseevents import MouseButtonEvent
+from OpenGLContext.move import modes
+from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
+from OpenGLContext.ui.overlay import OverlayMixin
 
 
 class _Event:
@@ -197,7 +202,6 @@ class TestModifiedBindingsFollowTheModifier:
     """The mode's view of the same thing: ctrl+arrow tilts, arrow alone walks."""
 
     def _mode(self):
-        from OpenGLContext.move import modes
         return modes.WalkMode(name='walk')
 
     def test_ctrl_after_the_arrow_tilts_rather_than_walks(self):
@@ -228,14 +232,12 @@ class TestAMouseButtonIsAnInputLikeAnyOther:
     """
 
     def button(self, index, state=1):
-        from OpenGLContext.events.mouseevents import MouseButtonEvent
         event = MouseButtonEvent()
         event.button = index
         event.state = state
         return event
 
     def test_a_button_has_a_name(self):
-        from OpenGLContext.events import mouseevents
         assert self.button(0).name == mouseevents.button_name(0)
 
     def test_the_names_of_two_buttons_differ(self):
@@ -267,7 +269,6 @@ class TestAMouseButtonIsAnInputLikeAnyOther:
         assert state.held('w') and state.held(self.button(0).name)
 
     def test_the_name_reads_as_what_it_is(self):
-        from OpenGLContext.events import mouseevents
         assert mouseevents.button_name(0) == '<mouse-0>'
 
 
@@ -297,7 +298,6 @@ class TestTheSamplerIsFedTheMouseToo:
     """
 
     def mixin(self):
-        from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
 
         class _Fed(ViewPlatformMixin):
             def __init__(self):
@@ -309,20 +309,17 @@ class TestTheSamplerIsFedTheMouseToo:
         return _Fed()
 
     def button(self, index, state=1):
-        from OpenGLContext.events.mouseevents import MouseButtonEvent
         event = MouseButtonEvent()
         event.button = index
         event.state = state
         return event
 
     def test_a_button_press_reaches_the_sampler(self):
-        from OpenGLContext.events import mouseevents
         fed = self.mixin()
         fed._recordInput(self.button(0, 1))
         assert fed.getInputState().held(mouseevents.button_name(0))
 
     def test_and_its_release_reaches_it_as_well(self):
-        from OpenGLContext.events import mouseevents
         fed = self.mixin()
         fed._recordInput(self.button(0, 1))
         fed._recordInput(self.button(0, 0))
@@ -334,8 +331,6 @@ class TestTheSamplerIsFedTheMouseToo:
         `_recordInput` handling a button is no use if the dispatch never hands
         it one, and that seam is invisible from either side alone.
         """
-        from OpenGLContext.events import mouseevents
-        from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
 
         class _Dispatched(ViewPlatformMixin, _EndOfTheChain):
             def __init__(self):
@@ -352,7 +347,6 @@ class TestTheSamplerIsFedTheMouseToo:
 
     def test_a_wheel_notch_is_never_held(self):
         """A wheel is not a button anybody can hold down, and must not stick."""
-        from OpenGLContext.events import mouseevents
         fed = self.mixin()
         fed._recordInput(self.button(mouseevents.WHEEL_UP, 1))
         assert not fed.getInputState().held(
@@ -369,8 +363,6 @@ class TestAClickOnAScreenIsNotAnInput:
     """
 
     def context(self, sinks):
-        from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
-        from OpenGLContext.ui.overlay import OverlayMixin
 
         class _Guarded(OverlayMixin, ViewPlatformMixin, _EndOfTheChain):
             def __init__(self):
@@ -385,14 +377,12 @@ class TestAClickOnAScreenIsNotAnInput:
         return _Guarded()
 
     def button(self, index=0, state=1):
-        from OpenGLContext.events.mouseevents import MouseButtonEvent
         event = MouseButtonEvent()
         event.button = index
         event.state = state
         return event
 
     def held(self, guarded):
-        from OpenGLContext.events import mouseevents
         return guarded.getInputState().held(mouseevents.button_name(0))
 
     def test_a_click_the_overlay_took_is_not_recorded(self):

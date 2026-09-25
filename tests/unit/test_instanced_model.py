@@ -14,6 +14,7 @@ from OpenGLContext import visitor
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.instancedshape import (
     InstancedModel, model_parts,
+    InstancedShape,
 )
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.scenegraph.transform import Transform
@@ -135,7 +136,6 @@ class TestABlendedSetDrawsEveryCopy:
             self.seen = []
 
     def shape(self, copies):
-        from OpenGLContext.scenegraph.instancedshape import InstancedShape
         moves = np.stack([np.identity(4, dtype='f') for _ in range(copies)])
         for at in range(copies):
             moves[at][3, 0] = float(at)
@@ -166,7 +166,6 @@ class TestABlendedSetDrawsEveryCopy:
         assert [float(m[3, 0]) for m in seen] == [0.0, 1.0, 2.0]
 
     def test_a_blended_set_with_nothing_placed_draws_nothing(self):
-        from OpenGLContext.scenegraph.instancedshape import InstancedShape
         empty = InstancedShape(geometry=Box(size=(1, 1, 1)))
         assert self.drawn(empty, 'RenderTransparent') == []
         assert empty.drawsNothing()
@@ -182,7 +181,6 @@ class TestCullingTheCopiesOfASet:
     """
 
     def shape(self, xs):
-        from OpenGLContext.scenegraph.instancedshape import InstancedShape
         moves = np.stack([np.identity(4, dtype='f') for _ in xs])
         for at, x in enumerate(xs):
             moves[at][3, 0] = float(x)
@@ -222,7 +220,6 @@ class TestCullingTheCopiesOfASet:
         assert self.shape([0, 1]).visiblePlacements(None, np.identity(4)) is None
 
     def test_a_set_with_nothing_placed_has_no_answer(self):
-        from OpenGLContext.scenegraph.instancedshape import InstancedShape
         empty = InstancedShape(geometry=Box(size=(1, 1, 1)))
         assert empty.visiblePlacements(self.frustum(-1, 1),
                                        np.identity(4)) is None

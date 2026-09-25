@@ -12,6 +12,8 @@ from pygltflib import Accessor, BufferView, Buffer
 
 from OpenGLContext.loaders.gltf import scene as gs
 from OpenGLContext.loaders.gltf.scene import GLTFScene
+from OpenGLContext.scenegraph.basenodes import Transform
+from OpenGLContext.scenegraph.scenegraph import SceneGraph
 
 
 class _R:
@@ -25,8 +27,6 @@ class TestGLTFSceneAccessors:
         assert sc.getDEF('anything') is None
 
     def test_get_def_delegates_to_scenegraph(self):
-        from OpenGLContext.scenegraph.scenegraph import SceneGraph
-        from OpenGLContext.scenegraph.basenodes import Transform
         sg = SceneGraph()
         marker = Transform()
         sg.regDefName('Hero', marker)

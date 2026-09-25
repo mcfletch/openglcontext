@@ -12,6 +12,8 @@ import numpy as np
 import pytest
 
 from OpenGLContext.loaders import hdr
+from OpenGLContext.loaders.resolver import fetch_to_cache
+from OpenGLContext.testing.network import unreachable
 
 
 # -- synthetic RGBE encoders (test-only; the library only decodes) ------------
@@ -214,8 +216,6 @@ def test_truncated_data_rejected():
 
 def test_real_polyhaven_hdr_if_available():
     """Decode a genuine Poly Haven CC0 panorama (skips if offline)."""
-    from OpenGLContext.loaders.resolver import fetch_to_cache
-    from OpenGLContext.testing.network import unreachable
     url = ('https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/'
            'studio_small_03_1k.hdr')
     reason = unreachable(url)

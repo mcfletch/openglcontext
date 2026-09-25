@@ -12,14 +12,16 @@ import pytest
 
 pytest.importorskip('pygltflib')
 
-from OpenGLContext.loaders.gltf import fastdecode, loader, shapes, zoning
+from OpenGLContext.loaders.gltf import fastdecode, loader, shapes, zoning, hooks
 from OpenGLContext.scenegraph import audio as audionodes
 from OpenGLContext.scenegraph.light import SpotLight
 from OpenGLContext.scenegraph.zone import (
     AUDIO, ENVIRONMENT, LIGHTS, MIRRORS, REVERB, VISIBILITY, GRAVITY, Zone,
     ZoneEnvironment,
+    ZoneReverb,
 )
 from OpenGLContext.scenegraph.zones import BOX, CAPSULE, SPHERE
+from OpenGLContext.scenegraph.group import Group
 
 EXAMPLES = os.path.join(os.path.dirname(__file__), '..', '..', 'docs',
                         'extensions', 'examples')
@@ -200,8 +202,6 @@ class TestReading:
     def test_visibility_names_what_a_hook_put_in_the_nodes_place(self):
         """A node hook that takes the node's slot leaves the loader's own
         Transform out of the scene; the zone controls what is drawn."""
-        from OpenGLContext.loaders.gltf import hooks
-        from OpenGLContext.scenegraph.group import Group
         body = zone_node(shape=0, extensions={'KHR_node_visibility': {
             'nodes': [1], 'visible': False}})
         body['nodes'].append({'name': 'secret',
@@ -232,7 +232,6 @@ class TestRegistry:
             'OGLC_hook', 'OMI_physics_gravity', 'EXT_lights_image_based'}
 
     def test_an_application_can_add_a_reader(self):
-        from OpenGLContext.scenegraph.zone import ZoneReverb
 
         def read(block, reading):
             return ZoneReverb(level=float(block['wet']))

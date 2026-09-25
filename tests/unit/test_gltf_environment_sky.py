@@ -27,6 +27,8 @@ from OpenGLContext.scenegraph.background import Background
 from OpenGLContext.scenegraph.cubebackground import CubeBackground
 from OpenGLContext.scenegraph.hdrbackground import HDRBackground
 from OpenGLContext.scenegraph.simplebackground import SimpleBackground
+from OpenGLContext.loaders.gltf.environment_sky import _to_shader_orientation
+from OpenGLContext.viewer import environment as env
 
 HALF_PI = math.pi / 2.0
 
@@ -371,7 +373,6 @@ class TestThePanoramaOrientation:
         ('between -X and -Z', (-0.7071, 0.0, -0.7071)),
     ])
     def test_a_direction_shows_the_column_the_extension_puts_there(self, name, direction):
-        from OpenGLContext.loaders.gltf.environment_sky import _to_shader_orientation
 
         source = self.panorama()
         converted = _to_shader_orientation(source)
@@ -382,7 +383,6 @@ class TestThePanoramaOrientation:
 
     def test_the_conversion_keeps_every_column(self):
         """A roll, not a crop: no part of the sky may be lost or doubled."""
-        from OpenGLContext.loaders.gltf.environment_sky import _to_shader_orientation
 
         source = self.panorama()
         converted = _to_shader_orientation(source)
@@ -390,7 +390,6 @@ class TestThePanoramaOrientation:
 
     def test_the_rows_are_left_alone(self):
         """Both conventions put the top row at +Y, so nothing moves vertically."""
-        from OpenGLContext.loaders.gltf.environment_sky import _to_shader_orientation
 
         source = np.zeros((4, self.WIDTH, 3), dtype=np.float32)
         source[0] = 1.0
@@ -427,6 +426,5 @@ class TestTheSceneItAllLandsIn:
 
     def test_the_viewer_leaves_a_documents_own_sky_alone(self):
         """A scene that brought a sky must not get a second one on top."""
-        from OpenGLContext.viewer import environment as env
         scene = gltf.load_gltf(document([PLAIN]), base_url='http://example/s.gltf')
         assert env.count_backgrounds(scene.group) == 1

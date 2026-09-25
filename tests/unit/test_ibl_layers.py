@@ -9,11 +9,13 @@ import math
 
 import numpy as np
 import pytest
+from OpenGL import GL
 
 from OpenGLContext.passes import ibl
 from OpenGLContext.passes.ibl import IBLProbe
 from OpenGLContext.scenegraph import imagebasedlight
 from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
+from OpenGLContext.passes.shaderpass import link_program
 
 
 def _smooth(directions):
@@ -98,8 +100,6 @@ class TestALightInALayer:
 
 class TestConvolvingALayer:
     def test_the_callers_state_is_given_back(self, probe):
-        from OpenGL import GL
-        from OpenGLContext.passes.shaderpass import link_program
         program = int(link_program(
             '#version 330 core\nvoid main(){ gl_Position = vec4(0.0); }\n',
             '#version 330 core\nout vec4 colour;\nvoid main(){ colour = vec4(1.0); }\n'))

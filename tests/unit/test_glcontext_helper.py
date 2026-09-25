@@ -13,8 +13,27 @@ for -- is asked of both, through the backend-neutral helpers, since that is the
 part the promise is really about.
 """
 import sys
+import builtins
+import contextlib
 
 import pytest
+import numpy as np
+from OpenGL.GL import (
+    GL_VERSION,
+    glGetString,
+    GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT,
+    GL_CONTEXT_FLAGS,
+    glGetIntegerv,
+    GL_CONTEXT_PROFILE_MASK,
+    GL_CONTEXT_CORE_PROFILE_BIT,
+    GL_COLOR_BUFFER_BIT,
+    GL_RGB,
+    GL_UNSIGNED_BYTE,
+    glClear,
+    glClearColor,
+    glReadPixels,
+    glViewport,
+)
 
 from OpenGLContext.testing import glcontext
 from OpenGLContext.testing.glcontext import (
@@ -51,7 +70,6 @@ class TestAskingForAContextThatCannotBeGiven:
 
     @glfw_only
     def test_no_glfw_is_a_reason_rather_than_an_import_error(self, monkeypatch):
-        import builtins
         real = builtins.__import__
 
         def refuse(name, *args, **named):
@@ -93,7 +111,6 @@ class TestAskingForAContextThatCannotBeGiven:
 
 class TestTheWindowItGives:
     def test_the_context_is_current_inside_the_block(self):
-        from OpenGL.GL import GL_VERSION, glGetString
         _require('core')
         with hidden_window('current'):
             assert glGetString(GL_VERSION) is not None
@@ -154,11 +171,6 @@ class TestTheWindowItGives:
         window, which asks for both together -- so a test exercises what ships
         rather than a context only a test ever gets. macOS gives no core context
         at all without it, and would skip every GL test in the suite instead."""
-        from OpenGL.GL import (
-            GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT,
-            GL_CONTEXT_FLAGS,
-            glGetIntegerv,
-        )
         _require('core')
         with hidden_window('forward'):
             flags = int(glGetIntegerv(GL_CONTEXT_FLAGS))
@@ -167,11 +179,6 @@ class TestTheWindowItGives:
     def test_a_compatibility_context_is_not(self):
         """Forward-compatible means the deprecated entry points are gone, which
         is the whole of what a compatibility context is asked for."""
-        from OpenGL.GL import (
-            GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT,
-            GL_CONTEXT_FLAGS,
-            glGetIntegerv,
-        )
         _require('compatibility')
         with hidden_window('compat', profile='compatibility'):
             flags = int(glGetIntegerv(GL_CONTEXT_FLAGS))
@@ -181,8 +188,6 @@ class TestTheWindowItGives:
         """The GLFW hints are process-global and sticky, so a window asked for
         as core after one asked for as compatibility would inherit the profile
         rather than take the one it asked for."""
-        from OpenGL.GL import GL_CONTEXT_PROFILE_MASK, glGetIntegerv
-        from OpenGL.GL import GL_CONTEXT_CORE_PROFILE_BIT
         _require('core', 'compatibility')
         with hidden_window('compat-first', profile='compatibility'):
             pass
@@ -300,7 +305,6 @@ class TestTheFixtures:
     """What a test in another project gets by turning the plugin on."""
 
     def test_gl_context_is_current(self, gl_context):
-        from OpenGL.GL import GL_VERSION, glGetString
         assert glGetString(GL_VERSION) is not None
 
     def test_gl_window_makes_the_window_it_is_asked_for(self, gl_window):
@@ -413,7 +417,6 @@ class TestTheWindowlessContext:
     """The same promises as the hidden window, with no window behind them."""
 
     def test_the_context_is_current_inside_the_block(self):
-        from OpenGL.GL import GL_VERSION, glGetString
         _require_windowless()
         with glcontext.offscreen_window('current'):
             assert glGetString(GL_VERSION) is not None
@@ -424,9 +427,6 @@ class TestTheWindowlessContext:
             assert glcontext.framebuffer_size(handle) == (96, 48)
 
     def test_it_is_the_profile_that_was_asked_for(self):
-        from OpenGL.GL import (
-            GL_CONTEXT_CORE_PROFILE_BIT, GL_CONTEXT_PROFILE_MASK, glGetIntegerv,
-        )
         _require_windowless()
         with glcontext.offscreen_window('core'):
             mask = int(glGetIntegerv(GL_CONTEXT_PROFILE_MASK))
@@ -435,11 +435,6 @@ class TestTheWindowlessContext:
     def test_a_frame_drawn_into_it_reads_back(self):
         """A context that creates cleanly and draws nothing is still a context,
         so this asks for the pixels."""
-        import numpy as np
-        from OpenGL.GL import (
-            GL_COLOR_BUFFER_BIT, GL_RGB, GL_UNSIGNED_BYTE, glClear,
-            glClearColor, glReadPixels, glViewport,
-        )
         _require_windowless()
         with glcontext.offscreen_window('drawn', size=(32, 16)):
             glViewport(0, 0, 32, 16)
@@ -463,7 +458,6 @@ class TestTheWindowlessContext:
         """``hints`` is GLFW's vocabulary and means nothing without a window;
         a caller passing one is asking about a window it said it did not
         want. The context is the one the same call without it gives."""
-        from OpenGL.GL import GL_VERSION, glGetString
         _require_windowless()
         with glcontext.offscreen_window('hinted', size=(40, 20),
                                         hints={'RESIZABLE': 0}) as handle:
@@ -479,7 +473,6 @@ class TestWhetherAWindowlessContextCanBeHad:
         monkeypatch.setattr(glcontext, '_OFFSCREEN_REFUSALS', {})
 
     def test_it_is_worked_out_once_per_profile(self, monkeypatch):
-        import contextlib
         opened = []
 
         @contextlib.contextmanager

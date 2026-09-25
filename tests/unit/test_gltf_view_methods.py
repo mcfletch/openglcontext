@@ -7,8 +7,11 @@ import io
 import os
 import sys
 import types
+import threading
+import time
 
 import pytest
+from vrml import node as vrmlnode
 
 from OpenGLContext.testing.gl_env import import_unconfigured
 
@@ -22,6 +25,12 @@ from OpenGLContext.scenegraph.light import DirectionalLight
 from OpenGLContext.scenegraph.background import Background
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.viewpoint import Viewpoint
+from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.loaders.gltf import animation as anim_mod
+from OpenGLContext.move.modes import walk_fly_modes
+from OpenGLContext.move.viewplatform import ViewPlatform
+from OpenGLContext.viewer.adapters import gltf
+from OpenGLContext.viewer.caption import CaptionLayer
 
 
 def _inst():
@@ -424,7 +433,6 @@ class TestPrepareAndLoadSource:
             inst.prepareSource()
 
     def test_load_scene_delegates_to_the_adapter(self, monkeypatch):
-        from OpenGLContext.viewer.adapters import gltf
         inst = _inst()
         inst.source = '/models/Duck.glb'
         inst.adapter = gltf.GLTFAdapter()
@@ -434,7 +442,6 @@ class TestPrepareAndLoadSource:
 
 class TestAsyncLoading:
     def _inst(self):
-        import threading
         inst = _inst()
         inst._loadLock = threading.Lock()
         inst._loadToken = 0
@@ -446,7 +453,6 @@ class TestAsyncLoading:
         return inst
 
     def test_request_scene_runs_the_producer_off_thread(self):
-        import time
         inst = self._inst()
         inst.requestScene(lambda: 'LOADED', 'Loading ...')
         for _ in range(200):
@@ -562,7 +568,6 @@ class TestAnimationControl:
         assert inst._animationPlaying is False
 
     def test_cycle_animation_rebinds_a_player_for_the_new_index(self, monkeypatch):
-        from OpenGLContext.loaders.gltf import animation as anim_mod
         monkeypatch.setattr(anim_mod, 'Player',
                             lambda *a, **k: _Player(duration=3.0))
         inst = _inst()
@@ -652,7 +657,6 @@ class TestCameraSelection:
         something is bound, and NULL is one object shared by every empty node
         field in the process -- so writing `isBound` onto it would reach all
         of them."""
-        from vrml import node as vrmlnode
 
         inst = self._ready_to_cycle(vrmlnode.NULL)
         inst.nextCamera()
@@ -676,8 +680,6 @@ class TestPhysicsInputHandlers:
         assert drawn
 
     def test_the_fly_key_swaps_the_mode_and_tells_the_character(self):
-        from OpenGLContext.contextdefinition import ContextDefinition
-        from OpenGLContext.move.modes import walk_fly_modes
         inst = _inst()
         seen = {}
         inst.physicsPlatform = types.SimpleNamespace(
@@ -697,8 +699,6 @@ class TestPhysicsInputHandlers:
         assert inst.contextDefinition.movementMode.name == 'walk'
 
     def test_the_fly_key_does_nothing_before_physics_exists(self):
-        from OpenGLContext.contextdefinition import ContextDefinition
-        from OpenGLContext.move.modes import walk_fly_modes
         inst = _inst()
         inst.physicsPlatform = None
         inst.contextDefinition = ContextDefinition(
@@ -743,7 +743,6 @@ class TestTheCaptionIsDrawnLikeEverythingElse:
             assert not hasattr(V.TestContext, gone), gone
 
     def test_the_caption_is_a_hud_layer_on_the_context(self):
-        from OpenGLContext.viewer.caption import CaptionLayer
         inst = _inst()
         assert isinstance(inst.captionLayer, CaptionLayer)
 
@@ -810,8 +809,6 @@ class TestRequestAndPollExtras:
         assert 'Duck.glb' in recorded['label']
 
     def test_request_scene_captures_a_producer_failure(self):
-        import threading
-        import time
         inst = _inst()
         inst._loadLock = threading.Lock()
         inst._loadToken = 0
@@ -830,7 +827,6 @@ class TestRequestAndPollExtras:
         assert scene is None and isinstance(error, RuntimeError)
 
     def test_poll_applies_a_loaded_scene(self):
-        import threading
         inst = _inst()
         inst._loadLock = threading.Lock()
         inst.triggerRedraw = lambda n: None
@@ -870,7 +866,6 @@ class TestCycleViewpointPhysics:
 
 class TestPhysicsSeams:
     def test_yaw_from_platform_reads_the_camera_heading(self):
-        from OpenGLContext.move.viewplatform import ViewPlatform
         inst = _inst()
         inst.platform = ViewPlatform(orientation=(0, 1, 0, 0.0))
         assert abs(inst.yawFromPlatform()) < 1e-6       # identity faces -Z

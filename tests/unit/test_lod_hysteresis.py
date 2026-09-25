@@ -9,13 +9,14 @@ threshold, and back to the finer level at the threshold itself.
 import numpy as np
 import pytest
 
-from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.scenegraph import basenodes, lod
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.lod import (
     CULLED, LOD, ScreenCoverageLOD, distance_to_viewer,
 )
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.scenegraph.transform import Transform
+from OpenGLContext.passes import _flat
 
 
 def _levels(count=3):
@@ -180,8 +181,6 @@ class TestWhereACoverageNodeIsMeasuredFrom:
 class TestThePassMeasuresFromTheSamePoint:
     def test_the_pass_measures_a_measured_node_from_its_geometry(self):
         """The pass and :func:`distance_to_viewer` agree on the centre."""
-        from OpenGLContext.passes import _flat
-        from OpenGLContext.scenegraph import lod
 
         class Path(list):
             def transformMatrix(self):

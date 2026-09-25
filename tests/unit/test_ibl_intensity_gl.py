@@ -17,6 +17,8 @@ import sys
 import textwrap
 
 import pytest
+import numpy as np
+from PIL import Image
 
 from OpenGLContext.testing.glcontext import gl_available
 from OpenGLContext.testing.paths import tests_root
@@ -74,8 +76,6 @@ def _brightness(mode, intensity, tmp_path):
     shot = tmp_path / 'probe.png'
     if not shot.exists():
         raise AssertionError(proc.stdout.decode('utf-8', 'replace')[-2000:])
-    from PIL import Image
-    import numpy as np
     return float(np.asarray(Image.open(shot).convert('RGB')).mean())
 
 

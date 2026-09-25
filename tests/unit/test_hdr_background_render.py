@@ -6,9 +6,35 @@ that it is tone-mapped (not raw HDR clipped, not black), and that a higher expos
 brightens it. Skips cleanly without a GL context.
 """
 import math
+import logging
 
 import numpy as np
 import pytest
+from OpenGL.GL import (
+    glViewport,
+    glClearColor,
+    glClear,
+    glReadPixels,
+    GL_COLOR_BUFFER_BIT,
+    GL_DEPTH_BUFFER_BIT,
+    GL_RGB,
+    GL_UNSIGNED_BYTE,
+    glBindFramebuffer,
+    GL_FRAMEBUFFER,
+    glEnable,
+    glIsEnabled,
+    GL_DEPTH_TEST,
+    GL_CULL_FACE,
+    glIsBuffer,
+    glIsTexture,
+    glIsVertexArray,
+    GL_NO_ERROR,
+    glGetError,
+)
+
+from OpenGLContext.passes import ibl
+from OpenGLContext.scenegraph import hdrbackground as H
+from OpenGLContext.scenegraph.hdrbackground import HDRBackground
 
 
 @pytest.fixture
@@ -31,7 +57,6 @@ def _with_a_fresh_program(window):
     context, in the real application -- and a per-test context makes that id
     meaningless.
     """
-    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
     HDRBackground._shader = None
     HDRBackground._shader_locations = None
     yield window
@@ -70,11 +95,6 @@ def _panorama(h=64, w=128):
 
 
 def _render_frame(bg, size=128):
-    from OpenGL.GL import (
-        glViewport, glClearColor, glClear, glReadPixels,
-        GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_RGB, GL_UNSIGNED_BYTE,
-        glBindFramebuffer, GL_FRAMEBUFFER,
-    )
     glBindFramebuffer(GL_FRAMEBUFFER, 0)
     glViewport(0, 0, size, size)
     glClearColor(0, 0, 0, 1)
@@ -86,7 +106,6 @@ def _render_frame(bg, size=128):
 
 
 def test_skybox_shows_sky_on_top_ground_on_bottom(gl_context):
-    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
     bg = HDRBackground(image=_panorama())
     bg.bound = 1
     img = _render_frame(bg).astype(int)
@@ -101,7 +120,6 @@ def test_skybox_shows_sky_on_top_ground_on_bottom(gl_context):
 
 
 def test_exposure_brightens_the_sky(gl_context):
-    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
     dim = HDRBackground(image=_panorama())
     dim.bound = 1
     dim.exposure = 0.25
@@ -120,8 +138,6 @@ def test_exposure_brightens_the_sky(gl_context):
 def test_skybox_falls_back_to_ldr_without_float_support(gl_context, monkeypatch):
     """With no float-render capability the sky uploads as clamped LDR and still
     draws (not black) through the same shader, keeping the sky/ground orientation."""
-    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
-    from OpenGLContext.passes import ibl
     monkeypatch.setattr(ibl, 'probe_float_render_capability',
                         lambda force=False: False)
     bg = HDRBackground(image=_panorama())
@@ -135,17 +151,12 @@ def test_skybox_falls_back_to_ldr_without_float_support(gl_context, monkeypatch)
 
 
 def test_render_clears_when_requested(gl_context):
-    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
     bg = HDRBackground(image=_panorama())
     bg.bound = 1
     assert bg.RenderShader(mode=_Mode(), clear=True) == 1   # clear=True path
 
 
 def test_render_restores_depth_and_cull_state(gl_context):
-    from OpenGL.GL import (
-        glEnable, glIsEnabled, GL_DEPTH_TEST, GL_CULL_FACE,
-    )
-    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
     glEnable(GL_DEPTH_TEST)
     glEnable(GL_CULL_FACE)
     bg = HDRBackground(image=_panorama())
@@ -157,7 +168,6 @@ def test_render_restores_depth_and_cull_state(gl_context):
 
 
 def test_render_legacy_mode_toggles_lighting(gl_context_compat):
-    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
 
     class _LegacyMode(_Mode):
         shader_mode = False       # exercises the glDisable/glEnable(GL_LIGHTING) arms
@@ -168,20 +178,17 @@ def test_render_legacy_mode_toggles_lighting(gl_context_compat):
 
 
 def test_render_via_compat_render_method(gl_context):
-    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
     bg = HDRBackground(image=_panorama())
     bg.bound = 1
     assert bg.Render(mode=_Mode(), clear=False) == 1     # Render() delegates to _render
 
 
 def test_render_skipped_when_not_bound(gl_context):
-    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
     bg = HDRBackground(image=_panorama())      # bound stays 0
     assert bg._render(_Mode()) == 0
 
 
 def test_render_skipped_on_secondary_pass(gl_context):
-    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
 
     class _SecondPass(_Mode):
         passCount = 1
@@ -192,14 +199,12 @@ def test_render_skipped_on_secondary_pass(gl_context):
 
 
 def test_render_skipped_without_panorama(gl_context):
-    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
     bg = HDRBackground()                        # no image
     bg.bound = 1
     assert bg._render(_Mode()) == 0
 
 
 def test_render_skipped_when_compile_yields_nothing(gl_context):
-    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
     bg = HDRBackground(image=_panorama())
     bg.bound = 1
     bg.compile = lambda mode=None: None         # simulate a compile that produced nothing
@@ -207,12 +212,10 @@ def test_render_skipped_when_compile_yields_nothing(gl_context):
 
 
 def test_compile_without_panorama_returns_none(gl_context):
-    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
     assert HDRBackground().compile(_Mode()) is None
 
 
 def test_dispose_frees_compiled_skybox(gl_context):
-    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
     bg = HDRBackground(image=_panorama())
     bg.compile(_Mode())
     assert bg._render_data
@@ -221,9 +224,6 @@ def test_dispose_frees_compiled_skybox(gl_context):
 
 
 def test_free_render_data_deletes_real_objects(gl_context):
-    from OpenGL.GL import glIsBuffer, glIsTexture, glIsVertexArray
-    from OpenGLContext.scenegraph import hdrbackground as H
-    from OpenGLContext.scenegraph.hdrbackground import HDRBackground
     bg = HDRBackground(image=_panorama())
     bg.bound = 1
     _render_frame(bg)                           # binds every object it made
@@ -242,9 +242,6 @@ def test_free_render_data_deletes_real_objects(gl_context):
 
 
 def test_free_render_data_ignores_falsey_and_broken_data(gl_context, caplog):
-    import logging
-    from OpenGL.GL import GL_NO_ERROR, glGetError
-    from OpenGLContext.scenegraph import hdrbackground as H
     caplog.set_level(logging.DEBUG, logger=H.log.name)
     assert H._free_render_data(None) is None     # nothing to free
     assert caplog.records == []

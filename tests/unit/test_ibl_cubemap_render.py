@@ -14,6 +14,7 @@ from pygltflib import (
     GLTF2, Scene, Node, Mesh, Primitive, Attributes, Accessor, BufferView,
     Buffer, Material, PbrMetallicRoughness,
 )
+from PIL import Image
 
 from OpenGLContext.testing.paths import tests_root
 TESTS_DIR = str(tests_root(__file__))
@@ -123,7 +124,6 @@ def test_env_cubemap_renders_as_skybox(tmp_path):
 def _write_synth_env(prefix):
     """Six solid, distinct faces so a mirror sphere's reflection is unambiguous:
     UP=red, DN=blue, RT(+X)=green, LF(-X)=yellow, FR(+Z)=cyan, BK(-Z)=magenta."""
-    from PIL import Image
     faces = {'RT': (20, 200, 20), 'LF': (220, 220, 20), 'UP': (230, 20, 20),
              'DN': (20, 20, 230), 'FR': (20, 200, 200), 'BK': (220, 20, 220)}
     for suffix, col in faces.items():

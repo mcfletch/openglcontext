@@ -9,7 +9,7 @@ import pytest
 pytest.importorskip('pygltflib')
 from PIL import Image
 
-from OpenGLContext.loaders.gltf import loader
+from OpenGLContext.loaders.gltf import loader, textures
 from OpenGLContext.scenegraph.imagebasedlight import (
     ImageBasedLight, decode_rgbd, face_directions, sh_irradiance,
 )
@@ -132,8 +132,7 @@ class TestMalformedValues:
         assert 'EXT_lights_image_based' in caplog.text
 
     def test_an_image_pillow_refuses_as_too_large_leaves_the_light_out(self, monkeypatch):
-        from PIL import Image as pil
-        monkeypatch.setattr(pil, 'MAX_IMAGE_PIXELS', 4)
+        monkeypatch.setattr(Image, 'MAX_IMAGE_PIXELS', 4)
         assert document().environment is None
 
 
@@ -169,7 +168,6 @@ class TestReadWhenNamed:
 
     @pytest.fixture
     def reads(self, monkeypatch):
-        from OpenGLContext.loaders.gltf import textures
         seen = []
         original = textures._image_bytes
 

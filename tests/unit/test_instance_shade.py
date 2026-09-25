@@ -9,11 +9,14 @@ So the instance layout carries a shade with the position, the yaw and the scale.
 It defaults to 1 -- full sun -- so a caller with nothing to say about light
 says nothing.
 """
+import os
+
 import numpy as np
 import pytest
 
 from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
 from OpenGLContext.scenegraph.vegetation.clumps import InstancedClumps
+from OpenGLContext.scenegraph import instancedgl
 
 COUNT = 6
 
@@ -70,8 +73,6 @@ class TestWhatAnInstanceCarries:
 
 class TestTheShadersAgreeWithIt:
     def test_every_instanced_shader_reads_a_shade(self) -> None:
-        import os
-        from OpenGLContext.scenegraph import instancedgl
         where = os.path.join(os.path.dirname(instancedgl.__file__), '..',
                              'shaders')
         for name in ('veg_billboard.vert', 'veg_mesh.vert'):

@@ -20,6 +20,7 @@ from OpenGLContext.loaders.gltf.lodasset import LOD_ERROR, LODAsset
 from OpenGLContext.loaders.gltf.writer import GLTFWriter, SceneNode
 from OpenGLContext.scenegraph.lod import ScreenCoverageLOD
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.loaders.documentvalues import DocumentError
 
 SECRET = b'the private key nobody asked this model for'
 
@@ -285,6 +286,5 @@ class TestWhereALevelsBytesMayLive:
      'accessor count is 1.5, which is not a whole number'),
 ])
 def test_a_document_naming_what_is_not_there_is_refused(document, complaint):
-    from OpenGLContext.loaders.documentvalues import DocumentError
     with pytest.raises(DocumentError, match=complaint):
         LODAsset('chain.glb', document, 0)

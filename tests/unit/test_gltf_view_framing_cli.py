@@ -4,6 +4,7 @@ frame. These exercise the parsing and the frameModel() arithmetic without a GL c
 import pytest
 
 from OpenGLContext.testing.gl_env import import_unconfigured
+from OpenGLContext.viewer.options import ViewerOptions
 
 # The viewer is a program and settles the renderer as it is imported; this
 # imports it to call its argument parsing, which is not.
@@ -37,7 +38,6 @@ class _Recorder:
 
 
 def _frame_with(margin=None, elevation=None, tilt=None, radius=10.0):
-    from OpenGLContext.viewer.options import ViewerOptions
     stub = view.TestContext.__new__(view.TestContext)
     stub.options = ViewerOptions(margin=margin, elevation=elevation, tilt=tilt)
     stub.platform = _Recorder()

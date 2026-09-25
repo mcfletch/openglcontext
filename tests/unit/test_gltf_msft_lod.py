@@ -21,6 +21,7 @@ from OpenGLContext.loaders import gltf
 from OpenGLContext.passes.instancing import geometry_instance_key
 from OpenGLContext.scenegraph.lod import ScreenCoverageLOD
 from OpenGLContext.scenegraph.shape import Shape
+from OpenGLContext.loaders.gltf.transforms import _local_matrix_rv
 
 COVERAGE = [0.5, 0.2, 0.01]
 
@@ -235,7 +236,6 @@ def _placed(document, translation, rotation=None, on=(0, 1, 2)):
 
 def _world_of(scene, node, level):
     """Where level ``level`` of ``node`` actually lands, walking the graph."""
-    from OpenGLContext.loaders.gltf.transforms import _local_matrix_rv
 
     target = _shapes(node.level[level])[0]
 

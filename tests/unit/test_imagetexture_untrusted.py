@@ -12,8 +12,10 @@ No GL: this is the decode, not the upload.
 
 import struct
 import zlib
+import io
 
 import pytest
+from PIL import Image
 
 from OpenGLContext.scenegraph import basenodes
 
@@ -34,7 +36,6 @@ def _png(width, height, payload=None):
 
 @pytest.fixture
 def real_png(tmp_path):
-    from PIL import Image
     path = tmp_path / 'ok.png'
     Image.new('RGB', (4, 4), (10, 200, 30)).save(str(path))
     return str(path)
@@ -99,9 +100,7 @@ class TestLoadingFromAUrl:
 
 class TestLoadingFromBytes:
     def test_ordinary_bytes_load(self):
-        import io
 
-        from PIL import Image
         held = io.BytesIO()
         Image.new('RGB', (2, 2), (1, 2, 3)).save(held, format='PNG')
         texture = basenodes.ImageTexture()

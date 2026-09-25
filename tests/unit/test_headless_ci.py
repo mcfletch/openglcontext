@@ -11,6 +11,7 @@ import sys
 from pathlib import Path
 
 from OpenGLContext.testing.paths import tests_root
+from OpenGLContext.testing import framebuffer_comparison as fbc
 
 # test_all_scripts stays in the tests root (it runs the demo scripts there).
 sys.path.insert(0, str(tests_root(__file__)))
@@ -50,7 +51,6 @@ def test_capture_delay_env_override(monkeypatch):
     Set after the module is imported, as a harness sets it for the program it
     is about to run, and it is still the delay a regression parser offers.
     """
-    from OpenGLContext.testing import framebuffer_comparison as fbc
 
     monkeypatch.setenv('OPENGLCONTEXT_CAPTURE_DELAY', '2.5')
     parser = fbc.AutomatedRegressionContext.add_regression_arguments(
@@ -59,7 +59,6 @@ def test_capture_delay_env_override(monkeypatch):
 
 
 def test_capture_delay_defaults_to_half_a_second(monkeypatch):
-    from OpenGLContext.testing import framebuffer_comparison as fbc
 
     monkeypatch.delenv('OPENGLCONTEXT_CAPTURE_DELAY', raising=False)
     parser = fbc.AutomatedRegressionContext.add_regression_arguments(

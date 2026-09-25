@@ -16,8 +16,11 @@ not the VBO upload.
 """
 import numpy as np
 import pytest
+from vrml import protofunctions
+from vrml.cache import Cache
 
 from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.scenegraph.teapot import Teapot
 
 
 def _quad_ifs(z=0.0, shift=0.0):
@@ -61,7 +64,6 @@ class TestIndexedFaceSetInstancing:
 
 class TestTeapotInstancing:
     def _teapot(self, **kw):
-        from OpenGLContext.scenegraph.teapot import Teapot
         return Teapot(**kw)
 
     def test_content_key_equal_for_identical_teapots(self):
@@ -115,8 +117,6 @@ class TestTheInstancedMeshFollowsItsFields:
     def cached(self):
         """A cache holding a value for a teapot, wired the way build_mesh_gpu
         wires one: a holder keyed ``instance_gpu`` depending on named fields."""
-        from vrml.cache import Cache
-        from OpenGLContext.scenegraph.teapot import Teapot
 
         teapot = Teapot(size=1.0)
         cache = Cache()
@@ -128,8 +128,6 @@ class TestTheInstancedMeshFollowsItsFields:
 
     def test_the_names_resolve_to_real_fields(self):
         """A name that is not a field would be swallowed by the guard."""
-        from vrml import protofunctions
-        from OpenGLContext.scenegraph.teapot import Teapot
 
         teapot = Teapot()
         for name in Teapot.instanceGPU_depend_fields:

@@ -15,6 +15,7 @@ import pytest
 from OpenGLContext.events.timer import Timer
 from OpenGLContext.loaders import base
 from OpenGLContext.scenegraph.inline import Inline
+from OpenGLContext.loaders.loader import Loader
 
 URL = 'http://example.com/scene.wrl'
 
@@ -108,7 +109,6 @@ def test_plain_data_is_not_taken_for_gzip():
 
 def test_gzipped_vrml97_file_loads(tmp_path):
     """A ``.wrl.gz`` scene reaches the parser expanded."""
-    from OpenGLContext.loaders.loader import Loader
 
     source = b'#VRML V2.0 utf8\nGroup { children [ Shape { geometry Box {} } ] }\n'
     path = tmp_path / 'scene.wrl.gz'

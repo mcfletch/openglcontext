@@ -4,12 +4,14 @@ import os
 
 import numpy as np
 import pytest
+from PIL import Image
 
 from OpenGLContext.passes import ibl
 from OpenGLContext.loaders.gltf.specular_glossiness import (
     _solve_metallic, _specgloss_to_metalrough, _specgloss_textures_to_metalrough,
     _DIELECTRIC_SPECULAR,
 )
+from OpenGLContext.loaders import hdr, resolver
 
 
 class TestResolveIBLMode:
@@ -141,8 +143,6 @@ class TestEquirectSource:
 class TestLoadEquirectHDR:
     def test_url_source_is_fetched_to_cache_first(self, monkeypatch):
         """An http(s) HDR is fetched to the asset cache, then decoded from disk."""
-        from OpenGLContext.loaders import hdr
-        from OpenGLContext.loaders import resolver
         seen = {}
 
         def fake_fetch(url):
@@ -163,7 +163,6 @@ class TestLoadEquirectHDR:
         assert out is decoded
 
     def test_local_path_decoded_directly(self, monkeypatch):
-        from OpenGLContext.loaders import hdr
         decoded = np.zeros((2, 4, 3), dtype=np.float32)
         monkeypatch.setattr(hdr, 'load_hdr', lambda path: decoded)
         assert ibl.load_equirect_hdr('/local/pano.hdr') is decoded
@@ -215,7 +214,6 @@ class TestSpecGlossFactorConversion:
 
 class TestSpecGlossTextureConversion:
     def _solid(self, rgba):
-        from PIL import Image
         return Image.new('RGBA', (4, 4), tuple(rgba))
 
     def test_gold_specular_texture_becomes_metal(self):

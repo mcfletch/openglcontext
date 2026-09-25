@@ -18,7 +18,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from OpenGLContext.testing import glcontext, glfwteardown
+from OpenGLContext.testing import glcontext, glfwteardown, plugin
 
 
 class FakeGLFW(SimpleNamespace):
@@ -209,7 +209,7 @@ def test_a_sound_stack_is_left_to_release_its_own_contexts(probe_result):
     """The engine's release path -- what a user's application runs on exit --
     is only under test where it is allowed to run, so the workaround has to go
     of its own accord rather than waiting to be noticed."""
-    import glfw
+    glfw = pytest.importorskip('glfw')
 
     if glfwteardown.setting() != 'auto':
         pytest.skip('this run pins the teardown rather than asking')
@@ -222,7 +222,6 @@ def test_a_sound_stack_is_left_to_release_its_own_contexts(probe_result):
 def test_the_session_settled_this_the_same_way(probe_result):
     """The plugin decides once, before anything opens a window; this says the
     decision it recorded is the one this machine warrants."""
-    from OpenGLContext.testing import plugin
 
     if glfwteardown.setting() != 'auto':
         pytest.skip('this run pins the teardown rather than asking')

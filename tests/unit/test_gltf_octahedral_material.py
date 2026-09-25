@@ -11,6 +11,7 @@ import base64
 import json
 
 import pytest
+import numpy as np
 
 from OpenGLContext.loaders import gltf
 
@@ -20,7 +21,6 @@ def _b64(data: bytes) -> str:
 
 
 def _document(extras=None):
-    import numpy as np
     points = np.array([(0, 0, 0), (1, 0, 0), (0, 1, 0)], dtype='<f4')
     blob = points.tobytes()
     material = {'pbrMetallicRoughness': {'baseColorFactor': [1, 1, 1, 1]}}

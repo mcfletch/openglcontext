@@ -17,6 +17,7 @@ import numpy as np
 from OpenGLContext.loaders import gltf
 from OpenGLContext.scenegraph.instancedshape import InstancedShape
 from OpenGLContext.scenegraph.shape import Shape
+from OpenGLContext.passes.instancing import geometry_content_key
 
 
 def _b64(data: bytes) -> str:
@@ -103,7 +104,6 @@ class TestWhatTheLoaderBuilds:
         """What lets tiles of the same forest batch into one draw."""
         first = _loaded(tmp_path, TRANSLATIONS, 'a.gltf')
         second = _loaded(tmp_path, TRANSLATIONS, 'b.gltf')
-        from OpenGLContext.passes.instancing import geometry_content_key
         keys = [geometry_content_key(n) for nodes in (first, second)
                 for n in nodes if isinstance(n, InstancedShape)]
         assert keys[0][0] == keys[1][0]

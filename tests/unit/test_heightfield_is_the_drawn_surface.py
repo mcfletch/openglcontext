@@ -28,6 +28,7 @@ from omi_physics.raycast import raycast
 from omi_physics.world import PhysicsWorld
 from OpenGLContext.physics.heightfield import HeightFieldColliders
 from OpenGLContext.scenegraph.terrain.heightfield import HeightField
+from OpenGLContext.loaders.tiles3d.vegetation import scatter_disc
 
 EXTENT = 256.0
 
@@ -166,7 +167,6 @@ class TestWhatStandsOnIt:
 
     def test_a_plant_seated_by_the_sampler_meets_the_ground(self) -> None:
         """A scatter lifted to ``sample`` sits on the surface, not in or over it."""
-        from OpenGLContext.loaders.tiles3d.vegetation import scatter_disc
 
         field = _field(res=17)
         placements = scatter_disc((0.0, 0.0, 0.0), 100.0, 0.02, seed=5,

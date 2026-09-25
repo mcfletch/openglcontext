@@ -12,6 +12,8 @@ import pytest
 
 from omi_physics.raycast import raycast
 from omi_physics.world import PhysicsWorld
+from omi_physics import model
+from omi_physics.vehicle import RaycastVehicle, VehicleTuning, car_wheels
 from OpenGLContext.physics.heightfield import HeightFieldColliders
 from OpenGLContext.scenegraph.terrain.heightfield import HeightField
 
@@ -140,8 +142,6 @@ class TestHowItIsCutUp:
 
 class TestACarOnIt:
     def test_a_car_settles_on_the_field_and_stays_there(self) -> None:
-        from omi_physics import model
-        from omi_physics.vehicle import RaycastVehicle, VehicleTuning, car_wheels
         field = _field()
         world = PhysicsWorld()
         ground = HeightFieldColliders(world, field, reach=300.0)
