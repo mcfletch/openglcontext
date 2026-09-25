@@ -218,6 +218,16 @@ each time you pass it, and each species has its own beds. ``density`` still
 means plants per square metre: a patchy species is scattered on a finer grid
 and then thinned.
 
+The beds are a ``vegetation.Patches(patchiness, metres, salt=0)``:
+``weight(x, z)`` is how much of the species belongs at each world position,
+from 0 between beds to 1 in the middle of one, ``thinning`` the fraction of
+the ground it keeps overall, and ``density_for(density)`` the grid density
+that leaves ``density`` plants per square metre standing after the weight
+thins it. It is built from ``vegetation.world_noise(x, z, metres, salt=0)``, a
+smooth field in [0, 1] with one blob every ``metres``, anchored to the world
+and different for each ``salt``; use it for anything else that should vary
+over the ground the same way wherever the camera is.
+
 ``canopy`` is the range of tree cover a species grows in,
 read from :ref:`terrain.canopy_cover <canopyclosure>`: 0 on open ground, 1
 where the tree crowns cover every square metre. A lower bound above 0 keeps

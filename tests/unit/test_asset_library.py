@@ -349,6 +349,80 @@ class TestMergingAModelIntoOneMesh:
         assert attributes["NORMAL"][0] == pytest.approx((0.0, 0.0, 1.0), abs=1e-6)
 
 
+class TestMergingWhatIsDrawn:
+    """The merge is the model as it is drawn: every placement, mirrored and
+    stretched copies included, and one level or choice of a node that draws
+    one of several."""
+
+    @staticmethod
+    def _slanted():
+        """A triangle leaning out of its plane, with its true normal."""
+        points = np.array([(0, 0, 0), (1, 0, 1), (0, 1, 0)], "f")
+        normal = np.cross(points[1] - points[0], points[2] - points[0])
+        mesh = PBRMesh(positions=points,
+                       normals=np.tile(normal / np.linalg.norm(normal), (3, 1)),
+                       indices=np.array([0, 1, 2], np.uint32))
+        return Shape(geometry=mesh, appearance=Appearance(material=PBRMaterial()))
+
+    @staticmethod
+    def _facing(attributes, indices):
+        """How well each triangle's winding agrees with its normals, -1 to 1."""
+        corners = attributes["POSITION"][indices.reshape(-1, 3)]
+        wound = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+        wound /= np.linalg.norm(wound, axis=1, keepdims=True)
+        given = attributes["NORMAL"][indices.reshape(-1, 3)[:, 0]]
+        return np.einsum("ij,ij->i", wound, given)
+
+    def test_a_stretched_copy_keeps_its_normals_square_to_its_surface(self) -> None:
+        attributes, indices = merged_mesh(
+            Transform(scale=(4.0, 1.0, 1.0), children=[self._slanted()]))
+        assert self._facing(attributes, indices).min() == pytest.approx(1.0, abs=1e-5)
+
+    def test_a_mirrored_copy_is_wound_to_face_the_way_its_normals_do(self) -> None:
+        attributes, indices = merged_mesh(
+            Transform(scale=(-1.0, 1.0, 1.0), children=[self._slanted()]))
+        assert self._facing(attributes, indices).min() == pytest.approx(1.0, abs=1e-5)
+
+    def test_a_level_of_detail_merges_its_finest_level(self) -> None:
+        from OpenGLContext.scenegraph.lod import LOD
+        fine = Shape(geometry=_quad())
+        coarse = Shape(geometry=PBRMesh(
+            positions=np.array([(0, 0, 0), (1, 0, 0), (0, 1, 0)], "f"),
+            indices=np.array([0, 1, 2], np.uint32)))
+        attributes, indices = merged_mesh(LOD(level=[fine, coarse], range=[10.0]))
+        assert len(attributes["POSITION"]) == 4 and len(indices) == 6
+
+    def test_a_switch_merges_the_child_it_shows(self) -> None:
+        from OpenGLContext.scenegraph.switch import Switch
+        shown = Transform(translation=(5.0, 0.0, 0.0), children=[Shape(geometry=_quad())])
+        attributes, _indices = merged_mesh(
+            Switch(choice=[Shape(geometry=_quad()), shown], whichChoice=1))
+        assert float(attributes["POSITION"][:, 0].min()) == pytest.approx(5.0)
+
+    def test_a_switch_showing_nothing_merges_nothing(self) -> None:
+        from OpenGLContext.scenegraph.switch import Switch
+        assert merged_mesh(Switch(choice=[Shape(geometry=_quad())],
+                                  whichChoice=-1)) is None
+
+    def test_an_instanced_shape_merges_each_placement(self) -> None:
+        from OpenGLContext.scenegraph.instancedshape import InstancedShape
+        placements = np.tile(np.eye(4, dtype="f"), (2, 1, 1))
+        placements[1, 3, :3] = (10.0, 0.0, 0.0)
+        attributes, indices = merged_mesh(
+            InstancedShape(geometry=_quad(), placements=placements))
+        assert len(attributes["POSITION"]) == 8 and len(indices) == 12
+        assert float(attributes["POSITION"][:, 0].max()) == pytest.approx(11.0)
+
+    def test_a_matrix_transform_places_what_is_measured(self) -> None:
+        from OpenGLContext.loaders.assets import bounds
+        from OpenGLContext.scenegraph.transform import MatrixTransform
+        moved = np.eye(4)
+        moved[3, :3] = (0.0, 7.0, 0.0)
+        low, _high = bounds(MatrixTransform(localMatrix=moved,
+                                            children=[Shape(geometry=_quad())]))
+        assert float(low[1]) == pytest.approx(7.0)
+
+
 class TestMergingOneMeshPerMaterial:
     """A textured model cannot become one mesh: a mesh draws with one material.
 

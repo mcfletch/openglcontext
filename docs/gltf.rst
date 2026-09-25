@@ -823,6 +823,33 @@ into the ground rather than on it. The original subtree is not changed, so one
 model can be seated in any number of places. Scattered vegetation uses it; see
 :ref:`Where a plant meets the ground <footing>`.
 
+``merged_mesh( node )`` returns a subtree's triangle meshes as one
+glTF-shaped mesh in the space of the subtree's root: ``({'POSITION': ...,
+'NORMAL': ..., 'TEXCOORD_0': ...}, indices)``, or ``None`` where it holds no
+triangles. ``TEXCOORD_0`` is present when any piece has it. A model exported
+in pieces (one per material, or one per 65,535 vertices) comes back as one
+surface, which is what a decimator or a collider builder wants: pieces handed
+over separately keep a seam along every join. ``merged_by_material( node )``
+returns ``[(material, attributes, indices), ...]``, one merged mesh per
+material in the order the materials were first met, for a result that is
+drawn with the model's own materials.
+
+.. code-block:: python
+
+   from OpenGLContext.loaders.assets import merged_mesh
+   from OpenGLContext.loaders.gltf import load_gltf
+
+   attributes, indices = merged_mesh( load_gltf( 'scan.glb' ).group )
+
+Both merge the model as it is drawn at full detail. Every ``Transform`` and
+``MatrixTransform`` is applied; normals move by the inverse transpose, so a
+stretched copy keeps them square to its surface, and a mirrored copy's
+triangles are wound again to face the way their normals do. An ``LOD``
+contributes its finest level, a ``Switch`` the child it shows, and an
+``InstancedShape`` one copy per placement. Only indexed triangle meshes are
+merged: lines, points and geometry defined by parameters (``Box``,
+``Sphere``) are left out. A piece with no normals is given its surface's own.
+
 .. _gltf-embedding:
 
 Embedding the viewer

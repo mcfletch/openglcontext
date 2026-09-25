@@ -227,10 +227,19 @@ def merged_mesh(node: Any) -> "Optional[Tuple[dict, np.ndarray]]":
     because neither side knows the other shares its edge.
 
     Positions and normals are brought into world space, so the pieces line up
-    the way they are drawn. A primitive carrying no normals is given the
-    surface's own, since anything measuring or shading the result needs them.
-    Use :func:`merged_by_material` where the result has to be drawn with the
-    model's own materials.
+    the way they are drawn: normals by the inverse transpose, so a stretched
+    copy keeps them square to its surface, and a mirrored copy's triangles
+    wound again to face the way they did. A primitive carrying no normals is
+    given the surface's own, since anything measuring or shading the result
+    needs them. Use :func:`merged_by_material` where the result has to be
+    drawn with the model's own materials.
+
+    The merge is the model as it is drawn at full detail: an ``LOD`` or
+    ``ScreenCoverageLOD`` contributes its finest level, a ``Switch`` the
+    child it shows (nothing where it shows none), and an ``InstancedShape``
+    one copy per placement. Only indexed triangle meshes are merged; lines,
+    points and geometry that is a handful of numbers (``Box``, ``Sphere``)
+    are left out.
 
         from OpenGLContext.loaders.assets import merged_mesh
         from OpenGLContext.loaders.gltf import load_gltf
@@ -269,18 +278,12 @@ def _joined(pieces: "Sequence") -> "Tuple[dict, np.ndarray]":
 
 def _merge(node: Any, world: np.ndarray, collected: list, ancestry: Tuple[int, ...]) -> None:
     """Append ``(material, (positions, normals, texcoords, indices))`` per mesh."""
-    from OpenGLContext.loaders.gltf.meshes import estimate_normals
-
     # Cycle-detect on the path rather than globally: one mesh mounted under
     # several transforms is several instances, and each belongs at its own.
     if id(node) in ancestry:
         return
     ancestry = ancestry + (id(node),)
-    if (
-        hasattr(node, "translation")
-        or hasattr(node, "rotation")
-        or getattr(node, "_forward", None) is not None
-    ):
+    if _posed(node):
         try:
             world = np.asarray(_local_matrix_rv(node), dtype="d") @ world
         except Exception:
@@ -289,20 +292,66 @@ def _merge(node: Any, world: np.ndarray, collected: list, ancestry: Tuple[int, .
             )
     mesh = _triangle_arrays(getattr(node, "geometry", None))
     if mesh is not None:
-        points, faces, given, uv = mesh
-        placed = np.column_stack([points, np.ones(len(points))]) @ world
-        if given is None:
-            given = estimate_normals(points, faces)
-        # Normals are directions: the translation must not reach them, and a
-        # scaled transform would need its inverse transpose. Renormalising is
-        # what keeps a uniformly-scaled model's shading right either way.
-        turned = np.asarray(given, dtype="d") @ world[:3, :3]
-        lengths = np.linalg.norm(turned, axis=1)
-        turned[lengths > 0] /= lengths[lengths > 0][:, None]
         material = getattr(getattr(node, "appearance", None), "material", None)
-        collected.append((material, (placed[:, :3], turned, uv, faces)))
-    for child in getattr(node, "children", None) or ():
+        for placement in _placements(node):
+            collected.append((material, _placed(mesh, placement @ world)))
+    for child in _drawn_children(node):
         _merge(child, world, collected, ancestry)
+
+
+def _posed(node: Any) -> bool:
+    """Whether ``node`` carries a transform of its own (a ``Transform`` or a
+    ``MatrixTransform``)."""
+    return (getattr(node, "translation", None) is not None
+            or getattr(node, "_forward", None) is not None)
+
+
+def _drawn_children(node: Any) -> list:
+    """The children of ``node`` that are drawn at full detail.
+
+    An ``LOD``'s finest level, a ``Switch``'s chosen child, or every child of
+    any other group.
+    """
+    level = getattr(node, "level", None)
+    if level is not None:
+        return list(level[:1])
+    choice = getattr(node, "choice", None)
+    if choice is not None:
+        which = int(getattr(node, "whichChoice", -1))
+        return [choice[which]] if 0 <= which < len(choice) else []
+    return list(getattr(node, "children", None) or ())
+
+
+def _placements(node: Any) -> "Sequence[np.ndarray]":
+    """The local matrices a shape is drawn at: one per ``InstancedShape``
+    placement, and the identity for any other shape."""
+    placements = getattr(node, "instancePlacements", None)
+    if placements is None:
+        return [np.eye(4)]
+    found = placements()
+    return [] if found is None else [np.asarray(one, dtype="d") for one in found]
+
+
+def _placed(mesh: tuple, world: np.ndarray) -> tuple:
+    """One mesh's ``(positions, normals, texcoords, indices)`` moved by ``world``."""
+    from OpenGLContext.loaders.gltf.meshes import estimate_normals
+
+    points, faces, given, uv = mesh
+    placed = np.column_stack([points, np.ones(len(points))]) @ world
+    if given is None:
+        given = estimate_normals(points, faces)
+    # Normals are directions: the translation must not reach them, and they
+    # move by the inverse transpose, which keeps them square to a surface a
+    # scale has stretched.
+    linear = world[:3, :3]
+    turned = np.asarray(given, dtype="d") @ np.linalg.pinv(linear).T
+    lengths = np.linalg.norm(turned, axis=1)
+    turned[lengths > 0] /= lengths[lengths > 0][:, None]
+    if np.linalg.det(linear) < 0:
+        # A mirror turns each triangle over; its winding is swapped back so
+        # the face and its normals agree.
+        faces = np.asarray(faces).reshape(-1, 3)[:, [0, 2, 1]].reshape(-1)
+    return placed[:, :3], turned, uv, faces
 
 
 def _triangle_arrays(geometry: Any) -> Any:
@@ -433,11 +482,7 @@ def _measure(node: Any, parent: np.ndarray, boxes: list) -> None:
     """Accumulate one subtree's world-space boxes into ``boxes``."""
     # Row-vector convention, as the renderer and the glTF loader both use:
     # p_world = p_local @ local @ parent.
-    world = (
-        _local_matrix_rv(node) @ parent
-        if getattr(node, "translation", None) is not None
-        else parent
-    )
+    world = _local_matrix_rv(node) @ parent if _posed(node) else parent
     local = _local_points(getattr(node, "geometry", None))
     if local is not None:
         placed = np.column_stack([local, np.ones(len(local))]) @ world
