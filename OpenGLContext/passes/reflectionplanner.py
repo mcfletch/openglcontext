@@ -250,12 +250,12 @@ class ReflectionPlanner:
         self.schedule = ReflectionSchedule()
         self.frame = 0
         self._held: Dict[Hashable, _Held] = {}
+        self._crowded: Set[Hashable] = set()
         #: Whether a mirror's reflection may be drawn for a camera at ``eye``:
         #: ``allowed(record, eye)``, or None where every mirror may. The pass
         #: sets it from the scene's zones; see
         #: :meth:`~OpenGLContext.passes.zonepass.ZonesMixin.mirrorAllowed`.
         self.allowed: Optional[Callable[[Any, np.ndarray], bool]] = None
-        self._crowded: Set[Hashable] = set()
         self._views: Dict[Hashable, ReflectedView] = {}
         #: The reflections in the atlas that a mirror view may read.
         self._arrived: Set[Hashable] = set()
