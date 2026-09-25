@@ -448,6 +448,9 @@ divide the work:
 - ``flatcore.py`` -- the core-profile pass described on this page.
 - ``flateffects.py`` -- the effects the core pass sequences: image-based
   lighting, transmission, bloom and cluster culling.
+- ``multiviewpass.py`` -- the pass's side of several views: laying them out,
+  culling the frame's walk for each, the draw one submission makes for every
+  view, and which view a pick event belongs to.
 - ``reflectionpass.py`` -- the pass's planar reflections: planning a frame's
   mirror views, drawing them into the atlas, and telling each mirror drawn
   which tile it reads.
