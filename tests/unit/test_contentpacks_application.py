@@ -202,3 +202,9 @@ class TestOnTheConsole:
             progress(done, 100)
         progress(5, None)
         assert said.getvalue().count('%') == 5
+
+    def test_the_reply_is_read_with_input_when_it_is_asked(
+            self, game, monkeypatch) -> None:
+        consent = application.ask_on_console(stream=io.StringIO())
+        monkeypatch.setattr('builtins.input', lambda prompt: 'yes')
+        assert consent(game.needed_to_start())

@@ -18,8 +18,8 @@ fetched, and a path computed then names a directory the pack is not in.
 from the machine as it is when they are called.
 
 :func:`ask_on_console` and :func:`console_progress` are the consent and the
-progress of a command-line first run; a window polls
-:meth:`Application.base_job` from its frame loop.
+progress of a command-line first run; a window shows
+:meth:`Application.base_job` on :class:`OpenGLContext.ui.contentscreen.ContentScreen`.
 """
 
 from __future__ import annotations
@@ -186,12 +186,12 @@ class Application:
 
 
 def ask_on_console(assume_yes: bool = False, stream: TextIO | None = None,
-                   answer: Callable[[str], str] = input) -> Consent:
+                   answer: Callable[[str], str] | None = None) -> Consent:
     """A consent that lists the packs on ``stream`` and asks yes or no.
 
     Each pack's title, size and terms, then the total. ``assume_yes`` prints
-    the list and goes ahead, for a script. End of input, or anything but a
-    yes, declines.
+    the list and goes ahead, for a script. ``answer`` reads the reply
+    (``input`` by default). End of input, or anything but a yes, declines.
     """
     def consent(packs: Sequence[ContentPack]) -> bool:
         out = stream if stream is not None else sys.stdout
@@ -205,7 +205,7 @@ def ask_on_console(assume_yes: bool = False, stream: TextIO | None = None,
             return True
         out.flush()
         try:
-            said = answer('Download it now? [y/N] ')
+            said = (answer or input)('Download it now? [y/N] ')
         except EOFError:
             return False
         return said.strip().lower() in ('y', 'yes')
