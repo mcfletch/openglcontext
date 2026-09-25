@@ -369,11 +369,14 @@ def test_the_swim_mode_carries_its_own_buoyancy_to_the_body():
     assert body.buoyancy == pytest.approx(0.25)
 
 
-def test_applying_a_mode_to_a_plain_camera_is_harmless():
+def test_applying_a_mode_to_a_plain_camera_leaves_it_unchanged():
     """Most platforms are a camera with no body at all."""
-    modes.SwimMode().applyTo(_Platform())
-    modes.FlyMode().applyTo(_Platform())
-    modes.WalkMode().applyTo(None)
+    untouched = vars(_Platform())
+    for mode in (modes.SwimMode(), modes.FlyMode(), modes.WalkMode()):
+        camera = _Platform()
+        assert mode.applyTo(camera) is None
+        assert vars(camera) == untouched
+    assert modes.WalkMode().applyTo(None) is None
 
 
 # -- bindings that want a modifier held ---------------------------------------

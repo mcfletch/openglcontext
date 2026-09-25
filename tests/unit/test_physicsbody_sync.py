@@ -116,8 +116,12 @@ def test_sync_to_scene_skips_sleeping_dynamic_body():
 
 
 def test_sync_to_scene_noop_when_unregistered():
-    body = PhysicsBody(Transform(), model.Motion())
-    body.sync_to_scene()                            # must not raise without a world
+    t = Transform(translation=(1, 2, 3), rotation=(0, 1, 0, 0.5))
+    body = PhysicsBody(t, model.Motion())
+    assert body.index is None                       # in no world yet
+    body.sync_to_scene()
+    assert tuple(t.translation) == (1, 2, 3)
+    assert tuple(t.rotation) == (0, 1, 0, 0.5)
 
 
 if __name__ == '__main__':

@@ -138,8 +138,14 @@ class TestStepping:
         p.step(0.5)
         assert float(p.rotation[0]) - before == pytest.approx(1.0)
 
-    def test_stepping_an_empty_pool_is_harmless(self):
-        pool().step(0.1, gravity=(0.0, -9.8, 0.0))
+    def test_stepping_an_empty_pool_changes_nothing(self):
+        p = pool()
+        before = (p.position.copy(), p.velocity.copy(), p.age.copy())
+        p.step(0.1, gravity=(0.0, -9.8, 0.0))
+        assert p.live == 0
+        assert np.array_equal(p.position, before[0])
+        assert np.array_equal(p.velocity, before[1])
+        assert np.array_equal(p.age, before[2])
 
     def test_a_zero_step_changes_nothing(self):
         p = pool()

@@ -23,11 +23,15 @@ def test_disable_vsync_swallows_a_raising_swap_interval(monkeypatch):
     """disable_vsync ignores any error from glfw.swap_interval (no current context)."""
     import glfw
 
-    def _boom(_interval):
+    asked = []
+
+    def _boom(interval):
+        asked.append(interval)
         raise RuntimeError('no current context')
 
     monkeypatch.setattr(glfw, 'swap_interval', _boom)
-    disable_vsync()                                  # must not propagate the error
+    assert disable_vsync() is None
+    assert asked == [0]
 
 
 def test_raw_material_registers_a_custom_material():

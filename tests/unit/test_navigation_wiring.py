@@ -143,8 +143,14 @@ def test_the_navigation_manager_drives_the_platform_from_held_keys():
     assert context.platform.jumped == 1          # both, in one frame
 
 
-def test_updating_navigation_without_modes_is_harmless():
-    _Context().updateNavigation(0.016)
+def test_updating_navigation_without_modes_moves_nothing():
+    """A context that declares no modes keeps the navigation it already had."""
+    context = _Context()
+    context.updateNavigation(0.016)
+    assert context.navigation is None
+    assert context.platform.moved == [] and context.platform.jumped == 0
+    assert not context.contextDefinition.movementMode
+    assert context._pointerCaptured is False
 
 
 def test_the_current_mode_is_published_on_the_context_definition():
