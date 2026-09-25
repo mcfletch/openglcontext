@@ -32,7 +32,7 @@ from typing import Any, Optional, TYPE_CHECKING
 import numpy as np
 from OpenGLContext import renderoptions
 from OpenGLContext.capture import ensure_pillow, read_back_buffer, save_png
-from OpenGLContext.testing.process_exit import flush_and_exit
+from OpenGLContext.processexit import flush_and_exit
 
 if TYPE_CHECKING:
     import subprocess

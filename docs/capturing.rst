@@ -119,6 +119,14 @@ something changes, so ``OnIdle`` asks for the frames the capture counts. ``captu
 all-black frame unless ``skip_blank=False`` is passed, and returns whether it
 wrote a file.
 
+A program that has to end at once from inside a draw callback, where the
+windowing loop would swallow ``sys.exit``, ends through
+``OpenGLContext.processexit.flush_and_exit(code)``. It saves any active
+coverage data and flushes standard output and error, then ends the process
+with ``os._exit``, which would otherwise discard what was still buffered. It
+imports nothing of the engine, so a shipped game uses it without importing
+the test machinery.
+
 A test that compares what was drawn against a reference image uses the same
 reads through the test machinery; see :ref:`Comparing pixels <pixels>`.
 

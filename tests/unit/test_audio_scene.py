@@ -101,6 +101,21 @@ class TestEngineLifetime:
             audioscene.close(first)
             audioscene.close(second)
 
+    def test_an_engine_made_elsewhere_is_the_one_the_context_uses(self, context):
+        from omi_audio import AudioEngine
+        given = AudioEngine(device=NullDevice(sample_rate=8000), voices=4)
+        audioscene.attach(context, given)
+        assert audioscene.existing_engine(context) is given
+        assert audioscene.engine_for(context) is given
+
+    def test_attaching_another_closes_the_first(self, context):
+        from omi_audio import AudioEngine
+        first = audioscene.engine_for(context)
+        closed = []
+        first.close = lambda: closed.append(first)
+        audioscene.attach(context, AudioEngine(device=NullDevice(sample_rate=8000)))
+        assert closed == [first]
+
 
 class TestDisabled:
     def test_audio_switched_off_never_opens_a_device(self):

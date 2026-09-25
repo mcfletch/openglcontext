@@ -32,7 +32,7 @@ def _with_engine(context):
     """
     from OpenGLContext.audio import scene as audioscene
     engine = Engine()
-    audioscene._engines[context] = engine
+    audioscene.attach(context, engine)
     return engine
 
 

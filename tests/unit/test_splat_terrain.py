@@ -2,13 +2,15 @@
 
 The GL draw path is covered by ``test_vegetation_gl_render``; these cover the
 parts that need no context: the default material resolver, the bounding volume,
-the shadow/invisible/disabled early-outs, and dispose-before-init.
+the shadow/invisible early-outs, the switch that leaves the terrain undrawn,
+and dispose-before-init.
 """
 import types
 
 import numpy as np
 import pytest
 
+from OpenGLContext.scenegraph.terrain.ground import GroundPatch
 from OpenGLContext.scenegraph.terrain.heightfield import HeightField
 from OpenGLContext.scenegraph.terrain.splat import SplatTerrain
 
@@ -38,11 +40,15 @@ def test_render_is_noop_in_shadow_pass():
     assert node.patch._gl is None                  # never initialized GL
 
 
-def test_render_is_noop_when_disabled():
+def test_a_terrain_switched_off_draws_nothing_and_casts_nothing(monkeypatch):
     node = SplatTerrain(_hf(), ["floor"], "control.png",
                         material_fn=lambda *a, **k: {})
-    node._disabled = True                          # a prior GL init failure
+    made = []
+    monkeypatch.setattr(GroundPatch, '_init_gl', lambda patch: made.append(patch))
+    node.drawn = False
     assert node.render(types.SimpleNamespace(shadow_pass=False, visible=True)) == 1
+    assert node.render_depth(types.SimpleNamespace(shadow_pass=True)) == 1
+    assert made == []
 
 
 def test_dispose_before_init_is_a_noop():

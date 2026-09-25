@@ -521,7 +521,7 @@ class AnimationMixer:
         every slot something outside the rig reaches -- a mesh, an attachment
         point with a weapon on it -- and every joint on the way down to one.
         """
-        slots = self._writable()
+        slots = self.writable_slots()
         if len(slots):
             axis_angle = quat_xyzw_to_vrml_rows(pose[1][slots])
             # One conversion out of numpy for the lot: a tuple built a float at
@@ -546,8 +546,13 @@ class AnimationMixer:
         self._observed.update(int(n) for n in nodes)
         self._exposed_signature = None
 
-    def _writable(self) -> np.ndarray:
-        """The slots to write, recomputed when the hierarchy's shape changes."""
+    def writable_slots(self) -> np.ndarray:
+        """The rig slots whose joints the pose is written to, as an int32 array.
+
+        Every driven joint under ``pose_write = 'all'``; under ``'exposed'``,
+        the driven joints something outside the rig reaches and those
+        :meth:`observe` named. Recomputed when the hierarchy's shape changes.
+        """
         if self.pose_write != 'exposed':
             return self._all_write_slots
         exposed = self.rig.exposed_slots()

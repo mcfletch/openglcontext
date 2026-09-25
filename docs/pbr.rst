@@ -701,8 +701,10 @@ the cheapest one that does the job.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``PBRMaterial.uv_transform`` is a 3×3 ``KHR_texture_transform`` matrix.
-Assigning it bumps the material's upload version, so the pass uploads its
-uniform block again and does nothing else. A scrolling conveyor belt, a
+Assigning it moves the material's ``factorVersion``, so the pass uploads its
+uniform block again and does nothing else. An edit made in place, such as a
+component written into the matrix's array, is announced with
+``material.factorsChanged()``. A scrolling conveyor belt, a
 rotating fan or a stretching liquid costs only this, however large the surface
 is.
 

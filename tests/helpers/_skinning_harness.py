@@ -664,7 +664,7 @@ def blend(model_path, out_dir):
             wanted = count * joints * 3 * 16
             report['pose_capacity'] = buffer.capacity
             report['pose_wanted'] = wanted
-            report['writable'] = len(self.models[0].mixer._writable())
+            report['writable'] = len(self.models[0].mixer.writable_slots())
             if buffer.capacity < wanted:
                 return
             glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffer.name)
@@ -708,7 +708,7 @@ def blend(model_path, out_dir):
             checked = 0
             for model in self.models:
                 mixer = model.mixer
-                written = mixer._writable()
+                written = mixer.writable_slots()
                 if not len(written):
                     continue
                 wanted = mixer.pose()

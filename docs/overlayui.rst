@@ -844,6 +844,9 @@ decoder for the file suffix:
 
    pictures.registerDecoder('.crn', my_module.load)
 
+``pictures.unregisterDecoder('.crn')`` removes the decoder for a suffix and
+returns it, or ``None`` when none was registered.
+
 The decoder receives a file path and returns a PIL image, or ``None`` to
 decline the file, for example when an optional dependency it needs is
 missing. A declined picture is not drawn, and a gallery shows its empty

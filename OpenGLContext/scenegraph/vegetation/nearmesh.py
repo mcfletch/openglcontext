@@ -69,7 +69,6 @@ class InstancedMeshLOD(InstancedVegBase):
         self.bounds = bounds
         self._gl: Any = None
         self._pending: "Optional[dict[int, np.ndarray]]" = None
-        self._disabled = False
 
     def compute_pending(self, cx: float, cz: float,
                         radius: float = 42.0) -> "dict[int, np.ndarray]":
@@ -77,8 +76,8 @@ class InstancedMeshLOD(InstancedVegBase):
 
         Reads only the immutable ``all_*`` tables and returns fresh arrays, touching
         no GL and no node state, so a background streaming thread can build the next
-        near-set off the render thread. The caller assigns the result to
-        :attr:`_pending` on the GL thread; :meth:`_stream` uploads it there."""
+        near-set off the render thread. The caller hands the result to
+        :meth:`stage` on the GL thread, and the next draw uploads it."""
         d2 = (self.all_pos[:, 0] - cx) ** 2 + (self.all_pos[:, 2] - cz) ** 2
         near = d2 < radius * radius
         return {
@@ -91,7 +90,20 @@ class InstancedMeshLOD(InstancedVegBase):
 
     def update(self, cx: float, cz: float, radius: float = 42.0) -> None:
         """Select trees within ``radius`` of ``(cx, cz)`` and stage their instance data."""
-        self._pending = self.compute_pending(cx, cz, radius)
+        self.stage(self.compute_pending(cx, cz, radius))
+
+    def stage(self, pending: "dict[int, np.ndarray]") -> None:
+        """Draw ``pending``, a :meth:`compute_pending` result, from the next draw on.
+
+        Called on the GL thread; the upload happens in that draw. A set staged
+        before an earlier one was drawn replaces it.
+        """
+        self._pending = pending
+
+    @property
+    def staged(self) -> "Optional[dict[int, np.ndarray]]":
+        """The near set waiting for the next draw to upload it, or None."""
+        return self._pending
 
     def _mkvao(self, P: np.ndarray, N: np.ndarray, U: np.ndarray, I: np.ndarray,
                ibuf: InstanceBuffer) -> "tuple[Any, int]":

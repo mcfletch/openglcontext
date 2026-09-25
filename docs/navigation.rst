@@ -76,6 +76,10 @@ passes no speed, and the body keeps the speed it was built with. Crouching is
 the exception: it belongs to the body, so ``crouchSpeed`` overrides the mode's
 speed.
 
+``PhysicsViewPlatform.world_direction(forward, strafe)`` returns the world
+direction a walk input moves in: on the ground plane, a unit ``forward`` along
+where the camera looks and a unit ``strafe`` to its right.
+
 Chosen modes and imposed modes
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

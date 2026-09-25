@@ -198,7 +198,16 @@ waits for it. A scatter that raises is logged and asked for again on the next
 ``update``. ``shutdown()`` stops the worker; a cover that is collected stops
 its worker as well. Without ``background``, ``update`` scatters on the calling
 thread; a caller with its own worker can run ``compute_near`` there and pass
-the result to ``apply_near`` on the render thread.
+the result to ``apply_near`` on the render thread. The near tree meshes
+(``InstancedMeshLOD``) work the same way: ``compute_pending(x, z, radius)``
+selects the trees near a point on any thread, and ``stage(result)`` on the
+render thread hands the set to the next draw.
+
+Every instanced vegetation node, the terrain and the particle emitters have a
+``drawn`` attribute, True by default. Set it False and the node draws nothing
+and casts no shadow until it is set True again; a profiling run leaves one
+layer out this way. A node whose shaders will not compile on the driver sets
+its ``failed`` attribute, logs one warning and draws nothing from then on.
 
 ``select`` is the per-frame step: it re-centres the drawn geometry on the
 current camera. Without it, the disc lags behind the walker and the density of

@@ -55,7 +55,7 @@ from OpenGLContext import entropy
 from OpenGLContext.events import systemtime
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.instancedgl import (
-    InstanceBuffer, delete_gl, ensure_gl, load_program, texture_rgba,
+    GLLayer, InstanceBuffer, delete_gl, load_program, texture_rgba,
 )
 
 log = logging.getLogger(__name__)
@@ -275,7 +275,7 @@ def _scatter(rng: Any, velocity: Vector, spread: float,
     return np.asarray((directions * speeds[:, None]).astype(np.float32))
 
 
-class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node):
+class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node, GLLayer):
     """A source of particles in the scene, drawn in one instanced call.
 
     Put it under a ``Transform`` and the particles come from there.  It is a
@@ -383,7 +383,6 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node):
         self._pending = float(self.burst) if self.burstOnStart else 0.0
         self._stepped: Optional[float] = None
         self._gl: Any = None
-        self._disabled = False
 
     # ------------------------------------------------------------------
     # Simulation
@@ -600,7 +599,7 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node):
             return 1
         origin, direction = self._pose(mode)
         self._advance(origin, direction)
-        if not self.pool.live or not ensure_gl(self):
+        if not self.pool.live or not self.ensure_gl():
             return 1
         self._draw(mode)
         return 1

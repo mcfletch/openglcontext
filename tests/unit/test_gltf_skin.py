@@ -50,6 +50,19 @@ class TestPBRMeshSkin:
         assert np.allclose(posed[0], [0, 1, 0], atol=1e-6)   # (1,0,0)->(0,1,0)
         assert np.allclose(posed[1], [0, 1, 0], atol=1e-6)   # joint1 identity
 
+    def test_the_matrices_last_given_are_read_back(self):
+        m = self._mesh()
+        assert m.skin_matrices is None
+        mats = np.stack([_rot_z_rowvec(np.pi / 2), np.eye(4)])
+        m.set_skin_matrices(mats)
+        assert np.array_equal(m.skin_matrices, mats)
+
+    def test_the_matrices_read_back_cannot_be_edited_in_place(self):
+        m = self._mesh()
+        m.set_skin_matrices(np.stack([np.eye(4), np.eye(4)]))
+        with pytest.raises(ValueError):
+            m.skin_matrices[0, 3, 0] = 2.0
+
     def test_weight_blend_between_two_joints(self):
         pos = np.array([[1, 0, 0]], dtype='f')
         joints = np.array([[0, 1, 0, 0]], dtype='u4')

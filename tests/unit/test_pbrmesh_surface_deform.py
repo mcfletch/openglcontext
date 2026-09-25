@@ -130,16 +130,16 @@ class TestWhatADeformerMayChange:
 class TestVersioning:
     def test_deforming_bumps_the_version_so_the_gpu_re_uploads(self):
         mesh = grid()
-        before = mesh._deform_version
+        before = mesh.deform_version
         mesh.set_surface_deformer(lift(1.0))
-        assert mesh._deform_version > before
+        assert mesh.deform_version > before
 
     def test_every_refresh_bumps_it_again(self):
         mesh = grid()
         mesh.set_surface_deformer(lift(1.0))
-        before = mesh._deform_version
+        before = mesh.deform_version
         mesh.refresh_surface()
-        assert mesh._deform_version > before
+        assert mesh.deform_version > before
 
     def test_the_bounding_volume_follows_the_deformed_positions(self):
         mesh = grid()

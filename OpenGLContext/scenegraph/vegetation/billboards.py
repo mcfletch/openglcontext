@@ -72,7 +72,6 @@ class InstancedBillboards(InstancedVegBase):
         self.bounds = bounds
         self._gl: Any = None
         self._pending = False
-        self._disabled = False
 
     def _instance_rows(self) -> np.ndarray:
         return instance_rows(self.pos, self.yaws, self.scales, self.shades)

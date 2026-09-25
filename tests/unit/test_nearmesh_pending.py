@@ -3,8 +3,9 @@
 The near-mesh LOD selects the trees within a radius of the camera and packs their
 per-instance rows for upload. ``compute_pending`` is the selection alone: it reads
 only the immutable position/yaw/scale/species tables and returns fresh arrays, so a
-background streaming thread can build the next near-set off the render thread.
-Constructing the node touches no GL, so these run without a context.
+background streaming thread can build the next near-set off the render thread,
+and ``stage`` hands the result to the next draw. Constructing the node touches
+no GL, so these run without a context.
 """
 import numpy as np
 import pytest
@@ -40,14 +41,22 @@ def test_compute_pending_excludes_trees_outside_radius():
 def test_compute_pending_does_not_mutate_node_state():
     n = _node()
     n.compute_pending(0.0, 0.0, 5.0)
-    assert n._pending is None        # pure: staging is the caller's job
+    assert n.staged is None          # pure: staging is the caller's job
 
 
 def test_update_stages_the_computed_pending():
     n = _node()
     n.update(0.0, 0.0, 10.0)
-    assert n._pending is not None
-    assert set(n._pending) == {0, 1}
+    assert n.staged is not None
+    assert set(n.staged) == {0, 1}
+
+
+def test_a_near_set_computed_elsewhere_is_staged_for_the_next_draw():
+    """A worker computes the set; the GL thread stages what it was handed."""
+    n = _node()
+    computed = n.compute_pending(0.0, 0.0, 10.0)
+    n.stage(computed)
+    assert n.staged is computed
 
 
 if __name__ == "__main__":

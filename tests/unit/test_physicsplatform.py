@@ -100,8 +100,8 @@ def test_world_dir_basis_matches_yaw():
     """At yaw 0 forward is world -Z and strafe is world +X."""
     plat = _platform()
     plat.yaw = 0.0
-    assert np.allclose(plat._world_dir(1.0, 0.0), (0, 0, -1))
-    assert np.allclose(plat._world_dir(0.0, 1.0), (1, 0, 0))
+    assert np.allclose(plat.world_direction(1.0, 0.0), (0, 0, -1))
+    assert np.allclose(plat.world_direction(0.0, 1.0), (1, 0, 0))
 
 
 def test_turn_accumulates_yaw():

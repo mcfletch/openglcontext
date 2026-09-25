@@ -248,7 +248,6 @@ class InstancedClumps(InstancedVegBase):
         self.bounds = bounds
         self._gl: Any = None
         self._pending: "Optional[np.ndarray]" = None
-        self._disabled = False
 
     def update_instances(self, positions: np.ndarray, yaws: np.ndarray,
                          scales: np.ndarray,

@@ -553,9 +553,6 @@ def _pointer_setter(g: "pygltflib.GLTF2", pointer: str, node_transforms: dict,
     KHR_texture_transform components."""
     toks = [t for t in pointer.split('/') if t]
 
-    def _bump(m: Any) -> None:
-        m._ubo_version = int(getattr(m, '_ubo_version', 0)) + 1
-
     def _v(value: Any) -> np.ndarray:
         return np.ravel(np.asarray(value, dtype='d'))
 
@@ -593,7 +590,6 @@ def _pointer_setter(g: "pygltflib.GLTF2", pointer: str, node_transforms: dict,
                     m.uv_transform = uv_transform_matrix(
                         offset=tuple(p['offset']), rotation=p['rotation'],
                         scale=tuple(p['scale']))
-                    _bump(m)
                 return set_uvt
             _SCALAR = {
                 ('pbrMetallicRoughness', 'metallicFactor'): 'metallic',
@@ -608,19 +604,16 @@ def _pointer_setter(g: "pygltflib.GLTF2", pointer: str, node_transforms: dict,
                 attr = _SCALAR[key]
                 def set_scalar(value: Any, m: Any = m, attr: str = attr) -> None:
                     setattr(m, attr, float(_v(value)[0]))
-                    _bump(m)
                 return set_scalar
             if key in _COLOR3:
                 attr = _COLOR3[key]
                 def set_color(value: Any, m: Any = m, attr: str = attr) -> None:
                     val = _v(value)
                     setattr(m, attr, tuple(float(x) for x in val[:3]))
-                    _bump(m)
                 return set_color
             if key == ('extensions', 'KHR_materials_emissive_strength', 'emissiveStrength'):
                 def set_es(value: Any, m: Any = m) -> None:
                     m.emissiveStrength = float(_v(value)[0])
-                    _bump(m)
                 return set_es
         return None
     except (ValueError, IndexError, KeyError, TypeError):

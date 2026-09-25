@@ -300,23 +300,51 @@ class InstanceBuffer:
         delete_gl(buffers=[self.id])
 
 
-def ensure_gl(node: Any) -> bool:
-    """Lazily run ``node._init_gl()``, disabling the node on a GL/shader failure.
+class GLLayer:
+    """A node that draws through GL objects it makes itself, at its first draw.
 
-    Returns True when GL is ready to draw. A compile/link/driver failure must not
-    crash the frame loop -- the node sets ``_disabled`` (logged once) and its
-    ``render`` becomes a no-op, so the layer just goes missing on hardware that
-    cannot support it instead of taking down the whole app."""
-    if getattr(node, '_disabled', False):
-        return False
-    if node._gl is None:
-        try:
-            node._init_gl()
-        except Exception as err:
-            node._disabled = True
-            log.warning("%s disabled: GL init failed: %s", type(node).__name__, err)
+    The terrain, vegetation and particle nodes are layers of this kind. Two
+    attributes decide whether one draws:
+
+    :attr:`drawn` is the application's switch. Set it False and the node draws
+    nothing and casts nothing, and makes no GL objects it has not already made;
+    set it True again and it draws from the next frame. A profiling run leaves
+    one layer out this way, and a settings screen hides one.
+
+    :attr:`failed` says the node's GL objects could not be made -- a shader this
+    driver will not compile, a texture format it does not have. The failure is
+    logged once and the node draws nothing from then on, so the layer goes
+    missing on hardware that cannot draw it instead of taking the frame down.
+
+    A subclass implements :meth:`_init_gl`, which makes its GL objects and sets
+    ``_gl`` to something other than None, and calls :meth:`ensure_gl` before
+    each draw.
+    """
+
+    #: Whether the node draws; the application's switch.
+    drawn: bool = True
+    #: Whether making the node's GL objects failed, after which it never draws.
+    failed: bool = False
+    #: The node's GL objects, None until :meth:`_init_gl` has made them.
+    _gl: Any = None
+
+    def _init_gl(self) -> None:
+        """Make the node's GL objects and set ``_gl``. GL thread."""
+        raise NotImplementedError
+
+    def ensure_gl(self) -> bool:
+        """Whether the node is to draw now, making its GL objects if need be."""
+        if not self.drawn or self.failed:
             return False
-    return True
+        if self._gl is None:
+            try:
+                self._init_gl()
+            except Exception as err:
+                self.failed = True
+                log.warning("%s not drawn: GL init failed: %s", type(self).__name__, err,
+                            exc_info=err)
+                return False
+        return True
 
 
 def delete_gl(vaos: Iterable[int] = (), buffers: Iterable[int] = (),

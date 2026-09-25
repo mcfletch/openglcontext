@@ -400,10 +400,11 @@ that block light: smoke, dust, steam.
 .. rst-class:: technical
 
 The shaders are ``OpenGLContext/shaders/particle.vert`` and ``particle.frag``.
-The GL helpers (``InstanceBuffer``, ``ensure_gl``) are shared with the terrain
+The GL helpers (``InstanceBuffer``, ``GLLayer``) are shared with the terrain
 and vegetation nodes in ``scenegraph/instancedgl.py``. If a shader fails to
-compile or the driver fails, the node is disabled with one logged warning:
-the effect is missing, and the rest of the scene still draws.
+compile or the driver fails, the node's ``failed`` is set with one logged
+warning: the effect is missing, and the rest of the scene still draws. Setting
+the node's ``drawn`` to False leaves it undrawn while its simulation goes on.
 
 Bounding volume
 ---------------

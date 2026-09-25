@@ -220,9 +220,8 @@ class PBRMaterial(node.Node):
     iridescenceThicknessMin = field.newField('iridescenceThicknessMin', 'SFFloat', 1, 100.0)
     iridescenceThicknessMax = field.newField('iridescenceThicknessMax', 'SFFloat', 1, 400.0)
 
-    # Fields whose in-place edit must invalidate the pbr pass's cached std140
-    # block: the pass keys its cache on `_ubo_version`, and nothing
-    # otherwise bumped it, so `material.roughness = 0.3` served a stale UBO.
+    # Fields the pbr pass packs into the material's std140 block: setting one
+    # moves :attr:`factorVersion`, which the pass keys its packed block on.
     _UBO_FIELDS = frozenset({
         'baseColor', 'metallic', 'roughness', 'emissiveColor', 'occlusionStrength',
         'normalScale', 'transparency', 'alphaMode', 'alphaCutoff', 'doubleSided',
@@ -258,13 +257,29 @@ class PBRMaterial(node.Node):
             value = TextureChannels(value or {})
         super(PBRMaterial, self).__setattr__(name, value)
         if name in self._UBO_FIELDS:
-            object.__setattr__(
-                self, '_ubo_version',
-                int(self.__dict__.get('_ubo_version', 0)) + 1)
+            self.factorsChanged()
         if name in self._BATCH_FIELDS:
             object.__setattr__(
                 self, '_batch_version',
                 int(self.__dict__.get('_batch_version', 0)) + 1)
+
+    @property
+    def factorVersion(self) -> int:
+        """A count that moves whenever a factor the draw's uniform block holds does.
+
+        Setting any of those fields moves it, and so does :meth:`factorsChanged`.
+        The pass repacks the material's block when it has moved since the last
+        pack.
+        """
+        return int(self.__dict__.get('_ubo_version', 0))
+
+    def factorsChanged(self) -> None:
+        """Say that a factor was edited in place, so the next draw repacks them.
+
+        For an edit that is not a set of a field: a component written into
+        :attr:`uv_transform`'s array, as a texture-transform animation does.
+        """
+        object.__setattr__(self, '_ubo_version', self.factorVersion + 1)
 
     def batchingVersion(self) -> tuple[int, int, int]:
         """A value that changes whenever something deciding how this batches does.
@@ -273,7 +288,7 @@ class PBRMaterial(node.Node):
         and transparency), the mirror and impostor fields, and edits made to
         :attr:`textures` in place.
         """
-        return (int(self.__dict__.get('_ubo_version', 0)),
+        return (self.factorVersion,
                 int(self.__dict__.get('_batch_version', 0)),
                 self.textures.version)
 

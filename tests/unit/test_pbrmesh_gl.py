@@ -246,23 +246,23 @@ class TestBoundingAndMisc:
         from OpenGL.GL import GL_CCW
         assert PBRMesh(positions=np.zeros((3, 3), 'f'))._front_face(None) == GL_CCW
 
-    def test_morph_version_alias_tracks_deform_version(self):
+    def test_morph_weights_move_the_deform_version(self):
         mesh = PBRMesh(
             positions=np.zeros((3, 3), 'f'),
             morph_targets=[{'positions': np.ones((3, 3), 'f')}])
-        assert mesh._morph_version == mesh._deform_version
+        assert mesh.deform_version == 0
         mesh.set_morph_weights([1.0])
-        assert mesh._morph_version == mesh._deform_version == 1
+        assert mesh.deform_version == 1
 
     def test_set_morph_weights_noop_without_targets(self):
         mesh = PBRMesh(positions=np.zeros((3, 3), 'f'))
         mesh.set_morph_weights([1.0])                 # no targets -> silent no-op
-        assert mesh._deform_version == 0
+        assert mesh.deform_version == 0
 
     def test_set_skin_matrices_noop_without_joints(self):
         mesh = PBRMesh(positions=np.zeros((3, 3), 'f'))
         mesh.set_skin_matrices(np.eye(4)[None])       # no joints -> silent no-op
-        assert mesh._deform_version == 0
+        assert mesh.deform_version == 0
 
     def test_flat_position_array_is_reshaped(self):
         mesh = PBRMesh(positions=np.array([0, 0, 0, 1, 0, 0], 'f'))   # 1-D input

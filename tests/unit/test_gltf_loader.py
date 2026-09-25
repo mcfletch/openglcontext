@@ -1115,7 +1115,7 @@ class TestAnimationPointerLive:
         assert mat.baseColor[0] > 0.9 and mat.baseColor[1] < 0.1
         player.evaluate(1.0)      # green
         assert mat.baseColor[1] > 0.9 and mat.baseColor[0] < 0.1
-        assert int(getattr(mat, '_ubo_version', 0)) >= 2   # each edit bumps the UBO
+        assert mat.factorVersion >= 2   # each edit moves the UBO's version
 
 
 class TestNodeVisibilityChildPropagation:

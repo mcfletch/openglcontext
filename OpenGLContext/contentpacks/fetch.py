@@ -344,6 +344,23 @@ class FetchJob:
             self._thread.start()
         return self
 
+    def wait(self, timeout: float | None = None) -> bool:
+        """Whether the work is over, waiting up to ``timeout`` seconds for it.
+
+        Blocks the calling thread, so it is for a program that has nothing to
+        draw while it waits -- a command-line fetch, a test -- and not for a
+        frame loop. It publishes nothing: :attr:`finished` and the rest still
+        say what the last :meth:`poll` saw. A job with no packs has nothing to
+        do and answers True; one never started answers False at once, since
+        nothing is fetching its packs.
+        """
+        if not self.packs:
+            return True
+        if self._thread is None:
+            return False
+        self._thread.join(timeout)
+        return not self._thread.is_alive()
+
     def cancel(self) -> None:
         """Ask the worker to stop. Acted on between chunks.
 

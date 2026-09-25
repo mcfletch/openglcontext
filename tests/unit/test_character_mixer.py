@@ -445,3 +445,26 @@ class TestStartingOver:
         mixer.reset()
         assert mixer.playing == ()
         assert np.allclose(nodes[2].translation, (0, 0, 0))
+
+
+class TestWhatIsWritten:
+    """The joints a mixer writes back to the scenegraph, by ``pose_write``."""
+
+    def _two_tracks(self):
+        mixer, _ = _mixer(_still('walk', 1, 'translation', [10, 0, 0]),
+                          _still('lift', 3, 'translation', [0, 1, 0]))
+        return mixer
+
+    def slots(self, mixer, *nodes):
+        return [mixer.rig.slot_of[node] for node in nodes]
+
+    def test_every_driven_joint_is_written_by_default(self):
+        mixer = self._two_tracks()
+        assert list(mixer.writable_slots()) == self.slots(mixer, 1, 3)
+
+    def test_an_unexposed_rig_writes_what_it_is_told_to_observe(self):
+        mixer = self._two_tracks()
+        mixer.pose_write = 'exposed'
+        assert list(mixer.writable_slots()) == []
+        mixer.observe(3)
+        assert list(mixer.writable_slots()) == self.slots(mixer, 3)

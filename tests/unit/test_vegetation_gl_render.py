@@ -102,8 +102,19 @@ def test_billboards_disabled_on_init_failure_no_crash(gl, tmp_path, monkeypatch)
     monkeypatch.setattr("OpenGLContext.scenegraph.vegetation.billboards.load_program",
                         lambda *a: (_ for _ in ()).throw(RuntimeError("no shader")))
     assert node.render(_mode()) == 1        # a compile failure must not raise
-    assert node._disabled is True
+    assert node.failed is True
     assert node.render(_mode()) == 1        # stays a no-op
+
+
+def test_billboards_switched_off_make_no_program(gl, tmp_path, monkeypatch):
+    node = InstancedBillboards(np.zeros((1, 3), 'f4'), np.zeros(1, 'f4'),
+                               np.ones(1, 'f4'), _tex_png(tmp_path))
+    made = []
+    monkeypatch.setattr("OpenGLContext.scenegraph.vegetation.billboards.load_program",
+                        lambda *a: made.append(a))
+    node.drawn = False
+    assert node.render(_mode()) == 1
+    assert made == [] and not node.failed
 
 
 def test_clumps_render_with_in_memory_texture_and_dispose(gl):

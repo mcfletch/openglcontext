@@ -575,7 +575,10 @@ The audio engine
 
 Each context has one engine, opened the first time it is asked for.
 ``audioscene.engine_for(context)`` returns it, or ``None`` when sound is
-switched off.
+switched off. ``audioscene.attach(context, engine)`` gives a context an engine
+made elsewhere, on a device of the caller's choosing (a silent
+``omi_audio.device.NullDevice`` for a server or a test), and closes any engine
+the context had; ``audioscene.close(context)`` releases it.
 
 .. list-table::
    :widths: auto

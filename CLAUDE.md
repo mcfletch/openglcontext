@@ -245,6 +245,8 @@ OpenGLContext/
 │                     # of -- numpy only
 ├── outline.py        # The scenegraph as rows, for a tree control -- no GL, no
 │                     # toolkit -- docs/embedding.rst
+├── processexit.py    # Ending the process at once, output and coverage flushed:
+│                     # what a capture or a bounded run exits through
 ├── renderoptions.py  # How a pass reads a rendering feature from the definition
 ├── screenshot.py     # The F2 key every context binds -- docs/capturing.rst
 ├── swapcontrol.py    # Waiting for the refresh, for backends that name nothing
@@ -879,8 +881,10 @@ inside their own `render()` — their own program, VAO, per-instance buffer and
 `glDraw*Instanced` — bypassing the VRML97/Shape path entirely. They restream
 per-frame instance data (camera-following fields) via the shared helpers in
 `scenegraph/instancedgl.py`: `InstanceBuffer` (grow-or-`glBufferSubData`, no
-per-frame realloc), `setup_instance_attribs`, and `ensure_gl` (disable-on-failure so
-a driver quirk drops the layer instead of crashing the frame). To compose with the
+per-frame realloc), `setup_instance_attribs`, and the `GLLayer` base, whose
+`ensure_gl()` makes the node's GL objects at its first draw (a failure sets `failed`,
+so a driver quirk drops the layer instead of crashing the frame) and whose `drawn`
+switch leaves a layer undrawn. To compose with the
 driving pass's GL state they use the pass's own CPU state memo, not a `glGet`
 snapshot: they restore the pass's bound program with `mode.current_program()` and
 route face-cull through `passes.instancing.set_cull_state(mode, ...)` (the same memo

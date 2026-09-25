@@ -49,7 +49,7 @@ class _MeshGPU(object):
     """
 
     # Deform counter of the arrays last uploaded to the dynamic VBOs; the cache in
-    # PBRMesh._gpu re-uploads when it lags the node's ``_deform_version``.
+    # PBRMesh._gpu re-uploads when it lags the node's :attr:`PBRMesh.deform_version`.
     _uploaded_morph_version: int = 0
 
     #: (array name on the mesh, vertex semantic, components). The location each
@@ -350,8 +350,8 @@ class PBRMesh(node.Node):
         A deformable mesh keeps immutable ``_base_*`` rest arrays; every frame the
         active weights (:meth:`set_morph_weights`) and joint matrices
         (:meth:`set_skin_matrices`) recompute ``positions``/``normals``/
-        ``tangents`` as morph-then-skin (the glTF-defined order). ``_deform_version``
-        is bumped on each change so each per-context GPU re-uploads when stale.
+        ``tangents`` as morph-then-skin (the glTF-defined order). :attr:`deform_version`
+        moves on each change so each per-context GPU re-uploads when stale.
         """
         self.morph_targets: list[dict[str, Any]] = []
         self.morph_weights: Optional[np.ndarray] = None
@@ -449,9 +449,27 @@ class PBRMesh(node.Node):
         return self._surface_deformer is not None and self.texcoords is not None
 
     @property
-    def _morph_version(self) -> int:
-        # back-compat alias: the GPU cache keys re-upload off this counter.
+    def deform_version(self) -> int:
+        """A count that moves each time the mesh's vertex arrays are deformed.
+
+        Morph weights, a pose skinned on the CPU and a material's surface
+        deformer each move it; the GPU buffers are re-uploaded when it has
+        moved since their last upload.
+        """
         return self._deform_version
+
+    @property
+    def skin_matrices(self) -> Any:
+        """The per-joint skin matrices last given to :meth:`set_skin_matrices`.
+
+        A read-only (J, 4, 4) row-vector array, or None before the first pose
+        or on a mesh with no skin.
+        """
+        if self._skin_matrices is None:
+            return None
+        view = self._skin_matrices.view()
+        view.flags.writeable = False
+        return view
 
     @property
     def is_deformable(self) -> bool:

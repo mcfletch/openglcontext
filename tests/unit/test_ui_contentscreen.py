@@ -55,7 +55,7 @@ class Gate:
 
 
 def finish(screen):
-    screen.job._thread.join(timeout=10)
+    assert screen.job.wait(timeout=10)
     screen.poll()
 
 
@@ -137,7 +137,7 @@ class TestADownload:
             screen.poll()
             if screen.progress.fraction > 0:
                 break
-            screen.job._thread.join(timeout=0.01)
+            screen.job.wait(timeout=0.01)
         assert 0 < screen.progress.fraction < 1
         assert screen.progress.text.startswith('Ashdown — ')
 

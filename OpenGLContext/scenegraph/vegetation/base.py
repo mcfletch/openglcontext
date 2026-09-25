@@ -20,7 +20,7 @@ from OpenGL.GL import (
 )
 from vrml.vrml97 import basenodes as vnodes
 from OpenGLContext.scenegraph import boundingvolume
-from OpenGLContext.scenegraph.instancedgl import ViewPrograms, ensure_gl, view_copies
+from OpenGLContext.scenegraph.instancedgl import GLLayer, ViewPrograms, view_copies
 
 #: node AABB kept large so a camera-following field is never frustum-culled whole.
 _BIG = (1.0e6, 1.0e6, 1.0e6)
@@ -33,7 +33,7 @@ LOD_FAR = 52.0
 _UP_WORLD = np.array([0.0, 1.0, 0.0])
 
 
-class InstancedVegBase(vnodes.PointSet):
+class InstancedVegBase(vnodes.PointSet, GLLayer):
     """Base for the instanced vegetation nodes; drives the shared render preamble.
 
     A subclass sets ``self._prog`` (its program), ``self.U`` (uniform-name ->
@@ -69,8 +69,6 @@ class InstancedVegBase(vnodes.PointSet):
         bounds: Any
         #: The node's program and its forms for shared draws.
         programs: ViewPrograms
-        #: Set once the node's GL objects are made, None before and after.
-        _gl: Any
 
     def boundingVolume(self, mode: Any) -> "boundingvolume.AABoundingBox":
         return boundingvolume.AABoundingBox(size=self.bounds, center=(0, 0, 0))
@@ -115,7 +113,7 @@ class InstancedVegBase(vnodes.PointSet):
     def render(self, mode: Any = None, **kw: Any) -> int:
         if getattr(mode, 'shadow_pass', False) or not getattr(mode, 'visible', True):
             return 1
-        if not ensure_gl(self):
+        if not self.ensure_gl():
             return 1
         if not self._stream():
             return 1

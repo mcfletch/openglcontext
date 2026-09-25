@@ -1,8 +1,9 @@
-"""Tests for OpenGLContext.testing.process_exit.flush_and_exit.
+"""Tests for OpenGLContext.processexit.flush_and_exit.
 
-The regression/capture harness forces process termination from inside a GL
-callback. It must flush coverage before doing so, otherwise subprocess coverage
-is silently lost. These tests verify both the flush and the hard-exit.
+A capture, the regression harness and a game's own bounded run end the process
+from inside a GL callback. It must flush what was written -- standard output
+and error, and coverage's data -- before doing so, otherwise it is lost. These
+tests verify the flushes and the hard exit.
 """
 
 import subprocess
@@ -11,7 +12,7 @@ import textwrap
 
 import pytest
 
-from OpenGLContext.testing.process_exit import flush_and_exit
+from OpenGLContext.processexit import flush_and_exit
 
 
 def test_flush_and_exit_saves_active_coverage(monkeypatch):
@@ -67,7 +68,7 @@ def test_flush_and_exit_really_terminates():
     """Integration: the process actually exits with the requested code."""
     code = textwrap.dedent(
         """
-        from OpenGLContext.testing.process_exit import flush_and_exit
+        from OpenGLContext.processexit import flush_and_exit
         flush_and_exit(7)
         print("should not reach here")
         """
@@ -84,7 +85,7 @@ def test_flush_and_exit_writes_coverage_file(tmp_path):
     target.write_text(
         textwrap.dedent(
             """
-            from OpenGLContext.testing.process_exit import flush_and_exit
+            from OpenGLContext.processexit import flush_and_exit
             def covered():
                 return 1
             covered()
@@ -105,3 +106,38 @@ def test_flush_and_exit_writes_coverage_file(tmp_path):
     assert result.returncode == 0
     data_files = list(tmp_path.glob('.coverage.*'))
     assert data_files, "flush_and_exit must persist coverage before hard exit"
+
+
+def test_what_was_written_reaches_the_pipe():
+    """Output buffered for a pipe is written before the process ends."""
+    code = textwrap.dedent(
+        """
+        import sys
+        from OpenGLContext.processexit import flush_and_exit
+        sys.stdout.write("frame 120 captured")
+        sys.stderr.write("and logged")
+        flush_and_exit(0)
+        """
+    )
+    result = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True)
+    assert result.returncode == 0
+    assert result.stdout == 'frame 120 captured'
+    assert result.stderr.endswith('and logged')
+
+
+def test_a_game_exits_without_importing_the_test_machinery():
+    code = textwrap.dedent(
+        """
+        import sys
+        import OpenGLContext.processexit
+        print('OpenGLContext.testing' in sys.modules)
+        """
+    )
+    result = subprocess.run([sys.executable, '-c', code], capture_output=True, text=True)
+    assert result.stdout.strip() == 'False', result.stderr
+
+
+def test_the_testing_package_names_the_same_helper():
+    from OpenGLContext.testing import process_exit
+
+    assert process_exit.flush_and_exit is flush_and_exit

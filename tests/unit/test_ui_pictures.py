@@ -265,11 +265,23 @@ class TestFormatsTheImagingLibraryCannotRead:
     @pytest.fixture(autouse=True)
     def _clean_registry(self):
         """The registry is process-wide, so a test must not leak into the next."""
-        from OpenGLContext.ui import pictures
-        saved = dict(pictures._decoders)
+        from OpenGLContext.ui.pictures import unregisterDecoder
         yield
-        pictures._decoders.clear()
-        pictures._decoders.update(saved)
+        unregisterDecoder('.madeup')
+
+    def test_a_decoder_can_be_taken_back(self):
+        from OpenGLContext.ui.pictures import (
+            decoderFor, registerDecoder, unregisterDecoder)
+
+        def decode(_path):
+            return None
+        registerDecoder('.madeup', decode)
+        assert unregisterDecoder('.MADEUP') is decode
+        assert decoderFor('texture.madeup') is None
+
+    def test_taking_back_a_suffix_nobody_registered_answers_none(self):
+        from OpenGLContext.ui.pictures import unregisterDecoder
+        assert unregisterDecoder('.madeup') is None
 
     def test_a_registered_decoder_reads_a_suffix_pil_cannot(self, gl, tmp_path):
         from PIL import Image

@@ -40,13 +40,13 @@ from OpenGLContext.loaders.resolver import checked_url, fetch_to_cache, is_url
 log = logging.getLogger(__name__)
 
 __all__ = ['PictureCache', 'DEFAULT_BUDGET', 'UPLOADS_PER_PUMP',
-           'registerDecoder', 'decoderFor']
+           'registerDecoder', 'unregisterDecoder', 'decoderFor']
 
 #: Suffix (lower case, with its dot) -> a callable taking a path and returning
 #: a PIL image, or None if it will not read that file.  Empty by default: the
 #: imaging library covers every format this toolkit's own artwork uses, and an
 #: entry here is an application saying it has content that library cannot read.
-_decoders: dict = {}
+_decoders: dict[str, Callable[[str], Any]] = {}
 
 
 def registerDecoder(suffix: str, decoder: Callable[[str], Any]) -> None:
@@ -62,6 +62,11 @@ def registerDecoder(suffix: str, decoder: Callable[[str], Any]) -> None:
     format should be able to say so.
     """
     _decoders[suffix.lower()] = decoder
+
+
+def unregisterDecoder(suffix: str) -> Optional[Callable[[str], Any]]:
+    """Forget the decoder registered for ``suffix``; the one that was, or None."""
+    return _decoders.pop(suffix.lower(), None)
 
 
 def decoderFor(path: str) -> Optional[Callable[[str], Any]]:

@@ -69,6 +69,20 @@ def engine_for(context: Any) -> Optional[AudioEngine]:
     return engine
 
 
+def attach(context: Any, engine: AudioEngine) -> None:
+    """Give ``context`` an engine made elsewhere, closing any it had.
+
+    For an engine on a device of the caller's choosing -- a silent one for a
+    server or a test, a particular output -- which :func:`engine_for` then
+    answers instead of opening one. :func:`close` releases it as it would
+    one made here.
+    """
+    previous = _engines.get(context)
+    if previous is not None and previous is not engine:
+        previous.close()
+    _engines[context] = engine
+
+
 def close(context: Any) -> None:
     """Release ``context``'s engine and its device.  Safe if it had none."""
     engine = _engines.pop(context, None)

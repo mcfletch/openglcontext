@@ -256,12 +256,12 @@ BAKED_LIGHT_BIT = 64
 def pack_material_block(material: Any) -> np.ndarray:
     """Pack a material into the std140 MaterialBlock byte layout (float32 array).
 
-    Kept on the material against its own ``_ubo_version``, the counter every
-    runtime material edit already bumps: an instanced group repacks its whole
+    Kept on the material against its own ``factorVersion``, the count every
+    runtime material edit moves: an instanced group repacks its whole
     material table every frame, and a crowd of figures out of one document
     carries a material apiece that nothing is changing.
     """
-    version = int(getattr(material, '_ubo_version', 0))
+    version = int(getattr(material, 'factorVersion', 0))
     cached = getattr(material, '_packed_block', None)
     if cached is not None and cached[0] == version:
         return np.asarray(cached[1])
@@ -595,10 +595,10 @@ class PBRShaderProgram(VRML97ShaderProgram):
                 self._default_material_ubo = self._upload_material_ubo(None)
             return self._default_material_ubo
         # Cache (buffer, version). A live edit (KHR_animation_pointer driving a
-        # material factor / texture transform) bumps material._ubo_version, so the
+        # material factor / texture transform) moves material.factorVersion, so the
         # block is re-packed on the next draw instead of staying stale.
         entry = self._material_ubos.get(material)
-        version = int(getattr(material, '_ubo_version', 0))
+        version = int(getattr(material, 'factorVersion', 0))
         if entry is None or entry[1] != version:
             buf = self._upload_material_ubo(material)
             self._material_ubos[material] = (buf, version)
@@ -1099,7 +1099,7 @@ class PBRPass(flatcore.FlatPass):
             made_from = (geometry, appearance, material,
                          getattr(appearance, 'texture', None))
             stamps = (version() if version is not None
-                      else getattr(material, '_ubo_version', 0), collapse, mirrors)
+                      else getattr(material, 'factorVersion', 0), collapse, mirrors)
             held = memo.get(shape)
             if held is not None and held[1] == stamps and all(
                     was is now for was, now in zip(held[0], made_from, strict=True)):

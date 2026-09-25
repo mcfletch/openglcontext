@@ -160,7 +160,7 @@ class TestAFirstRun:
         job = game.base_job()
         assert [one.key for one in job.packs] == ['racer/cars']
         job.start()
-        job._thread.join(timeout=30)
+        assert job.wait(timeout=30)
         job.poll()
         assert job.finished and job.failed is None
         assert game.needed_to_start() == []

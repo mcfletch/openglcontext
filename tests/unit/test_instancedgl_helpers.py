@@ -1,9 +1,10 @@
 """Portability/teardown helpers shared by the instanced veg/terrain nodes.
 
-Covers the graceful-degradation guard (a GL/shader init failure disables the node
-instead of crashing the frame loop) and the in-memory texture-upload path (an
-embedded image uploads without writing a file beside a read-only asset). Neither
-needs a real GL context: the GL entry points are stubbed.
+Covers the graceful-degradation guard (a GL/shader init failure marks the node
+failed instead of crashing the frame loop), the application's switch that
+leaves a layer undrawn, and the in-memory texture-upload path (an embedded
+image uploads without writing a file beside a read-only asset). None needs a
+real GL context: the GL entry points are stubbed.
 """
 import numpy as np
 from PIL import Image
@@ -11,34 +12,49 @@ from PIL import Image
 import OpenGLContext.scenegraph.instancedgl as ig
 
 
-class _Node:
-    """Minimal stand-in with the (_gl, _init_gl) contract ensure_gl relies on."""
+class _Node(ig.GLLayer):
+    """A layer whose GL objects are made, or fail to be, by a counted stand-in."""
     def __init__(self, fail=False):
-        self._gl = None
-        self._fail = fail
+        self.fail = fail
         self.inits = 0
 
     def _init_gl(self):
         self.inits += 1
-        if self._fail:
+        if self.fail:
             raise RuntimeError("shader compile failed")
         self._gl = object()
 
 
 def test_ensure_gl_ready_on_success():
     n = _Node(fail=False)
-    assert ig.ensure_gl(n) is True
-    assert n._gl is not None and n.inits == 1
-    assert ig.ensure_gl(n) is True          # already built -> no re-init
+    assert n.ensure_gl() is True
+    assert n.inits == 1
+    assert n.ensure_gl() is True            # already built -> no re-init
     assert n.inits == 1
 
 
-def test_ensure_gl_disables_node_on_failure():
+def test_ensure_gl_marks_the_node_failed_on_failure():
     n = _Node(fail=True)
-    assert ig.ensure_gl(n) is False         # failure -> caller draws nothing
-    assert getattr(n, '_disabled', False) is True
-    assert ig.ensure_gl(n) is False         # stays disabled, does not retry
+    assert n.ensure_gl() is False           # failure -> caller draws nothing
+    assert n.failed is True
+    assert n.ensure_gl() is False           # stays failed, does not retry
     assert n.inits == 1                     # _init_gl not called again
+
+
+def test_a_layer_switched_off_makes_nothing_and_draws_nothing():
+    n = _Node(fail=False)
+    n.drawn = False
+    assert n.ensure_gl() is False
+    assert n.inits == 0 and not n.failed
+
+
+def test_a_layer_switched_back_on_draws_again():
+    n = _Node(fail=False)
+    n.drawn = False
+    n.ensure_gl()
+    n.drawn = True
+    assert n.ensure_gl() is True
+    assert n.inits == 1
 
 
 def test_texture_rgba_accepts_in_memory_image(monkeypatch):

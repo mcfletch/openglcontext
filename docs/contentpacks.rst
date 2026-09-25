@@ -405,6 +405,13 @@ The worker thread writes its results under a lock, and ``poll()`` is the only
 place they are read, so the caller needs no lock. As a result, a job whose
 worker has finished reports itself as unfinished until the next ``poll()``.
 
+``job.wait(timeout=None)`` blocks until the worker has stopped, or until
+``timeout`` seconds have passed, and returns whether it has stopped. It is for
+a program with nothing to draw while it waits, such as a command-line fetch
+or a test, and like ``start()`` it publishes nothing: poll afterwards to read
+the result. A job with no packs returns True; a job never started returns
+False at once.
+
 Errors
 ~~~~~~
 

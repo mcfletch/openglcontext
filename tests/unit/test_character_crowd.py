@@ -38,7 +38,7 @@ def _pose_of(model):
 
 
 def _skin_of(model):
-    return [np.asarray(mesh._skin_matrices)
+    return [np.asarray(mesh.skin_matrices)
             for skin in model.mixer.skins for mesh in skin.meshes]
 
 

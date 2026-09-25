@@ -69,6 +69,9 @@ class SplatTerrain(vnodes.PointSet):
     """
     #: One draw serves every view that sees the terrain; see GroundPatch.
     multiviewShared = True
+    #: Whether the terrain draws and casts, the application's switch; see
+    #: :class:`~OpenGLContext.scenegraph.instancedgl.GLLayer`.
+    drawn: bool = True
 
     def __init__(self, height_field: "HeightField", layers: "list[str]", control: Any,
                  sun: "tuple[float, float, float]" = DEFAULT_SUN,
@@ -228,6 +231,8 @@ class SplatTerrain(vnodes.PointSet):
     def render_depth(self, mode: Any) -> int:
         """Write the ground's depth for a shadow map."""
         self._release_replaced()
+        if not self.drawn:
+            return 1
         return self.patch.render_depth(mode)
 
     def dispose(self) -> None:
@@ -248,4 +253,6 @@ class SplatTerrain(vnodes.PointSet):
 
     def render(self, mode: Any = None, **kw: Any) -> int:
         self._release_replaced()
+        if not self.drawn:
+            return 1
         return self.patch.render(mode, **kw)

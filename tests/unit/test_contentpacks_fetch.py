@@ -331,10 +331,32 @@ class TestAJobTheFrameLoopPolls:
         make_tarball(where, 'a.tar.gz')
         job = fetch.FetchJob([pack(base + '/a.tar.gz')], store, cache_dir=cache)
         assert job.start() is job
-        job._thread.join(10.0)
+        assert job.wait(10.0)
         assert not job.finished, 'nobody polled, so nobody was told'
         job.poll()
         assert job.finished and not job.failed
+
+    def test_waiting_gives_up_when_the_worker_is_still_going(
+            self, store, cache) -> None:
+        released = threading.Event()
+
+        def slow(pack, progress, cancel):
+            released.wait(10.0)
+            return '/content'
+
+        job = fetch.FetchJob([pack('https://example.invalid/a.tar.gz')], store,
+                             fetch=slow).start()
+        assert job.wait(0.01) is False
+        released.set()
+        assert job.wait(10.0) is True
+
+    def test_a_job_never_started_is_not_waited_for(self, store, cache) -> None:
+        job = fetch.FetchJob([pack('https://example.invalid/a.tar.gz')], store,
+                             cache_dir=cache)
+        assert job.wait() is False, 'nothing is fetching it'
+
+    def test_an_empty_job_has_nothing_to_wait_for(self, store, cache) -> None:
+        assert fetch.FetchJob([], store, cache_dir=cache).wait() is True
 
     def test_starting_twice_runs_one_worker(self, served, store, cache) -> None:
         where, base = served

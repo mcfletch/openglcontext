@@ -438,6 +438,12 @@ example to measure a reach or to test a pose, call:
 .. code-block:: python
 
    mesh.posed_positions()      # where the pose put them, whichever side skins
+   mesh.skin_matrices          # the joint matrices of that pose, read-only
+
+``mixer.writable_slots()`` lists the rig slots whose joints the pose is written
+back to: every driven joint under ``mixer.pose_write = 'all'`` (the default),
+and under ``'exposed'`` only those something outside the rig reaches, plus any
+``mixer.observe(node)`` named.
 
 Bounds are computed from the joints, not from the rest vertices, so a figure
 whose animation carries it away from where it was modelled is still bounded

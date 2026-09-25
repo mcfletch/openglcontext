@@ -44,7 +44,7 @@ import time
 from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGLContext.events import synthetic
-from OpenGLContext.testing.process_exit import flush_and_exit
+from OpenGLContext.processexit import flush_and_exit
 
 try:
     import fcntl

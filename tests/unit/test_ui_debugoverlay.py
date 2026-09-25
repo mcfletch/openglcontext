@@ -359,7 +359,7 @@ class TestBuiltInProviders:
         context = Context()
         engine = AudioEngine(device=NullDevice(sample_rate=8000), voices=4)
         try:
-            audioscene._engines[context] = engine
+            audioscene.attach(context, engine)
             rows = dict(audio_provider(context)())
             assert rows['voices'] == 0
             assert rows['audio']

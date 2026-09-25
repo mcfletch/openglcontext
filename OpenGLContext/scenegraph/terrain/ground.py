@@ -45,7 +45,7 @@ from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.instancedgl import (
     ViewPrograms,
     delete_gl,
-    ensure_gl,
+    GLLayer,
     load_program,
     texture_rgba,
 )
@@ -91,7 +91,7 @@ UNIFORMS = (
 )
 
 
-class GroundShading:
+class GroundShading(GLLayer):
     """The materials a world's ground is made of, and the light baked into it.
 
     :param extent: how wide the world's square is, in metres. The control map
@@ -133,7 +133,6 @@ class GroundShading:
         direction = np.asarray(sun, 'd')
         self.sun = direction / np.linalg.norm(direction)
         self._gl: Any = None
-        self._disabled = False
 
     @property
     def world_min(self) -> "tuple[float, float]":
@@ -177,8 +176,7 @@ class GroundShading:
 
     def ready(self) -> bool:
         """Whether the ground can be drawn, building its GL objects if need be."""
-        found: bool = ensure_gl(self)
-        return found
+        return self.ensure_gl()
 
     def begin(self, mode: Any, model: Any) -> "Optional[int]":
         """Bind the program, the textures and everything but the geometry.
@@ -287,7 +285,7 @@ def _shadow_texture(shading: Any) -> int:
     return int(found)
 
 
-class GroundPatch(vnodes.PointSet):
+class GroundPatch(vnodes.PointSet, GLLayer):
     """One mesh drawn as ground.
 
     :param shading: the world's :class:`GroundShading`, shared with every other
@@ -320,7 +318,6 @@ class GroundPatch(vnodes.PointSet):
         self.model = np.eye(4, dtype='d') if model is None \
             else np.asarray(model, dtype='d')
         self._gl: Any = None
-        self._disabled = False
 
     def _init_gl(self) -> None:
         """Upload this patch's own vertex array. GL thread."""
@@ -354,7 +351,7 @@ class GroundPatch(vnodes.PointSet):
             return self.render_depth(mode)
         if not getattr(mode, 'visible', True):
             return 1
-        if not ensure_gl(self) or not self.shading.ready():
+        if not self.ensure_gl() or not self.shading.ready():
             return 1
         from OpenGLContext.multiview.strategy import draw_elements
         previous = self.shading.begin(mode, self.model)
@@ -382,7 +379,7 @@ class GroundPatch(vnodes.PointSet):
         draw uses neither: what a world pays for its ground is then paid once,
         in the first pass that asks for any of it, rather than split across two.
         """
-        if not ensure_gl(self) or not self.shading.ready():
+        if not self.ensure_gl() or not self.shading.ready():
             return 1
         glBindVertexArray(self._gl['vao'])
         glDrawElements(GL_TRIANGLES, self._gl['count'], GL_UNSIGNED_INT, None)

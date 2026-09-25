@@ -59,12 +59,16 @@ class PhysicsViewPlatform:
         return self.bind((eye[0], eye[1] + offset, eye[2]))
 
     # -- input -----------------------------------------------------------
-    def _world_dir(self, forward: float, strafe: float) -> np.ndarray:
-        # World-space camera basis for this yaw, derived from viewplatform.render()
+    def world_direction(self, forward: float, strafe: float) -> np.ndarray:
+        """Where a walk input of ``forward`` and ``strafe`` moves, in world space.
+
+        On the ground plane, from the platform's yaw: a unit forward input is
+        where the camera looks, levelled, and a unit strafe is to its right.
+        """
+        # The camera basis for this yaw, from viewplatform.render()
         # (glRotate(yaw, Y) then translate): the camera's world forward is
         # R_y(yaw)^T . (0,0,-1) = (sin yaw, 0, -cos yaw), and right = cross(fwd, up)
-        # = (cos yaw, 0, sin yaw). Validated against observed forward/back at the
-        # east-facing default heading.
+        # = (cos yaw, 0, sin yaw).
         c, s = np.cos(self.yaw), np.sin(self.yaw)
         fwd = np.array([s, 0.0, -c])
         right = np.array([c, 0.0, s])
@@ -94,12 +98,12 @@ class PhysicsViewPlatform:
     def set_move(self, forward: float = 0.0, strafe: float = 0.0, mode: str = 'walk',
                  speed: Optional[float] = None) -> None:
         self._moveAt(self.TIER_SPEEDS.get(mode, 'walkSpeed'), speed)
-        self.character.set_move(self._world_dir(forward, strafe), mode=mode)
+        self.character.set_move(self.world_direction(forward, strafe), mode=mode)
 
     def set_fly_move(self, forward: float = 0.0, strafe: float = 0.0, up: float = 0.0,
                      speed: Optional[float] = None) -> None:
         self._moveAt('flySpeed', speed)
-        d = self._world_dir(forward, strafe) + np.array([0.0, up, 0.0])
+        d = self.world_direction(forward, strafe) + np.array([0.0, up, 0.0])
         self.character.set_fly_move(d)
 
     def _gaze_dir(self, forward: float, strafe: float) -> np.ndarray:
@@ -142,7 +146,7 @@ class PhysicsViewPlatform:
 
         Take that from here rather than deriving it.  These angles rotate the
         *world* rather than the camera, and the two obvious derivations give
-        opposite answers: ``_world_dir`` reads a rising yaw as swinging toward
+        opposite answers: :meth:`world_direction` reads a rising yaw as swinging toward
         +X while the quaternion in :meth:`camera_orientation` reads it the
         other way, depending entirely on whether you apply the matrix as
         ``v @ M`` or ``M @ v``.  Whichever you assume, assume the other one.

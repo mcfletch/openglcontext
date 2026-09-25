@@ -123,7 +123,7 @@ class TestOnePoseForEveryLevel:
             [count + 1 for count in before], 'the coarse meshes joined the skin'
         for skin in model.mixer.skins:
             assert len(skin.meshes) >= 2
-            posed = [mesh._skin_matrices for mesh in skin.meshes]
+            posed = [mesh.skin_matrices for mesh in skin.meshes]
             assert all(matrices is not None for matrices in posed)
             for matrices in posed[1:]:
                 assert np.allclose(matrices, posed[0])

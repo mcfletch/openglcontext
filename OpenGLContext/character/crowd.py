@@ -436,7 +436,7 @@ class Crowd:
         layout = self._layout
         if layout is None:
             return
-        wanted = [member.mixer._writable() for member in group]
+        wanted = [member.mixer.writable_slots() for member in group]
         if not sum(len(slots) for slots in wanted):
             return
         slots = np.unique(np.concatenate(wanted)).astype(np.int32)
@@ -618,7 +618,7 @@ class Crowd:
     def _write_group(self, group: list[Member],
                      pose: tuple[np.ndarray, ...]) -> None:
         """Put each figure's pose onto its own scenegraph nodes."""
-        self._write_slots(group, pose, [member.mixer._writable()
+        self._write_slots(group, pose, [member.mixer.writable_slots()
                                         for member in group])
 
     def _write_slots(self, group: list[Member], pose: tuple[np.ndarray, ...],

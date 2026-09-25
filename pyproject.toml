@@ -229,14 +229,14 @@ ignore = [
 "shutil.rmtree".msg = "replace or remove a directory through OpenGLContext.atomicfiles: staged_directory, replace_directory or remove_directory"
 "shutil.move".msg = "move a finished file or directory into place through OpenGLContext.atomicfiles: staged_file, staged_directory or replace_directory"
 "os.rename".msg = "os.rename refuses an existing target on Windows; use os.replace, or OpenGLContext.atomicfiles"
-"os._exit".msg = "exit through OpenGLContext.testing.process_exit.flush_and_exit, which flushes what was written first"
+"os._exit".msg = "exit through OpenGLContext.processexit.flush_and_exit, which flushes what was written first"
 
 [tool.ruff.lint.per-file-ignores]
 # The modules that implement a replacement use the raw form, and the tests,
 # the scripts and the documentation build are programs that clean up after
 # themselves and end their own processes.
 "OpenGLContext/atomicfiles.py" = ["TID251"]
-"OpenGLContext/testing/process_exit.py" = ["TID251"]
+"OpenGLContext/processexit.py" = ["TID251"]
 "tests/**" = ["TID251"]
 "scripts/**" = ["TID251"]
 "build-docs.py" = ["TID251"]
