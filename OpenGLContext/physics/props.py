@@ -63,6 +63,19 @@ class PropColliders:
             [[p.position[0], p.position[2]] for p in self.props],
             dtype='d').reshape(-1, 2)
 
+    @classmethod
+    def baked(cls, world: "PhysicsWorld", extras: Any, channel: str, base: str,
+              **named: Any) -> "PropColliders":
+        """Colliders for the props a baked world carries in ``extras[channel]``.
+
+        ``base`` is the tileset's directory or URL directory; the props are read
+        in either form a world carries them
+        (:func:`~OpenGLContext.loaders.tiles3d.props.baked_props`), and
+        ``named`` is ``reach`` and ``settled`` as for the constructor.
+        """
+        from OpenGLContext.loaders.tiles3d.props import baked_props
+        return cls(world, baked_props(extras, channel, base), **named)
+
     def update(self, position: Any) -> None:
         """Hold the props within reach of here, and let go of the rest."""
         at = np.asarray(position, dtype='d').reshape(-1)[:3]

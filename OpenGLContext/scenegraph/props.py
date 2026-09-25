@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -29,7 +29,8 @@ from OpenGLContext.loaders.gltf.meshes import estimate_normals
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
-__all__ = ['Prop', 'RockProfile', 'rock_mesh', 'rock_material', 'SHAPES']
+__all__ = ['Prop', 'RockProfile', 'rock_mesh', 'rock_material', 'SHAPES',
+           'props_table', 'props_from_table']
 
 #: What a prop's ``radius`` and ``height`` describe, for the physics world that
 #: has to stand a body up from them. See :class:`Prop`.
@@ -180,6 +181,74 @@ class Prop:
                    radius=float(record.get('radius', 0.5)),
                    height=float(record.get('height', 1.0)),
                    shape=str(record.get('shape', 'box')))
+
+
+#: The shapes in the order a props table numbers them.
+_SHAPE_ORDER = ('box', 'dome')
+
+
+def props_table(props: Sequence[Prop]) -> bytes:
+    """``props`` as one compressed NumPy ``.npz`` file.
+
+    For a world that carries more props than is reasonable to write as JSON --
+    the loose stone on a hillside is tens of thousands -- and whose tileset
+    ``extras`` every reader parses. One row per prop: ``positions`` (N, 3),
+    ``yaws``, ``scales``, ``radii`` and ``heights`` as float32, ``kinds`` the
+    names and ``kind`` each prop's index into them, ``shape`` its index into
+    ``box``, ``dome``. :func:`props_from_table` reads it back.
+    """
+    import io
+    kinds = sorted({one.kind for one in props})
+    number = {name: index for index, name in enumerate(kinds)}
+    buffer = io.BytesIO()
+    np.savez_compressed(
+        buffer,
+        kinds=np.asarray(kinds, dtype='U'),
+        kind=np.asarray([number[one.kind] for one in props], dtype='i4'),
+        shape=np.asarray([_SHAPE_ORDER.index(one.shape) for one in props],
+                         dtype='i1'),
+        positions=np.asarray([one.position for one in props],
+                             dtype='f4').reshape(-1, 3),
+        yaws=np.asarray([one.yaw for one in props], dtype='f4'),
+        scales=np.asarray([one.scale for one in props], dtype='f4'),
+        radii=np.asarray([one.radius for one in props], dtype='f4'),
+        heights=np.asarray([one.height for one in props], dtype='f4'))
+    return buffer.getvalue()
+
+
+def props_from_table(data: bytes) -> List[Prop]:
+    """The props a :func:`props_table` holds.
+
+    Raises ``ValueError`` for bytes that are not such a table, or whose
+    columns disagree about how many props there are.
+    """
+    import io
+    import zipfile
+    try:
+        with np.load(io.BytesIO(data), allow_pickle=False) as table:
+            columns = {name: table[name] for name in (
+                'kinds', 'kind', 'shape', 'positions', 'yaws', 'scales',
+                'radii', 'heights')}
+    except (OSError, ValueError, KeyError, zipfile.BadZipFile) as error:
+        raise ValueError('not a props table: %s' % (error,)) from error
+    count = len(columns['kind'])
+    if (columns['positions'].shape != (count, 3)
+            or any(len(columns[name]) != count for name in (
+                'shape', 'yaws', 'scales', 'radii', 'heights'))):
+        raise ValueError('a props table whose columns disagree about how many '
+                         'props it holds')
+    kinds = [str(name) for name in columns['kinds']]
+    if count and (int(columns['kind'].max()) >= len(kinds)
+                  or int(columns['kind'].min()) < 0
+                  or not set(np.unique(columns['shape'])) <= set(range(len(_SHAPE_ORDER)))):
+        raise ValueError('a props table naming a kind or shape it does not have')
+    positions = columns['positions'].astype('d')
+    return [Prop(kind=kinds[int(k)], position=tuple(float(v) for v in at),
+                 yaw=float(yaw), scale=float(scale), radius=float(radius),
+                 height=float(height), shape=_SHAPE_ORDER[int(shape)])
+            for k, at, yaw, scale, radius, height, shape in zip(
+                columns['kind'], positions, columns['yaws'], columns['scales'],
+                columns['radii'], columns['heights'], columns['shape'])]
 
 
 #: The twelve vertices of an icosahedron, and the twenty faces over them.

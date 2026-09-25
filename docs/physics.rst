@@ -789,6 +789,26 @@ need different reaches: a boulder must stop a car from a long way off, while a
 stone only matters under the wheel. Use two ``PropColliders``, one for each
 table, each with its own ``reach``.
 
+A baked world names its props by channel in its tileset's ``extras``: a
+channel of hundreds as a list of prop records, and one of tens of thousands --
+the loose stone -- as ``{"table": "stones.npz", "count": n}``, a binary table
+beside the tileset (``scenegraph.props.props_table``), since the ``extras`` is
+parsed by every reader of the world. ``PropColliders.baked`` reads either form
+from the tileset's directory or URL and stands the colliders up:
+
+.. code-block:: python
+
+   from OpenGLContext.loaders.tiles3d import fetch
+   from OpenGLContext.physics.props import PropColliders
+
+   base = fetch.dir_of(tileset_path)
+   boulders = PropColliders.baked(physics_world, extras, 'props', base)
+   stones = PropColliders.baked(physics_world, extras, 'stones', base, reach=40.0)
+
+``OpenGLContext.loaders.tiles3d.props.baked_props`` is the reader on its own.
+A table named outside the tileset's reach is refused, as every file a world
+names is (:doc:`untrusted`).
+
 .. _physics-debug:
 
 The debug overlay
