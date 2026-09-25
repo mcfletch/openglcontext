@@ -407,6 +407,20 @@ frames = 60
 timeout = 600
 
 [[image]]
+id = "pages/surfaces"
+out = "images/surfaces.jpg"
+size = [1200, 640]
+licence = "BSD-3-Clause"
+alt = "Ten square panels on a dark ground: checkered marble, veined white marble, red brick, plaster and sandstone above; black marble tiles, aqua glazed tiles, and brushed gold, copper and steel below"
+caption = "The procedural surfaces, each a metre square: the stones lit from the side to show their relief, the metals reflecting the horizon."
+producer = "command"
+cwd = "openglcontext"
+harness = "auto-exit"
+frames = 20
+timeout = 300
+argv = ["docbuild/surface_swatches.py"]
+
+[[image]]
 id = "pages/forest-instancing"
 out = "images/forest-instancing.jpg"
 size = [1280, 720]

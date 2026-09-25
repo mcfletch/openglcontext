@@ -74,6 +74,8 @@ package whose code ends up somewhere else.
 OpenGLContext/
 ├── audio/            # Spatial audio nodes + the per-context engine -- docs/audio.rst
 ├── bin/              # The console commands (see [project.scripts]) -- docs/viewer.rst
+│   └── mirrorhall.py # The room oglc-mirrors hangs its mirrors in; scenery,
+│                     # not a command
 ├── character/        # Rigged characters: rig, clips, mixer, crowds -- docs/characters.rst
 ├── contentpacks/     # Data an application fetches rather than ships: the
 │                     # registry, the store, safe extraction and the polled
@@ -154,8 +156,9 @@ OpenGLContext/
 │   ├── pbrmaterial.py, pbrmesh.py   # The metallic/roughness material and mesh
 │   ├── reflector.py  # PlanarReflector: a material's surfaces are mirrors
 │   ├── mirrorhooks.py    # The mirror OGLC_hook kind -- docs/reflections.rst
-│   ├── surfaces.py   # Procedural PBR maps (marble, brick, metals); NumPy
-│   │                 # only, so Blender loads it too -- docs/pbr.rst
+│   ├── surfaces.py   # Procedural PBR maps (marble, tiles, brick, metals) and
+│   │                 # geometry that wears them by the metre; NumPy only,
+│   │                 # so Blender loads it too -- docs/surfaces.rst
 │   ├── varied.py     # Varied: a node's copy with some fields changed
 │   ├── lightgrid.py  # Baked irradiance grid: lights what a lightmap cannot
 │   ├── octahedral.py # The fold an impostor's views are laid out by; the same

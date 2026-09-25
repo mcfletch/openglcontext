@@ -365,6 +365,15 @@ Demos
 -----
 
 ``oglc-mirrors`` builds a hall in code with every kind of mirror on this page:
+a silvered mirror over a dais at the far end, a corridor of ten mirrors
+sharing one reflector down the left wall, a floor of polished marble tiles in
+a black marble border sharing another, a pool whose water ripples, and a round
+window that shows only what it reflects. The room itself -- brick walls
+broken by half columns and moldings, real windows onto a sky, the dais, the
+metal columns -- is ``OpenGLContext/bin/mirrorhall.py``, made from
+:doc:`surfaces` and holding no mirrors of its own, so
+``OpenGLContext/bin/mirrors_demo.py`` is only the mirrors: what each
+reflector is set to, the materials carrying them, and where they go.
 
 .. list-table::
    :widths: auto

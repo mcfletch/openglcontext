@@ -1,0 +1,14 @@
+{
+  "argv": [
+    "docbuild/surface_swatches.py"
+  ],
+  "frames": 20,
+  "git": "v3.0.0a4-191-g8ab2e2e-dirty",
+  "id": "pages/surfaces",
+  "licence": "BSD-3-Clause",
+  "producer": "command",
+  "size": [
+    1200,
+    640
+  ]
+}

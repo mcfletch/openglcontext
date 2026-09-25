@@ -130,6 +130,10 @@ Features
   - :doc:`Physically based materials <pbr>`: a metallic/roughness
     :doc:`uber-shader <ubershader>` with image-based lighting
 
+  - :doc:`Procedural surfaces <surfaces>`: marble, tiles, brick, plaster,
+    stone and brushed metals made with NumPy, and geometry that wears them by
+    the metre
+
   - :ref:`HDR backgrounds <environment-lighting>`: a Radiance ``.hdr``
     panorama drawn as the sky, tone-mapped with the scene and reflected by
     metallic surfaces
@@ -302,6 +306,7 @@ Documentation
    flat
    renderpasses
    pbr
+   surfaces
    ubershader
    glslversions
    shadows

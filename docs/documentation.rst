@@ -195,6 +195,10 @@ Rendering
 - :doc:`Physically Based Rendering <pbr>` -- the metallic/roughness pass, its
   materials and image-based lighting.
 
+- :doc:`Procedural Surfaces <surfaces>` -- marble, tiles, brick, plaster, stone
+  and brushed metals as maps made with NumPy; the geometry that wears them at
+  their real size; making a surface of your own and writing it to files.
+
 - :doc:`PBR Uber-Shader <ubershader>` -- a line-by-line walkthrough of the PBR
   fragment shader: its textures, uniforms and lobes.
 
