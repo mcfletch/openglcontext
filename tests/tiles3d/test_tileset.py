@@ -5,12 +5,21 @@ sphere bounding volumes (sphere is unsupported by py3dtiles, so we parse the tre
 ourselves), and transform composition down the hierarchy into world space.
 """
 import os
+from typing import ClassVar
 
 import numpy as np
 import pytest
+from PIL import Image
 
-from OpenGLContext.loaders.tiles3d.tileset import build_runtime_tileset
-from OpenGLContext.loaders.tiles3d.boundingvolume import SphereBV, BoxBV, RegionBV
+from OpenGLContext.loaders.documentvalues import DocumentError
+from OpenGLContext.loaders.gltf.writer import ExternalImage, write_glb
+from OpenGLContext.loaders.tiles3d.boundingvolume import (
+    WGS84_A, WGS84_B, BoxBV, RegionBV, SphereBV, geodetic_to_ecef,
+)
+from OpenGLContext.loaders.tiles3d.gltf_uploader import file_tile_loader
+from OpenGLContext.loaders.tiles3d.tileset import Z_UP_TO_Y_UP, build_runtime_tileset
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
 
 def _tileset(root):
@@ -153,7 +162,7 @@ def test_plural_contents_split_external_json_from_geometry():
             {"uri": "building.glb"},
             {"uri": "sub.json"},        # external tileset among the contents
         ],
-    }), resolve_external=lambda uri: external)
+    }), resolve_external=lambda _uri: external)
     # Geometry stays as content; the .json is grafted as a child subtree.
     assert [os.path.basename(uri) for uri in ts.root.content_uris] == ["building.glb"]
     assert len(ts.root.children) == 1
@@ -172,7 +181,7 @@ def test_external_tileset_unexpanded_when_resolver_is_none():
 
 
 def test_external_tileset_cycle_is_rejected():
-    def resolver(uri):
+    def resolver(_uri):
         # Always points back at another external tileset -> unbounded nesting.
         return {"asset": {}, "geometricError": 1.0,
                 "root": {"boundingVolume": _box(), "geometricError": 1.0,
@@ -390,7 +399,7 @@ def test_external_tileset_keeps_its_own_up_axis():
         "boundingVolume": _box(),
         "geometricError": 100.0,
         "content": {"uri": "child.json"},
-    }), resolve_external=lambda uri: external)
+    }), resolve_external=lambda _uri: external)
     grafted = ts.root.children[0]
     assert np.allclose(grafted.content_transform, np.identity(4))
 
@@ -403,8 +412,6 @@ def _enu_tileset(longitude=-1.3856, latitude=0.7617):
     The root transform is an east/north/up frame at the given point, which is how
     b3dm content is placed on the globe, and the content is a metre above it.
     """
-    from OpenGLContext.loaders.tiles3d.boundingvolume import (
-        geodetic_to_ecef, WGS84_A, WGS84_B)
     origin = geodetic_to_ecef(longitude, latitude, 0.0)
     # Up is the ellipsoid normal, which is what an east/north/up frame means and
     # is a fifth of a degree off the direction back to the geocentre.
@@ -454,7 +461,6 @@ def test_levelling_keeps_distances_and_needs_recentring():
 def test_a_local_dataset_is_turned_rather_than_levelled():
     """A tileset that is not earth-centred has no local up to level against, so
     its own Z-up frame is turned into the viewer's Y-up world instead."""
-    from OpenGLContext.loaders.tiles3d.tileset import Z_UP_TO_Y_UP
     ts = build_runtime_tileset(_tileset({
         "boundingVolume": _box(),
         "geometricError": 10.0,
@@ -520,13 +526,7 @@ def test_a_local_datasets_bounding_volume_turns_with_it():
 def test_a_tile_finds_a_texture_named_beside_its_tileset(tmp_path):
     """3D Tiles content is read as bytes, so the loader has to be told where the
     tile came from or a shared texture cannot be found."""
-    import numpy as np
-    from PIL import Image
 
-    from OpenGLContext.loaders.gltf.writer import ExternalImage, write_glb
-    from OpenGLContext.loaders.tiles3d.gltf_uploader import file_tile_loader
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
-    from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
     Image.new('RGBA', (4, 4), (7, 200, 9, 255)).save(str(tmp_path / 'shared.png'))
     material = PBRMaterial()
@@ -536,7 +536,7 @@ def test_a_tile_finds_a_texture_named_beside_its_tileset(tmp_path):
     write_glb(mesh, path=str(tmp_path / 'tile.glb'))
 
     class _Tile:
-        content_uris = [str(tmp_path / 'tile.glb')]
+        content_uris: ClassVar[list] = [str(tmp_path / 'tile.glb')]
 
     scene, nbytes = file_tile_loader(_Tile())
     assert nbytes > 0
@@ -574,13 +574,11 @@ def test_a_tile_finds_a_texture_named_beside_its_tileset(tmp_path):
      'tile transform is .*, which is not 16 finite numbers'),
 ])
 def test_a_malformed_tile_is_refused_naming_what_is_wrong(root, complaint):
-    from OpenGLContext.loaders.documentvalues import DocumentError
     with pytest.raises(DocumentError, match=complaint):
         build_runtime_tileset(_tileset(root))
 
 
 def test_a_tileset_with_no_root_object_is_refused():
-    from OpenGLContext.loaders.documentvalues import DocumentError
     with pytest.raises(DocumentError, match='tileset root is None'):
         build_runtime_tileset({"asset": {"version": "1.1"}})
 

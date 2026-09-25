@@ -5,9 +5,19 @@ prototype (the shape the instancing engine collapses), positioned on the surface
 """
 import numpy as np
 
-from OpenGLContext.scenegraph.basenodes import Shape, Box
-from OpenGLContext.loaders.tiles3d.vegetation import build_vegetation_group
 from OpenGLContext.loaders.tiles3d.scatter import scatter_on_mesh
+from OpenGLContext.loaders.tiles3d.vegetation import (
+    build_forest_patch,
+    build_grass_patch,
+    build_vegetation_group,
+    build_vegetation_lod,
+    bush,
+    conifer,
+    grass_tuft,
+    partition_by_distance,
+    scatter_disc,
+)
+from OpenGLContext.scenegraph.basenodes import Box, Shape
 
 
 def _quad(size=10.0):
@@ -56,9 +66,6 @@ def test_instance_positions_match_scatter():
 
 
 def test_partition_by_distance_splits_near_and_far():
-    import numpy as np
-    from OpenGLContext.loaders.tiles3d.scatter import scatter_on_mesh
-    from OpenGLContext.loaders.tiles3d.vegetation import partition_by_distance
     p, t = _quad(size=200.0)
     s = scatter_on_mesh(p, t, density=0.01, seed=3)
     cam = (0.0, 0.0, 0.0)
@@ -70,8 +77,6 @@ def test_partition_by_distance_splits_near_and_far():
 
 
 def test_vegetation_lod_uses_two_prototypes():
-    from OpenGLContext.scenegraph.basenodes import Shape, Box
-    from OpenGLContext.loaders.tiles3d.vegetation import build_vegetation_lod
     p, t = _quad(size=200.0)
     near_proto = Shape(geometry=Box(size=(2, 6, 2)))
     far_proto = Shape(geometry=Box(size=(1, 1, 1)))
@@ -86,9 +91,6 @@ def test_vegetation_lod_uses_two_prototypes():
 
 
 def test_grass_patch_is_dense_and_local():
-    import numpy as np
-    from OpenGLContext.scenegraph.basenodes import Shape, Box
-    from OpenGLContext.loaders.tiles3d.vegetation import build_grass_patch
     p, t = _quad(size=400.0)
     blade = Shape(geometry=Box(size=(0.1, 1.0, 0.1)))
     cam = (200.0, 0.0, 200.0)          # centre of the quad
@@ -100,7 +102,6 @@ def test_grass_patch_is_dense_and_local():
 
 
 def test_conifer_is_a_multipart_tree():
-    from OpenGLContext.loaders.tiles3d.vegetation import conifer
     g = conifer(height=10.0)
     assert len(g.children) == 4          # trunk + 3 foliage layers
     # foliage sits above the trunk
@@ -109,9 +110,7 @@ def test_conifer_is_a_multipart_tree():
 
 
 def test_scatter_disc_seats_on_surface_within_radius():
-    import numpy as np
-    from OpenGLContext.loaders.tiles3d.vegetation import scatter_disc
-    def hf(x, z):
+    def hf(x, _z):
         return np.full(np.shape(x), 12.0)
     s = scatter_disc((100.0, 0.0, -50.0), radius=40.0, density=0.05, seed=1,
                      height_fn=hf)
@@ -122,8 +121,6 @@ def test_scatter_disc_seats_on_surface_within_radius():
 
 
 def test_scatter_disc_keep_filter():
-    import numpy as np
-    from OpenGLContext.loaders.tiles3d.vegetation import scatter_disc
     def hf(x, z):
         return np.asarray(x) * 0 + np.asarray(z) * 0.0 + 5.0
     # keep only the +x half
@@ -133,15 +130,12 @@ def test_scatter_disc_keep_filter():
 
 
 def test_grass_and_bush_prototypes():
-    from OpenGLContext.loaders.tiles3d.vegetation import grass_tuft, bush
     assert len(grass_tuft().children) == 3       # crossed blades
     assert len(bush().children) >= 2             # foliage blobs
 
 
 def test_build_forest_patch_has_all_layers():
-    import numpy as np
-    from OpenGLContext.loaders.tiles3d.vegetation import build_forest_patch
-    def hf(x, z):
+    def hf(x, _z):
         return np.full(np.shape(x), 30.0)
     forest = build_forest_patch((0.0, 0.0, 0.0), hf, seed=5)
     assert len(forest.children) == 3             # grass, shrubs, trees

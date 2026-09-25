@@ -5,16 +5,20 @@ tiles. This checks the overhang tileset has genuine solid-air-solid structure (w
 no heightfield can express), streams and renders through `TilesTerrain`, and produces
 a walkable static collider.
 """
+import json
 import math
 import os
-import json
+
 import pytest
+from omi_physics import model
+from omi_physics.world import PhysicsWorld
 
 pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders.tiles3d.sample import build_overhang_tileset
 from OpenGLContext.loaders.tiles3d.tileset import build_runtime_tileset
 from OpenGLContext.loaders.tiles3d.gltf_uploader import file_tile_loader
+from OpenGLContext.physics import gltf_world
 from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
 
 
@@ -30,7 +34,6 @@ def test_overhang_geometry_is_not_a_heightfield(tmp_path):
     overhang = [t for t in ts.iter_tiles() if t.content_uri
                 and t.content_uri.endswith("overhang.glb")][0]
     scene, _ = file_tile_loader(overhang)
-    from OpenGLContext.physics import gltf_world
     pts, _tris = gltf_world.extract_trimesh(scene.group)
     # The slab is lifted well above y=0: a column through it has ground below and
     # slab above -> more than one solid surface in the same (x, z), i.e. not 2.5D.
@@ -38,8 +41,6 @@ def test_overhang_geometry_is_not_a_heightfield(tmp_path):
 
 
 def test_overhang_tile_streams_and_gets_collider(tmp_path):
-    from omi_physics.world import PhysicsWorld
-    from omi_physics import model
     world = PhysicsWorld(gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)))
     path = build_overhang_tileset(str(tmp_path))
     terrain = TilesTerrain(path, fovy=math.radians(45.0), workers=3,

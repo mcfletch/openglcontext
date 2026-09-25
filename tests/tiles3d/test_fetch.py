@@ -4,9 +4,11 @@ Covers scheme-aware base/relative joins, local reads, and remote reads with the 
 cache (network mocked so the suite stays offline/CI-safe).
 """
 import os
+from typing import ClassVar
 
 import pytest
 
+from OpenGLContext.loaders import resolver
 from OpenGLContext.loaders.tiles3d import fetch
 
 
@@ -67,7 +69,7 @@ def test_read_bytes_url_caches_and_reuses(tmp_path, monkeypatch):
     class _Resp:
         """Just enough of an http response for the streaming reader."""
 
-        headers: dict = {}
+        headers: ClassVar[dict] = {}
 
         def __init__(self, data):
             self._data = data
@@ -80,14 +82,13 @@ def test_read_bytes_url_caches_and_reuses(tmp_path, monkeypatch):
         def __enter__(self): return self
         def __exit__(self, *a): return False
 
-    def fake_open(url, base_url, timeout=None):
+    def fake_open(*_args, **_named):
         calls["n"] += 1
         return _Resp(b"remote-bytes")
 
     # read_bytes fetches through the resolver's cache, so the stub goes at the
     # one call that reaches the network -- leaving the caching itself real,
     # which is what this test is about.
-    from OpenGLContext.loaders import resolver
     monkeypatch.setattr(resolver, "_open_url", fake_open)
     cache = str(tmp_path / "cache")
     url = "https://host.example/set/tile.b3dm"

@@ -5,13 +5,19 @@ glTF load, mount, residency) and checks that the visible children update as the
 camera moves: coarse root from afar, finer quadrant tiles up close.
 """
 import math
-import os
+
+import numpy as np
 import pytest
+from omi_physics import model
+from omi_physics.world import PhysicsWorld
 
 pytest.importorskip("pygltflib")
 
 from OpenGLContext.loaders.tiles3d.sample import build_sample_tileset
 from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
+from OpenGLContext.loaders.tiles3d import procedural
+from OpenGLContext.loaders.tiles3d.frustum import view_projection
+from OpenGLContext.loaders.tiles3d.gltf_uploader import GLTileUploader
 
 
 def _terrain(tmp_path, **kw):
@@ -58,12 +64,9 @@ def test_children_are_mountable_nodes(tmp_path):
 
 
 def test_terrain_populates_physics_world(tmp_path):
-    import math as _m
-    from omi_physics.world import PhysicsWorld
-    from omi_physics import model
     world = PhysicsWorld(gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)))
     path = build_sample_tileset(str(tmp_path))
-    terrain = TilesTerrain(path, fovy=_m.radians(45.0), workers=3, physics_world=world)
+    terrain = TilesTerrain(path, fovy=math.radians(45.0), workers=3, physics_world=world)
     try:
         _settle(terrain, camera=(0, 300, 0))
         assert terrain.colliders.collider_count >= 1
@@ -79,10 +82,6 @@ def test_the_node_pages_tiles_in_and_out_as_the_camera_travels(tmp_path):
     This is the path the viewer mounts, so it is the one that has to keep paging:
     a dataset larger than the memory budget must not simply accumulate.
     """
-    import numpy as np
-    from OpenGLContext.loaders.tiles3d import procedural
-    from OpenGLContext.loaders.tiles3d.frustum import view_projection
-    from OpenGLContext.loaders.tiles3d.gltf_uploader import GLTileUploader
 
     counts = {"uploaded": 0, "released": 0}
 

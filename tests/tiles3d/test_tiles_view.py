@@ -45,13 +45,13 @@ def test_leaf_tile_descends_past_contentless_grouping_tiles():
 
 
 def test_forward_is_negative_z_for_identity_orientation():
-    fwd = tilesadapter._forward(quaternion.fromXYZR(0, 1, 0, 0.0))
+    fwd = tilesadapter._forward(quaternion.fromXYZR(0, 1, 0, 0.0))  # noqa: SLF001 tests the adapter's camera-forward helper directly
     assert np.allclose(fwd, [0, 0, -1], atol=1e-9)
 
 
 def test_forward_yaws_with_orientation():
     # A +90-degree yaw about +Y turns the look direction toward -X.
-    fwd = tilesadapter._forward(quaternion.fromXYZR(0, 1, 0, math.pi / 2))
+    fwd = tilesadapter._forward(quaternion.fromXYZR(0, 1, 0, math.pi / 2))  # noqa: SLF001 tests the adapter's camera-forward helper directly
     assert np.allclose(fwd, [-1, 0, 0], atol=1e-6)
 
 

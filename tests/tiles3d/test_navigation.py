@@ -5,13 +5,16 @@ onto the surface, walking follows the terrain, flying moves freely, and switchin
 from fly back to walk drops the avatar to the surface. Pure numpy physics against the
 terrain's static trimesh collider — no GL.
 """
-import numpy as np
-import pytest
+import math
 
-from omi_physics.world import PhysicsWorld
+import numpy as np
 from omi_physics import model
-from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
+from omi_physics.character import CharacterCapabilities
+from omi_physics.world import PhysicsWorld
+
 from OpenGLContext.loaders.tiles3d import procedural as P
+from OpenGLContext.move.physicsplatform import PhysicsViewPlatform
+from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
 
 
 def _terrain_world(extent=400.0, res=81):
@@ -125,14 +128,9 @@ def test_switch_fly_to_walk_drops_to_surface():
 
 def test_avatar_walks_on_streamed_tileset_colliders(tmp_path):
     """Full loop: terrain streams -> per-tile colliders register -> avatar stands on them."""
-    import os
-    import json
-    import math
-    from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
-    from OpenGLContext.loaders.tiles3d import procedural as PR
 
     world = PhysicsWorld(gravity=model.Gravity(gravity=9.81, direction=(0, -1, 0)))
-    path = PR.build_terrain_tileset(str(tmp_path), extent=1024, levels=2, tile_res=33)
+    path = P.build_terrain_tileset(str(tmp_path), extent=1024, levels=2, tile_res=33)
     terrain = TilesTerrain(path, fovy=math.radians(50.0), workers=4,
                            physics_world=world, memory_budget=64 * 1024 * 1024)
     try:
@@ -161,7 +159,6 @@ def test_walks_a_long_distance_without_getting_stuck():
     world = _terrain_world(extent=1200.0, res=161)   # skirt-free (skirt_depth=0)
     x, z = _flat_spot()
     surf = _surface(x, z)
-    from omi_physics.character import CharacterCapabilities
     caps = CharacterCapabilities(walkSpeed=16.0, stepHeight=0.7, eyeHeight=1.7)
     plat = PhysicsViewPlatform(world, caps, position=(x, surf + 5, z), yaw=0.0)
     plat.bind((x, surf + 5, z))

@@ -98,11 +98,11 @@ def test_evict_deletes_the_state_entry():
     r = Residency(memory_budget=1000)
     a = FakeTile("a")
     r.set_renderable(a, 100)
-    assert a in r._state and a in r._resident
+    assert a in r._state and a in r._resident  # noqa: SLF001 checks eviction leaves no entry in Residency's internal tables
     r.evict(a)
-    assert a not in r._state
-    assert a not in r._resident
-    assert a not in r._recency
+    assert a not in r._state  # noqa: SLF001 checks eviction leaves no entry in Residency's internal tables
+    assert a not in r._resident  # noqa: SLF001 checks eviction leaves no entry in Residency's internal tables
+    assert a not in r._recency  # noqa: SLF001 checks eviction leaves no entry in Residency's internal tables
 
 
 def test_state_stays_bounded_over_many_touched_then_evicted_tiles():
@@ -117,8 +117,8 @@ def test_state_stays_bounded_over_many_touched_then_evicted_tiles():
         r.enforce_budget(keep=[t])   # keep the just-loaded tile, evict older ones
     # 100 bytes each, 300-byte budget -> at most 3 resident at any time.
     assert r.resident_bytes <= budget
-    assert len(r._resident) <= 3
-    assert len(r._state) <= 3
+    assert len(r._resident) <= 3  # noqa: SLF001 checks eviction leaves no entry in Residency's internal tables
+    assert len(r._state) <= 3  # noqa: SLF001 checks eviction leaves no entry in Residency's internal tables
 
 
 def test_enforce_budget_scans_only_resident_not_all_state():
@@ -129,7 +129,7 @@ def test_enforce_budget_scans_only_resident_not_all_state():
     for t in old:
         r.set_renderable(t, 100)
         r.evict(t)                   # each evicted immediately
-    assert r._resident == set()
+    assert r._resident == set()  # noqa: SLF001 checks eviction leaves no entry in Residency's internal tables
     live = FakeTile("live")
     r.set_renderable(live, 100)
     r.note_wanted([live])

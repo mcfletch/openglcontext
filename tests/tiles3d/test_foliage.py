@@ -5,6 +5,7 @@ import pytest
 pytest.importorskip("pygltflib")
 pytest.importorskip("PIL")
 
+from OpenGLContext.loaders import cc0, gltf
 from OpenGLContext.loaders.tiles3d import foliage as F
 
 
@@ -44,10 +45,9 @@ def test_ground_texture_is_earthy():
 
 
 def test_procedural_ground_maps_and_patch():
-    import numpy as np
     maps = F.procedural_ground_maps(seed=2)
     assert "color" in maps
-    def hf(x, z):
+    def hf(x, _z):
         return np.full(np.shape(x), 5.0)
     node = F.ground_patch_node((0, 0, 0), 40.0, hf, maps, res=12)
     assert node is not None
@@ -55,15 +55,14 @@ def test_procedural_ground_maps_and_patch():
 
 def test_cc0_offline_safe():
     # try_material must never raise, even offline.
-    from OpenGLContext.loaders import cc0
     r = cc0.try_material("definitely_not_a_real_asset_xyz")
     assert r is None or isinstance(r, dict)
 
 
 def test_slope01_flat_vs_steep():
-    def flat(x, z):
+    def flat(x, _z):
         return np.zeros(np.shape(x))
-    def steep(x, z):
+    def steep(x, _z):
         return np.asarray(x) * 2.0
     assert F.slope01(flat, np.array([0.0]), np.array([0.0]))[0] < 0.05
     assert F.slope01(steep, np.array([0.0]), np.array([0.0]))[0] > 1.0
@@ -77,7 +76,7 @@ def test_rock_flower_branch_build():
 
 def test_ground_patch_split_dirt_and_rock():
     # a ramp: half flat, half steep -> both dirt and rock primitives present
-    def hf(x, z):
+    def hf(x, _z):
         return np.maximum(np.asarray(x), 0.0) * 1.5
     node = F.ground_patch_split((0, 0, 0), 30.0, hf,
                                 F.procedural_ground_maps(seed=1),
@@ -107,7 +106,7 @@ def test_tree_billboard_and_no_shadow():
 
 
 def test_ground_patch_blended_builds():
-    def hf(x, z):
+    def hf(x, _z):
         return np.sin(np.asarray(x) * 0.05) * 10
     mats = [F.procedural_ground_maps(1)["color"], F.procedural_ground_maps(2)["color"]]
     assert F.ground_patch_blended((0, 0, 0), 60.0, hf, mats, res=16,
@@ -118,7 +117,6 @@ def test_the_billboard_is_available_as_bytes():
     """The far rung of a tree's detail ladder, for a baker to place directly."""
     data = F.tree_billboard_glb(width=4.0, height=7.0, seed=2)
     assert data[:4] == b'glTF'
-    from OpenGLContext.loaders import gltf
     scene = gltf.load_gltf(data)
     assert scene.group is not None
 

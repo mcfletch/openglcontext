@@ -100,7 +100,7 @@ def test_flythrough_streams_within_budget_and_evicts(tmp_path):
                 rt.wait_for_loads(timeout=8.0)
             rt.update(tuple(cam), viewport_height=720, view_projection=vp)
             max_resident_bytes = max(max_resident_bytes, rt.residency.resident_bytes)
-            max_resident_count = max(max_resident_count, len(rt._drawables))
+            max_resident_count = max(max_resident_count, len(rt._drawables))  # noqa: SLF001 TilesetRuntime offers no public view of its mounted drawables
 
         distinct_loaded = len(set(up.uploaded))
         # 1. Memory stayed bounded near the budget.
@@ -129,11 +129,11 @@ def test_resident_tiles_are_near_the_camera(tmp_path):
         cam_np = np.array(cam)
         far = 0
         for tile in ts.iter_tiles():
-            if tile in rt._drawables:
+            if tile in rt._drawables:  # noqa: SLF001 TilesetRuntime offers no public view of its mounted drawables
                 d = tile.bounding_volume.distance_to(cam_np)
                 if d > 2200:
                     far += 1
         assert far == 0
-        assert len(rt._drawables) >= 1
+        assert len(rt._drawables) >= 1  # noqa: SLF001 TilesetRuntime offers no public view of its mounted drawables
     finally:
         rt.shutdown()

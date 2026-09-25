@@ -5,10 +5,12 @@ arrays; VBOs are created lazily at render), and the uploader mounts it as a draw
 node. Both are GL-free, so they are tested here directly; actual rendering is covered
 by the offscreen demo render test.
 """
+import json
 import os
 import types
 
 import numpy as np
+import OpenGL.GL as gl
 import pytest
 
 pytest.importorskip("pygltflib")
@@ -21,7 +23,7 @@ from OpenGLContext.loaders.tiles3d.gltf_uploader import (
     GLTileUploader,
 )
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-import json
+import OpenGLContext.context as ctxmod
 
 
 def _tileset(tmp_path):
@@ -89,22 +91,22 @@ class _FakeHolder:
     def __init__(self, cache, client, key):
         self._cache, self._client, self._key = cache, client, key
 
-    def __call__(self, *a, **k):
-        self._cache._data.pop((self._client, self._key), None)
+    def __call__(self, *_args, **_named):
+        self._cache.data.pop((self._client, self._key), None)
 
 
 class _FakeCache:
     def __init__(self):
-        self._data = {}
+        self.data = {}
 
     def put(self, client, key, data):
-        self._data[(client, key)] = data
+        self.data[(client, key)] = data
 
     def getData(self, client, key="", default=None):
-        return self._data.get((client, key), default)
+        return self.data.get((client, key), default)
 
     def getHolder(self, client, key=""):
-        if (client, key) in self._data:
+        if (client, key) in self.data:
             return _FakeHolder(self, client, key)
         return None
 
@@ -157,14 +159,12 @@ def _upload_group(group):
 def test_release_deletes_gl_buffers_and_textures(monkeypatch):
     """release() deletes the drawable's VAO, VBOs and textures via the current
     context, and drops the mesh's cache entry -- no reliance on GC."""
-    import OpenGLContext.context as ctxmod
-    import OpenGL.GL as gl
 
     ctx = _FakeContext()
     gpu = _FakeGPU()
     geo = _FakeGeometry(
         material=_FakeMaterial({'baseColor': _FakePBRTexture(_FakeTexture(11), ctx)}))
-    ctx.cache.put(geo, PBRMesh._GPU_CACHE_KEY, gpu)
+    ctx.cache.put(geo, PBRMesh._GPU_CACHE_KEY, gpu)  # noqa: SLF001 PBRMesh does not publish the key its GPU record is cached under
     group = _FakeGroup([_FakeShape(geo)])
 
     deleted_textures = []
@@ -182,18 +182,16 @@ def test_release_deletes_gl_buffers_and_textures(monkeypatch):
     assert gpu.idx_vbo.deleted is True
     assert all(buf.deleted for buf, *_ in gpu.attr_layout)
     assert deleted_textures == [11]
-    assert ctx.cache.getData(geo, key=PBRMesh._GPU_CACHE_KEY) is None
+    assert ctx.cache.getData(geo, key=PBRMesh._GPU_CACHE_KEY) is None  # noqa: SLF001 PBRMesh does not publish the key its GPU record is cached under
 
 
 def test_dispose_is_idempotent(monkeypatch):
     """A second release() (or dispose()) does not delete a second time."""
-    import OpenGLContext.context as ctxmod
-    import OpenGL.GL as gl
 
     ctx = _FakeContext()
     gpu = _FakeGPU()
     geo = _FakeGeometry()
-    ctx.cache.put(geo, PBRMesh._GPU_CACHE_KEY, gpu)
+    ctx.cache.put(geo, PBRMesh._GPU_CACHE_KEY, gpu)  # noqa: SLF001 PBRMesh does not publish the key its GPU record is cached under
     group = _FakeGroup([_FakeShape(geo)])
 
     calls = []
@@ -211,20 +209,19 @@ def test_dispose_is_idempotent(monkeypatch):
 def test_release_without_context_is_safe_and_deletes_nothing(monkeypatch):
     """With no current context, dispose cannot touch GL; it must not raise and must
     leave resources for GC rather than crashing the eviction pass."""
-    import OpenGLContext.context as ctxmod
 
     ctx = _FakeContext()
     gpu = _FakeGPU()
     geo = _FakeGeometry()
-    ctx.cache.put(geo, PBRMesh._GPU_CACHE_KEY, gpu)
+    ctx.cache.put(geo, PBRMesh._GPU_CACHE_KEY, gpu)  # noqa: SLF001 PBRMesh does not publish the key its GPU record is cached under
     group = _FakeGroup([_FakeShape(geo)])
 
     monkeypatch.setattr(ctxmod, 'getCurrentContext', lambda: None)
-    gltf_uploader._warned_no_context = False
+    gltf_uploader._warned_no_context = False  # noqa: SLF001 the uploader's warn-once flag has no public reset
 
     up, drawable, _ = _upload_group(group)
     up.release(drawable)       # must not raise
 
     assert gpu.released is False
-    assert ctx.cache.getData(geo, key=PBRMesh._GPU_CACHE_KEY) is gpu
-    assert gltf_uploader._warned_no_context is True
+    assert ctx.cache.getData(geo, key=PBRMesh._GPU_CACHE_KEY) is gpu  # noqa: SLF001 PBRMesh does not publish the key its GPU record is cached under
+    assert gltf_uploader._warned_no_context is True  # noqa: SLF001 the uploader's warn-once flag has no public reset

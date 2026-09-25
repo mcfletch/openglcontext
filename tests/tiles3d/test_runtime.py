@@ -27,7 +27,7 @@ class FakeUploader:
         self.uploaded = []
         self.released = []
 
-    def upload(self, tile, payload):
+    def upload(self, tile, payload):  # noqa: ARG002 the runtime's uploader protocol
         self.uploaded.append(tile)
         return Drawable(tile), self.nbytes
 
@@ -155,7 +155,7 @@ def test_eviction_releases_gl_resources_and_respects_budget():
 
 
 def test_failed_load_does_not_crash_update():
-    def bad_loader(tile):
+    def bad_loader(_tile):
         raise IOError("network down")
 
     up = FakeUploader()
