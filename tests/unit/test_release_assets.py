@@ -59,3 +59,23 @@ class TestWhatThePackHolds:
         assert 'CREDITS.txt' in capsys.readouterr().err
         assert not (into / 'gallery-world.tar.gz').exists()
         assert not (tmp_path / 'packs.json').exists()
+
+
+class TestWhereTheRegistryIsWritten:
+    """The shipped registry names what a release carries, so only a run that
+    publishes (or says it means to) rewrites it."""
+
+    def test_a_build_writes_its_registry_beside_the_archive(self, script,
+                                                            tmp_path):
+        into = tmp_path / 'dist'
+        assert script.main(['--world', a_world(tmp_path),
+                            '--into', str(into)]) == 0
+        assert (into / 'packs.json').is_file()
+        assert not (tmp_path / 'packs.json').exists()
+
+    def test_asking_for_it_writes_the_shipped_one(self, script, tmp_path):
+        into = tmp_path / 'dist'
+        assert script.main(['--world', a_world(tmp_path), '--into', str(into),
+                            '--write-registry']) == 0
+        assert (tmp_path / 'packs.json').read_text() == \
+            (into / 'packs.json').read_text()

@@ -166,6 +166,8 @@ a path to the picture on this machine:
 If the registry names a preview that is not present, the pack loads with no
 picture. The registry still loads, so the user can still choose a pack.
 
+.. _bundles:
+
 A registry as one file
 ~~~~~~~~~~~~~~~~~~~~~~
 
@@ -181,6 +183,9 @@ To publish a registry with its pictures as one file, put them in a zip with
 .. code-block:: python
 
    packs = catalog.load_bundle('registry.zip', where_to_unpack_it)
+
+``publish.bundle_registry(manifest, path, pictures)`` writes one from a
+registry file and the directory its pictures are in.
 
 A bundle is small (a document and some thumbnails), so an application can
 fetch another publisher's registry and show its packs without downloading
@@ -506,62 +511,108 @@ Publishing a pack
 
 ``archive.write`` and ``OpenGLContext.contentpacks.publish`` build and publish
 packs. Each application has a ``release-assets.py`` script that says what to
-build and what the registry should say about it. The steps are the same for
-every application:
+build and what the registry should say about it, as a ``publish.Release``, and
+hands its command line to ``publish.main``:
 
-#. Stage the pack's files in ``publish.fresh_directory(path)``, which removes
-   whatever an earlier build left there: an archive holds everything in the
-   tree, so a file the new build did not write would be packed with it.
+.. code-block:: python
 
-#. Build the archive with ``archive.write(directory, path)``. The archive's
-   bytes depend only on the content: entries are sorted, every entry and the
-   gzip header have a fixed timestamp, and entries have no owner and one file
-   mode. The same content gives the same digest on any machine, so you can
-   rebuild from a tag and show that the result is the released archive.
-   It refuses a tree holding a symbolic link or a Git LFS pointer (the small
-   text file a checkout made without ``git lfs pull`` holds in place of a large
-   one), naming each, so neither reaches a release.
+   from OpenGLContext.contentpacks import publish
 
-#. Measure the archive and take its digest with ``os.path.getsize(path)`` and
-   ``archive.digest(path)``. Write the registry entry from those values, so
-   every entry describes an archive that was built.
+   def declare(build):
+       built = build.archive(ART, 'forest-art')
+       return [build.entry('art', built, title='Forest demo art',
+                           marker='forest_height.png', base=True,
+                           copyright=CREDIT)]
 
-#. Install the pack on this machine and test the application against it.
-   ``publish.install(pack, store, archives)`` leaves the same result as a
-   download: digest checked, unpacking size-limited, content in the directory a
-   first run looks in. Only the network transfer is skipped. Use this to test a
-   content release before publishing it.
+   RELEASE = publish.Release(
+       namespace='openglcontext-forest', declare=declare,
+       url='https://github.com/mcfletch/openglcontext-forest/releases/'
+           'download/%s/%s',
+       catalog=CATALOG, into=os.path.join(HERE, 'dist', 'content'),
+       title='Forest demo art')
 
-#. Attach the archive to a release with ``publish.push(publish.repository(pack.url),
-   tag, paths)``. This runs the GitHub CLI. It creates the release at that tag
-   the first time, and replaces the release's assets after that. A GitHub
-   release asset can be up to 2 GB, with no limit on the number of assets and
-   no bandwidth charge, at a URL of the form
-   ``https://github.com/<owner>/<repo>/releases/download/<tag>/<file>``. Use a
-   tag only for content, separate from the code's release tags. A rebuilt pack
-   pushed to the same tag keeps its URL and changes its bytes; the registry's
-   new ``sha256`` is what makes installed copies update (see :ref:`Installing
-   <installing>`), so give every pack you rebuild in place a digest.
+   if __name__ == '__main__':
+       raise SystemExit(publish.main(RELEASE))
+
+``declare`` is handed a ``publish.Build`` and returns the registry's entries.
+Raising ``SystemExit`` with a message refuses the build; the command prints
+the message and exits 2. ``Release`` also takes ``arguments`` (a function
+adding options of the application's own, read back from ``build.options``),
+``keep_unbuilt`` (keep the shipped registry's entries for packs this command
+does not build, such as other people's packages), ``bundle`` (also write the
+registry and its preview pictures as one zip, see :ref:`bundles`), ``store``
+(the store ``--install`` writes into, ``ContentStore(namespace)`` by default),
+``tag``, ``notes`` and ``description``.
+
+The steps ``publish.main`` and a ``declare`` take between them are the same
+for every application:
+
+#. Stage a pack's files in ``build.staging(name)`` (``publish.fresh_directory``
+   under ``--into``), which removes whatever an earlier build left there: an
+   archive holds everything in the tree, so a file the new build did not write
+   would be packed with it. A directory that is already the pack's content,
+   such as an ``assets`` directory, is archived as it is.
+
+#. Build the archive with ``build.archive(directory, name)``, which calls
+   ``archive.write(directory, path)`` and returns the path, size and digest.
+   The archive's bytes depend only on the content: entries are sorted, every
+   entry and the gzip header have a fixed timestamp, and entries have no owner
+   and one file mode. The same content gives the same digest on any machine,
+   so you can rebuild from a tag and show that the result is the released
+   archive. It refuses a tree holding a symbolic link or a Git LFS pointer
+   (the small text file a checkout made without ``git lfs pull`` holds in
+   place of a large one), naming each, so neither reaches a release.
+
+#. Write the registry entry with ``build.entry(name, built, title=...,
+   copyright=..., marker=..., ...)``. The key, the URL, the size and the
+   digest come from the archive, so every entry describes an archive that was
+   built. ``publish.main`` writes the registry to ``packs.json`` beside the
+   archives in ``--into`` and loads it back, so a malformed entry is refused
+   before anything is installed or pushed. The registry the application ships
+   is rewritten only by ``--write-registry`` or ``--push``, so a draft build
+   never leaves the shipped registry describing archives nobody published.
+
+#. Install the packs on this machine and test the application against them
+   (``--install``). ``publish.install(pack, store, archives)`` leaves the same
+   result as a download: digest checked, unpacking size-limited, content in
+   the directory a first run looks in, each pack a chooser offers installed
+   with what it needs inside it. Only the network transfer is skipped.
+
+#. Attach the archives to a release (``--push``), with
+   ``publish.push(publish.repository(pack.url), tag, paths)``. This runs the
+   GitHub CLI. It creates the release at that tag the first time, and replaces
+   the release's assets after that. A GitHub release asset can be up to 2 GB,
+   with no limit on the number of assets and no bandwidth charge, at a URL of
+   the form ``https://github.com/<owner>/<repo>/releases/download/<tag>/<file>``.
+   Use a tag only for content, separate from the code's release tags. A
+   rebuilt pack pushed to the same tag keeps its URL and changes its bytes;
+   the registry's new ``sha256`` is what makes installed copies update (see
+   :ref:`Installing <installing>`), so give every pack you rebuild in place a
+   digest.
 
 #. Publish the preview pictures with the registry, because a chooser shows
-   them before anything is downloaded.
+   them before anything is downloaded. ``bundle=True`` attaches
+   ``<namespace>-registry.zip``, written by ``publish.bundle_registry``, with
+   the archives.
 
 .. code-block:: bash
 
-   ./release-assets.py                 # build the archives, write the registry
-   ./release-assets.py --install       # ...and put them in this machine's store
-   ./release-assets.py --reinstall     # ...over whatever that store already holds
-   ./release-assets.py --push          # ...and attach them to the release tag
+   ./release-assets.py                   # build the archives and their registry
+   ./release-assets.py --install         # ...and put them in this machine's store
+   ./release-assets.py --reinstall       # ...replacing the copies installed there
+   ./release-assets.py --write-registry  # ...and write the shipped registry
+   ./release-assets.py --push            # ...attach them to the release tag,
+                                         #    and write the shipped registry
 
-``--install`` does not replace a pack that is already in the store, so it
-never deletes installed content. While you are still authoring a world, the
-store then holds the build from before your change, and the game opens that
-build. ``--reinstall`` installs the new build over the installed copy. For a
-pack of its own that replaces everything under the pack's directory, including
-files added by hand. For a pack installed inside another it replaces that
-pack's own files and leaves the rest. A pack found in a directory
-``OPENGLCONTEXT_CONTENT`` names is refused, since that copy is read before the
-store.
+``--install`` keeps a pack that is already installed; ``--reinstall`` replaces
+it with the one just built. While you are still authoring a world, the store
+may hold a copy you edited by hand or an install of the same build, and
+``--reinstall`` is how the build you just made becomes the one the application
+opens. For a pack of its own that replaces everything under the pack's
+directory, including files added by hand. For a pack installed inside another
+it replaces that pack's own files and leaves the rest. A pack found in a
+directory ``OPENGLCONTEXT_CONTENT`` names is refused, since that copy is read
+before the store.
 
 Give a ``sha256`` whenever you control the archive's bytes. An uncompressed
 tarball cut off at a member boundary reads as a valid, shorter archive: the

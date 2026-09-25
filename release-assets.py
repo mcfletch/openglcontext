@@ -6,10 +6,11 @@ something an index should be asked to serve on every install of the engine. It
 does not travel in the wheel: it is attached to a GitHub release and fetched
 through :mod:`OpenGLContext.contentpacks`. One command covers the whole of that:
 
-    ./release-assets.py                 # build the world, write the registry
+    ./release-assets.py                 # build the world and its registry
     ./release-assets.py --install       # ...and put it in this machine's store
-    ./release-assets.py --reinstall     # ...over whatever that store already holds
-    ./release-assets.py --push          # ...and attach it to the release tag
+    ./release-assets.py --reinstall     # ...replacing the copy installed there
+    ./release-assets.py --push          # ...attach it to the release tag and
+                                        #    write OpenGLContext/packs.json
 
 ``--install`` is what makes a content release testable before it is a release:
 ``oglc-view --pack openglcontext/gallery`` then opens it out of this machine's
@@ -26,19 +27,19 @@ neither is needed to *run* the demo; ``--world`` takes an already-built glB and
 skips both.
 
 The registry is written from the archive this built, so its digest and its size
-cannot describe a file that was never made.
+cannot describe a file that was never made. It is written beside the archive;
+the one the package ships is rewritten only by ``--push`` or
+``--write-registry``. The options, the install and the push are
+:func:`OpenGLContext.contentpacks.publish.main`'s.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import shutil
-import sys
 
-from OpenGLContext import atomicfiles
-from OpenGLContext.contentpacks import archive, catalog, publish
+from OpenGLContext.contentpacks import publish
 
 #: Where a release's artefacts are fetched from.
 URL = "https://github.com/mcfletch/openglcontext/releases/download/%s/%s"
@@ -96,12 +97,6 @@ def stage(world: str, into: str) -> str:
     return into
 
 
-def build(where: str, name: str, into: str) -> tuple[str, int, str]:
-    """Archive ``where`` as ``name``; return its path, size and digest."""
-    path = archive.write(where, os.path.join(into, f"{name}.tar.gz"))
-    return path, os.path.getsize(path), archive.digest(path)
-
-
 def credits() -> str:
     """Whose the art is, in the one line a consent screen has room for."""
     return ("'Marble Bust 01' by Rico Cilliers from Poly Haven, and the floor, "
@@ -109,64 +104,28 @@ def credits() -> str:
             "(public domain). Full attribution in CREDITS.txt inside the pack.")
 
 
-def entry(tag: str, path: str, size: int, sha: str) -> dict:
-    """What the registry says about the world this built."""
-    return {
-        "key": f"{NAMESPACE}/gallery",
-        "title": "Bust gallery demo world",
-        "url": URL % (tag, os.path.basename(path)),
-        "directory": "gallery",
-        "archive": "tar",
-        "approximate_bytes": size,
-        "sha256": sha,
-        "base": False,
-        "copyright": credits(),
-        "marker": MARKER,
-        "notes": "A hall of 120 marble busts on "
-                 "plinths, each a six-level MSFT_lod chain, with a polished "
-                 "parquet floor and dark beams overhead. An ordinary glTF "
-                 "file -- a viewer that does not know the extension draws "
-                 "every bust at its finest level.",
-    }
+def declare(build: publish.Build) -> list[dict]:
+    """Build the gallery pack; what the registry says about it."""
+    options = build.options
+    staged = build.staging("gallery")
+    if options.world:
+        if not os.path.exists(options.world):
+            raise SystemExit(f"no world at {options.world}")
+        stage(options.world, staged)
+    else:
+        build_world(staged, options.bays, options.levels)
+    built = build.archive(staged, "gallery-world")
+    return [build.entry(
+        "gallery", built, title="Bust gallery demo world",
+        copyright=credits(), marker=MARKER,
+        notes="A hall of 120 marble busts on plinths, each a six-level "
+              "MSFT_lod chain, with a polished parquet floor and dark beams "
+              "overhead. An ordinary glTF file -- a viewer that does not know "
+              "the extension draws every bust at its finest level.")]
 
 
-def install(into: str, replace: bool = False) -> int:
-    """Put what was built into the store the demo reads, and say where.
-
-    ``replace`` throws away what is installed under each key first, which is
-    what a second build of a world wants: the store holds the last one, and an
-    install that leaves it there shows the world before the change.
-    """
-    from OpenGLContext.contentpacks import ContentStore
-
-    store = ContentStore(NAMESPACE)
-    packs = catalog.merge(catalog.load(CATALOG))
-    print(f"store: {store.root}")
-    for pack in packs:
-        where = publish.install(pack, store, into, replace=replace)
-        print(f"  {pack.key:<28} {os.path.relpath(where, store.root)}")
-    return 0
-
-
-def push(tag: str, paths: list[str]) -> int:
-    """Attach the built archives to the release the registry names."""
-    publish.push(publish.repository(URL % (tag, "x")), tag, paths,
-                 title=f"Bust gallery world {tag}",
-                 notes="The level-of-detail demo world. Open it with "
-                       "`oglc-view <url>#gallery.glb`. "
-                       "Terms are in the registry and in CREDITS.txt inside "
-                       "the pack.")
-    print(f"attached {len(paths)} file(s) to {tag}")
-    return 0
-
-
-def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--tag", default="content-v1",
-                        help="the release tag the artefact is attached to "
-                             "(default: %(default)s)")
-    parser.add_argument("--into", default=os.path.join(HERE, "dist", "content"),
-                        help="where to write the archive")
+def arguments(parser: argparse.ArgumentParser) -> None:
+    """The options that say how the world is built."""
     parser.add_argument("--world", default=None,
                         help="pack this glB instead of building one, which "
                              "needs neither Blender nor openglcontext-editor")
@@ -174,45 +133,22 @@ def main(argv: list[str] | None = None) -> int:
                         help="plinths down the hall (default: %(default)s)")
     parser.add_argument("--levels", type=int, default=6,
                         help="levels per bust (default: %(default)s)")
-    parser.add_argument("--install", action="store_true",
-                        help="install what was built into this machine's own "
-                             "store, so the demo runs against it with nothing "
-                             "published")
-    parser.add_argument("--reinstall", action="store_true",
-                        help="install, throwing away what is already in the "
-                             "store under this key first, which is what a "
-                             "rebuilt world needs to be the one that opens")
-    parser.add_argument("--push", action="store_true",
-                        help="attach the archives to the release at --tag, "
-                             "creating it if it is not there yet (needs the "
-                             "GitHub CLI, and an account that may write here)")
-    options = parser.parse_args(argv)
 
-    staged = publish.fresh_directory(os.path.join(options.into, "gallery"))
-    try:
-        if options.world:
-            if not os.path.exists(options.world):
-                raise SystemExit(f"no world at {options.world}")
-            stage(options.world, staged)
-        else:
-            build_world(staged, options.bays, options.levels)
-    except SystemExit as refused:
-        print(refused, file=sys.stderr)
-        return 2
 
-    path, size, sha = build(staged, "gallery-world", options.into)
-    declared = entry(options.tag, path, size, sha)
-    atomicfiles.write_text(
-        CATALOG, json.dumps({"namespace": NAMESPACE, "packs": [declared]},
-                            indent=1) + "\n")
-    print(f"gallery world: {size / 1048576:.1f} MB, sha256 {sha[:12]}, "
-          f"registry written to {os.path.relpath(CATALOG, HERE)}")
+def release() -> publish.Release:
+    """What this command publishes."""
+    return publish.Release(
+        namespace=NAMESPACE, url=URL, catalog=CATALOG, declare=declare,
+        into=os.path.join(HERE, "dist", "content"), arguments=arguments,
+        description=__doc__.split("\n\n")[0],
+        title="Bust gallery world",
+        notes="The level-of-detail demo world. Open it with "
+              "`oglc-view --pack openglcontext/gallery`. Terms are in the "
+              "registry and in CREDITS.txt inside the pack.")
 
-    if options.install or options.reinstall:
-        install(options.into, replace=options.reinstall)
-    if options.push:
-        return push(options.tag, [path])
-    return 0
+
+def main(argv: list[str] | None = None) -> int:
+    return publish.main(release(), argv)
 
 
 if __name__ == "__main__":
