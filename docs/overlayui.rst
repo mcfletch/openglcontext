@@ -576,7 +576,7 @@ window, only when the shape changes. GLFW, GLUT, pygame, Tk, wx and Qt each
 map these names to their own shapes. If a platform does not have a shape,
 ``setPointerShape`` returns False and the pointer is left unchanged, rather
 than showing a wrong shape; the caller can then show the information another
-way. A minimal Wayland cursor theme has only the arrow and the text bar, so
+way. GLUT and Tk have no "not allowed" pointer, so both refuse ``no``. A minimal Wayland cursor theme has only the arrow and the text bar, so
 the view splitters also draw a grip.
 
 While a mouse-look mode holds the pointer it is hidden, and the overlay asks

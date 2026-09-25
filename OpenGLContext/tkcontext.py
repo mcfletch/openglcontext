@@ -229,7 +229,8 @@ class TkContext(tkevents.EventHandlerMixin, Context):
 
     #: Tk's cursor names, by the name a control asks for. Tk takes the X11
     #: names on every platform and maps them to the native pointer, so these
-    #: are the spellings rather than a picture this has to carry.
+    #: are the spellings rather than a picture this has to carry. The X11 set
+    #: has no "not allowed" pointer, so ``'no'`` is refused.
     CURSOR_SHAPES = {
         'arrow': '',
         'hand': 'hand2',
@@ -238,7 +239,6 @@ class TkContext(tkevents.EventHandlerMixin, Context):
         'resize-x': 'sb_h_double_arrow',
         'resize-y': 'sb_v_double_arrow',
         'resize': 'fleur',
-        'no': 'X_cursor',
     }
 
     def setPointerShape(self, name: str) -> bool:

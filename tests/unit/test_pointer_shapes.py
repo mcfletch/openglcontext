@@ -138,3 +138,22 @@ class TestMouseLookKeepsThePointerHidden:
         context._pointerGrabbed = False
         assert context.setPointerShape('hand')
         assert set_to == [GLUT.GLUT_CURSOR_INFO]
+
+
+class TestNoWrongPicture:
+    """A backend with no "not allowed" pointer answers False rather than show another."""
+
+    def test_glut_has_no_not_allowed_pointer(self, monkeypatch):
+        from OpenGL import GLUT
+        from OpenGLContext.glutcontext import GLUTContext
+        set_to = []
+        monkeypatch.setattr(GLUT, 'glutSetWindow', lambda window: None)
+        monkeypatch.setattr(GLUT, 'glutSetCursor', set_to.append)
+        context = GLUTContext.__new__(GLUTContext)
+        context.windowID = 1
+        assert not context.setPointerShape('no')
+        assert set_to == []
+
+    def test_tk_has_no_not_allowed_pointer(self):
+        from OpenGLContext.tkcontext import TkContext
+        assert 'no' not in TkContext.CURSOR_SHAPES

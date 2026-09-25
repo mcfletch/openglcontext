@@ -209,7 +209,8 @@ class GLUTContext(
 
     #: GLUT's own cursors, by the name a control asks for. It has a fixed
     #: set and no way to add to it, so what is not here is answered rather
-    #: than approximated.
+    #: than approximated: it has no "not allowed" pointer, and ``'no'`` is
+    #: refused.
     CURSOR_SHAPES = {
         'arrow': 'GLUT_CURSOR_RIGHT_ARROW',
         'hand': 'GLUT_CURSOR_INFO',
@@ -217,7 +218,6 @@ class GLUTContext(
         'crosshair': 'GLUT_CURSOR_CROSSHAIR',
         'resize-x': 'GLUT_CURSOR_LEFT_RIGHT',
         'resize-y': 'GLUT_CURSOR_UP_DOWN',
-        'no': 'GLUT_CURSOR_DESTROY',
     }
 
     def setPointerShape(self, name: str) -> bool:
