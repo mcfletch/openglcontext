@@ -244,6 +244,15 @@ so. A sink accepts only the checked type, and the only way to get one is the
 function that does the check. A plain `str` handed to a loader's open helper
 is then a type error in mypy, in the editor and in every user's project.
 
+The public API does not change. The entry points a caller uses (`load`,
+`Resolver.fetch`, a node's `url` field, `oglc-view`'s argument) keep taking a
+string or URL, and each is the one place that string passes through the
+restrictions: it contains the path or checks the URL, and hands the checked
+type down. Everything below it (the format loaders, the readers of a file a
+document names, the image and array openers) takes only the checked type. A
+user's code keeps passing strings; a lower-level function inside the engine,
+or in a user's own loader built on these, cannot be handed an unchecked one.
+
 A `NewType` is not enough on its own: the measurement showed mypy, pyright
 and ty all accept `ContainedPath(x)` written anywhere. So each checked type is
 a small runtime class whose constructor is private, with the mypy plugin
@@ -646,16 +655,15 @@ the rules its table selects):
 | glisteel-editor | 0 | 0 | 2 | 22 | 0 | 0 | 0 |
 | twig-bb | 5 | 0 | 16 | 68 | 1 | 12 | 0 |
 
+## Decided
+
+- The rule package is the sibling project `openglcontext-checks`, installable
+  by a project that does not use the engine.
+- The checked types change no public signature: the top-level load operations
+  take a string, pass it through the restrictions once, and hand the checked
+  type to the lower-level loaders (see [layer 3](#3-types-that-must-be-unwrapped)).
+
 ## Questions for the maintainer
 
-- Name and home of the rule package: a new sibling `openglcontext-checks`
-  (proposed), or a subpackage of OpenGLContext. A sibling keeps it installable
-  by a project that does not use the engine, and keeps the engine free of a
-  mypy dependency.
-- Whether the checked types (`ContainedPath` and the rest) may change public
-  signatures in this release. A loader taking `ContainedPath` refuses a plain
-  `str` from a user's code; the options are a deprecation period where both
-  are accepted with a warning, or taking only the checked type from the next
-  minor release.
 - Whether to propose the general rules (OGC131, OGC141, OGC191, OGC201,
   OGC221 to OGC223) to upstream ruff once they have run here for a release.
