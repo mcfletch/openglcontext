@@ -82,7 +82,7 @@ class LODHall:
         self.chains: List[Any] = []
         self.columns: List[Any] = []
         #: What each level's shapes wear untinted, by shape.
-        self._worn: Dict[int, Any] = {}
+        self._worn: Dict[Any, Any] = {}
         length = ROWS * SPACING
         self.children: List[Any] = [
             basenodes.SimpleBackground(color=(0.55, 0.62, 0.72)),
@@ -159,7 +159,7 @@ class LODHall:
             for index, level in enumerate(levels):
                 tint = self.finishes.tints[min(index, len(self.finishes.tints) - 1)]
                 for shape in shapes(level):
-                    worn = self._worn.setdefault(id(shape), shape.appearance.material)
+                    worn = self._worn.setdefault(shape, shape.appearance.material)
                     shape.appearance.material = tint if on else worn
         self.tinted = on
 

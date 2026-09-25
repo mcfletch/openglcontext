@@ -268,7 +268,7 @@ class AnimationMixer:
         #: One :class:`~OpenGLContext.character.clip.ClipSampler` per clip,
         #: keyed by the clip object, so two mixers over one document share none
         #: of their playback and all of their regrouping.
-        self._samplers: Dict[int, ClipSampler] = {}
+        self._samplers: Dict[Animation, ClipSampler] = {}
         #: The last pose written to the scenegraph, so an unchanged joint costs
         #: no field assignment -- and an idle character costs almost nothing.
         self._written: Dict[Tuple[int, str], Any] = {}
@@ -317,10 +317,10 @@ class AnimationMixer:
         here, and what it moves joins what the mixer knows how to write -- so
         a game may add a clip at any point and have it play.
         """
-        found = self._samplers.get(id(clip))
+        found = self._samplers.get(clip)
         if found is None:
             found = ClipSampler(clip, self.rig)
-            self._samplers[id(clip)] = found
+            self._samplers[clip] = found
             self._note_driven(found)
         return found
 

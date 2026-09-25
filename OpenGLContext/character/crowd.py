@@ -83,7 +83,7 @@ class Crowd:
         self._skeleton_tried = False
         self._frame = 0
         self.members: List[Member] = []
-        self._by_mixer: Dict[int, Member] = {}
+        self._by_mixer: Dict[AnimationMixer, Member] = {}
         self._layout: Optional[Rig] = None
         #: Runs of arithmetic the last :meth:`update` took -- one per set of
         #: figures doing the same kind of thing. It is what says whether a
@@ -112,13 +112,13 @@ class Crowd:
                 % (mixer.rig.n, self._layout.n))
         member = Member(mixer, rate=rate)
         self.members.append(member)
-        self._by_mixer[id(mixer)] = member
+        self._by_mixer[mixer] = member
         return member
 
     def remove(self, figure: Any) -> None:
         """Take a figure out of the crowd; it poses on its own again."""
         mixer = getattr(figure, 'mixer', figure)
-        member = self._by_mixer.pop(id(mixer), None)
+        member = self._by_mixer.pop(mixer, None)
         if member is not None:
             self.members.remove(member)
         if not self.members:

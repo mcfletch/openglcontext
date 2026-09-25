@@ -8,6 +8,7 @@ frame's collisions to the callbacks subscribed through :attr:`PhysicsManager.eve
 once a frame, usually from its ``OnIdle``.
 """
 from collections import OrderedDict
+from collections.abc import Hashable
 from contextlib import AbstractContextManager, nullcontext
 from typing import Any, List, Optional
 
@@ -64,8 +65,8 @@ class PhysicsManager:
         #: The registered bodies in the order they were added, as dictionary
         #: keys so that removing one does not search for it.
         self._bodies: dict[Any, None] = {}
-        #: Each registered body by the ``id`` of the Transform it drives.
-        self._by_transform: dict[int, Any] = {}
+        #: Each registered body by the Transform it drives.
+        self._by_transform: dict[Any, Any] = {}
         #: Collision subscriptions: :meth:`CollisionEvents.subscribe
         #: <OpenGLContext.physics.events.CollisionEvents.subscribe>`.
         self.events = CollisionEvents(self)
@@ -92,7 +93,7 @@ class PhysicsManager:
         """Register a scenegraph ``PhysicsBody`` handle into the world and track it; returns the body."""
         body.register(self.world)
         self._bodies[body] = None
-        self._by_transform[id(body.transform)] = body
+        self._by_transform[body.transform] = body
         return body
 
     def remove(self, body: Any) -> None:
@@ -116,9 +117,9 @@ class PhysicsManager:
     def _forget(self, body: Any) -> None:
         """Stop tracking ``body``."""
         self._bodies.pop(body, None)
-        key = id(body.transform)
-        if self._by_transform.get(key) is body:
-            del self._by_transform[key]
+        transform = body.transform
+        if self._by_transform.get(transform) is body:
+            del self._by_transform[transform]
 
     def _remove_body(self, index: int) -> None:
         """Remove body ``index`` from the world."""
@@ -132,8 +133,15 @@ class PhysicsManager:
         return ref if found is None else found
 
     def body_for(self, transform: Any) -> Any:
-        """The registered ``PhysicsBody`` driving ``transform``, or None."""
-        return self._by_transform.get(id(transform))
+        """The registered ``PhysicsBody`` driving ``transform``, or None.
+
+        None for anything that cannot be a transform's key, such as a list of
+        bodies handed to :meth:`CollisionEvents.resolve
+        <OpenGLContext.physics.events.CollisionEvents.resolve>`.
+        """
+        if not isinstance(transform, Hashable):
+            return None
+        return self._by_transform.get(transform)
 
     def advance(self, real_dt: float) -> float:
         """Step the world by ``real_dt`` seconds, sync poses and deliver collisions.

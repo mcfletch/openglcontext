@@ -313,7 +313,7 @@ class ViewLayout:
         self._captured: Optional[View] = None
         self._held: Set[int] = set()
         #: The camera each view last told a size, and the size, by view.
-        self._told: Dict[int, Tuple[int, Tuple[int, int]]] = {}
+        self._told: Dict[View, Tuple[Any, Tuple[int, int]]] = {}
 
     # -- building ----------------------------------------------------------
     @classmethod
@@ -391,10 +391,10 @@ class ViewLayout:
         tell = getattr(camera, 'setViewport', None)
         if tell is None:
             return
-        told = (id(camera), view.size)
-        if self._told.get(id(view)) == told:
+        last = self._told.get(view)
+        if last is not None and last[0] is camera and last[1] == view.size:
             return
-        self._told[id(view)] = told
+        self._told[view] = (camera, view.size)
         tell(*view.size)
 
     def cameras(self, default: Optional[ViewCamera] = None) -> List[ViewCamera]:
