@@ -201,3 +201,39 @@ class TestTheViewersOwnResolution:
 
     def test_a_path_that_is_not_there_is_none(self, tmp_path):
         assert viewersource.resolve_source(str(tmp_path / 'absent.glb')) is None
+
+
+class TestAnUnpackingThatDidNotFinish:
+    """A world is unpacked once and kept, so a half-unpacked one must not be."""
+
+    def test_the_next_opening_unpacks_it_again(self, tmp_path, cache,
+                                               monkeypatch):
+        world = _tar(tmp_path / 'world.tar.gz', ['a.bin', 'gallery.glb'])
+        real = viewersource.archive.extract
+
+        def interrupted(path, directory, kind, **named):
+            os.makedirs(directory, exist_ok=True)
+            with open(os.path.join(directory, 'a.bin'), 'wb') as handle:
+                handle.write(b'the first member')
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(viewersource.archive, 'extract', interrupted)
+        with pytest.raises(KeyboardInterrupt):
+            viewersource.open_archive(world, cache_dir=cache)
+        monkeypatch.setattr(viewersource.archive, 'extract', real)
+        found = viewersource.open_archive(world, cache_dir=cache)
+        assert os.path.basename(found) == 'gallery.glb'
+
+    def test_nothing_of_it_is_left_in_the_cache(self, tmp_path, cache,
+                                                monkeypatch):
+        world = _tar(tmp_path / 'world.tar.gz', ['gallery.glb'])
+
+        def interrupted(path, directory, kind, **named):
+            os.makedirs(directory, exist_ok=True)
+            raise OSError('the disk is full')
+
+        monkeypatch.setattr(viewersource.archive, 'extract', interrupted)
+        with pytest.raises(OSError):
+            viewersource.open_archive(world, cache_dir=cache)
+        assert [name for name in os.listdir(cache)
+                if not name.endswith('.lock')] == []

@@ -68,6 +68,42 @@ URIs relative to the document. The viewer resolves those against the
 document's URL, so a remote multi-file model opens with its geometry and
 textures. See :doc:`Loading glTF <gltf>`.
 
+.. _viewer-archives:
+
+Archives
+~~~~~~~~
+
+A world of several files travels as an archive: a ``.zip``, ``.tar``,
+``.tar.gz`` (``.tgz``), ``.tar.bz2`` (``.tbz2``) or ``.tar.xz`` (``.txz``),
+as a path or a URL. ``#member`` after it names the scene to open inside:
+
+.. code-block:: bash
+
+   oglc-view world.tar.gz#gallery.glb
+   oglc-view https://example.com/world.tar.gz#scenes/gallery.gltf
+   oglc-view world.zip                 # holds exactly one scene file
+
+An archive holding exactly one scene file (``.glb``, ``.gltf``, ``.wrl``,
+``.wrz``, ``.vrml``, ``.x3d`` or ``.obj``) needs no ``#``. One holding several
+is refused with a list of what it holds, and one that holds no such file says
+so. The whole archive is unpacked, not only the member, so a ``.gltf``'s
+buffers and textures and a level-of-detail chain's sidecars resolve against
+the member's own directory.
+
+An archive is unpacked once, into ``<app data>/OpenGLContext/archives/``
+under a name taken from its digest, and later openings of the same bytes use
+that directory. The extraction is the one :doc:`content packs <contentpacks>`
+use: an archive may unpack to no more than 512 MB, a member naming an absolute
+path or climbing out of the directory is refused, and the archive is unpacked
+beside its directory and renamed into place when complete, so an interrupted
+extraction is done again on the next opening. Two viewers opening one archive
+take turns. Nothing removes old archives from that directory; deleting it at
+any time costs only the next opening's extraction.
+
+A URL to an archive follows a redirect to any public https host, which is how
+release hosts such as GitHub serve their assets (see :ref:`Fetching
+<fetching>` on the content-packs page).
+
 Streamed datasets take extra options:
 
 - ``--sse`` - the screen-space error target, in pixels. Lower values load more

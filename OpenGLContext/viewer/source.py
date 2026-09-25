@@ -17,7 +17,7 @@ import hashlib
 import os
 from typing import TYPE_CHECKING, Optional, Tuple
 
-from OpenGLContext import userpaths
+from OpenGLContext import atomicfiles, userpaths
 from OpenGLContext.contentpacks import archive
 from OpenGLContext.loaders import resolver
 from OpenGLContext.loaders import gltf
@@ -78,7 +78,9 @@ def cache_dir() -> str:
     """Where archives are unpacked: per user, not in shared temp.
 
     The same reasoning as every other download this engine keeps -- no other
-    account can pre-seed a world this user then opens.
+    account can pre-seed a world this user then opens. Each archive is kept
+    under its own digest until somebody removes it; deleting the directory at
+    any time costs only the next opening's extraction.
     """
     where = os.path.join(userpaths.appdatadirectory(), 'OpenGLContext',
                          'archives')
@@ -112,9 +114,19 @@ def open_archive(source: str, cache_dir: Optional[str] = None,
     return _member_in(where, member, path)
 
 
+#: The file an unpacked archive's directory holds once the extraction is whole.
+UNPACKED = '.unpacked'
+
+
 def _unpack(path: str, kind: str, into: Optional[str],
             max_bytes: int) -> str:
-    """The directory ``path`` is unpacked into, unpacking it if it is not."""
+    """The directory ``path`` is unpacked into, unpacking it if it is not.
+
+    Unpacked beside that directory and renamed into place when whole, under a
+    lock so two viewers opening one archive take turns, so an extraction that
+    stopped part way is never opened as the world. A directory without the
+    completion file is unpacked again.
+    """
     # An archive the user named follows redirects to any public host, as a
     # content pack does: release hosts serve every asset through a CDN.
     local = (resolver.fetch_to_cache(path, max_bytes=max_bytes,
@@ -124,10 +136,12 @@ def _unpack(path: str, kind: str, into: Optional[str],
     # Named for what it holds rather than for where it came from, so the same
     # archive fetched twice is one directory and a changed archive is another.
     where = os.path.join(root, _digest(local))
-    if os.path.isdir(where) and os.listdir(where):
-        return where
-    os.makedirs(root, exist_ok=True)
-    return archive.extract(local, where, kind, max_bytes=max_bytes)
+    with atomicfiles.file_lock(where + '.lock'):
+        if not os.path.exists(os.path.join(where, UNPACKED)):
+            with atomicfiles.staged_directory(where) as staging:
+                archive.extract(local, staging, kind, max_bytes=max_bytes)
+                atomicfiles.write_text(os.path.join(staging, UNPACKED), '')
+    return where
 
 
 def _digest(path: str) -> str:
@@ -175,7 +189,7 @@ def _scenes(where: str) -> list[str]:
 def _listing(where: str, most: int = 12) -> str:
     names = sorted(os.path.relpath(os.path.join(root, leaf), where)
                    for root, _directories, files in os.walk(where)
-                   for leaf in files)
+                   for leaf in files if leaf != UNPACKED or root != where)
     shown = ', '.join(names[:most])
     return shown + (', ...' if len(names) > most else '') if names else '(nothing)'
 
