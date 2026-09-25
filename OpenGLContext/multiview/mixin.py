@@ -23,22 +23,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Callable, List, Optional, Sequence, Tuple
 
 from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
+from OpenGLContext.multiview.quad import ELEVATIONS, FLAT_BACKGROUND
 from OpenGLContext.multiview.viewpoints import SceneCamera, scene_cameras
 from OpenGLContext.multiview.views import View, ViewLayout, ViewStyle
 from OpenGLContext.multiview.viewset import ViewSet
 
-__all__ = ['MultiViewMixin', 'ARRANGEMENTS', 'ELEVATIONS', 'FLAT_BACKGROUND']
+__all__ = ['MultiViewMixin', 'ARRANGEMENTS']
 
 #: The arrangements the mixin offers, in the order its key takes them: the
 #: window's own view alone, and the four.
 ARRANGEMENTS = ('single', 'quad')
-
-#: Which way the three orthographic views look, placed top left, top right and
-#: bottom left; the window's own view is bottom right.
-ELEVATIONS = ('top', 'front', 'left')
-
-#: What an orthographic view clears to, in place of the scene's sky.
-FLAT_BACKGROUND = (0.32, 0.33, 0.35)
 
 
 if TYPE_CHECKING:

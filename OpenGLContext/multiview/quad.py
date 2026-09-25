@@ -54,14 +54,20 @@ import numpy as np
 
 from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
 from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform, Point
-from OpenGLContext.multiview.navigation import ROTATE_RATE, ZOOM_STEP
 from OpenGLContext.multiview.viewpoints import (
     CameraChooser, SceneCamera, first_camera, look_through,
 )
 from OpenGLContext.multiview.views import View, ViewStyle
 from OpenGLContext.multiview.viewset import ViewSet
 
-__all__ = ['QuadView', 'OPENING_HEADING', 'ROTATE_RATE', 'ZOOM_STEP']
+__all__ = ['QuadView', 'ELEVATIONS', 'FLAT_BACKGROUND', 'OPENING_HEADING']
+
+#: Which way the three orthographic views look, placed top left, top right and
+#: bottom left; the perspective view is bottom right.
+ELEVATIONS = ('top', 'front', 'left')
+
+#: What an orthographic view clears to, in place of the scene's sky.
+FLAT_BACKGROUND = (0.32, 0.33, 0.35)
 
 #: The heading the perspective view opens on, in degrees: thirty round from
 #: the front towards the right, so it shows the side the left elevation does
@@ -85,8 +91,8 @@ class QuadView:
     None to keep the view it opened on. The first, unless given.
     """
 
-    def __init__(self, directions: Sequence[str] = ('top', 'front', 'left'),
-                 background: Colour = (0.32, 0.33, 0.35),
+    def __init__(self, directions: Sequence[str] = ELEVATIONS,
+                 background: Colour = FLAT_BACKGROUND,
                  choose_camera: CameraChooser = first_camera) -> None:
         if len(directions) != 3:
             raise ValueError('a quad view has three orthographic views, not %d'
