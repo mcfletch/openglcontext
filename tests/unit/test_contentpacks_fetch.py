@@ -222,7 +222,7 @@ class TestTheSizeCap:
 class TestCancelling:
     def test_the_user_stopping_it_is_not_a_failure(self, served, store,
                                                    cache) -> None:
-        """Telling somebody their own decision was an error answers it badly."""
+        """A cancel is the user's decision, not an error."""
         where, base = served
         make_tarball(where, 'a.tar.gz', ['f%d' % n for n in range(8)], big=64 * 1024)
         with pytest.raises(fetch.Cancelled):
@@ -239,13 +239,9 @@ class TestCancelling:
 
 
 class TestAJobTheFrameLoopPolls:
-    """`poll()` is the only place anything the worker wrote is read.
-
-    That single rule is the whole of the thread safety, and it is why a caller
-    needs no lock of its own. Its visible consequence looks like a bug and is
-    not: a job whose worker has finished still reports itself unfinished until
-    it is polled, because there is nobody to tell.
-    """
+    """`poll()` is the only place anything the worker wrote is read, so a
+    caller needs no lock of its own, and a job whose worker has finished
+    reports itself unfinished until it is polled."""
 
     def drive(self, job, limit=500):
         import time
