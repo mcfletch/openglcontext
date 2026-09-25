@@ -105,6 +105,22 @@ from level to level. Level *i* is drawn from its own threshold up to the
 threshold of the level before it. Below the last value, nothing is drawn. To
 keep a model on screen however small it gets, end its list with ``0``.
 
+The ``MSFT_lod`` README does not define screen coverage. Babylon.js, where the
+extension is implemented, compares the projected sphere's *area* with the
+screen's area; this engine compares heights, as above. A threshold written for
+one reads differently in the other: in a square window, an area of 0.5 is a
+height of about 0.8.
+
+Both nodes hold a level near a threshold. A node moves to a coarser level only
+once the viewer is ``hysteresis`` past the threshold, as a fraction of it, and
+returns to the finer level at the threshold itself. The default is 0.1: a
+``range`` of 10 m hands over going out at 11 m and back coming in at 10 m, and
+a coverage threshold of 0.5 hands over going out at 0.45. A viewer standing on
+a threshold, or bobbing across one, then keeps one level instead of changing
+level every frame. ``hysteresis`` is an attribute of the node rather than a
+field, so it is not written to a file; set it to 0 to switch at the thresholds
+exactly. The first choice a node makes is the plain answer.
+
 The pass chooses the levels once a frame, for every view at once
 (``FlatPass.chooseLevels``, from ``prepareViews``), before it walks the scene. A level change replaces a subtree, and the pass has to update
 its flattened copy of the scenegraph before it walks it. Only the camera is
@@ -153,14 +169,17 @@ The nodes
      - Distance, as VRML97 specifies
      - ``level``, ``range``, ``center``
    * - ``ScreenCoverageLOD``
-     - Screen coverage, as ``MSFT_lod`` specifies
+     - Screen coverage, for ``MSFT_lod``
      - ``level``, ``screenCoverage``, ``center``, ``radius``
 
 Both nodes are in ``OpenGLContext.scenegraph.lod``, and both signal a level
 change the same way a ``Switch`` does. ``center`` is the point, in the node's
 own coordinates, that distance is measured to, so the distance is measured to
 the model rather than to the world origin. ``radius`` is the radius used for
-coverage. The glTF loader takes it from the finest level's ``POSITION``
+coverage. A ``ScreenCoverageLOD`` with ``radius`` 0 measures the finest
+level's bounding sphere, and with ``center`` also at the origin it measures
+distance to that sphere's centre. A node's bounding volume is the level being
+drawn, and a level change updates it and the volumes of the groups above. The glTF loader takes it from the finest level's ``POSITION``
 accessor bounds. glTF requires a file to declare those bounds, so a level can
 be sized and placed without reading its geometry.
 

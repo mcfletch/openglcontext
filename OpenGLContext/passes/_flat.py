@@ -1241,7 +1241,7 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         if self._levelsAlreadyChosen( viewers, own ):
             return
         worlds = asarray( own, 'd' )
-        centres = [ node.center for node, _world in placed ]
+        centres = [ node.distanceCentre() for node, _world in placed ]
         answers: List[List[Tuple[float, float, float]]] = [ [] for _ in placed ]
         for viewer in viewers:
             modelviews = worlds @ asarray( viewer.modelview, 'd' )

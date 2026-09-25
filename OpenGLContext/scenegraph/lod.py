@@ -26,6 +26,8 @@ from pydispatch import dispatcher
 from vrml import field
 from vrml.vrml97 import basenodes, nodetypes
 
+from vrml import cache
+
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.switch import SWITCH_CHANGE_SIGNAL
 
@@ -43,6 +45,10 @@ CULLED = -1
 DEFAULT_FIELD_OF_VIEW = 60.0
 
 _TINY = 1e-9
+
+#: The largest ``hysteresis`` a node is held to: a coverage band reaching to
+#: zero would never let a node coarsen.
+MAXIMUM_HYSTERESIS = 0.9
 
 
 def viewer_tangent(field_of_view: Optional[float] = None) -> float:
@@ -174,7 +180,8 @@ def screen_fractions(radii: Any, distances: Any, tangent: float) -> np.ndarray:
 
 def distance_to_viewer(node: Any, modelview: Any) -> float:
     """How far the viewer is from ``node``'s centre, given its modelview."""
-    centre = np.concatenate([np.asarray(node.center, dtype='d')[:3], [1.0]])
+    centre = np.concatenate([np.asarray(node.distanceCentre(), dtype='d')[:3],
+                             [1.0]])
     eye = centre @ np.asarray(modelview, dtype='d')
     return float(np.linalg.norm(eye[:3]))
 
@@ -205,6 +212,18 @@ class LOD(basenodes.LOD):
     #: levels are and where they change over, and this is what that comes to
     #: for the viewer as it stands.
     whichLevel: int = 0
+
+    #: How far past a threshold, as a fraction of it, a viewer has to be before
+    #: a coarser level is drawn; the finer level comes back at the threshold
+    #: itself. A viewer standing on a threshold, or bobbing across it, then
+    #: keeps one level rather than changing every frame. 0 switches at the
+    #: thresholds exactly; values are held to [0, :data:`MAXIMUM_HYSTERESIS`].
+    #: Not a VRML field, so a node's own setting is not written to a file.
+    hysteresis: float = 0.1
+
+    #: Whether a level has been chosen yet. The first choice has no level to
+    #: hold on to, and is the plain answer.
+    _shown: bool = False
 
     def selectFor(self, modelview: Any, tangent: float) -> bool:
         """Choose a level for the viewer this modelview and field of view are.
@@ -239,7 +258,7 @@ class LOD(basenodes.LOD):
         What a frame drawn through several cameras asks each of them, before
         showing the finest of the answers.
         """
-        return self.levelFor(distance)
+        return self.levelNear(distance)
 
     def select(self, distance: float) -> bool:
         """Choose the level for a viewer ``distance`` away; True if it changed.
@@ -248,7 +267,44 @@ class LOD(basenodes.LOD):
         leaves to the browser: guessing a distance for content that named none
         would draw somebody's model at a detail they never asked for.
         """
-        return self.show(self.levelFor(distance))
+        return self.show(self.levelNear(distance))
+
+    def levelNear(self, distance: float) -> int:
+        """The level for a viewer ``distance`` away, held by :attr:`hysteresis`."""
+        band = self.band()
+        return self.held(self.levelFor(distance),
+                         lambda: self.levelFor(distance / (1.0 + band)))
+
+    def band(self) -> float:
+        """:attr:`hysteresis` as a usable fraction."""
+        value = float(self.hysteresis)
+        if not math.isfinite(value):
+            return 0.0
+        return min(max(value, 0.0), MAXIMUM_HYSTERESIS)
+
+    def held(self, plain: int, eased: Any) -> int:
+        """The level to draw, given the plain answer and a way to ask with the band.
+
+        ``eased()`` is the level for the measurement moved the band's width
+        toward the finer side. A finer or equal ``plain`` is drawn as it is; a
+        coarser one only as far as ``eased()`` also reaches, so a viewer inside
+        the band keeps the level being drawn.
+        """
+        if not self._shown:
+            return plain
+        current = self.whichLevel
+        if self._rank(plain) <= self._rank(current):
+            return plain
+        coarsest: int = max(current, eased(), key=self._rank)
+        return coarsest
+
+    def _rank(self, level: int) -> int:
+        """How coarse ``level`` is: its index, with :data:`CULLED` past the last."""
+        return len(self.level) if level == CULLED else level
+
+    def distanceCentre(self) -> Any:
+        """The point, in this node's coordinates, a viewer's distance is measured to."""
+        return self.center
 
     def show(self, level: int) -> bool:
         """Draw level ``level`` from now on; True where that is a change.
@@ -256,6 +312,7 @@ class LOD(basenodes.LOD):
         The change is announced rather than assumed, because the pass renders
         from a flattened scenegraph it has to be told to re-walk.
         """
+        self._shown = True
         if level == self.whichLevel:
             return False
         self.whichLevel = level
@@ -305,7 +362,8 @@ class LOD(basenodes.LOD):
         The levels are the same object at different detail, so any of them
         bounds the node; the one on screen is the one whose bounds are wanted,
         and it is what a coarser level's slightly different silhouette should
-        be culled by.
+        be culled by. A change of level clears the volume, and with it the
+        volumes of the groups holding this node.
         """
         current = boundingvolume.getCachedVolume(self)
         if current is not None:
@@ -321,7 +379,11 @@ class LOD(basenodes.LOD):
             volume: Any = boundingvolume.BoundingBox.union(volumes, None)
         except boundingvolume.UnboundedObject:
             volume = boundingvolume.UnboundedVolume()
-        return boundingvolume.cacheVolume(self, volume, dependencies)
+        volume = boundingvolume.cacheVolume(self, volume, dependencies)
+        holder = cache.CACHE.getHolder(self, key='boundingVolume')
+        if holder is not None:
+            holder.depend_signal(SWITCH_CHANGE_SIGNAL, self)
+        return volume
 
 
 class ScreenCoverageLOD(LOD):
@@ -339,7 +401,9 @@ class ScreenCoverageLOD(LOD):
     spans, so it answers the question a level was measured against: how many
     pixels of this is the viewer actually looking at. ``radius`` is that sphere
     in the node's own coordinates; left at 0 it is measured from the finest
-    level, and a transform above the node is accounted for either way.
+    level, and a transform above the node is accounted for either way. With
+    ``radius`` at 0 and ``center`` at the origin, the distance is measured to
+    the measured sphere's centre as well.
 
     Reference:
         https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/MSFT_lod
@@ -354,6 +418,7 @@ class ScreenCoverageLOD(LOD):
     def __init__(self, *args: Any, **named: Any) -> None:
         super(ScreenCoverageLOD, self).__init__(*args, **named)
         self._measured: float = 0.0
+        self._measuredCentre: Any = None
         dispatcher.connect(
             self._onLevelsChange,
             signal=('set', self.__class__.level),
@@ -363,6 +428,7 @@ class ScreenCoverageLOD(LOD):
     def _onLevelsChange(self, value: Any = None) -> None:
         """New levels are a new size to judge them by."""
         self._measured = 0.0
+        self._measuredCentre = None
 
     def levelAt(self, distance: float, scale: float, tangent: float) -> int:
         """The level for the coverage this viewer gives the object."""
@@ -372,7 +438,18 @@ class ScreenCoverageLOD(LOD):
             # finest unless something chose otherwise -- what a reader that had
             # never heard of the extension would draw.
             return self.whichLevel
-        return self.levelForCoverage(screen_fraction(radius, distance, tangent))
+        coverage = screen_fraction(radius, distance, tangent)
+        band = self.band()
+        return self.held(self.levelForCoverage(coverage),
+                         lambda: self.levelForCoverage(coverage / (1.0 - band)))
+
+    def distanceCentre(self) -> Any:
+        """``center``, or the finest level's measured centre where both are unset."""
+        if float(self.radius) > 0 or any(float(v) for v in self.center):
+            return self.center
+        self._measure()
+        return self._measuredCentre if self._measuredCentre is not None \
+            else self.center
 
     def levelForCoverage(self, coverage: float) -> int:
         """The level to draw where the object covers ``coverage`` of the window.
@@ -399,10 +476,16 @@ class ScreenCoverageLOD(LOD):
         stated = float(self.radius)
         if stated > 0:
             return stated
-        if not self._measured:
-            measured = boundingvolume.boundingSphere(self.level[:1])
-            self._measured = float(measured[1]) if measured else 0.0
+        self._measure()
         return self._measured
+
+    def _measure(self) -> None:
+        """Measure the finest level's sphere, once for each set of levels."""
+        if self._measured:
+            return
+        measured = boundingvolume.boundingSphere(self.level[:1])
+        self._measured = float(measured[1]) if measured else 0.0
+        self._measuredCentre = measured[0] if measured else None
 
 
 _level_changes = 0
