@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
 
-from OpenGLContext.loaders.documentvalues import DocumentValues
+from OpenGLContext.loaders.documentvalues import DocumentValues, JSONObject, require_text
 from OpenGLContext.loaders.gltf.meshes import estimate_normals
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
@@ -176,10 +176,11 @@ class Prop:
                 'shape': self.shape}
 
     @classmethod
-    def from_json(cls, record: Any) -> 'Prop':
-        """A prop read back out of a baked world."""
+    def from_json(cls, record: JSONObject) -> 'Prop':
+        """A prop read back out of a baked world; one with no ``kind`` is a
+        :class:`~OpenGLContext.loaders.documentvalues.DocumentError`."""
         values = DocumentValues(logger=log)
-        return cls(kind=record['kind'],
+        return cls(kind=require_text(record.get('kind'), 'prop kind'),
                    position=values.vector(record.get('at'), (0.0, 0.0, 0.0), 'prop at'),
                    yaw=values.number(record.get('yaw'), 0.0, 'prop yaw'),
                    scale=values.number(record.get('scale'), 1.0, 'prop scale', minimum=0.0),
@@ -187,7 +188,8 @@ class Prop:
                                         minimum=0.0),
                    height=values.number(record.get('height'), 1.0, 'prop height',
                                         minimum=0.0),
-                   shape=str(record.get('shape', 'box')))
+                   shape=values.choice(record.get('shape'), 'box', 'prop shape',
+                                       _SHAPE_ORDER))
 
 
 #: The shapes in the order a props table numbers them.

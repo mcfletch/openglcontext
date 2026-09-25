@@ -144,3 +144,11 @@ class TestWhatAPropCarries:
 
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))
+
+
+def test_a_prop_that_names_no_kind_is_refused():
+    from OpenGLContext.loaders.documentvalues import DocumentError
+    from OpenGLContext.scenegraph.props import Prop
+    with pytest.raises(DocumentError, match='prop kind is 3'):
+        Prop.from_json({'kind': 3})
+    assert Prop.from_json({'kind': 'boulder', 'shape': 'cone'}).shape == 'box'

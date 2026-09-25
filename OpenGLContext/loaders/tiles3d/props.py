@@ -18,7 +18,11 @@ The table's name is resolved within the tileset's reach
 """
 from __future__ import annotations
 
-from typing import Any, List, Mapping, Optional
+from typing import List, Mapping, Optional
+
+from OpenGLContext.loaders.documentvalues import (
+    JSONObject, require_object, require_text, require_whole,
+)
 
 from OpenGLContext.loaders.tiles3d import fetch
 from OpenGLContext.scenegraph.props import Prop, props_from_table
@@ -26,7 +30,7 @@ from OpenGLContext.scenegraph.props import Prop, props_from_table
 __all__ = ['baked_props']
 
 
-def baked_props(extras: Mapping[str, Any], channel: str, base: str,
+def baked_props(extras: JSONObject, channel: str, base: str,
                 max_bytes: Optional[int] = fetch.DEFAULT_MAX_TILE_BYTES) -> List[Prop]:
     """The props in ``extras[channel]``, in either form; empty where absent.
 
@@ -39,14 +43,15 @@ def baked_props(extras: Mapping[str, Any], channel: str, base: str,
     if not record:
         return []
     if isinstance(record, list):
-        return [Prop.from_json(one) for one in record]
+        return [Prop.from_json(require_object(one, 'a prop in %s' % (channel,)))
+                for one in record]
     if not isinstance(record, Mapping) or not isinstance(record.get('table'), str):
         raise ValueError('%s is %r, which is neither a list of props nor a '
                          'table' % (channel, record))
-    where = fetch.beside(base, record['table'])
+    where = fetch.beside(base, require_text(record['table'], '%s table' % (channel,)))
     found = props_from_table(fetch.read_bytes(where, max_bytes=max_bytes))
     stated = record.get('count')
-    if stated is not None and int(stated) != len(found):
+    if stated is not None and require_whole(stated, '%s count' % (channel,)) != len(found):
         raise ValueError('%s says it holds %s props and its table holds %d'
                          % (channel, stated, len(found)))
     return found
