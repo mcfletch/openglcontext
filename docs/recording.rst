@@ -83,8 +83,9 @@ viewpoints: it visits them in the order the file declares them, easing in and
 out of each leg. A world with two viewpoints in it is enough for a shot. The
 path advances by recorded frames rather than by wall time, so it lasts as
 long as the video however fast the machine draws. ``--turntable`` rotates the
-model instead. ``--video-seconds`` sets the length (default 12) and
-``--video-fps`` the frame rate (default 30).
+model instead. ``--video-seconds`` sets the length (default 12), which is
+also how long a ``--fly-through`` takes when nothing is recorded, and
+``--video-fps`` the frame rate (default 30). Both must be above zero.
 
 A recorded frame has no caption and no developer overlay, the same as a
 screenshot. See :ref:`Recording a video <video>` on the viewer page.

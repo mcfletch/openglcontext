@@ -234,3 +234,37 @@ class TestTheArrangementAViewerOpensIn:
         from OpenGLContext.bin.view import parse_args
         assert parse_args(['model.glb']).views is None
         assert parse_args(['model.glb', '--views', 'quad']).views == 'quad'
+
+
+class TestWhatTheCommandLineRefuses:
+    """Refused by the parser, before a window opens, rather than inside it."""
+
+    @pytest.mark.parametrize('argv', [
+        ['--video-fps', '0'], ['--video-fps', '-5'], ['--video-fps', 'x'],
+        ['--video-seconds', '0'], ['--video-seconds', '-2'],
+        ['--video-seconds', 'nan'],
+    ])
+    def test_a_recording_of_no_length_or_rate(self, argv, capsys):
+        from OpenGLContext.bin.view import parse_args
+        with pytest.raises(SystemExit):
+            parse_args(['model.glb'] + argv)
+
+    def test_a_positive_one_is_taken(self):
+        from OpenGLContext.bin.view import parse_args
+        options = parse_args(['model.glb', '--video-fps', '24',
+                              '--video-seconds', '2.5'])
+        assert (options.video_fps, options.video_seconds) == (24, 2.5)
+
+
+class TestOneOptionOneEntry:
+    def test_capture_and_capture_image_are_one_option(self):
+        from OpenGLContext.bin.view import build_parser
+        spelled = [action.option_strings for action in build_parser()._actions
+                   if 'capture' == action.dest]
+        assert spelled == [['--capture', '--capture-image']]
+
+    def test_the_recording_length_says_it_also_times_a_fly_through(self):
+        from OpenGLContext.bin.view import build_parser
+        action, = [action for action in build_parser()._actions
+                   if action.dest == 'video_seconds']
+        assert 'fly-through' in action.help

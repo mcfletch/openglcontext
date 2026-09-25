@@ -43,10 +43,9 @@ Usage::
 
 A ``.glb`` is self-contained, so URLs work cleanly. A ``.gltf`` URL fetches only
 that file; models that reference external ``.bin``/texture files by relative URI
-will be missing those -- **which is what an archive is for**. A world that is
-more than one file travels as one, and naming a member with ``#`` unpacks the
-whole archive once, into a per-user directory, and opens that member from
-inside it, so its relative references resolve. An archive holding exactly one
+will be missing those. A world of several files travels as an archive: naming a
+member with ``#`` unpacks the whole archive once, into a per-user directory,
+and opens that member from inside it, so its relative references resolve. An archive holding exactly one
 scene needs no ``#``; one holding several says which it holds. Extraction is the
 content packs' own: bounded, and refusing a member that is absolute or climbs
 out of the directory.
@@ -84,6 +83,7 @@ without this command line, and the formats it opens are the adapters registered
 in :mod:`OpenGLContext.viewer.adapters`; see docs/gltf.rst.
 """
 import argparse
+import math
 import os
 from typing import Any, Optional
 
@@ -111,6 +111,32 @@ def _parse_size(text: str) -> tuple[int, int]:
         return (w, h)
     except Exception:
         raise argparse.ArgumentTypeError("size must be WxH, e.g. 1100x680") from None
+
+
+def _positive_int(text: str) -> int:
+    """A whole number above zero, for a rate."""
+    try:
+        value = int(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError('expected a whole number, got %r'
+                                         % (text,)) from None
+    if value <= 0:
+        raise argparse.ArgumentTypeError('expected a number above zero, got %d'
+                                         % (value,))
+    return value
+
+
+def _positive_float(text: str) -> float:
+    """A finite number above zero, for a length of time."""
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError('expected a number, got %r'
+                                         % (text,)) from None
+    if not (value > 0 and math.isfinite(value)):
+        raise argparse.ArgumentTypeError('expected a number above zero, got %r'
+                                         % (text,))
+    return value
 
 
 def _format_names() -> list[str]:
@@ -177,21 +203,21 @@ def build_parser(prog: str = 'oglc-view') -> argparse.ArgumentParser:
     parser.add_argument('--capture-video', dest='capture_video', metavar='PATH',
                         help='record the scene to a video file, then exit. With '
                              '--fly-through the camera walks the scene\'s own '
-                             'cameras in order, which is what makes a recording '
-                             'of a world rather than of a still')
-    parser.add_argument('--video-seconds', dest='video_seconds', type=float,
-                        metavar='SECONDS',
-                        help='how long the recording is (default 12)')
-    parser.add_argument('--video-fps', dest='video_fps', type=int, metavar='N',
+                             'cameras in order')
+    parser.add_argument('--video-seconds', dest='video_seconds',
+                        type=_positive_float, metavar='SECONDS',
+                        help='how long the recording is, and how long a '
+                             '--fly-through takes with or without one '
+                             '(default 12)')
+    parser.add_argument('--video-fps', dest='video_fps', type=_positive_int,
+                        metavar='N',
                         help='frames a second in the recording (default 30)')
     parser.add_argument('--fly-through', dest='fly_through',
                         action='store_true',
                         help="walk the camera along the scene's own viewpoints, "
                              'in the order it declares them')
-    parser.add_argument('--capture-image', dest='capture', metavar='PATH',
-                        help='render to PATH (PNG) after settling, then exit; '
-                             'the same as --capture')
-    parser.add_argument('--capture', metavar='PATH',
+    parser.add_argument('--capture', '--capture-image', dest='capture',
+                        metavar='PATH',
                         help='render to PATH (PNG) after settling, then exit')
     parser.add_argument('--capture-delay', type=float, metavar='SECONDS',
                         help='seconds to let the scene settle before --capture (default 0.5)')
