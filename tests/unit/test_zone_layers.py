@@ -268,3 +268,69 @@ def test_the_table_weighs_every_zone_at_a_point_as_each_would():
         found = zonelayers.point_weights(table, point)
         for zone in zones:
             assert found[id(zone)] == pytest.approx(zone.weight(point), abs=1e-9)
+
+
+def _spread(rng, count=60, across=2000.0):
+    """Turned, scaled zones along a long stretch of world, as a road's are."""
+    placed = []
+    for _ in range(count):
+        angle = float(rng.uniform(0, 2 * np.pi))
+        matrix = np.identity(4)
+        matrix[0, 0] = matrix[2, 2] = np.cos(angle)
+        matrix[0, 2], matrix[2, 0] = np.sin(angle), -np.sin(angle)
+        matrix[:3, :3] *= float(rng.uniform(0.5, 2.0))
+        matrix[3, :3] = (rng.uniform(-across / 2, across / 2), rng.uniform(-5, 5),
+                         rng.uniform(-across / 2, across / 2))
+        zone = Zone(size=tuple(rng.uniform(4, 80, 3)), blend=float(rng.uniform(0, 25)),
+                    settings=[ZoneEnvironment()])
+        placed.append((zone, matrix))
+    return placed_zones(placed)
+
+
+class TestTheTableAsksOnlyTheZonesNearby:
+    """A moving object is near a few of a world's zones; the table's detailed
+    tests are made against those, and the answers are every zone's."""
+
+    def test_many_boxes_are_classified_as_each_zone_would(self):
+        rng = np.random.default_rng(21)
+        zones = _spread(rng)
+        table = zonelayers.ZoneTable(zones)
+        for _ in range(15):
+            centre = rng.uniform(-900, 900, 3) * (1, 0.01, 1)
+            lows = centre + rng.uniform(-8, 8, (6, 3))
+            highs = lows + rng.uniform(0.5, 6, (6, 3))
+            for low, high, found in zip(lows, highs, table.classify_many(lows, highs)):
+                kept = {id(zone): inside for zone, inside in found}
+                wanted = {id(zone): where == 'inside' for zone in zones
+                          for where in (zone.shape.classify(low, high, zone.blend),)
+                          if where != 'outside'}
+                assert kept == wanted
+
+    def test_a_box_near_a_zone_is_tested_against_it(self):
+        zones = _spread(np.random.default_rng(22))
+        table = zonelayers.ZoneTable(zones)
+        some = zones[7]
+        at = np.asarray(some.shape.centre, 'd')
+        found = table.classify_many([at - 0.5], [at + 0.5])[0]
+        assert (some, True) in found
+
+    def test_far_zones_are_not_asked(self):
+        zones = _spread(np.random.default_rng(23))
+        table = zonelayers.ZoneTable(zones)
+        near = table.near([-5.0, -5.0, -5.0], [5.0, 5.0, 5.0])
+        assert len(near) < len(zones) / 4
+
+    def test_slack_never_overstates_the_room(self):
+        rng = np.random.default_rng(24)
+        zones = _spread(rng)
+        table = zonelayers.ZoneTable(zones)
+        everything = zonelayers.ZoneTable(zones)
+        everything.slack_reach = np.inf
+        centres = rng.uniform(-900, 900, (200, 3)) * (1, 0.01, 1)
+        radii = rng.uniform(0.2, 4.0, 200)
+        found = table.sphere_slack(centres, radii)
+        exact = everything.sphere_slack(centres, radii)
+        assert np.all(found <= exact + 1e-9)
+        close = exact < table.slack_reach - radii
+        assert close.any()
+        assert np.allclose(found[close], exact[close])

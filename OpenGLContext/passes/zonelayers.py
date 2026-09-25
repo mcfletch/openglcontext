@@ -112,6 +112,11 @@ class ZoneTable:
     way. Other shapes are measured one at a time, as before.
     """
 
+    #: How far from a sphere :meth:`sphere_slack` looks for zones, in metres.
+    #: A zone further away than this leaves the sphere at least this much
+    #: room, less its radius, so the slack answered is never more than that.
+    slack_reach = 60.0
+
     def __init__(self, placed: Sequence[PlacedZone]) -> None:
         self.placed = list(placed)
         count = len(self.placed)
@@ -119,21 +124,47 @@ class ZoneTable:
         self.reach = np.zeros((count, 3), dtype='d')
         self.half = np.zeros((count, 3), dtype='d')
         self.box = np.zeros(count, dtype=bool)
+        self.blend = np.array([zone.blend for zone in self.placed], dtype='d')
         for index, zone in enumerate(self.placed):
             self.to_local[index] = zone.shape.to_local
             self.reach[index] = np.asarray(zone.shape.reach, 'd') + zone.blend
             if zone.shape.kind == zones.BOX:
                 self.box[index] = True
                 self.half[index] = zone.shape.params
+        # Each zone's reach -- its shape and its blend band -- as a box in the
+        # world, so the zones a query could touch are found with a comparison
+        # of boxes before any point is carried into a zone's frame.
+        if count:
+            to_world = np.linalg.inv(self.to_local)
+            middle = to_world[:, 3, :3]
+            spread = (np.abs(to_world[:, :3, :3]) * self.reach[:, :, None]).sum(axis=1)
+            self.world_low, self.world_high = middle - spread, middle + spread
+        else:
+            self.world_low = self.world_high = np.zeros((0, 3))
 
-    def _local(self, points: np.ndarray) -> np.ndarray:
-        """``(N, 3)`` world points in every zone's frame, as ``(Z, N, 3)``.
+    def near(self, minimum: Any, maximum: Any) -> np.ndarray:
+        """The indices of the zones whose reach overlaps the world box given."""
+        low = np.asarray(minimum, dtype='d')
+        high = np.asarray(maximum, dtype='d')
+        found: np.ndarray = np.flatnonzero(np.all(self.world_low <= high, axis=1)
+                                           & np.all(self.world_high >= low, axis=1))
+        return found
+
+    def _local_to(self, which: Any, points: np.ndarray) -> np.ndarray:
+        """``(N, 3)`` world points in the frames of the zones ``which``, as ``(W, N, 3)``.
 
         A broadcast matrix product, which numpy hands to BLAS, rather than an
         ``einsum``, which it does not.
         """
-        return (np.matmul(np.asarray(points, dtype='d')[None, :, :], self.to_local[:, :3, :3])
-                + self.to_local[:, None, 3, :3])
+        matrices = self.to_local[which]
+        found: np.ndarray = (
+            np.matmul(np.asarray(points, dtype='d')[None, :, :], matrices[:, :3, :3])
+            + matrices[:, None, 3, :3])
+        return found
+
+    def _local(self, points: np.ndarray) -> np.ndarray:
+        """``(N, 3)`` world points in every zone's frame, as ``(Z, N, 3)``."""
+        return self._local_to(slice(None), points)
 
     def reaching(self, minimum: Any, maximum: Any) -> List[PlacedZone]:
         """The zones whose shape, or blend band, the box may reach."""
@@ -141,22 +172,7 @@ class ZoneTable:
 
     def classify(self, minimum: Any, maximum: Any) -> List[Tuple[PlacedZone, bool]]:
         """Each zone the box reaches, with whether the box is wholly inside it."""
-        if not self.placed:
-            return []
-        local = self._local(zones._corners(minimum, maximum))
-        low, high = local.min(axis=1), local.max(axis=1)
-        clear = np.any(low > self.reach, axis=1) | np.any(high < -self.reach, axis=1)
-        inside_box = np.all(np.abs(local) <= self.half[:, None, :], axis=(1, 2))
-        found = []
-        for index in np.flatnonzero(~clear):
-            zone = self.placed[index]
-            if self.box[index]:
-                inside = bool(inside_box[index])
-            else:
-                inside = bool(np.all(zones._distance(
-                    zone.shape.kind, zone.shape.params, local[index]) <= 0.0))
-            found.append((zone, inside))
-        return found
+        return self.classify_many([minimum], [maximum])[0]
 
     def classify_many(self, minimums: Any, maximums: Any
                       ) -> List[List[Tuple[PlacedZone, bool]]]:
@@ -170,25 +186,34 @@ class ZoneTable:
         high_in = np.asarray(maximums, dtype='d').reshape(-1, 3)
         if not self.placed or not len(low_in):
             return [[] for _ in range(len(low_in))]
+        # Only the zones whose reach overlaps the boxes together are carried
+        # through; a world's zones are strung out along its roads, and an
+        # object is near few of them.
+        which = self.near(low_in.min(axis=0), high_in.max(axis=0))
+        if not len(which):
+            return [[] for _ in range(len(low_in))]
         corners = np.where(zones._CORNER_ENDS[None, :, :], high_in[:, None, :],
                            low_in[:, None, :])                         # (M, 8, 3)
         count = len(low_in)
-        local = self._local(corners.reshape(-1, 3))                    # (Z, M*8, 3)
-        local = local.reshape(len(self.placed), count, 8, 3).transpose(1, 0, 2, 3)
-        low, high = local.min(axis=2), local.max(axis=2)
-        clear = (np.any(low > self.reach[None], axis=2)
-                 | np.any(high < -self.reach[None], axis=2))           # (M, Z)
-        inside_box = np.all(np.abs(local) <= self.half[None, :, None, :], axis=(2, 3))
+        local = self._local_to(which, corners.reshape(-1, 3))          # (W, M*8, 3)
+        # Corners leading, since numpy reduces a short trailing axis slowly.
+        local = local.reshape(len(which), count, 8, 3).transpose(2, 1, 0, 3)
+        low, high = local.min(axis=0), local.max(axis=0)               # (M, W, 3)
+        reach = self.reach[which][None]
+        clear = np.any(low > reach, axis=2) | np.any(high < -reach, axis=2)
+        half = self.half[which][None]
+        inside_box = (np.all(low >= -half, axis=2) & np.all(high <= half, axis=2))
         found: List[List[Tuple[PlacedZone, bool]]] = []
-        for row in range(len(low_in)):
+        for row in range(count):
             mine = []
-            for index in np.flatnonzero(~clear[row]):
+            for at in np.flatnonzero(~clear[row]):
+                index = which[at]
                 zone = self.placed[index]
                 if self.box[index]:
-                    inside = bool(inside_box[row, index])
+                    inside = bool(inside_box[row, at])
                 else:
                     inside = bool(np.all(zones._distance(
-                        zone.shape.kind, zone.shape.params, local[row, index]) <= 0.0))
+                        zone.shape.kind, zone.shape.params, local[:, row, at]) <= 0.0))
                 mine.append((zone, inside))
             found.append(mine)
         return found
@@ -198,14 +223,18 @@ class ZoneTable:
         points = np.asarray(points, dtype='d').reshape(-1, 3)
         if not self.placed:
             return np.zeros((len(points), 0))
-        local = self._local(points)                                  # (Z, M, 3)
-        q = np.abs(local) - self.half[:, None, :]
-        found = (np.linalg.norm(np.maximum(q, 0.0), axis=2)
-                 + np.minimum(q.max(axis=2), 0.0)).T                 # (M, Z)
-        for index in np.flatnonzero(~self.box):
-            zone = self.placed[index]
-            found[:, index] = zones._distance(zone.shape.kind, zone.shape.params,
-                                              local[index])
+        return self._signed(np.arange(len(self.placed)), points)
+
+    def _signed(self, which: np.ndarray, points: np.ndarray) -> np.ndarray:
+        """The zones ``which``'s signed distances from ``points``, as ``(M, W)``."""
+        local = self._local_to(which, points)                        # (W, M, 3)
+        q = np.abs(local) - self.half[which][:, None, :]
+        found: np.ndarray = (np.linalg.norm(np.maximum(q, 0.0), axis=2)
+                             + np.minimum(q.max(axis=2), 0.0)).T     # (M, W)
+        for at in np.flatnonzero(~self.box[which]):
+            zone = self.placed[which[at]]
+            found[:, at] = zones._distance(zone.shape.kind, zone.shape.params,
+                                           local[at])
         return found
 
     def sphere_slack(self, centres: Any, radii: Any) -> np.ndarray:
@@ -217,19 +246,34 @@ class ZoneTable:
         An object that has moved less than this since it was classified,
         turned however it likes within its bounding sphere, is where it was as
         far as every zone can tell.
+
+        Only the zones within :attr:`slack_reach` of the spheres are measured;
+        the rest leave at least that much room, so the answer is never more
+        than :attr:`slack_reach` less the radius.
         """
         centres = np.asarray(centres, dtype='d').reshape(-1, 3)
-        radii = np.asarray(radii, dtype='d').reshape(-1, 1)
+        radii = np.asarray(radii, dtype='d').reshape(-1)
+        reach = float(self.slack_reach)
         if not self.placed:
             return np.full(len(centres), np.inf)
-        d = self.signed_distances(centres)
-        blend = np.array([zone.blend for zone in self.placed])[None, :]
+        limit: np.ndarray
+        if np.isfinite(reach):
+            which = self.near(centres.min(axis=0) - reach, centres.max(axis=0) + reach)
+            limit = np.maximum(reach - radii, 0.0)
+        else:
+            which = np.arange(len(self.placed))
+            limit = np.full(len(centres), np.inf)
+        if not len(which):
+            return limit
+        d = self._signed(which, centres)
+        blend = self.blend[which][None, :]
         # What decides a classification is which side of two lines a sphere
         # is: the shape's surface and the outer edge of its blend band. Its
         # room is the distance to the nearer of them, less its radius.
         room = np.where(d > blend, d - blend,
-                        np.where(d > 0.0, np.minimum(d, blend - d), -d)) - radii
-        return np.maximum(room.min(axis=1), 0.0)
+                        np.where(d > 0.0, np.minimum(d, blend - d), -d)) - radii[:, None]
+        slack: np.ndarray = np.minimum(np.maximum(room.min(axis=1), 0.0), limit)
+        return slack
 
     def nearness(self, point: Any) -> Dict[int, float]:
         """Every zone's signed distance from ``point``, by ``id``, in one pass."""
