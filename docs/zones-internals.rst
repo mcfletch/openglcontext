@@ -277,6 +277,8 @@ Tests
 ``tests/unit/test_zones.py`` (distances, classification, layering),
 ``test_gltf_zones.py`` (the reader, against the specification's examples),
 ``test_zone_layers.py`` (draw, camera and capture decisions),
+``test_zone_glsl_distances.py`` (``zoneDistance`` in the shader against the
+Python distances, for every kind of shape),
 ``test_pbr_zones.py`` (the shader contract, the pass, audio, gravity, renders
 from ``tests/helpers/_zone_capture.py`` and the fill-bound timing) and
 ``test_tilesterrain_zones.py`` (a streamed world's zones).
