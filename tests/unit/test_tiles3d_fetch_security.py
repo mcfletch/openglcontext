@@ -155,7 +155,7 @@ class TestTheCacheTheTilesRuntimeUses:
             pytest.skip('this filesystem does not enforce POSIX directory modes')
         # Another account must not be able to pre-seed a tile this user loads.
         monkeypatch.setattr(resolver, "_open_url",
-                            lambda url, base, timeout=30: _FakeResponse(b"glb"))
+                            lambda _url, _base, timeout=30: _FakeResponse(b"glb"))  # noqa: ARG005 _open_url's signature
         cache = tmp_path / "tiles3d"
         assert fetch.read_bytes(fetch.resolve_uri("", REMOTE + "0.glb"), cache_dir=str(cache)) == b"glb"
         assert (os.stat(cache).st_mode & 0o077) == 0
@@ -174,7 +174,7 @@ class TestTheCacheTheTilesRuntimeUses:
 
     def test_a_remote_payload_over_the_cap_is_refused(self, tmp_path, monkeypatch):
         monkeypatch.setattr(resolver, "_open_url",
-                            lambda url, base, timeout=30: _FakeResponse(b"x" * 4096))
+                            lambda _url, _base, timeout=30: _FakeResponse(b"x" * 4096))  # noqa: ARG005 _open_url's signature
         with pytest.raises(ValueError):
             fetch.read_bytes(fetch.resolve_uri("", REMOTE + "0.glb"), cache_dir=str(tmp_path),
                              max_bytes=1024)

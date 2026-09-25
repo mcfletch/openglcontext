@@ -13,13 +13,13 @@ def _found(drawn, differing):
 
 
 def test_a_geometry_out_of_sight_is_refused(monkeypatch):
-    monkeypatch.setattr(mirrored, 'mirrored_render', lambda geometry, **named: _found(0.0, 0.0))
+    monkeypatch.setattr(mirrored, 'mirrored_render', lambda _geometry, **_named: _found(0.0, 0.0))
     with pytest.raises(NotMirrored, match='covers 0.0% of the frame'):
         mirrored.check_mirrored_render(basenodes.Box())
 
 
 def test_a_picture_that_is_not_turned_over_is_refused(monkeypatch):
-    monkeypatch.setattr(mirrored, 'mirrored_render', lambda geometry, **named: _found(0.3, 0.3))
+    monkeypatch.setattr(mirrored, 'mirrored_render', lambda _geometry, **_named: _found(0.3, 0.3))
     with pytest.raises(NotMirrored, match='Box under a mirroring transform differs'):
         mirrored.check_mirrored_render(basenodes.Box())
 

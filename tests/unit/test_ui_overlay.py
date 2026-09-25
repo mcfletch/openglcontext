@@ -183,8 +183,8 @@ class TestStack:
         stack = OverlayStack()
         first, second = dialog(), dialog()
         fired = []
-        first.find('ok').on_activate = lambda widget: fired.append('first')
-        second.find('ok').on_activate = lambda widget: fired.append('second')
+        first.find('ok').on_activate = lambda _widget: fired.append('first')
+        second.find('ok').on_activate = lambda _widget: fired.append('second')
         stack.push(first, viewport=(800, 600), metrics=metrics)
         stack.push(second, viewport=(800, 600), metrics=metrics)
         stack.key('o', (0, 0, 0))
@@ -199,7 +199,7 @@ class TestStack:
         stack = OverlayStack()
         under, over = dialog(modal=False), dialog(modal=False)
         fired = []
-        under.find('ok').on_activate = lambda widget: fired.append('under')
+        under.find('ok').on_activate = lambda _widget: fired.append('under')
         stack.push(under, viewport=(800, 600), metrics=metrics)
         stack.push(over, viewport=(800, 600), metrics=metrics)
         # A point on the lower panel's button that the upper panel has nothing
@@ -214,7 +214,7 @@ class TestStack:
         stack = OverlayStack()
         under, over = dialog(modal=False), dialog(modal=True)
         fired = []
-        under.find('ok').on_activate = lambda widget: fired.append('under')
+        under.find('ok').on_activate = lambda _widget: fired.append('under')
         stack.push(under, viewport=(800, 600), metrics=metrics)
         stack.push(over, viewport=(800, 600), metrics=metrics)
         over.find('ok').enabled = False
@@ -494,7 +494,7 @@ class TestAnInputTheOverlayTookIsTakenWhole:
         context.pushOverlay(panel)
         panel.accelerators.clear()
         x, y = panel.find('ok').rect.centre
-        panel.find('ok').on_activate = lambda widget: panel.close(True)
+        panel.find('ok').on_activate = lambda _widget: panel.close(True)
         context.ProcessEvent(FakeEvent('mousebutton', button=0, state=1,
                                        pick=(x, y)))
         context.ProcessEvent(FakeEvent('mousebutton', button=0, state=0,

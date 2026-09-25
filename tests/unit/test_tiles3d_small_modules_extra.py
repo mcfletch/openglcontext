@@ -77,10 +77,10 @@ def test_evict_releases_drawable_and_fires_callback():
     evicted = []
     released = []
     uploader = types.SimpleNamespace(
-        upload=lambda tile, payload: (None, 0),
+        upload=lambda _tile, _payload: (None, 0),
         release=lambda drawable: released.append(drawable))
     tileset = types.SimpleNamespace(root=None)
-    rt = TilesetRuntime(tileset, loader_fn=lambda t: None, uploader=uploader,
+    rt = TilesetRuntime(tileset, loader_fn=lambda _t: None, uploader=uploader,
                         memory_budget=0.0, fovy=1.0, workers=1,
                         on_evicted=lambda tile, drawable: evicted.append((tile, drawable)))
     try:

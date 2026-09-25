@@ -56,7 +56,7 @@ def _viewer(source=None, **named):
     viewer.physicsWalking = False
     viewer.physicsPlatform = None
     viewer.sceneLoaded = False
-    viewer.triggerRedraw = lambda count=1: None
+    viewer.triggerRedraw = lambda count=1: None  # noqa: ARG005 triggerRedraw's signature
     viewer.requested = []
     viewer.requestScene = lambda produce, label='': viewer.requested.append(
         (produce, label))
@@ -199,7 +199,7 @@ class TestTheMovementItDeclares:
         viewer.settleCapture = None
         viewer.sg = object()
         viewer.physicsYaw = 0.0
-        viewer.setupPhysics = lambda enable=False: False
+        viewer.setupPhysics = lambda enable=False: False  # noqa: ARG005 setupPhysics's signature
         return viewer
 
     def test_a_viewer_declares_them_before_anything_is_walked(self):

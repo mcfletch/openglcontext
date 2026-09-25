@@ -18,7 +18,7 @@ def metrics():
 @pytest.fixture
 def registry():
     made = console.CommandRegistry()
-    made.add('echo', lambda panel, *words: ' '.join(words), 'repeat the words')
+    made.add('echo', lambda _panel, *words: ' '.join(words), 'repeat the words')
     return made
 
 
@@ -54,7 +54,7 @@ class TestRegistry:
         assert 'deliberate' in registry.dispatch(None, 'broken')
 
     def test_commands_are_listed_in_order(self, registry):
-        registry.add('alpha', lambda panel: '', 'first')
+        registry.add('alpha', lambda _panel: '', 'first')
         assert registry.names()[0] == 'alpha'
 
 

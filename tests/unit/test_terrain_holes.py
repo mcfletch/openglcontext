@@ -73,7 +73,7 @@ class TestAnOpeningWithNothingInIt:
         field = flat()
         inter, triangles = field.mesh()
         _, kept = cut(inter, triangles.reshape(-1, 3),
-                      lambda x, z: np.ones(np.shape(x), dtype=bool))
+                      lambda x, _z: np.ones(np.shape(x), dtype=bool))
         assert not len(kept)
 
     def test_an_opening_that_leaves_only_slivers_leaves_none(self) -> None:
@@ -82,7 +82,7 @@ class TestAnOpeningWithNothingInIt:
         field = flat(res=5)
         inter, triangles = field.mesh()
         _, kept = cut(inter, triangles.reshape(-1, 3),
-                      lambda x, z: np.asarray(x) > -EXTENT / 2 + 1e-9)
+                      lambda x, _z: np.asarray(x) > -EXTENT / 2 + 1e-9)
         assert not len(kept)
         assert np.asarray(kept).shape[1:] == (3,)
 

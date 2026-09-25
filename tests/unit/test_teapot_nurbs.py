@@ -222,9 +222,9 @@ def _patch_render(monkeypatch, t, tessellate_ok=True):
     """
     calls = []
     monkeypatch.setattr(type(t), '_ensure_tessellated',
-                        classmethod(lambda cls, steps: tessellate_ok))
-    monkeypatch.setattr(t, '_render_legacy', lambda steps: calls.append('legacy'))
-    monkeypatch.setattr(t, '_render_shader', lambda mode, steps: calls.append('shader'))
+                        classmethod(lambda _cls, _steps: tessellate_ok))
+    monkeypatch.setattr(t, '_render_legacy', lambda _steps: calls.append('legacy'))
+    monkeypatch.setattr(t, '_render_shader', lambda _mode, _steps: calls.append('shader'))
     monkeypatch.setattr(t, '_render_glut', lambda: calls.append('glut'))
     return calls
 

@@ -133,7 +133,7 @@ class TestTheTilesAdapter:
         adapter.load(tileset)
         asked = []
         adapter.terrain.update_for_camera = (
-            lambda eye, height, view_projection=None: asked.append(eye))
+            lambda eye, _height, view_projection=None: asked.append(eye))  # noqa: ARG005 update_for_camera's signature
         assert adapter.update(_Viewer()) is True
         assert asked, 'the runtime was told where the camera is'
 
@@ -223,7 +223,7 @@ class TestAimingAtRealGeometry:
 
     def test_a_tileset_with_no_extent_still_frames(self):
         root = self._root((0.0, 0.0, 0.0), 0.0, content_uri=None, children=[])
-        _center, radius = TilesAdapter().boundsOf(root, lambda tile: (None, None))
+        _center, radius = TilesAdapter().boundsOf(root, lambda _tile: (None, None))
         assert radius == 1.0
 
 

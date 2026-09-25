@@ -132,7 +132,7 @@ class TestReplaying:
     def test_it_knows_when_the_recording_has_run_out(self):
         replay = Replay(journal(keypress(0, 'a'),
                                 {'kind': 'frames', 'frame': 0, 't': 0.0,
-                                 'ms': [16.0]}), lambda record: None)
+                                 'ms': [16.0]}), lambda _record: None)
         assert not replay.finished
         replay.frame()
         assert replay.finished
@@ -144,7 +144,7 @@ class TestReplaying:
         frame stale."""
         replay = Replay(journal({'kind': 'frames', 'frame': 0, 't': 0.0,
                                  'ms': [16.0, 500.0, 16.0]}),
-                        lambda record: None, start=100.0)
+                        lambda _record: None, start=100.0)
         replay.install()
         try:
             replay.frame()
@@ -163,7 +163,7 @@ class TestReplaying:
         the replay starts."""
         replay = Replay(journal({'kind': 'frames', 'frame': 0, 't': 12.5,
                                  'ms': [16.0]}),
-                        lambda record: None, start=100.0)
+                        lambda _record: None, start=100.0)
         with replay.clock:
             replay.frame()
             assert systemtime.systemTime() == pytest.approx(100.0)

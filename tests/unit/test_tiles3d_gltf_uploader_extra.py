@@ -124,8 +124,8 @@ def test_dispose_mesh_gpu_swallows_release_and_delete_errors():
 
     dropped = []
     cache = types.SimpleNamespace(
-        getData=lambda g, key="": _GPU(),
-        getHolder=lambda g, key="": lambda: dropped.append(g))
+        getData=lambda _g, key="": _GPU(),  # noqa: ARG005 the context cache's getData/getHolder signature
+        getHolder=lambda g, key="": lambda: dropped.append(g))  # noqa: ARG005 the context cache's getData/getHolder signature
     geometry = object()
     # One failure does not stop the rest: every buffer is still deleted and
     # the cache entry is still dropped.

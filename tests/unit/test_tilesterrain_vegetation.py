@@ -59,7 +59,7 @@ def _landscape(directory, **named):
     document = json.load(open(path))
     document.setdefault('extras', {})
     field = HeightField.from_function(
-        lambda x, z: np.zeros(np.shape(np.asarray(x))), res=33, extent=2048.0)
+        lambda x, _z: np.zeros(np.shape(np.asarray(x))), res=33, extent=2048.0)
     field.save_image(os.path.join(str(directory), 'g-height.png'))
     control_map(field, [LayerRule()], size=32).save(
         os.path.join(str(directory), 'g-control.png'))
@@ -249,7 +249,7 @@ class TestTheGroundCoverAWorldCarries:
         document = json.load(open(path))
         document.setdefault('extras', {})
         field = HeightField.from_function(
-            lambda x, z: np.zeros(np.shape(np.asarray(x))), res=33,
+            lambda x, _z: np.zeros(np.shape(np.asarray(x))), res=33,
             extent=2048.0)
         field.save_image(os.path.join(str(directory), 'g-height.png'))
         control_map(field, [LayerRule(), LayerRule(weight=0.0)], size=32).save(

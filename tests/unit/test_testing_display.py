@@ -107,7 +107,7 @@ class TestAskedOnce:
             ran.append(named['env']['DISPLAY'])
             return Opened()
 
-        monkeypatch.setattr(glcontext, '_display_listens', lambda *a: True)
+        monkeypatch.setattr(glcontext, '_display_listens', lambda *_args: True)
         monkeypatch.setattr(subprocess, 'run', run)
         glcontext._client_opens.cache_clear()
         try:

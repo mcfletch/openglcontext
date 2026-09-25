@@ -98,8 +98,8 @@ class TestTheHandover:
         host.redraws = 0
         host.applied = []
         host.labels = []
-        host.triggerRedraw = lambda count=1: None
-        host.onSceneLoading = lambda label: None
+        host.triggerRedraw = lambda count=1: None  # noqa: ARG005 triggerRedraw's signature
+        host.onSceneLoading = lambda _label: None
         host.applyLoadedScene = host.applied.append
         host.requestScene(lambda: 'SCENE')
         assert _settled(host)

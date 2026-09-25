@@ -460,7 +460,7 @@ class TestAFailedConstructionSaysWhatIsMissing:
 
     def test_a_driver_with_no_pbuffers_is_refused_by_name(self, monkeypatch):
         monkeypatch.setattr(offscreen, 'available',
-                            lambda profile='core': ('WGL_ARB_pbuffer',))
+                            lambda profile='core': ('WGL_ARB_pbuffer',))  # noqa: ARG005 offscreen.available's signature
         with pytest.raises(wglcontext.WGLContextError) as caught:
             wglcontext.WGLContext(size=(16, 16))
         assert 'WGL_ARB_pbuffer' in str(caught.value)

@@ -30,8 +30,8 @@ def panel(metrics):
         ], spacing=8)],
     )
     dialog.fired = []
-    yes.on_activate = lambda widget: dialog.fired.append('yes')
-    no.on_activate = lambda widget: dialog.fired.append('no')
+    yes.on_activate = lambda _widget: dialog.fired.append('yes')
+    no.on_activate = lambda _widget: dialog.fired.append('no')
     dialog.layout((800, 600), metrics)
     return dialog
 
@@ -232,7 +232,7 @@ class TestCapturing:
         screen = Panel(capturing=True, children=[
             Column(children=[capture, cancel])])
         screen.fired = []
-        cancel.on_activate = lambda widget: screen.fired.append('cancel')
+        cancel.on_activate = lambda _widget: screen.fired.append('cancel')
         screen.layout((400, 200), metrics)
         screen.focus(capture)
         return screen
@@ -266,7 +266,7 @@ class TestCommands:
         done = []
         button = Button(text='Apply', action='commit', name='apply')
         screen = Panel(children=[Column(children=[button])])
-        screen.commands['commit'] = lambda dialog, widget: done.append(widget)
+        screen.commands['commit'] = lambda _dialog, widget: done.append(widget)
         screen.layout((400, 200), metrics)
         button.activate()
         assert done == [button]
@@ -275,7 +275,7 @@ class TestCommands:
         done = []
         button = Button(text='Apply', action='nosuch')
         screen = Panel(children=[Column(children=[button])])
-        screen.commands['commit'] = lambda dialog, widget: done.append(widget)
+        screen.commands['commit'] = lambda _dialog, widget: done.append(widget)
         screen.layout((400, 200), metrics)
         button.activate()
         assert done == []
@@ -402,7 +402,7 @@ class TestWhatAWidgetIsToldToDo:
 
     def test_a_button_can_be_given_its_action(self) -> None:
         pressed = []
-        button = Button(text='Yes', on_activate=lambda widget: pressed.append(1))
+        button = Button(text='Yes', on_activate=lambda _widget: pressed.append(1))
         button.activate()
         assert pressed == [1]
 
@@ -413,7 +413,7 @@ class TestWhatAWidgetIsToldToDo:
         assert seen == [True]
 
     def test_the_fields_still_come_through(self) -> None:
-        button = Button(text='Yes', name='yes', on_activate=lambda w: None)
+        button = Button(text='Yes', name='yes', on_activate=lambda _w: None)
         assert button.text == 'Yes' and button.name == 'yes'
 
     def test_a_widget_given_neither_has_neither(self) -> None:

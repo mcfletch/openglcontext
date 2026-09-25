@@ -50,7 +50,7 @@ def _ground(images):
     vertices, indices = field.mesh()
     shading = GroundShading(extent=EXTENT, layers=['grass'], control=control,
                             shading=np.ones((8, 8), 'f'),
-                            material_fn=lambda *a, **k: {'color': grass})
+                            material_fn=lambda *_args, **_named: {'color': grass})
     return basenodes.Shape(geometry=GroundPatch(shading, vertices, indices))
 
 

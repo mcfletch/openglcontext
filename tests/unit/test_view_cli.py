@@ -73,9 +73,9 @@ class TestListingCameras:
 class TestStartingTheViewer:
     def test_the_options_reach_the_context(self, monkeypatch):
         seen = {}
-        monkeypatch.setattr(V, 'apply_render_env', lambda options: None)
+        monkeypatch.setattr(V, 'apply_render_env', lambda _options: None)
         monkeypatch.setattr(V.TestContext, 'ContextMainLoop',
-                            classmethod(lambda cls, **window: seen.update(window)))
+                            classmethod(lambda _cls, **window: seen.update(window)))
         monkeypatch.delenv('OPENGLCONTEXT_FULLSCREEN', raising=False)
         V.main([VRML_WORLD])
         assert V.TestContext.options.source == VRML_WORLD
@@ -83,9 +83,9 @@ class TestStartingTheViewer:
 
     def test_a_window_size_reaches_the_loop(self, monkeypatch):
         seen = {}
-        monkeypatch.setattr(V, 'apply_render_env', lambda options: None)
+        monkeypatch.setattr(V, 'apply_render_env', lambda _options: None)
         monkeypatch.setattr(V.TestContext, 'ContextMainLoop',
-                            classmethod(lambda cls, **window: seen.update(window)))
+                            classmethod(lambda _cls, **window: seen.update(window)))
         monkeypatch.delenv('OPENGLCONTEXT_FULLSCREEN', raising=False)
         V.main([VRML_WORLD, '--size', '640x480'])
         assert seen == {'size': (640, 480), 'fullscreen': False}
@@ -93,10 +93,10 @@ class TestStartingTheViewer:
     def test_nothing_to_view_still_opens_the_viewer(self, monkeypatch):
         """It opens its shelf.  A usage message is not what a viewer is for."""
         monkeypatch.delenv('GLTF', raising=False)
-        monkeypatch.setattr(V, 'apply_render_env', lambda options: None)
+        monkeypatch.setattr(V, 'apply_render_env', lambda _options: None)
         ran = []
         monkeypatch.setattr(V.TestContext, 'ContextMainLoop',
-                            classmethod(lambda cls, **window: ran.append(True)))
+                            classmethod(lambda _cls, **_window: ran.append(True)))
         V.main([])
         assert ran == [True]
         assert V.TestContext.options.source is None
@@ -118,9 +118,9 @@ class TestTheOldCommandNames:
     def test_an_alias_runs_the_one_viewer(self, module, source, monkeypatch, capsys):
         alias = importlib.import_module(module)
         seen = {}
-        monkeypatch.setattr(V, 'apply_render_env', lambda options: None)
+        monkeypatch.setattr(V, 'apply_render_env', lambda _options: None)
         monkeypatch.setattr(V.TestContext, 'ContextMainLoop',
-                            classmethod(lambda cls, **window: seen.setdefault('ran', True)))
+                            classmethod(lambda _cls, **_window: seen.setdefault('ran', True)))
         alias.main([source])
         assert seen.get('ran'), 'the alias must actually open the viewer'
         assert 'oglc-view' in capsys.readouterr().err, 'and say what replaced it'

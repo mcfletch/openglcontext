@@ -105,7 +105,7 @@ def test_billboards_disabled_on_init_failure_no_crash(tmp_path, monkeypatch):
                                np.ones(1, 'f4'), _tex_png(tmp_path))
     # billboards binds load_program into its own namespace at import.
     monkeypatch.setattr("OpenGLContext.scenegraph.vegetation.billboards.load_program",
-                        lambda *a: (_ for _ in ()).throw(RuntimeError("no shader")))
+                        lambda *_args: (_ for _ in ()).throw(RuntimeError("no shader")))
     assert node.render(_mode()) == 1        # a compile failure must not raise
     assert node.failed is True
     assert node.render(_mode()) == 1        # stays a no-op
@@ -253,7 +253,7 @@ def test_splat_terrain_render_restores_state_and_disposes(tmp_path):
     grid = (np.sin(np.linspace(0, 3, 8))[:, None] * np.ones((8, 8))).astype('f8') * 0.5 + 0.5
     hf = HeightField(grid, 100.0, 10.0)
     node = SplatTerrain(hf, ["floor"], str(ctl),
-                        material_fn=lambda name, res: {"color": str(tex)})
+                        material_fn=lambda _name, _res: {"color": str(tex)})
 
     glEnable(GL_BLEND)
     glDepthMask(GL_FALSE)

@@ -97,7 +97,7 @@ class TestTheTap:
 
     def test_removing_it_leaves_the_method_the_class_defines(self, context):
         original = FakeContext.ProcessEvent
-        tap = telemetry_record.Tap(context, 'ProcessEvent', before=lambda event: None)
+        tap = telemetry_record.Tap(context, 'ProcessEvent', before=lambda _event: None)
         tap.remove()
         assert 'ProcessEvent' not in context.__dict__
         assert context.ProcessEvent.__func__ is original
@@ -529,7 +529,7 @@ class TestTheHeader:
 
 class TestTakingTheTapOffAgain:
     def test_a_tap_whose_attribute_has_already_gone_still_restores(self, context):
-        tap = telemetry_record.Tap(context, 'ProcessEvent', before=lambda e: None)
+        tap = telemetry_record.Tap(context, 'ProcessEvent', before=lambda _e: None)
         del context.ProcessEvent
         tap.remove()
         context.ProcessEvent('an event')

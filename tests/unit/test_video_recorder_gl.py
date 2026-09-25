@@ -86,13 +86,13 @@ class TestWhichBufferAFrameIsCopiedFrom:
         monkeypatch.setattr(recorder, 'glReadBuffer', asked.append)
         monkeypatch.setattr(recorder, 'glBindFramebuffer', lambda _t, _f: None)
         monkeypatch.setattr(recorder, 'glBlitFramebuffer',
-                            lambda *arguments: None)
+                            lambda *_arguments: None)
         monkeypatch.setattr(
             recorder, 'glGetIntegerv',
             lambda enum: (0, 0, 4, 4) if enum == GL_VIEWPORT else 0)
         monkeypatch.setattr(
             capture, 'glGetFramebufferAttachmentParameteriv',
-            lambda *a: GL_FRAMEBUFFER_DEFAULT if has_back_buffer
+            lambda *_args: GL_FRAMEBUFFER_DEFAULT if has_back_buffer
             else capture.GL_NONE)
         recorder.copy_frame(1, (4, 4), source=source, **named)
         return asked

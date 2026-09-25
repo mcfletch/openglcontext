@@ -47,7 +47,7 @@ class TestMain:
     def test_runs_loop_and_publishes_config(self, monkeypatch):
         ran = {}
         monkeypatch.setattr(T.TerrainContext, 'ContextMainLoop',
-                            classmethod(lambda cls: ran.setdefault('size', 'default')))
+                            classmethod(lambda _cls: ran.setdefault('size', 'default')))
         T.main([])
         assert ran.get('size') == 'default'
         assert T.TerrainContext.config.source is None
@@ -58,7 +58,7 @@ class TestMain:
             monkeypatch.delenv(name, raising=False)
         monkeypatch.setenv('OPENGLCONTEXT_IBL', 'full')
         monkeypatch.setattr(T.TerrainContext, 'ContextMainLoop',
-                            classmethod(lambda cls: None))
+                            classmethod(lambda _cls: None))
         T.main([])
         assert os.environ['OPENGLCONTEXT_RENDERER'] == 'pbr'
         assert os.environ['OPENGLCONTEXT_SHADOWS'] == '1'
@@ -89,7 +89,7 @@ class TestMain:
     def test_size_flag_is_parsed_into_the_loop(self, monkeypatch):
         seen = {}
         monkeypatch.setattr(T.TerrainContext, 'ContextMainLoop',
-                            classmethod(lambda cls, size=None: seen.setdefault('size', size)))
+                            classmethod(lambda _cls, size=None: seen.setdefault('size', size)))
         T.main(['--size', '800x600'])
         assert seen['size'] == (800, 600)
 
@@ -244,7 +244,7 @@ class TestSceneMutation:
         called = {}
         for name in ('_refresh_grass', '_refresh_detail', '_refresh_trees',
                      '_refresh_ground'):
-            setattr(inst, name, lambda *a, n=name: called.setdefault(n, True))
+            setattr(inst, name, lambda *_args, n=name: called.setdefault(n, True))
         # No layer centres are set: reading one would raise AttributeError.
         inst._maybe_refresh_vegetation((1000.0, 0.0, 1000.0))
         assert called == {}
@@ -260,7 +260,7 @@ class TestSceneMutation:
         called = {}
         for name in ('_refresh_grass', '_refresh_detail', '_refresh_trees',
                      '_refresh_ground'):
-            setattr(inst, name, lambda *a, n=name: called.setdefault(n, True))
+            setattr(inst, name, lambda *_args, n=name: called.setdefault(n, True))
         inst._maybe_refresh_vegetation((1.0, 5.0, 1.0))     # within every threshold
         assert called == {}
 
@@ -275,7 +275,7 @@ class TestSceneMutation:
         called = {}
         for name in ('_refresh_grass', '_refresh_detail', '_refresh_trees',
                      '_refresh_ground'):
-            setattr(inst, name, lambda *a, n=name: called.setdefault(n, True))
+            setattr(inst, name, lambda *_args, n=name: called.setdefault(n, True))
         inst._maybe_refresh_vegetation((0.0, 5.0, 0.0))     # exceeds every threshold
         assert called == {'_refresh_grass': True, '_refresh_detail': True,
                           '_refresh_trees': True, '_refresh_ground': True}
@@ -342,7 +342,7 @@ class TestStream:
         inst.getViewPort = lambda: (800, 600)
         seen = {}
         inst.terrain = types.SimpleNamespace(
-            update_for_camera=lambda eye, h, view_projection=None: seen.update(
+            update_for_camera=lambda _eye, h, view_projection=None: seen.update(
                 height=h, vp=view_projection))
         inst._stream((0.0, 100.0, 0.0))
         assert seen['height'] == 600

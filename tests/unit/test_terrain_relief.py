@@ -97,7 +97,7 @@ class TestGroundWithReliefOnIt:
 
     def test_and_what_it_answers_is_the_ground_plus_the_grain(self) -> None:
         relief = Relief()
-        ground = relief.over(lambda x, z: np.full(np.shape(x), 12.0),
+        ground = relief.over(lambda x, _z: np.full(np.shape(x), 12.0),
                              spacing=0.5, error=2.0)
         gx, gz = _grid()
         assert np.allclose(ground(gx, gz) - 12.0,
@@ -205,7 +205,7 @@ class TestGroundThatWasGraded:
 
     def test_a_height_function_given_the_grain_is_graded_too(self) -> None:
         relief = Relief(where=self._beside())
-        ground = relief.over(lambda x, z: np.zeros(np.shape(x)),
+        ground = relief.over(lambda x, _z: np.zeros(np.shape(x)),
                              spacing=0.5, error=4.0)
         assert not np.asarray(ground(np.linspace(-8.0, 8.0, 9),
                                      np.zeros(9))).any()

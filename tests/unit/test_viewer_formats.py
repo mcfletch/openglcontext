@@ -60,7 +60,7 @@ def _viewer(source, **named):
     viewer._player = None
     viewer.physicsWalking = False
     viewer.physicsPlatform = None
-    viewer.triggerRedraw = lambda count=1: None
+    viewer.triggerRedraw = lambda count=1: None  # noqa: ARG005 triggerRedraw's signature
     viewer.prepareSource()
     return viewer
 

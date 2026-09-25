@@ -176,7 +176,7 @@ class TestADownload:
         assert len(screen.finished) == 1
 
     def test_a_caller_that_starts_nothing_leaves_the_screen_idle(self):
-        screen = ContentScreen([ASHDOWN], on_fetch=lambda pack: None)
+        screen = ContentScreen([ASHDOWN], on_fetch=lambda _pack: None)
         screen.fetch_button.on_activate(screen.fetch_button)
         assert screen.job is None and screen.fetch_button.enabled
 

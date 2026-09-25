@@ -54,7 +54,7 @@ def _shading(tmp_path):
         extent=EXTENT, layers=['west', 'east'],
         control=Image.fromarray(control, 'RGBA'),
         shading=np.ones((4, 4), 'f'), sun=(0.0, -1.0, 0.0),
-        material_fn=lambda name, res: {'color': red if name == 'west' else green})
+        material_fn=lambda name, _res: {'color': red if name == 'west' else green})
 
 
 def _quad():

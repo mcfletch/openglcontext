@@ -31,9 +31,9 @@ class _GL:
         # which colour buffers the read framebuffer actually has.
         monkeypatch.setattr(
             capture, 'glGetFramebufferAttachmentParameteriv',
-            lambda *a: GL_FRAMEBUFFER_DEFAULT if has_back_buffer else capture.GL_NONE)
+            lambda *_args: GL_FRAMEBUFFER_DEFAULT if has_back_buffer else capture.GL_NONE)
         for name in ('glBindTexture', 'glCopyTexSubImage2D', 'glGenerateMipmap'):
-            monkeypatch.setattr(transmission, name, lambda *a, **k: None)
+            monkeypatch.setattr(transmission, name, lambda *_args, **_named: None)
 
 
 def _buffer():

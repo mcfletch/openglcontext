@@ -35,7 +35,7 @@ def test_the_factor_is_the_callers():
 
 
 def test_work_that_costs_nothing_scales_as_nothing():
-    assert measure_scaling(lambda n: (lambda: 0), n=5, measure='count').ratio == 1.0
+    assert measure_scaling(lambda _n: (lambda: 0), n=5, measure='count').ratio == 1.0
     assert measure_scaling(lambda n: (lambda: n - 5), n=5,
                            measure='count').ratio == float('inf')
 

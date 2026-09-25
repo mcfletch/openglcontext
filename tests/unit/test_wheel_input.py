@@ -33,10 +33,10 @@ VIEWPORT = (800, 600)
 
 def mock_glfw(monkeypatch, cursor=(100.0, 100.0), window=VIEWPORT,
               framebuffer=VIEWPORT):
-    monkeypatch.setattr(glfwevents.glfw, 'get_window_size', lambda w: window)
+    monkeypatch.setattr(glfwevents.glfw, 'get_window_size', lambda _w: window)
     monkeypatch.setattr(glfwevents.glfw, 'get_framebuffer_size',
-                        lambda w: framebuffer)
-    monkeypatch.setattr(glfwevents.glfw, 'get_cursor_pos', lambda w: cursor)
+                        lambda _w: framebuffer)
+    monkeypatch.setattr(glfwevents.glfw, 'get_cursor_pos', lambda _w: cursor)
 
 
 class GLFWRecorder(glfwevents.EventHandlerMixin):
@@ -78,7 +78,7 @@ class TestTheGLFWBackendReportsNotches:
                      'scroll'):
             monkeypatch.setattr(
                 glfwcontext.glfw, 'set_%s_callback' % name,
-                lambda window, callback, name=name: registered.__setitem__(
+                lambda _window, callback, name=name: registered.__setitem__(
                     name, callback))
         context = glfwcontext.GLFWContext.__new__(glfwcontext.GLFWContext)
         context.window = object()
@@ -89,11 +89,11 @@ class TestTheGLFWBackendReportsNotches:
         seen = []
         monkeypatch.setattr(
             glfwcontext.glfw, 'set_scroll_callback',
-            lambda window, callback: seen.append(callback))
+            lambda _window, callback: seen.append(callback))
         for name in ('key', 'char', 'mouse_button', 'cursor_pos',
                      'framebuffer_size', 'window_close', 'window_focus'):
             monkeypatch.setattr(glfwcontext.glfw, 'set_%s_callback' % name,
-                                lambda window, callback: None)
+                                lambda _window, _callback: None)
         context = glfwcontext.GLFWContext.__new__(glfwcontext.GLFWContext)
         context.window = object()
         context.setupCallbacks()

@@ -40,7 +40,7 @@ def served(tmp_path):
     world.mkdir()
     handler = functools.partial(http.server.SimpleHTTPRequestHandler,
                                 directory=str(world))
-    handler.log_message = lambda *args: None
+    handler.log_message = lambda *_args: None
     server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), handler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
@@ -96,7 +96,7 @@ def _landscape(world, extras):
     path = build_sample_tileset(str(world))
     document = json.load(open(path))
     field = HeightField.from_function(
-        lambda x, z: np.zeros(np.shape(np.asarray(x))), res=33, extent=2048.0)
+        lambda x, _z: np.zeros(np.shape(np.asarray(x))), res=33, extent=2048.0)
     field.save_image(os.path.join(str(world), 'g-height.png'))
     control_map(field, [LayerRule()], size=32).save(
         os.path.join(str(world), 'g-control.png'))

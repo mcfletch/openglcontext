@@ -84,7 +84,7 @@ def _extractable(monkeypatch):
     """Read a patch straight off the stand-in drawable, with no glTF involved."""
     monkeypatch.setattr(
         gltf_world, 'extract_trimesh',
-        lambda drawable, min_hull_size=0.0: (drawable.points, drawable.indices))
+        lambda drawable, min_hull_size=0.0: (drawable.points, drawable.indices))  # noqa: ARG005 extract_trimesh's signature
 
 
 def _pair(name, offset=0.0):

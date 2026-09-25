@@ -87,7 +87,7 @@ class TestFinishing:
     def test_it_reports_what_the_capture_cost_and_quits(self, capsys):
         """The harness records the numbers per model, so a load that doubles or a
         frame rate that halves is visible even when the picture is unchanged."""
-        host = _Host(fps=type('C', (), {'recentFps': lambda self: 61.5})())
+        host = _Host(fps=type('C', (), {'recentFps': lambda _self: 61.5})())
         host.loadSeconds = 1.25
         host.finishCapture()
         out = capsys.readouterr().out

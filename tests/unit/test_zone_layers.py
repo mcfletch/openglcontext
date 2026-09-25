@@ -88,7 +88,7 @@ class TestEnvironmentLayers:
 
     def test_the_probe_layer_comes_from_the_caller(self):
         zones = place((room(environment=ZoneEnvironment(capture=True)), (0, 0, 0)))
-        pack = environment_layers(zones, *BOX, lambda zone: 3.0)
+        pack = environment_layers(zones, *BOX, lambda _zone: 3.0)
         assert pack.light[0][2] == 3.0
 
     def test_too_many_crossed_zones_keep_the_nearest(self):
@@ -195,12 +195,12 @@ class TestCaptureSchedule:
         assert schedule.request('naos') and not schedule.request('naos')
         assert schedule.layer('naos') is None
         for _capture in range(2):
-            assert schedule.next(lambda key: 0.0) == 'naos'
+            assert schedule.next(lambda _key: 0.0) == 'naos'
             assert schedule.faces('naos', 6) == [0, 1, 2, 3, 4, 5]
             assert schedule.drawn('naos', 6)
             schedule.finished('naos')
             assert schedule.layer('naos') == 1
-        assert schedule.next(lambda key: 0.0) is None
+        assert schedule.next(lambda _key: 0.0) is None
 
     def test_the_camera_inside_asks_for_one_more(self):
         schedule = CaptureSchedule(bounces=1)
@@ -209,10 +209,10 @@ class TestCaptureSchedule:
         schedule.finished('naos')
         schedule.camera_inside('naos')
         schedule.camera_inside('naos')
-        assert schedule.next(lambda key: 0.0) == 'naos'
+        assert schedule.next(lambda _key: 0.0) == 'naos'
         schedule.drawn('naos', 6)
         schedule.finished('naos')
-        assert schedule.next(lambda key: 0.0) is None
+        assert schedule.next(lambda _key: 0.0) is None
 
     def test_the_nearest_goes_first_and_a_started_one_is_finished(self):
         schedule = CaptureSchedule()

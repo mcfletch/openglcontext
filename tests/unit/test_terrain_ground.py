@@ -40,7 +40,7 @@ def _hf(res=8):
 
 
 def _shading(**named):
-    named.setdefault('material_fn', lambda *a, **k: {})
+    named.setdefault('material_fn', lambda *_args, **_named: {})
     named.setdefault('shading', np.ones((8, 8), 'f'))
     return GroundShading(extent=EXTENT, layers=['floor'], control='control.png',
                          **named)
@@ -212,7 +212,7 @@ class TestTheTerrainIsOneOfItsCallers:
 
     def _node(self):
         return SplatTerrain(_hf(), ['floor'], 'control.png',
-                            material_fn=lambda *a, **k: {})
+                            material_fn=lambda *_args, **_named: {})
 
     def test_it_has_ground_shading_of_its_own(self) -> None:
         assert isinstance(self._node().ground, GroundShading)

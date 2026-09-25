@@ -134,13 +134,13 @@ def test_grass_mask_thins_and_excludes():
     hf = HeightField(np.zeros((16, 16)), 1000.0, 10.0)
     full, _, _ = world_grid_scatter(0, 0, 40.0, 1.0, hf)
     # mask=0 everywhere removes all instances; mask=1 keeps the full set unchanged.
-    none, _, _ = world_grid_scatter(0, 0, 40.0, 1.0, hf, mask=lambda x, z: np.zeros_like(x))
-    allkept, _, _ = world_grid_scatter(0, 0, 40.0, 1.0, hf, mask=lambda x, z: np.ones_like(x))
+    none, _, _ = world_grid_scatter(0, 0, 40.0, 1.0, hf, mask=lambda x, _z: np.zeros_like(x))
+    allkept, _, _ = world_grid_scatter(0, 0, 40.0, 1.0, hf, mask=lambda x, _z: np.ones_like(x))
     assert len(none) == 0
     assert len(allkept) == len(full)
     # a half-plane mask (grass only where x<0) keeps instances on that side only.
     half, _, _ = world_grid_scatter(0, 0, 40.0, 1.0, hf,
-                                    mask=lambda x, z: (x < 0).astype(float))
+                                    mask=lambda x, _z: (x < 0).astype(float))
     assert len(half) > 0
     assert (half[:, 0] < 0).all()
 

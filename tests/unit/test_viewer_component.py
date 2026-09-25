@@ -65,7 +65,7 @@ def _viewer(**named):
     viewer._player = None
     viewer.physicsWalking = False
     viewer.physicsPlatform = None
-    viewer.triggerRedraw = lambda count=1: None
+    viewer.triggerRedraw = lambda count=1: None  # noqa: ARG005 triggerRedraw's signature
     return viewer
 
 
@@ -241,13 +241,13 @@ class TestTheMixinsComposeCleanly:
         viewer.settleCapture = None
         assert viewer.wantsMoreFrames() is False
 
-        monkeypatch.setattr(Context, 'wantsMoreFrames', lambda self: True)
+        monkeypatch.setattr(Context, 'wantsMoreFrames', lambda _self: True)
         assert viewer.wantsMoreFrames() is True, (
             'the mix-in answered for the context instead of asking it')
 
         # And its own answer still comes first, so a pending capture does not
         # depend on what anything below it says.
-        monkeypatch.setattr(Context, 'wantsMoreFrames', lambda self: False)
+        monkeypatch.setattr(Context, 'wantsMoreFrames', lambda _self: False)
         viewer.setupCapture('somewhere.png')
         assert viewer.wantsMoreFrames() is True
         viewer.settleCapture.done = True

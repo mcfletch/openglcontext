@@ -170,7 +170,7 @@ class TestOffTheRenderThread:
         """GL is single-threaded; a worker must never touch it."""
         cache = PictureCache(upload=gl.upload, delete=gl.delete, workers=1)
         seen = []
-        gl.upload = lambda w, h, data: seen.append(threading.current_thread()) or 1
+        gl.upload = lambda _w, _h, _data: seen.append(threading.current_thread()) or 1
         cache.upload = gl.upload
         try:
             cache.get(picture('a.png'))

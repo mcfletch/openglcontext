@@ -38,7 +38,7 @@ def test_on_renderable_ignores_already_resident_tile(monkeypatch):
 
 def test_on_renderable_skips_when_extraction_is_none(monkeypatch):
     monkeypatch.setattr(physics_colliders.gltf_world, "extract_trimesh",
-                        lambda drawable, min_hull_size=0.0: None)
+                        lambda _drawable, min_hull_size=0.0: None)  # noqa: ARG005 extract_trimesh's signature
     colliders = TerrainColliders(_world())
     colliders.on_renderable(_Tile(), object())
     assert colliders.collider_count == 0
@@ -47,7 +47,7 @@ def test_on_renderable_skips_when_extraction_is_none(monkeypatch):
 def test_on_renderable_skips_empty_triangle_mesh(monkeypatch):
     empty = (np.zeros((0, 3), "f4"), np.zeros((0, 3), "u4"))
     monkeypatch.setattr(physics_colliders.gltf_world, "extract_trimesh",
-                        lambda drawable, min_hull_size=0.0: empty)
+                        lambda _drawable, min_hull_size=0.0: empty)  # noqa: ARG005 extract_trimesh's signature
     colliders = TerrainColliders(_world())
     colliders.on_renderable(_Tile(), object())
     assert colliders.collider_count == 0
