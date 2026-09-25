@@ -80,3 +80,18 @@ def test_a_frame_with_a_legacy_pick_still_draws_its_reflections(render_scene, mo
                        picks=lambda w, h: [(w // 2, h // 2)])
     # Frames 1 and 2 carry the pick.
     assert [_red(frame) > 300 for frame in frames[1:]] == [True, True, True]
+
+
+def test_a_views_combined_matrix_is_of_the_projection_it_draws_with(render_scene, monkeypatch):
+    """Trimming a view's projection to its depth trims the product with it."""
+    pytest.importorskip('glfw')
+    from OpenGLContext.passes import renderpass
+    from tests.unit.glrender import base_env
+    from tests.unit.test_planar_mirror_gl import SIZE, _room
+    base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0')
+    render_scene(_room(), frames=2, size=SIZE)
+    for frame in renderpass.current_pass().viewFrames:
+        assert frame.maxDepth                     # the projection was trimmed
+        assert np.allclose(frame.modelproj,
+                           np.asarray(frame.modelView) @ np.asarray(frame.projection),
+                           atol=1e-5)

@@ -149,7 +149,7 @@ class Shape(basenodes.Shape):
             self.geometry.render(textured=True, mode=mode)
             return
 
-        if self.appearance and hasattr(self.appearance, 'objects'):
+        if self.appearance and getattr(self.appearance, 'bringsProgram', False):
             if getattr(mode, 'visible', True):
                 return self._render_shader_appearance(mode)
             # Selection paints every shape in its own id colour with the pass's

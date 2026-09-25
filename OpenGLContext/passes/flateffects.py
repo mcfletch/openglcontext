@@ -13,7 +13,10 @@ from __future__ import annotations
 import contextlib
 import os
 import logging
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Tuple
+from types import MappingProxyType
+from typing import (
+    TYPE_CHECKING, AbstractSet, Any, Dict, List, Mapping, Optional, Sequence, Set, Tuple,
+)
 
 import numpy as np
 from OpenGL.GL import (
@@ -35,8 +38,20 @@ if TYPE_CHECKING:
     from OpenGLContext.passes.reflectionplanner import Lookup, ReflectionPlanner
     from OpenGLContext.passes.reflectiontiles import Budget
     from OpenGLContext.passes.transmission import TransmissionBuffer
+    from OpenGLContext.passes.renderstats import RenderStats
+    from OpenGLContext.multiview.strategy import ViewFrame
+    from OpenGLContext.passes._flat import GatheredPaths
 
 log = logging.getLogger(__name__)
+
+#: A frame's environment lighting, from :meth:`_FlatEffectsMixin.iblPrepare`:
+#: the mode (``'full'``, ``'analytic'`` or ``'off'``) and the probe where it is
+#: ``'full'``.
+Lighting = Tuple[str, Optional["IBLProbe"]]
+
+#: What a pass whose reflections have never been drawn reads: nothing, and
+#: read-only, so no pass can fill it for every other.
+_NO_LOOKUPS: Mapping[Any, Any] = MappingProxyType({})
 
 
 class _FlatEffectsMixin(PassResources):
@@ -74,7 +89,7 @@ class _FlatEffectsMixin(PassResources):
 
         def renderSet(self, matrix: Any, gathered: Any = None) -> List[Any]: ...
 
-        def setupViewLighting(self, matrix: Any, lighting: Any,
+        def setupViewLighting(self, matrix: Any, lighting: Optional[Lighting],
                               fitted: bool = False) -> None: ...
 
         def shaderRenderOpaque(self, toRender: List, id_map: Optional[Dict] = None,
@@ -87,18 +102,23 @@ class _FlatEffectsMixin(PassResources):
         def chooseMultiview(self) -> str: ...
 
         def renderShared(self, frames: Any, id_map: Optional[Dict],
-                         lighting: Any = None, mirrored: bool = False,
-                         capacity: int = 0, reflection: bool = False) -> Optional[set]: ...
+                         lighting: Optional[Lighting] = None, mirrored: bool = False,
+                         capacity: int = 0, into_atlas: bool = False) -> Optional[set]: ...
 
         def _frustumSurvivors(self, matrices: Any, points: Any, bounded: Any,
                               drawing: Any) -> Any: ...
 
         multiviewStrategy: Optional[str]
-        def frameGather(self) -> Any: ...
         _pathGeneration: int
-        activeFrame: Any
+
+        def frameGather(self) -> "GatheredPaths": ...
+
+        activeFrame: Optional["ViewFrame"]
         view: Any
-        stats: Any
+
+        @property
+        def stats(self) -> "RenderStats": ...
+
         _scissorViews: bool
 
     # Transmission (KHR_materials_transmission). Filled on the first frame from the
@@ -116,12 +136,12 @@ class _FlatEffectsMixin(PassResources):
     _reflection_guard: Optional[LayerGuard] = None
     #: What each mirror in each view reads this frame, by
     #: :func:`~OpenGLContext.passes.reflectionplanner.key_for`.
-    _reflection_lookups: Dict[Any, "Lookup"] = {}
+    _reflection_lookups: Mapping[Any, "Lookup"] = _NO_LOOKUPS
     #: What each mirror read the frame before: what a mirror seen in a mirror
     #: view reads, from the copy of the atlas that frame left.
-    _previous_lookups: Dict[Any, "Lookup"] = {}
+    _previous_lookups: Mapping[Any, "Lookup"] = _NO_LOOKUPS
     #: The mirror views this frame drew with a mirror left out of them.
-    _incompleteMirrors: set = set()
+    _incompleteMirrors: AbstractSet[Any] = frozenset()
     #: :meth:`sceneMirrors`' answer, and what it was worked out for.
     _sceneMirrors: Optional[Tuple[Any, Any]] = None
     #: The lookup the program was last given, so a run of shapes that are
@@ -173,7 +193,7 @@ class _FlatEffectsMixin(PassResources):
         super().disposeResources()
 
     # -- image-based lighting ----------------------------------------------
-    def iblPrepare(self) -> Tuple[str, Optional["IBLProbe"]]:
+    def iblPrepare(self) -> Lighting:
         """This frame's environment-lighting mode, and the probe when it is 'full'.
 
         Resolves the effective IBL mode (with fps-adaptive degradation) and
@@ -212,7 +232,7 @@ class _FlatEffectsMixin(PassResources):
         return mode, probe
 
     def iblSetup(self, matrix: Any,
-                 prepared: Optional[Tuple[str, Optional["IBLProbe"]]] = None) -> str:
+                 prepared: Optional[Lighting] = None) -> str:
         """Bind the environment-lighting path onto the PBR program for one view.
 
         ``prepared`` is this frame's :meth:`iblPrepare`, asked for here where
@@ -337,7 +357,8 @@ class _FlatEffectsMixin(PassResources):
             self, 'reflectionAtlas',
             renderoptions.env_number_once('OPENGLCONTEXT_REFLECTION_ATLAS', 0.5))))
 
-    def renderReflections(self, frames: List[Any], lighting: Any = None) -> None:
+    def renderReflections(self, frames: List[Any],
+                          lighting: Optional[Lighting] = None) -> None:
         """Draw this frame's reflections into the atlas, for the mirrors to read.
 
         :class:`~OpenGLContext.passes.reflectionplanner.ReflectionPlanner`
@@ -362,9 +383,9 @@ class _FlatEffectsMixin(PassResources):
         self._reflection_lookups = {}
         self._previous_lookups = {}
         self._reflection_applied = None
-        self._incompleteMirrors = set()
+        self._incompleteMirrors = frozenset()
 
-    def _renderReflections(self, frames: List[Any], lighting: Any) -> None:
+    def _renderReflections(self, frames: List[Any], lighting: Optional[Lighting]) -> None:
         previous = self._reflection_lookups
         self._previous_lookups = {}
         self._reflection_lookups = {}
@@ -405,7 +426,7 @@ class _FlatEffectsMixin(PassResources):
             # Looking for mirrors in the mirrors' views looked through them.
             self.applyViewFrame(self.activeFrame, gl=False)
         self._reflection_lookups = plan.lookups
-        self._incompleteMirrors = set()
+        self._incompleteMirrors = frozenset()
         if plan.unfinished:
             # A context that draws only when something changes would otherwise
             # leave a still scene showing reflections drawn while the pass was
@@ -546,7 +567,8 @@ class _FlatEffectsMixin(PassResources):
         from OpenGLContext.passes.reflection import fov, is_reflector
         from OpenGLContext.passes.reflectionplanner import view_key
         mirrors = []
-        self._incompleteMirrors = set()
+        incomplete: Set[Any] = set()
+        self._incompleteMirrors = incomplete
         earlier = self._previous_lookups
         drawing = {draw.key for draw in plan.draws}
         canonical = getattr(plan, 'canonical', lambda key: key)
@@ -572,7 +594,7 @@ class _FlatEffectsMixin(PassResources):
                     group = canonical(key)
                     if key not in earlier:
                         if group in drawing:
-                            self._incompleteMirrors.add(draw.key)
+                            incomplete.add(draw.key)
                             continue
                         missing.add(group)
                 kept.append(record)
@@ -582,7 +604,7 @@ class _FlatEffectsMixin(PassResources):
             mirrors.append(frame)
         return mirrors
 
-    def _drawMirrorViews(self, plan: Any, lighting: Any, gathered: Any,
+    def _drawMirrorViews(self, plan: Any, lighting: Optional[Lighting], gathered: Any,
                          atlas: "ReflectionAtlas") -> None:
         """Draw every mirror view of ``plan`` into its tile of ``atlas``."""
         from OpenGL.GL import (
@@ -623,7 +645,7 @@ class _FlatEffectsMixin(PassResources):
                     for start in range(0, len(views), limit):
                         found = self.renderShared(views[start:start + limit], None,
                                                   lighting, mirrored=odd,
-                                                  capacity=capacity, reflection=True)
+                                                  capacity=capacity, into_atlas=True)
                         if found is None:
                             break
                         shared |= {(id(frame), path) for frame in views[start:start + limit]

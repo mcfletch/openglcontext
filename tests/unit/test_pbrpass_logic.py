@@ -136,3 +136,21 @@ class TestMaterialUBOInvalidation:
         prog.invalidate_material_ubo(a)
         assert a not in prog._material_ubos
         assert b in prog._material_ubos
+
+
+def test_an_impostor_setting_is_uploaded_only_when_it_changes(monkeypatch):
+    from OpenGLContext.passes import pbrpass
+    program = pbrpass.PBRShaderProgram()
+    program.program = 5
+    sent = []
+    monkeypatch.setattr(program, '_set_uniform1i',
+                        lambda name, value, target=None: sent.append((name, value, target)))
+    program.set_impostor(0)
+    program.set_impostor(0)
+    assert sent == [('impostorGrid', 0, 5), ('impostorHemi', 1, 5)]
+    program.set_impostor(8, hemi=False)
+    assert sent[-2:] == [('impostorGrid', 8, 5), ('impostorHemi', 0, 5)]
+    program.program = 6                       # another set of programs is bound
+    program.set_impostor(8, hemi=False)
+    assert sent[-2:] == [('impostorGrid', 8, 6), ('impostorHemi', 0, 6)]
+    assert len(sent) == 6

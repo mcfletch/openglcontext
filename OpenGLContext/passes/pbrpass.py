@@ -14,7 +14,10 @@ from __future__ import annotations
 import os
 import logging
 import weakref
-from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Sequence, Tuple
+from types import MappingProxyType
+from typing import (
+    TYPE_CHECKING, Any, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple,
+)
 
 import numpy as np
 
@@ -350,7 +353,7 @@ def _compile_shadow_frag(vert_name: str, frag_name: str, max_shadow_lights: int,
                          cube_array: bool, validate: bool = False,
                          extra_defines: Optional[list] = None,
                          vertex_defines: Optional[list] = None,
-                         views: int = 0, strategy: str = 'geometry') -> Any:
+                         views: int = 0, strategy: str = 'geometry') -> int:
     """Compile a program whose fragment shader carries the shared shadow include.
 
     ``views`` compiles it for a shared draw of that many views, reached by
@@ -365,6 +368,21 @@ def _compile_shadow_frag(vert_name: str, frag_name: str, max_shadow_lights: int,
 
 class PBRShaderProgram(VRML97ShaderProgram):
     """Cook-Torrance metallic/roughness program (+ the inherited shadow machinery)."""
+
+    #: Every material map this program samples, with its unit: the core maps,
+    #: and the extension maps :attr:`ext_channels` says the driver has units for.
+    texture_units: Tuple[Tuple[str, int], ...] = tuple(PBR_UNITS.items())
+    _ext_channels: Mapping[str, int] = MappingProxyType({})
+
+    @property
+    def ext_channels(self) -> Mapping[str, int]:
+        """The extension maps this driver has texture units for, by channel."""
+        return self._ext_channels
+
+    @ext_channels.setter
+    def ext_channels(self, channels: Mapping[str, int]) -> None:
+        self._ext_channels = dict(channels)
+        self.texture_units = tuple(PBR_UNITS.items()) + tuple(self._ext_channels.items())
 
     MATERIAL_UBO_BINDING: int = MATERIAL_UBO_BINDING
 
@@ -397,6 +415,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         self._material_ubos.clear()
         self._default_material_ubo = None
         self._appearance_material = _APPEARANCE_UNSET
+        self._impostor = PBRShaderProgram._impostor
         if buffers:
             try:
                 glDeleteBuffers(len(buffers), buffers)
@@ -718,6 +737,9 @@ class PBRShaderProgram(VRML97ShaderProgram):
         """Enable/disable per-vertex color (glTF COLOR_0) modulation of baseColor."""
         self._set_uniform1i('hasVertexColor', 1 if enabled else 0, self.program)
 
+    #: What :meth:`set_impostor` last set, and on which program.
+    _impostor: Tuple[Optional[int], int, bool] = (None, 0, True)
+
     def set_impostor(self, views: int, hemi: bool = True) -> None:
         """Draw this material's geometry as an octahedral impostor, or not.
 
@@ -725,9 +747,15 @@ class PBRShaderProgram(VRML97ShaderProgram):
         every ordinary material -- turns the whole thing off. The vertex shader
         does the rest: it turns the quad to the viewer and moves its texture
         coordinate into the tile for the direction it is being seen from.
+        Called for every shape drawn, so a run of shapes asking what the
+        program already has costs one comparison.
         """
-        self._set_uniform1i('impostorGrid', int(views), self.program)
-        self._set_uniform1i('impostorHemi', 1 if hemi else 0, self.program)
+        state = (self.program, int(views), bool(hemi))
+        if state == self._impostor:
+            return
+        self._set_uniform1i('impostorGrid', state[1], self.program)
+        self._set_uniform1i('impostorHemi', 1 if state[2] else 0, self.program)
+        self._impostor = state
 
     # -- skinning ----------------------------------------------------------
     def _init_skinning(self, program: Any) -> None:
@@ -825,7 +853,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         # uploads it, and an upload binds the new texture on the active unit,
         # which would be the unit of the map bound before it.
         found = []
-        for channel, unit in self._textureUnits():
+        for channel, unit in self.texture_units:
             holder = textures.get(channel)
             tex = holder.cached(mode) if holder is not None else None
             if tex is not None and getattr(tex, 'texture', None):
@@ -839,15 +867,6 @@ class PBRShaderProgram(VRML97ShaderProgram):
             sampled |= PBR_TEXTURE_BITS[channel]
         self._set_uniform1i('materialTextures', sampled, self.program)
         glActiveTexture(GL_TEXTURE0)
-
-    def _textureUnits(self) -> List[Tuple[str, int]]:
-        """Every material map this program samples, and its unit."""
-        found = self.__dict__.get('_texture_units')
-        if found is None or found[0] is not self.__dict__.get('ext_channels'):
-            units = list(PBR_UNITS.items()) + list(
-                getattr(self, 'ext_channels', {}).items())
-            found = self._texture_units = (self.__dict__.get('ext_channels'), units)
-        return found[1]
 
     def configure_appearance(self, appearance: Any, mode: Any) -> None:
         """Configure PBR material + textures from a Shape's appearance.

@@ -6,7 +6,7 @@ them collapsed into instanced draws, and how many draw calls came out the far
 end.  Those numbers exist inside the render pass for a moment each frame and
 are then thrown away, so this is where they are kept.
 
-**Counted, not estimated.**  Every field here is incremented at the place the
+Every field here is counted, not estimated: it is incremented at the place the
 pass does the thing it counts.  Triangle counts are deliberately absent: the
 pass does not know them -- a geometry node does, and instrumenting every
 ``render()`` in the system to find out would cost more than the answer is
@@ -40,7 +40,9 @@ class RenderStats:
 
     def reset(self) -> None:
         """Start a new frame's counts."""
-        #: Shapes the pass gathered from the scenegraph, culling included.
+        #: Shapes that survived culling, summed over the frame's views: a shape
+        #: two views see counts twice, as it is culled and drawn for each.
+        #: Mirror views are not among them.
         self.shapes = 0
         #: How those divided between the two geometry passes.
         self.opaque = 0

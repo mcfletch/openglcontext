@@ -80,8 +80,8 @@ def _upload_view_list(location: int, indices: Tuple[int, ...]) -> None:
 
 def link_program(vert_source: str, frag_source: str, validate: bool = True,
                  views: int = 0, strategy: str = 'geometry',
-                 position: str = 'vPosition') -> Any:
-    """Compile and link a program from preprocessed sources.
+                 position: str = 'vPosition') -> int:
+    """The name of a program compiled and linked from preprocessed sources.
 
     ``views`` of two or more compiles it for a shared draw of that many views,
     the fragment stage told ``MULTIVIEW_VIEWS`` and the ``ViewBlock`` pointed
@@ -119,7 +119,7 @@ def link_program(vert_source: str, frag_source: str, validate: bool = True,
         index = glGetUniformBlockIndex(program, 'ViewBlock')
         if index != GL_INVALID_INDEX:
             glUniformBlockBinding(program, index, VIEW_BLOCK_BINDING)
-    return program
+    return int(program)
 
 
 def normal_matrix(modelview: Matrix4) -> Matrix4:
@@ -403,7 +403,8 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         return program
 
     #: The programs a shared draw of several views binds. Each is compiled a
-    #: second time with a geometry stage; see :meth:`select_program_set`.
+    #: second time for such a draw, with a geometry stage or with the vertex
+    #: stage's routing as the strategy asks; see :meth:`select_program_set`.
     MULTIVIEW_PROGRAMS: Tuple[str, ...] = ('program', 'vertex_color_program')
 
     #: Which set of :data:`MULTIVIEW_PROGRAMS` is in the attributes: 0 for the

@@ -131,6 +131,16 @@ class TestAMalformedNode:
         assert working.whichLevel == 1
         assert 'could not place an LOD node' in caplog.text
 
+    def test_a_bad_node_is_reported_once_not_every_frame(self, caplog):
+        class _Broken(lod.LOD):
+            def selectAt(self, distance, scale, tangent):
+                raise ValueError('no centre')
+
+        rendering = _pass([_Broken(level=_levels(), range=[10.0])])
+        for distance in (50.0, 40.0, 30.0):         # the camera moves each frame
+            rendering.selectLevels(_at(distance))
+        assert caplog.text.count('could not place an LOD node') == 1
+
 
 class _MovablePath(list):
     """A path whose transform the test can change, as the scenegraph's would.

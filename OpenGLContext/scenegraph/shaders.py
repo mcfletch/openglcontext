@@ -768,6 +768,10 @@ class GLSLObject(shaders.GLSLObject):
 class Shader(shaders.Shader):
     """Shader is a programmable substitute for an Appearance node"""
 
+    #: An appearance that draws its shape with a GLSL program of its own
+    #: rather than the pass's; ``Appearance`` does not say so, and is False.
+    bringsProgram = True
+
     current = field.newField(" current", "SFNode", 1, node.NULL)
     uniformIDs = None
     attributeIDs = None

@@ -15,6 +15,7 @@ a context and caches the choice across frames.
 from __future__ import annotations
 
 import contextlib
+import weakref
 from typing import (
     Any, Callable, Dict, Iterator, List, NamedTuple, Optional, Sequence, Tuple,
     TYPE_CHECKING,
@@ -71,6 +72,7 @@ log = logging.getLogger( __name__ )
 
 if TYPE_CHECKING:
     from OpenGLContext.multiview.strategy import ViewFrame
+    from OpenGLContext.passes.flateffects import Lighting
     from OpenGLContext.passes.instancing import Batchers
     from OpenGLContext.passes.renderfailures import RenderFailureLog
     from OpenGLContext.passes.renderstats import RenderStats
@@ -112,10 +114,12 @@ def disable_object_id_blend() -> None:
         glDisablei(GL_BLEND, OBJECT_ID_ATTACHMENT)
     except Exception as err:
         log.debug("indexed blend disable unavailable: %s", err)
+
+
 class GatheredPaths( NamedTuple ):
     """One frame's answers about every renderable path in the scene.
 
-    What :meth:`SGObserver.gatherPaths` produces and everything else in the
+    What :meth:`FlatPass.gatherPaths` produces and everything else in the
     frame reads. Camera-independent throughout: the viewpoint enters after this,
     which is what lets the colour pass and a light's depth pass share one table.
     """
@@ -125,18 +129,18 @@ class GatheredPaths( NamedTuple ):
     #: The node each path ends at, so nothing has to walk the path again.
     nodes: List[Any]
     #: ``(N,4,4)`` world transforms stacked, for the arithmetic done at once.
-    matrices: Any
+    matrices: numpy.ndarray
     #: The same transforms as the scenegraph's cache handed them over -- one
     #: object per unmoved node, a fresh one once it moves. What a memo keys on.
     own: List[Any]
     #: Each node's bounding volume, or None where it draws nothing.
     volumes: List[Any]
     #: ``(N,8,4)`` bounding corners, meaningful where ``bounded`` says so.
-    points: Any
+    points: numpy.ndarray
     #: Which paths offer the eight corners a frustum test needs.
-    bounded: Any
+    bounded: numpy.ndarray
     #: Which paths have anything to put on screen at all.
-    drawing: Any
+    drawing: numpy.ndarray
 
 
 class SGObserver( object ):
@@ -1180,7 +1184,11 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
             return 0
 
     def selectLevels( self, matrix: Any ) -> None:
-        """Let every LOD node choose its level for where the viewer now is.
+        """Let every LOD node choose its level for one viewer at ``matrix``.
+
+        For a caller choosing levels from one camera of its own; a frame
+        chooses them for all of its views at once, through
+        :meth:`chooseLevels` from :meth:`prepareViews`.
 
         Before the render set is gathered, not during it: a level that changes
         replaces a subtree, and the flattened scenegraph the pass renders from
@@ -1226,7 +1234,7 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
             try:
                 placed.append( (path[-1], path.transformMatrix()) )
             except Exception as err:
-                log.warning( 'could not place an LOD node: %s', err )
+                self._levelFailed( path[-1], err )
         if not placed:
             return
         own = [ world for _node, world in placed ]
@@ -1251,7 +1259,26 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
                     node.show( lod.finest(
                         [ node.levelAt( *numbers ) for numbers in asked ] ) )
             except Exception as err:
-                log.warning( 'could not place an LOD node: %s', err )
+                self._levelFailed( node, err )
+
+    #: The level-of-detail nodes already reported as unable to choose a level.
+    _levelsFailed: Optional['weakref.WeakSet[Any]'] = None
+
+    def _levelFailed( self, node: Any, err: Exception ) -> None:
+        """Report a node that could not choose its level, once for that node.
+
+        It is asked again every frame, and fails the same way every frame.
+        """
+        failed = self._levelsFailed
+        if failed is None:
+            failed = self._levelsFailed = weakref.WeakSet()
+        try:
+            if node in failed:
+                return
+            failed.add( node )
+        except TypeError:
+            pass                    # a node that cannot be referred to weakly
+        log.warning( 'could not place an LOD node: %s', err )
 
     def _levelsAlreadyChosen( self, viewers: Sequence['lod.Viewer'],
                               own: List[Any] ) -> bool:
@@ -1820,7 +1847,7 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         if frame.view.style.wireframe:
             glPolygonMode( GL_FRONT_AND_BACK, GL_FILL )
 
-    def setupViewLighting( self, matrix: Any, lighting: Any,
+    def setupViewLighting( self, matrix: Any, lighting: Optional['Lighting'],
                            fitted: bool = False ) -> None:
         """Put the frame's lights, shadows and environment in ``matrix``'s eye space.
 
@@ -1871,7 +1898,7 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         return self.DEFAULT_AMBIENT
 
     def renderViewShader( self, frame: 'ViewFrame', id_map: Optional[Dict[int, Any]],
-                          lighting: Any = None, background: bool = True,
+                          lighting: Optional['Lighting'] = None, background: bool = True,
                           shared: Any = frozenset() ) -> None:
         """Draw one view of the frame through the shader passes.
 
@@ -1933,7 +1960,7 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         if not getattr( getattr( node, 'geometry', None ), 'multiviewShared', False ):
             return False
         appearance = getattr( node, 'appearance', None )
-        if appearance is not None and hasattr( appearance, 'objects' ):
+        if getattr( appearance, 'bringsProgram', False ):
             return False
         material = getattr( appearance, 'material', None )
         return not ( getattr( material, 'transmission', 0.0 )
@@ -2012,8 +2039,8 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
 
     def renderShared( self, frames: Sequence['ViewFrame'],
                       id_map: Optional[Dict[int, Any]],
-                      lighting: Any = None, mirrored: bool = False,
-                      capacity: int = 0, reflection: bool = False ) -> Optional[set]:
+                      lighting: Optional['Lighting'] = None, mirrored: bool = False,
+                      capacity: int = 0, into_atlas: bool = False ) -> Optional[set]:
         """Draw every shape that can serve several views once, for all of them.
 
         The draw is made in the active view's eye space, exactly as that view
@@ -2025,7 +2052,7 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         leave out, or None where the programs for this many views did not
         compile and every view draws everything itself.
 
-        ``reflection`` draws mirror views into the reflection atlas, in linear
+        ``into_atlas`` draws mirror views into the reflection atlas, in linear
         HDR. ``mirrored`` says every view's camera has been reflected an odd
         number of times, which turns the winding over and which the reference
         camera's modelviews do not say.
@@ -2060,7 +2087,7 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
             self.lighting = True
             self.textured = True
             self.setupViewLighting( matrix, lighting, fitted=reference.fitted )
-            if reflection:
+            if into_atlas:
                 hdr = getattr( shader, 'set_hdr_output', None )
                 if hdr is not None:
                     hdr( True )
@@ -2283,7 +2310,7 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
     #: This frame's views, each with its camera's matrices, frustum and draw
     #: list; the first frame's active view is :attr:`activeFrame`. Built by
     #: :meth:`layoutViews` and :meth:`prepareViews`.
-    viewFrames: List['ViewFrame'] = []
+    viewFrames: Sequence['ViewFrame'] = ()
     activeFrame: Optional['ViewFrame'] = None
     #: The view being drawn, for a node that draws differently per view.
     view: Any = None
@@ -2524,7 +2551,7 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         """
         from OpenGLContext.multiview.views import tile_of
         from OpenGLContext.scenegraph.lod import viewer_for
-        frames = self.viewFrames
+        frames = list( self.viewFrames )
         window = self.context.getViewPort()
         self.chooseLevels( [
             viewer_for( frame.camera, frame.modelView, frame.projection )
@@ -2543,6 +2570,9 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
             if frame.maxDepth:
                 with tile_of( frame.view, frame.camera, window ):
                     frame.projection = frame.camera.viewMatrix( frame.maxDepth )
+                # The frustum stays the one the view was culled with.
+                frame.modelproj = dot( asarray( frame.modelView, 'f' ),
+                                       asarray( frame.projection, 'f' ) )
         active = self.activeFrame if self.activeFrame is not None else frames[0]
         self.applyViewFrame( active, gl=False )
         self._zoneHidden = self.zoneHiddenAt( self.cameraPosition( active ) )

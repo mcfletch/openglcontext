@@ -18,7 +18,7 @@ scene pays a dictionary lookup per draw. A scene with no zones pays one test.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Hashable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Hashable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -102,7 +102,7 @@ class ZonesMixin(PassResources):
         view: Any
         visiblePlacements: Any
         matrix: Any
-        _reflection_lookups: Dict[Any, Any]
+        _reflection_lookups: Mapping[Any, Any]
 
         def applyViewFrame(self, frame: Any, gl: bool = True) -> None: ...
         def renderSet(self, matrix: Any, gathered: Any) -> List[Any]: ...

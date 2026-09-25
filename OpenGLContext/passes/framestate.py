@@ -7,7 +7,7 @@ scene as it stood when it was made, so it is held here, and the pass drops
 this object when the frame ends -- in a ``finally``, so a frame that raised
 leaves nothing for the next one to read by mistake.
 
-:meth:`OpenGLContext.passes._flat.SGObserver.drawingFrame` opens one around a
+:meth:`OpenGLContext.passes._flat.FlatPass.drawingFrame` opens one around a
 frame; ``frameState`` on the pass is the open one, or None between frames.
 """
 from __future__ import annotations

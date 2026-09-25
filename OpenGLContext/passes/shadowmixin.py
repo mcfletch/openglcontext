@@ -711,7 +711,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         Every question here -- the node at the end of a path, where it is, what
         bounds it -- the frame's gather has already asked and answered, so the
         pool reads that table
-        (:meth:`~OpenGLContext.passes._flat.SGObserver.frameGather`) rather than
+        (:meth:`~OpenGLContext.passes._flat.FlatPass.frameGather`) rather than
         walking the scene a second time. A depth pass driven outside a frame
         walks the scene itself.
         """
@@ -940,9 +940,14 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         entries: List[Optional[tuple]] = []
         for record in records:
             key = (id(record[2]), id(record[3]))
-            entry = current.get(key) or previous.get(key)
+            entry = current.get(key)
             if entry is None:
-                missing.append((len(entries), record, key))
+                # Carried forward from the frame before, or worked out below.
+                entry = previous.get(key)
+                if entry is None:
+                    missing.append((len(entries), record, key))
+                else:
+                    current[key] = entry
             entries.append(entry)
         # Everything this frame has still to work out, in one pass: the misses
         # are what the derivation costs, and asking for them together is what
@@ -956,10 +961,9 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                                           found[0], found[1])
         points: List[np.ndarray] = []
         boxes: List[np.ndarray] = []
-        for record, entry in zip(records, entries):
+        for entry in entries:
             if entry is None:
                 continue
-            current[(id(record[2]), id(record[3]))] = entry
             points.append(entry[2])
             boxes.append(entry[3])
         return (np.concatenate(points, axis=0) if points else None,
