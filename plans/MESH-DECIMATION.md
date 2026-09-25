@@ -1,15 +1,23 @@
 # Mesh decimation and cluster LOD
 
 **Status:** 🟡 In progress. The decimator exists: `opengl_decimate`, a workspace
-sibling, covering M0–M3 and M6. Everything from M4 (the compiled accelerator) on
-is still plan.
+sibling, covering M0–M4 and M6, with M2 and M3 in part. M4, the compiled
+accelerator, landed as Cython inside the package rather than as the Rust
+package the M4 section below describes. M5 and M7–M12 are still plan.
 
 ## What has landed
 
 `opengl_decimate` — NumPy in, NumPy out, no GL, no engine import. 100% statement
-coverage, ruff- and mypy-clean, `py.typed`, a tox matrix over CPython 3.10–3.14
+coverage of the Python, ruff- and mypy-clean, `py.typed`, a tox matrix over CPython 3.10–3.14
 and PyPy, and release-on-push-to-main wired the way the other siblings are. It
 is in `[tool.uv.sources]`, `requirements-dev.txt` and `tools/preflight.toml`.
+
+The coverage figure is of the Python. The compiled reducer,
+`_reduce_native.pyx`, runs on every wheel and is not in it: `coverage` sees a
+compiled line only in a `linetrace` build, which makes the reducer too slow for
+the suite to finish. What holds it instead is `tests/test_native.py`, which
+requires it to make the same contractions in the same order as the NumPy loop on
+meshes chosen to reach each of its decisions.
 
 | Milestone | State |
 |---|---|
@@ -17,8 +25,9 @@ is in `[tool.uv.sources]`, `requirements-dev.txt` and `tools/preflight.toml`.
 | M1 sequential QEM, manifold and border, position | done |
 | M2 attributes | **partly** — carried and seam-preserving, not yet part of the metric |
 | M3 parallel schedules | **partly** — `multiple-choice` done, batch-independent-set not |
+| M4 compiled accelerator | done — Cython in the package (`_reduce_native`), not a Rust `opengl_decimate_accelerate`; see below |
 | M6 collapse sequence and instant re-target | done |
-| M4, M5, M7–M12 | plan |
+| M5, M7–M12 | plan |
 
 What it does today: quadric accumulation with area weighting and border
 constraint planes; classical and probabilistic metrics sharing one storage and
@@ -793,6 +802,11 @@ choice is which compiled language.
   a second language in the workspace, and a source install on a platform with no
   wheel needs `cargo` present.
 
+*What was built instead (2026-09):* M4 landed as a Cython extension inside
+`opengl_decimate` itself, `_reduce_native`, with the NumPy loop as the
+always-importable fallback -- see "M4 landed" under What has landed. The
+recommendation below is kept as the reasoning it was.
+
 **Recommendation: Rust core, exposed through PyO3, with a pure-NumPy reference
 implementation in the same project that is always importable.** The split
 follows the `PyOpenGL` / `PyOpenGL-accelerate` precedent:
@@ -1089,6 +1103,10 @@ maps to a GPU kernel.
 **M4 — The Rust accelerator.** `opengl_decimate_accelerate`: PyO3, maturin,
 `rayon`, `abi3` wheels, GIL released. Differential-tested against the NumPy path.
 *Red:* the two paths disagree on the corpus.
+*Landed* as Cython inside the package (`opengl_decimate._reduce_native`), for the
+`heap` schedule and the corner handover, GIL released, differential-tested
+against the NumPy path; not as Rust, and without `rayon`, since only the
+sequential schedule is compiled.
 
 **M5 — Scanner input.** The `repair` pass (weld by tolerance, degenerate and
 duplicate faces, floaters, small holes), scale normalisation, the 2-complex
