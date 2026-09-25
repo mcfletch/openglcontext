@@ -123,19 +123,15 @@ def test_sync_skips_republishing_the_same_version_unless_forced():
     assert np.allclose(t.translation, applied)
 
 
-def test_sync_skips_bodies_that_are_unregistered_or_out_of_range():
-    """A body with no index, or an index past the snapshot, is skipped safely."""
+def test_sync_skips_a_body_added_after_the_snapshot():
+    """A body the published snapshot has no row for keeps its authored pose."""
     mgr, real, t = _falling_manager()
     mgr._sim._publish()
-    unregistered = PhysicsBody(Transform(translation=(1, 2, 3)),
-                               model.Motion(type=model.DYNAMIC))   # index is None
-    stray = PhysicsBody(Transform(translation=(4, 5, 6)),
-                        model.Motion(type=model.DYNAMIC))
-    stray.index = 999                          # beyond len(snapshot poses)
-    mgr.bodies.extend([unregistered, stray])
+    late = mgr.add(PhysicsBody(Transform(translation=(4, 5, 6)),
+                               model.Motion(type=model.DYNAMIC)))
+    assert late.index == 1                     # beyond len(snapshot poses)
     mgr.sync(force=True)
-    assert tuple(unregistered.transform.translation) == (1, 2, 3)
-    assert tuple(stray.transform.translation) == (4, 5, 6)
+    assert tuple(late.transform.translation) == (4, 5, 6)
     assert real.index == 0                     # the real body still synced
 
 

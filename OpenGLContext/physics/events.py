@@ -81,7 +81,7 @@ class Collision:
 
     ``normal`` points from ``other`` into ``body``: the direction ``body`` was
     pushed. For a trigger event it is zero, since an overlap has no direction,
-    and ``point`` is the position of the body that entered.
+    and ``point`` is where the body that entered was on the step it did.
     """
     #: ``'contact'``, ``'trigger'`` or ``'hit'``.
     kind: str
@@ -163,8 +163,8 @@ class CollisionEvents:
         self._by_body: dict[BodyRef, list[Subscription]] = {}
         self._everything: list[Subscription] = []
         self._hits: list[HitEvent] = []
-        #: Whether anything has subscribed; from then on the manager drains
-        #: the world's event log every frame, so it never fills.
+        #: Whether anything has subscribed, so the events the manager drains
+        #: from the world each frame are dispatched here.
         self.draining = False
 
     @property
@@ -272,15 +272,16 @@ class CollisionEvents:
     def _report(self, refs: set[BodyRef] | None, phases: frozenset[str]) -> None:
         """Have the world record what a new subscription asks about."""
         world = self.world
-        if refs is None:
-            world.contact_reporting = 'all'
-        else:
-            for ref in refs:
-                world.report_contacts(ref.index)
-            if world.contact_reporting == 'off':
-                world.contact_reporting = 'flagged'
-        if phases & {'persist', 'stay'}:
-            world.report_persist = True
+        with self.manager.with_world():
+            if refs is None:
+                world.contact_reporting = 'all'
+            else:
+                for ref in refs:
+                    world.report_contacts(ref.index)
+                if world.contact_reporting == 'off':
+                    world.contact_reporting = 'flagged'
+            if phases & {'persist', 'stay'}:
+                world.report_persist = True
 
     def _check_immediate(self, subscription: Subscription) -> None:
         """Refuse an immediate subscription this manager cannot run."""
@@ -332,7 +333,11 @@ class CollisionEvents:
         as it is: the weapon, the damage, the team.
 
         The event is delivered with the next frame's dispatch, ahead of that
-        frame's contacts, which all happened after it. Returns the event.
+        frame's contacts. On a :class:`PhysicsManager` those all happened
+        after the hit; a threaded manager's frame can also carry contacts from
+        ticks published before it. The impulse is applied under the manager's
+        :meth:`~OpenGLContext.physics.manager.PhysicsManager.with_world`.
+        Returns the event.
         """
         world = self.world
         target = world.ref(hit.body)
@@ -343,9 +348,10 @@ class CollisionEvents:
         point = np.asarray(hit.point, dtype='d')
         if impulse:
             push = heading * float(impulse)
-            world.apply_impulse(hit.body, push)
-            arm = point - world.position[hit.body]
-            world.apply_angular_impulse(hit.body, np.cross(arm, push))
+            with self.manager.with_world():
+                world.apply_impulse(hit.body, push)
+                arm = point - world.position[hit.body]
+                world.apply_angular_impulse(hit.body, np.cross(arm, push))
         shooter = None if source is None else self.resolve(source)[0]
         event = HitEvent(target, shooter, point, heading, float(speed),
                          float(impulse), payload, world.step_count, world.time)
@@ -433,11 +439,8 @@ class CollisionEvents:
         if isinstance(event, TriggerEvent):
             mine, theirs = ((event.trigger, event.other) if side == 0
                             else (event.other, event.trigger))
-            world = self.world
-            point = (world.position[event.other.index].copy()
-                     if world.alive(event.other) else _ZERO)
-            return self._build(event, mine, theirs, point, _ZERO, 0.0, 0.0, 0.0,
-                               0.0, 0.0, True, None, None)
+            return self._build(event, mine, theirs, event.point, _ZERO, 0.0, 0.0,
+                               0.0, 0.0, 0.0, True, None, None)
         return self._build(event, event.target, event.source, event.point,
                            event.direction, event.speed, event.impulse, 0.0, 0.0,
                            0.0, True, None, event.payload)

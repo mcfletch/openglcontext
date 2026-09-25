@@ -9,13 +9,21 @@ blocks on a step: because the native solver, narrow phase, and PyOpenGL draw cal
 all release the GIL, the physics tick and the render pass genuinely overlap, so a
 render loop can hold 60 fps while the simulation advances underneath.
 
-Structural changes to the world (adding/removing bodies) must be made with the
-loop stopped (:meth:`stop`) or while holding :meth:`with_world`;
-:meth:`~ThreadedPhysicsManager.remove` takes the lock itself.
+Anything that changes the world from another thread is made with the loop
+stopped (:meth:`stop`) or while holding :meth:`with_world`: adding a body,
+moving one, pushing one. :meth:`~ThreadedPhysicsManager.remove`, a subscription
+and :meth:`~OpenGLContext.physics.events.CollisionEvents.report_hit` take the
+lock themselves, and it is re-entrant, so they may also be called while holding
+it. A walker built with a body
+(:class:`~OpenGLContext.move.physicsplatform.PhysicsViewPlatform` with
+``body=True``) places that body in the world on every update, so it is updated
+under :meth:`with_world` too.
 
 Collision subscriptions (:attr:`~OpenGLContext.physics.manager.PhysicsManager.events`)
 are delivered on the render thread by :meth:`~ThreadedPhysicsManager.advance`,
-with the snapshot the events were published alongside.
+with the snapshot the events were published alongside. A removed body's
+``'end'`` events are published as it is removed, so they are delivered by the
+next :meth:`~ThreadedPhysicsManager.advance` whether or not a tick has run.
 """
 from typing import Any
 
@@ -26,11 +34,18 @@ from omi_physics.threaded import ThreadedSimulation
 class ThreadedPhysicsManager(PhysicsManager):
     """A :class:`PhysicsManager` whose simulation runs on a background thread."""
 
+    #: Steps run on the simulation thread, so an immediate subscription is refused.
+    steps_on_this_thread = False
+
     def __init__(self, world: Any = None, gravity: Any = None,
                  sim_hz: float = 120.0, **kw: Any) -> None:
         super().__init__(world=world, gravity=gravity, **kw)
         self._sim = ThreadedSimulation(self.world, sim_hz=sim_hz)
         self._synced_version = -1
+        #: Bodies added since the snapshot the render thread may still adopt,
+        #: and the version of that snapshot: its row for their slot belongs
+        #: to whatever was there before.
+        self._fresh: dict[Any, int] = {}
 
     # -- lifecycle -------------------------------------------------------
     def start(self) -> None:
@@ -42,7 +57,11 @@ class ThreadedPhysicsManager(PhysicsManager):
         self._sim.stop()
 
     def with_world(self) -> Any:
-        """Context manager giving exclusive access to the world (pauses stepping)."""
+        """Context manager giving exclusive access to the world (pauses stepping).
+
+        Re-entrant: code holding it may remove a body or report a hit, which
+        take it themselves.
+        """
         return self._sim.with_world()
 
     @property
@@ -70,13 +89,22 @@ class ThreadedPhysicsManager(PhysicsManager):
         """
         return self._sim.rate()
 
-    #: Steps run on the simulation thread, so an immediate subscription is refused.
-    steps_on_this_thread = False
+    def add(self, body: Any) -> Any:
+        """Register ``body``, made with the loop stopped or under :meth:`with_world`."""
+        super().add(body)
+        self._fresh[body] = self._sim.latest()[1]
+        return body
+
+    def _forget(self, body: Any) -> None:
+        """Stop tracking ``body``."""
+        super()._forget(body)
+        self._fresh.pop(body, None)
 
     def _remove_body(self, index: int) -> None:
-        """Remove body ``index`` between two ticks of the simulation thread."""
+        """Remove body ``index`` between two ticks, and publish what that ended."""
         with self.with_world():
             self.world.remove_body(index)
+            self._sim.flush_events()
 
     # -- render thread ---------------------------------------------------
     def advance(self, real_dt: float) -> float:
@@ -110,8 +138,13 @@ class ThreadedPhysicsManager(PhysicsManager):
         self._synced_version = version
         pos, aa, awake, dynamic = snap
         m = len(pos)
-        for body in self.bodies:
+        fresh = self._fresh
+        if fresh:
+            for body in [body for body, before in fresh.items() if version > before]:
+                del fresh[body]
+        for body in self._bodies:
             i = body.index
-            if i is None or i >= m or (dynamic[i] and not awake[i]):
+            if (i is None or i >= m or body in fresh
+                    or (dynamic[i] and not awake[i])):
                 continue
             write_pose(body.transform, pos[i], aa[i])

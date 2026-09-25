@@ -221,7 +221,9 @@ facing the lower-indexed body. Two bodies that fall asleep against each other
 are still touching: a crate that settles gets a ``'begin'`` and no ``'end'``
 until something moves it off. ``manager.remove(body)`` ends every pair it was
 in with ``reason='removed'``; its subscriptions hear those ends at the next
-``advance()`` and then finish.
+``advance()`` and then finish, on a threaded manager whether or not a tick has
+run in between. A subscription hears only what happens after it is made: the
+manager drains the world's event log every frame.
 
 When callbacks run
 ~~~~~~~~~~~~~~~~~~
@@ -233,6 +235,13 @@ delivers what happened on all four, so a bounce is heard at any frame rate.
 ``ThreadedPhysicsManager`` delivers the events published with the snapshot it
 writes, so the two managers deliver the same events. A callback that raises is
 logged with the collision and does not stop the rest.
+
+On a ``ThreadedPhysicsManager``, code on the render thread that changes the
+world holds ``manager.with_world()``, which pauses the simulation thread:
+adding a body, moving one, setting a velocity. ``remove``, ``subscribe`` and
+``report_hit`` take it themselves; it is re-entrant, so they can also be called
+inside it. ``PhysicsManager.with_world()`` is the same call and waits for
+nothing, so code written for one manager runs under the other.
 
 Callbacks are held until cancelled, so a lambda can be subscribed.
 
@@ -265,7 +274,8 @@ any other blow:
 ``report_hit`` pushes the body by ``impulse`` (N·s) at the hit point, and the
 subscriber sees ``approach`` as the round's ``speed``, ``normal`` along its
 path and ``payload`` as it was passed. It is delivered with the next
-``advance()``, ahead of that frame's contacts. ``filter=`` on ``raycast``,
+``advance()``, ahead of that frame's contacts; a threaded manager's frame can
+also carry contacts from ticks published before the shot. ``filter=`` on ``raycast``,
 ``raycast_many`` and ``bodies_along`` is a collision filter for the ray, so what
 a weapon passes through is data rather than a list of bodies to skip.
 
@@ -285,6 +295,9 @@ touching there, within 2 cm, with the speed it arrived at: a subscription on
 
    platform = PhysicsViewPlatform(world, body=True)
    events.subscribe(on_pad, body=platform.body, kinds=('trigger',))
+
+The walker places its body in the world on every update. In a threaded world,
+update it inside ``manager.with_world()``.
 
 Breaking instead of bouncing
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -713,9 +726,8 @@ holds.
    obstacles.update(car_position)           # once a frame
 
 A prop's collider is the simple shape its record names, at the size the
-record gives, not its render mesh. A triangle mesh per rock would cost both
-the broad phase and the narrow phase, for a difference nobody driving past at
-forty metres a second can see. ``Prop.shape`` is one of:
+record gives, not its render mesh; a triangle mesh per rock costs both the
+broad phase and the narrow phase. ``Prop.shape`` is one of:
 
 - ``box`` - an obstacle: a boulder, a barrier, a broken-down car. The car
   cannot pass through it.
@@ -723,7 +735,9 @@ forty metres a second can see. ``Prop.shape`` is one of:
 - ``dome`` - something to drive or walk over, such as a stone lying in the
   grass. The collider is a sphere as wide as the stone, sunk until its top is
   level with the stone's top, so a wheel rides over it and a walker steps onto
-  it. As a box, the same stone would be a kerb across the hillside.
+  it. As a box, the same stone would be a kerb across the hillside. A stone
+  more than twice as tall as its radius has its sphere resting on the ground,
+  ``2 * radius`` tall.
 
 A world typically has thousands of stones and hundreds of boulders, and they
 need different reaches: a boulder must stop a car from a long way off, while a

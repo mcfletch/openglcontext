@@ -24,8 +24,8 @@ STEP = 1.0 / 120.0
 GRAVITY = model.Gravity(gravity=9.81, direction=(0, -1, 0))
 
 
-def manager(cls=PhysicsManager, **kw):
-    return cls(gravity=GRAVITY, fixed_dt=STEP, sleep_enabled=False, **kw)
+def manager(cls=PhysicsManager, gravity=GRAVITY, **kw):
+    return cls(gravity=gravity, fixed_dt=STEP, sleep_enabled=False, **kw)
 
 
 def add_floor(mgr, restitution=0.0):
@@ -459,3 +459,119 @@ class TestRemoving:
         finally:
             mgr.stop()
         assert mgr.world.live_body_count == 0
+
+
+def tick(mgr, steps=1):
+    """Run ``steps`` ticks of a threaded manager's simulation on this thread."""
+    sim = mgr._sim
+    with sim.with_world():
+        for _ in range(steps):
+            mgr.world.step(STEP)
+            sim._publish()
+
+
+class TestThreadedRemoval:
+    def test_a_removed_body_hears_its_end_before_the_next_tick(self) -> None:
+        mgr = manager(ThreadedPhysicsManager)
+        add_floor(mgr)
+        crate = add_crate(mgr, position=(0, 0.5, 0))
+        heard = []
+        subscription = mgr.events.subscribe(heard.append, body=crate,
+                                            phases=('begin', 'end'))
+        for _ in range(12):
+            tick(mgr)
+            mgr.advance(STEP)
+        mgr.remove(crate)
+        mgr.advance(STEP)
+        assert [(hit.phase, hit.reason) for hit in heard] == [
+            ('begin', None), ('end', 'removed')]
+        assert heard[1].body is crate
+        assert not subscription.active
+
+    def test_a_body_in_a_reused_slot_is_not_given_its_predecessors_pose(self) -> None:
+        mgr = manager(ThreadedPhysicsManager, gravity=model.Gravity(gravity=0.0))
+        old = add_crate(mgr, position=(100, 50, 0))
+        tick(mgr)
+        mgr.remove(old)
+        new = add_crate(mgr, position=(0, 1, 0))
+        assert new.index == 0
+        mgr.advance(STEP)
+        assert tuple(new.transform.translation) == pytest.approx((0, 1, 0))
+        tick(mgr)
+        mgr.advance(STEP)
+        assert tuple(new.transform.translation) == pytest.approx((0, 1, 0), abs=1e-3)
+
+
+class TestALateSubscription:
+    def test_it_hears_nothing_from_before_it_was_made(self) -> None:
+        mgr = manager()
+        add_floor(mgr)
+        crate = add_crate(mgr, position=(0, 0.5, 0))
+        mgr.events.subscribe(lambda hit: None, body=crate,
+                             phases=('begin', 'persist'), immediate=True)
+        run(mgr, 3.0)
+        heard = []
+        mgr.events.subscribe(heard.append, body=crate, phases=('begin', 'persist'))
+        mgr.advance(1.0 / 60.0)
+        assert heard
+        assert min(hit.time for hit in heard) >= mgr.world.time - 1.0 / 60.0 - 1e-9
+        assert len(mgr.world.contact_log) == 0
+
+
+class TestTheThreadedWorldIsLocked:
+    def test_a_hit_waits_for_the_world(self) -> None:
+        import threading
+        mgr = manager(ThreadedPhysicsManager)
+        crate = add_crate(mgr, position=(0, 5, 0))
+        hit = raycast(mgr.world, (-4, 5, 0), (1, 0, 0))
+        held = threading.Event()
+        release = threading.Event()
+
+        def hold():
+            with mgr.with_world():
+                held.set()
+                release.wait(5.0)
+
+        holder = threading.Thread(target=hold)
+        holder.start()
+        held.wait(5.0)
+        shooter = threading.Thread(
+            target=lambda: mgr.events.report_hit(hit, direction=(1, 0, 0), impulse=1.0))
+        shooter.start()
+        shooter.join(0.2)
+        waited = shooter.is_alive()
+        release.set()
+        holder.join()
+        shooter.join()
+        assert waited
+        assert mgr.world.linear_velocity[crate.index][0] == pytest.approx(1.0)
+
+    def test_a_trigger_reports_where_the_body_was_when_it_entered(self) -> None:
+        mgr = manager(ThreadedPhysicsManager, gravity=model.Gravity(gravity=0.0))
+        shape = mgr.world.add_shape(model.Shape.box((2, 2, 2)))
+        pad = mgr.add(PhysicsBody(Transform(), model.Motion(type=model.STATIC),
+                                  trigger=model.Trigger(shape=shape)))
+        ball = add_crate(mgr, position=(-3, 0, 0), shape=model.Shape.sphere(0.2))
+        mgr.world.linear_velocity[ball.index] = (30.0, 0, 0)
+        heard = []
+        mgr.events.subscribe(heard.append, body=pad, kinds=('trigger',))
+        tick(mgr, 20)
+        # The simulation runs on past the snapshot the render thread adopts.
+        with mgr.with_world():
+            for _ in range(20):
+                mgr.world.step(STEP)
+        mgr.advance(STEP)
+        (entered,) = heard
+        assert entered.point[0] == pytest.approx(-1.0, abs=0.3)
+
+
+class TestFindingBodies:
+    def test_a_body_is_found_by_its_transform_and_its_reference(self) -> None:
+        mgr = manager()
+        crates = [add_crate(mgr, position=(3 * k, 5, 0)) for k in range(5)]
+        for crate in crates:
+            assert mgr.body_for(crate.transform) is crate
+            assert mgr.handle(mgr.world.ref(crate.index)) is crate
+        mgr.remove(crates[2])
+        assert mgr.body_for(crates[2].transform) is None
+        assert mgr.bodies == [crates[0], crates[1], crates[3], crates[4]]

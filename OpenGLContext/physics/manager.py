@@ -8,6 +8,7 @@ frame's collisions to the callbacks subscribed through :attr:`PhysicsManager.eve
 once a frame, usually from its ``OnIdle``.
 """
 from collections import OrderedDict
+from contextlib import AbstractContextManager, nullcontext
 from typing import Any, List, Optional
 
 from omi_physics.contactevents import BodyRef
@@ -40,6 +41,11 @@ def write_pose(transform: Any, pos_row: Any, aa_row: Any) -> None:
 class PhysicsManager:
     """Couples a :class:`PhysicsWorld` to scenegraph bodies: register, advance, write poses back."""
 
+    #: Whether :meth:`advance` steps the world on the calling thread.
+    steps_on_this_thread = True
+    #: How many removed bodies :meth:`handle` still answers for.
+    RETIRED_KEPT = 4096
+
     def __init__(self, world: Optional[PhysicsWorld] = None, gravity: Any = None,
                  default_linear_damping: float = 0.3,
                  default_angular_damping: float = 1.5,
@@ -51,25 +57,38 @@ class PhysicsManager:
                                  default_angular_damping=default_angular_damping,
                                  **world_kw)
         self.world = world
-        self.bodies: List[Any] = []
+        #: The registered bodies in the order they were added, as dictionary
+        #: keys so that removing one does not search for it.
+        self._bodies: dict[Any, None] = {}
+        #: Each registered body by the ``id`` of the Transform it drives.
+        self._by_transform: dict[int, Any] = {}
         #: Collision subscriptions: :meth:`CollisionEvents.subscribe
         #: <OpenGLContext.physics.events.CollisionEvents.subscribe>`.
         self.events = CollisionEvents(self)
-        self._handles: dict = {}
         #: Bodies removed recently, so events about their last contacts still
         #: name them. Bounded: only the events of the next frame or two need it.
         self._retired: "OrderedDict[BodyRef, Any]" = OrderedDict()
 
-    #: Whether :meth:`advance` steps the world on the calling thread.
-    steps_on_this_thread = True
-    #: How many removed bodies :meth:`handle` still answers for.
-    RETIRED_KEPT = 4096
+    @property
+    def bodies(self) -> List[Any]:
+        """The registered ``PhysicsBody`` handles, in the order they were added."""
+        return list(self._bodies)
+
+    def with_world(self) -> AbstractContextManager[Any]:
+        """Exclusive access to the world while it is changed.
+
+        This manager steps the world on the caller's thread, so there is
+        nothing to wait for; a threaded manager answers its simulation's lock.
+        Code that changes the world outside :meth:`advance` takes it, so the
+        same code runs under either.
+        """
+        return nullcontext()
 
     def add(self, body: Any) -> Any:
         """Register a scenegraph ``PhysicsBody`` handle into the world and track it; returns the body."""
         body.register(self.world)
-        self.bodies.append(body)
-        self._handles[self.world.ref(body.index)] = body
+        self._bodies[body] = None
+        self._by_transform[id(body.transform)] = body
         return body
 
     def remove(self, body: Any) -> None:
@@ -77,19 +96,25 @@ class PhysicsManager:
 
         The pairs it was touching end with ``reason='removed'``, and the
         subscriptions on it hear those ends at the next :meth:`advance` and
-        then finish. ``body.index`` is None afterwards.
+        then finish. ``body.index`` is None afterwards. On a threaded manager
+        this takes :meth:`with_world` itself.
         """
         if body.index is None:
             return
         ref = self.world.ref(body.index)
         self._remove_body(body.index)
-        self._handles.pop(ref, None)
         self._retired[ref] = body
         while len(self._retired) > self.RETIRED_KEPT:
             self._retired.popitem(last=False)
-        if body in self.bodies:
-            self.bodies.remove(body)
+        self._forget(body)
         body.index = None
+
+    def _forget(self, body: Any) -> None:
+        """Stop tracking ``body``."""
+        self._bodies.pop(body, None)
+        key = id(body.transform)
+        if self._by_transform.get(key) is body:
+            del self._by_transform[key]
 
     def _remove_body(self, index: int) -> None:
         """Remove body ``index`` from the world."""
@@ -97,30 +122,30 @@ class PhysicsManager:
 
     def handle(self, ref: BodyRef) -> Any:
         """The ``PhysicsBody`` ``ref`` names, or ``ref`` itself for a body added without one."""
-        found = self._handles.get(ref)
+        found = self.world.handle_of(ref)
         if found is None:
             found = self._retired.get(ref)
-        if found is None:
-            found = self.world.handle_of(ref)
         return ref if found is None else found
 
     def body_for(self, transform: Any) -> Any:
         """The registered ``PhysicsBody`` driving ``transform``, or None."""
-        for body in self.bodies:
-            if body.transform is transform:
-                return body
-        return None
+        return self._by_transform.get(id(transform))
 
     def advance(self, real_dt: float) -> float:
         """Step the world by ``real_dt`` seconds, sync poses and deliver collisions.
 
         Returns the interpolation alpha. Collision callbacks run last, so they
         see the scene in the pose this frame draws.
+
+        The world's :attr:`~omi_physics.world.PhysicsWorld.contact_log` is
+        drained every frame, whether or not anything has subscribed, so a
+        subscription made later hears only what happens after it.
         """
         alpha = self.world.advance(real_dt)
         self.sync(alpha)
+        events = self.world.contact_log.drain()
         if self.events.draining:
-            self.events.dispatch(self.world.contact_log.drain())
+            self.events.dispatch(events)
         return alpha
 
     def sync(self, alpha: float = 1.0) -> None:
@@ -142,7 +167,7 @@ class PhysicsManager:
         aa = mathutil.quat_to_axis_angle(quat)
         awake = w.awake[:n]
         dynamic = w.motion_type[:n] == 2
-        for body in self.bodies:
+        for body in self._bodies:
             i = body.index
             if i is None or (dynamic[i] and not awake[i]):
                 continue

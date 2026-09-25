@@ -30,7 +30,11 @@ class PhysicsViewPlatform:
 
         ``body`` gives the walker a body in the world: a sensor capsule that
         enters trigger volumes and whose touches with moving bodies are
-        reported, without pushing or being pushed (:attr:`body`).
+        reported, without pushing or being pushed (:attr:`body`). Each update
+        places that body in the world, so in a world a
+        :class:`~OpenGLContext.physics.threaded.ThreadedPhysicsManager` steps
+        on another thread, update the walker inside the manager's
+        ``with_world()``.
         """
         self.character = CharacterController(
             world, capabilities or CharacterCapabilities(), position, gravity=gravity,
