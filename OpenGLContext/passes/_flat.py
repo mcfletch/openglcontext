@@ -1390,7 +1390,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
                 if found is not None:
                     if not len(found):
                         continue
-                    seen[id(path)] = found
+                    seen[id(path)] = (path, found)
             toRender.append( (
                 node.sortKey( self, tmatrix ),
                 modelviews[at], tmatrix, volumes[index], path, node,

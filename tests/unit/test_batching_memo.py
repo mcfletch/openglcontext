@@ -5,6 +5,8 @@ under and whether it can be drawn instanced at all, so a frame does not work
 either out again for a shape nothing has touched. Each test here asks, edits
 one input in place, and asks again.
 """
+import gc
+
 import numpy as np
 import pytest
 
@@ -105,3 +107,20 @@ def test_a_new_appearance_is_seen(ask):
     shape.appearance = basenodes.Appearance(material=PBRMaterial(
         reflector=PlanarReflector()))
     assert ask(shape)[1] is False
+
+
+def test_a_shape_that_has_gone_leaves_nothing_behind(monkeypatch):
+    """The memo is kept by shape, and a collected shape's answer goes with it.
+
+    A collected shape's address is handed to the next object of its size, so
+    a memo keyed on addresses would answer a new shape with the old one's key.
+    """
+    monkeypatch.delenv('OPENGLCONTEXT_INSTANCE_COLLAPSE', raising=False)
+    passing = PBRPass.__new__(PBRPass)
+    key, _instanceable = passing.batchers()
+    shape = _shape()
+    key(shape)
+    assert len(passing._batchMemo) == 1
+    del shape
+    gc.collect()
+    assert len(passing._batchMemo) == 0

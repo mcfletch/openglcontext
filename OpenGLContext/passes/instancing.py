@@ -514,7 +514,8 @@ def record_placements(record: tuple, visible: Optional[dict] = None) -> Optional
     every placement that shape holds; every other record stands for itself.
 
     ``visible`` is a caller's per-record answer to "which of them can be seen
-    from *here*", keyed by ``id`` of the record's path -- see
+    from *here*": keyed by ``id`` of the record's path, which is a list, each
+    entry the path and its visible placements -- see
     :meth:`~OpenGLContext.scenegraph.instancedshape.InstancedShape.visiblePlacements`.
     It belongs to the caller and not to the shape because a shadow pass culls
     against a light while the colour pass culls against the camera; a pass that
@@ -522,8 +523,8 @@ def record_placements(record: tuple, visible: Optional[dict] = None) -> Optional
     """
     if visible is not None:
         found = visible.get(id(record[4]))
-        if found is not None:
-            return found
+        if found is not None and found[0] is record[4]:
+            return found[1]
     placements = getattr(record[5], 'instancePlacements', None)
     return placements() if placements is not None else None
 
@@ -573,7 +574,7 @@ def instance_matrices(records: List[tuple], index: int = 1,
     return out
 
 
-def instance_joint_bases(mode: Any, group: Any) -> Optional[Dict[int, int]]:
+def instance_joint_bases(mode: Any, group: Any) -> Optional[Dict[Any, int]]:
     """Where each member of a skinned group reads its joints, by geometry.
 
     None where the group is not skinned, or where a figure has no palette range
@@ -592,7 +593,7 @@ def instance_joint_bases(mode: Any, group: Any) -> Optional[Dict[int, int]]:
     if getattr(group.geometry, 'skin_joints', None) is None:
         return None
     from OpenGLContext.scenegraph.skinning import palette_for
-    bases: Dict[int, int] = {}
+    bases: Dict[Any, int] = {}
     pending: list = []
     for record in group.members:
         geometry = record[5].geometry
@@ -600,7 +601,7 @@ def instance_joint_bases(mode: Any, group: Any) -> Optional[Dict[int, int]]:
         if claimed is None:
             return None
         base, matrices = claimed
-        bases[id(geometry)] = base
+        bases[geometry] = base
         if matrices is not None:
             pending.append((base, matrices))
     if pending:
@@ -610,7 +611,7 @@ def instance_joint_bases(mode: Any, group: Any) -> Optional[Dict[int, int]]:
     return bases
 
 
-def member_joint_bases(bases: Dict[int, int], records: List[tuple],
+def member_joint_bases(bases: Dict[Any, int], records: List[tuple],
                        counts: List[int]) -> List[int]:
     """The joint base of every instance ``records`` draws, in draw order.
 
@@ -618,7 +619,7 @@ def member_joint_bases(bases: Dict[int, int], records: List[tuple],
     record standing for a placement set hands its figure's joints to each of
     its placements.
     """
-    return per_instance([bases[id(r[5].geometry)] for r in records], counts)
+    return per_instance([bases[r[5].geometry] for r in records], counts)
 
 
 def _winding_sign(mv: Any) -> int:

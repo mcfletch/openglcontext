@@ -1084,7 +1084,9 @@ class PBRPass(flatcore.FlatPass):
         """
         collapse = instance_collapse_is_enabled()
         mirrors = reflection.mirror_generation()
-        memo = self.__dict__.setdefault('_batchMemo', {})
+        memo = self.__dict__.get('_batchMemo')
+        if memo is None:
+            memo = self.__dict__['_batchMemo'] = weakref.WeakKeyDictionary()
         if len(memo) > 100000:
             memo.clear()
 
@@ -1093,17 +1095,18 @@ class PBRPass(flatcore.FlatPass):
             appearance = getattr(shape, 'appearance', None)
             material = getattr(appearance, 'material', None)
             version = getattr(material, 'batchingVersion', None)
-            signature = (id(geometry), id(appearance), id(material),
-                         version() if version is not None
-                         else getattr(material, '_ubo_version', 0),
-                         id(getattr(appearance, 'texture', None)), collapse, mirrors)
-            held = memo.get(id(shape))
-            if held is not None and held[0] == signature:
-                return held[1], held[2]
+            made_from = (geometry, appearance, material,
+                         getattr(appearance, 'texture', None))
+            stamps = (version() if version is not None
+                      else getattr(material, '_ubo_version', 0), collapse, mirrors)
+            held = memo.get(shape)
+            if held is not None and held[1] == stamps and all(
+                    was is now for was, now in zip(held[0], made_from, strict=True)):
+                return held[2], held[3]
             key = self._keyFor(shape, collapse)
             flag = key is not None and bool(self._instanceable(shape))
             if not callable(getattr(geometry, 'instanceContentKey', None)):
-                memo[id(shape)] = (signature, key, flag)
+                memo[shape] = (made_from, stamps, key, flag)
             return key, flag
 
         return (lambda shape: answer(shape)[0]), (lambda shape: answer(shape)[1])
