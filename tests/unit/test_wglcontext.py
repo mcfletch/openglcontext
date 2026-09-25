@@ -26,6 +26,19 @@ windows_only = pytest.mark.skipif(
     sys.platform != 'win32', reason='WGL is the Windows binding for OpenGL')
 
 
+def _needs_pbuffers():
+    """Skip where the driver lacks the WGL extensions an offscreen context needs.
+
+    Asked of PyOpenGL without creating anything, so a context the engine fails
+    to make where the extensions are offered fails the test.
+    """
+    from OpenGL.WGL import offscreen
+    missing = offscreen.available('core')
+    if missing:
+        pytest.skip('this driver offers no offscreen OpenGL: %s missing'
+                    % (', '.join(missing),))
+
+
 def definition(**named):
     return contextdefinition.ContextDefinition(**named)
 
@@ -149,10 +162,8 @@ class TestOffscreenRendering:
                 glClearColor(0.25, 0.50, 0.75, 1.0)
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-        try:
-            context = KnownColour(size=(64, 48))
-        except wglcontext.WGLContextError as error:
-            pytest.skip(f'no offscreen WGL context available here: {error}')
+        _needs_pbuffers()
+        context = KnownColour(size=(64, 48))
         try:
             yield context
         finally:
@@ -184,19 +195,18 @@ class TestOffscreenRendering:
         assert renderer.getViewPort() == (64, 48)
 
     def test_closing_twice_is_harmless(self, renderer):
-        """Nothing should explode if a caller closes and the fixture closes again."""
+        """A caller that closes, and the fixture closing again, leave it closed."""
         renderer.close()
         renderer.close()
+        assert renderer.surface is None
 
     def test_it_works_as_a_context_manager(self):
         # Built here rather than through `renderer`, because what is under test
         # is the construction itself -- so the skip that fixture carries has to
         # be repeated: a machine with no pbuffers cannot answer this one way or
         # the other, and must say so rather than fail.
-        try:
-            opened = wglcontext.WGLContext(size=(16, 16))
-        except wglcontext.WGLContextError as error:
-            pytest.skip(f'no offscreen WGL context available here: {error}')
+        _needs_pbuffers()
+        opened = wglcontext.WGLContext(size=(16, 16))
         with opened as context:
             assert context.surface is not None
         assert context.surface is None
@@ -214,10 +224,8 @@ class TestDrivingTheContext:
 
     @pytest.fixture
     def context(self):
-        try:
-            context = wglcontext.WGLContext(size=(64, 64))
-        except wglcontext.WGLContextError as error:
-            pytest.skip(f'no offscreen WGL context available here: {error}')
+        _needs_pbuffers()
+        context = wglcontext.WGLContext(size=(64, 64))
         try:
             yield context
         finally:
@@ -298,10 +306,8 @@ class TestResizing:
                 glClearColor(0.0, 1.0, 0.0, 1.0)
                 glClear(GL_COLOR_BUFFER_BIT)
 
-        try:
-            context = KnownColour(size=(32, 32))
-        except wglcontext.WGLContextError as error:
-            pytest.skip(f'no offscreen WGL context available here: {error}')
+        _needs_pbuffers()
+        context = KnownColour(size=(32, 32))
         try:
             yield context
         finally:
@@ -365,10 +371,8 @@ class TestHowManyFramesTheLoopDraws:
             def wantsMoreFrames(self):
                 return bool(self.remaining)
 
-        try:
-            return Counting(size=(16, 16))
-        except wglcontext.WGLContextError as error:
-            pytest.skip(f'no offscreen WGL context available here: {error}')
+        _needs_pbuffers()
+        return Counting(size=(16, 16))
 
     def test_it_draws_the_frame_count_when_nothing_wants_more(self):
         context = self.contextDrawing(0)

@@ -7,7 +7,7 @@ Two layers, as elsewhere in this suite:
     does need is the bindings, so the module skips on a platform with no EGL
     library for them to bind to.
   * GL -- a real offscreen context, created, made current and drawn into.
-    Skipped where EGL cannot provide one.
+    Skipped where PyOpenGL finds no EGL device to make one on.
 
 The device policy is not cosmetic.  Asking for a display on a *hardware* EGL
 device while ``LIBGL_ALWAYS_SOFTWARE`` demands software rendering is a
@@ -22,6 +22,17 @@ pytest.importorskip('OpenGL.EGL', exc_type=ImportError)
 from OpenGL.EGL.devices import DeviceInfo
 from OpenGLContext import eglcontext
 from OpenGLContext.events import synthetic
+
+
+def _needs_a_device():
+    """Skip where PyOpenGL finds no EGL device to render on.
+
+    Asked of PyOpenGL's enumeration rather than of the engine, so a context
+    the engine fails to make on a machine that has a device fails the test.
+    """
+    from OpenGL.EGL.devices import devices
+    if not devices():
+        pytest.skip('no EGL device on this machine to make a context on')
 
 
 def device(index=0, software=False, driver=None):
@@ -195,10 +206,8 @@ class TestOffscreenRendering:
                 glClearColor(0.25, 0.50, 0.75, 1.0)
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-        try:
-            context = KnownColour(size=(64, 48))
-        except eglcontext.EGLContextError as error:
-            pytest.skip(f'no offscreen EGL context available here: {error}')
+        _needs_a_device()
+        context = KnownColour(size=(64, 48))
         try:
             yield context
         finally:
@@ -230,19 +239,18 @@ class TestOffscreenRendering:
         assert renderer.device.software == eglcontext.prefersSoftware()
 
     def test_closing_twice_is_harmless(self, renderer):
-        """Nothing should explode if a caller closes and the fixture closes again."""
+        """A caller that closes, and the fixture closing again, leave it closed."""
         renderer.close()
         renderer.close()
+        assert renderer.display is None
 
     def test_it_works_as_a_context_manager(self):
         # Built here rather than through `renderer`, because what is under test
         # is the construction itself -- so the skip that fixture carries has to
         # be repeated: a machine with no EGL device cannot answer this one way
         # or the other, and must say so rather than fail.
-        try:
-            opened = eglcontext.EGLContext(size=(16, 16))
-        except eglcontext.EGLContextError as error:
-            pytest.skip(f'no offscreen EGL context available here: {error}')
+        _needs_a_device()
+        opened = eglcontext.EGLContext(size=(16, 16))
         with opened as context:
             assert context.display is not None
         assert context.display is None
@@ -259,10 +267,8 @@ class TestDrivingTheContext:
 
     @pytest.fixture
     def context(self):
-        try:
-            context = eglcontext.EGLContext(size=(64, 64))
-        except eglcontext.EGLContextError as error:
-            pytest.skip(f'no offscreen EGL context available here: {error}')
+        _needs_a_device()
+        context = eglcontext.EGLContext(size=(64, 64))
         try:
             yield context
         finally:
@@ -339,10 +345,8 @@ class TestResizing:
                 glClearColor(0.0, 1.0, 0.0, 1.0)
                 glClear(GL_COLOR_BUFFER_BIT)
 
-        try:
-            context = KnownColour(size=(32, 32))
-        except eglcontext.EGLContextError as error:
-            pytest.skip(f'no offscreen EGL context available here: {error}')
+        _needs_a_device()
+        context = KnownColour(size=(32, 32))
         try:
             yield context
         finally:
@@ -510,10 +514,8 @@ class TestFlushingPendingPicks:
 
     @pytest.fixture
     def context(self):
-        try:
-            context = eglcontext.EGLContext(size=(64, 64))
-        except eglcontext.EGLContextError as error:
-            pytest.skip(f'no offscreen EGL context available here: {error}')
+        _needs_a_device()
+        context = eglcontext.EGLContext(size=(64, 64))
         try:
             yield context
         finally:
@@ -624,10 +626,8 @@ class TestTheDefinitionsProfile:
             pass
 
         Profiled.profile = profile
-        try:
-            context = Profiled(size=(16, 16))
-        except eglcontext.EGLContextError as error:
-            pytest.skip(f'no offscreen EGL context available here: {error}')
+        _needs_a_device()
+        context = Profiled(size=(16, 16))
         try:
             context.setCurrent()
             try:
@@ -673,12 +673,10 @@ class TestTheDisplayIsSharedRatherThanOwned:
     and the suite opens two at once on purpose."""
 
     def test_the_last_user_out_terminates_it(self):
-        try:
-            device = eglcontext.selectDevice()
-            first = eglcontext.openDisplay(device)
-            second = eglcontext.openDisplay(device)
-        except eglcontext.EGLContextError as err:
-            pytest.skip(str(err))
+        _needs_a_device()
+        device = eglcontext.selectDevice()
+        first = eglcontext.openDisplay(device)
+        second = eglcontext.openDisplay(device)
         assert eglcontext._address(first) == eglcontext._address(second)
         assert eglcontext.closeDisplay(second) is False
         assert eglcontext.closeDisplay(first) is True
@@ -687,10 +685,8 @@ class TestTheDisplayIsSharedRatherThanOwned:
         """Releasing one leaves the other drawable."""
         from OpenGL.GL import GL_VERSION, glGetString
 
-        try:
-            first = eglcontext.PbufferContext(width=16, height=16)
-        except eglcontext.EGLContextError as err:
-            pytest.skip(str(err))
+        _needs_a_device()
+        first = eglcontext.PbufferContext(width=16, height=16)
         try:
             second = eglcontext.PbufferContext(width=16, height=16)
             second.release()
@@ -701,10 +697,8 @@ class TestTheDisplayIsSharedRatherThanOwned:
 
     def test_releasing_one_leaves_the_current_one_current(self):
         """Letting go of a context that is not current un-currents nothing."""
-        try:
-            first = eglcontext.PbufferContext(width=16, height=16)
-        except eglcontext.EGLContextError as err:
-            pytest.skip(str(err))
+        _needs_a_device()
+        first = eglcontext.PbufferContext(width=16, height=16)
         try:
             second = eglcontext.PbufferContext(width=16, height=16)
             first.make_current()
@@ -716,10 +710,8 @@ class TestTheDisplayIsSharedRatherThanOwned:
         assert not eglcontext._address(eglcontext.EGL.eglGetCurrentContext())
 
     def test_releasing_twice_is_harmless(self):
-        try:
-            context = eglcontext.PbufferContext(width=16, height=16)
-        except eglcontext.EGLContextError as err:
-            pytest.skip(str(err))
+        _needs_a_device()
+        context = eglcontext.PbufferContext(width=16, height=16)
         context.release()
         context.release()
         assert context.display is None
