@@ -807,8 +807,9 @@ becoming zero is the answer. Two failures seen in full runs belong to other
 work in progress in the tree: `test_viewer_component` (a viewer mix-in
 shadowing `renderer` and `resolveDefinition`) and
 `test_gltf_regression_diff::test_dl_downloads_when_absent`.
-`test_unlit_pickable_gl[pointset]` failed once in a loaded full run (a
-subprocess pick returned no hit) and passed in four runs alone.
+`test_unlit_pickable_gl[pointset]`, which failed once in a loaded full run
+(its pick's readback had not landed in the frames it drew), waits for the
+readback with `flushPendingPicks` (e9a40d9).
 
 ## Parked, 2026-09-25
 
