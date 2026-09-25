@@ -1,6 +1,7 @@
 // The table of views a shared multi-view draw reads: one record per view, in
-// the std140 layout OpenGLContext/passes/multiview.py packs. Declared only in a
-// program compiled for several views, which defines MULTIVIEW_VIEWS.
+// the std140 layout pack_view_table in OpenGLContext/multiview/strategy.py
+// packs. Declared only in a program compiled for several views, which defines
+// MULTIVIEW_VIEWS.
 //
 // A shared draw works in the reference camera's eye space (the active view's):
 // the modelviews, lights and shadow matrices are the ones one view would use,
