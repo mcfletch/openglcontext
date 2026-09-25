@@ -1248,11 +1248,37 @@ class MiniMap(HUDWidget):
     # -- the fitting ------------------------------------------------------
     def bounds(self) -> Optional[Tuple[float, float, float, float]]:
         """The route's own extent in world XZ, or None for no route."""
+        return self._fitting()[0]
+
+    def _fitting(self) -> Tuple[Optional[Tuple[float, float, float, float]], Any]:
+        """The route's extent and its points, kept while the route is the same one.
+
+        A route is set once and a map is painted every frame, so its extent
+        is worked out when the route arrives rather than for every point
+        placed on it.
+        """
+        held = self.__dict__.get('_fitted')
+        if held is not None and held[0] is self.route:
+            return held[1], held[2]
         points = _points(self.route)
-        if points is None:
+        found = None if points is None else (
+            float(points[:, 0].min()), float(points[:, 1].min()),
+            float(points[:, 0].max()), float(points[:, 1].max()))
+        self.__dict__['_fitted'] = (self.route, found, points)
+        return found, points
+
+    def _placing(self) -> Optional[Tuple[float, float, float, float, float, Rect]]:
+        """``(middle x, middle y, centre x, centre z, scale, box)`` for placing points."""
+        found = self.bounds()
+        if found is None:
             return None
-        return (float(points[:, 0].min()), float(points[:, 1].min()),
-                float(points[:, 0].max()), float(points[:, 1].max()))
+        box = self.rect
+        low_x, low_z, high_x, high_z = found
+        span = max(high_x - low_x, high_z - low_z)
+        room = max(min(box.width, box.height) - float(self.inset) * 2.0, 1.0)
+        scale = room / span if span > 1e-9 else 0.0
+        return (box.x + box.width / 2.0, box.y + box.height / 2.0,
+                (low_x + high_x) / 2.0, (low_z + high_z) / 2.0, scale, box)
 
     def at(self, x: float, z: float) -> Tuple[float, float]:
         """Where a world position lands on the map, in window pixels.
@@ -1260,35 +1286,48 @@ class MiniMap(HUDWidget):
         Clamped to the box: a car that has left the road is somewhere, and
         where it is off the edge is worth seeing.
         """
+        placing = self._placing()
         box = self.rect
-        inset = float(self.inset)
-        found = self.bounds()
-        middle = (box.x + box.width / 2.0, box.y + box.height / 2.0)
-        if found is None:
-            return middle
-        low_x, low_z, high_x, high_z = found
-        span = max(high_x - low_x, high_z - low_z)
-        room = max(min(box.width, box.height) - inset * 2.0, 1.0)
-        scale = room / span if span > 1e-9 else 0.0
+        if placing is None:
+            return (box.x + box.width / 2.0, box.y + box.height / 2.0)
+        mx, my, cx, cz, scale, box = placing
         # Z runs into the screen and the map's Y runs up it, so the map is seen
         # from above with north at the top rather than mirrored.
-        place = (middle[0] + (x - (low_x + high_x) / 2.0) * scale,
-                 middle[1] - (z - (low_z + high_z) / 2.0) * scale)
+        place = (mx + (x - cx) * scale, my - (z - cz) * scale)
         return (min(max(place[0], box.x), float(box.right)),
                 min(max(place[1], box.y), float(box.top)))
 
     def strokes(self) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
-        """The route as pairs of points on the map, thinned to :attr:`detail`."""
-        points = _points(self.route)
-        if points is None or len(points) < 2:
+        """The route as pairs of points on the map, thinned to :attr:`detail`.
+
+        Kept while the route, the box and the settings are the same, since a
+        route does not change from one frame to the next.
+        """
+        box = self.rect
+        key = (id(self.route), box.x, box.y, box.width, box.height,
+               float(self.inset), int(self.detail), bool(self.closed))
+        held = self.__dict__.get('_strokes')
+        if held is not None and held[0] == key and held[1] is self.route:
+            return held[2]
+        found = self._strokes()
+        self.__dict__['_strokes'] = (key, self.route, found)
+        return found
+
+    def _strokes(self) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
+        _found, points = self._fitting()
+        placing = self._placing()
+        if points is None or len(points) < 2 or placing is None:
             return []
         stride = max(1, int(np.ceil(len(points) / max(int(self.detail), 2))))
-        drawn = list(points[::stride])
+        drawn = points[::stride]
         if not np.allclose(drawn[-1], points[-1]):
-            drawn.append(points[-1])
+            drawn = np.vstack([drawn, points[-1:]])
         if self.closed and not np.allclose(drawn[0], drawn[-1]):
-            drawn.append(drawn[0])
-        placed = [self.at(float(x), float(z)) for x, z in drawn]
+            drawn = np.vstack([drawn, drawn[:1]])
+        mx, my, cx, cz, scale, box = placing
+        xs = np.clip(mx + (drawn[:, 0] - cx) * scale, box.x, float(box.right))
+        ys = np.clip(my - (drawn[:, 1] - cz) * scale, box.y, float(box.top))
+        placed = list(zip(xs.tolist(), ys.tolist(), strict=True))
         return list(zip(placed[:-1], placed[1:], strict=True))
 
     def marked(self) -> List[Tuple[Tuple[float, float], str]]:
