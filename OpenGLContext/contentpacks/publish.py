@@ -28,13 +28,16 @@ import subprocess
 import urllib.parse
 from typing import Callable, Sequence
 
+from OpenGLContext import atomicfiles
+
 from . import archive
 from .pack import ContentPack
 from .store import CONTENT_OVERRIDE, ContentStore
 
 log = logging.getLogger(__name__)
 
-__all__ = ['GITHUB', 'built', 'install', 'push', 'repository']
+__all__ = ['GITHUB', 'built', 'fresh_directory', 'install', 'push',
+           'repository']
 
 #: The command a release is attached with. GitHub's own, which knows where the
 #: credentials are kept; nothing here handles a token.
@@ -58,6 +61,18 @@ def built(pack: ContentPack, archives: str) -> str:
     """
     return os.path.join(archives,
                         urllib.parse.urlparse(pack.url).path.rsplit('/', 1)[-1])
+
+
+def fresh_directory(path: str) -> str:
+    """An empty directory at ``path`` to stage a pack in; returns ``path``.
+
+    Whatever an earlier build left there is removed first, since an archive is
+    made of everything in the tree and a file the new build did not write
+    would otherwise be packed, and digested, with it.
+    """
+    atomicfiles.remove_directory(path)
+    os.makedirs(path)
+    return path
 
 
 def install(pack: ContentPack, store: ContentStore, archives: str,

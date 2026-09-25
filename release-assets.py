@@ -36,6 +36,7 @@ import os
 import shutil
 import sys
 
+from OpenGLContext import atomicfiles
 from OpenGLContext.contentpacks import archive, catalog, publish
 
 #: Where a release's artefacts are fetched from.
@@ -80,12 +81,17 @@ def build_world(into: str, bays: int, levels: int) -> str:
 
 
 def stage(world: str, into: str) -> str:
-    """Put an already-built glB and its notices where the archive is made."""
-    os.makedirs(into, exist_ok=True)
-    shutil.copyfile(world, os.path.join(into, MARKER))
+    """Put an already-built glB and its notices where the archive is made.
+
+    The registry entry says the full attribution is in ``CREDITS.txt`` inside
+    the pack, so a glB without one beside it is refused.
+    """
     beside = os.path.join(os.path.dirname(os.path.abspath(world)), "CREDITS.txt")
-    if os.path.exists(beside):
-        shutil.copyfile(beside, os.path.join(into, "CREDITS.txt"))
+    if not os.path.exists(beside):
+        raise SystemExit("no CREDITS.txt beside %s; the pack carries the art's "
+                         "attribution, so put it there" % (world,))
+    shutil.copyfile(world, os.path.join(into, MARKER))
+    shutil.copyfile(beside, os.path.join(into, "CREDITS.txt"))
     return into
 
 
@@ -181,22 +187,23 @@ def main(argv: list[str] | None = None) -> int:
                              "GitHub CLI, and an account that may write here)")
     options = parser.parse_args(argv)
 
-    staged = os.path.join(options.into, "gallery")
-    os.makedirs(staged, exist_ok=True)
-    if options.world:
-        if not os.path.exists(options.world):
-            print(f"no world at {options.world}", file=sys.stderr)
-            return 2
-        stage(options.world, staged)
-    else:
-        build_world(staged, options.bays, options.levels)
+    staged = publish.fresh_directory(os.path.join(options.into, "gallery"))
+    try:
+        if options.world:
+            if not os.path.exists(options.world):
+                raise SystemExit(f"no world at {options.world}")
+            stage(options.world, staged)
+        else:
+            build_world(staged, options.bays, options.levels)
+    except SystemExit as refused:
+        print(refused, file=sys.stderr)
+        return 2
 
     path, size, sha = build(staged, "gallery-world", options.into)
     declared = entry(options.tag, path, size, sha)
-    with open(CATALOG, "w", encoding="utf-8") as handle:
-        json.dump({"namespace": NAMESPACE, "packs": [declared]}, handle,
-                  indent=1)
-        handle.write("\n")
+    atomicfiles.write_text(
+        CATALOG, json.dumps({"namespace": NAMESPACE, "packs": [declared]},
+                            indent=1) + "\n")
     print(f"gallery world: {size / 1048576:.1f} MB, sha256 {sha[:12]}, "
           f"registry written to {os.path.relpath(CATALOG, HERE)}")
 

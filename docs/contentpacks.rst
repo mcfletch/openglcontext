@@ -507,6 +507,10 @@ packs. Each application has a ``release-assets.py`` script that says what to
 build and what the registry should say about it. The steps are the same for
 every application:
 
+#. Stage the pack's files in ``publish.fresh_directory(path)``, which removes
+   whatever an earlier build left there: an archive holds everything in the
+   tree, so a file the new build did not write would be packed with it.
+
 #. Build the archive with ``archive.write(directory, path)``. The archive's
    bytes depend only on the content: entries are sorted, every entry and the
    gzip header have a fixed timestamp, and entries have no owner and one file
