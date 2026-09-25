@@ -135,3 +135,75 @@ class TestMalformedValues:
         from PIL import Image as pil
         monkeypatch.setattr(pil, 'MAX_IMAGE_PIXELS', 4)
         assert document().environment is None
+
+
+class TestFaceSizes:
+    """A light's faces are square, six alike, and each mip half the one before."""
+
+    def test_a_face_that_is_not_square_leaves_the_light_out(self, caplog):
+        body_images = [png((255, 0, 0), alpha=128), _wide_png()]
+        with caplog.at_level('WARNING'):
+            scene = _with_images(body_images, [[0] * 6, [1] * 6])
+        assert scene.environment is None
+        assert 'square' in caplog.text
+
+    def test_a_mip_that_is_not_half_the_one_before_leaves_the_light_out(self, caplog):
+        with caplog.at_level('WARNING'):
+            scene = _with_images([png((255, 0, 0), alpha=128)], [[0] * 6, [0] * 6])
+        assert scene.environment is None
+        assert 'mip 1' in caplog.text
+
+    def test_faces_of_one_mip_differ_in_size_leaves_the_light_out(self):
+        images = [png((255, 0, 0), alpha=128), png((0, 64, 0), size=2)]
+        assert _with_images(images, [[0, 0, 0, 0, 0, 1]]).environment is None
+
+    def test_a_stated_size_the_faces_do_not_have_is_the_faces_size(self, caplog):
+        with caplog.at_level('WARNING'):
+            light = document(specularImageSize=16).environment
+        assert light.specularImageSize == 4
+        assert 'specularImageSize' in caplog.text
+
+
+class TestReadWhenNamed:
+    """A light is decoded when a scene or a zone names it, each image once."""
+
+    @pytest.fixture
+    def reads(self, monkeypatch):
+        from OpenGLContext.loaders.gltf import textures
+        seen = []
+        original = textures._image_bytes
+
+        def counting(g, index, resolver):
+            seen.append(index)
+            return original(g, index, resolver)
+        monkeypatch.setattr(textures, '_image_bytes', counting)
+        return seen
+
+    def test_each_image_is_decoded_once(self, reads):
+        document()                       # the scene and the zone name one light
+        assert sorted(reads) == [0, 1]
+
+    def test_a_light_nothing_names_is_not_decoded(self, reads):
+        document(zone=False, scene=False)
+        assert reads == []
+
+
+def _wide_png():
+    pixels = np.zeros((2, 4, 3), 'u1')
+    buffer = io.BytesIO()
+    Image.fromarray(pixels).save(buffer, 'PNG')
+    return 'data:image/png;base64,' + base64.b64encode(buffer.getvalue()).decode()
+
+
+def _with_images(images, mips):
+    body = {
+        'asset': {'version': '2.0'},
+        'extensionsUsed': ['EXT_lights_image_based'],
+        'extensions': {'EXT_lights_image_based': {'lights': [{
+            'irradianceCoefficients': [[1.0, 0.0, 0.0]] + [[0.0, 0.0, 0.0]] * 8,
+            'specularImages': mips}]}},
+        'images': [{'uri': uri} for uri in images],
+        'scene': 0,
+        'scenes': [{'nodes': [], 'extensions': {'EXT_lights_image_based': {'light': 0}}}],
+    }
+    return loader.load_gltf(json.dumps(body).encode('utf-8'))

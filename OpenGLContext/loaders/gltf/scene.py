@@ -594,7 +594,7 @@ class _SceneBuilder:
         self.zoning = zoning.ZoneReader(g)
         # EXT_lights_image_based: the document's prefiltered environments, for
         # its scene and its zones to name.
-        self.image_lights = imagebased.read_lights(g, resolver)
+        self.image_lights = imagebased.ImageLights(g, resolver)
         self.emitter_nodes: dict = {}
         self._emitter_index: Optional[dict] = None
         self._zone_placed: list = []
@@ -952,9 +952,7 @@ class _SceneBuilder:
 
     def _image_light(self, index: int) -> Any:
         """The ``EXT_lights_image_based`` light at ``index``, or None."""
-        if 0 <= index < len(self.image_lights):
-            return self.image_lights[index]
-        return None
+        return self.image_lights.light(index)
 
     def _zone_emitters(self, index: int) -> list:
         """The emitter nodes a zone naming emitter ``index`` controls.

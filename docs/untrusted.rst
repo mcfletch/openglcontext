@@ -158,8 +158,10 @@ provides; none names code, a module or a command.
    * - ``EXT_lights_image_based``
      - Environment lighting shipped as images. The images are read through
        the ``Resolver`` like any other, and decoded under :ref:`Pillow's
-       pixel limit <images>`. A light with an image that cannot be read, or
-       coefficients that are not nine rows of three numbers, is left out.
+       pixel limit <images>`, and only for a light a scene or a zone names.
+       A light with an image that cannot be read, faces that are not square
+       and alike with each mip half the one before, or coefficients that are
+       not nine rows of three numbers, is left out.
 
 Every value these extensions read is checked before it is used
 (``loaders.documentvalues.DocumentValues``). A value that is not a finite
