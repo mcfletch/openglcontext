@@ -742,6 +742,17 @@ building a path at each call site:
    mine = ART.load( 'cars/saloon.glb' )         # my own copy, to change
    mine.materials[ 'paint' ].baseColor = (0.6, 0.1, 0.1)
 
+Art that arrives after the program starts, such as a content pack fetched on
+a first run, is named by a function returning the directory rather than by the
+directory. The function is asked at each use, and what was shared from the
+previous directory is let go when its answer changes.
+``OpenGLContext.contentpacks.Application.library()`` returns a library made
+this way (see :ref:`firstrun`):
+
+.. code-block:: python
+
+   ART = CONTENT.library()                      # follows the base pack
+
 Use ``shared()`` for a model you only draw, and ``load()`` for a model you
 will change:
 

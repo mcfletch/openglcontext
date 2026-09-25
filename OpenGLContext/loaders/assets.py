@@ -31,7 +31,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Callable, Iterator, Optional, Sequence, Tuple
+from typing import Any, Callable, Iterator, Optional, Sequence, Tuple, Union
 
 import numpy as np
 
@@ -62,12 +62,35 @@ class AssetLibrary(object):
         scene = ART.shared('cars/saloon.glb')
         if scene is not None:
             world.children.append(scene.group)
+
+    ``root`` may instead be a function returning the directory, which is asked
+    at each use rather than when the library is made. That is the form for art
+    that arrives after the program starts, such as a content pack fetched on a
+    first run (:meth:`OpenGLContext.contentpacks.Application.library`). When
+    the answer changes, what was shared from the previous directory is let go.
     """
 
-    def __init__(self, root: str) -> None:
-        self.root = os.path.abspath(root)
+    def __init__(self, root: Union[str, Callable[[], str]]) -> None:
+        self._where: Optional[Callable[[], str]] = (
+            root if callable(root) else None)
+        self._root = "" if callable(root) else os.path.abspath(root)
         self._shared: dict[str, Optional[Any]] = {}
         self._variants: dict[Any, Optional[Any]] = {}
+
+    @property
+    def root(self) -> str:
+        """The directory the models are read from, as of now."""
+        return self._follow()
+
+    def _follow(self) -> str:
+        """The directory as of now, letting go of what was shared from the
+        previous one if it has changed."""
+        if self._where is not None:
+            now = os.path.abspath(self._where())
+            if now != self._root:
+                self._root = now
+                self.clear()
+        return self._root
 
     def __repr__(self) -> str:
         return "AssetLibrary(%r)" % (self.root,)
@@ -105,6 +128,7 @@ class AssetLibrary(object):
         A model that will not load is remembered as absent, so a file that is
         missing is read for once rather than once a frame.
         """
+        self._follow()
         if relative not in self._shared:
             self._shared[relative] = self.load(relative)
         return self._shared[relative]
@@ -135,6 +159,7 @@ class AssetLibrary(object):
         is not called for one.
         """
         where = (relative, key)
+        self._follow()
         if where not in self._variants:
             scene = self.load(relative)
             if scene is not None and prepare is not None:

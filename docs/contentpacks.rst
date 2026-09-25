@@ -422,27 +422,67 @@ The first run
 -------------
 
 Art the application cannot start without is an ordinary pack marked
-``base``. Fetch the base packs before showing the menu:
+``base``. ``contentpacks.Application`` holds what an application says about
+its content once, and answers the first run's questions from it:
 
 .. code-block:: python
 
-   wanted = fetch.missing_base(packs, store)
-   if wanted:
-       ask_the_user(wanted)            # title, combined size, terms
-       job = fetch.FetchJob(fetch.base_fetches(packs, store), store)
+   from OpenGLContext.contentpacks import Application, application
 
-``missing_base`` returns the packs a first run still has to fetch: every base
-pack whose content is not on this machine, and every pack a base pack needs
-that is not yet unpacked within it. It returns an empty list for an
-application that ships all of its own art, and for one whose base packs are
-already downloaded. Show it to the user for consent.
+   CONTENT = Application('glisteel', 'glisteel/packs.json',
+                         base='glisteel/cars', fallback='glisteel/assets')
 
-A pack a base pack needs unpacks *within* that base pack, so fetch the set
-through ``base_fetches``, which pairs each pack with the base pack it lands
-in. ``FetchJob`` takes those pairs as they are. In the foreground, fetch each
-pair with ``fetch.fetch_pack(pack, store, within=base)``. Fetched without its
-``within``, a needed pack would land in a directory of its own, and the next
-run's ``missing_base`` would ask for it again.
+   # A command line, before anything opens the art:
+   if not CONTENT.ensure_base(consent=application.ask_on_console(),
+                              progress=application.console_progress()):
+       raise SystemExit('nothing to draw without it')
+
+   # A window: the same packs, fetched off the frame loop.
+   job = CONTENT.base_job(on_progress=context.triggerRedraw)
+
+   ART = CONTENT.library()               # models, read from the pack
+   heightmap = os.path.join(CONTENT.base_directory(), 'height.png')
+
+``Application(namespace, catalog, base=None, fallback=None, root=None,
+added=False, cache_dir=None)`` takes the namespace, the path of the registry
+the application ships and the key of its base pack. ``fallback`` is a
+directory holding the same art without a pack (``assets`` in a checkout),
+used while the pack is not installed and only if it exists. ``root`` and
+``cache_dir`` move the store and the download cache, and ``added`` also reads
+the registries added to the store.
+
+- ``registry()`` - the packs, read once; ``reload()`` reads them again.
+- ``store(root=None)`` - the application's ``ContentStore``.
+- ``needed_to_start()`` - what a first run still has to fetch, for consent.
+- ``ensure_base(consent, progress)`` - fetch it in the foreground; False if
+  ``consent`` declined, and an ``IOError`` for content that did not arrive.
+  ``application.ask_on_console(assume_yes=False)`` lists the packs, their
+  sizes and terms and asks yes or no; ``application.console_progress()``
+  prints a percentage on one line.
+- ``base_job()`` - the same set as a ``FetchJob``, for a window.
+- ``base_directory()`` - where the art is now: the base pack's root once it
+  is installed, else ``fallback``; ``application.NotInstalled`` if neither.
+- ``library()`` - an ``AssetLibrary`` whose root is ``base_directory()``,
+  asked at each use.
+
+Ask where the art is when it is used, not when a module is imported. A first
+run imports the application before its base pack arrives, and a path
+computed at import names a directory the pack is not in for the rest of that
+run.
+
+Underneath, ``fetch.missing_base(packs, store)`` returns the packs a first run
+still has to fetch: every base pack whose content is not on this machine, and
+every pack a base pack needs that is not yet unpacked within it. It returns an
+empty list for an application that ships all of its own art, and for one whose
+base packs are already downloaded.
+
+A pack a base pack needs unpacks *within* that base pack, so the set is
+fetched through ``fetch.base_fetches``, which pairs each pack with the base
+pack it lands in. ``FetchJob`` takes those pairs as they are. In the
+foreground, fetch each pair with ``fetch.fetch_pack(pack, store,
+within=base)``. Fetched without its ``within``, a needed pack would land in a
+directory of its own, and the next run's ``missing_base`` would ask for it
+again.
 
 When the job finishes, ``job.state`` is ``'done'``, ``'cancelled'`` or
 ``'failed: '`` and the reason; a failure is also logged with its traceback.

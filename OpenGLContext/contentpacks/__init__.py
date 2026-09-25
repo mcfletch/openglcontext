@@ -15,7 +15,8 @@ What each module answers is in its own docstring; ``docs/contentpacks.rst`` is
 the guide for an application author.
 """
 
+from .application import Application
 from .pack import ContentPack
 from .store import ContentStore
 
-__all__ = ['ContentPack', 'ContentStore']
+__all__ = ['Application', 'ContentPack', 'ContentStore']
