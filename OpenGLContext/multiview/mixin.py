@@ -82,7 +82,7 @@ class MultiViewMixin(_Host):
         ``arrangement`` is what to open in, ``'single'`` unless the class says
         otherwise.
         """
-        flat = ViewStyle(background=FLAT_BACKGROUND)
+        flat = ViewStyle(background=FLAT_BACKGROUND, grid=True)
         views = [View(OrthoViewPlatform(OrthoView(direction)), name=direction,
                       style=flat)
                  for direction in elevations]

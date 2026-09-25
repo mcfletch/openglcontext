@@ -36,6 +36,7 @@ The parts, and the module each is in:
 """
 from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
 from OpenGLContext.multiview.gestures import ViewGestures
+from OpenGLContext.multiview.grid import Grid
 from OpenGLContext.multiview.quad import QuadView
 from OpenGLContext.multiview.views import (
     MAX_VIEWS,
@@ -47,6 +48,7 @@ from OpenGLContext.multiview.views import (
 from OpenGLContext.multiview.viewset import ViewSet
 
 __all__ = [
+    'Grid',
     'MAX_VIEWS',
     'OrthoView',
     'OrthoViewPlatform',

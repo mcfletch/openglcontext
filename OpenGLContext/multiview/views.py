@@ -66,10 +66,14 @@ class ViewStyle:
     ``wireframe`` draws the view's geometry as lines. It is per view because
     ``glPolygonMode`` is state rather than something a shader decides, so a
     wireframe view is drawn apart from the shaded ones.
+
+    ``grid`` rules the view with the scene's
+    :class:`~OpenGLContext.multiview.grid.Grid`, where the scene has one.
     """
 
     background: Union[bool, Tuple[float, ...]] = True
     wireframe: bool = False
+    grid: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.background, bool) and len(self.background) not in (3, 4):

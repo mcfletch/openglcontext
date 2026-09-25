@@ -176,6 +176,8 @@ How a view draws
   that colour instead. An orthographic editor view usually uses a flat colour
   rather than a sky.
 - ``ViewStyle(wireframe=True)`` draws the view's geometry as lines.
+- ``ViewStyle(grid=True)`` rules the view with the scene's grid; see
+  :ref:`multiview-grid`.
 
 When a view's rectangle changes size, its camera is given the new size. A
 perspective camera then uses the rectangle's aspect ratio rather than the
@@ -188,6 +190,40 @@ frames.
 A node that draws differently in each view reads ``mode.view`` during its
 render. It holds the :class:`~OpenGLContext.multiview.views.View` being
 drawn.
+
+.. _multiview-grid:
+
+A grid to measure against
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``OpenGLContext.multiview.grid.Grid`` is a node that rules each view whose
+style says ``grid=True``: a line every so many units and a heavier one every
+tenth, in the plane the view looks at. An elevation is ruled in its own
+upright plane; a plan view and a camera that turns are ruled across the
+ground (y = 0 in world coordinates).
+
+.. code-block:: python
+
+   from OpenGLContext.multiview.grid import Grid
+
+   scene.children.append(Grid())
+   front = View(OrthoViewPlatform(OrthoView('front')), name='front',
+                style=ViewStyle(background=(0.32, 0.33, 0.35), grid=True))
+
+Add one ``Grid`` at the top of the scene. The lines are in world coordinates
+and are worked out for each view as it is drawn, so a ``Transform`` above the
+node does not move them. With ``spacing`` 0, the default, each view is ruled
+to its own scale: the step is 1, 2 or 5 times a power of ten, chosen to put
+the lines about 24 pixels apart, so zooming changes the step rather than
+crowding the lines. A ``spacing`` in world units pins the step in every view.
+``colour`` and ``heavyColour`` are RGB. The grid takes no picks, casts no
+shadow and adds nothing to the scene's bounds, so framing ignores it.
+``MultiViewMixin`` and ``QuadView`` rule their three orthographic views, and
+``oglc-view`` puts a grid in its scene, so ``oglc-view model.glb --views
+quad`` shows one; a single view is not ruled.
+
+``lines_for(view)`` in the same module answers the lines a view would be
+ruled with, as world-space segments, with no GL.
 
 Events in a view
 ~~~~~~~~~~~~~~~~

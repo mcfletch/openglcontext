@@ -289,3 +289,12 @@ class TestTheOverridableSeams:
         viewer.viewpoints = ['a', 'b', 'c']
         viewer.cameraIndex = 1
         assert viewer.physicsSpawnViewpoints() == ['b', 'c', 'a'], 'selected first'
+
+
+class TestTheGridTheOrthographicViewsAreRuledBy:
+    def test_the_scene_carries_one(self, scene):
+        from OpenGLContext.multiview.grid import Grid
+        viewer = _viewer()
+        viewer.source = MODEL
+        viewer.buildScenegraph(scene)
+        assert [child for child in viewer.sg.children if isinstance(child, Grid)]

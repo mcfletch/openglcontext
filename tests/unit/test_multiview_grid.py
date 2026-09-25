@@ -19,7 +19,7 @@ from OpenGLContext.multiview.grid import (
     lines_for,
     spacing_for,
 )
-from OpenGLContext.multiview.views import View
+from OpenGLContext.multiview.views import View, ViewStyle
 
 SIZE = (400, 300)
 
@@ -134,21 +134,50 @@ class TestWhereTheLinesAre:
 
 
 class TestTheNodeAViewDraws:
-    def test_it_starts_off_in_every_view(self):
-        grid = Grid()
-        assert not grid.shownIn(_plan())
+    """A view's style says whether it is ruled; the node in the scene draws it."""
 
-    def test_a_view_can_be_told_to_show_one(self):
-        grid, view = Grid(), _plan()
-        grid.show(view, True)
-        assert grid.shownIn(view)
-        grid.show(view, False)
-        assert not grid.shownIn(view)
+    def test_a_view_is_not_ruled_unless_its_style_says(self):
+        assert Grid().linesFor(_plan()) is None
+
+    def test_a_view_whose_style_asks_is_ruled(self):
+        view = _plan()
+        view.style = ViewStyle(grid=True)
+        lines = Grid().linesFor(view)
+        assert lines is not None and lines.segments
 
     def test_each_view_is_asked_for_itself(self):
         grid, plan, front = Grid(), _plan(), _elevation()
-        grid.show(plan, True)
-        assert grid.shownIn(plan) and not grid.shownIn(front)
+        plan.style = ViewStyle(grid=True)
+        assert grid.linesFor(plan) is not None and grid.linesFor(front) is None
 
-    def test_a_view_it_has_never_heard_of_shows_nothing(self):
-        assert not Grid().shownIn(View(name='elsewhere'))
+    def test_a_pinned_spacing_rules_every_view_alike(self):
+        view = _plan(span=100.0)
+        view.style = ViewStyle(grid=True)
+        assert Grid(spacing=2.5).linesFor(view).spacing == 2.5
+
+    def test_the_heavier_lines_are_drawn_in_their_own_colour(self):
+        view = _plan(span=100.0)
+        view.style = ViewStyle(grid=True)
+        grid = Grid(colour=(0.1, 0.2, 0.3), heavyColour=(0.9, 0.8, 0.7))
+        lines = grid.linesFor(view)
+        rows = grid.vertices(lines)
+        assert rows.shape == (len(lines.segments) * 2, 6)
+        heavy = lines.heavy[0]
+        assert rows[heavy * 2, 3:] == pytest.approx((0.9, 0.8, 0.7))
+        light = next(index for index in range(len(lines.segments))
+                     if index not in lines.heavy)
+        assert rows[light * 2 + 1, 3:] == pytest.approx((0.1, 0.2, 0.3))
+        assert tuple(rows[0, :3]) == pytest.approx(lines.segments[0][0])
+
+    def test_it_adds_nothing_to_the_scenes_bounds(self):
+        """It is ruled to each view rather than placed, so framing ignores it."""
+        from OpenGLContext.scenegraph import basenodes
+        from OpenGLContext.scenegraph.boundingvolume import boundingSphere
+        box = basenodes.Shape(geometry=basenodes.Box(size=(2, 2, 2)))
+        alone = boundingSphere([box])
+        assert alone is not None
+        assert boundingSphere([box, Grid()]) == alone
+
+    def test_it_is_neither_picked_nor_casts_a_shadow(self):
+        grid = Grid()
+        assert grid.pickable is False and grid.castsShadow is False

@@ -274,8 +274,8 @@ The scene
 - ``t`` starts and stops the turntable.
 
 - ``v`` switches between one view of the scene and four: the plan, the front
-  and left elevations, and the camera. ``--views quad`` opens with four. See
-  :doc:`multiview`.
+  and left elevations, and the camera. The three orthographic views are ruled
+  with a grid. ``--views quad`` opens with four. See :doc:`multiview`.
 
 These keys act once, when the key is released. A held key repeats about
 twenty times a second, which would load twenty models or skip twenty cameras.

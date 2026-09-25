@@ -71,6 +71,7 @@ from OpenGLContext.multiview.mixin import MultiViewMixin
 from OpenGLContext.viewer.options import ViewerOptions
 from OpenGLContext.viewer.caption import CaptionMixin
 from OpenGLContext.viewer.screens import ViewerScreensMixin
+from OpenGLContext.multiview.grid import Grid
 from OpenGLContext.viewer.source import UnknownMember, resolve_source
 
 # ViewerContext is built by the module __getattr__ at the end of this file
@@ -505,6 +506,8 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
             self.viewpoints = []
 
         children.extend(self.lightsFor(scene))
+        # Rules the orthographic views of the four; draws nothing in one view.
+        children.append(Grid())
         self.sg = SceneGraph(children=children)
         self.setupAnimation(scene)
 

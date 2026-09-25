@@ -178,6 +178,41 @@ class TestPickingThroughTheViewClicked:
         assert layout.active.name == 'right'
 
 
+def _ruled(context):
+    """Two top views of the same ground, the left one ruled."""
+    from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
+    black = (0.0, 0.0, 0.0)
+    left = View(OrthoViewPlatform(OrthoView('top', span=20.0)), name='ruled',
+                style=ViewStyle(background=black, grid=True))
+    right = View(OrthoViewPlatform(OrthoView('top', span=20.0)), name='plain',
+                 style=ViewStyle(background=black))
+    return ViewLayout.split(left, right)
+
+
+def _grid_scene():
+    from OpenGLContext.multiview.grid import Grid
+    return [Grid(colour=(1.0, 1.0, 0.0), heavyColour=(1.0, 1.0, 0.0))]
+
+
+class TestTheGrid:
+    def _lit(self, tile):
+        return int(((tile[..., 0] > 150) & (tile[..., 1] > 150)
+                    & (tile[..., 2] < 60)).sum())
+
+    def test_it_is_drawn_in_the_view_whose_style_asks(self, render_scene, env):
+        frame = frames_of(render_scene, _grid_scene(), frames=3,
+                          layout=_ruled, size=(WIDTH, HEIGHT))[-1]
+        assert self._lit(frame[:, :WIDTH // 2]) > 100
+        assert self._lit(frame[:, WIDTH // 2:]) == 0
+
+    def test_and_in_a_compatibility_profile(self, render_scene, env, monkeypatch):
+        monkeypatch.setenv('OPENGLCONTEXT_PROFILE', 'compatibility')
+        frame = frames_of(render_scene, _grid_scene(), frames=3,
+                          layout=_ruled, size=(WIDTH, HEIGHT))[-1]
+        assert self._lit(frame[:, :WIDTH // 2]) > 100
+        assert self._lit(frame[:, WIDTH // 2:]) == 0
+
+
 class TestCompatibilityProfile:
     def test_each_tile_shows_the_box_its_camera_faces(self, render_scene, env,
                                                       monkeypatch):

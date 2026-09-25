@@ -278,3 +278,9 @@ class TestWhatThePerspectiveViewOpensOn:
         quad = _quad()
         quad.orbit.orbit(0.0, -120.0)
         assert quad.orbit.pitch < 0.0
+
+
+def test_the_three_orthographic_views_are_ruled():
+    quad = QuadView()
+    assert all(quad.view(name).style.grid for name in ('top', 'front', 'left'))
+    assert not quad.view('perspective').style.grid

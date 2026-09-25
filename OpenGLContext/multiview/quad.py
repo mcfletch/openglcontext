@@ -111,7 +111,7 @@ class QuadView:
         #: The box last framed, which is how far ahead a camera looked
         #: through is orbited about.
         self._framed: Optional[Tuple[np.ndarray, np.ndarray]] = None
-        flat = ViewStyle(background=background)
+        flat = ViewStyle(background=background, grid=True)
         views = [View(OrthoViewPlatform(camera), name=direction, style=flat)
                  for direction, camera in self.orthographic.items()]
         views.append(View(OrbitViewPlatform(self.orbit), name='perspective',

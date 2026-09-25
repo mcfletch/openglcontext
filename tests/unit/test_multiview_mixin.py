@@ -266,3 +266,13 @@ class TestLosingFocusMidDrag:
         top = window.views.named('top')
         tx, ty, _w, _h = top.rect
         assert window.views.layout.route(_Event(tx + 1, ty + 1, kind='mousemove')) is top
+
+
+class TestTheGrid:
+    def test_the_orthographic_views_are_ruled(self):
+        window = _window(arrangement='quad')
+        for name in ('top', 'front', 'left'):
+            assert window.views.named(name).style.grid, name
+
+    def test_the_windows_own_view_is_not(self):
+        assert not _window().views.named('perspective').style.grid
