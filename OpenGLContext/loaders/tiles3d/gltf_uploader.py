@@ -28,6 +28,7 @@ from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.tiles3d import fetch
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.transform import MatrixTransform
+from OpenGLContext.scenegraph.walk import reachable
 
 if TYPE_CHECKING:
     from OpenGLContext.loaders.gltf import GLTFScene
@@ -111,17 +112,9 @@ def _drawable_shapes(root: Any) -> Iterator[Any]:
 
     Depth-first and cycle-safe, so a malformed subtree can't loop forever.
     """
-    stack = [root]
-    seen: set[int] = set()
-    while stack:
-        node = stack.pop()
-        if id(node) in seen:
-            continue
-        seen.add(id(node))
+    for node in reachable(root):
         if getattr(node, 'geometry', None) is not None:
             yield node
-        for child in (getattr(node, 'children', None) or ()):
-            stack.append(child)
 
 
 def _mesh_vbos(gpu: Any) -> list[Any]:

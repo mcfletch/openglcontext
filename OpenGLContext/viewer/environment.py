@@ -14,12 +14,13 @@ never passed through it is a viewer whose shadows, exposure and environment
 settings say nothing.
 """
 import os
-from typing import Any, Optional, Set
+from typing import Any, Optional
 
 from vrml.vrml97 import nodetypes
 
 from OpenGLContext.scenegraph.background import Background
 from OpenGLContext.scenegraph.light import Light
+from OpenGLContext.scenegraph.walk import reachable
 from OpenGLContext.viewer.options import ViewerOptions
 
 __all__ = ['count_nodes', 'count_lights', 'count_backgrounds', 'sky_background',
@@ -63,31 +64,22 @@ _CUBE_FIELDS = {'RT': 'rightUrl', 'LF': 'leftUrl', 'UP': 'topUrl',
                 'DN': 'bottomUrl', 'FR': 'frontUrl', 'BK': 'backUrl'}
 
 
-def count_nodes(node: Any, kind: Any, seen: Optional[Set[int]] = None) -> int:
+def count_nodes(node: Any, kind: Any) -> int:
     """How many nodes of ``kind`` are reachable from ``node``.
 
     What a viewer asks to find out what a scene brought with it, so that it adds
-    only what is missing.  Nodes already visited are remembered, since a
-    scenegraph may share a subtree between several parents and a naive walk
-    would either double-count it or, given a cycle, not finish.
+    only what is missing.  A subtree shared between several parents is counted
+    once, and a scene referring back to itself is walked once.
     """
-    if seen is None:
-        seen = set()
-    if id(node) in seen:
-        return 0
-    seen.add(id(node))
-    total = 1 if isinstance(node, kind) else 0
-    for child in getattr(node, 'children', None) or ():
-        total += count_nodes(child, kind, seen)
-    return total
+    return sum(1 for each in reachable(node) if isinstance(each, kind))
 
 
-def count_lights(node: Any, seen: Optional[Set[int]] = None) -> int:
+def count_lights(node: Any) -> int:
     """How many lights a scene brought, and so whether it needs a rig."""
-    return count_nodes(node, Light, seen)
+    return count_nodes(node, Light)
 
 
-def count_backgrounds(node: Any, seen: Optional[Set[int]] = None) -> int:
+def count_backgrounds(node: Any) -> int:
     """How many backdrops a scene brought.
 
     A world authored complete has its own sky, and a second backdrop in the same
@@ -99,7 +91,7 @@ def count_backgrounds(node: Any, seen: Optional[Set[int]] = None) -> int:
     glTF ``OMI_environment_sky`` may bring any of them.  The render pass binds
     whichever of them it finds, so it is that set this has to agree with.
     """
-    return count_nodes(node, nodetypes.Background, seen)
+    return count_nodes(node, nodetypes.Background)
 
 
 def sky_background() -> Background:

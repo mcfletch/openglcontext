@@ -129,22 +129,22 @@ def _append_mesh(world_points: np.ndarray, tri: Any, points: List[np.ndarray],
 
 
 def _collect(node: Any, world_matrix: np.ndarray, points: List[np.ndarray],
-             tris: List[np.ndarray], ancestry: Tuple[int, ...],
+             tris: List[np.ndarray], ancestry: Tuple[Any, ...],
              state: Dict[str, int], min_hull_size: float) -> None:
     """Walk ``node`` and append each mesh's world-space verts/tris to ``points``/``tris``.
 
     ``node`` is a scenegraph node. Mutates ``points``, ``tris`` and ``state``
-    (the running vertex offset ``state['n']``). ``ancestry`` is the id path from
-    the root, so instanced geometry reached by several transforms is collected once
+    (the running vertex offset ``state['n']``). ``ancestry`` is the nodes on the
+    path from the root, so instanced geometry reached by several transforms is collected once
     per instance without infinite recursion.
     """
     # Cycle-detect on the current path, NOT a global seen-set: instanced geometry
     # shares one mesh node reachable via many parent transforms, and each instance
     # must be collected with its own transform (a global seen-set would keep only
     # the first, so e.g. the parthenon's instanced columns would have no collider).
-    if id(node) in ancestry:
+    if any(above is node for above in ancestry):
         return
-    ancestry = ancestry + (id(node),)
+    ancestry = ancestry + (node,)
     world = _local_matrix(node) @ world_matrix
     geom = getattr(node, 'geometry', None)
     if geom is not None:

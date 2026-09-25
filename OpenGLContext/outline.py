@@ -228,14 +228,14 @@ class SceneOutline:
         # An explicit stack rather than recursion: how deep a loaded scene goes
         # is the file's business, so it is bounded by memory here rather than by
         # the interpreter's recursion limit.
-        # ``above`` is the identity of every node on the way to this one, which
-        # is what stops a scene that refers back to itself being walked twice.
-        stack: List[Tuple[OutlinePath, Any, Optional[str], Tuple[int, ...]]] = [
+        # ``above`` is every node on the way to this one, which is what stops a
+        # scene that refers back to itself being walked twice.
+        stack: List[Tuple[OutlinePath, Any, Optional[str], Tuple[Any, ...]]] = [
             ((), self._root, None, ())
         ]
         while stack:
             path, node, field, above = stack.pop()
-            children = [] if id(node) in above else nodeChildren(node)
+            children = [] if any(each is node for each in above) else nodeChildren(node)
             rows.append(OutlineRow(
                 path=path,
                 node=node,
@@ -246,7 +246,7 @@ class SceneOutline:
                 expandable=bool(children),
             ))
             if children and path in self.expanded:
-                below = above + (id(node),)
+                below = above + (node,)
                 for index in reversed(range(len(children))):
                     childField, child = children[index]
                     stack.append((path + (index,), child, childField, below))

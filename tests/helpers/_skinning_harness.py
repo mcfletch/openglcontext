@@ -88,19 +88,11 @@ def _first_skinned(model):
     return None
 
 
-def _walk_meshes(node, seen=None):
-    seen = seen if seen is not None else set()
-    if id(node) in seen:
-        return
-    seen.add(id(node))
-    if getattr(node, 'skin_joints', None) is not None:
-        yield node
-    for name in ('children', 'geometry'):
-        value = getattr(node, name, None)
-        if value is None:
-            continue
-        for child in (value if isinstance(value, (list, tuple)) else [value]):
-            yield from _walk_meshes(child, seen)
+def _walk_meshes(node):
+    from OpenGLContext.scenegraph.walk import reachable
+    for each in reachable(node, fields=('children', 'geometry')):
+        if getattr(each, 'skin_joints', None) is not None:
+            yield each
 
 
 def _setup(gpu):

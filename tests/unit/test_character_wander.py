@@ -22,6 +22,7 @@ from OpenGLContext.character.wander import (
     Gait, STAND, TURN, WALK, Wander, WanderingCrowd,
 )
 from OpenGLContext.loaders.gltf import load_gltf, parse_gltf
+from OpenGLContext.scenegraph.walk import reachable
 from tests.unit._character_assets import character_glb
 
 DT = 1 / 60.0
@@ -649,19 +650,11 @@ class TestTheDemoDoesNotMoonwalk:
             % (name, drift, speed, stride))
 
 
-def _skinned(node, seen=None):
+def _skinned(node):
     """Every mesh under ``node`` that a skeleton poses."""
-    seen = seen if seen is not None else set()
-    if id(node) in seen:
-        return
-    seen.add(id(node))
-    if getattr(node, 'skin_joints', None) is not None:
-        yield node
-    for name in ('children', 'geometry'):
-        value = getattr(node, name, None)
-        for child in (value if isinstance(value, (list, tuple))
-                      else [value] if value is not None else []):
-            yield from _skinned(child, seen)
+    for each in reachable(node, fields=('children', 'geometry')):
+        if getattr(each, 'skin_joints', None) is not None:
+            yield each
 
 
 def _world(model, node):

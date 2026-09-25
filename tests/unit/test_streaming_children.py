@@ -16,6 +16,7 @@ from OpenGLContext.passes._flat import SGObserver
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
+from OpenGLContext.scenegraph.walk import reachable
 
 
 class _ShapeObserver(SGObserver):
@@ -31,7 +32,7 @@ def _shape(x=0.0):
 
 def _tracked(observer):
     """The Shapes the observer currently has a live path to."""
-    return {id(path[-1]) for path in observer.paths.get(Shape, [])
+    return {path[-1] for path in observer.paths.get(Shape, [])
             if not path.broken}
 
 
@@ -41,15 +42,15 @@ class TestAGroupThatSwapsItsChildren:
         observer = _ShapeObserver(group, [])
         arriving = _shape(10)
         group.children = list(group.children) + [arriving]
-        assert id(arriving) in _tracked(observer)
+        assert arriving in _tracked(observer)
 
     def test_a_departed_child_leaves_it(self) -> None:
         staying, going = _shape(0), _shape(10)
         group = Group(children=[staying, going])
         observer = _ShapeObserver(group, [])
         group.children = [staying]
-        assert id(going) not in _tracked(observer)
-        assert id(staying) in _tracked(observer)
+        assert going not in _tracked(observer)
+        assert staying in _tracked(observer)
 
     def test_a_whole_new_set_is_tracked(self) -> None:
         """What a streamer does: last frame's tiles out, this frame's in."""
@@ -57,7 +58,7 @@ class TestAGroupThatSwapsItsChildren:
         observer = _ShapeObserver(group, [])
         arriving = [_shape(20), _shape(30), _shape(40)]
         group.children = arriving
-        assert _tracked(observer) == {id(shape) for shape in arriving}
+        assert _tracked(observer) == set(arriving)
 
     def test_it_keeps_up_over_many_frames(self) -> None:
         """Twenty frames of paging, as a car driving across a world does."""
@@ -66,7 +67,7 @@ class TestAGroupThatSwapsItsChildren:
         for frame in range(20):
             wanted = [_shape(frame + offset) for offset in range(4)]
             group.children = wanted
-            assert _tracked(observer) == {id(shape) for shape in wanted}, (
+            assert _tracked(observer) == set(wanted), (
                 "frame %d: the pass is drawing the wrong tiles" % frame)
 
     def test_nothing_changes_when_nothing_changes(self) -> None:
@@ -106,10 +107,5 @@ class TestTheStreamingTerrainNode:
             terrain.runtime.shutdown()
 
 
-def _visible_shapes(node, out=None):
-    out = set() if out is None else out
-    if isinstance(node, Shape):
-        out.add(id(node))
-    for child in getattr(node, 'children', None) or []:
-        _visible_shapes(child, out)
-    return out
+def _visible_shapes(node):
+    return {each for each in reachable(node) if isinstance(each, Shape)}

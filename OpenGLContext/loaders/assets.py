@@ -276,13 +276,13 @@ def _joined(pieces: "Sequence") -> "Tuple[dict, np.ndarray]":
     return attributes, np.concatenate(triangles).astype(np.uint32)
 
 
-def _merge(node: Any, world: np.ndarray, collected: list, ancestry: Tuple[int, ...]) -> None:
+def _merge(node: Any, world: np.ndarray, collected: list, ancestry: Tuple[Any, ...]) -> None:
     """Append ``(material, (positions, normals, texcoords, indices))`` per mesh."""
     # Cycle-detect on the path rather than globally: one mesh mounted under
     # several transforms is several instances, and each belongs at its own.
-    if id(node) in ancestry:
+    if any(above is node for above in ancestry):
         return
-    ancestry = ancestry + (id(node),)
+    ancestry = ancestry + (node,)
     if _posed(node):
         try:
             world = np.asarray(_local_matrix_rv(node), dtype="d") @ world

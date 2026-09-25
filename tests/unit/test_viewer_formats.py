@@ -18,6 +18,7 @@ from OpenGLContext.viewer import ViewerOptions
 from OpenGLContext.viewer.adapters.gltf import GLTFAdapter
 from OpenGLContext.viewer.adapters.vrml import VRMLAdapter
 from OpenGLContext.viewer.sceneviewer import ViewerContext
+from OpenGLContext.scenegraph.walk import reachable
 
 WRLS = os.path.join(str(tests_root(__file__)), 'wrls')
 GLTF_MODEL = os.path.join(WRLS, 'instanced_lattice.gltf')
@@ -195,14 +196,6 @@ class TestStreamingFormats:
         assert seen == [viewer]
 
 
-def _find(node, kind, seen=None):
+def _find(node, kind):
     """Every node of ``kind`` reachable from ``node``."""
-    if seen is None:
-        seen = set()
-    if id(node) in seen:
-        return []
-    seen.add(id(node))
-    found = [node] if isinstance(node, kind) else []
-    for child in getattr(node, 'children', None) or ():
-        found.extend(_find(child, kind, seen))
-    return found
+    return [each for each in reachable(node) if isinstance(each, kind)]

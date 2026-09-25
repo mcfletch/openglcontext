@@ -16,6 +16,7 @@ from OpenGLContext.character.levels import levels_match
 from OpenGLContext.character.model import CharacterModel
 from OpenGLContext.loaders.gltf import load_gltf, parse_gltf
 from OpenGLContext.scenegraph.lod import LOD
+from OpenGLContext.scenegraph.walk import reachable
 from tests.unit._character_assets import character_glb, skinned_bar_glb
 
 
@@ -33,17 +34,9 @@ def _model(document):
     return CharacterModel(load_gltf(document=document))
 
 
-def _lods(node, seen=None):
-    seen = seen if seen is not None else set()
-    if id(node) in seen:
-        return []
-    seen.add(id(node))
-    found = [node] if isinstance(node, LOD) else []
-    children = list(getattr(node, 'children', None) or ())
-    children += list(getattr(node, 'level', None) or ())
-    for child in children:
-        found += _lods(child, seen)
-    return found
+def _lods(node):
+    return [each for each in reachable(node, fields=('children', 'level'))
+            if isinstance(each, LOD)]
 
 
 class TestTakingALevel:
@@ -111,21 +104,9 @@ class TestTheRendererReachesTheLevelItDraws:
         assert self._reachable(model), 'the level chosen for range draws nothing'
 
 
-def _skinned_under(node, seen=None):
-    seen = seen if seen is not None else set()
-    if id(node) in seen:
-        return []
-    seen.add(id(node))
-    found = []
-    if getattr(node, 'skin_joints', None) is not None:
-        found.append(node)
-    for name in ('children', 'geometry', 'level'):
-        value = getattr(node, name, None)
-        if value is None:
-            continue
-        for child in (value if isinstance(value, (list, tuple)) else [value]):
-            found += _skinned_under(child, seen)
-    return found
+def _skinned_under(node):
+    return [each for each in reachable(node, fields=('children', 'geometry', 'level'))
+            if getattr(each, 'skin_joints', None) is not None]
 
 
 class TestOnePoseForEveryLevel:

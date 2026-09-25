@@ -49,6 +49,7 @@ from OpenGLContext.scenegraph.instancedgl import (
     texture_rgba,
 )
 from OpenGLContext.scenegraph.vertexsemantics import LOC_NORMAL, LOC_POSITION
+from OpenGLContext.scenegraph.walk import reachable
 
 __all__ = ['GroundShading', 'GroundPatch', 'mount_ground', 'GROUND_MATERIAL']
 
@@ -455,15 +456,5 @@ def mount_ground(root: Any, shading: GroundShading, material: Any,
 
 def _shapes(root: Any) -> "list[Any]":
     """Every node with geometry under this one, depth first and cycle safe."""
-    found = []
-    stack = [root]
-    seen: "set[int]" = set()
-    while stack:
-        node = stack.pop()
-        if id(node) in seen:
-            continue
-        seen.add(id(node))
-        if getattr(node, 'geometry', None) is not None:
-            found.append(node)
-        stack.extend(getattr(node, 'children', None) or ())
-    return found
+    return [node for node in reachable(root)
+            if getattr(node, 'geometry', None) is not None]
