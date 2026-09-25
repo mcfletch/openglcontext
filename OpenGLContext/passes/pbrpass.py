@@ -1028,10 +1028,8 @@ class PBRPass(flatcore.FlatPass):
         return int(renderoptions.env_number_once(
             'OPENGLCONTEXT_INSTANCE_MIN', 4, integer=True))
 
-    # The base _flat.FlatPass declares instancing_enabled as a writeable class
-    # attribute; the shader passes intentionally compute it as a read-only property.
     @property
-    def instancing_enabled(self) -> bool:  # type: ignore[override]
+    def instancing_enabled(self) -> bool:
         return instancing_is_enabled(self)
 
     def getShaderProgram(self) -> VRML97ShaderProgram:

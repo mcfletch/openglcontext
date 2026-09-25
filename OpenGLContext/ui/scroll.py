@@ -60,7 +60,7 @@ class ScrollViewport(Widget):
     lineHeight: int = 20
 
     @property
-    def focusable(self) -> bool:            # type: ignore[override]
+    def focusable(self) -> bool:
         """Tab stops here only when there is something to scroll."""
         return self.maximumScroll > 0
 

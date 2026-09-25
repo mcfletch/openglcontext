@@ -96,10 +96,14 @@ class GUINode(object):
     parent: Any = None
     #: The measurements :attr:`rect` was made from, kept by :meth:`arrange`.
     _metrics: Optional[FontMetrics] = None
-    #: Whether this reports a different height for a different width -- text
-    #: that wraps.  A row measures those a second time once it knows what
-    #: width each child ended up with; everything else is measured once.
-    wrapsToWidth: bool = False
+    @property
+    def wrapsToWidth(self) -> bool:
+        """Whether this reports a different height for a different width.
+
+        Text that wraps does.  A row measures those a second time once it knows
+        what width each child ended up with; everything else is measured once.
+        """
+        return False
 
     @property
     def metrics(self) -> FontMetrics:

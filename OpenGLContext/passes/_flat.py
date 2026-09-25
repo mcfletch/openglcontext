@@ -1074,7 +1074,10 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
 
     # Instanced-geometry hooks. The base pass never instances; PBRPass overrides
     # instancing_enabled + the two methods below.
-    instancing_enabled = False
+    @property
+    def instancing_enabled( self ) -> bool:
+        """Whether shapes sharing one geometry are drawn as one instanced draw."""
+        return False
 
     def instanceMinimum( self ) -> int:
         """Smallest group worth collapsing into one instanced draw.

@@ -114,8 +114,14 @@ class Widget(GUINode, node.Node):
 
     #: Whether the pointer can pick this out of the tree.
     interactive: bool = False
-    #: Whether Tab stops here.
-    focusable: bool = False
+    @property
+    def focusable(self) -> bool:
+        """Whether Tab stops here.
+
+        A subclass answers with a class attribute, or with a property where the
+        answer depends on its state.
+        """
+        return False
     #: Whether it wants typed characters, which is also what earns it a focus
     #: ring on a click rather than only on Tab.
     acceptsText: bool = False
@@ -572,7 +578,7 @@ class Label(Widget):
     color = field.newField('color', 'SFVec4f', 1, (0, 0, 0, 0))
 
     @property
-    def wrapsToWidth(self) -> bool:                   # type: ignore[override]
+    def wrapsToWidth(self) -> bool:
         """A wrapped label is taller in a narrow column than in a wide one."""
         return bool(self.wrap)
 

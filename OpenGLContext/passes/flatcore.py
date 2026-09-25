@@ -100,11 +100,8 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
         return int(renderoptions.env_number_once(
             'OPENGLCONTEXT_INSTANCE_MIN', 4, integer=True))
 
-    # The base _flat.FlatPass declares instancing_enabled as a writeable class
-    # attribute; this read-only property refines it (env-gated), so mypy's
-    # attribute/property override check does not apply.
     @property
-    def instancing_enabled(self) -> bool:  # type: ignore[override]
+    def instancing_enabled(self) -> bool:
         """Instance shapes sharing one geometry through the VRML97 lit shader.
 
         Off with ContextDefinition.instancing. Only geometry exposing a cached
