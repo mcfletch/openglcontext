@@ -6,21 +6,22 @@ when the work finishes.  A field setter hands that work over with
 :func:`load_in_background`; :func:`wait_for_idle` is how a test or a tool waits
 for a scene to be complete before it looks at it.
 
-Two properties of the pool are what make it safe to hand a whole world's
-resources to:
+The pool has a fixed number of workers. One thread per URL would be one
+thread per face of a cubemap and one per texture in a scene; :data:`WORKERS`
+threads do the same work at a bounded cost, and start only as work arrives. A
+fetch that stalls holds its worker until the resolver's timeout (30 seconds
+for each connection or read); an application whose loads should not queue
+behind remote ones builds a :class:`LoadPool` of its own for them.
 
-**A fixed number of workers.**  One thread per URL is one thread per face of a
-cubemap and one per texture in a scene, so a world of a few hundred images
-would spend more of itself starting threads than loading.  :data:`WORKERS`
-threads do the same work at a bounded cost, and start only as work arrives.
-
-**No first-use imports on a worker.**  A module being imported for the first
-time is imported under CPython's import lock, which is held with the GIL
-released and which no Python signal handler can interrupt: a thread waiting for
-that lock is a thread no ``KeyboardInterrupt``, no ``SIGTERM`` and no test
-runner's timeout can reach.  So the imports a load needs are made by the thread
-that submits it -- that is what ``prepare`` is for -- where they are ordinary,
-interruptible work and an ``ImportError`` is raised where a caller can see it.
+No module is imported for the first time on a worker. Such an import is made
+under CPython's import lock, which is held with the GIL released and which no
+Python signal handler can interrupt: a thread waiting for that lock is a thread
+no ``KeyboardInterrupt``, no ``SIGTERM`` and no test runner's timeout can
+reach. So the imports a load needs are made by the thread that submits it --
+that is what ``prepare`` is for -- where they are ordinary, interruptible work
+and an ``ImportError`` is raised where a caller can see it. A load that submits
+loads of its own, as an inlined scene does for its textures, prepares those in
+its own ``prepare`` with :func:`prepare`.
 """
 from __future__ import annotations
 
@@ -32,7 +33,7 @@ from typing import Any, Callable, Optional
 
 log = logging.getLogger(__name__)
 
-__all__ = ['WORKERS', 'LoadPool', 'load_in_background', 'pending',
+__all__ = ['WORKERS', 'LoadPool', 'load_in_background', 'prepare', 'pending',
            'wait_for_idle']
 
 #: How many loads run at once.  Enough to keep a disk and a network busy while
@@ -66,18 +67,18 @@ class LoadPool:
         """Run ``work(*args)`` on a worker; answer at once.
 
         ``description`` names the resource in the log if the work raises.
-        ``prepare`` runs first, **on the calling thread**, and at most once per
+        ``prepare`` runs first, on the calling thread, and at most once per
         pool for a given callable: it is where a load's imports are made.  It
         has to be safe to call twice, since two threads submitting at the same
-        moment may both reach it.
+        moment may both reach it.  Submitted from one of this pool's own
+        workers, a ``prepare`` not yet run is run there and reported, since
+        the load that submitted it should have prepared it (:meth:`prepare`).
         """
         if prepare is not None and prepare not in self._prepared:
-            # Deliberately not under the lock: `prepare` imports, and holding a
-            # lock across an import is the shape of deadlock this pool exists
-            # to keep out of the engine.
-            prepare()
-            with self._state:
-                self._prepared.add(prepare)
+            if threading.current_thread() in self._threads:
+                log.warning('Preparing the load of %s on a loader thread; the load '
+                            'that submitted it did not prepare it', description)
+            self.prepare(prepare)
         started = []
         with self._state:
             self._pending += 1
@@ -94,6 +95,23 @@ class LoadPool:
         self._queue.put((description, work, args))
         for thread in started:
             thread.start()
+
+    def prepare(self, *preparations: Callable[[], None]) -> None:
+        """Run each of ``preparations`` not yet run, here on the calling thread.
+
+        For a load whose work submits loads of its own: its ``prepare`` calls
+        this with theirs, so their imports are made before any of it reaches a
+        worker.
+        """
+        for preparation in preparations:
+            if preparation in self._prepared:
+                continue
+            # Deliberately not under the lock: a preparation imports, and
+            # holding a lock across an import is the shape of deadlock this
+            # pool exists to keep out of the engine.
+            preparation()
+            with self._state:
+                self._prepared.add(preparation)
 
     def pending(self) -> int:
         """How many submitted loads have yet to finish."""
@@ -164,6 +182,11 @@ def load_in_background(description: str, work: Callable[..., Any], *args: Any,
     the calling thread.
     """
     _pool.submit(description, work, *args, prepare=prepare)
+
+
+def prepare(*preparations: Callable[[], None]) -> None:
+    """Run preparations on the engine's loader pool; see :meth:`LoadPool.prepare`."""
+    _pool.prepare(*preparations)
 
 
 def pending() -> int:

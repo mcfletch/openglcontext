@@ -15,6 +15,7 @@ import time
 import pytest
 
 from OpenGLContext.loaders import background
+from OpenGLContext.scenegraph import imagetexture, shaders
 
 #: How long a test waits for a load that should take milliseconds.
 PATIENCE = 20.0
@@ -208,6 +209,33 @@ class TestThePool:
         assert pool.wait_for_idle(PATIENCE)
         assert counted == [1]
 
+    def test_a_load_that_submits_loads_prepares_them_first(self, make_pool):
+        """An inlined scene submits its textures from a worker; what those
+        loads import is made before the scene's own load is handed over."""
+        where = []
+        pool = make_pool(workers=1)
+
+        def texture_prepare():
+            where.append(threading.current_thread())
+
+        def scene():
+            pool.submit('a texture', lambda: None, prepare=texture_prepare)
+        pool.submit('a scene', scene,
+                    prepare=lambda: pool.prepare(texture_prepare))
+        assert pool.wait_for_idle(PATIENCE)
+        assert where == [threading.main_thread()]
+
+    def test_a_preparation_first_reached_on_a_worker_is_reported(
+            self, make_pool, caplog):
+        pool = make_pool(workers=1)
+
+        def scene():
+            pool.submit('a texture', lambda: None, prepare=lambda: None)
+        with caplog.at_level('WARNING'):
+            pool.submit('a scene', scene)
+            assert pool.wait_for_idle(PATIENCE)
+        assert 'a texture' in caplog.text and 'loader thread' in caplog.text
+
     def test_waiting_on_an_empty_pool_answers_at_once(self, make_pool):
         assert make_pool(workers=1).wait_for_idle(0)
 
@@ -241,6 +269,16 @@ class TestWhatALoaderThreadMayDo:
                              if thread is not threading.main_thread()})
         assert not off_thread, (
             'imported on a loader thread: %s' % (', '.join(off_thread),))
+
+    def test_a_scene_prepares_every_kind_of_load_its_nodes_make(
+            self, unprepared_pool):
+        """An Inline's scene is read on a worker, and its textures, shaders
+        and panoramas submit their loads from there."""
+        from OpenGLContext.scenegraph import hdrbackground, inline
+        inline.prepare_scene_loading()
+        assert {imagetexture.prepare_image_loading,
+                shaders.prepare_shader_loading,
+                hdrbackground.prepare_panorama_loading} <= unprepared_pool._prepared
 
     @pytest.mark.parametrize('node,suffix', [
         ('OpenGLContext.scenegraph.imagetexture:ImageTexture', '.png'),

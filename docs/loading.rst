@@ -183,9 +183,11 @@ To wait until the scene is complete, for example in a test or a tool, call
 
 ``wait_for_idle`` returns ``False`` if the timeout expires first. It also waits
 for work submitted while it is waiting, such as the files a scene's first file
-names. For loads that should not queue behind the scenegraph's, create a
-separate ``background.LoadPool`` and call its ``shutdown()`` when you are done
-with it. The engine's own pool lasts as long as the process.
+names. A fetch that stalls holds its worker until the resolver's timeout, 30
+seconds for each connection or read. For loads that should not queue behind
+the scenegraph's, such as remote content that may be slow, create a separate
+``background.LoadPool`` and call its ``shutdown()`` when you are done with it.
+The engine's own pool lasts as long as the process.
 
 The loaders above run on the thread that calls them. To load a whole model
 without stopping the frame, call them from a worker, as :doc:`the viewer
@@ -202,6 +204,12 @@ thread waiting for that lock does not respond to ``SIGTERM``,
 the submitting thread keeps them interruptible, and raises any
 ``ImportError`` where the caller can handle it. Pass a ``prepare`` callable to
 ``background.load_in_background`` for your own loads for the same reason.
+
+A load whose work submits more loads runs on a worker when it does so, so it
+prepares those loads in its own ``prepare`` with ``background.prepare(...)``:
+an ``Inline`` prepares the texture, shader and panorama loads its scene's nodes
+will make. A preparation first reached on a worker thread still runs, and is
+logged as a warning naming the load.
 
 Adding a format
 ---------------

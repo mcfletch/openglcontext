@@ -18,9 +18,17 @@ def prepare_scene_loading() -> None:
     :mod:`OpenGLContext.loaders.background`.  Reading a scene means the parser
     for its format, which the loader imports from the plugin registry the
     first time it is asked for a handler, so that is done here.
+
+    The scene is built on that thread too, and its textures, shaders and
+    panoramas submit their own loads from there, so their preparations are
+    made here as well. An Inline inside it finds this one already made.
     """
     from OpenGLContext.loaders.loader import Loader
+    from OpenGLContext.scenegraph import hdrbackground, imagetexture, shaders
     Loader.loadHandlers()
+    background.prepare(imagetexture.prepare_image_loading,
+                       shaders.prepare_shader_loading,
+                       hdrbackground.prepare_panorama_loading)
 
 
 class InlineURLField( fieldtypes.MFString ):
