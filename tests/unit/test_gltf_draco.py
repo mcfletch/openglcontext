@@ -5,18 +5,11 @@ mesh with DracoPy, wrap it in a glTF whose attribute accessors carry no bufferVi
 exactly as a Draco asset does) so they need no network. The sample-asset case pulls
 the Khronos Duck Draco variant and checks its counts against the uncompressed Duck.
 """
-import os
-import subprocess
-import sys
-
 import numpy as np
 import pytest
 
 pygltflib = pytest.importorskip("pygltflib")
 DracoPy = pytest.importorskip("DracoPy")
-
-from OpenGLContext.testing.paths import tests_root
-TESTS_DIR = str(tests_root(__file__))
 
 from pygltflib import (
     GLTF2, Scene, Node, Mesh, Primitive, Attributes, Accessor, BufferView,
@@ -26,6 +19,7 @@ from pygltflib import (
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.gltf import draco as draco_mod
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from tests.unit.viewcapture import view_frame
 
 
 # Draco AttributeType enum -> glTF semantic
@@ -343,24 +337,12 @@ class TestDracoRender:
     """A Draco primitive must render to real pixels, not just decode to arrays."""
 
     def test_draco_cube_renders_non_blank(self, tmp_path):
-        pytest.importorskip("PIL")
-        from PIL import Image
         glb = tmp_path / "draco_cube.glb"
         glb.write_bytes(_draco_box_glb())
-        out = str(tmp_path / "draco_cube.png")
-        args = [str(glb), '--no-cameras', '--no-physics', '--no-rotate',
-                '--no-shadows', '--background', '0,0,0', '--yaw', '0.6',
-                '--capture', out, '--frames', '6', '--capture-delay', '0.2',
-                '--size', '320x240']
-        try:
-            subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.view'] + args,
-                           timeout=180, capture_output=True, text=True,
-                           cwd=TESTS_DIR + '/..')
-        except subprocess.TimeoutExpired:
-            pytest.skip("OpenGL context unavailable / capture timed out")
-        if not os.path.exists(out):
-            pytest.skip("OpenGL context unavailable for capture")
-        arr = np.asarray(Image.open(out).convert("RGB")).astype(int)
+        arr = view_frame([str(glb), '--no-cameras', '--no-physics', '--no-rotate',
+                          '--no-shadows', '--background', '0,0,0', '--yaw', '0.6',
+                          '--frames', '6', '--capture-delay', '0.2', '--size', '320x240'],
+                         str(tmp_path / "draco_cube.png"))
         assert arr.any(), "captured Draco frame is all black"
         # The lit reddish cube must actually cover a chunk of the frame.
         lit = (arr.sum(axis=2) > 30)
@@ -371,18 +353,20 @@ class TestDracoRender:
 class TestKhronosDuckDraco:
     """The Duck Draco variant must decode to the same counts as uncompressed Duck."""
 
+    BASE = ('https://raw.githubusercontent.com/KhronosGroup/'
+            'glTF-Sample-Assets/main/Models/Duck')
+
     def _load(self, variant, cache):
-        base = ('https://raw.githubusercontent.com/KhronosGroup/'
-                'glTF-Sample-Assets/main/Models/Duck')
-        return gltf.load_gltf_url('%s/%s/Duck.gltf' % (base, variant), cache)
+        return gltf.load_gltf_url('%s/%s/Duck.gltf' % (self.BASE, variant), cache)
 
     def test_duck_draco_counts_match_uncompressed(self, tmp_path):
+        from OpenGLContext.testing.network import unreachable
         cache = str(tmp_path)
-        try:
-            draco = self._load('glTF-Draco', cache)
-            plain = self._load('glTF', cache)
-        except Exception as err:  # pragma: no cover - network/offline guard
-            pytest.skip("network unavailable for Khronos sample fetch: %s" % err)
+        reason = unreachable('%s/glTF/Duck.gltf' % (self.BASE,), cache)
+        if reason:
+            pytest.skip(reason)
+        draco = self._load('glTF-Draco', cache)
+        plain = self._load('glTF', cache)
         dshape = _find_shape(draco.group)
         pshape = _find_shape(plain.group)
         assert dshape is not None and pshape is not None

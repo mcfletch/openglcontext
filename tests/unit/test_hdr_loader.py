@@ -215,12 +215,13 @@ def test_truncated_data_rejected():
 def test_real_polyhaven_hdr_if_available():
     """Decode a genuine Poly Haven CC0 panorama (skips if offline)."""
     from OpenGLContext.loaders.resolver import fetch_to_cache
+    from OpenGLContext.testing.network import unreachable
     url = ('https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/'
            'studio_small_03_1k.hdr')
-    try:
-        path = fetch_to_cache(url)
-    except Exception as err:                       # network unavailable in CI
-        pytest.skip('network unavailable: %s' % err)
+    reason = unreachable(url)
+    if reason:
+        pytest.skip(reason)
+    path = fetch_to_cache(url)
     img = hdr.load_hdr(path)
     assert img.ndim == 3 and img.shape[2] == 3
     assert img.shape[0] * 2 == img.shape[1]        # equirectangular 2:1

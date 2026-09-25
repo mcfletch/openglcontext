@@ -60,10 +60,12 @@ def figure(demo):
     """The demo's own sample model, or a skip where it cannot be fetched."""
     from OpenGLContext.loaders.gltf import sample_model_url
     from OpenGLContext.loaders.resolver import fetch_to_cache
-    try:
-        return parse_gltf(fetch_to_cache(sample_model_url(demo.MODEL)))
-    except Exception as err:
-        pytest.skip('%s is not in the asset cache: %s' % (demo.MODEL, err))
+    from OpenGLContext.testing.network import unreachable
+    url = sample_model_url(demo.MODEL)
+    reason = unreachable(url)
+    if reason:
+        pytest.skip(reason)
+    return parse_gltf(fetch_to_cache(url))
 
 
 @pytest.fixture

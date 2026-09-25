@@ -600,6 +600,40 @@ A test that waits for a background resource load should wait on the loader
 pool, not on a thread name or a sleep; see :ref:`Loading without stopping
 the frame <background-loading>`.
 
+.. _skipping:
+
+When a test may skip
+--------------------
+
+A skip says the machine lacks something the test needs. Decide it with a
+check that does not run the code under test, before that code runs: the
+``gl_context`` fixtures and ``gl_available()`` for a GL target,
+``pytest.importorskip`` for an optional package, ``sys.platform`` for a
+platform. Do not catch an exception from the code under test and skip on it.
+A loader that raises, a viewer that hangs or a renderer that crashes is then
+reported as skipped, in a run that reads green.
+
+A test that reads a published sample, such as a Khronos model or a Poly
+Haven panorama, needs a copy in the resolver's cache or a connection to the
+host that serves it. ``OpenGLContext.testing.network.unreachable(url)``
+answers that without fetching anything, and returns the reason to skip or
+``None``:
+
+.. code-block:: python
+
+   from OpenGLContext.testing.network import unreachable
+
+   def test_the_duck_loads():
+       reason = unreachable(DUCK_URL)
+       if reason:
+           pytest.skip(reason)
+       scene = load(fetch_to_cache(DUCK_URL))
+
+The fetch then runs unguarded, so a defect in the resolver or the loader
+fails the test. A host's answer is kept for the life of the process, and a
+host that does not accept a connection within five seconds counts as
+unreachable.
+
 .. _what-to-test:
 
 What to put in a test
