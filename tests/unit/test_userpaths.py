@@ -42,14 +42,14 @@ class TestTheApplicationDataDirectory:
     def test_with_no_environment_the_expansion_answers(self, clean, monkeypatch,
                                                        tmp_path):
         clean.setattr(sys, 'platform', 'linux')
-        monkeypatch.setattr(os.path, 'expanduser', lambda path: str(tmp_path))
+        monkeypatch.setattr(os.path, 'expanduser', lambda _path: str(tmp_path))
         assert userpaths.appdatadirectory() == str(tmp_path / '.config')
 
     def test_windows_with_no_environment_takes_the_profile_itself(
             self, clean, monkeypatch, tmp_path):
         """Windows puts application data in a directory of its own, not under one."""
         clean.setattr(sys, 'platform', 'win32')
-        monkeypatch.setattr(os.path, 'expanduser', lambda path: str(tmp_path))
+        monkeypatch.setattr(os.path, 'expanduser', lambda _path: str(tmp_path))
         assert userpaths.appdatadirectory() == str(tmp_path)
 
     def test_nothing_to_go_on_is_an_error_the_caller_can_catch(self, clean,
@@ -118,7 +118,7 @@ class TestThePicturesDirectory:
                                                      tmp_path):
         """A service account may have a home directory but no HOME variable."""
         clean.setattr(sys, 'platform', 'linux')
-        monkeypatch.setattr(os.path, 'expanduser', lambda path: str(tmp_path))
+        monkeypatch.setattr(os.path, 'expanduser', lambda _path: str(tmp_path))
         assert userpaths.picturesdirectory() == str(tmp_path / 'Pictures')
 
     def test_no_home_at_all_is_an_error_the_caller_can_catch(self, clean,
