@@ -215,14 +215,28 @@ Options
 - ``--requirement FILE`` (repeatable) - requirement files installed before
   the project. Use one to pin a dependency that is not on a package index.
 
+- ``--distribution NAME`` - the Python distribution to package. The default
+  is the name in the project's ``pyproject.toml``.
+
+- ``--menu COMMAND`` - the command the desktop entry runs. The default is the
+  command named after the package; an empty value writes no entry.
+
 - ``--menu-name``, ``--categories``, ``--icon`` - the desktop entry. Without
   ``--icon``, the entry names a stock icon that every icon theme provides.
+
+- ``--maintainer "NAME <EMAIL>"`` - the package's maintainer. The default is
+  the project's author.
 
 - ``--revision N`` - the Debian revision for one upstream release, starting
   at 1.
 
 - ``--prefix``, ``--bindir``, ``--section`` - for an application that is not
   a game.
+
+- ``--build-directory DIR`` - where the package is assembled. The default is
+  ``build/deb/<package>``.
+
+- ``--quiet``, ``-q`` - print nothing but the package that was written.
 
 Version numbers and reproducible builds
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -235,9 +249,10 @@ a string: ``0.1.0a1`` becomes ``0.1.0~a1-1``.
 
 ``oglc-deb`` writes the package directly, as the ``ar`` archive of two
 tarballs that a ``.deb`` is, so the build host does not need ``dpkg``. Every
-file in it is owned by root and has the same timestamp, so building the same
-input twice gives the same package. Set ``SOURCE_DATE_EPOCH`` to fix that
-timestamp for builds that must be reproducible across days.
+file in it is owned by root and has the same timestamp. That timestamp is
+``SOURCE_DATE_EPOCH`` where it is set, and the time of the build otherwise, so
+two builds of the same input are the same package only when
+``SOURCE_DATE_EPOCH`` is set.
 
 .. _packaging-limits:
 
