@@ -20,8 +20,8 @@ camera is clamped to, and what
 :class:`~OpenGLContext.physics.heightfield.HeightFieldColliders` builds colliders
 from.
 """
-import io
 import json
+import logging
 import math
 import os
 from typing import Any, Callable, Optional
@@ -34,6 +34,8 @@ from OpenGLContext.loaders.tiles3d.gltf_uploader import (
     make_tile_loader,
     GLTileUploader,
 )
+
+log = logging.getLogger(__name__)
 
 
 class TilesTerrain(Group):
@@ -129,7 +131,7 @@ class TilesTerrain(Group):
             self.vegetation.lit_by(self.ground.shade)
         if vegetation and extras.get('vegetation'):
             self._mount_cover(extras['vegetation'].get('cover'), base_uri,
-                              extras.get('terrain'))
+                              cache_dir)
         #: The world's zones, when it names a document of them: the loaded
         #: :class:`~OpenGLContext.loaders.gltf.scene.GLTFScene`, whose
         #: ``zones`` and ``sounds`` an application may want. Its group is
@@ -223,8 +225,8 @@ class TilesTerrain(Group):
             raise ValueError(
                 "a world's vegetation record names no species, so there is "
                 "nothing to draw its trees as")
-        beside = base_uri if fetch.is_url(base_uri) else base_uri.rstrip(os.sep)
-        species = [TreeSpecies.from_json(entry).beside(beside)
+        species = [TreeSpecies.from_json(entry).located(
+                       lambda name: _beside(base_uri, name, cache_dir))
                    for entry in named]
         table = np.load(_beside(base_uri, record['trees'], cache_dir))
         self.vegetation = VegetationField(
@@ -239,19 +241,29 @@ class TilesTerrain(Group):
         ``OGLC_zone`` nodes and whatever they name -- emitters and their
         audio, lights -- in the world's own coordinates, beside the tileset.
         See ``docs/zones.rst``.
+
+        Zones are an addition to a world rather than its ground: a document
+        that is outside the tileset's reach, or will not load, is reported and
+        the world is mounted without zones.
         """
         from OpenGLContext.loaders.gltf import loader
         name = record.get('document') if isinstance(record, dict) else record
         if not name:
             return
-        if fetch.is_url(base_uri):
-            self.zones = loader.load_gltf_url(base_uri + name, cache_dir=cache_dir)
-        else:
-            self.zones = loader.load_gltf(os.path.join(base_uri, name))
-        self._zone_node = self.zones.group
+        try:
+            where = fetch.beside(base_uri, str(name))
+            if fetch.is_url(where):
+                zones = loader.load_gltf_url(where, cache_dir=cache_dir)
+            else:
+                zones = loader.load_gltf(where)
+        except Exception as error:
+            log.warning("world zones %r not loaded: %s", name, error)
+            return
+        self.zones = zones
+        self._zone_node = zones.group
 
     def _mount_cover(self, record: Any, base_uri: str,
-                     terrain: Any) -> None:
+                     cache_dir: Optional[str]) -> None:
         """Build the ground cover this world names, if it has ground for it.
 
         Cover sits on a height field and grows where the splat control map says
@@ -269,9 +281,9 @@ class TilesTerrain(Group):
         from OpenGLContext.scenegraph.vegetation.cover import (
             CoverSpecies, GroundCover, control_weight,
         )
-        beside = base_uri if fetch.is_url(base_uri) else base_uri.rstrip(os.sep)
         named = record.get('species')
-        species = [CoverSpecies.from_json(entry).beside(beside)
+        species = [CoverSpecies.from_json(entry).located(
+                       lambda name: _beside(base_uri, name, cache_dir))
                    for entry in (named if named is not None else [record])]
         wanted = list(record.get('on') or ())
         mask = (control_weight(self.ground.control, wanted,
@@ -346,13 +358,11 @@ def _facing(view_projection: Any) -> Any:
     return None if length < 1e-9 else forward / length
 
 
-def _beside(base_uri: str, name: str, cache_dir: Optional[str]) -> Any:
-    """A file named from a tileset, as something an image decoder can open.
+def _beside(base_uri: str, name: str, cache_dir: Optional[str]) -> str:
+    """The path of a file a world names beside its tileset.
 
-    Local worlds are the common case and resolve to a path; a remote one comes
-    back as its bytes, which is the other thing PIL accepts.
+    Held to the tileset's containment (:func:`fetch.beside`); a served world's
+    file is fetched to the cache, so what comes back is a path on this machine
+    for every world.
     """
-    uri = base_uri + name if fetch.is_url(base_uri) else os.path.join(base_uri, name)
-    if not fetch.is_url(uri):
-        return uri
-    return io.BytesIO(fetch.read_bytes(uri, cache_dir=cache_dir))
+    return fetch.local_copy(fetch.beside(base_uri, name), cache_dir=cache_dir)

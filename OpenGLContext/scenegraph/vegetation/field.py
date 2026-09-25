@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import math
 import posixpath
-from typing import Any, Optional, Sequence
+from typing import Any, Callable, Optional, Sequence
 
 import numpy as np
 from vrml import field
@@ -127,17 +127,27 @@ class TreeSpecies(Varied, Node):
                 'b_keys': tuple(self.foliage), 'b_tex': self.foliageTexture}
 
     def beside(self, directory: str) -> 'TreeSpecies':
-        """A copy of this species with its files resolved against ``directory``.
+        """A copy of this species with its files joined to ``directory``.
 
         posixpath, not os.path: this joins a reference rather than opening a
-        file, and a baked world is as likely to be served over http as read
-        off disk. Forward slashes are a path on every platform and a URL too.
+        file, and forward slashes are a path on every platform and a URL too.
+        The names are used as the species gives them, so this is for species
+        the application itself chose. Species read out of a document go
+        through :meth:`located` with the document's containment.
         """
-        return self.varied(
-            mesh=posixpath.join(directory, self.mesh),
-            solidTexture=posixpath.join(directory, self.solidTexture),
-            foliageTexture=posixpath.join(directory, self.foliageTexture),
-            impostor=posixpath.join(directory, self.impostor))
+        return self.located(lambda name: posixpath.join(directory, name))
+
+    def located(self, where: Callable[[str], str]) -> 'TreeSpecies':
+        """A copy of this species with each file it names replaced by ``where(name)``.
+
+        An empty name stays empty. ``where`` raising refuses the species.
+        """
+        return self.varied(**{name: where(value) if value else value
+                              for name, value in (
+                                  ('mesh', self.mesh),
+                                  ('solidTexture', self.solidTexture),
+                                  ('foliageTexture', self.foliageTexture),
+                                  ('impostor', self.impostor))})
 
     def to_json(self) -> dict:
         """This species as a baked world carries it."""

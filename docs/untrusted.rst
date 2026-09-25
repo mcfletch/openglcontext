@@ -97,7 +97,9 @@ Rules for each loader
        are restricted to the model's directory.
    * - :doc:`3D Tiles <tiles3d>` (``loaders/tiles3d/``)
      - Tile content and nested tilesets resolve through the ``Resolver``, with a
-       separate cap for each tile. See :ref:`What a tileset may reach
+       separate cap for each tile. The files a world names in its extras
+       (terrain maps, trees, ground cover, zones) are held to the same rules by
+       ``tiles3d.fetch.beside``. See :ref:`What a tileset may reach
        <tiles3d-reach>`.
    * - ambientCG materials (``loaders/cc0.py``)
      - The service's reply is size-capped, the download link is checked against

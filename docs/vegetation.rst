@@ -61,9 +61,13 @@ A ``TreeSpecies`` defines how one kind of tree is drawn:
 A ``TreeSpecies`` is a scenegraph node, and the forest keeps its species in
 its ``species`` field, read when the forest is built. The field names match
 the keys of a baked world's JSON (``to_json`` and ``from_json``).
-``beside(directory)`` returns a copy with its file paths resolved against
-``directory``, and ``varied(cardWidth=0.6)`` returns a copy with those fields
-changed; the original species is unchanged by either.
+``beside(directory)`` returns a copy with its file paths joined to
+``directory``, ``located(where)`` a copy with each non-empty file name replaced
+by ``where(name)``, and ``varied(cardWidth=0.6)`` a copy with those fields
+changed; the original species is unchanged by each. ``beside`` uses the names
+as given, so it is for species an application chose; ``TilesTerrain`` reads a
+world's species through ``located`` with ``tiles3d.fetch.beside``, which keeps
+them inside the world (:ref:`tiles3d-reach`).
 
 The near mesh and the cards cross-fade in their shaders over a shared distance
 band.

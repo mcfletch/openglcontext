@@ -260,7 +260,9 @@ named in the tileset's extras:
 
 ``TilesTerrain`` loads the document once and keeps it mounted beside the
 tiles, so a zone that runs through many tiles is never unloaded with one of
-them. ``TilesTerrain.zones`` is the loaded scene. ``OpenGLContext_editor``'s
+them. The name must resolve under the tileset's directory, or on its origin
+for a served world. A document that is outside that reach, or does not load,
+is logged as a warning and the world is built without zones. ``TilesTerrain.zones`` is the loaded scene. ``OpenGLContext_editor``'s
 ``ZonesLayer`` writes the document when a world is baked; see :doc:`baking`.
 
 Limits

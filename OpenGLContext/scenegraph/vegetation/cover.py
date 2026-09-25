@@ -237,10 +237,23 @@ class CoverSpecies(Varied, Node):
         return (float(self.canopy[0]), float(self.canopy[1]))
 
     def beside(self, directory: str) -> 'CoverSpecies':
-        """A copy of this species with its files resolved against ``directory``."""
-        return self.varied(
-            card=posixpath.join(directory, self.card),
-            clump=(posixpath.join(directory, self.clump) if self.clump else ''))
+        """A copy of this species with its files joined to ``directory``.
+
+        The names are used as the species gives them, so this is for species
+        the application itself chose. Species read out of a document go
+        through :meth:`located` with the document's containment.
+        """
+        return self.located(lambda name: posixpath.join(directory, name))
+
+    def located(self, where: Callable[[str], str]) -> 'CoverSpecies':
+        """A copy of this species with each file it names replaced by ``where(name)``.
+
+        An empty name (no clump) stays empty. ``where`` raising refuses the
+        species.
+        """
+        return self.varied(**{name: where(value) if value else value
+                              for name, value in (('card', self.card),
+                                                  ('clump', self.clump))})
 
     def to_json(self) -> dict:
         """This species as a baked world carries it."""

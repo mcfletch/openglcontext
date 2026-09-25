@@ -60,6 +60,45 @@ def resolve_uri(base: str, uri: str) -> str:
     return resolver.Resolver(base_dir=base).resolve(uri)
 
 
+def beside(base: str, name: str) -> str:
+    """Where a file named in a tileset's extras is, within what the tileset may reach.
+
+    `base` is the tileset's directory or URL directory (:func:`dir_of`), and
+    `name` a file a world names beside its tiles: a zones document, a tree's
+    mesh, a cover species' clump or card. The containment is
+    :func:`resolve_uri`'s: under `base` for a local world, same-origin http(s)
+    for a served one. Unlike :func:`resolve_uri`, an empty `base` is an error,
+    since every such name comes out of a document.
+
+    Raises:
+        ValueError: where `base` is empty.
+        IOError: where `name` is outside what `base` permits.
+    """
+    if not base:
+        raise ValueError(
+            "%r is named by a tileset, and has no tileset to be resolved "
+            "against" % (name,))
+    return resolve_uri(base, name)
+
+
+def local_copy(uri: str, cache_dir: Optional[str] = None,
+               max_bytes: Optional[int] = DEFAULT_MAX_TILE_BYTES) -> str:
+    """A path on this machine holding the file at `uri`.
+
+    A local path is returned as it is. An http(s) URL is fetched into the
+    per-user cache (once, size-capped, its redirects held to its origin) and
+    the cached file's path is returned, for readers that open only paths:
+    ``numpy.load``, ``PIL.Image.open``, a ``.glb`` clump.
+
+    `uri` is expected to have been through :func:`beside` or
+    :func:`resolve_uri` already.
+    """
+    if not is_url(uri):
+        return uri
+    return resolver.fetch_to_cache(uri, cache_dir or default_cache_dir(),
+                                   max_bytes=max_bytes)
+
+
 def dir_of(uri: str) -> str:
     """The base (directory) of a URI, with a trailing separator, for child URIs.
 

@@ -238,6 +238,16 @@ follow the same rules as a glTF document's external references:
   256 MiB by default. For a dataset with larger tiles, pass ``max_bytes`` to
   ``read_bytes``.
 
+- The files a world names in its ``extras`` -- the height and control maps, the
+  tree table and each species' meshes and textures, the ground cover's cards
+  and clumps, the zones document -- follow the same two rules. They resolve
+  through ``tiles3d.fetch.beside(base, name)``, and a served world's files are
+  fetched to the cache by ``tiles3d.fetch.local_copy(uri)``, so every reader
+  is handed a path on this machine. A name outside the tileset's reach raises
+  ``IOError`` and the world is not built, except for the zones document: a
+  zones document that is refused or does not load is logged, and the world is
+  built without zones.
+
 The URL or path you give the viewer is not restricted: the viewer fetches what
 you name, as ``curl`` would. The file it fetches is untrusted like any other.
 Its size is capped, redirects of that first fetch must stay on the origin you
