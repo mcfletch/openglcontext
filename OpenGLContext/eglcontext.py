@@ -92,6 +92,7 @@ __all__ = (
     'contextAttributes',
     'createContext',
     'createPbufferSurface',
+    'definitionAttributes',
     'devices',
     'openDisplay',
     'prefersSoftware',
@@ -274,6 +275,24 @@ def contextAttributes(
         attributes += [EGL.EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE, EGL.EGL_TRUE]
     attributes.append(EGL.EGL_NONE)
     return attributes
+
+
+def definitionAttributes(definition: Any) -> List[int]:
+    """The ``eglCreateContext`` attribute list a :class:`ContextDefinition` asks for.
+
+    The same request the windowed backends make of their toolkits: a core
+    profile at the definition's version, forward-compatible; a compatibility
+    profile where the definition names a version of 3.2 or later, which is
+    where the profile mask begins; and otherwise the context the
+    implementation makes by default.
+    """
+    profile = str(definition.profile)
+    version = (int(definition.version[0]), int(definition.version[1]))
+    if profile == 'core':
+        return contextAttributes('core', version, forwardCompatible=True)
+    if profile == 'compatibility' and version >= (3, 2):
+        return contextAttributes('compatibility', version)
+    return contextAttributes('any')
 
 
 def selectDevice(environ: Optional[Mapping[str, str]] = None) -> DeviceInfo:
@@ -605,7 +624,8 @@ class EGLContext(
         )
 
     def _createContext(self, config: Any) -> Any:
-        return createContext(self.display, config)
+        return createContext(self.display, config,
+                             definitionAttributes(self.contextDefinition))
 
     def _createSurface(self, config: Any, width: int, height: int) -> Any:
         return createPbufferSurface(self.display, config, width, height)

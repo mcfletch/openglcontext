@@ -53,6 +53,13 @@ The context renders into a pbuffer, which is a real default framebuffer.
 Passes that draw to framebuffer zero, read it back or take a screenshot work
 as they do on a window, with no offscreen-specific code.
 
+The context is made with the profile and version its definition names, as a
+window is (see :doc:`profiles`): a core program gets a forward-compatible core
+context at its version, so a fixed-function call fails offscreen as it does
+in a window. A compatibility program that names a version of 3.2 or later gets
+a compatibility profile at that version; one that names none gets the
+driver's default context.
+
 Platform support
 ----------------
 

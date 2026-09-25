@@ -565,10 +565,8 @@ class TestFlushingPendingPicks:
 class TestContextAttributes:
     """The profile and version an EGL context is asked for.
 
-    ``EGLContext`` itself names neither and takes what the driver makes, which
-    is enough for a scene.  A test harness has to ask: a case written against
-    GLSL 330 in a core profile must get one, or it is testing a context nobody
-    ships.
+    A case written against GLSL 330 in a core profile must get one, or it is
+    testing a context nobody ships.
     """
 
     def test_the_version_asked_for_is_requested(self):
@@ -610,6 +608,62 @@ class TestContextAttributes:
 
     def test_the_list_is_terminated(self):
         assert eglcontext.contextAttributes('core')[-1] == eglcontext.EGL.EGL_NONE
+
+
+class TestTheDefinitionsProfile:
+    """An ``EGLContext`` is made with the profile and version its definition names.
+
+    A core program run offscreen gets a core context, as it does in every
+    windowed backend, so a fixed-function call fails the same way in both.
+    """
+
+    def _mask(self, profile):
+        from OpenGL.GL import GL_CONTEXT_PROFILE_MASK, glGetIntegerv
+
+        class Profiled(eglcontext.EGLContext):
+            pass
+
+        Profiled.profile = profile
+        try:
+            context = Profiled(size=(16, 16))
+        except eglcontext.EGLContextError as error:
+            pytest.skip(f'no offscreen EGL context available here: {error}')
+        try:
+            context.setCurrent()
+            try:
+                return int(glGetIntegerv(GL_CONTEXT_PROFILE_MASK))
+            finally:
+                context.unsetCurrent()
+        finally:
+            context.close()
+
+    def test_a_core_program_gets_a_core_context(self):
+        from OpenGL.GL import GL_CONTEXT_CORE_PROFILE_BIT
+        assert self._mask('core') & GL_CONTEXT_CORE_PROFILE_BIT
+
+    def test_the_definition_decides_the_attributes(self):
+        from OpenGLContext.contextdefinition import ContextDefinition
+        core = eglcontext.definitionAttributes(
+            ContextDefinition(profile='core', version=(4, 1)))
+        assert _attribute(core, eglcontext.EGL.EGL_CONTEXT_MAJOR_VERSION) == 4
+        assert _attribute(core, eglcontext.EGL.EGL_CONTEXT_OPENGL_PROFILE_MASK) \
+            == eglcontext.EGL.EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT
+        assert _attribute(core, eglcontext.EGL.EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE) \
+            == eglcontext.EGL.EGL_TRUE
+
+    def test_a_compatibility_program_with_no_version_takes_the_default(self):
+        """Below GL 3.2 there is no profile to name, and (0, 0) names no version."""
+        from OpenGLContext.contextdefinition import ContextDefinition
+        assert eglcontext.definitionAttributes(
+            ContextDefinition(profile='compatibility', version=(0, 0))
+        ) == [eglcontext.EGL.EGL_NONE]
+
+    def test_a_compatibility_program_that_names_a_version_asks_for_it(self):
+        from OpenGLContext.contextdefinition import ContextDefinition
+        attributes = eglcontext.definitionAttributes(
+            ContextDefinition(profile='compatibility', version=(4, 5)))
+        assert _attribute(attributes, eglcontext.EGL.EGL_CONTEXT_OPENGL_PROFILE_MASK) \
+            == eglcontext.EGL.EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT
 
 
 class TestTheDisplayIsSharedRatherThanOwned:
