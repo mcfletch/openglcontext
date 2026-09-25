@@ -92,7 +92,6 @@ class _FlatEffectsMixin:
                               drawing: Any) -> Any: ...
 
         multiviewStrategy: Optional[str]
-        frustum: Any
         _frameGather: Any
         _pathGeneration: int
         activeFrame: Any
@@ -517,7 +516,7 @@ class _FlatEffectsMixin:
                             continue
                         missing.add(key)
                 kept.append(record)
-            if missing:
+            if missing and self._reflection_planner is not None:
                 self._reflection_planner.drawn_without(draw.key, missing)
             frame.toRender = kept
             mirrors.append(frame)

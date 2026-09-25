@@ -71,7 +71,7 @@ def close(context: Any) -> None:
 
 
 def update(context: Any, paths: Sequence[Any], now: Optional[float] = None,
-           zones: Sequence[Any] = ()) -> int:
+           zones: Sequence[Any] = (), table: Any = None) -> int:
     """Keep ``context``'s sounds in step with its camera, for one frame.
 
     ``paths`` are the render pass's collected ``Auditory`` node paths.  An empty
@@ -83,7 +83,8 @@ def update(context: Any, paths: Sequence[Any], now: Optional[float] = None,
 
     ``zones`` are the frame's placed zones: the emitters they name are heard
     only while the camera is inside them, and the reverb is theirs. See
-    :func:`OpenGLContext.audio.areas.apply_zones`.
+    :func:`OpenGLContext.audio.areas.apply_zones`; ``table`` is the zones
+    stacked for weighing all at once.
 
     Returns how many nodes were driven, for a debug overlay.
     """
@@ -104,7 +105,7 @@ def update(context: Any, paths: Sequence[Any], now: Optional[float] = None,
     if zones:
         from OpenGLContext.audio.areas import apply_zones
         apply_zones(engine, [path[-1] for path in paths], zones,
-                    engine.listener.position)
+                    engine.listener.position, table)
     return update_scene_audio(engine, paths,
                               time.time() if now is None else now)
 

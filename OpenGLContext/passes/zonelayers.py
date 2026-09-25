@@ -35,7 +35,8 @@ log = logging.getLogger(__name__)
 __all__ = [
     'MAX_ZONE_LAYERS', 'SCENE_PROBE', 'NO_ENVIRONMENT', 'ZonePack', 'ZoneTable',
     'Reach', 'reach', 'classified', 'stacked', 'chosen', 'probe_layers', 'pack_reach',
-    'environment_layers', 'lights_off', 'controlled_lights', 'camera_shares',
+    'environment_layers', 'lights_off', 'light_decision', 'light_mask',
+    'controlled_lights', 'point_weights', 'camera_shares',
     'reverb_at', 'Reverb',
 ]
 
@@ -126,8 +127,12 @@ class ZoneTable:
                 self.half[index] = zone.shape.params
 
     def _local(self, points: np.ndarray) -> np.ndarray:
-        """``(N, 3)`` world points in every zone's frame, as ``(Z, N, 3)``."""
-        return (np.einsum('ni,zij->znj', points, self.to_local[:, :3, :3])
+        """``(N, 3)`` world points in every zone's frame, as ``(Z, N, 3)``.
+
+        A broadcast matrix product, which numpy hands to BLAS, rather than an
+        ``einsum``, which it does not.
+        """
+        return (np.matmul(np.asarray(points, dtype='d')[None, :, :], self.to_local[:, :3, :3])
                 + self.to_local[:, None, 3, :3])
 
     def reaching(self, minimum: Any, maximum: Any) -> List[PlacedZone]:
@@ -167,8 +172,9 @@ class ZoneTable:
             return [[] for _ in range(len(low_in))]
         corners = np.where(zones._CORNER_ENDS[None, :, :], high_in[:, None, :],
                            low_in[:, None, :])                         # (M, 8, 3)
-        local = (np.einsum('mci,zij->mzcj', corners, self.to_local[:, :3, :3])
-                 + self.to_local[None, :, None, 3, :3])                # (M, Z, 8, 3)
+        count = len(low_in)
+        local = self._local(corners.reshape(-1, 3))                    # (Z, M*8, 3)
+        local = local.reshape(len(self.placed), count, 8, 3).transpose(1, 0, 2, 3)
         low, high = local.min(axis=2), local.max(axis=2)
         clear = (np.any(low > self.reach[None], axis=2)
                  | np.any(high < -self.reach[None], axis=2))           # (M, Z)
@@ -186,6 +192,51 @@ class ZoneTable:
                 mine.append((zone, inside))
             found.append(mine)
         return found
+
+    def signed_distances(self, points: Any) -> np.ndarray:
+        """Every zone's signed distance from each of ``(M, 3)`` points, as ``(M, Z)``."""
+        points = np.asarray(points, dtype='d').reshape(-1, 3)
+        if not self.placed:
+            return np.zeros((len(points), 0))
+        local = self._local(points)                                  # (Z, M, 3)
+        q = np.abs(local) - self.half[:, None, :]
+        found = (np.linalg.norm(np.maximum(q, 0.0), axis=2)
+                 + np.minimum(q.max(axis=2), 0.0)).T                 # (M, Z)
+        for index in np.flatnonzero(~self.box):
+            zone = self.placed[index]
+            found[:, index] = zones._distance(zone.shape.kind, zone.shape.params,
+                                              local[index])
+        return found
+
+    def sphere_slack(self, centres: Any, radii: Any) -> np.ndarray:
+        """How far each sphere may move before its classification could change.
+
+        For a sphere outside a zone, the room between it and the zone's blend
+        band; for one inside, the room between it and the zone's surface; the
+        least over every zone, and nought for a sphere already across one.
+        An object that has moved less than this since it was classified,
+        turned however it likes within its bounding sphere, is where it was as
+        far as every zone can tell.
+        """
+        centres = np.asarray(centres, dtype='d').reshape(-1, 3)
+        radii = np.asarray(radii, dtype='d').reshape(-1, 1)
+        if not self.placed:
+            return np.full(len(centres), np.inf)
+        d = self.signed_distances(centres)
+        blend = np.array([zone.blend for zone in self.placed])[None, :]
+        # What decides a classification is which side of two lines a sphere
+        # is: the shape's surface and the outer edge of its blend band. Its
+        # room is the distance to the nearer of them, less its radius.
+        room = np.where(d > blend, d - blend,
+                        np.where(d > 0.0, np.minimum(d, blend - d), -d)) - radii
+        return np.maximum(room.min(axis=1), 0.0)
+
+    def nearness(self, point: Any) -> Dict[int, float]:
+        """Every zone's signed distance from ``point``, by ``id``, in one pass."""
+        found = self.signed_distances(np.asarray(point, dtype='d')[:3])[0]
+        if '_ids' not in self.__dict__:
+            self._ids = [id(zone) for zone in self.placed]
+        return dict(zip(self._ids, found.tolist(), strict=True))
 
     def distances(self, point: Any) -> Dict[int, float]:
         """Every zone's signed distance from ``point``, by ``id`` of the zone."""
@@ -254,12 +305,16 @@ def classified(placed: Sequence[PlacedZone], minimum: Any, maximum: Any,
 
 def chosen(kept: Sequence[Tuple[PlacedZone, bool]], camera: Optional[Any] = None,
            warn: Optional[Callable[[str], None]] = None,
-           table: Optional[ZoneTable] = None) -> Optional[Reach]:
+           table: Optional[ZoneTable] = None,
+           near: Optional[Dict[int, float]] = None) -> Optional[Reach]:
     """The layers the shader is given from :func:`classified`'s answer.
 
     All of them where they fit. Where more zones cross the object than the
     shader has room for, the one it is inside stays, the others nearest
-    ``camera`` are kept, and ``warn`` is told. None where no zone reaches it.
+    ``camera`` are kept, and ``warn`` is told. ``near`` is the table's
+    :meth:`ZoneTable.nearness` for ``camera`` where the caller already has
+    it -- one answer serves every object drawn from that camera. None where
+    no zone reaches the object.
     """
     if not kept:
         return None
@@ -271,8 +326,9 @@ def chosen(kept: Sequence[Tuple[PlacedZone, bool]], camera: Optional[Any] = None
     head, rest = list(kept[:1]), list(kept[1:])
     if camera is not None:
         point = np.asarray(camera, dtype='d')[:3]
-        if table is not None:
-            near = table.distances(point)
+        if near is None and table is not None:
+            near = table.nearness(point)
+        if near is not None:
             rest.sort(key=lambda item: near.get(id(item[0]), 0.0))
         else:
             rest.sort(key=lambda item: float(item[0].shape.distance(point)))
@@ -347,15 +403,15 @@ def controlled_lights(placed: Iterable[PlacedZone]) -> Dict[int, List[PlacedZone
     return found
 
 
-def lights_off(placed: Sequence[PlacedZone], minimum: Any, maximum: Any,
-               slots: Sequence[Any], controlled: Dict[int, List[PlacedZone]]) -> int:
-    """The ``lightsOff`` mask for an object: one bit per light slot that does not light it.
+def light_decision(placed: Sequence[PlacedZone], minimum: Any, maximum: Any
+                   ) -> Tuple[frozenset, bool]:
+    """Which lights the zones switch on for an object, and whether they darken it.
 
-    ``slots`` is the light node bound to each slot, in slot order. A light a
-    zone names lights the object where the object reaches one of those zones
-    and is not wholly inside a higher zone that decides the lights otherwise.
-    Where the object is wholly inside a zone that switches the lights off,
-    every light no zone names is off too.
+    The first is the ``id`` of every light a zone reaching the object names,
+    among the zones at or above the topmost one it is wholly inside (that one
+    covers the whole object); the second whether the object is wholly inside
+    a zone that switches the lights off. Neither depends on which slot a light
+    is bound to, so it holds until the object or a zone moves.
     """
     reaching: List[Tuple[PlacedZone, bool]] = []
     for zone in placed:
@@ -364,26 +420,21 @@ def lights_off(placed: Sequence[PlacedZone], minimum: Any, maximum: Any,
         where = zone.shape.classify(minimum, maximum, zone.blend)
         if where != zones.OUTSIDE:
             reaching.append((zone, where == zones.INSIDE))
-    if not reaching and not controlled:
-        return 0
-    reaching.sort(key=lambda item: (item[0].priority, -item[0].volume))
-    # Only the zones at or above the topmost one the object is wholly inside
-    # have a say: that one covers the whole object.
-    base = 0
-    for index, (_zone, inside) in enumerate(reaching):
-        if inside:
-            base = index
-    deciding = reaching[base:]
     on: set = set()
     dark = False
-    for zone, inside in deciding:
+    for zone, inside in stacked(reaching):
         setting = zone.setting(LIGHTS)
-        if setting is None:
-            continue
         if not bool(setting.enabled):
             dark = dark or inside
             continue
         on.update(id(light) for light in getattr(setting, 'lights', None) or ())
+    return frozenset(on), dark
+
+
+def light_mask(decision: Tuple[frozenset, bool], slots: Sequence[Any],
+               controlled: Dict[int, List[PlacedZone]]) -> int:
+    """The ``lightsOff`` mask from :func:`light_decision`, for the lights in ``slots``."""
+    on, dark = decision
     mask = 0
     for slot, light in enumerate(slots):
         key = id(light)
@@ -395,14 +446,41 @@ def lights_off(placed: Sequence[PlacedZone], minimum: Any, maximum: Any,
     return mask
 
 
+def lights_off(placed: Sequence[PlacedZone], minimum: Any, maximum: Any,
+               slots: Sequence[Any], controlled: Dict[int, List[PlacedZone]]) -> int:
+    """The ``lightsOff`` mask for an object: one bit per light slot that does not light it.
+
+    ``slots`` is the light node bound to each slot, in slot order. A light a
+    zone names lights the object where the object reaches one of those zones
+    and is not wholly inside a higher zone that decides the lights otherwise.
+    Where the object is wholly inside a zone that switches the lights off,
+    every light no zone names is off too.
+    """
+    return light_mask(light_decision(placed, minimum, maximum), slots, controlled)
+
+
+def point_weights(table: ZoneTable, point: Any) -> Dict[int, float]:
+    """Every zone's weight at ``point``, by ``id`` of the zone, in one pass."""
+    if not table.placed:
+        return {}
+    d = table.signed_distances(np.asarray(point, dtype='d')[:3])[0]
+    blend = np.array([zone.blend for zone in table.placed])
+    t = np.clip(np.where(blend > 0.0, d / np.maximum(blend, 1e-12), np.where(d > 0.0, 1.0, 0.0)),
+                0.0, 1.0)
+    w = np.where(d <= 0.0, 1.0, 1.0 - t * t * (3.0 - 2.0 * t))
+    return {id(zone): float(value) for zone, value in zip(table.placed, w, strict=True)}
+
+
 def camera_shares(placed: Sequence[PlacedZone], point: Any, key: str,
-                  names: Callable[[Any], Iterable[Hashable]]) -> Dict[Hashable, float]:
+                  names: Callable[[Any], Iterable[Hashable]],
+                  weights: Optional[Dict[int, float]] = None) -> Dict[Hashable, float]:
     """How much each thing zones switch on for ``key`` is on, at ``point``.
 
     ``names`` gives the things a setting names -- emitters, nodes, mirrors.
     Something no zone at ``point`` names is at nought, so the answer holds
     only what some zone names; the caller treats anything a zone names
-    anywhere as off when it is missing here.
+    anywhere as off when it is missing here. ``weights`` is
+    :func:`point_weights` for ``point`` where the caller has it.
     """
     candidates = []
     mapping: Dict[Hashable, List[Hashable]] = {}
@@ -410,7 +488,7 @@ def camera_shares(placed: Sequence[PlacedZone], point: Any, key: str,
         setting = zone.setting(key)
         if setting is None:
             continue
-        weight = zone.weight(point)
+        weight = weights[id(zone)] if weights is not None else zone.weight(point)
         candidate = zone.candidate(key, weight)
         candidates.append(candidate)
         if candidate[1] is not None:
@@ -427,14 +505,16 @@ class Reverb:
     damping: float = 0.4
 
 
-def reverb_at(placed: Sequence[PlacedZone], point: Any) -> Reverb:
+def reverb_at(placed: Sequence[PlacedZone], point: Any,
+              weights: Optional[Dict[int, float]] = None) -> Reverb:
     """The reverb heard at ``point``, mixed from the zones it is in by their shares.
 
     The level is each zone's level times its share, so it fades in over a
     zone's blend; the decay and damping are the shares' weighted mean, so two
     places meet without a jump. Outside every zone there is none.
     """
-    candidates = [zone.candidate(REVERB, zone.weight(point))
+    candidates = [zone.candidate(REVERB, weights[id(zone)] if weights is not None
+                                 else zone.weight(point))
                   for zone in placed if zone.setting(REVERB) is not None]
     stack = zones.layers(candidates)
     level = decay = damping = weight = 0.0

@@ -398,7 +398,7 @@ class TestManyZones:
             zoned.setupZones(np.linalg.inv(moved))
         camera_at(3.0)
         assert reached() is first
-        camera_at(30.0)
+        camera_at(100.0)
         assert reached() is not first
 
     def test_a_finished_capture_repacks_without_classifying_again(self):
@@ -410,6 +410,7 @@ class TestManyZones:
         first, _mask = zoned.zoneState(path, where, Box(1))
         found = zoned._zoneObjects[id(path)].reach
         layer[0] = 2.0
+        zoned._probeVersion += 1        # as a finished capture does
         second, _mask = zoned.zoneState(path, where, Box(1))
         assert zoned._zoneObjects[id(path)].reach is found
         assert second is not first and second.light[0][2] == 2.0
@@ -430,10 +431,65 @@ class TestMovingObjectsTogether:
         table.classify_many = lambda *a: calls.append(1) or real(*a)
         zoned.refreshZones(records)
         assert calls == [1]
+        zoned.refreshZones(records)
+        assert calls == [1]
         together = [zoned._zoneObjects[id(r[4])].reach for r in records]
         for record, found in zip(records, together):
             one = zoned._classifyObject(record[2], record[3]).reach
             assert (None if one is None else [(id(z), i) for z, i in one.stack]) == \
                 (None if found is None else [(id(z), i) for z, i in found.stack])
-        zoned.refreshZones(records)
+
+
+class TestSlack:
+    def test_an_object_moving_within_its_slack_is_not_classified_again(self):
+        zoned = ZonedPass([(Zone(size=(100, 100, 100), blend=2.0,
+                                 settings=[ZoneEnvironment(intensity=0.3)]), at(0))])
+        zoned.placeZones()
+        path = ('car',)
+        zoned.zoneState(path, at(0), Box(1))
+        held = zoned._zoneObjects[id(path)]
+        assert held.slack == pytest.approx(50.0 - 3 ** 0.5, abs=1e-6)
+        zoned.zoneState(path, at(10), Box(1))
+        assert zoned._zoneObjects[id(path)] is held
+        zoned.zoneState(path, at(49.5), Box(1))
+        assert zoned._zoneObjects[id(path)] is not held
+
+    def test_an_object_across_an_edge_has_none(self):
+        zoned = ZonedPass([(Zone(size=(10, 10, 10), settings=[ZoneEnvironment()]), at(0))])
+        zoned.placeZones()
+        path = ('car',)
+        zoned.zoneState(path, at(5), Box(1))
+        held = zoned._zoneObjects[id(path)]
+        assert held.slack == 0.0
+        zoned.zoneState(path, at(5.01), Box(1))
+        assert zoned._zoneObjects[id(path)] is not held
+
+
+class TestInstancedGroups:
+    def test_a_group_is_classified_once_until_a_member_moves(self):
+        zoned = ZonedPass([(Zone(size=(10, 10, 10), settings=[ZoneEnvironment(intensity=0.2)]),
+                            at(0))])
+        zoned.placeZones()
+        zoned.setupZones(np.identity(4))
+        members = [(None, None, at(x), Box(1), ('tree', x), None) for x in (-2.0, 0.0, 2.0)]
+        calls = []
+        real = zoned._classify
+        zoned._classify = lambda items: calls.append(len(items)) or real(items)
+        shader = zoned.shader_program
+        zoned.applyZonesToGroup(shader, members)
+        zoned.applyZonesToGroup(shader, members)
         assert calls == [1]
+        assert shader.zones[-1].light[0][0] == pytest.approx(0.2)
+        moved = list(members)
+        moved[0] = (None, None, at(30.0), Box(1), ('tree', -2.0), None)
+        zoned.applyZonesToGroup(shader, moved)
+        assert calls == [1, 1]
+        assert shader.zones[-1].kinds[0] == 1        # the group now crosses the edge
+
+
+def test_an_object_with_no_bounds_crosses_every_zone():
+    class Unbounded:
+        def getPoints(self):
+            return ()
+    low, high = ZonesMixin.worldBox(at(0), Unbounded())
+    assert np.all(low < -1e6) and np.all(high > 1e6)

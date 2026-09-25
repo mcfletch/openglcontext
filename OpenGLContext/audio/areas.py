@@ -41,7 +41,7 @@ def box_gain(position: Sequence[float], centre: Sequence[float],
 
 
 def apply_zones(engine: Any, emitters: Sequence[Any], zones: Sequence[Any],
-                position: Sequence[float]) -> None:
+                position: Sequence[float], table: Any = None) -> None:
     """Set each zone-controlled emitter's gain, and the reverb, for a listener at ``position``.
 
     ``emitters`` are the scene's :class:`~OpenGLContext.scenegraph.audio.AudioEmitter`
@@ -50,6 +50,8 @@ def apply_zones(engine: Any, emitters: Sequence[Any], zones: Sequence[Any],
     fades over a zone's ``blend``; one no zone names is left at full gain. The
     engine's reverb takes the level, decay and damping of the zones the
     listener is in, mixed by their shares, and none outside every zone.
+    ``table``, a :class:`~OpenGLContext.passes.zonelayers.ZoneTable` of
+    ``zones``, weighs every zone at the listener in one pass.
     """
     from OpenGLContext.passes import zonelayers
     from OpenGLContext.scenegraph.zone import AUDIO
@@ -62,14 +64,15 @@ def apply_zones(engine: Any, emitters: Sequence[Any], zones: Sequence[Any],
         setting = zone.setting(AUDIO)
         if setting is not None and bool(setting.enabled):
             controlled.update(named(setting))
-    shares = (zonelayers.camera_shares(zones, position, AUDIO, named)
+    weights = zonelayers.point_weights(table, position) if table is not None else None
+    shares = (zonelayers.camera_shares(zones, position, AUDIO, named, weights)
               if controlled else {})
     for emitter in emitters:
         key = id(emitter)
         wanted = float(shares.get(key, 0.0)) if key in controlled else 1.0
         if getattr(emitter, 'zoneGain', 1.0) != wanted:
             emitter.zoneGain = wanted
-    reverb = zonelayers.reverb_at(zones, position)
+    reverb = zonelayers.reverb_at(zones, position, weights)
     target = getattr(engine, 'reverb', None)
     if target is not None:
         target.level = reverb.level

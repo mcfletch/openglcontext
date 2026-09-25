@@ -36,11 +36,22 @@ log = logging.getLogger(__name__)
 
 __all__ = ['ZonesMixin']
 
+#: The half-size of the box an object with no bounds is taken to fill: large
+#: enough to cross every zone, so it is weighted per fragment.
+_UNBOUNDED = 1.0e7
+
 
 class _ObjectZones:
-    """What one object was last worked out to get from the zones."""
+    """What one object was last worked out to get from the zones.
 
-    __slots__ = ('matrix', 'epoch', 'cell', 'kept', 'reach', 'mask', 'layers', 'pack')
+    ``centre`` and ``radius`` are the object's bounding sphere in the world
+    when it was classified, and ``slack`` how far that sphere may move before
+    any zone could see it differently; ``version`` is the pass's probe version
+    ``pack`` was made at.
+    """
+
+    __slots__ = ('matrix', 'epoch', 'cell', 'kept', 'reach', 'mask', 'layers', 'pack',
+                 'local', 'radius', 'centre', 'slack', 'version', 'lights', 'slots')
 
     def __init__(self, matrix: Any, epoch: int, cell: Tuple[int, ...],
                  kept: List[Any], reach: Optional[zonelayers.Reach], mask: int) -> None:
@@ -53,10 +64,29 @@ class _ObjectZones:
         self.mask = mask
         self.layers: Tuple[float, ...] = ()
         self.pack: Optional[ZonePack] = None
+        #: The bounding sphere's centre in the object's own frame, homogeneous.
+        self.local: Optional[np.ndarray] = None
+        self.radius = 0.0
+        self.centre: Optional[np.ndarray] = None
+        self.slack = 0.0
+        self.version = -1
+        #: :func:`~OpenGLContext.passes.zonelayers.light_decision`, and the
+        #: slot version ``mask`` was made for.
+        self.lights: Any = (frozenset(), False)
+        self.slots = -1
 
-#: The half-size of the box an object with no bounds is taken to fill: large
-#: enough to cross every zone, so it is weighted per fragment.
-_UNBOUNDED = 1.0e7
+
+class _GroupBox:
+    """The world box round an instanced group's members, as bounds to classify."""
+
+    __slots__ = ('points',)
+
+    def __init__(self, low: np.ndarray, high: np.ndarray) -> None:
+        from OpenGLContext.scenegraph.zones import _corners
+        self.points = np.concatenate([_corners(low, high), np.ones((8, 1))], axis=1)
+
+    def getPoints(self) -> np.ndarray:
+        return self.points
 
 
 class ZonesMixin:
@@ -107,6 +137,20 @@ class ZonesMixin:
     #: The environment zones stacked for testing all at once, remade when the
     #: zones move.
     _environmentTable: Optional[zonelayers.ZoneTable] = None
+    #: Every zone an object's classification depends on, for its slack.
+    _slackTable: Optional[zonelayers.ZoneTable] = None
+    #: Bumped whenever a probe layer's answer may have changed: a capture or
+    #: an upload finishing, a capture starting or ending, a probe lost, the
+    #: environment mode changing. A draw re-reads its layers only then.
+    _probeVersion = 0
+    _probeSignature: Any = None
+    #: Instanced groups' boxes, by their members' paths, with the member
+    #: matrices each was made from.
+    _zoneGroups: Optional[Dict[Tuple[int, ...], Tuple[Any, Any, Any]]] = None
+    #: Bumped when lights are bound to different slots.
+    _slotVersion = 0
+    #: The camera's cell for the view being drawn.
+    _zoneCell: Tuple[int, ...] = ()
     _tableKeys: Tuple[int, ...] = ()
 
     # -- once a frame --------------------------------------------------------
@@ -134,9 +178,21 @@ class ZonesMixin:
         if keys != self._tableKeys:
             self._tableKeys = keys
             self._environmentTable = zonelayers.ZoneTable(self._environmentZones)
+            self._allTable = zonelayers.ZoneTable(placed)
+            self._slackTable = zonelayers.ZoneTable(
+                [z for z in placed if z.setting(ENVIRONMENT) is not None
+                 or z.setting(LIGHTS) is not None])
         self._lightZones = [z for z in placed if z.setting(LIGHTS) is not None]
         self._controlledLights = zonelayers.controlled_lights(placed)
         return placed
+
+    #: Every zone, stacked for weighing all at once at one point.
+    _allTable: Optional[zonelayers.ZoneTable] = None
+
+    @property
+    def zoneTable(self) -> Optional[zonelayers.ZoneTable]:
+        """This frame's zones as a :class:`~OpenGLContext.passes.zonelayers.ZoneTable`."""
+        return self._allTable
 
     @property
     def zones(self) -> List[PlacedZone]:
@@ -153,10 +209,19 @@ class ZonesMixin:
             self._zoneCamera = np.linalg.inv(np.asarray(matrix, 'd'))[3, :3]
         except np.linalg.LinAlgError:
             self._zoneCamera = None
+        self._zoneCell = self._cameraCell()
+        self._nearness = None
+        # Objects stream in and out of a large world, and what the dead ones
+        # were given is let go of wholesale; the living are classified again.
+        for kept in (self._zoneObjects, self._zoneGroups):
+            if kept is not None and len(kept) > self.KEPT_LIMIT:
+                kept.clear()
         keys = tuple(id(light) for light in self.boundLights)
         if keys != self._boundLightKeys:
+            # Which light is in which slot decides the mask and nothing else,
+            # so the objects keep their zones and only remake their masks.
             self._boundLightKeys = keys
-            self._zoneEpoch += 1
+            self._slotVersion += 1
         if shader is None:
             return
         if hasattr(shader, 'set_zones'):
@@ -169,11 +234,14 @@ class ZonesMixin:
                   ) -> Tuple[Optional[ZonePack], int]:
         """The environment layers and light mask the zones give one object.
 
-        Which zones reach the object is kept until the object or a zone moves
-        (or, for an object crossing more zones than the shader holds, until
-        the camera moves a cell). Which probe each of those zones reads is
-        asked again every draw, since a capture finishing changes it, and the
-        arrays are packed again only when that answer changes.
+        Which zones reach the object is kept until a zone moves or the object
+        moves further than its slack -- the distance its bounding sphere had
+        to the nearest zone edge when it was classified -- so a car driving
+        down the middle of a forest zone is classified again only as it nears
+        the next one. An object crossing more zones than the shader holds has
+        its nearest ones chosen again as the camera moves a cell. The arrays
+        are packed again only when the pass's probe version has moved on and
+        a probe the object reads has changed.
         """
         if not self._environmentZones and not self._controlledLights and not self._lightZones:
             return None, 0
@@ -181,78 +249,132 @@ class ZonesMixin:
         if objects is None:
             objects = self._zoneObjects = {}
         held = objects.get(id(path))
-        if held is None or held.matrix is not tmatrix or held.epoch != self._zoneEpoch:
-            held = self._classifyObject(tmatrix, bvolume)
-            objects[id(path)] = held
+        if not self._current(held, tmatrix):
+            self._classify([(path, tmatrix, bvolume)])
+            held = objects[id(path)]
+        if held.slots != self._slotVersion:
+            held.slots = self._slotVersion
+            held.mask = (zonelayers.light_mask(held.lights, self.boundLights,
+                                               self._controlledLights)
+                         if self._controlledLights or self._lightZones else 0)
         if held.reach is not None and held.reach.limited:
-            cell = self._cameraCell()
+            cell = self._zoneCell
             if cell != held.cell:
                 held.cell = cell
                 held.reach = zonelayers.chosen(held.kept, self._zoneCamera,
-                                               self._zoneWarn, self._environmentTable)
+                                               self._zoneWarn, self._environmentTable,
+                                               self._cameraNearness())
                 held.pack = None
         if held.reach is None:
             return None, held.mask
-        layers = zonelayers.probe_layers(held.reach, self.zoneProbeLayer)
-        if held.pack is None or layers != held.layers:
-            held.layers = layers
-            held.pack = zonelayers.pack_reach(held.reach, layers)
+        if held.pack is None or held.version != self._probeVersion:
+            layers = zonelayers.probe_layers(held.reach, self.zoneProbeLayer)
+            if held.pack is None or layers != held.layers:
+                held.layers = layers
+                held.pack = zonelayers.pack_reach(held.reach, layers)
+            held.version = self._probeVersion
         return held.pack, held.mask
+
+    def _current(self, held: Optional['_ObjectZones'], tmatrix: Any) -> bool:
+        """Whether ``held`` still answers for an object now placed by ``tmatrix``."""
+        if held is None or held.epoch != self._zoneEpoch:
+            return False
+        if held.matrix is tmatrix:
+            return True
+        centre = held.centre
+        if centre is None or held.slack <= 0.0:
+            return False
+        # The sphere is centred on the object's origin, so how far it moved is
+        # how far the origin did: three numbers, and no matrix product.
+        row = tmatrix[3]
+        dx, dy, dz = float(row[0]) - centre[0], float(row[1]) - centre[1], \
+            float(row[2]) - centre[2]
+        if dx * dx + dy * dy + dz * dz > held.slack * held.slack:
+            return False
+        held.matrix = tmatrix
+        return True
 
     def refreshZones(self, records: Sequence[Any]) -> None:
         """Classify, together, every record about to be drawn whose zones are stale.
 
-        A still object keeps what it was given, so what is left here is the
-        objects that moved since they were last drawn -- a car and the traffic
-        -- and they are classified against every zone in one pass
-        (:meth:`~OpenGLContext.passes.zonelayers.ZoneTable.classify_many`)
+        A still object keeps what it was given, and so does one that has not
+        moved past its slack, so what is left here is the objects that moved
+        near an edge -- and they are classified against every zone in one
+        pass (:meth:`~OpenGLContext.passes.zonelayers.ZoneTable.classify_many`)
         rather than a numpy call apiece. Called once for each draw list, before
         the draws ask for their zones one at a time.
         """
-        if not self._environmentZones or self._environmentTable is None:
+        if not self._environmentZones and not self._lightZones:
             return
         objects = self._zoneObjects
         if objects is None:
             objects = self._zoneObjects = {}
+        epoch = self._zoneEpoch
+        found = objects.get
+        current = self._current
         stale = []
         for record in records:
-            held = objects.get(id(record[4]))
-            if held is None or held.matrix is not record[2] or held.epoch != self._zoneEpoch:
-                stale.append(record)
-        if len(stale) < 2:
-            return
-        boxes = [self.worldBox(record[2], record[3]) for record in stale] \
-            if len(stale) < 4 else self._worldBoxes(stale)
+            held = found(id(record[4]))
+            if held is not None and held.matrix is record[2] and held.epoch == epoch:
+                continue                        # the common case, inline
+            if not current(held, record[2]):
+                stale.append((record[4], record[2], record[3]))
+        if stale:
+            self._classify(stale)
+
+    def _classify(self, items: Sequence[Tuple[Any, Any, Any]]) -> None:
+        """Classify ``(path, matrix, bounds)`` items against the zones, all at once."""
+        objects = self._zoneObjects
+        if objects is None:
+            objects = self._zoneObjects = {}
+        boxes = self._worldBoxes([(matrix, bounds) for _path, matrix, bounds in items])
         minimums = np.array([box[0] for box in boxes])
         maximums = np.array([box[1] for box in boxes])
         table = self._environmentTable
-        for record, reaching, low, high in zip(
-                stale, table.classify_many(minimums, maximums), minimums, maximums,
-                strict=True):
+        reached = (table.classify_many(minimums, maximums)
+                   if table is not None and self._environmentZones
+                   else [[] for _ in items])
+        spheres = [self._sphere(matrix, bounds) for _path, matrix, bounds in items]
+        slack = np.zeros(len(items))
+        bounded = [index for index, sphere in enumerate(spheres) if sphere is not None]
+        if bounded and self._slackTable is not None:
+            slack[bounded] = self._slackTable.sphere_slack(
+                [spheres[i][2] for i in bounded], [spheres[i][1] for i in bounded])
+        cell = self._zoneCell
+        lit = bool(self._controlledLights or self._lightZones)
+        for index, ((path, matrix, _bounds), reaching) in enumerate(zip(items, reached, strict=True)):
             kept = zonelayers.stacked(reaching)
-            found = zonelayers.chosen(kept, self._zoneCamera, self._zoneWarn, table)
-            mask = 0
-            if self._controlledLights or self._lightZones:
-                mask = zonelayers.lights_off(self._lightZones, low, high,
-                                             self.boundLights, self._controlledLights)
-            objects[id(record[4])] = _ObjectZones(
-                record[2], self._zoneEpoch, self._cameraCell(), kept, found, mask)
+            found = zonelayers.chosen(kept, self._zoneCamera, self._zoneWarn, table,
+                                      self._cameraNearness() if len(kept) > zonelayers.MAX_ZONE_LAYERS
+                                      else None)
+            held = _ObjectZones(matrix, self._zoneEpoch, cell, kept, found, 0)
+            if lit:
+                held.lights = zonelayers.light_decision(
+                    self._lightZones, minimums[index], maximums[index])
+                held.mask = zonelayers.light_mask(held.lights, self.boundLights,
+                                                  self._controlledLights)
+            held.slots = self._slotVersion
+            sphere = spheres[index]
+            if sphere is not None:
+                held.local, held.radius, held.centre = sphere
+                held.slack = float(slack[index])
+            objects[id(path)] = held
 
-    def _worldBoxes(self, records: Sequence[Any]) -> List[Tuple[np.ndarray, np.ndarray]]:
-        """:meth:`worldBox` for many records, the eight-cornered ones in one product."""
-        boxes: List[Any] = [None] * len(records)
+    def _worldBoxes(self, items: Sequence[Tuple[Any, Any]]) -> List[Tuple[np.ndarray, np.ndarray]]:
+        """:meth:`worldBox` for many ``(matrix, bounds)``, the eight-cornered in one product."""
+        boxes: List[Any] = [None] * len(items)
         corners, matrices, where = [], [], []
-        for index, record in enumerate(records):
+        for index, (matrix, bounds) in enumerate(items):
             try:
-                points = record[3].getPoints() if record[3] is not None else ()
+                points = bounds.getPoints() if bounds is not None else ()
             except Exception:
                 points = ()
             if points is not None and len(points) == 8 and np.shape(points)[-1] == 4:
                 corners.append(points)
-                matrices.append(record[2])
+                matrices.append(matrix)
                 where.append(index)
             else:
-                boxes[index] = self.worldBox(record[2], record[3])
+                boxes[index] = self.worldBox(matrix, bounds)
         if where:
             world = np.einsum('mci,mij->mcj', np.asarray(corners, dtype='d'),
                               np.asarray(matrices, dtype='d'))[..., :3]
@@ -261,25 +383,50 @@ class ZonesMixin:
                 boxes[index] = (lows[slot], highs[slot])
         return boxes
 
+    @staticmethod
+    def _sphere(matrix: Any, bounds: Any) -> Optional[Tuple[None, float, Tuple[float, float, float]]]:
+        """A sphere about the object's origin holding its bounds, however it turns.
+
+        Returned as ``(None, radius, centre)``: centred on the origin rather
+        than on the bounds, so telling whether the object has moved out of it
+        takes the origin alone (:meth:`_current`).
+        """
+        try:
+            points = bounds.getPoints() if bounds is not None else ()
+        except Exception:
+            return None
+        if points is None or not len(points):
+            return None
+        local = np.asarray(points, dtype='d')[:, :3]
+        m = np.asarray(matrix, dtype='d')
+        scale = float(np.linalg.norm(m[:3, :3], axis=1).max())
+        radius = float(np.linalg.norm(local, axis=1).max()) * scale
+        origin = m[3, :3]
+        return None, radius, (float(origin[0]), float(origin[1]), float(origin[2]))
+
     def _classifyObject(self, tmatrix: Any, bvolume: Any) -> '_ObjectZones':
-        minimum, maximum = self.worldBox(tmatrix, bvolume)
-        kept: List[Tuple[PlacedZone, bool]] = []
-        found = None
-        if self._environmentZones:
-            kept = zonelayers.classified(self._environmentZones, minimum, maximum,
-                                         table=self._environmentTable)
-            found = zonelayers.chosen(kept, self._zoneCamera, self._zoneWarn,
-                                      self._environmentTable)
-        mask = 0
-        if self._controlledLights or self._lightZones:
-            mask = zonelayers.lights_off(self._lightZones, minimum, maximum,
-                                         self.boundLights, self._controlledLights)
-        return _ObjectZones(tmatrix, self._zoneEpoch, self._cameraCell(), kept,
-                            found, mask)
+        """One object classified on its own, as :meth:`_classify` would."""
+        key = ('single', id(tmatrix))
+        self._classify([(key, tmatrix, bvolume)])
+        assert self._zoneObjects is not None
+        return self._zoneObjects.pop(id(key))
+
+    #: How many objects' zones are kept before the record is started afresh.
+    KEPT_LIMIT = 50000
 
     #: How far the camera moves, in metres, before an object crossing more
     #: zones than the shader holds has its nearest zones chosen again.
-    CAMERA_CELL = 8.0
+    CAMERA_CELL = 32.0
+
+    #: Every environment zone's distance from this view's camera, made the
+    #: first time an object crossing too many zones asks.
+    _nearness: Optional[Dict[int, float]] = None
+
+    def _cameraNearness(self) -> Optional[Dict[int, float]]:
+        if self._nearness is None and self._zoneCamera is not None \
+                and self._environmentTable is not None:
+            self._nearness = self._environmentTable.nearness(self._zoneCamera)
+        return self._nearness
 
     def _cameraCell(self) -> Tuple[int, ...]:
         camera = self._zoneCamera
@@ -292,8 +439,29 @@ class ZonesMixin:
         """Hand the program the zones reaching the object about to be drawn."""
         if not self._zones:
             return
-        pack, mask = self.zoneState(path, tmatrix, bvolume)
-        self._applyZoneState(shader, pack, mask, program)
+        objects = self._zoneObjects
+        held = objects.get(id(path)) if objects is not None else None
+        if (held is not None and held.matrix is tmatrix and held.epoch == self._zoneEpoch
+                and held.version == self._probeVersion and held.slots == self._slotVersion
+                and (held.pack is not None or held.reach is None)
+                and not (held.reach is not None and held.reach.limited
+                         and held.cell != self._zoneCell)):
+            # The common case -- an object that has not moved since its zones
+            # were packed -- in as few steps as it can be.
+            pack, mask = held.pack, held.mask
+        else:
+            pack, mask = self.zoneState(path, tmatrix, bvolume)
+        key = None if pack is None else pack.key
+        if key is not self._zoneApplied and key != self._zoneApplied:
+            setter = getattr(shader, 'set_zones', None)
+            if setter is not None:
+                setter(pack, program=program)
+            self._zoneApplied = key
+        if mask != self._lightsOffApplied:
+            setter = getattr(shader, 'set_lights_off', None)
+            if setter is not None:
+                setter(mask, program=program)
+            self._lightsOffApplied = mask
 
     def applyZonesToGroup(self, shader: Any, members: Sequence[Any],
                           program: Any = None) -> None:
@@ -311,21 +479,22 @@ class ZonesMixin:
             record = members[0]
             self.applyZones(shader, record[4], record[2], record[3], program)
             return
-        low = np.full(3, np.inf)
-        high = np.full(3, -np.inf)
-        for record in members:
-            minimum, maximum = self.worldBox(record[2], record[3])
-            low = np.minimum(low, minimum)
-            high = np.maximum(high, maximum)
-        pack = None
-        if self._environmentZones:
-            pack = zonelayers.environment_layers(
-                self._environmentZones, low, high, self.zoneProbeLayer,
-                camera=self._zoneCamera, table=self._environmentTable)
-        mask = 0
-        if self._controlledLights or self._lightZones:
-            mask = zonelayers.lights_off(self._lightZones, low, high,
-                                         self.boundLights, self._controlledLights)
+        groups = self._zoneGroups
+        if groups is None:
+            groups = self._zoneGroups = {}
+        key = tuple(id(record[4]) for record in members)
+        placed = tuple(id(record[2]) for record in members)
+        held = groups.get(key)
+        if held is None or held[0] != placed:
+            # A member moved, or the group is new: the box round all of them,
+            # as the bounds of one object placed where it already is.
+            boxes = self._worldBoxes([(record[2], record[3]) for record in members])
+            low = np.min([box[0] for box in boxes], axis=0)
+            high = np.max([box[1] for box in boxes], axis=0)
+            held = (placed, _GroupBox(low, high), np.identity(4))
+            groups[key] = held
+        _placed, box, where = held
+        pack, mask = self.zoneState(box, where, box)
         self._applyZoneState(shader, pack, mask, program)
 
     def _applyZoneState(self, shader: Any, pack: Optional[ZonePack], mask: int,
@@ -434,6 +603,7 @@ class ZonesMixin:
                     del self._imageLights[key]
                 elif probe.upload_light(light, layer):
                     schedule.finished(key)
+                    self._probeVersion += 1
         scene = self.sceneImageLight()
         mark = (id(scene), probe.lost, id(probe.prefilter))
         if scene is not None and mark != self._sceneLightMark:
@@ -457,6 +627,12 @@ class ZonesMixin:
     def renderZoneProbes(self, frames: Sequence[Any], lighting: Any) -> None:
         """Draw this frame's share of the zone captures, before any view is drawn."""
         self._zoneLighting = lighting
+        probe = getattr(self, '_ibl_probe', None)
+        signature = (None if lighting is None else lighting[0], id(probe),
+                     None if probe is None else (probe.arrayed, probe.ready))
+        if signature != self._probeSignature:
+            self._probeSignature = signature
+            self._probeVersion += 1
         schedule = self._zoneCaptures
         probe = getattr(self, '_ibl_probe', None)
         if probe is not None and schedule is None and self.sceneImageLight() is not None \
@@ -469,6 +645,7 @@ class ZonesMixin:
         if probe.lost != self._probeLost:
             self._probeLost = probe.lost
             schedule.lost()
+            self._probeVersion += 1
             self.__dict__.setdefault('_imageLights', {}).update(self._everyImageLight())
         self.uploadImageLights(probe)
         camera = self._frameCamera(frames)
@@ -489,6 +666,8 @@ class ZonesMixin:
             if probe.lost != self._probeLost:
                 self._probeLost = probe.lost
                 schedule.lost()
+                self._probeVersion += 1
+            self._probeVersion += 1
         faces = schedule.faces(key, self.zoneCaptureFaces())
         whole = self._drawCapture(zone, faces, frames, lighting)
         if whole is None:
@@ -498,6 +677,7 @@ class ZonesMixin:
             target = self._captureTarget
             if target is not None and target.cube is not None and probe.convolve(target.cube, layer):
                 schedule.finished(key)
+                self._probeVersion += 1
                 log.info('zone %r captured into probe layer %d (capture %d)',
                          getattr(zone.zone, 'DEF', None) or key, layer,
                          schedule.captured(key))
@@ -564,6 +744,7 @@ class ZonesMixin:
         lookups = getattr(self, '_reflection_lookups', None)
         self._reflection_lookups = {}
         self._zoneCapturing = zone.zone
+        self._probeVersion += 1
         target.begin()
         try:
             for face in faces:
@@ -595,6 +776,7 @@ class ZonesMixin:
             shader.use(lit=True)
             shader.set_hdr_output(bool(getattr(self, '_bloom_active', False)))
             self._zoneCapturing = None
+            self._probeVersion += 1
             self._reflection_lookups = lookups if lookups is not None else {}
             self.clearPlanarReflection()
             if active is not None:
