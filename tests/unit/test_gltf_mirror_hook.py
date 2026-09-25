@@ -68,10 +68,11 @@ def test_the_shorthand_is_a_mirror_with_every_default():
 def test_the_parameters_say_what_the_mirror_is_worth():
     material = _material_of(_load(SceneNode(mesh=_quad({
         'kind': 'mirror', 'scale': 0.25, 'interval': 2, 'priority': 4.0,
-        'distortion': 0.05}))))
+        'distortion': 0.05, 'reflectance': 0.9}))))
     reflector = material.reflector
     assert (reflector.scale, reflector.interval, reflector.priority,
-            reflector.distortion) == pytest.approx((0.25, 2, 4.0, 0.05))
+            reflector.distortion, reflector.reflectance) == pytest.approx(
+                (0.25, 2, 4.0, 0.05, 0.9))
 
 
 def test_the_material_the_file_carries_is_kept():
@@ -121,11 +122,12 @@ def test_an_object_mirror_takes_the_parameters_too():
 
 def test_a_material_reflector_round_trips_through_the_writer():
     mesh = _quad()
-    mesh.material.reflector = PlanarReflector(scale=0.75, interval=5, priority=2.0)
+    mesh.material.reflector = PlanarReflector(scale=0.75, interval=5, priority=2.0,
+                                              reflectance=0.85)
     material = _material_of(_load(SceneNode(mesh=mesh)))
     reflector = material.reflector
-    assert (reflector.scale, reflector.interval, reflector.priority) == \
-        pytest.approx((0.75, 5, 2.0))
+    assert (reflector.scale, reflector.interval, reflector.priority,
+            reflector.reflectance) == pytest.approx((0.75, 5, 2.0, 0.85))
 
 
 def test_a_disabled_reflector_is_not_written():

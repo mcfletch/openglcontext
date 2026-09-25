@@ -51,6 +51,12 @@ The node's fields are read every frame, so a change takes effect on the next.
      - 0.0
      - How far a unit of the surface normal's tilt from the plane pushes the
        lookup, in view widths: the normal map breaking the reflection up.
+   * - ``reflectance``
+     - 0.97
+     - The share of the light the mirror reflects. A silvered mirror loses a
+       few percent, which is what tells it from an opening onto the same room.
+       Water carries 1, since its Fresnel term already decides how much it
+       reflects.
    * - ``enabled``
      - True
      - False leaves the node in place and the surface reflecting the probe.
@@ -113,7 +119,8 @@ things:
   materials are set aside.
 
 The parameters are the ``PlanarReflector`` fields above, all optional:
-``scale``, ``interval``, ``priority``, ``distortion``, and ``replace`` where
+``scale``, ``interval``, ``priority``, ``distortion``, ``reflectance``, and
+``replace`` where
 the place's own default -- off on a material, on on an object -- is not the
 one wanted.
 
@@ -202,9 +209,9 @@ them:
    vegetation among them -- is drawn once for all the mirror views that see
    it, through the ``vertex`` or ``geometry`` strategy. What a shared draw
    refuses, such as particles and text, is drawn per mirror view.
-5. A mirror seen in a mirror view shows the reflection it had the frame
-   before, read from a copy of the atlas taken before the frame's mirror views
-   are drawn.
+5. A mirror seen in a mirror view shows the reflection drawn for that view
+   the frame before, read from a copy of the atlas taken before the frame's
+   mirror views are drawn.
 6. Each mirror, drawn in each view, projects its own world position through
    the matrix its tile was drawn with to find its texel.
 
@@ -216,13 +223,27 @@ camera that has moved far enough for that to exceed a texel redraws the tile.
 A reflection does not contain transparent shapes or the sky: where the mirror
 view drew nothing, the surface reflects the probe.
 
-A mirror in another mirror's view shows its own reflection as the main view
-saw it a frame ago, not as the first mirror sees it; the difference is a change
-of viewpoint across the second mirror, which reads as a reflection of the room
-where the bare metal would read as a smear. A mirror in view that has no
-reflection yet is left out of the other's view, and that view is drawn again on
-the next frame, once it has one. A mirror no view shows has no reflection of
-its own, and reflects the probe wherever a mirror view sees it.
+Mirrors seen in mirrors
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Every mirror in view has a view of its own, the camera mirrored in it, and a
+mirror inside that view is planned from that camera: its own crop, its own
+tile, its own place in the schedule, drawn whether or not any other view sees
+that mirror. Each chain of mirrors -- camera, first mirror, second mirror --
+has its own camera and frustum. The chains are followed ``reflectionBounces``
+reflections deep, 2 by default: the mirrors in view, and the mirrors seen in
+them. Past that, a mirror reflects the probe. Finding the mirrors inside a
+mirror's view tests the scene's mirrors, and nothing else, against that view's
+frustum, so a chain costs a few frustum tests per mirror before any of it is
+drawn. A camera reflected twice has its winding the right way round again,
+which the pass takes into account.
+
+A mirror whose reflection for a view is being drawn this frame, and was not
+before, is left out of that view, and the view is drawn again on the next
+frame. One whose reflection is not yet scheduled shows the probe meanwhile, and
+the view showing it is drawn again once the reflection is. A reflection inside
+a reflection weighs by its size in its parent's tile, so under a short budget
+it waits behind the mirrors in view.
 
 Settling and still scenes
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -263,6 +284,13 @@ The budget is for a whole frame, across every view.
      - The most mirror views drawn in a frame. 0 takes the strategy's own:
        16 under ``vertex`` or ``geometry``, 2 under ``sequential``, where each
        costs a draw of the scene.
+   * - ``reflectionBounces``
+     - ``OPENGLCONTEXT_REFLECTION_BOUNCES``
+     - 2
+     - How many reflections deep a chain of mirrors is followed. 1 is the
+       mirrors in view only, and a mirror seen in one reflects the probe; each
+       step past it multiplies the mirror views a frame may ask for by the
+       mirrors each can see.
    * - ``reflectionSeparateViews``
      - ``OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS``
      - 4
@@ -279,7 +307,7 @@ The budget is for a whole frame, across every view.
      - A GPU time the reflections aim to stay under. The texels drawn are
        scaled by the measured time, between a quarter and all of the budget.
 
-The first four are counts and sizes, so a capture or a visual baseline draws
+The first five are counts and sizes, so a capture or a visual baseline draws
 the same reflections every run. The time target adapts to the machine, which
 is why it is off unless set.
 
@@ -344,6 +372,10 @@ Demos
      - The mirror views a frame may draw: the strategy's own, then 1, 2 and 4.
        With 1, the mirrors take turns and the stale ones are read by
        projection.
+   * - ``m``
+     - How deep mirrors seen in mirrors are followed: ``reflectionBounces``
+       of 2, 3 and 1. At 1 the far mirror, seen in the floor, reflects the
+       probe.
    * - ``i``
      - The corridor's shared ``interval``: 3, 1 and 6 frames.
    * - ``o``
@@ -361,8 +393,12 @@ Limits
 
 - Flat surfaces only. A curved mirror, a chrome sphere or a car body reflects
   the probe.
-- A mirror seen in a mirror shows its reflection a frame late, and from the
-  main view's side of it rather than the first mirror's.
+- A mirror seen in a mirror shows its reflection a frame late. Chains of
+  mirrors are followed ``reflectionBounces`` deep; past that a mirror
+  reflects the probe.
+- A view two reflections deep is clipped by the near plane of the last mirror
+  only: what stands behind the first mirror, and inside the second mirror's
+  view, is drawn in it.
 - A moving object's reflection lags by its tile's age, up to its ``interval``
   frames. ``interval=1`` on a reflector where that shows.
 - Transparent shapes are not drawn into any reflection.

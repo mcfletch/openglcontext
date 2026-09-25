@@ -512,8 +512,11 @@ the sky. The change is worked out per fragment, and lightmaps and light grids
 are not scaled by it. See :doc:`zones`.
 
 In ``auto`` mode, environment lighting adapts to the frame rate. When the
-frame rate falls below 45 frames a second it steps down to ``analytic``, then
-to ``off``; after a sustained period above 75 it steps back up. Choosing a
+frame rate stays below 45 frames a second for 30 frames it steps down to
+``analytic``, never further; after 45 frames above 75, and at least 60 frames
+after stepping down, it steps back up. A few slow frames, such as those in
+which programs compile, change nothing: each step changes every glossy surface
+at once. Choosing a
 mode explicitly turns adaptation off. A run started with ``--capture`` also
 keeps the mode it started with, so the captured image does not depend on how
 far the mode had recovered when the frame was taken. Shadow cascades are fixed

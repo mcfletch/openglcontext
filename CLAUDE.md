@@ -364,7 +364,8 @@ Passes read through `OpenGLContext.renderoptions`, never the environment
 directly. The fields are `shadows`, `shadowsSoft`, `shadowCascades`,
 `maximumLights`, `bloom`, `ibl`, `iblIntensity`, `transmission`,
 `planarReflections` (with the reflection budget: `reflectionViews`,
-`reflectionSeparateViews`, `reflectionAtlas`, `reflectionMilliseconds`),
+`reflectionBounces`, `reflectionSeparateViews`, `reflectionAtlas`,
+`reflectionMilliseconds`),
 `instancing`, `tessellationLOD`, `vsync` and `uiScale`; see
 [docs/overlayui.rst](docs/overlayui.rst).
 

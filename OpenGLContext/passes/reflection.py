@@ -44,7 +44,8 @@ log = logging.getLogger(__name__)
 __all__ = [
     'REFLECTION_UNIT', 'REFLECTION_UNITS_NEEDED', 'FLATNESS', 'GUARD',
     'ROUGHEST', 'WATER_DISTORTION', 'WATER_REFLECTOR', 'Plane', 'MeshPlane',
-    'MirrorView', 'shape_reflector', 'reflector_for', 'surface_roughness', 'is_reflector', 'is_water', 'fit_plane',
+    'MirrorView', 'shape_reflector', 'reflector_for', 'surface_roughness', 'is_reflector',
+    'is_water', 'mirror_generation', 'fit_plane',
     'surface_plane', 'local_plane', 'place_plane', 'world_corners',
     'box_corners', 'guarded', 'contains', 'tile_bounds', 'mirror_matrix', 'eye_plane',
     'oblique_projection', 'screen_rect', 'crop_matrix', 'plan_mirror',
@@ -136,6 +137,40 @@ def surface_roughness(material: Any) -> float:
 def is_reflector(record: Any) -> bool:
     """Whether a draw record's surface mirrors the scene."""
     return reflector_for(record) is not None
+
+
+_mirror_changes = 0
+
+
+def mirror_generation() -> int:
+    """A count that moves whenever a field deciding which shapes are mirrors is set.
+
+    Those are a shape's ``appearance`` and ``geometry``, an appearance's
+    ``material``, a material's ``reflector`` and a reflector's ``enabled``. A
+    pass that remembers which of the scene's shapes are mirrors keeps the
+    answer while this and its set of paths stay as they were.
+    """
+    return _mirror_changes
+
+
+def _mirrors_changed(*_args: Any, **_named: Any) -> None:
+    global _mirror_changes
+    _mirror_changes += 1
+
+
+def _watch_mirror_fields() -> None:
+    from pydispatch import dispatcher
+    from OpenGLContext.scenegraph.appearance import Appearance
+    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+    from OpenGLContext.scenegraph.shape import Shape
+    for owner, name in ((Shape, 'appearance'), (Shape, 'geometry'),
+                        (Appearance, 'material'), (PBRMaterial, 'reflector'),
+                        (PlanarReflector, 'enabled')):
+        dispatcher.connect(_mirrors_changed, signal=('set', getattr(owner, name)),
+                           weak=False)
+
+
+_watch_mirror_fields()
 
 
 # --- the plane of a mesh ------------------------------------------------------

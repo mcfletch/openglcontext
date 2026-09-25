@@ -135,6 +135,12 @@ class OGLCHookSettings(PropertyGroup):
                     'widths per unit of tilt',
         default=tag.DEFAULTS['distortion'], min=0.0, soft_max=1.0,
     )
+    reflectance: FloatProperty(
+        name='Reflectance',
+        description='The share of the light the mirror reflects. Below 1 is '
+                    'what tells a mirror from an opening onto the same room',
+        default=tag.DEFAULTS['reflectance'], min=0.0, max=1.0,
+    )
     parameters: StringProperty(
         name='Parameters',
         description='A JSON object of parameters, merged over the fields '

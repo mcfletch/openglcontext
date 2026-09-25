@@ -159,6 +159,11 @@ Lighting and shadows
      - 0
      - The most mirror views drawn in a frame; 0 is the multi-view strategy's
        own, 16 or 2.
+   * - ``OPENGLCONTEXT_REFLECTION_BOUNCES``
+     - integer
+     - 2
+     - How many reflections deep a chain of mirrors is followed; 1 is the
+       mirrors in view only.
    * - ``OPENGLCONTEXT_REFLECTION_SEPARATE_VIEWS``
      - integer
      - 4

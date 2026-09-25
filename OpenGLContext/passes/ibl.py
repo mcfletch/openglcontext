@@ -946,13 +946,17 @@ class IBLController(object):
     """Resolve the effective IBL mode per frame with fps-adaptive degradation.
 
     The base mode comes from :func:`resolve_ibl_mode`. While in ``full`` the
-    controller drops to ``analytic`` (then ``off``) when the recent frame rate
-    sags below a floor, and steps back up after sustained headroom -- the same
-    hysteresis the shadow cascades use, so IBL never pins a scene below 60 fps.
+    controller drops to ``analytic`` when the recent frame rate stays below a
+    floor for ``DOWN_FRAMES`` frames, and steps back up after ``UP_FRAMES`` of
+    headroom -- the same hysteresis the shadow cascades use, so IBL never pins
+    a scene below 60 fps. A switch changes every glossy surface at once, so a
+    few slow frames -- programs compiling, a mirror's first view -- do not make
+    one.
     """
 
     FPS_DOWN = 45.0
     FPS_UP = 75.0
+    DOWN_FRAMES = 30
     UP_FRAMES = 45
     COOLDOWN = 60
 
@@ -963,6 +967,7 @@ class IBLController(object):
         self.adaptive = adaptive
         self._effective = self.base_mode
         self._up_streak = 0
+        self._down_streak = 0
         self._cooldown = 0
 
     def _cap_index(self) -> int:
@@ -982,15 +987,20 @@ class IBLController(object):
         if self._cooldown > 0:
             self._cooldown -= 1
         if fps and fps < self.FPS_DOWN and cur > floor:
-            cur -= 1
             self._up_streak = 0
-            self._cooldown = self.COOLDOWN
+            self._down_streak += 1
+            if self._down_streak >= self.DOWN_FRAMES:
+                cur -= 1
+                self._down_streak = 0
+                self._cooldown = self.COOLDOWN
         elif fps > self.FPS_UP and cur < cap and self._cooldown == 0:
+            self._down_streak = 0
             self._up_streak += 1
             if self._up_streak >= self.UP_FRAMES:
                 cur += 1
                 self._up_streak = 0
         else:
             self._up_streak = 0
+            self._down_streak = 0
         self._effective = self._ORDER[cur]
         return self._effective

@@ -488,3 +488,36 @@ never reflected terrain's ground.
 Still open: the visual-regression baselines, checked by preflight on the main
 checkout once this is merged.
 
+
+## After use in oglc-mirrors (2026-09-24)
+
+Found by recording every frame of the demo with pyopengl-video and logging the
+plan beside each frame:
+
+- Flashing between mirror and matte at a still camera: the packer's shelves
+  took only tiles of their own height class, so a tile that shrank a few texels
+  into the next class found no room beside the floor's tall tile, and a drawn
+  tile then evicted the kept ones, which evicted it the frame after. The packer
+  now puts a shorter tile beside taller ones, and tiles that do not all fit are
+  placed by screen area times priority, so the same mirrors keep their tiles.
+- Stutter while turning: a shared draw's programs were compiled for each new
+  count of views, about 120 ms each. They are compiled for a power of two of
+  views, and the mirror views ask for their whole budget once.
+- A mirror seen in a mirror read the reflection planned for the main view: the
+  probe when no view saw it, and a tile cropped to the main view's rectangle,
+  whose edge showed as the camera turned. Every mirror in view now has a
+  `ReflectedView` of its own, the mirrors inside it are found by testing only
+  the scene's mirrors against its frustum, and each chain of mirrors is planned
+  from its own camera, `reflectionBounces` deep (2 by default). A nested mirror
+  is planned from its parent's projection before the oblique near plane: two
+  oblique steps left a far plane that clipped everything the second mirror
+  showed. The floor-and-wall tests had asserted the old, wrong image, and now
+  stand the box where the double reflection sees it.
+- A view drawn without a nested reflection that is not yet scheduled shows the
+  probe for it and is drawn again once it arrives (`drawn_without`), in place
+  of waiting for it: under a short budget the wait never ended.
+- `PlanarReflector.reflectance` (0.97; water 1.0) scales what a mirror
+  reflects, which tells a mirror from an opening onto the same room.
+
+Still open: the fps-adaptive IBL drops to `analytic` for a hundred frames when
+a heavy frame dips under 45 fps, which changes every glossy surface at once.

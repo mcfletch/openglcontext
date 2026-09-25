@@ -86,9 +86,14 @@ class _FlatEffectsMixin:
 
         def renderShared(self, frames: Any, id_map: Optional[Dict],
                          lighting: Any = None, mirrored: bool = False,
-                         capacity: int = 0) -> Optional[set]: ...
+                         capacity: int = 0, reflection: bool = False) -> Optional[set]: ...
+
+        def _frustumSurvivors(self, matrices: Any, points: Any, bounded: Any,
+                              drawing: Any) -> Any: ...
 
         multiviewStrategy: Optional[str]
+        _frameGather: Any
+        _pathGeneration: int
         activeFrame: Any
         view: Any
         stats: Any
@@ -113,6 +118,8 @@ class _FlatEffectsMixin:
     _previous_lookups: Dict[Any, "Lookup"] = {}
     #: The mirror views this frame drew with a mirror left out of them.
     _incompleteMirrors: set = set()
+    #: :meth:`sceneMirrors`' answer, and what it was worked out for.
+    _sceneMirrors: Optional[Tuple[Any, Any]] = None
     #: The lookup the program was last given, so a run of shapes that are
     #: not mirrors sets nothing.
     _reflection_applied: Any = None
@@ -334,8 +341,15 @@ class _FlatEffectsMixin:
         if target > 0.0 and timer is not None and timer.milliseconds is not None:
             planner.schedule.measured(timer.milliseconds, target)
         size = self.reflectionAtlasSize()
+        bounces = int(renderoptions.number(
+            self, 'reflectionBounces', renderoptions.env_number_once(
+                'OPENGLCONTEXT_REFLECTION_BOUNCES', 2, integer=True)))
         plan = planner.plan(frames, size, self.reflectionBudget,
-                            separate=self._separateShapes)
+                            separate=self._separateShapes, inside=self.mirrorsIn,
+                            bounces=bounces)
+        if self.activeFrame is not None:
+            # Looking for mirrors in the mirrors' views looked through them.
+            self.applyViewFrame(self.activeFrame, gl=False)
         self._reflection_lookups = plan.lookups
         self._incompleteMirrors = set()
         if plan.unfinished:
@@ -395,51 +409,116 @@ class _FlatEffectsMixin:
         return any(not record[0][0] and not is_reflector(record)
                    and not self.sharesDraw(record) for record in frame.toRender)
 
-    def mirrorFrames(self, plan: Any, gathered: Any) -> List[Any]:
-        """A :class:`~OpenGLContext.multiview.strategy.ViewFrame` per mirror view.
+    def sceneMirrors(self) -> Any:
+        """Indices into this frame's gather of the shapes that are mirrors.
 
-        Each is the mirror's camera, drawing into its tile, with what that
-        camera's frustum keeps of the frame's walk: opaque, and large enough
-        to cover two texels of the tile. A mirror in it shows the reflection
-        it had the frame before. One in view that had none yet is left out,
-        and the view noted in :attr:`_incompleteMirrors` to be drawn again once
-        it has; one no view shows has no reflection of its own and reflects
-        the environment probe.
+        Kept while the scene's paths and every field deciding which shapes are
+        mirrors stay as they were
+        (:func:`~OpenGLContext.passes.reflection.mirror_generation`).
+        """
+        from OpenGLContext.passes.reflection import mirror_generation, shape_reflector
+        gathered = self._frameGather
+        key = (self._pathGeneration, mirror_generation(), len(gathered.nodes))
+        known = self._sceneMirrors
+        if known is None or known[0] != key:
+            known = self._sceneMirrors = (key, np.array(
+                [index for index, node in enumerate(gathered.nodes)
+                 if shape_reflector(node) is not None], dtype=int))
+        return known[1]
+
+    def mirrorsIn(self, frame: Any) -> List[Any]:
+        """The scene's mirrors inside a mirror view's frustum, as draw records.
+
+        Only the mirrors are tested, against the frustum of ``frame``'s own
+        camera, so a chain of mirrors costs a test of the few mirrors a scene
+        has at each step rather than a cull of the whole scene.
         """
         from OpenGLContext import frustum
+        indices = self.sceneMirrors()
+        if not len(indices):
+            return []
+        gathered = self._frameGather
+        if frame.frustum is None:
+            frame.frustum = frustum.Frustum.fromViewingMatrix(frame.modelproj, normalize=1)
+        current, self.frustum = self.frustum, frame.frustum
+        try:
+            keep = indices[self._frustumSurvivors(
+                gathered.matrices[indices], gathered.points[indices],
+                np.asarray(gathered.bounded)[indices],
+                np.asarray(gathered.drawing)[indices])]
+        finally:
+            self.frustum = current
+        modelview = np.asarray(frame.modelView, 'f')
+        return [(gathered.nodes[index].sortKey(self, gathered.own[index]),
+                 gathered.matrices[index] @ modelview, gathered.own[index],
+                 gathered.volumes[index], gathered.paths[index], gathered.nodes[index])
+                for index in keep]
+
+    def mirrorContents(self, frame: Any, texels: float = 0.0) -> List[Any]:
+        """What a mirror view's ``frame`` draws, of the frame's walk of the scene.
+
+        What its camera's frustum keeps, opaque, and large enough to cover two
+        texels of its tile. ``texels`` is the tile's texels per radian, worked
+        out from the frame's rectangle and projection where not given. Sets
+        the frame's frustum where it has none, and the placements it keeps of
+        each instanced set.
+        """
+        from OpenGLContext import frustum
+        from OpenGLContext.passes.reflection import fov, too_small
+        if frame.frustum is None:
+            frame.frustum = frustum.Frustum.fromViewingMatrix(frame.modelproj, normalize=1)
+        if texels <= 0.0:
+            texels = frame.rect[3] / max(fov(frame.projection), 1e-6)
+        self.applyViewFrame(frame, gl=False)
+        eye = np.linalg.inv(np.asarray(frame.modelView, 'd'))[3, :3]
+        records = [record for record in self.renderSet(frame.modelView, self._frameGather)
+                   if not record[0][0] and not too_small(record, eye, texels)]
+        frame.visiblePlacements = self.visiblePlacements or {}
+        return records
+
+    def mirrorFrames(self, plan: Any) -> List[Any]:
+        """A :class:`~OpenGLContext.multiview.strategy.ViewFrame` per mirror view.
+
+        Each is the mirror's camera, drawing into its tile as the draw's
+        :class:`~OpenGLContext.passes.reflectionplanner.ReflectedView`, with
+        :meth:`mirrorContents` to draw. A mirror in it shows the reflection
+        drawn for that view the frame before. One whose reflection is being
+        drawn this frame and was not before is left out, and the view noted
+        in :attr:`_incompleteMirrors` to be drawn again next frame; one with
+        none drawn yet reflects the environment probe, and the planner is told
+        to draw the view again once it has one.
+        """
         from OpenGLContext.multiview.strategy import ViewFrame
-        from OpenGLContext.passes.reflection import fov, is_reflector, too_small
+        from OpenGLContext.passes.reflection import fov, is_reflector
         mirrors = []
         self._incompleteMirrors = set()
         earlier = self._previous_lookups
-        coming = {candidate.key for candidate in plan.candidates}
+        drawing = {draw.key for draw in plan.draws}
         for draw in plan.draws:
             mirror = draw.mirror
-            modelproj = mirror.modelproj
             frame = ViewFrame(
-                draw.frame.view, draw.frame.camera, draw.tile.rect,
-                mirror.modelView, mirror.projection, modelproj,
-                frustum.Frustum.fromViewingMatrix(modelproj, normalize=1),
+                draw.view, draw.frame.camera, draw.tile.rect,
+                mirror.modelView, mirror.projection, mirror.modelproj, None,
                 fitted=False)
-            self.applyViewFrame(frame, gl=False)
             texels = draw.tile.height / max(
                 (mirror.crop[3] - mirror.crop[1]) / 2.0 * fov(draw.frame.projection),
                 1e-6)
-            eye = np.linalg.inv(np.asarray(mirror.modelView, 'd'))[3, :3]
             kept = []
-            for record in self.renderSet(mirror.modelView, gathered):
-                if record[0][0] or too_small(record, eye, texels):
-                    continue
+            missing = set()
+            for record in self.mirrorContents(frame, texels):
                 if is_reflector(record):
                     if record[4] is draw.record[4]:
                         continue
                     key = (id(frame.view), id(record[4]))
-                    if key not in earlier and key in coming:
-                        self._incompleteMirrors.add(draw.key)
-                        continue
+                    if key not in earlier:
+                        if key in drawing:
+                            self._incompleteMirrors.add(draw.key)
+                            continue
+                        missing.add(key)
                 kept.append(record)
+            if missing and self._reflection_planner is not None:
+                self._reflection_planner.drawn_without(draw.key, missing)
             frame.toRender = kept
-            frame.visiblePlacements = self.visiblePlacements or {}
             mirrors.append(frame)
         return mirrors
 
@@ -455,7 +534,7 @@ class _FlatEffectsMixin:
         from OpenGLContext.passes.reflection import is_reflector
         shader = self.shader_program
         active = self.activeFrame
-        mirrors = self.mirrorFrames(plan, gathered)
+        mirrors = self.mirrorFrames(plan)
         # A mirror seen in a mirror view reads the reflection it had the frame
         # before, from a copy: the atlas itself is being drawn into.
         bounce = any(is_reflector(record) for frame in mirrors
@@ -477,16 +556,21 @@ class _FlatEffectsMixin:
                 # One set of programs for every count of mirror views the
                 # budget allows, compiled the first frame there are mirrors.
                 capacity = min(limit, max(1, self.reflectionBudget().views))
-                for start in range(0, len(mirrors), limit):
-                    chunk = mirrors[start:start + limit]
-                    found = self.renderShared(chunk, None, lighting, mirrored=True,
-                                              capacity=capacity)
-                    if found is None:
-                        break
-                    shared |= found
+                # A camera reflected an even number of times has its winding
+                # the right way round again, so those views draw apart.
+                for odd in (True, False):
+                    views = [frame for frame in mirrors if _turned(frame) == odd]
+                    for start in range(0, len(views), limit):
+                        found = self.renderShared(views[start:start + limit], None,
+                                                  lighting, mirrored=odd,
+                                                  capacity=capacity, reflection=True)
+                        if found is None:
+                            break
+                        shared |= {(id(frame), path) for frame in views[start:start + limit]
+                                   for path in found}
             for frame in mirrors:
                 records = [record for record in frame.toRender
-                           if id(record[4]) not in shared]
+                           if (id(frame), id(record[4])) not in shared]
                 if not records:
                     continue
                 self.applyViewFrame(frame, gl=False)
@@ -500,7 +584,7 @@ class _FlatEffectsMixin:
                 # A mirrored camera turns every triangle's winding over. A
                 # mesh follows its modelview's determinant; everything else
                 # follows this.
-                glFrontFace(GL_CW)
+                glFrontFace(GL_CW if _turned(frame) else GL_CCW)
                 PBRMesh.reset_draw_state(self)
                 self.shaderRenderOpaque(records, None)
                 glFrontFace(GL_CCW)
@@ -776,3 +860,8 @@ class _FlatEffectsMixin:
         except Exception:
             pass
         self._bloom_active = False
+
+
+def _turned(frame: Any) -> bool:
+    """Whether a mirror view's camera has been reflected an odd number of times."""
+    return int(getattr(frame.view, 'depth', 1)) % 2 == 1

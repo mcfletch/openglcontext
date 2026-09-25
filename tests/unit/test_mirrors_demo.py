@@ -7,7 +7,7 @@ real.
 import numpy as np
 import pytest
 
-from OpenGLContext.bin.mirrors_demo import BUDGETS, INTERVALS, MirrorHall
+from OpenGLContext.bin.mirrors_demo import BOUNCES, BUDGETS, INTERVALS, MirrorHall
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.passes import reflection
 from OpenGLContext.scenegraph.shape import Shape
@@ -76,6 +76,13 @@ def test_b_steps_through_the_budgets():
     seen = [hall.press('b', definition) and definition.reflectionViews
             for _ in BUDGETS]
     assert seen == list(BUDGETS[1:]) + [BUDGETS[0]]
+
+
+def test_m_steps_through_the_bounces():
+    hall, definition = MirrorHall(), ContextDefinition(reflectionBounces=2)
+    seen = [hall.press('m', definition) and definition.reflectionBounces
+            for _ in BOUNCES]
+    assert seen == list(BOUNCES[1:]) + [BOUNCES[0]]
 
 
 def test_i_steps_the_corridor_through_its_intervals():

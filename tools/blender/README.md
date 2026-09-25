@@ -43,7 +43,7 @@ line under the fields is what the file will carry:
   ```
 
 - `mirror`, on a material or an object - resolution, redraw interval,
-  priority and distortion, each written only where it differs from the
+  priority, distortion and reflectance, each written only where it differs from the
   engine's default. On a material the material shades the reflection; on an
   object the object shows only its reflection. The mesh must be flat, and it
   reflects towards the side its faces point:

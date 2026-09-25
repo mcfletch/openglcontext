@@ -37,8 +37,8 @@ def _mirror(x=0.0, z=-4.0, size=6.0, reflector=None, y=0.0, **material):
             **settings)))])
 
 
-def _box(x, z, colour, size=3.0):
-    return basenodes.Transform(translation=(x, 0.0, z), children=[basenodes.Shape(
+def _box(x, z, colour, size=3.0, y=0.0):
+    return basenodes.Transform(translation=(x, y, z), children=[basenodes.Shape(
         geometry=basenodes.Box(size=(size, size, size)),
         appearance=basenodes.Appearance(material=basenodes.Material(
             diffuseColor=colour, emissiveColor=colour)))])
@@ -332,18 +332,24 @@ def test_a_still_scene_asks_for_frames_until_its_mirrors_settle(render_scene, en
 
 
 
+def _floor_and_wall():
+    return [basenodes.Viewpoint(position=(0.0, 1.0, 6.0), orientation=(1, 0, 0, -0.2)),
+            basenodes.NavigationInfo(headlight=False),
+            basenodes.DirectionalLight(direction=(0.0, -1.0, 0.0)),
+            _box(0.0, 9.0, (1.0, 0.0, 0.0), size=4.0, y=6.5),
+            _mirror(y=1.5, size=3.0),
+            _floor(baseColor=(0.9, 0.9, 0.9), metallic=1.0, roughness=0.02)]
+
+
 def test_a_mirror_seen_in_a_mirror_shows_its_own_reflection(render_scene, env):
     """The floor reflects the wall mirror, and the wall mirror reflects the box.
 
     The box stands behind the camera, so the only way red reaches the floor is
-    through the wall mirror's reflection, seen in the floor.
+    through the wall mirror's reflection, seen in the floor. It stands high,
+    where the wall mirror seen from under the floor looks: the camera
+    reflected in the floor and then in the wall looks up through the wall.
     """
-    scene = [basenodes.Viewpoint(position=(0.0, 1.0, 6.0), orientation=(1, 0, 0, -0.2)),
-             basenodes.NavigationInfo(headlight=False),
-             basenodes.DirectionalLight(direction=(0.0, -1.0, 0.0)),
-             _box(0.0, 9.0, (1.0, 0.0, 0.0)),
-             _mirror(y=1.5, size=3.0),
-             _floor(baseColor=(0.9, 0.9, 0.9), metallic=1.0, roughness=0.02)]
+    scene = _floor_and_wall()
     frame = frames_of(render_scene, scene, frames=6, size=SIZE)[-1].astype(int)
     height = frame.shape[0]
     floor = frame[int(height * 0.7):]
@@ -354,12 +360,7 @@ def test_a_mirror_seen_in_a_mirror_shows_its_own_reflection(render_scene, env):
 def test_a_still_scene_settles_with_each_mirror_in_the_other(render_scene, env):
     """Drawn only when asked, a floor reflecting a wall mirror ends up showing
     what the wall mirror shows."""
-    scene = [basenodes.Viewpoint(position=(0.0, 1.0, 6.0), orientation=(1, 0, 0, -0.2)),
-             basenodes.NavigationInfo(headlight=False),
-             basenodes.DirectionalLight(direction=(0.0, -1.0, 0.0)),
-             _box(0.0, 9.0, (1.0, 0.0, 0.0)),
-             _mirror(y=1.5, size=3.0),
-             _floor(baseColor=(0.9, 0.9, 0.9), metallic=1.0, roughness=0.02)]
+    scene = _floor_and_wall()
     frames = []
     from OpenGLContext import glfwcontext
     from OpenGLContext.capture import read_back_buffer
@@ -377,3 +378,79 @@ def test_a_still_scene_settles_with_each_mirror_in_the_other(render_scene, env):
     floor = frames[-1][int(frames[-1].shape[0] * 0.7):]
     red = (floor[..., 0] > 120) & (floor[..., 0] > floor[..., 1] + 60)
     assert int(red.sum()) > 40
+
+
+def _behind_the_camera():
+    """A mirror behind the camera, facing the one in front of it, and a red box
+    only that mirror's reflection can reach: behind the front mirror's plane
+    and outside the camera's view."""
+    half = 6.0
+    mesh = PBRMesh(
+        positions=np.array([(-half, -half, 0), (half, -half, 0),
+                            (half, half, 0), (-half, half, 0)], 'f'),
+        normals=np.array([(0, 0, 1)] * 4, 'f'),
+        texcoords=np.array([(0, 0), (1, 0), (1, 1), (0, 1)], 'f'),
+        indices=np.array([0, 1, 2, 0, 2, 3], np.uint32))
+    back = basenodes.Transform(
+        translation=(0.0, 0.0, 10.0), rotation=(0.0, 1.0, 0.0, np.pi),
+        children=[basenodes.Shape(geometry=mesh, appearance=basenodes.Appearance(
+            material=PBRMaterial(reflector=PlanarReflector(), baseColor=(1.0, 1.0, 1.0),
+                                 metallic=1.0, roughness=0.0)))])
+    return [basenodes.Viewpoint(position=(0.0, 0.0, 6.0)),
+            basenodes.NavigationInfo(headlight=False),
+            basenodes.DirectionalLight(direction=(0.0, -1.0, 0.0)),
+            _box(10.0, -8.0, (1.0, 0.0, 0.0), size=2.0),
+            _mirror(), back]
+
+
+def test_a_mirror_out_of_view_shows_its_reflection_in_a_mirror_in_view(render_scene, env):
+    """The mirror behind the camera is seen only in the front mirror, and what
+    it reflects there is drawn from the front mirror's camera."""
+    red = _red_anywhere(frames_of(render_scene, _behind_the_camera(), frames=8,
+                                  size=SIZE)[-1])
+    env.setenv('OPENGLCONTEXT_PLANAR_REFLECTIONS', '0')
+    unreflected = _red_anywhere(frames_of(render_scene, _behind_the_camera(), frames=3,
+                                          size=SIZE)[-1])
+    assert unreflected == 0
+    assert red > 20
+
+
+def _red_anywhere(frame):
+    frame = frame.astype(int)
+    return int(((frame[..., 0] > 120) & (frame[..., 0] > frame[..., 1] + 60)).sum())
+
+
+def test_one_bounce_leaves_a_mirror_in_a_mirror_reflecting_the_probe(render_scene, env):
+    env.setenv('OPENGLCONTEXT_REFLECTION_BOUNCES', '1')
+    assert _red_anywhere(frames_of(render_scene, _behind_the_camera(), frames=8,
+                                   size=SIZE)[-1]) == 0
+
+
+def test_a_mirror_reflects_its_reflectance_of_the_light(render_scene, env):
+    """A mirror is told from an opening by reflecting less than all of it."""
+    def red_level(reflectance):
+        frame = frames_of(render_scene, _room(_mirror(reflector=PlanarReflector(
+            replace=True, reflectance=reflectance))), frames=3, size=SIZE)[-1]
+        height, width = frame.shape[:2]
+        return float(frame[height // 2 - 6:height // 2 + 6,
+                           width // 2 - 6:width // 2 + 6, 0].mean())
+    full, half = red_level(1.0), red_level(0.3)
+    assert full > 120
+    assert half < full * 0.85
+
+
+def test_a_shape_made_a_mirror_while_out_of_view_is_found_in_a_mirror(render_scene, env):
+    """The mirror behind the camera is plain metal until its material is given
+    a reflector, and no view but the front mirror's can see it."""
+    scene = _behind_the_camera()
+    back = scene[-1].children[0].appearance.material
+    reflector, back.reflector = back.reflector, None
+    rendered = render_scene(scene, frames=4, size=SIZE)
+    from OpenGLContext.capture import read_back_buffer
+    context = rendered.context
+    before = _red_anywhere(read_back_buffer()[0])
+    back.reflector = reflector
+    for _ in range(6):
+        context.OnDraw(force=1)
+    assert before == 0
+    assert _red_anywhere(read_back_buffer()[0]) > 20

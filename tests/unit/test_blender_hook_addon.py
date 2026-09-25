@@ -48,7 +48,7 @@ def settings(**named):
     values = dict(enabled=True, kind='water', style='still', material='keep',
                   medium='water', depth=0.0, scale=1.0, density=1.0,
                   mirror_scale=0.5, interval=3, priority=1.0, distortion=0.0,
-                  parameters='')
+                  reflectance=0.97, parameters='')
     values.update(named)
     return SimpleNamespace(**values)
 
@@ -172,9 +172,9 @@ def test_a_mirror_left_at_its_defaults_is_the_kind_alone():
 
 def test_a_mirror_writes_what_it_is_worth():
     assert tag.hook_block(settings(kind='mirror', mirror_scale=0.25, interval=1,
-                                   priority=3.0, distortion=0.1)) == {
+                                   priority=3.0, distortion=0.1, reflectance=0.9)) == {
         'kind': 'mirror', 'scale': 0.25, 'interval': 1, 'priority': 3.0,
-        'distortion': 0.1,
+        'distortion': 0.1, 'reflectance': 0.9,
     }
 
 

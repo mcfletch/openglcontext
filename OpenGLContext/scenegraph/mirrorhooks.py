@@ -61,7 +61,7 @@ KIND = 'mirror'
 #: Each parameter a tag may give, and the type its value is read as.
 PARAMETERS: Dict[str, type] = {
     'scale': float, 'interval': int, 'priority': float, 'distortion': float,
-    'replace': bool,
+    'reflectance': float, 'replace': bool,
 }
 
 

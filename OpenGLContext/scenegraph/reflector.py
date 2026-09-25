@@ -40,6 +40,11 @@ class PlanarReflector(Varied, node.Node):
     lookup: water's ripple, or a mirror's normal map. ``enabled`` False keeps
     the node in place while the surface reflects the probe.
 
+    ``reflectance`` is the share of the light the mirror reflects, 0.97 by
+    default: a silvered mirror loses a few percent, which is what tells it
+    from an opening onto the same room. Water reflects by its Fresnel term
+    and carries 1.
+
     ``replace`` True draws the reflection in place of the surface's shading
     rather than through it: the material's colour, metalness and roughness are
     not applied, and the surface shows exactly what the mirror sees. That is
@@ -54,6 +59,7 @@ class PlanarReflector(Varied, node.Node):
     distortion = field.newField('distortion', 'SFFloat', 1, 0.0)
     enabled = field.newField('enabled', 'SFBool', 1, True)
     replace = field.newField('replace', 'SFBool', 1, False)
+    reflectance = field.newField('reflectance', 'SFFloat', 1, 0.97)
 
     UI_HINTS = {
         'scale': {'label': 'Resolution', 'minimum': 0.05, 'maximum': 1.0,
@@ -66,6 +72,8 @@ class PlanarReflector(Varied, node.Node):
                        'step': 0.01},
         'enabled': {'label': 'Reflects the scene'},
         'replace': {'label': 'Shows only the reflection'},
+        'reflectance': {'label': 'Reflectance', 'minimum': 0.0, 'maximum': 1.0,
+                        'step': 0.01},
     }
 
 
@@ -77,4 +85,4 @@ WATER_DISTORTION = 0.12
 #: What a body of water reflects by: redrawn every frame, since what stands on
 #: a shore moves and the eye is on it. Shared, as the water styles are; a lake
 #: of its own is ``WATER.varied(...)``.
-WATER = PlanarReflector(interval=1, distortion=WATER_DISTORTION)
+WATER = PlanarReflector(interval=1, distortion=WATER_DISTORTION, reflectance=1.0)

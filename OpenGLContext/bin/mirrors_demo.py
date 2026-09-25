@@ -19,6 +19,9 @@ Keys:
 ``b``
     The mirror views a frame may draw (``reflectionViews``): the strategy's
     own, then 1, 2 and 4, to watch the schedule share them out.
+``m``
+    How deep mirrors seen in mirrors are followed (``reflectionBounces``):
+    2, 3, then 1, where a mirror seen in another reflects the probe.
 ``i``
     The corridor's interval: 1, 3 or 6 frames between redraws.
 ``o``
@@ -44,10 +47,13 @@ from OpenGLContext.scenegraph.water import STILL, water_surface
 
 log = logging.getLogger(__name__)
 
-__all__ = ['BUDGETS', 'INTERVALS', 'Finishes', 'MirrorHall', 'main']
+__all__ = ['BOUNCES', 'BUDGETS', 'INTERVALS', 'Finishes', 'MirrorHall', 'main']
 
 #: The ``reflectionViews`` the ``b`` key steps through; 0 is the strategy's own.
 BUDGETS: Tuple[int, ...] = (0, 1, 2, 4)
+
+#: The ``reflectionBounces`` the ``m`` key steps through.
+BOUNCES: Tuple[int, ...] = (2, 3, 1)
 
 #: The corridor intervals the ``i`` key steps through.
 INTERVALS: Tuple[int, ...] = (3, 1, 6)
@@ -127,6 +133,7 @@ class MirrorHall:
     KEYS: Dict[str, str] = {
         'r': 'reflections on and off',
         'b': 'mirror views a frame may draw',
+        'm': 'how deep mirrors seen in mirrors are followed',
         'i': "the corridor's interval",
         'o': 'the window: only its reflection, or shaded glass',
     }
@@ -227,6 +234,13 @@ class MirrorHall:
                                 if now in BUDGETS else 0]
             definition.reflectionViews = following
             return 'mirror views a frame: %s' % (following or "the strategy's own")
+        if key == 'm':
+            now = int(getattr(definition, 'reflectionBounces', 2) or 2)
+            following = BOUNCES[(BOUNCES.index(now) + 1) % len(BOUNCES)
+                                if now in BOUNCES else 0]
+            definition.reflectionBounces = following
+            return 'mirrors followed %d reflection%s deep' % (
+                following, '' if following == 1 else 's')
         if key == 'i':
             now = int(self.corridor.interval)
             following = INTERVALS[(INTERVALS.index(now) + 1) % len(INTERVALS)
