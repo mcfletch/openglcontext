@@ -204,3 +204,40 @@ class TestTheShaderPicksTheViewThePythonSaysItShould:
         axis, angle = ANGLES[index]
 
         assert cell_from(seen[index]) == expected_cell(axis, angle)
+
+
+def test_a_small_atlas_reads_nothing_of_the_neighbouring_views(render_scene, monkeypatch):
+    """The tile's edge is sampled half a texel in, for the atlas's own size.
+
+    The view the camera sees is green and every other view red, so any red on
+    screen is the filter reaching across the tile's edge into a neighbour.
+    """
+    import numpy as np
+    from PIL import Image
+    from OpenGLContext.scenegraph import basenodes
+    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
+    from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+    from tests.unit.glrender import base_env, frames_of
+
+    base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0', OPENGLCONTEXT_INSTANCE_MIN='999')
+    row, column = expected_cell((0.0, 1.0, 0.0), 0.0)
+    tile = ATLAS // GRID
+    pixels = np.zeros((ATLAS, ATLAS, 4), 'uint8')
+    pixels[..., 0] = 255
+    pixels[..., 3] = 255
+    pixels[row * tile:(row + 1) * tile, column * tile:(column + 1) * tile] = (0, 255, 0, 255)
+    material = PBRMaterial(baseColor=(1, 1, 1), unlit=True, octahedralViews=GRID,
+                           textures={'baseColor': PBRTexture(Image.fromarray(pixels, 'RGBA'))})
+    quad = PBRMesh(
+        positions=np.array([(-1, -1, 0), (1, -1, 0), (1, 1, 0), (-1, 1, 0)], 'f'),
+        normals=np.tile(np.array([0, 0, 1], 'f'), (4, 1)),
+        texcoords=np.array([(0, 0), (1, 0), (1, 1), (0, 1)], 'f'),
+        indices=np.array([0, 1, 2, 0, 2, 3], 'uint32'), solid=False)
+    frame = frames_of(render_scene, [
+        basenodes.Viewpoint(position=(0.0, 0.0, 4.0)),
+        basenodes.Background(skyColor=[(0.0, 0.0, 1.0)]),
+        basenodes.Shape(geometry=quad, appearance=basenodes.Appearance(material=material)),
+    ], frames=2, size=(160, 160))[-1].astype(int)
+    drawn = frame[..., 2] < 128                       # not the blue sky
+    assert drawn.sum() > 4000
+    assert int(frame[..., 0][drawn].max()) < 24

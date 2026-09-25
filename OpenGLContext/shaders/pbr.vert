@@ -41,6 +41,9 @@ uniform bool instancingEnabled;   // read model + id from instance attributes
 // which is the same mapping in Python and is what the baker renders against.
 uniform int impostorGrid;
 uniform bool impostorHemi;
+// The atlas itself, the same uniform the fragment stage samples, asked here
+// only for its size: the half-texel inset below is measured in its texels.
+uniform sampler2D baseColorTexture;
 
 out vec3 vNormal;        // eye space
 out vec3 vPosition;      // eye space
@@ -124,7 +127,7 @@ void main() {
                               float(impostorGrid) - 0.001));
         // Half a texel in from the tile's edge, so the bilinear filter cannot
         // reach across into the view next door.
-        float inset = 0.5 / float(impostorGrid * 512);
+        float inset = 0.5 / max(float(textureSize(baseColorTexture, 0).x), 1.0);
         impostorOrigin = cell * side + inset;
         impostorSpan = side - 2.0 * inset;
         eyePositionOverride = vec4(origin + vec3(aPosition.xy * scale, 0.0), 1.0);

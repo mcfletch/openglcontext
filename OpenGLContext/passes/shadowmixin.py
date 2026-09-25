@@ -38,6 +38,19 @@ if TYPE_CHECKING:
 
 log = logging.getLogger(__name__)
 
+
+def casts_shadow(node: Any) -> bool:
+    """Whether a renderable node is drawn into the shadow maps.
+
+    Not where it says it does not (``castsShadow = False``), and not where its
+    material is an octahedral impostor: the card turns to face the camera in
+    the lit pass only, and drawn from a light it would be a fixed rectangle.
+    """
+    if not getattr(node, 'castsShadow', True):
+        return False
+    material = getattr(getattr(node, 'appearance', None), 'material', None)
+    return not getattr(material, 'octahedralViews', 0)
+
 # Shadow depth-pass acne controls, named rather than scattered as literals.
 # Polygon offset is the single *primary* control; the receiver shader adds a
 # small constant depth bias plus a normal offset as secondary.  Nothing culls
@@ -187,8 +200,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         # visual gain. This keeps the opted-out geometry out of the cascade fit /
         # camera-visible occluder set; the depth-pass caster pool excludes it in
         # _shadowCasterRecords, so it is skipped there too.
-        toRender = [r for r in toRender
-                    if getattr(r[5], "castsShadow", True)]
+        toRender = [r for r in toRender if casts_shadow(r[5])]
 
         caps = self._ensureShadowCaps()
         self._applyPerLightShadowSettings(caps)
@@ -689,8 +701,9 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         A shadow caster behind the camera still casts into the visible scene, so
         the caster pool must be the whole scene, not the camera-visible render set.
         Geometry that opts out with ``node.castsShadow = False`` (e.g. dense alpha
-        foliage) is excluded here, so it is drawn into no depth map -- this is the
-        pool the per-light depth pass actually culls from. Each record mirrors the
+        foliage), and an impostor (:func:`casts_shadow`), is excluded here, so it
+        is drawn into no depth map -- this is the pool the per-light depth pass
+        actually culls from. Each record mirrors the
         render-set tuple shape ``(sortKey, mvmatrix, tmatrix, bvolume, path, node)``; the
         depth pass and :meth:`_cullOccluders` use only ``tmatrix`` (world transform),
         ``bvolume``, ``path`` and ``node``, so the first two slots are unused
@@ -707,7 +720,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         records = []
         for path, node, tmatrix, bvolume in zip(
                 gathered.paths, gathered.nodes, gathered.own, gathered.volumes):
-            if getattr(node, 'castsShadow', True):
+            if casts_shadow(node):
                 records.append((None, None, tmatrix, bvolume, path, node))
         return records
 

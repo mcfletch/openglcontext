@@ -403,4 +403,15 @@ Limits
   from daylight into a cellar keeps its daylight at the distances where the
   impostor is drawn.
 
+- An impostor casts no shadow. Its card turns to face the camera only in the
+  lit pass, so drawn from a light it would cast the flat rectangle of the quad
+  it is authored as; it is left out of the shadow maps instead. The mesh levels
+  before it in the chain cast as usual.
+
+- The tile a view is read from is inset by half a texel of the atlas's own
+  size, so at full resolution the filter never reads the next view. Coarser
+  mipmap levels, which an impostor uses as it shrinks on screen, average
+  texels on both sides of a tile edge. Leave the background round each view
+  transparent (the baking tools do), so what bleeds in at the edge is nothing.
+
 - ``MSFT_lod`` on a *material*, which the extension also allows, is not read.

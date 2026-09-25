@@ -557,9 +557,10 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         is marked ``fitted``; every other view picks each fragment's cascade by
         which map holds it.
         """
+        from OpenGLContext.passes.shadowmixin import casts_shadow
+
         def casts(frame: 'ViewFrame') -> bool:
-            return any(getattr(record[5], 'castsShadow', True)
-                       for record in frame.toRender)
+            return any(casts_shadow(record[5]) for record in frame.toRender)
 
         fit = next((frame for frame in [active, *frames] if casts(frame)), active)
         for frame in frames:

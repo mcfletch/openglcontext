@@ -524,6 +524,26 @@ class TestWhereACallerSetsTheOptOut:
         assert casting in found
         assert opted_out not in found
 
+    def test_an_impostor_casts_no_shadow(self):
+        """Its card faces the camera, which a light's depth pass does not."""
+        from vrml.vrml97 import nodepath, nodetypes
+
+        from OpenGLContext.passes import _flat, flatcore
+        from OpenGLContext.scenegraph.appearance import Appearance
+        from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+        from OpenGLContext.scenegraph.transform import Transform
+
+        solid = self.shape()
+        card = self.shape(appearance=Appearance(material=PBRMaterial(octahedralViews=8)))
+        mixin = flatcore.FlatPass.__new__(flatcore.FlatPass)
+        _flat.SGObserver.__init__(mixin, None, [])
+        mixin.paths = {nodetypes.Rendering: [
+            nodepath.NodePath([Transform(children=[node]), node])
+            for node in (solid, card)]}
+
+        found = [record[4][-1] for record in mixin._shadowCasterRecords()]
+        assert found == [solid]
+
     def test_the_cascade_fit_leaves_out_a_shape_that_opted_out(self):
         fitted = []
         mixin = TestRenderShadowMapsGuards()._ready(fitted)
