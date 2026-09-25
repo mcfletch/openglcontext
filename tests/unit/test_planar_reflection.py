@@ -558,3 +558,39 @@ def test_the_public_names_are_the_ones_other_modules_use():
 def test_a_tiles_bounds_name_the_tile_they_were_made_from(tile):
     atlas = (1360, 768)
     assert reflection.bounds_tile(reflection.tile_bounds(tile, atlas), atlas) == tile
+
+
+# --- a mirror with a corner behind the camera --------------------------------------
+
+def _floor_corners(half=20.0):
+    return reflection.box_corners(np.array([(-half, 0.0, -half), (half, 0.0, half)]))
+
+
+def test_a_floor_under_a_level_camera_covers_the_view_below_the_horizon():
+    """Half the floor is behind the camera, and still it covers only the
+    lower half of the view, not all of it."""
+    view = _look_at((0.0, 1.6, 0.0), (0.0, 1.6, -10.0))
+    rect = reflection.screen_rect(_floor_corners(), view @ _perspective())
+    x0, y0, x1, y1 = rect
+    assert (x0, y0, x1) == pytest.approx((-1.0, -1.0, 1.0))
+    assert -0.2 < y1 < 0.0
+
+
+def test_a_mirror_off_to_one_side_and_behind_covers_only_its_side():
+    view = _look_at((0.0, 0.0, 0.0), (0.0, 0.0, -10.0))
+    wall = reflection.box_corners(np.array([(3.0, -1.0, -10.0), (3.0, 1.0, 10.0)]))
+    x0, y0, x1, y1 = reflection.screen_rect(wall, view @ _perspective())
+    assert x0 > 0.0 and x1 == pytest.approx(1.0)
+
+
+def test_several_boxes_with_corners_behind_the_camera_are_clipped_each():
+    view = _look_at((0.0, 1.6, 0.0), (0.0, 1.6, -10.0))
+    corners = np.concatenate([_floor_corners(), _floor_corners() + (0.0, 0.0, 30.0)])
+    x0, y0, x1, y1 = reflection.screen_rect(corners, view @ _perspective())
+    assert y1 < 0.0
+
+
+def test_a_mirror_wholly_behind_the_camera_plane_covers_nothing():
+    view = _look_at((0.0, 0.0, 0.0), (0.0, 0.0, -10.0))
+    behind = reflection.box_corners(np.array([(-1.0, -1.0, 1.0), (1.0, 1.0, 3.0)]))
+    assert reflection.screen_rect(behind, view @ _perspective()) is None

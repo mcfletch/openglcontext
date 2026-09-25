@@ -457,29 +457,54 @@ NDCRect = Tuple[float, float, float, float]
 WHOLE: NDCRect = (-1.0, -1.0, 1.0, 1.0)
 
 
+#: The corner pairs of a :func:`box_corners` box joined by its twelve edges.
+_EDGES = np.array([(corner, corner | bit) for corner in range(8) for bit in (1, 2, 4)
+                   if not corner & bit])
+
+#: The least clip-space w a point may have and still be in front of the camera.
+_NEAR_W = 1e-6
+
+
 def screen_rect(corners: ArrayLike, modelproj: Any) -> Optional[NDCRect]:
     """Where world ``corners`` -- a box's, or several boxes' -- fall in a view,
     clipped to it, or None.
 
-    None where the box is wholly off screen or behind the camera. A box the
-    camera's plane cuts through covers an unbounded part of the view, and is
-    given the whole of it.
+    None where the boxes are wholly off screen or behind the camera. A box the
+    camera's plane cuts through is cut there: its edges are clipped where they
+    pass the plane, and what is in front is measured, so a floor running
+    under the camera covers the view below its horizon and not all of it.
+    Corners that are not whole boxes of eight are given the whole view where
+    any is behind the camera.
     """
     points = np.asarray(corners, 'd').reshape(-1, 3)
     points = np.c_[points, np.ones(len(points))]
     clip = points @ np.asarray(modelproj, 'd')
     w = clip[:, 3]
-    if (w <= 1e-6).all():
+    if (w <= _NEAR_W).all():
         return None
-    if (w <= 1e-6).any():
-        return WHOLE
-    ndc = clip[:, :2] / w[:, None]
+    if (w <= _NEAR_W).any():
+        if len(clip) % 8:
+            return WHOLE
+        clip = _clipped(clip.reshape(-1, 8, 4))
+    ndc = clip[:, :2] / clip[:, 3:]
     low, high = ndc.min(axis=0), ndc.max(axis=0)
     x0, y0 = max(float(low[0]), -1.0), max(float(low[1]), -1.0)
     x1, y1 = min(float(high[0]), 1.0), min(float(high[1]), 1.0)
     if x0 >= x1 or y0 >= y1:
         return None
     return x0, y0, x1, y1
+
+
+def _clipped(boxes: np.ndarray) -> np.ndarray:
+    """The clip-space points of ``boxes`` in front of the camera, and where
+    each box's edges pass the plane in front of it."""
+    front = boxes[boxes[:, :, 3] > _NEAR_W]
+    start, end = boxes[:, _EDGES[:, 0]], boxes[:, _EDGES[:, 1]]
+    ws, we = start[..., 3], end[..., 3]
+    crossing = (ws > _NEAR_W) != (we > _NEAR_W)
+    share = (_NEAR_W - ws[crossing]) / (we[crossing] - ws[crossing])
+    passed = start[crossing] + share[:, None] * (end[crossing] - start[crossing])
+    return np.concatenate([front, passed])
 
 
 def guarded(rect: NDCRect, guard: float = GUARD) -> NDCRect:
