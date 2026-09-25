@@ -458,3 +458,28 @@ def test_a_shape_made_a_mirror_while_out_of_view_is_found_in_a_mirror(render_sce
         context.OnDraw(force=1)
     assert before == 0
     assert _red_anywhere(read_back_buffer()[0]) > 20
+
+
+def test_a_scene_without_mirrors_looks_at_no_shape_for_one(render_scene, env, monkeypatch):
+    from OpenGLContext.passes import reflection
+    asked = []
+    real = reflection.reflector_for
+    monkeypatch.setattr(reflection, 'reflector_for',
+                        lambda record: asked.append(record) or real(record))
+    boxes = [_box(x, -4.0, (0.2, 0.6, 0.2), size=1.0) for x in range(-3, 4)]
+    frames_of(render_scene, _room(*boxes), frames=3, size=SIZE)   # boxes, no mirror
+    assert asked == []
+
+
+def test_the_planner_looks_only_at_the_mirrors(render_scene, env, monkeypatch):
+    from OpenGLContext.passes import reflection
+    from OpenGLContext.passes.reflectionplanner import ReflectionPlanner
+    asked = []
+    real = ReflectionPlanner._surface
+    monkeypatch.setattr(ReflectionPlanner, '_surface',
+                        lambda self, frame, record, eye: asked.append(record[5])
+                        or real(self, frame, record, eye))
+    boxes = [_box(x, -2.0, (0.2, 0.6, 0.2), size=0.5) for x in range(-3, 4)]
+    frames_of(render_scene, _room() + boxes, frames=3, size=SIZE)
+    assert asked
+    assert all(reflection.shape_reflector(shape) is not None for shape in asked)

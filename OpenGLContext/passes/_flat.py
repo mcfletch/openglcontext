@@ -546,6 +546,32 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         """Render shadow depth maps before the lit passes (mixin override)."""
         return None   # base pass has no shadows; ShadowMapMixin overrides this
 
+    def renderFrameShadows(self, frames: Sequence['ViewFrame'],
+                           active: 'ViewFrame') -> None:
+        """Render the shadow maps once, for every view of the frame to read.
+
+        Spot and point maps do not depend on the camera. The directional
+        cascades are fitted to one view -- the active one, or, where it draws
+        nothing that casts a shadow, the first view that does -- and that view
+        is marked ``fitted``; every other view picks each fragment's cascade by
+        which map holds it.
+        """
+        def casts(frame: 'ViewFrame') -> bool:
+            return any(getattr(record[5], 'castsShadow', True)
+                       for record in frame.toRender)
+
+        fit = next((frame for frame in [active, *frames] if casts(frame)), active)
+        for frame in frames:
+            frame.fitted = frame is fit
+        if fit is active:
+            self.renderShadowMaps(active.toRender)
+            return
+        self.applyViewFrame(fit, gl=False)
+        try:
+            self.renderShadowMaps(fit.toRender)
+        finally:
+            self.applyViewFrame(active, gl=False)
+
     def bindShadowUniforms(self, fitted: bool = True) -> None:
         """Bind shadow maps onto the lit program after lights (mixin override)."""
         return None   # base pass has no shadows; ShadowMapMixin overrides this
@@ -1584,7 +1610,6 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         frames = self.prepareViews()
         self.clearUncovered( context, frames )
         active = self.activeFrame if self.activeFrame is not None else frames[0]
-        toRender = active.toRender
         matrix = active.modelView
         self.stats.shapes = sum( len( frame.toRender ) for frame in frames )
 
@@ -1648,11 +1673,9 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
                     'the frame set one where it settled use_shaders')
                 # Render shadow maps before binding the MRT selection FBO; the
                 # shadow pass binds/unbinds its own depth FBOs and restores state.
-                # Once for every view: the maps depend on the lights and the
-                # casters, and the cascades are fitted to the active view.
                 if self.use_shadows:
                     shader_program.use(lit=True)
-                    self.renderShadowMaps(toRender)
+                    self.renderFrameShadows(frames, active)
 
                 # Render into the MRT selection FBO only while picking is active.
                 # Otherwise render straight to the screen: no second render
@@ -2014,14 +2037,7 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
             self.transparent = False
             self.lighting = True
             self.textured = True
-            self.setupShaderLights( matrix )
-            if self.use_shadows:
-                self.bindShadowUniforms( fitted=True )
-            self.iblSetup( matrix, lighting )
-            shader.set_default_material()
-            shader.set_scene_ambient( self.sceneAmbient() )
-            self.setupLightGrid()
-            self.setupZones( matrix )
+            self.setupViewLighting( matrix, lighting, fitted=reference.fitted )
             if reflection:
                 hdr = getattr( shader, 'set_hdr_output', None )
                 if hdr is not None:

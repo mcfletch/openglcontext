@@ -662,11 +662,13 @@ camera. Work that depends only on the scene is done once for all views:
   moving its camera does not.
 - Shadow maps - rendered once and read by every view. Spot and point light
   maps depend only on their light. A directional light's cascades are fitted
-  to the active view. Other views read the same cascades, using the finest
-  cascade that contains each fragment. Ground that a non-active view shows
-  outside every cascade is drawn unshadowed.
+  to the active view, or, where the active view shows nothing that casts a
+  shadow, to the first view that does. Other views read the same cascades,
+  using the finest cascade that contains each fragment. Ground that another
+  view shows outside every cascade is drawn unshadowed.
 - Shadowed lights - a spot or point light keeps its shadow while any view
-  can see its range.
+  can see its range, and every one keeps it while the scene has a mirror, since
+  a mirror may show a light no view looks at.
 - Bloom - blurs and composites each view inside its own rectangle, so a
   bright object at the edge of one view does not glow into the next.
 - Transparency - transparent shapes are sorted back to front for each view's

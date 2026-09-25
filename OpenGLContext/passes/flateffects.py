@@ -294,6 +294,10 @@ class _FlatEffectsMixin(PassResources):
             self, 'planarReflections',
             renderoptions.env_flag_once('OPENGLCONTEXT_PLANAR_REFLECTIONS', True))
 
+    def reflectsScene(self) -> bool:
+        """Whether this frame may draw reflections: they are on and a shape is a mirror."""
+        return self.planarReflectionsEnabled() and bool(len(self.sceneMirrors()))
+
     def reflectionBudget(self) -> "Budget":
         """The most this frame's reflections may cost, from the definition.
 
@@ -371,6 +375,13 @@ class _FlatEffectsMixin(PassResources):
         if self._reflection_planner is None:
             self._reflection_planner = ReflectionPlanner()
         planner = self._reflection_planner
+        indices = self.sceneMirrors()
+        if not len(indices):
+            # Nothing in the scene is a mirror: no tile the planner holds is
+            # read, and no view is looked through for one.
+            planner.reset()
+            return
+        mirror_paths = {id(gathered.paths[index]) for index in indices}
         # Zones may say which mirrors draw a reflection from where a camera is.
         planner.allowed = self.mirrorAllowed if self.mirrorsZoned() else None
         target = float(renderoptions.number(
@@ -385,7 +396,9 @@ class _FlatEffectsMixin(PassResources):
                 'OPENGLCONTEXT_REFLECTION_BOUNCES', 2, integer=True)))
         plan = planner.plan(frames, size, self.reflectionBudget,
                             separate=self._separateShapes, inside=self.mirrorsIn,
-                            bounces=bounces)
+                            bounces=bounces,
+                            shown=lambda frame: [record for record in frame.toRender
+                                                 if id(record[4]) in mirror_paths])
         if self.activeFrame is not None:
             # Looking for mirrors in the mirrors' views looked through them.
             self.applyViewFrame(self.activeFrame, gl=False)

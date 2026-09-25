@@ -133,10 +133,11 @@ By default the number of slices adapts to the frame rate. Set
 every run (see :ref:`shadows-reproducible`).
 
 With :doc:`several views <multiview>` in one window, the slices are fitted to
-the active view's camera, and every view reads the same maps. In another
-view, each point uses the finest cascade that contains it. Ground outside
-every cascade is not shadowed in that view. Spot and point maps do not depend
-on the camera, so every view reads them in the same way.
+the active view's camera, and every view reads the same maps. Where the active
+view shows nothing that casts a shadow, they are fitted to the first view that
+does. In another view, each point uses the finest cascade that contains it.
+Ground outside every cascade is not shadowed in that view. Spot and point maps
+do not depend on the camera, so every view reads them in the same way.
 
 .. rst-class:: technical
 

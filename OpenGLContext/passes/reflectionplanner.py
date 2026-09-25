@@ -290,8 +290,13 @@ class ReflectionPlanner:
             held.missing = frozenset(self._aliases.get(inner, inner) for inner in missing)
 
     # -- finding the mirrors ----------------------------------------------
-    def _seen(self, frames: Sequence[Any]) -> List[_Seen]:
-        """Each view's mirrors, those in one plane sharing a reflector as one."""
+    def _seen(self, frames: Sequence[Any],
+              shown: Optional[Callable[[Any], Sequence[Any]]] = None) -> List[_Seen]:
+        """Each view's mirrors, those in one plane sharing a reflector as one.
+
+        ``shown(frame)`` is the part of a view's draw list that may hold a
+        mirror; all of it where not given.
+        """
         found = []
         for frame in frames:
             view = frame.view
@@ -300,7 +305,7 @@ class ReflectionPlanner:
             modelview = np.asarray(frame.modelView, 'd')
             eye = np.linalg.inv(modelview)[3, :3]
             groups: Dict[Hashable, List[_Surface]] = {}
-            for record in frame.toRender:
+            for record in (frame.toRender if shown is None else shown(frame)):
                 surface = self._surface(frame, record, eye)
                 if surface is not None:
                     point, normal = surface.plane
@@ -433,7 +438,8 @@ class ReflectionPlanner:
              budget: Union[Budget, Callable[[], Budget]],
              separate: Callable[[Any], bool] = lambda frame: False,
              inside: Optional[Callable[[Any], Sequence[Any]]] = None,
-             bounces: int = 2) -> ReflectionPlan:
+             bounces: int = 2,
+             shown: Optional[Callable[[Any], Sequence[Any]]] = None) -> ReflectionPlan:
         """This frame's mirror views and lookups.
 
         ``atlas`` is the atlas's size in texels; ``budget`` is the frame's
@@ -445,13 +451,16 @@ class ReflectionPlanner:
         its :class:`ReflectedView`, and read there a frame later. Every chain
         of mirrors is followed with its own camera, up to ``bounces``
         reflections deep: 1 plans only the mirrors the views see.
+        ``shown(frame)`` answers the records of a view's draw list that may be
+        mirrors, so a scene of thousands of shapes and a few mirrors is not
+        asked about every shape; all of the draw list where not given.
         """
         self.frame += 1
         self._arrived = {key for key, held in self._held.items() if not held.provisional}
         if (self.packer.width, self.packer.height) != tuple(atlas):
             self.packer.resize(*atlas)
             self._held.clear()
-        seen = {entry.key: entry for entry in self._seen(frames)}
+        seen = {entry.key: entry for entry in self._seen(frames, shown)}
         if inside is not None:
             level = list(seen.values())
             for _depth in range(1, int(bounces)):

@@ -179,10 +179,17 @@ class _FailingPlanner:
         raise RuntimeError('the reflection atlas is incomplete (0x8cd6)')
 
 
+class _Gathered:
+    """A frame's walk with one mirror in it."""
+
+    paths = [object()]
+
+
 def _failing_pass():
     effects = _pass()
     effects.shader_program = _Program()
-    effects.frameGather = lambda: object()
+    effects.frameGather = lambda: _Gathered()
+    effects.sceneMirrors = lambda: np.array([0])
     effects.activeFrame = None
     effects.mirrorsZoned = lambda: False
     effects._reflection_planner = planner = _FailingPlanner()

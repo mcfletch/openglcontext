@@ -88,3 +88,20 @@ def test_a_view_the_cascades_were_not_fitted_to_still_shows_the_shadow(
     # The borrowed cascades cover the ground at a different resolution, so the
     # edge of the shadow moves by a texel or two; its area does not go missing.
     assert _differing(own, borrowed) < 60
+
+
+def _looking_away_layout(context):
+    """The active view looks up at the empty sky; the other sees the shadow."""
+    _far, near = _cameras()
+    away = _looking((0.0, 0.0, 60.0), (0.0, 100.0, 70.0))
+    layout = ViewLayout.split(View(away, name='away'), View(near, name='near'))
+    layout.activate(layout.views[0])
+    return layout
+
+
+def test_an_active_view_with_nothing_in_it_leaves_the_others_their_shadows(
+        render_scene, env):
+    lit = _near_tile(render_scene, 'near', shadows=False)
+    frames = frames_of(render_scene, _scene(), frames=3, shadows=True,
+                       size=(WIDTH, HEIGHT), layout=_looking_away_layout)
+    assert _differing(lit, frames[-1][:, WIDTH // 2:]) > 400

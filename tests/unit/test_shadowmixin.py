@@ -141,6 +141,14 @@ class TestLightInView:
         light = PointLight(attenuation=(0, 0, 1))
         assert m._lightInView((100, 0, 0), light) is True
 
+    def test_a_light_out_of_view_is_kept_where_a_mirror_may_show_it(self):
+        """A mirror view is planned after the shadows, and may see any light."""
+        light = PointLight(attenuation=(0, 0, 1), intensity=1.0)
+        self.mixin.reflectsScene = lambda: True
+        assert self.mixin._lightInView((100, 0, 0), light) is True
+        self.mixin.reflectsScene = lambda: False
+        assert self.mixin._lightInView((100, 0, 0), light) is False
+
 
 class TestCullOccluders:
     def setup_method(self):
@@ -408,18 +416,45 @@ class TestRenderShadowMapsGuards:
         m.renderShadowMaps([self._record(self._node())])
         assert m._shadow_bindings == []
 
-    def test_empty_render_set_returns(self):
+    def _ready(self, fitted):
+        """A mixin with a program, whose caster pool offers nothing to cast from.
+
+        ``fitted`` collects what the cascades would be fitted to.
+        """
         m = ShadowMapMixin()
         m.use_shadows = True
+        m.shader_program = types.SimpleNamespace(
+            program=1, use=lambda **named: None,
+            init_shadow_samplers=lambda: None, set_shadow_count=lambda count: None)
+        m._ensureShadowCaps = lambda: None
+        m._applyPerLightShadowSettings = lambda caps: None
+        m.getModelView = lambda: np.identity(4)
+        m.projection = np.identity(4)
+        m.pool = 0
+
+        def refresh():
+            m.pool += 1
+            m._caster_points_raw = None
+            return []
+        m._refreshCasterData = refresh
+        m._occluderPoints = lambda records: fitted.append(records)
+        return m
+
+    def test_an_empty_view_still_asks_the_scene_for_casters(self):
+        """Another view, or a caster behind this one, may still need a map."""
+        fitted = []
+        m = self._ready(fitted)
         m.renderShadowMaps([])
+        assert m.pool == 1
+        assert fitted == []
         assert m._shadow_bindings == []
 
-    def test_all_casters_opted_out_returns(self):
-        m = ShadowMapMixin()
-        m.use_shadows = True
-        # every record's node opts out of casting -> filtered set is empty
+    def test_a_view_of_opted_out_shapes_still_asks_the_scene_for_casters(self):
+        fitted = []
+        m = self._ready(fitted)
         m.renderShadowMaps([self._record(self._node(casts=False))])
-        assert m._shadow_bindings == []
+        assert m.pool == 1
+        assert fitted == []
 
     def test_no_shader_program_returns(self):
         m = ShadowMapMixin()
@@ -489,13 +524,13 @@ class TestWhereACallerSetsTheOptOut:
         assert casting in found
         assert opted_out not in found
 
-    def test_the_render_set_leaves_out_a_shape_that_opted_out(self):
-        mixin = ShadowMapMixin()
-        mixin.use_shadows = True
-        mixin.renderShadowMaps([
-            _record(np.identity(4, 'd'), None,
-                    self.shape(castsShadow=False))])
-        assert mixin._shadow_bindings == []
+    def test_the_cascade_fit_leaves_out_a_shape_that_opted_out(self):
+        fitted = []
+        mixin = TestRenderShadowMapsGuards()._ready(fitted)
+        casting, opted_out = self.shape(), self.shape(castsShadow=False)
+        mixin.renderShadowMaps([_record(np.identity(4, 'd'), None, node)
+                                for node in (casting, opted_out)])
+        assert [[record[5] for record in records] for records in fitted] == [[casting]]
 
 
 class TestCullOccludersTogether:

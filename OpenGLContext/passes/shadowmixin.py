@@ -164,9 +164,20 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
 
     # -- public hooks ------------------------------------------------------
     def renderShadowMaps(self, toRender: List) -> None:
-        """Render depth maps for all shadow-casting lights this frame."""
+        """Render depth maps for all shadow-casting lights this frame.
+
+        ``toRender`` is the active view's draw list, which the directional
+        cascades are fitted to. Whether there is anything to cast is a question
+        about the whole scene, not about that view: a view looking at the sky
+        still leaves every other view its shadows, and a caster behind the
+        camera still casts into it. Where the active view holds no caster the
+        cascades are fitted to the whole caster pool.
+        """
         self._shadow_bindings = []
-        if not self.use_shadows or not toRender:
+        if not self.use_shadows:
+            return
+        shader = self.shader_program
+        if shader is None or shader.program is None:
             return
         # Let geometry opt out of casting shadows (``node.castsShadow = False``) — dense
         # alpha foliage (grass) is expensive to render into every cascade for little
@@ -175,11 +186,6 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         # _shadowCasterRecords, so it is skipped there too.
         toRender = [r for r in toRender
                     if getattr(r[5], "castsShadow", True)]
-        if not toRender:
-            return
-        shader = self.shader_program
-        if shader is None or shader.program is None:
-            return
 
         caps = self._ensureShadowCaps()
         self._applyPerLightShadowSettings(caps)
@@ -194,9 +200,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         camera_proj = np.asarray(self.projection, dtype='d')
         # Fit the cascades to the camera-visible geometry (resolution follows what
         # you can see)...
-        occluder_points = self._occluderPoints(toRender)
-        if occluder_points is None:
-            return
+        occluder_points = self._occluderPoints(toRender) if toRender else None
         # ...but the caster POOL must not be limited to the camera frustum: an
         # object behind the camera can still cast a shadow onto visible geometry
         # (walk forward past a column and its shadow must not pop out). Refresh the
@@ -204,6 +208,10 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
         # frame's when nothing moved); per-light _cullOccluders then keeps only the
         # casters in each light's frustum.
         self._refreshCasterData()
+        if occluder_points is None:
+            occluder_points = self._caster_points_raw
+        if occluder_points is None:
+            return      # nothing in the scene offers a bound to cast from
         # Spot/point near-far must bound the whole caster pool, not the
         # camera-visible subset: fitting them to occluder_points let a caster
         # outside the camera frustum fall past the near/far planes, so its shadow
@@ -504,12 +512,15 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
     # -- internals ---------------------------------------------------------
 
     def _lightInView(self, world_pos: np.ndarray, light_node: Any) -> bool:
-        """Is the light's sphere of influence inside the camera frustum?
+        """Is the light's sphere of influence inside any view's frustum?
 
         Directional lights (unbounded range) and lights whose range can't be
         computed are always considered relevant. A light whose influence sphere
-        is entirely outside the view frustum contributes nothing visible and is
-        skipped, freeing a shadow slot for a light that matters.
+        is entirely outside every view's frustum contributes nothing visible and
+        is skipped, freeing a shadow slot for a light that matters. Where the
+        frame may draw reflections (``reflectsScene``) every light is kept: the
+        mirror views are planned after the shadow maps are drawn, and a light
+        behind the camera may be seen in one.
         """
         rng = None
         if hasattr(light_node, 'effectiveRange'):
@@ -518,6 +529,9 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
             except Exception:
                 rng = None
         if rng is None:
+            return True
+        reflects = getattr(self, 'reflectsScene', None)
+        if reflects is not None and reflects():
             return True
         frames = getattr(self, 'viewFrames', None) or ()
         frusta = [frame.frustum for frame in frames] or [getattr(self, 'frustum', None)]
