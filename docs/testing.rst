@@ -8,7 +8,12 @@ Testing what you draw
 - pytest fixtures that give a test a hidden GL window in the test process;
 - a runner for tests that start a whole application in a child process;
 - a pixel comparison that checks a rendered frame against an approved
-  reference image.
+  reference image;
+- test conventions for the defects no static check finds: a memo missing an
+  input, work repeated in a still frame, cost that grows faster than the
+  scene, an optional layer that keeps failing, geometry drawn inside out
+  under a mirror, a file opened outside the engine's openers, and a NaN made
+  from numbers.
 
 It ships with the engine, so a game built on OpenGLContext can test its
 rendering the same way the engine tests its own.
@@ -637,6 +642,206 @@ The fetch then runs unguarded, so a defect in the resolver or the loader
 fails the test. A host's answer is kept for the life of the process, and a
 host that does not accept a connection within five seconds counts as
 unreachable.
+
+.. _conventions:
+
+Test conventions
+----------------
+
+Each convention is a function in a module of ``OpenGLContext.testing`` and a
+fixture of the plugin of the same name, so a test either imports it or asks
+for it. Each raises an ``AssertionError`` subclass saying what it found, and
+each name starts with ``check_``, which is how the ``openglcontext-checks``
+rule OGC222 counts a test calling it as one that asserts. The engine's own
+use of each is named below; those tests are the fuller examples.
+
+A scene drawn in the test
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``OpenGLContext.testing.scenes.scene_context(children, size=(96, 96))`` is a
+context drawing a scenegraph of ``children``, current for a ``with`` block
+and released when it ends. The context is the interactive context of the
+backend the run uses, or ``base`` where a project has its own. It is hidden,
+does not wait for the display's refresh, draws no frame-rate counter and pins
+image-based lighting to ``analytic``; ``environment`` sets further
+``OPENGLCONTEXT_*`` values for the block and puts the old ones back, and any
+other keyword is a ``ContextDefinition`` field. ``context.OnDraw(force=1)``
+draws a frame, and ``drawn_image(context)`` draws one and returns it as a
+top-down ``(H, W, 3)`` array. The ``scene_context`` fixture skips the test
+where no core-profile context can be made.
+
+A memo follows every input
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A memo keeps an answer against what it was made from. An input it does not
+compare is an edit it does not see, and the next frame is drawn from the
+stale answer. ``OpenGLContext.testing.memo.check_memo_inputs(ask, inputs,
+fresh=...)`` takes a way to ask the memo, one edit per input (a mapping of
+name to callable, or ``(name, edit)`` pairs, applied in order), and the
+computation with no memo in the way. It applies each edit and fails naming
+every input whose edit the memo did not follow, every edit after which the
+memo answers differently from ``fresh``, and every edit that changes nothing:
+
+.. code-block:: python
+
+   from OpenGLContext.testing.memo import check_memo_inputs
+
+   def test_the_level_memo_follows_its_fields():
+       check_memo_inputs(ask, [
+           ('LOD.range', lambda: setattr(node, 'range', [20.0, 30.0])),
+           ('LOD.hysteresis', lambda: setattr(node, 'hysteresis', 0.0)),
+       ], fresh=lambda: [node.levelAt(distance, 1.0, 1.0)])
+
+Make the nodes an edit sets before the edits start: making a node sets its
+fields, and a field set moves the generation counts memos compare, which
+would hide a missed input. ``same`` compares two answers where ``==`` does
+not. ``tests/unit/test_memo_inputs.py`` holds the batching, mirror,
+level-of-detail and zone placement memos to it.
+
+A still frame asks nothing new of GL
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A frame of a scene nothing has changed in should find every buffer, texture
+and program made and filled. ``OpenGLContext.testing.stillframe.
+check_still_frame(draw, allocations=0, uploads=0, compiles=0, warmup=3)``
+draws ``warmup`` frames, counts the GL calls of the next, and fails where the
+frame made more GL objects, filled more buffers or textures, or compiled or
+linked more than the floors given. The failure names each call and the line
+that made it:
+
+.. code-block:: python
+
+   from OpenGLContext.testing.stillframe import check_still_frame
+
+   def test_the_menu_over_the_level_costs_nothing(scene_context):
+       with scene_context(level_children) as context:
+           check_still_frame(lambda: context.OnDraw(force=1), warmup=8)
+
+``counting_gl(names)`` is the shim underneath: it replaces each named entry
+point wherever a loaded module or PyOpenGL's buffer implementation holds it,
+counts the calls from any thread, and puts every one back. A function that
+bound an entry point to a local name before the count began is not counted.
+``tests/unit/test_still_frames.py`` holds six scenes to a floor of nothing.
+
+Cost that grows with the scene
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``OpenGLContext.testing.scaling.check_scaling(prepare, n=..., most=...,
+factor=4, measure='time')`` builds the scene at ``n`` and at ``factor * n``
+with ``prepare(size)``, which returns the work as a callable, runs the work
+once at each size and then measures it, and fails where the larger costs more
+than ``most`` times the smaller. ``measure='count'`` takes the number the work
+returns (objects touched, records built) instead of its time; a count is the
+same on every machine and is the better measure where the work can give one.
+A timed test carries the ``serial`` marker, and the fixture refuses one that
+does not. Linear work at a factor of 4 costs about 4 times as much, work
+independent of the scene about 1, and work growing as the square about 16:
+
+.. code-block:: python
+
+   @pytest.mark.serial
+   def test_classifying_grows_with_the_objects(check_scaling):
+       def prepare(objects):
+           table, lows, highs = road(objects)
+           return lambda: table.classify_many(lows, highs)
+       check_scaling(prepare, n=5000, most=6.0, repeat=3)
+
+``tests/unit/test_scaling.py`` holds zone classification, the mirror planner
+and ground cover to it.
+
+An optional layer that fails
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Reflections, bloom and zone captures add to a frame that is complete without
+them, and one that fails is switched off and reported once
+(``passes/layerguard.LayerGuard``). ``OpenGLContext.testing.layers.
+check_failing_layer(frame, owner, name, frames=10, context=None)`` replaces
+``owner.name`` with a method that raises, draws ``frames`` frames, and fails
+where the layer was entered more than once, its failure was logged other than
+once, or it asked for a frame (``context.triggerRedraw``) after it failed:
+
+.. code-block:: python
+
+   def test_reflections_that_fail_are_switched_off(scene_context):
+       with scene_context(mirror_room) as context:
+           for _ in range(8):
+               context.OnDraw(force=1)
+           check_failing_layer(lambda: context.OnDraw(force=1),
+                               renderpass.FLAT, '_renderReflections',
+                               context=context)
+
+``attempts``, ``reports`` and ``most_asked`` change the bounds for a layer
+that is tried once per item. ``tests/unit/test_failing_layers.py`` holds
+reflections, bloom and zone captures to it.
+
+Geometry under a mirror
+~~~~~~~~~~~~~~~~~~~~~~~
+
+A transform with a negative determinant turns every triangle's winding over,
+and a geometry that culls its back faces must turn its front face with it.
+``OpenGLContext.testing.mirrored.check_mirrored_render(geometry)`` draws the
+geometry in front of a camera at the origin, and again inside
+``Transform(scale=(-1, 1, 1))``, and fails where the second picture differs
+from the first turned left to right over more than ``most_differing`` of the
+frame (default 2%), or where the geometry covers less than ``least_drawn`` of
+it. ``appearance``, ``distance``, ``size`` and ``environment`` (a renderer,
+say) are passed through. ``tests/unit/test_mirrored_geometry.py`` holds every
+geometry the engine registers to it and fails when a new one has neither a
+case nor a stated reason.
+
+Floating-point errors
+~~~~~~~~~~~~~~~~~~~~~
+
+The plugin's ``numpy_errors`` setting runs each test inside
+``numpy.errstate`` with that action for division by zero, overflow and
+invalid operations: ``raise`` makes a NaN or an infinity made from numbers a
+``FloatingPointError`` where it is made. Underflow is left alone, since a
+result too small for its type becoming zero is the answer. Unset, NumPy's own
+setting stands; ``--numpy-errors`` overrides the ini value. It holds on the
+test's own thread. A test that means to make a NaN says so with
+``numpy.errstate`` around it. OpenGLContext's suite runs with ``raise``:
+
+.. code-block:: toml
+
+   [tool.pytest.ini_options]
+   numpy_errors = "raise"
+
+Files opened outside the sanctioned openers
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A path a document names reaches the disk through the resolver, which holds
+it to the directory it was named in, and a file is written through
+``OpenGLContext.atomicfiles``. The open audit (``OpenGLContext.testing.
+openaudit``) is a ``sys.audit`` hook that charges each file opened to the
+innermost module of a checked package on the stack, and records it where
+that module is not a sanctioned opener. Opens the import system or traceback
+formatting make on a module's behalf, a package's own data files and file
+descriptors are not recorded. A package name sanctions every module in it.
+
+``open_audit = "fail"`` fails the test that opened such a file, at teardown,
+naming the module, the line and the path; ``"report"`` lists each as an
+``OpenAuditWarning`` in the run's warnings summary; ``"off"``, the default,
+installs nothing. ``open_audit_checked`` defaults to ``OpenGLContext``, and
+``open_audit_sanctioned`` to the engine's openers:
+
+.. code-block:: toml
+
+   [tool.pytest.ini_options]
+   open_audit = "fail"
+   open_audit_checked = ["OpenGLContext", "mygame"]
+   open_audit_sanctioned = [
+       "OpenGLContext.loaders.resolver",
+       "OpenGLContext.contentpacks",
+       "OpenGLContext.atomicfiles",
+       "OpenGLContext.testing",
+       "mygame.savegames",
+   ]
+
+A project listing its own openers names the engine's as well. The hook costs
+about 4 microseconds an open that reaches a checked module; over the engine's
+unit suite the difference is inside the run-to-run spread. OpenGLContext's
+suite runs with ``fail``, and its ``pyproject.toml`` lists which modules open
+files and why.
 
 .. _what-to-test:
 

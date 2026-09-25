@@ -396,11 +396,13 @@ is reused the same way. No GPU objects are created or destroyed per frame.
 See ``_build_instance_vao`` and ``draw_instanced_mesh`` (the VAO and instance
 ``vbo.VBO`` are kept on the mesh's ``_MeshGPU`` and released with it), and
 ``_bind_material_array`` (one persistent UBO on the pass, orphaned and
-uploaded again for each group). The instance matrices are in eye space (they
-include the camera), so the buffer is uploaded every frame even for a static
-scene. Keeping it static would need model-space matrices and the view
-transform in the shader. ``tests/unit/test_instanced_caching_gl.py`` counts
-GPU-object creations per frame and requires zero in steady state.
+filled again when a group's materials differ from what it holds). The
+instance matrices are in eye space (they include the camera), so the instance
+buffer is filled again whenever the camera or an instance moves; a frame
+whose packed instances are the bytes the buffer already holds fills nothing.
+``tests/unit/test_instanced_caching_gl.py`` counts GPU-object creations per
+frame and requires zero in steady state, and ``tests/unit/test_still_frames.py``
+requires no uploads in a still frame.
 
 Culling off-screen copies
 ~~~~~~~~~~~~~~~~~~~~~~~~~

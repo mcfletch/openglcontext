@@ -998,6 +998,36 @@ of them is set -- a `('set', field)` signal through `pydispatch.dispatcher`
 A cache's tests edit each input in turn and assert that the answer changes,
 so an input the key misses fails a test rather than a frame.
 
+### Before a change is finished
+
+The static gates (ruff, mypy, `oglc-check`) catch what the syntax and the
+types show. These defect classes they do not, so a change that can introduce
+one carries the test that holds it, from `OpenGLContext.testing` (the
+conventions are in [docs/testing.rst](docs/testing.rst#conventions)):
+
+- A memo or cache - `check_memo_inputs`, one edit per input its answer is
+  made from (`tests/unit/test_memo_inputs.py`).
+- Anything drawn every frame - `check_still_frame`: a still scene's second
+  frame makes, fills and compiles nothing (`tests/unit/test_still_frames.py`).
+- Per-frame work over the scene's objects - `check_scaling` at n and 4n, by
+  count where the work can report one, by time under `serial`
+  (`tests/unit/test_scaling.py`).
+- An optional frame layer - `check_failing_layer`: made to fail, it is tried
+  once, reported once and asks for no frames (`tests/unit/test_failing_layers.py`).
+- A geometry node or a draw path - `check_mirrored_render`, and a case in
+  `tests/unit/test_mirrored_geometry.py` for a new geometry class.
+- A numeric entry point - the suite's `numpy_errors = "raise"`, and tests at
+  zero, negative, huge and non-finite inputs.
+- A module that opens files - the suite's open audit: through the resolver or
+  `atomicfiles`, or listed in `open_audit_sanctioned` in `pyproject.toml` with
+  the reason its paths are its own.
+- A second implementation of one API, or a specification's format - a
+  differential test between the implementations, or the specification's own
+  sample assets.
+- Logic in a window-bound class - hoisted into a plain object and tested
+  there.
+- A user-visible change - its page in `docs/` updated in the same commit.
+
 ### Imports
 
 `from x import *` is traditional in this codebase and should **not** be churned out

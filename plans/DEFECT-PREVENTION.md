@@ -1,6 +1,6 @@
 # Defect prevention: gates for the defect classes the reviews keep finding
 
-Status: In progress. Items 1, 2 and 5 of the order of work are done (see [Baseline, ruff rules](#baseline-ruff-rules), [Baseline, OGC rules](#baseline-ogc-rules) and [The post-edit gates](#the-post-edit-gates)); items 3, 4, 6 and 7 are under way and parked (see [Parked, 2026-09-25](#parked-2026-09-25)).
+Status: In progress. Items 1, 2, 5 and 6 of the order of work are done (see [Baseline, ruff rules](#baseline-ruff-rules), [Baseline, OGC rules](#baseline-ogc-rules), [The post-edit gates](#the-post-edit-gates) and [The test conventions](#the-test-conventions)); items 3, 4 and 7 are under way (see [Parked, 2026-09-25](#parked-2026-09-25)).
 
 ## Why
 
@@ -775,6 +775,41 @@ Item 4 of the order of work landed on 2026-09-25.
   `ContextKey` is the smaller change that gives that, where a defect shows
   it is needed.
 
+## The test conventions
+
+Item 6 landed on 2026-09-25: a module of `OpenGLContext.testing` for each
+convention, each also a fixture of the engine's pytest plugin, documented in
+[docs/testing.rst](../docs/testing.rst) ("Test conventions"), and the section
+"Before a change is finished" in `openglcontext/CLAUDE.md` naming the test
+each non-static class needs. The helpers are named `check_*` (the plan's
+`memo_inputs` is `check_memo_inputs`), which is how OGC222 counts a test that
+calls one as asserting.
+
+| Convention | Module | Applied in | Defects found and fixed |
+|---|---|---|---|
+| `check_memo_inputs` | `testing/memo.py` | `tests/unit/test_memo_inputs.py`: batching memo, mirror generation, LOD memo, zone placement | `LOD.hysteresis` unwatched by `level_generation` (lod_demo's toggle did nothing while still); a `PBRMesh`'s own `material` unwatched by `mirror_generation`; `shape_material` ignored the mesh's material under an `Appearance` with no material |
+| `check_scaling` | `testing/scaling.py` | `tests/unit/test_scaling.py`: zones, mirror planner, ground cover | `ZoneTable.classify_many` grew as objects times zones (16 to 18 times at 4x); Z-ordered chunks and a tree query per chunk make it linear (20,000 objects over 57 zones: 0.66 s to 0.04 s) |
+| `check_failing_layer` | `testing/layers.py` | `tests/unit/test_failing_layers.py`: reflections, bloom start and composite, zone captures | none: each is isolated |
+| `check_still_frame` | `testing/stillframe.py` | `tests/unit/test_still_frames.py`: six scenes | instance buffers, group material arrays and bitmap text were uploaded every still frame |
+| `check_mirrored_render` | `testing/mirrored.py` | `tests/unit/test_mirrored_geometry.py`: every registered geometry, both renderers | Box, Sphere, Cone, Cylinder, Gear, Teapot, NurbsSurface and TrimmedSurface drew inside out under a negative scale; bitmap text in the core profile was drawn at a fixed spot rather than at the node |
+| `numpy_errors` ini setting | `testing/plugin.py` | openglcontext's suite runs with `raise` | `polygonsort` divided by `w = 0` for a triangle reaching the eye plane; its `project` raised for most point counts and scaled y by the width |
+| open audit (`open_audit` ini setting) | `testing/openaudit.py` | openglcontext's suite runs with `fail` | 22 readers of document- and application-named files open them directly; they are listed in `open_audit_sanctioned` and leave it as item 4 routes them through the resolver's checked paths |
+
+`scene_context` and `drawn_image` (`testing/scenes.py`) are what the drawing
+conventions are built on. The open audit costs about 4 microseconds an open
+that reaches a checked module; the unit suite on 8 workers took 242 s
+without it and 217 s with it, inside the run-to-run spread.
+
+Left open: the mirrored-render test draws in the core profile, so the
+compatibility-profile draw paths (fixed function, display lists) are not
+held by it; underflow is not raised, since a result too small for its type
+becoming zero is the answer. Two failures seen in full runs belong to other
+work in progress in the tree: `test_viewer_component` (a viewer mix-in
+shadowing `renderer` and `resolveDefinition`) and
+`test_gltf_regression_diff::test_dl_downloads_when_absent`.
+`test_unlit_pickable_gl[pointset]` failed once in a loaded full run (a
+subprocess pick returned no hit) and passed in four runs alone.
+
 ## Parked, 2026-09-25
 
 Work stopped on a session limit with items 3, 4, 6 and part of 7 mid-change.
@@ -786,9 +821,9 @@ is to be committed as it stands without its tests passing.
 - openglcontext (items 3, 4, 6): the checked types and `JSONObject` in the
   loaders, tiles3d manifest and tileset, hooks, vegetation, contentpacks
   catalog and viewer (item 4, which also owns openglcontext's OGC111 hits and
-  the mypy plugin, whose first commit is in openglcontext-checks as 192e7ba);
-  `OpenGLContext/testing/layers.py` and `testing/scenes.py`, new and
-  untracked (item 6's failing-layer driver and still-frame scenes). Item 3
+  the mypy plugin, whose first commit is in openglcontext-checks as 192e7ba).
+  Item 6 resumed and is recorded under
+  [The test conventions](#the-test-conventions). Item 3
   has resumed and is recorded under
   [Baseline, sanctioned-API rules](#baseline-sanctioned-api-rules), item 4
   under [The checked types](#the-checked-types). The edits to

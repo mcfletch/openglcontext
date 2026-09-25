@@ -127,6 +127,13 @@ arrays and a texture rather than ``glBitmap``, ``glRasterPos`` or display
 lists, so it runs on an OpenGL 3.3 core-profile context and does not need a
 GLUT display.
 
+The first line starts at the ``Text`` node's origin, projected into the
+viewport, and the glyphs are drawn upright at the atlas's size facing the
+viewer, as ``glRasterPos`` and ``glBitmap`` place a bitmap. The node's
+transform moves the text; it does not scale, turn or mirror the glyphs.
+Text whose origin is behind the viewer is not drawn. A string drawn again
+unchanged is not uploaded again.
+
 The provider registry puts this provider ahead of the other bitmap providers
 in both profiles. In the :doc:`core profile <renderpasses>` the
 fixed-function providers cannot run and are skipped. In the compatibility
