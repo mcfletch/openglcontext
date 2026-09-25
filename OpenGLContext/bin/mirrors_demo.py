@@ -168,9 +168,16 @@ class MirrorHall:
         return '\n'.join('  %s -- %s' % item for item in cls.KEYS.items())
 
 
-def main() -> int:
-    """Open the hall in a window."""
+def main(argv: list[str] | None = None) -> int:
+    """Open the hall in a window; ``--help`` prints the keys and exits."""
+    import argparse
     import os
+    argparse.ArgumentParser(
+        prog='oglc-mirrors',
+        description=(__doc__ or '').split('\n\n')[0],
+        epilog='keys:\n' + MirrorHall.help(),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    ).parse_args(argv)
     # The mirrors are metallic/roughness materials, which the PBR pass draws.
     os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
     from OpenGLContext import testingcontext

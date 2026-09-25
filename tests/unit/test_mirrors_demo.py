@@ -135,3 +135,15 @@ def test_the_hall_draws_its_mirrors(render_scene, monkeypatch):
     stats = renderpass.FLAT.stats
     assert stats.mirrorViews == 3
     assert stats.mirrorTexels > 0
+
+
+def test_help_prints_usage_and_opens_no_window(capsys):
+    """``oglc-mirrors --help`` answers on the console and exits."""
+    import pytest
+    from OpenGLContext.bin import mirrors_demo
+    with pytest.raises(SystemExit) as stopped:
+        mirrors_demo.main(['--help'])
+    assert stopped.value.code == 0
+    said = capsys.readouterr().out
+    assert 'usage' in said
+    assert 'reflections on and off' in said.lower()
