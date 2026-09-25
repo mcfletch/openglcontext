@@ -1,5 +1,5 @@
 #! /usr/bin/env python
-"""Collision events: a yard where things are struck, and the game hears about it.
+"""Collision events: a yard where things are struck, and each strike calls the subscriber registered for it.
 
 Walk around with the arrow keys and press the keys it prints:
 
@@ -255,7 +255,7 @@ class CollisionYard:
             basenodes.SimpleBackground(color=(0.55, 0.62, 0.72)),
         ])
 
-    # -- what the game hears -------------------------------------------------
+    # -- the collision subscribers -------------------------------------------
     def _thud(self, hit: Collision) -> None:
         self.sounds.append(('thud', hit.point, min(1.0, hit.approach / IMPACT_FULL)))
 
