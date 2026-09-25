@@ -227,3 +227,35 @@ def _all_shapes(node, out=None):
             list(getattr(node, 'level', None) or []):
         _all_shapes(child, out)
     return out
+
+
+# --- values a file should not have given ----------------------------------------
+
+@pytest.mark.parametrize('tag', [
+    {'kind': 'water', 'depth': 'deep'},
+    {'kind': 'water', 'depth': float('nan')},
+    {'kind': 'water', 'style': {'style': 'lake', 'amplitude': 'x'}},
+    {'kind': 'water', 'style': {'amplitude': float('inf'), 'flow': ['a', 1]}},
+    {'kind': 'water', 'style': {'flow': [float('nan'), 0.0]}},
+])
+def test_a_malformed_water_value_loads_as_water(tag):
+    scene, shape = _loaded(tag)
+    body, = scene.hook_data['water']
+    assert np.all(np.isfinite(body.volume.minimum))
+    style = shape.geometry.waveStyle
+    assert np.isfinite(style.amplitude) and np.all(np.isfinite(style.flow))
+
+
+def test_a_negative_depth_is_no_depth(caplog):
+    """A box reaching up out of the water is not what a depth means."""
+    scene, _shape = _loaded({'kind': 'water', 'depth': -6.0})
+    body, = scene.hook_data['water']
+    assert body.volume.minimum[1] == pytest.approx(body.volume.maximum[1])
+
+
+def test_an_unknown_medium_is_water(caplog):
+    with caplog.at_level('WARNING'):
+        scene, _shape = _loaded({'kind': 'water', 'medium': 'mud'})
+    body, = scene.hook_data['water']
+    assert body.medium == water.medium.WATER
+    assert 'mud' in caplog.text

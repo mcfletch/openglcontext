@@ -224,3 +224,41 @@ class TestRegistry:
             zoning.unregister_scoped('GAME_echo')
         assert zone.setting(REVERB).level == pytest.approx(0.9)
         assert 'GAME_echo' not in zoning.registered_scoped()
+
+
+class TestMalformedValues:
+    """One bad value in a zone costs the value, or the zone, never the load."""
+
+    @pytest.mark.parametrize('block, check', [
+        ({'priority': 'high'}, lambda zone: zone.priority == 0),
+        ({'priority': 2.5}, lambda zone: zone.priority == 0),
+        ({'blend': 'x'}, lambda zone: zone.blend == 0.0),
+        ({'blend': float('inf')}, lambda zone: zone.blend == 0.0),
+        ({'environment': {'intensity': 'dim'}},
+         lambda zone: zone.setting(ENVIRONMENT).intensity == 1.0),
+        ({'environment': {'capture': {'position': [1.0]}}},
+         lambda zone: tuple(zone.setting(ENVIRONMENT).captureCentre) == (0.0, 0.0, 0.0)),
+        ({'reverb': {'level': 'x', 'decay': -3.0}},
+         lambda zone: (zone.setting(REVERB).level, zone.setting(REVERB).decay)
+         == (pytest.approx(0.4), 0.0)),
+    ])
+    def test_a_malformed_value_is_its_default(self, block, check, caplog):
+        with caplog.at_level(logging.WARNING):
+            scene = load(zone_node(shape=0, **block))
+        zone, = scene.zones
+        assert check(zone)
+        assert caplog.text
+
+    def test_a_box_without_three_sizes_is_no_zone(self, caplog):
+        body = zone_node(shape=0)
+        body['extensions']['KHR_implicit_shapes']['shapes'][0]['box']['size'] = [2.0, 3.0]
+        with caplog.at_level(logging.WARNING):
+            scene = load(body)
+        assert scene.zones == []
+        assert 'shape' in caplog.text
+
+    def test_a_box_with_a_size_that_is_no_number_is_no_zone(self):
+        body = zone_node(shape=0)
+        body['extensions']['KHR_implicit_shapes']['shapes'][0]['box']['size'] = [
+            2.0, float('nan'), 1.0]
+        assert load(body).zones == []

@@ -28,12 +28,19 @@ Reference:
 """
 from __future__ import annotations
 
+import logging
+import math
 from typing import TYPE_CHECKING, Any, Optional, Sequence, Tuple
 
 import numpy as np
 
+from OpenGLContext.loaders.documentvalues import DocumentValues
+from OpenGLContext.loaders.gltf.accessors import declared_bounds
+
 if TYPE_CHECKING:
     import pygltflib
+
+log = logging.getLogger(__name__)
 
 #: The property the levels are named by, on a node's ``extensions``.
 EXTENSION = 'MSFT_lod'
@@ -46,41 +53,74 @@ COVERAGE = 'MSFT_screencoverage'
 FIRST_COVERAGE = 0.5
 
 
-def alternative_ids(g: "pygltflib.GLTF2") -> set:
+def alternative_ids(g: "pygltflib.GLTF2",
+                    values: Optional[DocumentValues] = None) -> set:
     """Every node index some node names as a coarser level of itself.
 
     A level belongs to the node that lists it. A file may mention one in its
     scene as well -- nothing forbids it -- and drawing it there too would put
     every level of the model on screen at once.
     """
+    values = values if values is not None else DocumentValues(logger=log)
     found: set = set()
     for node in (g.nodes or []):
         extensions = getattr(node, 'extensions', None) or {}
         if isinstance(extensions, dict):
-            ids = (extensions.get(EXTENSION) or {}).get('ids') or []
-            found.update(int(index) for index in ids)
+            found.update(level_ids(extensions.get(EXTENSION), values))
     return found
 
 
-def level_ids(extension: Any) -> list:
-    """The coarser levels an ``MSFT_lod`` object names, in decreasing detail."""
-    if not isinstance(extension, dict):
+def level_ids(extension: Any, values: Optional[DocumentValues] = None) -> list:
+    """The coarser levels an ``MSFT_lod`` object names, in decreasing detail.
+
+    An extension that is no object names none, and an id that is no node
+    index is reported and passed over.
+    """
+    if extension is None:
         return []
-    return [int(index) for index in (extension.get('ids') or [])]
+    values = values if values is not None else DocumentValues(logger=log)
+    if not isinstance(extension, dict):
+        values.warn('%s is %r, which is not an object; the node is drawn at its '
+                    'finest level' % (EXTENSION, extension))
+        return []
+    ids = extension.get('ids') or []
+    if not isinstance(ids, list):
+        values.warn('%s ids is %r, which is not a list; the node is drawn at its '
+                    'finest level' % (EXTENSION, ids))
+        return []
+    found = []
+    for raw in ids:
+        index = values.integer(raw, -1, '%s id' % (EXTENSION,))
+        if index < 0:
+            values.warn('%s id %r is not a node index; that level is left out'
+                        % (EXTENSION, raw))
+            continue
+        found.append(index)
+    return found
 
 
-def screen_coverage(node: Any, levels: int) -> list:
+def screen_coverage(node: Any, levels: int,
+                    values: Optional[DocumentValues] = None) -> list:
     """The coverage each of ``levels`` levels takes over at, decreasing.
 
     The file's own figures where it gave them. The extension calls them a hint
     and a file may leave them out, so a chain that named none is scheduled by
     halving -- ending at zero, because a level a *reader* guessed a threshold
-    for must not be the reason something disappears.
+    for must not be the reason something disappears. A figure that is no
+    finite number, or a value that is no list, is reported and the chain is
+    scheduled by halving; a negative figure is 0.
     """
     extras = getattr(node, 'extras', None) or {}
     stated = extras.get(COVERAGE) if isinstance(extras, dict) else None
     if stated:
-        return [float(value) for value in stated]
+        values = values if values is not None else DocumentValues(logger=log)
+        # NaN stands for a figure DocumentValues reported as unusable.
+        read = ([values.number(value, math.nan, COVERAGE, minimum=0.0)
+                 for value in stated] if isinstance(stated, list) else [math.nan])
+        if all(math.isfinite(value) for value in read):
+            return read
+        values.warn('%s is %r, which is not a list of numbers; the levels are '
+                    'scheduled by halving' % (COVERAGE, stated))
     return [FIRST_COVERAGE / (2 ** index) for index in range(levels - 1)] + [0.0]
 
 
@@ -90,7 +130,8 @@ def mesh_bounds(g: "pygltflib.GLTF2",
 
     Read from the ``POSITION`` accessors' ``min``/``max`` rather than from the
     vertices, so a level whose bytes have not been fetched can still be placed
-    and sized. None where the file declares neither.
+    and sized. None where the file declares neither, or declares no three
+    finite numbers for either.
     """
     lows: list = []
     highs: list = []
@@ -98,11 +139,11 @@ def mesh_bounds(g: "pygltflib.GLTF2",
         index = getattr(primitive.attributes, 'POSITION', None)
         if index is None:
             continue
-        accessor = g.accessors[index]
-        if not accessor.min or not accessor.max:
+        declared = declared_bounds(g.accessors[index])
+        if declared is None:
             continue
-        lows.append([float(value) for value in accessor.min[:3]])
-        highs.append([float(value) for value in accessor.max[:3]])
+        lows.append(declared[0])
+        highs.append(declared[1])
     if not lows:
         return None
     low = np.asarray(lows, dtype='d').min(axis=0)

@@ -36,6 +36,7 @@ from OpenGLContext.scenegraph import audio as audionodes
 from OpenGLContext.scenegraph.instancedshape import (
     InstancedShape, placement_matrices,
 )
+from OpenGLContext.loaders.documentvalues import DocumentValues
 from OpenGLContext.loaders.resolver import Resolver
 
 if TYPE_CHECKING:
@@ -578,12 +579,16 @@ class _SceneBuilder:
         # MSFT_lod: the node indices that are somebody's coarser level, so one
         # is built where it belongs and nowhere else, and how deep the walk
         # currently is inside such a level.
-        self.lod_alternatives: set = lodext.alternative_ids(g)
+        # What values from extensions and custom properties are read through:
+        # one for the whole load, so a value repeated on every node is
+        # reported once.
+        self.values = DocumentValues(logger=log)
+        self.lod_alternatives: set = lodext.alternative_ids(g, self.values)
         self._coarser_levels = 0
         # The OGLC_hook kinds this document's materials and nodes name, and the
         # hook_data they write. One runner for the whole load, so an unknown
         # kind is reported once rather than once per primitive.
-        self.hooks = hookreg.HookRunner(g, resolver)
+        self.hooks = hookreg.HookRunner(g, resolver, values=self.values)
         # OGLC_zone: the regions this document declares, and what each emitter
         # index was built as, so a zone can name the emitters it plays.
         self.zoning = zoning.ZoneReader(g)
@@ -695,7 +700,8 @@ class _SceneBuilder:
                 placements = gpu_instance_placements(
                     self.g, gi_ext, self.resolver)
         lod_ids = lodext.level_ids(
-            node_ext.get(lodext.EXTENSION) if isinstance(node_ext, dict) else None)
+            node_ext.get(lodext.EXTENSION) if isinstance(node_ext, dict) else None,
+            self.values)
         if lod_ids and node.mesh is not None and node_visible and placements is None:
             children.append(self._lod_node(node, lod_ids, world, ancestry,
                                            node_visible, group, node_casts))
@@ -831,7 +837,7 @@ class _SceneBuilder:
         centre, radius = measured if measured else ((0.0, 0.0, 0.0), 0.0)
         return ScreenCoverageLOD(
             level=levels,
-            screenCoverage=lodext.screen_coverage(node, len(levels)),
+            screenCoverage=lodext.screen_coverage(node, len(levels), self.values),
             center=centre,
             radius=radius,
         )

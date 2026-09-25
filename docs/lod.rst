@@ -157,6 +157,14 @@ coverage. The glTF loader takes it from the finest level's ``POSITION``
 accessor bounds. glTF requires a file to declare those bounds, so a level can
 be sized and placed without reading its geometry.
 
+A malformed ``MSFT_lod`` block costs the chain, not the file. An extension
+that is not an object, or ``ids`` that is not a list, leaves the node drawn at
+its finest level; an id that is no node index is logged and that level left
+out. ``MSFT_screencoverage`` that is not a list of finite numbers is logged
+and the levels are scheduled by halving, as for a file that gives none.
+Accessor bounds that are not three finite numbers are not read, and the level
+is measured from its points.
+
 .. _placement:
 
 Where a level is drawn

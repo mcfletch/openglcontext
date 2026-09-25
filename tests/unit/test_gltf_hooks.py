@@ -409,3 +409,26 @@ def test_register_works_as_a_decorator_and_as_a_call():
 
 def test_registered_reports_what_is_bound():
     assert hooks.registered('nothing-is-bound-to-this') is None
+
+
+# --- a hook that fails ------------------------------------------------------------
+
+def _fails(ctx):
+    raise RuntimeError('the lantern hook broke on %s' % ctx.at)
+
+
+def test_a_material_hook_that_raises_leaves_the_loaders_shape(caplog):
+    """One broken hook costs its holder the hook, not the file its load."""
+    material = _tagged_material(extras={'OGLC_hook': 'lantern'})
+    with bound('lantern', _fails), caplog.at_level(logging.ERROR):
+        scene = gltf.load_gltf(write_glb(_quad(material)))
+    shape, = _shapes(scene.group)
+    assert isinstance(shape.geometry, PBRMesh)
+    assert 'lantern' in caplog.text
+
+
+def test_a_node_hook_that_raises_leaves_the_transform_and_children(caplog):
+    with bound('lantern', _fails), caplog.at_level(logging.ERROR):
+        scene = gltf.load_gltf(write_glb(_tagged_node('lantern', name='lamp')))
+    assert len(_shapes(scene.group)) == 1
+    assert 'lantern' in caplog.text and 'lamp' in caplog.text

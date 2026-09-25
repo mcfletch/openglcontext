@@ -40,6 +40,7 @@ else:
     from OpenGLContext.scenegraph.basenodes import Shape, Appearance
 from OpenGLContext.loaders.gltf.accessors import (
     _read_floats, _read_accessor, _read_texcoords, _read_normalized, _read_colors,
+    declared_bounds,
 )
 from OpenGLContext.loaders.gltf.materials import _build_material
 from OpenGLContext.loaders.gltf.transforms import _bounds_from_points
@@ -189,9 +190,8 @@ def _primitive_shape(g: "pygltflib.GLTF2", primitive: "pygltflib.Primitive",
                    draw_mode=int(draw_mode),
                    solid=not bool(getattr(material, 'doubleSided', False)))
     shape = Shape(geometry=mesh, appearance=Appearance(material=material))
-    acc = g.accessors[attrs.POSITION]
-    bounds = (np.asarray(acc.min, dtype='d'), np.asarray(acc.max, dtype='d')) \
-        if acc.min and acc.max else _bounds_from_points(positions)
+    bounds = declared_bounds(g.accessors[attrs.POSITION]) \
+        or _bounds_from_points(positions)
     if hooks is not None and key is not None:
         # The material hook stands here rather than beside _build_material
         # because what a substance needs is often on the *geometry* -- water's

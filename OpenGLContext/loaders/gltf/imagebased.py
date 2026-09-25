@@ -10,17 +10,22 @@ one with ``{"light": n}``, and so does a zone's ``extensions`` block
 Each light is read into an
 :class:`~OpenGLContext.scenegraph.imagebasedlight.ImageBasedLight` with its
 faces decoded to linear float: a four-channel PNG as RGBD HDR, anything else
-as the LDR values it holds. A light whose images cannot all be read is left
-out with one warning, and whatever named it lights as though it had not.
+as the LDR values it holds. A light whose images cannot all be read, or whose
+coefficients are not nine rows of three finite numbers, is left out with one
+warning, and whatever named it lights as though it had not. An ``intensity``,
+``rotation`` or ``specularImageSize`` that is no finite number of the right
+kind is reported and left at its default.
 """
 from __future__ import annotations
 
 import io
 import logging
-from typing import Any, List, Optional
+import math
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 
+from OpenGLContext.loaders.documentvalues import DocumentValues, bounded
 from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight, decode_rgbd
 
 log = logging.getLogger(__name__)
@@ -44,13 +49,13 @@ def _face(g: Any, index: Any, resolver: Any) -> Optional[np.ndarray]:
     return decode_rgbd(np.asarray(image)).astype('f4')
 
 
-def _light(g: Any, entry: Any, resolver: Any) -> Optional[ImageBasedLight]:
+def _light(g: Any, entry: Any, resolver: Any,
+           values: DocumentValues) -> Optional[ImageBasedLight]:
     if not isinstance(entry, dict):
         return None
-    coefficients = entry.get('irradianceCoefficients')
+    coefficients = _coefficients(entry.get('irradianceCoefficients'))
     mips = entry.get('specularImages')
-    if not (isinstance(coefficients, list) and len(coefficients) == 9
-            and isinstance(mips, list) and mips):
+    if coefficients is None or not (isinstance(mips, list) and mips):
         return None
     specular: List[List[np.ndarray]] = []
     for level in mips:
@@ -62,11 +67,30 @@ def _light(g: Any, entry: Any, resolver: Any) -> Optional[ImageBasedLight]:
         specular.append(faces)                            # type: ignore[arg-type]
     return ImageBasedLight(
         specular=specular,
-        intensity=float(entry.get('intensity', 1.0)),
-        rotation=tuple(float(v) for v in entry.get('rotation', (0.0, 0.0, 0.0, 1.0))),
-        irradianceCoefficients=[tuple(float(v) for v in row) for row in coefficients],
-        specularImageSize=int(entry.get('specularImageSize', len(specular[0][0]))),
+        intensity=values.number(entry.get('intensity'), 1.0,
+                                '%s intensity' % (EXTENSION,), minimum=0.0),
+        rotation=values.vector(entry.get('rotation'), (0.0, 0.0, 0.0, 1.0),
+                               '%s rotation' % (EXTENSION,), length=4),
+        irradianceCoefficients=coefficients,
+        specularImageSize=values.integer(
+            entry.get('specularImageSize'), len(specular[0][0]),
+            '%s specularImageSize' % (EXTENSION,), minimum=1),
         DEF=str(entry.get('name') or '') or None)
+
+
+def _coefficients(raw: Any) -> Optional[List[Tuple[float, ...]]]:
+    """Nine rows of three finite numbers, or None."""
+    if not isinstance(raw, list) or len(raw) != 9:
+        return None
+    rows = []
+    for row in raw:
+        if not isinstance(row, list) or len(row) != 3:
+            return None
+        numbers = tuple(bounded(value, math.nan) for value in row)
+        if not all(math.isfinite(number) for number in numbers):
+            return None
+        rows.append(numbers)
+    return rows
 
 
 def read_lights(g: Any, resolver: Any) -> List[Optional[ImageBasedLight]]:
@@ -77,10 +101,13 @@ def read_lights(g: Any, resolver: Any) -> List[Optional[ImageBasedLight]]:
     if not isinstance(entries, list):
         return []
     found = []
+    values = DocumentValues(logger=log)
     for index, entry in enumerate(entries):
         try:
-            light = _light(g, entry, resolver)
-        except (OSError, ValueError) as error:
+            light = _light(g, entry, resolver, values)
+        except Exception as error:
+            # Pillow refuses an oversized image with DecompressionBombError,
+            # which is neither an OSError nor a ValueError.
             log.warning('%s light %d could not be read: %s', EXTENSION, index, error)
             light = None
         else:

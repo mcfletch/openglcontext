@@ -25,10 +25,14 @@ Four parameters, all optional:
     ``water``, ``slime`` or ``lava``: what being inside it is like
     (:mod:`OpenGLContext.scenegraph.water.medium`). Lava is this hook with
     another medium and another material, which is why there is no second kind.
+    A name :data:`~OpenGLContext.scenegraph.water.medium.MEDIA` does not have
+    is reported and is water.
 ``depth``
-    How far below the surface the body reaches, in metres. A surface has no
-    thickness, so a sheet with no ``depth`` bounds a box nothing can be inside
-    of except exactly at the waterline.
+    How far below the surface the body reaches, in metres, at least 0. A
+    surface has no thickness, so a sheet with no ``depth`` bounds a box nothing
+    can be inside of except exactly at the waterline.
+
+A value that is no finite number is reported once and left at its default.
 
 What it leaves behind is one :class:`WaterBody` per tagged primitive in
 ``scene.hook_data['water']``: the mesh whose wave a frame advances, the style it
@@ -46,12 +50,13 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Tuple
 
+from OpenGLContext.loaders.documentvalues import DocumentValues
 from OpenGLContext.loaders.gltf import hooks
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.reflector import WATER as WATER_REFLECTOR
-from OpenGLContext.scenegraph.water.medium import WATER
+from OpenGLContext.scenegraph.water.medium import MEDIA, WATER
 from OpenGLContext.scenegraph.water.surface import (
     BREEZE, CHOPPY, FLOWING, LAKE, STILL, WaterStyle, water_material,
 )
@@ -59,7 +64,8 @@ from OpenGLContext.scenegraph.water.volumes import Volume
 
 log = logging.getLogger(__name__)
 
-__all__ = ['KIND', 'STYLES', 'WaterBody', 'style_for', 'water_hook', 'advance']
+__all__ = ['KIND', 'STYLES', 'STYLE_RANGES', 'WaterBody', 'style_for',
+           'water_hook', 'advance']
 
 #: What a document names this hook.
 KIND = 'water'
@@ -87,37 +93,52 @@ class WaterBody:
         return str(self.volume.medium)
 
 
-def style_for(named: Any) -> WaterStyle:
+def style_for(named: Any, values: Optional[DocumentValues] = None) -> WaterStyle:
     """The motion a tag asks for: one of :data:`STYLES`, or one written out.
 
     A name nothing answers to is a pond, and said so once -- a misspelling in a
-    custom property is a model to load rather than a file to refuse.
+    custom property is a model to load rather than a file to refuse. So is a
+    written-out value that is no finite number, and one outside
+    :data:`STYLE_RANGES` is the nearer end of its range. ``values`` reports
+    each problem once for a whole load; without one, once for this call.
     """
+    values = values if values is not None else DocumentValues(logger=log)
     if isinstance(named, str):
         style = STYLES.get(named.strip().lower())
         if style is None:
-            log.warning('%r is not a water style; %s are, and this one is '
-                        'drawn still', named, ', '.join(sorted(STYLES)))
+            values.warn('%r is not a water style; %s are, and this one is '
+                        'drawn still' % (named, ', '.join(sorted(STYLES))))
             return STILL
         return style
     if isinstance(named, dict):
-        return _written_out(named)
+        return _written_out(named, values)
     return STILL
 
 
-def _written_out(fields: Dict[str, Any]) -> WaterStyle:
+#: The range each written-out style field is held to, ``(minimum, maximum)``
+#: with None for an open end. A wavelength or a ripple is at least a
+#: centimetre, since the wave divides by both.
+STYLE_RANGES: Dict[str, Tuple[Optional[float], Optional[float]]] = {
+    'amplitude': (0.0, None), 'wavelength': (0.01, None), 'speed': (None, None),
+    'steepness': (0.0, None), 'ripple': (0.01, None),
+}
+
+
+def _written_out(fields: Dict[str, Any], values: DocumentValues) -> WaterStyle:
     """A style spelled out field by field, over whichever one it names."""
-    base = style_for(fields.get('style', 'still'))
-    values: Dict[str, Any] = {}
-    for name in ('amplitude', 'wavelength', 'speed', 'steepness', 'ripple'):
+    base = style_for(fields.get('style', 'still'), values)
+    found: Dict[str, Any] = {}
+    for name, (minimum, maximum) in STYLE_RANGES.items():
         if fields.get(name) is not None:
-            values[name] = float(fields[name])
-    flow = fields.get('flow')
-    if isinstance(flow, Sequence) and len(flow) == 2:
-        values['flow'] = (float(flow[0]), float(flow[1]))
-    if not values:
+            found[name] = values.number(fields[name], float(getattr(base, name)),
+                                        'the water %s' % (name,),
+                                        minimum=minimum, maximum=maximum)
+    if fields.get('flow') is not None:
+        found['flow'] = values.vector(fields['flow'], tuple(base.flow),
+                                      'the water flow', length=2)
+    if not found:
         return base
-    return base.varied(name=str(fields.get('name') or base.name), **values)
+    return base.varied(name=str(fields.get('name') or base.name), **found)
 
 
 def _body_volume(ctx: "hooks.HookContext", medium: str,
@@ -149,18 +170,23 @@ def water_hook(ctx: "hooks.HookContext") -> None:
         # what carries the wave, so there is nothing to do for the group that
         # holds it; a game wanting more registers a kind of its own.
         return None
-    style = style_for(ctx.params.get('style', 'still'))
+    values = ctx.values
+    style = style_for(ctx.params.get('style', 'still'), values)
     ctx.mesh.waveStyle = style
     ctx.mesh.wave_time = 0.0
-    if str(ctx.params.get('material', 'keep')).strip().lower() == 'engine':
+    if values.choice(ctx.params.get('material'), 'keep', 'the water material',
+                     ('keep', 'engine')) == 'engine':
         engine = water_material()
         ctx.mesh.material = engine
         ctx.shape.appearance.material = engine
     elif not getattr(ctx.material, 'reflector', None):
         # Water mirrors the shore, whatever material the artist gave it.
         ctx.material.reflector = WATER_REFLECTOR
-    volume = _body_volume(ctx, str(ctx.params.get('medium') or WATER),
-                          float(ctx.params.get('depth') or 0.0))
+    medium = values.choice(ctx.params.get('medium'), WATER, 'the water medium',
+                           MEDIA)
+    depth = values.number(ctx.params.get('depth'), 0.0, 'the water depth',
+                          minimum=0.0)
+    volume = _body_volume(ctx, medium, depth)
     if volume is not None:
         ctx.collect(WaterBody(mesh=ctx.mesh, style=style, volume=volume))
     return None

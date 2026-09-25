@@ -26,12 +26,12 @@ def png(colour, size=4, alpha=None):
     return 'data:image/png;base64,' + base64.b64encode(buffer.getvalue()).decode()
 
 
-def document(zone=True, scene=True):
+def document(zone=True, scene=True, **fields):
     images = [{'uri': png((255, 0, 0), alpha=128)}, {'uri': png((0, 64, 0), size=2)}]
     light = {'name': 'red-room', 'intensity': 1.0,
              'irradianceCoefficients': [[1.0, 0.0, 0.0]] + [[0.0, 0.0, 0.0]] * 8,
              'specularImageSize': 4,
-             'specularImages': [[0] * 6, [1] * 6]}
+             'specularImages': [[0] * 6, [1] * 6], **fields}
     body = {
         'asset': {'version': '2.0'},
         'extensionsUsed': ['EXT_lights_image_based', 'OGLC_zone', 'KHR_implicit_shapes'],
@@ -104,3 +104,34 @@ class TestReading:
             {'nodes': [], 'extensions': {'EXT_lights_image_based': {'light': 3}}}],
             'scene': 0}))
         assert loader.load_gltf(json.dumps(body).encode()).environment is None
+
+
+class TestMalformedValues:
+    """One bad value in a light costs the value, or the light, never the load."""
+
+    @pytest.mark.parametrize('fields, check', [
+        ({'intensity': 'bright'}, lambda light: light.intensity == 1.0),
+        ({'intensity': float('nan')}, lambda light: light.intensity == 1.0),
+        ({'intensity': -2.0}, lambda light: light.intensity == 0.0),
+        ({'rotation': 'abc'}, lambda light: tuple(light.rotation) == (0.0, 0.0, 0.0, 1.0)),
+        ({'rotation': [0, 0, float('inf'), 1]},
+         lambda light: tuple(light.rotation) == (0.0, 0.0, 0.0, 1.0)),
+        ({'specularImageSize': 1e999}, lambda light: light.specularImageSize == 4),
+        ({'specularImageSize': 'big'}, lambda light: light.specularImageSize == 4),
+    ])
+    def test_a_malformed_value_is_its_default(self, fields, check):
+        assert check(document(**fields).environment)
+
+    @pytest.mark.parametrize('coefficients', [
+        [5] * 9, [[1.0, 0.0]] * 9, [['a', 0, 0]] * 9, [[float('nan'), 0, 0]] * 9,
+    ])
+    def test_coefficients_that_are_no_numbers_leave_the_light_out(self, coefficients, caplog):
+        with caplog.at_level('WARNING'):
+            scene = document(irradianceCoefficients=coefficients)
+        assert scene.environment is None
+        assert 'EXT_lights_image_based' in caplog.text
+
+    def test_an_image_pillow_refuses_as_too_large_leaves_the_light_out(self, monkeypatch):
+        from PIL import Image as pil
+        monkeypatch.setattr(pil, 'MAX_IMAGE_PIXELS', 4)
+        assert document().environment is None

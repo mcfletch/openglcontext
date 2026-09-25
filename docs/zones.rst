@@ -136,7 +136,20 @@ zones by registering a reader:
 
 A reader returns a setting node, or None. ``reading`` gives it the document,
 the zone, and the scenegraph nodes built for the document's node, light and
-emitter indices.
+emitter indices. ``reading.values`` is a
+``loaders.documentvalues.DocumentValues`` for reading the block's numbers,
+flags and vectors: a value it cannot use is logged once for the document and
+the reader's default is used. An exception out of a reader is logged and that
+extension is left out of the zone.
+
+A value in the zone's own block that is no number of the right kind is logged
+once and left at its default -- ``priority`` 0, ``blend`` 0, an
+``environment`` ``intensity`` of 1, the reverb's 0.4, 1.5 s and 0.4 -- and a
+value outside its range is the nearer end of it: a ``blend`` or an
+``intensity`` below 0 is 0, and a reverb ``level`` or ``damping`` is held
+between 0 and 1. A shape that is not a zone's -- a box without three sizes, a
+negative or non-finite dimension -- is logged, and the node is no zone. The
+document loads either way.
 
 Environment lighting
 --------------------

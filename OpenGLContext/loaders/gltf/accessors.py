@@ -14,10 +14,12 @@ whose accessors share one buffer decodes it once.
 """
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Optional
+import math
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 import numpy as np
 
+from OpenGLContext.loaders.documentvalues import bounded
 from OpenGLContext.loaders.resolver import Resolver, decode_data_uri, resolver_max
 
 if TYPE_CHECKING:
@@ -141,6 +143,23 @@ def _checked_count(count: Any, what: str) -> int:
     if n < 0:
         raise ValueError("glTF %s declares a negative count (%d)" % (what, n))
     return n
+
+
+def declared_bounds(acc: Any) -> Optional[Tuple[np.ndarray, np.ndarray]]:
+    """A ``POSITION`` accessor's declared ``min`` and ``max``, or None.
+
+    None where the accessor declares either one as anything other than at
+    least three finite numbers; the caller then measures the points instead.
+    """
+    corners = []
+    for declared in (getattr(acc, 'min', None), getattr(acc, 'max', None)):
+        if not isinstance(declared, (list, tuple)) or len(declared) < 3:
+            return None
+        corner = np.array([bounded(value, math.nan) for value in declared[:3]], 'd')
+        if not np.all(np.isfinite(corner)):
+            return None
+        corners.append(corner)
+    return corners[0], corners[1]
 
 
 def _shared(resolver: Resolver, kind: str, index: int) -> Optional[np.ndarray]:

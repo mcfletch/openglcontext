@@ -31,8 +31,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from OpenGLContext.loaders.documentvalues import DocumentValues
 from OpenGLContext.loaders.gltf import shapes as shapetable
 from OpenGLContext.scenegraph.zone import (
     AUDIO, GRAVITY, LIGHTS, MIRRORS, VISIBILITY, Zone, ZoneAudio,
@@ -77,6 +78,8 @@ class ZoneReading:
     #: Settings other readers made for this zone, which a reader may extend
     #: rather than add a second of.
     settings: List[ZoneSetting] = field(default_factory=list)
+    #: What a reader reads a block's values through, reporting by ``warn``.
+    values: DocumentValues = field(default_factory=DocumentValues)
 
 
 #: A reader: the extension's block (a dict, or False) and the reading, to a
@@ -157,7 +160,8 @@ def _read_visibility(block: Any, reading: ZoneReading) -> Optional[ZoneSetting]:
         return None
     nodes = [n for n in (reading.node_transform(i) for i in _indices(block, 'nodes'))
              if n is not None]
-    return ZoneVisibility(nodes=nodes, visible=bool(block.get('visible', True)))
+    return ZoneVisibility(nodes=nodes, visible=reading.values.flag(
+        block.get('visible'), True, 'KHR_node_visibility visible'))
 
 
 @register_scoped('OGLC_hook')
@@ -187,12 +191,16 @@ def _read_gravity(block: Any, reading: ZoneReading) -> Optional[ZoneSetting]:
         return ZoneGravity(stop=True)
     if not isinstance(block, dict):
         return None
-    kind = str(block.get('type', 'directional'))
+    values = reading.values
     return ZoneGravity(
-        type=kind, gravity=float(block.get('gravity', 9.81)),
-        direction=tuple(float(v) for v in block.get('direction', (0.0, -1.0, 0.0))),
-        center=tuple(float(v) for v in block.get('center', (0.0, 0.0, 0.0))),
-        replace=bool(block.get('replace', False)), stop=bool(block.get('stop', False)))
+        type=str(block.get('type', 'directional')),
+        gravity=values.number(block.get('gravity'), 9.81, 'the zone gravity'),
+        direction=values.vector(block.get('direction'), (0.0, -1.0, 0.0),
+                                'the zone gravity direction'),
+        center=values.vector(block.get('center'), (0.0, 0.0, 0.0),
+                             'the zone gravity centre'),
+        replace=values.flag(block.get('replace'), False, 'the zone gravity replace'),
+        stop=values.flag(block.get('stop'), False, 'the zone gravity stop'))
 
 
 @register_scoped('EXT_lights_image_based')
@@ -221,24 +229,37 @@ def _read_image_light(block: Any, reading: ZoneReading) -> Optional[ZoneSetting]
 BUILTIN = tuple(registered_scoped())
 
 
-def _environment(block: Any) -> Optional[ZoneEnvironment]:
+#: The most and least a zone's ``priority`` may be: an ``SFInt32``.
+_INT32 = (-2 ** 31, 2 ** 31 - 1)
+
+
+def _environment(block: Any, values: DocumentValues) -> Optional[ZoneEnvironment]:
     if not isinstance(block, dict):
         return None
-    capture = block.get('capture', False)
-    centre = (0.0, 0.0, 0.0)
-    if isinstance(capture, dict):
-        centre = tuple(float(v) for v in capture.get('position', centre))[:3]  # type: ignore[assignment]
+    raw = block.get('capture', False)
+    centre: Tuple[float, ...] = (0.0, 0.0, 0.0)
+    if isinstance(raw, dict):
+        centre = values.vector(raw.get('position'), centre,
+                               'the environment capture position')
         capture = True
-    return ZoneEnvironment(intensity=float(block.get('intensity', 1.0)),
-                           capture=bool(capture), captureCentre=centre)
+    else:
+        capture = values.flag(raw, False, 'the environment capture')
+    return ZoneEnvironment(
+        intensity=values.number(block.get('intensity'), 1.0,
+                                'the environment intensity', minimum=0.0),
+        capture=capture, captureCentre=centre)
 
 
-def _reverb(block: Any) -> Optional[ZoneReverb]:
+def _reverb(block: Any, values: DocumentValues) -> Optional[ZoneReverb]:
     if not isinstance(block, dict):
         return None
-    return ZoneReverb(level=float(block.get('level', 0.4)),
-                      decay=float(block.get('decay', 1.5)),
-                      damping=float(block.get('damping', 0.4)))
+    return ZoneReverb(
+        level=values.number(block.get('level'), 0.4, 'the reverb level',
+                            minimum=0.0, maximum=1.0),
+        decay=values.number(block.get('decay'), 1.5, 'the reverb decay',
+                            minimum=0.0),
+        damping=values.number(block.get('damping'), 0.4, 'the reverb damping',
+                              minimum=0.0, maximum=1.0))
 
 
 class ZoneReader:
@@ -256,6 +277,8 @@ class ZoneReader:
         self.zones: List[Zone] = []
         self._pending: List[tuple] = []
         self._warned: set = set()
+        #: What the zones' own values are read through, reporting by :meth:`warn`.
+        self.values = DocumentValues(warn=self.warn)
 
     def warn(self, message: str) -> None:
         """Log ``message`` once for this document."""
@@ -264,11 +287,26 @@ class ZoneReader:
             log.warning('%s: %s', EXTENSION, message)
 
     def zone_for(self, node: Any, node_index: int) -> Optional[Zone]:
-        """The zone glTF node ``node_index`` declares, or None."""
+        """The zone glTF node ``node_index`` declares, or None.
+
+        A value the zone cannot use is reported and left at its default; a
+        block that cannot be made into a zone at all is reported and is no
+        zone, and the document loads without it.
+        """
         extensions = getattr(node, 'extensions', None) or {}
         block = extensions.get(EXTENSION) if isinstance(extensions, dict) else None
         if not isinstance(block, dict):
             return None
+        try:
+            return self._zone(block, node, node_index)
+        except (TypeError, ValueError, OverflowError) as error:
+            self.warn('node %r could not be read as a zone: %s'
+                      % (getattr(node, 'name', None) or node_index, error))
+            return None
+
+    def _zone(self, block: Dict[str, Any], node: Any,
+              node_index: int) -> Optional[Zone]:
+        values = self.values
         index = block.get('shape')
         spec = shapetable.shape_at(self.document, index, self.shapes)
         if spec is None:
@@ -279,10 +317,13 @@ class ZoneReader:
         zone = Zone(shapeType=spec.kind, size=spec.size, radius=spec.radius,
                     height=spec.height, radiusTop=spec.radius_top,
                     radiusBottom=spec.radius_bottom,
-                    priority=int(block.get('priority', 0) or 0),
-                    blend=max(float(block.get('blend', 0.0) or 0.0), 0.0))
-        own = [setting for setting in (_environment(block.get('environment')),
-                                       _reverb(block.get('reverb')))
+                    priority=values.integer(block.get('priority'), 0,
+                                            'the zone priority',
+                                            minimum=_INT32[0], maximum=_INT32[1]),
+                    blend=values.number(block.get('blend'), 0.0, 'the zone blend',
+                                        minimum=0.0))
+        own = [setting for setting in (_environment(block.get('environment'), values),
+                                       _reverb(block.get('reverb'), values))
                if setting is not None]
         zone.settings = own
         borrowed = block.get('extensions')
@@ -300,7 +341,7 @@ class ZoneReader:
         for zone, node_index, borrowed in self._pending:
             reading = ZoneReading(self.document, zone, node_index, node_transform,
                                   light, emitters, place, self.warn, image_light,
-                                  list(zone.settings))
+                                  list(zone.settings), self.values)
             for name, block in borrowed.items():
                 reader = _READERS.get(name)
                 if reader is None:
@@ -309,7 +350,7 @@ class ZoneReader:
                     continue
                 try:
                     setting = reader(block, reading)
-                except (TypeError, ValueError) as error:
+                except Exception as error:
                     self.warn('the %s block could not be read: %s' % (name, error))
                     continue
                 if setting is not None and setting not in reading.settings:

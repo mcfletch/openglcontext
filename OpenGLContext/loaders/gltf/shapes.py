@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Any, List, Optional, Sequence
 
+from OpenGLContext.loaders.documentvalues import bounded
 from OpenGLContext.scenegraph.zones import BOX, CAPSULE, CYLINDER, SPHERE, ShapeSpec
 
 log = logging.getLogger(__name__)
@@ -55,26 +56,39 @@ def read_shape(entry: Any) -> Optional[ShapeSpec]:
 
     The dimensions default as the shape specification defines them: a unit
     box, a sphere of radius 0.5, and a capsule or cylinder 0.5 high with
-    radii of 0.25. A ``plane`` bounds no volume, so it is not a zone's shape.
+    radii of 0.25. A ``plane`` bounds no volume, so it is not a zone's shape,
+    and nor is a box without exactly three sizes or a shape with a dimension
+    that is negative or no finite number.
     """
     if not isinstance(entry, dict):
         return None
     kind = entry.get('type')
     data = entry.get(kind) if isinstance(kind, str) else None
     data = data if isinstance(data, dict) else {}
-    try:
-        if kind == BOX:
-            size = data.get('size', (1.0, 1.0, 1.0))
-            return ShapeSpec(BOX, size=tuple(float(v) for v in size[:3]))  # type: ignore[arg-type]
-        if kind == SPHERE:
-            return ShapeSpec(SPHERE, radius=float(data.get('radius', 0.5)))
-        if kind in (CAPSULE, CYLINDER):
-            return ShapeSpec(kind, height=float(data.get('height', 0.5)),
-                             radius_top=float(data.get('radiusTop', 0.25)),
-                             radius_bottom=float(data.get('radiusBottom', 0.25)))
-    except (TypeError, ValueError, IndexError):
-        return None
+    if kind == BOX:
+        size = data.get('size', (1.0, 1.0, 1.0))
+        if not isinstance(size, (list, tuple)) or len(size) != 3:
+            return None
+        sizes = [_dimension(value) for value in size]
+        if None in sizes:
+            return None
+        return ShapeSpec(BOX, size=tuple(sizes))  # type: ignore[arg-type]
+    if kind == SPHERE:
+        radius = _dimension(data.get('radius', 0.5))
+        return None if radius is None else ShapeSpec(SPHERE, radius=radius)
+    if kind in (CAPSULE, CYLINDER):
+        height, top, bottom = (_dimension(data.get(name, default)) for name, default in (
+            ('height', 0.5), ('radiusTop', 0.25), ('radiusBottom', 0.25)))
+        if height is None or top is None or bottom is None:
+            return None
+        return ShapeSpec(kind, height=height, radius_top=top, radius_bottom=bottom)
     return None
+
+
+def _dimension(value: Any) -> Optional[float]:
+    """``value`` as a length: a finite, non-negative number, or None."""
+    length = bounded(value, -1.0)
+    return length if length >= 0.0 else None
 
 
 def document_shapes(g: Any) -> List[Optional[ShapeSpec]]:

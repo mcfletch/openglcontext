@@ -38,6 +38,12 @@ differs, because the two stand in different places:
     transform, ``True`` puts it in the glTF node's own slot in the parent and
     hands it the placement (``ctx.local_matrix``).
 
+A factory that raises is logged with the kind and the holder, and that
+holder loads as the loader built it; the rest of the document loads. A
+factory reads its parameters through ``ctx.values``
+(:class:`~OpenGLContext.loaders.documentvalues.DocumentValues`), which answers
+a default for a value it cannot use and reports it once per document.
+
 **A file names a kind; it never names code.** The registry is populated by the
 application, so a downloaded model can only select among what the running
 program already registered. The one exception is :data:`BUILTIN` -- a fixed
@@ -286,6 +292,9 @@ class HookContext:
 
 # --- running them -------------------------------------------------------------
 
+#: What :meth:`HookRunner._run` answers for a factory that raised.
+_FAILED = object()
+
 class HookRunner:
     """The hooks one document's tags name, for the length of one load.
 
@@ -294,12 +303,14 @@ class HookRunner:
     """
 
     def __init__(self, document: Any, resolver: Any,
-                 on: Optional[bool] = None) -> None:
+                 on: Optional[bool] = None,
+                 values: Optional[DocumentValues] = None) -> None:
         self.document = document
         self.resolver = resolver
         self.scene_data: Dict[str, Any] = {}
         self.on = enabled() if on is None else bool(on)
-        self.values = DocumentValues()
+        #: What every hook of this load reads its parameters through.
+        self.values = values if values is not None else DocumentValues()
         self._unknown: set = set()
 
     def _bound(self, holder: Any) -> Optional[Tuple[HookTag, Registration]]:
@@ -325,6 +336,21 @@ class HookRunner:
             return None
         return tag, entry
 
+    def _run(self, entry: Registration, ctx: HookContext, holder: Any) -> Any:
+        """What ``entry``'s factory returns, or :data:`_FAILED` where it raised.
+
+        The exception is logged with the kind and the holder, and the holder
+        loads as the loader built it: a hook that fails on one material or
+        node costs that holder its hook, and the rest of the document loads.
+        """
+        try:
+            return entry.factory(ctx)
+        except Exception:
+            log.exception('the %s hook %r failed on %s %r; it is loaded as an '
+                          'ordinary %s', EXTENSION, entry.kind, ctx.at,
+                          getattr(holder, 'name', None) or '(unnamed)', ctx.at)
+            return _FAILED
+
     def _context(self, at: str, tag: HookTag, **named: Any) -> HookContext:
         return HookContext(at=at, kind=tag.kind, params=dict(tag.params),
                            document=self.document, resolver=self.resolver,
@@ -342,7 +368,9 @@ class HookRunner:
         ctx = self._context('material', tag, primitive=primitive, mesh=mesh,
                             material=material, shape=shape, bounds=bounds,
                             world_matrix=world)
-        made = entry.factory(ctx)
+        made = self._run(entry, ctx, material_def)
+        if made is _FAILED:
+            return shape, bounds, entry.shareable
         return (shape if made is None else made), ctx.bounds, entry.shareable
 
     def node(self, node_def: Any, transform: Any, children: List[Any],
@@ -359,8 +387,8 @@ class HookRunner:
         ctx = self._context('node', tag, node=node_def, transform=transform,
                             children=children, local_matrix=local,
                             world_matrix=world)
-        made = entry.factory(ctx)
-        if made is None:
+        made = self._run(entry, ctx, node_def)
+        if made is None or made is _FAILED:
             return None
         if not (isinstance(made, tuple) and len(made) == 2):
             raise ValueError(

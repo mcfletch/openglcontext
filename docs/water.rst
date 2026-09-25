@@ -525,12 +525,18 @@ tag a node rather than a material and how to register a kind of your own.
    * - ``medium``
      - ``water``
      - ``water``, ``slime`` or ``lava``: what being inside it is like. Lava is
-       this kind with another medium and another material.
+       this kind with another medium and another material. A name ``MEDIA``
+       does not hold is water, with a warning.
    * - ``depth``
      - ``0.0``
-     - How far below the surface the body reaches, in metres. A surface has no
-       thickness, so a sheet with no ``depth`` bounds a box that nothing is
-       inside except exactly at the waterline.
+     - How far below the surface the body reaches, in metres, at least 0. A
+       surface has no thickness, so a sheet with no ``depth`` bounds a box
+       that nothing is inside except exactly at the waterline.
+
+A value that is no finite number is logged once and left at its default. A
+written-out style's ``amplitude`` and ``steepness`` are at least 0 and its
+``wavelength`` and ``ripple`` at least a centimetre (``STYLE_RANGES`` in
+``scenegraph.water.gltf``).
 
 Each tagged primitive becomes one ``WaterBody`` in
 ``scene.hook_data['water']``: the mesh whose wave a frame advances, the style

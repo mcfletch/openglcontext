@@ -314,3 +314,36 @@ class TestWhereALevelIsDrawn:
         where = _world_of(scene, _the_lod(scene), 1)
 
         assert where[3][:3] == pytest.approx([2.0, 0.0, 3.0])
+
+
+class TestMalformedValues:
+    """One bad value in an MSFT_lod block costs the chain, never the load."""
+
+    def test_ids_that_are_no_node_indices_are_passed_over(self, tmp_path):
+        node = _the_lod(_loaded(tmp_path, _document(ids=['a', 1, 2.5, None, 2])))
+        assert len(node.level) == 3
+
+    def test_an_extension_that_is_no_object_loads_the_finest_level(self, tmp_path):
+        document = _document()
+        document['nodes'][0]['extensions']['MSFT_lod'] = [1, 2]
+        scene = _loaded(tmp_path, document)
+        assert [n for n in _flatten(scene.group) if isinstance(n, ScreenCoverageLOD)] == []
+        assert _shapes(scene.group)
+
+    @pytest.mark.parametrize('coverage', ['abc', 0.5, [0.5, 'x', 0.1],
+                                          [float('nan'), 0.2, 0.1]])
+    def test_a_coverage_that_is_no_list_of_numbers_is_guessed(self, tmp_path, coverage):
+        document = _document()
+        document['nodes'][0]['extras'] = {'MSFT_screencoverage': coverage}
+        node = _the_lod(_loaded(tmp_path, document))
+        assert list(node.screenCoverage) == pytest.approx([0.5, 0.25, 0.0])
+
+    @pytest.mark.parametrize('declared', [['a', 0, 0], [0, 0], 'abc'])
+    def test_bounds_that_are_no_numbers_are_not_read(self, tmp_path, declared):
+        """The chain and its shape are then measured from the points."""
+        document = _document()
+        document['accessors'][0]['min'] = declared
+        scene = _loaded(tmp_path, document)
+        node = _the_lod(scene)
+        assert node.coverageRadius() == pytest.approx(np.sqrt(2.0) / 2.0)
+        assert np.all(np.isfinite(scene.minimum)) and np.isfinite(scene.radius)

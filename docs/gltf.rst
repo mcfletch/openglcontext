@@ -372,6 +372,13 @@ where this copy stands, a trigger's fired flag — so two nodes referencing one
 mesh each get their own, as each gets its own copy of a morphed or skinned mesh.
 The default shares one result between every node that references the mesh.
 
+A factory that raises is logged with the kind and the holder's name, and that
+material or node loads as the loader built it; the rest of the document
+loads. ``ctx.values`` is what a factory reads its parameters through: a
+``loaders.documentvalues.DocumentValues`` answering the default for a value
+that is no finite number of the right kind and the nearer bound for one
+outside a range, and logging each once for the document.
+
 What a hook records with ``ctx.collect()`` arrives on the scene as
 ``scene.hook_data[ kind ]``. A kind registered with an ``advance`` callable is
 walked by ``scene.advance( seconds )``, which answers whether anything changed;
