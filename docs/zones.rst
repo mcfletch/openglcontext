@@ -231,7 +231,9 @@ Lights
 A light a ``ZoneLights`` names lights an object only where the object is
 inside or crossing a zone that names it, so a room's lamp does not light the
 far side of its wall. The decision is per object: a floor that runs from one
-room into another is lit by both rooms' lights.
+room into another is lit by both rooms' lights. ``ZoneLights(enabled=False)``
+turns the other lights off only for an object wholly inside the zone; one that
+crosses its surface keeps them.
 
 A shadow-casting light that zones name draws its shadow map only while one of
 those zones -- its shape and its blend band -- is inside some view's
@@ -379,9 +381,9 @@ Limits
   the other two scales. An uneven zone is best authored as a box.
 - A zone's lights are decided per object, and its environment per fragment.
 - A zone's environment applies to what the PBR program draws, which is the one
-  program that reads the environment probe. The flat core pass has no probe,
+  program that reads the environment probe. The VRML97 programs read no probe,
   and the splat terrain, vegetation and water shaders light with a sun and a
-  hemispheric ambient of their own; zones do not change them.
+  hemispheric ambient of their own; a zone's environment does not change them.
 - A zone's lights apply to the PBR program and to the VRML97 lighting programs
   (material and per-vertex colour), in the PBR pass and the flat core pass
   alike. The terrain, vegetation and water shaders read no punctual lights, so

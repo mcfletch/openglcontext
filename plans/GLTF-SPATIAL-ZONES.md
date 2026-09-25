@@ -1,6 +1,10 @@
 # Spatial zones: glTF extensions that apply inside a shape
 
-Status: **Planned** — 2026-09-24. Plan only, awaiting review.
+Status: **Implemented** — 2026-09-24, reviewed and corrected 2026-09-25 (see
+[Where it departs from this plan](#where-it-departs-from-this-plan) and
+[GLTF-SPATIAL-ZONES-HANDOFF.md](GLTF-SPATIAL-ZONES-HANDOFF.md)). The guide is
+`docs/zones.rst`, the internals `docs/zones-internals.rst`, and the demo
+`oglc-zones`.
 
 ## Why
 
@@ -277,7 +281,7 @@ multiplies its gain the same way, so a fountain behind a wall is not heard from
 the other room. The gain is applied in the engine's audio glue, through the
 per-voice gain `omi_audio` already exposes, so `omi_audio` keeps no knowledge of
 zones. Whether an emitter starts playing on first entry or runs silently
-throughout is its `autoPlay`, as the extension defines it.
+throughout is its `autoplay`, as the extension defines it.
 
 The engine already does this by hand. `OpenGLContext.audio.areas.box_gain` is
 1 inside an axis-aligned box and falls linearly to 0 over a margin, and
@@ -418,6 +422,35 @@ it once.
   sees the same room.
 - Audio: the camera outside, crossing `blend`, and inside, giving the expected
   gains; `box_gain` giving the same answers as before for axis-aligned boxes.
+
+## Where it departs from this plan
+
+Recorded 2026-09-25, from the hand-off's list and the code review.
+
+- The settings are nodes of their own (`ZoneEnvironment`, `ZoneLights`,
+  `ZoneAudio`, `ZoneReverb`, `ZoneVisibility`, `ZoneMirrors`, `ZoneGravity`)
+  in the `Zone` node's `settings` field, rather than fields of the zone.
+- The environment is weighted per fragment in the zone's own frame, with the
+  fragment's world position worked out in the fragment shader, and a draw
+  takes up to four layers (`MAX_ZONE_LAYERS`), not two.
+- Captured probes and the cube-map-array probe were built in the same work as
+  the rest, and `EXT_lights_image_based` lights go into layers of that array.
+- `reverb` is a property of the zone's own block beside `environment`.
+- `box_gain` stays a function beside `apply_zones`, and is the axis-aligned
+  case of a box zone's weight (the smoothstep over the margin) rather than a
+  linear fall.
+- The Parthenon's pool is a raised marble curb with a flat water sheet.
+- What a draw is given is kept per object and invalidated spatially: a zone
+  moving or being edited reclassifies only the objects whose answers it can
+  reach (`ObjectBoxes`), and setting any field of a zone's settings makes a
+  new placement.
+- A shadow-casting light zones name draws its shadow map only while one of its
+  zones is in a view's frustum (phase 3's "no shadow pass for a zone-owned
+  light"), tested against the zones' reach rather than against the visible
+  objects zoned into them.
+- Zone lights apply to the VRML97 lighting programs as well as the PBR one.
+- Gravity follows the zones the render pass places each frame while walking
+  (`GravityZones`), rather than being fixed when the physics world is built.
 
 ## Decided
 

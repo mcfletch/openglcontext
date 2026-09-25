@@ -194,7 +194,11 @@ of subject: what is drawn, the camera, and physics bodies.
 
 What is drawn is tested per fragment for the environment, so a wall that is
 one mesh with a face inside the zone and a face outside it is lit differently
-on its two faces, and per object for lights. The camera is the position of the
+on its two faces, and per object for lights. For lights, an object is inside a
+zone only when all of it is: a named light lights an object that is inside or
+crosses a zone naming it, and ``"KHR_lights_punctual": false`` (rule 3) turns
+the other lights off only for an object wholly inside that zone, so an object
+that crosses its surface keeps every light. The camera is the position of the
 view being drawn; audio has one listener, at the main view's camera.
 
 ``KHR_audio_emitter`` emitters a zone names are the document's own: an emitter
