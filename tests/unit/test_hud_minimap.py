@@ -141,3 +141,20 @@ class _Skin:
     crosshair = np.array([1.0, 1.0, 1.0, 1.0])
     hudText = np.array([0.8, 0.8, 0.8, 1.0])
     hudTrack = np.array([0.0, 0.0, 0.0, 0.4])
+
+
+class TestKeepingTheStrokes:
+    def test_a_map_moved_to_another_box_draws_there(self) -> None:
+        """The window was resized, so the same route is drawn somewhere else."""
+        found = _map()
+        before = found.strokes()
+        found.rect = Rect(100, 100, 200, 200)
+        after = found.strokes()
+        assert after and after != before
+        assert min(x for (x, _y), _end in after) >= 100.0
+
+    def test_a_new_route_is_drawn_in_place_of_the_old(self) -> None:
+        found = _map()
+        before = found.strokes()
+        found.route = _oval(across=400.0, along=800.0)
+        assert found.strokes() != before

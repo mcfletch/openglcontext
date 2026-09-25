@@ -1212,10 +1212,8 @@ class MiniMap(HUDWidget):
     polyline in world XZ and a list of marks, and knows nothing about either --
     the same widget serves a race circuit, a rally stage or a delivery round.
 
-    The **fitting is the whole of it**: the route is scaled to the box by
-    whichever axis needs it more and centred in the other, so it keeps its
-    shape. A map that stretches the circuit to fill its box is a map of a
-    different circuit.
+    The route is scaled to the box by whichever axis needs it more and
+    centred in the other, so it keeps its shape.
     """
 
     PROTO = 'MiniMap'
@@ -1239,6 +1237,11 @@ class MiniMap(HUDWidget):
     route: Any = None
     #: What is on it, as ``(x, z, kind)``. ``kind`` names a skin colour.
     marks: Sequence[Any] = ()
+    #: The route's extent and points, and its strokes on the map, each with
+    #: the route they were worked out for; see :meth:`_fitting` and
+    #: :meth:`strokes`.
+    _fitted: Any = None
+    _stroked: Any = None
 
     def content_size(self, metrics: FontMetrics,
                      available: Optional[int] = None) -> Tuple[int, int]:
@@ -1257,14 +1260,14 @@ class MiniMap(HUDWidget):
         is worked out when the route arrives rather than for every point
         placed on it.
         """
-        held = self.__dict__.get('_fitted')
+        held = self._fitted
         if held is not None and held[0] is self.route:
             return held[1], held[2]
         points = _points(self.route)
         found = None if points is None else (
             float(points[:, 0].min()), float(points[:, 1].min()),
             float(points[:, 0].max()), float(points[:, 1].max()))
-        self.__dict__['_fitted'] = (self.route, found, points)
+        self._fitted = (self.route, found, points)
         return found, points
 
     def _placing(self) -> Optional[Tuple[float, float, float, float, float, Rect]]:
@@ -1304,14 +1307,14 @@ class MiniMap(HUDWidget):
         route does not change from one frame to the next.
         """
         box = self.rect
-        key = (id(self.route), box.x, box.y, box.width, box.height,
+        key = (box.x, box.y, box.width, box.height,
                float(self.inset), int(self.detail), bool(self.closed))
-        held = self.__dict__.get('_strokes')
-        if held is not None and held[0] == key and held[1] is self.route:
+        held = self._stroked
+        if held is not None and held[0] is self.route and held[1] == key:
             strokes: List[Tuple[Tuple[float, float], Tuple[float, float]]] = held[2]
             return strokes
         found = self._strokes()
-        self.__dict__['_strokes'] = (key, self.route, found)
+        self._stroked = (self.route, key, found)
         return found
 
     def _strokes(self) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
