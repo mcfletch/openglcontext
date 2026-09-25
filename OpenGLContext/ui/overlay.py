@@ -283,6 +283,7 @@ if TYPE_CHECKING:
 
         def getViewPort(self) -> Tuple[int, int]: ...
         def triggerRedraw(self, force: int = 0) -> Any: ...
+        def redrawAt(self, when: float) -> None: ...
         def overlayMetrics(self) -> Optional[FontMetrics]: ...
         def setPointerShape(self, name: str) -> bool: ...
         def screenTrees(self, metrics: FontMetrics,
@@ -596,10 +597,17 @@ class OverlayMixin(_Host):
         :meth:`tooltipTree` measures against.
         """
         from OpenGLContext.events import systemtime
+        from OpenGLContext.ui.tooltip import TOOLTIP_PAUSE
         self._pointerAt = (float(x), float(y))
         self._pointerSince = (systemtime.systemTime() if now is None
                               else float(now))
         self._tooltip = None
+        stack = self._overlays
+        hovered = stack.hovered() if stack is not None and stack.visible else None
+        if str(getattr(hovered, 'tooltip', '') or ''):
+            # A window that draws on demand draws nothing more once the
+            # pointer is still, so the frame the tip appears in is asked for.
+            self.redrawAt(self._pointerSince + TOOLTIP_PAUSE)
 
     def showCursor(self) -> bool:
         """Put the pointer into the shape the widget under it asks for.

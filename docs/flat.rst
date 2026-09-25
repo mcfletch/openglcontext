@@ -107,7 +107,12 @@ equivalent) to the flat pass drawing the frame.
 #. ``Context.OnDraw``:
 
    #. runs the event cascade (the ``DoEventCascade`` customization point,
-      which does nothing by default) while holding the scenegraph lock
+      which does nothing by default) while holding the scenegraph lock. A
+      call that was not forced draws only if the cascade changed something
+      or a time given to ``Context.redrawAt(when)`` has passed; ``when`` is
+      on the session clock (``OpenGLContext.events.systemtime``), and is how
+      something that changes with time alone, such as a tooltip waiting for
+      its pause, gets its frame in a window that draws on demand
 
    #. makes this Context the current context: it acquires the OpenGLContext
       ``contextLock`` and makes the GUI library's set-current call

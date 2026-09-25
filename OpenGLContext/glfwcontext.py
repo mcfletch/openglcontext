@@ -570,7 +570,7 @@ class GLFWContext(
             # still runs DoEventCascade so time events (animations) are processed
             # and only renders if they produced a visible change.
             with trace.phase('draw'):
-                if self.redrawRequest.isSet() or not renderedFirst:
+                if self.redrawRequest.is_set() or not renderedFirst:
                     renderedFirst = True
                     self.OnDraw(force=1)
                 else:

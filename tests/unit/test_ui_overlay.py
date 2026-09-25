@@ -53,6 +53,8 @@ class World:
         #: What an application would do with an event that reaches it.
         self.handlers = []
         self.redraws = 0
+        #: The session times a frame was asked for at.
+        self.redrawsAt = []
         self.captureSuspended = None
         self.inputState = InputState()
         self.viewport = (800, 600)
@@ -67,6 +69,9 @@ class World:
 
     def triggerRedraw(self, force=0):
         self.redraws += 1
+
+    def redrawAt(self, when):
+        self.redrawsAt.append(when)
 
     def suspendPointerCapture(self, suspend):
         self.captureSuspended = suspend
@@ -783,6 +788,19 @@ class TestTellingThePointerWhatIsUnderIt:
         assert isinstance(tip, Tooltip)
         assert tip.rect.width > 0 and tip.rect.height > 0
         assert tip.rect.x > button.rect.centre[0]
+
+    def test_the_frame_it_appears_in_is_asked_for(self):
+        """A window drawing on demand draws nothing more once the pointer is still."""
+        from OpenGLContext.ui.tooltip import TOOLTIP_PAUSE
+        context, _panel, _button = self._resting()
+        assert context.redrawsAt[-1] == pytest.approx(TOOLTIP_PAUSE)
+
+    def test_a_control_with_nothing_to_say_asks_for_no_frame(self):
+        context, _panel, button = self._resting()
+        button.tooltip = ''
+        asked = len(context.redrawsAt)
+        context.pointerRested(*button.rect.centre, now=1.0)
+        assert len(context.redrawsAt) == asked
 
     def test_moving_the_pointer_starts_the_pause_again(self):
         context, _panel, button = self._resting()

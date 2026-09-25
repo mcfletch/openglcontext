@@ -583,7 +583,9 @@ the view splitters also draw a grip.
 for ``OpenGLContext.ui.tooltip.TOOLTIP_PAUSE`` seconds (0.6). It is drawn over
 the panels rather than pushed on the stack, so it takes no events and does
 not change modality. The pause restarts on every movement, so a pointer
-passing over a control shows no tooltip.
+passing over a control shows no tooltip. The overlay asks for the frame the
+tooltip appears in with ``Context.redrawAt``, so it appears in a window that
+draws only when something happens.
 
 Every interactive control also shows a highlight while the pointer rests on
 it and a ripple when it is used, with nothing declared; see

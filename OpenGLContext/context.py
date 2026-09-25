@@ -307,6 +307,8 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     # render loop (e.g. GLFW) set this so a burst of input events coalesces
     # into a single render per loop iteration instead of one render per event.
     deferRedraw = False
+    #: The session time a frame is owed at, or None; see :meth:`redrawAt`.
+    redrawDue: float | None = None
     viewportDimensions: tuple[int, int] = (0, 0)
     drawPollTimeout = 0.01
     coreProfile = False
@@ -1259,7 +1261,8 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         try:
             with self.tracePhase('cascade'):
                 changed = self.DoEventCascade()
-            if not force and not changed:
+            due = self.redrawFallsDue()
+            if not force and not changed and not due:
                 return 0
         finally:
             self.unlockScenegraph()
@@ -1482,6 +1485,31 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         delivered: int = flush() if flush is not None else 0
         self.DoEventCascade()
         return delivered
+
+    def redrawAt(self, when: float) -> None:
+        """Draw a frame once the session clock reaches ``when``.
+
+        For what changes with time alone, in a window that draws only when
+        something happens: a tooltip due after the pointer has rested, say.
+        ``when`` is on :func:`OpenGLContext.events.systemtime.systemTime`'s
+        clock. The earliest time asked for stands until a frame is drawn at or
+        after it. The frame comes from the loop's next :meth:`OnDraw` once the
+        time has passed, so it is as prompt as the backend's idle polling.
+        """
+        when = float(when)
+        if self.redrawDue is None or when < self.redrawDue:
+            self.redrawDue = when
+
+    def redrawFallsDue(self) -> bool:
+        """Whether a frame :meth:`redrawAt` asked for is owed now; clears it if so."""
+        due = self.redrawDue
+        if due is None:
+            return False
+        from OpenGLContext.events import systemtime
+        if systemtime.systemTime() < due:
+            return False
+        self.redrawDue = None
+        return True
 
     def triggerRedraw(self, force: int = 0) -> None:
         """Indicate to the context that it should redraw when possible
