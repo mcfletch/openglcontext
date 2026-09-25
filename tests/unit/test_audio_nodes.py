@@ -370,7 +370,7 @@ class TestAudioEmitterNode:
         source.play()
         emitter.updateAudio(engine, translation(), 0.1)
         assert engine.active_voices == 1
-        assert emitter._playing[id(source)].elapsed == 0.0
+        assert emitter._playing[source].elapsed == 0.0
 
     def test_playing_an_emitter_plays_every_source(self, engine):
         sources = [audionodes.AudioSource(url=['blip'], autoplay=False),
@@ -710,6 +710,15 @@ class TestHowOftenAPlayingSoundIsReAimed:
         emitter = self.make()
         emitter.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
         assert self.aims(engine, emitter, [1.0 / 60.0]) == 1
+
+    def test_a_sound_started_again_is_aimed_on_its_first_look(self, engine):
+        """Stopping an emitter forgets when its sources were last aimed."""
+        emitter = self.make()
+        emitter.updateAudio(engine, translation(0.0, 0.0, -1.0), 0.0)
+        assert self.aims(engine, emitter, [1.0 / 60.0]) == 1
+        emitter.stopAudio()
+        emitter.updateAudio(engine, translation(0.0, 0.0, -1.0), 2.0 / 60.0)
+        assert self.aims(engine, emitter, [3.0 / 60.0]) == 1
 
     def test_two_emitters_do_not_re_aim_on_the_same_frame(self, engine):
         """Spread on purpose: a level's worth landing together is a stutter."""

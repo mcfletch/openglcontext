@@ -201,7 +201,8 @@ runs every frame. At fifteen times a second the steps are not audible and the
 cost does not grow with the frame rate.
 
 The interval does not delay the start of a sound: a source is aimed the first
-time it is seen. Emitters are given staggered phases, so they do not all
+time it is seen, and again the first time it is seen after it starts again or
+its emitter is stopped. Emitters are given staggered phases, so they do not all
 re-aim in the same frame.
 
 .. _audio-ellipsoids:

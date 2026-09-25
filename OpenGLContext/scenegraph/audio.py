@@ -367,10 +367,11 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
     def __init__(self, **named: Any) -> None:
         super(AudioEmitter, self).__init__(**named)
         self._record = model.AudioEmitter()
-        self._playing: Dict[int, Any] = {}
+        #: The engine's handle for each source this emitter started.
+        self._playing: Dict[AudioSource, Any] = {}
         #: When each finished one-shot may sound again, by source, for the
         #: sources that have a :attr:`AudioSource.repeatInterval`.
-        self._repeats: Dict[int, float] = {}
+        self._repeats: Dict[AudioSource, float] = {}
         # Ambient timing is presentation and not simulation -- nothing reads a
         # repeat back -- so the session's own stream is enough. Emitters draw
         # from it in turn rather than each from the same place, which is what
@@ -379,7 +380,7 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
         self._jitter = entropy.randomizer('audio-jitter')
         #: When each playing source was last re-aimed, by source.  See
         #: :data:`AIM_INTERVAL`.
-        self._aimed: Dict[int, float] = {}
+        self._aimed: Dict[AudioSource, float] = {}
         #: How far through its first aiming interval this emitter starts, so a
         #: level's worth of them do not all re-aim on the same frame and turn a
         #: saving into a stutter every few frames.  Drawn from the session's own
@@ -441,13 +442,13 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
         just started is placed before it is heard rather than up to an interval
         later.
         """
-        last = self._aimed.get(id(source))
+        last = self._aimed.get(source)
         if last is None:
-            self._aimed[id(source)] = now + self._aimPhase
+            self._aimed[source] = now + self._aimPhase
             return True
         if now - last < AIM_INTERVAL:
             return False
-        self._aimed[id(source)] = now
+        self._aimed[source] = now
         return True
 
     def repeatsAt(self, source: Any) -> Optional[float]:
@@ -456,18 +457,17 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
         Reported so a debug overlay and a test can see the timer; nothing in
         the playing path reads it back.
         """
-        return self._repeats.get(id(source))
+        return self._repeats.get(source)
 
     def _updateSource(self, engine: Any, source: Any, record: model.AudioEmitter,
                       position: np.ndarray, forward: np.ndarray,
                       now: float = 0.0) -> None:
         """Keep one source of this emitter in step with the world."""
-        handle = self._playing.get(id(source))
+        handle = self._playing.get(source)
         wanted = source.takeRequest()
         if handle is not None and wanted:
             handle.stop()
-            self._playing.pop(id(source), None)
-            self._repeats.pop(id(source), None)
+            self._forget(source)
         elif handle is not None:
             if handle.playing:
                 # Every frame rather than at the aim interval: it is one float,
@@ -482,8 +482,7 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
             # Either a loop that lost its voice to stealing -- nothing else
             # ends one, so it may take another when one frees -- or a one-shot
             # whose repeat has come round.  Both start again from here.
-            self._playing.pop(id(source), None)
-            self._repeats.pop(id(source), None)
+            self._forget(source)
         if not (source.autoplay or wanted):
             return
         clip = source.clip(engine)
@@ -494,7 +493,7 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
                               priority=source.priority, loop=source.loop,
                               rate=source.playbackRate)
         if started is not None:
-            self._playing[id(source)] = started
+            self._playing[source] = started
 
     def _stillFinished(self, source: Any, now: float) -> bool:
         """Whether a one-shot that has ended should stay silent.
@@ -508,9 +507,9 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
         interval = float(source.repeatInterval)
         if interval <= 0.0:
             return True
-        due = self._repeats.get(id(source))
+        due = self._repeats.get(source)
         if due is None:
-            self._repeats[id(source)] = now + self._wait(source, interval)
+            self._repeats[source] = now + self._wait(source, interval)
             return True
         return now < due
 
@@ -527,6 +526,13 @@ class AudioEmitter(nodetypes.Auditory, nodetypes.Children, node.Node):
             handle.stop()
         self._playing.clear()
         self._repeats.clear()
+        self._aimed.clear()
+
+    def _forget(self, source: AudioSource) -> None:
+        """Drop what this emitter holds for a source it is about to start again."""
+        self._playing.pop(source, None)
+        self._repeats.pop(source, None)
+        self._aimed.pop(source, None)
 
 
 class Sound(basenodes.Sound):
