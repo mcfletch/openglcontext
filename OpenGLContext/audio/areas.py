@@ -14,31 +14,48 @@ source's ``gain`` from it.
 
 from __future__ import annotations
 
-from typing import Any, Sequence, Set
+import weakref
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Set
 
 import numpy as np
 from numpy.typing import ArrayLike
+
+from OpenGLContext.scenegraph import zones as zonemath
+
+if TYPE_CHECKING:
+    from OpenGLContext.passes.zonelayers import Reverb
 
 __all__ = ['box_gain', 'apply_zones']
 
 
 def box_gain(position: Sequence[float], centre: Sequence[float],
              half_size: Sequence[float], margin: float = 3.0) -> float:
-    """1.0 inside an axis-aligned box, falling linearly to 0.0 ``margin`` outside it.
+    """1.0 inside an axis-aligned box, falling smoothly to 0.0 ``margin`` outside it.
 
     ``position`` is the listener's, in world coordinates; a homogeneous
     ``(x, y, z, 1)`` such as ``ViewPlatform.position`` is accepted.  ``centre``
-    and ``half_size`` are the box's, and ``margin`` is in metres.  The distance
-    outside the box is taken on the axis where it is largest, so a listener
-    outside on any one axis is outside.  A ``margin`` of 0 is a hard edge.
+    and ``half_size`` are the box's, and ``margin`` is in metres.  This is a
+    box zone's weight with ``margin`` as its blend: the distance is to the
+    nearest point of the box, and the fall is the smoothstep a zone's blend
+    uses (:func:`OpenGLContext.scenegraph.zones.weight`), a half at half the
+    margin.  A ``margin`` of 0 is a hard edge.
     """
-    offset = np.abs(np.asarray(position, dtype='d')[:3] - np.asarray(centre, dtype='d'))
-    outside = float((offset - np.asarray(half_size, dtype='d')).max())
-    if outside <= 0.0:
-        return 1.0
-    if margin <= 0.0:
-        return 0.0
-    return float(min(1.0, max(0.0, 1.0 - outside / margin)))
+    offset = np.asarray(position, dtype='d')[:3] - np.asarray(centre, dtype='d')
+    distance = zonemath._box(offset, np.abs(np.asarray(half_size, dtype='d')))
+    return float(zonemath.weight(distance, float(margin)))
+
+
+@dataclass
+class _ReverbOverZones:
+    """The application's own reverb on an engine, and what the zones last set."""
+
+    base: 'Reverb'
+    written: Optional['Reverb'] = None
+
+
+#: Each engine whose reverb the zones are laid over; see :func:`apply_zones`.
+_reverbs: "weakref.WeakKeyDictionary[Any, _ReverbOverZones]" = weakref.WeakKeyDictionary()
 
 
 def apply_zones(engine: Any, emitters: Sequence[Any], zones: Sequence[Any],
@@ -48,11 +65,17 @@ def apply_zones(engine: Any, emitters: Sequence[Any], zones: Sequence[Any],
     ``emitters`` are the scene's :class:`~OpenGLContext.scenegraph.audio.AudioEmitter`
     nodes and ``zones`` the frame's placed zones. An emitter a zone names
     plays at the share of the zones naming it that the listener is in, so it
-    fades over a zone's ``blend``; one no zone names is left at full gain. The
-    engine's reverb takes the level, decay and damping of the zones the
-    listener is in, mixed by their shares, and none outside every zone.
+    fades over a zone's ``blend``; one no zone names is left at full gain.
     ``table``, a :class:`~OpenGLContext.passes.zonelayers.ZoneTable` of
     ``zones``, weighs every zone at the listener in one pass.
+
+    The engine's reverb is touched only while some zone has a
+    ``ZoneReverb``. The reverb the application had set is kept, and the
+    zones the listener is in are laid over it by their shares
+    (:func:`~OpenGLContext.passes.zonelayers.reverb_at`); outside them it is
+    the application's. A value the application sets while the zones are
+    applied is taken as its own from then on. When no zone has a reverb any
+    more, the application's is put back.
     """
     from OpenGLContext.passes import zonelayers
     from OpenGLContext.scenegraph.zone import AUDIO
@@ -73,9 +96,39 @@ def apply_zones(engine: Any, emitters: Sequence[Any], zones: Sequence[Any],
         wanted = float(shares.get(key, 0.0)) if key in controlled else 1.0
         if getattr(emitter, 'zoneGain', 1.0) != wanted:
             emitter.zoneGain = wanted
-    reverb = zonelayers.reverb_at(zones, position, weights)
+    _lay_reverb(engine, zones, position, weights)
+
+
+def _lay_reverb(engine: Any, zones: Sequence[Any], position: ArrayLike,
+                weights: Optional[Dict[int, float]]) -> None:
+    """The zones' reverb over the application's, on ``engine``; see :func:`apply_zones`."""
+    from OpenGLContext.passes import zonelayers
+    from OpenGLContext.scenegraph.zone import REVERB
     target = getattr(engine, 'reverb', None)
-    if target is not None:
-        target.level = reverb.level
-        target.decay = reverb.decay
-        target.damping = reverb.damping
+    if target is None:
+        return
+    held = _reverbs.get(engine)
+    reverberant = any(zone.setting(REVERB) is not None for zone in zones)
+    if held is None:
+        if not reverberant:
+            return
+        held = _reverbs[engine] = _ReverbOverZones(_reading(target))
+    elif _reading(target) != held.written:
+        held.base = _reading(target)
+    if not reverberant:
+        _write(target, held.base)
+        del _reverbs[engine]
+        return
+    _write(target, zonelayers.reverb_at(zones, position, weights, held.base))
+    held.written = _reading(target)
+
+
+def _reading(target: Any) -> 'Reverb':
+    from OpenGLContext.passes.zonelayers import Reverb
+    return Reverb(float(target.level), float(target.decay), float(target.damping))
+
+
+def _write(target: Any, reverb: 'Reverb') -> None:
+    target.level = reverb.level
+    target.decay = reverb.decay
+    target.damping = reverb.damping

@@ -420,10 +420,13 @@ A zone (:doc:`zones`) plays an area's ambience: a global emitter named by a
 ``ZoneAudio`` is heard only while the camera is inside the zone and fades out
 over its ``blend``, and a ``ZoneReverb`` gives everything heard there the
 reverb of the place. A glTF file declares both with ``OGLC_zone``; the render
-pass sets the gains and the reverb each frame. When a scene's zones go -- the
-file is replaced, or the level unloads them -- every emitter returns to full
-gain and the reverb to none. A scene that never had zones leaves
-``engine.reverb`` to the application.
+pass sets the gains and the reverb each frame. The zones' reverb is laid over
+the one the application set on ``engine.reverb``, which is what is heard
+outside them; ``engine.reverb`` is touched only while some zone has a
+``ZoneReverb``, and a value the application sets meanwhile is kept as its
+own. When a scene's zones go -- the file is replaced, or the level unloads
+them -- every emitter returns to full gain and the reverb to the
+application's.
 
 .. code-block:: python
 
@@ -443,7 +446,8 @@ centre with ``distanceModel='linear'``: it is at full level within
 
 For an area of another shape, make the emitter ``global`` and set its gain
 each frame from where the camera is. ``box_gain()`` is 1 inside a box and
-falls to 0 over ``margin`` metres outside it:
+falls to 0 over ``margin`` metres outside it, as a box zone's weight falls over
+its ``blend``:
 
 .. code-block:: python
 

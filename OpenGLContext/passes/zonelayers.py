@@ -625,21 +625,29 @@ def camera_shares(placed: Sequence[PlacedZone], point: Any, key: str,
 
 @dataclass(frozen=True)
 class Reverb:
-    """The reverb a listener hears: level 0 to 1, decay in seconds, damping 0 to 1."""
+    """The reverb a listener hears: level 0 to 1, decay in seconds, damping 0 to 1.
+
+    ``Reverb()`` is none at all, with a ``ZoneReverb``'s own decay and
+    damping.
+    """
 
     level: float = 0.0
-    decay: float = 1.2
+    decay: float = 1.5
     damping: float = 0.4
 
 
 def reverb_at(placed: Sequence[PlacedZone], point: Any,
-              weights: Optional[Dict[int, float]] = None) -> Reverb:
-    """The reverb heard at ``point``, mixed from the zones it is in by their shares.
+              weights: Optional[Dict[int, float]] = None,
+              base: Optional[Reverb] = None) -> Reverb:
+    """The reverb heard at ``point``, the zones it is in laid over ``base``.
 
-    The level is each zone's level times its share, so it fades in over a
-    zone's blend; the decay and damping are the shares' weighted mean, so two
-    places meet without a jump. Outside every zone there is none.
+    ``base`` is what is heard outside every zone: none where it is not
+    given. The level is each zone's level times its share, and ``base``'s
+    times what the zones leave, so it fades over a zone's blend. The decay
+    and damping are the weighted mean of the zones' -- and of ``base``'s
+    where it has a level -- so two places meet without a jump.
     """
+    outside = Reverb() if base is None else base
     candidates = [zone.candidate(REVERB, weights[id(zone)] if weights is not None
                                  else zone.weight(point))
                   for zone in placed if zone.setting(REVERB) is not None]
@@ -653,6 +661,12 @@ def reverb_at(placed: Sequence[PlacedZone], point: Any,
         decay += layer.share * max(0.0, float(setting.decay))
         damping += layer.share * max(0.0, min(1.0, float(setting.damping)))
         weight += layer.share
+    rest = max(0.0, 1.0 - weight)
+    if outside.level > 0.0 and rest > 0.0:
+        level += rest * outside.level
+        decay += rest * outside.decay
+        damping += rest * outside.damping
+        weight += rest
     if weight <= 0.0:
-        return Reverb()
+        return outside
     return Reverb(level, decay / weight, damping / weight)

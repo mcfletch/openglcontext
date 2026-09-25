@@ -267,6 +267,16 @@ class TestTheCamera:
         assert zoned.mirrorAllowed(record, np.array([50.0, 0, 0]))
 
 
+class FakeEngine:
+    """An engine with a reverb and nothing else."""
+
+    def __init__(self, level=0.0, decay=1.2, damping=0.4):
+        class Reverb:
+            pass
+        self.reverb = Reverb()
+        self.reverb.level, self.reverb.decay, self.reverb.damping = level, decay, damping
+
+
 class TestAudio:
     def test_zone_emitters_are_heard_inside_and_the_reverb_is_the_zones(self):
         from OpenGLContext.audio.areas import apply_zones
@@ -274,10 +284,7 @@ class TestAudio:
         zones = placed_zones([(Zone(size=(10, 10, 10), blend=2.0, settings=[
             ZoneAudio(emitters=[birds]), ZoneReverb(level=0.5, decay=2.0)]), at(0))])
 
-        class Engine:
-            class reverb:
-                level = decay = damping = None
-        engine = Engine()
+        engine = FakeEngine()
         apply_zones(engine, [birds, music], zones, (0, 0, 0))
         assert birds.zoneGain == 1.0 and music.zoneGain == 1.0
         assert engine.reverb.level == pytest.approx(0.5)
@@ -286,6 +293,41 @@ class TestAudio:
         apply_zones(engine, [birds, music], zones, (50, 0, 0))
         assert birds.zoneGain == 0.0 and music.zoneGain == 1.0
         assert engine.reverb.level == 0.0
+
+    def test_zones_with_no_reverb_leave_the_applications_alone(self):
+        from OpenGLContext.audio.areas import apply_zones
+        zones = placed_zones([(Zone(size=(10, 10, 10), settings=[
+            ZoneEnvironment(intensity=0.2)]), at(0))])
+        engine = FakeEngine(level=0.3, decay=2.5)
+        for where in ((0, 0, 0), (50, 0, 0)):
+            apply_zones(engine, [], zones, where)
+            assert (engine.reverb.level, engine.reverb.decay) == (0.3, 2.5)
+
+    def test_a_reverb_zone_is_laid_over_the_applications_reverb(self):
+        from OpenGLContext.audio.areas import apply_zones
+        zones = placed_zones([(Zone(size=(10, 10, 10), blend=2.0, settings=[
+            ZoneReverb(level=0.6, decay=3.0)]), at(0))])
+        engine = FakeEngine(level=0.3, decay=1.0)
+        apply_zones(engine, [], zones, (0, 0, 0))
+        assert (engine.reverb.level, engine.reverb.decay) == pytest.approx((0.6, 3.0))
+        apply_zones(engine, [], zones, (6, 0, 0))
+        assert 0.3 < engine.reverb.level < 0.6 and 1.0 < engine.reverb.decay < 3.0
+        apply_zones(engine, [], zones, (50, 0, 0))
+        assert (engine.reverb.level, engine.reverb.decay) == pytest.approx((0.3, 1.0))
+
+    def test_the_application_changing_its_reverb_is_kept(self):
+        from OpenGLContext.audio.areas import apply_zones
+        zones = placed_zones([(Zone(size=(10, 10, 10), settings=[
+            ZoneReverb(level=0.6)]), at(0))])
+        engine = FakeEngine(level=0.1)
+        apply_zones(engine, [], zones, (50, 0, 0))
+        engine.reverb.level = 0.45
+        apply_zones(engine, [], zones, (50, 0, 0))
+        assert engine.reverb.level == pytest.approx(0.45)
+        apply_zones(engine, [], zones, (0, 0, 0))
+        assert engine.reverb.level == pytest.approx(0.6)
+        apply_zones(engine, [], (), (0, 0, 0))
+        assert engine.reverb.level == pytest.approx(0.45)
 
     def test_the_zone_gain_scales_the_record(self):
         emitter = AudioEmitter(gain=0.8)

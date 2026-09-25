@@ -91,7 +91,8 @@ def update(context: Any, paths: Sequence[Any], now: Optional[float] = None,
     :func:`OpenGLContext.audio.areas.apply_zones`; ``table`` is the zones
     stacked for weighing all at once. On the first frame with no zones after
     frames with some, every emitter goes back to full gain and the reverb to
-    none; a scene that never had zones leaves the reverb to the application.
+    the application's; a scene that never had a reverb zone leaves the
+    reverb to the application.
 
     Returns how many nodes were driven, for a debug overlay.
     """
