@@ -59,11 +59,22 @@ import importlib
 import logging
 import os
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import (
+    TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple, Union, overload,
+)
 
 import numpy as np
 
 from OpenGLContext.loaders.documentvalues import DocumentValues
+
+if TYPE_CHECKING:
+    from vrml.node import Node
+
+    from OpenGLContext.loaders.resolver import Resolver
+    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+    from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+    from OpenGLContext.scenegraph.shape import Shape
+    from OpenGLContext.scenegraph.transform import Transform
 
 log = logging.getLogger(__name__)
 
@@ -146,9 +157,13 @@ def tag_for(holder: Any) -> Optional[HookTag]:
 
 # --- the registry -------------------------------------------------------------
 
+#: What a hook returns. At the material point: None, or a node to stand in
+#: the shape's place. At the node point: None, or ``(node, replacing)``.
+HookResult = Union[None, 'Node', Tuple['Node', bool]]
+
 #: A hook, called once per primitive of a tagged material or once per tagged
 #: node. See :class:`HookContext` for what it is handed and may return.
-Factory = Callable[['HookContext'], Any]
+Factory = Callable[['HookContext'], HookResult]
 
 #: What a kind does with wall time: ``advance(data, when) -> bool``, where
 #: ``data`` is that kind's :attr:`GLTFScene.hook_data` entry and the answer says
@@ -173,9 +188,20 @@ class Registration:
 _REGISTRY: Dict[str, Registration] = {}
 
 
+@overload
+def register(kind: str, factory: None = None, *, shareable: bool = True,
+             advance: Optional[Advance] = None) -> Callable[[Factory], Factory]: ...
+
+
+@overload
+def register(kind: str, factory: Factory, *, shareable: bool = True,
+             advance: Optional[Advance] = None) -> Factory: ...
+
+
 def register(kind: str, factory: Optional[Factory] = None, *,
              shareable: bool = True,
-             advance: Optional[Advance] = None) -> Any:
+             advance: Optional[Advance] = None
+             ) -> Union[Factory, Callable[[Factory], Factory]]:
     """Bind ``kind`` to a factory, as a decorator or as a call.
 
     The engine claims the bare lowercase names it documents and ships. An
@@ -194,7 +220,16 @@ def unregister(kind: str) -> None:
     _REGISTRY.pop(kind, None)
 
 
-def registered(kind: Optional[str] = None) -> Any:
+@overload
+def registered(kind: None = None) -> Dict[str, Registration]: ...
+
+
+@overload
+def registered(kind: str) -> Optional[Registration]: ...
+
+
+def registered(kind: Optional[str] = None
+               ) -> Union[Dict[str, Registration], Optional[Registration]]:
     """What ``kind`` is bound to, or the whole registry where none is named.
 
     A viewer reports which of a file's tags it can honour with this. A kind the
@@ -234,8 +269,10 @@ class HookContext:
     objects rather than the accessors they came from, ``primitive`` is the glTF
     primitive, and ``bounds`` is the primitive's **local** box -- the pair the
     loader frames the camera from, writable by a hook that changes the extent.
-    :meth:`world_bounds` places it, since ``world_matrix`` is where this copy of
-    the primitive stands.
+    For a kind registered ``shareable=False``, ``world_matrix`` is where this
+    copy of the primitive stands and :meth:`world_bounds` places the box
+    there; a shareable kind's result serves every node on the mesh, so it is
+    given no ``world_matrix`` and :meth:`world_bounds` answers None.
 
     At the node point ``node`` is the glTF node record, ``transform`` the
     ``Transform`` the loader built for it, ``children`` the subtree gathered
@@ -246,27 +283,31 @@ class HookContext:
     at: str
     kind: str
     params: Dict[str, Any]
+    #: The parsed glTF document (a ``pygltflib.GLTF2``).
     document: Any
-    resolver: Any
+    resolver: 'Resolver'
     #: The dict that becomes :attr:`GLTFScene.hook_data`, keyed by kind.
     scene_data: Dict[str, Any]
-    world_matrix: Any = None
+    #: Row-vector 4x4, or None; see above.
+    world_matrix: Optional[np.ndarray] = None
     #: What a hook reads its parameters through: each value a hook cannot use
     #: is reported once for the whole document.
     values: DocumentValues = field(default_factory=DocumentValues)
 
     # the material point
+    #: The glTF primitive record (a ``pygltflib.Primitive``).
     primitive: Any = None
-    mesh: Any = None
-    material: Any = None
-    shape: Any = None
-    bounds: Optional[Tuple[Any, Any]] = None
+    mesh: Optional['PBRMesh'] = None
+    material: Optional['PBRMaterial'] = None
+    shape: Optional['Shape'] = None
+    bounds: Optional[Tuple[np.ndarray, np.ndarray]] = None
 
     # the node point
+    #: The glTF node record (a ``pygltflib.Node``).
     node: Any = None
-    transform: Any = None
-    children: List[Any] = field(default_factory=list)
-    local_matrix: Any = None
+    transform: Optional['Transform'] = None
+    children: List['Node'] = field(default_factory=list)
+    local_matrix: Optional[np.ndarray] = None
 
     def collect(self, item: Any) -> Any:
         """Put one record in this kind's ``hook_data`` entry, and return it.
@@ -299,6 +340,8 @@ class HookRunner:
 
     Holds the ``hook_data`` the hooks write and says an unknown kind once,
     rather than once per primitive of every node that uses it.
+    :attr:`registrations` is what each kind the load ran was bound to, which
+    is what advances that kind's ``hook_data`` afterwards.
     """
 
     def __init__(self, document: Any, resolver: Any,
@@ -310,7 +353,9 @@ class HookRunner:
         self.on = enabled() if on is None else bool(on)
         #: What every hook of this load reads its parameters through.
         self.values = values if values is not None else DocumentValues()
-        self._unknown: set = set()
+        #: What each kind met in this load was bound to, as it was then.
+        self.registrations: Dict[str, Registration] = {}
+        self._unknown: Set[str] = set()
 
     def _bound(self, holder: Any) -> Optional[Tuple[HookTag, Registration]]:
         """The tag a holder carries and what it is bound to, or None.
@@ -333,7 +378,13 @@ class HookRunner:
                           'carries it is loaded as it stands',
                           EXTENSION, tag.kind)
             return None
+        self.registrations.setdefault(tag.kind, entry)
         return tag, entry
+
+    def shareable(self, material_def: Any) -> bool:
+        """Whether a material's hook, if it has one bound, may share its result."""
+        found = self._bound(material_def)
+        return True if found is None else found[1].shareable
 
     def _run(self, entry: Registration, ctx: HookContext, holder: Any) -> Any:
         """What ``entry``'s factory returns, or :data:`_FAILED` where it raised.
@@ -358,22 +409,25 @@ class HookRunner:
 
     def material(self, primitive: Any, material_def: Any, mesh: Any,
                  material: Any, shape: Any, bounds: Any,
-                 world: Any = None) -> Tuple[Any, Any, bool]:
-        """Run a tagged material's hook. Returns ``(node, bounds, shareable)``."""
+                 world: Optional[np.ndarray] = None) -> Tuple[Any, Any, bool]:
+        """Run a tagged material's hook. Returns ``(node, bounds, shareable)``.
+
+        ``world`` reaches only a hook whose kind is not shareable.
+        """
         found = self._bound(material_def)
         if found is None:
             return shape, bounds, True
         tag, entry = found
         ctx = self._context('material', tag, primitive=primitive, mesh=mesh,
                             material=material, shape=shape, bounds=bounds,
-                            world_matrix=world)
+                            world_matrix=None if entry.shareable else world)
         made = self._run(entry, ctx, material_def)
         if made is _FAILED:
             return shape, bounds, entry.shareable
         return (shape if made is None else made), ctx.bounds, entry.shareable
 
-    def node(self, node_def: Any, transform: Any, children: List[Any],
-             local: Any, world: Any) -> Optional[Tuple[Any, bool]]:
+    def node(self, node_def: Any, transform: 'Transform', children: List['Node'],
+             local: np.ndarray, world: np.ndarray) -> Optional[Tuple['Node', bool]]:
         """Run a tagged node's hook.
 
         Returns ``None`` where the loader keeps what it built, or the

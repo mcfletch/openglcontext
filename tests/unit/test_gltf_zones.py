@@ -197,6 +197,25 @@ class TestReading:
         assert visibility.nodes == [scene.getDEF('secret')]
         assert not visibility.visible
 
+    def test_visibility_names_what_a_hook_put_in_the_nodes_place(self):
+        """A node hook that takes the node's slot leaves the loader's own
+        Transform out of the scene; the zone controls what is drawn."""
+        from OpenGLContext.loaders.gltf import hooks
+        from OpenGLContext.scenegraph.group import Group
+        body = zone_node(shape=0, extensions={'KHR_node_visibility': {
+            'nodes': [1], 'visible': False}})
+        body['nodes'].append({'name': 'secret',
+                              'extras': {'OGLC_hook': 'test:stand-in'}})
+        body['scenes'][0]['nodes'].append(1)
+        hooks.register('test:stand-in', lambda ctx: (Group(), True))
+        try:
+            scene = load(body)
+        finally:
+            hooks.unregister('test:stand-in')
+        visibility = scene.zones[0].setting(VISIBILITY)
+        assert visibility.nodes == [scene.getDEF('secret')]
+        assert isinstance(visibility.nodes[0], Group)
+
     def test_a_named_light_node_without_a_light_is_reported(self, caplog):
         body = zone_node(shape=0, extensions={'KHR_lights_punctual': {'nodes': [0]}})
         body['extensions']['KHR_lights_punctual'] = {'lights': [{'type': 'point'}]}

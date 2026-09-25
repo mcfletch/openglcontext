@@ -202,7 +202,8 @@ class Zone(nodetypes.Children, node.Node):
 
     def shape(self) -> ShapeSpec:
         """The zone's shape in its own frame."""
-        return ShapeSpec(str(self.shapeType), size=tuple(float(v) for v in self.size),  # type: ignore[arg-type]
+        x, y, z = (float(v) for v in self.size)
+        return ShapeSpec(str(self.shapeType), size=(x, y, z),
                          radius=float(self.radius), height=float(self.height),
                          radius_top=float(self.radiusTop),
                          radius_bottom=float(self.radiusBottom))

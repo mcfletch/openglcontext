@@ -10,7 +10,7 @@ wants a change of its own::
 """
 from __future__ import annotations
 
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any, TypeVar
 
 __all__ = ['Varied']
 
@@ -20,9 +20,13 @@ _Self = TypeVar('_Self', bound='Varied')
 class Varied:
     """Mixin for a :class:`vrml.node.Node` class: :meth:`varied` copies."""
 
+    if TYPE_CHECKING:
+        # What the node class this is mixed into provides.
+        def copy(self: _Self) -> _Self: ...
+
     def varied(self: _Self, **fields: Any) -> _Self:
         """A copy of this node with ``fields`` set on it; this one is unchanged."""
-        made: _Self = self.copy()  # type: ignore[attr-defined]
+        made: _Self = self.copy()
         for name, value in fields.items():
             setattr(made, name, value)
         return made

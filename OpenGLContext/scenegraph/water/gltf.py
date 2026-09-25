@@ -170,25 +170,28 @@ def water_hook(ctx: "hooks.HookContext") -> None:
         # what carries the wave, so there is nothing to do for the group that
         # holds it; a game wanting more registers a kind of its own.
         return None
+    mesh, shape, material = ctx.mesh, ctx.shape, ctx.material
+    if mesh is None or shape is None or material is None:  # pragma: no cover - the loader passes all three
+        return None
     values = ctx.values
     style = style_for(ctx.params.get('style', 'still'), values)
-    ctx.mesh.waveStyle = style
-    ctx.mesh.wave_time = 0.0
+    mesh.waveStyle = style
+    mesh.wave_time = 0.0
     if values.choice(ctx.params.get('material'), 'keep', 'the water material',
                      ('keep', 'engine')) == 'engine':
         engine = water_material()
-        ctx.mesh.material = engine
-        ctx.shape.appearance.material = engine
-    elif not getattr(ctx.material, 'reflector', None):
+        mesh.material = engine
+        shape.appearance.material = engine
+    elif not getattr(material, 'reflector', None):
         # Water mirrors the shore, whatever material the artist gave it.
-        ctx.material.reflector = WATER_REFLECTOR
+        material.reflector = WATER_REFLECTOR
     medium = values.choice(ctx.params.get('medium'), WATER, 'the water medium',
                            MEDIA)
     depth = values.number(ctx.params.get('depth'), 0.0, 'the water depth',
                           minimum=0.0)
     volume = _body_volume(ctx, medium, depth)
     if volume is not None:
-        ctx.collect(WaterBody(mesh=ctx.mesh, style=style, volume=volume))
+        ctx.collect(WaterBody(mesh=mesh, style=style, volume=volume))
     return None
 
 

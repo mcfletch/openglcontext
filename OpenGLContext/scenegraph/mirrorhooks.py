@@ -149,7 +149,7 @@ def mirrored(node: Any, material: PBRMaterial) -> Any:
 def mirror_hook(ctx: "hooks.HookContext") -> None:
     """Make a tagged material or object a mirror, and leave it where it is."""
     if ctx.at == 'material':
-        if not getattr(ctx.material, 'reflector', None):
+        if ctx.material is not None and not getattr(ctx.material, 'reflector', None):
             ctx.material.reflector = reflector_for(ctx.params, values=ctx.values)
         return None
     material = mirror_material(reflector_for(ctx.params, replace=True,

@@ -171,6 +171,9 @@ class GLTFScene(object):
         # trigger volumes, whatever a game's own kind put there. Empty for a
         # document that carries no tag, or one loaded with the mechanism off.
         self.hook_data: dict = {}
+        # hook_registrations: what each kind in hook_data was bound to when the
+        # document loaded, which is what advances it.
+        self.hook_registrations: dict = {}
         # zones: the Zone node built for each glTF node carrying OGLC_zone, in
         # document order. They are in the scenegraph under their node's
         # transform already; this is for an application that wants to find
@@ -187,13 +190,16 @@ class GLTFScene(object):
         records its meshes -- and a kind that registered no ``advance`` is
         walked past, so a scene with no timed hook is a return.
 
+        Each kind is advanced by what it was bound to when the document
+        loaded, which wrote its records, whatever the kind is bound to now.
+
         A game driving its own loop calls this itself;
         :meth:`~OpenGLContext.viewer.sceneviewer.SceneViewerMixin.advanceHooks`
         is what calls it in the viewer.
         """
         moved = False
         for kind, data in self.hook_data.items():
-            entry = hookreg.registered(kind)
+            entry = self.hook_registrations.get(kind)
             if entry is None or entry.advance is None:
                 continue
             moved = bool(entry.advance(data, float(when))) or moved
@@ -552,6 +558,8 @@ class _SceneBuilder:
         self.cameras: list = []       # (world_matrix, camera_def)
         self.light_meter: list = []   # (light_node, world_position or None) for auto-exposure
         self.node_transforms: dict = {}   # node index -> the Transform built for it
+        # node index -> what a node hook put in that node's slot, where one did
+        self.node_slots: dict = {}
         self.node_light: dict = {}        # node index -> the light node built for it
         self.node_morph: dict = {}        # node index -> [morph-weight setter callables]
         self.skins: list = []             # Skin, one per skinned mesh node
@@ -705,6 +713,16 @@ class _SceneBuilder:
             children.append(self._lod_node(node, node_index, lod_ids, world,
                                            ancestry, node_visible, group,
                                            node_casts))
+        elif (node.mesh is not None and node_visible and placements is not None
+              and not self._mesh_shareable(node.mesh)):
+            # A hook whose result stands for one copy is run for each
+            # placement, and each copy is placed on its own.
+            for placement in placements:
+                placed = placement @ world
+                for shape, bounds in self.mesh_shapes(node.mesh, placed, node_casts):
+                    children.append(MatrixTransform(localMatrix=placement,
+                                                    children=[shape]))
+                    self._record_part(placed, shape, bounds)
         elif node.mesh is not None and node_visible:
             shapes = self.mesh_shapes(node.mesh, world, node_casts)
             if placements is not None:
@@ -759,6 +777,8 @@ class _SceneBuilder:
         is where the document says the node is -- which is what a skin's joint
         walk and an animation channel are written against, and a hook that took
         the slot took the placement rather than the document's word for it.
+        ``node_slots`` records what took the slot, and a zone naming the node
+        controls that (:meth:`_in_slot`), since it is what is drawn.
         """
         made = self.hooks.node(node, group, children,
                                _local_matrix_rv(group), world)
@@ -770,7 +790,24 @@ class _SceneBuilder:
             group.children = [placed]
             return group
         self.scene_graph.regDefName(group.DEF, placed)
+        self.node_slots[node_index] = placed
         return placed
+
+    def _in_slot(self, node_index: int) -> Any:
+        """What stands in a glTF node's slot in the scene: what its hook put
+        there, or the loader's own ``Transform``. What a zone controls."""
+        placed = self.node_slots.get(node_index)
+        return placed if placed is not None else self.node_transforms.get(node_index)
+
+    def _mesh_shareable(self, mesh_index: int) -> bool:
+        """Whether every hooked material of a mesh may share its hook's result."""
+        materials = self.g.materials or []
+        for primitive in self.g.meshes[mesh_index].primitives:
+            index = primitive.material
+            if index is not None and 0 <= index < len(materials) \
+                    and not self.hooks.shareable(materials[index]):
+                return False
+        return True
 
     def _instanced(self, node: Any, shape: Any, placements: np.ndarray) -> Any:
         """Every placement of one primitive as a single instanced draw.
@@ -1041,7 +1078,7 @@ class _SceneBuilder:
             root_children.extend(self._audio_emitters(active, scene=True))
         # Zones name lights, emitters and nodes anywhere in the document, so
         # their borrowed blocks are read once every node has been built.
-        self.zoning.finish(node_transform=self.node_transforms.get,
+        self.zoning.finish(node_transform=self._in_slot,
                            light=self.node_light.get,
                            emitters=self._zone_emitters,
                            place=self._zone_placed.append,
@@ -1097,6 +1134,7 @@ class _SceneBuilder:
         scene.materials = self._name_materials()
         scene.sounds = self._name_sounds()
         scene.hook_data = self.hooks.scene_data
+        scene.hook_registrations = dict(self.hooks.registrations)
         scene.zones = list(self.zoning.zones)
         scene.environment = environment
         top = getattr(g, 'extensions', None) or {}

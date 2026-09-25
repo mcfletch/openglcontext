@@ -344,8 +344,10 @@ The factory is called at both hook points — once per primitive of a tagged
 material, once per tagged node — and ``ctx.at`` says which. At the material
 point it is handed the finished ``PBRMesh``, ``PBRMaterial`` and ``Shape``, the
 primitive's local ``bounds`` (writable, so a hook that changes the extent
-changes the framing) and the world matrix this copy stands at; it returns
-``None`` to keep the loader's ``Shape``, or a node to put in its place. At the
+changes the framing) and, for a kind registered ``shareable=False``, the world
+matrix this copy stands at (``ctx.world_matrix``, and ``ctx.world_bounds()``
+for the box placed there); it returns ``None`` to keep the loader's ``Shape``,
+or a node to put in its place. At the
 node point it is handed the ``Transform``, the children gathered under it and
 the local and world matrices, and returns one of three things:
 
@@ -375,8 +377,11 @@ same name it would have found.
 
 ``shareable=False`` says the hook's result carries per-node state — a box round
 where this copy stands, a trigger's fired flag — so two nodes referencing one
-mesh each get their own, as each gets its own copy of a morphed or skinned mesh.
-The default shares one result between every node that references the mesh.
+mesh each get their own, as each gets its own copy of a morphed or skinned mesh,
+and each ``EXT_mesh_gpu_instancing`` placement gets its own, placed on its own
+rather than instanced. The default shares one result between every node that
+references the mesh; since that result stands at no one node's place, a
+shareable hook is given no world matrix at the material point.
 
 A factory that raises is logged with the kind and the holder's name, and that
 material or node loads as the loader built it; the rest of the document
@@ -389,7 +394,11 @@ What a hook records with ``ctx.collect()`` arrives on the scene as
 ``scene.hook_data[ kind ]``. A kind registered with an ``advance`` callable is
 walked by ``scene.advance( seconds )``, which answers whether anything changed;
 the viewer calls it from its idle, and a game driving its own loop calls it
-itself.
+itself. Each kind is advanced by what it was registered as when the document
+loaded (``scene.hook_registrations``), since that is what wrote its records.
+
+A zone that names a node whose hook took the node's slot (``(node, True)``)
+controls what the hook put there, which is what is drawn.
 
 What a file may ask for
 ^^^^^^^^^^^^^^^^^^^^^^^

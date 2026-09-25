@@ -227,6 +227,61 @@ def test_an_unshareable_hook_gives_each_node_its_own_geometry():
     assert len(seen.calls) == 2
 
 
+def test_a_shareable_hook_is_given_no_world_matrix():
+    """One result serves every node on the mesh, so no one node's place is
+    the one it stands at."""
+    material = _tagged_material(extras={'OGLC_hook': 'probe'})
+    seen = Recorder()
+    with bound('probe', seen):
+        gltf.load_gltf(_two_nodes_on_one_mesh(material))
+    assert seen.only.world_matrix is None
+    assert seen.only.world_bounds() is None
+
+
+def _instanced_with_tagged_material(translations):
+    """A node drawing one tagged triangle at each of ``translations``."""
+    import base64
+    import json
+    positions = np.array([(0, 0, 0), (1, 0, 0), (0, 1, 0)], dtype='<f4')
+    moved = np.asarray(translations, dtype='<f4')
+    blob = positions.tobytes() + moved.tobytes()
+    return json.dumps({
+        'asset': {'version': '2.0'},
+        'extensionsUsed': ['EXT_mesh_gpu_instancing'],
+        'buffers': [{'byteLength': len(blob), 'uri': 'data:application/octet-stream;base64,'
+                     + base64.b64encode(blob).decode('ascii')}],
+        'bufferViews': [
+            {'buffer': 0, 'byteOffset': 0, 'byteLength': positions.nbytes},
+            {'buffer': 0, 'byteOffset': positions.nbytes, 'byteLength': moved.nbytes}],
+        'accessors': [
+            {'bufferView': 0, 'componentType': 5126, 'count': 3, 'type': 'VEC3',
+             'min': [0, 0, 0], 'max': [1, 1, 0]},
+            {'bufferView': 1, 'componentType': 5126, 'count': len(moved), 'type': 'VEC3'}],
+        'materials': [{'extras': {'OGLC_hook': 'probe'}}],
+        'meshes': [{'primitives': [{'attributes': {'POSITION': 0}, 'material': 0}]}],
+        'nodes': [{'mesh': 0, 'extensions': {
+            'EXT_mesh_gpu_instancing': {'attributes': {'TRANSLATION': 1}}}}],
+        'scenes': [{'nodes': [0]}], 'scene': 0}).encode('utf-8')
+
+
+def test_an_unshareable_hook_is_run_for_each_instanced_placement():
+    """Each placement is a copy standing somewhere of its own."""
+    seen = Recorder()
+    with bound('probe', seen, shareable=False):
+        gltf.load_gltf(_instanced_with_tagged_material([(-5, 0, 0), (5, 0, 0)]))
+    placed = sorted(float(ctx.world_bounds()[0][0]) for ctx in seen.calls)
+    assert placed == pytest.approx([-5.0, 5.0])
+
+
+def test_the_copies_an_unshareable_hook_made_are_each_placed_once():
+    seen = Recorder()
+    with bound('probe', seen, shareable=False):
+        scene = gltf.load_gltf(_instanced_with_tagged_material([(-5, 0, 0), (5, 0, 0)]))
+    shapes = _shapes(scene.group)
+    assert len(shapes) == 2
+    assert shapes[0].geometry is not shapes[1].geometry
+
+
 # --- the node hook ------------------------------------------------------------
 
 def _tagged_node(tag, **named):
@@ -345,6 +400,19 @@ def test_advance_walks_the_kinds_that_registered_one():
         scene = gltf.load_gltf(write_glb(_tagged_node('probe', name='lake')))
         assert scene.advance(2.5) is True
     assert moved == [(['body'], 2.5)]
+
+
+def test_advance_uses_what_the_kind_was_bound_to_when_it_loaded():
+    """hook_data was written by the load's factory; what the kind is bound to
+    later is somebody else's."""
+    moved = []
+    with bound('probe', lambda ctx: ctx.collect('body') and None,
+               advance=lambda data, when: moved.append('loaded') or True):
+        scene = gltf.load_gltf(write_glb(_tagged_node('probe', name='lake')))
+    with bound('probe', lambda ctx: None,
+               advance=lambda data, when: moved.append('later') or True):
+        assert scene.advance(1.0) is True
+    assert moved == ['loaded']
 
 
 def test_advance_is_a_return_for_a_scene_with_no_hooks():

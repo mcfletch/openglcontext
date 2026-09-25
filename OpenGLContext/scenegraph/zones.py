@@ -220,9 +220,13 @@ def place(shape: ShapeSpec, matrix: Optional[ArrayLike] = None) -> PlacedShape:
         widest = max(r1, r2)
         tall = h / 2.0 + (widest if kind == CAPSULE else 0.0)
         reach = (widest, tall, widest)
-    return PlacedShape(kind, to_local, params,
-                       tuple(float(v) for v in origin),   # type: ignore[arg-type]
-                       tuple(float(v) for v in reach))    # type: ignore[arg-type]
+    return PlacedShape(kind, to_local, params, _triple(origin), _triple(reach))
+
+
+def _triple(values: Any) -> Tuple[float, float, float]:
+    """Three numbers as a tuple of three floats."""
+    x, y, z = (float(v) for v in values)
+    return (x, y, z)
 
 
 def weight(distance: ArrayLike, blend: float) -> np.ndarray:

@@ -69,10 +69,10 @@ def read_shape(entry: Any) -> Optional[ShapeSpec]:
         size = data.get('size', (1.0, 1.0, 1.0))
         if not isinstance(size, (list, tuple)) or len(size) != 3:
             return None
-        sizes = [_dimension(value) for value in size]
-        if None in sizes:
+        x, y, z = (_dimension(value) for value in size)
+        if x is None or y is None or z is None:
             return None
-        return ShapeSpec(BOX, size=tuple(sizes))  # type: ignore[arg-type]
+        return ShapeSpec(BOX, size=(x, y, z))
     if kind == SPHERE:
         radius = _dimension(data.get('radius', 0.5))
         return None if radius is None else ShapeSpec(SPHERE, radius=radius)
