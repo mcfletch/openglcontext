@@ -60,20 +60,23 @@ def gl(gl_window):
 
 
 class TestApplyWindingCull:
-    def test_solid_enables_cull_and_sets_mirror_aware_front_face(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_solid_enables_cull_and_sets_mirror_aware_front_face(self):
         mode = types.SimpleNamespace(matrix=MIRROR_X)
         winding.apply_winding_cull(mode, ccw=True, solid=True)
         assert glIsEnabled(GL_CULL_FACE)
         # CCW geometry under a single-axis mirror draws CW-front.
         assert int(glGetIntegerv(GL_FRONT_FACE)) == GL_CW
 
-    def test_non_solid_disables_cull(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_non_solid_disables_cull(self):
         mode = types.SimpleNamespace(matrix=IDENT)
         winding.apply_winding_cull(mode, ccw=True, solid=False)
         assert not glIsEnabled(GL_CULL_FACE)
         assert int(glGetIntegerv(GL_FRONT_FACE)) == GL_CCW
 
-    def test_the_pass_record_is_kept_with_what_gl_has(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_the_pass_record_is_kept_with_what_gl_has(self):
         """The pass records culling so a mesh sets it only on a change; VRML97
         geometry setting it past the record leaves the next mesh culled."""
         mode = types.SimpleNamespace(matrix=IDENT)
@@ -83,7 +86,8 @@ class TestApplyWindingCull:
         set_cull_state(mode, False, GL_CCW)          # the next double-sided mesh
         assert not glIsEnabled(GL_CULL_FACE)
 
-    def test_missing_matrix_uses_base_winding(self, gl):
+    @pytest.mark.usefixtures('gl')
+    def test_missing_matrix_uses_base_winding(self):
         mode = types.SimpleNamespace()          # no .matrix attribute
         winding.apply_winding_cull(mode, ccw=False, solid=True)
         assert int(glGetIntegerv(GL_FRONT_FACE)) == GL_CW

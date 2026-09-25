@@ -7,27 +7,31 @@ from OpenGLContext import texture
 from OpenGLContext.arrays import zeros
 
 
-def test_best_size_rounds_up_to_a_power_of_two(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_best_size_rounds_up_to_a_power_of_two():
     assert texture.bestSize(1) == 1
     assert texture.bestSize(3) == 4
     assert texture.bestSize(64) == 64
     assert texture.bestSize(65) == 128
 
 
-def test_best_size_stops_at_the_largest_texture(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_best_size_stops_at_the_largest_texture():
     """A dimension past what the driver will take comes back as the limit."""
     limit = int(glGetIntegerv(GL_MAX_TEXTURE_SIZE))
     assert texture.bestSize(limit * 4) == limit
 
 
-def test_update_without_a_stored_image_is_refused(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_update_without_a_stored_image_is_refused():
     """`update` has no format to read the data as until something is stored."""
     tex = texture.Texture()
     with pytest.raises(RuntimeError):
         tex.update((0, 0), (1, 1), b'\0\0\0')
 
 
-def test_binding_as_a_context_manager_yields_the_texture(gl_context_compat):
+@pytest.mark.usefixtures('gl_context_compat')
+def test_binding_as_a_context_manager_yields_the_texture():
     """`with texture as bound:` hands back the texture, not None."""
     tex = texture.Texture()
     with tex as bound:

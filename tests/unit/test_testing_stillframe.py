@@ -17,7 +17,8 @@ def _fill(buffers):
     GL.glBufferData(GL.GL_ARRAY_BUFFER, 16, np.zeros(4, 'f'), GL.GL_STATIC_DRAW)
 
 
-def test_calls_are_counted_by_name_and_by_where_they_were_made(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_calls_are_counted_by_name_and_by_where_they_were_made():
     original = GL.glGenBuffers
     with counting_gl() as work:
         buffer = made_under_another_name(1)
@@ -29,7 +30,8 @@ def test_calls_are_counted_by_name_and_by_where_they_were_made(gl_context):
     GL.glDeleteBuffers(1, [buffer])
 
 
-def test_a_frame_that_fills_a_buffer_fails_a_floor_of_nothing(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_a_frame_that_fills_a_buffer_fails_a_floor_of_nothing():
     buffers = [GL.glGenBuffers(1)]
     with pytest.raises(StillFrameWork, match='uploads: 1, the floor is 0'):
         check_still_frame(lambda: _fill(buffers), warmup=1)

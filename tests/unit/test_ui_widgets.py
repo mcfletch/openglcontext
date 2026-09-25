@@ -298,7 +298,7 @@ class TestSelect:
         select.step(-1)
         assert select.settings.quality == 'medium'
 
-    def test_a_value_outside_the_options_starts_at_the_first(self, metrics):
+    def test_a_value_outside_the_options_starts_at_the_first(self):
         select = Select(options=['a', 'b'], value='zzz')
         assert select.index == 0
 
@@ -318,7 +318,7 @@ class TestSelect:
         assert select.key('<right>', (0, 0, 0))
         assert select.settings.quality == 'low'
 
-    def test_it_shows_a_label_rather_than_the_raw_value(self, metrics):
+    def test_it_shows_a_label_rather_than_the_raw_value(self):
         select = Select(options=['low', 'high'], optionLabels=['Low', 'High'],
                         value='high')
         assert select.display_value() == 'High'
@@ -433,7 +433,7 @@ class TestSlider:
     def test_a_key_it_does_not_use_is_left_alone(self, slider):
         assert not slider.key('z', (0, 0, 0))
 
-    def test_it_prints_its_value_with_the_suffix(self, metrics):
+    def test_it_prints_its_value_with_the_suffix(self):
         slider = Slider(minimum=0, maximum=10, value=3, suffix=' m/s')
         assert slider.display_value() == '3 m/s'
 
@@ -524,7 +524,7 @@ class TestTextField:
 
 
 class TestKeyCapture:
-    def test_it_takes_the_next_key_whatever_it_is(self, metrics):
+    def test_it_takes_the_next_key_whatever_it_is(self):
         capture = KeyCapture(keys=['w'])
         assert capture.key('<tab>', (0, 0, 0))
         assert capture.captured == '<tab>'

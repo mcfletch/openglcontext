@@ -120,7 +120,7 @@ class TestTheOffer:
 
 
 class TestADownload:
-    def test_download_starts_the_job_for_the_choice(self, screen, gate):
+    def test_download_starts_the_job_for_the_choice(self, screen):
         screen.fetch_button.on_activate(screen.fetch_button)
         assert screen.running
         assert screen.job.packs == [ASHDOWN, ART]
@@ -131,7 +131,7 @@ class TestADownload:
         assert screen.stop_button.enabled
         assert not screen.fetch_button.enabled
 
-    def test_the_bar_and_its_words_follow_the_job(self, screen, gate):
+    def test_the_bar_and_its_words_follow_the_job(self, screen):
         screen.fetch_button.on_activate(screen.fetch_button)
         for _ in range(200):
             screen.poll()

@@ -168,7 +168,7 @@ class TestTeapotLOD:
         t = Teapot(size=1.0)
         assert t._lod_level(_Mode(False, far)) > t._lod_level(_Mode(False, near))
 
-    def test_size_normalizes_level(self, monkeypatch):
+    def test_size_normalizes_level(self):
         # a big teapot and a small one at proportional distances get the same level
         m = np.eye(4)
         m[3, 2] = -40.0
@@ -342,7 +342,8 @@ def gl_context():
 
 
 @pytest.mark.core_profile
-def test_tessellation_produces_arrays(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_tessellation_produces_arrays():
     base, lid = teapot_nurbs.tessellate_teapot()
     assert base.dtype == np.float32
     assert len(base) % teapot_nurbs.FLOATS_PER_VERTEX == 0
@@ -353,7 +354,8 @@ def test_tessellation_produces_arrays(gl_context):
 
 
 @pytest.mark.core_profile
-def test_tessellation_normals_are_unit(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_tessellation_normals_are_unit():
     base, _ = teapot_nurbs.tessellate_teapot()
     verts = base.reshape(-1, teapot_nurbs.FLOATS_PER_VERTEX)
     normals = verts[:, 2:5]  # T2F_N3F_V3F: normal is floats 2..5
@@ -362,7 +364,8 @@ def test_tessellation_normals_are_unit(gl_context):
 
 
 @pytest.mark.core_profile
-def test_tessellation_normals_point_outward(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_tessellation_normals_point_outward():
     """Body normals face away from the central (y) axis.
 
     Regression guard for the Newell patch ordering, which is left-handed and
@@ -391,7 +394,8 @@ def test_tessellation_normals_point_outward(gl_context):
 
 
 @pytest.mark.core_profile
-def test_tessellation_oriented_y_up(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_tessellation_oriented_y_up():
     """Tessellated geometry is y-up and roughly glut-teapot sized."""
     base, lid = teapot_nurbs.tessellate_teapot()
     pos = base.reshape(-1, teapot_nurbs.FLOATS_PER_VERTEX)[:, 5:8]  # T2F_N3F_V3F
@@ -404,7 +408,8 @@ def test_tessellation_oriented_y_up(gl_context):
 
 
 @pytest.mark.core_profile
-def test_tessellation_emits_texcoords_in_unit_square(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_tessellation_emits_texcoords_in_unit_square():
     """Every vertex carries a (u, v) inside the injective atlas [0, 1]^2."""
     base, lid = teapot_nurbs.tessellate_teapot()
     for arr in (base, lid):
@@ -419,7 +424,8 @@ def test_tessellation_emits_texcoords_in_unit_square(gl_context):
 
 
 @pytest.mark.core_profile
-def test_interior_faces_double_geometry_and_flip_normals(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_interior_faces_double_geometry_and_flip_normals():
     """With interior on, each patch also emits a reversed, negated-normal copy."""
     base_solid, _ = teapot_nurbs.tessellate_teapot(interior=False)
     base_both, _ = teapot_nurbs.tessellate_teapot(interior=True)
@@ -437,7 +443,8 @@ def test_interior_faces_double_geometry_and_flip_normals(gl_context):
 
 
 @pytest.mark.core_profile
-def test_interior_faces_use_interior_atlas_region(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_interior_faces_use_interior_atlas_region():
     """A body patch's exterior faces land in v>=0.25, its interior copy in v<=0.25."""
     base_ext, base_int, _, _ = teapot_nurbs.injective_uv_transforms()
     patch = data.PATCH_GROUPS['body'][0]
@@ -450,7 +457,8 @@ def test_interior_faces_use_interior_atlas_region(gl_context):
     assert arr[m:, 1].max() <= 0.25 + 1e-4   # interior in v[0, 0.25]
 
 
-def test_steps_cache_separate_meshes(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_steps_cache_separate_meshes():
     """Two sampling steps tessellate and cache as two meshes, not one."""
     Teapot._arrays = {}
     Teapot._tessellate_attempts = {}

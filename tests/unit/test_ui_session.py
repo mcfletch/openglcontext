@@ -301,7 +301,7 @@ class TestDirtyIsCheapToAsk:
             assert not session.dirty
         assert len(calls) == 1, "compared the whole tree once per question"
 
-    def test_an_edit_makes_it_work_the_answer_out_again(self, monkeypatch):
+    def test_an_edit_makes_it_work_the_answer_out_again(self):
         session = SettingsSession(Settings())
         assert not session.dirty
         session.draft.lights = 2

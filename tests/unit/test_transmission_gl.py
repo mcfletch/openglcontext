@@ -51,7 +51,8 @@ def test_max_lod_reflects_level_count():
 
 
 class TestEnsureSize:
-    def test_allocates_texture_and_mip_levels(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_allocates_texture_and_mip_levels(self):
         b = TransmissionBuffer()
         assert b.ensure_size(64, 32) is True
         assert b.tex is not None
@@ -60,7 +61,8 @@ class TestEnsureSize:
         assert b.levels == 7
         b.release()
 
-    def test_same_size_is_a_noop(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_same_size_is_a_noop(self):
         b = TransmissionBuffer()
         b.ensure_size(64, 64)
         first = b.tex
@@ -68,7 +70,8 @@ class TestEnsureSize:
         assert b.tex == first          # no reallocation
         b.release()
 
-    def test_resize_reallocates(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_resize_reallocates(self):
         b = TransmissionBuffer()
         b.ensure_size(64, 64)
         first = b.tex
@@ -80,7 +83,8 @@ class TestEnsureSize:
         assert b.levels == 6
         b.release()
 
-    def test_zero_dimensions_clamped_to_one(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_zero_dimensions_clamped_to_one(self):
         b = TransmissionBuffer()
         assert b.ensure_size(0, 0) is True
         assert (b.w, b.h) == (1, 1)
@@ -88,7 +92,8 @@ class TestEnsureSize:
         b.release()
 
 
-def test_capture_and_bind_roundtrip(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_capture_and_bind_roundtrip():
     """capture() copies the default framebuffer and bind() activates the unit."""
     glViewport(0, 0, 64, 64)
     glClearColor(0.2, 0.4, 0.6, 1.0)
@@ -109,7 +114,8 @@ class TestRelease:
         b.release()
         assert b.tex is None
 
-    def test_release_frees_and_clears(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_release_frees_and_clears(self):
         b = TransmissionBuffer()
         b.ensure_size(8, 8)
         assert b.tex is not None

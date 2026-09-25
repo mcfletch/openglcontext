@@ -180,7 +180,7 @@ class TestWhereEverythingLands:
         band.rect = Rect(0, 0, width, height)
         return band
 
-    def test_the_arrows_sit_at_either_end(self, metrics):
+    def test_the_arrows_sit_at_either_end(self):
         band = self.laid(carousel())
         left, right = band.arrowRects()
         assert left.x < right.x

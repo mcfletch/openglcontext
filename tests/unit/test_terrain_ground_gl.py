@@ -91,7 +91,8 @@ def _draw(patch, model):
     return np.frombuffer(pixels, 'u1')[:3].astype(int)
 
 
-def test_a_patch_placed_east_is_drawn_with_the_eastern_layer(gl_context, tmp_path):
+@pytest.mark.usefixtures('gl_context')
+def test_a_patch_placed_east_is_drawn_with_the_eastern_layer(tmp_path):
     shading = _shading(tmp_path)
     model = np.eye(4)
     model[3, :3] = (25.0, 0.0, 0.0)           # row-vector, as mode.matrix is
@@ -105,7 +106,8 @@ def test_a_patch_placed_east_is_drawn_with_the_eastern_layer(gl_context, tmp_pat
         shading.dispose()
 
 
-def test_a_tile_placed_by_its_transform_reads_the_ground_there(gl_context, tmp_path):
+@pytest.mark.usefixtures('gl_context')
+def test_a_tile_placed_by_its_transform_reads_the_ground_there(tmp_path):
     """The uploader is handed the tile's column-vector transform, as the
     tileset states it, and the ground drawn under it is read where it lands."""
     shading = _shading(tmp_path)
@@ -132,7 +134,8 @@ def test_a_tile_placed_by_its_transform_reads_the_ground_there(gl_context, tmp_p
         shading.dispose()
 
 
-def test_the_constants_are_sent_once_not_per_patch(gl_context, tmp_path):
+@pytest.mark.usefixtures('gl_context')
+def test_the_constants_are_sent_once_not_per_patch(tmp_path):
     """What does not change from patch to patch is set when the program is
     made; a patch sends only where it is and how it is seen."""
     shading = _shading(tmp_path)

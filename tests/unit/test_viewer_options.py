@@ -239,7 +239,7 @@ class TestWhatTheCommandLineRefuses:
         ['--video-seconds', '0'], ['--video-seconds', '-2'],
         ['--video-seconds', 'nan'],
     ])
-    def test_a_recording_of_no_length_or_rate(self, argv, capsys):
+    def test_a_recording_of_no_length_or_rate(self, argv):
         with pytest.raises(SystemExit):
             parse_args(['model.glb'] + argv)
 

@@ -95,13 +95,15 @@ def _sampled(mode, env_mode=GL_REPLACE, blend_over=None):
     return np.frombuffer(pixels, dtype='B').astype(int)
 
 
-def test_a_greyscale_texture_draws_grey(gl_context_compat):
+@pytest.mark.usefixtures('gl_context_compat')
+def test_a_greyscale_texture_draws_grey():
     """Red, green and blue all carry the one channel that was uploaded."""
     red, green, blue, _ = _sampled('L')
     assert (red, green, blue) == pytest.approx((LUMINANCE, LUMINANCE, LUMINANCE), abs=2)
 
 
-def test_a_greyscale_texture_modulates_every_channel(gl_context_compat):
+@pytest.mark.usefixtures('gl_context_compat')
+def test_a_greyscale_texture_modulates_every_channel():
     """The light-map case: it dims a surface rather than colouring it.
 
     Under ``GL_MODULATE`` a texel of (L, 0, 0, 1) multiplies green and blue by
@@ -113,7 +115,8 @@ def test_a_greyscale_texture_modulates_every_channel(gl_context_compat):
     assert (red, green, blue) == pytest.approx((LUMINANCE, LUMINANCE, LUMINANCE), abs=2)
 
 
-def test_a_greyscale_texture_is_fully_opaque(gl_context_compat):
+@pytest.mark.usefixtures('gl_context_compat')
+def test_a_greyscale_texture_is_fully_opaque():
     """Nothing was uploaded into alpha, so it samples as 1 rather than as the red."""
     assert _sampled('L')[3] == pytest.approx(255, abs=2)
 
@@ -123,7 +126,8 @@ def test_a_greyscale_texture_is_fully_opaque(gl_context_compat):
     ('LA', (GL_RED, GL_RED, GL_RED, GL_GREEN)),
     ('RGB', (GL_RED, GL_GREEN, GL_BLUE, GL_ALPHA)),
 ])
-def test_the_texture_is_told_which_channel_stands_for_which(gl_context_compat, mode, expected):
+@pytest.mark.usefixtures('gl_context_compat')
+def test_the_texture_is_told_which_channel_stands_for_which(mode, expected):
     """The swizzle each format is uploaded with, read back off the texture.
 
     The single-channel case is asserted through a drawn pixel above; this is how
@@ -141,7 +145,8 @@ def test_the_texture_is_told_which_channel_stands_for_which(gl_context_compat, m
     assert actual == tuple(int(e) for e in expected)
 
 
-def test_a_colour_texture_is_left_alone(gl_context_compat):
+@pytest.mark.usefixtures('gl_context_compat')
+def test_a_colour_texture_is_left_alone():
     """The replication is for the single-channel formats and nothing else."""
     red, green, blue, alpha = _sampled('RGB')
     assert (red, green, blue) == pytest.approx((200, 100, 50), abs=2)

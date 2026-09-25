@@ -48,7 +48,7 @@ def gl_context(gl_window):
 
 
 @pytest.fixture
-def renderer(gl_context):
+def renderer(gl_context):  # noqa: ARG001 requested so its GL context is current while this is built
     """A renderer with its program and font atlas built, or a skip."""
     glViewport(0, 0, WIDTH, HEIGHT)
     made = OverlayRenderer(16)
@@ -270,7 +270,8 @@ def test_a_skinned_button_draws_its_artwork(renderer, tmp_path):
     assert corner.min() > 150, "the button's artwork did not draw"
 
 
-def test_the_context_hook_lays_out_and_draws(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_the_context_hook_lays_out_and_draws():
     """The path a real context takes: renderShaderOverlay with a live atlas."""
 
     class World:
@@ -310,7 +311,8 @@ def test_the_context_hook_lays_out_and_draws(gl_context):
         renderer.close()
 
 
-def test_the_hook_does_nothing_with_no_overlay(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_the_hook_does_nothing_with_no_overlay():
     class Context(OverlayMixin, ScreenMixin):
         def getViewPort(self):
             return (WIDTH, HEIGHT)
@@ -345,11 +347,13 @@ def test_two_windows_get_their_own_text_renderer(gl_context, gl_window):
         glcontext.make_current(gl_context)
 
 
-def test_the_same_window_keeps_the_one_atlas(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_the_same_window_keeps_the_one_atlas():
     assert get_text_renderer(16) is get_text_renderer(16)
 
 
-def test_a_context_can_let_its_text_renderers_go(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_a_context_can_let_its_text_renderers_go():
     """What a window calls as it is destroyed, so nothing outlives its objects."""
     made = shadertext.get_text_renderer(16)
     made.initialize()
@@ -367,7 +371,7 @@ class TestTheContextDrawsItsOwnOverlay:
     """
 
     @pytest.fixture
-    def context(self, gl_context):
+    def context(self, gl_context):  # noqa: ARG002 requested so its GL context is current while this is built
         glViewport(0, 0, WIDTH, HEIGHT)
 
         class Context(OverlayMixin, ScreenMixin):
@@ -479,7 +483,8 @@ class TestTheBatchDoesNotFlushForNothing:
 
 
 class TestClosingReleasesTheProgram:
-    def test_close_deletes_the_program(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_close_deletes_the_program(self):
         made = OverlayRenderer(16)
         if not made.initialize():
             pytest.skip("no font atlas / program on this driver")
@@ -488,7 +493,8 @@ class TestClosingReleasesTheProgram:
         made.close()
         assert not glIsProgram(program), "the GL program was leaked"
 
-    def test_closing_twice_is_harmless(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_closing_twice_is_harmless(self):
         """The second close deletes nothing, not whatever reused the old names."""
         made = OverlayRenderer(16)
         if not made.initialize():
@@ -547,7 +553,8 @@ class _Redrawable:
         self.asked.append(force)
 
 
-def test_a_picture_arriving_asks_the_context_for_a_frame(renderer):
+@pytest.mark.usefixtures('renderer')
+def test_a_picture_arriving_asks_the_context_for_a_frame():
     """Otherwise it is drawn whenever something unrelated next causes one.
 
     ``force=0`` because the decode finishes on a worker thread: it sets the

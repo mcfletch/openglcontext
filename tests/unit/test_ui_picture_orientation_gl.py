@@ -40,7 +40,7 @@ def gl_context(gl_window):
 
 
 @pytest.fixture
-def renderer(gl_context):
+def renderer(gl_context):  # noqa: ARG001 requested so its GL context is current while this is built
     glViewport(0, 0, WIDTH, HEIGHT)
     made = OverlayRenderer(16)
     if not made.initialize():

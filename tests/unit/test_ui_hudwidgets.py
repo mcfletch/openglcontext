@@ -123,7 +123,7 @@ class TestHUDLayer:
         # A group stacks downward, so the first child is the upper one.
         assert one.rect.y > two.rect.y
 
-    def test_ticking_reaches_the_children_that_want_a_clock(self, metrics):
+    def test_ticking_reaches_the_children_that_want_a_clock(self):
         messages = MessageQueue(duration=1.0, fade=0.0)
         layer = HUDLayer(children=[messages])
         messages.post('picked up a shotgun', now=100.0)
@@ -270,7 +270,7 @@ class TestDamageIndicator:
         indicator.tick(0.0)
         assert indicator.bands(metrics) == []
 
-    def test_spent_marks_do_not_pile_up(self, metrics):
+    def test_spent_marks_do_not_pile_up(self):
         """A firefight asks for dozens; none of them may outlive its fade."""
         indicator = self.marked(duration=0.5)
         for index in range(50):
@@ -348,11 +348,11 @@ class TestBarMeter:
         bar.arrange(Rect(0, 0, 200, 40), metrics)
         assert bar.barRect(metrics).x > 0
 
-    def test_a_maximum_of_zero_is_not_a_division(self, metrics):
+    def test_a_maximum_of_zero_is_not_a_division(self):
         bar = BarMeter(value=5, maximum=0, barWidth=100, barHeight=10)
         assert bar.fraction == 0.0
 
-    def test_the_colour_crosses_the_warning_threshold(self, metrics):
+    def test_the_colour_crosses_the_warning_threshold(self):
         skin = HUDLayer().activeSkin()
         healthy = BarMeter(value=100, maximum=100)
         warned = BarMeter(value=40, maximum=100)
@@ -361,7 +361,7 @@ class TestBarMeter:
         assert colour(warned.stateColour(skin)) == colour(skin.hudWarn)
         assert colour(critical.stateColour(skin)) == colour(skin.hudCritical)
 
-    def test_an_explicit_colour_overrides_the_thresholds(self, metrics):
+    def test_an_explicit_colour_overrides_the_thresholds(self):
         skin = HUDLayer().activeSkin()
         bar = BarMeter(value=1, maximum=100, color=(1, 0, 1, 1))
         assert colour(bar.stateColour(skin)) == (1.0, 0.0, 1.0, 1.0)
@@ -425,7 +425,7 @@ class TestReadout:
         assert width >= metrics.text_width('AMMO 42')
         assert height >= metrics.char_height
 
-    def test_the_value_can_be_told_it_is_low(self, metrics):
+    def test_the_value_can_be_told_it_is_low(self):
         skin = HUDLayer().activeSkin()
         readout = Readout(value='2', critical=True)
         assert colour(readout.valueColour(skin)) == colour(skin.hudCritical)

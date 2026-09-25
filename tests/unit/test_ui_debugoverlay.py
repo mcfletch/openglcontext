@@ -157,7 +157,7 @@ class TestLayout:
         overlay.refresh()
         assert overlay.panel.natural_size(metrics) == (0, 0)
 
-    def test_ticking_refreshes_what_the_providers_say(self, overlay, metrics):
+    def test_ticking_refreshes_what_the_providers_say(self, overlay):
         readings = iter([[('fps', 30)], [('fps', 60)]])
         overlay.register('Frame', lambda: next(readings))
         overlay.tick(1.0)

@@ -375,7 +375,8 @@ class TestTheWheelScrollsThePanelUnderIt:
         context.glfwOnScroll(object(), 0.0, 1.0)
         assert 0 < view.scroll < scrolled
 
-    def test_the_world_never_sees_the_notch(self, context, view):
+    @pytest.mark.usefixtures('view')
+    def test_the_world_never_sees_the_notch(self, context):
         """A wheel the interface used must not also turn the player's view."""
         context.glfwOnScroll(object(), 0.0, -1.0)
         assert context.dispatched == []

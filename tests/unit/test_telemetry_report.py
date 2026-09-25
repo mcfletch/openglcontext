@@ -138,7 +138,7 @@ class TestTheCommand:
         assert 'twig-bb' in capsys.readouterr().out
 
     def test_a_file_that_is_not_there_is_reported_rather_than_traced(
-            self, tmp_path, capsys):
+            self, tmp_path):
         assert report.main([str(tmp_path / 'nothing.jsonl')]) == 1
 
 

@@ -65,7 +65,7 @@ def context(tmp_path):
 
 
 @pytest.fixture
-def page(context, metrics):
+def page(context):
     panel = bindings.bindings_panel(context, context.navigation,
                                     path=context.bindingsPath)
     context.pushOverlay(panel)
@@ -80,7 +80,7 @@ class TestThePage:
     def test_a_row_shows_the_keys_it_is_bound_to(self, page):
         assert 'w' in page.find('walk.forward').text
 
-    def test_it_scrolls_because_there_are_many(self, page, context, metrics):
+    def test_it_scrolls_because_there_are_many(self, page, metrics):
         page.layout((640, 300), metrics)
         assert page.find('body').maximumScroll > 0
 
@@ -287,5 +287,5 @@ class TestTheBindingsPageSavesOnlyOnSave:
         page.find('save').activate()
         assert 'z' not in open(page.path).read()
 
-    def test_save_is_the_default_action(self, context, page):
+    def test_save_is_the_default_action(self, page):
         assert page.primary() is page.find('save')

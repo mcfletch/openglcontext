@@ -150,18 +150,18 @@ PRESSES = [
 class TestOneFingerIsOneNumber:
     """A press and a drag with the same button must agree about which it is."""
 
-    @pytest.mark.parametrize('name,wxButton,expected',
+    @pytest.mark.parametrize('_name,wxButton,expected',
                              PRESSES, ids=[case[0] for case in PRESSES])
-    def test_a_press_reports_the_x11_number(self, wxevents, name, wxButton,
+    def test_a_press_reports_the_x11_number(self, wxevents, _name, wxButton,
                                             expected):
         event = wxevents.wxMouseButtonEvent(
             Canvas(), MouseEvent(button=wxButton, down=True, held=(wxButton,)))
         assert event.button == expected
         assert event.state == 1
 
-    @pytest.mark.parametrize('name,wxButton,expected',
+    @pytest.mark.parametrize('_name,wxButton,expected',
                              PRESSES, ids=[case[0] for case in PRESSES])
-    def test_a_drag_reports_the_number_its_press_did(self, wxevents, name,
+    def test_a_drag_reports_the_number_its_press_did(self, wxevents, _name,
                                                     wxButton, expected):
         move = wxevents.wxMouseMoveEvent(Canvas(),
                                          MouseEvent(held=(wxButton,)))

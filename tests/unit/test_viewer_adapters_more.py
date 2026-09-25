@@ -118,7 +118,8 @@ class TestTheTilesAdapter:
         with pytest.raises(UnknownSourceType):
             adapter_for(str(other))
 
-    def test_a_dataset_is_shown_where_it_is(self, tileset):
+    @pytest.mark.usefixtures('tileset')
+    def test_a_dataset_is_shown_where_it_is(self):
         """Its coordinates are the world's; there is no 'middle' to move it to."""
         assert TilesAdapter.recentres is False
 

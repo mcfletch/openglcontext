@@ -87,7 +87,8 @@ class TestAnImageTextureDrawsUnderCore:
 
 
 class TestBindingIsSeparateFromEnabling:
-    def test_bind_touches_no_fixed_function_state(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_bind_touches_no_fixed_function_state(self):
         """A shader needs the texture bound; the enable is a compatibility call."""
 
         tex = texture.Texture()
@@ -97,7 +98,8 @@ class TestBindingIsSeparateFromEnabling:
         assert gl.glGetError() == gl.GL_NO_ERROR
         assert gl.glGetIntegerv(gl.GL_TEXTURE_BINDING_2D) == tex.texture
 
-    def test_enabling_is_what_a_compatibility_caller_asks_for(self, gl_context_compat):
+    @pytest.mark.usefixtures('gl_context_compat')
+    def test_enabling_is_what_a_compatibility_caller_asks_for(self):
         tex = texture.Texture()
         tex.store(3, gl.GL_RGB, 2, 2, b'\xff' * 12)
         tex()

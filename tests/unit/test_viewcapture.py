@@ -55,7 +55,7 @@ def test_no_gl_target_is_a_skip_before_anything_runs(tmp_path, monkeypatch):
     assert not marker.exists()
 
 
-def test_the_viewer_is_asked_to_capture_to_the_frame_read(tmp_path, monkeypatch):
+def test_the_viewer_is_asked_to_capture_to_the_frame_read(monkeypatch):
     ran = []
     monkeypatch.setattr(viewcapture, 'run_to_frame',
                         lambda command, out, **named: ran.append((command, out)))

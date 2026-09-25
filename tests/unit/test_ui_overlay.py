@@ -252,7 +252,7 @@ class TestStack:
         stack.push(dialog(modal=True), viewport=(800, 600), metrics=metrics)
         assert stack.sinks()
 
-    def test_clear_closes_everything(self, metrics):
+    def test_clear_closes_everything(self):
         stack = OverlayStack()
         first, second = dialog(), dialog()
         stack.push(first)
@@ -269,7 +269,7 @@ class TestStack:
     def test_popping_an_empty_stack_gives_nothing(self):
         assert OverlayStack().pop() is None
 
-    def test_only_a_capturing_top_panel_reports_capturing(self, metrics):
+    def test_only_a_capturing_top_panel_reports_capturing(self):
         stack = OverlayStack()
         assert not stack.capturing()
         stack.push(dialog(capturing=True))
@@ -286,7 +286,7 @@ class TestStack:
         assert stack.wheel(-1, *view.rect.centre)
         assert view.scroll > 0
 
-    def test_an_empty_stack_ignores_input(self, metrics):
+    def test_an_empty_stack_ignores_input(self):
         stack = OverlayStack()
         assert not stack.key('a', (0, 0, 0))
         assert not stack.character('a')
@@ -378,7 +378,7 @@ class TestContextRouting:
         context.ProcessEvent(event)
         assert context.dispatched == [event]
 
-    def test_the_overlay_is_relaid_out_when_the_window_resizes(self, context, metrics):
+    def test_the_overlay_is_relaid_out_when_the_window_resizes(self, context):
         panel = dialog()
         context.pushOverlay(panel)
         first = panel.rect

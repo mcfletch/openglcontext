@@ -33,7 +33,7 @@ def gl_context(gl_window):
 
 
 @pytest.fixture
-def encoder_available(gl_context):
+def encoder_available(gl_context):  # noqa: ARG001 an encoder is asked for with a GL context current
     encoders = pytest.importorskip('pyopengl_video').encoders
     if not encoders():
         pytest.skip('no hardware video encoder on this machine')
@@ -122,7 +122,8 @@ def read_texture(texture):
     return np.frombuffer(raw, dtype=np.uint8).reshape(height, width, 4)
 
 
-def test_copy_frame_turns_the_picture_the_right_way_up(gl_context):
+@pytest.mark.usefixtures('gl_context')
+def test_copy_frame_turns_the_picture_the_right_way_up():
     """The encoder reads a texture from its first row and calls that the top."""
 
     draw_a_distinctive_frame()
@@ -138,7 +139,8 @@ def test_copy_frame_turns_the_picture_the_right_way_up(gl_context):
     assert captured[-1, 0, 0] > 200 and captured[-1, 0, 2] < 20     # bottom: orange
 
 
-def test_a_recording_writes_a_video_file(tmp_path, encoder_available):
+@pytest.mark.usefixtures('encoder_available')
+def test_a_recording_writes_a_video_file(tmp_path):
     path = tmp_path / 'clip.mp4'
     recorder = VideoRecorder(path, fps=FPS, size=SIZE)
     try:
@@ -154,7 +156,8 @@ def test_a_recording_writes_a_video_file(tmp_path, encoder_available):
     assert b'mdat' in written and b'moov' in written
 
 
-def test_a_recording_of_a_set_length_stops_itself(tmp_path, encoder_available):
+@pytest.mark.usefixtures('encoder_available')
+def test_a_recording_of_a_set_length_stops_itself(tmp_path):
     recorder = VideoRecorder(tmp_path / 'short.mp4', fps=FPS, size=SIZE, seconds=0.2)
     try:
         taken = [recorder.capture() for _ in range(10)]
@@ -165,7 +168,8 @@ def test_a_recording_of_a_set_length_stops_itself(tmp_path, encoder_available):
     assert recorder.frames_written == 6
 
 
-def test_a_recording_advances_the_world_one_frame_at_a_time(tmp_path, encoder_available):
+@pytest.mark.usefixtures('encoder_available')
+def test_a_recording_advances_the_world_one_frame_at_a_time(tmp_path):
     """The scene must move by exactly a frame per frame recorded."""
 
     recorder = VideoRecorder(tmp_path / 'clock.mp4', fps=FPS, size=SIZE)
@@ -183,7 +187,8 @@ def test_a_recording_advances_the_world_one_frame_at_a_time(tmp_path, encoder_av
     assert systemtime.systemTime() > 1e9
 
 
-def test_a_wall_clock_recording_leaves_the_engine_clock_alone(tmp_path, encoder_available):
+@pytest.mark.usefixtures('encoder_available')
+def test_a_wall_clock_recording_leaves_the_engine_clock_alone(tmp_path):
     recorder = VideoRecorder(tmp_path / 'wall.mp4', fps=FPS, size=SIZE,
                              fixed_step=False)
     try:
@@ -204,7 +209,8 @@ def test_recording_without_the_encoder_package_says_what_to_install(monkeypatch)
         recorder_module.load_encoder_api()
 
 
-def test_a_recording_can_wait_for_the_scene_to_arrive(tmp_path, encoder_available):
+@pytest.mark.usefixtures('encoder_available')
+def test_a_recording_can_wait_for_the_scene_to_arrive(tmp_path):
     """A world that streams in needs a moment before it is worth recording."""
 
     recorder = VideoRecorder(tmp_path / 'waited.mp4', fps=FPS, size=SIZE,
@@ -220,8 +226,8 @@ def test_a_recording_can_wait_for_the_scene_to_arrive(tmp_path, encoder_availabl
     assert recorder.frames_written == 1
 
 
-def test_waiting_for_the_scene_is_not_the_recording_finishing(tmp_path,
-                                                              encoder_available):
+@pytest.mark.usefixtures('encoder_available')
+def test_waiting_for_the_scene_is_not_the_recording_finishing(tmp_path):
     """Both look like a frame that was not kept; only one means close the file."""
 
     recorder = VideoRecorder(tmp_path / 'waiting.mp4', fps=FPS, size=SIZE,

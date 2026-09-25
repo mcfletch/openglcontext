@@ -194,7 +194,8 @@ class TestDebugOverlay:
 
 
 class TestDrawingOrder:
-    def test_the_hud_is_drawn_under_the_screens(self, gl_context, metrics):
+    @pytest.mark.usefixtures('gl_context')
+    def test_the_hud_is_drawn_under_the_screens(self, metrics):
         game = Game()
         layer = HUDLayer()
         game.addHUDLayer(layer)

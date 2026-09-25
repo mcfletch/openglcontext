@@ -65,7 +65,8 @@ def _tex_png(tmp_path):
     return str(p)
 
 
-def test_billboards_render_composes_with_cull_memo_and_disposes(gl, tmp_path):
+@pytest.mark.usefixtures('gl')
+def test_billboards_render_composes_with_cull_memo_and_disposes(tmp_path):
     pos = np.array([[0, 0, 0], [1, 0, 1], [-1, 0, 2]], 'f4')
     node = InstancedBillboards(pos, np.zeros(3, 'f4'), np.ones(3, 'f4'), _tex_png(tmp_path))
     mode = _mode()
@@ -98,7 +99,8 @@ def test_billboards_render_composes_with_cull_memo_and_disposes(gl, tmp_path):
     node.dispose()   # idempotent
 
 
-def test_billboards_disabled_on_init_failure_no_crash(gl, tmp_path, monkeypatch):
+@pytest.mark.usefixtures('gl')
+def test_billboards_disabled_on_init_failure_no_crash(tmp_path, monkeypatch):
     node = InstancedBillboards(np.zeros((1, 3), 'f4'), np.zeros(1, 'f4'),
                                np.ones(1, 'f4'), _tex_png(tmp_path))
     # billboards binds load_program into its own namespace at import.
@@ -109,7 +111,8 @@ def test_billboards_disabled_on_init_failure_no_crash(gl, tmp_path, monkeypatch)
     assert node.render(_mode()) == 1        # stays a no-op
 
 
-def test_billboards_switched_off_make_no_program(gl, tmp_path, monkeypatch):
+@pytest.mark.usefixtures('gl')
+def test_billboards_switched_off_make_no_program(tmp_path, monkeypatch):
     node = InstancedBillboards(np.zeros((1, 3), 'f4'), np.zeros(1, 'f4'),
                                np.ones(1, 'f4'), _tex_png(tmp_path))
     made = []
@@ -120,7 +123,8 @@ def test_billboards_switched_off_make_no_program(gl, tmp_path, monkeypatch):
     assert made == [] and not node.failed
 
 
-def test_clumps_render_with_in_memory_texture_and_dispose(gl):
+@pytest.mark.usefixtures('gl')
+def test_clumps_render_with_in_memory_texture_and_dispose():
     # One triangle, textured from a decoded PIL image (no file on disk).
     P = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], 'f4')
     N = np.tile(np.array([0, 0, 1], 'f4'), (3, 1))
@@ -138,7 +142,8 @@ def test_clumps_render_with_in_memory_texture_and_dispose(gl):
     node.dispose()                                # idempotent: no GL objects left to free
 
 
-def test_far_clump_renders_with_inner_cut_window(gl):
+@pytest.mark.usefixtures('gl')
+def test_far_clump_renders_with_inner_cut_window():
     """A coarse far-clump node carries the inner fade-in window (uCutStart/uCutEnd)
     that dithers it IN at the geometry-LOD boundary; it compiles and draws clean."""
     P = np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0]], 'f4')
@@ -156,7 +161,8 @@ def test_far_clump_renders_with_inner_cut_window(gl):
     node.dispose()
 
 
-def test_meshlod_skips_species_with_no_near_instances(gl, tmp_path):
+@pytest.mark.usefixtures('gl')
+def test_meshlod_skips_species_with_no_near_instances(tmp_path):
     """A species whose near-set is empty is skipped in the draw loop while another
     species still draws -- the per-species empty-buffer guard."""
     two = [_species_npz(tmp_path), _species_npz(tmp_path)]
@@ -171,7 +177,8 @@ def test_meshlod_skips_species_with_no_near_instances(gl, tmp_path):
     node.dispose()
 
 
-def test_lod_window_shared_by_impostor_and_near_mesh(gl, tmp_path):
+@pytest.mark.usefixtures('gl')
+def test_lod_window_shared_by_impostor_and_near_mesh(tmp_path):
     """One LOD constant pair drives both shaders so the handoff can't drift apart."""
     imp = InstancedBillboards(np.zeros((1, 3), 'f4'), np.zeros(1, 'f4'), np.ones(1, 'f4'),
                               _tex_png(tmp_path), near_fade=True)
@@ -193,7 +200,8 @@ def test_lod_window_shared_by_impostor_and_near_mesh(gl, tmp_path):
     mesh.dispose()
 
 
-def test_instance_buffer_survives_shrink_then_grow(gl, tmp_path):
+@pytest.mark.usefixtures('gl')
+def test_instance_buffer_survives_shrink_then_grow(tmp_path):
     """Restreaming does not reallocate on a shrink and stays correct across a grow."""
     node = InstancedBillboards(np.zeros((5, 3), 'f4'), np.zeros(5, 'f4'),
                                np.ones(5, 'f4'), _tex_png(tmp_path))
@@ -220,7 +228,8 @@ def test_instance_buffer_survives_shrink_then_grow(gl, tmp_path):
     node.dispose()
 
 
-def test_meshlod_render_and_dispose_frees_everything(gl, tmp_path):
+@pytest.mark.usefixtures('gl')
+def test_meshlod_render_and_dispose_frees_everything(tmp_path):
     node = InstancedMeshLOD(np.array([[0, 0, 0]], 'f4'), np.zeros(1, 'f4'),
                             np.ones(1, 'f4'), [_species_npz(tmp_path)])
     node.update(0.0, 0.0, radius=100.0)
@@ -234,7 +243,8 @@ def test_meshlod_render_and_dispose_frees_everything(gl, tmp_path):
     node.dispose()                                # idempotent
 
 
-def test_splat_terrain_render_restores_state_and_disposes(gl, tmp_path):
+@pytest.mark.usefixtures('gl')
+def test_splat_terrain_render_restores_state_and_disposes(tmp_path):
     tex = tmp_path / "layer.png"
     Image.new("RGBA", (8, 8), (120, 110, 90, 255)).save(tex)
     ctl = tmp_path / "control.png"
@@ -260,7 +270,8 @@ def test_splat_terrain_render_restores_state_and_disposes(gl, tmp_path):
     assert node._patch is None and node._ground is None
 
 
-def test_a_cover_retuned_after_it_is_drawn_sends_its_new_windows(gl, tmp_path):
+@pytest.mark.usefixtures('gl')
+def test_a_cover_retuned_after_it_is_drawn_sends_its_new_windows(tmp_path):
     """A quality setting moves a cover's radii after its nodes have GL."""
     cover = GroundCover(HeightField(np.zeros((9, 9)), 256.0, 1.0),
                         CoverSpecies(name='grass', card=_tex_png(tmp_path)),

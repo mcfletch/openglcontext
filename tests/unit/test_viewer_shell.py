@@ -99,7 +99,7 @@ class TestOpeningSomethingElse:
         assert 'b.glb' in viewer.overlayText
 
     def test_starting_on_an_archive_holding_a_choice_exits_saying_so(
-            self, tmp_path, monkeypatch, capsys):
+            self, tmp_path, monkeypatch):
         monkeypatch.setattr(viewersource, 'archive_cache_dir',
                             lambda: str(tmp_path / 'unpacked'))
         path = str(tmp_path / 'two.zip')

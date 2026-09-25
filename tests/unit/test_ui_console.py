@@ -180,7 +180,7 @@ class TestPanelBehaviour:
         """Typing into a console must not also walk the character."""
         assert panel.modal
 
-    def test_it_can_be_asked_for_modelessly(self, registry, metrics):
+    def test_it_can_be_asked_for_modelessly(self, registry):
         made = console.console_panel(registry=registry, modal=False)
         assert not made.modal
 

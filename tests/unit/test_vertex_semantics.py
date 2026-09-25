@@ -92,7 +92,8 @@ class TestTheShadersMatchIt:
 
 
 class TestThePassAgreesWithIt:
-    def test_every_compiled_program_reads_position_where_the_table_says(self, gl_context):
+    @pytest.mark.usefixtures('gl_context')
+    def test_every_compiled_program_reads_position_where_the_table_says(self):
         shader_program = VRML97ShaderProgram()
         assert shader_program.compile(), 'the VRML97 programs did not compile'
         for attribute in ('aPosition', 'aNormal', 'aTexCoord', 'aColor'):

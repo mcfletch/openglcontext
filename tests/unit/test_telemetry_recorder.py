@@ -337,7 +337,7 @@ class TestMarkingWhenNobodyIsRecording:
     def test_it_says_it_is_not_recording(self) -> None:
         assert not NOT_RECORDING
 
-    def test_and_a_real_recording_says_it_is(self, tmp_path) -> None:
+    def test_and_a_real_recording_says_it_is(self) -> None:
         assert SessionRecorder(_Written().write)
 
     def test_one_stands_in_for_the_other(self) -> None:
