@@ -1586,9 +1586,6 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         if self.contextDefinition:
             self.contextDefinition.size = width, height
 
-    #: The views this context draws, or None for one view through its own
-    #: view platform; :meth:`getViewLayout` makes that layout on first use.
-    #: Assign a :class:`~OpenGLContext.multiview.views.ViewLayout` to draw several.
     def setPointerShape(self, name: str) -> bool:
         """Show the pointer ``name``; False where this backend cannot.
 
@@ -1597,14 +1594,16 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         :attr:`OpenGLContext.ui.widgets.Widget.cursor`, and the overlay asks
         for it as the pointer crosses the window.
 
-        A backend answers False for a shape it has no picture for, rather than
-        showing another one: a window that cannot say "this drags" is better
-        than one that says it with the wrong picture, and a caller that is
-        told can say it some other way -- the splitters draw a grip because a
-        cursor theme need not carry a resize pointer.
+        A backend answers False for a shape it has no picture for and leaves
+        the pointer as it is, so the caller can show the same thing another
+        way: the splitters draw a grip, since a cursor theme need not carry a
+        resize pointer.
         """
         return False
 
+    #: The views this context draws, or None for one view through its own
+    #: view platform; :meth:`getViewLayout` makes that layout on first use.
+    #: Assign a :class:`~OpenGLContext.multiview.views.ViewLayout` to draw several.
     viewLayout: Any = None
 
     def getViewLayout(self) -> Any:

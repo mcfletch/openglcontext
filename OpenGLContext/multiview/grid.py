@@ -5,9 +5,9 @@ units, a heavier one every tenth, in the plane the view looks at. A plan view
 and one that turns are ruled across the ground; an elevation is ruled in its
 own upright plane, which is where its measurements are.
 
-**How closely it is ruled follows the view's scale.** A grid at a fixed
-spacing is a sheet of solid lines when the view is zoomed out and a bare field
-when it is zoomed in, so the step is chosen from the ones a ruler is marked in
+How closely it is ruled follows the view's scale. A grid at a fixed spacing
+is a sheet of solid lines when the view is zoomed out and a bare field when it
+is zoomed in, so the step is chosen from the ones a ruler is marked in
 -- one, two and five in every decade -- as the one that lands nearest a
 comfortable number of pixels apart.
 

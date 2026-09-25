@@ -1,6 +1,6 @@
 """Where a model comes from, and getting it.
 
-A viewer opens a filesystem path, an http(s) URL, or **a member of an archive**
+A viewer opens a filesystem path, an http(s) URL, or a member of an archive
 named with a fragment::
 
     oglc-view model.glb

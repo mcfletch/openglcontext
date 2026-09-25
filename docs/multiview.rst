@@ -424,7 +424,7 @@ camera the first time it is read.
      - the same zoom, driven by a drag; dragging up moves closer
      - nothing by default
 
-**The primary (left) button is unbound in every view.** An editor's tools and
+The primary (left) button is unbound in every view. An editor's tools and
 its selection use it. A window with no tools can bind it with one call.
 
 The bindings are :class:`~OpenGLContext.move.modes.KeyBinding` nodes, the
@@ -491,8 +491,13 @@ view and handles clicks on them:
 
    from OpenGLContext.ui.viewchrome import ViewChrome
 
+   def placeViews():
+       views.arrange(*self.getViewPort())
+       self.overlays.invalidate()
+       self.triggerRedraw(1)
+
    self.chrome = ViewChrome(layout=views.layout, stack=self.overlays,
-                            on_arrange=self.placeViews)
+                            on_arrange=placeViews)
    self.overlays.push(self.chrome)
 
 In each view it draws:
@@ -507,7 +512,8 @@ Between the views it draws a splitter on each dividing line, and in a quad a
 handle where the two lines cross, which moves both. The icons are drawn in
 code, so an application needs no artwork for them. ``on_arrange`` is called
 when a control changes what is on screen, so the window can place its views
-again and redraw.
+again and redraw. ``MultiViewMixin`` passes its own ``viewsArranged``, which
+does that.
 
 The view's menu has these entries:
 

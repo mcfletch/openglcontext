@@ -382,9 +382,8 @@ class GLFWContext(
         """Show this pointer; False for a name this platform has not got.
 
         ``''`` and ``'arrow'`` are the ordinary pointer. A shape the platform
-        does not have is answered rather than approximated: a window that
-        cannot say "this drags" is better than one that says it with the wrong
-        picture.
+        does not have answers False and leaves the pointer as it is, rather
+        than showing a nearby shape.
         """
         if not self.window:
             return False

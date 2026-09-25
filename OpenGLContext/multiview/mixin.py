@@ -9,11 +9,10 @@ furniture in each view, and a key that switches between one view and four::
         def OnInit(self):
             self.startViews(bounds=(scene.minimum, scene.maximum))
 
-**The window's own camera stays the window's.** The perspective view draws
-through whatever ``getViewPlatform()`` answers, so the navigation, a bound
-``Viewpoint`` and any camera the application swaps in go on driving it exactly
-as they did with one view. The three orthographic views are the mixin's, and
-are framed on the bounds it is given.
+The perspective view draws through whatever ``getViewPlatform()`` answers, so
+the navigation, a bound ``Viewpoint`` and any camera the application swaps in
+drive it as they drive a window of one view. The three orthographic views are
+the mixin's, and are framed on the bounds it is given.
 
 It goes *after* ``OverlayMixin`` in the bases, so the overlay is offered each
 event first -- the furniture has to have the click meant for a button standing

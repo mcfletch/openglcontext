@@ -415,9 +415,9 @@ def _egl_pbuffer(size: Sequence[int], profile: str, version: Sequence[int],
     """A GL context on an EGL pbuffer, current for the body.
 
     The windowless path on Linux.  EGL renders on a *device* rather than on a
-    display server, so this needs neither a window nor a session -- which is
-    the difference between it and the hidden GLFW window the suite otherwise
-    uses, since that still wants a windowing library and something to talk to.
+    display server, so this needs neither a window nor a session; the hidden
+    GLFW window the suite otherwise uses needs a windowing library and a
+    display server.
     """
     try:
         from OpenGLContext.eglcontext import EGLContextError, PbufferContext

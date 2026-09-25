@@ -97,8 +97,7 @@ class View:
     :class:`~OpenGLContext.edit.orbitview.OrbitViewPlatform` -- or None, which
     draws through the context's own view platform, whatever
     ``getViewPlatform()`` answers that frame. The default layout is one view
-    with no camera, which is how an application that never mentions views
-    renders exactly as it did.
+    with no camera, filling the window.
 
     ``rect`` is where the layout last placed the view; a view the layout is not
     showing (the others, while one is maximised) is placed nowhere.

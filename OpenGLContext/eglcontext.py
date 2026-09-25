@@ -363,8 +363,7 @@ def openDisplay(device: DeviceInfo) -> Any:
 def closeDisplay(display: Any) -> bool:
     """Give back one use of ``display``; terminate it on the last.
 
-    Answers whether it was terminated, which is what a test asking "did that
-    one take the display down with it" wants to know.
+    Returns True where this was the last use and the display was terminated.
     """
     key = _address(display)
     with _DISPLAY_LOCK:

@@ -1,21 +1,19 @@
 """Moving the camera along the viewpoints a scene brought with it.
 
-A recording of a scene that does not move is a picture with a file size. What
-to move along is already in most scenes: the cameras their author placed. A
-fly-through treats them as waypoints and walks the camera from the first to the
-last over the length of the recording, so the path is the one the author chose
-rather than one a viewer invented.
+A fly-through gives a recording of a still scene something that moves. It
+treats the cameras the scene's author placed as waypoints and walks the camera
+from the first to the last over the length of the recording.
 
-Nothing here touches GL or the scenegraph -- it is the arithmetic of where the
-camera is at a given point along a path, which is what makes it checkable.
+Nothing here touches GL or the scenegraph: it is the arithmetic of where the
+camera is at a given point along a path.
 """
 from __future__ import annotations
 
-from typing import List, Sequence, Tuple
+from typing import Any, List, Sequence, Tuple
 
 from OpenGLContext.quaternion import Quaternion
 
-__all__ = ['Pose', 'ease', 'pose_at', 'segment_at']
+__all__ = ['Pose', 'ease', 'pose_at', 'poses_from', 'segment_at']
 
 #: A place to be and a way to face: a position and an orientation quaternion.
 Pose = Tuple[Sequence[float], Quaternion]
@@ -50,9 +48,8 @@ def pose_at(poses: Sequence[Pose], fraction: float,
             smooth: bool = True) -> Pose:
     """Where the camera is at ``fraction`` of the way along ``poses``.
 
-    Positions are interpolated straight and orientations along the shorter arc,
-    which is what makes a turn between two cameras look like a turn rather than
-    a tumble. ``smooth`` eases each leg's ends.
+    Positions are interpolated in a straight line and orientations along the
+    shorter arc between the two cameras. ``smooth`` eases each leg's ends.
     """
     if not poses:
         raise ValueError('a fly-through needs at least one viewpoint')
@@ -66,7 +63,7 @@ def pose_at(poses: Sequence[Pose], fraction: float,
     return position, facing.slerp(turned, along)
 
 
-def poses_from(viewpoints: Sequence) -> List[Pose]:
+def poses_from(viewpoints: Sequence[Any]) -> List[Pose]:
     """The scene's ``Viewpoint`` nodes as a path, in the order they are declared.
 
     A viewpoint states its orientation the way VRML97 does -- an axis and an

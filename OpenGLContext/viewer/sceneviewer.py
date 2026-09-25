@@ -142,8 +142,8 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
     Four views of it as well as one: ``MultiViewMixin`` puts the plan and two
     elevations beside the camera this already had, and ``v`` switches between
     them. The viewer's own camera is what the perspective view draws through,
-    so the model's cameras, the turntable and the fly-through go on working
-    whichever arrangement is up.
+    so the model's cameras, the turntable and the fly-through move that view
+    in either arrangement.
     """
 
     #: What to show and how.  A class attribute so a subclass can simply set it.

@@ -4,23 +4,26 @@ A window showing four views of one scene needs to say which view is which,
 which way each is looking, and how to work them. :class:`ViewChrome` draws
 that inside each view and takes the clicks:
 
-- the view's **name**, along its top, as a button that opens the view's menu:
+- the view's name, along its top, as a button that opens the view's menu:
   which way it looks, the scene's own cameras, how it is drawn, fitting what
   there is to see into it, and taking the window;
-- an **axis triad**, which says which way the world's axes run in this view
-  and turns with the camera;
-- an **expand** button, which gives the view the whole window and gives it
-  back;
-- a **splitter** on each line the arrangement divides the window along, which
-  a drag moves.
+- an axis triad, which says which way the world's axes run in this view and
+  turns with the camera;
+- an expand button, which gives the view the whole window and gives it back;
+- a splitter on each line the arrangement divides the window along, which a
+  drag moves.
 
 It is a panel at the bottom of the overlay stack, like
 :class:`~OpenGLContext.ui.toolpalette.ToolPalette`, and it is not modal: a
 press that lands on none of its controls reaches the scene underneath::
 
     chrome = ViewChrome(layout=views.layout, stack=context.overlays,
-                        on_arrange=context.placeViews)
+                        on_arrange=context.viewsArranged)
     context.overlays.push(chrome)
+
+``on_arrange`` is called when a control changes what is on screen;
+:meth:`~OpenGLContext.multiview.mixin.MultiViewMixin.viewsArranged` places the
+views again and redraws.
 
 ``cameras`` offers the scene's cameras in that menu -- a list of
 :class:`~OpenGLContext.multiview.viewpoints.SceneCamera`, or a callable
