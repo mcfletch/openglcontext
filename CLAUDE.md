@@ -931,6 +931,28 @@ New code passes `ruff check` with no warnings under the project config
 /workspaces/OpenGL-dev/.venv/bin/python -m ruff check OpenGLContext/<path>/
 ```
 
+### Caches
+
+A cache answers what the computation would answer, for every input the
+computation reads.
+
+Key on the object, never on `id()` alone. An `id()` is reused as soon as its
+object is collected, so a cache keyed on `id(positions)` or on a raw context
+address answers a new object with an old object's result. Hold the key object
+(a `WeakKeyDictionary`, or the object itself in the key or the entry), or key
+on something the object carries that is not reused.
+
+Cover every input. A memo that checks only some of what its answer depends on
+keeps a stale answer when one of the others changes: a field of the node
+itself, a setting, a scale, a texture edited in place. Compare every input, or
+key on a generation count that the scenegraph's field observers bump when any
+of them is set -- a `('set', field)` signal through `pydispatch.dispatcher`
+(`passes.reflection.mirror_generation` is one), or a `vrml.cache` holder whose
+`depend(node, field)` names them (`scenegraph.boundingvolume`).
+
+A cache's tests edit each input in turn and assert that the answer changes,
+so an input the key misses fails a test rather than a frame.
+
 ### Imports
 
 `from x import *` is traditional in this codebase and should **not** be churned out
