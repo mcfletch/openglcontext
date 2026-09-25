@@ -103,7 +103,10 @@ class TestReading:
         body = json.loads(json.dumps({'asset': {'version': '2.0'}, 'scenes': [
             {'nodes': [], 'extensions': {'EXT_lights_image_based': {'light': 3}}}],
             'scene': 0}))
-        assert loader.load_gltf(json.dumps(body).encode()).environment is None
+        with caplog.at_level('WARNING'):
+            scene = loader.load_gltf(json.dumps(body).encode())
+        assert scene.environment is None
+        assert 'EXT_lights_image_based' in caplog.text
 
 
 class TestMalformedValues:

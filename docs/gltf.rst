@@ -178,7 +178,9 @@ animation:
 - Image-based lights - ``EXT_lights_image_based``: a scene's or a zone's
   prefiltered environment and its irradiance coefficients, loaded as an
   :ref:`ImageBasedLight <image-based-light-node>` node when a scene or a
-  zone names it; a light nothing names is not decoded. See :doc:`zones`.
+  zone names it; a light nothing names is not decoded, and a scene naming a
+  light the document does not declare is reported and lit without one. See
+  :doc:`zones`.
 
 - Baked light - ``OGLC_materials_baked_light``, this project's own extension.
   It marks a mesh's ``COLOR_0`` as light calculated when the world was built,

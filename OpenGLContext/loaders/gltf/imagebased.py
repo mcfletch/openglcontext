@@ -14,7 +14,8 @@ four-channel PNG as RGBD HDR, anything else as the LDR values it holds. Each
 mip's six faces are square and alike, and each mip is half as wide as the one
 before. A light whose images cannot all be read, whose faces break those
 rules, or whose coefficients are not nine rows of three finite numbers, is left
-out with one warning, and whatever named it lights as though it had not. An
+out with one warning, and whatever named it lights as though it had not; so
+is a scene naming a light the document does not declare. An
 ``intensity`` or ``rotation`` that is no finite number of the right kind is
 reported and left at its default; a ``specularImageSize`` other than the
 faces' own width is reported, and the faces are read as they are.
@@ -175,11 +176,18 @@ def _coefficients(raw: Any) -> Optional[list[tuple[float, ...]]]:
 
 def scene_light(holder_extensions: Any, lights: ImageLights
                 ) -> Optional[ImageBasedLight]:
-    """The light a scene's (or a zone's) ``{"light": n}`` block names, or None."""
+    """The light a scene's (or a zone's) ``{"light": n}`` block names, or None.
+
+    A block naming no light the document declares is reported, and the
+    holder is lit as though it had no block.
+    """
     block = holder_extensions.get(EXTENSION) if isinstance(holder_extensions, dict) else None
     if block is None:
         return None
     index = block.get('light') if isinstance(block, dict) else None
-    if isinstance(index, bool) or not isinstance(index, int):
+    if isinstance(index, bool) or not isinstance(index, int) \
+            or not 0 <= index < len(lights):
+        log.warning('%s names light %r, which the document does not have',
+                    EXTENSION, index)
         return None
     return lights.light(index)
