@@ -93,6 +93,25 @@ class TestPlayerPointerException:
         assert len(written) == 1
         assert np.allclose(written[0], [0.5])
 
+    def test_it_is_reported_once_and_then_left_undriven(self, caplog):
+        s = ga.Sampler(np.array([0.0, 1.0]), np.array([[0.0], [1.0]]))
+        calls = []
+
+        def boom(_value):
+            calls.append(_value)
+            raise RuntimeError("setter blew up")
+
+        anim = ga.Animation('a', [], [
+            ga.PointerChannel(s, boom, '/materials/0/emissiveFactor')])
+        player = ga.Player(anim, {})
+        with caplog.at_level('ERROR', logger=ga.__name__):
+            for t in (0.25, 0.5, 0.75):
+                player.evaluate(t)
+        assert len(calls) == 1
+        [record] = caplog.records
+        assert '/materials/0/emissiveFactor' in record.getMessage()
+        assert record.exc_info is not None
+
 
 class TestSamplerValuesValidation:
     def test_indivisible_output_raises(self):

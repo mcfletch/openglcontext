@@ -445,6 +445,8 @@ class Player(object):
         # is a no-arg callable returning the current node world-matrix dict.
         self.skins: list = list(skins) if skins else []
         self.compute_worlds = compute_worlds
+        #: Pointer channels whose setter raised; held, so each is skipped.
+        self._failed_pointers: set[PointerChannel] = set()
 
     @property
     def duration(self) -> float:
@@ -467,12 +469,20 @@ class Player(object):
                     self._apply_weights(node_index, value)
                 elif xform is not None:
                     self._apply_trs(xform, path, value)
-        # KHR_animation_pointer: drive arbitrary properties through resolved setters.
+        # KHR_animation_pointer: drive arbitrary properties through resolved
+        # setters. A setter that raises is reported once and not driven again:
+        # it names a fixed property, so it would fail the same way every frame,
+        # and the other channels keep playing.
         for pc in self.animation.pointer_channels:
+            if pc in self._failed_pointers:
+                continue
             try:
                 pc.setter(pc.sampler.evaluate(tt))
             except Exception:
-                pass
+                self._failed_pointers.add(pc)
+                log.exception(
+                    'animation %r: pointer %s cannot be set; it is no longer '
+                    'animated', self.animation.name, pc.pointer)
         self.update_skins()
 
     def update_skins(self) -> None:

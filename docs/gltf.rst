@@ -149,7 +149,9 @@ animation:
 
 - Animation - keyframed node transforms, skinning and morph targets.
   ``KHR_animation_pointer`` animates material and texture-transform
-  properties, and ``KHR_node_visibility`` shows and hides nodes.
+  properties, and ``KHR_node_visibility`` shows and hides nodes. A pointer
+  whose property cannot be set is logged once, with its path, and left
+  unanimated while the clip's other channels play.
 
 - Instancing - ``EXT_mesh_gpu_instancing``. Repeated meshes are also batched
   into one instanced draw when the file does not use the extension. See
