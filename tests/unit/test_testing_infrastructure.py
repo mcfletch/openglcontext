@@ -8,6 +8,7 @@ import json
 import os
 import pathlib
 import socket
+import subprocess
 import tempfile
 import threading
 import sys
@@ -436,3 +437,26 @@ class TestConftest:
             duration=1.0,
         )
         assert result2.skipped
+
+
+class TestTheShippedClassesAreNotCollected:
+    """A test module that imports the runner's classes at its top gets tests
+    of its own collected, and nothing from the classes whose names start with
+    ``Test``."""
+
+    def test_importing_them_collects_only_the_modules_own_tests(self, tmp_path):
+        (tmp_path / 'pytest.ini').write_text('[pytest]\n')
+        (tmp_path / 'test_imports_the_runner.py').write_text(
+            'from OpenGLContext.testing.report_generator import TestReportGenerator\n'
+            'from OpenGLContext.testing.subprocess_runner import TestResult, TestRunner\n'
+            '\n'
+            'def test_its_own():\n'
+            '    pass\n')
+        done = subprocess.run(
+            [sys.executable, '-m', 'pytest', '--collect-only', '-q',
+             '-p', 'no:cacheprovider', '-W', 'error::pytest.PytestCollectionWarning',
+             str(tmp_path / 'test_imports_the_runner.py')],
+            cwd=tmp_path, capture_output=True, text=True, timeout=60)
+        assert done.returncode == 0, done.stdout + done.stderr
+        collected = [line for line in done.stdout.splitlines() if '::' in line]
+        assert collected == ['test_imports_the_runner.py::test_its_own']

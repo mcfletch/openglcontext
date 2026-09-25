@@ -26,6 +26,9 @@ SLOW_TEST_TIMEOUT = 120
 class TestResult:
     """Result from running a test in a subprocess."""
 
+    #: Not a test class, for pytest collecting a module that imports this one.
+    __test__ = False
+
     script: str
     returncode: int
     stdout: str
@@ -253,6 +256,9 @@ def run_test_with_popen(
 
 class TestRunner:
     """Runs multiple tests with configurable settings."""
+
+    #: Not a test class, for pytest collecting a module that imports this one.
+    __test__ = False
 
     def __init__(
         self,

@@ -378,6 +378,9 @@ TEST_ITEM_TEMPLATE = """
 class TestReportGenerator:
     """Generates HTML test reports."""
 
+    #: Not a test class, for pytest collecting a module that imports this one.
+    __test__ = False
+
     def __init__(self, title: str = "OpenGLContext Test Report") -> None:
         """Initialize the report generator.
 
