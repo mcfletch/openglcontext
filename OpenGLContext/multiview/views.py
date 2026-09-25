@@ -31,15 +31,43 @@ from __future__ import annotations
 from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import (
-    Any, Callable, Iterable, Iterator, List, Optional, Sequence, Set, Tuple,
-    Union,
+    TYPE_CHECKING, Any, Callable, Dict, Iterable, Iterator, List, Optional,
+    Protocol, Sequence, Set, Tuple, Union,
 )
 
 from OpenGLContext.events.mouseevents import WHEEL_BUTTONS
 
+if TYPE_CHECKING:
+    from OpenGLContext.multiview.navigation import ViewNavigation
+
 __all__ = [
-    'MAX_VIEWS', 'Rect', 'View', 'ViewLayout', 'ViewStyle', 'covers', 'tile_of',
+    'MAX_VIEWS', 'Rect', 'View', 'ViewCamera', 'ViewLayout', 'ViewStyle',
+    'covers', 'tile_of',
 ]
+
+
+class ViewCamera(Protocol):
+    """What a view's camera is: anything with the view platform's matrix interface.
+
+    :class:`~OpenGLContext.move.viewplatform.ViewPlatform` and the platforms
+    built on it -- :class:`~OpenGLContext.multiview.cameras.OrthoViewPlatform`,
+    :class:`~OpenGLContext.edit.mapview.MapViewPlatform`,
+    :class:`~OpenGLContext.edit.orbitview.OrbitViewPlatform` -- are all of
+    them. Matrices are row-vector 4x4. A camera that also has
+    ``setViewport(width, height)`` is told the size of its tile; one with a
+    ``view`` attribute (the orthographic, plan and orbiting platforms) is one
+    the pointer can navigate.
+    """
+
+    def matrix(self, inverse: bool = ...) -> Any:
+        """Model-view times projection."""
+
+    def modelMatrix(self, inverse: bool = ...) -> Any:
+        """World to eye."""
+
+    def viewMatrix(self, trimDepth: Optional[float] = ...,
+                   inverse: bool = ...) -> Any:
+        """The projection, its far plane at ``trimDepth`` where given."""
 
 #: The most views one layout holds: the size of the per-frame view table the
 #: faster multi-view strategies upload, and no more than ``GL_MAX_VIEWPORTS``
@@ -113,13 +141,13 @@ class View:
     that nobody navigates carries none.
     """
 
-    def __init__(self, camera: Any = None, name: str = '',
+    def __init__(self, camera: Optional[ViewCamera] = None, name: str = '',
                  style: Optional[ViewStyle] = None,
-                 navigation: Any = None) -> None:
-        self.camera = camera
+                 navigation: Optional['ViewNavigation'] = None) -> None:
+        self.camera: Optional[ViewCamera] = camera
         self.name = name
         self.style = style if style is not None else ViewStyle()
-        self.navigation = navigation
+        self.navigation: Optional['ViewNavigation'] = navigation
         self.rect: Rect = _NOWHERE
 
     def __repr__(self) -> str:
@@ -146,7 +174,8 @@ class View:
 
 
 @contextmanager
-def tile_of(view: View, camera: Any, window: Tuple[int, int]) -> Iterator[None]:
+def tile_of(view: View, camera: ViewCamera,
+            window: Tuple[int, int]) -> Iterator[None]:
     """Within the block, ``camera`` projects for ``view``'s tile rather than the window.
 
     For a view drawn through the context's own camera, which the context keeps
@@ -283,12 +312,12 @@ class ViewLayout:
         #: The view a held button is talking to, and which buttons hold it.
         self._captured: Optional[View] = None
         self._held: Set[int] = set()
-        #: The size each camera was last told, by view.
-        self._told: dict = {}
+        #: The camera each view last told a size, and the size, by view.
+        self._told: Dict[int, Tuple[int, Tuple[int, int]]] = {}
 
     # -- building ----------------------------------------------------------
     @classmethod
-    def single(cls, camera: Any = None, name: str = 'main',
+    def single(cls, camera: Optional[ViewCamera] = None, name: str = 'main',
                style: Optional[ViewStyle] = None) -> 'ViewLayout':
         """One view filling the window: what every context draws by default."""
         return cls([View(camera, name, style)], 'single')
@@ -368,7 +397,7 @@ class ViewLayout:
         self._told[id(view)] = told
         tell(*view.size)
 
-    def cameras(self, default: Any = None) -> List[Any]:
+    def cameras(self, default: Optional[ViewCamera] = None) -> List[ViewCamera]:
         """Every camera the layout draws through, once each.
 
         ``default`` stands for a view with no camera of its own -- pass the
@@ -376,7 +405,7 @@ class ViewLayout:
         the viewer, such as streamed tiles or a vegetation field, which have
         to serve every view at once.
         """
-        found: List[Any] = []
+        found: List[ViewCamera] = []
         for view in self.views:
             camera = view.camera if view.camera is not None else default
             if camera is not None and not any(camera is seen for seen in found):

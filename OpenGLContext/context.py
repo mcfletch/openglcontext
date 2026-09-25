@@ -54,6 +54,7 @@ if TYPE_CHECKING:
     from OpenGLContext.contextdefinition import ContextDefinition
     from OpenGLContext.framecounter import FrameCounter
     from OpenGLContext.looptrace import LoopTrace
+    from OpenGLContext.multiview.views import View, ViewLayout
     from OpenGLContext.scenegraph.text.ttfregistry import TTFRegistry
     from OpenGLContext.stalltrace import StallJournal
     from OpenGLContext.telemetry.record import ReplaySession, SessionRecording
@@ -1604,9 +1605,9 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     #: The views this context draws, or None for one view through its own
     #: view platform; :meth:`getViewLayout` makes that layout on first use.
     #: Assign a :class:`~OpenGLContext.multiview.views.ViewLayout` to draw several.
-    viewLayout: Any = None
+    viewLayout: 'ViewLayout | None' = None
 
-    def getViewLayout(self) -> Any:
+    def getViewLayout(self) -> 'ViewLayout':
         """The :class:`~OpenGLContext.multiview.views.ViewLayout` this context draws.
 
         One view through :meth:`getViewPlatform` unless the application has
@@ -1617,7 +1618,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             self.viewLayout = ViewLayout.single()
         return self.viewLayout
 
-    def routeEvent(self, event: Any) -> Any:
+    def routeEvent(self, event: Any) -> 'View | None':
         """The view ``event`` belongs to, which is also recorded as ``event.view``.
 
         The view under the pointer, the one a held button's press began in,

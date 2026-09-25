@@ -321,6 +321,5 @@ def navigation_for(view: View, mode: Optional[ViewNavigationMode] = None
         mode = current.mode if current.turns == turns else None
         current = None
     if current is None or mode is not None:
-        view.navigation = ViewNavigation(view, mode)
-    found: ViewNavigation = view.navigation
-    return found
+        current = view.navigation = ViewNavigation(view, mode)
+    return current

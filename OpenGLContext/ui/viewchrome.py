@@ -151,11 +151,11 @@ class _ViewWidget(Widget):
 
     #: The view it belongs to. Not a field: a view is not something to
     #: serialise, and the widget is rebuilt whenever the arrangement changes.
-    view: Any = None
+    view: Optional[View] = None
     #: The chrome that built it, which is what its press acts through.
     chrome: Any = None
 
-    def __init__(self, view: Any = None, chrome: Any = None,
+    def __init__(self, view: Optional[View] = None, chrome: Any = None,
                  **named: Any) -> None:
         super(_ViewWidget, self).__init__(**named)
         self.view = view
@@ -241,7 +241,7 @@ class AxisTriad(_ViewWidget):
     PROTO = 'AxisTriad'
 
     def paint(self, renderer: Any) -> None:
-        directions = axis_directions(self.view)
+        directions = axis_directions(self.view) if self.view is not None else None
         if directions is None:
             return
         centre = self.rect.centre
