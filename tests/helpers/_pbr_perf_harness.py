@@ -24,10 +24,19 @@ import os
 import sys
 import time
 
+import numpy as np
+from OpenGL.GL import glBindVertexArray, glDeleteVertexArrays, glFinish
+
+from OpenGLContext import testingcontext
+from OpenGLContext.scenegraph import pbrmesh as pbrmesh_mod
+from OpenGLContext.scenegraph.basenodes import (
+    Appearance, DirectionalLight, Shape, Transform, sceneGraph,
+)
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+
 
 def _cube(half=0.5):
     """Return (positions, normals, texcoords, indices) for a unit cube."""
-    import numpy as np
     # 6 faces x 4 verts, with per-face normals
     faces = [
         ((0, 0, 1), [(-1, -1, 1), (1, -1, 1), (1, 1, 1), (-1, 1, 1)]),
@@ -58,6 +67,8 @@ def main() -> int:
     os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
     os.environ['OPENGLCONTEXT_RENDERER'] = 'pbr'
     os.environ.setdefault('OPENGLCONTEXT_SHADOWS', '0')
+    # A frame time measured against the display's refresh would measure the display.
+    os.environ['OPENGLCONTEXT_NO_VSYNC'] = '1'
     os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
     # This harness measures the per-shape VAO cache, so keep the per-shape draw
     # path: instancing would collapse the identical cubes into one instanced draw
@@ -65,17 +76,7 @@ def main() -> int:
     # per-mesh VAO allocation this test counts.
     os.environ['OPENGLCONTEXT_INSTANCING'] = '0'
 
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-    import numpy as np
-    from OpenGL.GL import glFinish
-    from OpenGLContext import testingcontext
     BaseContext = testingcontext.getInteractive()
-    from OpenGLContext.scenegraph.basenodes import (
-        sceneGraph, Transform, Shape, Appearance, DirectionalLight,
-    )
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
-    from OpenGLContext.scenegraph import pbrmesh as pbrmesh_mod
 
     # Count VAO allocations so we can prove "built once" vs "rebuilt per frame".
     alloc = {'count': 0}
@@ -91,9 +92,8 @@ def main() -> int:
         # The pre-cache baseline: rebuild the VAO and re-specify the attribute
         # pointers every call. Lives here (not on the shipped node) so the
         # production _MeshGPU carries only the cached fast path.
-        from OpenGL.GL import glBindVertexArray, glDeleteVertexArrays
         # Go through the module symbol so the per-frame rebuilds are counted (a
-        # local `from OpenGL.GL import glGenVertexArrays` would bypass the wrapper
+        # direct `OpenGL.GL.glGenVertexArrays` would bypass the wrapper
         # installed above, undercounting the uncached baseline to just the initial
         # per-mesh builds).
         vao = pbrmesh_mod.glGenVertexArrays(1)
@@ -112,7 +112,7 @@ def main() -> int:
             glDeleteVertexArrays(1, [vao])
 
     if mode == 'uncached':
-        pbrmesh_mod._MeshGPU.draw = _draw_uncached
+        pbrmesh_mod._MeshGPU.draw = _draw_uncached  # noqa: SLF001 swaps in the uncached baseline draw; the mesh's GPU record has no public draw hook
 
     cube = _cube()
 
@@ -157,17 +157,12 @@ def main() -> int:
 
     class PerfContext(BaseContext):
         def OnInit(self):
-            try:
-                import glfw
-                glfw.swap_interval(0)  # disable vsync so timing reflects raw cost
-            except Exception:
-                pass
             self._root, self.sg = scene()
             cols = int(np.ceil(np.sqrt(shapes)))
             self.platform.setPosition((0, 0, cols * 1.7 + 4))
             self._frame = 0
 
-        def OnIdle(self, *a):
+        def OnIdle(self, *_args):
             self.triggerRedraw(1)
             return 1
 

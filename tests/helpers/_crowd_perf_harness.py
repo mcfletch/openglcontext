@@ -33,6 +33,20 @@ import pstats
 import sys
 import time
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(os.path.dirname(HERE)))
+sys.path.insert(0, os.path.dirname(HERE))
+
+from OpenGL.GL import glFinish
+
+from OpenGLContext import testingcontext
+from OpenGLContext.character.attachment import attach
+from OpenGLContext.character.crowd import Crowd
+from OpenGLContext.character.model import CharacterModel
+from OpenGLContext.loaders.gltf import load_gltf, parse_gltf
+from OpenGLContext.scenegraph.basenodes import DirectionalLight, Transform, sceneGraph
+from helpers._crowd_asset import crowd_character_glb
+
 
 def _options(argv):
     options = {'skinning': 'gpu', 'write': 'exposed', 'joints': 57,
@@ -62,24 +76,12 @@ def main():
     os.environ['OPENGLCONTEXT_BLOOM'] = '0'
     os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
     os.environ.setdefault('OPENGLCONTEXT_HIDDEN', '1')
-    os.environ.setdefault('OPENGLCONTEXT_NO_VSYNC', '1')
+    # A frame rate measured against the display's would measure the display.
+    os.environ['OPENGLCONTEXT_NO_VSYNC'] = '1'
     os.environ['OPENGLCONTEXT_GPU_SKINNING'] = \
         '1' if options['skinning'] == 'gpu' else '0'
 
-    here = os.path.dirname(os.path.abspath(__file__))
-    sys.path.insert(0, os.path.dirname(os.path.dirname(here)))
-    sys.path.insert(0, os.path.dirname(here))
-
-    from OpenGL.GL import glFinish
-    from OpenGLContext import testingcontext
     BaseContext = testingcontext.getInteractive()
-    from OpenGLContext.scenegraph.basenodes import (
-        sceneGraph, Transform, DirectionalLight,
-    )
-    from OpenGLContext.character.crowd import Crowd
-    from OpenGLContext.character.model import CharacterModel
-    from OpenGLContext.loaders.gltf import load_gltf, parse_gltf
-    from helpers._crowd_asset import crowd_character_glb
 
     timings = {'update': [], 'draw': []}
     built = {}
@@ -109,7 +111,6 @@ def main():
                 layer = model.mixer.layer('upper', mask=upper)
                 layer.play(names[(index + 2) % len(names)])
             if options['equipped']:
-                from OpenGLContext.character.attachment import attach
                 rig = model.mixer.rig
                 attach(rig.transforms[min(options['equipped'], rig.n - 1)],
                        Transform())
@@ -153,16 +154,11 @@ def main():
 
     class CrowdContext(BaseContext):
         def OnInit(self):
-            try:
-                import glfw
-                glfw.swap_interval(0)
-            except Exception:
-                pass
             self.models, self.sg = build()
             self.platform.setPosition((0, 2, 14))
             self._frame = 0
 
-        def OnIdle(self, *a):
+        def OnIdle(self, *_args):
             self.triggerRedraw(1)
             return 1
 

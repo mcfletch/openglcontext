@@ -13,17 +13,25 @@ import json
 import os
 import sys
 
+from OpenGLContext.eglcontext import EGLContext
+from OpenGLContext.passes.zonebake import bake_zone_lights
+from OpenGLContext.scenegraph.basenodes import (
+    Appearance,
+    Box,
+    DirectionalLight,
+    sceneGraph,
+    Shape,
+    Sphere,
+    Transform,
+    Zone,
+    ZoneEnvironment,
+)
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+
 
 def main() -> int:
     for name in ('OPENGLCONTEXT_RENDERER', 'OPENGLCONTEXT_IBL', 'OPENGLCONTEXT_PROFILE'):
         os.environ.pop(name, None)
-    from OpenGLContext.eglcontext import EGLContext
-    from OpenGLContext.passes.zonebake import bake_zone_lights
-    from OpenGLContext.scenegraph.basenodes import (
-        Appearance, Box, DirectionalLight, Shape, Sphere, Transform, Zone,
-        ZoneEnvironment, sceneGraph,
-    )
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 
     def grey():
         return Appearance(material=PBRMaterial(

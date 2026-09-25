@@ -25,6 +25,27 @@ PBR pass, for the modes about lights.
 import os
 import sys
 
+import numpy as np
+
+from OpenGLContext import testingcontext
+from OpenGLContext.capture import capture_to_png
+from OpenGLContext.scenegraph.basenodes import (
+    Appearance,
+    Box,
+    DirectionalLight,
+    Material,
+    PointLight,
+    sceneGraph,
+    Shape,
+    Sphere,
+    Transform,
+    Zone,
+    ZoneEnvironment,
+    ZoneLights,
+)
+from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+
 
 MODES = ('none', 'dim', 'capture', 'lights', 'nolights', 'imagelight')
 
@@ -46,14 +67,7 @@ def main() -> int:
     os.environ['OPENGLCONTEXT_IBL'] = 'full'
     os.environ.setdefault('OPENGLCONTEXT_AUTO_EXIT_FRAMES', '10')
 
-    from OpenGLContext.capture import capture_to_png
-    from OpenGLContext import testingcontext
     BaseContext = testingcontext.getInteractive()
-    from OpenGLContext.scenegraph.basenodes import (
-        Appearance, Box, DirectionalLight, Material, PointLight, Shape, Sphere,
-        Transform, Zone, ZoneEnvironment, ZoneLights, sceneGraph,
-    )
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 
     def grey():
         if renderer == 'flat':
@@ -85,8 +99,6 @@ def main() -> int:
                 for where, box in (((-4.6, 0.3, 0), wall), ((-0.4, 0.3, 0), wall),
                                    ((-2.5, 0.3, -2.1), side), ((-2.5, 0.3, 2.1), side)))
         if mode == 'imagelight':
-            import numpy as np
-            from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
             red = ImageBasedLight(
                 specular=[[np.full((8, 8, 3), (1.5, 0.05, 0.05), 'f4')] * 6],
                 irradianceCoefficients=[(5.0, 0.2, 0.2)] + [(0.0, 0.0, 0.0)] * 8)

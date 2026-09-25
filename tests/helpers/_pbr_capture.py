@@ -9,6 +9,30 @@ Usage:  python tests/_pbr_capture.py OUTPUT.png [gltf SOURCE]
 import os
 import sys
 
+import numpy as np
+from PIL import Image
+
+from OpenGLContext import testingcontext
+from OpenGLContext.capture import capture_to_png
+from OpenGLContext.loaders import gltf
+from OpenGLContext.scenegraph.basenodes import (
+    Appearance,
+    Box,
+    DirectionalLight,
+    PointLight,
+    sceneGraph,
+    Shape,
+    Sphere,
+    Teapot,
+    Transform,
+)
+from OpenGLContext.scenegraph.lightgrid import LightGrid
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from _ceramic_textures import ceramic_textures
+
 
 def main() -> int:
     out_path = sys.argv[1]
@@ -27,16 +51,7 @@ def main() -> int:
         # comparison measuring the probe.
         os.environ.setdefault('OPENGLCONTEXT_IBL', 'off')
 
-    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-
-    from OpenGLContext.capture import capture_to_png
-    from OpenGLContext import testingcontext
     BaseContext = testingcontext.getInteractive()
-    from OpenGLContext.scenegraph.basenodes import (
-        sceneGraph, Transform, Shape, Appearance, Sphere, Box, Teapot,
-        DirectionalLight, PointLight,
-    )
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
 
     def blend_scene():
         # An opaque red sphere with a translucent (alphaMode=BLEND) unlit-blue
@@ -99,8 +114,6 @@ def main() -> int:
         # A ceramic PBRMaterial on the non-glTF Teapot geometry: exercises the
         # full non-glTF PBR path (Shape -> PBRPass -> teapot VAO with texcoords +
         # tangents). Small texture size keeps the test fast.
-        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from _ceramic_textures import ceramic_textures
         tex = ceramic_textures(256)
         mat = PBRMaterial(
             baseColor=(1, 1, 1), metallic=0.0, roughness=1.0, normalScale=1.0,
@@ -123,9 +136,6 @@ def main() -> int:
         # is the baked lightmap on the left quad (a black->white horizontal ramp
         # on TEXCOORD_1). The right quad has none, so it stays at the flat ambient
         # level and gives the comparison baseline.
-        import numpy as np
-        from PIL import Image
-        from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
         ramp = np.tile(np.linspace(0, 255, 64, dtype='u1')[None, :, None], (64, 1, 3))
         lightmap = PBRTexture(Image.fromarray(ramp, 'RGB'), srgb=True)
@@ -159,8 +169,6 @@ def main() -> int:
         # exactly where the spheres do -- bright on the left, black on the
         # right. Neither sphere carries a lightmap, which is the whole point:
         # the grid is what lights an object that has none.
-        import numpy as np
-        from OpenGLContext.scenegraph.lightgrid import LightGrid
 
         grey = dict(baseColor=(0.8, 0.8, 0.8), metallic=0.0, roughness=0.9)
 
@@ -188,7 +196,6 @@ def main() -> int:
         ])
 
     def gltf_scene():
-        from OpenGLContext.loaders import gltf
         # sc.group is the model's root Transform (one child Transform per glTF
         # node); sc.getDEF(name) reaches an individual node.
         sc = gltf.load_gltf_url(source) if source.startswith('http') else gltf.load_gltf(source)

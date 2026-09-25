@@ -124,7 +124,7 @@ class DriverContext(BaseContext):
         print('DONE', flush=True)
         return True
 
-    def OnIdle(self, *arguments):
+    def OnIdle(self, *_arguments):
         if self.script:
             if self.script[0]():
                 self.script.pop(0)

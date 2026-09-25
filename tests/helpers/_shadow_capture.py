@@ -10,6 +10,9 @@ Usage:  python tests/helpers/_shadow_capture.py {on|off} OUTPUT.png
 import os
 import sys
 
+from OpenGLContext import testingcontext
+from OpenGLContext.capture import capture_to_png
+
 
 def main() -> int:
     shadows = sys.argv[1] == 'on'
@@ -24,10 +27,10 @@ def main() -> int:
     # Sibling scene modules (shadow_spot) live in the parent tests/ directory.
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-    from OpenGLContext.capture import capture_to_png
-    from OpenGLContext import testingcontext
     BaseContext = testingcontext.getInteractive()
-    from shadow_spot import make_scene
+    # The scene script sets its own environment defaults and picks a backend
+    # as it is imported, so it comes after the settings above.
+    from shadow_spot import make_scene  # noqa: PLC0415 imported after this process's settings, which it reads on import
 
     light_kind = sys.argv[3] if len(sys.argv) > 3 else os.environ.get('SHADOW_LIGHT', 'spot')
 

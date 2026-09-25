@@ -30,66 +30,37 @@ Every job reports ``key=value`` lines on stdout.
 import os
 import sys
 
+import numpy as np
+from OpenGL.GL import (
+    GL_RGB,
+    GL_SHADER_STORAGE_BUFFER,
+    GL_TEXTURE_BUFFER,
+    GL_UNSIGNED_BYTE,
+    glBindBuffer,
+    glGetBufferSubData,
+    glReadPixels,
+)
+from PIL import Image
 
-def _render(model_path, out_dir, gpu, frames=12):
-    """Render the figure posed mid-clip and return the captured RGB array."""
-    import numpy as np
-    from OpenGL.GL import glReadPixels, GL_RGB, GL_UNSIGNED_BYTE
-
-    os.environ['OPENGLCONTEXT_GPU_SKINNING'] = '1' if gpu else '0'
-    from OpenGLContext import renderoptions
-    renderoptions.reset_env_cache()
-
-    from OpenGLContext import testingcontext
-    BaseContext = testingcontext.getInteractive()
-    from OpenGLContext.scenegraph.basenodes import (
-        sceneGraph, Transform, DirectionalLight,
-    )
-    from OpenGLContext.character.model import CharacterModel
-
-    captured = {}
-
-    class SkinContext(BaseContext):
-        def OnInit(self):
-            self.model = CharacterModel.load(model_path)
-            self.model.play(sorted(self.model.clips)[0], loop=False)
-            self.model.update(0.6)
-            self.sg = sceneGraph(children=[
-                Transform(translation=(0, 0, 0), children=[self.model.group]),
-                DirectionalLight(direction=(-0.3, -0.4, -1.0),
-                                 color=(1, 1, 1), intensity=2.0),
-            ])
-            self.platform.setPosition((0, 0, 6))
-            self._frame = 0
-
-        def OnIdle(self, *a):
-            self.triggerRedraw(1)
-            return 1
-
-        def OnDraw(self, *a, **k):
-            result = BaseContext.OnDraw(self, *a, **k)
-            self._frame += 1
-            if self._frame == frames:
-                width, height = self.getViewPort()
-                raw = glReadPixels(0, 0, width, height, GL_RGB, GL_UNSIGNED_BYTE)
-                captured['pixels'] = np.frombuffer(raw, dtype=np.uint8).copy()
-                captured['mesh'] = _first_skinned(self.model)
-            return result
-
-    os.environ['OPENGLCONTEXT_AUTO_EXIT_FRAMES'] = str(frames + 1)
-    SkinContext.ContextMainLoop()
-    return captured
-
-
-def _first_skinned(model):
-    for skin in model.mixer.skins:
-        for mesh in getattr(skin, 'meshes', ()):
-            return mesh
-    return None
+from OpenGLContext import renderoptions, testingcontext
+from OpenGLContext.character import gpuskeleton
+from OpenGLContext.character.attachment import attach
+from OpenGLContext.character.crowd import Crowd
+from OpenGLContext.character.model import CharacterModel
+from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.loaders.gltf import load_gltf, parse_gltf
+from OpenGLContext.loaders.gltf.animation import quat_xyzw_to_vrml_rows
+from OpenGLContext.scenegraph import pbrmesh, skinning
+from OpenGLContext.scenegraph.appearance import Appearance
+from OpenGLContext.scenegraph.basenodes import DirectionalLight, sceneGraph, Transform
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.scenegraph.shape import Shape
+from OpenGLContext.scenegraph.skinning import MATRIX_FLOATS, palette_for
+from OpenGLContext.scenegraph.walk import reachable
 
 
 def _walk_meshes(node):
-    from OpenGLContext.scenegraph.walk import reachable
     for each in reachable(node, fields=('children', 'geometry')):
         if getattr(each, 'skin_joints', None) is not None:
             yield each
@@ -107,21 +78,13 @@ def _setup(gpu):
     os.environ['OPENGLCONTEXT_GPU_SKINNING'] = '1' if gpu else '0'
 
 
-def compare(model_path, out_dir):
+def compare(model_path, _out_dir):
     """Render both ways in one process and report the difference."""
-    import numpy as np
     _setup(True)
     report = {}
     frames = {}
 
-    from OpenGL.GL import glReadPixels, GL_RGB, GL_UNSIGNED_BYTE
-    from OpenGLContext import testingcontext
     BaseContext = testingcontext.getInteractive()
-    from OpenGLContext.scenegraph.basenodes import (
-        sceneGraph, Transform, DirectionalLight,
-    )
-    from OpenGLContext.character.model import CharacterModel
-    from OpenGLContext.scenegraph import skinning
 
     class SkinContext(BaseContext):
         def OnInit(self):
@@ -144,7 +107,7 @@ def compare(model_path, out_dir):
             self._frame = 0
             self._stage = 0
 
-        def OnIdle(self, *a):
+        def OnIdle(self, *_args):
             self.triggerRedraw(1)
             return 1
 
@@ -181,7 +144,6 @@ def compare(model_path, out_dir):
 
 
 def _emit(report, frames):
-    import numpy as np
     if 0 in frames and 1 in frames:
         gpu, cpu = frames[0].astype(np.int16), frames[1].astype(np.int16)
         differing = np.abs(gpu - cpu) > 8
@@ -193,36 +155,29 @@ def _emit(report, frames):
         print('%s=%s' % (key, value), flush=True)
 
 
-def uploads(model_path, out_dir):
+def uploads(model_path, _out_dir):
     """Animate with the shader skinning and count what was uploaded."""
     _setup(True)
     counts = {'vertex_uploads': 0, 'palette_writes': 0}
 
-    from OpenGLContext.scenegraph import pbrmesh as pbrmesh_mod
-    from OpenGLContext.scenegraph import skinning as skinning_mod
 
-    original_update = pbrmesh_mod._MeshGPU.update_dynamic
+    original_update = pbrmesh._MeshGPU.update_dynamic  # noqa: SLF001 counts vertex uploads; the engine keeps no count of them
 
     def counting_update(self, mesh):
         counts['vertex_uploads'] += 1
         return original_update(self, mesh)
 
-    pbrmesh_mod._MeshGPU.update_dynamic = counting_update
+    pbrmesh._MeshGPU.update_dynamic = counting_update  # noqa: SLF001 counts vertex uploads; the engine keeps no count of them
 
-    original_write = skinning_mod.JointPalette.write
+    original_write = skinning.JointPalette.write
 
     def counting_write(self, base, matrices):
         counts['palette_writes'] += 1
         return original_write(self, base, matrices)
 
-    skinning_mod.JointPalette.write = counting_write
+    skinning.JointPalette.write = counting_write
 
-    from OpenGLContext import testingcontext
     BaseContext = testingcontext.getInteractive()
-    from OpenGLContext.scenegraph.basenodes import (
-        sceneGraph, Transform, DirectionalLight,
-    )
-    from OpenGLContext.character.model import CharacterModel
 
     state = {}
 
@@ -237,7 +192,7 @@ def uploads(model_path, out_dir):
             ])
             self.platform.setPosition((0, 0, 5))
 
-        def OnIdle(self, *a):
+        def OnIdle(self, *_args):
             self.model.update(1 / 60.0)
             self.triggerRedraw(1)
             return 1
@@ -270,11 +225,6 @@ SHADOW_FIGURES = 6
 
 def _ground(size=9.0):
     """A wide quad at y=0 that takes shadows and casts none."""
-    import numpy as np
-    from OpenGLContext.scenegraph.appearance import Appearance
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
-    from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-    from OpenGLContext.scenegraph.shape import Shape
 
     # Wound anti-clockwise seen from above, which is the side it is looked at
     # from; the other way round it is back-face culled and the frame is empty.
@@ -297,21 +247,13 @@ def shadows(model_path, out_dir):
     the rest pose -- or from one figure's pose used for all of them -- is a
     different picture from the one the per-shape path draws.
     """
-    import numpy as np
     _setup(True)
     os.environ['OPENGLCONTEXT_SHADOWS'] = '1'
     os.environ['OPENGLCONTEXT_SHADOW_CASCADES'] = '1'
     report = {}
     frames = {}
 
-    from OpenGL.GL import glReadPixels, GL_RGB, GL_UNSIGNED_BYTE
-    from OpenGLContext import testingcontext
     BaseContext = testingcontext.getInteractive()
-    from OpenGLContext.scenegraph.basenodes import (
-        sceneGraph, Transform, DirectionalLight,
-    )
-    from OpenGLContext.character.model import CharacterModel
-    from OpenGLContext.loaders.gltf import load_gltf, parse_gltf
 
     class ShadowContext(BaseContext):
         def OnInit(self):
@@ -340,7 +282,7 @@ def shadows(model_path, out_dir):
             self.platform.setOrientation((1, 0, 0, -0.62))
             self._frame = 0
 
-        def OnIdle(self, *a):
+        def OnIdle(self, *_args):
             self.triggerRedraw(1)
             return 1
 
@@ -370,14 +312,12 @@ def shadows(model_path, out_dir):
             _emit_shadows(report, frames, out_dir)
             return ShadowContext.OnQuit(self, *a, **k)
 
-    from OpenGLContext.contextdefinition import ContextDefinition
     Reporting.ContextMainLoop(definition=ContextDefinition(size=(480, 360)))
     _emit_shadows(report, frames, out_dir)
 
 
 def _emit_shadows(report, frames, out_dir):
     """Report the comparison, and leave both frames beside it to be looked at."""
-    import numpy as np
     if 0 in frames and 1 in frames:
         for stage, name in ((0, 'batched'), (1, 'per-shape')):
             _write_png(os.path.join(out_dir, 'shadows-%s.png' % name),
@@ -394,10 +334,6 @@ def _emit_shadows(report, frames, out_dir):
 
 
 def _write_png(path, pixels):
-    try:
-        from PIL import Image
-    except ImportError:
-        return
     Image.fromarray(pixels, 'RGB').save(path)
 
 
@@ -409,23 +345,10 @@ def main():
 
 
 
-def compute(model_path, out_dir):
+def compute(model_path, _out_dir):
     """Compare the palettes a compute shader writes with the ones numpy does."""
     _setup(True)
-    import numpy as np
-    from OpenGL.GL import (
-        GL_TEXTURE_BUFFER, glBindBuffer, glGetBufferSubData,
-    )
-    from OpenGLContext import testingcontext
     BaseContext = testingcontext.getInteractive()
-    from OpenGLContext.scenegraph.basenodes import (
-        sceneGraph, Transform, DirectionalLight,
-    )
-    from OpenGLContext.character.crowd import Crowd
-    from OpenGLContext.character.model import CharacterModel
-    from OpenGLContext.character import gpuskeleton
-    from OpenGLContext.loaders.gltf import load_gltf, parse_gltf
-    from OpenGLContext.scenegraph.skinning import MATRIX_FLOATS, palette_for
 
     report = {}
 
@@ -449,7 +372,7 @@ def compute(model_path, out_dir):
             self.platform.setPosition((0, 0, 8))
             self._frame = 0
 
-        def OnIdle(self, *a):
+        def OnIdle(self, *_args):
             self.triggerRedraw(1)
             return 1
 
@@ -463,9 +386,9 @@ def compute(model_path, out_dir):
 
         def _measure(self):
             report['compute_available'] = int(gpuskeleton.compute_is_available())
-            report['compute_ran'] = int(self.crowd._skeleton is not None)
+            report['compute_ran'] = int(self.crowd._skeleton is not None)  # noqa: SLF001 Crowd offers no public view of its compute skeleton
             palette = palette_for(self)
-            if palette is None or self.crowd._skeleton is None:
+            if palette is None or self.crowd._skeleton is None:  # noqa: SLF001 Crowd offers no public view of its compute skeleton
                 return
             glBindBuffer(GL_TEXTURE_BUFFER, palette.buffer)
             raw = glGetBufferSubData(GL_TEXTURE_BUFFER, 0,
@@ -476,7 +399,7 @@ def compute(model_path, out_dir):
             checked = 0
             for model in self.models:
                 for wanted, plan in zip(model.mixer.joint_matrices(),
-                                       model.mixer._skin_plans, strict=True):
+                                       model.mixer._skin_plans, strict=True):  # noqa: SLF001 the mixer offers no public list of its skin plans
                     for mesh in plan[0].meshes:
                         base = palette.reserved_base(mesh)
                         if base is None:
@@ -497,7 +420,7 @@ def compute(model_path, out_dir):
     _report({}, report)
 
 
-def fallback(model_path, out_dir):
+def fallback(model_path, _out_dir):
     """Check the processor path engages for a mesh that would otherwise batch.
 
     A mesh drawn in an instanced batch has no draw of its own, so where it is
@@ -506,16 +429,9 @@ def fallback(model_path, out_dir):
     skinning in the shader whatever it had been asked for.
     """
     _setup(False)
-    from OpenGLContext import renderoptions
     renderoptions.reset_env_cache()
 
-    from OpenGLContext import testingcontext
     BaseContext = testingcontext.getInteractive()
-    from OpenGLContext.scenegraph.basenodes import (
-        sceneGraph, Transform, DirectionalLight,
-    )
-    from OpenGLContext.character.model import CharacterModel
-    from OpenGLContext.loaders.gltf import load_gltf, parse_gltf
 
     state = {}
 
@@ -536,7 +452,7 @@ def fallback(model_path, out_dir):
             self.platform.setPosition((0, 0, 8))
             self._frame = 0
 
-        def OnIdle(self, *a):
+        def OnIdle(self, *_args):
             for model in self.models:
                 model.update(1 / 60.0)
             self.triggerRedraw(1)
@@ -565,26 +481,14 @@ def fallback(model_path, out_dir):
 
 
 def _at_rest(mesh):
-    import numpy as np
-    return mesh._base_positions is None or np.allclose(
-        mesh.positions, mesh._base_positions, atol=1e-6)
+    return mesh._base_positions is None or np.allclose(  # noqa: SLF001 PBRMesh offers no public view of its rest-pose positions
+        mesh.positions, mesh._base_positions, atol=1e-6)  # noqa: SLF001 PBRMesh offers no public view of its rest-pose positions
 
 
-def blend(model_path, out_dir):
+def blend(model_path, _out_dir):
     """Compare the pose a compute shader blends with the one numpy blends."""
     _setup(True)
-    import numpy as np
-    from OpenGL.GL import (
-        GL_SHADER_STORAGE_BUFFER, glBindBuffer, glGetBufferSubData,
-    )
-    from OpenGLContext import testingcontext
     BaseContext = testingcontext.getInteractive()
-    from OpenGLContext.scenegraph.basenodes import (
-        sceneGraph, Transform, DirectionalLight,
-    )
-    from OpenGLContext.character.crowd import Crowd
-    from OpenGLContext.character.model import CharacterModel
-    from OpenGLContext.loaders.gltf import load_gltf, parse_gltf
 
     report = {}
 
@@ -622,12 +526,9 @@ def blend(model_path, out_dir):
                 if equipped:
                     # Something hung on a deep joint, which is what makes the
                     # scenegraph need that joint and the ones down to it.
-                    from OpenGLContext.character.attachment import attach
-                    from OpenGLContext.scenegraph.transform import Transform \
-                        as HeldTransform
                     rig = model.mixer.rig
                     attach(rig.transforms[min(equipped, rig.n - 1)],
-                           HeldTransform())
+                           Transform())
                 self.crowd.add(model)
             self.sg = sceneGraph(children=[
                 Transform(translation=(index * 1.5 - 3, 0, 0),
@@ -638,7 +539,7 @@ def blend(model_path, out_dir):
             self.platform.setPosition((0, 0, 9))
             self._frame = 0
 
-        def OnIdle(self, *a):
+        def OnIdle(self, *_args):
             self.triggerRedraw(1)
             return 1
 
@@ -653,14 +554,14 @@ def blend(model_path, out_dir):
             return result
 
         def _measure(self):
-            skeleton = self.crowd._skeleton
+            skeleton = self.crowd._skeleton  # noqa: SLF001 Crowd offers no public view of its compute skeleton
             report['blend_ran'] = int(
                 skeleton is not None and bool(skeleton.clip_index))
             if not report['blend_ran']:
                 return
             joints = skeleton.joints_per_figure
             count = len(self.models)
-            buffer = skeleton._buffers['pose']
+            buffer = skeleton._buffers['pose']  # noqa: SLF001 the compute skeleton offers no public view of its pose buffer
             wanted = count * joints * 3 * 16
             report['pose_capacity'] = buffer.capacity
             report['pose_wanted'] = wanted
@@ -677,7 +578,7 @@ def blend(model_path, out_dir):
                 wanted = model.mixer.pose()
                 for layer in model.mixer.layers:
                     if layer.weight and layer.tracks:
-                        model.mixer._apply_layer(layer, wanted, {})
+                        model.mixer._apply_layer(layer, wanted, {})  # noqa: SLF001 the mixer offers no public blended pose with its layers applied
                 for path, (name, width) in enumerate(
                         (('translation', 3), ('rotation', 4), ('scale', 3))):
                     got = read[figure, :, path, :width]
@@ -701,8 +602,6 @@ def blend(model_path, out_dir):
             the skeleton -- so what they have to match is the pose the processor
             would have arrived at for the whole figure.
             """
-            import numpy as np
-            from OpenGLContext.loaders.gltf.animation import quat_xyzw_to_vrml_rows
 
             worst = 0.0
             checked = 0
@@ -714,7 +613,7 @@ def blend(model_path, out_dir):
                 wanted = mixer.pose()
                 for layer in mixer.layers:
                     if layer.weight and layer.tracks:
-                        mixer._apply_layer(layer, wanted, {})
+                        mixer._apply_layer(layer, wanted, {})  # noqa: SLF001 the mixer offers no public blended pose with its layers applied
                 axis_angle = quat_xyzw_to_vrml_rows(wanted[1][written])
                 for index, slot in enumerate(written):
                     node = mixer.rig.transforms[int(slot)]

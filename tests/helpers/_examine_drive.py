@@ -65,7 +65,7 @@ class DriverContext(BaseContext):
     def getSceneGraph(self):
         return self.sg
 
-    def OnIdle(self, *arguments):
+    def OnIdle(self, *_arguments):
         if not self.script:
             return 0
         if self.script[0]():

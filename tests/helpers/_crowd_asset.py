@@ -109,12 +109,12 @@ def crowd_character_glb(joints=57, vertices=4096, clips=23, keys=21,
     animations = []
     for clip in range(clips):
         samplers, channels = [], []
-        still_translation = _accessor(arrays, accessors, 6,
+        still_translation = _accessor(arrays, accessors,
                                       np.zeros((2, 3), dtype='<f4'), 'VEC3')
-        still_scale = _accessor(arrays, accessors, 6,
+        still_scale = _accessor(arrays, accessors,
                                 np.ones((2, 3), dtype='<f4'), 'VEC3')
         still_rotation = _accessor(
-            arrays, accessors, 6,
+            arrays, accessors,
             np.tile(np.array([0, 0, 0, 1], dtype='<f4'), (2, 1)), 'VEC4')
         for path, output in (('translation', still_translation),
                              ('scale', still_scale), ('rotation', still_rotation)):
@@ -138,9 +138,9 @@ def crowd_character_glb(joints=57, vertices=4096, clips=23, keys=21,
             slope = np.gradient(angle) * 1.5
             spline[0::3, 2] = np.sin(angle / 2) * slope     # in-tangents
             spline[2::3, 2] = -np.sin(angle / 2) * slope    # out-tangents
-            curve = _accessor(arrays, accessors, 7, spline, 'VEC4')
+            curve = _accessor(arrays, accessors, spline, 'VEC4')
         else:
-            curve = _accessor(arrays, accessors, 7, turn, 'VEC4')
+            curve = _accessor(arrays, accessors, turn, 'VEC4')
         for step in range(moving):
             joint = (step * max(1, joints // max(1, moving))) % joints
             samplers.append(AnimationSampler(input=7, output=curve,
@@ -172,7 +172,7 @@ def crowd_character_glb(joints=57, vertices=4096, clips=23, keys=21,
     return b"".join(g.save_to_bytes())
 
 
-def _accessor(arrays, accessors, times_view, values, kind):
+def _accessor(arrays, accessors, values, kind):
     """Append one sampler-output array and return its accessor index."""
     arrays.append(np.ascontiguousarray(values))
     accessors.append(Accessor(bufferView=len(arrays) - 1, componentType=5126,

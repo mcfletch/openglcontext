@@ -32,12 +32,12 @@ class InteractiveClickTarget(EventInjectionMixin, BaseContext):
             "mousebutton", button=0, state=1, function=self.OnClick
         )
 
-    def OnClick(self, event=None):
+    def OnClick(self, event=None):  # noqa: ARG002 an event handler's signature
         # Reaching here proves the injected event traversed socket -> injector
         # -> event manager -> handler. Flush so the parent sees it promptly.
         print(CLICK_MARKER, flush=True)
 
-    def OnIdle(self, *args):
+    def OnIdle(self, *_args):
         self.poll_injected_events()
         self.triggerRedraw(1)
 

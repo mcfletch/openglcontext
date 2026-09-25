@@ -11,6 +11,7 @@ Usage:  _tk_viewer_drive.py <step> [<step> ...]
 import os
 import sys
 import time
+import tkinter
 
 os.environ.setdefault('OPENGLCONTEXT_NO_VSYNC', '1')
 os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
@@ -63,7 +64,7 @@ def windowGone(application):
     """
     try:
         return not application.root.winfo_exists()
-    except Exception:
+    except tkinter.TclError:
         return True
 
 

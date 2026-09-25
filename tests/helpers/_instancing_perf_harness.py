@@ -27,10 +27,25 @@ SHAPES = int(sys.argv[2]) if len(sys.argv) > 2 else 400
 FRAMES = int(sys.argv[3]) if len(sys.argv) > 3 else 120
 os.environ['OPENGLCONTEXT_INSTANCING'] = '1' if MODE == 'on' else '0'
 os.environ['OPENGLCONTEXT_INSTANCE_MIN'] = '4'
+# A frame time measured against the display's refresh would measure the display.
+os.environ['OPENGLCONTEXT_NO_VSYNC'] = '1'
+
+import numpy as np
+from OpenGL.GL import glFinish
+
+from OpenGLContext import testingcontext
+from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.testing.glcontext import gl_available
+
+try:
+    import glfw
+except ImportError:                 # the harness drives GLFW's event loop itself
+    glfw = None
 
 
 def _cube():
-    import numpy as np
     faces = [((0, 0, 1), [(-1, -1, 1), (1, -1, 1), (1, 1, 1), (-1, 1, 1)]),
              ((0, 0, -1), [(1, -1, -1), (-1, -1, -1), (-1, 1, -1), (1, 1, -1)]),
              ((1, 0, 0), [(1, -1, 1), (1, -1, -1), (1, 1, -1), (1, 1, 1)]),
@@ -48,29 +63,7 @@ def _cube():
 
 
 def main():
-    import glfw
-    from OpenGLContext.passes import instancing
-    from OpenGLContext.scenegraph import pbrmesh
-    from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
-
-    counts = {'single': 0, 'instanced': 0, 'instances': 0}
-    _od = pbrmesh._MeshGPU.draw
-    def _cd(self, *args, **named):
-        counts['single'] += 1
-        return _od(self, *args, **named)
-    pbrmesh._MeshGPU.draw = _cd
-    _oi = instancing.draw_instanced_mesh
-    def _ci(gpu, mvs, oids, material_indices=None, **named):
-        counts['instanced'] += 1
-        counts['instances'] += len(mvs)
-        return _oi(gpu, mvs, oids, material_indices, **named)
-    instancing.draw_instanced_mesh = _ci
-
-    from OpenGLContext import testingcontext
     Base = testingcontext.getInteractive()
-    from OpenGLContext.scenegraph import basenodes
-    import numpy as np
 
     cube = _cube()
     geom = PBRMesh(positions=cube[0], normals=cube[1], indices=cube[2])
@@ -85,12 +78,11 @@ def main():
 
             A buffer swap blocks until the compositor is ready for another
             frame, and a compositor may throttle it to the display whatever
-            `swap_interval(0)` asked for.  Timing across it measures the wait
+            ``OPENGLCONTEXT_NO_VSYNC`` asked for.  Timing across it measures the wait
             and not the work: both modes then come out at the frame interval,
             and the ratio between them is driven to 1 -- which is the wrong
             answer for a measurement whose whole purpose is the ratio.
             """
-            from OpenGL.GL import glFinish
             glFinish()
             drawn.append(time.perf_counter())
             return super(C, self).SwapBuffers()
@@ -110,15 +102,8 @@ def main():
 
     inst = C()
     inst.deferRedraw = True
-    try:
-        glfw.swap_interval(0)   # disable vsync so timing reflects real work
-    except Exception:
-        pass
     for i in range(FRAMES):
         glfw.poll_events()
-        counts['single'] = 0
-        counts['instanced'] = 0
-        counts['instances'] = 0
         del drawn[:]
         t0 = time.perf_counter()
         inst.OnDraw(force=1)
@@ -133,22 +118,24 @@ def main():
     ts = sorted(timings)
     median = ts[len(ts) // 2] if ts else 0.0
     mean = sum(ts) / len(ts) if ts else 0.0
+    # The last frame's counts: one draw per shape drawn singly, plus one per
+    # instanced group.
+    stats = inst.renderStats
     print(json.dumps({
         'instancing': MODE, 'shapes': SHAPES,
-        'single_draws': counts['single'], 'instanced_draws': counts['instanced'],
-        'instances': counts['instances'],
+        'single_draws': stats.draws - stats.instanceGroups,
+        'instanced_draws': stats.instanceGroups,
+        'instances': stats.instances,
         'median_ms': round(median, 4), 'mean_ms': round(mean, 4),
         'fps': round(1000.0 / mean, 1) if mean else 0.0}))
     sys.stdout.flush()   # os._exit skips buffer flushing
     os._exit(0)
 
 
-try:
+if __name__ == '__main__':
+    # Exit 3 is "this machine cannot render", which the test skips on. Any
+    # other failure is the harness's, and ends with its traceback.
+    if glfw is None or not gl_available():
+        sys.stderr.write('NOGL no GLFW window with a GL context can be made here\n')
+        os._exit(3)
     main()
-except SystemExit:
-    raise
-except BaseException as e:
-    import traceback
-    traceback.print_exc()
-    sys.stderr.write('NOGL %r\n' % (e,))
-    os._exit(3)

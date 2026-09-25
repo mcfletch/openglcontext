@@ -48,7 +48,7 @@ class Driven(TkInteractiveContext):
     def OnInit(self):
         pass
 
-    def Render(self, mode=None):
+    def Render(self, mode=None):  # noqa: ARG002 Context.Render's signature
         glClearColor(*[component / 255 for component in COLOUR], 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 

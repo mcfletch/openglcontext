@@ -7,6 +7,21 @@ the middle of the frame.
 """
 import os
 
+import numpy as np
+from OpenGL.GL import GL_RGB, GL_UNSIGNED_BYTE, glReadPixels
+
+from OpenGLContext import testingcontext
+from OpenGLContext.scenegraph.basenodes import (
+    Appearance,
+    Box,
+    DirectionalLight,
+    Material,
+    sceneGraph,
+    Shape,
+    Transform,
+)
+from OpenGLContext.scenegraph.lod import LOD
+
 
 def main():
     os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
@@ -19,15 +34,7 @@ def main():
     os.environ.setdefault('OPENGLCONTEXT_NO_VSYNC', '1')
     os.environ['OPENGLCONTEXT_AUTO_EXIT_FRAMES'] = '24'
 
-    import numpy as np
-    from OpenGL.GL import glReadPixels, GL_RGB, GL_UNSIGNED_BYTE
-    from OpenGLContext import testingcontext
     BaseContext = testingcontext.getInteractive()
-    from OpenGLContext.scenegraph.basenodes import (
-        Appearance, Box, DirectionalLight, Material, Shape, Transform,
-        sceneGraph,
-    )
-    from OpenGLContext.scenegraph.lod import LOD
 
     #: Where the fine level gives way to the coarse one.
     EDGE = 20.0
@@ -52,7 +59,7 @@ def main():
             self._frame = 0
             self.platform.setPosition((0, 0, 10))
 
-        def OnIdle(self, *a):
+        def OnIdle(self, *_args):
             self.triggerRedraw(1)
             return 1
 

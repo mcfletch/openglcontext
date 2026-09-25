@@ -30,6 +30,25 @@ os.environ['OPENGLCONTEXT_IBL'] = 'full'
 os.environ.setdefault('OPENGLCONTEXT_DISABLE_FPS_DISPLAY', '1')
 os.environ['OPENGLCONTEXT_SHADOWS'] = '1'
 os.environ['OPENGLCONTEXT_SHADOW_CASCADES'] = '1'
+# A frame time measured against the display's refresh would measure the display.
+os.environ['OPENGLCONTEXT_NO_VSYNC'] = '1'
+
+import numpy as np
+from OpenGL.GL import glFinish
+
+from OpenGLContext import testingcontext
+from OpenGLContext.scenegraph.basenodes import (
+    Appearance, Box, DirectionalLight, Shape, Transform, Zone,
+    ZoneEnvironment, sceneGraph,
+)
+from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.testing.glcontext import gl_available
+
+try:
+    import glfw
+except ImportError:                 # the harness drives GLFW's event loop itself
+    glfw = None
 
 #: Frames drawn before any is timed, so the probe and the shaders are built.
 WARMUP = 15
@@ -41,22 +60,11 @@ def main() -> None:
     if mode not in ('plain', 'zones', 'probes'):
         raise ValueError('no zone cost mode %r' % (mode,))
 
-    import glfw
-    from OpenGL.GL import glFinish
-    from OpenGLContext import testingcontext
-    from OpenGLContext.scenegraph.basenodes import (
-        Appearance, Box, DirectionalLight, Shape, Transform, Zone,
-        ZoneEnvironment, sceneGraph,
-    )
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
-
     Base = testingcontext.getInteractive()
     drawn = []
 
     def image_light(index):
         """A small image-based light of one colour, the zone's own probe."""
-        import numpy as np
-        from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
         colour = [(1.2, 0.3, 0.3), (0.3, 1.2, 0.3), (0.3, 0.3, 1.2), (1.0, 1.0, 0.3)][index]
         return ImageBasedLight(
             specular=[[np.full((8, 8, 3), colour, 'f4')] * 6],
@@ -88,19 +96,8 @@ def main() -> None:
             self.platform.setOrientation((1.0, 0.0, 0.0, -1.5))
 
     # Large enough that the frame is the fragments' cost.
-    try:
-        context = Harness(size=(1600, 1000))
-    except Exception as error:
-        import traceback
-        traceback.print_exc()
-        sys.stderr.write('NOGL %r\n' % (error,))
-        sys.stderr.flush()
-        os._exit(3)
+    context = Harness(size=(1600, 1000))
     context.deferRedraw = True
-    try:
-        glfw.swap_interval(0)
-    except Exception:
-        pass
     timings = []
     for frame in range(frames + WARMUP):
         glfw.poll_events()
@@ -118,4 +115,7 @@ def main() -> None:
 
 
 if __name__ == '__main__':
+    if glfw is None or not gl_available():
+        sys.stderr.write('NOGL no GLFW window with a GL context can be made here\n')
+        os._exit(3)
     main()

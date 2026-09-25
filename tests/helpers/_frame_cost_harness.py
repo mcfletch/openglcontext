@@ -32,6 +32,26 @@ os.environ['OPENGLCONTEXT_RENDERER'] = 'pbr'
 os.environ.setdefault('OPENGLCONTEXT_DISABLE_FPS_DISPLAY', '1')
 os.environ['OPENGLCONTEXT_SHADOWS'] = '1'
 os.environ['OPENGLCONTEXT_SHADOW_CASCADES'] = '1'
+# A frame time measured against the display's refresh would measure the display.
+os.environ['OPENGLCONTEXT_NO_VSYNC'] = '1'
+
+import numpy as np
+from OpenGL.GL import glFinish
+from vrml.nodepath import NodePath
+from vrml.vrml97 import nodepath as vrml_nodepath
+
+from OpenGLContext import testingcontext
+from OpenGLContext.passes import shadowmixin
+from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.scenegraph import lod as lod_module
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.testing.glcontext import gl_available
+
+try:
+    import glfw
+except ImportError:                 # the harness drives GLFW's event loop itself
+    glfw = None
 
 OBJECTS = int(sys.argv[1]) if len(sys.argv) > 1 else 200
 FRAMES = int(sys.argv[2]) if len(sys.argv) > 2 else 90
@@ -44,7 +64,6 @@ WARMUP = 20
 
 def _tetra(scale):
     """A handful of triangles: the scene is about object count, not geometry."""
-    import numpy as np
     corners = [(1, 1, 1), (1, -1, -1), (-1, 1, -1), (-1, -1, 1)]
     faces = [(0, 1, 2), (0, 2, 3), (0, 3, 1), (1, 3, 2)]
     pos, nrm, idx = [], [], []
@@ -61,24 +80,16 @@ def _tetra(scale):
 
 
 def main():
-    import glfw
-    import numpy as np
-
-    from OpenGLContext.scenegraph import lod as lod_module
-    from OpenGLContext.passes import shadowmixin
-
     counts = {'matrices': 0, 'walks': 0, 'derivations': 0, 'choices': 0}
 
-    from vrml.vrml97 import nodepath as vrml_nodepath
-    _matrix = vrml_nodepath._NodePath.transformMatrix
+    _matrix = vrml_nodepath._NodePath.transformMatrix  # noqa: SLF001 counts world-matrix queries; pyvrml97 keeps no count of them
 
     def counted_matrix(self, *args, **named):
         counts['matrices'] += 1
         return _matrix(self, *args, **named)
 
-    vrml_nodepath._NodePath.transformMatrix = counted_matrix
+    vrml_nodepath._NodePath.transformMatrix = counted_matrix  # noqa: SLF001 counts world-matrix queries; pyvrml97 keeps no count of them
 
-    from vrml.nodepath import NodePath
     _walk = NodePath.__getitem__
 
     def counted_walk(self, index):
@@ -87,13 +98,13 @@ def main():
 
     NodePath.__getitem__ = counted_walk
 
-    _derive = shadowmixin.ShadowMapMixin._casterGeometryBatch.__func__
+    _derive = shadowmixin.ShadowMapMixin._casterGeometryBatch.__func__  # noqa: SLF001 counts caster derivations; the shadow pass keeps no count of them
 
     def counted_derive(cls, records):
         counts['derivations'] += len(records)
         return _derive(cls, records)
 
-    shadowmixin.ShadowMapMixin._casterGeometryBatch = classmethod(counted_derive)
+    shadowmixin.ShadowMapMixin._casterGeometryBatch = classmethod(counted_derive)  # noqa: SLF001 counts caster derivations; the shadow pass keeps no count of them
 
     _scales = lod_module.uniform_scales
 
@@ -102,11 +113,6 @@ def main():
         return _scales(modelviews)
 
     lod_module.uniform_scales = counted_scales
-
-    from OpenGLContext import testingcontext
-    from OpenGLContext.scenegraph import basenodes
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
-    from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 
     material = PBRMaterial(baseColor=(0.6, 0.55, 0.5), metallic=0.0,
                            roughness=0.6)
@@ -129,7 +135,6 @@ def main():
             A swap blocks until the compositor wants another frame, so timing
             across it measures the wait rather than the work.
             """
-            from OpenGL.GL import glFinish
             glFinish()
             drawn.append(time.perf_counter())
             return super(Harness, self).SwapBuffers()
@@ -151,10 +156,6 @@ def main():
 
     context = Harness()
     context.deferRedraw = True
-    try:
-        glfw.swap_interval(0)
-    except Exception:
-        pass
 
     platform = context.getViewPlatform()
     timings = []
@@ -191,12 +192,10 @@ def main():
     os._exit(0)
 
 
-try:
+if __name__ == '__main__':
+    # Exit 3 is "this machine cannot render", which the test skips on. Any
+    # other failure is the harness's, and ends with its traceback.
+    if glfw is None or not gl_available():
+        sys.stderr.write('NOGL no GLFW window with a GL context can be made here\n')
+        os._exit(3)
     main()
-except SystemExit:
-    raise
-except BaseException as error:
-    import traceback
-    traceback.print_exc()
-    sys.stderr.write('NOGL %r\n' % (error,))
-    os._exit(3)

@@ -16,6 +16,14 @@ import sys
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, REPO_ROOT)
 
+from OpenGL import error
+from OpenGL.GL import GL_FRAGMENT_SHADER, GL_VERTEX_SHADER
+from OpenGL.GL import shaders as S
+
+from OpenGLContext.context import Context
+from OpenGLContext.passes import shaderpass as SP
+from OpenGLContext.passes.pbrpass import pbr_feature_defines
+
 SKIP = 77
 
 
@@ -28,13 +36,7 @@ def _make_context():
     whose display cannot be initialised has to reach 77: reporting any of those
     as 1 says a shader does not compile, which is a different and untrue claim.
     """
-    try:
-        from OpenGLContext.context import Context
-
-        offscreen = Context.getOffscreenContextType()
-    except Exception as err:
-        print("offscreen context unavailable:", err)
-        return None
+    offscreen = Context.getOffscreenContextType()
     if offscreen is None:
         print("no offscreen backend on this platform")
         return None
@@ -51,7 +53,10 @@ def _make_context():
         # -- for a context it could not build, and says why.
         print("offscreen context creation failed:", err)
         return None
-    except Exception as err:
+    except (ImportError, AttributeError, error.Error) as err:
+        # Bindings that will not load, an extension entry point the library
+        # does not export, or a window-system call that refused: PyOpenGL's
+        # NullFunctionError and EGLError.
         print("no offscreen context available:", err)
         return None
     context.setCurrent()
@@ -64,20 +69,16 @@ def main():
         print("no headless GL context available")
         return SKIP
     try:
-        return _check(context)
+        return _check()
     finally:
         # However the checks ended, including a failure part-way through them.
         context.unsetCurrent()
         context.close()
 
 
-def _check(context):
-    """Compile and link every reviewed program, and report what failed."""
-    from OpenGL.GL import shaders as S
-    from OpenGL.GL import GL_VERTEX_SHADER, GL_FRAGMENT_SHADER
-    from OpenGLContext.passes import shaderpass as SP
-    from OpenGLContext.passes.pbrpass import pbr_feature_defines
-
+def _check():
+    """0 where every reviewed program compiles and links in the current
+    context, else 1; each program's result is printed."""
     fails = []
 
     def compile_prog(name, vert_src, frag_src):
@@ -86,7 +87,7 @@ def _check(context):
             f = S.compileShader(frag_src, GL_FRAGMENT_SHADER)
             S.compileProgram(v, f, validate=False)
             print("PASS", name)
-        except Exception as err:
+        except (RuntimeError, error.GLError) as err:
             print("FAIL", name, "\n", str(err)[:1200])
             fails.append(name)
 
@@ -120,7 +121,7 @@ def _check(context):
                         ['#define MAX_SHADOW_LIGHTS 5']), GL_FRAGMENT_SHADER)
         print("FAIL tripwire: MAX_SHADOW_LIGHTS=5 compiled")
         fails.append("tripwire")
-    except Exception as err:
+    except RuntimeError as err:
         if 'unrolls 4 shadow slots' in str(err):
             print("PASS tripwire (MAX_SHADOW_LIGHTS=5 rejected)")
         else:

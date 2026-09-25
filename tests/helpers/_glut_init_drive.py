@@ -43,7 +43,7 @@ class Driven(GLUTInteractiveContext):
     def OnInit(self):
         pass
 
-    def Render(self, mode=None):
+    def Render(self, mode=None):  # noqa: ARG002 Context.Render's signature
         glClearColor(*[component / 255 for component in COLOUR], 1.0)
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
@@ -91,7 +91,7 @@ def mainloop():
     class Bounded(Driven):
         frames = 0
 
-        def OnIdle(self, *arguments):
+        def OnIdle(self, *_arguments):
             self.frames += 1
             if self.frames > 3:
                 say('LOOPED', True)
