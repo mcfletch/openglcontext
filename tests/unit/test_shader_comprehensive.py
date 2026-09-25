@@ -484,7 +484,7 @@ Press 'q' - Quit
 
 """)
         # Use start scene from command line if specified
-        start_scene = getattr(self.__class__, '_start_scene', 0)
+        start_scene = getattr(self.__class__, 'start_scene', 0)
         self.scene_index = 0
         self.load_scene(start_scene)
 
@@ -583,7 +583,7 @@ if __name__ == "__main__":
                 sys.exit(1)
 
     # Store start scene for OnInit to use
-    TestContext._start_scene = start_scene
+    TestContext.start_scene = start_scene
 
     # Use core profile to enable shader-based rendering via flatcore
     from OpenGLContext import contextdefinition

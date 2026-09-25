@@ -220,10 +220,10 @@ class TestOptimizedColourPick:
         target, children = _box_target()
         pick_context(children)          # warm a context so renderpass.FLAT exists
         fp = renderpass.FLAT
-        before = fp._selection_fbo
+        before = fp._selection_fbo  # noqa: SLF001 whether the pass made its pick FBO has no public query
         # No events: the loop returns immediately, never creating the pick FBO.
         fp.shaderSelectRenderOptimized(None, [], {})
-        assert fp._selection_fbo is before
+        assert fp._selection_fbo is before  # noqa: SLF001 whether the pass made its pick FBO has no public query
 
     def test_framebuffer_restore_failure_does_not_break_the_pick(self, pick_context,
                                                                  monkeypatch):

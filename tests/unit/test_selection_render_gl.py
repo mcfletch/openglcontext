@@ -78,8 +78,8 @@ def _bare(buffer):
     sel.modelView = np.identity(4, 'f')
     sel.projection = np.identity(4, 'f')
     sel.viewport = (0, 0, 16, 16)
-    sel._selection_buffer = buffer
-    sel._getSelectionBuffer = lambda: buffer
+    sel._selection_buffer = buffer  # noqa: SLF001 a pass made with __new__ is handed its selection buffer
+    sel._getSelectionBuffer = lambda: buffer  # noqa: SLF001 a pass made with __new__ is handed its selection buffer
     return sel
 
 

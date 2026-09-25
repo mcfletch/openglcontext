@@ -86,14 +86,14 @@ class TestForgettingTheAnswer:
             shadowcaps.ShadowCapabilities, '_detect',
             lambda _context=None: shadowcaps.ShadowCapabilities(detected=True))
         shadowcaps.ShadowCapabilities.detect(None)
-        assert shadowcaps._DETECTED
+        assert shadowcaps._DETECTED  # noqa: SLF001 the detection memo's contents are what is under test
         shadowcaps.reset_detected()
-        assert not shadowcaps._DETECTED
+        assert not shadowcaps._DETECTED  # noqa: SLF001 the detection memo's contents are what is under test
 
     def test_the_shadow_config_can_be_forgotten(self, monkeypatch) -> None:
         monkeypatch.setattr(shadersource, '_SHADOW_CONFIG', (3, True))
         shadersource.reset_shadow_config()
-        assert shadersource._SHADOW_CONFIG is None
+        assert shadersource._SHADOW_CONFIG is None  # noqa: SLF001 the detection memo's contents are what is under test
 
 
 class TestTheShadowConfigIsAskedOnce:

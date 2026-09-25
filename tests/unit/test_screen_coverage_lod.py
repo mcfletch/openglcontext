@@ -340,7 +340,7 @@ class TestChoosingFromNumbersAlreadyWorkedOut:
     def test_a_node_with_no_size_keeps_its_finest_level(self):
         node = ScreenCoverageLOD(level=_levels(), screenCoverage=[0.5],
                                  radius=0.0)
-        node._measured = 0.0
+        node._measured = 0.0  # noqa: SLF001 a node that measured nothing, which no field sets
         assert node.selectAt(50.0, 1.0, SQUARE) is False
         assert node.whichLevel == 0
 

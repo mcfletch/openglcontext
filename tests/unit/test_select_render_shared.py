@@ -96,7 +96,7 @@ class TestTheBodyItself:
         class Mode:
             context = Context()
 
-        _flat._color_select_render(
+        _flat._color_select_render(  # noqa: SLF001 the helper both passes share is private to _flat
             passing, Mode(), toRender, events,
             id_shift=0, read_format=GL_RGB,
             setup_fixed_function=True, require_pick_enabled=False)

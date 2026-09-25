@@ -34,11 +34,11 @@ def rec(monkeypatch):
 
 def _program():
     p = VRML97ShaderProgram.__new__(VRML97ShaderProgram)
-    p._uniform_value_cache = {}
-    p._location_cache = {}
+    p._uniform_value_cache = {}  # noqa: SLF001 a program made with __new__ is given its caches and location lookup
+    p._location_cache = {}  # noqa: SLF001 a program made with __new__ is given its caches and location lookup
     p.program = PROG
     p.vertex_color_program = PROG + 1
-    p._get_location = lambda _name, _program=None: 1     # always a valid location
+    p._get_location = lambda _name, _program=None: 1     # always a valid location  # noqa: SLF001 a program made with __new__ is given its caches and location lookup
     return p
 
 

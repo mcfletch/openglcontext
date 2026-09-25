@@ -84,7 +84,7 @@ class TestShadowMapArray:
         monkeypatch.setattr(shadowmap, 'glTexStorage3D', boom)
         arr = ShadowMapArray(size=128, layers=2)
         assert arr.bind_layer(0) is False
-        assert arr._initialized is False
+        assert arr._initialized is False  # noqa: SLF001 ShadowMapArray has no public readiness query
 
     @pytest.mark.usefixtures('gl_context')
     def test_cleanup_swallows_delete_errors(self, monkeypatch):
@@ -97,7 +97,7 @@ class TestShadowMapArray:
         monkeypatch.setattr(shadowmap, 'glDeleteTextures', boom)
         arr.cleanup()
         assert arr.fbo is None and arr.depth_texture is None
-        assert arr._initialized is False
+        assert arr._initialized is False  # noqa: SLF001 ShadowMapArray has no public readiness query
 
 
 # --------------------------------------------------------------------------- #
@@ -151,7 +151,7 @@ class TestShadowMapCubeArray:
         monkeypatch.setattr(shadowmap, 'glTexStorage3D', boom)
         ca = ShadowMapCubeArray(size=64, num_cubes=1)
         assert ca.bind_face(0, 0) is False
-        assert ca._initialized is False
+        assert ca._initialized is False  # noqa: SLF001 ShadowMapArray has no public readiness query
 
     @pytest.mark.usefixtures('gl_context')
     def test_cleanup_swallows_delete_errors(self, monkeypatch):
@@ -205,7 +205,7 @@ class TestShadowMapCube:
         monkeypatch.setattr(shadowmap, 'glTexStorage2D', boom)
         cube = ShadowMapCube(size=64)
         assert cube.bind_face(0) is False
-        assert cube._initialized is False
+        assert cube._initialized is False  # noqa: SLF001 ShadowMapArray has no public readiness query
 
     @pytest.mark.usefixtures('gl_context')
     def test_cleanup_swallows_delete_errors(self, monkeypatch):

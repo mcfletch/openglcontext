@@ -49,8 +49,8 @@ def test_one_room_moving_classifies_the_objects_near_it_however_long_the_street(
     def prepare(objects):
         zoned, records = _street(objects)
         classified = []
-        real = zoned._classify
-        zoned._classify = lambda items: classified.append(len(items)) or real(items)
+        real = zoned._classify  # noqa: SLF001 counts calls to the private step whose work is being measured
+        zoned._classify = lambda items: classified.append(len(items)) or real(items)  # noqa: SLF001 counts calls to the private step whose work is being measured
         steps = iter(range(1, 1000))
 
         def creep():
@@ -79,12 +79,12 @@ def test_classifying_touches_the_zones_near_each_object():
     def prepare(objects):
         table, lows, highs = _boxes_along_a_road(objects)
         carried = []
-        real = table._local_to
+        real = table._local_to  # noqa: SLF001 counts calls to the private step whose work is being measured
 
         def counting(which, points):
             carried.append(len(which) * len(points))
             return real(which, points)
-        table._local_to = counting
+        table._local_to = counting  # noqa: SLF001 counts calls to the private step whose work is being measured
 
         def classify():
             carried.clear()

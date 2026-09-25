@@ -11,9 +11,9 @@ These pin the sampling, the episode grouping, the file the two produce, and the
 report that reads it back.
 """
 
+import inspect
 import json
 import logging
-import sys
 import threading
 import time
 
@@ -45,7 +45,7 @@ def clock():
 # -- what a stack looks like ------------------------------------------------
 
 def _inner_function():
-    return sys._getframe()
+    return inspect.currentframe()
 
 
 def _outer_function():
@@ -69,7 +69,7 @@ class TestStackOf:
         def recurse(depth):
             if depth:
                 return recurse(depth - 1)
-            return sys._getframe()
+            return inspect.currentframe()
 
         found = stack_of(recurse(200), depth=12)
         assert len(found) == 12

@@ -98,7 +98,7 @@ class TestVersionParsing:
         (b"garbage", (3, 3)),
     ])
     def test_parse_version(self, raw, expected):
-        assert ShadowCapabilities._parse_version(raw) == expected
+        assert ShadowCapabilities._parse_version(raw) == expected  # noqa: SLF001 replaces a driver query, or tests its parse
 
 
 class TestVramQuery:
@@ -106,31 +106,31 @@ class TestVramQuery:
 
     def test_nvidia_nvx_reports_total_vram(self, monkeypatch):
         monkeypatch.setattr(GL, 'glGetIntegerv', lambda _enum: 8 * 1024 * 1024)
-        mb = ShadowCapabilities._query_vram_mb({'GL_NVX_gpu_memory_info'})
+        mb = ShadowCapabilities._query_vram_mb({'GL_NVX_gpu_memory_info'})  # noqa: SLF001 replaces a driver query, or tests its parse
         assert mb == 8 * 1024   # KB -> MB
 
     def test_amd_ati_meminfo_list_first_element(self, monkeypatch):
         monkeypatch.setattr(GL, 'glGetIntegerv',
                             lambda _enum: [4 * 1024 * 1024, 0, 0, 0])
-        mb = ShadowCapabilities._query_vram_mb({'GL_ATI_meminfo'})
+        mb = ShadowCapabilities._query_vram_mb({'GL_ATI_meminfo'})  # noqa: SLF001 replaces a driver query, or tests its parse
         assert mb == 4 * 1024
 
     def test_amd_ati_meminfo_scalar(self, monkeypatch):
         monkeypatch.setattr(GL, 'glGetIntegerv', lambda _enum: 2 * 1024 * 1024)
-        mb = ShadowCapabilities._query_vram_mb({'GL_ATI_meminfo'})
+        mb = ShadowCapabilities._query_vram_mb({'GL_ATI_meminfo'})  # noqa: SLF001 replaces a driver query, or tests its parse
         assert mb == 2 * 1024
 
     def test_no_meminfo_extension_returns_zero(self, monkeypatch):
         monkeypatch.setattr(GL, 'glGetIntegerv',
                             lambda _enum: pytest.fail("must not query"))
-        assert ShadowCapabilities._query_vram_mb(set()) == 0
+        assert ShadowCapabilities._query_vram_mb(set()) == 0  # noqa: SLF001 replaces a driver query, or tests its parse
 
     def test_query_exception_returns_zero(self, monkeypatch):
         def boom(_enum):
             raise RuntimeError("no GL")
 
         monkeypatch.setattr(GL, 'glGetIntegerv', boom)
-        assert ShadowCapabilities._query_vram_mb({'GL_NVX_gpu_memory_info'}) == 0
+        assert ShadowCapabilities._query_vram_mb({'GL_NVX_gpu_memory_info'}) == 0  # noqa: SLF001 replaces a driver query, or tests its parse
 
 
 class TestListExtensions:
@@ -144,7 +144,7 @@ class TestListExtensions:
         class _Ctx:
             extensions = _Exts()
 
-        result = ShadowCapabilities._list_extensions(_Ctx())
+        result = ShadowCapabilities._list_extensions(_Ctx())  # noqa: SLF001 replaces a driver query, or tests its parse
         assert result == {'GL_ARB_texture_gather', 'GL_ARB_depth_clamp'}
 
     def test_context_extension_manager_failure_falls_through(self, monkeypatch):
@@ -163,7 +163,7 @@ class TestListExtensions:
             raise RuntimeError("no GL")
 
         monkeypatch.setattr(GL, 'glGetIntegerv', boom)
-        result = ShadowCapabilities._list_extensions(_Ctx())
+        result = ShadowCapabilities._list_extensions(_Ctx())  # noqa: SLF001 replaces a driver query, or tests its parse
         assert result == set()
 
     def test_fallback_enumeration_failure_returns_empty(self, monkeypatch):
@@ -171,7 +171,7 @@ class TestListExtensions:
             raise RuntimeError("no GL")
 
         monkeypatch.setattr(GL, 'glGetIntegerv', boom)
-        assert ShadowCapabilities._list_extensions(None) == set()
+        assert ShadowCapabilities._list_extensions(None) == set()  # noqa: SLF001 replaces a driver query, or tests its parse
 
 
 class TestDetectErrorPaths:

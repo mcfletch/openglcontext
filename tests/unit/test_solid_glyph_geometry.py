@@ -28,7 +28,7 @@ def font_file():
 @pytest.fixture
 def glyph(font_file, gl_context):  # noqa: ARG001 requested for its effect: the GL context the glyph is built in
     """The 'O' of some font: an outer contour plus a hole."""
-    font = toolsfont._SolidFont(font_file, quality=3)
+    font = toolsfont._SolidFont(font_file, quality=3)  # noqa: SLF001 the glyph geometry builders under test are private to toolsfont
     font.ensureGlyphs('O')
     glyph = font.getGlyph('O')
     if not (glyph and glyph.outlines and glyph.contours):
@@ -55,7 +55,7 @@ def _facing(triangles):
 
 def test_extruded_sides_wind_towards_their_normals(glyph):
     """Each side quad faces the way its contour normal points."""
-    triangles = _triangles(glyph._buildExtrusionGeometry(scale=400.0, thickness=0.25))
+    triangles = _triangles(glyph._buildExtrusionGeometry(scale=400.0, thickness=0.25))  # noqa: SLF001 the glyph geometry builders under test are private to toolsfont
 
     facing = _facing(triangles)
     assert (facing > 0).all(), "%d of %d side triangles wind inward" % (
@@ -67,7 +67,7 @@ def test_caps_wind_towards_their_normals(glyph):
     """The front cap faces +z and the back cap -z, winding to match."""
     for front, z_offset in ((True, 0.0), (False, -0.25)):
         triangles = _triangles(
-            glyph._buildCapGeometry(scale=400.0, front=front, z_offset=z_offset)
+            glyph._buildCapGeometry(scale=400.0, front=front, z_offset=z_offset)  # noqa: SLF001 the glyph geometry builders under test are private to toolsfont
         )
 
         facing = _facing(triangles)
@@ -84,6 +84,6 @@ def test_shader_geometry_covers_caps_and_sides(glyph):
         scale=400.0, thickness=thickness, renderSides=False
     )
 
-    sides = len(glyph._buildExtrusionGeometry(scale=400.0, thickness=thickness))
+    sides = len(glyph._buildExtrusionGeometry(scale=400.0, thickness=thickness))  # noqa: SLF001 the glyph geometry builders under test are private to toolsfont
     assert everything['vertex_count'] == caps_only['vertex_count'] + sides
     assert everything['advance'] == pytest.approx(glyph.width / 400.0)

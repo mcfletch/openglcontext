@@ -43,13 +43,13 @@ class TestSelectionFBO:
         assert fbo.fbo is None
         assert fbo.color_texture is None
         assert fbo.depth_renderbuffer is None
-        assert fbo._initialized is False
+        assert fbo.readyFramebuffer is None
 
     @pytest.mark.usefixtures('gl_context')
     def test_bind_rejects_zero_region(self):
         fbo = SelectionFBO()
         assert fbo.bind(0, 0, 0, 0) is False
-        assert fbo._initialized is False
+        assert fbo.readyFramebuffer is None
 
     @pytest.mark.usefixtures('gl_context')
     def test_bind_creates_complete_fbo(self):
@@ -96,7 +96,7 @@ class TestSelectionFBO:
                             lambda _target: 0)
         fbo = SelectionFBO()
         assert fbo.bind(0, 0, 8, 8) is False
-        assert fbo._initialized is False
+        assert fbo.readyFramebuffer is None
         assert fbo.fbo is None
 
     @pytest.mark.usefixtures('gl_context')
@@ -106,7 +106,7 @@ class TestSelectionFBO:
         monkeypatch.setattr(selectionbuffers, 'glTexImage2D', boom)
         fbo = SelectionFBO()
         assert fbo.bind(0, 0, 8, 8) is False
-        assert fbo._initialized is False
+        assert fbo.readyFramebuffer is None
 
     @pytest.mark.usefixtures('gl_context')
     def test_cleanup_swallows_delete_errors(self, monkeypatch):
@@ -118,11 +118,11 @@ class TestSelectionFBO:
                             lambda *_a: (_ for _ in ()).throw(RuntimeError("x")))
         monkeypatch.setattr(selectionbuffers, 'glDeleteRenderbuffers',
                             lambda *_a: (_ for _ in ()).throw(RuntimeError("x")))
-        fbo._cleanup()   # must not raise despite every delete throwing
+        fbo.release()   # must not raise despite every delete throwing
         assert fbo.fbo is None
         assert fbo.color_texture is None
         assert fbo.depth_renderbuffer is None
-        assert fbo._initialized is False
+        assert fbo.readyFramebuffer is None
 
 
 def glCheckFramebufferComplete():
@@ -137,14 +137,14 @@ class TestSelectionBufferFBO:
         sb = SelectionBufferFBO()
         assert sb.fbo is None
         assert sb.id_texture is None
-        assert sb._initialized is False
+        assert sb.readyFramebuffer is None
         assert sb.id_map == {}
 
     @pytest.mark.usefixtures('gl_context')
     def test_ensure_size_rejects_zero(self):
         sb = SelectionBufferFBO()
         assert sb.ensure_size(0, 0) is False
-        assert sb._initialized is False
+        assert sb.readyFramebuffer is None
 
     @pytest.mark.usefixtures('gl_context')
     def test_ensure_size_creates_mrt_and_is_complete(self):
@@ -176,7 +176,7 @@ class TestSelectionBufferFBO:
         # is not a reliable witness -- the size is).
         assert sb.ensure_size(48, 48) is True
         assert (sb.width, sb.height) == (48, 48)
-        assert sb._initialized is True
+        assert sb.readyFramebuffer is not None
 
     @pytest.mark.usefixtures('gl_context')
     def test_bind_false_before_init(self):
@@ -269,7 +269,7 @@ class TestSelectionBufferFBO:
                             lambda _target: 0)
         sb = SelectionBufferFBO()
         assert sb.ensure_size(16, 16) is False
-        assert sb._initialized is False
+        assert sb.readyFramebuffer is None
         assert sb.fbo is None
 
     @pytest.mark.usefixtures('gl_context')
@@ -279,7 +279,7 @@ class TestSelectionBufferFBO:
         monkeypatch.setattr(selectionbuffers, 'glTexImage2D', boom)
         sb = SelectionBufferFBO()
         assert sb.ensure_size(16, 16) is False
-        assert sb._initialized is False
+        assert sb.readyFramebuffer is None
 
     @pytest.mark.usefixtures('gl_context')
     def test_cleanup_swallows_delete_errors(self, monkeypatch):
@@ -291,12 +291,12 @@ class TestSelectionBufferFBO:
         monkeypatch.setattr(selectionbuffers, 'glDeleteFramebuffers', raiser)
         monkeypatch.setattr(selectionbuffers, 'glDeleteTextures', raiser)
         monkeypatch.setattr(selectionbuffers, 'glDeleteRenderbuffers', raiser)
-        sb._cleanup()   # every delete throws; must still fully reset
+        sb.release()   # every delete throws; must still fully reset
         assert sb.fbo is None
         assert sb.color_texture is None
         assert sb.id_texture is None
         assert sb.depth_renderbuffer is None
-        assert sb._initialized is False
+        assert sb.readyFramebuffer is None
 
 
 def _both_attachments():

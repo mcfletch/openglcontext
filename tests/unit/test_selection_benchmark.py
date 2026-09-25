@@ -110,7 +110,7 @@ class BenchmarkContext(BaseContext):
     benchmark = None
     current_iteration = 0
     warmup_frames = 10
-    _results = None
+    benchmark_results = None
 
     def OnInit(self):
         """Create a scene with many objects for benchmarking."""
@@ -277,7 +277,7 @@ class BenchmarkContext(BaseContext):
         print(f"\nResults saved to: {output_file}", flush=True)
 
         # Store for programmatic access
-        BenchmarkContext._results = results
+        BenchmarkContext.benchmark_results = results
 
         # Ensure output is flushed before quitting
         sys.stdout.flush()
@@ -293,12 +293,12 @@ def run_benchmark(num_objects: int = 1000, num_events: int = 10,
     BenchmarkContext.num_objects = num_objects
     BenchmarkContext.num_events_per_frame = num_events
     BenchmarkContext.num_iterations = num_iterations
-    BenchmarkContext._results = None
+    BenchmarkContext.benchmark_results = None
 
     # Run the context main loop
     BenchmarkContext.ContextMainLoop()
 
-    return BenchmarkContext._results or {}
+    return BenchmarkContext.benchmark_results or {}
 
 
 def main():

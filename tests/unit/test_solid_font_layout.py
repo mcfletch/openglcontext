@@ -44,7 +44,7 @@ def placements(font_file, monkeypatch):
         )
         mode = _Mode()
         lines = font.toLines('\n'.join(LINES), mode=mode)
-        font._renderShaderJustified(lines, fontStyle, mode)
+        font._renderShaderJustified(lines, fontStyle, mode)  # noqa: SLF001 the justified layout under test is private to the solid font
         return font, fontStyle, lines, drawn
     return place
 

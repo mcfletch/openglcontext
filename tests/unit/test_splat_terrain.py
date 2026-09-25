@@ -37,7 +37,7 @@ def test_render_is_noop_in_shadow_pass():
     node = SplatTerrain(_hf(), ["floor"], "control.png",
                         material_fn=lambda *_a, **_k: {})
     assert node.render(types.SimpleNamespace(shadow_pass=True, visible=True)) == 1
-    assert node.patch._gl is None                  # never initialized GL
+    assert node.patch._gl is None                  # never initialized GL  # noqa: SLF001 whether the patch holds GL objects has no public query
 
 
 def test_a_terrain_switched_off_draws_nothing_and_casts_nothing(monkeypatch):
@@ -55,7 +55,7 @@ def test_dispose_before_init_is_a_noop():
     node = SplatTerrain(_hf(), ["floor"], "control.png",
                         material_fn=lambda *_a, **_k: {})
     node.dispose()                                 # nothing allocated yet
-    assert node._patch is None
+    assert node._patch is None  # noqa: SLF001 whether the patch holds GL objects has no public query
 
 
 def test_sun_direction_is_normalized():
@@ -125,7 +125,7 @@ def test_canopy_shadow_is_baked_into_the_sun_texture(tmp_path):
                                  shadow_pass=False, visible=True)
     node.render(mode)
     assert glGetError() == GL_NO_ERROR
-    assert node.patch._gl is not None
+    assert node.patch._gl is not None  # noqa: SLF001 whether the patch holds GL objects has no public query
     node.dispose()
 
 

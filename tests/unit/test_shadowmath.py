@@ -242,12 +242,12 @@ class TestNormalizeDegenerate:
         """A (near-)zero vector has no direction, so it is returned as-is
         rather than dividing by ~0 and producing inf/nan."""
         z = np.zeros(3, dtype='d')
-        out = shadowmath._normalize(z)
+        out = shadowmath._normalize(z)  # noqa: SLF001 the helper under test is private to shadowmath
         assert np.array_equal(out, z)
 
     def test_tiny_vector_below_epsilon_returned_unchanged(self):
         tiny = np.array([1e-13, 0.0, 0.0])
-        out = shadowmath._normalize(tiny)
+        out = shadowmath._normalize(tiny)  # noqa: SLF001 the helper under test is private to shadowmath
         assert np.array_equal(out, tiny)
 
 
@@ -279,7 +279,7 @@ class TestExtendNearDegenerateBounds:
         view = shadowmath.look_at_matrix((0, 0, 10), (0, 0, -1))
         mins = np.zeros(3)
         maxs = np.ones(3)
-        near = shadowmath._extend_near_for_casters(
+        near = shadowmath._extend_near_for_casters(  # noqa: SLF001 the helper under test is private to shadowmath
             np.zeros((8, 3)), view.astype('d'), mins, maxs, 5.0)
         assert near == 5.0
 

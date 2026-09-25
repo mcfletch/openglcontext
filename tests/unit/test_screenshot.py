@@ -170,7 +170,7 @@ class TestAskingForOne:
 
     def test_a_context_that_never_asks_holds_no_state(self):
         """The flag is a class attribute, so an untouched context reads it."""
-        assert screenshot.ScreenshotMixin._screenshotPending is False
+        assert screenshot.ScreenshotMixin._screenshotPending is False  # noqa: SLF001 the pending flag's class default is what is under test
         assert '_screenshotPending' not in Recorder().__dict__
 
 

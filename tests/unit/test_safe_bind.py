@@ -20,7 +20,7 @@ def test_bind_inside_solid_box_depenetrates():
     ok = ch.safe_bind((0, 2, 0))                    # bound at the block centre
     assert ok
     assert not ch.stuck
-    assert not ch._overlaps(ch._proxy())            # pushed out to free space
+    assert not ch._overlaps(ch._proxy())            # pushed out to free space  # noqa: SLF001 CharacterController has no public overlap query
 
 
 def test_bind_below_floor_snaps_base_onto_it():
@@ -31,7 +31,7 @@ def test_bind_below_floor_snaps_base_onto_it():
     assert ch.base()[1] == pytest.approx(0.0, abs=0.05)
     eye = ch.eye()
     assert eye[1] == pytest.approx(ch.base()[1] + ch.caps.eyeHeight, abs=1e-6)
-    assert not ch._overlaps(ch._proxy())
+    assert not ch._overlaps(ch._proxy())  # noqa: SLF001 CharacterController has no public overlap query
 
 
 def test_bind_slightly_high_snaps_down_to_floor():

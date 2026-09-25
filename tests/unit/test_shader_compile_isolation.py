@@ -16,15 +16,15 @@ from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
 
 def _prepared(monkeypatch, failing_labels):
     sp = VRML97ShaderProgram.__new__(VRML97ShaderProgram)
-    sp._compiled = False
-    sp._ok = False
+    sp._compiled = False  # noqa: SLF001 a program made with __new__ has its compile step replaced
+    sp._ok = False  # noqa: SLF001 a program made with __new__ has its compile step replaced
     monkeypatch.setattr(shaderpass, 'resolve_shadow_config', lambda: (0, False))
     monkeypatch.setattr(shaderpass, 'glUseProgram', lambda *_a, **_k: None, raising=False)
     sp.init_shadow_samplers = lambda: None
 
     def fake_compile_one(label, *_a, **_k):
         return None if label in failing_labels else 'prog_%s' % label
-    sp._compile_one = fake_compile_one
+    sp._compile_one = fake_compile_one  # noqa: SLF001 a program made with __new__ has its compile step replaced
     return sp
 
 

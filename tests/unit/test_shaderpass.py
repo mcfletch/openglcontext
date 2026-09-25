@@ -73,7 +73,7 @@ class TestVRML97ShaderProgramNoGL(unittest.TestCase):
         program = VRML97ShaderProgram()
         self.assertIsNone(program.program)
         self.assertIsNone(program.unlit_program)
-        self.assertFalse(program._compiled)
+        self.assertFalse(program._compiled)  # noqa: SLF001 a program made with __new__, or a private helper under test
         self.assertEqual(program.MAX_LIGHTS, 8)
 
     def test_get_shader_program_singleton(self) -> None:
@@ -81,14 +81,14 @@ class TestVRML97ShaderProgramNoGL(unittest.TestCase):
 
         # The programs are kept per context, and with none current this test
         # adds an entry of its own; the next test finds the table as it was.
-        saved = dict(shaderpass._shader_programs)
+        saved = dict(shaderpass._shader_programs)  # noqa: SLF001 a program made with __new__, or a private helper under test
         try:
             prog1 = shaderpass.get_shader_program()
             prog2 = shaderpass.get_shader_program()
             self.assertIs(prog1, prog2)
         finally:
-            shaderpass._shader_programs.clear()
-            shaderpass._shader_programs.update(saved)
+            shaderpass._shader_programs.clear()  # noqa: SLF001 a program made with __new__, or a private helper under test
+            shaderpass._shader_programs.update(saved)  # noqa: SLF001 a program made with __new__, or a private helper under test
 
 
 class TestShaderRenderMode(unittest.TestCase):
@@ -193,13 +193,13 @@ class TestTextureTransformMatrix(unittest.TestCase):
 
     def test_affine_helpers_build_expected_matrices(self) -> None:
         np.testing.assert_array_almost_equal(
-            shaderpass._affine2d_translate(0.5, 0.25),
+            shaderpass._affine2d_translate(0.5, 0.25),  # noqa: SLF001 a program made with __new__, or a private helper under test
             [[1, 0, 0.5], [0, 1, 0.25], [0, 0, 1]])
         np.testing.assert_array_almost_equal(
-            shaderpass._affine2d_scale(2.0, 0.5), [[2, 0, 0], [0, 0.5, 0], [0, 0, 1]])
+            shaderpass._affine2d_scale(2.0, 0.5), [[2, 0, 0], [0, 0.5, 0], [0, 0, 1]])  # noqa: SLF001 a program made with __new__, or a private helper under test
         c, s = cos(0.7), sin(0.7)
         np.testing.assert_array_almost_equal(
-            shaderpass._affine2d_rotate(0.7), [[c, -s, 0], [s, c, 0], [0, 0, 1]])
+            shaderpass._affine2d_rotate(0.7), [[c, -s, 0], [s, c, 0], [0, 0, 1]])  # noqa: SLF001 a program made with __new__, or a private helper under test
 
 
 class TestSetUniformCollapse(unittest.TestCase):
@@ -209,13 +209,13 @@ class TestSetUniformCollapse(unittest.TestCase):
     def _prog(self):
         sp = VRML97ShaderProgram.__new__(VRML97ShaderProgram)
         calls = []
-        sp._set_uniform = lambda name, value, program, upload: calls.append(
+        sp._set_uniform = lambda name, value, program, upload: calls.append(  # noqa: SLF001 a program made with __new__, or a private helper under test
             (name, value, program, upload))
         return sp, calls
 
     def test_int_wrapper_normalizes_and_picks_setter(self) -> None:
         sp, calls = self._prog()
-        sp._set_uniform1i('flag', 3.9)
+        sp._set_uniform1i('flag', 3.9)  # noqa: SLF001 a program made with __new__, or a private helper under test
         name, value, program, upload = calls[-1]
         self.assertEqual(value, 3)
         self.assertIs(type(value), int)
@@ -224,33 +224,33 @@ class TestSetUniformCollapse(unittest.TestCase):
 
     def test_vec_wrapper_normalizes_to_float_tuple(self) -> None:
         sp, calls = self._prog()
-        sp._set_uniform3f('c', (1, 2, 3), program=7)
+        sp._set_uniform3f('c', (1, 2, 3), program=7)  # noqa: SLF001 a program made with __new__, or a private helper under test
         name, value, program, upload = calls[-1]
         self.assertEqual(value, (1.0, 2.0, 3.0))
         self.assertTrue(all(isinstance(v, float) for v in value))
-        self.assertIs(upload, shaderpass._UPLOAD_3FV)
+        self.assertIs(upload, shaderpass._UPLOAD_3FV)  # noqa: SLF001 a program made with __new__, or a private helper under test
         self.assertEqual(program, 7)
 
     def test_shared_body_skips_unchanged_and_uploads_changed(self) -> None:
         sp = VRML97ShaderProgram.__new__(VRML97ShaderProgram)
         sp.program = 1
-        sp._uniform_value_cache = {}
-        sp._get_location = lambda _name, _program: 5
+        sp._uniform_value_cache = {}  # noqa: SLF001 a program made with __new__, or a private helper under test
+        sp._get_location = lambda _name, _program: 5  # noqa: SLF001 a program made with __new__, or a private helper under test
         uploaded = []
         def upload(loc, value):
             return uploaded.append((loc, value))
-        sp._set_uniform('x', 3, None, upload)
-        sp._set_uniform('x', 3, None, upload)   # unchanged -> skipped
-        sp._set_uniform('x', 4, None, upload)   # changed -> uploaded
+        sp._set_uniform('x', 3, None, upload)  # noqa: SLF001 a program made with __new__, or a private helper under test
+        sp._set_uniform('x', 3, None, upload)   # unchanged -> skipped  # noqa: SLF001 a program made with __new__, or a private helper under test
+        sp._set_uniform('x', 4, None, upload)   # changed -> uploaded  # noqa: SLF001 a program made with __new__, or a private helper under test
         self.assertEqual(uploaded, [(5, 3), (5, 4)])
 
     def test_shared_body_skips_when_location_absent(self) -> None:
         sp = VRML97ShaderProgram.__new__(VRML97ShaderProgram)
         sp.program = 1
-        sp._uniform_value_cache = {}
-        sp._get_location = lambda _name, _program: -1
+        sp._uniform_value_cache = {}  # noqa: SLF001 a program made with __new__, or a private helper under test
+        sp._get_location = lambda _name, _program: -1  # noqa: SLF001 a program made with __new__, or a private helper under test
         uploaded = []
-        sp._set_uniform('x', 3, None, lambda _loc, value: uploaded.append(value))
+        sp._set_uniform('x', 3, None, lambda _loc, value: uploaded.append(value))  # noqa: SLF001 a program made with __new__, or a private helper under test
         self.assertEqual(uploaded, [])
 
 
@@ -353,8 +353,8 @@ class TestDepthProgram(unittest.TestCase):
 
     def _program(self, depth):
         p = shaderpass.VRML97ShaderProgram.__new__(shaderpass.VRML97ShaderProgram)
-        p._compiled = True
-        p._ok = True  # simulate a fully-linked program
+        p._compiled = True  # noqa: SLF001 a program made with __new__, or a private helper under test
+        p._ok = True  # simulate a fully-linked program  # noqa: SLF001 a program made with __new__, or a private helper under test
         p.program = 10
         p.depth_program = depth
         return p
