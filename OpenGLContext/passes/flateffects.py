@@ -85,7 +85,8 @@ class _FlatEffectsMixin:
         def chooseMultiview(self) -> str: ...
 
         def renderShared(self, frames: Any, id_map: Optional[Dict],
-                         lighting: Any = None, mirrored: bool = False) -> Optional[set]: ...
+                         lighting: Any = None, mirrored: bool = False,
+                         capacity: int = 0) -> Optional[set]: ...
 
         multiviewStrategy: Optional[str]
         activeFrame: Any
