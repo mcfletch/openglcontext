@@ -12,6 +12,7 @@ import pytest
 
 from OpenGLContext.contentpacks import catalog
 from OpenGLContext.contentpacks.pack import ContentPack
+from OpenGLContext.contentpacks.store import ContentStore
 
 
 ENTRY = {
@@ -415,7 +416,6 @@ class TestNamesAFilesystemWouldMerge:
             catalog.merge(shipped, added)
 
     def test_the_store_puts_them_in_one_place_either_way(self, tmp_path):
-        from OpenGLContext.contentpacks.store import ContentStore
         store = ContentStore('glisteel', root=str(tmp_path), search=[])
         lower = ContentPack(**dict(ENTRY))
         upper = ContentPack(**dict(ENTRY, key='GLISTEEL/ashdown',

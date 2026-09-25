@@ -20,6 +20,11 @@ import numpy as np
 import pytest
 
 from vrml import cache
+from OpenGL.GL import (
+    GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_FRAMEBUFFER, GL_RGB,
+    GL_UNSIGNED_BYTE, glBindFramebuffer, glClear, glClearColor,
+    glReadPixels, glViewport,
+)
 
 from OpenGLContext.scenegraph.background import Background
 from OpenGLContext.scenegraph.hdrbackground import HDRBackground
@@ -71,11 +76,6 @@ def _panorama_background():
 
 def _draw(background):
     """Draw into whichever context is current, and read the frame back."""
-    from OpenGL.GL import (
-        GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_FRAMEBUFFER, GL_RGB,
-        GL_UNSIGNED_BYTE, glBindFramebuffer, glClear, glClearColor,
-        glReadPixels, glViewport,
-    )
     glBindFramebuffer(GL_FRAMEBUFFER, 0)
     glViewport(0, 0, SIZE, SIZE)
     glClearColor(0, 0, 0, 1)

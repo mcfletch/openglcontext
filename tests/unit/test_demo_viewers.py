@@ -24,6 +24,8 @@ from OpenGLContext.testing.paths import tests_root
 
 pytest.importorskip('tkinter')
 
+from OpenGLContext.demos.tk_viewer import pathOf, rowId
+
 DRIVER = tests_root(__file__) / 'helpers' / '_tk_viewer_drive.py'
 
 needs_display = pytest.mark.skipif(
@@ -51,15 +53,11 @@ class TestTheRowIds:
     """Which outline row a tree item stands for, which needs no window."""
 
     def test_a_path_survives_the_round_trip(self):
-        from OpenGLContext.demos.tk_viewer import pathOf, rowId
-
         for path in ((), (0,), (3, 1, 4)):
             assert pathOf(rowId(path)) == path
 
     def test_an_item_that_is_not_a_row_stands_for_no_path(self):
         """The placeholder under a closed row, and Tk's own "nothing"."""
-        from OpenGLContext.demos.tk_viewer import pathOf
-
         assert pathOf('') is None
         assert pathOf('I001') is None
 

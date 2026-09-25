@@ -15,9 +15,10 @@ import ast
 import os
 
 import pytest
+from OpenGL import _dispatch
 
-from OpenGLContext import context as context_module
-from OpenGLContext import contextresources
+from OpenGLContext import context as context_module, contextresources
+from OpenGLContext.testing.glcontext import gl_available
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PACKAGE = os.path.dirname(os.path.dirname(HERE))
@@ -122,11 +123,8 @@ class TestQuittingReallyReleases:
 
     def _quit(self, monkeypatch):
         """Build a window, quit it, and answer what the quit told the caches"""
-        from OpenGLContext.testing.glcontext import gl_available
-
         if not gl_available():
             pytest.skip('no GL target available')
-        from OpenGLContext import glfwinteractivecontext
 
         told = []
         monkeypatch.setattr(contextresources, 'context_lost',
@@ -136,6 +134,8 @@ class TestQuittingReallyReleases:
         monkeypatch.setattr(context_module.Context, 'OnQuit',
                             lambda self, event=None: told.append('exited'))
         monkeypatch.setenv('OPENGLCONTEXT_HIDDEN', '1')
+        glfwinteractivecontext = pytest.importorskip(
+            'OpenGLContext.glfwinteractivecontext', exc_type=ImportError)
         made = glfwinteractivecontext.GLFWInteractiveContext(size=(64, 64))
         made.OnQuit()
         return made, told
@@ -176,8 +176,6 @@ class TestTheContractIsStatedOnce:
         assert 'engine' in told
 
     def test_releasing_tells_pyopengl(self, monkeypatch):
-        from OpenGL import _dispatch
-
         told = []
         monkeypatch.setattr(contextresources, 'context_lost', lambda: None)
         monkeypatch.setattr(
@@ -187,8 +185,6 @@ class TestTheContractIsStatedOnce:
         assert told == [0xC0FFEE]
 
     def test_binding_tells_pyopengl(self, monkeypatch):
-        from OpenGL import _dispatch
-
         told = []
         monkeypatch.setattr(
             _dispatch, 'make_current', lambda handle: told.append(handle)
@@ -207,8 +203,6 @@ class TestTheContractIsStatedOnce:
         assert told == ['engine']
 
     def test_both_halves_work_where_pyopengl_has_no_c_layer(self, monkeypatch):
-        from OpenGL import _dispatch
-
         told = []
         monkeypatch.setattr(_dispatch, 'ACTIVE', False)
         monkeypatch.setattr(

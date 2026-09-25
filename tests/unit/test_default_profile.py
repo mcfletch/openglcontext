@@ -8,6 +8,8 @@ nothing there.  So core is what a caller gets for free, and compatibility is
 what a program asks for when it means to use the older pipeline.
 """
 
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -15,6 +17,10 @@ import pytest
 from OpenGLContext.contextdefinition import (
     ContextDefinition, _get_default_profile, version_for_profile,
 )
+from OpenGLContext.passes import renderpass
+from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.scenegraph.frommesh import mesh_from_primitive
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 
 
 class TestTheDefault:
@@ -49,7 +55,9 @@ class TestGeneratedGeometryDrawsWithNothingSet:
 
     @pytest.fixture(autouse=True)
     def no_profile_named(self, monkeypatch):
-        from tests.unit.glrender import base_env
+        # glrender skips its importer where glfw is missing, and the tests of
+        # the default above need no window.
+        from tests.unit.glrender import base_env  # noqa: PLC0415 skips without glfw
         base_env(monkeypatch)
         monkeypatch.delenv('OPENGLCONTEXT_PROFILE', raising=False)
 
@@ -58,38 +66,17 @@ class TestGeneratedGeometryDrawsWithNothingSet:
         assert rendered.context.contextDefinition.profile == 'core'
 
     def test_a_generated_mesh_reaches_the_framebuffer(self, render_scene):
-        from OpenGLContext import glfwcontext
-        from OpenGLContext.capture import read_back_buffer
-
-        frames = []
-        original = glfwcontext.GLFWContext.SwapBuffers
-
-        def capturing(self):
-            frames.append(read_back_buffer()[0])
-            return original(self)
-
-        glfwcontext.GLFWContext.SwapBuffers = capturing
-        try:
-            render_scene(generated_mesh_scene(), frames=4)
-        finally:
-            glfwcontext.GLFWContext.SwapBuffers = original
-        assert frames, 'nothing was rendered'
+        from tests.unit.glrender import frames_of  # noqa: PLC0415 skips without glfw
+        frames = frames_of(render_scene, generated_mesh_scene(), frames=4)
         assert np.asarray(frames[-1]).max() > 0, 'the frame is black'
 
     def test_nothing_failed_to_render(self, render_scene):
-        from OpenGLContext.passes import renderpass
         render_scene(generated_mesh_scene(), frames=3)
         assert renderpass.FLAT.failures.summary() == []
 
 
 def generated_mesh_scene():
     """A quad built the way the glTF loader and the generators build one."""
-    from types import SimpleNamespace
-
-    from OpenGLContext.scenegraph import basenodes
-    from OpenGLContext.scenegraph.frommesh import mesh_from_primitive
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
-
     positions = np.array([
         [-4, -4, -20], [4, -4, -20], [4, 4, -20],
         [-4, -4, -20], [4, 4, -20], [-4, 4, -20],

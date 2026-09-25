@@ -8,14 +8,17 @@ workers are bounded and shared, they import nothing of their own, and they
 hand back a decoded image rather than an open file.
 """
 import contextlib
+import importlib
 import sys
 import threading
 import time
 
 import pytest
+from PIL import Image
 
 from OpenGLContext.loaders import background
-from OpenGLContext.scenegraph import imagetexture, shaders
+from OpenGLContext.scenegraph import imagetexture, shaders, hdrbackground, inline
+from OpenGLContext.scenegraph.imagetexture import ImageTexture
 
 #: How long a test waits for a load that should take milliseconds.
 PATIENCE = 20.0
@@ -66,7 +69,6 @@ def until(predicate, patience=PATIENCE):
 
 def _image(tmp_path, name, size=(2, 3)):
     """A real image file on disk, and its path as a string."""
-    from PIL import Image
     path = tmp_path / name
     Image.new('RGB', size, (10, 20, 30)).save(path)
     return str(path)
@@ -259,7 +261,6 @@ class TestWhatALoaderThreadMayDo:
         thread waiting for it answers to no signal, no ``KeyboardInterrupt``
         and no test runner's timeout.  So the imports a load needs are made by
         the thread that asks for the load."""
-        from OpenGLContext.scenegraph.imagetexture import ImageTexture
         path = _image(tmp_path, 'one.png')
         with unimported('OpenGLContext.loaders.loader'):
             with watching_imports() as seen:
@@ -274,7 +275,6 @@ class TestWhatALoaderThreadMayDo:
             self, unprepared_pool):
         """An Inline's scene is read on a worker, and its textures, shaders
         and panoramas submit their loads from there."""
-        from OpenGLContext.scenegraph import hdrbackground, inline
         inline.prepare_scene_loading()
         assert {imagetexture.prepare_image_loading,
                 shaders.prepare_shader_loading,
@@ -289,7 +289,6 @@ class TestWhatALoaderThreadMayDo:
     def test_every_url_field_loads_on_the_shared_pool(self, tmp_path, node, suffix):
         """One thread per url is one per cubemap face and one per texture in a
         scene.  Every field that loads in the background shares the pool."""
-        import importlib
         module, name = node.split(':')
         cls = getattr(importlib.import_module(module), name)
         before = {id(thread) for thread in threading.enumerate()}

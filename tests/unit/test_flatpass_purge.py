@@ -20,12 +20,12 @@ import pytest
 from OpenGLContext.scenegraph.box import Box
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.shape import Shape
+from OpenGLContext.passes.flatcore import FlatPass
 
 
 @pytest.fixture
 def watched():
     """A pass watching a graph of three separately-removable subtrees."""
-    from OpenGLContext.passes.flatcore import FlatPass
     subtrees = [Group(children=[Shape(geometry=Box())]) for _ in range(3)]
     scene = Group(children=list(subtrees))
     watcher = FlatPass.__new__(FlatPass)

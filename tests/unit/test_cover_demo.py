@@ -8,6 +8,7 @@ import os
 
 import numpy as np
 import pytest
+from PIL import Image
 
 pytest.importorskip('pygltflib')
 
@@ -15,6 +16,7 @@ from OpenGLContext.bin import cover_demo
 from OpenGLContext.bin.cover_demo import (
     DENSITIES, LAYERS, WELL, WELL_RADIUS, Meadow,
 )
+from OpenGLContext.scenegraph.vegetation import control_weight
 
 
 @pytest.fixture(scope='module')
@@ -49,7 +51,6 @@ class TestTheArt:
             assert meadow.cover.rung(name).clumps_far is None
 
     def test_the_terrain_is_given_a_colour_and_a_normal_map_per_layer(self):
-        from PIL import Image
         grounds = cover_demo.Grounds()
         for name in LAYERS:
             maps = grounds(name, '1K')
@@ -62,7 +63,6 @@ class TestWhatGrowsWhere:
         assert all(len(rung.cards.pos) for rung in meadow.cover.rungs)
 
     def test_nothing_grows_on_the_rock(self, meadow):
-        from OpenGLContext.scenegraph.vegetation import control_weight
         meadow.update(meadow.standing(0.0, -60.0))
         cards = _all_cards(meadow)
         rock = control_weight(meadow.control, ['rock'], LAYERS, cover_demo.EXTENT)

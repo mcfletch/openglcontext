@@ -14,8 +14,8 @@ import threading
 
 import pytest
 
-from OpenGLContext.contentpacks import ContentPack, ContentStore, archive, fetch
-from OpenGLContext.contentpacks import publish
+from OpenGLContext.contentpacks import ContentPack, ContentStore, archive, fetch, publish
+from OpenGLContext.contentpacks.pack import human_bytes
 from OpenGLContext.loaders import resolver
 
 from . import test_contentpacks_fetch as fetched
@@ -299,6 +299,5 @@ class TestASizeAsAPersonReadsIt:
         (41_711_739, '42 MB'), (640_000, '640 kB'), (12, '1 kB'),
         (2_345_000_000, '2.3 GB')])
     def test_it_is_never_zero_megabytes(self, count, shown):
-        from OpenGLContext.contentpacks.pack import human_bytes
         assert human_bytes(count) == shown
         assert a_pack(approximate_bytes=count).human_size() == shown

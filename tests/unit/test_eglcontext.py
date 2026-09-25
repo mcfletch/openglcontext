@@ -15,13 +15,20 @@ combination Mesa refuses and then segfaults on, so choosing the wrong device
 here takes the process down rather than raising.
 """
 
+import numpy as np
 import pytest
 
 pytest.importorskip('OpenGL.EGL', exc_type=ImportError)
 
-from OpenGL.EGL.devices import DeviceInfo
-from OpenGLContext import eglcontext
+from OpenGL.EGL.devices import DeviceInfo, devices
+from OpenGL.GL import (
+    GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, glClear, glClearColor, GL_RGB, GL_UNSIGNED_BYTE,
+    glReadPixels, GL_CONTEXT_PROFILE_MASK, glGetIntegerv, GL_CONTEXT_CORE_PROFILE_BIT, GL_VERSION,
+    glGetString,
+)
+from OpenGLContext import eglcontext, contextresources
 from OpenGLContext.events import synthetic
+from OpenGLContext.contextdefinition import ContextDefinition
 
 
 def _needs_a_device():
@@ -30,7 +37,6 @@ def _needs_a_device():
     Asked of PyOpenGL's enumeration rather than of the engine, so a context
     the engine fails to make on a machine that has a device fails the test.
     """
-    from OpenGL.EGL.devices import devices
     if not devices():
         pytest.skip('no EGL device on this machine to make a context on')
 
@@ -194,10 +200,6 @@ class TestOffscreenRendering:
 
     @pytest.fixture
     def renderer(self):
-        from OpenGL.GL import (
-            GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, glClear, glClearColor,
-        )
-
         class KnownColour(eglcontext.EGLContext):
             """Clears to a colour no default framebuffer would hold by accident."""
 
@@ -215,9 +217,6 @@ class TestOffscreenRendering:
 
     def test_the_frame_holds_what_was_drawn(self, renderer):
         """The whole point: pixels come back, and they are the ones asked for."""
-        import numpy as np
-        from OpenGL.GL import GL_RGB, GL_UNSIGNED_BYTE, glReadPixels
-
         renderer.OnDraw(force=1)
         renderer.setCurrent()
         try:
@@ -337,8 +336,6 @@ class TestResizing:
 
     @pytest.fixture
     def context(self):
-        from OpenGL.GL import GL_COLOR_BUFFER_BIT, glClear, glClearColor
-
         class KnownColour(eglcontext.EGLContext):
             def Render(self, mode=None):
                 eglcontext.EGLContext.Render(self, mode)
@@ -353,9 +350,6 @@ class TestResizing:
             context.close()
 
     def test_the_frame_comes_back_at_the_new_size(self, context):
-        import numpy as np
-        from OpenGL.GL import GL_RGB, GL_UNSIGNED_BYTE, glReadPixels
-
         context.OnResize(48, 24)
         context.OnDraw(force=1)
         context.setCurrent()
@@ -440,8 +434,6 @@ class TestAFailedConstructionReleasesWhatItTook:
     def test_the_engines_caches_are_not_told(self, monkeypatch):
         """No cache ever saw this context, so announcing its loss would drop
         another context's objects."""
-        from OpenGLContext import contextresources
-
         told = []
         monkeypatch.setattr(
             contextresources, 'context_lost', lambda: told.append(True)
@@ -620,8 +612,6 @@ class TestTheDefinitionsProfile:
     """
 
     def _mask(self, profile):
-        from OpenGL.GL import GL_CONTEXT_PROFILE_MASK, glGetIntegerv
-
         class Profiled(eglcontext.EGLContext):
             pass
 
@@ -638,11 +628,9 @@ class TestTheDefinitionsProfile:
             context.close()
 
     def test_a_core_program_gets_a_core_context(self):
-        from OpenGL.GL import GL_CONTEXT_CORE_PROFILE_BIT
         assert self._mask('core') & GL_CONTEXT_CORE_PROFILE_BIT
 
     def test_the_definition_decides_the_attributes(self):
-        from OpenGLContext.contextdefinition import ContextDefinition
         core = eglcontext.definitionAttributes(
             ContextDefinition(profile='core', version=(4, 1)))
         assert _attribute(core, eglcontext.EGL.EGL_CONTEXT_MAJOR_VERSION) == 4
@@ -653,13 +641,11 @@ class TestTheDefinitionsProfile:
 
     def test_a_compatibility_program_with_no_version_takes_the_default(self):
         """Below GL 3.2 there is no profile to name, and (0, 0) names no version."""
-        from OpenGLContext.contextdefinition import ContextDefinition
         assert eglcontext.definitionAttributes(
             ContextDefinition(profile='compatibility', version=(0, 0))
         ) == [eglcontext.EGL.EGL_NONE]
 
     def test_a_compatibility_program_that_names_a_version_asks_for_it(self):
-        from OpenGLContext.contextdefinition import ContextDefinition
         attributes = eglcontext.definitionAttributes(
             ContextDefinition(profile='compatibility', version=(4, 5)))
         assert _attribute(attributes, eglcontext.EGL.EGL_CONTEXT_OPENGL_PROFILE_MASK) \
@@ -683,8 +669,6 @@ class TestTheDisplayIsSharedRatherThanOwned:
 
     def test_two_pbuffer_contexts_live_at_once(self):
         """Releasing one leaves the other drawable."""
-        from OpenGL.GL import GL_VERSION, glGetString
-
         _needs_a_device()
         first = eglcontext.PbufferContext(width=16, height=16)
         try:

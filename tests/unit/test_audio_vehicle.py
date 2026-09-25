@@ -9,6 +9,8 @@ import numpy as np
 import pytest
 from omi_audio import model
 from omi_audio.vehicle import VehicleSoundTuning
+from omi_audio.device import NullDevice
+from omi_audio.engine import AudioEngine
 
 from OpenGLContext.audio.vehicle import VehicleSoundtrack
 
@@ -35,8 +37,6 @@ class _Vehicle:
 
 @pytest.fixture
 def engine():
-    from omi_audio.device import NullDevice
-    from omi_audio.engine import AudioEngine
     made = AudioEngine(device=NullDevice(sample_rate=RATE), voices=8)
     yield made
     made.close()

@@ -14,8 +14,10 @@ here.
 
 import numpy as np
 import pytest
+from vrml.vrml97 import nodetypes
 
 from OpenGLContext.passes import _flat, flatcompat, flatcore, pbrpass
+from OpenGLContext.audio import scene as audioscene
 
 
 #: Every pass a context can actually be rendered by.
@@ -64,8 +66,6 @@ def test_the_pass_drives_scene_audio_from_its_entry_point(name, cls, monkeypatch
 @pytest.mark.parametrize('name,cls', PASSES, ids=[p[0] for p in PASSES])
 def test_the_pass_collects_auditory_nodes(name, cls):
     """A pass that does not collect them has nothing to drive."""
-    from vrml.vrml97 import nodetypes
-
     assert nodetypes.Auditory in cls.INTERESTING_TYPES, name
 
 
@@ -78,8 +78,6 @@ def test_no_pass_overrides_the_entry_point(name, cls):
 
 def test_a_failure_in_the_audio_update_never_costs_a_frame(monkeypatch, caplog):
     """A sound card that vanishes mid-session is a log line, not a black window."""
-    from OpenGLContext.audio import scene as audioscene
-
     def explode(context, paths, now=None):
         raise RuntimeError('the sound card fell out')
 

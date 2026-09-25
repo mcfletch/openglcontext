@@ -11,10 +11,13 @@ The viewer binds PageDown to its own camera cycling, and
 ``OnNextViewpoint``. The application asked, the framework overruled it, and the
 key silently did the other thing.
 """
+import inspect
+
 import pytest
 
 from OpenGLContext.context import Context
 from OpenGLContext.screenshot import ScreenshotMixin
+from OpenGLContext.viewer.sceneviewer import SceneViewerMixin
 
 
 class _Bindings:
@@ -72,7 +75,6 @@ class _Application(_Host):
 
 def _setup(host):
     """The pair, in the order :meth:`Context.__init__` runs them."""
-    import inspect
     source = inspect.getsource(Context.__init__)
     first = source.index('self.setupCallbacks()')
     second = source.index('self.setupDefaultEventCallbacks()')
@@ -101,7 +103,6 @@ class TestWhoHoldsAKeyBothWant:
 class TestTheOrderItself:
     def test_the_defaults_are_bound_first(self):
         """They are the fallback, so everything else lands on top of them."""
-        import inspect
         source = inspect.getsource(Context.__init__)
         assert (source.index('self.setupDefaultEventCallbacks()')
                 < source.index('self.setupCallbacks()'))
@@ -120,8 +121,6 @@ class TestTheViewerGetsItsPageKeys:
         ('<pageup>', 'previousCamera'),
     ])
     def test_both_page_keys_reach_the_viewer(self, key, method):
-        from OpenGLContext.viewer.sceneviewer import SceneViewerMixin
-
         class _Viewer(_Host):
             def setupCallbacks(self):
                 super().setupCallbacks()

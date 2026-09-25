@@ -10,11 +10,13 @@ The ground here rises across the bore, so one straight line runs the whole way
 from open cutting to buried hillside: under the road at the approach, across the
 face at the mouth, over the top of it once the hill has closed above.
 """
+import json
+
 import numpy as np
 import pytest
 
 from OpenGLContext.scenegraph.road import RoadProfile
-from OpenGLContext.scenegraph.roadworks import TunnelProfile, bore_opening
+from OpenGLContext.scenegraph.roadworks import TunnelProfile, bore_opening, BoreCut, BORE_INSET
 
 #: The bore runs along x at y=0, from the first of these to the last.
 ENDS = (-50.0, 50.0)
@@ -154,13 +156,11 @@ class TestHowAWorldRecordsItsBores:
     world records them with its road (:class:`BoreCut`)."""
 
     def _cut(self):
-        from OpenGLContext.scenegraph.roadworks import BoreCut
         return BoreCut(tunnel=TunnelProfile(portal_border=4.0, clearance=6.5,
                                             margin=0.5),
                        inset=0.2, approach=24.0)
 
     def test_the_record_reads_back_as_the_cut_it_was(self):
-        from OpenGLContext.scenegraph.roadworks import BoreCut
         cut = self._cut()
         read = BoreCut.from_json(cut.to_json())
         assert (read.tunnel.portal_border, read.tunnel.clearance,
@@ -170,7 +170,6 @@ class TestHowAWorldRecordsItsBores:
     def test_a_record_is_plain_json(self):
         """It survives a trip through JSON text unchanged: nothing in it is a
         tuple, an array or an object JSON would turn into something else."""
-        import json
         record = self._cut().to_json()
         assert json.loads(json.dumps(record)) == record
 
@@ -183,7 +182,6 @@ class TestHowAWorldRecordsItsBores:
         assert np.array_equal(mask(x, z), mouth(x, z))
 
     def test_every_run_is_cut(self):
-        from OpenGLContext.scenegraph.roadworks import BoreCut
         far = line() + (0.0, 0.0, 500.0)
 
         def hills(x, z):
@@ -193,17 +191,14 @@ class TestHowAWorldRecordsItsBores:
         assert mask(at, 0.0) and mask(at, 500.0)
 
     def test_a_road_with_no_bore_opens_nothing(self):
-        from OpenGLContext.scenegraph.roadworks import BoreCut
         assert BoreCut().openings([], hillside) is None
         assert BoreCut().openings([line()[:1]], hillside) is None
 
     def test_a_record_with_a_figure_that_is_no_number_takes_the_default(self, caplog):
-        from OpenGLContext.scenegraph.roadworks import BoreCut
         read = BoreCut.from_json({'portalBorder': 'wide', 'approach': -3.0})
         assert read.tunnel.portal_border == TunnelProfile().portal_border
         assert read.approach == 0.0
 
     def test_a_world_that_records_nothing_is_cut_as_the_defaults(self):
-        from OpenGLContext.scenegraph.roadworks import BORE_INSET, BoreCut
         read = BoreCut.from_json(None)
         assert read.inset == BORE_INSET and read.approach == 0.0

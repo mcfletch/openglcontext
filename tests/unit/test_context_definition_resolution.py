@@ -15,6 +15,8 @@ The resolution itself lives in one place so the backends cannot disagree about
 it: what a caller passed wins, then what the class declared, then a fresh
 definition built from the environment.
 """
+import inspect
+
 import pytest
 
 from OpenGLContext.context import Context
@@ -83,7 +85,6 @@ def test_a_mapping_is_read_as_the_fields_to_set():
 ])
 def test_every_backend_resolves_the_definition_the_same_way(module_name, class_name):
     """The window is made from the resolved definition, not one built locally."""
-    import inspect
     module = pytest.importorskip(module_name)
     source = inspect.getsource(getattr(module, class_name).__init__)
     assert 'resolveDefinition' in source, (

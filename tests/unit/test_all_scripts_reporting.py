@@ -5,10 +5,13 @@ the extension it exists to exercise.  The harness turns that into a skip, and
 the skip message is what a reader has to work from.
 """
 
+import importlib.util
 import os
 import sys
 
 import pytest
+
+from OpenGLContext.context import Context
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
@@ -48,8 +51,6 @@ class TestTheShaderCompileHarnessSkips:
     as 1 says a shader does not compile."""
 
     def _harness(self):
-        import importlib.util
-
         path = os.path.join(ROOT, 'tests', 'helpers', '_shader_compile_check.py')
         spec = importlib.util.spec_from_file_location('_shader_compile_check', path)
         module = importlib.util.module_from_spec(spec)
@@ -63,8 +64,6 @@ class TestTheShaderCompileHarnessSkips:
         so this says the same thing on a machine whose offscreen context is a
         WGL pbuffer as on one whose is EGL.
         """
-        from OpenGLContext.context import Context
-
         class Refuses:
             __module__ = 'OpenGLContext.testing'
 
@@ -93,8 +92,6 @@ class TestTheShaderCompileHarnessSkips:
 
     def test_no_offscreen_backend_at_all_is_a_skip(self, monkeypatch):
         """macOS today: nothing registered can render without a window."""
-        from OpenGLContext.context import Context
-
         harness = self._harness()
         monkeypatch.setattr(
             Context, 'getOffscreenContextType', classmethod(lambda cls: None)

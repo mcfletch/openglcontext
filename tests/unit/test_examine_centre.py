@@ -18,6 +18,14 @@ import numpy as np
 import pytest
 
 from OpenGLContext.context import Context
+from OpenGLContext.move import examinemanager
+from OpenGLContext.move.examinemanager import ExamineManager
+from OpenGLContext.move.orbit import aimAt
+from OpenGLContext.move.viewplatform import ViewPlatform
+from OpenGLContext.scenegraph.box import Box
+from OpenGLContext.scenegraph.scenegraph import SceneGraph
+from OpenGLContext.scenegraph.shape import Shape
+from OpenGLContext.scenegraph.transform import Transform
 
 
 class _Platform:
@@ -157,11 +165,6 @@ class TestWithNothingToGoOn:
 
 class TestTheSceneBoundsItself:
     def test_a_context_reports_the_bounds_of_its_scenegraph(self):
-        from OpenGLContext.scenegraph.box import Box
-        from OpenGLContext.scenegraph.scenegraph import SceneGraph
-        from OpenGLContext.scenegraph.shape import Shape
-        from OpenGLContext.scenegraph.transform import Transform
-
         class _Real:
             sceneBounds = Context.sceneBounds
 
@@ -196,10 +199,6 @@ class TestHowFarADragTurns:
     """
 
     def _orbit(self, width=800, height=600, start=(400, 300)):
-        from OpenGLContext.move.examinemanager import ExamineManager
-        from OpenGLContext.move.orbit import aimAt
-        from OpenGLContext.move.viewplatform import ViewPlatform
-
         platform = ViewPlatform(position=(0.0, 0.0, 10.0))
         platform.quaternion = aimAt((0.0, 0.0, 10.0), (0.0, 0.0, 0.0))
 
@@ -218,7 +217,6 @@ class TestHowFarADragTurns:
             np.asarray(list(original), 'd'), np.asarray(list(turned), 'd')))))))
 
     def test_a_drag_the_height_of_the_window_is_half_a_turn(self):
-        from OpenGLContext.move import examinemanager
         assert examinemanager.EXAMINE_DRAG_ANGLE == pytest.approx(np.pi)
         assert self._orbit().dragAngle == pytest.approx(np.pi)
 

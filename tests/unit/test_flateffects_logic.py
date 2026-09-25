@@ -9,6 +9,8 @@ import numpy as np
 from OpenGLContext.passes.flateffects import _FlatEffectsMixin
 from OpenGLContext.frustum import Frustum
 from OpenGLContext.scenegraph.boundingvolume import AABoundingBox
+from OpenGLContext.passes import transmission, bloom
+from OpenGLContext.passes.flatcompat import FlatPass as CompatPass
 
 
 def make_frustum():
@@ -156,7 +158,6 @@ class TestTransmissionMode:
         assert p._transmission_mode == 'off'
 
     def test_resolves_and_caches_from_renderer(self):
-        from OpenGLContext.passes import transmission
         p = _FlatEffectsMixin()
         p.shader_program = type('P', (), {'set_transmission': lambda *a: None})()
         p._gl_renderer = 'NVIDIA GeForce RTX'
@@ -181,7 +182,6 @@ class TestBloomWrapDefensive:
     """The bloom-wrap begin/end guard + failure branches (no GL needed)."""
 
     def test_the_target_holds_the_whole_window_not_one_view(self, monkeypatch):
-        from OpenGLContext.passes import bloom
         sizes = []
 
         class _Recording:
@@ -197,7 +197,6 @@ class TestBloomWrapDefensive:
         assert sizes == [(640, 480)]
 
     def test_begin_bloom_disabled_returns_false(self, monkeypatch):
-        from OpenGLContext.passes import bloom
         monkeypatch.setattr(bloom, 'bloom_enabled', lambda source=None: False)
         p = _FlatEffectsMixin()
         p.context = _Window(64, 64)
@@ -205,8 +204,6 @@ class TestBloomWrapDefensive:
         assert p._bloom_active is False
 
     def test_a_pass_that_cannot_composite_draws_straight_to_the_window(self, monkeypatch):
-        from OpenGLContext.passes import bloom
-        from OpenGLContext.passes.flatcompat import FlatPass as CompatPass
         monkeypatch.setattr(bloom, 'bloom_enabled', lambda source=None: True)
         p = CompatPass.__new__(CompatPass)
         p.context = _Window(64, 64)
@@ -214,7 +211,6 @@ class TestBloomWrapDefensive:
         assert p._bloom_active is False
 
     def test_begin_bloom_zero_window_returns_false(self, monkeypatch):
-        from OpenGLContext.passes import bloom
         monkeypatch.setattr(bloom, 'bloom_enabled', lambda source=None: True)
         p = _FlatEffectsMixin()
         p.context = _Window(0, 0)
@@ -223,7 +219,6 @@ class TestBloomWrapDefensive:
 
     def test_a_bloom_that_cannot_start_is_reported_once_and_switched_off(
             self, monkeypatch, caplog):
-        from OpenGLContext.passes import bloom
         calls = []
 
         class _BoomPass:
@@ -245,8 +240,6 @@ class TestBloomWrapDefensive:
 
     def test_a_composite_that_fails_is_reported_once_and_bloom_switched_off(
             self, monkeypatch, caplog):
-        from OpenGLContext.passes import bloom
-
         class _BoomPass:
             def begin(self, w, h):
                 return True

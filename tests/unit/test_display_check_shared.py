@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 from OpenGLContext.testing.paths import tests_root
+from OpenGLContext.testing.display import display_available
 
 # test_visual_regression sits beside this file (tests/unit/); test_all_scripts
 # stays in the tests root -- both must be importable.
@@ -19,17 +20,14 @@ sys.path.insert(0, str(tests_root(__file__)))
 
 class TestSharedHelper:
     def test_windowed_display_is_available(self):
-        from OpenGLContext.testing.display import display_available
         assert display_available({'DISPLAY': ':0'}) is True
         assert display_available({'WAYLAND_DISPLAY': 'wayland-0'}) is True
 
     def test_offscreen_platform_is_available(self):
-        from OpenGLContext.testing.display import display_available
         assert display_available({'PYOPENGL_PLATFORM': 'egl'}) is True
         assert display_available({'PYOPENGL_PLATFORM': 'osmesa'}) is True
 
     def test_no_display_no_offscreen_is_unavailable(self):
-        from OpenGLContext.testing.display import display_available
         assert display_available({}, platform='linux') is False
         assert display_available({'PYOPENGL_PLATFORM': 'glx'}, platform='linux') is False
 
@@ -41,7 +39,6 @@ class TestSharedHelper:
         variables there answers "headless" for a machine with a screen -- and
         the whole visual suite skips and reads green.
         """
-        from OpenGLContext.testing.display import display_available
         assert display_available({}, platform='win32') is True
         assert display_available({}, platform='darwin') is True
 

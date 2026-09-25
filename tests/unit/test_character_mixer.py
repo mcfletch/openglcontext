@@ -5,6 +5,7 @@ against hand-built clips and plain ``Transform`` nodes, so what is under test is
 the blend arithmetic and the layer rules rather than any file parsing.
 """
 import math
+import types
 
 import numpy as np
 import pytest
@@ -13,7 +14,7 @@ pygltflib = pytest.importorskip("pygltflib")
 
 from OpenGLContext.character.mixer import AnimationMixer
 from OpenGLContext.loaders.gltf import animation as ga
-from OpenGLContext.scenegraph.transform import Transform
+from OpenGLContext.scenegraph.transform import Transform, MatrixTransform
 
 
 def _clip(name, node, path, values, times=(0.0, 1.0), is_rotation=False,
@@ -290,7 +291,6 @@ class TestMorphAndSkin:
 
 class TestFromScene:
     def test_names_the_clips_a_document_carries(self):
-        import types
         scene = types.SimpleNamespace(
             animations=[ga.Animation('walk', []), ga.Animation(None, [])],
             node_transforms={}, node_morph={}, skins=[],
@@ -394,7 +394,6 @@ class TestEdges:
         assert np.allclose(nodes[2].translation, [0, 6, 0])
 
     def test_a_baked_matrix_node_is_left_alone(self, caplog):
-        from OpenGLContext.scenegraph.transform import MatrixTransform
         clip = _still('a', 1, 'translation', [10, 0, 0])
         node = MatrixTransform(localMatrix=np.eye(4))
         mixer = AnimationMixer({'a': clip}, {1: node})

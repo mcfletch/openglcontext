@@ -9,12 +9,14 @@ import gc
 
 import numpy as np
 import pytest
+from PIL import Image
 
 from OpenGLContext.passes.pbrpass import PBRPass
 from OpenGLContext.scenegraph import basenodes
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.reflector import PlanarReflector
+from OpenGLContext.scenegraph.water.surface import WaterStyle
 
 
 def _mesh():
@@ -66,7 +68,6 @@ def test_a_mirror_switched_off_batches_again(ask):
 
 
 def test_geometry_that_becomes_water_is_drawn_singly(ask):
-    from OpenGLContext.scenegraph.water.surface import WaterStyle
     shape = _shape()
     assert ask(shape)[1] is True
     shape.geometry.waveStyle = WaterStyle()
@@ -74,8 +75,6 @@ def test_geometry_that_becomes_water_is_drawn_singly(ask):
 
 
 def test_a_texture_set_in_place_changes_the_key(ask):
-    from OpenGLContext.scenegraph.pbrmaterial import PBRTexture
-    from PIL import Image
     material = PBRMaterial()
     shape = _shape(material)
     before = ask(shape)[0]
@@ -84,8 +83,6 @@ def test_a_texture_set_in_place_changes_the_key(ask):
 
 
 def test_a_texture_removed_in_place_changes_the_key(ask):
-    from OpenGLContext.scenegraph.pbrmaterial import PBRTexture
-    from PIL import Image
     material = PBRMaterial(textures={
         'baseColor': PBRTexture(Image.new('RGB', (2, 2)), srgb=True)})
     shape = _shape(material)

@@ -5,6 +5,8 @@ the index page it writes. The rendering itself is the ordinary viewer path and
 is covered by the viewer's own tests.
 """
 import os
+import subprocess
+import sys
 
 import numpy as np
 import pytest
@@ -13,6 +15,7 @@ pytest.importorskip("pygltflib")
 
 from OpenGLContext import contactsheet
 from OpenGLContext.bin import character_sheet as sheet_tool
+from OpenGLContext.character import CharacterModel
 
 from ._character_assets import character_glb
 
@@ -103,7 +106,6 @@ class TestHoldArguments:
 
 class TestAgainstARealModel:
     def test_the_clips_of_a_loaded_character(self):
-        from OpenGLContext.character import CharacterModel
         model = CharacterModel.load(character_glb())
         sheet = sheet_tool.CharacterSheet('x.glb', 'out', phases=3)
         assert set(sheet.clips_of(model)) == {'raise', 'kick'}
@@ -121,8 +123,6 @@ class TestDrawingOne:
     """
 
     def test_writes_a_sheet_per_clip_and_an_index(self, tmp_path):
-        import subprocess
-        import sys
         model = tmp_path / 'figure.glb'
         model.write_bytes(character_glb())
         out = tmp_path / 'sheets'

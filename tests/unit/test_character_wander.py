@@ -21,9 +21,11 @@ from OpenGLContext.character.model import CharacterModel
 from OpenGLContext.character.wander import (
     Gait, STAND, TURN, WALK, Wander, WanderingCrowd,
 )
-from OpenGLContext.loaders.gltf import load_gltf, parse_gltf
+from OpenGLContext.loaders.gltf import load_gltf, parse_gltf, sample_model_url
 from OpenGLContext.scenegraph.walk import reachable
 from tests.unit._character_assets import character_glb
+from OpenGLContext.loaders.resolver import fetch_to_cache
+from OpenGLContext.testing.network import unreachable
 
 DT = 1 / 60.0
 
@@ -59,9 +61,6 @@ def demo():
 @pytest.fixture(scope='module')
 def figure(demo):
     """The demo's own sample model, or a skip where it cannot be fetched."""
-    from OpenGLContext.loaders.gltf import sample_model_url
-    from OpenGLContext.loaders.resolver import fetch_to_cache
-    from OpenGLContext.testing.network import unreachable
     url = sample_model_url(demo.MODEL)
     reason = unreachable(url)
     if reason:

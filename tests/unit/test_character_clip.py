@@ -11,8 +11,9 @@ import pytest
 
 from OpenGLContext.character.clip import ClipSampler
 from OpenGLContext.character.rig import Rig
-from OpenGLContext.loaders.gltf import animation as ga
+from OpenGLContext.loaders.gltf import animation as ga, load_gltf
 from OpenGLContext.scenegraph.transform import Transform
+from tests.helpers._crowd_asset import crowd_character_glb
 
 
 def _rig(count=6):
@@ -235,9 +236,6 @@ class TestTheCubicTestContentIsReallyCubic:
     """
 
     def _sampler(self, interpolation):
-        from OpenGLContext.loaders.gltf import load_gltf
-        from tests.helpers._crowd_asset import crowd_character_glb
-
         scene = load_gltf(crowd_character_glb(
             joints=8, vertices=64, clips=1, keys=6, moving=3,
             interpolation=interpolation))

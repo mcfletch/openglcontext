@@ -6,17 +6,18 @@ cache/manifest paths run fully offline.
 """
 import io
 import json
+import os
 import zipfile
 
 import pytest
 
 from OpenGLContext.loaders import cc0
+from OpenGLContext import userpaths
 
 
 @pytest.fixture(autouse=True)
 def cache_under_tmp(tmp_path, monkeypatch):
     """Keep every test's downloads out of the real per-user cache."""
-    from OpenGLContext import userpaths
     monkeypatch.setattr(userpaths, "appdatadirectory", lambda: str(tmp_path))
 
 
@@ -88,7 +89,6 @@ def test_material_downloads_extracts_and_caches(tmp_path, monkeypatch):
         with open(maps[kind], "rb") as fh:
             assert fh.read()               # each map extracted to disk
     # A CREDITS manifest recording provenance was written.
-    import os
     credits = os.path.join(cc0.cache_dir(), "CREDITS.txt")
     assert "Bark012" in open(credits).read()
 
@@ -109,14 +109,12 @@ def test_manifest_not_duplicated_on_second_material(tmp_path, monkeypatch):
     _install_fake_net(monkeypatch, _api_json())
     cc0._write_manifest("Rock030", "1K")
     cc0._write_manifest("Rock030", "1K")   # identical line -> not appended twice
-    import os
     text = open(os.path.join(cc0.cache_dir(), "CREDITS.txt")).read()
     assert text.count("Rock030 (1K)") == 1
 
 
 def test_an_unwritable_manifest_costs_the_credit_line_not_the_material(
         tmp_path, monkeypatch):
-    import os
     # A directory where the CREDITS file should be makes open() raise OSError.
     credits = os.path.join(cc0.cache_dir(), "CREDITS.txt")
     os.mkdir(credits)
@@ -144,7 +142,5 @@ def test_try_material_returns_none_on_failure(tmp_path, monkeypatch):
 def test_cache_dir_is_under_the_per_user_app_data_directory(tmp_path, monkeypatch):
     # Shared with the rest of OpenGLContext's downloaded assets, so no other
     # account can pre-seed a texture this user then loads.
-    import os
-    from OpenGLContext import userpaths
     monkeypatch.setattr(userpaths, "appdatadirectory", lambda: str(tmp_path))
     assert cc0.cache_dir() == os.path.join(str(tmp_path), "OpenGLContext", "cc0")

@@ -13,6 +13,7 @@ import tomllib
 import pytest
 
 from OpenGLContext.testing.paths import tests_root
+from OpenGLContext import renderoptions
 
 ROOT = tests_root(__file__).parent
 PACKAGE = ROOT / 'OpenGLContext'
@@ -179,7 +180,6 @@ class TestTheEnvironmentReferenceIsComplete:
 
     @pytest.mark.skipif(not DOCS.is_dir(), reason='docs/ not in this checkout')
     def test_every_rendering_variable_is_documented(self):
-        from OpenGLContext import renderoptions
         missing = set(renderoptions.ENVIRONMENT) - self._documented()
         assert not missing, (
             'in renderoptions.ENVIRONMENT but absent from '

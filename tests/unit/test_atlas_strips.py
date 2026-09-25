@@ -1,8 +1,10 @@
 """Strip bookkeeping in `OpenGLContext.atlas`."""
 import gc
 
+import pytest
+
 from OpenGLContext.arrays import zeros
-from OpenGLContext.atlas import AtlasManager
+from OpenGLContext.atlas import AtlasManager, AtlasError
 from OpenGLContext.texture import NumpyAdapter
 
 
@@ -40,10 +42,6 @@ def test_space_is_reused_after_a_release():
 
 
 def test_an_image_larger_than_the_child_limit_is_refused():
-    import pytest
-
-    from OpenGLContext.atlas import AtlasError
-
     manager = AtlasManager(max_size=256, max_child_size=32)
     with pytest.raises(AtlasError):
         manager.add(_image(64, 8))

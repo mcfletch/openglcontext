@@ -5,7 +5,11 @@ names -- is covered per cache.  What is checked here is the other half: that
 each cache holding this context's names is told when the context goes, and that
 a backend makes the announcement while the context is still current.
 """
+import gc
+import importlib
+
 import pytest
+from OpenGL import contextdata, error
 
 from OpenGLContext import contextresources
 # At module scope, so each cache registers its callback while this file is being
@@ -15,6 +19,7 @@ from OpenGLContext import contextresources
 from OpenGLContext.passes import renderpass, shaderpass
 from OpenGLContext.scenegraph.teapot import Teapot
 from OpenGLContext.scenegraph.text import shadertext
+from OpenGLContext.testing.glcontext import gl_available, hidden_window
 
 
 @pytest.fixture(autouse=True)
@@ -161,8 +166,6 @@ class TestTheBackendsAnnounceIt:
         Hundreds of them open and close in one suite run, which is exactly the
         setting in which a driver hands the same address out again.
         """
-        from OpenGLContext.testing.glcontext import gl_available, hidden_window
-
         if not gl_available():
             pytest.skip('no GL context can be created in this process')
 
@@ -234,7 +237,6 @@ class TestContextNames:
         assert kept.entries(owner) == {'a': (1, 'metrics')}
 
     def test_a_collected_owner_s_names_wait_for_their_own_context(self, names):
-        import gc
         kept, deleted, current = names
         owner = _Owner()
         kept.entries(owner).update({'a': (1, None), 'b': (None, None)})
@@ -298,8 +300,6 @@ class TestTheContextKey:
             contextresources.ContextKey(1234, object())
 
     def test_no_current_context_has_no_key(self, monkeypatch):
-        from OpenGL import contextdata, error
-
         def none() -> None:
             raise error.Error('no context')
 
@@ -308,7 +308,6 @@ class TestTheContextKey:
 
 
 def test_a_backend_names_the_context_to_pyopengl_by_its_handle(gl_context):
-    from OpenGL import contextdata
     handle = contextresources.current_handle()
     assert not isinstance(handle, contextresources.ContextKey)
     assert handle == contextdata.getContext()
@@ -320,8 +319,5 @@ def test_a_backend_names_the_context_to_pyopengl_by_its_handle(gl_context):
     ('OpenGLContext.eglcontext', 'EGLContext'),
 ])
 def test_each_backend_binds_pyopengl_to_the_platform_handle(gl_context, module, name):
-    import importlib
-
-    from OpenGL import contextdata
     backend = getattr(importlib.import_module(module), name)
     assert backend._glHandle(object()) == contextdata.getContext()

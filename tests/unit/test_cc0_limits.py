@@ -7,11 +7,13 @@ be bounded: an archive is compressed, so its members can be far larger than the
 bytes that arrived.
 """
 import io
+import os
 import zipfile
 
 import pytest
 
 from OpenGLContext.loaders import cc0
+from OpenGLContext import userpaths
 
 
 def _archive(members):
@@ -81,17 +83,13 @@ class TestTheArchiveIsBounded:
 
 class TestTheCacheLocation:
     def test_it_is_under_the_per_user_app_data_directory(self, tmp_path, monkeypatch):
-        from OpenGLContext import userpaths
         monkeypatch.setattr(userpaths, "appdatadirectory", lambda: str(tmp_path))
         assert cc0.cache_dir() == str(tmp_path / "OpenGLContext" / "cc0")
 
     def test_the_cache_is_not_readable_by_other_accounts(self, tmp_path, monkeypatch,
                                                          posix_modes):
-        import os
-
         if not posix_modes:
             pytest.skip('this filesystem does not enforce POSIX directory modes')
-        from OpenGLContext import userpaths
         monkeypatch.setattr(userpaths, "appdatadirectory", lambda: str(tmp_path))
         created = cc0.cache_dir()
         assert (os.stat(created).st_mode & 0o077) == 0

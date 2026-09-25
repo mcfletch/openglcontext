@@ -6,11 +6,13 @@ against content no release carries yet, and the call that attaches the same
 files to a release when it is time.
 """
 
+import json
 import os
+import sys
 
 import pytest
 
-from OpenGLContext.contentpacks import ContentPack, ContentStore, archive, publish
+from OpenGLContext.contentpacks import ContentPack, ContentStore, archive, publish, catalog
 
 
 def a_pack(tmp_path, **named):
@@ -213,12 +215,10 @@ class TestAttachingThemToARelease:
 class TestRunningTheCommand:
     def test_the_status_is_the_command_s_own(self) -> None:
         """What `push` judges by, when nobody passed a runner of their own."""
-        import sys
         assert publish._run([sys.executable, '-c', '']) == 0
         assert publish._run([sys.executable, '-c', 'raise SystemExit(3)']) == 3
 
     def test_asking_answers_the_status_and_what_it_printed(self) -> None:
-        import sys
         status, said = publish._ask(
             [sys.executable, '-c',
              'import sys; print("out"); print("err", file=sys.stderr); '
@@ -280,7 +280,6 @@ class TestTheReleaseCommand:
     def test_the_registry_describes_what_was_built(self, tmp_path) -> None:
         release = a_release(tmp_path, cars_and_track(tmp_path))
         assert publish.main(release, []) == 0
-        from OpenGLContext.contentpacks import catalog
         packs = catalog.load(str(tmp_path / 'dist' / 'packs.json'))
         assert [one.key for one in packs] == [
             'glisteel/cars', 'glisteel/forest-art', 'glisteel/ashdown']
@@ -310,7 +309,6 @@ class TestTheReleaseCommand:
         release = a_release(tmp_path, cars_and_track(tmp_path))
         assert publish.main(release, ['--install']) == 0
         store = release.open_store()
-        from OpenGLContext.contentpacks import catalog
         packs = catalog.merge(catalog.load(
             str(tmp_path / 'dist' / 'packs.json')))
         cars, art, track = packs
@@ -354,7 +352,6 @@ class TestTheReleaseCommand:
                   'directory': 'theirs', 'archive': 'zip',
                   'approximate_bytes': 10, 'copyright': 'theirs',
                   'marker': 'x'}
-        import json
         shipped.write_text(json.dumps({'namespace': 'glisteel',
                                        'packs': [theirs]}))
         release = a_release(tmp_path, cars_and_track(tmp_path),
@@ -390,7 +387,6 @@ class TestTheReleaseCommand:
         (tmp_path / 'game' / 'previews' / 'ashdown.jpg').write_bytes(b'jpg')
         release = a_release(tmp_path, cars_and_track(tmp_path), bundle=True)
         publish.main(release, [])
-        from OpenGLContext.contentpacks import catalog
         packs = catalog.load_bundle(
             str(tmp_path / 'dist' / 'glisteel-registry.zip'),
             str(tmp_path / 'unpacked'))

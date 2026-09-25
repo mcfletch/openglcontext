@@ -15,13 +15,21 @@ real it is named here, once, with what it is.
 See `plans/BACKEND-PARITY.md`.
 """
 import ast
+import ctypes
 import os
+import threading
 
 import pytest
+from OpenGL.GL import (
+    GL_MATRIX_MODE, GL_NO_ERROR, GL_PROJECTION, glGetError, glGetIntegerv, glMatrixMode,
+)
 
-from OpenGLContext import plugins
-from OpenGLContext.context import Context
 from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext import context as context_module, plugins, testingcontext
+from OpenGLContext.context import Context, contextAddress, sameContext
+from OpenGLContext.events.eventhandlermixin import HeldKeyMixin
+from OpenGLContext.scenegraph import imagetexture
+from OpenGLContext.testing.glcontext import gl_available
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PACKAGE = os.path.dirname(os.path.dirname(HERE))
@@ -216,8 +224,6 @@ class TestTheContractIsStatedOnce:
         assert Context.setPointerCapture(bare, True) is False
 
     def test_held_key_tracking_is_shared(self):
-        from OpenGLContext.events.eventhandlermixin import HeldKeyMixin
-
         for name in ('noteKeyDown', 'noteKeyUp', 'pumpKeyRepeats',
                      'clearHeldKeys'):
             assert callable(getattr(HeldKeyMixin, name, None)), name
@@ -227,8 +233,6 @@ class TestTheSharedHeldKeyTracking:
     """The map, the synthetic repeat, and letting go on focus loss."""
 
     def _held(self):
-        from OpenGLContext.events.eventhandlermixin import HeldKeyMixin
-
         class _Keys(HeldKeyMixin):
             def __init__(self):
                 self.emitted = []
@@ -307,10 +311,8 @@ class TestAContextKnowsItsSizeAsSoonAsItExists:
     """
 
     def test_the_run_s_backend_reports_a_size(self):
-        from OpenGLContext.testing.glcontext import gl_available
         if not gl_available():
             pytest.skip('no GL target available')
-        from OpenGLContext import testingcontext
         BaseContext = testingcontext.getInteractive()
 
         class Sized(BaseContext):
@@ -335,7 +337,6 @@ class TestTheContextThreadCheckBeforeThereIsOne:
     """
 
     def test_no_context_thread_yet_is_not_the_wrong_thread(self, monkeypatch):
-        from OpenGLContext import context as context_module
         monkeypatch.setattr(context_module, 'contextThread', None)
         assert context_module.inContextThread()
 
@@ -351,33 +352,27 @@ class TestTellingOneGLContextFromAnother:
     """
 
     def _pointer(self, address):
-        import ctypes
         return ctypes.cast(ctypes.c_void_p(address), ctypes.POINTER(ctypes.c_int))
 
     def test_two_pointers_at_one_address_are_one_context(self):
-        from OpenGLContext.context import sameContext
         one, other = self._pointer(0xBEEF), self._pointer(0xBEEF)
         assert one != other, 'the hazard this guards has gone away'
         assert sameContext(one, other)
 
     def test_pointers_at_different_addresses_are_different_contexts(self):
-        from OpenGLContext.context import sameContext
         assert not sameContext(self._pointer(0xBEEF), self._pointer(0xC0FFEE))
 
     def test_an_integer_handle_compares_by_value(self):
-        from OpenGLContext.context import sameContext
         assert sameContext(0xBEEF, 0xBEEF)
         assert not sameContext(0xBEEF, 0xC0FFEE)
 
     def test_nothing_is_never_the_same_context_as_anything(self):
         """Including another nothing: no context is current, not 'the same one'."""
-        from OpenGLContext.context import sameContext
         assert not sameContext(None, None)
         assert not sameContext(0, 0)
         assert not sameContext(0xBEEF, None)
 
     def test_a_handle_that_is_no_kind_of_address_names_no_context(self):
-        from OpenGLContext.context import contextAddress
         assert contextAddress(object()) is None
 
 
@@ -392,7 +387,6 @@ class TestTheProfileAskedForIsTheProfileGiven:
     """
 
     def _built(self, profile):
-        from OpenGLContext import testingcontext
         BaseContext = testingcontext.getInteractive()
 
         class Profiled(BaseContext):
@@ -402,13 +396,8 @@ class TestTheProfileAskedForIsTheProfileGiven:
         return Profiled(profile=profile)
 
     def test_a_compatibility_context_after_a_core_one_still_has_the_matrix_stack(self):
-        from OpenGLContext.testing.glcontext import gl_available
         if not gl_available():
             pytest.skip('no GL target available')
-        from OpenGL.GL import (
-            GL_MATRIX_MODE, GL_NO_ERROR, GL_PROJECTION, glGetError,
-            glGetIntegerv, glMatrixMode,
-        )
 
         core = self._built('core')
         core.releaseWindow()
@@ -441,10 +430,6 @@ class TestNothingKeepsTheProcessAlive:
     """
 
     def test_an_image_load_runs_on_a_daemon_thread(self):
-        import threading
-
-        from OpenGLContext.scenegraph import imagetexture
-
         started = []
         real = threading.Thread
 

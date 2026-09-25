@@ -18,6 +18,10 @@ from OpenGLContext import quaternion
 from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
 from OpenGLContext.move import examinemanager, movementmanager
 from OpenGLContext.move.viewplatform import ViewPlatform
+from OpenGLContext.move.direct import Direct
+from OpenGLContext.move.smooth import Smooth
+from OpenGLContext.move.trackball import Trackball
+from OpenGLContext.multiview.views import View
 
 
 class _Context:
@@ -218,7 +222,6 @@ class TestTheBindings:
     """Which button does what, as the default navigation declares it."""
 
     def _binding(self, key):
-        from OpenGLContext.move.direct import Direct
         return Direct.commandBindings[key]
 
     def test_the_right_button_orbits(self):
@@ -234,7 +237,6 @@ class TestTheBindings:
         assert self._binding('zoomout')['button'] == WHEEL_DOWN
 
     def test_every_command_names_a_method_that_exists(self):
-        from OpenGLContext.move.smooth import Smooth
         for _title, _key, function in Smooth.commands:
             assert getattr(Smooth, function, None) is not None, function
 
@@ -373,8 +375,6 @@ class TestTheOrbitIsTheCustomisationPoint:
     def test_the_arcball_still_fits_the_slot(self):
         """`Trackball` answers `rotate` and `cancel`, which is the whole of what
         the manager asks of an orbit."""
-        from OpenGLContext.move.trackball import Trackball
-
         class _Arcball(examinemanager.ExamineManager):
             def OnBuildOrbit(self, platform, centre, event, width, height):
                 x, y = event.getPickPoint()
@@ -400,7 +400,6 @@ class TestInATileOfSeveralViews:
     """A drag in a quarter of the window is measured against that quarter."""
 
     def _tile(self):
-        from OpenGLContext.multiview.views import View
         view = View(name='perspective')
         view.rect = (400, 0, 400, 300)
         return view

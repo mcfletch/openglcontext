@@ -10,14 +10,15 @@ import pytest
 glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.scenegraph import basenodes
-from OpenGLContext.multiview.views import View, ViewLayout
+from OpenGLContext.multiview.views import View, ViewLayout, ViewStyle
 from tests.unit.glrender import base_env, frames_of
+from OpenGLContext.move.viewplatform import ViewPlatform
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 
 WIDTH, HEIGHT = 200, 100
 
 
 def _glowing_box(x):
-    from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
     material = PBRMaterial(baseColor=(0.0, 0.0, 0.0), emissiveColor=(1.0, 1.0, 1.0),
                            emissiveStrength=40.0, roughness=1.0, metallic=0.0)
     return basenodes.Transform(translation=(x, 0, 0), children=[
@@ -26,7 +27,6 @@ def _glowing_box(x):
 
 
 def _camera(x, z=6.0):
-    from OpenGLContext.move.viewplatform import ViewPlatform
     return ViewPlatform(position=(x, 0, z), orientation=(0, 1, 0, 0))
 
 
@@ -75,8 +75,6 @@ def test_one_view_glows_as_it_always_has(render_scene, env):
 
 def test_what_the_views_stop_covering_is_cleared(render_scene, env):
     """With bloom on, a band given up by the views keeps nothing of an earlier frame."""
-    from OpenGLContext.multiview.views import ViewStyle
-
     def layout(context):
         drawn = []
 

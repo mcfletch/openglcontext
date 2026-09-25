@@ -11,8 +11,9 @@ import numpy as np
 import pytest
 
 from OpenGLContext.character.rig import Rig
-from OpenGLContext.loaders.gltf.animation import compute_world_matrices
+from OpenGLContext.loaders.gltf.animation import compute_world_matrices, quat_xyzw_to_vrml
 from OpenGLContext.scenegraph.transform import Transform
+from OpenGLContext.character.attachment import attach
 
 
 def _chain(depth, branch=1):
@@ -53,7 +54,6 @@ def _random_pose(rig, seed=7):
 
 def _walked(rig, roots, children, translation, rotation, scale):
     """The same pose written onto Transforms and walked one node at a time."""
-    from OpenGLContext.loaders.gltf.animation import quat_xyzw_to_vrml
     for slot in range(rig.n):
         xform = rig.transforms[slot]
         xform.translation = tuple(float(v) for v in translation[slot])
@@ -179,8 +179,6 @@ class TestWorldMatrices:
 class TestWriteBack:
     def test_a_node_holding_something_foreign_is_written(self):
         """A weapon hung on a hand needs that hand's Transform kept current."""
-        from OpenGLContext.character.attachment import attach
-
         roots, children, transforms = _chain(3)
         rig = Rig(roots, children, transforms)
         hand = rig.indices[-1]
@@ -191,8 +189,6 @@ class TestWriteBack:
     def test_every_joint_down_to_the_one_holding_it_is_written(self):
         """The renderer reaches the weapon by walking, so the whole chain has
         to say where the pose put it."""
-        from OpenGLContext.character.attachment import attach
-
         roots, children, transforms = _chain(4)
         rig = Rig(roots, children, transforms)
         attach(transforms[int(rig.indices[-1])], Transform())
@@ -206,8 +202,6 @@ class TestWriteBack:
         assert rig.slot_of[0] not in rig.exposed_slots()
 
     def test_the_exposed_set_notices_something_new_hung_on(self):
-        from OpenGLContext.character.attachment import attach
-
         roots, children, transforms = _chain(3)
         rig = Rig(roots, children, transforms)
         before = rig.exposed_slots()

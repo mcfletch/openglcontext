@@ -3,6 +3,7 @@ import os
 
 import numpy as np
 import pytest
+from PIL import Image
 
 from OpenGLContext import contactsheet
 
@@ -17,7 +18,6 @@ class TestTiling:
         contactsheet.tile(path, 'a title',
                           [('front', [frame(), frame()]),
                            ('side', [frame(), frame()])], ['0%', '50%'])
-        from PIL import Image
         with Image.open(path) as sheet:
             width, height = sheet.size
         assert width >= contactsheet.GUTTER + 2 * 8
@@ -28,7 +28,6 @@ class TestTiling:
         path = str(tmp_path / 'sheet.png')
         contactsheet.tile(path, 't', [('row', [frame(40), frame(220)])],
                           ['a', 'b'])
-        from PIL import Image
         pixels = np.asarray(Image.open(path).convert('RGB'))
         values = {int(v) for v in np.unique(pixels)}
         assert 40 in values and 220 in values

@@ -7,11 +7,16 @@ that every node draws in a core profile, which the GLE-backed geometry these
 replace could not do at all.
 """
 import contextlib
+import os
 
 import numpy as np
 import pytest
 
-from opengl_extrusions import circle, extrude, rectangle
+from opengl_extrusions import circle, extrude, rectangle, with_tangents
+from OpenGL.GL import (
+    GL_NO_ERROR, GL_RGB, GL_UNSIGNED_BYTE, glGetError, glReadPixels,
+)
+from vrml import cache
 
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, Extrusion, Material, PolyCone, PolyCylinder, Shape, sceneGraph,
@@ -45,7 +50,6 @@ class TestAdapter:
         assert np.shares_memory(node.indices, primitive.indices)
 
     def test_every_attribute_the_engine_knows_comes_across(self):
-        from opengl_extrusions import with_tangents
         mesh = with_tangents(extrude(circle(0.5, 8), [(0, 0, 0), (0, 0, 1)])).merged()
         node = mesh_from_primitive(mesh.primitives[0])
         assert node.texcoords is not None
@@ -185,7 +189,6 @@ class _FakePass:
     """Just the cache a geometry node asks its render pass for."""
 
     def __init__(self):
-        from vrml import cache
         self.cache = cache.Cache()
 
 
@@ -210,8 +213,6 @@ def _drawn(node, profile):
     drove it through the other one's calls -- which on GLUT leaks a window per
     test until freeglut gives up and ends the process.
     """
-    import os
-
     os.environ['OPENGLCONTEXT_PROFILE'] = profile
     os.environ['OPENGLCONTEXT_HIDDEN'] = '1'
     os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
@@ -245,11 +246,6 @@ def _drawn(node, profile):
 
 def _render_and_count_lit_pixels(node, profile):
     """Draw one node in a profile and report how much of the frame it covered."""
-    import numpy as np
-    from OpenGL.GL import (
-        GL_NO_ERROR, GL_RGB, GL_UNSIGNED_BYTE, glGetError, glReadPixels,
-    )
-
     with _drawn(node, profile) as context:
         assert glGetError() == GL_NO_ERROR
         width, height = context.getViewPort()
@@ -274,8 +270,6 @@ def test_every_swept_node_draws_in_a_core_profile(name, make):
     framebuffer with something in it at the end, so "it did not raise" is not
     mistaken for "it drew".
     """
-    from OpenGL.GL import GL_NO_ERROR, glGetError
-
     with _drawn(make(), 'core'):
         assert glGetError() == GL_NO_ERROR, 'GL reported an error drawing %s' % name
 

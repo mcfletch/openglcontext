@@ -4,6 +4,8 @@
 reshape/flip logic is verified without a live context; ``save_png``/``SettleCapture``
 run for real.
 """
+import time as _time
+
 import numpy as np
 from OpenGL.GL import GL_FRAMEBUFFER_DEFAULT, GL_READ_FRAMEBUFFER
 
@@ -159,7 +161,6 @@ class TestSettleCapture:
         # SettleCapture.tick does `from time import perf_counter` each call, so
         # patching the stdlib clock controls it.
         clock = {'t': 100.0}
-        import time as _time
         monkeypatch.setattr(_time, 'perf_counter', lambda: clock['t'])
         monkeypatch.setattr(capture, 'read_back_buffer',
                             lambda hud=0: (np.ones((1, 1, 3), np.uint8), 1, 1))

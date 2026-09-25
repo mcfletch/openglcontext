@@ -98,7 +98,6 @@ NARROWED = [
 
 @pytest.mark.parametrize('rel', NARROWED)
 def test_no_bare_except_in_narrowed_files(rel):
-    import re
     src = open(os.path.join(ROOT, rel)).read()
     bare = re.findall(r'^[ \t]*except:[ \t]*$', src, re.MULTILINE)
     assert not bare, "%s still has a bare except:" % rel

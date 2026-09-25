@@ -1,4 +1,5 @@
 """The developer aids in `OpenGLContext.debug`."""
+import importlib
 import os
 
 import pytest
@@ -25,7 +26,6 @@ def test_importing_logcontext_writes_no_file(tmp_path, monkeypatch):
     """The log opens when something logs to it, not when the module loads."""
     monkeypatch.chdir(tmp_path)
     logcontext.close()
-    import importlib
     importlib.reload(logcontext)
     assert not (tmp_path / logcontext.LOG_NAME).exists()
 

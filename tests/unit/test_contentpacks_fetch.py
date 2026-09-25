@@ -7,17 +7,22 @@ whether or not any of that were wired up.
 """
 
 import functools
+import hashlib
 import http.server
 import io
+import json
 import os
 import tarfile
 import threading
+import time
+import zipfile
 
 import pytest
 
 from OpenGLContext.contentpacks import archive, catalog, fetch
 from OpenGLContext.contentpacks.pack import ContentPack
 from OpenGLContext.contentpacks.store import ContentStore
+from OpenGLContext.loaders import resolver
 
 
 @pytest.fixture
@@ -89,7 +94,6 @@ def pack(url, **extra):
 
 
 def digest_of(path):
-    import hashlib
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
@@ -244,7 +248,6 @@ class TestAJobTheFrameLoopPolls:
     reports itself unfinished until it is polled."""
 
     def drive(self, job, limit=500):
-        import time
         for _ in range(limit):
             job.poll()
             if job.finished:
@@ -431,8 +434,6 @@ class TestARegistryFetchedFromElsewhere:
 
     def registry_bundle(self, where, name='registry.zip', pictures=('p.png',),
                         namespace='contrib.x', key='contrib.x/hillclimb'):
-        import json
-        import zipfile
         entry = {
             'key': key, 'title': 'Hill climb',
             'url': 'https://example.invalid/hillclimb.tar.gz',
@@ -590,7 +591,6 @@ class TestFetchingContentAPackIsIncompleteWithout:
 
 def drive(job, limit=2000):
     """Poll a job as a frame loop would, until it says it is done."""
-    import time
     for _ in range(limit):
         job.poll()
         if job.finished:
@@ -649,7 +649,6 @@ class TestWhereARegistryMayComeFrom:
     def test_anything_but_https_off_this_machine_is_refused(
             self, url, store, cache, monkeypatch) -> None:
         """Refused before anything is asked of the network."""
-        from OpenGLContext.loaders import resolver
         asked = []
         monkeypatch.setattr(resolver, 'fetch_to_cache',
                             lambda url, **named: asked.append(url))

@@ -6,6 +6,7 @@ anything is written: an entry that would land outside it stops the extraction
 rather than overwriting whatever it pointed at.
 """
 
+import hashlib
 import io
 import os
 import tarfile
@@ -14,6 +15,7 @@ import zipfile
 import pytest
 
 from OpenGLContext.contentpacks import archive
+from OpenGLContext.loaders import resolver
 
 
 def zip_of(path, names, data=b'x'):
@@ -187,7 +189,6 @@ class TestWhatItSaysAboutADigest:
     def test_a_file_that_matches_passes(self, tmp_path) -> None:
         path = tmp_path / 'a.bin'
         path.write_bytes(b'hello')
-        import hashlib
         archive.check_digest(str(path), hashlib.sha256(b'hello').hexdigest())
 
     def test_one_that_does_not_is_refused_naming_both(self, tmp_path) -> None:
@@ -206,7 +207,6 @@ class TestWhatItSaysAboutADigest:
         """A base pack is tens of megabytes; it is not held in memory to hash."""
         path = tmp_path / 'big.bin'
         path.write_bytes(b'ab' * 200_000)
-        import hashlib
         archive.check_digest(str(path),
                              hashlib.sha256(b'ab' * 200_000).hexdigest())
 
@@ -344,7 +344,6 @@ class TestWritingAPack:
             assert handle.getnames() == sorted(handle.getnames())
 
     def test_the_digest_is_of_the_file(self, tmp_path) -> None:
-        import hashlib
         path = tmp_path / 'a.bin'
         path.write_bytes(b'hello')
         assert archive.digest(str(path)) == hashlib.sha256(b'hello').hexdigest()
@@ -419,7 +418,6 @@ class TestReadingNoMoreThanItMust:
         assert 'Python' in str(raised.value)
 
     def test_a_cancel_stops_the_unpacking(self, tmp_path):
-        from OpenGLContext.loaders import resolver
         source = tar_of(tmp_path / 'a.tar.gz', ['f%d' % n for n in range(20)])
         with pytest.raises(resolver.FetchCancelled):
             archive.extract(source, str(tmp_path / 'out'), 'tar',

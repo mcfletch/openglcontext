@@ -12,6 +12,7 @@ import json
 
 import numpy as np
 import pytest
+from omi_physics.world import PhysicsWorld
 
 from OpenGLContext.loaders.tiles3d.props import baked_props
 from OpenGLContext.physics.props import PropColliders
@@ -80,7 +81,6 @@ class TestWhatAWorldCarries:
 
 class TestStandingThemUp:
     def test_the_colliders_are_built_from_the_world(self, tmp_path):
-        from omi_physics.world import PhysicsWorld
         (tmp_path / 'stones.npz').write_bytes(props_table(STONES))
         extras = {'stones': {'table': 'stones.npz', 'count': len(STONES)}}
         colliders = PropColliders.baked(PhysicsWorld(), extras, 'stones',

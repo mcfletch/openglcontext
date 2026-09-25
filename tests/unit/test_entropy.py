@@ -8,6 +8,7 @@ from a stream derived from it -- which is what makes the seed worth recording
 and worth putting back.
 """
 
+import json
 import logging
 import random
 
@@ -15,6 +16,10 @@ import numpy as np
 import pytest
 
 from OpenGLContext import entropy
+from OpenGLContext.context import Context
+from OpenGLContext.interactivecontext import InteractiveContext
+from OpenGLContext.nav.navmesh import NavMesh
+from OpenGLContext.scenegraph.particles import ParticlePool
 
 
 @pytest.fixture(autouse=True)
@@ -146,7 +151,6 @@ class TestCapturingWhatTheGeneratorsHold:
         assert entropy.generator('trees').random(3).tolist() == expected
 
     def test_it_is_all_plain_data(self):
-        import json
         assert json.loads(json.dumps(entropy.capture()))
 
     def test_a_record_from_somewhere_else_is_ignored_rather_than_fatal(self, caplog):
@@ -197,24 +201,18 @@ class TestWhatTheEngineDrawsFrom:
     replay with it."""
 
     def test_particles_repeat_within_a_session_seed(self):
-        from OpenGLContext.scenegraph.particles import ParticlePool
-
         entropy.reseed(5)
         first = ParticlePool(capacity=4)._random.random(4).tolist()
         entropy.reseed(5)
         assert ParticlePool(capacity=4)._random.random(4).tolist() == first
 
     def test_an_emitter_that_names_its_own_seed_still_wins(self):
-        from OpenGLContext.scenegraph.particles import ParticlePool
-
         entropy.reseed(5)
         first = ParticlePool(capacity=4, seed=77)._random.random(4).tolist()
         entropy.reseed(6)
         assert ParticlePool(capacity=4, seed=77)._random.random(4).tolist() == first
 
     def test_a_navmesh_wander_repeats_within_a_session_seed(self):
-        from OpenGLContext.nav.navmesh import NavMesh
-
         mesh = _square_mesh()
         entropy.reseed(5)
         first = [mesh.random_point() for _ in range(6)]
@@ -231,8 +229,6 @@ class TestWhatTheEngineDrawsFrom:
 
 
 def _square_mesh():
-    from OpenGLContext.nav.navmesh import NavMesh
-
     points = np.array([[0, 0, 0], [4, 0, 0], [4, 0, 4], [0, 0, 4],
                        [8, 0, 0], [8, 0, 4]], dtype='f')
     cells = np.array([[0, 1, 2], [0, 2, 3], [1, 4, 5], [1, 5, 2]], dtype='i')
@@ -245,9 +241,6 @@ class TestWhenTheSeedTakesEffect:
     and a game builds its world in ``OnInit``."""
 
     def _probe(self):
-        from OpenGLContext.context import Context
-        from OpenGLContext.interactivecontext import InteractiveContext
-
         class Probe(InteractiveContext, Context):
             """A whole context short of the window: everything
             ``Context.__init__`` does, with the one step that needs GL --

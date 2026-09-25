@@ -5,6 +5,7 @@ rendering for every user, PBR or not. The selection is now guarded and degrades 
 the base core FlatPass.
 """
 import sys
+import types
 
 import pytest
 
@@ -30,7 +31,6 @@ class TestCorePassClassSelection:
     def test_falls_back_when_pbr_import_broken(self, monkeypatch):
         # Simulate an import-time fault in the PBR chain: a stand-in module with no
         # renderer_is_pbr makes `from pbrpass import renderer_is_pbr` raise.
-        import types
         broken = types.ModuleType('OpenGLContext.passes.pbrpass')
         monkeypatch.setitem(sys.modules, 'OpenGLContext.passes.pbrpass', broken)
         monkeypatch.setenv('OPENGLCONTEXT_RENDERER', 'pbr')

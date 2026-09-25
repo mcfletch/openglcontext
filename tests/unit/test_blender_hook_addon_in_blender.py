@@ -18,6 +18,7 @@ import pytest
 
 from OpenGLContext.loaders import gltf
 from OpenGLContext.scenegraph import particles
+from OpenGLContext.scenegraph.shape import Shape
 
 ADDONS = Path(__file__).resolve().parents[2] / 'tools' / 'blender'
 
@@ -203,8 +204,6 @@ def test_a_mirror_panel_offers_the_mirror_fields_on_either_tab(exported):
 
 
 def test_the_exported_mirrors_load_reflecting(exported):
-    from OpenGLContext.scenegraph.shape import Shape
-
     def materials(node):
         found = [node.appearance.material] if isinstance(node, Shape) else []
         for child in getattr(node, 'children', None) or []:

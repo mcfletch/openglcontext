@@ -9,6 +9,7 @@ nor the survival of a properly-held handler can be changed unnoticed.
 import gc
 
 import pytest
+from pydispatch import dispatcher
 
 from OpenGLContext.events import eventmanager
 
@@ -38,7 +39,6 @@ def deliver(manager, key='k'):
     This goes through ``sendExact`` rather than poking the registration tables,
     so it exercises the same delivery a real event takes.
     """
-    from pydispatch import dispatcher
     return len(dispatcher.sendExact((manager.type, 0, key), None, None))
 
 
@@ -102,13 +102,9 @@ class TestDeregisteringSeveralAtOnce:
     """
 
     def receivers(self, manager, key='k'):
-        from pydispatch import dispatcher
-
         return dispatcher.getReceivers(sender=None, signal=(manager.type, 0, key))
 
     def test_two_handlers_on_one_key_both_come_off(self, manager):
-        from pydispatch import dispatcher
-
         first, second = Recorder(), Recorder()
         signal = (manager.type, 0, 'k')
         # Connected directly: registerCallback deregisters before it registers,
@@ -121,8 +117,6 @@ class TestDeregisteringSeveralAtOnce:
         assert len(self.receivers(manager)) == 0
 
     def test_a_handful_on_one_key_all_come_off(self, manager):
-        from pydispatch import dispatcher
-
         signal = (manager.type, 0, 'k')
         held = [Recorder() for _ in range(5)]
         for recorder in held:

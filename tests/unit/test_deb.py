@@ -9,7 +9,7 @@ import tarfile
 
 import pytest
 
-from OpenGLContext.packaging import deb
+from OpenGLContext.packaging import deb, appdir
 
 
 def _records_execute_bit(tmp_path):
@@ -340,8 +340,6 @@ class TestWhichBackendThePackageIsFor:
                                                           tmp_path):
         """Everything past the environment needs a real one, so the build is
         stopped where the question is answered."""
-        from OpenGLContext.packaging import appdir
-
         class Stop(Exception):
             pass
 

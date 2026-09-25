@@ -13,10 +13,16 @@ for ``mousemove``, the check says nobody is listening, and every move the drag
 exists to consume is filtered away before it arrives. Examine mode started and
 then never saw a single movement.
 """
+import inspect
+
 import pytest
 
 from OpenGLContext.events import eventmanager
 from OpenGLContext.events.eventhandlermixin import EventHandlerMixin
+from OpenGLContext.context import Context
+from OpenGLContext.interactivecontext import InteractiveContext
+from OpenGLContext.move import examinemanager
+from OpenGLContext.move.examinemanager import ExamineManager
 
 
 class _Manager(eventmanager.EventManager):
@@ -37,7 +43,6 @@ class _Host(EventHandlerMixin):
 
 @pytest.fixture
 def host():
-    from OpenGLContext.interactivecontext import InteractiveContext
     _Host.EventManagerClasses = InteractiveContext.EventManagerClasses
     return _Host()
 
@@ -67,12 +72,9 @@ class TestMovesAreDeliveredWhileCaptured:
     """The whole point: the pass must not filter away what a drag is waiting for."""
 
     def _context(self):
-        from OpenGLContext.context import Context
-
         class _Probe(_Host):
             getEventManager = EventHandlerMixin.getEventManager
             hasMouseMoveHandlers = Context.hasMouseMoveHandlers
-        from OpenGLContext.interactivecontext import InteractiveContext
         _Probe.EventManagerClasses = InteractiveContext.EventManagerClasses
         return _Probe()
 
@@ -101,13 +103,10 @@ class TestTheExamineDragItself:
     """``ExamineManager`` is what captures, and what was being starved."""
 
     def test_it_captures_the_moves_it_needs(self):
-        import inspect
-        from OpenGLContext.move import examinemanager
         source = inspect.getsource(examinemanager.ExamineManager.OnBind)
         assert "captureEvents" in source
         assert "mousemove" in source
 
     def test_its_own_type_is_not_the_type_it_captures(self):
         """Which is exactly why asking it for receivers answered nothing."""
-        from OpenGLContext.move.examinemanager import ExamineManager
         assert ExamineManager.type == 'examine'

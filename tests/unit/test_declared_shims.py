@@ -25,6 +25,11 @@ import textwrap
 
 import pytest
 
+from OpenGLContext.context import Context
+from OpenGLContext.events.eventhandlermixin import EventHandlerMixin
+from OpenGLContext.passes import _flat
+from OpenGLContext.scenegraph import shaders, imagetexture
+
 
 def declared_names(cls: type) -> set[str]:
     """The names ``cls`` declares inside its own ``if TYPE_CHECKING:`` block.
@@ -158,9 +163,6 @@ def test_the_matrix_uniform_declares_what_its_class_has():
     """The pass binds each of its matrices through one of the uniform classes
     :mod:`OpenGLContext.scenegraph.shaders` builds at import, so a checker
     cannot see the class and the declaration stands in for it."""
-    from OpenGLContext.passes import _flat
-    from OpenGLContext.scenegraph import shaders
-
     # NEED_INVERSE is the pass's own: `_flat` sets it per instance to say which
     # way round this matrix is wanted, and no uniform class carries one.
     assert_supplied(stand_in_names(_flat, '_MatrixUniform'),
@@ -171,9 +173,6 @@ def test_the_matrix_uniform_declares_what_its_class_has():
 def test_the_matrix_uniform_is_what_the_pass_actually_binds():
     """The declaration and the runtime class are two spellings of one name, and
     only this says they are still the same one."""
-    from OpenGLContext.passes import _flat
-    from OpenGLContext.scenegraph import shaders
-
     assert _flat._MatrixUniform is shaders.FloatUniformm4
 
 
@@ -182,8 +181,6 @@ def test_the_texture_mixin_declares_fields_its_nodes_have(node_name):
     """``image``, ``repeatS`` and ``repeatT`` are VRML97 fields of the concrete
     texture nodes; declaring them on the mix-in for real would register a
     second copy of each."""
-    from OpenGLContext.scenegraph import imagetexture
-
     assert_supplied(declared_names(imagetexture._Texture),
                     getattr(imagetexture, node_name), 'imagetexture._Texture')
 
@@ -192,7 +189,4 @@ def test_the_context_declares_what_the_event_mixin_supplies():
     """Every context a backend builds mixes :class:`EventHandlerMixin` in ahead
     of :class:`Context`, which is why these are declarations rather than
     do-nothing definitions."""
-    from OpenGLContext.context import Context
-    from OpenGLContext.events.eventhandlermixin import EventHandlerMixin
-
     assert_supplied(declared_names(Context), EventHandlerMixin, 'Context')

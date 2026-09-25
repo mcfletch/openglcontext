@@ -6,11 +6,21 @@ the program it describes cannot drift apart.  These hold the two halves of
 that: what the commentary notation means, and what the page made of it says.
 """
 
+import glob
+import json
 import os
+import re
 
 import pytest
 
 from docbuild import markup, tutorials
+
+from OpenGLContext.loaders.gltf import zoning, hooks
+from OpenGLContext.scenegraph import particlehooks
+from OpenGLContext.scenegraph.mirrorhooks import PARAMETERS
+from OpenGLContext.scenegraph.reflector import LIMITS
+from OpenGLContext.scenegraph.water import gltf, medium
+from OpenGLContext.testing.paths import tests_root
 
 
 class TestHeadings:
@@ -352,8 +362,6 @@ class TestIndentation:
         from docutils import nodes
         from sphinx.application import Sphinx
 
-        from OpenGLContext.testing.paths import tests_root
-
         monkeypatch.syspath_prepend(str(tests_root(__file__).parent / 'docs' / '_ext'))
         source = tmp_path / 'source'
         source.mkdir()
@@ -514,8 +522,6 @@ class TestEveryLinkedTutorialIsWritten:
         return names
 
     def test_no_documentation_page_links_a_tutorial_nothing_writes(self):
-        import glob
-        import re
         here = os.path.dirname(os.path.dirname(os.path.dirname(
             os.path.abspath(__file__))))
         linked = set()
@@ -535,7 +541,6 @@ class TestEveryLinkedTutorialIsWritten:
 
 class TestTheZonesPageListsTheReaders:
     def test_every_extension_the_engine_reads_in_a_zone_is_named(self):
-        from OpenGLContext.loaders.gltf import zoning
         here = os.path.dirname(os.path.dirname(os.path.dirname(
             os.path.abspath(__file__))))
         with open(os.path.join(here, 'docs', 'zones.rst'),
@@ -568,7 +573,6 @@ class TestTheHookSchemaMatchesTheKinds:
     each shipped kind reads, with the ranges the code holds it to."""
 
     def schema(self):
-        import json
         here = os.path.dirname(os.path.dirname(os.path.dirname(
             os.path.abspath(__file__))))
         with open(os.path.join(here, 'docs', 'extensions', 'schema',
@@ -577,13 +581,10 @@ class TestTheHookSchemaMatchesTheKinds:
             return json.load(handle)['$defs']
 
     def test_every_shipped_kind_is_covered(self):
-        from OpenGLContext.loaders.gltf import hooks
         described = {'water', 'mirror', 'fire', 'smoke', 'sparks'}
         assert set(hooks.BUILTIN) == described
 
     def test_the_mirror_parameters_and_their_limits(self):
-        from OpenGLContext.scenegraph.mirrorhooks import PARAMETERS
-        from OpenGLContext.scenegraph.reflector import LIMITS
         mirror = self.schema()['mirror']['properties']
         assert set(PARAMETERS) <= set(mirror)
         for name, (low, high) in LIMITS.items():
@@ -591,7 +592,6 @@ class TestTheHookSchemaMatchesTheKinds:
             assert mirror[name].get('maximum') == high, name
 
     def test_the_particle_fields_and_their_ranges(self):
-        from OpenGLContext.scenegraph import particlehooks
         particles = self.schema()['particles']['properties']
         assert set(particlehooks.FIELDS) | {'scale', 'density'} <= set(particles)
         for name, (low, high) in particlehooks.RANGES.items():
@@ -600,7 +600,6 @@ class TestTheHookSchemaMatchesTheKinds:
         assert particles['scale']['maximum'] == particlehooks.MULTIPLIER_MAXIMUM
 
     def test_the_water_parameters_and_styles(self):
-        from OpenGLContext.scenegraph.water import gltf, medium
         defs = self.schema()
         water = defs['water']['properties']
         assert {'style', 'material', 'medium', 'depth'} <= set(water)

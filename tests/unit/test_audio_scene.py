@@ -7,14 +7,18 @@ paths and a context; everything else is here.
 import numpy as np
 import pytest
 
-from omi_audio import synth
+from omi_audio import synth, AudioEngine
 from omi_audio.device import NullDevice
+from vrml.vrml97 import basenodes
 
 from OpenGLContext.audio import scene as audioscene
-from OpenGLContext.audio.settings import AudioSettings
+from OpenGLContext.audio.settings import AudioSettings, settings_for
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.move import viewplatform
 from OpenGLContext.scenegraph import audio as audionodes
+from OpenGLContext.physics.zones import scene_zones
+from OpenGLContext.scenegraph.transform import Transform
+from OpenGLContext.scenegraph.zone import Zone, ZoneAudio, ZoneReverb
 
 
 class FakePath(list):
@@ -102,14 +106,12 @@ class TestEngineLifetime:
             audioscene.close(second)
 
     def test_an_engine_made_elsewhere_is_the_one_the_context_uses(self, context):
-        from omi_audio import AudioEngine
         given = AudioEngine(device=NullDevice(sample_rate=8000), voices=4)
         audioscene.attach(context, given)
         assert audioscene.existing_engine(context) is given
         assert audioscene.engine_for(context) is given
 
     def test_attaching_another_closes_the_first(self, context):
-        from omi_audio import AudioEngine
         first = audioscene.engine_for(context)
         closed = []
         first.close = lambda: closed.append(first)
@@ -147,8 +149,6 @@ class TestUpdating:
         assert audioscene.update(context, paths, now=0.0) == 2
 
     def test_a_path_whose_node_makes_no_sound_is_skipped(self, context):
-        from vrml.vrml97 import basenodes
-
         assert audioscene.update(
             context, [FakePath(basenodes.AudioClip())], now=0.0) == 0
 
@@ -219,8 +219,6 @@ class TestDefinitionSubNode:
 
     def test_a_context_with_no_definition_still_has_settings(self):
         """A bare test double has none, and a scene with sound must still run."""
-        from OpenGLContext.audio.settings import settings_for
-
         assert isinstance(settings_for(object()), AudioSettings)
 
     def test_the_voice_budget_reaches_the_pool(self, monkeypatch):
@@ -281,9 +279,6 @@ class TestZones:
     """The zones a frame is drawn with set emitters' gains and the reverb."""
 
     def zoned(self):
-        from OpenGLContext.physics.zones import scene_zones
-        from OpenGLContext.scenegraph.transform import Transform
-        from OpenGLContext.scenegraph.zone import Zone, ZoneAudio, ZoneReverb
         ambience = audionodes.AudioEmitter(type='global', sources=[
             audionodes.AudioSource(url=['drips'], loop=True)])
         cave = Transform(translation=(20.0, 0.0, 0.0), children=[

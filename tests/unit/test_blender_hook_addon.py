@@ -28,6 +28,7 @@ from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.scenegraph.water import gltf as watergltf
 from OpenGLContext.scenegraph.water.medium import MEDIA
+from OpenGLContext.scenegraph.reflector import PlanarReflector
 
 ADDON = Path(__file__).resolve().parents[2] / 'tools' / 'blender' / 'oglc_hook'
 
@@ -188,7 +189,6 @@ def test_the_mirror_parameters_are_the_ones_the_engine_reads():
 
 
 def test_the_mirror_defaults_are_the_engines():
-    from OpenGLContext.scenegraph.reflector import PlanarReflector
     default = PlanarReflector()
     for field, param in tag.MIRROR_PARAMETERS.items():
         assert tag.DEFAULTS[field] == pytest.approx(getattr(default, param))

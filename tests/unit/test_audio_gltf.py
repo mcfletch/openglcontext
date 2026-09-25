@@ -14,7 +14,7 @@ import wave
 import numpy as np
 import pytest
 
-from omi_audio import synth
+from omi_audio import synth, formats
 from omi_audio.clip import decoder_available
 from omi_audio.device import NullDevice
 from omi_audio.engine import AudioEngine
@@ -255,8 +255,6 @@ class TestCodecExtensions:
                               'http://example/assets/shot.mp3']
 
     def test_the_library_is_asked_for_the_encoding_this_build_can_decode(self):
-        from omi_audio import formats
-
         scene = loader.load_gltf(self.coded(),
                                  base_url='http://example/assets/scene.gltf')
         source = emitters_in(scene)[0].sources[0]

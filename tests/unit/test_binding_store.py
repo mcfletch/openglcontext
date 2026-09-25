@@ -1,6 +1,7 @@
 """Key bindings saved to and loaded from the per-user app-data directory."""
 
 import json
+import stat
 
 import pytest
 
@@ -176,8 +177,6 @@ class TestSavingIsAllOrNothing:
         assert list(tmp_path.iterdir()) == []
 
     def test_the_directory_is_the_users_own(self, navigation, tmp_path, posix_modes):
-        import stat
-
         if not posix_modes:
             pytest.skip('this filesystem does not enforce POSIX directory modes')
         directory = tmp_path / 'appdata'

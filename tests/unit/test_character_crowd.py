@@ -14,7 +14,7 @@ pygltflib = pytest.importorskip("pygltflib")
 from OpenGLContext.character.crowd import Crowd
 from OpenGLContext.character.model import CharacterModel
 from OpenGLContext.loaders.gltf import load_gltf, parse_gltf
-from tests.unit._character_assets import character_glb
+from tests.unit._character_assets import character_glb, skinned_bar_glb
 
 
 @pytest.fixture(scope='module')
@@ -179,8 +179,6 @@ class TestManyFiguresAgree:
 class TestMembership:
     def test_a_figure_of_another_build_is_refused(self, document):
         """A joint has to mean the same joint in every figure of a crowd."""
-        from tests.unit._character_assets import skinned_bar_glb
-
         crowd = Crowd()
         crowd.add(_figure(document))
         other = CharacterModel(load_gltf(document=parse_gltf(skinned_bar_glb())))

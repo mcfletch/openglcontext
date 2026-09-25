@@ -12,8 +12,9 @@ import zipfile
 
 import pytest
 
-from OpenGLContext.contentpacks import archive, catalog
+from OpenGLContext.contentpacks import archive, catalog, fetch
 from OpenGLContext.contentpacks.store import ContentStore
+from OpenGLContext.loaders import resolver
 
 #: The smallest thing a decoder will agree is a PNG.
 PNG = bytes.fromhex(
@@ -236,7 +237,6 @@ class TestARefreshedBundle:
         assert calls == []
 
     def test_it_unpacks_under_the_cap_it_is_fetched_under(self):
-        from OpenGLContext.contentpacks import fetch
         assert fetch.REGISTRY_LIMIT == catalog.REGISTRY_LIMIT
 
 
@@ -245,8 +245,6 @@ class TestARegistryThatFailsToLoad:
 
     def test_the_store_still_loads_its_other_registries(self, tmp_path,
                                                         monkeypatch):
-        from OpenGLContext.contentpacks import fetch
-        from OpenGLContext.loaders import resolver
         store = ContentStore('glisteel', root=str(tmp_path / 'store'),
                              search=[])
         bad = bundle(tmp_path, {'key': 'glisteel/x', 'copyright': ''},

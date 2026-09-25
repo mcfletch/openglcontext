@@ -8,6 +8,9 @@ from typing import Any
 
 import pytest
 
+from OpenGLContext.arrays import identity
+from OpenGLContext.passes.flatcompat import FlatPass
+
 
 class _Raiser:
     """A renderable whose draw always fails."""
@@ -46,7 +49,6 @@ class _Context:
 
 def _records(nodes: list[Any], transparent: int) -> list[tuple[Any, ...]]:
     """One (sortKey, mvmatrix, tmatrix, bvolume, path, node) record per node."""
-    from OpenGLContext.arrays import identity
     matrix = identity(4, 'f')
     return [((transparent, 0.0), matrix, matrix, None, [node], node)
             for node in nodes]
@@ -54,7 +56,6 @@ def _records(nodes: list[Any], transparent: int) -> list[tuple[Any, ...]]:
 
 @pytest.fixture
 def compat_pass(gl_context_compat: Any) -> Any:
-    from OpenGLContext.passes.flatcompat import FlatPass
     pass_object = FlatPass.__new__(FlatPass)
     pass_object.context = _Context()
     pass_object.failed: list[tuple[str, Any, BaseException]] = []

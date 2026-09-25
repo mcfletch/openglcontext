@@ -82,11 +82,9 @@ class TestTheSharedReader:
         ('on', True), ('0', False), ('', False), ('no', False),
     ])
     def test_what_counts_as_hidden(self, monkeypatch, value, hidden):
-        from OpenGLContext import renderoptions
         monkeypatch.setenv('OPENGLCONTEXT_HIDDEN', value)
         assert renderoptions.hidden_window() is hidden
 
     def test_unset_means_a_window_on_the_screen(self, monkeypatch):
-        from OpenGLContext import renderoptions
         monkeypatch.delenv('OPENGLCONTEXT_HIDDEN', raising=False)
         assert renderoptions.hidden_window() is False

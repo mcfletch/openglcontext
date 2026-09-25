@@ -117,12 +117,13 @@ class TestTheBackendCapability:
 
 glfw = pytest.importorskip('glfw')
 
+from OpenGLContext import glfwcontext
+
 
 class TestChoosingTheMonitor:
     """Which monitor GLFW is asked to fill, if any."""
 
     def _monitor(self, definition):
-        from OpenGLContext import glfwcontext
         return glfwcontext.fullscreenMonitor(definition)
 
     def test_a_windowed_context_names_no_monitor(self):

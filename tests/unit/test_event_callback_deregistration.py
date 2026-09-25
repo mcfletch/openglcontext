@@ -19,6 +19,7 @@ from pydispatch import dispatcher
 
 from OpenGLContext import plugins
 from OpenGLContext.events.keyboardevents import KeyboardEventManager
+from OpenGLContext.testing.glcontext import offscreen_unavailable
 
 #: The backend that renders on no window here -- a WGL pbuffer on Windows, EGL
 #: elsewhere.  Both are registered everywhere, since which one a machine can
@@ -153,8 +154,6 @@ class TestTwoContextsInSequence:
         test can have it.  Which of the two that is depends on the machine, so
         the registry is asked rather than a module named.
         """
-        from OpenGLContext.testing.glcontext import offscreen_unavailable
-
         reason = offscreen_unavailable('core')
         if reason:
             pytest.skip(reason)

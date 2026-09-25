@@ -239,7 +239,6 @@ class TestSeenWithoutPerspective:
     """
 
     def _view(self, **named):
-        from OpenGLContext.edit.orbitview import OrbitView
         return OrbitView(distance=100.0, **named)
 
     def test_a_camera_starts_in_perspective(self):
@@ -252,7 +251,6 @@ class TestSeenWithoutPerspective:
         two projections are asked to agree -- nearer than that a perspective
         view still draws bigger, and further, smaller.
         """
-        import numpy as np
         view = self._view()
         size = (400, 300)
         model, _projection = view.matrices(size)
@@ -264,7 +262,6 @@ class TestSeenWithoutPerspective:
 
     def test_distance_stops_making_things_smaller(self):
         """Two things of a size measure the same, however far off each is."""
-        import numpy as np
         view = self._view()
         size = (400, 300)
         model, _projection = view.matrices(size)
@@ -287,7 +284,6 @@ class TestSeenWithoutPerspective:
 
     def test_what_is_behind_the_camera_is_still_drawn(self):
         """An orthographic view has no eye to be behind: it keeps its depth."""
-        import numpy as np
         view = self._view()
         view.orthographic = True
         behind = view.position() + (view.position() - view.target())
@@ -296,7 +292,6 @@ class TestSeenWithoutPerspective:
 
 
 def _clip(view, point, size, keep_z=False):
-    import numpy as np
     model, projection = view.matrices(size)
     clip = np.append(np.asarray(point, 'd'), 1.0) @ model @ projection
     found = clip[:3] / clip[3]

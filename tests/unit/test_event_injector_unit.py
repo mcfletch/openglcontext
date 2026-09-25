@@ -6,6 +6,7 @@ in-process sockets and a GL-free fake context. The only mocked edges are a
 specific socket error and the GL framebuffer capture.
 """
 
+import argparse
 import os
 import pathlib
 import socket
@@ -383,7 +384,6 @@ def test_setup_event_injection_from_args_builds_injector():
     """setup_event_injection wires an EventInjector from a socket argument."""
     ctx = _fake_context()
     path = _sock_path()
-    import argparse
 
     args = argparse.Namespace(event_socket=path, event_stdin=False)
     try:
@@ -444,8 +444,6 @@ def test_poll_injected_events_without_injector_is_noop():
 
 def test_add_event_injection_arguments_registers_flags():
     """The classmethod adds the --event-socket/--event-stdin options."""
-    import argparse
-
     parser = argparse.ArgumentParser()
     EventInjectionMixin.add_event_injection_arguments(parser)
     ns = parser.parse_args(['--event-socket', '/tmp/x.sock', '--event-stdin'])

@@ -9,6 +9,8 @@ registrations it is generated from: a node registered without running
 ``scripts/write_basenodes_stub.py`` fails here rather than reaching a release
 as a name nothing can resolve.
 """
+import ast
+import importlib.util
 import os
 
 import pytest
@@ -31,8 +33,6 @@ def _imports(text):
     private bases the dynamically built families derive from, which is what
     makes those declarations resolve.
     """
-    import ast
-
     for statement in ast.parse(text).body:
         if isinstance(statement, ast.ImportFrom) and statement.module:
             for alias in statement.names:
@@ -46,8 +46,6 @@ def _names(text):
     checker expands ``from basenodes import *`` against, and a family built
     with ``type()`` is declared as a class rather than imported.
     """
-    import ast
-
     for statement in ast.parse(text).body:
         if isinstance(statement, ast.Assign):
             targets = [t.id for t in statement.targets if isinstance(t, ast.Name)]
@@ -184,8 +182,6 @@ class TestTheScript:
 
     @pytest.fixture
     def script(self):
-        import importlib.util
-
         path = os.path.join(
             _basenodes_stub.package_root(_basenodes_stub.__file__),
             os.pardir, 'scripts', 'write_basenodes_stub.py',

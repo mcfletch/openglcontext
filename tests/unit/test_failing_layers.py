@@ -16,6 +16,9 @@ from OpenGLContext.passes.reflectionplanner import SETTLE_FRAMES
 from OpenGLContext.testing.glcontext import profile_unavailable
 from OpenGLContext.testing.layers import check_failing_layer
 from OpenGLContext.testing.scenes import scene_context
+from OpenGLContext.passes import renderpass
+from OpenGLContext.passes.bloom import BloomPass
+from tests.unit.test_pbr_zones import CaptureProbe, CapturingPass
 
 SETTLING = SETTLE_FRAMES + 2
 
@@ -41,7 +44,6 @@ def mirror_room():
     Reflections ask for frames while their tiles settle, and a frame asked
     for then is not the failing layer's.
     """
-    from OpenGLContext.passes import renderpass
     refused = profile_unavailable('core')
     if refused:
         pytest.skip(refused)
@@ -70,7 +72,6 @@ def test_bloom_that_fails_to_start_is_switched_off_once(mirror_room):
 
 
 def test_bloom_that_fails_to_composite_is_switched_off_once(mirror_room):
-    from OpenGLContext.passes.bloom import BloomPass
     context, passing = mirror_room
     check_failing_layer(lambda: context.OnDraw(force=1), BloomPass, 'composite',
                         context=context)
@@ -86,7 +87,6 @@ class _Context:
 
 
 def test_a_zone_capture_that_fails_is_not_tried_again():
-    from tests.unit.test_pbr_zones import CaptureProbe, CapturingPass
     zoned = CapturingPass(CaptureProbe())
     zoned.context = _Context()
     zoned.frames(1)

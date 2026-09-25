@@ -7,6 +7,14 @@ Skips cleanly when a GL context can't be created.
 
 import numpy as np
 import pytest
+from OpenGL.GL import (
+    glViewport, glEnable, glDisable, glScissor, glClear, glClearColor,
+    glReadPixels, GL_SCISSOR_TEST, GL_COLOR_BUFFER_BIT,
+    GL_RGB, GL_UNSIGNED_BYTE, glBindFramebuffer, GL_FRAMEBUFFER,
+)
+
+from OpenGLContext.passes import bloom
+from OpenGLContext.passes.bloom import BloomPass, bloom_enabled, scaled_rect, tile_uniforms
 
 
 @pytest.fixture
@@ -15,12 +23,6 @@ def gl_context(gl_window):
 
 
 def test_bloom_spreads_a_halo(gl_context):
-    from OpenGL.GL import (
-        glViewport, glEnable, glDisable, glScissor, glClear, glClearColor,
-        glReadPixels, GL_SCISSOR_TEST, GL_COLOR_BUFFER_BIT,
-        GL_RGB, GL_UNSIGNED_BYTE, glBindFramebuffer, GL_FRAMEBUFFER,
-    )
-    from OpenGLContext.passes.bloom import BloomPass
     W = H = 96
     bp = BloomPass()
 
@@ -59,7 +61,6 @@ def test_bloom_spreads_a_halo(gl_context):
 
 
 def test_bloom_enabled_reads_env(monkeypatch):
-    from OpenGLContext.passes.bloom import bloom_enabled
     for val in ('1', 'on', 'true', 'YES'):
         monkeypatch.setenv('OPENGLCONTEXT_BLOOM', val)
         assert bloom_enabled() is True
@@ -70,7 +71,6 @@ def test_bloom_enabled_reads_env(monkeypatch):
 
 def test_same_size_begin_reuses_targets(gl_context):
     """A second begin() at the same size must not reallocate the scene target."""
-    from OpenGLContext.passes.bloom import BloomPass
     bp = BloomPass()
     bp.begin(64, 64)
     first_fbo = bp._targets.scene_fbo
@@ -83,7 +83,6 @@ def test_same_size_begin_reuses_targets(gl_context):
 
 def test_resize_reallocates_targets(gl_context):
     """begin() at a new size releases the old targets and allocates fresh ones."""
-    from OpenGLContext.passes.bloom import BloomPass
     bp = BloomPass()
     bp.begin(64, 64)
     old_tex = bp._targets.scene_tex
@@ -98,8 +97,6 @@ def test_resize_reallocates_targets(gl_context):
 
 def test_release_targets_swallows_delete_errors(gl_context, monkeypatch):
     """A GL failure while freeing any target must not escape _release_targets."""
-    from OpenGLContext.passes import bloom
-    from OpenGLContext.passes.bloom import BloomPass
     bp = BloomPass()
     bp.begin(32, 32)
 
@@ -118,18 +115,15 @@ class TestTiles:
     """Where each view's part of the glow is drawn and how far its samples reach."""
 
     def test_a_tile_of_the_window_is_the_same_tile_at_half_size(self):
-        from OpenGLContext.passes.bloom import scaled_rect
         assert scaled_rect((100, 0, 100, 100), (200, 100), (100, 50)) == (50, 0, 50, 50)
 
     def test_tiles_that_meet_still_meet_at_half_size(self):
-        from OpenGLContext.passes.bloom import scaled_rect
         left = scaled_rect((0, 0, 67, 101), (201, 101), (100, 50))
         right = scaled_rect((67, 0, 134, 101), (201, 101), (100, 50))
         assert left[0] + left[2] == right[0]
         assert left[2] + right[2] == 100
 
     def test_the_whole_target_is_sampled_edge_to_edge(self):
-        from OpenGLContext.passes.bloom import tile_uniforms
         region, bounds = tile_uniforms((0, 0, 100, 50), (100, 50))
         assert region == (0.0, 0.0, 1.0, 1.0)
         # The first and last texel centres, which is where GL_CLAMP_TO_EDGE
@@ -137,7 +131,6 @@ class TestTiles:
         assert bounds == (0.005, 0.01, 0.995, 0.99)
 
     def test_a_tile_is_sampled_only_inside_itself(self):
-        from OpenGLContext.passes.bloom import tile_uniforms
         region, bounds = tile_uniforms((50, 0, 50, 50), (100, 50))
         assert region == (0.5, 0.0, 0.5, 1.0)
         assert bounds[0] == 0.505 and bounds[2] == 0.995

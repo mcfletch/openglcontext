@@ -3,6 +3,7 @@
 import pytest
 
 from OpenGLContext.audio.areas import box_gain
+from OpenGLContext.scenegraph.zones import weight
 
 CENTRE = (0.0, 0.0, 0.0)
 HALF = (10.0, 5.0, 10.0)
@@ -16,7 +17,6 @@ class TestBoxGain:
         assert box_gain((10.0, 0.0, 0.0), CENTRE, HALF) == 1.0
 
     def test_it_fades_as_a_zones_blend_does(self):
-        from OpenGLContext.scenegraph.zones import weight
         assert box_gain((11.5, 0.0, 0.0), CENTRE, HALF, margin=3.0) == \
             pytest.approx(0.5)
         assert box_gain((10.6, 0.0, 0.0), CENTRE, HALF, margin=3.0) == \
@@ -32,7 +32,6 @@ class TestBoxGain:
             pytest.approx(0.5)
 
     def test_past_a_corner_the_distance_is_to_the_corner(self):
-        from OpenGLContext.scenegraph.zones import weight
         assert box_gain((0.0, 6.5, 12.0), CENTRE, HALF, margin=4.0) == \
             pytest.approx(float(weight(2.5, 4.0)))
 

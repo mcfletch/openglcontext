@@ -30,7 +30,11 @@ from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.appearance import Appearance
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.shape import Shape
-from OpenGLContext.scenegraph.transform import Transform
+from OpenGLContext.scenegraph.transform import Transform, MatrixTransform
+from OpenGLContext.scenegraph.instancedshape import InstancedShape
+from OpenGLContext.scenegraph.lod import LOD
+from OpenGLContext.scenegraph.material import Material
+from OpenGLContext.scenegraph.switch import Switch
 
 
 def _quad(material=None):
@@ -213,10 +217,6 @@ def test_repr_says_where_the_art_is(library, tmp_path):
 
 def test_brighten_lights_a_vrml_material_from_its_diffuse_colour():
     """VRML97's own Material names its colour differently, and is lit the same."""
-    from OpenGLContext.scenegraph.appearance import Appearance
-    from OpenGLContext.scenegraph.material import Material
-    from OpenGLContext.scenegraph.shape import Shape
-
     material = Material(diffuseColor=(0.8, 0.4, 0.2))
     shape = Shape(geometry=_quad(), appearance=Appearance(material=material))
     assert brighten(Transform(children=[shape]), 0.5) == 1
@@ -384,7 +384,6 @@ class TestMergingWhatIsDrawn:
         assert self._facing(attributes, indices).min() == pytest.approx(1.0, abs=1e-5)
 
     def test_a_level_of_detail_merges_its_finest_level(self) -> None:
-        from OpenGLContext.scenegraph.lod import LOD
         fine = Shape(geometry=_quad())
         coarse = Shape(geometry=PBRMesh(
             positions=np.array([(0, 0, 0), (1, 0, 0), (0, 1, 0)], "f"),
@@ -393,19 +392,16 @@ class TestMergingWhatIsDrawn:
         assert len(attributes["POSITION"]) == 4 and len(indices) == 6
 
     def test_a_switch_merges_the_child_it_shows(self) -> None:
-        from OpenGLContext.scenegraph.switch import Switch
         shown = Transform(translation=(5.0, 0.0, 0.0), children=[Shape(geometry=_quad())])
         attributes, _indices = merged_mesh(
             Switch(choice=[Shape(geometry=_quad()), shown], whichChoice=1))
         assert float(attributes["POSITION"][:, 0].min()) == pytest.approx(5.0)
 
     def test_a_switch_showing_nothing_merges_nothing(self) -> None:
-        from OpenGLContext.scenegraph.switch import Switch
         assert merged_mesh(Switch(choice=[Shape(geometry=_quad())],
                                   whichChoice=-1)) is None
 
     def test_an_instanced_shape_merges_each_placement(self) -> None:
-        from OpenGLContext.scenegraph.instancedshape import InstancedShape
         placements = np.tile(np.eye(4, dtype="f"), (2, 1, 1))
         placements[1, 3, :3] = (10.0, 0.0, 0.0)
         attributes, indices = merged_mesh(
@@ -414,8 +410,6 @@ class TestMergingWhatIsDrawn:
         assert float(attributes["POSITION"][:, 0].max()) == pytest.approx(11.0)
 
     def test_a_matrix_transform_places_what_is_measured(self) -> None:
-        from OpenGLContext.loaders.assets import bounds
-        from OpenGLContext.scenegraph.transform import MatrixTransform
         moved = np.eye(4)
         moved[3, :3] = (0.0, 7.0, 0.0)
         low, _high = bounds(MatrixTransform(localMatrix=moved,

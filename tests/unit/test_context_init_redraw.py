@@ -11,6 +11,8 @@ frame, and adding a HUD in ``OnInit`` is exactly what the documentation tells an
 application to do.  So the fix belongs here rather than in each caller: requests
 made during start-up are remembered and satisfied by the first real frame.
 """
+import threading
+
 import pytest
 
 from OpenGLContext import context as context_module
@@ -24,7 +26,6 @@ class _Context(context_module.Context):
     """
 
     def __init__(self, work):
-        import threading
         self.drawn = 0
         self.work = work
         self.currentDepth = 0

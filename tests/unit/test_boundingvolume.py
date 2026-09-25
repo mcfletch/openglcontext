@@ -7,6 +7,13 @@ available.
 """
 import numpy as np
 import pytest
+from OpenGL.GL import (
+    glMatrixMode,
+    glLoadIdentity,
+    glFrustum,
+    GL_MODELVIEW,
+    GL_PROJECTION,
+)
 
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext import frustum, utilities
@@ -104,14 +111,6 @@ def test_frustum_extraction_matches_glfrustum(gl_context):
     float32 depth precision and are excluded — that divergence was the point of
     the original interactive check-script, not a correctness bug.)
     """
-    from OpenGL.GL import (
-        glMatrixMode,
-        glLoadIdentity,
-        glFrustum,
-        GL_MODELVIEW,
-        GL_PROJECTION,
-    )
-
     for near in (0.2, 1.0, 3.0, 4.0, 5.0, 19.0):
         for far in (20.0, 100.0, 1000.0, 20000.0, 50000.0):
             glMatrixMode(GL_MODELVIEW)

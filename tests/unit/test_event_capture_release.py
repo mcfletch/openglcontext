@@ -12,6 +12,7 @@ import pytest
 
 from OpenGLContext.events import eventmanager
 from OpenGLContext.events.eventhandlermixin import EventHandlerMixin
+from OpenGLContext.interactivecontext import InteractiveContext
 
 
 class _Drag(eventmanager.EventManager):
@@ -29,7 +30,6 @@ class _Host(EventHandlerMixin):
 
 @pytest.fixture
 def host():
-    from OpenGLContext.interactivecontext import InteractiveContext
     _Host.EventManagerClasses = InteractiveContext.EventManagerClasses
     return _Host()
 

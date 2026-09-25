@@ -6,6 +6,8 @@ machine took to get there, so a TimeSensor lands at a different point in its
 cycle every run and the image differs.  Counting frames instead makes the
 captured frame a function of the scene.
 """
+import threading
+
 import pytest
 
 from OpenGLContext import context as context_module
@@ -70,7 +72,6 @@ class _Context(context_module.Context):
     """A context with the window and the GL taken out."""
 
     def __init__(self):
-        import threading
         self.currentDepth = 0
         self.redrawRequest = threading.Event()
         self.setupThreading()
