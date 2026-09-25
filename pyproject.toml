@@ -363,24 +363,6 @@ script = [
     "scripts/*.py",
     "docs/conf.py",
 ]
-# The modules that read a document's values, sizes and file names -- the
-# format loaders, the handlers a document's hooks name, and the readers of
-# baked props, cover, zones, content-pack registries, key bindings and
-# session journals -- which OGC101, OGC102 and OGC111 hold to DocumentValues,
-# a size check and the resolver.
-loader = [
-    "OpenGLContext/loaders/**",
-    "OpenGLContext/scenegraph/*hooks.py",
-    "OpenGLContext/scenegraph/props.py",
-    "OpenGLContext/scenegraph/tilesterrain.py",
-    "OpenGLContext/scenegraph/vegetation/clumps.py",
-    "OpenGLContext/scenegraph/vegetation/cover.py",
-    "OpenGLContext/contentpacks/catalog.py",
-    "OpenGLContext/contentpacks/pack.py",
-    "OpenGLContext/move/bindingstore.py",
-    "OpenGLContext/events/synthetic.py",
-    "OpenGLContext/telemetry/replay.py",
-]
 
 [tool.openglcontext-checks.per-file-ignores]
 # A tutorial: its text is what docs/tutorials/hud_demo.rst shows, and its
@@ -393,10 +375,6 @@ loader = [
 # which runs only on Windows under wxPython. Tutorials are not edited for
 # tooling.
 "tests/glprint.py" = ["OGC141"]
-
-# The modules that implement the sanctioned APIs do what the rules report:
-# the resolver decodes a data URI once check_size has passed it.
-"OpenGLContext/loaders/resolver.py" = ["OGC102"]
 
 # uv decides whether its cached metadata for a source tree is still current
 # from pyproject.toml, setup.py and setup.cfg alone. This project's version
