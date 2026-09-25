@@ -438,7 +438,10 @@ Give the recording something that moves:
   the one the author placed, so a world with two cameras already makes a
   shot. Use it for a scene too large to see at once. See :ref:`Levels of
   detail <lod-demo>`, where the walk from one end of a hall to a bust at the
-  other follows the two cameras in that world.
+  other follows the two cameras in that world. Without a recording it runs
+  live, over ``--video-seconds``, from the moment the scene is shown; a scene
+  opened afterwards walks its own viewpoints from its start, and the camera
+  stays at the last viewpoint when the walk ends.
 
 .. rst-class:: technical
 

@@ -981,3 +981,68 @@ class TestSwitchingAnimations:
         viewer = self._viewer(self._Scene())
         viewer.scene = None
         viewer.cycleAnimation(1)
+
+
+class TestTheFlyThrough:
+    """The camera walks the scene's viewpoints: the scene it is showing, from its start."""
+
+    def _viewer(self, clock):
+        inst = _inst()
+        inst.options = _config(no_cameras=False, fly_through=True, video_seconds=10.0)
+        inst.platform = _Platform()
+        inst.getViewPlatform = lambda: inst.platform
+        inst.source = 'walk.glb'
+        inst.physicsWalking = False
+        inst.cameraIndex = 0
+        inst.viewpoints = []
+        inst.recorder = None
+        inst._flyPath = None
+        inst._turntableStart = 0.0
+        inst._now = lambda: clock[0]
+        return inst
+
+    def _scene(self, *xs):
+        points = [Viewpoint(position=(x, 1.0, 5.0)) for x in xs]
+        return _fake_scene(viewpoints=points,
+                           cameras=[{'name': 'c%d' % i} for i in range(len(xs))])
+
+    def test_a_new_scene_walks_its_own_viewpoints(self):
+        clock = [0.0]
+        inst = self._viewer(clock)
+        inst.buildScenegraph(self._scene(0.0, 10.0))
+        assert inst.flyThroughPath()[0][0][0] == pytest.approx(0.0)
+        inst.buildScenegraph(self._scene(100.0, 200.0))
+        assert inst.flyThroughPath()[0][0][0] == pytest.approx(100.0)
+
+    def test_it_starts_from_the_scenes_first_viewpoint(self):
+        """A scene that arrives late still opens at the start of its path."""
+        clock = [50.0]
+        inst = self._viewer(clock)
+        inst.buildScenegraph(self._scene(0.0, 10.0))
+        assert inst.advanceFlyThrough()
+        assert inst.platform.position[0] == pytest.approx(0.0)
+
+    def test_it_stops_asking_for_frames_at_the_end(self):
+        clock = [0.0]
+        inst = self._viewer(clock)
+        inst.buildScenegraph(self._scene(0.0, 10.0))
+        clock[0] = 5.0
+        assert inst.advanceFlyThrough()
+        clock[0] = 20.0
+        assert inst.advanceFlyThrough(), 'the last pose is put in place'
+        assert inst.platform.position[0] == pytest.approx(10.0)
+        assert not inst.advanceFlyThrough()
+        assert not inst.advanceFlyThrough()
+
+    def test_the_turntable_does_not_restart_it(self):
+        clock = [0.0]
+        inst = self._viewer(clock)
+        inst.triggerRedraw = lambda n=1: None
+        inst.modelTransform = None
+        inst.buildScenegraph(self._scene(0.0, 10.0))
+        clock[0] = 5.0
+        inst.advanceFlyThrough()
+        halfway = inst.platform.position[0]
+        inst.toggleTurntable()
+        inst.advanceFlyThrough()
+        assert inst.platform.position[0] == pytest.approx(halfway)

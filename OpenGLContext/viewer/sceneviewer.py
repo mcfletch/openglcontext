@@ -167,6 +167,11 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
 
     #: The options this viewer started with, before any library entry's.
     _baseOptions: Optional[ViewerOptions] = None
+    #: The fly-through: the scene's viewpoints as poses, made on first use;
+    #: when the walk along them began; and whether its end has been drawn.
+    _flyPath: Any = None
+    _flyStart: float = 0.0
+    _flyDone: bool = False
     #: The shelf, built on first use.
     _library: Any = None
     #: The scene as the adapter loaded it, kept because it is what knows how to
@@ -202,7 +207,9 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         self._cameraNames: List[str] = []
         self._turntableStart = self._now()
         self._hooksStart = self._now()
-        self._flyPath: Any = None
+        self._flyPath = None
+        self._flyStart = self._now()
+        self._flyDone = False
         self._defaultModelRotation: Sequence[float] = (0, 1, 0, 0.0)
         self._animations: List[Any] = []
         self._animationNames: List[str] = []
@@ -458,6 +465,11 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         self.scene = scene
         self.radius = scene.radius or 1.0
         self._hooksStart = self._now()
+        # A new scene brings its own viewpoints, and its walk along them starts
+        # now rather than when the viewer did.
+        self._flyPath = None
+        self._flyStart = self._now()
+        self._flyDone = False
         # A dataset the viewer may not re-centre is a world -- its coordinates
         # are the world's and the camera flies about inside it -- so walking
         # drops in from wherever the camera got to.
@@ -1030,19 +1042,25 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         recorder = self.recorder
         if recorder is not None and recorder.limit:
             return min(1.0, recorder.frames_written / float(recorder.limit))
-        elapsed = self._now() - self._turntableStart
+        elapsed = self._now() - self._flyStart
         return min(1.0, elapsed / max(self.options.video_seconds, 1e-6))
 
     def advanceFlyThrough(self) -> bool:
-        """Put the camera where the path says.  Returns whether to redraw."""
+        """Put the camera where the path says.  Returns whether to redraw.
+
+        False once the end of the path has been drawn: the camera then stays
+        at the last viewpoint and nothing more is asked for.
+        """
         path = self.flyThroughPath()
-        if not path:
+        if not path or self._flyDone:
             return False
         from OpenGLContext.viewer import flythrough
-        where, facing = flythrough.pose_at(path, self.flyThroughFraction())
+        fraction = self.flyThroughFraction()
+        where, facing = flythrough.pose_at(path, fraction)
         platform = self.getViewPlatform()
         platform.setPosition(where)
         platform.quaternion = facing
+        self._flyDone = fraction >= 1.0
         return True
 
     # -- the caption ------------------------------------------------------
