@@ -793,7 +793,7 @@ calls one as asserting.
 | `check_still_frame` | `testing/stillframe.py` | `tests/unit/test_still_frames.py`: six scenes | instance buffers, group material arrays and bitmap text were uploaded every still frame |
 | `check_mirrored_render` | `testing/mirrored.py` | `tests/unit/test_mirrored_geometry.py`: every registered geometry, both renderers | Box, Sphere, Cone, Cylinder, Gear, Teapot, NurbsSurface and TrimmedSurface drew inside out under a negative scale; bitmap text in the core profile was drawn at a fixed spot rather than at the node |
 | `numpy_errors` ini setting | `testing/plugin.py` | openglcontext's suite runs with `raise` | `polygonsort` divided by `w = 0` for a triangle reaching the eye plane; its `project` raised for most point counts and scaled y by the width |
-| open audit (`open_audit` ini setting) | `testing/openaudit.py` | openglcontext's suite runs with `fail` | 22 readers of document- and application-named files open them directly; they are listed in `open_audit_sanctioned` and leave it as item 4 routes them through the resolver's checked paths |
+| open audit (`open_audit` ini setting) | `testing/openaudit.py` | openglcontext's suite runs with `fail` | 22 readers of document- and application-named files opened them directly; the glTF loader opens through the resolver since 954b0a7 (97c94fa), and the other 21 are listed in `open_audit_sanctioned` and leave it as item 4 routes them through the resolver's checked paths |
 
 `scene_context` and `drawn_image` (`testing/scenes.py`) are what the drawing
 conventions are built on. The open audit costs about 4 microseconds an open
