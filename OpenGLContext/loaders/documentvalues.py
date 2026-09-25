@@ -176,9 +176,9 @@ class DocumentValues:
         if raw is None:
             return tuple(default)
         if isinstance(raw, (list, tuple)) and len(raw) == length:
-            numbers = [_as_float(value) for value in raw]
-            if all(number is not None for number in numbers):
-                return tuple(numbers)  # type: ignore[arg-type]
+            numbers = [number for number in map(_as_float, raw) if number is not None]
+            if len(numbers) == length:
+                return tuple(numbers)
         self.warn('%s is %r, which is not %d finite numbers; it is taken as %r'
                   % (what, raw, length, tuple(default)))
         return tuple(default)

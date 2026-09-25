@@ -284,9 +284,9 @@ class Panel(RootWidget):
         if not order:
             self.focus(None)
             return False
-        try:
-            index = order.index(self._focused)     # type: ignore[arg-type]
-        except ValueError:
+        if self._focused in order:
+            index = order.index(self._focused)
+        else:
             index = -1 if step > 0 else 0
         self.focus(order[(index + step) % len(order)], visible=True)
         return True

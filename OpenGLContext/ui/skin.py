@@ -70,7 +70,8 @@ class NineSlice(node.Node):
 
     def borders(self) -> Tuple[int, int, int, int]:
         """Corner sizes as whole pixels, in the order left, top, right, bottom."""
-        return tuple(int(value) for value in self.border)      # type: ignore[return-value]
+        left, top, right, bottom = (int(value) for value in self.border)
+        return (left, top, right, bottom)
 
 
 class Skin(node.Node):

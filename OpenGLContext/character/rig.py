@@ -212,10 +212,11 @@ class Rig:
         """
         from OpenGLContext.character import attachment
         signature = attachment.generation()
-        if signature != self._exposed_signature:
+        exposed = self._exposed
+        if exposed is None or signature != self._exposed_signature:
+            exposed = self._exposed = self._find_exposed()
             self._exposed_signature = signature
-            self._exposed = self._find_exposed()
-        return self._exposed  # type: ignore[return-value]
+        return exposed
 
     def invalidate_exposed(self) -> None:
         """Say that what hangs off this rig's joints has changed."""

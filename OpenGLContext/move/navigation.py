@@ -85,9 +85,9 @@ class NavigationManager:
         choices = self._selectable()
         if not choices:
             return None
-        try:
-            index = choices.index(self._selected)   # type: ignore[arg-type]
-        except ValueError:
+        if self._selected in choices:
+            index = choices.index(self._selected)
+        else:
             index = -step
         chosen = choices[(index + step) % len(choices)]
         self._selected = chosen

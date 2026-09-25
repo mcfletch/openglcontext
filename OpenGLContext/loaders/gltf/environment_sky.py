@@ -279,7 +279,8 @@ def _clamped(color: Sequence[float]) -> Tuple[float, float, float]:
     while the extension permits values above 1.0 for an HDR sky.  Clamping is
     the honest loss; letting one through wraps to a wrong colour entirely.
     """
-    return tuple(min(1.0, max(0.0, float(c))) for c in color)  # type: ignore[return-value]
+    red, green, blue = (min(1.0, max(0.0, float(c))) for c in color)
+    return (red, green, blue)
 
 
 def _gradient_stops(horizon: Sequence[float], pole: Sequence[float], curve: float,

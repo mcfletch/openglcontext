@@ -114,6 +114,17 @@ def test_cycling_steps_through_the_user_selectable_modes():
     assert definition.movementMode is walk
 
 
+@pytest.mark.parametrize('step', [1, -1])
+def test_cycling_from_a_mode_taken_off_the_menu_starts_at_the_first(step):
+    walk, fly = modes.WalkMode(name='walk'), modes.FlyMode(name='fly')
+    run = modes.WalkMode(name='run')
+    manager, definition = _manager(walk, fly, run)
+    manager.select('run')
+    run.enabled = False
+    assert manager.cycle(step) is walk
+    assert definition.movementMode is walk
+
+
 def test_cycling_skips_world_imposed_modes():
     """Swimming is not something to cycle into; the water decides."""
     walk = modes.WalkMode(name='walk')

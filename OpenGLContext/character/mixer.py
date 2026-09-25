@@ -476,8 +476,8 @@ class AnimationMixer:
                 if not len(slots):
                     continue
                 values = sampled[index]
-                if layer.additive:
-                    values = _delta_rows(path, values, base[index])  # type: ignore[index]
+                if base is not None:
+                    values = _delta_rows(path, values, base[index])
                 if mask is not None:
                     keep = mask[slots]
                     slots, values = slots[keep], values[keep]

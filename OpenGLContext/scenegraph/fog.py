@@ -97,7 +97,8 @@ class Fog(basenodes.Fog):
         return (mode, 1.0 / visibility, self._color())
 
     def _color(self) -> Tuple[float, float, float]:
-        return tuple(float(value) for value in self.color[:3])   # type: ignore[return-value]
+        red, green, blue = (float(value) for value in self.color[:3])
+        return (red, green, blue)
 
 
 def _scale_of(matrix: Any) -> float:
