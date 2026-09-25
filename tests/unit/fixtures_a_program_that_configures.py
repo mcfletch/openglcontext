@@ -11,7 +11,7 @@ Not named ``test_*``, so pytest does not collect it; it is imported by name.
 
 import os
 
-os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
+os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')  # noqa: OGC161 configuring at import is what this stands in for
 
 #: What it settled on, so a test can tell the module was actually imported.
-WHAT_IT_ASKED_FOR = os.environ['OPENGLCONTEXT_RENDERER']
+WHAT_IT_ASKED_FOR = os.environ['OPENGLCONTEXT_RENDERER']  # noqa: OGC161 read back to show the import ran
