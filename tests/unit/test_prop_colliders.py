@@ -174,6 +174,14 @@ class TestAPropThatIsNotABlock:
         # Sunk far enough that the top still stands where the stone's does.
         assert float(world.position[0][1]) == pytest.approx(0.1, abs=0.01)
 
+    def test_a_dome_taller_than_it_is_wide_rests_on_the_ground(self) -> None:
+        world = _world()
+        PropColliders(world, [self._stone(radius=0.3, height=1.0)]
+                      ).update((0, 0, 0))
+        # The sphere cannot reach the measured height without leaving the
+        # ground, so it stands on the foot and its top is 2 * radius up.
+        assert float(world.position[0][1]) == pytest.approx(0.3, abs=0.01)
+
     def test_a_prop_that_says_nothing_is_still_a_block(self) -> None:
         world = _world()
         PropColliders(world, [Prop(kind='rock', position=(0.0, 0.0, 0.0),

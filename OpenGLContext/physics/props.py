@@ -94,19 +94,16 @@ class PropColliders:
     def _stand(self, prop: "Prop") -> int:
         """One prop as a static body, of the shape the prop says it is.
 
-        Not the mesh it is drawn as, either way. A triangle soup per rock costs
-        the broadphase and the narrow phase both, for a difference nobody
-        driving past at forty metres a second can see.
-
-        A ``box`` is what a boulder wants: what a car needs from one is that it
-        stops there. A ``dome`` is what a stone lying in the grass wants -- a
-        sphere as wide as the stone, sunk until its top stands where the
-        stone's does, so a wheel rides over it and a walker steps onto it. The
-        same stone as a block is a kerb across the hillside.
+        A static box or sphere, not the drawn mesh: a triangle mesh per rock
+        costs the broad and narrow phases. A ``box`` stops what hits it. A
+        ``dome`` is a sphere as wide as the stone, sunk so its top is at the
+        stone's height, so a wheel or walker goes over it; a stone taller than
+        it is wide has its sphere resting on the ground, top at twice the
+        radius.
         """
         if prop.shape == 'dome':
             shape = self.world.add_shape(model.Shape.sphere(prop.radius))
-            lift = np.array([0.0, prop.height - prop.radius, 0.0])
+            lift = np.array([0.0, min(prop.height - prop.radius, prop.radius), 0.0])
         else:
             shape = self.world.add_shape(model.Shape.box(
                 (prop.radius * 2.0, prop.height, prop.radius * 2.0)))

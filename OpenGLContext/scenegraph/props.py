@@ -119,6 +119,9 @@ class Prop:
     there is no way through. A ``dome`` is a thing you go *over* -- a stone
     lying in the grass, which is part of the ground rather than an obstacle in
     it, and which a block the size of it turns into a kerb across the hillside.
+    A dome's collider is a sphere of ``radius`` sunk until its top is at
+    ``height``; where ``height`` is more than twice ``radius`` the sphere rests
+    on the ground and stands ``2 * radius`` tall.
     """
 
     kind: str
