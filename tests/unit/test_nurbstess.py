@@ -184,9 +184,9 @@ class TestColours:
 class TestWeights:
     """The rational in NURBS: the ``weight`` field shapes the surface."""
 
-    _RING = [(1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1),
-             (1, -1), (1, 0)]
-    _U_KNOT = [0, 0, 0, .25, .25, .5, .5, .75, .75, 1, 1, 1]
+    _RING = ((1, 0), (1, 1), (0, 1), (-1, 1), (-1, 0), (-1, -1), (0, -1),
+             (1, -1), (1, 0))
+    _U_KNOT = (0, 0, 0, .25, .25, .5, .5, .75, .75, 1, 1, 1)
 
     def _cylinder(self, weighted):
         root = np.sqrt(2) / 2

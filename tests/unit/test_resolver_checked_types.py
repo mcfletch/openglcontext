@@ -42,7 +42,7 @@ def test_a_checked_type_is_not_made_directly(kind):
 
 def test_a_checked_value_pickles_as_the_string_it_is(tmp_path):
     found = contain(str(tmp_path), 'a.bin')
-    back = pickle.loads(pickle.dumps(found))
+    back = pickle.loads(pickle.dumps(found))  # noqa: S301 the bytes are the ones pickled on this line
     assert back == found
     assert type(back) is str
 

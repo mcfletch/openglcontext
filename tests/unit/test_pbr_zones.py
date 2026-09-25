@@ -11,6 +11,7 @@ import os
 import re
 import subprocess
 import sys
+from typing import ClassVar
 
 import numpy as np
 import pytest
@@ -155,7 +156,7 @@ class Box:
     its bounds change.
     """
 
-    _made: dict = {}
+    _made: ClassVar[dict[float, 'Box']] = {}
 
     def __new__(cls, half):
         found = cls._made.get(half)

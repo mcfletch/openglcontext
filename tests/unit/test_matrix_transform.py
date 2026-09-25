@@ -93,7 +93,7 @@ def test_loader_uses_matrix_transform_for_matrix_nodes():
     Rz180_col = np.diag([-1.0, -1.0, 1.0, 1.0])
 
     class FakeNode:
-        matrix = list(_gltf_flat(Rz180_col))
+        matrix = tuple(_gltf_flat(Rz180_col))
         translation = scale = rotation = None
 
     t = gltf.transforms._transform_for(FakeNode())
@@ -106,7 +106,7 @@ def test_loader_uses_matrix_transform_for_matrix_nodes():
 def test_loader_uses_trs_when_no_matrix():
     class FakeNode:
         matrix = None
-        translation = [1.0, 2.0, 3.0]
+        translation = (1.0, 2.0, 3.0)
         scale = None
         rotation = None
 

@@ -42,9 +42,9 @@ class TestExtTextureGating:
 
 def _has_network():
     try:
-        urllib.request.urlopen(gltf.SAMPLE_MODELS_BASE + '/README.md', timeout=6).close()
+        urllib.request.urlopen(gltf.SAMPLE_MODELS_BASE + '/README.md', timeout=6).close()  # noqa: S310 a fixed https URL, asking whether the sample models can be reached
         return True
-    except Exception:
+    except OSError:
         return False
 
 

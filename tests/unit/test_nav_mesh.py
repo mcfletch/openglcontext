@@ -270,8 +270,8 @@ class TestRoundingACorner:
     #: The taut route through :func:`zigzag`, corner by corner in ``(x, z)``:
     #: out of the left room round the end of the first wall, up the channel
     #: between the two, and out round the end of the second.
-    TAUT = [(2.0, 2.0), (4.0, 12.0), (6.0, 12.0),
-            (10.0, 4.0), (12.0, 4.0), (14.0, 14.0)]
+    TAUT = ((2.0, 2.0), (4.0, 12.0), (6.0, 12.0),
+            (10.0, 4.0), (12.0, 4.0), (14.0, 14.0))
 
     def test_the_channel_is_crossed_on_the_diagonal(self):
         """The hypotenuse, not the two sides of it.

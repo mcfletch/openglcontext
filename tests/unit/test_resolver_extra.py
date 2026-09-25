@@ -77,9 +77,8 @@ def test_a_cache_hit_survives_a_refused_touch(tmp_path, monkeypatch):
 
 def test_a_failed_rename_leaves_no_temporary(tmp_path, monkeypatch):
     class Body:
-        headers = {}
-
         def __init__(self):
+            self.headers = {}
             self.sent = False
 
         def read(self, n=-1):

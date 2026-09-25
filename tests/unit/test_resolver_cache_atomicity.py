@@ -77,7 +77,7 @@ def test_concurrent_fetch_never_reads_partial(fake_download):
             path = resolver.fetch_to_cache(url, cache_dir=cache_dir)
             with open(path, 'rb') as f:
                 results.append(f.read())
-        except Exception as err:                # pragma: no cover - failure path
+        except Exception as err:  # pragma: no cover  # noqa: BLE001 a worker thread's error, whatever it is, for the main thread to assert on
             errors.append(err)
 
     threads = [threading.Thread(target=worker) for _ in range(8)]

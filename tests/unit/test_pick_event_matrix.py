@@ -43,7 +43,9 @@ class _Event:
 
 class _Buffer:
     _initialized = True
-    id_map: dict = {}
+
+    def __init__(self):
+        self.id_map = {}
 
     def read_pixel(self, x, y):
         return 0, 0.5

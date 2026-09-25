@@ -187,7 +187,7 @@ class _FailingPlanner:
 class _Gathered:
     """A frame's walk with one mirror in it."""
 
-    paths = [object()]
+    paths = (object(),)
 
 
 def _failing_pass():
