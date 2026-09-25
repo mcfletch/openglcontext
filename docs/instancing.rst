@@ -95,8 +95,16 @@ Two shapes share a key, and therefore a draw, when they have the same:
   instance, so a different texture image starts a new group.
 
 - Pass properties - properties that decide how or in which pass a shape is
-  drawn (transparency, alpha mode, transmission) must match, because they are
-  shared state for the whole draw.
+  drawn (transparency, alpha mode, transmission, an octahedral impostor's
+  views) must match, because they are shared state for the whole draw.
+
+A mirror is never batched: each one reads a reflection of its own (see
+:doc:`Reflections <reflections>`).
+
+The PBR pass remembers each shape's key between frames. It works the key out
+again when the shape's geometry, appearance, material or texture is replaced,
+when a material field or texture channel is set, and when any shape becomes a
+mirror or stops being one, so an edit takes effect on the next frame.
 
 Explicit and opportunistic instances
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

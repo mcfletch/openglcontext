@@ -1057,12 +1057,18 @@ class PBRPass(flatcore.FlatPass):
 
         What a shape batches on is read from its geometry and its appearance,
         and they change far less often than a frame is drawn, so the answer is
-        kept against the identities (and the material's version) it was made
-        from and asked again only when one of them differs. A geometry that
-        computes its own content key from its fields is asked every time.
-        Whether content collapse is on is read once for the grouping.
+        kept against what it was made from and asked again only when one of
+        them differs: the identities of the geometry, appearance, material and
+        texture, the material's
+        :meth:`~OpenGLContext.scenegraph.pbrmaterial.PBRMaterial.batchingVersion`,
+        and :func:`~OpenGLContext.passes.reflection.mirror_generation`, which
+        moves when any shape may have become a mirror or stopped being one. A
+        geometry that computes its own content key from its fields is asked
+        every time. Whether content collapse is on is read once for the
+        grouping.
         """
         collapse = instance_collapse_is_enabled()
+        mirrors = reflection.mirror_generation()
         memo = self.__dict__.setdefault('_batchMemo', {})
         if len(memo) > 100000:
             memo.clear()
@@ -1071,9 +1077,11 @@ class PBRPass(flatcore.FlatPass):
             geometry = getattr(shape, 'geometry', None)
             appearance = getattr(shape, 'appearance', None)
             material = getattr(appearance, 'material', None)
+            version = getattr(material, 'batchingVersion', None)
             signature = (id(geometry), id(appearance), id(material),
-                         getattr(material, '_ubo_version', 0),
-                         id(getattr(appearance, 'texture', None)), collapse)
+                         version() if version is not None
+                         else getattr(material, '_ubo_version', 0),
+                         id(getattr(appearance, 'texture', None)), collapse, mirrors)
             held = memo.get(id(shape))
             if held is not None and held[0] == signature:
                 return held[1], held[2]

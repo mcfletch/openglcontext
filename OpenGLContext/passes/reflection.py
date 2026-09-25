@@ -146,7 +146,8 @@ def mirror_generation() -> int:
     """A count that moves whenever a field deciding which shapes are mirrors is set.
 
     Those are a shape's ``appearance`` and ``geometry``, an appearance's
-    ``material``, a material's ``reflector`` and a reflector's ``enabled``. A
+    ``material``, a material's ``reflector``, a reflector's ``enabled`` and a
+    mesh's ``waveStyle``, which makes it water. A
     pass that remembers which of the scene's shapes are mirrors keeps the
     answer while this and its set of paths stay as they were.
     """
@@ -162,10 +163,11 @@ def _watch_mirror_fields() -> None:
     from pydispatch import dispatcher
     from OpenGLContext.scenegraph.appearance import Appearance
     from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+    from OpenGLContext.scenegraph.pbrmesh import PBRMesh
     from OpenGLContext.scenegraph.shape import Shape
     for owner, name in ((Shape, 'appearance'), (Shape, 'geometry'),
                         (Appearance, 'material'), (PBRMaterial, 'reflector'),
-                        (PlanarReflector, 'enabled')):
+                        (PlanarReflector, 'enabled'), (PBRMesh, 'waveStyle')):
         dispatcher.connect(_mirrors_changed, signal=('set', getattr(owner, name)),
                            weak=False)
 

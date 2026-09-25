@@ -668,9 +668,11 @@ lighting with it, and the shadows slide off the walls.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``baseColor``, ``emissiveColor`` and ``transparency`` are ordinary material
-fields. Assigning any of them uploads the block again. To swap a map, assign a
-new dict to ``material.textures``. Do not modify the existing dict in place:
-that does not bump the version, and the old texture set stays in use.
+fields. Assigning any of them uploads the block again. To swap a map, set its
+channel, ``material.textures['baseColor'] = texture``, or assign a new dict to
+``material.textures``. The textures are held in a ``TextureChannels`` dict that
+counts its own edits, so a shape wearing the material is grouped for
+:doc:`instancing <instancing>` by the maps it has now.
 
 3. The vertices: a CPU pass and a buffer upload each frame
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -132,17 +132,21 @@ def _material_pass_signature(material: Any) -> tuple:
     """Properties that are pass-level uniforms, not per-instance UBO factors.
 
     ``alphaMode``, transmission and transparency drive shared uniforms / which
-    pass a shape draws in, so they cannot vary within one instanced draw -- two
+    pass a shape draws in, and an octahedral impostor's views are a uniform of
+    the draw, so none of them can vary within one instanced draw -- two
     materials must agree on them to batch. Null-safe: a material lacking these
     (a plain fake, or a VRML97 Material) yields a constant signature so such
     materials still group together.
     """
     if material is None:
-        return (None, False, False)
+        return (None, False, False, 0, True)
     am = getattr(material, 'alphaMode', None)
     transmission = float(getattr(material, 'transmission', 0.0) or 0.0) > 0.0
     transparency = float(getattr(material, 'transparency', 0.0) or 0.0) > 0.0
-    return (str(am) if am is not None else None, transmission, transparency)
+    views = int(getattr(material, 'octahedralViews', 0) or 0)
+    hemi = bool(getattr(material, 'octahedralHemi', True)) if views else True
+    return (str(am) if am is not None else None, transmission, transparency,
+            views, hemi)
 
 
 def geometry_texture_key(shape: Any) -> Optional[tuple]:

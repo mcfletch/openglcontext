@@ -7,7 +7,7 @@ and colour factors are VRML fields; texture maps are held as light-weight
 ``baseColor``, ``metallicRoughness``, ``normal``, ``occlusion``, ``emissive``)
 so PIL-backed images need not be squeezed into VRML field types.
 """
-from typing import Any
+from typing import Any, Dict, Tuple
 
 import numpy as np
 
@@ -65,6 +65,51 @@ class PBRTexture(object):
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min_f)
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER,
                         int(self.mag_filter) if self.mag_filter else GL_LINEAR)
+
+
+class TextureChannels(Dict[str, Any]):
+    """A material's texture maps by glTF channel name, counting its own edits.
+
+    ``version`` moves on every change made in place, so a cache of what a
+    material's textures were -- the batching key of a shape wearing it -- can
+    tell a set it has seen from one edited since.
+    """
+
+    version = 0
+
+    def _changed(self) -> None:
+        self.version += 1
+
+    def __setitem__(self, channel: str, texture: Any) -> None:
+        super().__setitem__(channel, texture)
+        self._changed()
+
+    def __delitem__(self, channel: str) -> None:
+        super().__delitem__(channel)
+        self._changed()
+
+    def update(self, *others: Any, **named: Any) -> None:
+        super().update(*others, **named)
+        self._changed()
+
+    def pop(self, channel: str, *default: Any) -> Any:
+        found = super().pop(channel, *default)
+        self._changed()
+        return found
+
+    def popitem(self) -> Tuple[str, Any]:
+        found = super().popitem()
+        self._changed()
+        return found
+
+    def setdefault(self, channel: str, default: Any = None) -> Any:
+        found = super().setdefault(channel, default)
+        self._changed()
+        return found
+
+    def clear(self) -> None:
+        super().clear()
+        self._changed()
 
 
 class PBRMaterial(node.Node):
@@ -161,21 +206,46 @@ class PBRMaterial(node.Node):
         'uv_transform', 'textures',
     })
 
+    #: The texture maps by glTF channel name; assigning a dict makes one.
+    textures: TextureChannels
+
+    #: Fields besides those that decide how a shape wearing the material is
+    #: batched: whether it is a mirror, and whether it is an impostor. Each
+    #: set moves :meth:`batchingVersion`.
+    _BATCH_FIELDS = frozenset({'reflector', 'octahedralViews', 'octahedralHemi'})
+
     def __init__(self, **named: Any) -> None:
         textures = named.pop('textures', None)
         uv_transform = named.pop('uv_transform', None)
         super(PBRMaterial, self).__init__(**named)
         # plain attributes (not VRML fields) keyed by glTF channel name
-        self.textures = dict(textures) if textures else {}
+        self.textures = TextureChannels(textures or {})
         # 3x3 row-major UV transform (KHR_texture_transform), or None for identity
         self.uv_transform = uv_transform
 
     def __setattr__(self, name: str, value: Any) -> None:
+        if name == 'textures' and not isinstance(value, TextureChannels):
+            value = TextureChannels(value or {})
         super(PBRMaterial, self).__setattr__(name, value)
         if name in self._UBO_FIELDS:
             object.__setattr__(
                 self, '_ubo_version',
                 int(self.__dict__.get('_ubo_version', 0)) + 1)
+        if name in self._BATCH_FIELDS:
+            object.__setattr__(
+                self, '_batch_version',
+                int(self.__dict__.get('_batch_version', 0)) + 1)
+
+    def batchingVersion(self) -> Tuple[int, int, int]:
+        """A value that changes whenever something deciding how this batches does.
+
+        The factor block's version (which covers the alpha mode, transmission
+        and transparency), the mirror and impostor fields, and edits made to
+        :attr:`textures` in place.
+        """
+        return (int(self.__dict__.get('_ubo_version', 0)),
+                int(self.__dict__.get('_batch_version', 0)),
+                self.textures.version)
 
     def texture(self, channel: str) -> Any:
         return self.textures.get(channel)

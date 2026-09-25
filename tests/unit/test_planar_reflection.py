@@ -371,3 +371,14 @@ def test_making_a_shape_a_mirror_moves_the_mirror_generation():
     shape.appearance = basenodes.Appearance()
     seen.append(reflection.mirror_generation())
     assert all(later > earlier for earlier, later in zip(seen, seen[1:]))
+
+
+def test_making_a_mesh_water_moves_the_mirror_generation():
+    """A mesh with a wave is water, and water is a mirror."""
+    import numpy as np
+    from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+    from OpenGLContext.scenegraph.water.surface import WaterStyle
+    mesh = PBRMesh(positions=np.zeros((3, 3), 'f'), indices=np.arange(3, dtype=np.uint32))
+    before = reflection.mirror_generation()
+    mesh.waveStyle = WaterStyle()
+    assert reflection.mirror_generation() > before
