@@ -24,6 +24,7 @@ test.
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from typing import Any, Callable, Sequence
 
@@ -175,8 +176,34 @@ def fetch_pack(pack: ContentPack, store: ContentStore,
         _report(progress, pack.approximate_bytes, pack.approximate_bytes)
         return existing
     log.info('fetching %s (%s)', pack.key, pack.human_size())
+    downloaded = _download(pack, cache_dir, progress, cancel)
     try:
-        downloaded = resolver.fetch_to_cache(
+        archive.check_digest(downloaded, pack.sha256)
+    except archive.DigestMismatch:
+        # A publisher replacing a release's assets keeps the URL and changes
+        # the bytes, and the download cache is keyed by URL: the copy here may
+        # be the build before this one, or a damaged file. Fetch it once more.
+        log.info('the cached copy of %s is not the one the registry names; '
+                 'fetching it again', pack.key)
+        _evict(downloaded)
+        downloaded = _download(pack, cache_dir, progress, cancel)
+        try:
+            archive.check_digest(downloaded, pack.sha256)
+        except archive.DigestMismatch:
+            _evict(downloaded)
+            raise
+    try:
+        return store.install(pack, downloaded, within, cancel=cancel)
+    except resolver.FetchCancelled as error:
+        raise Cancelled(str(error)) from error
+
+
+def _download(pack: ContentPack, cache_dir: str | None,
+              progress: resolver.Progress | None,
+              cancel: resolver.Cancel | None) -> str:
+    """The pack's archive in the download cache, fetched if it is not there."""
+    try:
+        return resolver.fetch_to_cache(
             pack.url, cache_dir=cache_dir,
             max_bytes=fetch_limit(pack.approximate_bytes),
             progress=progress, cancel=cancel,
@@ -189,11 +216,14 @@ def fetch_pack(pack: ContentPack, store: ContentStore,
                        'allows: %s' % (pack.key,
                                        fetch_limit(pack.approximate_bytes),
                                        pack.human_size(), error)) from error
-    archive.check_digest(downloaded, pack.sha256)
-    return archive.extract(downloaded, store.directory_for(pack, within),
-                           pack.archive,
-                           max_bytes=archive.unpacked_limit(
-                               pack.approximate_bytes))
+
+
+def _evict(path: str) -> None:
+    """Remove a cached download that is not the one wanted."""
+    try:
+        os.remove(path)
+    except FileNotFoundError:
+        pass
 
 
 def _report(progress: Any, done: int, total: int | None) -> None:

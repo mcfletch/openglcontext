@@ -34,8 +34,8 @@ import threading
 import time
 from typing import IO, Any, Iterator
 
-__all__ = ['copy_file', 'file_lock', 'replace_directory', 'staged_directory',
-           'staged_file', 'write_bytes', 'write_text']
+__all__ = ['copy_file', 'file_lock', 'remove_directory', 'replace_directory',
+           'staged_directory', 'staged_file', 'write_bytes', 'write_text']
 
 #: What a staging directory's name starts with after the target's own name.
 PARTIAL = '.partial-'
@@ -145,6 +145,23 @@ def replace_directory(source: str, path: str) -> str:
     if retired is not None:
         shutil.rmtree(retired, ignore_errors=True)
     return path
+
+
+def remove_directory(path: str) -> None:
+    """Remove the directory at ``path`` and everything under it.
+
+    It is renamed aside first, so ``path`` is gone in one step and a reader
+    never finds half of it; a failure to rename is raised. What was renamed
+    aside is then deleted, and anything of it a failure leaves behind is
+    cleared by the next :func:`staged_directory` of the same path.
+    """
+    if not os.path.lexists(path):
+        return
+    parent, name = os.path.split(os.path.abspath(path))
+    retired = tempfile.mkdtemp(prefix='.%s%s' % (name, RETIRED), dir=parent)
+    os.rmdir(retired)
+    os.replace(path, retired)
+    shutil.rmtree(retired, ignore_errors=True)
 
 
 def _remove_leftovers(parent: str, name: str) -> None:

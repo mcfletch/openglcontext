@@ -43,8 +43,10 @@ class ContentPack:
     #: where the directory existing and being non-empty is proof enough.
     marker: str
     #: The archive's exact digest, lower-case hex, where the publisher controls
-    #: the bytes. Empty for a pack hosted by somebody who may replace it under
-    #: the same URL, where only an approximate size is honest.
+    #: the bytes; empty where somebody else hosts it and only an approximate
+    #: size can be stated. A rebuilt pack states its new digest, and an
+    #: installed copy with the old one is then fetched again, under the same
+    #: URL or a new one.
     sha256: str = ''
     #: Whether the application cannot start without it. A base pack is fetched
     #: before anything else, carries a digest, and is not one of a ``family``.

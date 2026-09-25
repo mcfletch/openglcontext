@@ -24,14 +24,13 @@ from __future__ import annotations
 
 import logging
 import os
-import shutil
 import subprocess
 import urllib.parse
 from typing import Callable, Sequence
 
 from . import archive
 from .pack import ContentPack
-from .store import ContentStore
+from .store import CONTENT_OVERRIDE, ContentStore
 
 log = logging.getLogger(__name__)
 
@@ -68,26 +67,30 @@ def install(pack: ContentPack, store: ContentStore, archives: str,
     installed is left where it is, so a run of this over a store is not a way to
     lose whatever is in one.
 
-    ``replace`` is for the author of a world they are still building: it throws
-    away what is installed under this key and unpacks the build in its place,
-    so the next run of the game shows the world that was just made rather than
-    the one before it. Everything under that directory goes, including anything
-    put there by hand, so it is asked for rather than assumed.
+    ``replace`` is for the author of a world they are still building: it
+    installs the build over what is installed under this key, so the next run
+    of the game shows the world that was just made rather than the one before
+    it. A pack of its own replaces its whole directory, including anything put
+    there by hand; one installed ``within`` another replaces its own files and
+    leaves the rest of that pack alone. A pack found in a directory
+    ``OPENGLCONTEXT_CONTENT`` names is refused for ``replace``, since that copy
+    is read before the store and a rebuilt one in the store would never open.
     """
     existing = store.root_for(pack, within)
-    if existing is not None and replace:
-        shutil.rmtree(store.directory_for(pack, within), ignore_errors=True)
-        existing = None
     if existing is not None:
-        return existing
+        if not replace:
+            return existing
+        if existing != store.directory_for(pack, within):
+            raise IOError(
+                '%s is found in %s, a directory searched before the store, so '
+                'a rebuilt copy in the store would never be opened; remove it '
+                'there or unset %s' % (pack.key, existing, CONTENT_OVERRIDE))
     path = built(pack, archives)
     if not os.path.isfile(path):
         raise IOError('%s: no archive for %s in %s'
                       % (os.path.basename(path), pack.key, archives))
     archive.check_digest(path, pack.sha256)
-    return archive.extract(
-        path, store.directory_for(pack, within), pack.archive,
-        max_bytes=archive.unpacked_limit(pack.approximate_bytes))
+    return store.install(pack, path, within, replace=replace)
 
 
 def repository(url: str) -> str:

@@ -194,3 +194,15 @@ class TestALock:
                 raise Interrupted
         with atomicfiles.file_lock(lock):
             pass
+
+
+class TestRemovingADirectory:
+    def test_it_is_gone_whole(self, tmp_path):
+        where = tmp_path / 'pack'
+        (where / 'sub').mkdir(parents=True)
+        (where / 'sub' / 'a.txt').write_text('x')
+        atomicfiles.remove_directory(str(where))
+        assert os.listdir(tmp_path) == []
+
+    def test_one_that_is_not_there_is_nothing_to_do(self, tmp_path):
+        atomicfiles.remove_directory(str(tmp_path / 'absent'))

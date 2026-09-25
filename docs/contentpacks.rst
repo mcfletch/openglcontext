@@ -94,7 +94,8 @@ Registry fields
      - yes
      - A path inside the pack. If that path exists, the pack is unpacked. If the
        marker is empty, the pack counts as unpacked when its directory exists and
-       is not empty.
+       is not empty. In the store the install record must also match (see
+       :ref:`Installing <installing>`).
    * - ``sha256``
      - no
      - The archive's SHA-256 digest, 64 hex digits. Give one whenever you control
@@ -310,6 +311,43 @@ this machine returns without using the network, and its progress is reported
 as finished, so a progress bar fills either way. The digest is checked before
 anything is written into the store.
 
+.. _installing:
+
+Installing
+~~~~~~~~~~
+
+``store.install(pack, path, within=None)`` unpacks a downloaded archive, and
+``fetch_pack`` and ``publish.install`` both go through it. The archive is
+unpacked into a staging directory beside the pack's own
+(``.<directory>.partial-*``) and renamed into place once it is whole, so an
+extraction that is refused, cancelled or killed part way leaves no pack
+behind. A pack of its own replaces its whole directory, so nothing of a
+previous version survives an update. A pack unpacked ``within`` another
+removes the files its previous version installed there, then moves its new
+files in; the pack that needs it is left as it was.
+
+Each install writes a record of the pack's key, URL and digest under
+``.contentpacks/`` in the pack's directory. ``root_for`` compares the record
+with the registry's entry: the digest where the pack states one, otherwise the
+URL. A registry that names a rebuilt pack under a new digest therefore reads
+the installed copy as missing, and it is fetched again, whether or not its URL
+changed. A directory holding the marker and no record, such as a copy placed
+by hand, counts as installed.
+
+Two processes of one application installing the same pack take turns under a
+lock file beside the pack's directory (``.<directory>.lock``); the second
+finds the first one's pack and uses it. ``store.remove(pack, within=None)``
+removes a pack: its whole directory, or, for a pack ``within`` another, the
+files its record lists.
+
+.. rst-class:: technical
+
+The download cache is keyed by URL, and ``publish.push`` replaces a release's
+assets under the same URL. When a cached archive does not match the digest the
+registry names, ``fetch_pack`` removes it and downloads it once more before
+reporting ``DigestMismatch``, so a copy of the previous build or a damaged
+file in the cache does not block the update.
+
 .. rst-class:: technical
 
 A release host answers a download with a redirect to a CDN on another host. A
@@ -415,6 +453,10 @@ Where things are stored
      - ``<app data>/<application>/content/packs/<namespace>/<directory>/``
    * - Packs that another pack needs
      - Inside that pack's own directory
+   * - What was installed in a pack's directory
+     - ``<directory>/.contentpacks/<namespace>+<name>.json``
+   * - The lock two installs of one pack take turns on
+     - ``.../packs/<namespace>/.<directory>.lock``
    * - Added registries
      - ``<app data>/<application>/content/registries/``
    * - Their unpacked thumbnails
@@ -475,9 +517,12 @@ every application:
 ``--install`` does not replace a pack that is already in the store, so it
 never deletes installed content. While you are still authoring a world, the
 store then holds the build from before your change, and the game opens that
-build. ``--reinstall`` deletes the installed copy and unpacks the new build in
-its place. It removes everything under that pack's directory, including files
-added by hand, which is why it is a separate option.
+build. ``--reinstall`` installs the new build over the installed copy. For a
+pack of its own that replaces everything under the pack's directory, including
+files added by hand. For a pack installed inside another it replaces that
+pack's own files and leaves the rest. A pack found in a directory
+``OPENGLCONTEXT_CONTENT`` names is refused, since that copy is read before the
+store.
 
 Give a ``sha256`` whenever you control the archive's bytes. An uncompressed
 tarball cut off at a member boundary reads as a valid, shorter archive: the

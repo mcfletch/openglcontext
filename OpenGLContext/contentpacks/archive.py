@@ -229,10 +229,10 @@ def check_digest(path: str, expected: str) -> None:
     """Refuse ``path`` unless it hashes to ``expected``; an empty one asks
     nothing.
 
-    A pack hosted by somebody who may replace the file under the same URL states
-    no digest, and there is nothing to check. One we publish states its own, and
-    a truncated or substituted download is then a refusal here rather than a
-    rendering fault somewhere later.
+    A pack hosted by somebody else states no digest, and there is nothing to
+    check. One we publish states its own, and a truncated or substituted
+    download is then a refusal here rather than a rendering fault somewhere
+    later.
     """
     if not expected:
         return
