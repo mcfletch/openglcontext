@@ -43,19 +43,29 @@ class TestIBLController:
     def test_full_degrades_to_analytic_when_fps_sags(self):
         c = ibl.IBLController('full')
         c.effective_mode(120.0)
-        assert c.effective_mode(20.0) == 'analytic'
+        seen = [c.effective_mode(20.0) for _ in range(ibl.IBLController.DOWN_FRAMES)]
+        assert seen[-1] == 'analytic'
+
+    def test_a_few_slow_frames_leave_it_full(self):
+        """Programs compiling in the first frames, or a mirror's first view,
+        read as a few frames at a few fps: switching the lighting for a hundred
+        frames over them changes every glossy surface twice."""
+        c = ibl.IBLController('full')
+        seen = [c.effective_mode(fps) for fps in [4.0] * 5 + [120.0] * 60]
+        assert set(seen) == {'full'}
 
     def test_never_degrades_below_analytic(self):
         """Adaptation must never reach 'off' -- analytic is nearly free and keeps
         metals reflecting; only an explicit off selects off."""
         c = ibl.IBLController('full')
-        for _ in range(20):
+        for _ in range(ibl.IBLController.DOWN_FRAMES * 3):
             c.effective_mode(10.0)
         assert c._effective == 'analytic'
 
     def test_re_upgrades_after_sustained_headroom(self):
         c = ibl.IBLController('full')
-        c.effective_mode(20.0)                     # drop to analytic
+        for _ in range(ibl.IBLController.DOWN_FRAMES):
+            c.effective_mode(20.0)                 # drop to analytic
         assert c._effective == 'analytic'
         last = 'analytic'
         for _ in range(ibl.IBLController.UP_FRAMES + ibl.IBLController.COOLDOWN + 5):
