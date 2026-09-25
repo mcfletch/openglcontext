@@ -781,7 +781,13 @@ space to the view's clip space, the position of the view's camera, and how
 the view reads the shadow cascades. With ``geometry``, a geometry stage
 generated from the lit vertex shader emits each triangle once per view in the
 draw's mask. With ``vertex``, the draw is instanced once per view and the
-vertex stage routes each copy. The lit programs are compiled a second time
+vertex stage routes each copy. The geometry stage is written from the vertex
+shader's ``out`` declarations, each read as ``[layout(...)] [flat | smooth |
+noperspective | centroid] out type name;``; an array, several names in one
+declaration, an interface block, or an output inside a ``#if`` raises a
+``ValueError`` that names it, and the frame falls back to ``sequential``. A
+vertex shader of your own for the lit programs declares its outputs that way.
+The lit programs are compiled a second time
 for this, the first time a layout of several views is drawn; the single-view
 programs are unchanged. They are compiled for the next power of two of views,
 at least two, and serve any draw of up to that many, since the mask names only

@@ -13,7 +13,7 @@ import os
 import re
 import logging
 from functools import lru_cache
-from typing import Dict, FrozenSet, List, NamedTuple, Optional, Tuple
+from typing import Dict, FrozenSet, Iterator, List, NamedTuple, Optional, Tuple
 
 log = logging.getLogger(__name__)
 
@@ -190,24 +190,76 @@ def load_fragment_source(filename: str, max_shadow_lights: int,
 
 # -- the geometry stage of a shared multi-view draw ---------------------------
 
-#: A vertex output declared at the top level: ``flat out uint vObjectId;``.
+#: A vertex output declaration, as one statement with its spacing collapsed:
+#: an optional ``layout(...)``, any interpolation qualifiers, ``out``, a type
+#: and one name.
 _OUTPUT_RE = re.compile(
-    r'(?:^|(?<=;))[ \t]*(flat[ \t]+)?out[ \t]+(\w+)[ \t]+(\w+)[ \t]*;', re.MULTILINE)
+    r'^((?:layout ?\([^)]*\) ?)?(?:(?:flat|smooth|noperspective|centroid) )*)'
+    r'out (\w+) (\w+)$')
+
+#: A parenthesised group with none inside it: a parameter list or a layout.
+_PARENTHESISED_RE = re.compile(r'\([^()]*\)')
+
+#: Comments, which the scan of a shader's declarations skips.
+_COMMENT_RE = re.compile(r'//[^\n]*|/\*.*?\*/', re.DOTALL)
 
 #: The prefix a vertex output is renamed with when a geometry stage reads it.
 GEOMETRY_INPUT_PREFIX = 'gs_'
 
 
 class VertexOutput(NamedTuple):
-    """One value the vertex stage hands on: its GLSL type, name and qualifier."""
+    """One value the vertex stage hands on: its GLSL type, name and qualifiers.
+
+    ``qualifiers`` is what the declaration said before ``out`` -- a
+    ``layout(...)`` and any interpolation qualifiers -- which the geometry
+    stage repeats on the value it reads and on the one it writes.
+    """
 
     type: str
     name: str
     flat: bool
+    qualifiers: str = ''
 
 
 #: What the multi-view routing itself declares, which is never handed on.
 _ROUTING_OUTPUTS = frozenset(('vView',))
+
+
+def _file_scope_statements(source: str) -> Iterator[Tuple[str, bool]]:
+    """Each statement of ``source`` at file scope, and whether it is conditional.
+
+    Comments are skipped, and so is everything inside a function body, a
+    parameter list or a block. A statement is conditional where a ``#if``,
+    ``#ifdef`` or ``#ifndef`` encloses it. A block (an interface block, a
+    struct) is answered as its header, ending at the brace.
+    """
+    conditions = braces = parens = 0
+    current: List[str] = []
+    for line in _COMMENT_RE.sub(' ', source).split('\n'):
+        directive = line.strip()
+        if directive.startswith('#'):
+            word = directive[1:].split()[0] if directive[1:].split() else ''
+            if word in ('if', 'ifdef', 'ifndef'):
+                conditions += 1
+            elif word == 'endif':
+                conditions = max(0, conditions - 1)
+            continue
+        for character in line + '\n':
+            if braces == 0 and parens == 0 and character in ';{':
+                yield ''.join(current), conditions > 0
+                current = []
+            elif braces == 0:
+                current.append(character)
+            if character == '{':
+                braces += 1
+            elif character == '}':
+                braces = max(0, braces - 1)
+            elif character == '(':
+                parens += 1
+            elif character == ')':
+                parens = max(0, parens - 1)
+            if braces == 0 and character == '}':
+                current = []
 
 
 def vertex_outputs(source: str) -> List[VertexOutput]:
@@ -215,10 +267,33 @@ def vertex_outputs(source: str) -> List[VertexOutput]:
 
     ``vView``, which the vertex strategy's routing declares for itself, is not
     among them: a geometry stage writes its own.
+
+    A declaration is read as it is written: ``[layout(...)] [interpolation
+    qualifiers] out type name;``. Any other form -- an array, several names in
+    one declaration, an interface block -- or an output inside a preprocessor
+    conditional raises ``ValueError`` naming it, since the geometry stage made
+    from this would declare an input the vertex stage does not write.
     """
-    return [VertexOutput(kind, name, bool(flat))
-            for flat, kind, name in _OUTPUT_RE.findall(source)
-            if name not in _ROUTING_OUTPUTS]
+    found = []
+    for statement, conditional in _file_scope_statements(source):
+        # A function's ``out`` parameters are inside its parentheses.
+        if 'out' not in _PARENTHESISED_RE.sub(' ', statement).split():
+            continue
+        declaration = ' '.join(statement.split()).replace('( ', '(').replace(' )', ')')
+        match = _OUTPUT_RE.match(declaration)
+        if match is None:
+            raise ValueError('a shared multi-view draw reads vertex outputs declared '
+                             'as "[qualifiers] out type name;", not %r' % (declaration,))
+        qualifiers, kind, name = match.groups()
+        if name in _ROUTING_OUTPUTS:
+            continue
+        if conditional:
+            raise ValueError('a shared multi-view draw reads vertex outputs declared '
+                             'unconditionally; %r is inside a preprocessor '
+                             'conditional' % (declaration,))
+        qualifiers = qualifiers.strip()
+        found.append(VertexOutput(kind, name, 'flat' in qualifiers.split(), qualifiers))
+    return found
 
 
 def vertex_routing_source(vertex_source: str, views: int, extension: str) -> str:
@@ -291,10 +366,10 @@ def geometry_stage_source(vertex_source: str, views: int,
         'uniform uint viewMask;',
     ]
     for output in outputs:
-        flat = 'flat ' if output.flat else ''
+        qualifiers = output.qualifiers + ' ' if output.qualifiers else ''
         lines.append('%sin %s %s%s[];' % (
-            flat, output.type, GEOMETRY_INPUT_PREFIX, output.name))
-        lines.append('%sout %s %s;' % (flat, output.type, output.name))
+            qualifiers, output.type, GEOMETRY_INPUT_PREFIX, output.name))
+        lines.append('%sout %s %s;' % (qualifiers, output.type, output.name))
     lines += [
         'flat out int vView;',
         'void main() {',

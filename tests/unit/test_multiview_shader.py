@@ -35,6 +35,48 @@ class TestWhatTheVertexStageHandsOn:
         assert set(found) == {'vUV', 'vEyePos', 'vKind', 'vH'}
         assert found['vKind'].flat and found['vEyePos'].type == 'vec3'
 
+    def test_an_interpolation_qualifier_is_carried_through(self):
+        source = ('#version 330 core\n'
+                  'noperspective out vec2 vScreen;\n'
+                  'smooth centroid out vec3 vPosition;\n'
+                  'layout(location = 5) out vec4 vTint;\n'
+                  'void main() { vec3 x; }\n')
+        found = {v.name: v for v in shadersource.vertex_outputs(source)}
+        assert set(found) == {'vScreen', 'vPosition', 'vTint'}
+        assert found['vScreen'].qualifiers == 'noperspective'
+        assert found['vPosition'].qualifiers == 'smooth centroid'
+        assert found['vTint'].qualifiers == 'layout(location = 5)'
+        stage = shadersource.geometry_stage_source(source, 2, (4, 6))
+        assert 'noperspective in vec2 gs_vScreen[];' in stage
+        assert 'noperspective out vec2 vScreen;' in stage
+
+    def test_a_function_parameter_is_not_an_output(self):
+        source = ('#version 330 core\nout vec3 vPosition;\n'
+                  'void split(in vec3 a, out vec3 b) { b = a; }\n'
+                  'float depth(inout vec3 p);\n')
+        assert [v.name for v in shadersource.vertex_outputs(source)] == ['vPosition']
+
+    @pytest.mark.parametrize('declaration, named', [
+        ('out vec3 vA[2];', 'vA'),
+        ('out vec3 vA, vB;', 'vA'),
+        ('out Block { vec3 vA; } block;', 'Block'),
+    ])
+    def test_a_form_the_stage_cannot_copy_is_named(self, declaration, named):
+        source = '#version 330 core\nout vec3 vPosition;\n%s\n' % declaration
+        with pytest.raises(ValueError, match=named):
+            shadersource.vertex_outputs(source)
+
+    def test_an_output_under_a_condition_is_named(self):
+        source = ('#version 330 core\nout vec3 vPosition;\n'
+                  '#ifdef FANCY\nout vec3 vFancy;\n#endif\n')
+        with pytest.raises(ValueError, match='vFancy'):
+            shadersource.vertex_outputs(source)
+
+    def test_a_commented_out_output_is_not_one(self):
+        source = ('#version 330 core\nout vec3 vPosition;\n'
+                  '// out vec3 vOld;\n/* out vec3 vOlder; */\n')
+        assert [v.name for v in shadersource.vertex_outputs(source)] == ['vPosition']
+
     def test_each_output_is_renamed_for_the_geometry_stage_to_read(self):
         defines = shadersource.geometry_input_defines(LIT_VERTEX)
         assert '#define vNormal gs_vNormal' in defines
