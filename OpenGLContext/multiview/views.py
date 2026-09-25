@@ -412,6 +412,16 @@ class ViewLayout:
                 return view
         return None
 
+    def release_all(self) -> None:
+        """Let go of the pointer: no button is held and no view has it.
+
+        For a release that will not arrive -- the window lost focus mid-drag,
+        or another arrangement was put up -- so the next event goes to the
+        view it is over.
+        """
+        self._captured = None
+        self._held.clear()
+
     def view_of(self, event: Any) -> Optional[View]:
         """The view ``event`` belongs to, routed once and recorded as ``event.view``.
 
@@ -435,9 +445,10 @@ class ViewLayout:
 
         A press goes to the view under it and makes that view active, and every
         event after it goes there too until the last held button is released.
-        Wheel notches are presses of a button nobody holds, so they go to the
-        view under the pointer and capture nothing. An event with no position,
-        such as a key, goes to the active view.
+        A press of a button already held means its release never arrived, and
+        starts a new capture. Wheel notches are presses of a button nobody
+        holds, so they go to the view under the pointer and capture nothing. An
+        event with no position, such as a key, goes to the active view.
         """
         point = getattr(event, 'getPickPoint', None)
         point = point() if point is not None else None
@@ -450,6 +461,8 @@ class ViewLayout:
         if button in WHEEL_BUTTONS:
             return self._captured if self._captured is not None else under
         if getattr(event, 'state', 0):
+            if button in self._held:
+                self.release_all()
             if self._captured is None:
                 self._captured = under
                 if under is not None:

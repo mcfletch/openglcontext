@@ -136,6 +136,9 @@ class ViewSet:
         if name not in self._layouts:
             raise ValueError('there is no %r arrangement; the ones there are: %s'
                              % (name, ', '.join(self._layouts)))
+        # A drag in the arrangement going away ends with it: its release would
+        # reach the new layout, and the view it was moving may not be shown.
+        self.release_all()
         self.mode = name
         layout = self._layouts[name]
         layout.arrange(*self.window)
@@ -143,6 +146,11 @@ class ViewSet:
         self.gestures.views = [view for view in layout.views
                                if any(view is mine for mine in self.driven)]
         return layout
+
+    def release_all(self) -> None:
+        """Let go of the pointer: end any drag, and free the layout's capture."""
+        self.gestures.cancel()
+        self.layout.release_all()
 
     def view(self, name: str) -> Optional[View]:
         """The view called ``name``, or None."""

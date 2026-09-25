@@ -250,3 +250,19 @@ class TestTheScenesCameras:
     def test_a_window_with_no_scene_offers_none(self):
         window = _window(arrangement='quad')
         assert window.viewChrome.sceneCameras() == []
+
+
+class TestLosingFocusMidDrag:
+    def test_the_drag_ends_and_the_pointer_is_free(self):
+        """No release arrives for a button held as the window lost focus."""
+        window = _window(arrangement='quad')
+        window.emitKey = lambda *args: None
+        front = window.views.named('front')
+        x, y, width, height = front.rect
+        window.ProcessEvent(_Event(x + width // 2, y + height // 2))
+        assert window.views.gestures.dragging
+        window.clearHeldKeys()
+        assert not window.views.gestures.dragging
+        top = window.views.named('top')
+        tx, ty, _w, _h = top.rect
+        assert window.views.layout.route(_Event(tx + 1, ty + 1, kind='mousemove')) is top

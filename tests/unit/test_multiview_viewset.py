@@ -199,3 +199,23 @@ class TestThePointer:
         assert views.view_for(_Event(*under)) is views.view('angled')
         views.show('plan')
         assert views.view_for(_Event(*under)) is views.view('plan')
+
+
+
+class TestSwitchingArrangementMidDrag:
+    def test_a_drag_does_not_carry_over_to_another_arrangement(self):
+        """The v key during a drag: the hidden view stops panning."""
+        plan, front, left, angled = _views()
+        views = ViewSet([plan, front, left, angled], mode='quad')
+        views.arrange(800, 600)
+        x, y, width, height = front.rect
+        assert views.gestures.press(front, x + width / 2, y + height / 2, 2)
+        views.layout.route(_Event(x + width / 2, y + height / 2, button=2))
+        quad = views.layout
+        views.show('split')
+        assert not views.gestures.dragging
+        centre = front.camera.view.centre
+        assert not views.gestures.drag(front, x, y)
+        assert front.camera.view.centre == centre
+        # The arrangement put away holds the pointer for nothing either.
+        assert quad.route(_Event(1, 1, kind='mousemove')) is not front

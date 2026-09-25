@@ -97,6 +97,11 @@ class HeldKeyMixin(object):
         held = self.__dict__.pop('_heldKeysMap', None) or {}
         for key, info in held.items():
             self.emitKey(key, 0, info[0])
+        # A mouse button held as focus went has no release coming either, so
+        # the view a drag began in lets go of the pointer.
+        layout = getattr(self, 'viewLayout', None)
+        if layout is not None:
+            layout.release_all()
 
     def _heldMap(self) -> Dict[Any, List[Any]]:
         held = self.__dict__.get('_heldKeysMap')

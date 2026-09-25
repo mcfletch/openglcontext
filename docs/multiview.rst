@@ -198,7 +198,10 @@ The context assigns each event to a view and records that view as
 - A pointer event belongs to the view under the pointer.
 - A button press makes its view the *active* view. Every pointer event after
   it belongs to that view until the last held button is released, so a drag
-  that leaves its view still goes to it.
+  that leaves its view still goes to it. A release that never arrives does
+  not keep the pointer: the capture ends when the window loses focus, when
+  another arrangement is shown, and when a button that is already held is
+  pressed again. ``layout.release_all()`` ends it from code.
 - A wheel notch belongs to the view under the pointer, and does not change
   the active view.
 - A key belongs to the active view.

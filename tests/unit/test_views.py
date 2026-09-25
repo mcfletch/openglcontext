@@ -272,6 +272,31 @@ class TestPointer:
             layout.activate(View())
 
 
+class TestACaptureThatLostItsRelease:
+    """A release that never arrives -- focus lost mid-drag -- must not keep the pointer."""
+
+    def layout(self):
+        left, right = View(name='left'), View(name='right')
+        layout = ViewLayout.split(left, right)
+        layout.arrange(200, 100)
+        return layout, left, right
+
+    def test_pressing_the_held_button_again_starts_a_new_capture(self):
+        layout, _left, right = self.layout()
+        layout.route(press(50, 50, button=2))
+        assert layout.route(press(150, 50, button=2)) is right
+        assert layout.active is right
+        layout.route(press(150, 50, button=2, state=0))
+        assert layout.route(move(60, 50)).name == 'left'
+
+    def test_letting_go_of_everything_frees_the_pointer(self):
+        layout, left, right = self.layout()
+        layout.route(press(50, 50, button=2))
+        layout.release_all()
+        assert layout.route(move(150, 50)) is right
+        assert layout.route(press(150, 50, button=0)) is right
+
+
 class TestStyle:
     def test_a_view_draws_the_scene_background_by_default(self):
         assert View().style == ViewStyle()
@@ -324,3 +349,20 @@ class TestWhetherTheViewsCoverTheWindow:
     def test_a_window_with_no_pixels_is_covered_by_anything(self):
         from OpenGLContext.multiview.views import covers
         assert covers([], 0, 0)
+
+
+class TestLosingFocus:
+    def test_a_context_losing_focus_frees_its_layouts_pointer(self):
+        from OpenGLContext.events.eventhandlermixin import HeldKeyMixin
+
+        class Window(HeldKeyMixin):
+            def emitKey(self, key, state, modifiers):
+                pass
+
+        left, right = View(name='left'), View(name='right')
+        window = Window()
+        window.viewLayout = ViewLayout.split(left, right)
+        window.viewLayout.arrange(200, 100)
+        window.viewLayout.route(press(50, 50, button=2))
+        window.clearHeldKeys()
+        assert window.viewLayout.route(move(150, 50)) is right

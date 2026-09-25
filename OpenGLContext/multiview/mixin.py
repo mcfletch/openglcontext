@@ -214,6 +214,14 @@ class MultiViewMixin(_Host):
             return True
         return bool(super().hasMouseMoveHandlers())
 
+    def clearHeldKeys(self) -> None:
+        """Let go of what is held as the window loses focus: a view's drag, and the keys."""
+        if self.views is not None:
+            self.views.release_all()
+        clear = getattr(super(), 'clearHeldKeys', None)
+        if clear is not None:
+            clear()
+
     def ViewPort(self, width: int, height: int) -> None:
         """The window changed size: each view is told the size of its tile."""
         super().ViewPort(width, height)

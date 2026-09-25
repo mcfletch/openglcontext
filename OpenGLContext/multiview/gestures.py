@@ -64,6 +64,14 @@ class ViewGestures:
         """Whether a gesture is under way: a button went down and has not come up."""
         return self._held is not None
 
+    def cancel(self) -> None:
+        """Drop the gesture under way, for a release that will not arrive."""
+        if self._held is not None:
+            navigation = navigation_for(self._held)
+            if navigation is not None:
+                navigation.release()
+        self._held = None
+
     def drives(self, view: Optional[View]) -> bool:
         """Whether this view is one it moves the camera of."""
         if view is None or view.camera is None:
