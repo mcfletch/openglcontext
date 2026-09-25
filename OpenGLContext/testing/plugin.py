@@ -190,6 +190,10 @@ def pytest_configure(config: Any) -> None:
         'and put back afterwards, and it is skipped where this machine cannot '
         'give that kind. A test with no marker takes whatever the run settled '
         'on -- see OpenGLContext.testing.gl_env.')
+    config.addinivalue_line(
+        'markers',
+        'serial: measures against the clock, so it needs the machine to '
+        'itself; run these alone with -m serial after a -m "not serial" pass')
     # Before any fixture runs, because what it settles is what happens when the
     # first window closes.  Only where this run makes GLFW windows: a run on an
     # offscreen backend frees nothing through GLFW, and asking would spend a
@@ -344,4 +348,23 @@ def gl_context_compat(gl_window: Callable[..., Any]) -> Any:
 def check_memo_inputs() -> Callable[..., None]:
     """:func:`OpenGLContext.testing.memo.check_memo_inputs`."""
     from OpenGLContext.testing.memo import check_memo_inputs as check
+    return check
+
+
+@pytest.fixture
+def check_scaling(request: Any) -> Callable[..., Any]:
+    """:func:`OpenGLContext.testing.scaling.check_scaling`, for this test.
+
+    A test that measures time must carry the ``serial`` marker: a clock read
+    while the rest of the suite runs beside it measures the machine.
+    """
+    from OpenGLContext.testing import scaling
+
+    def check(*args: Any, **named: Any) -> scaling.Scaling:
+        if (named.get('measure', 'time') == 'time'
+                and request.node.get_closest_marker('serial') is None):
+            pytest.fail('%s measures time and has no serial marker; mark it '
+                        '@pytest.mark.serial, or measure a count'
+                        % (request.node.nodeid,))
+        return scaling.check_scaling(*args, **named)
     return check

@@ -148,12 +148,16 @@ objects in the same room uploads once. What moves an object's answer on:
   and go.
 
 The objects that did move are classified together
-(``ZoneTable.classify_many``). The boxes are taken ``chunk`` (512) at a time,
-and each chunk is carried only into the frames of the zones whose world reach
-overlaps one of its boxes, so the memory a call takes is bounded by the chunk
-and the zones near it. The table also keeps each zone's reach in an
-``omi_physics`` dynamic AABB tree, the physics engine's broad phase, which
-``sphere_slack`` queries for the zones near a set of spheres.
+(``ZoneTable.classify_many``). The boxes are put in the order of a Z-order
+curve through space (``spatial_order``), so neighbouring boxes are
+neighbours in the order, and taken ``chunk`` (512) at a time. The table keeps
+each zone's reach in an ``omi_physics`` dynamic AABB tree, the physics
+engine's broad phase: a chunk is tested only against the zones the tree finds
+near it, and carried only into the frames of the zones whose world reach
+overlaps one of its boxes. The cost of a call grows with the objects and the
+zones near each, not with the objects times every zone, and its memory is
+bounded by the chunk and the zones near it. ``sphere_slack`` queries the same
+tree for the zones near a set of spheres.
 
 An instanced group is kept under the group's own key, the same whichever of
 its members are drawn, with the member matrices and bounds its box was made

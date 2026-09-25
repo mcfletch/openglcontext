@@ -39,6 +39,7 @@ log = logging.getLogger(__name__)
 
 __all__ = [
     'MAX_ZONE_LAYERS', 'SCENE_PROBE', 'NO_ENVIRONMENT', 'ZonePack', 'ZoneTable',
+    'spatial_order',
     'ObjectBoxes', 'world_reach',
     'Reach', 'reach', 'classified', 'stacked', 'chosen', 'probe_layers', 'pack_reach',
     'environment_layers', 'lights_off', 'light_decision', 'light_mask',
@@ -124,6 +125,36 @@ def _world_boxes(to_local: np.ndarray, reach: np.ndarray) -> Tuple[np.ndarray, n
     return middle - spread, middle + spread
 
 
+#: How finely :func:`spatial_order` divides the boxes' extent, per axis.
+_ORDER_BITS = 10
+
+
+def spatial_order(minimums: np.ndarray, maximums: np.ndarray) -> np.ndarray:
+    """The indices of ``(M, 3)`` boxes in the order of a Z-order curve through them.
+
+    Boxes next to one another in this order are near one another in space,
+    so a run of them covers a small region. Each centre is placed on a grid
+    of cubes, :data:`_ORDER_BITS` bits an axis across the boxes' longest
+    extent, and the bits of its three cells are interleaved; ties keep their
+    given order. The cells are cubes so that boxes along a road are ordered
+    along it.
+    """
+    centres = (np.asarray(minimums, 'd') + np.asarray(maximums, 'd')) * 0.5
+    if len(centres) < 2:
+        return np.arange(len(centres))
+    low = centres.min(axis=0)
+    span = max(float((centres.max(axis=0) - low).max()), 1e-12)
+    top = (1 << _ORDER_BITS) - 1
+    cells = np.minimum((centres - low) / span * top, top).astype(np.uint64)
+    code = np.zeros(len(centres), dtype=np.uint64)
+    for bit in range(_ORDER_BITS):
+        for axis in range(3):
+            code |= ((cells[:, axis] >> np.uint64(bit)) & np.uint64(1)) << np.uint64(
+                3 * bit + axis)
+    order: np.ndarray = np.argsort(code, kind='stable')
+    return order
+
+
 class ZoneTable:
     """A frame's zones stacked for testing against many of them at once.
 
@@ -197,31 +228,43 @@ class ZoneTable:
                       ) -> List[List[Tuple[PlacedZone, bool]]]:
         """:meth:`classify` for many boxes at once: ``(M, 3)`` corners each.
 
-        The boxes are taken :attr:`chunk` at a time, and each chunk is
-        carried into the frames of only the zones whose world reach overlaps
-        one of its boxes, so what one call holds is bounded by the chunk and
-        the zones near it rather than by every box against every zone.
+        The boxes are taken :attr:`chunk` at a time in the order of a curve
+        through space (:func:`spatial_order`), so the boxes of one chunk lie
+        near one another. Each chunk is tested against only the zones the
+        tree finds near all of it, and carried into the frames of only the
+        zones one of its boxes overlaps: what a call costs grows with the
+        boxes and the zones near each, not with the boxes times every zone,
+        and what one chunk holds is bounded by the chunk and the zones near
+        it.
         """
         low_in = np.asarray(minimums, dtype='d').reshape(-1, 3)
         high_in = np.asarray(maximums, dtype='d').reshape(-1, 3)
         if not self.placed:
             return [[] for _ in range(len(low_in))]
-        found: List[List[Tuple[PlacedZone, bool]]] = []
+        found: List[List[Tuple[PlacedZone, bool]]] = [[] for _ in range(len(low_in))]
+        order = spatial_order(low_in, high_in)
         for start in range(0, len(low_in), self.chunk):
-            found.extend(self._classify_chunk(low_in[start:start + self.chunk],
-                                              high_in[start:start + self.chunk]))
+            rows = order[start:start + self.chunk]
+            for row, answer in zip(rows.tolist(), self._classify_chunk(
+                    low_in[rows], high_in[rows]), strict=True):
+                found[row] = answer
         return found
 
     def _classify_chunk(self, low_in: np.ndarray, high_in: np.ndarray
                         ) -> List[List[Tuple[PlacedZone, bool]]]:
         count = len(low_in)
-        # Which world reach each box overlaps, as (M, Z): what is carried
-        # through is only the zones some box of the chunk is near.
-        overlaps = (np.all(low_in[:, None, :] <= self.world_high[None], axis=2)
-                    & np.all(high_in[:, None, :] >= self.world_low[None], axis=2))
-        which = np.flatnonzero(overlaps.any(axis=0))
+        nearby = self.near(low_in.min(axis=0), high_in.max(axis=0))
+        if not len(nearby):
+            return [[] for _ in range(count)]
+        # Which world reach of the zones near the chunk each box overlaps, as
+        # (M, N): what is carried through is only the zones some box is near.
+        overlaps = (np.all(low_in[:, None, :] <= self.world_high[nearby][None], axis=2)
+                    & np.all(high_in[:, None, :] >= self.world_low[nearby][None], axis=2))
+        touched = overlaps.any(axis=0)
+        which = nearby[touched]
         if not len(which):
             return [[] for _ in range(count)]
+        overlaps = overlaps[:, touched]
         corners = np.where(zones._CORNER_ENDS[None, :, :], high_in[:, None, :],
                            low_in[:, None, :])                         # (M, 8, 3)
         local = self._local_to(which, corners.reshape(-1, 3))          # (W, M*8, 3)
@@ -229,7 +272,7 @@ class ZoneTable:
         local = local.reshape(len(which), count, 8, 3).transpose(2, 1, 0, 3)
         low, high = local.min(axis=0), local.max(axis=0)               # (M, W, 3)
         reach = self.reach[which][None]
-        near = (overlaps[:, which]
+        near = (overlaps
                 & ~(np.any(low > reach, axis=2) | np.any(high < -reach, axis=2)))
         half = self.half[which][None]
         inside = np.all(low >= -half, axis=2) & np.all(high <= half, axis=2)
