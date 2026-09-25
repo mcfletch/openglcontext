@@ -139,7 +139,7 @@ def test_inflight_map_is_emptied(fake_download):
 def test_no_temp_files_left_behind(fake_download):
     payload, cache_dir, _ = fake_download
     resolver.fetch_to_cache('https://example.com/a.bin', cache_dir=cache_dir)
-    leftovers = [n for n in os.listdir(cache_dir) if n.startswith('.dl-')]
+    leftovers = [n for n in os.listdir(cache_dir) if n.startswith('.')]
     assert leftovers == [], "download temp files not cleaned: %s" % leftovers
 
 

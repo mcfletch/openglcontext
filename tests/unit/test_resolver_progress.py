@@ -201,3 +201,38 @@ class TestCancelling:
             resolver.fetch_to_cache('https://example.com/o.bin',
                                     cache_dir=str(tmp_path), cancel=lambda: True)
         assert made['response'].closed
+
+
+class TestMemory:
+    """The file is streamed to disk; its bytes are never all in memory."""
+
+    size = 16 * 1024 * 1024
+
+    def peak_while(self, action):
+        import tracemalloc
+        tracemalloc.start()
+        try:
+            action()
+            return tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+
+    def test_a_download_to_the_cache_holds_a_chunk_at_a_time(
+            self, monkeypatch, tmp_path):
+        big = os.urandom(self.size)
+        monkeypatch.setattr(
+            resolver, '_open_url',
+            lambda url, redirects=None, timeout=30: _ChunkedResponse(
+                big, chunk=resolver.DOWNLOAD_CHUNK_BYTES))
+        peak = self.peak_while(lambda: resolver.fetch_to_cache(
+            'https://example.com/big.bin', cache_dir=str(tmp_path)))
+        assert peak < self.size // 4, 'peak %d bytes' % (peak,)
+
+    def test_a_cache_hit_reads_nothing(self, monkeypatch, tmp_path):
+        url = 'https://example.com/big.bin'
+        path = resolver.cached_path(url, str(tmp_path))
+        with open(path, 'wb') as handle:
+            handle.write(b'\0' * self.size)
+        peak = self.peak_while(lambda: resolver.fetch_to_cache(
+            url, cache_dir=str(tmp_path)))
+        assert peak < self.size // 4, 'peak %d bytes' % (peak,)

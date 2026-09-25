@@ -35,7 +35,8 @@ __all__ = [
     'RedirectPolicy', 'SameOrigin', 'PublicHosts', 'SAME_ORIGIN', 'PUBLIC_HOSTS',
     'DEFAULT_MAX_RESOURCE_BYTES', 'DEFAULT_MAX_IMAGE_PIXELS', 'DOWNLOAD_CHUNK_BYTES',
     'safe_url', 'is_url', 'is_local', 'require_host', 'user_agent', 'check_size', 'check_pixels', 'decode_data_uri', 'resolver_max',
-    'fetch_url', 'fetch_to_cache', 'stream_capped', 'cached_path', 'purge_cache',
+    'fetch_url', 'fetch_to_cache', 'stream_capped', 'stream_to', 'cached_path',
+    'purge_cache',
 ]
 
 import base64
@@ -48,6 +49,8 @@ import urllib.parse
 import urllib.request
 import urllib.error
 from typing import Any, Callable, List, Optional, Sequence, Tuple
+
+from OpenGLContext import atomicfiles
 
 log = logging.getLogger(__name__)
 
@@ -548,21 +551,20 @@ def cached_path(url: str, cache_dir: Optional[str] = None) -> str:
     return os.path.join(cache_dir, key)
 
 
-def _read_cached(path: str) -> Optional[bytes]:
-    """Return the bytes of a cached file (touching its mtime), or None if absent.
+def _touch(path: str) -> bool:
+    """Mark a cached file as used now, answering whether it is there.
 
-    An atomic write (:func:`_atomic_write`) means the path exists only when it is
-    complete, so a successful read is never partial.
+    An atomic write means the path exists only when it is complete, so a file
+    found here is whole. Its mtime is what :func:`purge_cache` reads as the last
+    use; a filesystem that refuses the touch still serves the file.
     """
-    if os.path.exists(path):
-        # Mark the entry as used so purge_cache treats mtime as last-access time.
-        try:
-            os.utime(path, None)
-        except OSError:
-            pass
-        with open(path, 'rb') as f:
-            return f.read()
-    return None
+    if not os.path.exists(path):
+        return False
+    try:
+        os.utime(path, None)
+    except OSError:
+        pass
+    return True
 
 
 # In-process single-flight: one lock per cache key (URL hash), so concurrent
@@ -611,36 +613,12 @@ def fetch_url(url: str, cache_dir: Optional[str] = None,
     ``file://`` URL cannot copy a local file into the cache.
 
     ``progress`` and ``cancel`` are for an asset large enough to be worth
-    watching -- see :func:`fetch_to_cache`.
+    watching -- see :func:`fetch_to_cache`, which this reads the result of.
     """
-    if not is_url(url):
-        raise IOError('%r is not an http(s) URL, and only those are fetched'
-                      % (_without_query(url),))
-    cache_dir = cache_dir or _default_cache_dir()
-    os.makedirs(cache_dir, mode=0o700, exist_ok=True)
-    path = cached_path(url, cache_dir)
-    data = _read_cached(path)
-    if data is not None:
-        _report(progress, len(data), len(data))
-        return data
-    # Serialize concurrent fetches of this exact asset on a per-key lock; a second
-    # caller waits here rather than launching a duplicate download.
-    lock = _acquire_download_slot(path)
-    try:
-        with lock:
-            data = _read_cached(path)      # the winner may have finished while we waited
-            if data is not None:
-                _report(progress, len(data), len(data))
-                return data
-            resp = _open_url(url, redirects, timeout=30)
-            try:
-                data = stream_capped(resp, max_bytes, progress, cancel)
-            finally:
-                resp.close()
-            _atomic_write(path, data, cache_dir)
-            return data
-    finally:
-        _release_download_slot(path)
+    path = fetch_to_cache(url, cache_dir, max_bytes, progress=progress,
+                          cancel=cancel, redirects=redirects)
+    with open(path, 'rb') as handle:
+        return handle.read()
 
 
 def _content_length(response: Any) -> Optional[int]:
@@ -672,23 +650,19 @@ def _report(progress: Optional[Progress], done: int,
         log.warning('a download progress callback raised', exc_info=True)
 
 
-def stream_capped(response: Any, max_bytes: Optional[int],
-            progress: Optional[Progress] = None,
-            cancel: Optional[Cancel] = None) -> bytes:
-    """Read a response a chunk at a time, watching the cap, the caller and the size.
+def stream_to(response: Any, target: Any, max_bytes: Optional[int],
+              progress: Optional[Progress] = None,
+              cancel: Optional[Cancel] = None) -> int:
+    """Copy a response into ``target`` a chunk at a time; the bytes copied.
 
-    Chunked rather than one ``read()`` for three reasons that arrive together:
-    a content pack is hundreds of megabytes and reading one whole holds all of
-    it in memory before a byte reaches the disk; a caller cannot draw a
-    progress bar for a call that reports nothing until it returns; and a
-    download that has begun cannot otherwise be abandoned.
-
-    Nothing is written to the cache from here -- the caller writes the finished
-    bytes atomically -- so a cancelled or over-size fetch leaves no partial
-    file behind.
+    Chunked for three reasons that arrive together: a content pack is hundreds
+    of megabytes and reading one whole holds all of it in memory before a byte
+    reaches the disk; a caller cannot draw a progress bar for a call that
+    reports nothing until it returns; and a download that has begun cannot
+    otherwise be abandoned. The cap is checked as the bytes arrive, and
+    ``cancel`` is asked before each chunk.
     """
     total = _content_length(response)
-    chunks: List[bytes] = []
     read = 0
     while True:
         if cancel is not None and cancel():
@@ -698,34 +672,25 @@ def stream_capped(response: Any, max_bytes: Optional[int],
             break
         read += len(chunk)
         check_size(read, max_bytes, 'remote resource')
-        chunks.append(chunk)
+        target.write(chunk)
         _report(progress, read, total)
-    if not chunks:
+    if not read:
         _report(progress, 0, total)
-    return b''.join(chunks)
+    return read
 
 
-def _atomic_write(path: str, data: bytes, cache_dir: str) -> None:
-    """Write ``data`` to ``path`` atomically, so ``path`` never appears partial.
+def stream_capped(response: Any, max_bytes: Optional[int],
+            progress: Optional[Progress] = None,
+            cancel: Optional[Cancel] = None) -> bytes:
+    """Read a response a chunk at a time, watching the cap, the caller and the size.
 
-    Two callers can fetch the same URL concurrently (e.g. the IBL probe and an HDR
-    background node both loading one panorama). A plain ``open(path, 'wb')``
-    truncates the file first, so a second caller that finds the path present would
-    read a half-written file. Writing to a unique temp file in the same directory
-    and ``os.replace``-ing it into place makes the cache entry appear all-at-once,
-    and a reader holding the old inode keeps reading a complete file."""
-    import tempfile
-    fd, tmp = tempfile.mkstemp(dir=cache_dir, prefix='.dl-')
-    try:
-        with os.fdopen(fd, 'wb') as f:
-            f.write(data)
-        os.replace(tmp, path)
-    except BaseException:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
+    :func:`stream_to` into memory, for a caller that wants the bytes rather
+    than a file: a response from an API rather than an asset.
+    """
+    import io
+    held = io.BytesIO()
+    stream_to(response, held, max_bytes, progress, cancel)
+    return held.getvalue()
 
 
 def fetch_to_cache(url: str, cache_dir: Optional[str] = None,
@@ -735,19 +700,48 @@ def fetch_to_cache(url: str, cache_dir: Optional[str] = None,
                    redirects: RedirectPolicy = SAME_ORIGIN) -> str:
     """Fetch ``url`` into the cache (once) and return its local file path.
 
-    The path variant of :func:`fetch_url`, for callers that want the cached file
-    on disk (e.g. an image to embed) rather than its bytes.
+    The body is streamed into a temporary file beside its cache entry and
+    renamed into place when complete, so a reader never finds a partial file
+    and the download is never all in memory; a cache hit is touched and not
+    read. Concurrent in-process fetches of one URL are coalesced into one
+    download. Only http(s) is fetched, and each redirect is put to
+    ``redirects`` as for :func:`fetch_url`.
 
     ``progress(done, total)`` is called as the bytes arrive, with ``total``
     None where the server declared no length; it is also called once on a cache
     hit, so a caller drawing a bar sees it finish whether or not anything was
     downloaded.  ``cancel()`` is asked between chunks and abandons the fetch
     with :class:`FetchCancelled` when it returns true.  Neither leaves a
-    partial file in the cache.  ``redirects`` is as for :func:`fetch_url`.
+    partial file in the cache.
     """
-    fetch_url(url, cache_dir, max_bytes, progress=progress, cancel=cancel,
-              redirects=redirects)
-    return cached_path(url, cache_dir)
+    if not is_url(url):
+        raise IOError('%r is not an http(s) URL, and only those are fetched'
+                      % (_without_query(url),))
+    cache_dir = cache_dir or _default_cache_dir()
+    os.makedirs(cache_dir, mode=0o700, exist_ok=True)
+    path = cached_path(url, cache_dir)
+    if _touch(path):
+        size = os.path.getsize(path)
+        _report(progress, size, size)
+        return path
+    # Serialize concurrent fetches of this exact asset on a per-key lock; a second
+    # caller waits here rather than launching a duplicate download.
+    lock = _acquire_download_slot(path)
+    try:
+        with lock:
+            if _touch(path):      # the winner may have finished while we waited
+                size = os.path.getsize(path)
+                _report(progress, size, size)
+                return path
+            resp = _open_url(url, redirects, timeout=30)
+            try:
+                with atomicfiles.staged_file(path, 'wb') as target:
+                    stream_to(resp, target, max_bytes, progress, cancel)
+            finally:
+                resp.close()
+            return path
+    finally:
+        _release_download_slot(path)
 
 
 def purge_cache(cache_dir: Optional[str] = None, max_age_days: int = 30) -> int:

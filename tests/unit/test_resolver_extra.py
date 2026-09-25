@@ -59,47 +59,50 @@ def test_default_cache_dir_falls_back_to_tempdir_on_oserror(monkeypatch):
     assert path.endswith(os.path.join("OpenGLContext", "asset_cache"))
 
 
-# --- _read_cached utime failure is swallowed ----------------------------------
+# --- a cache hit on a filesystem that refuses the touch -----------------------
 
-def test_read_cached_swallows_utime_error(tmp_path, monkeypatch):
-    p = tmp_path / "c.bin"
-    p.write_bytes(b"data")
+def test_a_cache_hit_survives_a_refused_touch(tmp_path, monkeypatch):
+    url = "https://example.invalid/c.bin"
+    path = resolver.cached_path(url, str(tmp_path))
+    with open(path, "wb") as handle:
+        handle.write(b"data")
 
     def bad_utime(path, times):
         raise OSError("read-only fs")
 
     monkeypatch.setattr(resolver.os, "utime", bad_utime)
-    assert resolver._read_cached(str(p)) == b"data"   # still returns the bytes
+    assert resolver.fetch_url(url, cache_dir=str(tmp_path)) == b"data"
 
 
-# --- _atomic_write cleans up its temp file on failure -------------------------
+# --- a download that cannot be moved into place leaves nothing ------------------
 
-def test_atomic_write_removes_tempfile_on_failure(tmp_path, monkeypatch):
-    before = set(os.listdir(tmp_path))
+def test_a_failed_rename_leaves_no_temporary(tmp_path, monkeypatch):
+    class Body:
+        headers = {}
+
+        def __init__(self):
+            self.sent = False
+
+        def read(self, n=-1):
+            if self.sent:
+                return b""
+            self.sent = True
+            return b"x"
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(resolver, "_open_url",
+                        lambda url, redirects=None, timeout=30: Body())
 
     def bad_replace(src, dst):
         raise RuntimeError("replace failed")
 
-    monkeypatch.setattr(resolver.os, "replace", bad_replace)
+    monkeypatch.setattr(os, "replace", bad_replace)
     with pytest.raises(RuntimeError):
-        resolver._atomic_write(str(tmp_path / "target.bin"), b"x", str(tmp_path))
-    # The .dl- temp file was unlinked; the directory is back to its prior contents.
-    assert set(os.listdir(tmp_path)) == before
-
-
-def test_atomic_write_swallows_unlink_failure_then_reraises(tmp_path, monkeypatch):
-    # Both the replace and the cleanup unlink fail; the original error still
-    # propagates and the unlink OSError is swallowed.
-    def bad_replace(src, dst):
-        raise RuntimeError("replace failed")
-
-    def bad_unlink(path):
-        raise OSError("cannot remove")
-
-    monkeypatch.setattr(resolver.os, "replace", bad_replace)
-    monkeypatch.setattr(resolver.os, "unlink", bad_unlink)
-    with pytest.raises(RuntimeError):
-        resolver._atomic_write(str(tmp_path / "target.bin"), b"x", str(tmp_path))
+        resolver.fetch_to_cache("https://example.invalid/t.bin",
+                                cache_dir=str(tmp_path))
+    assert os.listdir(tmp_path) == []
 
 
 # --- purge_cache swallows per-entry OSError -----------------------------------
