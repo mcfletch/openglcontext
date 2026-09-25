@@ -48,7 +48,7 @@ class TestFrontFace:
         assert winding.front_face(False, Bad()) == GL_CW
 
 
-from OpenGL.GL import (   # noqa: E402
+from OpenGL.GL import (
     GL_CULL_FACE, GL_FRONT_FACE, glGetIntegerv, glIsEnabled,
 )
 

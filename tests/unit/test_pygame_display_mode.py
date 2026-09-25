@@ -12,8 +12,8 @@ import pytest
 
 pygame = pytest.importorskip('pygame')
 
-from OpenGLContext.contextdefinition import ContextDefinition  # noqa: E402
-from OpenGLContext.pygamecontext import PygameContext  # noqa: E402
+from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.pygamecontext import PygameContext
 
 
 @pytest.fixture

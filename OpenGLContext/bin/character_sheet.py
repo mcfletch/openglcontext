@@ -41,11 +41,11 @@ from OpenGLContext.viewer.environment import apply_render_env, viewer_defaults
 
 viewer_defaults()   # before anything that renders is imported
 
-from OpenGLContext import contactsheet                              # noqa: E402
-from OpenGLContext.capture import read_back_buffer                  # noqa: E402
-from OpenGLContext.character import CharacterModel  # noqa: E402
-from OpenGLContext.viewer.options import ViewerOptions  # noqa: E402
-from OpenGLContext.viewer.sceneviewer import ViewerContext  # noqa: E402
+from OpenGLContext import contactsheet
+from OpenGLContext.capture import read_back_buffer
+from OpenGLContext.character import CharacterModel
+from OpenGLContext.viewer.options import ViewerOptions
+from OpenGLContext.viewer.sceneviewer import ViewerContext
 
 __all__ = ['VIEWS', 'CharacterSheet', 'main']
 

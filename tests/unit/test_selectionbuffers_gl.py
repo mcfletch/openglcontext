@@ -11,14 +11,14 @@ import numpy as np
 import pytest
 
 
-from OpenGL.GL import (  # noqa: E402
+from OpenGL.GL import (
     GL_COLOR_ATTACHMENT1, GL_COLOR_BUFFER_BIT, GL_FRAMEBUFFER, GL_FRAMEBUFFER_COMPLETE,
     glBindFramebuffer, glClear, glClearColor, glDrawBuffers, glReadPixels, glViewport,
     GL_RGBA, GL_UNSIGNED_BYTE,
 )
 
-from OpenGLContext.passes import selectionbuffers  # noqa: E402
-from OpenGLContext.passes.selectionbuffers import SelectionFBO, SelectionBufferFBO  # noqa: E402
+from OpenGLContext.passes import selectionbuffers
+from OpenGLContext.passes.selectionbuffers import SelectionFBO, SelectionBufferFBO
 
 
 @pytest.fixture

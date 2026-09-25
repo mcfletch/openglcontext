@@ -29,7 +29,7 @@ from OpenGLContext.scenegraph.nodepath import NodePath
 from OpenGLContext.testing.paths import tests_root
 
 sys.path.insert(0, str(tests_root(__file__)))
-from molehill_edit import TestContext as BaseContext     # noqa: E402
+from molehill_edit import TestContext as BaseContext
 
 NET, POINT, AXIS = (int(value) for value in sys.argv[1:4])
 DISTANCE = float(sys.argv[4])

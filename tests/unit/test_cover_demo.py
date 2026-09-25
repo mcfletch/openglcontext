@@ -11,8 +11,8 @@ import pytest
 
 pytest.importorskip('pygltflib')
 
-from OpenGLContext.bin import cover_demo  # noqa: E402
-from OpenGLContext.bin.cover_demo import (  # noqa: E402
+from OpenGLContext.bin import cover_demo
+from OpenGLContext.bin.cover_demo import (
     DENSITIES, LAYERS, WELL, WELL_RADIUS, Meadow,
 )
 

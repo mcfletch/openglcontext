@@ -9,8 +9,8 @@ pure resolve_mode / read-buffer logic is covered in test_transmission_capture.py
 import pytest
 
 
-from OpenGLContext.passes import transmission  # noqa: E402
-from OpenGLContext.passes.transmission import TransmissionBuffer  # noqa: E402
+from OpenGLContext.passes import transmission
+from OpenGLContext.passes.transmission import TransmissionBuffer
 
 
 class TestResolveMode:

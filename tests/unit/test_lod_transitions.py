@@ -26,8 +26,8 @@ from OpenGLContext.testing.glcontext import GLUnavailable, hidden_window
 
 from OpenGLContext.scenegraph.quadrics import Sphere, Cone
 
-from OpenGL.GL import *              # noqa: E402,F403
-from OpenGL.GLU import gluPerspective  # noqa: E402
+from OpenGL.GL import *
+from OpenGL.GLU import gluPerspective
 
 S = 256
 PI = np.pi

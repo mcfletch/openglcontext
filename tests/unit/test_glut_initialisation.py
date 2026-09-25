@@ -24,7 +24,7 @@ from OpenGLContext.testing.glcontext import display_answers
 
 pytest.importorskip('OpenGL.GLUT')
 
-from OpenGLContext.testing.paths import tests_root  # noqa: E402
+from OpenGLContext.testing.paths import tests_root
 
 DRIVER = tests_root(__file__) / 'helpers' / '_glut_init_drive.py'
 

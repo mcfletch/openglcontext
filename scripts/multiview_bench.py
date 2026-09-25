@@ -35,13 +35,13 @@ os.environ.setdefault('OPENGLCONTEXT_DISABLE_FPS_DISPLAY', '1')
 # drawn while the frame rate is what is being measured.
 os.environ.setdefault('OPENGLCONTEXT_IBL', 'analytic')
 
-import numpy as np  # noqa: E402
+import numpy as np
 
-from OpenGLContext import testingcontext  # noqa: E402
-from OpenGLContext.multiview.quad import QuadView  # noqa: E402
-from OpenGLContext.multiview import strategy as multiview  # noqa: E402
-from OpenGLContext.passes import renderpass  # noqa: E402
-from OpenGLContext.scenegraph import basenodes  # noqa: E402
+from OpenGLContext import testingcontext
+from OpenGLContext.multiview.quad import QuadView
+from OpenGLContext.multiview import strategy as multiview
+from OpenGLContext.passes import renderpass
+from OpenGLContext.scenegraph import basenodes
 
 
 class Result:

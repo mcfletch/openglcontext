@@ -9,8 +9,8 @@ import OpenGL
 # the engine rather than the per-call glGetError is what this harness is for.
 OpenGL.ERROR_CHECKING = False
 
-from typing import Any                                       # noqa: E402
-from OpenGLContext import testingcontext                     # noqa: E402
+from typing import Any
+from OpenGLContext import testingcontext
 #: The backend is chosen at run time, so the class this subclasses is not
 #: one a checker can name -- which is what Any says here.
 BaseContext: Any = testingcontext.getInteractive()

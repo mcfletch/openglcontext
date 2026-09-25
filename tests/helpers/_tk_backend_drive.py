@@ -15,16 +15,16 @@ os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'tk')
 os.environ.setdefault('OPENGLCONTEXT_NO_VSYNC', '1')
 os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
 
-import tkinter                                              # noqa: E402
+import tkinter
 
-from OpenGL.GL import (                                     # noqa: E402
+from OpenGL.GL import (
     GL_COLOR_BUFFER_BIT, GL_CONTEXT_CORE_PROFILE_BIT, GL_CONTEXT_PROFILE_MASK,
     GL_DEPTH_BUFFER_BIT, GL_RGB, GL_UNSIGNED_BYTE, GL_VIEWPORT, glClear,
     glClearColor, glDeleteLists, glGenLists, glGetIntegerv, glReadPixels,
 )
-from OpenGL.error import GLError                            # noqa: E402
-from OpenGLContext import contextresources                  # noqa: E402
-from OpenGLContext.tkinteractivecontext import (            # noqa: E402
+from OpenGL.error import GLError
+from OpenGLContext import contextresources
+from OpenGLContext.tkinteractivecontext import (
     TkInteractiveContext,
 )
 

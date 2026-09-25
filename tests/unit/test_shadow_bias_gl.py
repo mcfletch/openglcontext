@@ -18,7 +18,7 @@ import pytest
 
 glfw = pytest.importorskip("glfw")
 
-from OpenGLContext.scenegraph import basenodes  # noqa: E402
+from OpenGLContext.scenegraph import basenodes
 
 
 #: The wall the shadows land on: far enough back to fill the frame, wide enough

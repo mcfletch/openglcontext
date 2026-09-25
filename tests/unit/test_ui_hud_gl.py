@@ -11,11 +11,11 @@ import numpy as np
 import pytest
 
 
-from OpenGLContext.ui.debugoverlay import DebugOverlay              # noqa: E402
-from OpenGLContext.ui.hudwidgets import (                           # noqa: E402
+from OpenGLContext.ui.debugoverlay import DebugOverlay
+from OpenGLContext.ui.hudwidgets import (
     BarMeter, Crosshair, DamageIndicator, HUDLayer, MessageQueue,
 )
-from OpenGLContext.ui.panel import Panel                            # noqa: E402
+from OpenGLContext.ui.panel import Panel
 
 WIDTH = HEIGHT = 256
 

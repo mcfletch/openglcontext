@@ -10,8 +10,8 @@ import pytest
 
 pytest.importorskip("glfw")
 
-from OpenGLContext.scenegraph import basenodes, surfaces  # noqa: E402
-from tests.unit.glrender import base_env, frames_of  # noqa: E402
+from OpenGLContext.scenegraph import basenodes, surfaces
+from tests.unit.glrender import base_env, frames_of
 
 SIZE = (160, 120)
 

@@ -8,10 +8,10 @@ import pytest
 
 pytest.importorskip('pygltflib')
 
-from OpenGLContext.bin import lod_demo  # noqa: E402
-from OpenGLContext.bin.lod_demo import COVERAGE, ROWS, SIDES, LODHall  # noqa: E402
-from OpenGLContext.loaders.assets import shapes  # noqa: E402
-from OpenGLContext.scenegraph.lod import LOD, ScreenCoverageLOD  # noqa: E402
+from OpenGLContext.bin import lod_demo
+from OpenGLContext.bin.lod_demo import COVERAGE, ROWS, SIDES, LODHall
+from OpenGLContext.loaders.assets import shapes
+from OpenGLContext.scenegraph.lod import LOD, ScreenCoverageLOD
 
 
 @pytest.fixture(scope='module')

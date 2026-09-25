@@ -23,7 +23,7 @@ from OpenGLContext.scenegraph import audio as audionodes
 
 pygltflib = pytest.importorskip('pygltflib')
 
-from OpenGLContext.loaders.gltf import loader          # noqa: E402
+from OpenGLContext.loaders.gltf import loader
 
 needs_decoder = pytest.mark.skipif(
     not decoder_available(),

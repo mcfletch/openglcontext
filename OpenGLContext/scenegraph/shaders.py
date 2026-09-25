@@ -406,7 +406,7 @@ def prepare_shader_loading() -> None:
     The fetch runs on a loader thread, and a first-use import taken there is
     one nothing can interrupt -- see :mod:`OpenGLContext.loaders.background`.
     """
-    import OpenGLContext.loaders.loader                   # noqa: F401
+    import OpenGLContext.loaders.loader
 
 
 class ShaderURLField(fieldtypes.MFString):

@@ -27,12 +27,12 @@ os.environ.setdefault('OPENGLCONTEXT_NO_VSYNC', '1')
 os.environ.setdefault('OPENGLCONTEXT_AUTO_EXIT_FRAMES', '90')
 os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
 
-import numpy as np                                          # noqa: E402
-from OpenGL.GLU import gluProject                           # noqa: E402
+import numpy as np
+from OpenGL.GLU import gluProject
 
-from OpenGLContext import testingcontext                    # noqa: E402
-from OpenGLContext.events import synthetic                  # noqa: E402
-from OpenGLContext.scenegraph.basenodes import (            # noqa: E402
+from OpenGLContext import testingcontext
+from OpenGLContext.events import synthetic
+from OpenGLContext.scenegraph.basenodes import (
     Box, Shape, Transform, sceneGraph,
 )
 

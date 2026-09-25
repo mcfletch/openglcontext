@@ -16,14 +16,14 @@ import pytest
 
 pytest.importorskip("glfw")
 
-from OpenGL.GL import (  # noqa: E402
+from OpenGL.GL import (
     GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_LIGHTING, GL_MODELVIEW,
     GL_NO_ERROR, GL_PROJECTION, GL_RGB, GL_UNSIGNED_BYTE, glClear,
     glClearColor, glDisable, glFinish, glGetError, glLoadIdentity,
     glMatrixMode, glReadPixels,
 )
 
-from OpenGLContext.scenegraph import arraygeometry  # noqa: E402
+from OpenGLContext.scenegraph import arraygeometry
 
 SIZE = 64
 POSITIONS = np.array([[-1, -1, 0], [1, -1, 0], [0, 1, 0]], 'f')

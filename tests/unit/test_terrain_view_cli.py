@@ -14,8 +14,8 @@ from OpenGLContext.testing.gl_env import import_unconfigured
 # tests read its non-GL helpers, so the settling is put back.
 T = import_unconfigured('OpenGLContext.bin.terrain_view')
 
-from OpenGLContext.loaders.tiles3d import procedural as P  # noqa: E402
-from OpenGLContext.loaders.tiles3d.scatter import Scatter  # noqa: E402
+from OpenGLContext.loaders.tiles3d import procedural as P
+from OpenGLContext.loaders.tiles3d.scatter import Scatter
 
 
 def _inst():

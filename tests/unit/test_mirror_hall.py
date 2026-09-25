@@ -95,7 +95,7 @@ def test_a_wall_the_hall_does_not_have_is_refused(hall):
 
 # --- what breaks the room up -------------------------------------------------------
 
-from OpenGLContext.bin.mirrorhall import BAYS, PILASTERS, STEPS, WINDOWS  # noqa: E402
+from OpenGLContext.bin.mirrorhall import BAYS, PILASTERS, STEPS, WINDOWS
 
 
 def _pieces(hall, material):

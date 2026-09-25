@@ -29,9 +29,9 @@ import sys
 
 os.environ.setdefault('OPENGLCONTEXT_NO_VSYNC', '1')
 
-from OpenGLContext.bin import view                              # noqa: E402
-from OpenGLContext.events import glfwevents                     # noqa: E402
-from OpenGLContext.move import movementmanager                  # noqa: E402
+from OpenGLContext.bin import view
+from OpenGLContext.events import glfwevents
+from OpenGLContext.move import movementmanager
 
 
 def say(*parts):

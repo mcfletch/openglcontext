@@ -8,7 +8,7 @@ import pytest
 
 Image = pytest.importorskip("PIL.Image")
 
-from OpenGLContext.loaders.gltf import specular_glossiness as sg  # noqa: E402
+from OpenGLContext.loaders.gltf import specular_glossiness as sg
 
 
 class TestSpecGlossTextureConversion:

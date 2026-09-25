@@ -15,13 +15,13 @@ import time
 os.environ.setdefault('OPENGLCONTEXT_NO_VSYNC', '1')
 os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
 
-from vrml import protofunctions                                 # noqa: E402
+from vrml import protofunctions
 
-from OpenGLContext.demos.tk_viewer import (                     # noqa: E402
+from OpenGLContext.demos.tk_viewer import (
     ViewerApplication, pathOf, rowId,
 )
-from OpenGLContext.scenegraph import basenodes                  # noqa: E402
-from OpenGLContext.testing.paths import tests_root              # noqa: E402
+from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.testing.paths import tests_root
 
 MODEL = str(tests_root(__file__) / 'wrls' / 'instanced_lattice.gltf')
 

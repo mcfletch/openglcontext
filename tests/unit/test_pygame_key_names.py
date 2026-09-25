@@ -12,7 +12,7 @@ import pytest
 
 pygame = pytest.importorskip('pygame')
 
-from OpenGLContext.events.pygameevents import PygameXEvent   # noqa: E402
+from OpenGLContext.events.pygameevents import PygameXEvent
 
 
 @pytest.fixture

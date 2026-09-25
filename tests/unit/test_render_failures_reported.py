@@ -14,7 +14,7 @@ import pytest
 
 pytest.importorskip("glfw")
 
-from OpenGLContext.scenegraph import basenodes  # noqa: E402
+from OpenGLContext.scenegraph import basenodes
 
 
 

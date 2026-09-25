@@ -12,11 +12,11 @@ import pytest
 
 glfw = pytest.importorskip("glfw")
 
-from OpenGLContext.scenegraph import basenodes  # noqa: E402
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial  # noqa: E402
-from OpenGLContext.scenegraph.pbrmesh import PBRMesh  # noqa: E402
-from OpenGLContext.scenegraph.reflector import PlanarReflector  # noqa: E402
-from tests.unit.glrender import base_env, frames_of  # noqa: E402
+from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.scenegraph.reflector import PlanarReflector
+from tests.unit.glrender import base_env, frames_of
 
 SIZE = (160, 120)
 

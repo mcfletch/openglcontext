@@ -31,7 +31,7 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 @isolated.decorate
 def _plugin_modules() -> List[str]:
     """Modules the plug-in registries would import, the engine's own included"""
-    import OpenGLContext  # noqa: F401 -- imported for its registrations
+    import OpenGLContext  # imported for its registrations
     from OpenGL import plugins
 
     modules: List[str] = plugins.registered_modules()

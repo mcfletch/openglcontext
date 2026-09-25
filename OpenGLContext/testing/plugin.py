@@ -76,8 +76,8 @@ from OpenGLContext.testing import gl_env, glfwteardown
 gl_env.settle_gl_platform()
 gl_env.settle_gl_backend()
 
-from OpenGLContext.testing import glcontext              # noqa: E402
-from OpenGLContext.testing.glcontext import (  # noqa: E402 -- after the settling
+from OpenGLContext.testing import glcontext
+from OpenGLContext.testing.glcontext import (
     GLDescription,
     GLUnavailable,
     describe_gl,

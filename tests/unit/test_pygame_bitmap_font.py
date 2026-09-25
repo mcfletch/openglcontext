@@ -11,9 +11,9 @@ import pytest
 
 pytest.importorskip('pygame')
 
-from pygame import font as pygame_font                 # noqa: E402
+from pygame import font as pygame_font
 
-from OpenGLContext.scenegraph.text import fontprovider, pygamefont   # noqa: E402
+from OpenGLContext.scenegraph.text import fontprovider, pygamefont
 
 
 @pytest.fixture

@@ -9,14 +9,14 @@ import numpy as np
 import pytest
 
 pygltflib = pytest.importorskip("pygltflib")
-from pygltflib import (  # noqa: E402
+from pygltflib import (
     GLTF2, Scene, Node, Mesh, Primitive, Attributes, Accessor, BufferView,
     Buffer, Material, PbrMetallicRoughness,
 )
 
-from OpenGLContext.loaders import gltf  # noqa: E402
-from OpenGLContext.loaders.gltf import meshes as gm  # noqa: E402
-from OpenGLContext.loaders.gltf.meshes import PrimitiveMode  # noqa: E402
+from OpenGLContext.loaders import gltf
+from OpenGLContext.loaders.gltf import meshes as gm
+from OpenGLContext.loaders.gltf.meshes import PrimitiveMode
 
 
 def _find_shape(node):

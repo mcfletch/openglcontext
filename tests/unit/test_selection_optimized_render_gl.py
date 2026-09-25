@@ -19,8 +19,8 @@ import pytest
 
 glfw = pytest.importorskip("glfw")
 
-from OpenGLContext.scenegraph import basenodes  # noqa: E402
-from OpenGLContext.events.mouseevents import MouseButtonEvent  # noqa: E402
+from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.events.mouseevents import MouseButtonEvent
 
 
 @pytest.fixture

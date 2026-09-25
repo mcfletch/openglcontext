@@ -50,18 +50,18 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 # Before OpenGL is imported by anything else: on GTK3 this is what settles
 # PYOPENGL_PLATFORM=egl, without which shader rendering has no context to track.
 try:
-    from OpenGLContext import wxcontext                          # noqa: F401
+    from OpenGLContext import wxcontext
 except ImportError as error:
     # The distribution is `wxPython`, which the import name does not say.
     raise SystemExit(
         'This demo needs wxPython:\n    %s\n    pip install wxPython' % (error,)
     ) from None
 
-import wx                                                        # noqa: E402
-from pydispatch import dispatcher                                # noqa: E402
+import wx
+from pydispatch import dispatcher
 
-from OpenGLContext.outline import SceneOutline, nodeSummary      # noqa: E402
-from OpenGLContext.viewer import viewerFor                       # noqa: E402
+from OpenGLContext.outline import SceneOutline, nodeSummary
+from OpenGLContext.viewer import viewerFor
 
 #: What the file chooser offers, which is what the viewer's adapters read.
 SCENE_FILES = ('Scenes|*.gltf;*.glb;*.wrl;*.wrz;*.obj;*.json|Every file|*.*')

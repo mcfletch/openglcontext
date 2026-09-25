@@ -11,12 +11,12 @@ import types
 import numpy as np
 import pytest
 
-from vrml.cache import Cache  # noqa: E402
-from OpenGL.GL import (  # noqa: E402
+from vrml.cache import Cache
+from OpenGL.GL import (
     GL_POINTS, GL_TRIANGLES, glGetError, GL_NO_ERROR,
 )
 
-from OpenGLContext.scenegraph.pbrmesh import PBRMesh, _MeshGPU  # noqa: E402
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh, _MeshGPU
 
 
 @pytest.fixture

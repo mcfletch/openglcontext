@@ -11,13 +11,13 @@ import pytest
 
 glfw = pytest.importorskip("glfw")
 
-from OpenGLContext.events.mouseevents import MouseMoveEvent  # noqa: E402
-from OpenGLContext.looptrace import LoopTrace  # noqa: E402
-from OpenGLContext.ui.layout import Column  # noqa: E402
-from OpenGLContext.ui.panel import Panel  # noqa: E402
-from OpenGLContext.ui.tooltip import TOOLTIP_PAUSE, Tooltip  # noqa: E402
-from OpenGLContext.ui.widgets import Button  # noqa: E402
-from tests.unit.glrender import base_env  # noqa: E402
+from OpenGLContext.events.mouseevents import MouseMoveEvent
+from OpenGLContext.looptrace import LoopTrace
+from OpenGLContext.ui.layout import Column
+from OpenGLContext.ui.panel import Panel
+from OpenGLContext.ui.tooltip import TOOLTIP_PAUSE, Tooltip
+from OpenGLContext.ui.widgets import Button
+from tests.unit.glrender import base_env
 
 
 @pytest.fixture

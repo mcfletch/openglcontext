@@ -15,7 +15,7 @@ import pytest
 from OpenGLContext.contentpacks import Application, application, archive
 from OpenGLContext.loaders.gltf.writer import SceneNode, write_glb
 
-from tests.unit.test_contentpacks_fetch import served  # noqa: F401 - a fixture
+from tests.unit.test_contentpacks_fetch import served  # a fixture
 
 
 def an_art_pack(served_dir, name='art.tar.gz', marker='cars/hero.glb'):

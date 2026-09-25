@@ -9,7 +9,7 @@ exercised end-to-end by test_passes_render_gl.
 import pytest
 
 
-from OpenGLContext.passes import instancing  # noqa: E402
+from OpenGLContext.passes import instancing
 
 
 @pytest.fixture

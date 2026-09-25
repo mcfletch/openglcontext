@@ -12,14 +12,14 @@ import pytest
 
 pytest.importorskip('pygltflib')
 
-from OpenGLContext.loaders.gltf import fastdecode, loader, shapes, zoning  # noqa: E402
-from OpenGLContext.scenegraph import audio as audionodes  # noqa: E402
-from OpenGLContext.scenegraph.light import SpotLight  # noqa: E402
-from OpenGLContext.scenegraph.zone import (  # noqa: E402
+from OpenGLContext.loaders.gltf import fastdecode, loader, shapes, zoning
+from OpenGLContext.scenegraph import audio as audionodes
+from OpenGLContext.scenegraph.light import SpotLight
+from OpenGLContext.scenegraph.zone import (
     AUDIO, ENVIRONMENT, LIGHTS, MIRRORS, REVERB, VISIBILITY, GRAVITY, Zone,
     ZoneEnvironment,
 )
-from OpenGLContext.scenegraph.zones import BOX, CAPSULE, SPHERE  # noqa: E402
+from OpenGLContext.scenegraph.zones import BOX, CAPSULE, SPHERE
 
 EXAMPLES = os.path.join(os.path.dirname(__file__), '..', '..', 'docs',
                         'extensions', 'examples')

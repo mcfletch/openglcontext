@@ -7,13 +7,13 @@ import numpy as np
 import pytest
 
 pytest.importorskip('pygltflib')
-from PIL import Image  # noqa: E402
+from PIL import Image
 
-from OpenGLContext.loaders.gltf import loader  # noqa: E402
-from OpenGLContext.scenegraph.imagebasedlight import (  # noqa: E402
+from OpenGLContext.loaders.gltf import loader
+from OpenGLContext.scenegraph.imagebasedlight import (
     ImageBasedLight, decode_rgbd, face_directions, sh_irradiance,
 )
-from OpenGLContext.scenegraph.zone import ENVIRONMENT  # noqa: E402
+from OpenGLContext.scenegraph.zone import ENVIRONMENT
 
 
 def png(colour, size=4, alpha=None):

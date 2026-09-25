@@ -14,8 +14,8 @@ import pytest
 
 glfw = pytest.importorskip("glfw")
 
-from OpenGLContext.scenegraph import basenodes  # noqa: E402
-from tests.unit.glrender import base_env, frames_of  # noqa: E402,F401
+from OpenGLContext.scenegraph import basenodes
+from tests.unit.glrender import base_env, frames_of
 
 
 def test_the_render_environment_does_not_adapt(monkeypatch):

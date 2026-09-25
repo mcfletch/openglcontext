@@ -11,12 +11,12 @@ import pytest
 
 pygltflib = pytest.importorskip("pygltflib")
 Image = pytest.importorskip("PIL.Image")
-from pygltflib import (  # noqa: E402
+from pygltflib import (
     GLTF2, Image as GLTFImage, Sampler, Texture, BufferView, Buffer,
 )
 
-from OpenGLContext.loaders.gltf import textures as gtx  # noqa: E402
-from OpenGLContext.loaders.gltf.textures import _TexInfo  # noqa: E402
+from OpenGLContext.loaders.gltf import textures as gtx
+from OpenGLContext.loaders.gltf.textures import _TexInfo
 
 
 class _R:

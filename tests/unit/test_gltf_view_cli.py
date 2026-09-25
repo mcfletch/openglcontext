@@ -14,8 +14,8 @@ from OpenGLContext.testing.gl_env import import_unconfigured
 # test collected after this one.
 view = import_unconfigured('OpenGLContext.bin.view')
 
-from OpenGLContext.viewer import source  # noqa: E402
-from OpenGLContext.testing.paths import tests_root  # noqa: E402
+from OpenGLContext.viewer import source
+from OpenGLContext.testing.paths import tests_root
 TESTS_DIR = str(tests_root(__file__))
 
 

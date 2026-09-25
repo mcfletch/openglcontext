@@ -11,13 +11,13 @@ import numpy as np
 import pytest
 
 
-from OpenGL.GL import (  # noqa: E402
+from OpenGL.GL import (
     GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_BUFFER_BIT,
     GL_DEPTH_BUFFER_BIT, glClear, glClearColor, glDrawBuffers, glViewport,
 )
 
-from OpenGLContext.passes.selection import SelectionMixin  # noqa: E402
-from OpenGLContext.passes.selectionbuffers import SelectionBufferFBO  # noqa: E402
+from OpenGLContext.passes.selection import SelectionMixin
+from OpenGLContext.passes.selectionbuffers import SelectionBufferFBO
 
 
 ENCODED_ID = 7 | (8 << 8) | (9 << 16)   # rgba bytes (7, 8, 9, 0)

@@ -16,8 +16,8 @@ import pytest
 
 pytest.importorskip('OpenGL.GLUT')
 
-from OpenGL.GLUT import GLUT_ACTIVE_CTRL, GLUT_DOWN, GLUT_LEFT_BUTTON  # noqa: E402
-from OpenGLContext.events import glutevents                            # noqa: E402
+from OpenGL.GLUT import GLUT_ACTIVE_CTRL, GLUT_DOWN, GLUT_LEFT_BUTTON
+from OpenGLContext.events import glutevents
 
 
 @pytest.fixture(autouse=True)

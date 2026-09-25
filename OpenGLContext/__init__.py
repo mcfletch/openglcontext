@@ -69,7 +69,7 @@ VRMLContext( 'wgl', 'OpenGLContext.wglvrmlcontext.VRMLContext' )
 # registries above as it loads.  Absent unless the separate OpenGLContext-qt
 # distribution is installed, which is the whole of what makes qt selectable.
 try:
-    import OpenGLContext_qt      # noqa: F401
+    import OpenGLContext_qt
 except ImportError:
     pass
 

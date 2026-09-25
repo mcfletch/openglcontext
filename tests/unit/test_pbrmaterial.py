@@ -112,13 +112,13 @@ class TestUVTransform:
         assert m[1][0] == pytest.approx(-1.0)
 
 
-from PIL import Image  # noqa: E402
-from OpenGL.GL import (  # noqa: E402
+from PIL import Image
+from OpenGL.GL import (
     GL_CLAMP_TO_EDGE, GL_LINEAR, GL_NEAREST, GL_REPEAT, GL_TEXTURE_2D,
     GL_TEXTURE_MAG_FILTER, GL_TEXTURE_WRAP_S, glBindTexture, glGetError,
     glGetTexParameteriv, GL_NO_ERROR,
 )
-import types  # noqa: E402
+import types
 
 
 @pytest.fixture

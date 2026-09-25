@@ -11,13 +11,13 @@ assertions live in test_shadowmap.py.
 import pytest
 
 
-from OpenGL.GL import (  # noqa: E402
+from OpenGL.GL import (
     GL_FRAMEBUFFER, GL_FRAMEBUFFER_COMPLETE, glCheckFramebufferStatus,
     glGetIntegerv, GL_MAX_TEXTURE_IMAGE_UNITS,
 )
 
-from OpenGLContext.passes import shadowmap  # noqa: E402
-from OpenGLContext.passes.shadowmap import (  # noqa: E402
+from OpenGLContext.passes import shadowmap
+from OpenGLContext.passes.shadowmap import (
     ShadowMapArray, ShadowMapCubeArray, ShadowMapCube,
     _save_target, _restore_target,
 )

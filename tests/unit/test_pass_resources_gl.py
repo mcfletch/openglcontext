@@ -10,11 +10,11 @@ import pytest
 
 glfw = pytest.importorskip("glfw")
 
-from OpenGL import GL  # noqa: E402
+from OpenGL import GL
 
-from OpenGLContext.scenegraph import basenodes  # noqa: E402
-from tests.unit.glrender import base_env  # noqa: E402
-from tests.unit.test_planar_mirror_gl import _room  # noqa: E402
+from OpenGLContext.scenegraph import basenodes
+from tests.unit.glrender import base_env
+from tests.unit.test_planar_mirror_gl import _room
 
 SIZE = (160, 120)
 

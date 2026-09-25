@@ -58,9 +58,9 @@ def prepare_panorama_loading() -> None:
     :mod:`OpenGLContext.loaders.background`.  A decoded panorama is handed
     straight to the image-based lighting probe, so that comes too.
     """
-    from OpenGLContext.loaders import hdr                 # noqa: F401
-    from OpenGLContext.loaders import resolver            # noqa: F401
-    from OpenGLContext.passes import ibl                  # noqa: F401
+    from OpenGLContext.loaders import hdr
+    from OpenGLContext.loaders import resolver
+    from OpenGLContext.passes import ibl
 
 
 class HDRURLField(fieldtypes.MFString):

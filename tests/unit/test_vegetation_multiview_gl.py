@@ -10,14 +10,14 @@ import pytest
 
 glfw = pytest.importorskip("glfw")
 
-from PIL import Image  # noqa: E402
+from PIL import Image
 
-from OpenGLContext.scenegraph import basenodes  # noqa: E402
-from OpenGLContext.scenegraph.terrain.ground import GroundPatch, GroundShading  # noqa: E402
-from OpenGLContext.scenegraph.terrain.heightfield import HeightField  # noqa: E402
-from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards  # noqa: E402
-from OpenGLContext.scenegraph.vegetation.field import _drawn  # noqa: E402
-from tests.unit.glrender import base_env, frames_of  # noqa: E402
+from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.scenegraph.terrain.ground import GroundPatch, GroundShading
+from OpenGLContext.scenegraph.terrain.heightfield import HeightField
+from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
+from OpenGLContext.scenegraph.vegetation.field import _drawn
+from tests.unit.glrender import base_env, frames_of
 
 EXTENT = 60.0
 WIDTH, HEIGHT = 240, 120

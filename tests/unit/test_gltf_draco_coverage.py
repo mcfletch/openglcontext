@@ -12,9 +12,9 @@ import pytest
 
 pygltflib = pytest.importorskip("pygltflib")
 DracoPy = pytest.importorskip("DracoPy")
-from pygltflib import GLTF2, Primitive, Attributes, Accessor  # noqa: E402
+from pygltflib import GLTF2, Primitive, Attributes, Accessor
 
-from OpenGLContext.loaders.gltf import draco as draco_mod  # noqa: E402
+from OpenGLContext.loaders.gltf import draco as draco_mod
 
 
 class _FakeMesh:

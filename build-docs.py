@@ -138,7 +138,7 @@ def find_directdocs(named: str | None = None) -> str | None:
                 os.path.join(candidate, 'directdocs')
             ) else None
     try:
-        import directdocs  # noqa: F401
+        import directdocs
     except ImportError:
         pass
     else:

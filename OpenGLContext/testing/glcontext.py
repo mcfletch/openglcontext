@@ -153,7 +153,7 @@ def display_answers(name: str | None = None,
     if not _display_listens(display, directory, min(timeout, 2.0)):
         return False
     try:
-        import tkinter  # noqa: F401
+        import tkinter
     except ImportError:
         return True
     return _client_opens(display, timeout)

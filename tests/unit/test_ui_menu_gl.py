@@ -11,8 +11,8 @@ import numpy as np
 import pytest
 
 
-from OpenGLContext.ui.menu import Menu, MenuBar, MenuItem      # noqa: E402
-from OpenGLContext.ui.overlay import OverlayStack              # noqa: E402
+from OpenGLContext.ui.menu import Menu, MenuBar, MenuItem
+from OpenGLContext.ui.overlay import OverlayStack
 
 WIDTH = HEIGHT = 256
 

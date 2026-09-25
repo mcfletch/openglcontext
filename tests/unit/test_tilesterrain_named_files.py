@@ -20,11 +20,11 @@ import pytest
 
 pytest.importorskip("pygltflib")
 
-from OpenGLContext.loaders.tiles3d import fetch  # noqa: E402
-from OpenGLContext.scenegraph.tilesterrain import TilesTerrain  # noqa: E402
+from OpenGLContext.loaders.tiles3d import fetch
+from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
 
 sys.path.insert(0, os.path.dirname(__file__))
-from test_clump_glb import _glb_bytes, _ribbon  # noqa: E402
+from test_clump_glb import _glb_bytes, _ribbon
 
 ZONES = os.path.join(os.path.dirname(__file__), '..', '..', 'docs', 'extensions',
                      'examples', 'OGLC_zone-2.0.gltf')

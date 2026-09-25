@@ -8,12 +8,12 @@ import numpy as np
 import pytest
 
 pygltflib = pytest.importorskip("pygltflib")
-from pygltflib import (  # noqa: E402
+from pygltflib import (
     Accessor, BufferView, Buffer, Sparse, AccessorSparseIndices,
     AccessorSparseValues,
 )
 
-from OpenGLContext.loaders.gltf import accessors as ga  # noqa: E402
+from OpenGLContext.loaders.gltf import accessors as ga
 
 
 class _R:

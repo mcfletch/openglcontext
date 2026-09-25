@@ -12,10 +12,10 @@ import types
 import pytest
 
 PIL = pytest.importorskip("PIL")
-from PIL import Image  # noqa: E402
+from PIL import Image
 
-from OpenGLContext.bin import gltf_regression as R  # noqa: E402
-from OpenGLContext.loaders.gltf_demos import SceneSpec  # noqa: E402
+from OpenGLContext.bin import gltf_regression as R
+from OpenGLContext.loaders.gltf_demos import SceneSpec
 
 
 def _png(path, color, size=(16, 16)):

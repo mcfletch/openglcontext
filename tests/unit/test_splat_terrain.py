@@ -90,8 +90,8 @@ class TestAnOpeningToldAfterTheFirstDraw:
         assert released == [True]
 
 
-from PIL import Image  # noqa: E402
-from OpenGL.GL import glGetError, GL_NO_ERROR  # noqa: E402
+from PIL import Image
+from OpenGL.GL import glGetError, GL_NO_ERROR
 
 
 @pytest.fixture

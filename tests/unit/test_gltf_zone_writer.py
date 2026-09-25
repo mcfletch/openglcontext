@@ -11,12 +11,12 @@ import pytest
 
 pytest.importorskip('pygltflib')
 
-from OpenGLContext.loaders.gltf import loader  # noqa: E402
-from OpenGLContext.loaders.gltf.writer import (  # noqa: E402
+from OpenGLContext.loaders.gltf import loader
+from OpenGLContext.loaders.gltf.writer import (
     GLTFWriter, GlobalSound, ZoneNode, zone_box,
 )
-from OpenGLContext.scenegraph.zone import AUDIO, ENVIRONMENT, REVERB  # noqa: E402
-from OpenGLContext.scenegraph.zones import BOX  # noqa: E402
+from OpenGLContext.scenegraph.zone import AUDIO, ENVIRONMENT, REVERB
+from OpenGLContext.scenegraph.zones import BOX
 
 BIRDS = GlobalSound('birdsong', 'audio/birdsong.wav', gain=0.45)
 SURF = GlobalSound('surf', 'audio/surf.wav', gain=0.55)

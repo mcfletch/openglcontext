@@ -12,8 +12,8 @@ import pytest
 
 glfw = pytest.importorskip('glfw')
 
-from OpenGLContext.glfwcontext import GLFWContext  # noqa: E402
-from OpenGLContext.testing import glcontext  # noqa: E402
+from OpenGLContext.glfwcontext import GLFWContext
+from OpenGLContext.testing import glcontext
 
 #: Every name the backend offers.
 NAMES = sorted(GLFWContext.CURSOR_SHAPES)

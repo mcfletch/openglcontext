@@ -23,6 +23,6 @@ def test_vrml2pklgz_module_is_gone():
 
 def test_loaders_package_still_imports():
     # Removing the dead modules must not break the loaders package itself.
-    import OpenGLContext.loaders  # noqa: F401
-    import OpenGLContext.loaders.loader  # noqa: F401
-    import OpenGLContext.loaders.obj  # noqa: F401
+    import OpenGLContext.loaders
+    import OpenGLContext.loaders.loader
+    import OpenGLContext.loaders.obj

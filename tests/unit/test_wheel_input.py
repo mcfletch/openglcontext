@@ -25,7 +25,7 @@ from OpenGLContext.ui.scroll import ScrollViewport
 from OpenGLContext.ui.widgets import Label
 
 glfw = pytest.importorskip('glfw')
-from OpenGLContext.events import glfwevents        # noqa: E402  (needs glfw)
+from OpenGLContext.events import glfwevents  # needs glfw
 
 VIEWPORT = (800, 600)
 

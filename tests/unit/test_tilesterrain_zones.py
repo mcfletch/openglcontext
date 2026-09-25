@@ -15,8 +15,8 @@ import pytest
 
 pytest.importorskip("pygltflib")
 
-from OpenGLContext.scenegraph.tilesterrain import TilesTerrain  # noqa: E402
-from OpenGLContext.scenegraph.zone import ENVIRONMENT, Zone  # noqa: E402
+from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
+from OpenGLContext.scenegraph.zone import ENVIRONMENT, Zone
 
 EXAMPLE = os.path.join(os.path.dirname(__file__), '..', '..', 'docs', 'extensions',
                        'examples', 'OGLC_zone-2.0.gltf')

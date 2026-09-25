@@ -15,8 +15,8 @@ import pytest
 
 glfw = pytest.importorskip("glfw")
 
-from OpenGLContext.scenegraph import basenodes  # noqa: E402
-from OpenGLContext.scenegraph.fog import Fog  # noqa: E402
+from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.scenegraph.fog import Fog
 
 
 #: How far down -Z the box sits, and the fog ranges either side of that: one

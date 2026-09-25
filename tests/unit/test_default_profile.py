@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 
 
-from OpenGLContext.contextdefinition import (  # noqa: E402
+from OpenGLContext.contextdefinition import (
     ContextDefinition, _get_default_profile, version_for_profile,
 )
 

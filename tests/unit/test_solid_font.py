@@ -8,7 +8,7 @@ provider rather than a screen-space atlas that can only draw flat glyphs.
 import pytest
 
 from OpenGLContext.scenegraph.text import fontprovider, fontstyle3d, toolsfont
-from OpenGLContext.scenegraph.text import shaderfont  # noqa: F401  registers the atlas provider
+from OpenGLContext.scenegraph.text import shaderfont  # registers the atlas provider
 
 
 class _Mode:

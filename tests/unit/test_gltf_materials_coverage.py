@@ -13,12 +13,12 @@ import pytest
 
 pygltflib = pytest.importorskip("pygltflib")
 Image = pytest.importorskip("PIL.Image")
-from pygltflib import (  # noqa: E402
+from pygltflib import (
     GLTF2, Material, PbrMetallicRoughness, TextureInfo,
     Image as GLTFImage, Texture, BufferView, Buffer,
 )
 
-from OpenGLContext.loaders.gltf import materials as gmat  # noqa: E402
+from OpenGLContext.loaders.gltf import materials as gmat
 
 
 class _R:

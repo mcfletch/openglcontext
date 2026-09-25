@@ -12,11 +12,11 @@ import pytest
 
 glfw = pytest.importorskip("glfw")
 
-from OpenGLContext.ui.geometry import Rect                       # noqa: E402
-from OpenGLContext.ui.layout import Column, Row                  # noqa: E402
-from OpenGLContext.ui.overlay import OverlayStack                # noqa: E402
-from OpenGLContext.ui.panel import Panel                         # noqa: E402
-from OpenGLContext.ui.widgets import (                           # noqa: E402
+from OpenGLContext.ui.geometry import Rect
+from OpenGLContext.ui.layout import Column, Row
+from OpenGLContext.ui.overlay import OverlayStack
+from OpenGLContext.ui.panel import Panel
+from OpenGLContext.ui.widgets import (
     Button, Label, Slider, TextField, Toggle, PRIMARY,
 )
 

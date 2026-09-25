@@ -11,7 +11,7 @@ import pytest
 
 glfw = pytest.importorskip('glfw')
 
-from OpenGLContext.events import glfwevents                # noqa: E402
+from OpenGLContext.events import glfwevents
 
 
 class Window(object):

@@ -8,10 +8,10 @@ import numpy as np
 import pytest
 
 pygltflib = pytest.importorskip("pygltflib")
-from pygltflib import Accessor, BufferView, Buffer  # noqa: E402
+from pygltflib import Accessor, BufferView, Buffer
 
-from OpenGLContext.loaders.gltf import scene as gs  # noqa: E402
-from OpenGLContext.loaders.gltf.scene import GLTFScene  # noqa: E402
+from OpenGLContext.loaders.gltf import scene as gs
+from OpenGLContext.loaders.gltf.scene import GLTFScene
 
 
 class _R:

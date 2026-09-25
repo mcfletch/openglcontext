@@ -11,7 +11,7 @@ import pytest
 
 pytest.importorskip("glfw")
 
-from OpenGLContext.passes._flat import FlatPass  # noqa: E402
+from OpenGLContext.passes._flat import FlatPass
 
 
 class _Recording(FlatPass):

@@ -10,8 +10,8 @@ import numpy as np
 import pytest
 
 
-from OpenGLContext.passes import ibl  # noqa: E402
-from OpenGLContext.passes.ibl import IBLProbe  # noqa: E402
+from OpenGLContext.passes import ibl
+from OpenGLContext.passes.ibl import IBLProbe
 
 
 class _FakeProgram:

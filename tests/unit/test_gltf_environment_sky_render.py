@@ -17,9 +17,9 @@ import pytest
 
 pytest.importorskip("pygltflib")
 PIL = pytest.importorskip("PIL")
-from PIL import Image                                   # noqa: E402
+from PIL import Image
 
-from OpenGLContext.testing.paths import tests_root      # noqa: E402
+from OpenGLContext.testing.paths import tests_root
 
 TESTS_DIR = str(tests_root(__file__))
 

@@ -92,12 +92,12 @@ from OpenGLContext.viewer.environment import apply_render_env, viewer_defaults
 
 viewer_defaults()   # before anything that renders is imported
 
-from OpenGLContext.viewer.adapters import (  # noqa: E402
+from OpenGLContext.viewer.adapters import (
     UnknownSourceType, adapter_for, adapter_named, known_sources,
 )
-from OpenGLContext.viewer.sceneviewer import ViewerContext  # noqa: E402
-from OpenGLContext.viewer.options import ViewerOptions  # noqa: E402
-from OpenGLContext.viewer.source import (  # noqa: E402
+from OpenGLContext.viewer.sceneviewer import ViewerContext
+from OpenGLContext.viewer.options import ViewerOptions
+from OpenGLContext.viewer.source import (
     UnknownMember, open_pack, resolve_source,
 )
 

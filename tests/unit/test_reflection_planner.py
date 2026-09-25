@@ -253,7 +253,7 @@ def test_a_mirror_too_large_for_the_room_left_is_drawn_at_half_scale():
 
 # --- settling, and a frame that is not finished -------------------------------
 
-from OpenGLContext.passes.reflectionplanner import SETTLE_FRAMES  # noqa: E402
+from OpenGLContext.passes.reflectionplanner import SETTLE_FRAMES
 
 
 def _settled(planner, records, budget=BIG):

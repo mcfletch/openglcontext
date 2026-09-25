@@ -16,12 +16,12 @@ from OpenGLContext.testing.gl_env import import_unconfigured
 # tests read its logic, so the settling is put back.
 V = import_unconfigured('OpenGLContext.bin.view')
 
-from OpenGLContext.viewer import environment  # noqa: E402
-from OpenGLContext.viewer.options import ViewerOptions  # noqa: E402
-from OpenGLContext.scenegraph.light import DirectionalLight  # noqa: E402
-from OpenGLContext.scenegraph.background import Background  # noqa: E402
-from OpenGLContext.scenegraph.group import Group  # noqa: E402
-from OpenGLContext.scenegraph.viewpoint import Viewpoint  # noqa: E402
+from OpenGLContext.viewer import environment
+from OpenGLContext.viewer.options import ViewerOptions
+from OpenGLContext.scenegraph.light import DirectionalLight
+from OpenGLContext.scenegraph.background import Background
+from OpenGLContext.scenegraph.group import Group
+from OpenGLContext.scenegraph.viewpoint import Viewpoint
 
 
 def _inst():

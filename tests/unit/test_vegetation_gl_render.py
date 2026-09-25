@@ -11,8 +11,8 @@ import types
 import numpy as np
 import pytest
 
-from OpenGL.GL import *  # noqa: E402
-from PIL import Image  # noqa: E402
+from OpenGL.GL import *
+from PIL import Image
 
 from OpenGLContext.scenegraph.vegetation.billboards import InstancedBillboards
 from OpenGLContext.scenegraph.vegetation.clumps import InstancedClumps

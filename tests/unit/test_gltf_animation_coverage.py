@@ -12,9 +12,9 @@ import numpy as np
 import pytest
 
 pygltflib = pytest.importorskip("pygltflib")
-from pygltflib import GLTF2, Node, Accessor, BufferView, Buffer  # noqa: E402
+from pygltflib import GLTF2, Node, Accessor, BufferView, Buffer
 
-from OpenGLContext.loaders.gltf import animation as ga  # noqa: E402
+from OpenGLContext.loaders.gltf import animation as ga
 
 
 class _R:

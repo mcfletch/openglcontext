@@ -19,14 +19,14 @@ import pytest
 
 pytest.importorskip("pygltflib")
 PIL = pytest.importorskip("PIL")
-from PIL import Image                                       # noqa: E402
+from PIL import Image
 
-from OpenGLContext.loaders import gltf                      # noqa: E402
-from OpenGLContext.loaders.gltf import environment_sky as skies   # noqa: E402
-from OpenGLContext.scenegraph.background import Background   # noqa: E402
-from OpenGLContext.scenegraph.cubebackground import CubeBackground  # noqa: E402
-from OpenGLContext.scenegraph.hdrbackground import HDRBackground    # noqa: E402
-from OpenGLContext.scenegraph.simplebackground import SimpleBackground  # noqa: E402
+from OpenGLContext.loaders import gltf
+from OpenGLContext.loaders.gltf import environment_sky as skies
+from OpenGLContext.scenegraph.background import Background
+from OpenGLContext.scenegraph.cubebackground import CubeBackground
+from OpenGLContext.scenegraph.hdrbackground import HDRBackground
+from OpenGLContext.scenegraph.simplebackground import SimpleBackground
 
 HALF_PI = math.pi / 2.0
 

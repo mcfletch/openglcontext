@@ -23,7 +23,7 @@ import pytest
 pytest.importorskip("glfw")
 PIL = pytest.importorskip("PIL.Image")
 
-from OpenGL.GL import (  # noqa: E402
+from OpenGL.GL import (
     GL_ALPHA, GL_BLEND, GL_BLUE, GL_COLOR_BUFFER_BIT, GL_DEPTH_TEST, GL_GREEN,
     GL_LIGHTING, GL_MODELVIEW, GL_MODULATE, GL_ONE, GL_ONE_MINUS_SRC_ALPHA,
     GL_PROJECTION, GL_QUADS, GL_RED, GL_REPLACE, GL_RGBA, GL_SRC_ALPHA,
@@ -35,7 +35,7 @@ from OpenGL.GL import (  # noqa: E402
     glViewport,
 )
 
-from OpenGLContext import texture as texture_module  # noqa: E402
+from OpenGLContext import texture as texture_module
 
 LUMINANCE = 128
 ALPHA = 64

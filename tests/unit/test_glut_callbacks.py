@@ -13,8 +13,8 @@ import pytest
 
 pytest.importorskip('OpenGL.GLUT')
 
-from OpenGLContext import glutcontext                     # noqa: E402
-from OpenGLContext.glutcontext import GLUTContext         # noqa: E402
+from OpenGLContext import glutcontext
+from OpenGLContext.glutcontext import GLUTContext
 
 #: The registration call for each kind of input, and the handler it must be
 #: given.  A name missing from here is one nothing holds the backend to.

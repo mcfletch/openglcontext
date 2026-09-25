@@ -15,11 +15,11 @@ os.environ.setdefault('OPENGLCONTEXT_HIDDEN', '1')
 os.environ.setdefault('OPENGLCONTEXT_NO_VSYNC', '1')
 os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
 
-from OpenGL.GL import (                                     # noqa: E402
+from OpenGL.GL import (
     GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, GL_RGB, GL_UNSIGNED_BYTE,
     glClear, glClearColor, glReadPixels,
 )
-from OpenGLContext.glutinteractivecontext import (          # noqa: E402
+from OpenGLContext.glutinteractivecontext import (
     GLUTInteractiveContext,
 )
 

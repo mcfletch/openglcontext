@@ -185,7 +185,7 @@ def prepare_image_loading() -> None:
     format the first time it opens or saves anything, and the fetch itself
     needs the loader, so both are made here.
     """
-    import OpenGLContext.loaders.loader                   # noqa: F401
+    import OpenGLContext.loaders.loader
     Image.init()
 
 

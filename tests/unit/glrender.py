@@ -21,7 +21,7 @@ import pytest
 
 glfw = pytest.importorskip("glfw")
 
-from OpenGLContext.scenegraph import basenodes  # noqa: E402,F401
+from OpenGLContext.scenegraph import basenodes
 
 
 def base_env(monkeypatch, **extra):

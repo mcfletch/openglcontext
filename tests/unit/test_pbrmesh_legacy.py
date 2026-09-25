@@ -9,10 +9,10 @@ import pytest
 
 glfw = pytest.importorskip("glfw")
 
-from OpenGLContext.scenegraph import basenodes  # noqa: E402
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial  # noqa: E402
-from OpenGLContext.scenegraph.pbrmesh import PBRMesh  # noqa: E402
-from tests.unit.glrender import base_env, frames_of  # noqa: E402
+from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from tests.unit.glrender import base_env, frames_of
 
 SIZE = 64
 
