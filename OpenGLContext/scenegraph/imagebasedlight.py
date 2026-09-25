@@ -139,7 +139,12 @@ def _rotation_matrix(quaternion: Sequence[float]) -> np.ndarray:
 
 
 def _sample(faces: Sequence[np.ndarray], directions: np.ndarray) -> np.ndarray:
-    """The nearest texel of a cube's six faces in each direction."""
+    """A cube's six faces read in each direction, filtered bilinearly within a face.
+
+    The four texels round the point are those of the face the direction
+    lands on, clamped at its edges; a turned environment is smooth wherever
+    the faces are.
+    """
     size = faces[0].shape[0]
     d = directions
     ax, ay, az = np.abs(d[..., 0]), np.abs(d[..., 1]), np.abs(d[..., 2])
@@ -154,9 +159,18 @@ def _sample(faces: Sequence[np.ndarray], directions: np.ndarray) -> np.ndarray:
         u_, v_ = {0: (-v[:, 2], -v[:, 1]), 1: (v[:, 2], -v[:, 1]),
                   2: (v[:, 0], v[:, 2]), 3: (v[:, 0], -v[:, 2]),
                   4: (v[:, 0], -v[:, 1]), 5: (-v[:, 0], -v[:, 1])}[face]
-        col = np.clip(((u_ + 1.0) / 2.0 * size).astype(int), 0, size - 1)
-        row = np.clip(((v_ + 1.0) / 2.0 * size).astype(int), 0, size - 1)
-        out[mask] = faces[face][row, col]
+        x = np.clip((u_ + 1.0) / 2.0 * size - 0.5, 0.0, size - 1.0)
+        y = np.clip((v_ + 1.0) / 2.0 * size - 0.5, 0.0, size - 1.0)
+        x0 = np.minimum(x.astype(int), size - 2) if size > 1 else x.astype(int)
+        y0 = np.minimum(y.astype(int), size - 2) if size > 1 else y.astype(int)
+        x1 = np.minimum(x0 + 1, size - 1)
+        y1 = np.minimum(y0 + 1, size - 1)
+        fx = (x - x0)[:, None]
+        fy = (y - y0)[:, None]
+        texels = np.asarray(faces[face], dtype='d')
+        top = texels[y0, x0] * (1.0 - fx) + texels[y0, x1] * fx
+        bottom = texels[y1, x0] * (1.0 - fx) + texels[y1, x1] * fx
+        out[mask] = top * (1.0 - fy) + bottom * fy
     return out
 
 

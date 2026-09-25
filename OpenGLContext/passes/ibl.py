@@ -39,7 +39,7 @@ from OpenGL.GL import (
     GL_TEXTURE_CUBE_MAP_ARRAY,
     GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_FRAMEBUFFER_COMPLETE,
     GL_FRAMEBUFFER_BINDING, GL_TEXTURE_BINDING_2D,
-    GL_VIEWPORT, GL_DEPTH_TEST, GL_CULL_FACE, GL_BLEND,
+    GL_VIEWPORT, GL_DEPTH_TEST, GL_CULL_FACE, GL_BLEND, GL_CURRENT_PROGRAM,
     GL_VERTEX_SHADER, GL_FRAGMENT_SHADER,
     GL_RGB, GL_FLOAT,
     glGenTextures, glDeleteTextures, glBindTexture, glActiveTexture,
@@ -48,7 +48,7 @@ from OpenGL.GL import (
     glFramebufferTexture2D, glFramebufferTextureLayer, glCheckFramebufferStatus,
     glCopyImageSubData,
     glGenVertexArrays, glDeleteVertexArrays, glBindVertexArray,
-    glDrawArrays, glViewport, glUseProgram, glEnable, glDisable,
+    glDrawArrays, glViewport, glUseProgram, glEnable, glDisable, glIsEnabled,
     glGetIntegerv, glGetUniformLocation, glUniform1i, glUniform1f,
     glGetString, GL_VERSION,
 )
@@ -422,6 +422,10 @@ class IBLProbe(object):
         if self._built and self._source_gen == gen:
             return self.ready
         if self._built:
+            if self._source_gen is not None and self.arrayed and self.irradiance is not None:
+                # The environment changed: every layer goes with the arrays.
+                # A rebuild :meth:`grow` asked for has counted its loss already.
+                self.lost += 1
             self.release()           # env changed -> discard and rebuild
         self._built = True
         self._failed = False
@@ -745,13 +749,17 @@ class IBLProbe(object):
         which the prefilter samples at lower mips to keep fireflies out of the
         rough end. Layer 0 is the scene's own, and a plain-cube probe has no
         other layer, so either is refused. Returns whether the layer was
-        filled; the caller's framebuffer, viewport and program are restored
-        either way.
+        filled; the caller's framebuffer, viewport, program and depth-test,
+        culling and blending switches are as they were either way, and
+        texture unit 0 is the active one.
         """
         if not self.arrayed or not 0 < layer < self.layers or not self.ready:
             return False
         prev_fbo = int(glGetIntegerv(GL_FRAMEBUFFER_BINDING))
         prev_vp = glGetIntegerv(GL_VIEWPORT)
+        prev_program = int(glGetIntegerv(GL_CURRENT_PROGRAM))
+        switches = {cap: bool(glIsEnabled(cap))
+                    for cap in (GL_DEPTH_TEST, GL_CULL_FACE, GL_BLEND)}
         vao = fbo = None
         glDisable(GL_DEPTH_TEST)
         glDisable(GL_CULL_FACE)
@@ -772,7 +780,7 @@ class IBLProbe(object):
             log.error("IBL layer %d could not be filled: %s", layer, err)
             return False
         finally:
-            glUseProgram(0)
+            glUseProgram(prev_program)
             glBindVertexArray(0)
             if vao is not None:
                 glDeleteVertexArrays(1, [vao])
@@ -781,8 +789,8 @@ class IBLProbe(object):
                 glDeleteFramebuffers(1, [fbo])
             glActiveTexture(GL_TEXTURE0)
             glViewport(int(prev_vp[0]), int(prev_vp[1]), int(prev_vp[2]), int(prev_vp[3]))
-            glEnable(GL_DEPTH_TEST)
-            glEnable(GL_CULL_FACE)
+            for cap, enabled in switches.items():
+                (glEnable if enabled else glDisable)(cap)
 
     def upload_light(self, light: Any, layer: int = 0) -> bool:
         """Fill ``layer`` from an already-convolved image-based light.
@@ -798,6 +806,8 @@ class IBLProbe(object):
             return False
         if layer and not (self.arrayed and 0 < layer < self.layers):
             return False
+        if not light.specular:
+            return False                 # nothing to prefilter: the layer is left as it was
         from PIL import Image
         target = GL_TEXTURE_CUBE_MAP_ARRAY if self.arrayed else GL_TEXTURE_CUBE_MAP
         try:
@@ -813,7 +823,7 @@ class IBLProbe(object):
                     if pixels.shape[0] != size:
                         pixels = np.stack([np.asarray(Image.fromarray(
                             np.ascontiguousarray(pixels[..., channel])).resize(
-                                (size, size), Image.BILINEAR))  # type: ignore[attr-defined]
+                                (size, size), Image.Resampling.BILINEAR))
                             for channel in range(3)], -1)
                     self._upload_face(target, level, layer, face, pixels)
             return True
@@ -909,8 +919,7 @@ class IBLProbe(object):
             self._source_gen = None      # the next ensure_built rebuilds everything
 
     def release(self) -> None:
-        if self.arrayed and (self.irradiance is not None or self.prefilter is not None):
-            self.lost += 1
+        """Delete the probe's textures and programs; the next build makes them again."""
         if self._convolvers is not None:
             for prog in self._convolvers:
                 try:

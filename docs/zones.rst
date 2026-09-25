@@ -209,7 +209,8 @@ the scene's environment by its ``intensity`` instead.
 
 A zone can also be lit by a probe the file ships already convolved: an
 ``EXT_lights_image_based`` light, named in the zone's ``extensions`` block as
-``{"light": n}`` (``ZoneEnvironment(light=...)`` from code). It is uploaded
+``{"light": n}`` (``ZoneEnvironment(light=...)`` from code), which the
+loader makes an :ref:`ImageBasedLight <image-based-light-node>` node of. It is uploaded
 into its layer the first time the zone is needed and nothing is drawn, which
 is how a baked world should carry its places' environments. A scene's own
 ``{"light": n}`` lights everything no zone covers. A four-channel PNG face is

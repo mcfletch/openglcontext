@@ -475,6 +475,53 @@ roofed room is dark and lit through its door while the street outside keeps
 the sky. The change is worked out per fragment, and lightmaps and light grids
 are not scaled by it. See :doc:`zones`.
 
+.. _image-based-light-node:
+
+A document's own environment: ``ImageBasedLight``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+A glTF file can ship the environment it was lit under, already convolved, as
+an ``EXT_lights_image_based`` light (:doc:`gltf`). The loader makes an
+``ImageBasedLight`` node of it (``OpenGLContext.scenegraph.imagebasedlight``),
+which a scene's ``{"light": n}`` or a zone's (:doc:`zones`) selects:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Field
+     - Default
+     - Meaning
+   * - ``intensity``
+     - 1.0
+     - Multiplies the light's diffuse and specular contribution.
+   * - ``rotation``
+     - (0, 0, 0, 1)
+     - A quaternion ``(x, y, z, w)`` turning the environment. It is applied as
+       the faces are read, so the probe holds a world-aligned cube; each face
+       is read bilinearly and clamped at its edges.
+   * - ``irradianceCoefficients``
+     - none
+     - Nine RGB spherical-harmonic coefficients, l ≤ 2, of the irradiance
+       (the cosine-weighted integral of the radiance, so a uniform sky of
+       radiance *L* has irradiance π\ *L*).
+   * - ``specularImageSize``
+     - 0
+     - The width in texels of the largest specular mip.
+
+The specular images are held in the node's ``specular`` attribute rather than
+a field: a list of mip levels, finest first, each six linear float ``(n, n,
+3)`` faces in GL order (+X, -X, +Y, -Y, +Z, -Z). A four-channel PNG face in the
+file is read as RGBD HDR.
+
+``irradiance_faces(size)`` evaluates the coefficients into six ``(size, size,
+3)`` faces holding irradiance over π, the value the PBR shader multiplies the
+albedo by. ``IBLProbe.upload_light`` puts both into one layer of the probe the
+first time the light is needed, resampling the specular mips to the probe's
+size and repeating the roughest where the light has fewer; nothing is drawn.
+A light with no specular images is not uploaded. A zone's light needs the
+``full`` probe and cube-map arrays (GL 4.0 or ``ARB_texture_cube_map_array``).
+
 In ``auto`` mode, environment lighting adapts to the frame rate. When the
 frame rate stays below 45 frames a second for 30 frames it steps down to
 ``analytic``, never further; after 45 frames above 75, and at least 60 frames
