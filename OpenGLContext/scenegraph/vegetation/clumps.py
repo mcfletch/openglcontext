@@ -110,17 +110,20 @@ def _mesh_index(meshes: "list[dict]", wanted: "int | str") -> int:
     plant are written in whatever order the bake walked its variants, and a
     species naming ``fern_a_far`` should not become a different plant because
     another variant was added before it. A string of digits no mesh is named
-    is a position, which is how a species field holds one.
+    is a position, which is how a species field holds one. A name or a
+    position the file does not have raises ``KeyError`` naming what it holds.
     """
     if isinstance(wanted, int):
-        return wanted
-    for index, entry in enumerate(meshes):
-        if entry.get('name') == wanted:
-            return index
-    if wanted.isdigit() and int(wanted) < len(meshes):
-        return int(wanted)
+        if 0 <= wanted < len(meshes):
+            return wanted
+    else:
+        for index, entry in enumerate(meshes):
+            if entry.get('name') == wanted:
+                return index
+        if wanted.isdigit() and int(wanted) < len(meshes):
+            return int(wanted)
     raise KeyError(
-        "no mesh named %r; this file holds %s"
+        "no mesh %r; this file holds %s"
         % (wanted, ', '.join(repr(entry.get('name')) for entry in meshes)))
 
 

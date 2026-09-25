@@ -94,3 +94,14 @@ class TestEachPlaceOnce:
         blocks, _field_ = _blocks(mask=lambda x, z: np.zeros(np.shape(x)))
         points, yaws, scales = blocks.disc(0.0, 0.0, 50.0)
         assert points.shape == (0, 3) and len(yaws) == len(scales) == 0
+
+
+class TestNoDensityIsNoPlants:
+    def test_a_grid_of_no_density_scatters_nothing(self):
+        points, yaws, scales = world_grid_scatter(0.0, 0.0, 50.0, 0.0, _field())
+        assert points.shape == (0, 3) and len(yaws) == len(scales) == 0
+
+    def test_blocks_of_no_density_hold_nothing(self):
+        blocks = ScatterBlocks(0.0, _field())
+        points, yaws, scales = blocks.disc(0.0, 0.0, 50.0)
+        assert points.shape == (0, 3) and len(yaws) == len(scales) == 0

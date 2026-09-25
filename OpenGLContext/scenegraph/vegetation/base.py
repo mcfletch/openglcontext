@@ -69,12 +69,14 @@ class InstancedVegBase(vnodes.PointSet):
         bounds: Any
         #: The node's program and its forms for shared draws.
         programs: ViewPrograms
+        #: Set once the node's GL objects are made, None before and after.
+        _gl: Any
 
     def boundingVolume(self, mode: Any) -> "boundingvolume.AABoundingBox":
         return boundingvolume.AABoundingBox(size=self.bounds, center=(0, 0, 0))
 
     def _commit_constants(self, vert: str, frag: str) -> None:
-        """Send the never-per-frame uniforms once, at GL init, program saved/restored.
+        """Send the uniforms that are not per frame, at GL init, program saved/restored.
 
         Every form of the program compiled later for a shared draw is sent them
         as it is made.
@@ -86,8 +88,17 @@ class InstancedVegBase(vnodes.PointSet):
         self._upload_constants(self.U)
         glUseProgram(prev)
 
+    def refresh_constants(self) -> None:
+        """Send the uniforms :meth:`_upload_constants` sets again, after one changed.
+
+        Every form of the program already compiled is sent them; a node not yet
+        drawn sends them when it is.
+        """
+        if self._gl is not None:
+            self.programs.resend()
+
     def _upload_constants(self, U: Dict[str, int]) -> None:
-        """Upload uniforms constant for this node's lifetime (program already bound)."""
+        """Upload the uniforms that change only when a setting does (program already bound)."""
 
     def _stream(self) -> bool:
         """Upload any staged per-instance data; return True if there is anything to draw."""

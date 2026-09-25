@@ -18,7 +18,7 @@ from typing import Any, Callable, Dict, Optional, Sequence, Tuple
 import numpy as np
 from PIL import Image
 from OpenGL.GL import (
-    GL_ARRAY_BUFFER, GL_CLAMP_TO_EDGE, GL_DYNAMIC_DRAW, GL_FALSE, GL_FLOAT,
+    GL_ARRAY_BUFFER, GL_CLAMP_TO_EDGE, GL_CURRENT_PROGRAM, GL_DYNAMIC_DRAW, GL_FALSE, GL_FLOAT,
     GL_FRAGMENT_SHADER, GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR, GL_REPEAT,
     GL_RGBA, GL_RGBA8, GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER,
     GL_SRGB8_ALPHA8, GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_UNSIGNED_BYTE,
@@ -26,7 +26,7 @@ from OpenGL.GL import (
     glBindBuffer, glBindTexture, glBufferData, glBufferSubData,
     glDeleteBuffers, glDeleteProgram, glDeleteTextures, glDeleteVertexArrays,
     glEnableVertexAttribArray, glGenBuffers, glGenTextures,
-    glGenerateMipmap, glGetUniformLocation, glTexImage2D, glTexParameteri,
+    glGenerateMipmap, glGetIntegerv, glGetUniformLocation, glTexImage2D, glTexParameteri,
     glUniform1i, glUniform1ui, glUniform4iv, glUseProgram,
     glVertexAttribDivisor, glVertexAttribPointer,
 )
@@ -139,6 +139,23 @@ class ViewPrograms:
             glUniform4iv(locations['viewList'], 4, np.asarray(indices, np.int32))
         elif locations['viewMask'] != -1:
             glUniform1ui(locations['viewMask'], mask)
+
+    def resend(self) -> None:
+        """Call ``setup`` again on every form compiled, for constants that changed.
+
+        Each form is bound in turn; the program bound before is bound again
+        after.
+        """
+        if self.setup is None:
+            return
+        previous = int(glGetIntegerv(GL_CURRENT_PROGRAM))
+        try:
+            for form in self._forms.values():
+                if form is not None:
+                    glUseProgram(form[0])
+                    self.setup(form[1])
+        finally:
+            glUseProgram(previous)
 
     def programs(self) -> Iterator[int]:
         """Every form compiled, for disposal."""

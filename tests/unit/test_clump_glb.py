@@ -231,5 +231,14 @@ class TestOneFileHoldsEveryRungOfAPlant:
         assert 'fern_a_near' in str(raised.value)      # names what there is
 
 
+    @pytest.mark.parametrize('index', [-1, 2, 9])
+    def test_a_position_the_file_does_not_have_says_what_it_does(
+            self, tmp_path, index) -> None:
+        path = self._plant(tmp_path)
+        with pytest.raises(KeyError) as raised:
+            load_clump_glb(path, mesh=index)
+        assert 'fern_a_near' in str(raised.value)
+
+
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))

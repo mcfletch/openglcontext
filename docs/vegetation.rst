@@ -128,7 +128,8 @@ thickets with clear ground between them.
 ``CoverSpecies`` is also a scenegraph node, kept in the cover's ``species``
 field. ``clumpMesh`` and ``clumpFarMesh`` name meshes in the ``.glb``. A string
 of digits that matches no mesh name selects the mesh at that position in the
-file, and an empty ``clumpFarMesh`` draws the near mesh at both levels.
+file. With an empty ``clumpFarMesh`` the near mesh is drawn once over the
+whole disc, with no second level.
 
 Distance levels
 ~~~~~~~~~~~~~~~
@@ -170,11 +171,18 @@ the worker and stages what it made on a later call, so no frame waits for it,
 and ``wait(timeout)`` blocks until the worker is idle, for a capture or a
 bake that wants the cover in place. A cover a streamed world carries
 (``TilesTerrain``) is scattered this way, and ``TilesTerrain.wait_for_loads``
-waits for it. Without ``background``, ``update`` scatters on the calling
+waits for it. A scatter that raises is logged and asked for again on the next
+``update``. ``shutdown()`` stops the worker; a cover that is collected stops
+its worker as well. Without ``background``, ``update`` scatters on the calling
 thread; a caller with its own worker can run ``compute_near`` there and pass
-the result to ``apply_near`` on the render thread. ``select`` is the cheap per-frame step: it re-centres the drawn
-geometry on the current camera. Without it, the disc lags behind the walker
-and the density of the middle-distance cover pulses.
+the result to ``apply_near`` on the render thread.
+
+``select`` is the per-frame step: it re-centres the drawn geometry on the
+current camera. Without it, the disc lags behind the walker and the density of
+the middle-distance cover pulses. Each geometry level is chosen
+``CLUMP_SELECT_SLACK`` (1 m) past its radius, and chosen again only once the
+camera has moved that far; the shader fades each level by its distance from
+the live camera, so what is chosen early is not drawn until it is in reach.
 
 .. _wheretheygrow:
 
@@ -188,8 +196,10 @@ Four settings decide where a species grows and how much of it there is.
 baked world paints the road's corridor out of it.
 ``control_weight(image, wanted, layers, extent)`` turns that map into a mask:
 ``layers`` is the map's layer order and ``wanted`` the layers the cover grows
-on. The map must be fine enough for what it masks: over four kilometres, 512
-pixels are eight metres each, wider than a road corridor.
+on. The map covers ``extent`` metres along both axes, its columns along x and
+its rows along z, and need not be square. It must be fine enough for what it
+masks: over four kilometres, 512 pixels are eight metres each, wider than a
+road corridor.
 
 ``holes(x, z) -> mask`` removes cover where there is no ground, for example
 over a tunnel's bore. It is the same function the terrain uses for drawing and
@@ -223,7 +233,7 @@ Other settings:
 - ``height`` - the average height of a plant, in metres, not the maximum.
 - ``density_scale`` - a multiplier on the density of every species in the
   set (default 1). A quality setting changes it to draw less cover in the same
-  proportions.
+  proportions; 0 draws none. A species with a ``density`` of 0 draws none.
 - ``COVER_JITTER`` (1.7) - how far a plant may move from its grid cell. If
   plants stayed inside their cells, the set would still look like a grid of
   diagonal rows from thirty metres away.

@@ -465,6 +465,49 @@ class TestTheGeometryNearTheCamera:
         assert counted.mean() > 0
         assert np.abs(np.diff(counted)).max() < 0.35 * counted.mean()
 
+    def test_one_mesh_for_both_rungs_is_uploaded_and_drawn_once(
+            self, tmp_path) -> None:
+        species = _species('fern', clump=_plant_file(tmp_path),
+                           clumpMesh='near', density=2.0)
+        cover = _cover([species], clump_radius=30.0)
+        rung = cover.rungs[0]
+        clumps = [node for node in rung.nodes
+                  if type(node).__name__ == 'InstancedClumps']
+        assert len(clumps) == 1
+        cover.update((0.0, 0.0, 0.0))
+        drawn = clumps[0]._instance_rows()
+        assert float(np.hypot(drawn[:, 0], drawn[:, 2]).max()) > 30.0 * 0.8
+
+    def test_a_small_step_draws_from_what_is_already_up(self, tmp_path) -> None:
+        """Re-choosing the drawn plants copies and uploads them; a step the
+        shader's own fade covers does not need it."""
+        cover = self._clumped(tmp_path, card_radius=90.0)
+        rung = cover.rungs[0]
+        uploads = []
+        original = rung.clumps_far.update_instances
+
+        def counting(*arrays):
+            uploads.append(len(arrays[0]))
+            return original(*arrays)
+        rung.clumps_far.update_instances = counting
+        cover.update((0.0, 0.0, 0.0))
+        for step in (0.2, 0.4, 0.6):
+            cover.update((step, 0.0, 0.0))
+        assert len(uploads) == 1
+        cover.update((3.0, 0.0, 0.0))
+        assert len(uploads) == 2
+
+    def test_what_is_up_covers_the_disc_around_the_live_camera(
+            self, tmp_path) -> None:
+        cover = self._clumped(tmp_path, card_radius=90.0)
+        cover.update((0.0, 0.0, 0.0))
+        cover.update((0.6, 0.0, 0.0))
+        points = cover.rungs[0].cache[0]
+        wanted = np.hypot(points[:, 0] - 0.6, points[:, 2]) < 30.0
+        drawn = {tuple(row) for row in
+                 np.round(cover.rungs[0].clumps_far._instance_rows()[:, :3], 4)}
+        assert {tuple(row) for row in np.round(points[wanted], 4)} <= drawn
+
     def test_retuning_moves_the_fade_windows_with_the_radius(self, tmp_path) -> None:
         cover = self._clumped(tmp_path)
         cover.clump_radius = 12.0

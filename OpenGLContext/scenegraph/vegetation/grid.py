@@ -205,8 +205,11 @@ def world_grid_scatter(cx: float, cz: float, radius: float, density: float,
         world-anchored grid, so no two species stand in the same places and each keeps
         the pop-free property separately. Any integer. The default is the one grid
         there has always been.
-    :returns: ``(positions Nx3 float32, yaws N float32, scales N float32)``.
+    :returns: ``(positions Nx3 float32, yaws N float32, scales N float32)``,
+        empty where ``density`` is 0 or less.
     """
+    if not density > 0.0:
+        return _no_instances()
     s = 1.0 / math.sqrt(density)
     # A cell outside the disc can still place its instance inside it, by up to
     # half a cell of jitter, so the sweep is widened by that much.
@@ -216,6 +219,12 @@ def world_grid_scatter(cx: float, cz: float, radius: float, density: float,
         int(math.floor((cz - reach) / s)), int(math.ceil((cz + reach) / s)),
         s, height_field, scale_mul, jitter, mask, salt, scale_range,
         disc=(cx, cz, radius))
+
+
+def _no_instances() -> "tuple[np.ndarray, np.ndarray, np.ndarray]":
+    """The scatter of nothing: positions, yaws and scales, all empty."""
+    return (np.zeros((0, 3), np.float32), np.zeros(0, np.float32),
+            np.zeros(0, np.float32))
 
 
 def _scatter_cells(i0: int, i1: int, j0: int, j1: int, s: float,
@@ -288,6 +297,8 @@ class ScatterBlocks:
     growing with everywhere it has been. :meth:`clear` lets go of everything,
     which is what a caller does when its mask or ground change.
 
+    A ``density`` of 0 or less holds no plants: every disc is empty.
+
     One caller at a time: a worker thread computing discs owns the blocks
     while it does.
     """
@@ -303,7 +314,10 @@ class ScatterBlocks:
                  finish: Optional[Callable[..., tuple]] = None,
                  metres: float = BLOCK_METRES) -> None:
         self.density = float(density)
-        self.cell = 1.0 / math.sqrt(self.density)
+        # With no density there are no cells; one block of one cell stands
+        # for the whole world and holds nothing.
+        self.cell = (1.0 / math.sqrt(self.density) if self.density > 0.0
+                     else math.inf)
         #: How many cells along a side a block holds, and how wide that is.
         self.cells = max(BLOCK_CELLS_LEAST, int(round(float(metres) / self.cell)))
         self.span = self.cells * self.cell
@@ -341,6 +355,9 @@ class ScatterBlocks:
 
     def disc(self, cx: float, cz: float, radius: float) -> tuple:
         """The instances within ``radius`` of ``(cx, cz)``, as the scatter gives them."""
+        if not self.density > 0.0:
+            found = _no_instances()
+            return tuple(self.finish(*found)) if self.finish is not None else found
         span = self.span
         # A cell's instance lands up to half a cell of jitter from the cell.
         reach = radius + self.cell * max(self.jitter, 1.0) / 2.0

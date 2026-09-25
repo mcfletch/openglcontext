@@ -316,6 +316,59 @@ class TestItDoesNotGrowInRows:
         assert len(cover.rungs[0].cards.pos) > 2500
 
 
+class TestNothingToGrow:
+    """No density is no cover: a quality setting of 0, or a species with none."""
+
+    def test_a_density_scale_of_nothing_grows_nothing(self) -> None:
+        cover = _cover()
+        cover.density_scale = 0.0
+        cover.update((0.0, 0.0, 0.0))
+        assert len(cover.rungs[0].cards.pos) == 0
+
+    def test_a_species_of_no_density_grows_nothing(self) -> None:
+        cover = _cover(species=_species(density=0.0))
+        cover.update((0.0, 0.0, 0.0))
+        assert len(cover.rungs[0].cards.pos) == 0
+
+
+class TestAControlMapThatIsNotSquare:
+    def test_each_axis_is_read_across_its_own_width(self) -> None:
+        from PIL import Image
+        pixels = np.zeros((16, 64, 4), 'u1')
+        pixels[:, 56:64, 0] = 255                  # the eastern eighth is grass
+        weigh = control_weight(Image.fromarray(pixels), ['grass'],
+                               ['grass', 'rock', 'dirt', 'snow'], 200.0)
+        assert weigh(np.array([90.0]), np.array([0.0]))[0] == 1.0
+        assert weigh(np.array([0.0]), np.array([0.0]))[0] == 0.0
+
+    def test_a_map_taller_than_it_is_wide_is_read_too(self) -> None:
+        from PIL import Image
+        pixels = np.zeros((64, 16, 4), 'u1')
+        pixels[56:64, :, 0] = 255                  # the southern eighth
+        weigh = control_weight(Image.fromarray(pixels), ['grass'],
+                               ['grass'], 200.0)
+        assert weigh(np.array([0.0]), np.array([90.0]))[0] == 1.0
+        assert weigh(np.array([0.0]), np.array([0.0]))[0] == 0.0
+
+
+class TestToldWhileScattering:
+    def test_a_hole_told_during_a_scatter_is_not_undone_by_it(self) -> None:
+        """A scatter on a worker can be told a new hole by the render thread
+        at any point. What it made from the old ground must not be kept for
+        the new."""
+        cover = _cover(card_radius=60.0)
+        opening = TestWhereTheGroundIsNotThere()._hole()
+        finisher = cover._finisher
+
+        def told_meanwhile(rung):
+            if cover.holes is None:
+                cover.holes = opening        # as the render thread would
+            return finisher(rung)
+        cover._finisher = told_meanwhile
+        cover.compute_near(0.0, 0.0)
+        cards = cover.compute_near(0.0, 0.0)[0][0][0]
+        assert not opening(cards[:, 0], cards[:, 2]).any()
+
 class TestScatteredInTheBackground:
     """A cover told ``background=True`` scatters on a worker thread, so the
     frame that crosses a threshold pays nothing for it."""
@@ -351,3 +404,37 @@ class TestScatteredInTheBackground:
 
     def test_shutting_down_an_inline_cover_is_harmless(self) -> None:
         _cover().shutdown()
+
+
+class TestTheWorkerIsLetGo:
+    def test_a_failed_scatter_is_asked_for_again(self) -> None:
+        cover = _cover(card_radius=100.0, background=True)
+        failures = []
+
+        def mask(x, z):
+            if not failures:
+                failures.append(True)
+                raise RuntimeError('a mask that fails once')
+            return np.ones(np.shape(x))
+        cover.mask = mask
+        try:
+            for _frame in range(4):          # at one place: no step to re-ask
+                cover.update((0.0, 0.0, 0.0))
+                assert cover.wait(5.0)
+            assert len(cover.rungs[0].cards.pos) > 100
+        finally:
+            cover.shutdown()
+
+    def test_a_cover_dropped_without_shutdown_stops_its_thread(self) -> None:
+        import gc
+        import weakref
+        cover = _cover(card_radius=100.0, background=True)
+        cover.update((0.0, 0.0, 0.0))
+        assert cover.wait(5.0)
+        thread = cover._worker._thread
+        gone = weakref.ref(cover)
+        del cover
+        gc.collect()
+        assert gone() is None
+        thread.join(5.0)
+        assert not thread.is_alive()

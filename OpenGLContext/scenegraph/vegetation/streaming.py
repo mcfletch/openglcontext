@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 import threading
 from collections.abc import Callable
-from typing import Any, Optional
+from typing import Any, List, Optional, Tuple
 
 log = logging.getLogger(__name__)
 
@@ -34,18 +34,26 @@ class BackgroundCompute:
     replaces it; ``merge(old_args, new_args) -> args``, where given, decides
     what the replacement asks for, for a caller whose requests each ask for
     part of the work.
+
+    A request whose ``compute`` raises is logged, and ``failed(args, error)``,
+    where given, is called with it in the next :meth:`drain`, so a caller that
+    moved on when it asked can ask again.
     """
 
     def __init__(self, compute: Callable[..., Any], apply: Callable[[Any], None],
                  merge: Optional[Callable[[tuple, tuple], tuple]] = None,
-                 name: str = 'background-compute') -> None:
+                 name: str = 'background-compute',
+                 failed: Optional[Callable[[tuple, BaseException], None]] = None,
+                 ) -> None:
         self._compute = compute
         self._apply = apply
         self._merge = merge
+        self._failed = failed
         self._cv = threading.Condition()
         self._request: Optional[tuple] = None
         self._result: Any = None
         self._have_result = False
+        self._failures: List[Tuple[tuple, BaseException]] = []
         #: Whether the worker is computing a request now.
         self.busy = False
         self._stop = False
@@ -66,11 +74,19 @@ class BackgroundCompute:
             self._cv.notify_all()
 
     def drain(self) -> bool:
-        """Apply the newest result, on the calling thread; whether there was one."""
+        """Apply the newest result, on the calling thread; whether there was one.
+
+        Failures since the last drain go to ``failed`` first, in order.
+        """
         with self._cv:
-            if not self._have_result:
-                return False
+            failures, self._failures = self._failures, []
+            have = self._have_result
             payload, self._result, self._have_result = self._result, None, False
+        if self._failed is not None:
+            for args, error in failures:
+                self._failed(args, error)
+        if not have:
+            return bool(failures)
         self._apply(payload)
         return True
 
@@ -84,11 +100,16 @@ class BackgroundCompute:
                 lambda: self._request is None and not self.busy, timeout)
 
     def stop(self) -> None:
-        """Stop the worker and wait for it to finish what it is computing."""
+        """Stop the worker and wait for it to finish what it is computing.
+
+        Called on the worker itself, from inside ``compute``, it stops the
+        worker once that returns.
+        """
         with self._cv:
             self._stop = True
             self._cv.notify_all()
-        self._thread.join(timeout=5.0)
+        if threading.current_thread() is not self._thread:
+            self._thread.join(timeout=5.0)
 
     def _run(self) -> None:
         while True:
@@ -101,9 +122,10 @@ class BackgroundCompute:
             assert args is not None
             try:
                 payload = self._compute(*args)
-            except Exception:
+            except Exception as error:
                 log.exception('background recompute failed')
                 with self._cv:
+                    self._failures.append((args, error))
                     self.busy = False
                     self._cv.notify_all()
                 continue
