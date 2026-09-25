@@ -146,11 +146,8 @@ class TestLocalFetchSizeCap:
         opened = {'n': 0}
 
         def guard(path, *args, **kwargs):
-            try:
-                if os.path.realpath(str(path)) == os.path.realpath(str(big)):
-                    opened['n'] += 1
-            except TypeError:
-                pass
+            if os.path.realpath(str(path)) == os.path.realpath(str(big)):
+                opened['n'] += 1
             return real_open(path, *args, **kwargs)
 
         monkeypatch.setattr(builtins, 'open', guard)

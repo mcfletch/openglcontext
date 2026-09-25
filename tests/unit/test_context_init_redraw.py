@@ -11,6 +11,8 @@ frame, and adding a HUD in ``OnInit`` is exactly what the documentation tells an
 application to do.  So the fix belongs here rather than in each caller: requests
 made during start-up are remembered and satisfied by the first real frame.
 """
+import pytest
+
 from OpenGLContext import context as context_module
 
 
@@ -75,10 +77,8 @@ class TestARedrawAskedForDuringStartUp:
         def explode(self):
             raise RuntimeError('no model')
         held = _Context(explode)
-        try:
+        with pytest.raises(RuntimeError, match='no model'):
             held.DoInit()
-        except RuntimeError:
-            pass
         assert held.deferRedraw is False
 
     def test_a_context_that_asks_for_nothing_draws_nothing(self, monkeypatch):

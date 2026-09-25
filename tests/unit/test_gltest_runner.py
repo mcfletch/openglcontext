@@ -1,6 +1,8 @@
 """The `oglc-test` command in `OpenGLContext.bin.gltest`."""
 import os
 
+import pytest
+
 from OpenGLContext.bin import gltest
 
 
@@ -59,10 +61,8 @@ def test_the_output_directory_is_made_absolute(tmp_path, monkeypatch):
 
     monkeypatch.setattr(gltest, 'saveAndExitClass', record)
     monkeypatch.setattr(gltest, 'contextClass', lambda configs: object)
-    try:
+    with pytest.raises(SystemExit):
         gltest.main(['-s', script, '-o', 'shots'])
-    except SystemExit:
-        pass
     assert os.path.isabs(recorded['template'])
     assert recorded['template'] == str(tmp_path / 'shots' / 'demo-ref.png')
     assert recorded['script_name'] == 'demo'

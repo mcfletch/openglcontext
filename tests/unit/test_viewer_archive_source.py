@@ -22,6 +22,7 @@ import zipfile
 
 import pytest
 
+from OpenGLContext.contentpacks.archive import UnsafeArchive
 from OpenGLContext.viewer import source as viewersource
 
 
@@ -157,15 +158,9 @@ class TestWhatAnArchiveMayNotDo:
         with zipfile.ZipFile(path, 'w') as archive:
             archive.writestr('../escaped.glb', b'x')
 
-        got = None
-        try:
-            got = viewersource.open_archive(path + '#escaped.glb',
-                                            cache_dir=cache)
-        except (IOError, viewersource.UnknownMember):
-            pass
+        with pytest.raises(UnsafeArchive, match='outside'):
+            viewersource.open_archive(path + '#escaped.glb', cache_dir=cache)
         assert not os.path.exists(str(tmp_path / 'escaped.glb'))
-        if got is not None:
-            assert os.path.realpath(got).startswith(os.path.realpath(cache))
 
     def test_a_member_naming_an_absolute_path_is_refused(self, tmp_path, cache):
         outside = tmp_path / 'outside.glb'
@@ -173,11 +168,8 @@ class TestWhatAnArchiveMayNotDo:
         with zipfile.ZipFile(path, 'w') as archive:
             archive.writestr('/' + str(outside).lstrip('/'), b'x')
 
-        try:
+        with pytest.raises(UnsafeArchive, match='outside'):
             viewersource.open_archive(path, cache_dir=cache)
-        except (IOError, viewersource.UnknownMember):
-            pass
-
         assert not outside.exists()
 
 

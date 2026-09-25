@@ -7,6 +7,7 @@ specific socket error and the GL framebuffer capture.
 """
 
 import os
+import pathlib
 import socket
 import sys
 import tempfile
@@ -235,14 +236,19 @@ def test_close_swallows_teardown_errors():
     """close() ignores failures from the connection, socket and unlink."""
     inj = EventInjector(context=object())
 
+    closed = []
+
     class _Boom:
         def close(self):
+            closed.append(self)
             raise OSError('cannot close')
 
-    inj._conn = _Boom()
-    inj._socket = _Boom()
+    connection, listening = _Boom(), _Boom()
+    inj._conn = connection
+    inj._socket = listening
     inj.socket_path = '/no/such/dir/never.sock'  # unlink will raise OSError
-    inj.close()  # must not propagate
+    assert inj.close() is None
+    assert closed == [connection, listening]
 
 
 # --------------------------------------------------------------------------
@@ -500,10 +506,7 @@ def test_sender_encodes_all_event_kinds():
     finally:
         sender.close()
         server.close()
-        try:
-            os.unlink(path)
-        except OSError:
-            pass
+        pathlib.Path(path).unlink(missing_ok=True)
 
 
 def test_sender_close_swallows_socket_error():
@@ -531,7 +534,4 @@ def test_sender_close_is_idempotent():
         sender.close()
     finally:
         server.close()
-        try:
-            os.unlink(path)
-        except OSError:
-            pass
+        pathlib.Path(path).unlink(missing_ok=True)

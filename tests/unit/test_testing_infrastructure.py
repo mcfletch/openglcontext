@@ -6,11 +6,13 @@ requiring an OpenGL context.
 
 import json
 import os
+import pathlib
 import socket
 import tempfile
 import threading
 
 import numpy as np
+import pytest
 
 from OpenGLContext.testing import event_injector
 
@@ -172,10 +174,7 @@ class TestEventInjector:
             assert event['value'] == 42
         finally:
             server.close()
-            try:
-                os.unlink(socket_path)
-            except OSError:
-                pass
+            pathlib.Path(socket_path).unlink(missing_ok=True)
 
     def test_event_sender_send_mousebutton(self):
         """EventSender.send_mousebutton creates correct event."""
@@ -210,10 +209,7 @@ class TestEventInjector:
             assert event['state'] == 1
         finally:
             server.close()
-            try:
-                os.unlink(socket_path)
-            except OSError:
-                pass
+            pathlib.Path(socket_path).unlink(missing_ok=True)
 
 
 class TestVisualRegressionTest:
@@ -353,8 +349,10 @@ class TestKillProcessTree:
         """kill_process_tree handles nonexistent processes gracefully."""
         from OpenGLContext.testing.subprocess_runner import kill_process_tree
 
-        # Should not raise exception
-        kill_process_tree(999999999)
+        psutil = pytest.importorskip('psutil')
+        absent = 999999999
+        assert not psutil.pid_exists(absent)
+        assert kill_process_tree(absent) is None
 
 
 class TestEventInjectionMixin:

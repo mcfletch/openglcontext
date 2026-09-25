@@ -75,7 +75,7 @@ def test_timeout_kills_grandchild(tmp_path, runner):
     if _pid_alive(grandchild_pid):
         try:
             os.kill(grandchild_pid, signal.SIGKILL)
-        except ProcessLookupError:
+        except ProcessLookupError:  # noqa: OGC223 the survivor exited before this cleanup kill, and the test fails on the next line either way
             pass
         pytest.fail("grandchild process survived the timeout kill")
 

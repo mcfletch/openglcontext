@@ -271,6 +271,23 @@ class TestAMouseButtonIsAnInputLikeAnyOther:
         assert mouseevents.button_name(0) == '<mouse-0>'
 
 
+class _EndOfTheChain:
+    """What a context's mix-ins hand an event on to: its own dispatch.
+
+    Records each event that reaches it, and answers :attr:`DISPATCHED`.
+    """
+
+    DISPATCHED = 'dispatched'
+
+    @property
+    def dispatched(self):
+        return self.__dict__.setdefault('_dispatched', [])
+
+    def ProcessEvent(self, event):
+        self.dispatched.append(event)
+        return self.DISPATCHED
+
+
 class TestTheSamplerIsFedTheMouseToo:
     """A named button is no use if nothing puts one into the sampler.
 
@@ -320,23 +337,17 @@ class TestTheSamplerIsFedTheMouseToo:
         from OpenGLContext.events import mouseevents
         from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
 
-        class _Dispatched(ViewPlatformMixin):
+        class _Dispatched(ViewPlatformMixin, _EndOfTheChain):
             def __init__(self):
                 self._state = InputState()
 
             def getInputState(self):
                 return self._state
 
-            def ProcessEvent(self, event):
-                return ViewPlatformMixin.ProcessEvent(self, event)
-
-        # The mix-in's ProcessEvent chains to its super's; with nothing else in
-        # the way that is object's, so the chain is stubbed rather than run.
         dispatched = _Dispatched()
-        try:
-            dispatched.ProcessEvent(self.button(0, 1))
-        except AttributeError:
-            pass                        # no next handler in this bare chain
+        pressed = self.button(0, 1)
+        assert dispatched.ProcessEvent(pressed) == _EndOfTheChain.DISPATCHED
+        assert dispatched.dispatched == [pressed]
         assert dispatched.getInputState().held(mouseevents.button_name(0))
 
     def test_a_wheel_notch_is_never_held(self):
@@ -361,7 +372,7 @@ class TestAClickOnAScreenIsNotAnInput:
         from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
         from OpenGLContext.ui.overlay import OverlayMixin
 
-        class _Guarded(OverlayMixin, ViewPlatformMixin):
+        class _Guarded(OverlayMixin, ViewPlatformMixin, _EndOfTheChain):
             def __init__(self):
                 self._state = InputState()
 
@@ -387,12 +398,12 @@ class TestAClickOnAScreenIsNotAnInput:
     def test_a_click_the_overlay_took_is_not_recorded(self):
         guarded = self.context(sinks=True)
         assert guarded.ProcessEvent(self.button()) is None
+        assert guarded.dispatched == []
         assert not self.held(guarded)
 
     def test_a_click_the_overlay_did_not_want_is_recorded(self):
         guarded = self.context(sinks=False)
-        try:
-            guarded.ProcessEvent(self.button())
-        except AttributeError:
-            pass                        # no next handler in this bare chain
+        clicked = self.button()
+        assert guarded.ProcessEvent(clicked) == _EndOfTheChain.DISPATCHED
+        assert guarded.dispatched == [clicked]
         assert self.held(guarded)
