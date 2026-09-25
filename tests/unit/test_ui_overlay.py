@@ -83,6 +83,11 @@ class World:
         self.cursors.append(name)
         return True
 
+    def setPointerCapture(self, capture):
+        """The backend's half: the pointer is hidden, or shown as it was."""
+        self.cursors.append('<captured>' if capture else '<released>')
+        return True
+
     def screenTrees(self, metrics, now=None):
         """What a context draws over the frame: its HUD layers, of which the
         stand-in has none."""
@@ -760,6 +765,23 @@ class TestTellingThePointerWhatIsUnderIt:
         context.overlaySinks(FakeEvent('mousemove', pick=away))
         assert context.cursorWanted() == ''
         assert context.cursors[-1] == ''
+
+    def test_a_hover_does_not_show_the_pointer_mouse_look_hid(self):
+        context, _panel, button = self._resting()
+        assert context.setPointerCapture(True)
+        asked = len(context.cursors)
+        away = (button.rect.x - 40, button.rect.y - 40)
+        context.overlaySinks(FakeEvent('mousemove', pick=away))
+        context.overlaySinks(FakeEvent('mousemove', pick=button.rect.centre))
+        assert not context.showCursor()
+        assert len(context.cursors) == asked
+
+    def test_the_shape_wanted_is_put_back_when_capture_ends(self):
+        """Releasing the pointer shows the backend's own; the control's comes back."""
+        context, _panel, _button = self._resting()
+        context.setPointerCapture(True)
+        context.setPointerCapture(False)
+        assert context.cursors[-2:] == ['<released>', 'hand']
 
     def test_nothing_is_shown_before_the_pause_is_up(self):
         context, _panel, _button = self._resting()

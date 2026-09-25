@@ -119,3 +119,22 @@ class TestEveryBackendSpeaksTheSameWords:
 
     def test_the_backend_this_run_uses_offers_them(self):
         assert 'glfwcontext' in self._backends()
+
+
+class TestMouseLookKeepsThePointerHidden:
+    """A backend whose hidden pointer is itself a cursor shape refuses another."""
+
+    def test_glut_refuses_a_shape_while_the_pointer_is_grabbed(self, monkeypatch):
+        from OpenGL import GLUT
+        from OpenGLContext.glutcontext import GLUTContext
+        set_to = []
+        monkeypatch.setattr(GLUT, 'glutSetWindow', lambda window: None)
+        monkeypatch.setattr(GLUT, 'glutSetCursor', set_to.append)
+        context = GLUTContext.__new__(GLUTContext)
+        context.windowID = 1
+        context._pointerGrabbed = True
+        assert not context.setPointerShape('hand')
+        assert set_to == []
+        context._pointerGrabbed = False
+        assert context.setPointerShape('hand')
+        assert set_to == [GLUT.GLUT_CURSOR_INFO]

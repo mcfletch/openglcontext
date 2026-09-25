@@ -317,8 +317,10 @@ class OverlayMixin(_Host):
     _pointerSince: float = 0.0
     _tooltip: Any = None
     #: The shape the pointer is in, so it is set when it changes and not on
-    #: every movement.
-    _cursorShown: str = ''
+    #: every movement; None where the backend has changed it since.
+    _cursorShown: Optional[str] = ''
+    #: Whether the pointer is grabbed for mouse-look, which hides it.
+    _pointerHeld: bool = False
 
     @property
     def _holding(self) -> Dict['_Claim', bool]:
@@ -609,12 +611,34 @@ class OverlayMixin(_Host):
             # pointer is still, so the frame the tip appears in is asked for.
             self.redrawAt(self._pointerSince + TOOLTIP_PAUSE)
 
+    def setPointerCapture(self, capture: bool) -> bool:
+        """Grab or release the pointer as the backend does; False where it cannot.
+
+        A grabbed pointer is hidden, and no shape is asked for while it is, so
+        a hover cannot show it again. Releasing it leaves the backend's
+        ordinary pointer, so the shape the control under it wants is asked for
+        again at once.
+        """
+        backend = getattr(super(OverlayMixin, self), 'setPointerCapture', None)
+        if backend is None:
+            return False
+        done = bool(backend(capture))
+        if done:
+            self._pointerHeld = bool(capture)
+            self._cursorShown = None
+            if not capture:
+                self.showCursor()
+        return done
+
     def showCursor(self) -> bool:
         """Put the pointer into the shape the widget under it asks for.
 
         Called as the pointer crosses the window. A backend with no cursors
-        answers False and the pointer stays as it is.
+        answers False and the pointer stays as it is, as it does while
+        mouse-look holds the pointer hidden.
         """
+        if self._pointerHeld:
+            return False
         wanted = self.cursorWanted()
         if wanted == self._cursorShown:
             return True

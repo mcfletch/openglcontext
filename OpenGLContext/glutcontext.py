@@ -221,8 +221,12 @@ class GLUTContext(
     }
 
     def setPointerShape(self, name: str) -> bool:
-        """Show this pointer; False for a shape GLUT has not got."""
-        if not self.windowID:
+        """Show this pointer; False for a shape GLUT has not got.
+
+        False too while mouse-look has the pointer: GLUT hides it by setting
+        the cursor to none, and any other shape would show it again.
+        """
+        if not self.windowID or self._pointerGrabbed:
             return False
         shape = self.CURSOR_SHAPES.get(str(name or 'arrow'))
         if shape is None:

@@ -579,6 +579,10 @@ than showing a wrong shape; the caller can then show the information another
 way. A minimal Wayland cursor theme has only the arrow and the text bar, so
 the view splitters also draw a grip.
 
+While a mouse-look mode holds the pointer it is hidden, and the overlay asks
+for no shape, so a hover cannot show it again. When the mode lets go, the
+shape the control under the pointer wants is put back at once.
+
 ``tooltip`` is one line of text, shown when the pointer rests on the control
 for ``OpenGLContext.ui.tooltip.TOOLTIP_PAUSE`` seconds (0.6). It is drawn over
 the panels rather than pushed on the stack, so it takes no events and does
