@@ -12,14 +12,22 @@ include tests/*.py
 include tests/*.vert
 include tests/resources/*.txt
 
-recursive-include docs *.css *.png *.gif
-include docs/*.html
-include docs/images/*
-include docs/style/*
+# The documentation's source: the pages, the Sphinx configuration and its
+# extensions, templates and static files, the extension specifications, and
+# the pictures. The generated pages (docs/tutorials/*.rst, docs/api/) and the
+# built site are not source.
+include build-docs.py docs/*.rst docs/conf.py
+recursive-include docbuild *.py
+recursive-include docs/_ext *.py
+recursive-include docs/_templates *.html
+recursive-include docs/_static *.css *.js
+recursive-include docs/extensions *.rst *.json *.gltf
+recursive-include docs/images *.png *.jpg *.gif *.svg *.toml *.md *.json
+include docs/tutorials/*.png docs/tutorials/physics_getting_started.rst
 include OpenGLContext/resources/*.txt
 include OpenGLContext/loaders/*
-exclude docs/tutorials/*.xhtml
-exclude docs/tutorials/*.png
+prune docs/_build
+prune docs/api
 exclude tests/test-results/*.png
 exclude tests/test-results/*.html
 
