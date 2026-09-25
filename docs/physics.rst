@@ -276,8 +276,10 @@ A walking camera has a body in the world when its platform is built with
 ``PhysicsViewPlatform(world, body=True)``. The body is a sensor capsule that
 follows the walker: it enters trigger volumes, and its touches with moving
 bodies arrive as contacts with ``solved`` False. It pushes nothing and nothing
-pushes it, and rays pass through it. The walker still collides with the static
-world through its own controller, and those collisions are not reported.
+pushes it, and rays pass through it. The walker collides with the static world
+through its own controller, which reports what the capsule begins and stops
+touching there, within 2 cm, with the speed it arrived at: a subscription on
+``platform.body`` hears it land and walk into walls.
 
 .. code-block:: python
 
