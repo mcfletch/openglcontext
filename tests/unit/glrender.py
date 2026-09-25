@@ -22,6 +22,7 @@ import pytest
 glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.testing.glcontext import profile_unavailable
 
 
 def base_env(monkeypatch, **extra):
@@ -165,10 +166,10 @@ def render_scene_factory(monkeypatch):
                     self.addEventHandler('mousebutton', button=0, state=1,
                                          function=lambda e: None)
 
-        try:
-            inst = _Ctx()
-        except Exception as err:      # pragma: no cover - only on a broken GL stack
-            pytest.skip("no usable GL context: %r" % (err,))
+        reason = profile_unavailable('core')
+        if reason:
+            pytest.skip(reason)
+        inst = _Ctx()
         inst.deferRedraw = True
         win = getattr(inst, 'window', None)
         if win is not None:

@@ -13,6 +13,7 @@ glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.events.mouseevents import MouseMoveEvent
 from OpenGLContext.looptrace import LoopTrace
+from OpenGLContext.testing.glcontext import profile_unavailable
 from OpenGLContext.ui.layout import Column
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.tooltip import TOOLTIP_PAUSE, Tooltip
@@ -40,10 +41,10 @@ def window(monkeypatch):
             drawn.append(list(trees))
             return trees
 
-    try:
-        context = Tipped()
-    except Exception as err:      # pragma: no cover - only on a broken GL stack
-        pytest.skip('no usable GL context: %r' % (err,))
+    reason = profile_unavailable('core')
+    if reason:
+        pytest.skip(reason)
+    context = Tipped()
     context.deferRedraw = True
     try:
         yield context, drawn

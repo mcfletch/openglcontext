@@ -21,6 +21,7 @@ from OpenGLContext.scenegraph.frommesh import (
     mesh_from_primitive, meshes_from_mesh, shape_from_mesh, shapes_from_mesh,
 )
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+from OpenGLContext.testing.glcontext import profile_unavailable
 
 SECTION = [(0.0, -0.1), (0.2, -0.1), (0.2, 0.1), (0.0, 0.1)]
 CORNER = [(0.0, 0.0, 0.0), (0.0, 0.0, 2.0), (2.0, 0.0, 2.0)]
@@ -228,10 +229,10 @@ def _drawn(node, profile):
         def OnInit(self):
             self.sg = scene
 
-    try:
-        context = _Ctx()
-    except Exception as err:                     # pragma: no cover - broken GL stack
-        pytest.skip('no usable %s context: %r' % (profile, err))
+    reason = profile_unavailable(profile)
+    if reason:
+        pytest.skip(reason)
+    context = _Ctx()
     try:
         context.deferRedraw = True
         for _ in range(3):

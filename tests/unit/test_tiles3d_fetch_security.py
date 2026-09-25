@@ -85,7 +85,7 @@ class TestAReferenceFromALocalTileset:
         try:
             os.symlink(outside, base / "link.glb")
         except (OSError, NotImplementedError):        # pragma: no cover
-            pytest.skip("symlinks unavailable")
+            pytest.skip("symlinks unavailable")  # noqa: OGC221 the try holds only os.symlink, the probe: Windows refuses it without the privilege
         with pytest.raises(IOError):
             fetch.resolve_uri(str(base), "link.glb")
 

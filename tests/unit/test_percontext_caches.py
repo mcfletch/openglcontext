@@ -162,16 +162,12 @@ class TestClosingAWindowLetsGoOfItsOwnContext:
         other one's programs would stay reachable for ever."""
         import contextlib
 
-        def opened(stack, title):
-            try:
-                return stack.enter_context(
-                    glcontext.hidden_window(title, size=(32, 32)))
-            except glcontext.GLUnavailable as err:
-                pytest.skip('a second context cannot be made here: %s' % (err,))
-
+        if not glcontext.gl_available():
+            pytest.skip('no GL target available')
         with contextlib.ExitStack() as open_windows:
-            first = opened(open_windows, 'cache-close-a')
-            second = opened(open_windows, 'cache-close-b')
+            first, second = (
+                open_windows.enter_context(glcontext.hidden_window(title, size=(32, 32)))
+                for title in ('cache-close-a', 'cache-close-b'))
             glcontext.make_current(first)
             shaderpass.get_shader_program()
             glcontext.make_current(second)
@@ -201,17 +197,14 @@ class TestAContextReleasesItsOwnResources:
             def OnInit(self):
                 self.sg = None
 
+        if not glcontext.gl_available():
+            pytest.skip('no GL target available')
         built = []
         try:
             for _each in range(2):
                 context = _Ctx()
                 context.deferRedraw = True
                 built.append(context)
-        except Exception as err:      # pragma: no cover - only on a broken stack
-            for context in built:
-                context.releaseWindow()
-            pytest.skip('no usable GL context: %r' % (err,))
-        try:
             yield built
         finally:
             for context in built:
