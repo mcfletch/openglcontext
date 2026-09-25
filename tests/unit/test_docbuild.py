@@ -531,3 +531,17 @@ class TestEveryLinkedTutorialIsWritten:
         picture = os.path.join(here, 'docs', 'tutorials',
                                'physics_events.py-screen-0001.png')
         assert os.path.isfile(picture)
+
+
+class TestTheZonesPageListsTheReaders:
+    def test_every_extension_the_engine_reads_in_a_zone_is_named(self):
+        from OpenGLContext.loaders.gltf import zoning
+        here = os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))))
+        with open(os.path.join(here, 'docs', 'zones.rst'),
+                  encoding='utf-8') as handle:
+            page = handle.read()
+        start = page.index('The extensions the loader reads in a zone are')
+        sentence = page[start:page.index('. ', start)]
+        missing = [name for name in zoning.BUILTIN if name not in sentence]
+        assert missing == []

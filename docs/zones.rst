@@ -121,7 +121,7 @@ examples, is :doc:`extensions/OGLC_zone`.
 
 The extensions the loader reads in a zone are ``KHR_lights_punctual``,
 ``KHR_audio_emitter``, ``KHR_node_visibility``, ``OGLC_hook`` (the ``mirror``
-kind) and ``OMI_physics_gravity``. A name nothing reads is logged once and the
+kind), ``OMI_physics_gravity`` and ``EXT_lights_image_based``. A name nothing reads is logged once and the
 zone's other settings still apply. An application reads another extension in
 zones by registering a reader:
 
