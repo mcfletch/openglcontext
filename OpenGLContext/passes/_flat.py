@@ -161,11 +161,11 @@ class SGObserver( object ):
     _matrixBuffer: Optional[Any] = None
     #: The frame being drawn, from :meth:`drawingFrame`; None between frames.
     frameState: Optional[FrameState] = None
-    #: What the last :meth:`selectLevels` chose for: the path generation, the
-    #: level-of-detail nodes' world matrices as the transform cache handed them
-    #: over, and the camera. A frame matching all three is choosing again what
-    #: it chose last time.
-    _levelChoice: Optional[Tuple[int, List[Any], bytes]] = None
+    #: What the last :meth:`chooseLevels` chose for: the path generation, the
+    #: level-of-detail fields' generation, the nodes' world matrices as the
+    #: transform cache handed them over, and the cameras. A frame matching all
+    #: four is choosing again what it chose last time.
+    _levelChoice: Optional[Tuple[Tuple[int, int], List[Any], bytes]] = None
     #: Which copies of each declared set this gather's frustum kept, by ``id``
     #: of the record's path. Belongs to the gather rather than to the shapes: a
     #: depth pass culling against a light must not read the camera's answer.
@@ -1230,8 +1230,10 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
                               own: List[Any] ) -> bool:
         """Whether this frame's levels are the ones already chosen.
 
-        Nothing moved and no camera did either, so every node would work
-        out the coverage it worked out last frame and announce no change. How
+        Nothing moved, no camera did either and no field deciding a level was
+        set (:func:`~OpenGLContext.scenegraph.lod.level_generation`), so every
+        node would work out the coverage it worked out last frame and announce
+        no change. How
         often that holds is the application's business; asking costs one
         identity comparison per node, because the scenegraph's transform cache
         hands back the same matrix object while a node is unmoved.
@@ -1242,17 +1244,18 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         stillness. Holding them also costs one frame of four-by-fours.
         """
         previous = self._levelChoice
+        generations = ( self._pathGeneration, lod.level_generation() )
         camera = b''.join(
             asarray( viewer.modelview, 'f' ).tobytes()
             + array( (viewer.tangent, float(viewer.orthographic)), 'd' ).tobytes()
             for viewer in viewers )
         if ( previous is not None
-             and previous[0] == self._pathGeneration
+             and previous[0] == generations
              and previous[2] == camera
              and len(previous[1]) == len(own)
              and all( a is b for a, b in zip( previous[1], own ) ) ):
             return True
-        self._levelChoice = ( self._pathGeneration, own, camera )
+        self._levelChoice = ( generations, own, camera )
         return False
 
     def fieldOfView( self ) -> Optional[float]:

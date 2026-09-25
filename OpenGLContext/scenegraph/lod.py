@@ -13,8 +13,8 @@ its detail twice as far out.
 so a figure's distance is measured to the figure and not to the world origin.
 
 Which level that comes to is settled once a frame by the render pass, which is
-the only thing that knows where the viewer is
-(:meth:`OpenGLContext.passes._flat.FlatPass.selectLevels`). Changing level
+the only thing that knows where the viewers are
+(:meth:`OpenGLContext.passes._flat.FlatPass.chooseLevels`). Changing level
 announces itself on the same signal a ``Switch`` uses, because the pass keeps a
 flattened scenegraph and a level nobody told it about would not be drawn.
 """
@@ -30,8 +30,8 @@ from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph.switch import SWITCH_CHANGE_SIGNAL
 
 __all__ = ['LOD', 'ScreenCoverageLOD', 'CULLED', 'Viewer', 'distance_to_viewer',
-           'finest', 'screen_fraction', 'uniform_scale', 'viewer_for',
-           'viewer_tangent']
+           'finest', 'level_generation', 'screen_fraction', 'uniform_scale',
+           'viewer_for', 'viewer_tangent']
 
 #: ``whichLevel`` for a node that is drawing nothing at all, which is what
 #: ``MSFT_lod`` asks for below the coarsest level's screen coverage.
@@ -403,3 +403,33 @@ class ScreenCoverageLOD(LOD):
             measured = boundingvolume.boundingSphere(self.level[:1])
             self._measured = float(measured[1]) if measured else 0.0
         return self._measured
+
+
+_level_changes = 0
+
+
+def level_generation() -> int:
+    """A count that moves whenever a field deciding a node's level is set.
+
+    Those are a node's ``level``, ``range`` and ``center``, and a
+    :class:`ScreenCoverageLOD`'s ``screenCoverage`` and ``radius``. A pass that
+    remembers the levels it chose keeps them while this, the nodes' places
+    and the viewers stay as they were.
+    """
+    return _level_changes
+
+
+def _levels_changed(*_args: Any, **_named: Any) -> None:
+    global _level_changes
+    _level_changes += 1
+
+
+def _watch_level_fields() -> None:
+    for owner, name in ((LOD, 'level'), (LOD, 'range'), (LOD, 'center'),
+                        (ScreenCoverageLOD, 'screenCoverage'),
+                        (ScreenCoverageLOD, 'radius')):
+        dispatcher.connect(_levels_changed, signal=('set', getattr(owner, name)),
+                           weak=False)
+
+
+_watch_level_fields()

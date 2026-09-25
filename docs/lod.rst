@@ -105,8 +105,8 @@ from level to level. Level *i* is drawn from its own threshold up to the
 threshold of the level before it. Below the last value, nothing is drawn. To
 keep a model on screen however small it gets, end its list with ``0``.
 
-``FlatPass.selectLevels`` chooses the levels once a frame, before the pass
-walks the scene. A level change replaces a subtree, and the pass has to update
+The pass chooses the levels once a frame, for every view at once
+(``FlatPass.chooseLevels``, from ``prepareViews``), before it walks the scene. A level change replaces a subtree, and the pass has to update
 its flattened copy of the scenegraph before it walks it. Only the camera is
 used. The shadow pass draws the same levels from a light's point of view; if
 it chose levels by distance from the light, levels would change as the sun
@@ -127,10 +127,12 @@ its thresholds the coverage falls in and signals a change only when the level
 changes. ``selectFor(modelview, tangent)`` makes the same decision for a
 single node.
 
-If neither the camera nor any LOD node has moved since the last frame, the
-pass keeps last frame's choice and skips the calculation. The scenegraph's
-transform cache returns the same matrix object while a node does not move, so
-the check is one identity comparison per node. In the gallery above, with 120
+If neither the camera nor any LOD node has moved since the last frame, and no
+node's ``level``, ``range``, ``center``, ``screenCoverage`` or ``radius`` has
+been set, the pass keeps last frame's choice and skips the calculation. The
+scenegraph's transform cache returns the same matrix object while a node does
+not move, so the check is one identity comparison per node; a field set on any
+LOD node moves ``lod.level_generation()``, and the next frame chooses again. In the gallery above, with 120
 LOD nodes, choosing costs 0.40 ms a frame with a still camera and 1.20 ms
 without the shortcut. With the camera moving every frame, so the shortcut
 never applies, it costs 0.93 ms.

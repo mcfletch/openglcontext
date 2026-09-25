@@ -192,3 +192,46 @@ class TestTheMemo:
         rendering.chooseLevels([lod.Viewer(_at(5.0), 4.0, orthographic=True)])
         rendering.chooseLevels([lod.Viewer(_at(5.0), 40.0, orthographic=True)])
         assert node.whichLevel == 2
+
+    def test_a_new_range_chooses_again_with_nothing_moved(self):
+        node = lod.LOD(level=_levels(), range=[10.0, 20.0])
+        rendering = _pass([node])
+        rendering.chooseLevels([_perspective(15.0)])
+        assert node.whichLevel == 1
+        node.range = [30.0, 40.0]
+        rendering.chooseLevels([_perspective(15.0)])
+        assert node.whichLevel == 0
+
+    def test_a_new_centre_chooses_again(self):
+        node = lod.LOD(level=_levels(), range=[10.0, 20.0])
+        rendering = _pass([node])
+        rendering.chooseLevels([_perspective(15.0)])
+        node.center = (0.0, 0.0, 10.0)
+        rendering.chooseLevels([_perspective(15.0)])
+        assert node.whichLevel == 0
+
+    def test_new_coverages_choose_again(self):
+        node = _coverage_node()
+        rendering = _pass([node])
+        rendering.chooseLevels([_perspective(4.0)])
+        assert node.whichLevel == 1
+        node.screenCoverage = [0.01, 0.005, 0.001]
+        rendering.chooseLevels([_perspective(4.0)])
+        assert node.whichLevel == 0
+
+    def test_a_new_radius_chooses_again(self):
+        node = _coverage_node()
+        rendering = _pass([node])
+        rendering.chooseLevels([_perspective(4.0)])
+        node.radius = 100.0
+        rendering.chooseLevels([_perspective(4.0)])
+        assert node.whichLevel == 0
+
+    def test_new_levels_choose_again(self):
+        node = lod.LOD(level=[Transform()], range=[10.0, 20.0])
+        rendering = _pass([node])
+        rendering.chooseLevels([_perspective(15.0)])
+        assert node.whichLevel == 0
+        node.level = _levels()
+        rendering.chooseLevels([_perspective(15.0)])
+        assert node.whichLevel == 1
