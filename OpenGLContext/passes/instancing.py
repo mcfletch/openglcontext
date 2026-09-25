@@ -946,6 +946,10 @@ def _build_instance_vao(gpu: Any, arr: np.ndarray, stride: int) -> tuple:
     glBindVertexArray(0)
     gpu._instance_vao = vao
     gpu._instance_vbo = inst_vbo
+    # The divisor the attributes above were given, recorded with the VAO it is
+    # state of: a VAO rebuilt after a release starts from this, whatever the
+    # one before it was last set to.
+    gpu._instance_divisor = 1
     return vao, inst_vbo
 
 

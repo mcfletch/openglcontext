@@ -188,6 +188,28 @@ class TestResourcesAndQueue:
         assert gpu.vao == 0
         gpu.release()                                # idempotent
 
+    def test_a_rebuilt_instance_vao_is_given_the_divisor_it_is_drawn_with(self, gl):
+        """The divisor is state of the VAO, so a new VAO starts from its own."""
+        from OpenGL import GL
+        from OpenGLContext.passes import instancing
+        gpu = _full_mesh()._gpu(_mode())
+        modelviews = [np.eye(4, dtype='f')] * 2
+
+        def divisor():
+            GL.glBindVertexArray(gpu._instance_vao)
+            try:
+                return int(np.ravel(GL.glGetVertexAttribiv(
+                    instancing.INSTANCE_ATTR_LOC, GL.GL_VERTEX_ATTRIB_ARRAY_DIVISOR))[0])
+            finally:
+                GL.glBindVertexArray(0)
+
+        instancing.draw_instanced_mesh(gpu, modelviews, [0, 0], copies=3)
+        assert divisor() == 3
+        gpu.release()
+        instancing.draw_instanced_mesh(gpu, modelviews, [0, 0], copies=3)
+        assert divisor() == 3
+        assert glGetError() == GL_NO_ERROR
+
     def test_instance_gpu_returns_cached_gpu(self, gl):
         mesh = _full_mesh()
         mode = _mode()
