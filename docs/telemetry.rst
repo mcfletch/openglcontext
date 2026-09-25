@@ -129,6 +129,26 @@ level, the match, pickups, shots, the opponents' decisions.
 marks from the match's own event stream rather than from calls inside the
 game rules.
 
+Code that marks through a recorder of its own, rather than the context's,
+can be handed any of three with the same ``mark()``:
+
+- ``NOT_RECORDING`` keeps nothing and is false, so ``if recorder:`` still
+  says whether anything is kept.
+- ``Keeping(clock=None)`` keeps each mark in memory as ``(when, name,
+  fields)`` in ``.marks``, stamped with what ``clock`` returns (0.0 without
+  one); ``.named(name)`` returns the marks of one name. A test, or a
+  headless run that summarises what it did, reads them back from there.
+- ``Tee(*recorders)`` hands each mark to every recorder given, so one run
+  can be kept in memory and written to a journal at once. It is true when
+  any of them is.
+
+.. code-block:: python
+
+   from OpenGLContext.telemetry import Keeping, Tee
+
+   kept = Keeping(clock=lambda: driven)
+   session.telemetry = Tee(kept, context.telemetry)
+
 .. _randomness:
 
 Randomness

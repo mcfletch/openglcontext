@@ -343,6 +343,64 @@ class TestMarkingWhenNobodyIsRecording:
             recorder.mark('pass-begun', gap=40.0, sight=260.0)
 
 
+class TestKeepingMarksInMemory:
+    """Marks as values rather than a file: what a test or a headless run of a
+    game reads back once the run is over."""
+
+    def test_it_keeps_each_mark_in_order(self) -> None:
+        from OpenGLContext.telemetry import Keeping
+        kept = Keeping()
+        kept.mark('pass-begun', gap=40.0)
+        kept.mark('pass-done', seconds=4.2)
+        assert [(name, fields) for _when, name, fields in kept.marks] == [
+            ('pass-begun', {'gap': 40.0}), ('pass-done', {'seconds': 4.2})]
+
+    def test_stamped_with_the_time_its_clock_answers(self) -> None:
+        from OpenGLContext.telemetry import Keeping
+        now = [0.0]
+        kept = Keeping(clock=lambda: now[0])
+        kept.mark('one')
+        now[0] = 2.5
+        kept.mark('two')
+        assert [when for when, _name, _fields in kept.marks] == [0.0, 2.5]
+
+    def test_it_answers_the_marks_of_one_name(self) -> None:
+        from OpenGLContext.telemetry import Keeping
+        kept = Keeping()
+        for name in ('crash', 'driving', 'crash'):
+            kept.mark(name)
+        assert [name for _when, name, _fields in kept.named('crash')] == [
+            'crash', 'crash']
+
+    def test_it_says_it_is_recording(self) -> None:
+        from OpenGLContext.telemetry import Keeping
+        assert Keeping()
+
+    def test_a_field_named_name_is_a_field(self) -> None:
+        from OpenGLContext.telemetry import Keeping
+        kept = Keeping()
+        kept.mark('picked-up', name='rocket launcher')
+        assert kept.marks[0][2] == {'name': 'rocket launcher'}
+
+
+class TestMarkingToSeveralRecorders:
+    """One run kept in memory for a summary and written to a journal as well."""
+
+    def test_each_mark_reaches_every_recorder(self) -> None:
+        from OpenGLContext.telemetry import Keeping, SessionRecorder, Tee
+        kept, written = Keeping(), _Written()
+        both = Tee(kept, SessionRecorder(written.write))
+        both.mark('crash', closing=12.0)
+        assert [name for _when, name, _fields in kept.marks] == ['crash']
+        assert [record['name'] for record in written.records
+                if record.get('kind') == 'mark'] == ['crash']
+
+    def test_it_is_recording_if_any_of_them_is(self) -> None:
+        from OpenGLContext.telemetry import NOT_RECORDING, Keeping, Tee
+        assert Tee(NOT_RECORDING, Keeping())
+        assert not Tee(NOT_RECORDING)
+
+
 class _Written:
     """A journal that keeps its records in a list."""
 

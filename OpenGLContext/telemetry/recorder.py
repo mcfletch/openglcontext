@@ -351,3 +351,60 @@ class NotRecording:
 
 #: The one that is needed, since it holds nothing to tell two of them apart.
 NOT_RECORDING = NotRecording()
+
+
+class Keeping:
+    """A recorder that keeps its marks in memory, in order.
+
+    The same :meth:`mark` a :class:`SessionRecorder` takes, for a caller that
+    wants a run's marks back as values rather than as a file: a test, or a
+    headless run that summarises what it did. Each is kept as ``(when, name,
+    fields)``, stamped with what ``clock`` answers, or 0.0 with no clock.
+
+        >>> kept = Keeping()
+        >>> kept.mark('pass-done', seconds=4.2)
+        >>> kept.marks
+        [(0.0, 'pass-done', {'seconds': 4.2})]
+    """
+
+    def __init__(self, clock: Optional[Callable[[], float]] = None) -> None:
+        self.clock = clock
+        #: Every mark taken, as ``(when, name, fields)``.
+        self.marks: List[tuple[float, str, Dict[str, Any]]] = []
+
+    def mark(self, name: str, /, **fields: Any) -> None:
+        """Keep a mark."""
+        when = float(self.clock()) if self.clock is not None else 0.0
+        self.marks.append((when, name, fields))
+
+    def named(self, name: str) -> List[tuple[float, str, Dict[str, Any]]]:
+        """The marks called ``name``, in order."""
+        return [one for one in self.marks if one[1] == name]
+
+    def __bool__(self) -> bool:
+        return True
+
+    def __repr__(self) -> str:
+        return 'Keeping(%d marks)' % (len(self.marks),)
+
+
+class Tee:
+    """Marks every recorder it is given: one run kept and written at once.
+
+    Recording when any of them is, so ``if context.telemetry:`` still answers
+    whether anything keeps what is marked.
+    """
+
+    def __init__(self, *recorders: Any) -> None:
+        self.recorders = recorders
+
+    def mark(self, name: str, /, **fields: Any) -> None:
+        """Hand the mark to each recorder in turn."""
+        for recorder in self.recorders:
+            recorder.mark(name, **fields)
+
+    def __bool__(self) -> bool:
+        return any(bool(recorder) for recorder in self.recorders)
+
+    def __repr__(self) -> str:
+        return 'Tee(%s)' % (', '.join(repr(one) for one in self.recorders),)
