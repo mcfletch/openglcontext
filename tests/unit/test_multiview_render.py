@@ -196,7 +196,7 @@ class TestTheStrategy:
         from OpenGLContext.multiview import strategy as multiview
         from OpenGLContext.passes import renderpass
         render_scene(_scene(), frames=2, size=(WIDTH, HEIGHT), layout=_side_by_side)
-        assert renderpass.FLAT.multiviewStrategy in multiview.IMPLEMENTED
+        assert renderpass.FLAT.multiviewStrategy in multiview.STRATEGIES
 
     def test_one_view_asks_the_driver_nothing(self, render_scene, env):
         from OpenGLContext.passes import renderpass
@@ -213,6 +213,32 @@ class TestTheStrategy:
 
         multiview.reset_detected()
         render_scene(_scene(), frames=2, size=(WIDTH, HEIGHT), layout=layout)
+        assert renderpass.FLAT.multiviewStrategy == 'sequential'
+
+
+    def test_a_strategy_chosen_while_running_is_the_one_drawn_with(self, render_scene, env):
+        """The settings screen's field takes effect on the next frame."""
+        from OpenGLContext.multiview import strategy as multiview
+        from OpenGLContext.passes import renderpass
+
+        def layout(context):
+            context.contextDefinition.multiview = 'sequential'
+            return _side_by_side(context)
+
+        multiview.reset_detected()
+        rendered = render_scene(_scene(), frames=2, size=(WIDTH, HEIGHT), layout=layout)
+        assert renderpass.FLAT.multiviewStrategy == 'sequential'
+        context = rendered.context
+        context.setCurrent()
+        try:
+            expected = multiview.MultiviewCapabilities.detect().choose('geometry')
+        finally:
+            context.unsetCurrent()
+        context.contextDefinition.multiview = 'geometry'
+        context.OnDraw(force=1)
+        assert renderpass.FLAT.multiviewStrategy == expected
+        context.contextDefinition.multiview = 'sequential'
+        context.OnDraw(force=1)
         assert renderpass.FLAT.multiviewStrategy == 'sequential'
 
 

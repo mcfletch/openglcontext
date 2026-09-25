@@ -26,6 +26,7 @@ and the driver is asked once per GL context (:meth:`MultiviewCapabilities.detect
 ``ContextDefinition.multiview`` (env ``OPENGLCONTEXT_MULTIVIEW``) asks for one
 strategy by name, so each can be run and compared on one machine; a strategy
 the driver cannot run is reported and the best one it can run is used instead.
+The render pass chooses again on the frame after the field changes.
 
 :class:`ViewFrame` is one view's part of a frame: the camera's matrices, the
 frustum, the rectangle and the culled, sorted draw list. The pass builds one per
@@ -48,13 +49,17 @@ from typing import Any, Collection, Dict, Iterable, List, NamedTuple, Optional, 
 
 import numpy as np
 
-from OpenGLContext import renderoptions
+from OpenGL.GL import (
+    glDrawArrays, glDrawArraysInstanced, glDrawElements, glDrawElementsInstanced,
+)
+
+from OpenGLContext import contextresources, renderoptions
 from OpenGLContext.multiview.views import MAX_VIEWS, Rect, View
 
 log = logging.getLogger(__name__)
 
 __all__ = [
-    'IMPLEMENTED', 'MAX_VIEWS', 'MultiviewCapabilities', 'STRATEGIES',
+    'MAX_VIEWS', 'MultiviewCapabilities', 'STRATEGIES',
     'VIEW_BLOCK_BINDING', 'VIEW_RECORD_BYTES', 'ViewFrame', 'ViewRecord',
     'driver_view_offsets', 'pack_view_table', 'program_views', 'requested_strategy',
     'reset_detected', 'view_mask', 'view_record_offsets', 'view_records',
@@ -63,9 +68,6 @@ __all__ = [
 
 #: Every strategy, fastest first.
 STRATEGIES: Tuple[str, ...] = ('vertex', 'geometry', 'sequential')
-
-#: The strategies this build of the engine can draw with, fastest first.
-IMPLEMENTED: Tuple[str, ...] = ('vertex', 'geometry', 'sequential')
 
 #: The uniform-buffer binding point the ``ViewBlock`` is read from.
 VIEW_BLOCK_BINDING = 2
@@ -81,7 +83,9 @@ VERTEX_VIEWPORT_EXTENSIONS: Tuple[str, ...] = (
     'GL_AMD_vertex_shader_viewport_index',
 )
 
-#: What each GL context turned out to be able to do, keyed by the context.
+#: What each GL context turned out to be able to do, keyed by the context
+#: (:func:`~OpenGLContext.contextresources.context_key`), and dropped as the
+#: context dies, since a driver hands its address to the next one.
 _DETECTED: Dict[Any, 'MultiviewCapabilities'] = {}
 
 
@@ -90,22 +94,19 @@ def reset_detected() -> None:
     _DETECTED.clear()
 
 
-def _current_gl_context() -> Any:
-    """The GL context an answer would be about, or None when none is current."""
-    try:
-        from OpenGL import platform
-        return platform.PLATFORM.GetCurrentContext() or None
-    except Exception:
-        return None
+@contextresources.on_context_lost
+def _forget_dying_context() -> None:
+    """Drop the answer for the context being torn down."""
+    _DETECTED.pop(contextresources.context_key(), None)
 
 
 def requested_strategy(source: Any) -> str:
     """The strategy ``source``'s ContextDefinition asks for.
 
-    Where nothing set the field, ``OPENGLCONTEXT_MULTIVIEW`` does, and
-    ``'auto'`` where neither says.
+    Where nothing set the field, ``OPENGLCONTEXT_MULTIVIEW`` does, read once
+    per session, and ``'auto'`` where neither says.
     """
-    return renderoptions.choice(source, 'multiview', renderoptions.env_choice(
+    return renderoptions.choice(source, 'multiview', renderoptions.env_choice_once(
         'OPENGLCONTEXT_MULTIVIEW', renderoptions.CHOICES['multiview'],
         renderoptions.SYNONYMS['multiview']))
 
@@ -172,7 +173,7 @@ class MultiviewCapabilities:
         return tuple(found)
 
     def choose(self, requested: str = 'auto',
-               implemented: Sequence[str] = IMPLEMENTED,
+               implemented: Sequence[str] = STRATEGIES,
                failed: Collection[str] = ()) -> str:
         """The strategy to draw with: ``requested`` if it can run here, else the best that can.
 
@@ -205,7 +206,7 @@ class MultiviewCapabilities:
     # -- construction ------------------------------------------------------
     @classmethod
     def from_features(cls, extensions: Set[str], gl_version: Tuple[int, int],
-                      max_viewports: int = 16) -> 'MultiviewCapabilities':
+                      max_viewports: int = 1) -> 'MultiviewCapabilities':
         """From an extension set, a version and ``GL_MAX_VIEWPORTS``; no GL."""
         return cls(gl_version, extensions, max_viewports)
 
@@ -214,18 +215,19 @@ class MultiviewCapabilities:
         """What the current GL context offers, asked once per context.
 
         With no context current the answer is the GL 3.3 floor, and it is not
-        remembered, so the real answer is had once there is one.
+        remembered, so the real answer is had once there is one. A context
+        whose driver reports no version or extensions is answered with the
+        floor too, and that answer is kept for the context's life.
         """
-        key = _current_gl_context()
+        key = contextresources.context_key()
         if key is None:
             return cls()
         cached = _DETECTED.get(key)
         if cached is not None:
             return cached
         found = cls._detect()
-        if found.detected:
-            _DETECTED[key] = found
-            log.info('multi-view: %r', found)
+        _DETECTED[key] = found
+        log.info('multi-view: %r', found)
         return found
 
     @classmethod
@@ -270,11 +272,6 @@ class ViewFrame:
     toRender: List[Any] = field(default_factory=list)
     visiblePlacements: Dict[int, Any] = field(default_factory=dict)
     fitted: bool = False
-
-    @property
-    def viewport(self) -> Tuple[int, int, int, int]:
-        """The rectangle as ``glViewport`` takes it."""
-        return self.rect
 
 
 class ViewRecord(NamedTuple):
@@ -404,7 +401,6 @@ def draw_arrays(mode: Any, primitive: int, first: int, count: int) -> None:
     strategy reaches; the draw is then instanced that many times and the
     vertex stage routes each copy to its view. Otherwise it is one draw.
     """
-    from OpenGL.GL import glDrawArrays, glDrawArraysInstanced
     copies = int(getattr(mode, 'viewCopies', 0) or 0)
     if copies:
         glDrawArraysInstanced(primitive, first, count, copies)
@@ -415,7 +411,6 @@ def draw_arrays(mode: Any, primitive: int, first: int, count: int) -> None:
 def draw_elements(mode: Any, primitive: int, count: int, index_type: int,
                   indices: Any) -> None:
     """``glDrawElements``, once for every view; see :func:`draw_arrays`."""
-    from OpenGL.GL import glDrawElements, glDrawElementsInstanced
     copies = int(getattr(mode, 'viewCopies', 0) or 0)
     if copies:
         glDrawElementsInstanced(primitive, count, index_type, indices, copies)

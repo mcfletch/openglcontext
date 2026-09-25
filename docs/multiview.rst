@@ -660,7 +660,10 @@ logged at start-up.
 strategy by name: ``auto``, ``vertex``, ``geometry`` or ``sequential``. This
 lets each be run and compared on one machine. ``auto`` uses the fastest that
 can run. If the requested strategy cannot run, a warning is logged and the
-best strategy that can run is used.
+best strategy that can run is used. The field can be changed while the window
+is open, and the settings screen offers it: the next frame draws with the
+strategy it names. The environment variable is read once, the first time the
+strategy is chosen.
 
 A driver can offer a strategy and then fail to compile its programs. The
 failure is logged, and the frame in which it happens draws each view in turn.

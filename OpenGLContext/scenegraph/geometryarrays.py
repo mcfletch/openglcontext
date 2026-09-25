@@ -34,6 +34,7 @@ from OpenGL.GL import (
     glGetProgramiv, glVertexAttribPointer,
 )
 
+from OpenGLContext.multiview.strategy import draw_arrays, draw_elements
 from OpenGLContext.scenegraph import vertexsemantics
 from OpenGLContext.scenegraph.shadergeometry import (
     SHARED_LAYOUT, get_or_build_vao,
@@ -219,7 +220,6 @@ def draw_geometry(arrays: GeometryArrays, mode: Any = None) -> None:
     Once for every view a shared multi-view draw reaches, where ``mode`` says
     one is in progress; see :func:`OpenGLContext.multiview.strategy.draw_arrays`.
     """
-    from OpenGLContext.multiview.strategy import draw_arrays, draw_elements
     if arrays.indexed:
         draw_elements(mode, arrays.draw_mode, arrays.count, arrays.index_type, None)
     else:

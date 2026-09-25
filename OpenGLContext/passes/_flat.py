@@ -2232,8 +2232,11 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
     #: test, which a frame of more than one view needs and one view does not.
     _scissorViews = False
     #: How this pass draws a frame of several views, settled the first time it
-    #: draws one; see :mod:`OpenGLContext.multiview.strategy`.
+    #: draws one and again when the definition asks for another; see
+    #: :mod:`OpenGLContext.multiview.strategy`.
     multiviewStrategy: Optional[str] = None
+    #: What the definition asked for when :attr:`multiviewStrategy` was chosen.
+    _multiviewRequested: Optional[str] = None
     #: The strategies whose programs would not compile on this pass's context.
     _multiviewFailed: Tuple[str, ...] = ()
 
@@ -2242,8 +2245,22 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         from OpenGLContext.multiview.strategy import (
             MultiviewCapabilities, requested_strategy,
         )
+        self._multiviewRequested = requested_strategy( self )
         return MultiviewCapabilities.detect().choose(
-            requested_strategy( self ), failed=self._multiviewFailed )
+            self._multiviewRequested, failed=self._multiviewFailed )
+
+    def settleMultiview( self ) -> str:
+        """The strategy this frame draws several views with.
+
+        Chosen the first time it is asked for, and chosen again when the
+        definition's ``multiview`` field no longer names what it was chosen
+        for, so the settings screen's choice takes effect on the next frame.
+        """
+        from OpenGLContext.multiview.strategy import requested_strategy
+        if ( self.multiviewStrategy is None
+                or requested_strategy( self ) != self._multiviewRequested ):
+            self.multiviewStrategy = self.chooseMultiview()
+        return self.multiviewStrategy
 
     def sharesViews( self, frames: Sequence['ViewFrame'] ) -> bool:
         """Whether ``frames`` are drawn by one submission rather than in turn.
@@ -2384,8 +2401,10 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         from OpenGLContext.multiview.views import covers
         self._scissorViews = ( len( frames ) > 1
                                or not covers( [ frames[0].rect ], width, height ) )
-        if self._scissorViews and self.multiviewStrategy is None:
-            self.multiviewStrategy = self.chooseMultiview()
+        # Settled for a frame of several views, and kept current once settled:
+        # the reflections read it on a frame of one.
+        if self._scissorViews or self.multiviewStrategy is not None:
+            self.settleMultiview()
         self.applyViewFrame( active, gl=False )
         return frames
 

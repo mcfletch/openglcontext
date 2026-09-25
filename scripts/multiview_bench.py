@@ -178,7 +178,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     results = [measure(children, (low, high), 1, None, size,
                        options.frames, options.warmup)]
     found = multiview.MultiviewCapabilities.detect()
-    runnable = [name for name in found.available() if name in multiview.IMPLEMENTED]
+    runnable = list(found.available())
     wanted = options.strategies or runnable
     for strategy in wanted:
         if strategy not in runnable:

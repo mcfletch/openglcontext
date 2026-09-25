@@ -109,11 +109,15 @@ class TestChoice:
     def test_sequential_cannot_be_failed_out_of(self):
         assert caps().choose('auto', failed={'sequential'}) == 'sequential'
 
-    def test_the_default_choice_uses_what_this_build_implements(self):
-        assert caps().choose() in multiview.IMPLEMENTED
+    def test_the_default_choice_is_a_strategy(self):
+        assert caps().choose() in multiview.STRATEGIES
 
-    def test_sequential_is_always_implemented(self):
-        assert 'sequential' in multiview.IMPLEMENTED
+    def test_sequential_is_always_a_strategy(self):
+        assert 'sequential' in multiview.STRATEGIES
+
+    def test_built_from_features_it_has_the_viewports_it_is_told(self):
+        assert caps(viewports=1).max_viewports == 1
+        assert MultiviewCapabilities.from_features(set(), (4, 1)).max_viewports == 1
 
 
 class TestRequested:
@@ -146,6 +150,18 @@ class TestRequested:
         monkeypatch.setenv('OPENGLCONTEXT_MULTIVIEW', 'gs')
         assert multiview.requested_strategy(Source()) == 'geometry'
 
+    def test_the_environment_is_read_once(self, monkeypatch):
+        """A start-up switch: the definition's field is what changes at run time."""
+        from OpenGLContext.contextdefinition import ContextDefinition
+
+        class Source:
+            contextDefinition = ContextDefinition()
+
+        monkeypatch.setenv('OPENGLCONTEXT_MULTIVIEW', 'sequential')
+        assert multiview.requested_strategy(Source()) == 'sequential'
+        monkeypatch.setenv('OPENGLCONTEXT_MULTIVIEW', 'geometry')
+        assert multiview.requested_strategy(Source()) == 'sequential'
+
     def test_the_environment_variable_is_a_rendering_one(self):
         from OpenGLContext import renderoptions
 
@@ -170,3 +186,25 @@ class TestDetect:
         assert first.gl_version >= (3, 3)
         assert MultiviewCapabilities.detect() is first
         assert 'sequential' in first.available()
+
+    def test_a_context_that_dies_is_forgotten(self, gl_context):
+        """A driver hands a dead context's address to the next one."""
+        from OpenGLContext import contextresources
+        MultiviewCapabilities.detect()
+        key = contextresources.context_key()
+        assert key in multiview._DETECTED
+        contextresources.context_lost()
+        assert key not in multiview._DETECTED
+
+    def test_a_driver_that_answers_nothing_is_asked_once(self, gl_context, monkeypatch):
+        asked = []
+
+        def nothing(cls):
+            asked.append(1)
+            return cls()
+
+        monkeypatch.setattr(MultiviewCapabilities, '_detect', classmethod(nothing))
+        first = MultiviewCapabilities.detect()
+        assert not first.detected
+        assert MultiviewCapabilities.detect() is first
+        assert len(asked) == 1

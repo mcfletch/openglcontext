@@ -33,7 +33,8 @@ log = logging.getLogger(__name__)
 
 __all__ = ['hidden_window', 'fullscreen_window',
            'definition', 'flag', 'choice', 'number', 'env_flag', 'env_choice',
-           'env_number', 'env_flag_once', 'env_number_once', 'reset_env_cache',
+           'env_number', 'env_flag_once', 'env_number_once', 'env_choice_once',
+           'reset_env_cache',
            'clean_environment', 'is_render_configuration', 'CHOICES', 'LABELS',
            'CONFIGURATION_PREFIXES', 'ENVIRONMENT']
 
@@ -310,6 +311,14 @@ def env_number_once(name: str, default: float, integer: bool = False) -> float:
     if name not in _ENV_CACHE:
         _ENV_CACHE[name] = env_number(name, default, integer=integer)
     return float(_ENV_CACHE[name])
+
+
+def env_choice_once(name: str, allowed: Sequence[str], synonyms: Dict[str, str],
+                    default: str = 'auto') -> str:
+    """A named environment variable, read once and then remembered."""
+    if name not in _ENV_CACHE:
+        _ENV_CACHE[name] = env_choice(name, allowed, synonyms, default)
+    return str(_ENV_CACHE[name])
 
 
 def hidden_window() -> bool:
