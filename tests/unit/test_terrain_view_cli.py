@@ -210,7 +210,13 @@ class TestSceneMutation:
     def test_maybe_refresh_is_a_noop_when_vegetation_is_disabled(self):
         inst = _inst()
         inst._veg = True
-        inst._maybe_refresh_vegetation((0.0, 0.0, 0.0))     # must not touch missing attrs
+        called = {}
+        for name in ('_refresh_grass', '_refresh_detail', '_refresh_trees',
+                     '_refresh_ground'):
+            setattr(inst, name, lambda *a, n=name: called.setdefault(n, True))
+        # No layer centres are set: reading one would raise AttributeError.
+        inst._maybe_refresh_vegetation((1000.0, 0.0, 1000.0))
+        assert called == {}
 
     def test_maybe_refresh_leaves_layers_alone_when_the_camera_barely_moved(self):
         inst = _inst()
@@ -295,7 +301,10 @@ class TestStream:
     def test_stream_is_skipped_without_a_streamed_tileset(self):
         inst = _inst()
         inst.terrain = None
-        inst._stream((0.0, 0.0, 0.0))               # returns quietly
+        asked = []
+        inst.getViewPort = lambda: asked.append(True) or (800, 600)
+        assert inst._stream((0.0, 0.0, 0.0)) is None
+        assert asked == []                          # no viewport, no projection
 
     def test_stream_forwards_the_viewport_height_and_view_projection(self):
         inst = _inst()
@@ -320,7 +329,12 @@ class TestGroundAndCollision:
     def test_ground_clamp_is_skipped_for_a_raw_tileset(self):
         inst = _inst()
         inst.height_fn = None
-        inst._ground_clamp()                                 # no avatar needed, returns
+        ch = types.SimpleNamespace(position=np.array([0.0, -50.0, 0.0], 'd'),
+                                   height=2.0, vy=-3.0, grounded=False)
+        inst.avatar = types.SimpleNamespace(character=ch)
+        inst._ground_clamp()
+        assert ch.position.tolist() == [0.0, -50.0, 0.0]     # left below any surface
+        assert ch.vy == -3.0 and ch.grounded is False
 
     def test_ground_clamp_snaps_the_avatar_onto_the_surface(self):
         inst = _inst()
