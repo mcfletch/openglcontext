@@ -593,3 +593,55 @@ class TestCullOccludersTogether:
                                    _record(far, self._box()))
         kept = ShadowMapMixin()._cullOccluders([empty, everywhere, gone], view, proj)
         assert kept == [everywhere]
+
+
+class TestTheLocalBoxMemo:
+    """Each box volume's own centre and half-extents, kept per volume."""
+
+    def _light(self):
+        view = shadowmath.look_at_matrix((0, 5, 0), (0, -1, 0))
+        proj = shadowmath.perspective_matrix(1.0, 1.0, 0.5, 20.0)
+        return view, proj
+
+    def test_a_volume_is_measured_once(self, monkeypatch):
+        from OpenGLContext.passes import shadowmixin
+        from OpenGLContext.scenegraph.boundingvolume import AABoundingBox
+        measured = []
+        real = shadowmixin._local_box
+        monkeypatch.setattr(shadowmixin, '_local_box',
+                            lambda volume, visible: measured.append(volume)
+                            or real(volume, visible))
+        mixin = ShadowMapMixin()
+        records = [_record(np.eye(4), AABoundingBox(center=(0, 0, 0), size=(1, 1, 1)))]
+        for _frame in range(3):
+            mixin._cullOccluders(records, *self._light())
+        assert len(measured) == 1
+
+    def test_a_new_volume_is_measured_again(self):
+        from OpenGLContext.scenegraph.boundingvolume import AABoundingBox
+        mixin = ShadowMapMixin()
+        near = _record(np.eye(4), AABoundingBox(center=(0, 0, 0), size=(1, 1, 1)))
+        assert mixin._cullOccluders([near], *self._light()) == [near]
+        # The shape grew and moved out of the light: a fresh volume object.
+        far = _record(np.eye(4), AABoundingBox(center=(500, 0, 0), size=(1, 1, 1)))
+        both = [far, near]
+        assert mixin._cullOccluders(both, *self._light()) == [near]
+
+
+class TestLightsAcrossFrames:
+    def test_a_light_follows_the_views_of_each_frame(self):
+        """Out of one frame's views and into the next frame's."""
+        light = PointLight(attenuation=(0, 0, 1), intensity=1.0)
+        mixin = ShadowMapMixin()
+        near = types.SimpleNamespace(frustum=FakeFrustum())
+
+        class _Far:
+            planes = FakeFrustum.planes - np.array([0, 0, 0, 1000.0])
+
+        far = types.SimpleNamespace(frustum=_Far())
+        mixin.viewFrames = [far]
+        assert mixin._lightInView((0, 0, 0), light) is False
+        mixin.viewFrames = [far, near]
+        assert mixin._lightInView((0, 0, 0), light) is True
+        mixin.viewFrames = [far]
+        assert mixin._lightInView((0, 0, 0), light) is False

@@ -143,3 +143,29 @@ class TestGrowingTheArrays:
         assert probe.lost == lost + 1
         assert probe.ensure_built()
         assert probe.lost == lost + 1
+
+
+class TestTheCoefficientsAndTheEncoding:
+    def test_a_fit_evaluates_back_to_what_was_fitted(self):
+        """A sky that is a constant plus a gradient is exactly l <= 1."""
+        size = 32
+        sky = [np.repeat((1.0 + 0.5 * imagebasedlight.face_directions(face, size)[..., 1]
+                          )[..., None], 3, -1) for face in range(6)]
+        fitted = imagebasedlight.sh_fit(sky)
+        for face in range(6):
+            directions = imagebasedlight.face_directions(face, size)
+            back = imagebasedlight.sh_irradiance(fitted, directions)
+            assert np.allclose(back, sky[face], atol=0.02)
+
+    def test_rgbd_carries_values_above_one(self):
+        values = np.array([[0.0, 0.25, 1.0], [2.0, 8.0, 40.0], [200.0, 1.0, 0.5]])
+        encoded = imagebasedlight.encode_rgbd(values)
+        assert encoded.dtype == np.uint8 and encoded.shape == (3, 4)
+        decoded = imagebasedlight.decode_rgbd(encoded)
+        # Each channel is within one step of its pixel's shared scale.
+        step = np.maximum(values.max(axis=1, keepdims=True), 1.0) / 255.0
+        assert np.all(np.abs(decoded - values) <= step)
+
+    def test_three_channels_are_values_as_they_are(self):
+        pixels = np.array([[0, 128, 255]], dtype=np.uint8)
+        assert np.allclose(imagebasedlight.decode_rgbd(pixels), [[0.0, 128 / 255, 1.0]])
