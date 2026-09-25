@@ -616,21 +616,13 @@ def _real_transform_shape_path():
 
     Returns ``(transform, path)`` where ``path.transformMatrix()`` and
     ``path[-1].boundingVolume(mode)`` are backed by the vrml dependency cache --
-    the identity contract _casterSignature relies on. Skips the test cleanly if a
-    scenegraph can't be constructed in this environment (import/build failure).
+    the identity contract _casterSignature relies on.
     """
-    try:
-        from vrml.vrml97 import nodepath
-        from OpenGLContext.scenegraph import basenodes
-    except Exception as err:                                    # pragma: no cover
-        pytest.skip("scenegraph unavailable: %s" % (err,))
-    try:
-        shape = basenodes.Shape(geometry=basenodes.Box(size=(2, 2, 2)))
-        transform = basenodes.Transform(translation=(0, 0, 0), children=[shape])
-        path = nodepath.NodePath([transform, shape])
-    except Exception as err:                                    # pragma: no cover
-        pytest.skip("could not build scenegraph headless: %s" % (err,))
-    return transform, path
+    from vrml.vrml97 import nodepath
+    from OpenGLContext.scenegraph import basenodes
+    shape = basenodes.Shape(geometry=basenodes.Box(size=(2, 2, 2)))
+    transform = basenodes.Transform(translation=(0, 0, 0), children=[shape])
+    return transform, nodepath.NodePath([transform, shape])
 
 
 class TestCasterSignatureIdentityContract:
