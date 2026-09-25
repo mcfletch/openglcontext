@@ -2,22 +2,20 @@
 
 Renders the streamed procedural terrain + vegetation and asserts a real landscape
 rasterized: substantial green (grass/trees) and blue (water) regions, not a grey
-wash. Tolerates a slow teardown (reads the captured frame even if the process must be
-timed out), as the render itself completes well before capture.
+wash.
 """
 import os
-import subprocess
 import sys
 
 import pytest
 
 pytest.importorskip("pygltflib")
 pytest.importorskip("glfw")
-np = pytest.importorskip("numpy")
-Image = pytest.importorskip("PIL.Image")
 
 from OpenGLContext.testing.paths import tests_root
 TESTS_DIR = str(tests_root(__file__))
+
+from tests.unit.viewcapture import run_to_frame
 
 
 def test_landscape_renders_grass_and_water(tmp_path):
@@ -29,17 +27,8 @@ def test_landscape_renders_grass_and_water(tmp_path):
         OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME="landscape",
         OPENGLCONTEXT_DISABLE_FPS_DISPLAY="1",
     )
-    try:
-        subprocess.run(
-            [sys.executable, os.path.join(TESTS_DIR, "tiles_landscape.py")],
-            cwd=os.path.dirname(TESTS_DIR), env=env, timeout=200,
-        )
-    except subprocess.TimeoutExpired:
-        pass  # slow teardown; the frame was captured before auto-exit
-    out = tmp_path / "landscape.png"
-    if not out.exists():
-        pytest.skip("no GL capture produced (no usable offscreen GL target)")
-    rgb = np.asarray(Image.open(str(out)).convert("RGB")).astype(int)
+    rgb = run_to_frame([sys.executable, os.path.join(TESTS_DIR, "tiles_landscape.py")],
+                       str(tmp_path / "landscape.png"), env=env, timeout=200)
     lit = rgb[rgb.sum(2) > 40]
     r, g, b = lit[:, 0], lit[:, 1], lit[:, 2]
     green = ((g > r + 8) & (g > b + 8)).mean()

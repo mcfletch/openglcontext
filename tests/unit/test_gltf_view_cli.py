@@ -2,7 +2,6 @@
 --list-cameras integration (the latter skip if no GL / pygltflib)."""
 import os
 import subprocess
-import sys
 
 import pytest
 
@@ -15,8 +14,7 @@ from OpenGLContext.testing.gl_env import import_unconfigured
 view = import_unconfigured('OpenGLContext.bin.view')
 
 from OpenGLContext.viewer import source
-from OpenGLContext.testing.paths import tests_root
-TESTS_DIR = str(tests_root(__file__))
+from tests.unit.viewcapture import PROJECT_ROOT, view_command, view_frame
 
 
 class TestParseArgs:
@@ -186,55 +184,31 @@ def camera_glb(tmp_path_factory):
     return str(path)
 
 
-def _run(args, timeout=180):
-    return subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.view'] + args,
-                          timeout=timeout, capture_output=True, text=True,
-                          cwd=TESTS_DIR + '/..')
-
-
 def test_list_cameras(camera_glb):
     """--list-cameras prints the glTF camera names (headless, no window)."""
-    try:
-        result = _run([camera_glb, '--list-cameras'], timeout=60)
-    except subprocess.TimeoutExpired:
-        pytest.skip("viewer subprocess timed out")
-    out = result.stdout
-    assert '0: front' in out and '1: side' in out
+    result = subprocess.run(view_command([camera_glb, '--list-cameras']), timeout=60,
+                            capture_output=True, text=True, cwd=PROJECT_ROOT)
+    assert result.returncode == 0, result.stderr
+    assert '0: front' in result.stdout and '1: side' in result.stdout
 
 
 def test_capture_named_camera(camera_glb, tmp_path):
     """--capture with a named camera writes a non-blank PNG, then exits."""
-    pytest.importorskip("PIL")
-    import numpy as np
-    from PIL import Image
-    out = str(tmp_path / "shot.png")
-    try:
-        _run([camera_glb, '--camera', 'front', '--capture', out,
-              '--frames', '6', '--capture-delay', '0.2', '--no-shadows'])
-    except subprocess.TimeoutExpired:
-        pytest.skip("OpenGL context unavailable / capture timed out")
-    if not os.path.exists(out):
-        pytest.skip("OpenGL context unavailable for capture")
-    arr = np.asarray(Image.open(out).convert("RGB"))
+    arr = view_frame([camera_glb, '--camera', 'front', '--frames', '6',
+                      '--capture-delay', '0.2', '--no-shadows'],
+                     str(tmp_path / "shot.png"))
     assert arr.any(), "captured frame is all black"
 
 
 def test_capture_differs_between_cameras(camera_glb, tmp_path):
     """Selecting different named cameras produces different captures."""
-    pytest.importorskip("PIL")
     import numpy as np
-    from PIL import Image
-    outs = {}
-    for cam in ('front', 'side'):
-        p = str(tmp_path / (cam + ".png"))
-        try:
-            _run([camera_glb, '--camera', cam, '--capture', p,
-                  '--frames', '6', '--capture-delay', '0.2', '--no-shadows'])
-        except subprocess.TimeoutExpired:
-            pytest.skip("OpenGL context unavailable / capture timed out")
-        if not os.path.exists(p):
-            pytest.skip("OpenGL context unavailable for capture")
-        outs[cam] = np.asarray(Image.open(p).convert("RGB")).astype(int)
+    outs = {
+        cam: view_frame([camera_glb, '--camera', cam, '--frames', '6',
+                         '--capture-delay', '0.2', '--no-shadows'],
+                        str(tmp_path / (cam + ".png")))
+        for cam in ('front', 'side')
+    }
     assert np.abs(outs['front'] - outs['side']).mean() > 1.0
 
 

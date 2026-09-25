@@ -5,18 +5,17 @@ Confirms the avatar spawns on the terrain and the eye-level view shows grassy te
 walk/fly/drop behaviours themselves are validated in tests/tiles3d/test_navigation.py.
 """
 import os
-import subprocess
 import sys
 
 import pytest
 
 pytest.importorskip("pygltflib")
 pytest.importorskip("glfw")
-np = pytest.importorskip("numpy")
-Image = pytest.importorskip("PIL.Image")
 
 from OpenGLContext.testing.paths import tests_root
 TESTS_DIR = str(tests_root(__file__))
+
+from tests.unit.viewcapture import run_to_frame
 
 
 def test_walk_view_is_on_the_surface(tmp_path):
@@ -28,17 +27,8 @@ def test_walk_view_is_on_the_surface(tmp_path):
         OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME="walk",
         OPENGLCONTEXT_DISABLE_FPS_DISPLAY="1",
     )
-    try:
-        subprocess.run(
-            [sys.executable, os.path.join(TESTS_DIR, "tiles_walk.py")],
-            cwd=os.path.dirname(TESTS_DIR), env=env, timeout=200,
-        )
-    except subprocess.TimeoutExpired:
-        pass
-    out = tmp_path / "walk.png"
-    if not out.exists():
-        pytest.skip("no GL capture produced (no usable offscreen GL target)")
-    rgb = np.asarray(Image.open(str(out)).convert("RGB")).astype(int)
+    rgb = run_to_frame([sys.executable, os.path.join(TESTS_DIR, "tiles_walk.py")],
+                       str(tmp_path / "walk.png"), env=env, timeout=200)
     lit = rgb[rgb.sum(2) > 40]
     assert lit.shape[0] > 0, "eye-level frame is empty (avatar not on surface?)"
     green = ((lit[:, 1] > lit[:, 0] + 8) & (lit[:, 1] > lit[:, 2] + 8)).mean()

@@ -154,12 +154,8 @@ class TestUVTransformMatrix:
 
 
 # --- GL render: a base-color transform shifts the sampled texture -------------
-import os
-import subprocess
-import sys
 
-from OpenGLContext.testing.paths import tests_root
-TESTS_DIR = str(tests_root(__file__))
+from tests.unit.viewcapture import view_frame
 
 
 def _split_png():
@@ -208,12 +204,11 @@ def _unlit_quad_glb(offset):
     return b"".join(g.save_to_bytes())
 
 
-def _capture(glb, out):
-    args = [glb, '--no-cameras', '--no-physics', '--no-shadows', '--no-rotate',
-            '--lights', 'on', '--background', '0,0,0', '--capture', out,
-            '--frames', '6', '--capture-delay', '0.2', '--size', '200x200']
-    subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.view'] + args,
-                   timeout=180, capture_output=True, text=True, cwd=TESTS_DIR + '/..')
+def _frame(glb, out):
+    return view_frame([glb, '--no-cameras', '--no-physics', '--no-shadows', '--no-rotate',
+                       '--lights', 'on', '--background', '0,0,0',
+                       '--frames', '6', '--capture-delay', '0.2', '--size', '200x200'],
+                      out)
 
 
 def _green_frac(arr):
@@ -229,13 +224,7 @@ def test_basecolor_transform_shifts_texture(tmp_path):
         glb = tmp_path / ("t%s.glb" % off)
         glb.write_bytes(_unlit_quad_glb(off))
         out = str(tmp_path / ("t%s.png" % off))
-        try:
-            _capture(str(glb), out)
-        except subprocess.TimeoutExpired:
-            pytest.skip("OpenGL context unavailable / capture timed out")
-        if not os.path.exists(out):
-            pytest.skip("OpenGL context unavailable for capture")
-        fracs[off] = _green_frac(np.asarray(Image.open(out).convert("RGB")))
+        fracs[off] = _green_frac(_frame(str(glb), out))
     assert abs(fracs[0.0] - fracs[0.5]) > 0.05, (
         "the base-color KHR_texture_transform did not change the render "
         "(green off=%.3f on=%.3f)" % (fracs[0.0], fracs[0.5]))

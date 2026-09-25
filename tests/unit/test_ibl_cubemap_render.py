@@ -5,8 +5,6 @@ sphere reflects that real environment -- visibly different (and more chromatic)
 than the procedural studio env it reflects otherwise.
 """
 import os
-import subprocess
-import sys
 
 import pytest
 
@@ -20,6 +18,8 @@ from pygltflib import (
 from OpenGLContext.testing.paths import tests_root
 TESTS_DIR = str(tests_root(__file__))
 ENV_PREFIX = os.path.join(TESTS_DIR, 'pimbackground_')
+
+from tests.unit.viewcapture import view_frame
 
 
 def _uv_sphere(rings=24, sectors=48):
@@ -70,19 +70,16 @@ def _mirror_glb():
     return b"".join(g.save_to_bytes())
 
 
-def _capture(glb, out, env_cubemap, background='none'):
+def _frame(glb, out, env_cubemap, background='none'):
     env = dict(os.environ, OPENGLCONTEXT_IBL='full')
     if env_cubemap:
         env['OPENGLCONTEXT_ENV_CUBEMAP'] = ENV_PREFIX
     else:
         env.pop('OPENGLCONTEXT_ENV_CUBEMAP', None)
-    args = [glb, '--no-cameras', '--no-physics', '--no-shadows', '--no-rotate',
-            '--lights', 'on', '--ibl-intensity', '1.2', '--background', background,
-            '--capture', out, '--frames', '8', '--capture-delay', '0.3',
-            '--size', '200x200']
-    subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.view'] + args,
-                   timeout=180, capture_output=True, text=True,
-                   cwd=TESTS_DIR + '/..', env=env)
+    return view_frame([glb, '--no-cameras', '--no-physics', '--no-shadows', '--no-rotate',
+                       '--lights', 'on', '--ibl-intensity', '1.2', '--background', background,
+                       '--frames', '8', '--capture-delay', '0.3', '--size', '200x200'],
+                      out, env=env)
 
 
 def _obj(arr):
@@ -90,24 +87,14 @@ def _obj(arr):
 
 
 def test_env_cubemap_is_reflected(tmp_path):
-    pytest.importorskip("PIL")
-    from PIL import Image
     glb = tmp_path / "mirror.glb"
     glb.write_bytes(_mirror_glb())
     frames = {}
     for tag, use_env in (('proc', False), ('env', True)):
-        out = str(tmp_path / (tag + ".png"))
-        try:
-            _capture(str(glb), out, use_env)
-        except subprocess.TimeoutExpired:
-            pytest.skip("OpenGL context unavailable / capture timed out")
-        if not os.path.exists(out):
-            pytest.skip("OpenGL context unavailable for capture")
-        frames[tag] = np.asarray(Image.open(out).convert("RGB"))
+        frames[tag] = _frame(str(glb), str(tmp_path / (tag + ".png")), use_env)
     proc, env = frames['proc'], frames['env']
-    if not _obj(proc).size or not _obj(env).size:
-        pytest.skip("sphere not visible in capture")
-    diff = float(np.abs(proc.astype(int) - env.astype(int)).mean())
+    assert _obj(proc).size and _obj(env).size, "sphere not visible in capture"
+    diff = float(np.abs(proc - env).mean())
     assert diff > 5.0, ("the loaded environment cubemap should change the metal's "
                         "reflection (mean diff %.2f)" % diff)
     # the garden env is greener than the neutral procedural studio env
@@ -120,18 +107,10 @@ def test_env_cubemap_is_reflected(tmp_path):
 def test_env_cubemap_renders_as_skybox(tmp_path):
     """With the env cubemap set and no explicit background, the cube renders as the
     skybox (the frame corners show the environment, not black)."""
-    pytest.importorskip("PIL")
-    from PIL import Image
     glb = tmp_path / "mirror.glb"
     glb.write_bytes(_mirror_glb())
-    out = str(tmp_path / "sky.png")
-    try:
-        _capture(str(glb), out, env_cubemap=True, background='cube')  # show the cubemap skybox
-    except subprocess.TimeoutExpired:
-        pytest.skip("OpenGL context unavailable / capture timed out")
-    if not os.path.exists(out):
-        pytest.skip("OpenGL context unavailable for capture")
-    arr = np.asarray(Image.open(out).convert("RGB")).astype(int)
+    arr = _frame(str(glb), str(tmp_path / "sky.png"), env_cubemap=True,
+                 background='cube')  # show the cubemap skybox
     # sample the four corners (background, away from the centred sphere)
     h, w, _ = arr.shape
     corners = np.concatenate([arr[:12, :12].reshape(-1, 3), arr[:12, -12:].reshape(-1, 3),
@@ -151,16 +130,13 @@ def _write_synth_env(prefix):
         Image.new('RGB', (128, 128), col).save(prefix + suffix + '.jpg', quality=95)
 
 
-def _capture_env(glb, out, env_prefix, background='cube'):
+def _frame_env(glb, out, env_prefix, background='cube'):
     env = dict(os.environ, OPENGLCONTEXT_IBL='full',
                OPENGLCONTEXT_ENV_CUBEMAP=env_prefix)
-    args = [glb, '--no-cameras', '--no-physics', '--no-shadows', '--no-rotate',
-            '--lights', 'on', '--ibl-intensity', '1.2', '--background', background,
-            '--capture', out, '--frames', '6', '--capture-delay', '0.3',
-            '--size', '256x256']
-    subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.view'] + args,
-                   timeout=180, capture_output=True, text=True,
-                   cwd=TESTS_DIR + '/..', env=env)
+    return view_frame([glb, '--no-cameras', '--no-physics', '--no-shadows', '--no-rotate',
+                       '--lights', 'on', '--ibl-intensity', '1.2', '--background', background,
+                       '--frames', '6', '--capture-delay', '0.3', '--size', '256x256'],
+                      out, env=env)
 
 
 def test_mirror_sphere_reflects_env_right_way_up(tmp_path):
@@ -171,28 +147,18 @@ def test_mirror_sphere_reflects_env_right_way_up(tmp_path):
     brightness heuristic could not: an earlier flipY inverted the reflection while
     still passing a brightness check.
     """
-    pytest.importorskip("PIL")
-    from PIL import Image
     prefix = str(tmp_path / 'synenv_')
     _write_synth_env(prefix)
     glb = tmp_path / "mirror.glb"
     glb.write_bytes(_mirror_glb())
-    out = str(tmp_path / "syn.png")
-    try:
-        _capture_env(str(glb), out, prefix, background='cube')
-    except subprocess.TimeoutExpired:
-        pytest.skip("OpenGL context unavailable / capture timed out")
-    if not os.path.exists(out):
-        pytest.skip("OpenGL context unavailable for capture")
-    arr = np.asarray(Image.open(out).convert("RGB")).astype(int)
+    arr = _frame_env(str(glb), str(tmp_path / "syn.png"), prefix, background='cube')
     H, W, _ = arr.shape
     # background is the cyan FR face; the sphere is everything else, centred.
     r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
     isbg = (np.abs(r - 20) < 60) & (g > 150) & (b > 150)
     obj = ~isbg
     ys, xs = np.where(obj)
-    if len(ys) < 500:
-        pytest.skip("sphere not visible in capture")
+    assert len(ys) >= 500, "sphere not visible in capture"
     y0, y1, x0, x1 = ys.min(), ys.max(), xs.min(), xs.max()
     h, w = y1 - y0, x1 - x0
 
@@ -221,22 +187,13 @@ def test_env_reflection_is_not_upside_down(tmp_path):
     """The reflected environment must match the world: the bright sky reflects on
     the TOP of a mirror sphere and the dark/green ground on the bottom (a Y-flip
     bug had them swapped)."""
-    pytest.importorskip("PIL")
-    from PIL import Image
     glb = tmp_path / "mirror.glb"
     glb.write_bytes(_mirror_glb())
-    out = str(tmp_path / "m.png")
-    try:
-        _capture(str(glb), out, env_cubemap=True, background='none')
-    except subprocess.TimeoutExpired:
-        pytest.skip("OpenGL context unavailable / capture timed out")
-    if not os.path.exists(out):
-        pytest.skip("OpenGL context unavailable for capture")
-    arr = np.asarray(Image.open(out).convert("RGB")).astype(float)
+    arr = _frame(str(glb), str(tmp_path / "m.png"), env_cubemap=True,
+                 background='none').astype(float)
     lit = arr.sum(2) > 40
     ys, xs = np.where(lit)
-    if len(ys) < 200:
-        pytest.skip("sphere not visible")
+    assert len(ys) >= 200, "sphere not visible in capture"
     cy = ys.mean()
     upper = ys < cy
     top = arr[ys[upper], xs[upper]]         # reflections on the upper hemisphere

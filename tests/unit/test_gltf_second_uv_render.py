@@ -6,9 +6,6 @@ texCoord 1 it shows (almost) all red. Rendering both and comparing the green
 coverage proves the shader picks the right UV set per texture.
 """
 import io
-import os
-import subprocess
-import sys
 
 import pytest
 
@@ -22,8 +19,7 @@ from pygltflib import (
     Sampler,
 )
 
-from OpenGLContext.testing.paths import tests_root
-TESTS_DIR = str(tests_root(__file__))
+from tests.unit.viewcapture import view_frame
 
 
 def _split_png():
@@ -83,12 +79,11 @@ def _uv_glb(base_tex_coord):
     return b"".join(g.save_to_bytes())
 
 
-def _capture(glb_path, out):
-    args = [glb_path, '--no-cameras', '--no-physics', '--no-shadows', '--no-rotate',
-            '--lights', 'on', '--background', '0,0,0', '--capture', out,
-            '--frames', '6', '--capture-delay', '0.2', '--size', '200x200']
-    subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.view'] + args,
-                   timeout=180, capture_output=True, text=True, cwd=TESTS_DIR + '/..')
+def _frame(glb_path, out):
+    return view_frame([glb_path, '--no-cameras', '--no-physics', '--no-shadows', '--no-rotate',
+                       '--lights', 'on', '--background', '0,0,0',
+                       '--frames', '6', '--capture-delay', '0.2', '--size', '200x200'],
+                      out)
 
 
 def _green_fraction(arr):
@@ -102,13 +97,7 @@ def test_texcoord1_samples_second_uv(tmp_path):
         glb = tmp_path / ("uv%d.glb" % tc)
         glb.write_bytes(_uv_glb(tc))
         out = str(tmp_path / ("uv%d.png" % tc))
-        try:
-            _capture(str(glb), out)
-        except subprocess.TimeoutExpired:
-            pytest.skip("OpenGL context unavailable / capture timed out")
-        if not os.path.exists(out):
-            pytest.skip("OpenGL context unavailable for capture")
-        frames[tc] = np.asarray(Image.open(out).convert("RGB"))
+        frames[tc] = _frame(str(glb), out)
     assert frames[0].any(), "texCoord0 frame is blank"
     g0, g1 = _green_fraction(frames[0]), _green_fraction(frames[1])
     # texCoord0 shows the green right half; texCoord1 (left-half UVs) shows ~none.

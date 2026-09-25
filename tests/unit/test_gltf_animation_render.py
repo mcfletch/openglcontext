@@ -6,9 +6,6 @@ captures it at two pinned ``--anim-time`` values through the ``oglc-gltf`` viewe
 and asserts the frames differ. Skips cleanly when no GL context is available.
 """
 import math
-import os
-import subprocess
-import sys
 
 import pytest
 
@@ -31,8 +28,7 @@ def _cube_arrays():
         idx += [b, b + 1, b + 2, b, b + 2, b + 3]
     return np.array(v, '<f4'), np.array(n, '<f4'), np.array(idx, '<u4')
 
-from OpenGLContext.testing.paths import tests_root
-TESTS_DIR = str(tests_root(__file__))
+from tests.unit.viewcapture import view_frame
 
 _FACES = {
     'px': ([1, 0, 0], [(1, -1, -1), (1, 1, -1), (1, 1, 1), (1, -1, 1)]),
@@ -103,12 +99,11 @@ def spin_glb(tmp_path_factory):
     return str(path)
 
 
-def _capture(glb, out, anim_time):
-    args = [glb, '--no-cameras', '--no-physics', '--lights', 'on', '--no-shadows',
-            '--anim-time', str(anim_time), '--capture', out,
-            '--frames', '6', '--capture-delay', '0.2', '--size', '240x240']
-    subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.view'] + args,
-                   timeout=180, capture_output=True, text=True, cwd=TESTS_DIR + '/..')
+def _frame(glb, out, anim_time):
+    return view_frame([glb, '--no-cameras', '--no-physics', '--lights', 'on',
+                       '--no-shadows', '--anim-time', str(anim_time),
+                       '--frames', '6', '--capture-delay', '0.2', '--size', '240x240'],
+                      out)
 
 
 def _morph_cube_glb():
@@ -231,18 +226,10 @@ def skin_glb(tmp_path_factory):
 
 
 def test_animation_changes_rendered_frame(spin_glb, tmp_path):
-    pytest.importorskip("PIL")
-    from PIL import Image
     frames = {}
     for t in (0.0, 0.5):
         p = str(tmp_path / ("spin_%s.png" % t))
-        try:
-            _capture(spin_glb, p, t)
-        except subprocess.TimeoutExpired:
-            pytest.skip("OpenGL context unavailable / capture timed out")
-        if not os.path.exists(p):
-            pytest.skip("OpenGL context unavailable for capture")
-        frames[t] = np.asarray(Image.open(p).convert("RGB")).astype(int)
+        frames[t] = _frame(spin_glb, p, t)
     assert frames[0.0].any(), "rest-pose frame is all black"
     # a rotation about Y must repaint a substantial fraction of the cube's pixels
     diff = np.abs(frames[0.0] - frames[0.5]).max(axis=2)
@@ -251,18 +238,10 @@ def test_animation_changes_rendered_frame(spin_glb, tmp_path):
 
 def test_morph_changes_rendered_frame(morph_glb, tmp_path):
     """A weights animation deforms the mesh on the GPU (VBO re-upload path)."""
-    pytest.importorskip("PIL")
-    from PIL import Image
     frames = {}
     for t in (0.0, 1.0):
         p = str(tmp_path / ("morph_%s.png" % t))
-        try:
-            _capture(morph_glb, p, t)
-        except subprocess.TimeoutExpired:
-            pytest.skip("OpenGL context unavailable / capture timed out")
-        if not os.path.exists(p):
-            pytest.skip("OpenGL context unavailable for capture")
-        frames[t] = np.asarray(Image.open(p).convert("RGB")).astype(int)
+        frames[t] = _frame(morph_glb, p, t)
     assert frames[0.0].any(), "rest-pose frame is all black"
     # the cube doubles in size at weight 1, so its painted-pixel coverage grows
     def coverage(a):
@@ -275,18 +254,10 @@ def test_morph_changes_rendered_frame(morph_glb, tmp_path):
 
 def test_skinning_changes_rendered_frame(skin_glb, tmp_path):
     """A joint rotation bends the skinned bar on screen (LBS + VBO re-upload)."""
-    pytest.importorskip("PIL")
-    from PIL import Image
     frames = {}
     for t in (0.0, 1.0):
         p = str(tmp_path / ("skin_%s.png" % t))
-        try:
-            _capture(skin_glb, p, t)
-        except subprocess.TimeoutExpired:
-            pytest.skip("OpenGL context unavailable / capture timed out")
-        if not os.path.exists(p):
-            pytest.skip("OpenGL context unavailable for capture")
-        frames[t] = np.asarray(Image.open(p).convert("RGB")).astype(int)
+        frames[t] = _frame(skin_glb, p, t)
     assert frames[0.0].any(), "bind-pose frame is all black"
     diff = np.abs(frames[0.0] - frames[1.0]).max(axis=2)
     assert (diff > 10).mean() > 0.05, "skinning did not change the rendered frame"

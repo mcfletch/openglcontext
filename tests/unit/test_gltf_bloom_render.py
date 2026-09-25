@@ -6,8 +6,6 @@ the cube edges (and a stronger cube glows more). The pass is gated, so bloom-off
 must render exactly as before.
 """
 import os
-import subprocess
-import sys
 
 import pytest
 
@@ -18,8 +16,7 @@ from pygltflib import (
     Buffer, Material, PbrMetallicRoughness,
 )
 
-from OpenGLContext.testing.paths import tests_root
-TESTS_DIR = str(tests_root(__file__))
+from tests.unit.viewcapture import view_frame
 
 _FACES = {
     'px': ([1, 0, 0], [(1, -1, -1), (1, 1, -1), (1, 1, 1), (1, -1, 1)]),
@@ -79,14 +76,12 @@ def _emissive_glb():
     return b"".join(g.save_to_bytes())
 
 
-def _capture(glb, out, bloom):
+def _frame(glb, out, bloom):
     env = dict(os.environ, OPENGLCONTEXT_BLOOM=('1' if bloom else '0'))
-    args = [glb, '--no-cameras', '--no-physics', '--no-shadows', '--no-rotate',
-            '--lights', 'on', '--background', '0,0,0', '--capture', out,
-            '--frames', '6', '--capture-delay', '0.3', '--size', '360x140']
-    subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.view'] + args,
-                   timeout=180, capture_output=True, text=True,
-                   cwd=TESTS_DIR + '/..', env=env)
+    return view_frame([glb, '--no-cameras', '--no-physics', '--no-shadows', '--no-rotate',
+                       '--lights', 'on', '--background', '0,0,0',
+                       '--frames', '6', '--capture-delay', '0.3', '--size', '360x140'],
+                      out, env=env)
 
 
 def _glow(arr):
@@ -97,20 +92,12 @@ def _glow(arr):
 
 
 def test_bloom_adds_glow(tmp_path):
-    pytest.importorskip("PIL")
-    from PIL import Image
     glb = tmp_path / "emis.glb"
     glb.write_bytes(_emissive_glb())
     frames = {}
     for bloom in (False, True):
         out = str(tmp_path / ("b%d.png" % bloom))
-        try:
-            _capture(str(glb), out, bloom)
-        except subprocess.TimeoutExpired:
-            pytest.skip("OpenGL context unavailable / capture timed out")
-        if not os.path.exists(out):
-            pytest.skip("OpenGL context unavailable for capture")
-        frames[bloom] = np.asarray(Image.open(out).convert("RGB")).astype(int)
+        frames[bloom] = _frame(str(glb), out, bloom)
     assert frames[False].any(), "bloom-off frame is blank"
     assert frames[True].any(), "bloom-on frame is blank"
     g_off, g_on = _glow(frames[False]), _glow(frames[True])

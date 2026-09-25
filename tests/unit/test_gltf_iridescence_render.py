@@ -4,9 +4,6 @@ A metallic cube with iridescenceFactor 1.0 shows the thin-film hue shift (its fa
 pick up colour); the same cube with iridescence 0.0 stays a neutral metal. The
 iridescent render must be markedly more saturated.
 """
-import os
-import subprocess
-import sys
 
 import pytest
 
@@ -17,8 +14,7 @@ from pygltflib import (
     Buffer, Material, PbrMetallicRoughness,
 )
 
-from OpenGLContext.testing.paths import tests_root
-TESTS_DIR = str(tests_root(__file__))
+from tests.unit.viewcapture import view_frame
 
 
 def _uv_sphere(rings=24, sectors=48):
@@ -81,13 +77,12 @@ def _iridescent_cube_glb(factor):
     return b"".join(g.save_to_bytes())
 
 
-def _capture(glb, out):
-    args = [glb, '--no-cameras', '--no-physics', '--no-shadows', '--no-rotate',
-            '--yaw', '0.7', '--lights', 'on', '--background', '0.6,0.6,0.6',
-            '--capture', out, '--frames', '8', '--capture-delay', '0.3',
-            '--size', '200x200']
-    subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.view'] + args,
-                   timeout=180, capture_output=True, text=True, cwd=TESTS_DIR + '/..')
+def _frame(glb, out):
+    return view_frame([glb, '--no-cameras', '--no-physics', '--no-shadows', '--no-rotate',
+                       '--yaw', '0.7', '--lights', 'on', '--background', '0.6,0.6,0.6',
+                       '--frames', '8', '--capture-delay', '0.3',
+                       '--size', '200x200'],
+                      out)
 
 
 def _chroma(arr):
@@ -103,20 +98,12 @@ def _chroma(arr):
 
 
 def test_iridescence_changes_the_render(tmp_path):
-    pytest.importorskip("PIL")
-    from PIL import Image
     frames = {}
     for factor in (0.0, 1.0):
         glb = tmp_path / ("irid%.0f.glb" % factor)
         glb.write_bytes(_iridescent_cube_glb(factor))
         out = str(tmp_path / ("irid%.0f.png" % factor))
-        try:
-            _capture(str(glb), out)
-        except subprocess.TimeoutExpired:
-            pytest.skip("OpenGL context unavailable / capture timed out")
-        if not os.path.exists(out):
-            pytest.skip("OpenGL context unavailable for capture")
-        frames[factor] = np.asarray(Image.open(out).convert("RGB"))
+        frames[factor] = _frame(str(glb), out)
     assert frames[0.0].any() or frames[1.0].any(), "both frames blank"
     # iridescence tints the reflection across the sphere's grazing sweep: the on
     # sphere is markedly more chromatic than the plain one.

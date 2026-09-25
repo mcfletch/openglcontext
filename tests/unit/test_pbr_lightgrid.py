@@ -12,7 +12,6 @@ known until it binds one.
 """
 import os
 import re
-import subprocess
 import sys
 
 import pytest
@@ -171,19 +170,10 @@ class TestWhereTheObjectIs:
 @pytest.fixture(scope="module")
 def lightgrid_image(tmp_path_factory):
     """Two identical spheres, lit only by a grid that is bright on the left."""
-    pytest.importorskip("PIL")
-    import numpy as np
-    from PIL import Image
+    from tests.unit.viewcapture import run_to_frame
 
     out = str(tmp_path_factory.mktemp("lightgrid") / "lightgrid.png")
-    try:
-        subprocess.run([sys.executable, CAPTURE, out, 'lightgrid'], timeout=180,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except subprocess.TimeoutExpired:
-        pytest.skip("the capture did not finish")
-    if not os.path.exists(out):
-        pytest.skip("OpenGL context unavailable for the light-grid render")
-    return np.asarray(Image.open(out).convert("RGB")).astype(int)
+    return run_to_frame([sys.executable, CAPTURE, out, 'lightgrid'], out)
 
 
 def _halves(image):

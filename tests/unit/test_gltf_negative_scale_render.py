@@ -6,9 +6,6 @@ straight-down light. A correct renderer produces a left-right mirror-symmetric
 image; the old bug (one front-face winding for a mixed-determinant batch) lit the
 mirrored boxes inside-out, breaking symmetry.
 """
-import os
-import subprocess
-import sys
 
 import pytest
 
@@ -19,8 +16,7 @@ from pygltflib import (
     Buffer, Material, PbrMetallicRoughness,
 )
 
-from OpenGLContext.testing.paths import tests_root
-TESTS_DIR = str(tests_root(__file__))
+from tests.unit.viewcapture import view_frame
 
 _FACES = {
     'px': ([1, 0, 0], [(1, -1, -1), (1, 1, -1), (1, 1, 1), (1, -1, 1)]),
@@ -83,28 +79,19 @@ def _neg_scale_glb():
     return b"".join(g.save_to_bytes())
 
 
-def _capture(glb, out):
-    args = [glb, '--no-cameras', '--no-physics', '--no-shadows', '--no-rotate',
-            '--lights', 'off', '--background', '0,0,0', '--yaw', '0',
-            '--capture', out, '--frames', '6', '--capture-delay', '0.2',
-            '--size', '320x160']
-    subprocess.run([sys.executable, '-m', 'OpenGLContext.bin.view'] + args,
-                   timeout=180, capture_output=True, text=True, cwd=TESTS_DIR + '/..')
+def _frame(glb, out):
+    return view_frame([glb, '--no-cameras', '--no-physics', '--no-shadows', '--no-rotate',
+                       '--lights', 'off', '--background', '0,0,0', '--yaw', '0',
+                       '--frames', '6', '--capture-delay', '0.2',
+                       '--size', '320x160'],
+                      out)
 
 
 def test_mirrored_instances_are_symmetric(tmp_path):
-    pytest.importorskip("PIL")
-    from PIL import Image
     glb = tmp_path / "neg.glb"
     glb.write_bytes(_neg_scale_glb())
     out = str(tmp_path / "neg.png")
-    try:
-        _capture(str(glb), out)
-    except subprocess.TimeoutExpired:
-        pytest.skip("OpenGL context unavailable / capture timed out")
-    if not os.path.exists(out):
-        pytest.skip("OpenGL context unavailable for capture")
-    arr = np.asarray(Image.open(out).convert("RGB")).astype(int)
+    arr = _frame(str(glb), out)
     assert arr.any(), "frame is blank"
     mirror = arr[:, ::-1, :]
     # correct negative-scale handling => the mirrored boxes match the positive ones
