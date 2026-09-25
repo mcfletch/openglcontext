@@ -25,9 +25,7 @@ def drawCube() -> None:
     global VBO 
     if VBO is None:
         if vbo.get_implementation():
-            # vbo.VBO starts as None and is replaced by whichever
-            # implementation the module settles on, so a checker sees the None.
-            data = vbo.VBO( array( list(box.yieldVertices( (2,2,2) )), 'f') )  # type: ignore[misc]
+            data = vbo.VBO( array( list(box.yieldVertices( (2,2,2) )), 'f') )
             def draw() -> None:
                 data.bind()
                 try:
@@ -52,7 +50,7 @@ def drawCube() -> None:
                     data.unbind()
             VBO = draw 
         else:
-            data = array( list(box.yieldVertices( (2,2,2) )), 'f')
+            interleaved = array( list(box.yieldVertices( (2,2,2) )), 'f')
             def draw() -> None:
                 # No unbind to pair with: this path holds a plain array rather
                 # than a buffer object, and nothing was bound to release.
@@ -60,7 +58,7 @@ def drawCube() -> None:
                 try:
                     # interleaved arrays is not 3.1 compatible,
                     # but this is the old-code path...
-                    glInterleavedArrays( GL_T2F_N3F_V3F, 0, data )
+                    glInterleavedArrays( GL_T2F_N3F_V3F, 0, interleaved )
                     glDrawArrays( GL_TRIANGLES, 0, 36 )
                 finally:
                     glPopClientAttrib()

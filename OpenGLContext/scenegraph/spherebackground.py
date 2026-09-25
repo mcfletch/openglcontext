@@ -365,11 +365,8 @@ class _SphereBackground( object ):
         every_vertex = concatenate(all_vertices, axis=0)
         every_colour = concatenate(all_colors, axis=0)
 
-        # OpenGL.arrays.vbo.VBO is chosen at import time between the
-        # accelerated and the pure-Python class, so a checker reads it as
-        # the None it starts as.
-        vertices_vbo = vbo.VBO(every_vertex.astype('f'))    # type: ignore[misc]
-        colors_vbo = vbo.VBO(every_colour.astype('f'))      # type: ignore[misc]
+        vertices_vbo = vbo.VBO(every_vertex.astype('f'))
+        colors_vbo = vbo.VBO(every_colour.astype('f'))
 
         return (vertices_vbo, colors_vbo, len(every_vertex))
 

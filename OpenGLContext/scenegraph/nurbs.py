@@ -58,9 +58,7 @@ from OpenGLContext.scenegraph.nurbstess import (
 )
 
 
-#: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to whichever of
-#: the accelerated and the pure-Python class it loaded.
-VBO: Any = vbo.VBO
+VBO = vbo.VBO
 
 
 # Distance-LOD sampling rate per level. Level 0 is None -> keep the node's own

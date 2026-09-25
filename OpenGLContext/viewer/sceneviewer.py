@@ -119,25 +119,27 @@ class KeyBinding(NamedTuple):
 
 
 if TYPE_CHECKING:
-    class _MovementHost:
-        """The movement behaviour every interactive context brings.
+    class _Host:
+        """What every interactive context brings that this mix-in refines.
 
-        :class:`SceneViewerMixin` refines two of its methods and calls up to
-        them, so they have to be declared somewhere the mix-in can see; they
-        come from :class:`~OpenGLContext.move.physicswalk.PhysicsWalkMixin` and
+        :class:`SceneViewerMixin` overrides these and calls up to them, so they
+        have to be declared somewhere the mix-in can see. The movement two come
+        from :class:`~OpenGLContext.move.physicswalk.PhysicsWalkMixin` and
         :class:`~OpenGLContext.move.viewplatformmixin.ViewPlatformMixin` in the
-        assembled context.
+        assembled context, the frame two from the context itself.
         """
 
         def physicsAvatarScale(self, low: Any, high: Any) -> float: ...
         def setMovementManager(self, manager: Any) -> None: ...
+        def setupCallbacks(self) -> None: ...
+        def presentFrame(self) -> Any: ...
 else:
-    _MovementHost = object
+    _Host = object
 
 
 class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
                        SettleCaptureMixin, RecordingMixin,
-                       ViewerScreensMixin, MultiViewMixin, _MovementHost):
+                       ViewerScreensMixin, MultiViewMixin, _Host):
     """Showing one scene: assembly, cameras, animation and the caption.
 
     Four views of it as well as one: ``MultiViewMixin`` puts the plan and two
@@ -1131,7 +1133,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
 
     # -- the frame --------------------------------------------------------
     def setupCallbacks(self) -> None:  # pragma: no cover - binds live event handlers
-        super(SceneViewerMixin, self).setupCallbacks()       # type: ignore[misc]
+        super(SceneViewerMixin, self).setupCallbacks()
         for binding in self.viewerKeys:
             self.addEventHandler('keyboard', name=binding.name,
                                  state=binding.state,
@@ -1189,7 +1191,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         # opens on black, and its first second is of the world arriving.
         if self.sceneLoaded:
             self.tickRecording()
-        result = super(SceneViewerMixin, self).presentFrame()  # type: ignore[misc]
+        result = super(SceneViewerMixin, self).presentFrame()
         if captured:
             self.finishCapture()
         return result

@@ -273,9 +273,7 @@ class SolidGlyph( OutlineGlyph ):
 
         # Convert to numpy array: each vertex is [nx, ny, nz, px, py, pz]
         vertex_array = np.array(all_vertices, dtype='f')
-        # OpenGL.arrays.vbo.VBO is chosen at import time between the accelerated
-        # and the pure-Python class, so a checker reads it as the None it starts as.
-        vertex_vbo = vbo.VBO(vertex_array)  # type: ignore[misc]
+        vertex_vbo = vbo.VBO(vertex_array)
 
         return {
             'vertices': vertex_vbo,
@@ -644,8 +642,7 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
 
         if all_vertices:
             vertex_array = np.array(all_vertices, dtype='f')
-            # vbo.VBO reads as None: see buildShaderGeometry
-            self._shader_vbo = vbo.VBO(vertex_array)  # type: ignore[misc]
+            self._shader_vbo = vbo.VBO(vertex_array)
         else:
             self._shader_vbo = None
 

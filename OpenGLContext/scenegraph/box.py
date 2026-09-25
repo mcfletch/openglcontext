@@ -8,9 +8,7 @@ from vrml.vrml97 import basenodes
 from vrml import protofunctions
 
 
-#: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to whichever of
-#: the accelerated and the pure-Python class it loaded.
-VBO: Any = vbo.VBO
+VBO = vbo.VBO
 
 
 class Box( basenodes.Box ):
@@ -58,11 +56,11 @@ class Box( basenodes.Box ):
                 finally:
                     vb.unbind()
         else:
-            vb = array( list(yieldVertices( self.size )), 'f')
+            interleaved = array( list(yieldVertices( self.size )), 'f')
             def draw(textured: bool = True, lit: bool = True) -> None:
                 glPushClientAttrib(GL_CLIENT_ALL_ATTRIB_BITS)
                 try:
-                    glInterleavedArrays( GL_T2F_N3F_V3F, 0, vb )
+                    glInterleavedArrays( GL_T2F_N3F_V3F, 0, interleaved )
                     glDrawArrays( GL_TRIANGLES, 0, 36 )
                 finally:
                     glPopClientAttrib()

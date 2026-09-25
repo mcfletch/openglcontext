@@ -1,11 +1,29 @@
 """Mix-in class for contexts needing to control a viewplatform object"""
 from typing import TYPE_CHECKING, Any, Optional, Tuple
 
-from OpenGLContext import context
 from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
 from OpenGLContext.move import viewplatform
 from OpenGLContext.move.physicswalk import PhysicsWalkMixin
-class ViewPlatformMixin(PhysicsWalkMixin):
+
+if TYPE_CHECKING:
+    class _Host:
+        """What :class:`ViewPlatformMixin` needs of the context it is mixed into.
+
+        Declared for a checker and aliased to ``object`` at run time: the
+        context provides these, and the mix-in calls one of them and overrides
+        the rest, reaching the context's own through ``super()``.
+        """
+
+        def getViewPort( self ) -> Tuple[int, int]: ...
+        def hasMouseMoveHandlers( self ) -> bool: ...
+        def setupDefaultEventCallbacks( self ) -> None: ...
+        def ProcessEvent( self, event: Any ) -> Any: ...
+        def ViewPort( self, width: int, height: int ) -> None: ...
+else:
+    _Host = object
+
+
+class ViewPlatformMixin(PhysicsWalkMixin, _Host):
     """Mix-in for Context classes providing ViewPlatform support
 
     The viewplatform module provides a ViewPlatform object
@@ -54,13 +72,6 @@ class ViewPlatformMixin(PhysicsWalkMixin):
     initialOrientation = (0,1,0,0)
     #: Sampled key/pointer state, built on demand.  See
     #: :mod:`OpenGLContext.events.inputstate`.
-    if TYPE_CHECKING:
-        # Supplied by the Context this is mixed into.  Only the ones this
-        # mix-in *calls* without overriding: the three it does override reach
-        # their host through ``super()``, which the type checker cannot see
-        # into for a mix-in and which is marked at each call site.
-        def getViewPort( self ) -> Tuple[int, int]: ...
-
     inputState: Any = None
     #: Drives the declared movement modes, when the context declares any.
     navigation: Any = None
@@ -178,8 +189,7 @@ class ViewPlatformMixin(PhysicsWalkMixin):
                         'movementMode', None )
         if mode is not None and getattr( mode, 'capturePointer', False ):
             return True
-        return bool( super( ViewPlatformMixin, self )      # type: ignore[misc]
-                     .hasMouseMoveHandlers() )
+        return bool( super( ViewPlatformMixin, self ).hasMouseMoveHandlers() )
 
     def recordPointerMotion( self, x: float, y: float ) -> None:
         """Feed the sampler pointer motion, straight from the backend.
@@ -293,7 +303,7 @@ class ViewPlatformMixin(PhysicsWalkMixin):
             * Mouse-button-2 (right) for entering "examine" mode
             * '-' for straightening the view platform
         """
-        super( ViewPlatformMixin, self ).setupDefaultEventCallbacks()   # type: ignore[misc]
+        super( ViewPlatformMixin, self ).setupDefaultEventCallbacks()
         from OpenGLContext.move import smooth
         self.setMovementManager( smooth.Smooth( self.getViewPlatform() ) )
     def ProcessEvent( self, event: Any ) -> Any:
@@ -304,7 +314,7 @@ class ViewPlatformMixin(PhysicsWalkMixin):
         name/state/modifiers, so registering for "any key" is not expressible.
         """
         self._recordInput( event )
-        return super( ViewPlatformMixin, self ).ProcessEvent( event )   # type: ignore[misc]
+        return super( ViewPlatformMixin, self ).ProcessEvent( event )
 
     def setMovementManager( self, manager: Any ) -> None:
         """Set our current movement manager"""
@@ -320,16 +330,9 @@ class ViewPlatformMixin(PhysicsWalkMixin):
         "constant aspect ratio" in scenes, it is necessary
         to keep the ViewPlatform updated regarding the current
         aspect ratio of the ViewPort.  This implementation
-        merely calls the platform's setViewport, then
-        calls the super-class ViewPort method.
-
-        XXX
-            Unfortunately, because Context objects may be
-            old-style classes, we can't use super(), so
-            this implementation actually calls
-            context.Context.ViewPort directly.
+        calls the platform's setViewport, then the next
+        ViewPort in the context's MRO.
         """
         if self.platform:
             self.platform.setViewport( width, height or 1)
-        ### this is ugly for a mix-in class :(
-        context.Context.ViewPort( self, width, height )   # type: ignore[arg-type]
+        super( ViewPlatformMixin, self ).ViewPort( width, height )

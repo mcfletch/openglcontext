@@ -288,6 +288,8 @@ if TYPE_CHECKING:
         def setPointerShape(self, name: str) -> bool: ...
         def screenTrees(self, metrics: FontMetrics,
                         now: Optional[float] = None) -> List[Any]: ...
+        def ProcessEvent(self, event: Any) -> Any: ...
+        def hasMouseMoveHandlers(self) -> bool: ...
 else:
     _Host = object
 
@@ -408,7 +410,7 @@ class OverlayMixin(_Host):
                 continue
             event.context = self
             self._holding.pop(('keyboard', name), None)
-            super(OverlayMixin, self).ProcessEvent(event)   # type: ignore[misc]
+            super(OverlayMixin, self).ProcessEvent(event)
 
     def releaseOverlayPictures(self) -> None:
         """Give the overlay's picture textures back to the card.
@@ -443,7 +445,7 @@ class OverlayMixin(_Host):
         # release (:meth:`letGoOfHeldInput`).
         previous, self._dispatching = self._dispatching, _claimKey(event)
         try:
-            return super(OverlayMixin, self).ProcessEvent(event)   # type: ignore[misc]
+            return super(OverlayMixin, self).ProcessEvent(event)
         finally:
             self._dispatching = previous
 
@@ -545,7 +547,7 @@ class OverlayMixin(_Host):
         """
         if self._overlays is not None and self._overlays.visible:
             return True
-        return bool(super(OverlayMixin, self).hasMouseMoveHandlers())   # type: ignore[misc]
+        return bool(super(OverlayMixin, self).hasMouseMoveHandlers())
 
     # -- layout and drawing -----------------------------------------------
     def layoutOverlays(self, force: bool = False) -> bool:

@@ -27,9 +27,7 @@ LOCAL_ORIGIN = array([[0, 0, 0, 1.0]], "f")
 import logging
 
 
-#: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to whichever of
-#: the accelerated and the pure-Python class it loaded.
-VBO: Any = vbo.VBO
+VBO = vbo.VBO
 
 
 log = logging.getLogger(__name__)
