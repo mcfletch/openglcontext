@@ -18,6 +18,7 @@ import ast
 import ctypes
 import os
 import threading
+from typing import ClassVar
 
 import pytest
 from OpenGL.GL import (
@@ -86,10 +87,7 @@ class TestEveryBackendIsRegistered:
     def test_the_registered_name_resolves_to_a_class(self, name, kind):
         registered = [plugin for plugin in kind.registry if plugin.name == name]
         assert registered, '%s is not registered as a %s' % (name, kind.__name__)
-        try:
-            found = Context.getContextType(name, kind)
-        except Exception as error:              # pragma: no cover - a typo
-            pytest.fail('%s %s: %r' % (name, kind.__name__, error))
+        found = Context.getContextType(name, kind)
         if found is None:
             pytest.skip('%s is registered but its toolkit is not installed'
                         % (name,))
@@ -146,7 +144,7 @@ class TestEveryBackendReportsPointerMotionAsItHappens:
     directly.
     """
 
-    EVENTS = {
+    EVENTS: ClassVar[dict[str, str]] = {
         'glfw': 'OpenGLContext/events/glfwevents.py',
         'glut': 'OpenGLContext/events/glutevents.py',
         'pygame': 'OpenGLContext/events/pygameevents.py',

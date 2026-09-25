@@ -244,12 +244,12 @@ class TestEdges:
 class TestRigFamilies:
     #: An Unreal mannequin's skeleton, which is what Quaternius and most
     #: engine-ready content is rigged to.
-    UNREAL = ['root', 'pelvis', 'spine_01', 'spine_02', 'spine_03', 'neck_01',
+    UNREAL = ('root', 'pelvis', 'spine_01', 'spine_02', 'spine_03', 'neck_01',
               'head', 'clavicle_l', 'upperarm_l', 'lowerarm_l', 'hand_l',
               'clavicle_r', 'upperarm_r', 'lowerarm_r', 'hand_r',
               'thigh_l', 'calf_l', 'foot_l', 'ball_l',
               'thigh_r', 'calf_r', 'foot_r', 'ball_r',
-              'index_01_l', 'index_02_l', 'index_03_l', 'thumb_01_l']
+              'index_01_l', 'index_02_l', 'index_03_l', 'thumb_01_l')
 
     def bones(self, names):
         return hm.bones_by_name(dict(enumerate(names)))

@@ -15,6 +15,7 @@ import os
 import re
 import sys
 import tomllib
+from types import SimpleNamespace
 
 import pytest
 
@@ -276,16 +277,18 @@ class TestTheGalleryMarkup:
     def markup(self, gallery):
         oglc_gallery, node = gallery
 
-        class Builder:
-            images = {
+        builder = SimpleNamespace(
+            images={
                 'images/gallery/showcase/one.jpg': 'one.jpg',
                 'images/gallery/showcase/two.jpg': 'two.jpg',
-            }
-            imgpath = '_images'
+            },
+            imgpath='_images',
+        )
 
         class Translator:
-            builder = Builder()
-            body: list = []
+            def __init__(self):
+                self.builder = builder
+                self.body = []
 
             def attval(self, text):
                 return str(text).replace('"', '&quot;')

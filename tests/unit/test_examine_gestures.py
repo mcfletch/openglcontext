@@ -11,6 +11,8 @@ mine came up", which is the condition that **cancels** an examine and puts the
 camera back. Scrolling to back away from a model you had lost, in the middle of
 the drag that lost it, therefore undid the drag.
 """
+from typing import Any, ClassVar
+
 import numpy as np
 import pytest
 
@@ -322,8 +324,9 @@ class TestABindingWithNoMethodIsReported:
 
     def test_it_logs_a_warning(self, caplog):
         class _Missing(movementmanager.MovementManager):
-            commands = [('Nowhere', 'nowhere', 'noSuchMethod')]
-            commandBindings = dict(
+            commands: ClassVar[list[tuple[str, str, str]]] = [
+                ('Nowhere', 'nowhere', 'noSuchMethod')]
+            commandBindings: ClassVar[dict[str, dict[str, Any]]] = dict(
                 nowhere=dict(eventType='mousebutton', button=0, state=1,
                              modifiers=(0, 0, 0)))
 

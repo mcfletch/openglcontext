@@ -8,6 +8,7 @@ replace could not do at all.
 """
 import contextlib
 import os
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -75,10 +76,9 @@ class TestAdapter:
 
     def test_the_adapter_reads_structurally(self):
         """Anything with glTF-named arrays works, not only this one library."""
-        class Bare:
-            attributes = {'POSITION': np.zeros((3, 3), 'f')}
-            indices = np.array([0, 1, 2], np.uint32)
-        assert isinstance(mesh_from_primitive(Bare()), PBRMesh)
+        bare = SimpleNamespace(attributes={'POSITION': np.zeros((3, 3), 'f')},
+                               indices=np.array([0, 1, 2], np.uint32))
+        assert isinstance(mesh_from_primitive(bare), PBRMesh)
 
     def test_something_that_is_not_a_primitive_is_refused(self):
         with pytest.raises(TypeError):
@@ -87,11 +87,10 @@ class TestAdapter:
             meshes_from_mesh(object())
 
     def test_a_primitive_without_positions_is_refused(self):
-        class Bare:
-            attributes = {'NORMAL': np.zeros((3, 3), 'f')}
-            indices = None
+        bare = SimpleNamespace(attributes={'NORMAL': np.zeros((3, 3), 'f')},
+                               indices=None)
         with pytest.raises(ValueError):
-            mesh_from_primitive(Bare())
+            mesh_from_primitive(bare)
 
 
 class TestNodesBuild:

@@ -8,6 +8,8 @@ profiles.
 ``matchFamily`` is the other half: which of the names in a FontStyle's
 preference list a provider ends up serving.
 """
+from typing import ClassVar
+
 import pytest
 from vrml.vrml97 import basenodes
 
@@ -103,7 +105,7 @@ class TestTheFamilyPreferenceList:
     the font to use and everything after it is a fallback.
     """
 
-    AVAILABLE = {'SANS': 'helvetica', 'SERIF': 'times'}
+    AVAILABLE: ClassVar[dict[str, str]] = {'SANS': 'helvetica', 'SERIF': 'times'}
 
     def lookup(self, specifier):
         return self.AVAILABLE.get(specifier.upper())
