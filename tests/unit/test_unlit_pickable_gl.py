@@ -79,6 +79,9 @@ try:
             ev.modifiers = (0, 0, 0); ev.pickPoint = (w // 2, h // 2)
             inst.addPickEvent(ev); inst.triggerPick()
         inst.OnDraw(force=1)
+    # How many frames a readback takes is the machine's load, not the
+    # program's: wait for any still in flight rather than count frames.
+    inst.flushPendingPicks()
     sys.stderr.write('SCENARIO=%s HIT=%r\n' % (SCENARIO, RESULT['hit']))
     os._exit(0 if RESULT['hit'] else 2)
 except SystemExit:
