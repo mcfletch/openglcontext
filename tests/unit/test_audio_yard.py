@@ -5,6 +5,10 @@ shows -- a collision, an event, an area, a sound that follows the simulation --
 is tested here with a silent device and no window.
 """
 
+import subprocess
+import sys
+from types import SimpleNamespace
+
 import numpy as np
 import pytest
 
@@ -12,8 +16,10 @@ from omi_audio.device import NullDevice
 from omi_audio.engine import AudioEngine
 from vrml.vrml97 import nodepath, nodetypes
 
+from OpenGLContext.audio.areas import apply_zones
 from OpenGLContext.bin import audio_demo
 from OpenGLContext.bin.audio_demo import AudioYard
+from OpenGLContext.physics.zones import scene_zones
 from OpenGLContext.scenegraph.audio import update_scene_audio
 
 FRAME = 1.0 / 60.0
@@ -40,12 +46,18 @@ def auditory_paths(root):
     return found
 
 
+def driven(yard):
+    """``yard`` with what the render pass would collect from its scene."""
+    scene = yard.scene()
+    yard.paths = auditory_paths(scene)
+    yard.zones = scene_zones(scene)
+    yard.clock = 0.0
+    return yard
+
+
 @pytest.fixture
 def yard(engine):
-    made = AudioYard(sample_rate=RATE)
-    made.paths = auditory_paths(made.scene())
-    made.clock = 0.0
-    return made
+    return driven(AudioYard(sample_rate=RATE))
 
 
 OUTSIDE = (0.0, 1.6, 12.0)
@@ -54,13 +66,16 @@ OUTSIDE = (0.0, 1.6, 12.0)
 def run(yard, engine, seconds, where=OUTSIDE, frame=FRAME):
     """Frames of the demo, each with its share of mixing; sounds started.
 
-    Each frame steps the yard, then drives its sound nodes as the render pass
-    would, then mixes a frame's worth of samples as a device would pull them.
+    Each frame steps the yard, then sets the zones' gains and reverb and
+    drives its sound nodes as the render pass would with the camera at
+    ``where``, then mixes a frame's worth of samples as a device would pull
+    them.
     """
     started = 0
     for _ in range(max(1, int(round(seconds / frame)))):
-        started += yard.step(frame, where, engine)
+        started += yard.step(frame, engine)
         yard.clock += frame
+        apply_zones(engine, [path[-1] for path in yard.paths], yard.zones, where)
         update_scene_audio(engine, yard.paths, yard.clock)
         engine.mixer.mix(int(frame * RATE))
     return started
@@ -78,9 +93,7 @@ class TestCollisions:
 
     def test_a_slow_frame_rate_hears_every_bounce(self, engine):
         def thuds(frame):
-            yard = AudioYard(sample_rate=RATE)
-            yard.paths = auditory_paths(yard.scene())
-            yard.clock = 0.0
+            yard = driven(AudioYard(sample_rate=RATE))
             yard.drop()
             return run(yard, engine, 4.0, frame=frame)
 
@@ -123,19 +136,36 @@ class TestEvents:
 
 
 class TestAreas:
+    """The cave and the stream are zones; the render pass sets their gains."""
+
     def test_the_cave_is_heard_inside_it(self, yard, engine):
         run(yard, engine, FRAME, where=audio_demo.CAVE_CENTRE)
-        assert yard.cave.gain == pytest.approx(audio_demo.AREA_LEVEL)
-        assert yard.stream.gain == 0.0
+        assert yard.cave_sound.zoneGain == pytest.approx(1.0)
+        assert yard.stream_sound.zoneGain == 0.0
 
     def test_the_stream_is_heard_inside_it(self, yard, engine):
         run(yard, engine, FRAME, where=audio_demo.STREAM_CENTRE)
-        assert yard.stream.gain == pytest.approx(audio_demo.AREA_LEVEL)
-        assert yard.cave.gain == 0.0
+        assert yard.stream_sound.zoneGain == pytest.approx(1.0)
+        assert yard.cave_sound.zoneGain == 0.0
 
     def test_neither_is_heard_from_the_start(self, yard, engine):
         run(yard, engine, FRAME)
-        assert yard.cave.gain == yard.stream.gain == 0.0
+        assert yard.cave_sound.zoneGain == yard.stream_sound.zoneGain == 0.0
+
+    def test_the_cave_echoes(self, yard, engine):
+        run(yard, engine, FRAME, where=audio_demo.CAVE_CENTRE)
+        assert engine.reverb.level == pytest.approx(audio_demo.CAVE_REVERB)
+        assert engine.reverb.decay == pytest.approx(audio_demo.CAVE_DECAY)
+
+    def test_the_stream_does_not(self, yard, engine):
+        run(yard, engine, FRAME, where=audio_demo.STREAM_CENTRE)
+        assert engine.reverb.level == 0.0
+
+    def test_the_cave_fades_in_over_the_margin_outside_it(self, yard, engine):
+        x, y, z = audio_demo.CAVE_CENTRE
+        edge = x + audio_demo.AREA_HALF_SIZE[0] + audio_demo.AREA_MARGIN / 2
+        run(yard, engine, FRAME, where=(edge, y, z))
+        assert 0.0 < yard.cave_sound.zoneGain < 1.0
 
 
 class TestTheMotor:
@@ -165,13 +195,41 @@ class TestTheMotor:
         assert yard.rotor.rotation[3] != 0.0
 
 
+class TestThePlayersControls:
+    def test_muffle_toggles(self, yard, engine):
+        assert yard.toggle_muffle(engine) == 1.0
+        assert engine.muffle == 1.0
+        assert yard.toggle_muffle(engine) == 0.0
+
+    def test_muffle_without_an_engine_is_harmless(self, yard):
+        assert yard.toggle_muffle(None) == 0.0
+
+    def test_the_volume_moves_within_its_range(self, yard):
+        audio = SimpleNamespace(volume=0.95)
+        assert yard.change_volume(audio, 0.1) == 1.0
+        assert yard.change_volume(audio, -0.3) == pytest.approx(0.7)
+        audio.volume = 0.05
+        assert yard.change_volume(audio, -0.1) == 0.0
+
+
 class TestWithoutSound:
     def test_the_yard_runs_with_no_engine(self, yard):
         yard.drop()
         yard.ring()
         yard.toggle_motor()
         for _ in range(60):
-            assert yard.step(FRAME, OUTSIDE, None) == 0
+            assert yard.step(FRAME, None) == 0
 
     def test_the_scene_holds_every_sound(self, yard):
-        assert len(yard.paths) == 3        # the bell, the motor, the areas
+        assert len(yard.paths) == 4        # the bell, the motor, the two areas
+
+
+def test_importing_the_demo_chooses_no_window_backend():
+    """``oglc-audio-demo --help`` and these tests import the module; only
+    ``main()`` picks a GL backend."""
+    found = subprocess.run(
+        [sys.executable, '-c', 'import sys, OpenGLContext.bin.audio_demo; '
+         'print("OpenGLContext.testingcontext" in sys.modules)'],
+        capture_output=True, text=True, check=True)
+    assert found.stdout.strip() == 'False'
+    assert 'default context' not in found.stdout + found.stderr

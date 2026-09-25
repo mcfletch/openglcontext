@@ -682,7 +682,9 @@ each thing on this page in it:
      - Starts or stops a motor whose pitch and level follow its speed
      - :ref:`audio-synth`
    * - walk onto a pad
-     - The cave (dark, left) or the stream (blue, right) fades in
+     - The cave (dark slate, left, with its echo) or the stream (blue tiles,
+       right) fades in: each is a zone with a ``ZoneAudio``, and the cave's
+       ``ZoneReverb`` gives it the reverb
      - :ref:`audio-areas`
    * - :kbd:`m`
      - Muffles everything
@@ -696,8 +698,10 @@ each thing on this page in it:
    oglc-audio-demo
 
 Its source, ``OpenGLContext/bin/audio_demo.py``, is the working code for each
-recipe. The behaviour is in ``AudioYard``, which holds no GL; the window only
-feeds it the time step and the camera's position.
+recipe. The behaviour is in ``AudioYard``, which holds no GL: the window feeds
+it the time step and the keys, and the render pass sets the zones' gains and
+reverb from where the camera is. ``box_gain``, above, is the same thing for an
+application that keeps its areas in code rather than as zones.
 
 :doc:`tests/audio_spatial.py <tutorials/audio_spatial>` is the tutorial for
 placement: one sound circles you (panning), one is far away (distance), and
