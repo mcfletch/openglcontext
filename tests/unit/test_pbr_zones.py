@@ -358,11 +358,15 @@ class TestGravity:
 # -- renders ------------------------------------------------------------------
 
 def _render(tmp_path_factory, mode):
+    from OpenGLContext.testing.glcontext import gl_available
+    if not gl_available():
+        pytest.skip('no GL context can be made here')
     out = str(tmp_path_factory.mktemp('zones') / ('%s.png' % mode))
     done = subprocess.run([sys.executable, CAPTURE, out, mode], capture_output=True,
                           text=True, timeout=300)
-    if not os.path.exists(out):
-        pytest.skip('no zone render (%s): %s' % (mode, done.stderr[-500:]))
+    assert done.returncode == 0, 'zone render (%s) failed:\n%s' % (mode, done.stderr[-3000:])
+    assert os.path.exists(out), 'zone render (%s) wrote nothing:\n%s' % (
+        mode, done.stderr[-3000:])
     from PIL import Image
     return np.asarray(Image.open(out).convert('RGB'), dtype='d')
 
@@ -408,26 +412,54 @@ class TestRenders:
         assert red(open_right) > red(zoned_right) + 1.0
 
 
+def _cost(mode, frames=120):
+    """The harness's median frame time in ``mode``, in milliseconds."""
+    done = subprocess.run([sys.executable, COST, str(frames), mode], capture_output=True,
+                          text=True, timeout=600)
+    if done.returncode == 3:
+        pytest.skip('the harness could make no context: %s' % done.stderr[-500:])
+    assert done.returncode == 0, done.stderr[-3000:]
+    line = [text for text in done.stdout.splitlines() if text.startswith('{')][-1]
+    return json.loads(line)['median_ms']
+
+
+class TestHelpersFailLoudly:
+    """A helper that crashes fails the test; only no GL at all skips it."""
+
+    @pytest.fixture(autouse=True)
+    def gl(self):
+        from OpenGLContext.testing.glcontext import gl_available
+        if not gl_available():
+            pytest.skip('no GL context can be made here')
+
+    def test_a_render_that_fails_fails(self, tmp_path_factory):
+        with pytest.raises(AssertionError, match='no zone capture mode'):
+            _render(tmp_path_factory, 'no-such-mode')
+
+    def test_a_timing_that_fails_fails(self):
+        with pytest.raises(AssertionError, match='no zone cost mode'):
+            _cost('no-such-mode', frames=1)
+
+
 @pytest.mark.serial
 @pytest.mark.performance
 def test_zones_cost_a_fill_bound_frame_little():
     """Four zones across every fragment of a full-window floor.
 
-    Held to a generous ratio, since this has to pass on a slow machine too:
-    what it is here to catch is the per-fragment test growing into a multiple
-    of the frame.
+    Two kinds of zone: four that scale the scene's environment, which fold
+    into one sample of it, and four each lit by an image-based light of its
+    own, where every fragment samples four probe layers. What this is here to
+    catch is either growing into a large part of the frame.
     """
-    def median(mode):
-        done = subprocess.run([sys.executable, COST, '120', mode], capture_output=True,
-                              text=True, timeout=600)
-        if done.returncode == 3:
-            pytest.skip('no usable GL context for the zone cost harness')
-        assert done.returncode == 0, done.stderr[-2000:]
-        line = [text for text in done.stdout.splitlines() if text.startswith('{')][-1]
-        return json.loads(line)['median_ms']
-    plain = min(median('plain') for _ in range(2))
-    zoned = min(median('zones') for _ in range(2))
-    assert zoned < plain * 1.6 + 0.5, (plain, zoned)
+    from OpenGLContext.testing.glcontext import gl_available
+    if not gl_available():
+        pytest.skip('no GL context can be made here')
+
+    plain = min(_cost('plain') for _ in range(2))
+    zoned = min(_cost('zones') for _ in range(2))
+    probed = min(_cost('probes') for _ in range(2))
+    assert zoned < plain * 1.3 + 0.3, (plain, zoned)
+    assert probed < plain * 1.6 + 0.5, (plain, probed)
 
 
 class TestManyZones:

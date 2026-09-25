@@ -5,9 +5,18 @@ shadow-casting sun, and four zones cross it, so every one of its fragments
 weighs four zones. The same frame is drawn with and without the zones, and the
 median frame time is printed as one JSON line.
 
-Usage:  python tests/helpers/_zone_cost_harness.py FRAMES [zones|plain]
+Modes:
 
-Exits 3 where no GL context can be made.
+``plain``   no zones.
+``zones``   four zones scaling the scene's environment, which fold into one
+            sample of the scene's probe.
+``probes``  four zones each lit by an image-based light of its own, so every
+            fragment samples four probe layers of the arrays.
+
+Usage:  python tests/helpers/_zone_cost_harness.py FRAMES [plain|zones|probes]
+
+Exits 3 where no GL context can be made, and 1 with a traceback for any other
+failure.
 """
 import json
 import os
@@ -29,6 +38,8 @@ WARMUP = 15
 def main() -> None:
     frames = int(sys.argv[1]) if len(sys.argv) > 1 else 90
     mode = sys.argv[2] if len(sys.argv) > 2 else 'zones'
+    if mode not in ('plain', 'zones', 'probes'):
+        raise ValueError('no zone cost mode %r' % (mode,))
 
     import glfw
     from OpenGL.GL import glFinish
@@ -41,6 +52,15 @@ def main() -> None:
 
     Base = testingcontext.getInteractive()
     drawn = []
+
+    def image_light(index):
+        """A small image-based light of one colour, the zone's own probe."""
+        import numpy as np
+        from OpenGLContext.scenegraph.imagebasedlight import ImageBasedLight
+        colour = [(1.2, 0.3, 0.3), (0.3, 1.2, 0.3), (0.3, 0.3, 1.2), (1.0, 1.0, 0.3)][index]
+        return ImageBasedLight(
+            specular=[[np.full((8, 8, 3), colour, 'f4')] * 6],
+            irradianceCoefficients=[tuple(3.0 * c for c in colour)] + [(0.0, 0.0, 0.0)] * 8)
 
     class Harness(Base):
         def SwapBuffers(self):
@@ -57,17 +77,25 @@ def main() -> None:
                 DirectionalLight(direction=(-0.3, -1.0, -0.2), intensity=2.0,
                                  castShadows=True),
             ]
-            if mode == 'zones':
-                for x in (-3.0, -1.0, 1.0, 3.0):
+            if mode in ('zones', 'probes'):
+                for index, x in enumerate((-3.0, -1.0, 1.0, 3.0)):
+                    setting = (ZoneEnvironment(light=image_light(index)) if mode == 'probes'
+                               else ZoneEnvironment(intensity=0.3))
                     children.append(Transform(translation=(x, 0.0, 0.0), children=[
-                        Zone(size=(3.0, 4.0, 3.0), blend=1.0,
-                             settings=[ZoneEnvironment(intensity=0.3)])]))
+                        Zone(size=(3.0, 4.0, 3.0), blend=1.0, settings=[setting])]))
             self.sg = sceneGraph(children=children)
             self.platform.setPosition((0.0, 3.0, 0.0))
             self.platform.setOrientation((1.0, 0.0, 0.0, -1.5))
 
     # Large enough that the frame is the fragments' cost.
-    context = Harness(size=(1600, 1000))
+    try:
+        context = Harness(size=(1600, 1000))
+    except Exception as error:
+        import traceback
+        traceback.print_exc()
+        sys.stderr.write('NOGL %r\n' % (error,))
+        sys.stderr.flush()
+        os._exit(3)
     context.deferRedraw = True
     try:
         glfw.swap_interval(0)
@@ -89,12 +117,5 @@ def main() -> None:
     os._exit(0)
 
 
-try:
+if __name__ == '__main__':
     main()
-except SystemExit:
-    raise
-except BaseException as error:
-    import traceback
-    traceback.print_exc()
-    sys.stderr.write('NOGL %r\n' % (error,))
-    os._exit(3)

@@ -745,12 +745,11 @@ class ZonesMixin(PassResources):
         if schedule is not None:
             waiting = self._waitingLights()
             for key, light in list(waiting.items()):
-                if schedule.layer(key) is not None:
-                    continue
                 layer = schedule.layer_of(key)
-                if layer is None:
+                if layer is None or schedule.layer(key) is not None:
                     del waiting[key]
                 elif probe.upload_light(light, layer):
+                    del waiting[key]
                     schedule.finished(key)
                     self._probeVersion += 1
         scene = self.sceneImageLight()

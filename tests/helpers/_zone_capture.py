@@ -23,9 +23,14 @@ import os
 import sys
 
 
+MODES = ('none', 'dim', 'capture', 'lights', 'nolights', 'imagelight')
+
+
 def main() -> int:
     out_path = sys.argv[1]
     mode = sys.argv[2] if len(sys.argv) > 2 else 'none'
+    if mode not in MODES:
+        raise ValueError('no zone capture mode %r; the modes are %s' % (mode, ', '.join(MODES)))
 
     os.environ['OPENGLCONTEXT_PROFILE'] = 'core'
     os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')

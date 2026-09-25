@@ -186,7 +186,10 @@ by the sum of those shares. A layer with a probe of its own samples that
 probe's layer of the arrays.
 
 A fill-bound frame with four zones crossing every fragment is timed against
-the same frame without them in ``test_zones_cost_a_fill_bound_frame_little``.
+the same frame without them in ``test_zones_cost_a_fill_bound_frame_little``,
+once with zones that scale the scene's environment and once with zones each
+lit by an image-based light of its own, so that every fragment samples four
+probe layers.
 
 Probes
 ------
