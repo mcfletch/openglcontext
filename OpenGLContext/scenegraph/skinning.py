@@ -24,7 +24,8 @@ column vector by it is the row-vector transform.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+import weakref
+from typing import Any, Optional
 
 import numpy as np
 from OpenGL.GL import (
@@ -90,7 +91,8 @@ class JointPalette:
     def __init__(self, capacity: int = INITIAL_JOINTS) -> None:
         self.capacity = int(max(1, capacity))
         self.used = 0
-        self._reserved: Dict[int, int] = {}
+        #: Each owner's first joint index, forgotten with the owner.
+        self._reserved: "weakref.WeakKeyDictionary[Any, int]" = weakref.WeakKeyDictionary()
         self.buffer = int(glGenBuffers(1))
         self.texture = int(glGenTextures(1))
         glBindBuffer(GL_TEXTURE_BUFFER, self.buffer)
@@ -103,24 +105,24 @@ class JointPalette:
     def reserve(self, owner: Any, joints: int) -> int:
         """The first joint index of a range of ``joints``, made on first ask.
 
-        Keyed by the id of the owner, so a mesh asking again gets the range it
-        already has rather than another one.
+        Keyed by the owner, so a mesh asking again gets the range it already
+        has rather than another one. A collected owner's range is not handed
+        out again.
         """
         owner = _palette_owner(owner)
-        key = id(owner)
-        found = self._reserved.get(key)
+        found = self._reserved.get(owner)
         if found is not None:
             return found
         base = self.used
         self.used += int(joints)
         if self.used > self.capacity:
             self._grow(self.used)
-        self._reserved[key] = base
+        self._reserved[owner] = base
         return base
 
     def reserved_base(self, owner: Any) -> Optional[int]:
         """The range this owner already holds, or None if it holds none."""
-        return self._reserved.get(id(_palette_owner(owner)))
+        return self._reserved.get(_palette_owner(owner))
 
     def _grow(self, wanted: int) -> None:
         """Make the buffer big enough for ``wanted`` joints, keeping what is in it.

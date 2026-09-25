@@ -6,6 +6,7 @@ shader has to do is put the figure in the same place: the test renders one
 posed figure each way and compares the frames, and separately compares the
 joint palette the shader is handed with the matrices the CPU deform applies.
 """
+import gc
 import os
 import subprocess
 import sys
@@ -53,6 +54,37 @@ class TestPaletteLayout:
             | set(IBL_UNITS.values())
 
         assert SKIN_PALETTE_UNIT > max(used)
+
+
+class _Mesh:
+    """A skinned mesh, as far as the palette's ranges read one."""
+
+
+class TestPaletteRanges:
+    def test_a_mesh_asking_again_gets_the_range_it_has(self, gl_context):
+        from OpenGLContext.scenegraph.skinning import JointPalette
+
+        palette = JointPalette(capacity=8)
+        mesh = _Mesh()
+        base = palette.reserve(mesh, 4)
+        assert palette.reserve(mesh, 4) == base
+        assert palette.reserved_base(mesh) == base
+
+    def test_a_mesh_that_has_gone_holds_no_range(self, gl_context):
+        """Ranges are kept by mesh, not by where the mesh was allocated.
+
+        A collected mesh's address is handed to the next object of its size,
+        so a table keyed on it would give a new figure the old one's range,
+        whatever its own joint count.
+        """
+        from OpenGLContext.scenegraph.skinning import JointPalette
+
+        palette = JointPalette(capacity=8)
+        mesh = _Mesh()
+        palette.reserve(mesh, 4)
+        del mesh
+        gc.collect()
+        assert len(palette._reserved) == 0
 
 
 class TestMeshState:
