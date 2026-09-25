@@ -191,3 +191,72 @@ class TestWhatTheStoreReads:
 
     def test_none_added_is_no_packs_and_no_complaint(self, store) -> None:
         assert store.load_registries() == []
+
+
+class TestARefreshedBundle:
+    """A second bundle into the same place replaces the first as a whole."""
+
+    def test_one_with_no_manifest_does_not_load_the_old_one(self, tmp_path):
+        into = str(tmp_path / 'unpacked')
+        catalog.load_bundle(bundle(tmp_path, name='one.zip'), into)
+        empty = tmp_path / 'two.zip'
+        with zipfile.ZipFile(empty, 'w') as handle:
+            handle.writestr('readme.txt', 'no registry here')
+        with pytest.raises(catalog.BadCatalog):
+            catalog.load_bundle(str(empty), into)
+
+    def test_a_picture_it_dropped_is_not_shown(self, tmp_path):
+        into = str(tmp_path / 'unpacked')
+        catalog.load_bundle(bundle(tmp_path, {'preview': 'p.png'},
+                                   pictures=['p.png'], name='one.zip'), into)
+        packs = catalog.load_bundle(bundle(tmp_path, {'preview': 'p.png'},
+                                           name='two.zip'), into)
+        assert packs[0].preview == ''
+
+    def test_one_that_fails_leaves_the_last_good_one(self, tmp_path):
+        into = str(tmp_path / 'unpacked')
+        catalog.load_bundle(bundle(tmp_path, name='one.zip'), into)
+        bad = bundle(tmp_path, {'key': 'someone/else'}, name='bad.zip')
+        with pytest.raises(catalog.BadCatalog):
+            catalog.load_bundle(bad, into)
+        assert [pack.key for pack in catalog.load(
+            os.path.join(into, catalog.MANIFEST))] == ['glisteel/ashdown']
+
+    def test_the_same_bundle_is_not_unpacked_twice(self, tmp_path,
+                                                   monkeypatch):
+        """``load_registries`` reads every bundle on every start."""
+        into = str(tmp_path / 'unpacked')
+        path = bundle(tmp_path)
+        catalog.load_bundle(path, into)
+        calls = []
+        real = archive.extract
+        monkeypatch.setattr(archive, 'extract',
+                            lambda *a, **k: calls.append(1) or real(*a, **k))
+        assert catalog.load_bundle(path, into)
+        assert calls == []
+
+    def test_it_unpacks_under_the_cap_it_is_fetched_under(self):
+        from OpenGLContext.contentpacks import fetch
+        assert fetch.REGISTRY_LIMIT == catalog.REGISTRY_LIMIT
+
+
+class TestARegistryThatFailsToLoad:
+    """A fetched bundle that does not validate is not kept."""
+
+    def test_the_store_still_loads_its_other_registries(self, tmp_path,
+                                                        monkeypatch):
+        from OpenGLContext.contentpacks import fetch
+        from OpenGLContext.loaders import resolver
+        store = ContentStore('glisteel', root=str(tmp_path / 'store'),
+                             search=[])
+        bad = bundle(tmp_path, {'key': 'glisteel/x', 'copyright': ''},
+                     name='bad.zip')
+        monkeypatch.setattr(resolver, 'fetch_to_cache',
+                            lambda url, **named: bad)
+        with pytest.raises(catalog.BadCatalog):
+            fetch.fetch_registry('https://example.invalid/bad.zip', store)
+        assert store.registries() == []
+        assert store.load_registries() == []
+        unpacked = os.path.join(store.root, 'registries', '.unpacked')
+        assert not os.path.isdir(unpacked) or not [
+            name for name in os.listdir(unpacked) if not name.endswith('.lock')]

@@ -186,9 +186,12 @@ URL. ``store.load_registries()`` reads every added registry, bundled or not.
 .. rst-class:: technical
 
 A fetched registry is untrusted input. It is extracted by the same reader as a
-content pack and must follow the same namespace rule. It is capped at
-``fetch.REGISTRY_LIMIT`` (16 MB), because a registry has no declared size to
-set a cap from.
+content pack and must follow the same namespace rule. Its download and what it
+unpacks to are both capped at ``catalog.REGISTRY_LIMIT`` (16 MB), because a
+registry has no declared size to set a cap from. A bundle is unpacked beside
+its directory and validated there; one that does not load is refused, is not
+kept, and leaves the previous copy of that registry as it was. A bundle whose
+bytes are already unpacked is read without unpacking it again.
 
 .. _isolation:
 

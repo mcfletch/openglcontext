@@ -51,10 +51,8 @@ HEADROOM = 1.5
 FLOOR = resolver.DEFAULT_MAX_RESOURCE_BYTES
 
 #: The cap a registry bundle is fetched under, well below the one a content pack
-#: gets. A registry is a document and some thumbnails, and one arriving at the
-#: size of the content it describes is not a registry -- there is no size
-#: declared in advance to judge it against, so the judgement is made here.
-REGISTRY_LIMIT = 16 * 1024 * 1024
+#: gets, and the one it is unpacked under.
+REGISTRY_LIMIT = catalog.REGISTRY_LIMIT
 
 #: What one pack's fetch is called with: the pack, a progress callback taking
 #: bytes-so-far and an optional total, and a predicate that goes true when the
@@ -119,7 +117,10 @@ def fetch_registry(url: str, store: ContentStore, progress: Any = None,
 
     The bundle is kept under the store's own registries directory, so a later
     run finds it without being pointed at it again, and its packs are held to
-    the same namespacing rule as the shipped registry's.
+    the same namespacing rule as the shipped registry's. It is kept only once
+    it loads: one that does not is refused and leaves the store as it was, so
+    a bad URL or a publisher's typo cannot stop the store's other registries
+    loading.
     """
     log.info('fetching the registry at %s', resolver.safe_url(url))
     try:
@@ -133,8 +134,10 @@ def fetch_registry(url: str, store: ContentStore, progress: Any = None,
         raise TooLarge('the registry at %s is over the %d bytes a registry is '
                        'fetched under: %s' % (resolver.safe_url(url),
                                               REGISTRY_LIMIT, error)) from error
-    kept = store.keep_registry(downloaded, url)
-    return catalog.load_bundle(kept, store.unpacked_registry(kept))
+    kept = store.registry_path(url)
+    packs = catalog.load_bundle(downloaded, store.unpacked_registry(kept))
+    store.keep_registry(downloaded, url)
+    return packs
 
 
 def wanted_for(chosen: ContentPack, packs: Sequence[ContentPack],

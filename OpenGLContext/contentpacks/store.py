@@ -241,26 +241,27 @@ class ContentStore:
             found.extend(glob.glob(os.path.join(where, suffix)))
         return sorted(found)
 
-    def keep_registry(self, path: str, url: str) -> str:
-        """Copy a fetched registry bundle in beside the added ones; its path.
+    def registry_path(self, url: str) -> str:
+        """Where a registry bundle fetched from ``url`` is kept.
 
-        **Keyed by the whole URL, not by its last segment.** Two sources both
+        Keyed by the whole URL, not by its last segment. Two sources both
         publishing ``registry.zip`` would otherwise be one file here, the second
         fetch silently replacing the first and every pack it had offered. The
         URL's own name is kept after the key so somebody looking in the store
         can still tell what is there and remove it by hand.
-
-        A second fetch of the same URL lands on the same file, which is how a
-        registry is refreshed.
         """
         key = hashlib.sha256(url.encode('utf-8')).hexdigest()[:16]
         named = os.path.basename(urllib.parse.urlparse(url).path)
         stem = os.path.splitext(named)[0] or 'registry'
-        where = os.path.join(self.root, REGISTRIES)
-        os.makedirs(where, exist_ok=True)
-        kept = os.path.join(where, '%s-%s.zip' % (key, stem))
-        shutil.copyfile(path, kept)
-        return kept
+        return os.path.join(self.root, REGISTRIES, '%s-%s.zip' % (key, stem))
+
+    def keep_registry(self, path: str, url: str) -> str:
+        """Copy a fetched registry bundle in beside the added ones; its path.
+
+        Kept at :meth:`registry_path`, replacing the file there whole: a second
+        fetch of the same URL is how a registry is refreshed.
+        """
+        return atomicfiles.copy_file(path, self.registry_path(url))
 
     def unpacked_registry(self, path: str) -> str:
         """Where a registry bundle's content is extracted to.

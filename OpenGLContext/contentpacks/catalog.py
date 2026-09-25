@@ -34,8 +34,8 @@ from typing import Any, Iterable, Sequence
 from .pack import ContentPack
 
 __all__ = ['ARCHIVE_KINDS', 'BadCatalog', 'MANIFEST', 'OPTIONAL',
-           'PREVIEW_SUFFIXES', 'REQUIRED', 'load', 'load_bundle', 'merge',
-           'offered', 'pack_for_key', 'with_needed']
+           'PREVIEW_SUFFIXES', 'REGISTRY_LIMIT', 'REQUIRED', 'load',
+           'load_bundle', 'merge', 'offered', 'pack_for_key', 'with_needed']
 
 #: What the registry document is called, on its own or inside a bundle.
 MANIFEST = 'packs.json'
@@ -64,6 +64,15 @@ OPTIONAL: dict[str, Any] = {
 
 #: Archive containers there is a reader for.
 ARCHIVE_KINDS = ('zip', 'tar')
+
+#: The most a registry bundle is fetched as, and the most it unpacks to. A
+#: registry is a document and some thumbnails, and one arriving at the size of
+#: the content it describes is not a registry; there is no size declared in
+#: advance to judge it against, so the judgement is made here.
+REGISTRY_LIMIT = 16 * 1024 * 1024
+
+#: The file an unpacked bundle's directory holds its bundle's digest in.
+BUNDLE_DIGEST = '.bundle-sha256'
 
 _KEY = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$')
 _NAMESPACE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
@@ -117,20 +126,38 @@ def load_bundle(path: str, into: str) -> list[ContentPack]:
     and some thumbnails, so fetching one gives a picture of every pack it
     declares before anything large is downloaded.
 
-    Extracted into ``into`` through the same reader a content pack goes through,
-    so a bundle from elsewhere is held to the same rule about where its entries
-    may land.
+    Extracted through the same reader a content pack goes through, so a bundle
+    from elsewhere is held to the same rule about where its entries may land,
+    and under :data:`REGISTRY_LIMIT`, the cap it is fetched under. It is
+    unpacked beside ``into`` and validated there, and replaces what ``into``
+    held only when it loads: a bundle that does not is refused and the last
+    good one stays. A bundle already unpacked in ``into`` -- the same bytes,
+    by digest -- is read from there without unpacking it again.
     """
     from . import archive             # here: archive has no use for a catalogue
-    # A registry is a document and thumbnails; nothing in one is large, and a
-    # bundle that unpacks to more than a content pack would is not a registry.
-    archive.extract(path, into, 'zip',
-                    max_bytes=archive.MINIMUM_UNPACKED)
-    manifest = os.path.join(into, MANIFEST)
-    if not os.path.isfile(manifest):
-        raise BadCatalog('%s is not a registry bundle: it holds no %s at its '
-                         'top' % (path, MANIFEST))
-    return load(manifest)
+    from OpenGLContext import atomicfiles
+    digest = archive.digest(path)
+    recorded = os.path.join(into, BUNDLE_DIGEST)
+    with atomicfiles.file_lock(into + '.lock'):
+        if _read_text(recorded) != digest:
+            with atomicfiles.staged_directory(into) as staging:
+                archive.extract(path, staging, 'zip', max_bytes=REGISTRY_LIMIT)
+                manifest = os.path.join(staging, MANIFEST)
+                if not os.path.isfile(manifest):
+                    raise BadCatalog('%s is not a registry bundle: it holds no '
+                                     '%s at its top' % (path, MANIFEST))
+                load(manifest)
+                atomicfiles.write_text(os.path.join(staging, BUNDLE_DIGEST),
+                                       digest)
+    return load(os.path.join(into, MANIFEST))
+
+
+def _read_text(path: str) -> str | None:
+    try:
+        with open(path, 'r', encoding='utf-8') as handle:
+            return handle.read()
+    except OSError:
+        return None
 
 
 def merge(*groups: Sequence[ContentPack]) -> list[ContentPack]:
