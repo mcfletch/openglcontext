@@ -147,8 +147,11 @@ class TestCameras:
         assert layout.views[0].camera is None
 
     def test_a_camera_that_takes_no_size_is_left_alone(self):
-        layout = ViewLayout.single(camera=object())
-        layout.arrange(64, 64)
+        camera = object()
+        layout = ViewLayout.single(camera=camera)
+        assert layout.arrange(64, 64) == layout.views
+        assert layout.views[0].camera is camera
+        assert layout.views[0].rect == (0, 0, 64, 64)    # the tile is still placed
 
     def test_the_cameras_are_listed_once_each(self):
         shared = Camera()

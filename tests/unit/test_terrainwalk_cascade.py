@@ -54,11 +54,13 @@ def test_do_event_cascade_chains_to_host_then_clamps_to_ground():
     assert walker.platform.position[1] == pytest.approx(5.0 + walker.eye_height)
 
 
-def test_clamp_is_a_noop_without_a_platform():
-    """collide_and_clamp returns immediately when no platform is bound."""
+def test_the_cascade_runs_and_clamps_nothing_without_a_platform():
+    """With no platform bound the host cascade still runs and nothing is placed."""
     walker = _Walker(platform=None)
     walker.init_walk(HeightField(np.zeros((4, 4)), 10.0, 0.0))
-    walker.collide_and_clamp()                            # must not raise
+    assert walker.DoEventCascade() == 'host-changed'
+    assert walker.cascaded is True
+    assert walker.platform is None
 
 
 def test_clamp_is_a_noop_without_a_height_field():

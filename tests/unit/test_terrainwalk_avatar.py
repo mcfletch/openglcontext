@@ -338,11 +338,17 @@ class TestBeforeAnyTerrain:
         host.resolveTerrain()
         assert host.physicsPlatform is None
 
-    def test_a_bound_avatar_with_the_terrain_taken_away_resolves_to_nothing(self):
+    def test_a_bound_avatar_with_the_terrain_taken_away_is_left_where_it_is(self):
         host = walking()
+        character = host.physicsPlatform.character
+        character.position[:] = (3.0, -40.0, 7.0)   # well under the old ground
+        character.vy = -2.0
+        character.grounded = False
         host._tw_hf = None
         host.standAvatarOnTerrain()
-        host.resolveTerrain()          # must not raise
+        host.resolveTerrain()
+        assert tuple(character.position) == (3.0, -40.0, 7.0)
+        assert character.vy == -2.0 and character.grounded is False
 
 
 class TestIdle:

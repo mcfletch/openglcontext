@@ -85,44 +85,54 @@ def test_mesh_vbos_collects_dyn_buffers():
 class _FakeCache:
     def __init__(self, data=None):
         self._data = data
+        self.holders_asked = []
 
     def getData(self, geometry, key=""):
         return self._data
 
+    def getHolder(self, geometry, key=""):
+        self.holders_asked.append(geometry)
+        return None
+
 
 def test_dispose_mesh_gpu_no_entry_is_noop():
-    # cache.getData returns None -> nothing to release, returns without error.
-    _dispose_mesh_gpu(_FakeCache(None), object())
+    # cache.getData returns None -> nothing to release and no entry to drop.
+    cache = _FakeCache(None)
+    assert _dispose_mesh_gpu(cache, object()) is None
+    assert cache.holders_asked == []
 
 
 def test_dispose_mesh_gpu_swallows_release_and_delete_errors():
-    class _Boom:
-        def release(self):
-            raise RuntimeError("no gl")
+    attempted = []
 
     class _BadVBO:
-        idx_vbo = None
-        _instance_vbo = None
-        attr_layout = None
-        dyn = None
+        def __init__(self, name):
+            self.name = name
 
         def delete(self):
+            attempted.append(self.name)
             raise RuntimeError("no gl")
 
     class _GPU:
-        idx_vbo = _BadVBO()
+        idx_vbo = _BadVBO('index')
         _instance_vbo = None
-        attr_layout = []
+        attr_layout = [(_BadVBO('attribute'), 2, 3)]
         dyn = {}
 
         def release(self):
+            attempted.append('vao')
             raise RuntimeError("no gl")
 
+    dropped = []
     cache = types.SimpleNamespace(
         getData=lambda g, key="": _GPU(),
-        getHolder=lambda g, key="": None)
-    # Must not raise despite both release() and buf.delete() blowing up.
-    _dispose_mesh_gpu(cache, object())
+        getHolder=lambda g, key="": lambda: dropped.append(g))
+    geometry = object()
+    # One failure does not stop the rest: every buffer is still deleted and
+    # the cache entry is still dropped.
+    _dispose_mesh_gpu(cache, geometry)
+    assert attempted == ['vao', 'index', 'attribute']
+    assert dropped == [geometry]
 
 
 def test_dispose_material_textures_skips_missing_and_swallows_gl_errors(monkeypatch):
