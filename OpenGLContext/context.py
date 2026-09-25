@@ -508,11 +508,11 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         # Intercepting the swap on *this instance* is the whole mechanism: the
         # frame is only in the back buffer between the render and the swap, and
         # the swap is the backend's own method.
-        self.SwapBuffers = _readThenSwap    # type: ignore[method-assign]
+        self.SwapBuffers = _readThenSwap    # type: ignore[method-assign]  # wrapped on this instance for one frame
         try:
             self.OnDraw(force=1)
         finally:
-            self.SwapBuffers = swap         # type: ignore[method-assign]
+            self.SwapBuffers = swap         # type: ignore[method-assign]  # the backend's own swap restored
         if not answer:
             self.setCurrent()
             try:

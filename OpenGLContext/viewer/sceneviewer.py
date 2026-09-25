@@ -77,7 +77,7 @@ from OpenGLContext.viewer.source import UnknownMember, resolve_source
 # ViewerContext is built by the module __getattr__ at the end of this file
 # rather than defined here, so that importing this module chooses no window
 # system; see it for why.
-__all__ = ['KeyBinding', 'SceneViewerMixin', 'ViewerContext']  # noqa: F822
+__all__ = ['KeyBinding', 'SceneViewerMixin', 'ViewerContext']  # noqa: F822 ViewerContext comes from __getattr__
 
 #: How fast the turntable turns, in radians per second.
 TURNTABLE_RATE = 0.5

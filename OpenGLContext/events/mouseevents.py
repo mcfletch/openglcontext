@@ -224,9 +224,8 @@ class MouseButtonEventManager (MouseEventManager):
     """Manager for MouseButtonEvent instances"""
     type = MouseButtonEvent.type
     # Each manager's registerCallback takes the arguments its own event class
-    # routes on and assembles the key the base method registers under, so the
-    # signatures deliberately differ from the base's (key, function, ...).
-    def registerCallback(  # type: ignore[override]
+    # routes on and assembles the key the base method registers under.
+    def registerCallback(  # type: ignore[override]  # takes the fields its event routes on, not the base's key
         self,
         button: Any = 0, state: Any = 0,
         modifiers: Tuple[int, int, int] = (0, 0, 0),
@@ -303,9 +302,7 @@ class MouseMoveEventManager (MouseEventManager):
     """
     type = MouseMoveEvent.type
     lastPath: Any = ()
-    # See MouseButtonEventManager.registerCallback for why the signature
-    # differs from the base method's.
-    def registerCallback(  # type: ignore[override]
+    def registerCallback(  # type: ignore[override]  # takes the fields its event routes on, not the base's key
         self,
         buttons: Any = (), modifiers: Tuple[int, int, int] = (0, 0, 0),
         function: Any = None, node: Any = None, capture: Any = 0,
@@ -429,10 +426,8 @@ class MouseOutEvent( _MouseChangeEvent ):
 class _MouseChangeEventManager (MouseEventManager):
     """Manager for _MouseChangeEvent instances
     """
-    # See MouseButtonEventManager.registerCallback for why the signature
-    # differs from the base method's.
     @classmethod
-    def registerCallback(  # type: ignore[override]
+    def registerCallback(  # type: ignore[override]  # takes the fields its event routes on, not the base's key
         cls,
         buttons: Any = (), modifiers: Tuple[int, int, int] = (0, 0, 0),
         function: Any = None, node: Any = None, capture: Any = 0,

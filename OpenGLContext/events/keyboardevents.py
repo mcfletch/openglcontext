@@ -74,9 +74,8 @@ class KeyboardEventManager (eventmanager.EventManager):
     of keyboard-based events.  Also can be used to track meta-key state"""
     type = KeyboardEvent.type
     # Each manager's registerCallback takes the arguments its own event class
-    # routes on and assembles the key the base method registers under, so the
-    # signatures deliberately differ from the base's (key, function, ...).
-    def registerCallback(  # type: ignore[override]
+    # routes on and assembles the key the base method registers under.
+    def registerCallback(  # type: ignore[override]  # takes the fields its event routes on, not the base's key
         self, name: Any = None, state: Any = 0,
         modifiers: Tuple[int, int, int] = (0, 0, 0), function: Any = None,
     ) -> Any:
@@ -123,9 +122,7 @@ class KeyboardEventManager (eventmanager.EventManager):
         return super( KeyboardEventManager, self).registerCallback( key, function )
 class KeypressEventManager (eventmanager.EventManager):
     type = KeypressEvent.type
-    # See KeyboardEventManager.registerCallback for why the signature differs
-    # from the base method's.
-    def registerCallback(  # type: ignore[override]
+    def registerCallback(  # type: ignore[override]  # takes the fields its event routes on, not the base's key
         self, name: Any = None, modifiers: Tuple[int, int, int] = (0, 0, 0),
         function: Any = None,
     ) -> Any:
