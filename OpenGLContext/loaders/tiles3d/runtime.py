@@ -65,7 +65,7 @@ class TilesetRuntime:
         self.tileset = tileset
         self.uploader = uploader
         self.hysteresis = hysteresis
-        self._refined_state: dict[int, bool] = {}
+        self._refined_state: "dict[RuntimeTile, bool]" = {}
         # Fired when a tile's content becomes drawable / is evicted, so consumers
         # (e.g. physics colliders) can track the resident set. Both take (tile, drawable).
         self.on_renderable = on_renderable
@@ -80,9 +80,10 @@ class TilesetRuntime:
         self.max_sse = max_sse
         self.prefetch_factor = prefetch_factor
         self.max_uploads_per_update = max_uploads_per_update
-        self._drawables: dict[int, Any] = {}   # id(tile) -> drawable
-        # id(tile) -> (tile, payload) awaiting upload
-        self._ready_payloads: "dict[int, tuple[RuntimeTile, Any]]" = {}
+        #: Each renderable tile's drawable.
+        self._drawables: "dict[RuntimeTile, Any]" = {}
+        #: Each loaded tile's payload, awaiting upload, in the order it arrived.
+        self._ready_payloads: "dict[RuntimeTile, Any]" = {}
         #: What the last update decided to draw, as (tile, drawable) pairs.
         self._drawn: "list[tuple[RuntimeTile, Any]]" = []
 
@@ -137,26 +138,26 @@ class TilesetRuntime:
                 self.residency.evict(tile)
                 continue
             self.residency.set_ready(tile)
-            self._ready_payloads[id(tile)] = (tile, payload)
+            self._ready_payloads[tile] = payload
 
     def _upload_ready(self) -> None:
         uploaded = 0
-        for key in list(self._ready_payloads):
+        for tile in list(self._ready_payloads):
             if uploaded >= self.max_uploads_per_update:
                 break
-            tile, payload = self._ready_payloads.pop(key)
+            payload = self._ready_payloads.pop(tile)
             drawable, nbytes = self.uploader.upload(tile, payload)
             self.residency.set_renderable(tile, nbytes)
-            self._drawables[id(tile)] = drawable
+            self._drawables[tile] = drawable
             uploaded += 1
             if self.on_renderable is not None:
                 self.on_renderable(tile, drawable)
 
     def _renderable_or_ancestor(self, tile: "RuntimeTile") -> "Optional[RuntimeTile]":
-        if id(tile) in self._drawables:
+        if tile in self._drawables:
             return tile
         for ancestor in tile.ancestors():
-            if id(ancestor) in self._drawables:
+            if ancestor in self._drawables:
                 return ancestor
         return None
 
@@ -166,13 +167,13 @@ class TilesetRuntime:
         draw: "list[Any]" = []
         pinned: "list[RuntimeTile]" = []
         self._drawn = []
-        seen: set[int] = set()
+        seen: "set[RuntimeTile]" = set()
         for tile in render:
             resolved = self._renderable_or_ancestor(tile)
-            if resolved is None or id(resolved) in seen:
+            if resolved is None or resolved in seen:
                 continue
-            seen.add(id(resolved))
-            drawable = self._drawables[id(resolved)]
+            seen.add(resolved)
+            drawable = self._drawables[resolved]
             draw.append(drawable)
             self._drawn.append((resolved, drawable))
             if resolved is not tile:
@@ -183,7 +184,7 @@ class TilesetRuntime:
         self, want: "Iterable[RuntimeTile]", pinned: "list[RuntimeTile]"
     ) -> None:
         for tile in self.residency.enforce_budget(keep=list(want) + pinned):
-            drawable = self._drawables.pop(id(tile), None)
+            drawable = self._drawables.pop(tile, None)
             if drawable is not None:
                 self.uploader.release(drawable)
                 if self.on_evicted is not None:

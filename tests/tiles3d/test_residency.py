@@ -98,11 +98,11 @@ def test_evict_deletes_the_state_entry():
     r = Residency(memory_budget=1000)
     a = FakeTile("a")
     r.set_renderable(a, 100)
-    assert id(a) in r._state and id(a) in r._resident
+    assert a in r._state and a in r._resident
     r.evict(a)
-    assert id(a) not in r._state
-    assert id(a) not in r._resident
-    assert id(a) not in r._tiles
+    assert a not in r._state
+    assert a not in r._resident
+    assert a not in r._recency
 
 
 def test_state_stays_bounded_over_many_touched_then_evicted_tiles():

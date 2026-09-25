@@ -84,14 +84,14 @@ def test_evict_releases_drawable_and_fires_callback():
                         memory_budget=0.0, fovy=1.0, workers=1,
                         on_evicted=lambda tile, drawable: evicted.append((tile, drawable)))
     try:
-        tile = types.SimpleNamespace(name="t")
+        tile = object()                            # hashes by identity, as a tile does
         drawable = object()
         rt.residency.set_renderable(tile, 100)     # 100 bytes, budget 0 -> over
-        rt._drawables[id(tile)] = drawable
+        rt._drawables[tile] = drawable
         rt._evict(want=[], pinned=[])
         assert released == [drawable]
         assert evicted == [(tile, drawable)]
-        assert id(tile) not in rt._drawables
+        assert tile not in rt._drawables
     finally:
         rt.shutdown()
 

@@ -47,7 +47,7 @@ def test_in_band_does_not_refine_without_prior_state():
 
 def test_in_band_stays_refined_when_previously_refined():
     ts = _nested()
-    state = {id(ts.root): True}
+    state = {ts.root: True}
     r = select_tiles(ts, camera=(_D_SSE14, 0, 0), viewport_height=VH, fovy=FOVY,
                      max_sse=MAX_SSE, prefetch_factor=1.0,
                      hysteresis=0.25, refined_state=state)
@@ -56,7 +56,7 @@ def test_in_band_stays_refined_when_previously_refined():
 
 def test_below_band_coarsens_even_if_previously_refined():
     ts = _nested()
-    state = {id(ts.root): True}
+    state = {ts.root: True}
     r = select_tiles(ts, camera=(_D_SSE10, 0, 0), viewport_height=VH, fovy=FOVY,
                      max_sse=MAX_SSE, prefetch_factor=1.0,
                      hysteresis=0.25, refined_state=state)
@@ -70,4 +70,4 @@ def test_traversal_updates_refined_state():
     select_tiles(ts, camera=(0, 0, 0), viewport_height=VH, fovy=FOVY,
                  max_sse=MAX_SSE, prefetch_factor=1.0,
                  hysteresis=0.25, refined_state=state)
-    assert state.get(id(ts.root)) is True
+    assert state.get(ts.root) is True

@@ -16,37 +16,42 @@ from typing import Any
 
 
 class LoadQueue:
-    """Priority queue of pending tile loads (smaller priority = more urgent)."""
+    """Priority queue of pending tile loads (smaller priority = more urgent).
+
+    Tiles are keyed by themselves, so a tile must hash by identity, as a
+    :class:`~OpenGLContext.loaders.tiles3d.tileset.RuntimeTile` does.
+    """
 
     def __init__(self) -> None:
-        self._heap: list[tuple[float, int, int, Any]] = []
+        self._heap: list[tuple[float, int, Any]] = []
         self._counter = itertools.count()
-        self._present: set[int] = set()
-        self._cancelled: set[int] = set()
+        self._present: set[Any] = set()
+        self._cancelled: set[Any] = set()
 
     def push(self, tile: Any, priority: float) -> None:
-        tid = id(tile)
-        if tid in self._present:
+        if tile in self._present:
             return
-        self._present.add(tid)
-        self._cancelled.discard(tid)
-        heapq.heappush(self._heap, (priority, next(self._counter), tid, tile))
+        self._present.add(tile)
+        self._cancelled.discard(tile)
+        heapq.heappush(self._heap, (priority, next(self._counter), tile))
 
     def cancel(self, tile: Any) -> None:
-        self._cancelled.add(id(tile))
+        """Drop a queued tile; a tile not queued is left alone."""
+        if tile in self._present:
+            self._cancelled.add(tile)
 
     def pop(self) -> Any:
         while self._heap:
-            _, _, tid, tile = heapq.heappop(self._heap)
-            self._present.discard(tid)
-            if tid in self._cancelled:
-                self._cancelled.discard(tid)
+            _, _, tile = heapq.heappop(self._heap)
+            self._present.discard(tile)
+            if tile in self._cancelled:
+                self._cancelled.discard(tile)
                 continue
             return tile
         return None
 
     def __len__(self) -> int:
-        return sum(1 for tid in self._present if tid not in self._cancelled)
+        return len(self._present) - len(self._cancelled)
 
 
 class LoadManager:

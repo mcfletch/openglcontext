@@ -24,26 +24,30 @@ class TileState:
 
 
 class Residency:
+    """Each tile's load state, footprint and recency, keyed by the tile itself.
+
+    A tile hashes by identity, as a
+    :class:`~OpenGLContext.loaders.tiles3d.tileset.RuntimeTile` does.
+    """
+
     def __init__(self, memory_budget: float) -> None:
         self.memory_budget = memory_budget
         self.resident_bytes: float = 0
-        self._state: dict[int, str] = {}
-        self._bytes: dict[int, int] = {}
-        self._recency: dict[int, int] = {}
-        self._tiles: "dict[int, RuntimeTile]" = {}
-        # Ids of the currently-renderable tiles -- the only eviction candidates.
+        self._state: "dict[RuntimeTile, str]" = {}
+        self._bytes: "dict[RuntimeTile, int]" = {}
+        self._recency: "dict[RuntimeTile, int]" = {}
+        # The currently-renderable tiles -- the only eviction candidates.
         # Scanning this instead of all of `_state` keeps `enforce_budget` O(resident)
         # per frame rather than O(every tile ever touched).
-        self._resident: set[int] = set()
+        self._resident: "set[RuntimeTile]" = set()
         self._tick = 0
 
     def _touch(self, tile: "RuntimeTile") -> None:
         self._tick += 1
-        self._recency[id(tile)] = self._tick
-        self._tiles[id(tile)] = tile
+        self._recency[tile] = self._tick
 
     def get_state(self, tile: "RuntimeTile") -> str:
-        return self._state.get(id(tile), TileState.UNLOADED)
+        return self._state.get(tile, TileState.UNLOADED)
 
     def note_wanted(self, tiles: "Iterable[RuntimeTile]") -> None:
         """Refresh recency for tiles wanted this frame (most recently wanted last)."""
@@ -55,32 +59,27 @@ class Residency:
         return [t for t in want if self.get_state(t) == TileState.UNLOADED]
 
     def begin_load(self, tile: "RuntimeTile") -> None:
-        self._state[id(tile)] = TileState.LOADING
-        self._tiles[id(tile)] = tile
+        self._state[tile] = TileState.LOADING
 
     def set_ready(self, tile: "RuntimeTile") -> None:
-        self._state[id(tile)] = TileState.READY
-        self._tiles[id(tile)] = tile
+        self._state[tile] = TileState.READY
 
     def set_renderable(self, tile: "RuntimeTile", nbytes: int) -> None:
-        prev = self._bytes.get(id(tile), 0)
+        prev = self._bytes.get(tile, 0)
         self.resident_bytes += nbytes - prev
-        self._bytes[id(tile)] = nbytes
-        self._state[id(tile)] = TileState.RENDERABLE
-        self._tiles[id(tile)] = tile
-        self._recency.setdefault(id(tile), self._tick)
-        self._resident.add(id(tile))
+        self._bytes[tile] = nbytes
+        self._state[tile] = TileState.RENDERABLE
+        self._recency.setdefault(tile, self._tick)
+        self._resident.add(tile)
 
     def evict(self, tile: "RuntimeTile") -> None:
-        tid = id(tile)
-        self.resident_bytes -= self._bytes.pop(tid, 0)
-        self._resident.discard(tid)
-        self._recency.pop(tid, None)
-        self._tiles.pop(tid, None)
+        self.resident_bytes -= self._bytes.pop(tile, 0)
+        self._resident.discard(tile)
+        self._recency.pop(tile, None)
         # Delete the entry rather than marking it UNLOADED: an evicted tile is
         # indistinguishable from one never touched, and `get_state` already
         # defaults to UNLOADED, so `_state` never accumulates dead entries.
-        self._state.pop(tid, None)
+        self._state.pop(tile, None)
 
     def enforce_budget(self, keep: "Iterable[RuntimeTile]") -> "list[RuntimeTile]":
         """Evict least-recently-wanted renderable tiles until within budget.
@@ -89,14 +88,13 @@ class Residency:
         any parent-fallback pins). Returns the evicted tiles so the caller can free
         their GL resources.
         """
-        keep_ids = {id(t) for t in keep}
+        kept = set(keep)
         evicted: "list[RuntimeTile]" = []
         while self.resident_bytes > self.memory_budget:
-            candidates = [tid for tid in self._resident if tid not in keep_ids]
+            candidates = [tile for tile in self._resident if tile not in kept]
             if not candidates:
                 break
-            victim_id = min(candidates, key=lambda tid: self._recency.get(tid, 0))
-            victim = self._tiles[victim_id]
+            victim = min(candidates, key=lambda tile: self._recency.get(tile, 0))
             self.evict(victim)
             evicted.append(victim)
         return evicted

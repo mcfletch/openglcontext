@@ -10,6 +10,9 @@ car at speed catches the step between them, which reads as hitting a wall in the
 middle of an open road. So the set of colliders is the set of drawn tiles, and
 nothing else.
 """
+import gc
+import weakref
+
 import numpy as np
 import pytest
 
@@ -135,6 +138,24 @@ class TestTheDrawnSetIsTheColliderSet:
         empty.points, empty.indices = np.zeros((0, 3)), np.zeros((0, 3), 'i')
         ground.on_drawn([(_Tile('empty'), empty)])
         assert ground.collider_count == 0
+
+    def test_a_tile_with_a_collider_outlives_every_other_reference(self) -> None:
+        """A collider is found by its tile, not by where the tile was allocated.
+
+        A collected tile's address is handed to the next object of its size,
+        so a table keyed on addresses would answer a newcomer with the old
+        tile's body. Holding the tile keeps its address from being reused.
+        """
+        ground = TerrainColliders(_World())
+        tile = _Tile('held')
+        ground.on_renderable(tile, _Drawable())
+        held = weakref.ref(tile)
+        del tile
+        gc.collect()
+        assert held() is not None
+        ground.on_drawn([])
+        gc.collect()
+        assert held() is None
 
     def test_a_world_that_cannot_remove_says_so_once(self, caplog) -> None:
         world = _World(removable=False)

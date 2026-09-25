@@ -61,7 +61,7 @@ def test_collider_added_for_resident_tile(tmp_path):
 
 
 class _Tile:
-    """Minimal stand-in for a tile (identity is by id())."""
+    """Minimal stand-in for a tile, hashing by identity as a runtime tile does."""
 
 
 class _WorldWithoutRemoval:
@@ -76,7 +76,7 @@ def test_on_evicted_does_not_grow_unbounded_without_removal_api():
     assert not hasattr(colliders.world, "remove_body")
     for i in range(2000):
         tile = _Tile()
-        colliders._bodies[id(tile)] = i     # pretend a collider was added
+        colliders._bodies[tile] = i     # pretend a collider was added
         colliders.on_evicted(tile, None)
     assert colliders.collider_count == 0
     assert len(colliders.pending_removals) == 0
@@ -94,7 +94,7 @@ def test_an_evicted_tile_stops_costing_the_simulation_anything():
         tile = _Tile()
         shape = world.add_shape(model.Shape.trimesh(
             points + numpy.array([step * 8.0, 0, 0]), faces))
-        colliders._bodies[id(tile)] = world.add_body(
+        colliders._bodies[tile] = world.add_body(
             model.Motion(type=model.STATIC),
             collider=model.Collider(shape=shape))
         resident.append(tile)
@@ -117,7 +117,7 @@ def test_on_evicted_uses_remove_body_when_available():
     world = RemovableWorld()
     colliders = TerrainColliders(world)
     tile = _Tile()
-    colliders._bodies[id(tile)] = 7
+    colliders._bodies[tile] = 7
     colliders.on_evicted(tile, None)
     assert world.removed == [7]
     assert colliders.collider_count == 0
@@ -134,3 +134,4 @@ def test_extracted_collider_has_triangles(tmp_path):
     points, indices = gltf_world.extract_trimesh(scene.group)
     assert len(points) > 0
     assert len(indices) > 0
+

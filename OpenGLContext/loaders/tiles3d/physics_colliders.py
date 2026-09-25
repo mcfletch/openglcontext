@@ -35,7 +35,8 @@ class TerrainColliders:
     def __init__(self, world: "PhysicsWorld", min_hull_size: float = 0.0) -> None:
         self.world = world
         self.min_hull_size = min_hull_size
-        self._bodies: dict[int, int] = {}   # id(tile) -> body index
+        #: Each tile's body index, keyed by the tile, which hashes by identity.
+        self._bodies: dict[Any, int] = {}
         # Kept for API compatibility; stays empty because unremovable handles
         # are dropped rather than queued (see :meth:`on_evicted`).
         self.pending_removals: list[Any] = []
@@ -48,18 +49,16 @@ class TerrainColliders:
         already held keeps the collider it has -- rebuilding a trimesh every
         frame would cost more than the physics it feeds.
         """
-        wanted = {}
-        for tile, drawable in pairs:
-            wanted[id(tile)] = (tile, drawable)
-        for key in list(self._bodies):
-            if key not in wanted:
-                self._release(key)
-        for key, (tile, drawable) in wanted.items():
-            if key not in self._bodies:
+        wanted = dict(pairs)
+        for tile in list(self._bodies):
+            if tile not in wanted:
+                self._release(tile)
+        for tile, drawable in wanted.items():
+            if tile not in self._bodies:
                 self.on_renderable(tile, drawable)
 
     def on_renderable(self, tile: Any, drawable: Any) -> None:
-        if id(tile) in self._bodies:
+        if tile in self._bodies:
             return
         extracted = gltf_world.extract_trimesh(
             drawable, min_hull_size=self.min_hull_size)
@@ -72,7 +71,7 @@ class TerrainColliders:
         body = self.world.add_body(
             model.Motion(type=model.STATIC),
             collider=model.Collider(shape=shape))
-        self._bodies[id(tile)] = body
+        self._bodies[tile] = body
 
     def on_evicted(self, tile: Any, drawable: Any) -> None:
         """Take the evicted tile's collider out of the physics world.
@@ -82,11 +81,11 @@ class TerrainColliders:
         list of handles that could never be acted on would grow for as long as
         the stream ran.
         """
-        self._release(id(tile))
+        self._release(tile)
 
-    def _release(self, key: int) -> None:
-        """Drop the collider held for a tile, by its identity."""
-        body = self._bodies.pop(key, None)
+    def _release(self, tile: Any) -> None:
+        """Drop the collider held for a tile."""
+        body = self._bodies.pop(tile, None)
         if body is None:
             return
         remove = getattr(self.world, 'remove_body', None)

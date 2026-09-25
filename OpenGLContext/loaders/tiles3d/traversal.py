@@ -45,7 +45,7 @@ def _select(
     visible: "Optional[Callable[[RuntimeTile], bool]]",
     out: "list[RuntimeTile]",
     hysteresis: float,
-    refined_state: Optional[dict[int, bool]],
+    refined_state: "Optional[dict[RuntimeTile, bool]]",
 ) -> None:
     if visible is not None and not visible(tile):
         return
@@ -56,11 +56,11 @@ def _select(
         # its error drops below a lower band, so LOD does not flicker at the threshold.
         threshold = max_sse
         if (refined_state is not None and hysteresis > 0.0
-                and refined_state.get(id(tile))):
+                and refined_state.get(tile)):
             threshold = max_sse * (1.0 - hysteresis)
         refine = should_refine(sse, threshold)
         if refined_state is not None:
-            refined_state[id(tile)] = refine
+            refined_state[tile] = refine
     else:
         refine = False
     if not refine:
@@ -83,7 +83,7 @@ def select_tiles(
     prefetch_factor: float = 1.0,
     visible: "Optional[Callable[[RuntimeTile], bool]]" = None,
     hysteresis: float = 0.0,
-    refined_state: Optional[dict[int, bool]] = None,
+    refined_state: "Optional[dict[RuntimeTile, bool]]" = None,
 ) -> SelectionResult:
     """Select render and want sets for `tileset` from `camera`.
 
@@ -91,8 +91,9 @@ def select_tiles(
     (`max_sse / prefetch_factor`), so a factor above 1 speculatively pulls in finer
     tiles than are currently rendered. `visible`, if given, is a predicate used to
     prune whole subtrees (frustum culling). `hysteresis` (0..1) with a persistent
-    `refined_state` dict makes refinement sticky across frames to prevent LOD flicker;
-    only the render traversal updates that state (the prefetch pass does not).
+    `refined_state` dict, keyed by tile, makes refinement sticky across frames to
+    prevent LOD flicker; only the render traversal updates that state (the prefetch
+    pass does not).
     """
     render: "list[RuntimeTile]" = []
     _select(tileset.root, camera, viewport_height, fovy, max_sse, visible, render,
@@ -102,7 +103,7 @@ def select_tiles(
     deep: "list[RuntimeTile]" = []
     _select(tileset.root, camera, viewport_height, fovy,
             max_sse / prefetch_factor, visible, deep, 0.0, None)
-    seen = {id(t) for t in render}
+    seen = set(render)
     want = list(render)
-    want.extend(t for t in deep if id(t) not in seen)
+    want.extend(t for t in deep if t not in seen)
     return SelectionResult(render=render, want=want)

@@ -129,7 +129,7 @@ def test_resident_tiles_are_near_the_camera(tmp_path):
         cam_np = np.array(cam)
         far = 0
         for tile in ts.iter_tiles():
-            if id(tile) in rt._drawables:
+            if tile in rt._drawables:
                 d = tile.bounding_volume.distance_to(cam_np)
                 if d > 2200:
                     far += 1
