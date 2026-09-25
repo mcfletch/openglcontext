@@ -28,9 +28,26 @@ from typing import Any
 # Named rather than star-imported: this module's own ``indices`` would otherwise
 # collide with numpy's.
 from OpenGLContext.arrays import arange, argsort, dot, ones, reshape, take
+from numpy import where
 from OpenGL.GL import *
 
 __all__ = ['project', 'distances', 'indices', 'sortIndex']
+
+
+#: The smallest ``w`` a clip-space point is divided by. A point in the eye's
+#: own plane has ``w`` of 0, and a triangle reaching it is still sorted.
+_SMALLEST_W = 1e-12
+
+
+def _normalized(clip: Any) -> Any:
+    """``(N, 3)`` normalized device coordinates of ``(N, 4)`` clip-space points.
+
+    A ``w`` nearer 0 than :data:`_SMALLEST_W` is taken as that, with its sign,
+    so a point in the eye's plane lies far off rather than at infinity or NaN.
+    """
+    w = clip[:, 3:4].astype('d')
+    w = where( abs(w) < _SMALLEST_W, where( w < 0, -_SMALLEST_W, _SMALLEST_W ), w )
+    return clip[:, :3] / w
 
 
 def project(
@@ -52,13 +69,10 @@ def project(
         newpoints = ones( points.shape[:-1]+(4,), 'f')
         newpoints[:,:3] = points
         points = newpoints
-    v = dot( points, M )
-    # now convert to normalized coordinates...
-    v /= v[:,3]
-    v = v[:,:3]
+    v = _normalized( dot( points, M ) )
     v += 1.0
-    v[:,0:2] *= viewport[2:3]
     v /= 2.0
+    v[:,0:2] *= viewport[2:4]
     v[:,0:2] += viewport[0:2]
     return v.astype(astype)
 
@@ -86,9 +100,7 @@ def distances(
         newpoints[:,:3] = points
         points = newpoints
     M = dot( modelView, projection )
-    v = dot( points, M )
-    # now convert to normalized eye coordinates...
-    v /= v[:,3].reshape( (-1,1))
+    v = _normalized( dot( points, M ) )
     return ((v[:,2]+1.0)/2.0).astype(astype)
 
 

@@ -63,7 +63,7 @@ from __future__ import annotations
 
 import contextlib
 import os
-from typing import Any, Callable, Iterator, Mapping
+from typing import Any, Callable, Iterator, Literal, Mapping, Tuple, get_args
 
 import pytest
 
@@ -175,6 +175,58 @@ def context_skip_reason(asked: Mapping[str, str],
         if refused:
             return refused
     return None
+
+
+NumpyErrorAction = Literal['raise', 'warn', 'ignore', 'call', 'print', 'log']
+
+#: What ``numpy_errors`` may say: the actions ``numpy.errstate`` takes.
+NUMPY_ERROR_ACTIONS: Tuple[NumpyErrorAction, ...] = get_args(NumpyErrorAction)
+
+
+def pytest_addoption(parser: Any) -> None:
+    parser.addini(
+        'numpy_errors',
+        'What a division by zero, overflow or invalid operation in NumPy does '
+        'during each test: raise, warn, ignore (numpy.errstate); unset leaves '
+        'NumPy\'s own setting')
+    parser.addoption(
+        '--numpy-errors', choices=NUMPY_ERROR_ACTIONS, default=None,
+        help='what a floating-point error in NumPy does during each test; '
+             'overrides the numpy_errors ini setting')
+
+
+def numpy_errors(config: Any) -> NumpyErrorAction | None:
+    """The ``numpy.errstate`` action the run asked for, or None for NumPy's own."""
+    asked = config.getoption('numpy_errors', None) or config.getini('numpy_errors')
+    if not asked:
+        return None
+    named = str(asked).strip()
+    for action in NUMPY_ERROR_ACTIONS:
+        if action == named:
+            return action
+    raise ValueError('numpy_errors = %r is not one of %s'
+                     % (named, ', '.join(NUMPY_ERROR_ACTIONS)))
+
+
+@pytest.fixture(autouse=True)
+def numpy_error_state(request: Any) -> Iterator[None]:
+    """Hold NumPy's floating-point errors to the run's ``numpy_errors`` for each test.
+
+    With ``raise``, a division by zero, an overflow or an invalid operation
+    (a NaN made from numbers) raises ``FloatingPointError`` where it happens,
+    rather than a NaN travelling on into a picture or a position. A test that
+    means to make one says so with ``numpy.errstate`` around it. Underflow is
+    left alone: a result too small for its type becomes zero or a denormal,
+    which is the answer (``exp(-x * x)`` far from its centre, the square of a
+    tiny component in a length). The setting holds on the test's own thread.
+    """
+    action = numpy_errors(request.config)
+    if action is None:
+        yield
+        return
+    import numpy
+    with numpy.errstate(divide=action, over=action, invalid=action, under='ignore'):
+        yield
 
 
 def pytest_configure(config: Any) -> None:

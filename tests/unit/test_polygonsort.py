@@ -65,3 +65,20 @@ def test_sort_index_handles_quads():
     ordered = polygonsort.sortIndex(
         index, _distances([[0, 0, -50], [0, 0, -2]]), 4)
     assert [list(row) for row in ordered] == [[0, 1, 2, 3], [4, 5, 6, 7]]
+
+
+def test_a_point_in_the_eye_plane_has_a_finite_distance():
+    """A triangle reaching the eye's plane has w = 0 at that corner."""
+    found = _distances([[0, 0, 0], [0, 0, -5], [1, 0, 0]])
+    assert np.all(np.isfinite(found)), found
+
+
+def test_project_gives_window_coordinates_for_every_point():
+    found = polygonsort.project(np.asarray([[0, 0, -2], [1, 1, -1], [-2, 0, -4]], 'f'),
+                                modelView=MODELVIEW, projection=PROJECTION,
+                                viewport=VIEWPORT)
+    assert found.shape == (3, 3)
+    assert np.allclose(found[0, :2], (50, 50))
+    assert np.allclose(found[1, :2], (100, 100))
+    assert np.allclose(found[2, :2], (25, 50))
+    assert found[0, 2] < found[2, 2]
