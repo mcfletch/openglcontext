@@ -59,7 +59,9 @@ def test_every_backend_the_engine_registers_can_be_kept():
     from OpenGLContext import plugins
 
     for plugin in plugins.InteractiveContext.all():
-        packaging.unused_backend_modules(keep=[plugin.name])
+        assert plugin.name in packaging.BACKEND_MODULES
+        excluded = packaging.unused_backend_modules(keep=[plugin.name])
+        assert not set(packaging.BACKEND_MODULES[plugin.name]) & set(excluded)
 
 
 def test_an_unknown_backend_is_refused():

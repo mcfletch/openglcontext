@@ -30,7 +30,7 @@ def display(monkeypatch):
     pygame.display.quit()
 
 
-def test_the_buffers_a_definition_asks_for_reach_sdl(display):
+def test_the_buffers_a_definition_asks_for_reach_sdl(display, monkeypatch):
     """Every attribute this backend sets is one SDL knows.
 
     An attribute SDL does not recognise raises, so the window is never opened
@@ -40,7 +40,23 @@ def test_the_buffers_a_definition_asks_for_reach_sdl(display):
         depthBuffer=24, stencilBuffer=8, accumulationBuffer=16,
         multisampleBuffer=1, multisampleSamples=4, stereo=1,
     )
-    PygameContext.pygameFlagsFromDefinition(definition)
+    asked = {}
+    real = pygame.display.gl_set_attribute
+
+    def passing_through(attribute, value):
+        real(attribute, value)                   # SDL still validates the name
+        asked[attribute] = value
+    monkeypatch.setattr(pygame.display, 'gl_set_attribute', passing_through)
+    flags = PygameContext.pygameFlagsFromDefinition(definition)
+    assert flags == PygameContext.pygameWindowFlags(definition)
+    assert asked[pygame.GL_DEPTH_SIZE] == 24
+    assert asked[pygame.GL_STENCIL_SIZE] == 8
+    for channel in (pygame.GL_ACCUM_RED_SIZE, pygame.GL_ACCUM_GREEN_SIZE,
+                    pygame.GL_ACCUM_BLUE_SIZE, pygame.GL_ACCUM_ALPHA_SIZE):
+        assert asked[channel] == 16
+    assert asked[pygame.GL_MULTISAMPLEBUFFERS] == 1
+    assert asked[pygame.GL_MULTISAMPLESAMPLES] == 4
+    assert asked[pygame.GL_STEREO] == 1
 
 
 def test_a_default_definition_asks_for_no_optional_buffers(display):

@@ -158,33 +158,34 @@ def test_kill_process_tree_with_psutil_kills_children():
 
 
 def test_kill_process_tree_tolerates_vanished_processes(monkeypatch):
-    """A child or parent that exits between enumeration and kill is ignored."""
+    """A child or parent that exits between enumeration and kill is ignored,
+    and every other process in the tree is still killed."""
     import types
 
     fake = types.ModuleType('psutil')
+    killed = []
 
     class NoSuchProcess(Exception):
         pass
 
     class _Vanished:
-        def kill(self):
-            raise NoSuchProcess()
-
-    class _Process:
         def __init__(self, pid):
             self.pid = pid
 
-        def children(self, recursive=False):
-            return [_Vanished()]
-
         def kill(self):
+            killed.append(self.pid)
             raise NoSuchProcess()
+
+    class _Process(_Vanished):
+        def children(self, recursive=False):
+            return [_Vanished(1), _Vanished(2)]
 
     fake.NoSuchProcess = NoSuchProcess  # type: ignore[attr-defined]
     fake.Process = _Process  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, 'psutil', fake)
 
-    kill_process_tree(4242)  # both kills raise NoSuchProcess and are swallowed
+    assert kill_process_tree(4242) is None
+    assert killed == [1, 2, 4242]            # children first, then the parent
 
 
 def test_kill_process_tree_without_psutil_uses_signal(monkeypatch):
