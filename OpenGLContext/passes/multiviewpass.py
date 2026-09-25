@@ -184,7 +184,7 @@ class MultiviewPassMixin( PassResources ):
     def renderShared( self, frames: Sequence['ViewFrame'],
                       id_map: Optional[Dict[int, Any]],
                       lighting: Optional['Lighting'] = None, mirrored: bool = False,
-                      capacity: int = 0, into_atlas: bool = False ) -> Optional[set]:
+                      capacity: int = 0, into_atlas: bool = False ) -> Optional[Dict[int, Any]]:
         """Draw every shape that can serve several views once, for all of them.
 
         The draw is made in the active view's eye space, exactly as that view
@@ -192,9 +192,10 @@ class MultiviewPassMixin( PassResources ):
         programs compiled for this many views send each triangle to the views
         in the shape's mask, through the ``ViewBlock``: a geometry stage does it
         for the ``geometry`` strategy, and for ``vertex`` each draw is instanced
-        once per view and the vertex stage routes each copy. Returns the ``id`` of every path drawn, for each view to
-        leave out, or None where the programs for this many views did not
-        compile and every view draws everything itself.
+        once per view and the vertex stage routes each copy. Returns every path
+        drawn, by its ``id`` (a path is a list), for each view to leave out, or
+        None where the programs for this many views did not compile and every
+        view draws everything itself.
 
         ``into_atlas`` draws mirror views into the reflection atlas, in linear
         HDR. ``mirrored`` says every view's camera has been reflected an odd
@@ -211,12 +212,12 @@ class MultiviewPassMixin( PassResources ):
         reference = self.activeFrame if self.activeFrame is not None else frames[0]
         groups = self.sharedRecords( frames, reference )
         if not groups:
-            return set()
+            return {}
         strategy = self.multiviewStrategy or 'geometry'
         if not shader.select_program_set( max( len( frames ), capacity ), strategy ):
             self.multiviewFailed( strategy )
             return None
-        drawn: set = set()
+        drawn: Dict[int, Any] = {}
         try:
             self.applyViewFrame( reference, gl=False )
             rects = array( [ frame.rect for frame in frames ], 'f' )
@@ -247,7 +248,8 @@ class MultiviewPassMixin( PassResources ):
                 if strategy == 'vertex':
                     self.viewCopies = len( self.viewerEyes )
                 self.shaderRenderOpaque( group, id_map )
-                drawn.update( id( record[4] ) for record in group )
+                for record in group:
+                    drawn[id( record[4] )] = record[4]
             self.resetMeshDrawState()
         finally:
             self.viewerEyes = None

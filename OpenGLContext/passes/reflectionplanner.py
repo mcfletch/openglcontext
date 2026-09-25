@@ -38,7 +38,7 @@ from OpenGLContext.passes.reflectiontiles import (
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 
 __all__ = ['ROUGH', 'SETTLE_FRAMES', 'COPLANAR', 'CANDIDATES_PER_VIEW', 'Lookup', 'MirrorDraw', 'ReflectedView',
-           'ReflectionPlan', 'ReflectionPlanner', 'key_for', 'view_key']
+           'ReflectionPlan', 'ReflectionPlanner', 'key_for', 'lookup_key', 'view_key']
 
 #: Above this roughness a reflector reads blurred mip levels of its tile.
 ROUGH = 0.05
@@ -126,9 +126,10 @@ class MirrorDraw:
     tile: Tile
     reflector: PlanarReflector
     view: Optional[ReflectedView] = None
-    #: ``id`` of the path of every mirror this view is the reflection of: one,
-    #: or each of a set in one plane sharing one reflector.
-    paths: FrozenSet[int] = frozenset()
+    #: The path of every mirror this view is the reflection of, by ``id`` of
+    #: the path, which is a list: one, or each of a set in one plane sharing
+    #: one reflector.
+    paths: Mapping[int, Any] = field(default_factory=dict)
 
     @property
     def depth(self) -> int:
@@ -184,9 +185,18 @@ def view_key(view: Any) -> Hashable:
     return ('reflected', view.serial) if isinstance(view, ReflectedView) else id(view)
 
 
+def lookup_key(view: Any, path: Any) -> Tuple[Hashable, int]:
+    """The key the mirror at ``path``, seen in ``view``, is held by.
+
+    The path is a list, so it is kept by ``id``; the planner's held tiles hold
+    the path, which keeps the ``id`` its own while they do.
+    """
+    return view_key(view), id(path)
+
+
 def key_for(frame: Any, record: Any) -> Tuple[Hashable, int]:
     """The key one mirror in one view is held by."""
-    return view_key(frame.view), id(record[4])
+    return lookup_key(frame.view, record[4])
 
 
 @dataclass
@@ -548,7 +558,7 @@ class ReflectionPlanner:
                 plan.draws.append(MirrorDraw(
                     key, entry.frame, entry.record, entry.mirror, tile, entry.reflector,
                     self._view_for(entry),
-                    frozenset(id(member.record[4]) for member in entry.members)))
+                    {id(member.record[4]): member.record[4] for member in entry.members}))
             elif key not in packed.moved and entry.held is not None:
                 held[key] = entry.held
             else:
@@ -601,17 +611,16 @@ class ReflectionPlanner:
         finds meanwhile, and the view is drawn again once it has its own
         (:meth:`drawn_without`).
         """
-        own = draw.paths or frozenset((id(draw.record[4]),))
+        own = draw.paths or {id(draw.record[4]): draw.record[4]}
         drawing = {each.key for each in plan.draws}
-        seen_in = view_key(draw.view)
         kept: List[Any] = []
         missing: Set[Hashable] = set()
         incomplete = False
         for record in records:
             if reflection.is_reflector(record):
-                if id(record[4]) in own:
+                if own.get(id(record[4])) is record[4]:
                     continue
-                key = (seen_in, id(record[4]))
+                key = lookup_key(draw.view, record[4])
                 # A mirror sharing its plane's reflection is drawn under its
                 # group's key.
                 group = plan.canonical(key)

@@ -10,7 +10,9 @@ import pytest
 from OpenGLContext.multiview.strategy import ViewFrame
 from OpenGLContext.multiview.views import View
 from OpenGLContext.passes import reflection
-from OpenGLContext.passes.reflectionplanner import ReflectedView, ReflectionPlanner, view_key
+from OpenGLContext.passes.reflectionplanner import (
+    ReflectedView, ReflectionPlanner, lookup_key, view_key,
+)
 from OpenGLContext.passes.reflectiontiles import Budget
 from OpenGLContext.scenegraph.appearance import Appearance
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
@@ -355,8 +357,8 @@ def test_a_mirror_seen_only_in_another_mirror_is_drawn_for_that_mirror():
     [outer], [inner] = _by_path(plan, front), _by_path(plan, back)
     assert inner.frame.view is outer.view
     assert (outer.depth, inner.depth) == (1, 2)
-    assert plan.lookups[(view_key(outer.view), id(back[4]))] is not None
-    assert (view_key(outer.view), id(front[4])) not in plan.lookups
+    assert plan.lookups[lookup_key(outer.view, back[4])] is not None
+    assert lookup_key(outer.view, front[4]) not in plan.lookups
 
 
 def test_mirrors_are_looked_for_in_a_mirrors_view_and_no_deeper():
@@ -419,7 +421,7 @@ def test_a_view_drawn_without_a_mirrors_reflection_is_drawn_again_once_it_has_on
 
     first = plan(one)
     [outer] = first.draws
-    inner_key = (view_key(outer.view), id(back[4]))
+    inner_key = lookup_key(outer.view, back[4])
     planner.drawn_without(outer.key, [inner_key])
     second = plan(one)
     assert [draw.key for draw in second.draws] == [inner_key]
@@ -491,7 +493,7 @@ def test_a_view_waiting_on_a_group_is_drawn_again_when_any_of_it_arrives():
     one = Budget(views=1, separate_views=1, texels=10 ** 9)
     first = planner.plan([_frame([front])], ATLAS, one, inside=lambda frame: back)
     [outer] = first.draws
-    member = (view_key(outer.view), id(back[1][4]))
+    member = lookup_key(outer.view, back[1][4])
     planner.drawn_without(outer.key, [member])
     planner.plan([_frame([front])], ATLAS, one, inside=lambda frame: back)
     third = planner.plan([_frame([front])], ATLAS, NOTHING, inside=lambda frame: back)
@@ -645,7 +647,7 @@ def test_a_mirror_view_leaves_out_the_mirror_it_is_the_reflection_of():
     front, back, plan, outer = _front_and_back(planner)
     plain = _mirror(4.0)[:5] + (Shape(geometry=PBRMesh(positions=QUAD,
                                                          indices=QUAD_INDICES)),)
-    earlier = {(view_key(outer.view), id(back[4])): object()}
+    earlier = {lookup_key(outer.view, back[4]): object()}
     kept, incomplete = planner.contents(plan, outer, [front, plain, back], earlier)
     assert kept == [plain, back] and not incomplete
 
@@ -663,7 +665,7 @@ def test_a_mirror_with_no_reflection_yet_is_drawn_and_the_view_redone_once_it_ha
     front, back, plan, outer = _front_and_back(planner, one)
     kept, incomplete = planner.contents(plan, outer, [back], {})
     assert kept == [back] and not incomplete
-    inner = (view_key(outer.view), id(back[4]))
+    inner = lookup_key(outer.view, back[4])
     assert planner._held[outer.key].missing == {inner}
 
 

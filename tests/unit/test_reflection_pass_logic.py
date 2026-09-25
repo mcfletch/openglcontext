@@ -12,6 +12,7 @@ from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.passes import reflection
 from OpenGLContext.passes.reflectionpass import ReflectionsMixin
 from OpenGLContext.passes.reflectionatlas import FILL
+from OpenGLContext.passes.reflectionplanner import lookup_key
 from OpenGLContext.scenegraph.boundingvolume import AABoundingBox
 
 
@@ -112,7 +113,7 @@ def test_a_mirror_reads_its_own_lookup_and_the_next_shape_none():
     effects.view = view = object()
     mirror, plain = object(), object()
     lookup = object()
-    effects._reflection_lookups = {(id(view), id(mirror)): lookup}
+    effects._reflection_lookups = {lookup_key(view, mirror): lookup}
     shader = _Shader()
     effects.applyPlanarReflection(shader, ((False,), None, None, None, mirror, None))
     effects.applyPlanarReflection(shader, ((False,), None, None, None, mirror, None))
@@ -125,16 +126,16 @@ def test_a_mirror_reads_its_own_lookup_and_the_next_shape_none():
 def test_a_mirror_seen_in_a_mirror_falls_back_to_its_reflection_seen_directly():
     """Until its reflection for that mirror's view is drawn, a mirror seen in a
     mirror shows the one the viewer sees, not the probe."""
-    from OpenGLContext.passes.reflectionplanner import ReflectedView, view_key
+    from OpenGLContext.passes.reflectionplanner import ReflectedView
     effects, shader = ReflectionsMixin(), _Shader()
     main, mirror, inner = object(), object(), object()
     through = ReflectedView(main, 'key', np.zeros(3))
     direct = object()
-    effects._reflection_lookups = {(id(main), id(inner)): direct}
+    effects._reflection_lookups = {lookup_key(main, inner): direct}
     effects.view = through
     effects.applyPlanarReflection(shader, ((False,), None, None, None, inner, None))
     own = object()
-    effects._reflection_lookups[(view_key(through), id(inner))] = own
+    effects._reflection_lookups[lookup_key(through, inner)] = own
     effects.applyPlanarReflection(shader, ((False,), None, None, None, inner, None))
     effects.applyPlanarReflection(shader, ((False,), None, None, None, mirror, None))
     assert shader.given == [direct, own, None]

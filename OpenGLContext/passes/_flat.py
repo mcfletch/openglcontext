@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import contextlib
 import weakref
+from types import MappingProxyType
 from typing import (
-    Any, Callable, Dict, Iterator, List, NamedTuple, Optional, Sequence, Tuple,
+    Any, Callable, Dict, Iterator, List, Mapping, NamedTuple, Optional, Sequence, Tuple,
     TYPE_CHECKING,
 )
 
@@ -1740,7 +1741,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
                 # is drawn: they are views of their own, drawn into the
                 # reflection atlas, and a view reads them as it shades.
                 self.renderReflections(frames, lighting)
-                shared: Optional[set] = None
+                shared: Optional[Dict[int, Any]] = None
                 try:
                     if self.sharesViews( frames ):
                         for frame in frames:
@@ -1748,10 +1749,11 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
                             self._drawBackground(frame)
                         shared = self.renderShared(frames, id_map, lighting)
                     for frame in frames:
-                        joined = shared is not None and not frame.view.style.wireframe
+                        joined = (shared if shared is not None
+                                  and not frame.view.style.wireframe else {})
                         self.renderViewShader(frame, id_map, lighting,
                                               background=shared is None,
-                                              shared=shared if joined else frozenset())
+                                              shared=joined)
                 finally:
                     self.finishViews()
 
@@ -1907,15 +1909,15 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
 
     def renderViewShader( self, frame: 'ViewFrame', id_map: Optional[Dict[int, Any]],
                           lighting: Optional['Lighting'] = None, background: bool = True,
-                          shared: Any = frozenset() ) -> None:
+                          shared: Mapping[int, Any] = MappingProxyType({}) ) -> None:
         """Draw one view of the frame through the shader passes.
 
         Everything here is per view because it depends on the camera: the
         background is drawn from it, the lights are put in its eye space, the
         shadow maps are read through it and the shapes are the ones its frustum
         kept. ``lighting`` is the frame's :meth:`iblPrepare`. ``shared`` holds
-        the ``id`` of each path :meth:`renderShared` has already drawn for
-        every view, which this view leaves out; ``background`` is False where
+        each path :meth:`renderShared` has already drawn for every view, by its
+        ``id``, which this view leaves out; ``background`` is False where
         the background was drawn before them.
         """
         shader_program = self.shader_program
@@ -1925,7 +1927,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         try:
             self.setupViewLighting(matrix, lighting, fitted=frame.fitted)
             toRender = ( [ record for record in frame.toRender
-                           if id( record[4] ) not in shared ]
+                           if shared.get( id( record[4] ) ) is not record[4] ]
                          if shared else frame.toRender )
             # Transmissive (glass) shapes are opaque-alpha but must draw after
             # the opaque scene so they can sample it as a backdrop; split them

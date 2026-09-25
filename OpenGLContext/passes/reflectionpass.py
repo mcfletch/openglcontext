@@ -79,7 +79,8 @@ class ReflectionsMixin(PassResources):
         def chooseMultiview(self) -> str: ...
         def renderShared(self, frames: Any, id_map: Optional[Dict],
                          lighting: Optional["Lighting"] = None, mirrored: bool = False,
-                         capacity: int = 0, into_atlas: bool = False) -> Optional[set]: ...
+                         capacity: int = 0, into_atlas: bool = False
+                         ) -> Optional[Dict[int, Any]]: ...
         def _frustumSurvivors(self, matrices: Any, points: Any, bounded: Any,
                               drawing: Any) -> Any: ...
         def mirrorsZoned(self) -> bool: ...
@@ -249,7 +250,7 @@ class ReflectionsMixin(PassResources):
             # read, and no view is looked through for one.
             planner.reset()
             return False
-        mirror_paths = {id(gathered.paths[index]) for index in indices}
+        mirror_paths = {id(gathered.paths[index]): gathered.paths[index] for index in indices}
         # Zones may say which mirrors draw a reflection from where a camera is.
         planner.allowed = self.mirrorAllowed if self.mirrorsZoned() else None
         target = float(renderoptions.number(
@@ -268,7 +269,7 @@ class ReflectionsMixin(PassResources):
                             separate=self._separateShapes, inside=self.mirrorsIn,
                             bounces=bounces,
                             shown=lambda frame: [record for record in frame.toRender
-                                                 if id(record[4]) in mirror_paths])
+                                                 if mirror_paths.get(id(record[4])) is record[4]])
         if self.activeFrame is not None:
             # Looking for mirrors in the mirrors' views looked through them.
             self.applyViewFrame(self.activeFrame, gl=False)
@@ -582,15 +583,15 @@ class ReflectionsMixin(PassResources):
         a little way off, where the probe would read as a flash. Every other
         shape reads none, and a run of them sets nothing.
         """
-        from OpenGLContext.passes.reflectionplanner import ReflectedView, view_key
+        from OpenGLContext.passes.reflectionplanner import ReflectedView, lookup_key
         lookups = self._reflection_lookups
         lookup = None
         if lookups:
-            view, path = self.view, id(record[4])
-            lookup = lookups.get((view_key(view), path))
+            view, path = self.view, record[4]
+            lookup = lookups.get(lookup_key(view, path))
             while lookup is None and isinstance(view, ReflectedView):
                 view = view.source
-                lookup = lookups.get((view_key(view), path))
+                lookup = lookups.get(lookup_key(view, path))
         if lookup is self._reflection_applied:
             return
         apply = getattr(shader, 'set_planar_reflection', None)
