@@ -245,3 +245,48 @@ class TestWhatASettingsScreenSees:
     def test_the_two_modes_it_ships_with(self):
         assert plan_mode().name == 'plan'
         assert examine_mode().name == 'examine'
+
+
+class TestAfterTheCameraIsReplaced:
+    """Pointing a view elsewhere can give it a new camera; the pointer follows it."""
+
+    def test_a_drag_moves_the_camera_point_view_gave_the_view(self):
+        from OpenGLContext.multiview.cameras import point_view
+        view = _elevation()
+        navigation_for(view)
+        assert point_view(view, 'perspective')
+        navigation = navigation_for(view)
+        assert navigation.camera is view.camera.view
+        heading = view.camera.view.heading
+        assert navigation.begin(ROTATE, 200, 150)
+        navigation.drag(240, 150)
+        assert view.camera.view.heading != heading
+
+    def test_a_drag_moves_the_camera_look_through_gave_the_view(self):
+        from OpenGLContext.multiview.viewpoints import SceneCamera, look_through
+        view = _elevation()
+        navigation_for(view)
+        camera = SceneCamera(name='cam', position=(0.0, 2.0, 10.0),
+                             forward=(0.0, 0.0, -1.0), up=(0.0, 1.0, 0.0), fov=0.6)
+        assert look_through(view, camera, distance=8.0)
+        navigation = navigation_for(view)
+        target = view.camera.view.target().copy()
+        assert navigation.begin(PAN, 200, 150)
+        navigation.drag(240, 150)
+        assert not np.allclose(view.camera.view.target(), target)
+
+    def test_a_rebinding_survives_a_new_camera_of_the_same_family(self):
+        from OpenGLContext.multiview.cameras import point_view
+        view = _plan()
+        navigation_for(view).rebind(ZOOM_DRAG, [button_name(1)])
+        assert point_view(view, 'front')
+        navigation = navigation_for(view)
+        assert navigation.camera is view.camera.view
+        assert navigation.keys_for(ZOOM_DRAG) == (button_name(1),)
+
+    def test_a_new_family_starts_from_its_own_bindings(self):
+        from OpenGLContext.multiview.cameras import point_view
+        view = _elevation()
+        navigation_for(view)
+        point_view(view, 'perspective')
+        assert navigation_for(view).mode.name == 'examine'

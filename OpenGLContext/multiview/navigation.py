@@ -307,11 +307,20 @@ def navigation_for(view: View, mode: Optional[ViewNavigationMode] = None
     """The view's navigation, made for its camera; None for a view with no camera.
 
     Kept on the view, so the bindings a caller changes are the ones the pointer
-    reads.
+    reads. A view given a new camera (:func:`~OpenGLContext.multiview.cameras.point_view`,
+    :func:`~OpenGLContext.multiview.viewpoints.look_through`) is given a
+    navigation for it; where the new camera is of the same family as the old
+    -- both turn, or neither does -- the bindings carry over to it.
     """
-    if view.camera is None or getattr(view.camera, 'view', None) is None:
+    camera = getattr(view.camera, 'view', None)
+    if camera is None:
         return None
-    if view.navigation is None or mode is not None:
+    current = view.navigation
+    if mode is None and current is not None and current.camera is not camera:
+        turns = hasattr(camera, 'orbit')
+        mode = current.mode if current.turns == turns else None
+        current = None
+    if current is None or mode is not None:
         view.navigation = ViewNavigation(view, mode)
     found: ViewNavigation = view.navigation
     return found
