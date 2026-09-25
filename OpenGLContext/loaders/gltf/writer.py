@@ -179,6 +179,56 @@ class SceneNode:
     buffer: Optional[str] = None
 
 
+@dataclass(frozen=True)
+class GlobalSound:
+    """A sound heard wherever it is switched on: one ``KHR_audio_emitter``
+    global emitter playing one audio file.
+
+    ``uri`` is the file, relative to the document; ``mime_type`` its type
+    (``KHR_audio_emitter`` names ``audio/mpeg``, and this engine also plays
+    ``audio/wav``, Ogg and FLAC -- see ``docs/extensions/OGLC_zone.rst``);
+    ``gain`` the emitter's level. A zone that plays one scales that gain by
+    its weight, so the sound fades as the camera leaves.
+    """
+
+    name: str
+    uri: str
+    gain: float = 1.0
+    mime_type: str = 'audio/wav'
+    loop: bool = True
+    autoplay: bool = True
+
+
+def zone_box(size: Sequence[float]) -> dict:
+    """A ``KHR_implicit_shapes`` box of full extents ``size`` (x, y, z), for
+    :attr:`ZoneNode.shape`."""
+    return {'type': 'box', 'box': {'size': [float(v) for v in size]}}
+
+
+@dataclass
+class ZoneNode:
+    """An ``OGLC_zone`` node: a region, and what holds inside it.
+
+    ``shape`` is a ``KHR_implicit_shapes`` shape object (:func:`zone_box`),
+    centred on the node, which ``translation`` and ``rotation`` (an xyzw
+    quaternion) place. ``priority`` and ``blend`` are the zone's rules;
+    ``environment`` and ``reverb`` its own blocks as ``OGLC_zone`` defines
+    them; ``sounds`` the :class:`GlobalSound` it plays. The format is
+    ``docs/extensions/OGLC_zone.rst``, and
+    :mod:`OpenGLContext.loaders.gltf.zoning` reads it.
+    """
+
+    name: str
+    shape: dict
+    translation: Sequence[float] = (0.0, 0.0, 0.0)
+    rotation: Sequence[float] = (0.0, 0.0, 0.0, 1.0)
+    priority: int = 0
+    blend: float = 0.0
+    environment: Optional[dict] = None
+    reverb: Optional[dict] = None
+    sounds: Sequence[GlobalSound] = ()
+
+
 # --- accessors and buffer layout ----------------------------------------------
 
 class _BufferBuilder:
@@ -435,6 +485,8 @@ class GLTFWriter:
         self._texture_index: dict[tuple, int] = {}
         #: Written as the document's ``extras`` when it holds anything.
         self.extras: dict = {}
+        self._shapes: list[dict] = []
+        self._sounds: list[GlobalSound] = []
 
     # -- meshes ----------------------------------------------------------------
 
@@ -794,6 +846,58 @@ class GLTFWriter:
         self._nodes[index] = entry
         return index
 
+    def add_zone(self, zone: ZoneNode, *, root: bool = True) -> int:
+        """Write an ``OGLC_zone`` node; return its index.
+
+        The zone's shape joins the document's ``KHR_implicit_shapes`` table and
+        each sound it plays the ``KHR_audio_emitter`` arrays, a sound several
+        zones play once.
+        """
+        block: dict[str, Any] = {'shape': len(self._shapes),
+                                 'priority': int(zone.priority),
+                                 'blend': float(zone.blend)}
+        self._shapes.append(dict(zone.shape))
+        self._extensions_used.update(('OGLC_zone', 'KHR_implicit_shapes'))
+        if zone.environment is not None:
+            block['environment'] = zone.environment
+        if zone.reverb is not None:
+            block['reverb'] = zone.reverb
+        if zone.sounds:
+            emitters = []
+            for sound in zone.sounds:
+                if sound not in self._sounds:
+                    self._sounds.append(sound)
+                emitters.append(self._sounds.index(sound))
+            block['extensions'] = {'KHR_audio_emitter': {'emitters': emitters}}
+            self._extensions_used.add('KHR_audio_emitter')
+        self._nodes.append({
+            'name': zone.name,
+            'translation': [float(v) for v in zone.translation],
+            'rotation': [float(v) for v in zone.rotation],
+            'extensions': {'OGLC_zone': block}})
+        index = len(self._nodes) - 1
+        if root:
+            self._roots.append(index)
+        return index
+
+    def _document_extensions(self) -> dict:
+        """The document-level blocks the zones and their sounds need."""
+        extensions: dict[str, Any] = {}
+        if self._shapes:
+            extensions['KHR_implicit_shapes'] = {'shapes': self._shapes}
+        if self._sounds:
+            extensions['KHR_audio_emitter'] = {
+                'audio': [{'uri': sound.uri, 'mimeType': sound.mime_type}
+                          for sound in self._sounds],
+                'sources': [{'name': sound.name, 'audio': index,
+                             'loop': sound.loop, 'autoplay': sound.autoplay}
+                            for index, sound in enumerate(self._sounds)],
+                'emitters': [{'name': sound.name, 'type': 'global',
+                              'gain': float(sound.gain), 'sources': [index]}
+                             for index, sound in enumerate(self._sounds)],
+            }
+        return extensions
+
     def _node_entry(self, node: SceneNode) -> dict:
         """One node's JSON, with its children and mesh written."""
         entry: dict[str, Any] = {}
@@ -859,6 +963,9 @@ class GLTFWriter:
                 doc[key] = value
         if self._extensions_used:
             doc['extensionsUsed'] = sorted(self._extensions_used)
+        extensions = self._document_extensions()
+        if extensions:
+            doc['extensions'] = extensions
         if self.extras:
             doc['extras'] = self.extras
         return doc
@@ -870,6 +977,18 @@ class GLTFWriter:
         :meth:`external_buffers`.
         """
         return _pack_glb(self.document(), bytes(self._buffer.blob))
+
+    def to_gltf(self) -> bytes:
+        """The document as ``.gltf`` JSON text, UTF-8 encoded.
+
+        For a document with no binary chunk -- zones, a scene of references --
+        which is read as text; one holding mesh or image data in the chunk
+        raises ``ValueError`` and is written with :meth:`to_glb`.
+        """
+        if self._buffer.blob:
+            raise ValueError('this document holds %d bytes of binary chunk; '
+                             'write it as a .glb' % (len(self._buffer.blob),))
+        return (json.dumps(self.document(), indent=1) + '\n').encode('utf-8')
 
     def external_buffers(self) -> dict[str, bytes]:
         """The bytes of each file the document names beside itself, by name."""

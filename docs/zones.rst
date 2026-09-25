@@ -288,6 +288,31 @@ for a served world. A document that is outside that reach, or does not load,
 is logged as a warning and the world is built without zones. ``TilesTerrain.zones`` is the loaded scene. ``OpenGLContext_editor``'s
 ``ZonesLayer`` writes the document when a world is baked; see :doc:`baking`.
 
+Writing zones
+-------------
+
+``GLTFWriter.add_zone`` writes a zone node; ``to_gltf`` gives the document as
+JSON text when it holds no mesh data:
+
+.. code-block:: python
+
+   from OpenGLContext.loaders.gltf.writer import (
+       GLTFWriter, GlobalSound, ZoneNode, zone_box)
+
+   birds = GlobalSound('birdsong', 'audio/birdsong.wav', gain=0.45)
+   writer = GLTFWriter()
+   writer.add_zone(ZoneNode('forest-1', zone_box((40.0, 12.0, 80.0)),
+                            translation=(10.0, 2.0, -5.0), blend=3.0,
+                            reverb={'level': 0.2, 'decay': 0.8},
+                            sounds=(birds,)))
+   open('zones.gltf', 'wb').write(writer.to_gltf())
+
+The shape joins the document's ``KHR_implicit_shapes`` table, and each
+``GlobalSound`` is written once as a global ``KHR_audio_emitter`` emitter,
+however many zones play it. The audio files themselves are the caller's to
+write beside the document; ``omi_audio``'s ``Clip.wav_bytes()`` makes one from
+samples.
+
 Limits
 ------
 

@@ -202,6 +202,14 @@ placed on a node plays from there, and a global emitter the document places
 nowhere else plays for the zone. A zone's weight multiplies an emitter's gain,
 so a room's ambience fades out over ``blend`` as the camera leaves it.
 
+The audio such an emitter plays is the ``KHR_audio_emitter`` document's own
+``audio`` array. That draft names ``audio/mpeg`` as its audio type; this
+engine also plays ``audio/wav``, Ogg and FLAC, and OpenGLContext-editor writes
+a baked world's ambience as ``audio/wav``. A reader holding to the draft plays
+only the MP3 files of such a document, and a reader that does not read
+``OGLC_zone`` plays none of the zone's emitters, since they are named only
+from the zone.
+
 In a gravity volume's block, ``direction`` and ``center`` are in the zone
 node's frame. The volume's priority is the zone's.
 
