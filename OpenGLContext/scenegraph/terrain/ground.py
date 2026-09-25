@@ -23,18 +23,21 @@ from typing import Any, Callable, Optional
 
 import numpy as np
 from OpenGL.GL import (
-    GL_ARRAY_BUFFER, GL_BACK, GL_CCW, GL_CLAMP_TO_EDGE, GL_DEPTH_TEST,
-    GL_ELEMENT_ARRAY_BUFFER, GL_FALSE, GL_FLOAT, GL_LINEAR, GL_R8, GL_RED,
-    GL_STATIC_DRAW, GL_TEXTURE0, GL_TEXTURE1, GL_TEXTURE2, GL_TEXTURE3,
-    GL_TEXTURE4, GL_TEXTURE_2D, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER,
-    GL_TEXTURE_MIN_FILTER, GL_TEXTURE_WRAP_S, GL_TEXTURE_WRAP_T, GL_TRIANGLES,
-    GL_UNSIGNED_INT, glActiveTexture, glBindBuffer, glBindTexture,
-    glBindVertexArray, glBufferData, glCullFace, glDrawElements, glEnable,
+    GL_ARRAY_BUFFER, GL_BACK, GL_CLAMP_TO_EDGE, GL_DEPTH_TEST,
+    GL_ELEMENT_ARRAY_BUFFER, GL_FALSE, GL_FLOAT, GL_LINEAR,
+    GL_LINEAR_MIPMAP_LINEAR, GL_R8, GL_RED, GL_REPEAT, GL_RGBA, GL_RGBA8,
+    GL_STATIC_DRAW, GL_TEXTURE0, GL_TEXTURE_2D, GL_TEXTURE_2D_ARRAY,
+    GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER, GL_TEXTURE_WRAP_S,
+    GL_TEXTURE_WRAP_T, GL_TRIANGLES, GL_UNSIGNED_BYTE, GL_UNSIGNED_INT,
+    glActiveTexture, glBindBuffer, glBindTexture, glBindVertexArray,
+    glBufferData, glCullFace, glDrawElements, glEnable,
     glEnableVertexAttribArray, glGenBuffers, glGenTextures, glGenVertexArrays,
-    glGetUniformLocation, glTexImage2D, glTexParameteri, glUniform1f,
-    glUniform1i, glUniform2f, glUniform3f, glUniformMatrix3fv,
-    glUniformMatrix4fv, glUseProgram, glVertexAttribPointer,
+    glGenerateMipmap, glTexImage2D, glTexImage3D, glTexParameteri,
+    glTexSubImage3D, glUniform1f, glUniform1i, glUniform2f, glUniform3f,
+    glUniformMatrix3fv, glUniformMatrix4fv, glUseProgram,
+    glVertexAttribPointer,
 )
+from PIL import Image
 from vrml.vrml97 import basenodes as vnodes
 
 from OpenGLContext.scenegraph import boundingvolume
@@ -55,8 +58,9 @@ __all__ = ['GroundShading', 'GroundPatch', 'mount_ground', 'GROUND_MATERIAL']
 #: surface rather than about the file it arrived in.
 GROUND_MATERIAL = 'ground'
 
-#: Where the sun is, as a direction to it. The same figure the landscape's own
-#: shadows were baked from.
+#: Which way the sunlight travels, from the sun down to the ground: a direction
+#: with a negative y. The same figure the landscape's own shadows were baked
+#: from.
 DEFAULT_SUN = (-0.5, -0.72, -0.48)
 
 # Detail-material tiling: DETAIL_SCALE repeats per world unit (crisp close-up),
@@ -98,14 +102,17 @@ class GroundShading:
         grid over the same square. What a landscape's own relief and its canopy
         did to the light, worked out once (see
         :attr:`~OpenGLContext.scenegraph.terrain.splat.SplatTerrain.shading`).
-    :param sun: which way the sun is, for the direct term -- three numbers, in
-        any form :func:`numpy.asarray` reads.
+    :param sun: which way the sunlight travels, for the direct term -- three
+        numbers, in any form :func:`numpy.asarray` reads, pointing down from the
+        sun (see :data:`DEFAULT_SUN`).
     :param material_fn: ``material_fn(name, res)`` resolving a layer's texture
         paths; defaults to the cc0/ambientCG fetcher.
 
     One of these serves a whole world: the program, the layer textures, the
     control map and the baked light are built once and every patch drawn with it
-    shares them. Build it on the GL thread, or leave it to the first draw.
+    shares them. The uniforms that are the same for every patch are set when
+    each form of the program is made; a patch sends only its placement and the
+    view. Build it on the GL thread, or leave it to the first draw.
     """
 
     def __init__(self, extent: float, layers: "list[str]", control: Any,
@@ -138,18 +145,33 @@ class GroundShading:
 
     def _init_gl(self) -> None:
         """Compile the program and upload the textures. GL thread."""
-        from OpenGLContext.scenegraph.terrain.splat import _array_texture
         prog = load_program('terrain_splat.vert', 'terrain_splat.frag')
         tex = dict(col=_array_texture('color', self.layers, self.material_fn),
                    nrm=_array_texture('normal', self.layers, self.material_fn),
                    rgh=_array_texture('roughness', self.layers, self.material_fn),
                    ctl=texture_rgba(self.control, clamp=True, mipmap=False),
                    sun=_shadow_texture(self.shading))
-        self._gl = dict(prog=prog, tex=tex,
-                        U={name: glGetUniformLocation(prog, name)
-                           for name in UNIFORMS},
-                        views=ViewPrograms('terrain_splat.vert', 'terrain_splat.frag',
-                                           UNIFORMS, prog))
+        views = ViewPrograms('terrain_splat.vert', 'terrain_splat.frag',
+                             UNIFORMS, prog, setup=self._constants)
+        self._gl = dict(prog=prog, tex=tex, views=views)
+        views.resend()
+
+    def _constants(self, U: "dict[str, int]") -> None:
+        """Set the uniforms every patch shares, on the bound program."""
+        for unit, name in enumerate(('layerColor', 'layerNormal', 'layerRough',
+                                     'controlMap', 'sunShadow')):
+            glUniform1i(U[name], unit)
+        glUniform1i(U['numLayers'], len(self.layers))
+        glUniform2f(U['worldMin'], *self.world_min)
+        glUniform2f(U['worldSize'], *self.world_size)
+        glUniform1f(U['detailScale'], DETAIL_SCALE)
+        glUniform1f(U['macroScale'], MACRO_SCALE)
+        glUniform1f(U['normalStrength'], NORMAL_STRENGTH)
+        glUniform3f(U['sunColor'], *SUN_COLOR)
+        glUniform3f(U['skyColor'], *SKY_COLOR)
+        glUniform3f(U['groundAmbient'], *GROUND_AMBIENT)
+        glUniform1f(U['fogDensity'], FOG_DENSITY)
+        glUniform3f(U['fogColor'], *FOG_COLOR)
 
     def ready(self) -> bool:
         """Whether the ground can be drawn, building its GL objects if need be."""
@@ -159,9 +181,10 @@ class GroundShading:
     def begin(self, mode: Any, model: Any) -> "Optional[int]":
         """Bind the program, the textures and everything but the geometry.
 
-        ``model`` is where the world put the mesh about to be drawn, as a 4x4:
-        the blend is read from world XZ, and a tile is placed by the tileset's
-        transform. Answers the program that was bound, for :meth:`end`, or
+        ``model`` is where the world put the mesh about to be drawn, as a 4x4
+        in the scenegraph's row-vector form (``mode.matrix``'s, translation in
+        the last row): the blend is read from world XZ, and a tile is placed by
+        the tileset's transform. Answers the program that was bound, for :meth:`end`, or
         None where the program for a shared draw of several views would not
         compile and nothing should be drawn.
         """
@@ -185,23 +208,11 @@ class GroundShading:
         glUniformMatrix3fv(U['uNormalMatrix'], 1, GL_FALSE,
                            np.ascontiguousarray(np.asarray(mode.matrix)[:3, :3],
                                                 np.float32))
-        towards = np.asarray(mode.matrix)[:3, :3].T @ self.sun
-        towards /= np.linalg.norm(towards)
-        glUniform3f(U['sunDirEye'], *towards.astype(np.float32))
-        for unit, name in enumerate(('layerColor', 'layerNormal', 'layerRough',
-                                     'controlMap', 'sunShadow')):
-            glUniform1i(U[name], unit)
-        glUniform1i(U['numLayers'], len(self.layers))
-        glUniform2f(U['worldMin'], *self.world_min)
-        glUniform2f(U['worldSize'], *self.world_size)
-        glUniform1f(U['detailScale'], DETAIL_SCALE)
-        glUniform1f(U['macroScale'], MACRO_SCALE)
-        glUniform1f(U['normalStrength'], NORMAL_STRENGTH)
-        glUniform3f(U['sunColor'], *SUN_COLOR)
-        glUniform3f(U['skyColor'], *SKY_COLOR)
-        glUniform3f(U['groundAmbient'], *GROUND_AMBIENT)
-        glUniform1f(U['fogDensity'], FOG_DENSITY)
-        glUniform3f(U['fogColor'], *FOG_COLOR)
+        # The light's direction of travel in eye space; the shader lights by
+        # its reverse, the direction to the sun.
+        light = np.asarray(mode.matrix)[:3, :3].T @ self.sun
+        light /= np.linalg.norm(light)
+        glUniform3f(U['sunDirEye'], *light.astype(np.float32))
         tex = g['tex']
         for unit, (target, name) in enumerate((
                 (GL_TEXTURE_2D_ARRAY, 'col'), (GL_TEXTURE_2D_ARRAY, 'nrm'),
@@ -234,6 +245,31 @@ class GroundShading:
         self._gl = None
 
 
+def _array_texture(kind: str, layers: "list[str]",
+                   material_fn: "Callable[..., dict[str, Any]]",
+                   size: int = 1024) -> int:
+    """A GL_TEXTURE_2D_ARRAY of ``kind`` (color/normal/roughness) for each layer.
+
+    ``material_fn(name, res)`` returns a dict with at least a ``color`` path and
+    optionally ``normal``/``roughness`` paths (the ambientCG/cc0 material API)."""
+    tid = glGenTextures(1)
+    glBindTexture(GL_TEXTURE_2D_ARRAY, tid)
+    glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8, size, size, len(layers),
+                 0, GL_RGBA, GL_UNSIGNED_BYTE, None)
+    for i, name in enumerate(layers):
+        m = material_fn(name, "1K")
+        p = m.get(kind) or m["color"]
+        im = Image.open(p).convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
+        glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, i, size, size, 1,
+                        GL_RGBA, GL_UNSIGNED_BYTE, np.asarray(im))
+    glGenerateMipmap(GL_TEXTURE_2D_ARRAY)
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT)
+    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT)
+    return int(tid)
+
+
 def _shadow_texture(shading: Any) -> int:
     """The baked light as a single-channel texture over the world's square."""
     lit = np.ascontiguousarray(np.asarray(shading, np.float32))
@@ -258,8 +294,10 @@ class GroundPatch(vnodes.PointSet):
         what :meth:`~OpenGLContext.scenegraph.terrain.heightfield.HeightField.mesh`
         produces and what a baked tile's ground primitive is read into.
     :param indices: the triangles, as a flat array of uint32.
-    :param model: where the world puts this mesh, as a 4x4. A tile is placed by
-        the tileset's transform; a field sits at the origin.
+    :param model: where the world puts this mesh, as a 4x4 in the scenegraph's
+        row-vector form: a point ``p`` is at ``[*p, 1] @ model``, translation in
+        the last row, as ``MatrixTransform.localMatrix`` holds it. A tile is
+        placed by the tileset's transform; a field sits at the origin.
 
     Subclasses ``PointSet`` only to inherit the scenegraph render hook: it draws
     an indexed triangle mesh through the ground's program, not points. One draw
@@ -385,7 +423,8 @@ def mount_ground(root: Any, shading: GroundShading, material: Any,
     None -- a tile that carries no ground -- mounts nothing.
 
     ``model`` is where the world puts this subtree, which is the tile's own
-    transform: the blend is read from world XZ.
+    transform, in the row-vector form :class:`GroundPatch` takes: the blend is
+    read from world XZ.
 
     A primitive with no normals is left as it was. Ground is shaded from its own
     normals, and one that arrives without them is not ground this can draw.

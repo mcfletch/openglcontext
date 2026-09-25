@@ -161,9 +161,11 @@ CARD_WIDTH = 1.25
 #: a card lit like a leaf facing the sun reads as a neon lump on the ground.
 CARD_SUN = 0.42
 
-#: Where the sun is for the clump geometry, which is lit per fragment rather
-#: than by the flat term the cards use. The same direction the terrain and the
-#: trees are lit from, or the floor is lit from somewhere else than the wood.
+#: Which way the sunlight travels for the clump geometry, which is lit per
+#: fragment rather than by the flat term the cards use. The same direction the
+#: terrain and the trees are lit by
+#: (:data:`~OpenGLContext.scenegraph.terrain.ground.DEFAULT_SUN`), or the floor
+#: is lit from somewhere else than the wood.
 CLUMP_SUN = (-0.5, -0.72, -0.48)
 
 

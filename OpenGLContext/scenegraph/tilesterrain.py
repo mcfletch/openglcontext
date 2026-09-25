@@ -24,6 +24,7 @@ import json
 import logging
 import math
 import os
+import time
 from typing import Any, Callable, Optional
 
 from OpenGLContext.scenegraph.group import Group
@@ -193,8 +194,8 @@ class TilesTerrain(Group):
 
         Settable after the terrain is built, and it has to be: a game reads a
         tileset to stand the ground up and reads it again to find the roads, and
-        only the roads know where a bore runs. The mesh is not built until the
-        first draw, so anything set before then is in time.
+        only the roads know where a bore runs. The field's mesh is cut again
+        with it at its next draw.
 
         Hand the same callable to
         :class:`~OpenGLContext.physics.heightfield.HeightFieldColliders` and
@@ -325,12 +326,14 @@ class TilesTerrain(Group):
     def wait_for_loads(self, timeout: float = 5.0) -> Any:
         """Wait for the tiles asked for, and the cover's scatter, to be ready.
 
-        Answers what the tile runtime's own wait answers. What the cover
-        scattered is staged by the next :meth:`update_for_camera`.
+        ``timeout`` is in seconds, for both together. Answers what the tile
+        runtime's own wait answers. What the cover scattered is staged by the
+        next :meth:`update_for_camera`.
         """
+        deadline = time.monotonic() + timeout
         loaded = self.runtime.wait_for_loads(timeout=timeout)
         if self.cover is not None:
-            self.cover.wait(timeout)
+            self.cover.wait(max(deadline - time.monotonic(), 0.0))
         return loaded
 
     def shutdown(self) -> None:

@@ -113,9 +113,10 @@ different ranges, a different course for the river. ``SHIPPED_TERRAIN`` is the
 profile behind ``terrain_height``. Its values stay fixed, because baked worlds
 were made from them.
 
-``fbm`` and ``ridged`` are the noise functions the landscape is built from.
-Use them for anything you add to it, such as a sculpted hill, a scatter mask
-or a splat weight, so that the addition has the same grain.
+``fbm`` and ``ridged``, in ``OpenGLContext.noise``, are the noise functions
+the landscape is built from. Use them for anything you add to it, such as a
+sculpted hill, a scatter mask or a splat weight, so that the addition has the
+same grain.
 
 ``terrain_height_for`` returns an ordinary height function. Pass it to
 ``HeightField.from_function`` above, or use it to build :ref:`a baked tileset
@@ -254,8 +255,9 @@ car hits and the surface objects stand on then stay the same:
    terrain.holes = mouth                              # what is drawn, and what grows
    ground = HeightFieldColliders(physics_world, field, holes=mouth)
 
-Setting ``holes`` on a ``TilesTerrain`` also passes it to that terrain's
-:ref:`ground cover <wheretheygrow>`. Anything you place yourself using only
+``holes`` may be set at any time; a ``SplatTerrain`` cuts its mesh again at
+its next draw. Setting ``holes`` on a ``TilesTerrain`` also passes it to that
+terrain's :ref:`ground cover <wheretheygrow>`. Anything you place yourself using only
 ``field.sample`` stands in mid-air across the opening, so check ``holes`` for
 it too.
 
@@ -295,6 +297,15 @@ with it:
    ground = GroundShading(extent=2048.0, layers=layers, control='control.png',
                           shading=field.sun_shadow(sun))
    patch = GroundPatch(ground, vertices, indices, model=tile_transform)
+
+``model`` is in the scenegraph's row-vector form, as ``mode.matrix`` and
+``MatrixTransform.localMatrix`` are: a point ``p`` is at ``[*p, 1] @ model``,
+with the translation in the last row. A tileset states its transforms the
+other way round, so the tile loader passes the transpose of a tile's
+transform. ``sun`` is the direction the sunlight travels, pointing down from
+the sun, as ``ground.DEFAULT_SUN`` is. The uniforms every patch shares are set
+once, when each form of the program is compiled; a patch sends only its
+placement and the view.
 
 A bake marks a primitive as ground by **naming its material** ``ground``. The
 tile loader mounts those primitives as patches of the world's ground

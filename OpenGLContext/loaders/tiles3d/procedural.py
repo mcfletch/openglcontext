@@ -6,7 +6,8 @@ water) so the terrain reads as a landscape rather than flat-shaded noise. The sa
 continuous height field is sampled per tile at the tile's resolution, so a quadtree
 of tiles forms a coherent multi-resolution surface for the streaming runtime to page.
 
-Vectorised value-noise fBm (numpy only, deterministic) — no external noise library.
+Its noise is :mod:`OpenGLContext.noise`, vectorised value-noise
+fBm (numpy only, deterministic); :func:`fbm` and :func:`ridged` are that module's.
 """
 import json
 import os
@@ -16,98 +17,14 @@ from typing import Any, Optional
 
 import numpy as np
 
+from OpenGLContext.noise import fbm, ridged, smoothstep, value_noise
+
 HeightFn = Callable[[np.ndarray, np.ndarray], np.ndarray]
 #: Per-vertex colour from a patch's positions and normals -- (N,3)/(N,3) in,
 #: (N,3) float RGB out.
 ColorFn = Callable[[np.ndarray, np.ndarray], np.ndarray]
 
 WATER_LEVEL = 0.0
-
-
-# --- deterministic value-noise fBm --------------------------------------------
-
-def _hash01(ix: np.ndarray, iz: np.ndarray, seed: int) -> np.ndarray:
-    h = (ix.astype(np.int64) * 374761393 + iz.astype(np.int64) * 668265263
-         + np.int64(seed) * 1013904223)
-    h = (h ^ (h >> np.int64(13))) * np.int64(1274126177)
-    h = h ^ (h >> np.int64(16))
-    return (h & np.int64(0xFFFFFF)).astype(np.float64) / float(0xFFFFFF)
-
-
-def _smooth(t: np.ndarray) -> np.ndarray:
-    return np.asarray(t * t * (3.0 - 2.0 * t))
-
-
-def _value_noise(x: np.ndarray, z: np.ndarray, seed: int) -> np.ndarray:
-    x0 = np.floor(x).astype(np.int64)
-    z0 = np.floor(z).astype(np.int64)
-    fx = _smooth(x - x0)
-    fz = _smooth(z - z0)
-    v00 = _hash01(x0, z0, seed)
-    v10 = _hash01(x0 + 1, z0, seed)
-    v01 = _hash01(x0, z0 + 1, seed)
-    v11 = _hash01(x0 + 1, z0 + 1, seed)
-    top = v00 * (1 - fx) + v10 * fx
-    bot = v01 * (1 - fx) + v11 * fx
-    return np.asarray(top * (1 - fz) + bot * fz)
-
-
-def _fbm(
-    x: np.ndarray,
-    z: np.ndarray,
-    seed: int,
-    octaves: int = 5,
-    lacunarity: float = 2.0,
-    gain: float = 0.5,
-) -> np.ndarray:
-    total = np.zeros_like(x, dtype=np.float64)
-    amp, freq, norm = 1.0, 1.0, 0.0
-    for o in range(octaves):
-        total += amp * _value_noise(x * freq, z * freq, seed + o * 101)
-        norm += amp
-        amp *= gain
-        freq *= lacunarity
-    return total / norm
-
-
-def _ridged(x: np.ndarray, z: np.ndarray, seed: int, octaves: int = 5) -> np.ndarray:
-    total = np.zeros_like(x, dtype=np.float64)
-    amp, freq, norm = 1.0, 1.0, 0.0
-    for o in range(octaves):
-        n = _value_noise(x * freq, z * freq, seed + o * 211)
-        r = 1.0 - np.abs(2.0 * n - 1.0)
-        total += amp * (r * r)
-        norm += amp
-        amp *= 0.5
-        freq *= 2.0
-    return total / norm
-
-
-def fbm(x: np.ndarray, z: np.ndarray, seed: int = 0, octaves: int = 5,
-        lacunarity: float = 2.0, gain: float = 0.5) -> np.ndarray:
-    """Fractal value noise over ``(x, z)``, from 0 to 1.
-
-    Deterministic in ``seed``, vectorised, and numpy-only. This is the grain
-    the shipped landscape is made of, so anything that wants to add to it --
-    a sculpted hill, a scatter mask, a splat weight -- can be made of the same
-    grain rather than of a second kind of noise that does not match.
-
-    One unit of ``x``/``z`` is one feature of the coarsest octave, so a caller
-    working in metres divides by the size it wants the features to be.
-    """
-    return _fbm(np.asarray(x, dtype=np.float64), np.asarray(z, dtype=np.float64),
-                seed=seed, octaves=octaves, lacunarity=lacunarity, gain=gain)
-
-
-def ridged(x: np.ndarray, z: np.ndarray, seed: int = 0,
-           octaves: int = 5) -> np.ndarray:
-    """Ridged fractal noise over ``(x, z)``, from 0 to 1.
-
-    The same noise folded about its middle, which turns rounded hills into
-    ridges with sharp crests -- what mountains are made of here.
-    """
-    return _ridged(np.asarray(x, dtype=np.float64),
-                   np.asarray(z, dtype=np.float64), seed=seed, octaves=octaves)
 
 
 # --- terrain height + colour --------------------------------------------------
@@ -182,17 +99,17 @@ def terrain_height_for(profile: TerrainProfile) -> HeightFn:
         h = np.full(np.broadcast(x, z).shape, float(profile.datum))
         if profile.hills:
             h = h + profile.hills * (
-                _fbm(x * _scale(profile.hill_scale),
+                fbm(x * _scale(profile.hill_scale),
                      z * _scale(profile.hill_scale),
                      seed=1 + seed, octaves=5) - 0.5)
         if profile.mountains:
             # The mask is what keeps ranges in ranges: mountains everywhere is
             # noise, and a landscape is read by where the high ground is not.
             edge = 1.0 - float(profile.mountain_cover)
-            mask = _smooth(np.clip(
-                (_fbm(x * 0.0006 + 5, z * 0.0006 - 3, seed=7 + seed, octaves=3)
+            mask = smoothstep(np.clip(
+                (fbm(x * 0.0006 + 5, z * 0.0006 - 3, seed=7 + seed, octaves=3)
                  - edge) / 0.28, 0.0, 1.0))
-            h = h + profile.mountains * _ridged(
+            h = h + profile.mountains * ridged(
                 x * _scale(profile.mountain_scale),
                 z * _scale(profile.mountain_scale),
                 seed=3 + seed, octaves=6) * mask
@@ -203,8 +120,8 @@ def terrain_height_for(profile: TerrainProfile) -> HeightFn:
             h = h - profile.canyon * np.exp(
                 -((x - path) / max(float(profile.canyon_width), 1e-6)) ** 2)
         if profile.basin:
-            floor = _smooth(np.clip(
-                (_fbm(x * _scale(profile.basin_scale) - 8,
+            floor = smoothstep(np.clip(
+                (fbm(x * _scale(profile.basin_scale) - 8,
                       z * _scale(profile.basin_scale) + 4,
                       seed=9 + seed, octaves=4) - 0.5) / 0.25, 0.0, 1.0))
             h = h - profile.basin * floor
@@ -252,10 +169,10 @@ def terrain_colors(positions: np.ndarray, normals: np.ndarray,
     # kept low enough that the terrain mesh actually samples them (fine detail below
     # the vertex spacing would just alias to noise) — ground foliage supplies the
     # close-up detail the mesh can't.
-    patch = _value_noise(x * 0.014, z * 0.014, 42)
-    mid = _value_noise(x * 0.05, z * 0.05, 17)
-    dirtn = _value_noise(x * 0.035 + 3, z * 0.035 - 5, 88)
-    rockn = _value_noise(x * 0.045 - 7, z * 0.045 + 2, 55)
+    patch = value_noise(x * 0.014, z * 0.014, 42)
+    mid = value_noise(x * 0.05, z * 0.05, 17)
+    dirtn = value_noise(x * 0.035 + 3, z * 0.035 - 5, 88)
+    rockn = value_noise(x * 0.045 - 7, z * 0.045 + 2, 55)
 
     grass = _lerp(grass_lush, grass_dry, patch[:, None])
     grass = grass * (0.68 + 0.62 * mid)[:, None]              # stronger brightness mottle

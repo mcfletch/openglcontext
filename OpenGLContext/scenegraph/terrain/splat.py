@@ -1,104 +1,44 @@
-"""Runtime multi-layer *splat* terrain node.
+"""A landscape drawn from its height field: :class:`SplatTerrain`.
 
-Renders a :class:`~OpenGLContext.scenegraph.terrain.heightfield.HeightField` as a
-single triangulated mesh, texturing it in the fragment shader from N detail
-material layers (albedo/normal/roughness sampler arrays) blended per-pixel by an
-RGBA control map. Detail + macro tiling hides repetition; a baked sun-shadow +
-tree-canopy term is sampled for static shading. This is the crisp,
-close-up-capable ground under the instanced vegetation.
-
-The node drives raw core-profile GL in :meth:`render` (its own program, VAO and
-textures). It composes with whatever render pass is driving the scenegraph by
-restoring the pass's program (``mode.current_program()``) after its own draw and
-routing its face-cull through the pass's CPU state memo (``set_cull_state``), so it
-needs no ``glGet`` round-trip to snapshot live GL state.
+A :class:`~OpenGLContext.scenegraph.terrain.heightfield.HeightField` meshed
+whole and drawn as ground: up to four detail materials blended per pixel by an
+RGBA control map, with a baked sun-shadow and tree-canopy term for its static
+shading. The drawing is :class:`~OpenGLContext.scenegraph.terrain.ground.GroundShading`
+and :class:`~OpenGLContext.scenegraph.terrain.ground.GroundPatch`, the same
+ground a streamed world's tiles are drawn with; this node works out the light
+baked into the landscape, and where cover and trees stand in it.
 """
-import ctypes
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import numpy as np
-from PIL import Image
-from OpenGL.GL import (
-    GL_ARRAY_BUFFER, GL_BACK, GL_CCW, GL_CLAMP_TO_EDGE, GL_DEPTH_TEST, GL_ELEMENT_ARRAY_BUFFER, GL_FALSE, GL_FLOAT, GL_LINEAR,
-    GL_LINEAR_MIPMAP_LINEAR, GL_R8, GL_RED, GL_REPEAT, GL_RGBA, GL_RGBA8, GL_STATIC_DRAW,
-    GL_TEXTURE0, GL_TEXTURE1, GL_TEXTURE2, GL_TEXTURE3, GL_TEXTURE4, GL_TEXTURE_2D,
-    GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER, GL_TEXTURE_WRAP_S,
-    GL_TEXTURE_WRAP_T, GL_TRIANGLES, GL_UNSIGNED_BYTE, GL_UNSIGNED_INT, glActiveTexture,
-    glBindBuffer, glBindTexture, glBindVertexArray, glBufferData, glCullFace,
-    glDrawElements, glEnable, glEnableVertexAttribArray, glGenBuffers,
-    glGenTextures, glGenVertexArrays, glGenerateMipmap, glGetUniformLocation, glTexImage2D, glTexImage3D, glTexParameteri, glTexSubImage3D,
-    glUniform1f, glUniform1i, glUniform2f, glUniform3f, glUniformMatrix3fv,
-    glUniformMatrix4fv, glUseProgram, glVertexAttribPointer,
-)
 from vrml.vrml97 import basenodes as vnodes
+
 from OpenGLContext.scenegraph import boundingvolume
-from OpenGLContext.scenegraph.terrain.ground import GroundPatch, GroundShading
+from OpenGLContext.scenegraph.terrain.ground import DEFAULT_SUN, GroundPatch, GroundShading
 
 if TYPE_CHECKING:
     from OpenGLContext.scenegraph.terrain.heightfield import HeightField
 
-DEFAULT_SUN = (-0.5, -0.72, -0.48)
-
 #: How dark it is under a canopy. ``CANOPY_SHADE`` is how hard a closed canopy
 #: darkens the light and ``CANOPY_DEEPEST`` the most of it that may go, so what
 #: is left where the canopy opens is the sun breaking through. A forest floor is
-#: dark; the ground beside it is not, and the difference between them is most of
-#: what makes a wood read as a wood rather than as trees on a lawn.
+#: dark and the open ground beside it is not.
 #:
 #: ``CANOPY_CROWN`` is how wide a tree's crown is, in metres, which is the ground
 #: one tree shades: a stand is closed when its crowns meet, not when its trunks
-#: do. ``CANOPY_SPREAD`` offsets the shadow towards the sun, because a tree casts
-#: along the light rather than straight down.
+#: do. ``CANOPY_SPREAD`` offsets the shadow along the light, away from the sun,
+#: because a tree casts its shadow along the light rather than straight down.
 CANOPY_SHADE = 1.3
 CANOPY_DEEPEST = 0.78
 CANOPY_CROWN = 7.0
 CANOPY_SPREAD = 12.0
 
-# Detail-material tiling: DETAIL_SCALE repeats per world unit (crisp close-up),
-# MACRO_SCALE a second, larger tiling mixed in to break the visible repeat.
-DETAIL_SCALE = 0.35
-MACRO_SCALE = 0.043
-NORMAL_STRENGTH = 1.1
-# Atmosphere. Kept in step with the vegetation nodes' lighting so the ground and
-# the plants on it read under one sun: a warm key light, a hemispheric sky/ground
-# ambient split, and exponential height fog.
-SUN_COLOR = (1.3, 1.22, 1.05)
-SKY_COLOR = (0.42, 0.52, 0.66)
-GROUND_AMBIENT = (0.18, 0.17, 0.15)
-FOG_DENSITY = 0.00016
-FOG_COLOR = (0.46, 0.58, 0.76)
-
-
-def _array_texture(kind: str, layers: "list[str]",
-                   material_fn: "Callable[..., dict[str, Any]]",
-                   size: int = 1024) -> int:
-    """A GL_TEXTURE_2D_ARRAY of ``kind`` (color/normal/roughness) for each layer.
-
-    ``material_fn(name, res)`` returns a dict with at least a ``color`` path and
-    optionally ``normal``/``roughness`` paths (the ambientCG/cc0 material API)."""
-    tid = glGenTextures(1)
-    glBindTexture(GL_TEXTURE_2D_ARRAY, tid)
-    glTexImage3D(GL_TEXTURE_2D_ARRAY, 0, GL_RGBA8, size, size, len(layers),
-                 0, GL_RGBA, GL_UNSIGNED_BYTE, None)
-    for i, name in enumerate(layers):
-        m = material_fn(name, "1K")
-        p = m.get(kind) or m["color"]
-        im = Image.open(p).convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
-        glTexSubImage3D(GL_TEXTURE_2D_ARRAY, 0, 0, 0, i, size, size, 1,
-                        GL_RGBA, GL_UNSIGNED_BYTE, np.asarray(im))
-    glGenerateMipmap(GL_TEXTURE_2D_ARRAY)
-    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR)
-    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_MAG_FILTER, GL_LINEAR)
-    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_S, GL_REPEAT)
-    glTexParameteri(GL_TEXTURE_2D_ARRAY, GL_TEXTURE_WRAP_T, GL_REPEAT)
-    return int(tid)
-
 
 class SplatTerrain(vnodes.PointSet):
     """Splat-textured terrain over a :class:`HeightField`.
 
-    Subclasses ``PointSet`` only to inherit the scenegraph render hook; it draws a
-    triangulated indexed mesh through its own program/VAO, not points.
+    Subclasses ``PointSet`` only to inherit the scenegraph render hook; it draws
+    the field's mesh as a :class:`GroundPatch`, not points.
 
     :param height_field: the :class:`HeightField` to render and shade.
     :param layers: up to four material names, blended by the control map's RGBA.
@@ -114,13 +54,17 @@ class SplatTerrain(vnodes.PointSet):
         left where the density is low is the sun breaking through.
     :param canopy_crown: how wide a tree's crown is in metres, which is the
         ground one tree shades.
-    :param canopy_spread: how far the canopy's shadow is offset towards the sun,
-        in metres -- trees cast along the light, not straight down.
+    :param canopy_spread: how far the canopy's shadow is offset along the
+        light, away from the sun, in metres -- trees cast along the light, not
+        straight down.
+    :param sun: which way the sunlight travels, pointing down from the sun
+        (:data:`~OpenGLContext.scenegraph.terrain.ground.DEFAULT_SUN`).
     :param holes: ``holes(x, z) -> mask``, true where the ground is not there --
         over a tunnel's bore, say. Hand the *same* callable to
         :class:`~OpenGLContext.physics.heightfield.HeightFieldColliders` and the
         surface drawn and the surface collided against are the same surface; see
-        :meth:`~OpenGLContext.scenegraph.terrain.HeightField.mesh`.
+        :meth:`~OpenGLContext.scenegraph.terrain.HeightField.mesh`. It may be set
+        at any time: the mesh is cut again at the next draw.
     """
     #: One draw serves every view that sees the terrain; see GroundPatch.
     multiviewShared = True
@@ -136,6 +80,9 @@ class SplatTerrain(vnodes.PointSet):
                  holes: "Optional[Callable[[Any, Any], Any]]" = None) -> None:
         super(SplatTerrain, self).__init__()
         self.hf = height_field
+        self._patch: Any = None
+        #: Meshes a new :attr:`holes` replaced, released at the next draw.
+        self._replaced: "list[GroundPatch]" = []
         self.holes = holes
         self.layers = layers
         self.control = control
@@ -153,7 +100,6 @@ class SplatTerrain(vnodes.PointSet):
         self._shading: Any = None
         self._closure: Any = None
         self._ground: Any = None
-        self._patch: Any = None
 
     @property
     def shading(self) -> np.ndarray:
@@ -240,13 +186,37 @@ class SplatTerrain(vnodes.PointSet):
         return found
 
     @property
+    def holes(self) -> "Optional[Callable[[Any, Any], Any]]":
+        """Where the ground is not there: ``holes(x, z) -> mask``, or None.
+
+        Setting it drops the mesh, which is cut again with it at the next draw;
+        the GL objects of the one it replaces are released then, on the GL
+        thread.
+        """
+        return self.__dict__.get('_holes')
+
+    @holes.setter
+    def holes(self, holes: "Optional[Callable[[Any, Any], Any]]") -> None:
+        self.__dict__['_holes'] = holes
+        if self._patch is not None:
+            self._replaced.append(self._patch)
+            self._patch = None
+
+    def _release_replaced(self) -> None:
+        """Release the meshes a new :attr:`holes` replaced. GL thread."""
+        replaced, self._replaced = self._replaced, []
+        for patch in replaced:
+            patch.dispose()
+
+    @property
     def patch(self) -> GroundPatch:
         """The field's own mesh, drawn with that ground.
 
         Built at the first draw rather than at construction, because what it is
         cut by is not settled until then: a game reads a tileset to stand the
         ground up and reads it again to find the roads, and only the roads know
-        where a bore runs (:attr:`holes`).
+        where a bore runs (:attr:`holes`). Built again after :attr:`holes`
+        changes.
         """
         if self._patch is None:
             vertices, indices = self.hf.mesh(holes=self.holes)
@@ -256,10 +226,12 @@ class SplatTerrain(vnodes.PointSet):
 
     def render_depth(self, mode: Any) -> int:
         """Write the ground's depth for a shadow map."""
+        self._release_replaced()
         return self.patch.render_depth(mode)
 
     def dispose(self) -> None:
         """Free this node's GL objects (mesh, textures, program). GL thread."""
+        self._release_replaced()
         if self._patch is not None:
             self._patch.dispose()
             self._patch = None
@@ -274,4 +246,5 @@ class SplatTerrain(vnodes.PointSet):
             size=(E, H, E), center=(0, self.hf.base + self.hf.relief / 2.0, 0))
 
     def render(self, mode: Any = None, **kw: Any) -> int:
+        self._release_replaced()
         return self.patch.render(mode, **kw)

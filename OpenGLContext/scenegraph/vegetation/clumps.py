@@ -195,7 +195,8 @@ class InstancedClumps(InstancedVegBase):
     :param idx: (F*3,) triangle indices.
     :param texture: RGBA blade texture (alpha-cutout at 0.33) as a path or a
         decoded ``PIL.Image`` (see :func:`load_clump_glb`).
-    :param sun: world-space sun direction (matches the terrain/tree sun).
+    :param sun: world-space direction the sunlight travels, down from the sun
+        (matches the terrain/tree sun).
     :param bounds: node AABB, kept large so a follow-field is not culled as a whole.
     """
     def __init__(self, P: np.ndarray, N: np.ndarray, UV: np.ndarray, idx: np.ndarray,

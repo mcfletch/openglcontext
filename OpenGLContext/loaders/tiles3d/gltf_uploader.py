@@ -265,10 +265,10 @@ class GLTileUploader:
                 mount_ground,
             )
             # The tile's own transform, not the wrapper's: which layer is on the
-            # ground here is read from world XZ.
+            # ground here is read from world XZ. Row-vector, as the wrapper's.
             mount_ground(drawable, self.ground,
                          material=getattr(scene, 'materials', {}).get(GROUND_MATERIAL),
-                         model=m)
+                         model=m.T)
         drawable.dispose = _make_dispose(drawable)
         return drawable, nbytes
 

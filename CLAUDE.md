@@ -228,6 +228,9 @@ OpenGLContext/
 │                     # staged beside its path, moved in with one rename, and
 │                     # a lock for two processes writing the same one
 ├── hud.py            # Screen-space layout GUINode/GUIBox use (see ui/)
+├── noise.py          # Value noise over the ground plane (fbm, ridged): the
+│                     # grain landscapes and what is added to them are made
+│                     # of -- numpy only
 ├── outline.py        # The scenegraph as rows, for a tree control -- no GL, no
 │                     # toolkit -- docs/embedding.rst
 ├── renderoptions.py  # How a pass reads a rendering feature from the definition

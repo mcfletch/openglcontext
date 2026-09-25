@@ -58,6 +58,38 @@ def test_sun_direction_is_normalized():
     assert np.isclose(np.linalg.norm(node.sun), 1.0)
 
 
+
+class TestAnOpeningToldAfterTheFirstDraw:
+    """A game stands the ground up, draws it, and only then reads its roads
+    and learns where the bores are."""
+
+    @staticmethod
+    def _bore(x, z):
+        return np.hypot(np.asarray(x, 'd'), np.asarray(z, 'd')) < 20.0
+
+    def test_the_mesh_is_cut_by_it(self) -> None:
+        node = SplatTerrain(_hf(), ["floor"], "control.png",
+                            material_fn=lambda *a, **k: {})
+        def inside(patch):
+            corners = patch.vertices[patch.indices.reshape(-1, 3), :3]
+            middle = corners.mean(axis=1)
+            return int(self._bore(middle[:, 0], middle[:, 2]).sum())
+        assert inside(node.patch) > 0
+        node.holes = self._bore
+        assert inside(node.patch) == 0
+
+    def test_the_mesh_it_replaced_is_let_go_at_the_next_draw(self) -> None:
+        node = SplatTerrain(_hf(), ["floor"], "control.png",
+                            material_fn=lambda *a, **k: {})
+        first = node.patch
+        released = []
+        first.dispose = lambda: released.append(True)
+        node.holes = self._bore
+        assert released == []                    # not off the GL thread
+        node.render(types.SimpleNamespace(shadow_pass=True, visible=True))
+        assert released == [True]
+
+
 from PIL import Image  # noqa: E402
 from OpenGL.GL import glGetError, GL_NO_ERROR  # noqa: E402
 

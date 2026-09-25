@@ -39,7 +39,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
-from OpenGLContext.loaders.tiles3d.procedural import fbm
+from OpenGLContext.noise import fbm
 
 HeightFn = Callable[[Any, Any], Any]
 #: ``where(x, z) -> weight``: how much of the grain a place gets, 0 to 1.

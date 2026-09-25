@@ -210,7 +210,7 @@ class TestPlantsNamedByAWorld:
             assert not fetch.is_url(species.clump)
             assert not fetch.is_url(species.card)
             assert os.path.isfile(species.clump)
-            assert terrain.cover.rungs[0].clumps_near is not None
+            assert terrain.cover.rungs[0].clumps_far is not None
             tree = terrain.vegetation.species[0]
             assert os.path.isfile(tree.impostor)
         finally:

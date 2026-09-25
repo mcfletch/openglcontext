@@ -13,11 +13,13 @@ import pytest
 from OpenGLContext.loaders.tiles3d.procedural import (
     SHIPPED_TERRAIN,
     TerrainProfile,
-    _fbm,
-    _ridged,
-    _smooth,
     terrain_height,
     terrain_height_for,
+)
+from OpenGLContext.noise import (
+    fbm as _fbm,
+    ridged as _ridged,
+    smoothstep as _smooth,
 )
 
 

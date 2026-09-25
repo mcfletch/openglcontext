@@ -76,5 +76,30 @@ def test_url_tileset_with_external_reference(http_dir, tmp_path):
         terrain.shutdown()
 
 
+
+def test_waiting_for_loads_shares_one_deadline(tmp_path):
+    """The tiles and the cover wait within the one timeout between them."""
+    import time
+    import types
+    path = build_sample_tileset(str(tmp_path))
+    terrain = TilesTerrain(path, workers=1)
+    given = []
+
+    def slow_tiles(timeout):
+        time.sleep(0.2)
+        return True
+    runtime_wait = terrain.runtime.wait_for_loads
+    terrain.runtime.wait_for_loads = slow_tiles
+    terrain.cover = types.SimpleNamespace(wait=given.append,
+                                          shutdown=lambda: None)
+    try:
+        terrain.wait_for_loads(timeout=0.5)
+        assert given and given[0] <= 0.31
+    finally:
+        terrain.runtime.wait_for_loads = runtime_wait
+        terrain.cover = None
+        terrain.shutdown()
+
+
 if __name__ == '__main__':
     raise SystemExit(pytest.main([__file__, '-v']))

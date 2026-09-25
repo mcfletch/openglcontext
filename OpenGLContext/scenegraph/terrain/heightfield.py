@@ -235,11 +235,15 @@ class HeightField:
                    steps: int = 170, softness: float = 35.0,
                    strength: float = 0.8) -> np.ndarray:
         """Bake terrain self-shadowing: march the grid toward the sun; where higher
-        ground blocks the ray the cell is shadowed. Returns lit in [0, 1] (float32)."""
+        ground blocks the ray the cell is shadowed. Returns lit in [0, 1] (float32).
+
+        ``sun`` is the direction the light travels, down from the sun, as
+        :data:`~OpenGLContext.scenegraph.terrain.ground.DEFAULT_SUN` is.
+        """
         hm = self.grid * self.relief
         R = hm.shape[0]
         cell = self.extent / (R - 1)
-        ts = -np.asarray(sun, float)
+        ts = -np.asarray(sun, float)            # towards the sun
         hn = math.hypot(ts[0], ts[2])
         tan_elev = ts[1] / max(hn, 1e-3)
         dz = ts[2] / max(hn, 1e-3)
@@ -262,22 +266,21 @@ class HeightField:
         the figure mean the same thing at any grid resolution and any planting
         density.
 
-        Unclamped, and that is the point: past a certain density more trees
-        cannot take any more light, so :meth:`canopy_shadow` stops
-        distinguishing a stand with gaps in it from a closed one. Both are dark.
-        They are not the same place to *stand* in, though -- one has room for
-        shrubs and the other does not -- so what grows on a forest floor is
-        decided from this rather than from the shade.
+        The figure is not clamped. Past a certain density more trees take no
+        more light, so :meth:`canopy_shadow` shades a stand with gaps in it and
+        a closed one alike, but one has room for shrubs under it and the other
+        does not, so what grows on a forest floor is decided from this rather
+        than from the shade.
 
-        With a ``sun`` the cover is offset toward it by ``spread``, which is
-        where a tree's shade falls; without one it sits over the trunks, which
-        is where the tree itself is.
+        ``sun`` is the direction the light travels. With one, the cover is
+        offset ``spread`` metres along it, away from the sun, which is where a
+        tree's shade falls; without one it sits over the trunks.
         """
         offset = np.zeros(2)
         if sun is not None:
-            toward = -np.asarray(sun, float)
-            flat = math.hypot(toward[0], toward[2])
-            offset = (-toward[[0, 2]] / max(flat, 1e-3)) * spread
+            light = np.asarray(sun, float)
+            flat = math.hypot(light[0], light[2])
+            offset = (light[[0, 2]] / max(flat, 1e-3)) * spread
         extent = self.extent
         x = np.asarray(tree_pos, float)[:, 0] + offset[0]
         z = np.asarray(tree_pos, float)[:, 2] + offset[1]
@@ -300,9 +303,9 @@ class HeightField:
                       darken: float = 0.85, cap: float = 0.55) -> np.ndarray:
         """Darken ``lit`` under tree cover, for the dappled shade of a wood.
 
-        ``tree_pos`` is an (N, 3) array of trunk world positions, offset toward
-        the sun by ``spread`` because a tree shades along the light rather than
-        straight down. How much cover there is over each cell is
+        ``tree_pos`` is an (N, 3) array of trunk world positions, offset along
+        ``sun``, the direction the light travels, by ``spread`` metres, because
+        a tree shades along the light rather than straight down. How much cover there is over each cell is
         :meth:`canopy_density`; ``darken`` is how hard a closed canopy darkens
         the ground and ``cap`` the most of the light it may take.
         """
