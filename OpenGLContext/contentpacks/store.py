@@ -82,10 +82,11 @@ class ContentStore:
         pack's *key* is namespaced by the catalogue, and a key is not where
         content lands: a registry may name any ``directory`` it likes, so an
         added one could otherwise declare the name a shipped pack uses and write
-        over its content. Partitioning by namespace makes that impossible rather
-        than forbidden, and leaves two packs of the *same* publisher free to
-        share a tree on purpose -- which is how a world and the art it needs
-        arrive as one directory.
+        over its content. Under its namespace, a registry can write only where
+        its own packs are; two packs of the same publisher can still share a
+        tree on purpose, which is how a world and the art it needs arrive as
+        one directory. The namespace and directory are compared and placed
+        without case (see :func:`_place`).
 
         ``within`` is that case: content another pack is incomplete without
         unpacks into *that* pack's directory rather than into one of its own,
@@ -148,6 +149,7 @@ class ContentStore:
         where the pack is already here. ``cancel`` is asked between members.
         """
         where = self.directory_for(pack, within)
+        self._make_root()
         with atomicfiles.file_lock(_lock_for(where)):
             if not replace and self._here(pack, within):
                 return where
@@ -261,7 +263,17 @@ class ContentStore:
         Kept at :meth:`registry_path`, replacing the file there whole: a second
         fetch of the same URL is how a registry is refreshed.
         """
+        self._make_root()
         return atomicfiles.copy_file(path, self.registry_path(url))
+
+    def _make_root(self) -> None:
+        """The store's own directory, readable by this account alone.
+
+        The same rule as the engine's download cache: no other account can
+        pre-seed content this one then loads, whatever the permissions of the
+        directories above it.
+        """
+        os.makedirs(self.root, mode=0o700, exist_ok=True)
 
     def unpacked_registry(self, path: str) -> str:
         """Where a registry bundle's content is extracted to.
@@ -277,7 +289,7 @@ class ContentStore:
 
         A registry that will not load is refused with its own name in the
         message rather than skipped: one silently dropped is one nobody can see
-        the absence of, which is the whole reason validation is strict.
+        the absence of.
         """
         from . import catalog        # here: catalog reads a store's registries
         packs: list[ContentPack] = []

@@ -495,7 +495,9 @@ Where things are stored
 ``$XDG_CONFIG_HOME`` or ``~/.config`` on Linux, and ``%APPDATA%`` on Windows
 (see ``OpenGLContext.userpaths``). Applications share the download cache but
 not their content. No directory is created until something is written into
-it.
+it. The store's own directory and the download cache are created readable by
+the user's account alone, so no other account can put content there for this
+one to load.
 
 .. _publishing:
 

@@ -15,13 +15,12 @@ A registry is a JSON document naming its ``namespace`` and holding a list of
     {"namespace": "glisteel",
      "packs": [{"key": "glisteel/ashdown", "title": "Ashdown", "...": "..."}]}
 
-**Validation is strict on purpose.** A pack that fails to load is refused loudly
-rather than skipped, and every field has to be one the schema declares. Both
-rules answer the same failure: an entry with a mistyped key would otherwise be
-accepted, ignored for ever, and never noticed. The one that matters most is
-``copyright``, since a notices screen is generated from these entries and a pack
-that cannot state its terms would be offered for download and left out of the
-credits.
+A pack that fails to load is refused rather than skipped, and every field has
+to be one the schema declares, of the type it declares. An entry with a
+mistyped key would otherwise be accepted and ignored without anyone seeing it.
+``copyright`` is required because a notices screen is generated from these
+entries, and a pack that cannot state its terms would be offered for download
+and left out of the credits.
 """
 
 from __future__ import annotations

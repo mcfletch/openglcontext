@@ -4,18 +4,15 @@ A texture pack is 450 MB. Fetching one on the frame loop's thread stops the
 window dead for minutes -- no redraw, no cancel, and on most desktops an
 eventual "this application is not responding" from the window manager.
 
-So the work happens on a worker thread and **the frame loop polls**:
+So the work happens on a worker thread and the frame loop polls:
 :meth:`FetchJob.poll` is called once a frame, publishes whatever the worker has
-managed since the last call, and is the *only* place anything the worker wrote
-is read. That single rule is the whole of the thread safety here, and it is why
-a caller needs no lock of its own: everything a caller touches --
+managed since the last call, and is the only place anything the worker wrote
+is read. A caller therefore needs no lock of its own: everything it reads --
 :attr:`~FetchJob.finished`, :attr:`~FetchJob.fraction`, :attr:`~FetchJob.roots`
 -- is written by ``poll`` on the caller's own thread.
 
-The consequence is worth stating plainly because it looks like a bug and is
-not: a job whose worker has run to completion still reports itself unfinished
-until it is polled. A frame loop that stops polling stops learning, which is
-correct -- there is nobody to tell.
+A job whose worker has run to completion reports itself unfinished until the
+next ``poll``.
 
 :func:`fetch_pack` is the same work without the thread, for a command line or a
 test.
@@ -28,12 +25,12 @@ import logging
 import os
 import threading
 import urllib.parse
-from typing import Any, Callable, Sequence
+from typing import Callable, Sequence
 
 from OpenGLContext.loaders import resolver
 
 from . import archive, catalog
-from .pack import ContentPack
+from .pack import ContentPack, human_bytes
 from .store import ContentStore
 
 log = logging.getLogger(__name__)
@@ -66,9 +63,8 @@ Fetch = Callable[[ContentPack, Callable[[int, int | None], None],
 class Cancelled(Exception):
     """The user asked for the download to stop.
 
-    Distinct from a failure so the two can be reported differently: nothing went
-    wrong, and telling somebody their own decision was an error is a poor way to
-    answer it.
+    Distinct from a failure so the two can be reported differently: a cancel
+    is the user's own decision, not an error.
     """
 
 
@@ -125,8 +121,9 @@ def base_fetches(packs: Sequence[ContentPack], store: ContentStore
     return wanted
 
 
-def fetch_registry(url: str, store: ContentStore, progress: Any = None,
-                   cancel: Any = None,
+def fetch_registry(url: str, store: ContentStore,
+                   progress: resolver.Progress | None = None,
+                   cancel: resolver.Cancel | None = None,
                    cache_dir: str | None = None) -> list[ContentPack]:
     """Fetch a registry bundle and return the packs it declares.
 
@@ -179,7 +176,8 @@ def wanted_for(chosen: ContentPack, packs: Sequence[ContentPack],
 
 
 def fetch_pack(pack: ContentPack, store: ContentStore,
-               progress: Any = None, cancel: Any = None,
+               progress: resolver.Progress | None = None,
+               cancel: resolver.Cancel | None = None,
                cache_dir: str | None = None,
                within: ContentPack | None = None) -> str:
     """Fetch and unpack one pack; return its content root.
@@ -258,7 +256,8 @@ def _evict(path: str) -> None:
         pass
 
 
-def _report(progress: Any, done: int, total: int | None) -> None:
+def _report(progress: resolver.Progress | None, done: int,
+            total: int | None) -> None:
     if progress is not None:
         progress(done, total)
 
@@ -266,10 +265,10 @@ def _report(progress: Any, done: int, total: int | None) -> None:
 class FetchJob:
     """One user-consented download of one or more packs, run off the frame loop.
 
-    **One bar for the job, not one per pack.** A user who consents to three
-    packs agreed to a single download of their combined size; a bar that fills
-    and resets three times reads as three failures. :attr:`fraction` therefore
-    spans the whole set, weighted by the sizes the user was shown.
+    One progress bar covers the job: a user who consents to three packs agreed
+    to a single download of their combined size, and a bar that fills and
+    resets three times reads as three failures. :attr:`fraction` spans the
+    whole set, weighted by the sizes the user was shown.
     """
 
     def __init__(self,
@@ -357,7 +356,7 @@ class FetchJob:
 
     def human_total(self) -> str:
         """How much this job is, as the user consented to read it."""
-        return '%d MB' % (round(self.total_bytes / 1e6),)
+        return human_bytes(self.total_bytes)
 
     def poll(self) -> None:
         """Publish what the worker has managed, and start it the first time.

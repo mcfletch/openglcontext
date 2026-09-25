@@ -282,3 +282,21 @@ class TestReplacingAPackFoundElsewhere:
             publish.install(a_pack(), store, str(dist), replace=True)
         assert 'OPENGLCONTEXT_CONTENT' in str(raised.value)
         assert publish.install(a_pack(), store, str(dist)) == str(found)
+
+
+class TestTheStoresOwnDirectory:
+    @pytest.mark.skipif(os.name != 'posix', reason='POSIX modes')
+    def test_it_is_this_accounts_alone(self, tmp_path, store):
+        path = tarball(tmp_path / 'a.tar.gz', [('world.json', b'{}')])
+        store.install(a_pack(), path)
+        assert os.stat(store.root).st_mode & 0o077 == 0
+
+
+class TestASizeAsAPersonReadsIt:
+    @pytest.mark.parametrize('count,shown', [
+        (41_711_739, '42 MB'), (640_000, '640 kB'), (12, '1 kB'),
+        (2_345_000_000, '2.3 GB')])
+    def test_it_is_never_zero_megabytes(self, count, shown):
+        from OpenGLContext.contentpacks.pack import human_bytes
+        assert human_bytes(count) == shown
+        assert a_pack(approximate_bytes=count).human_size() == shown

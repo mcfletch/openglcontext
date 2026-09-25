@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-__all__ = ['ContentPack']
+__all__ = ['ContentPack', 'human_bytes']
 
 
 @dataclass(frozen=True)
@@ -18,8 +18,8 @@ class ContentPack:
     """Data an application fetches rather than ships.
 
     ``approximate_bytes`` and ``copyright`` are required because both are put in
-    front of the user before anything is fetched: a pack that cannot state its
-    size and its terms has no business being offered.
+    front of the user before anything is fetched, and a pack is offered only
+    with its size and its terms.
     """
 
     #: ``<namespace>/<name>``. The namespace is the registry that may declare
@@ -87,5 +87,19 @@ class ContentPack:
         return SpecifierSet(self.requires).contains(version, prereleases=True)
 
     def human_size(self) -> str:
-        """The download size as the user should read it."""
-        return '%d MB' % (round(self.approximate_bytes / 1e6),)
+        """The download size as the user should read it: see :func:`human_bytes`."""
+        return human_bytes(self.approximate_bytes)
+
+
+def human_bytes(count: int) -> str:
+    """A byte count as a person reads a download's size.
+
+    Decimal units, as a download manager and a disk's label use them:
+    ``'640 kB'`` under a megabyte (never ``'0 MB'``), whole megabytes up to a
+    thousand, and gigabytes to one decimal above that.
+    """
+    if count < 1_000_000:
+        return '%d kB' % (max(1, round(count / 1e3)),)
+    if count < 1_000_000_000:
+        return '%d MB' % (round(count / 1e6),)
+    return '%.1f GB' % (count / 1e9,)
