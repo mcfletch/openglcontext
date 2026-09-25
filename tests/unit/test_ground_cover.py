@@ -314,3 +314,40 @@ class TestItDoesNotGrowInRows:
         cover = _cover(card_radius=60.0, species=_species(density=1.0))
         cover.update((0.0, 0.0, 0.0))
         assert len(cover.rungs[0].cards.pos) > 2500
+
+
+class TestScatteredInTheBackground:
+    """A cover told ``background=True`` scatters on a worker thread, so the
+    frame that crosses a threshold pays nothing for it."""
+
+    @staticmethod
+    def _rows(cover):
+        return sorted(map(tuple, np.round(cover.rungs[0].cards.pos, 4)))
+
+    def test_it_grows_the_same_cover(self) -> None:
+        aside = _cover(card_radius=100.0, background=True)
+        inline = _cover(card_radius=100.0)
+        try:
+            aside.update((0.0, 0.0, 0.0))
+            assert aside.wait(5.0)
+            aside.update((0.0, 0.0, 0.0))
+            inline.update((0.0, 0.0, 0.0))
+            assert len(inline.rungs[0].cards.pos) > 100
+            assert self._rows(aside) == self._rows(inline)
+        finally:
+            aside.shutdown()
+
+    def test_the_frame_that_asks_does_not_wait(self) -> None:
+        aside = _cover(card_radius=100.0, background=True)
+        try:
+            aside.update((0.0, 0.0, 0.0))
+            assert aside.selections == 1
+            assert aside.wait(5.0)
+        finally:
+            aside.shutdown()
+
+    def test_waiting_on_an_inline_cover_is_immediate(self) -> None:
+        assert _cover().wait(0.0)
+
+    def test_shutting_down_an_inline_cover_is_harmless(self) -> None:
+        _cover().shutdown()

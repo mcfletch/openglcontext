@@ -70,14 +70,14 @@ class TestEachPlaceOnce:
         blocks, _field_ = _blocks()
         blocks.disc(0.0, 0.0, 90.0)
         first = blocks.built
-        blocks.disc(60.0, 0.0, 90.0)
-        assert 0 < blocks.built - first < first / 2
+        blocks.disc(blocks.span * 1.5, 0.0, 90.0)
+        assert 0 < blocks.built - first < first * 0.6
 
     def test_ground_left_far_behind_is_let_go(self):
         blocks, _field_ = _blocks()
         for step in range(40):
             blocks.disc(step * 60.0, 0.0, 90.0)
-        span = blocks.cell * 32
+        span = blocks.span
         across = 2 * (blocks.keep * 90.0 + span) / span + 2
         assert len(blocks) <= across * across
         assert len(blocks) < blocks.built / 2

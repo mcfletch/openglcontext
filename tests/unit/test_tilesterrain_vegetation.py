@@ -364,6 +364,11 @@ class TestTheGroundCoverAWorldCarries:
         try:
             terrain.holes = bore
             assert terrain.cover.holes is bore
+            assert terrain.cover.background
+            terrain.cover.update((0.0, 0.0, 0.0))
+            # A streamed world's cover is scattered in the background, and
+            # staged by the update after the scatter finishes.
+            assert terrain.cover.wait(5.0)
             terrain.cover.update((0.0, 0.0, 0.0))
             placed = terrain.cover.rungs[0].cards.pos
             assert len(placed)

@@ -149,7 +149,7 @@ pops as the disc re-centres. Each species uses its own salted grid, so
 species do not compete for the same cells.
 
 Because a cell's plant never changes, the scatter is kept by the block: the
-grid is cut into squares of 32 cells a side
+grid is cut into squares about 32 metres wide
 (``vegetation.grid.ScatterBlocks``), each scattered the first time a disc
 reaches it, with its plants' sizes and light, and kept while the camera is
 within twice the disc's radius of it. A disc is assembled from the blocks it
@@ -158,10 +158,16 @@ ground already covered costs nothing but the assembly. ``GroundCover.scattered``
 counts the blocks scattered. Setting ``mask``, ``holes``, ``shade`` or
 ``canopy`` scatters everything again.
 
-The scatter is the expensive half of the work and makes no GL calls. A caller
-with a worker thread can run ``compute_near`` on it and pass the result to
-``apply_near`` on the render thread. ``update`` does both on the calling
-thread. ``select`` is the cheap per-frame step: it re-centres the drawn
+The scatter is the expensive half of the work and makes no GL calls.
+``GroundCover(..., background=True)`` runs it on a worker thread
+(``vegetation.streaming.BackgroundCompute``): ``update`` hands the scatter to
+the worker and stages what it made on a later call, so no frame waits for it,
+and ``wait(timeout)`` blocks until the worker is idle, for a capture or a
+bake that wants the cover in place. A cover a streamed world carries
+(``TilesTerrain``) is scattered this way, and ``TilesTerrain.wait_for_loads``
+waits for it. Without ``background``, ``update`` scatters on the calling
+thread; a caller with its own worker can run ``compute_near`` there and pass
+the result to ``apply_near`` on the render thread. ``select`` is the cheap per-frame step: it re-centres the drawn
 geometry on the current camera. Without it, the disc lags behind the walker
 and the density of the middle-distance cover pulses.
 

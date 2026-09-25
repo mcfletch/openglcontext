@@ -424,6 +424,7 @@ class GroundCover(Group):
                  shade: Optional[Callable[[Any, Any], Any]] = None,
                  canopy: Optional[Callable[[Any, Any], Any]] = None,
                  sun: "tuple[float, float, float]" = CLUMP_SUN,
+                 background: bool = False,
                  **named: Any) -> None:
         super().__init__(**named)
         kinds = ([species] if isinstance(species, CoverSpecies)
@@ -456,6 +457,10 @@ class GroundCover(Group):
         #: setting moves: a machine that cannot draw this much cover wants less
         #: of all of it, in proportion, rather than a different set of plants.
         self.density_scale = 1.0
+        #: Whether :meth:`update` scatters on a worker thread; see
+        #: :class:`~OpenGLContext.scenegraph.vegetation.streaming.BackgroundCompute`.
+        self.background = bool(background)
+        self._worker: Any = None
         self.rungs = [CoverRung(one, self.clump_radius, self.card_radius,
                                 self.far_radius, sun) for one in kinds]
         # children is a VRML ChildrenTypedField descriptor that coerces a node list.
@@ -469,8 +474,10 @@ class GroundCover(Group):
         self.__dict__['_' + name + '_fn'] = value
         blocks = self.__dict__.get('_blocks')
         if blocks:
-            self._retired += sum(held.built for _key, held in blocks.values())
-            blocks.clear()
+            # A new table rather than an emptied one: a background scatter may
+            # be reading the old one.
+            self._retired += sum(held.built for _key, held in list(blocks.values()))
+            self._blocks = {}
         self._near_at = self._far_at = None
 
     mask = property(lambda self: self.__dict__.get('_mask_fn'),
@@ -494,7 +501,7 @@ class GroundCover(Group):
         grows with the ground newly reached rather than with the distance
         driven over ground already covered.
         """
-        return self._retired + sum(held.built for _key, held in self._blocks.values())
+        return self._retired + sum(held.built for _key, held in list(self._blocks.values()))
 
     def rung(self, name: str) -> CoverRung:
         """The rung for the species called ``name``."""
@@ -666,17 +673,65 @@ class GroundCover(Group):
         Re-scatters whichever rungs the camera has walked far enough to have
         moved off the middle of, then re-centres the drawn geometry -- which
         happens every frame, because that is what keeps the disc from lagging.
+
+        With :attr:`background` the scatter is handed to a worker thread and
+        what it made is staged on a later call, so no frame waits for it.
         """
         at = np.asarray(position, dtype='d').reshape(-1)[:3]
         x, z = float(at[0]), float(at[2])
-        if _walked(at, self._near_at) > SETTLED_METRES:
+        near = _walked(at, self._near_at) > SETTLED_METRES
+        far = _walked(at, self._far_at) > FAR_SETTLED_METRES
+        if near:
             self.selections += 1
             self._near_at = at.copy()
-            self.apply_near(self.compute_near(x, z))
-        if _walked(at, self._far_at) > FAR_SETTLED_METRES:
+        if far:
             self._far_at = at.copy()
-            self.apply_far(self.compute_far(x, z))
+        if near or far:
+            if self.background:
+                self._background().request(x, z, near, far)
+            else:
+                self._apply_both(self._compute_both(x, z, near, far))
+        if self._worker is not None:
+            self._worker.drain()
         self.select(x, z)
+
+    def _compute_both(self, x: float, z: float, near: bool, far: bool) -> tuple:
+        return (self.compute_near(x, z) if near else None,
+                self.compute_far(x, z) if far else None)
+
+    def _apply_both(self, payload: tuple) -> None:
+        near, far = payload
+        if near is not None:
+            self.apply_near(near)
+        if far is not None:
+            self.apply_far(far)
+
+    def _background(self) -> Any:
+        if self._worker is None:
+            from OpenGLContext.scenegraph.vegetation.streaming import BackgroundCompute
+            self._worker = BackgroundCompute(
+                self._compute_both, self._apply_both, merge=_either,
+                name='ground-cover')
+        return self._worker
+
+    def wait(self, timeout: Optional[float] = None) -> bool:
+        """Wait for a background scatter to finish; whether it did in time.
+
+        What it made is staged by the next :meth:`update`. A cover scattering
+        in line has nothing to wait for.
+        """
+        return True if self._worker is None else bool(self._worker.wait(timeout))
+
+    def shutdown(self) -> None:
+        """Stop the background scatter's thread, if there is one."""
+        if self._worker is not None:
+            self._worker.stop()
+            self._worker = None
+
+
+def _either(old: tuple, new: tuple) -> tuple:
+    """Two scatter requests as one: the newer place, and either's rungs."""
+    return (new[0], new[1], old[2] or new[2], old[3] or new[3])
 
 
 def _band(value: Any, limits: Any) -> Any:

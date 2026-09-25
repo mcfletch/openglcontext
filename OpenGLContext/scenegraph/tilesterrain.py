@@ -277,8 +277,10 @@ class TilesTerrain(Group):
         mask = (control_weight(self.ground.control, wanted,
                                self.ground.layers, self.field.extent)
                 if wanted else None)
+        # Scattered on a worker: a streamed world is driven or flown over,
+        # and the ground newly reached is scattered every few frames.
         self.cover = GroundCover(self.field, species, mask=mask,
-                                 shade=self.ground.shade)
+                                 shade=self.ground.shade, background=True)
 
     def update_for_camera(self, camera: Any, viewport_height: float,
                           max_sse: Optional[float] = None,
@@ -309,10 +311,21 @@ class TilesTerrain(Group):
         return drawables
 
     def wait_for_loads(self, timeout: float = 5.0) -> Any:
-        return self.runtime.wait_for_loads(timeout=timeout)
+        """Wait for the tiles asked for, and the cover's scatter, to be ready.
+
+        Answers what the tile runtime's own wait answers. What the cover
+        scattered is staged by the next :meth:`update_for_camera`.
+        """
+        loaded = self.runtime.wait_for_loads(timeout=timeout)
+        if self.cover is not None:
+            self.cover.wait(timeout)
+        return loaded
 
     def shutdown(self) -> None:
+        """Stop the tile loaders and the cover's scatter thread."""
         self.runtime.shutdown()
+        if self.cover is not None:
+            self.cover.shutdown()
 
 
 def _facing(view_projection: Any) -> Any:

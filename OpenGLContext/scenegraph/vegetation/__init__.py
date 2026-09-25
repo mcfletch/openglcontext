@@ -7,6 +7,8 @@
 - :func:`world_grid_scatter` — world-anchored jittered scatter for pop-free
   camera-following grass fields, and :class:`ScatterBlocks`, the same scatter
   kept by the block so each piece of ground is scattered once.
+- :class:`~OpenGLContext.scenegraph.vegetation.streaming.BackgroundCompute` --
+  a camera-following field's recompute on a worker thread.
 - :class:`VegetationField` and :class:`TreeSpecies` — a whole forest as one
   node: the table of trees, the species they are drawn from, and the selection
   that keeps the near geometry and the far cards fed as the camera moves.

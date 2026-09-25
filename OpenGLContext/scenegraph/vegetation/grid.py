@@ -63,7 +63,10 @@ def _salted(seed: np.uint32, salt: int) -> np.uint32:
     itself, because ``_mix32(0)`` is 0: an unsalted scatter is the scatter that
     was there before there were salts to ask for.
     """
-    return np.uint32(seed ^ _mix32(np.uint32(salt & 0xFFFFFFFF)))
+    # Mixed as a one-element array: array arithmetic wraps silently, where
+    # numpy's scalar arithmetic reports the wrap the hash is made of.
+    mixed = _mix32(np.array([salt & 0xFFFFFFFF], np.uint32))[0]
+    return np.uint32(seed ^ mixed)
 
 
 def _cell_hash(I: np.ndarray, J: np.ndarray, seed: np.uint32) -> np.ndarray:
@@ -256,15 +259,18 @@ def _scatter_cells(i0: int, i1: int, j0: int, j1: int, s: float,
     return pos, yaw, sca
 
 
-#: How many grid cells along each side a block of :class:`ScatterBlocks` holds.
-BLOCK_CELLS = 32
+#: How wide a block of :class:`ScatterBlocks` is, in metres: whole cells, and
+#: never fewer than :data:`BLOCK_CELLS_LEAST` of them along a side. Wide enough
+#: that the fixed cost of scattering a block is small beside its plants.
+BLOCK_METRES = 32.0
+BLOCK_CELLS_LEAST = 16
 
 
 class ScatterBlocks:
     """:func:`world_grid_scatter` kept by the block, so each place is scattered once.
 
-    The world's grid is cut into square blocks of :data:`BLOCK_CELLS` cells a
-    side. :meth:`disc` answers the scatter of a disc from the blocks it
+    The world's grid is cut into square blocks of whole cells, about
+    :data:`BLOCK_METRES` wide. :meth:`disc` answers the scatter of a disc from the blocks it
     reaches, scattering a block the first time it is reached and keeping it,
     so a camera moving over the ground pays for the ground it newly reaches
     and nothing it has already passed over. The answer is the same set of
@@ -296,6 +302,9 @@ class ScatterBlocks:
                  finish: Optional[Callable[..., tuple]] = None) -> None:
         self.density = float(density)
         self.cell = 1.0 / math.sqrt(self.density)
+        #: How many cells along a side a block holds, and how wide that is.
+        self.cells = max(BLOCK_CELLS_LEAST, int(round(BLOCK_METRES / self.cell)))
+        self.span = self.cells * self.cell
         self.height_field = height_field
         self.scale_mul = scale_mul
         self.jitter = jitter
@@ -317,9 +326,9 @@ class ScatterBlocks:
     def _block(self, bi: int, bj: int) -> tuple:
         found = self._blocks.get((bi, bj))
         if found is None:
-            i0, j0 = bi * BLOCK_CELLS, bj * BLOCK_CELLS
+            i0, j0 = bi * self.cells, bj * self.cells
             found = _scatter_cells(
-                i0, i0 + BLOCK_CELLS - 1, j0, j0 + BLOCK_CELLS - 1, self.cell,
+                i0, i0 + self.cells - 1, j0, j0 + self.cells - 1, self.cell,
                 self.height_field, self.scale_mul, self.jitter, self.mask,
                 self.salt, self.scale_range)
             if self.finish is not None:
@@ -330,7 +339,7 @@ class ScatterBlocks:
 
     def disc(self, cx: float, cz: float, radius: float) -> tuple:
         """The instances within ``radius`` of ``(cx, cz)``, as the scatter gives them."""
-        span = self.cell * BLOCK_CELLS
+        span = self.span
         # A cell's instance lands up to half a cell of jitter from the cell.
         reach = radius + self.cell * max(self.jitter, 1.0) / 2.0
         wanted = [self._block(bi, bj)
