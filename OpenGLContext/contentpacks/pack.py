@@ -55,8 +55,9 @@ class ContentPack:
     family: str | None = None
     #: Keys of packs this one is incomplete without.
     needs: tuple[str, ...] = ()
-    #: A PEP 440 specifier on the version of the application that reads it, so
-    #: content built against a later format is declined rather than loaded.
+    #: A PEP 440 specifier on the version of the application that reads it.
+    #: :func:`~OpenGLContext.contentpacks.catalog.for_version` declines a pack
+    #: whose specifier excludes the application's version.
     requires: str = ''
     #: A sentence about what it is, for a download or notices screen.
     notes: str = ''
@@ -73,6 +74,17 @@ class ContentPack:
     def namespace(self) -> str:
         """The registry this pack may be declared by."""
         return self.key.split('/', 1)[0]
+
+    def readable_by(self, version: str) -> bool:
+        """Whether an application at ``version`` reads this pack.
+
+        True where the pack states no ``requires``. A pre-release of the
+        application counts as its version, so ``>=2.0`` admits ``2.1.0a1``.
+        """
+        if not self.requires:
+            return True
+        from packaging.specifiers import SpecifierSet
+        return SpecifierSet(self.requires).contains(version, prereleases=True)
 
     def human_size(self) -> str:
         """The download size as the user should read it."""

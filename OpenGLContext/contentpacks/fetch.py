@@ -23,9 +23,11 @@ test.
 
 from __future__ import annotations
 
+import http.client
 import logging
 import os
 import threading
+import urllib.parse
 from typing import Any, Callable, Sequence
 
 from OpenGLContext.loaders import resolver
@@ -73,8 +75,9 @@ class Cancelled(Exception):
 #: Past a cap: too much to download, or too much to unpack to. One class for
 #: both, and :mod:`~OpenGLContext.contentpacks.archive` owns it, so a caller
 #: reporting "the content did not arrive" catches one thing. The resolver states
-#: an over-cap download as a ``ValueError``, which is right for a size limit in
-#: general and wrong for one of several ways one fetch can fail.
+#: an over-cap download as :class:`~OpenGLContext.loaders.resolver.ResourceTooLarge`,
+#: a ``ValueError``, which is right for a size limit in general and wrong for
+#: one of several ways one fetch can fail.
 TooLarge = archive.TooLarge
 
 
@@ -122,6 +125,10 @@ def fetch_registry(url: str, store: ContentStore, progress: Any = None,
     a bad URL or a publisher's typo cannot stop the store's other registries
     loading.
     """
+    scheme = urllib.parse.urlsplit(url).scheme.lower()
+    if scheme != 'https' and not (scheme == 'http' and resolver.is_local(url)):
+        raise IOError('a registry is fetched over https, and %s is not an '
+                      'https URL' % (resolver.safe_url(url),))
     log.info('fetching the registry at %s', resolver.safe_url(url))
     try:
         downloaded = resolver.fetch_to_cache(
@@ -130,10 +137,13 @@ def fetch_registry(url: str, store: ContentStore, progress: Any = None,
             redirects=resolver.PUBLIC_HOSTS)
     except resolver.FetchCancelled as error:
         raise Cancelled(str(error)) from error
-    except ValueError as error:
+    except resolver.ResourceTooLarge as error:
         raise TooLarge('the registry at %s is over the %d bytes a registry is '
                        'fetched under: %s' % (resolver.safe_url(url),
                                               REGISTRY_LIMIT, error)) from error
+    except http.client.HTTPException as error:
+        raise IOError('the registry at %s did not arrive: %r'
+                      % (resolver.safe_url(url), error)) from error
     kept = store.registry_path(url)
     packs = catalog.load_bundle(downloaded, store.unpacked_registry(kept))
     store.keep_registry(downloaded, url)
@@ -213,12 +223,15 @@ def _download(pack: ContentPack, cache_dir: str | None,
             redirects=resolver.PUBLIC_HOSTS)
     except resolver.FetchCancelled as error:
         raise Cancelled(str(error)) from error
-    except ValueError as error:
-        # The one ValueError this path can reach: the resolver's size check.
+    except resolver.ResourceTooLarge as error:
         raise TooLarge('%s is larger than the %d bytes its declared size of %s '
                        'allows: %s' % (pack.key,
                                        fetch_limit(pack.approximate_bytes),
                                        pack.human_size(), error)) from error
+    except http.client.HTTPException as error:
+        # A transfer cut short (IncompleteRead) or a URL http.client will not
+        # send; an IOError, like every other way the content does not arrive.
+        raise IOError('%s did not arrive: %r' % (pack.key, error)) from error
 
 
 def _evict(path: str) -> None:

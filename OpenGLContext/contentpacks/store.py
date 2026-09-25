@@ -94,7 +94,7 @@ class ContentStore:
         so a second track carrying the same art costs disk and no download.
         """
         owner = within if within is not None else pack
-        return os.path.join(self.root, PACKS, owner.namespace, owner.directory)
+        return os.path.join(self.root, PACKS, *_place(owner))
 
     def root_for(self, pack: ContentPack,
                  within: ContentPack | None = None) -> str | None:
@@ -119,7 +119,7 @@ class ContentStore:
         """
         owner = within if within is not None else pack
         for base in self.search:
-            where = os.path.join(base, owner.namespace, owner.directory)
+            where = os.path.join(base, *_place(owner))
             if _unpacked(where, pack.marker):
                 return where
         where = self.directory_for(pack, within)
@@ -297,6 +297,15 @@ def _from_environment() -> list[str]:
     """The directories :data:`CONTENT_OVERRIDE` names, if any."""
     named = os.environ.get(CONTENT_OVERRIDE, '')
     return [part for part in named.split(os.pathsep) if part]
+
+
+def _place(pack: ContentPack) -> tuple[str, str]:
+    """The namespace and directory a pack's content is under, without case.
+
+    A filesystem that ignores case -- macOS's by default, and Windows' -- makes
+    ``Glisteel`` and ``glisteel`` one directory, so they are one everywhere.
+    """
+    return pack.namespace.casefold(), pack.directory.casefold()
 
 
 def _unpacked(where: str, marker: str) -> bool:

@@ -327,3 +327,126 @@ class TestWhatIsWorthOffering:
             self, tmp_path) -> None:
         packs = catalog.merge(catalog.load(registry(tmp_path)))
         assert catalog.offered(packs) == packs
+
+
+class TestAValueOfTheWrongType:
+    """JSON types are checked, not coerced: ``bool("false")`` is True."""
+
+    @pytest.mark.parametrize('entry', [
+        {'base': 'false', 'sha256': 'ab' * 32},
+        {'base': 1, 'sha256': 'ab' * 32},
+        {'needs': 'glisteel/art'},
+        {'needs': [7]},
+        {'needs': ['not a key']},
+        {'approximate_bytes': True},
+        {'approximate_bytes': 1.9},
+        {'approximate_bytes': '12'},
+        {'title': None},
+        {'title': ''},
+        {'family': 7},
+        {'copyright': ['x']},
+        {'requires': 5},
+        {'notes': 3},
+        {'url_page': False},
+        {'sha256': 12},
+        {'marker': 7},
+        {'marker': 'a/../../b'},
+        {'marker': '/etc'},
+    ])
+    def test_it_is_refused(self, tmp_path, entry) -> None:
+        with pytest.raises(catalog.BadCatalog):
+            catalog.load(registry(tmp_path, entry))
+
+    def test_a_name_with_two_dots_in_it_is_a_marker(self, tmp_path) -> None:
+        pack, = catalog.load(registry(tmp_path, {'marker': 'v1..2.glb'}))
+        assert pack.marker == 'v1..2.glb'
+
+
+class TestWhereAPackComesFrom:
+    def test_plain_http_with_no_digest_is_refused(self, tmp_path) -> None:
+        """Anyone on the path could replace it."""
+        with pytest.raises(catalog.BadCatalog):
+            catalog.load(registry(
+                tmp_path, {'url': 'http://example.org/ashdown.tar.gz'}))
+
+    def test_plain_http_with_a_digest_is_accepted(self, tmp_path) -> None:
+        pack, = catalog.load(registry(
+            tmp_path, {'url': 'http://example.org/ashdown.tar.gz',
+                       'sha256': 'ab' * 32}))
+        assert pack.url.startswith('http://')
+
+    def test_plain_http_on_this_machine_is_accepted(self, tmp_path) -> None:
+        pack, = catalog.load(registry(
+            tmp_path, {'url': 'http://127.0.0.1:8000/ashdown.tar.gz'}))
+        assert pack.url.startswith('http://127.0.0.1')
+
+    @pytest.mark.parametrize('url', ['https://localhost:abc/x.tar.gz',
+                                     'https:///x.tar.gz',
+                                     'https://[::1/x.tar.gz'])
+    def test_a_url_that_does_not_parse_is_refused(self, tmp_path, url) -> None:
+        with pytest.raises(catalog.BadCatalog):
+            catalog.load(registry(tmp_path, {'url': url}))
+
+
+class TestNamesAFilesystemWouldMerge:
+    """macOS and Windows compare names without case, and Windows drops a
+    trailing dot, so two names that differ only there are one directory."""
+
+    @pytest.mark.parametrize('namespace', ['glisteel.', 'con', 'NUL',
+                                           'com1', 'lpt9.x'])
+    def test_a_namespace_windows_would_rename_is_refused(self, tmp_path,
+                                                         namespace) -> None:
+        with pytest.raises(catalog.BadCatalog):
+            catalog.load(registry(tmp_path, {'key': namespace + '/ashdown'},
+                                  namespace=namespace))
+
+    @pytest.mark.parametrize('directory', ['ashdown.', 'aux', 'Con.txt'])
+    def test_such_a_directory_is_refused(self, tmp_path, directory) -> None:
+        with pytest.raises(catalog.BadCatalog):
+            catalog.load(registry(tmp_path, {'directory': directory}))
+
+    def test_two_registries_differing_in_case_are_one_namespace(
+            self, tmp_path) -> None:
+        shipped = catalog.load(registry(tmp_path, name='a.json'))
+        added = catalog.load(registry(tmp_path, {'key': 'Glisteel/other',
+                                                 'directory': 'other'},
+                                      namespace='Glisteel', name='b.json'))
+        with pytest.raises(catalog.BadCatalog):
+            catalog.merge(shipped, added)
+
+    def test_the_store_puts_them_in_one_place_either_way(self, tmp_path):
+        from OpenGLContext.contentpacks.store import ContentStore
+        store = ContentStore('glisteel', root=str(tmp_path), search=[])
+        lower = ContentPack(**dict(ENTRY))
+        upper = ContentPack(**dict(ENTRY, key='GLISTEEL/ashdown',
+                                   directory='Ashdown'))
+        assert store.directory_for(lower) == store.directory_for(upper)
+
+
+class TestAPackForAnotherVersion:
+    """``requires`` is a PEP 440 specifier on the application's version."""
+
+    def test_one_that_is_not_a_specifier_is_refused(self, tmp_path) -> None:
+        with pytest.raises(catalog.BadCatalog):
+            catalog.load(registry(tmp_path, {'requires': 'three or later'}))
+
+    def test_a_version_it_names_reads_it(self, tmp_path) -> None:
+        pack, = catalog.load(registry(tmp_path, {'requires': '>=2.0,<3'}))
+        assert pack.readable_by('2.4.1')
+        assert not pack.readable_by('3.0.0a1')
+
+    def test_no_specifier_is_any_version(self, tmp_path) -> None:
+        pack, = catalog.load(registry(tmp_path))
+        assert pack.readable_by('0.1')
+
+    def test_the_packs_a_version_cannot_read_are_declined(
+            self, tmp_path) -> None:
+        packs = catalog.merge(catalog.load(registry(
+            tmp_path,
+            {'key': 'glisteel/old', 'directory': 'old'},
+            {'key': 'glisteel/new', 'directory': 'new', 'requires': '>=4'},
+            {'key': 'glisteel/uses-new', 'directory': 'uses',
+             'needs': ['glisteel/new']})))
+        assert [pack.key for pack in catalog.for_version(packs, '3.1')] == [
+            'glisteel/old']
+        assert len(catalog.for_version(packs, '4.0')) == 3

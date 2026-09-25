@@ -71,7 +71,10 @@ Registry fields
      - The name shown to the user.
    * - ``url``
      - yes
-     - Where the archive is, over http or https.
+     - Where the archive is, over https. Plain http is accepted only for a pack
+       with a ``sha256``, or on this machine (``localhost`` or a loopback
+       address); without either, anyone on the network path could replace the
+       archive.
    * - ``directory``
      - yes
      - The directory the pack unpacks into, under the store. One path segment.
@@ -116,8 +119,10 @@ Registry fields
        :ref:`Packs from other publishers <needs>`.
    * - ``requires``
      - no
-     - A PEP 440 version specifier for the application. A pack built for a later
-       format is declined rather than loaded.
+     - A PEP 440 version specifier for the application, such as ``">=2.0,<3"``.
+       ``catalog.for_version(packs, version)`` declines a pack whose specifier
+       excludes the application's version, and any pack that needs it. A
+       pre-release of the application counts as its version.
    * - ``preview``
      - no
      - A picture of the pack's content, as a path relative to the registry. ``.png``,
@@ -132,11 +137,17 @@ Registry fields
 .. rst-class:: technical
 
 Validation is strict. Any of these rejects the whole registry, with a reason:
-an unknown field, a missing required field, a size of zero, a digest that is
-not 64 hex digits, a ``directory`` that is a path rather than one segment, or
-a key outside the registry's namespace. The loader rejects the whole registry
-rather than skipping the bad pack, because a skipped pack would silently
-disappear from the list. The exception is ``catalog.BadCatalog``.
+an unknown field, a missing required field, a field of the wrong JSON type
+(``"base": "false"`` is text, not false; a size is a whole number; ``needs`` is
+a list of keys), a size of zero, a digest that is not 64 hex digits, a URL
+that does not parse, a ``requires`` that is not a version specifier, a
+``directory`` that is a path rather than one segment, a marker outside the
+pack, or a key outside the registry's namespace. A namespace or directory may
+not end in a dot or be a name Windows reserves for a device (``con``,
+``nul``, ``com1`` and the like), since Windows would store either under
+another name. The loader rejects the whole registry rather than skipping the
+bad pack, because a skipped pack would silently disappear from the list. The
+exception is ``catalog.BadCatalog``.
 
 .. _previews:
 
@@ -180,8 +191,8 @@ any content:
    packs = fetch.fetch_registry('https://example.org/tracks/registry.zip', store)
    # every pack's title, size, terms and picture, and no content
 
-The fetched bundle is kept in the store, so a later run finds it without the
-URL. ``store.load_registries()`` reads every added registry, bundled or not.
+The URL is https (plain http only on this machine). The fetched bundle is
+kept in the store, so a later run finds it without the URL. ``store.load_registries()`` reads every added registry, bundled or not.
 
 .. rst-class:: technical
 
@@ -207,7 +218,9 @@ names. An added registry cannot declare ``glisteel/ashdown``, so it cannot be
 loaded in place of the pack the application shipped.
 
 Content is stored by namespace on disk, at
-``<store>/packs/<namespace>/<directory>``. The registry format namespaces
+``<store>/packs/<namespace>/<directory>``, both in lower case, since macOS and
+Windows treat names differing only in case as one directory. Namespaces are
+compared the same way, so ``Glisteel`` and ``glisteel`` are one namespace. The registry format namespaces
 only the *key*; a registry can choose any ``directory``. Without separate
 namespace directories, an added registry could declare ``"directory":
 "ashdown"`` under a key of its own and overwrite a shipped track's files.

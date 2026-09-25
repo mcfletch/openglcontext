@@ -622,3 +622,20 @@ class TestAReleaseHostThatRedirects:
         packs = fetch.fetch_registry(front + '/registry.zip', store,
                                      cache_dir=cache)
         assert [one.key for one in packs] == ['contrib.x/hillclimb']
+
+
+class TestWhereARegistryMayComeFrom:
+    @pytest.mark.parametrize('url', ['http://example.invalid/registry.zip',
+                                     'file:///etc/hostname',
+                                     'ftp://example.invalid/registry.zip'])
+    def test_anything_but_https_off_this_machine_is_refused(
+            self, url, store, cache, monkeypatch) -> None:
+        """Refused before anything is asked of the network."""
+        from OpenGLContext.loaders import resolver
+        asked = []
+        monkeypatch.setattr(resolver, 'fetch_to_cache',
+                            lambda url, **named: asked.append(url))
+        with pytest.raises(IOError):
+            fetch.fetch_registry(url, store, cache_dir=cache)
+        assert asked == []
+        assert store.registries() == []

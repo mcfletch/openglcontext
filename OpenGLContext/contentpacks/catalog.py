@@ -26,16 +26,22 @@ credits.
 
 from __future__ import annotations
 
+import collections
 import json
 import os
 import re
+import urllib.parse
+from pathlib import PurePosixPath, PureWindowsPath
 from typing import Any, Iterable, Sequence
+
+from OpenGLContext.loaders import resolver
 
 from .pack import ContentPack
 
 __all__ = ['ARCHIVE_KINDS', 'BadCatalog', 'MANIFEST', 'OPTIONAL',
-           'PREVIEW_SUFFIXES', 'REGISTRY_LIMIT', 'REQUIRED', 'load',
-           'load_bundle', 'merge', 'offered', 'pack_for_key', 'with_needed']
+           'PREVIEW_SUFFIXES', 'REGISTRY_LIMIT', 'REQUIRED', 'for_version',
+           'load', 'load_bundle', 'merge', 'offered', 'pack_for_key',
+           'with_needed']
 
 #: What the registry document is called, on its own or inside a bundle.
 MANIFEST = 'packs.json'
@@ -74,10 +80,34 @@ REGISTRY_LIMIT = 16 * 1024 * 1024
 #: The file an unpacked bundle's directory holds its bundle's digest in.
 BUNDLE_DIGEST = '.bundle-sha256'
 
-_KEY = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$')
-_NAMESPACE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
-_SEGMENT = re.compile(r'^[A-Za-z0-9][A-Za-z0-9._-]*$')
+#: One name: a namespace, a directory, or either half of a key. No trailing dot,
+#: which Windows drops, so ``glisteel.`` would be ``glisteel`` on disk.
+_NAME = re.compile(r'^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9_-])?$')
 _DIGEST = re.compile(r'^[0-9a-f]{64}$')
+
+#: Names Windows gives to devices, with or without an extension after them.
+_RESERVED = frozenset(
+    ['con', 'prn', 'aux', 'nul']
+    + ['com%d' % (n,) for n in range(1, 10)]
+    + ['lpt%d' % (n,) for n in range(1, 10)])
+
+#: Fields holding text, and whether an empty string is allowed in each.
+_TEXT = {'title': False, 'url': False, 'directory': False, 'archive': False,
+         'copyright': True, 'marker': True, 'sha256': True, 'requires': True,
+         'notes': True, 'url_page': True, 'preview': True}
+
+
+def _is_name(value: Any) -> bool:
+    """Whether ``value`` can name a directory on every platform the same way."""
+    return (isinstance(value, str) and bool(_NAME.match(value))
+            and value.split('.', 1)[0].casefold() not in _RESERVED)
+
+
+def _is_key(value: Any) -> bool:
+    if not isinstance(value, str) or value.count('/') != 1:
+        return False
+    namespace, name = value.split('/')
+    return _is_name(namespace) and _is_name(name)
 
 
 class BadCatalog(ValueError):
@@ -106,7 +136,7 @@ def load(path: str) -> list[ContentPack]:
     if not isinstance(document, dict):
         raise BadCatalog('%s is not a content registry' % (path,))
     namespace = document.get('namespace')
-    if not isinstance(namespace, str) or not _NAMESPACE.match(namespace):
+    if not isinstance(namespace, str) or not _is_name(namespace):
         raise BadCatalog(
             '%s names no namespace. A registry declares the namespace its keys '
             'sit under, so that what it adds cannot answer for a pack the '
@@ -188,6 +218,25 @@ def pack_for_key(key: str, packs: Iterable[ContentPack]) -> ContentPack | None:
     return None
 
 
+def for_version(packs: Sequence[ContentPack],
+                version: str) -> list[ContentPack]:
+    """Those of ``packs`` an application at ``version`` can read, in order.
+
+    A pack whose ``requires`` excludes the version is declined, and so is a
+    pack that needs one that was, since it would arrive incomplete. Apply it
+    to what :func:`merge` returns, before anything is offered or fetched.
+    """
+    declined = {pack.key for pack in packs if not pack.readable_by(version)}
+    changed = True
+    while changed:
+        changed = False
+        for pack in packs:
+            if pack.key not in declined and declined.intersection(pack.needs):
+                declined.add(pack.key)
+                changed = True
+    return [pack for pack in packs if pack.key not in declined]
+
+
 def offered(packs: Sequence[ContentPack]) -> list[ContentPack]:
     """Those packs a chooser puts in front of somebody, in the order given.
 
@@ -203,26 +252,24 @@ def offered(packs: Sequence[ContentPack]) -> list[ContentPack]:
 
 
 def with_needed(pack: ContentPack,
-                    packs: Sequence[ContentPack]) -> list[ContentPack]:
+                packs: Sequence[ContentPack]) -> list[ContentPack]:
     """``pack`` and everything it is incomplete without, it first.
 
     What a user is asked to consent to, since fetching a map without the art it
     names leaves them looking at grey. A needed pack may name its own; a cycle
     is walked once.
     """
+    by_key = {one.key: one for one in packs}
     wanted: list[ContentPack] = []
     seen: set[str] = set()
-    pending = [pack]
+    pending = collections.deque([pack])
     while pending:
-        one = pending.pop(0)
+        one = pending.popleft()
         if one.key in seen:
             continue
         seen.add(one.key)
         wanted.append(one)
-        for key in one.needs:
-            needed = pack_for_key(key, packs)
-            if needed is not None:
-                pending.append(needed)
+        pending.extend(by_key[key] for key in one.needs if key in by_key)
     return wanted
 
 
@@ -235,10 +282,13 @@ def _refuse_shared_namespaces(groups: Sequence[Sequence[ContentPack]]) -> None:
     namespace on disk: two registries claiming a namespace would be two
     publishers writing into one tree. Refusing it makes trusting a second an
     explicit decision rather than something that happens quietly.
+
+    Compared without case, since the directory a namespace names is one
+    directory on a filesystem that ignores case.
     """
     seen: dict[str, int] = {}
     for index, group in enumerate(groups):
-        for namespace in {pack.namespace for pack in group}:
+        for namespace in {pack.namespace.casefold() for pack in group}:
             first = seen.setdefault(namespace, index)
             if first != index:
                 raise BadCatalog(
@@ -249,10 +299,10 @@ def _refuse_shared_namespaces(groups: Sequence[Sequence[ContentPack]]) -> None:
 def _refuse_repeats(packs: Sequence[ContentPack], where: str) -> None:
     seen: set[str] = set()
     for pack in packs:
-        if pack.key in seen:
+        if pack.key.casefold() in seen:
             raise BadCatalog('%s declares %r twice; a key names one pack'
                              % (where, pack.key))
-        seen.add(pack.key)
+        seen.add(pack.key.casefold())
 
 
 def _pack(entry: Any, path: str, namespace: str) -> ContentPack:
@@ -273,17 +323,40 @@ def _pack(entry: Any, path: str, namespace: str) -> ContentPack:
     for name, default in OPTIONAL.items():
         values[name] = entry.get(name, default)
 
+    _check_types(values, path)
     _check_key(values['key'], path, namespace)
+    _check_the_digest(values, path)
     _check_where_it_lands(values, path)
     _check_what_the_user_is_told(values, path)
-    _check_the_digest(values, path)
+    _check_the_version(values, path)
 
     values['preview'] = _resolve_preview(values, path)
-    values['approximate_bytes'] = int(values['approximate_bytes'])
-    values['needs'] = tuple(values['needs'] or ())
-    values['base'] = bool(values['base'])
-    values['sha256'] = str(values['sha256']).lower()
+    values['needs'] = tuple(values['needs'])
+    values['sha256'] = values['sha256'].lower()
     return ContentPack(**values)
+
+
+def _check_types(values: dict[str, Any], path: str) -> None:
+    """Each field is the JSON type it is declared as; nothing is coerced."""
+    def refuse(name: str, what: str) -> BadCatalog:
+        return BadCatalog('%s: pack %r has %r as its %s, which is not %s'
+                          % (path, values.get('key'), values[name], name, what))
+
+    for name, empty in _TEXT.items():
+        value = values[name]
+        if not isinstance(value, str) or not (empty or value.strip()):
+            raise refuse(name, 'text' if empty else 'non-empty text')
+    if not isinstance(values['base'], bool):
+        raise refuse('base', 'true or false')
+    if values['family'] is not None and not isinstance(values['family'], str):
+        raise refuse('family', 'text')
+    size = values['approximate_bytes']
+    if isinstance(size, bool) or not isinstance(size, int):
+        raise refuse('approximate_bytes', 'a whole number of bytes')
+    needs = values['needs']
+    if not isinstance(needs, (list, tuple)) or not all(
+            _is_key(key) for key in needs):
+        raise refuse('needs', 'a list of pack keys')
 
 
 def _resolve_preview(values: dict[str, Any], path: str) -> str:
@@ -308,8 +381,8 @@ def _resolve_preview(values: dict[str, Any], path: str) -> str:
         raise BadCatalog(
             '%s: pack %r has %r as its preview, and a chooser shows %s'
             % (path, values['key'], named, ' or '.join(PREVIEW_SUFFIXES)))
-    root = os.path.abspath(os.path.dirname(path))
-    where = os.path.abspath(os.path.join(root, named))
+    root = os.path.realpath(os.path.dirname(path))
+    where = os.path.realpath(os.path.join(root, named))
     if os.path.isabs(named) or not where.startswith(root + os.sep):
         raise BadCatalog(
             '%s: pack %r names %r as its preview, which is outside the '
@@ -318,7 +391,7 @@ def _resolve_preview(values: dict[str, Any], path: str) -> str:
 
 
 def _check_key(key: Any, path: str, namespace: str) -> None:
-    if not isinstance(key, str) or not _KEY.match(key):
+    if not _is_key(key):
         raise BadCatalog(
             '%s: %r is not a pack key. A key is <namespace>/<name>.'
             % (path, key))
@@ -330,17 +403,30 @@ def _check_key(key: Any, path: str, namespace: str) -> None:
 
 
 def _check_where_it_lands(values: dict[str, Any], path: str) -> None:
-    """The two fields that decide what is fetched and where it is written."""
+    """The fields that decide what is fetched and where it is written.
+
+    A URL is https, or plain http where the bytes are checked by a digest or
+    never leave this machine: without either, anyone on the path could replace
+    the archive, and what it holds is loaded as content.
+    """
     url = values['url']
-    if not isinstance(url, str) or not url.startswith(('http://', 'https://')):
+    parts = _parsed(url)
+    if (parts is None or parts.scheme not in ('http', 'https')
+            or not parts.hostname):
         raise BadCatalog(
             '%s: pack %r names %r. A registry says what to fetch, so a URL is '
-            'http or https.' % (path, values['key'], url))
+            'http or https and names a host.' % (path, values['key'], url))
+    if (parts.scheme == 'http' and not values['sha256']
+            and not resolver.is_local(url)):
+        raise BadCatalog(
+            '%s: pack %r is fetched over plain http with no sha256, so anyone '
+            'on the way could replace it. Use https, or state its digest.'
+            % (path, values['key']))
     directory = values['directory']
-    if not isinstance(directory, str) or not _SEGMENT.match(directory):
+    if not _is_name(directory):
         raise BadCatalog(
             '%s: pack %r unpacks into %r. That is joined against the store, so '
-            'it is one path segment and not a path.'
+            'it is one path segment and a name every platform keeps as it is.'
             % (path, values['key'], directory))
     if values['archive'] not in ARCHIVE_KINDS:
         raise BadCatalog(
@@ -348,32 +434,53 @@ def _check_where_it_lands(values: dict[str, Any], path: str) -> None:
             % (path, values['key'], values['archive'],
                ' and '.join(ARCHIVE_KINDS)))
     marker = values['marker']
-    if not isinstance(marker, str) or os.path.isabs(marker) or '..' in marker:
+    if marker and any(
+            flavour.is_absolute() or '..' in flavour.parts
+            for flavour in (PurePosixPath(marker), PureWindowsPath(marker))):
         raise BadCatalog('%s: pack %r has %r as its marker, which is not a '
                          'path inside it' % (path, values['key'], marker))
 
 
+def _parsed(url: str) -> urllib.parse.SplitResult | None:
+    """``url`` split into its parts, or None where it does not parse -- an
+    unclosed IPv6 bracket, or a port that is not a number."""
+    try:
+        parts = urllib.parse.urlsplit(url)
+        if parts.port is not None and not 0 < parts.port < 65536:
+            return None
+    except ValueError:
+        return None
+    return parts
+
+
 def _check_what_the_user_is_told(values: dict[str, Any], path: str) -> None:
     """The two fields a user reads before consenting to a download."""
-    if not str(values['copyright']).strip():
+    if not values['copyright'].strip():
         raise BadCatalog(
             '%s: pack %r states no copyright. A notices screen is generated '
             'from that field, so a pack without one would be offered for '
             'download and never credited.' % (path, values['key']))
-    try:
-        size = int(values['approximate_bytes'])
-    except (TypeError, ValueError) as error:
-        raise BadCatalog('%s: pack %r has %r as its size'
-                         % (path, values['key'],
-                            values['approximate_bytes'])) from error
-    if size <= 0:
+    if values['approximate_bytes'] <= 0:
         raise BadCatalog('%s: pack %r states no size, and the user is asked to '
                          'consent to one' % (path, values['key']))
 
 
+def _check_the_version(values: dict[str, Any], path: str) -> None:
+    """``requires`` is a PEP 440 specifier, or empty."""
+    if not values['requires']:
+        return
+    from packaging.specifiers import InvalidSpecifier, SpecifierSet
+    try:
+        SpecifierSet(values['requires'])
+    except InvalidSpecifier as error:
+        raise BadCatalog('%s: pack %r requires %r, which is not a version '
+                         'specifier such as ">=2.0,<3"'
+                         % (path, values['key'], values['requires'])) from error
+
+
 def _check_the_digest(values: dict[str, Any], path: str) -> None:
     """``sha256``, and the two things a ``base`` pack additionally owes."""
-    digest = str(values['sha256'] or '')
+    digest = values['sha256']
     if digest and not _DIGEST.match(digest.lower()):
         raise BadCatalog('%s: pack %r has %r as its sha256, which is not 64 '
                          'hex digits' % (path, values['key'], digest))

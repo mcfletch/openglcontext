@@ -31,10 +31,10 @@ implementation somewhere else is a containment rule with a hole in it.
 """
 
 __all__ = [
-    'Resolver', 'FetchCancelled', 'Progress', 'Cancel',
+    'Resolver', 'FetchCancelled', 'ResourceTooLarge', 'Progress', 'Cancel',
     'RedirectPolicy', 'SameOrigin', 'PublicHosts', 'SAME_ORIGIN', 'PUBLIC_HOSTS',
     'DEFAULT_MAX_RESOURCE_BYTES', 'DEFAULT_MAX_IMAGE_PIXELS', 'DOWNLOAD_CHUNK_BYTES',
-    'safe_url', 'is_url', 'require_host', 'user_agent', 'check_size', 'check_pixels', 'decode_data_uri', 'resolver_max',
+    'safe_url', 'is_url', 'is_local', 'require_host', 'user_agent', 'check_size', 'check_pixels', 'decode_data_uri', 'resolver_max',
     'fetch_url', 'fetch_to_cache', 'stream_capped', 'cached_path', 'purge_cache',
 ]
 
@@ -290,6 +290,22 @@ class PublicHosts(RedirectPolicy):
         return None
 
 
+def is_local(url: str) -> bool:
+    """Whether ``url`` names this machine: ``localhost`` or a loopback address.
+
+    Read off the URL alone, without asking DNS, for a check made where content
+    is declared rather than fetched: plaintext to this machine crosses no
+    network anyone could be on.
+    """
+    host = (urllib.parse.urlsplit(url).hostname or '').lower()
+    if host == 'localhost':
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 def _is_loopback(url: str) -> bool:
     """Whether every address ``url``'s host names is on this machine."""
     addresses = _addresses(urllib.parse.urlsplit(url).hostname or '')
@@ -374,9 +390,18 @@ def _resolve_local(base_dir: str, uri: str) -> str:
     return full
 
 
+class ResourceTooLarge(ValueError):
+    """A resource is larger than the cap it was fetched or decoded under.
+
+    A ``ValueError``, as a limit on a value is; its own class so a caller that
+    reports the ways one fetch can fail catches this and nothing else.
+    """
+
+
 def check_size(nbytes: int, max_bytes: Optional[int], what: str) -> None:
+    """Raise :class:`ResourceTooLarge` where ``nbytes`` is over ``max_bytes``."""
     if max_bytes is not None and nbytes > max_bytes:
-        raise ValueError(
+        raise ResourceTooLarge(
             "resource %s is %d bytes, over the %d-byte limit"
             % (what, nbytes, max_bytes))
 

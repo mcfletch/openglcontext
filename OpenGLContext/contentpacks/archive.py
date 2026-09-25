@@ -245,7 +245,7 @@ def check_digest(path: str, expected: str) -> None:
 
 def _extract_zip(path: str, directory: str, max_bytes: int | None,
                  max_entries: int, cancel: resolver.Cancel | None) -> None:
-    root = os.path.abspath(directory)
+    root = os.path.realpath(directory)
     budget = _Budget(path, max_bytes, max_entries)
     try:
         with zipfile.ZipFile(path) as zip_file:
@@ -291,7 +291,7 @@ def _extract_tar(path: str, directory: str, max_bytes: int | None,
     stopping at the first overrun is what bounds the work as well as the disk.
     """
     _require_filters(path)
-    root = os.path.abspath(directory)
+    root = os.path.realpath(directory)
     budget = _Budget(path, max_bytes, max_entries)
     try:
         with tarfile.open(path) as tar:
@@ -317,7 +317,7 @@ def _extract_tar(path: str, directory: str, max_bytes: int | None,
 
 def _refuse_escape(name: str, root: str, directory: str) -> None:
     """Refuse ``name`` unless it resolves to somewhere inside ``root``."""
-    target = os.path.abspath(os.path.join(root, name))
+    target = os.path.realpath(os.path.join(root, name))
     if os.path.isabs(name) or not (target == root
                                    or target.startswith(root + os.sep)):
         raise UnsafeArchive('archive entry %r would be written outside %s'
