@@ -1,6 +1,6 @@
 # Defect prevention: gates for the defect classes the reviews keep finding
 
-Status: In progress. Items 1, 2 and 5 of the order of work are done (see [Baseline, ruff rules](#baseline-ruff-rules), [Baseline, OGC rules](#baseline-ogc-rules) and [The post-edit gates](#the-post-edit-gates)); items 3, 4, 6 and 7 are under way.
+Status: In progress. Items 1, 2 and 5 of the order of work are done (see [Baseline, ruff rules](#baseline-ruff-rules), [Baseline, OGC rules](#baseline-ogc-rules) and [The post-edit gates](#the-post-edit-gates)); items 3, 4, 6 and 7 are under way and parked (see [Parked, 2026-09-25](#parked-2026-09-25)).
 
 ## Why
 
@@ -675,6 +675,53 @@ findings on standard error otherwise, and as a git pre-commit hook
 in `tools/editcheck.py`'s docstring). `--staged` checks the working-tree copy
 of each staged file, not the staged copy. The Claude hook names
 `.venv/bin/python`, so it does not run on Windows as written.
+
+## Parked, 2026-09-25
+
+Work stopped on a session limit with items 3, 4, 6 and part of 7 mid-change.
+Everything finished is committed; what is below is uncommitted in the working
+trees, as the agents left it, and may not pass its gates yet. Each change is
+to be finished (tests, gates) or discarded by whoever resumes it; nothing here
+is to be committed as it stands without its tests passing.
+
+- openglcontext (items 3, 4, 6): the checked types and `JSONObject` in the
+  loaders, tiles3d manifest and tileset, hooks, vegetation, contentpacks
+  catalog and viewer (item 4, which also owns openglcontext's OGC111 hits and
+  the mypy plugin, whose first commit is in openglcontext-checks as 192e7ba);
+  `OpenGLContext/testing/layers.py` and `testing/scenes.py`, new and
+  untracked (item 6's failing-layer driver and still-frame scenes). Item 3's
+  rules OGC101, OGC102, OGC111, OGC121 and OGC151 are committed in
+  openglcontext-checks; openglcontext's `select` does not yet name them, and
+  its hits (OGC121 has about 40) are unresolved. The edits to
+  `docs/_static/oglc.css` and `docs/structure.rst` predate this work and are
+  not the agents'.
+- Item 7, ruff ratchets. Done and committed: opengl_extrusions, ttfquery,
+  pydispatcher, simpleparse, omi_audio, opengl_decimate, pyopengl-video,
+  pyvrml97, pyopengl-glut-binaries, marble-editor, openglcontext-checks (all
+  but PLC0415, one import in `tests/test_config.py`), openglcontext-forest,
+  openglcontext-qt. Mid-change, uncommitted: omi_physics (about 20 files; the
+  suite in both accelerator modes and the CHANGELOG were next),
+  openglcontext-editor (about 90 files; unused-argument fixes in the tests
+  were next), glisteel (about 47 files), glisteel-editor (about 19),
+  twig-bb (5; SLF001 was next). Not started: marble-demo (make
+  `level.Wall._OFFSET` public there, which removes the editor's one noqa),
+  and openglcontext itself, which waits for items 3, 4 and 6. pyopengl was
+  started (a generator fix was next); its working tree also holds the
+  maintainer's own uncommitted work, which is not part of this.
+- Engine APIs the applications need, found by item 7: a public way to stage
+  `InstancedMeshLOD.compute_pending()`'s result (the forest assigns
+  `_pending`, as the engine's docstring says to), and a public on/off switch
+  for the instanced vegetation and terrain nodes (a profiling tool sets
+  `_disabled`).
+- Maintainer questions raised along the way: ttfquery's `Registry.load`,
+  `save` and `describe.openFont` leave files open, and its `.coverage` is
+  committed; pydispatcher's `BoundMethodWeakref.__new__` signature change
+  wants a release note, and its CI could now lint; simpleparse's three
+  unused public keywords and its `_generator` alias; omi_audio's
+  `impact_clip(tuning)`; pyvrml97's two new deprecations and the
+  `Lineariser` renames need a changelog; pyopengl-video's Windows interop
+  change is untested on Windows; the forest's `showMenu`/`closeMenu`/
+  `showCredits` event parameters.
 
 ## Decided
 
