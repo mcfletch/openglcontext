@@ -56,6 +56,65 @@ importing the same names.
        not in a system temporary directory that every account can write to, so
        another account cannot plant a cache entry that this user then loads.
 
+.. _checked-types:
+
+The checked types
+~~~~~~~~~~~~~~~~~
+
+What passed a check is said by its type, so a function that needs a checked
+value cannot be handed an unchecked one:
+
+.. list-table::
+   :widths: auto
+   :header-rows: 1
+
+   * - Type
+     - Made by
+     - Taken by
+   * - ``ContainedPath``: a local path held to a directory, with no ``..``
+       and no link leading out
+     - ``contain(base, name)``, ``Resolver.resolve`` and ``Resolver.contain``
+       for a document read from a file, ``contained_source(path)`` for a path
+       your code names, the download cache
+     - ``read_contained``, ``open_contained``, ``tiles3d.fetch.read_bytes``,
+       the loaders' own openers
+   * - ``CheckedURL``: an http(s) URL put to the check its source needs
+     - ``checked_url`` (the scheme), ``require_host`` and
+       ``AllowedHosts.check`` (a service's hosts), ``Resolver.resolve`` for a
+       served document (its origin)
+     - ``open_url``, ``fetch_url``, ``fetch_to_cache``,
+       ``tiles3d.fetch.local_copy``
+   * - ``Located``
+     - either of the above: ``checked_source(source)`` for a path or URL your
+       code names, ``tiles3d.fetch.resolve_uri`` and ``beside``
+     - ``tiles3d.fetch.read_bytes`` and ``local_copy``
+
+Both are ``str`` subclasses, so a checked value goes anywhere a string does.
+A path built from one (joined, concatenated) is a plain ``str`` again, and
+one read back from a pickle is a plain ``str``. Their constructor takes a key
+the resolver module holds, so ``ContainedPath('/etc/passwd')`` raises
+``TypeError``; the mypy plugin in ``openglcontext-checks`` reports such a
+construction where it is written (see :doc:`checks`).
+
+The load operations you call -- ``load``, ``load_gltf``, ``Resolver.fetch``,
+``TilesTerrain``, a node's ``url`` field, ``oglc-view``'s argument -- take a
+string and pass it through ``checked_source`` or
+``contained_source`` once. A path your code names is contained by its own
+directory; a URL must be http(s). Only the functions below them take the
+checked types, and a loader of your own built on the resolver does the same:
+take the string at the top, check it once, and hand the checked value down.
+
+A document's values are typed as well. Every reader of a JSON document here
+answers a ``JSONObject`` (``Mapping[str, object]``), so a value taken out of
+one is an ``object`` that mypy refuses to use as a number, a string or a table
+until it is narrowed. ``OpenGLContext.loaders.documentvalues`` narrows:
+``DocumentValues.number``, ``integer``, ``flag``, ``choice``, ``vector``,
+``mapping``, ``array``, ``text`` and ``texts`` report a value they cannot use
+once and answer the default; ``require_object``, ``require_array``,
+``require_number``, ``require_numbers``, ``require_text``, ``require_whole``,
+``require_index`` and ``require_item`` refuse a part the document cannot be
+read without with ``DocumentError``, a ``ValueError`` naming the part.
+
 .. _answers:
 
 A URL returned by a service
@@ -66,7 +125,7 @@ an asset is, and the service replies with a link. Treat that reply as
 untrusted data too. A compromised, misconfigured or faulty service can reply
 with a local address, an unencrypted ``http`` link, or a ``file://`` path.
 Check the link with ``resolver.require_host(url, hosts)``, where ``hosts`` are
-the host names the provider serves files from. List them in your code in
+the host names the provider serves files from; it answers a ``CheckedURL``. List them in your code in
 advance: they are a fact about the provider, not about the reply.
 ``require_host`` requires ``https`` and compares the parsed host name exactly.
 It refuses a host that only *ends* in an allowed name, a host hidden in the

@@ -103,8 +103,12 @@ OpenGLContext/
 ├── loaders/          # File formats into the scenegraph -- docs/loading.rst, gltf.rst, vrml97.rst
 │   ├── background.py # The pool a url field hands its fetch to, and the rule
 │   │                 # that its imports are made by the submitting thread
-│   ├── documentvalues.py  # A document's numbers, flags and names, checked:
-│   │                 # a default or a bound and one report, never a raise
+│   ├── documentvalues.py  # A document's values, checked: JSONObject, a
+│   │                 # default or a bound and one report, or DocumentError
+│   │                 # for a part the document cannot be read without
+│   ├── resolver.py   # Where a document's references may lead; ContainedPath
+│   │                 # and CheckedURL, and the openers that take only them
+│   │                 # -- docs/untrusted.rst
 │   ├── gltf/         # glTF 2.0 / GLB
 │   │   ├── lod.py    # MSFT_lod: a node's coarser levels, and when each is
 │   │   │             # worth drawing -- docs/gltf.rst#lod. Making them is
@@ -244,7 +248,8 @@ OpenGLContext/
 ├── renderoptions.py  # How a pass reads a rendering feature from the definition
 ├── screenshot.py     # The F2 key every context binds -- docs/capturing.rst
 ├── swapcontrol.py    # Waiting for the refresh, for backends that name nothing
-├── contextresources.py   # Caches let go of a GL context's names as it dies
+├── contextresources.py   # Caches let go of a GL context's names as it dies;
+│                         # ContextKey, what a per-context table keys on
 ├── contextdefinition.py  # The fields a context is configured by
 ├── context.py        # Base context class
 ├── glfwcontext.py, glutcontext.py, pygamecontext.py, tkcontext.py,

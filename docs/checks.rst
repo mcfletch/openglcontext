@@ -103,6 +103,38 @@ findings. A run that names its own test files leaves them out unless
 ``--oglc-check`` is given. Installing the package without the ``-p`` option
 changes nothing.
 
+Checked types, in mypy
+----------------------
+
+The package also ships a mypy plugin. The engine's checked types --
+``ContainedPath`` and ``CheckedURL`` in ``OpenGLContext.loaders.resolver``,
+``ContextKey`` in ``OpenGLContext.contextresources`` -- are values whose type
+says a check was made (:ref:`checked-types`). mypy on its own accepts
+``ContainedPath(name)`` written anywhere; the plugin reports it.
+
+.. code-block:: toml
+
+   [tool.mypy]
+   plugins = ["openglcontext_checks.mypy_plugin"]
+
+   [tool.openglcontext-checks]
+   checked-types = ["mygame.levels.LevelKey"]       # your own, beside the engine's
+   contained-paths = ["mygame.levels.LevelPath"]    # paths a loader may open
+
+It reports, with the error code ``checked-construction``, a checked type made
+or subclassed outside the module that defines it; the engine's are reported
+in every project. In a module of the ``loader`` scope it reports, with the
+code ``unchecked-open``, a file opened (``open``, ``io.open``,
+``PIL.Image.open``, ``numpy.load`` and the other openers OGC111 reads) at a
+path whose type is not a contained path: a ``str``, ``bytes``, a
+``pathlib.Path`` or a value typed ``Any``. A string literal, a ``Literal``
+type, a file descriptor and an open file are accepted. Where mypy has a hook
+of its own for one of these calls, it still decides the call's type.
+
+The engine enables the plugin, so ``tools/preflight.py``'s typecheck of
+``openglcontext`` runs it. mypy imports the plugin, so
+``openglcontext-checks`` has to be installed where mypy runs.
+
 The rules and what to use instead
 ---------------------------------
 

@@ -38,6 +38,13 @@ material libraries, inlined scenes) against that document's own location, and
 only there; :doc:`Loading content you did not write <untrusted>` gives the
 rules.
 
+Each of these takes the path or URL as a string, checks it once
+(``resolver.checked_source``: a local path, or an http(s) URL), and hands the
+checked value to the readers below it, which accept nothing else (see
+:ref:`checked-types`). A document's JSON is read as a ``JSONObject``, and a
+part the format requires that is missing or of the wrong type is a
+``DocumentError`` (a ``ValueError``) naming it.
+
 VRML97 worlds
 -------------
 

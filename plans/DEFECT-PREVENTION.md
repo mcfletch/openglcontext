@@ -721,6 +721,60 @@ in `tools/editcheck.py`'s docstring). `--staged` checks the working-tree copy
 of each staged file, not the staged copy. The Claude hook names
 `.venv/bin/python`, so it does not run on Windows as written.
 
+## The checked types
+
+Item 4 of the order of work landed on 2026-09-25.
+
+- `JSONObject = Mapping[str, object]` (`loaders/documentvalues.py`) is what
+  the JSON readers answer: tilesets and external tilesets, a world's extras,
+  manifests and species, content registries, install records and the publish
+  command's registry, a LOD chain's and a grass clump's glTF JSON, the glTF
+  decoder, the tileset sniff, the ambientCG reply; hook and zone parameters
+  are typed the same way. `DocumentValues` gained `mapping`, `array`, `text`
+  and `texts`; the `require_*` functions (`object`, `array`, `number`,
+  `numbers`, `text`, `whole`, `index`, `item`) refuse a missing or malformed
+  required part with `DocumentError`. Readers of the engine's own files
+  (key bindings, telemetry and stall journals, the `bin/` tools) are not
+  converted.
+- `ContainedPath` and `CheckedURL` live in `loaders/resolver.py`, with a
+  constructor keyed on a module-private object. Producers: `contain`,
+  `Resolver.resolve` / `Resolver.contain`, `contained_source` and
+  `checked_source` (a caller's string, checked once), `cached_path`;
+  `checked_url`, `require_host`, `AllowedHosts.check`. `open_url`,
+  `fetch_url`, `fetch_to_cache`, `read_contained`, `open_contained`,
+  `tiles3d.fetch.read_bytes` and `local_copy` take only them. Found on the
+  way: a cache key built from a URL's extension could carry a query's `..`
+  out of the cache directory (the key is now one component), and a tileset
+  read with no base took its document's content names as the caller's (they
+  are now held to the working directory, and a `RuntimeTile`'s content URIs
+  are absolute).
+- The mypy plugin (`openglcontext_checks.mypy_plugin`) reports
+  `checked-construction` and, in the `loader` scope, `unchecked-open`.
+  openglcontext enables it: 19 opens in loader modules went through
+  `contained_source`, `read_contained` or `Resolver.contain`, with no
+  `type: ignore`. The openers are checked from a signature hook, because an
+  error from a call hook during overload matching types `open()` as its last
+  overload.
+- `ContextKey` (`contextresources.py`) is what `context_key()` answers and
+  what the engine's per-context tables are typed on. A backend tells
+  PyOpenGL's dispatch its context by the raw handle
+  (`contextresources.current_handle`), not by the key.
+- OGC111: openglcontext has no findings in its `loader` scope and selects it.
+  `urllib.request.urlopen` joined its banned API once `cc0` fetched through
+  `open_url`.
+- `GLName` owning wrappers: not adopted. The engine's GL names already have
+  owners (the `PassResources.disposeResources` chain for a pass,
+  `ContextNames` for names an object holds per context, the
+  context-loss callbacks for module caches), and OGC141/OGC142 hold new code
+  to them. A `TextureName(int)` would pass wherever PyOpenGL takes an int, so
+  the type protects only the engine's own bind helpers, which few draws go
+  through; making it protect the 106 allocation sites in 43 modules means
+  routing every bind of every draw through a Python-level wrapper on the hot
+  path. What it would add over the present ownership is a check that a name
+  is used in the context that issued it, and a name carrying its
+  `ContextKey` is the smaller change that gives that, where a defect shows
+  it is needed.
+
 ## Parked, 2026-09-25
 
 Work stopped on a session limit with items 3, 4, 6 and part of 7 mid-change.
@@ -736,7 +790,8 @@ is to be committed as it stands without its tests passing.
   `OpenGLContext/testing/layers.py` and `testing/scenes.py`, new and
   untracked (item 6's failing-layer driver and still-frame scenes). Item 3
   has resumed and is recorded under
-  [Baseline, sanctioned-API rules](#baseline-sanctioned-api-rules). The edits to
+  [Baseline, sanctioned-API rules](#baseline-sanctioned-api-rules), item 4
+  under [The checked types](#the-checked-types). The edits to
   `docs/_static/oglc.css` and `docs/structure.rst` predate this work and are
   not the agents'.
 - Item 7, ruff ratchets. Done and committed: opengl_extrusions, ttfquery,
