@@ -249,3 +249,52 @@ class TestVolumeOwnership:
         assert engine.volume == pytest.approx(1.0)
         engine.volume = -1.0
         assert engine.volume == pytest.approx(0.0)
+
+
+class TestZones:
+    """The zones a frame is drawn with set emitters' gains and the reverb."""
+
+    def zoned(self):
+        from OpenGLContext.physics.zones import scene_zones
+        from OpenGLContext.scenegraph.transform import Transform
+        from OpenGLContext.scenegraph.zone import Zone, ZoneAudio, ZoneReverb
+        ambience = audionodes.AudioEmitter(type='global', sources=[
+            audionodes.AudioSource(url=['drips'], loop=True)])
+        cave = Transform(translation=(20.0, 0.0, 0.0), children=[
+            Zone(size=(10.0, 10.0, 10.0),
+                 settings=[ZoneAudio(emitters=[ambience]), ZoneReverb(level=0.5)])])
+        return ambience, scene_zones(cave)
+
+    def test_an_emitter_outside_its_zone_is_silent_and_there_is_no_reverb(
+            self, context):
+        ambience, zones = self.zoned()
+        audioscene.update(context, [FakePath(ambience)], now=0.0, zones=zones)
+        assert ambience.zoneGain == 0.0
+        assert audioscene.existing_engine(context).reverb.level == 0.0
+
+    def test_inside_it_is_heard_with_the_reverb(self, context):
+        ambience, zones = self.zoned()
+        context.platform.setPosition((20.0, 0.0, 0.0))
+        audioscene.update(context, [FakePath(ambience)], now=0.0, zones=zones)
+        assert ambience.zoneGain == 1.0
+        assert audioscene.existing_engine(context).reverb.level == 0.5
+
+    def test_when_the_zones_go_nothing_they_set_is_left_behind(self, context):
+        ambience, zones = self.zoned()
+        context.platform.setPosition((20.0, 0.0, 0.0))
+        audioscene.update(context, [FakePath(ambience)], now=0.0, zones=zones)
+        context.platform.setPosition((0.0, 0.0, 0.0))
+        audioscene.update(context, [FakePath(ambience)], now=0.1, zones=zones)
+        assert ambience.zoneGain == 0.0
+        context.platform.setPosition((20.0, 0.0, 0.0))
+        audioscene.update(context, [FakePath(ambience)], now=0.2, zones=())
+        assert ambience.zoneGain == 1.0
+        assert audioscene.existing_engine(context).reverb.level == 0.0
+
+    def test_a_scene_that_never_had_zones_leaves_the_reverb_to_the_application(
+            self, context):
+        audioscene.update(context, [FakePath(emitter())], now=0.0)
+        engine = audioscene.existing_engine(context)
+        engine.reverb.level = 0.3
+        audioscene.update(context, [FakePath(emitter())], now=0.1)
+        assert engine.reverb.level == 0.3

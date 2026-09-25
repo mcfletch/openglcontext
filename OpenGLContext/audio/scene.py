@@ -25,6 +25,7 @@ from typing import Any, Dict, Optional, Sequence
 from omi_audio.device import open_device
 from omi_audio.engine import AudioEngine
 
+from OpenGLContext.audio.areas import apply_zones
 from OpenGLContext.audio.settings import settings_for
 from OpenGLContext.scenegraph.audio import stop_scene_audio, update_scene_audio
 
@@ -34,6 +35,10 @@ log = logging.getLogger(__name__)
 #: the context itself rather than stored on it so a context class needs to know
 #: nothing about audio to have some.
 _engines: "weakref.WeakKeyDictionary[Any, AudioEngine]" = weakref.WeakKeyDictionary()
+
+#: Engines whose emitters' gains and reverb zones set on the last frame, so the
+#: frame the zones go puts both back.
+_zoned: "weakref.WeakSet[AudioEngine]" = weakref.WeakSet()
 
 
 def existing_engine(context: Any) -> Optional[AudioEngine]:
@@ -84,7 +89,9 @@ def update(context: Any, paths: Sequence[Any], now: Optional[float] = None,
     ``zones`` are the frame's placed zones: the emitters they name are heard
     only while the camera is inside them, and the reverb is theirs. See
     :func:`OpenGLContext.audio.areas.apply_zones`; ``table`` is the zones
-    stacked for weighing all at once.
+    stacked for weighing all at once. On the first frame with no zones after
+    frames with some, every emitter goes back to full gain and the reverb to
+    none; a scene that never had zones leaves the reverb to the application.
 
     Returns how many nodes were driven, for a debug overlay.
     """
@@ -102,10 +109,13 @@ def update(context: Any, paths: Sequence[Any], now: Optional[float] = None,
     platform = _view_platform(context)
     if platform is not None:
         engine.listen(platform)
-    if zones:
-        from OpenGLContext.audio.areas import apply_zones
+    if zones or engine in _zoned:
         apply_zones(engine, [path[-1] for path in paths], zones,
                     engine.listener.position, table)
+        if zones:
+            _zoned.add(engine)
+        else:
+            _zoned.discard(engine)
     return update_scene_audio(engine, paths,
                               time.time() if now is None else now)
 
