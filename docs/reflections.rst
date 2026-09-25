@@ -65,7 +65,11 @@ The node's fields are read every frame, so a change takes effect on the next.
      - True shows the reflection in place of the surface's shading.
 
 One reflector held by the materials of a set of mirrors tunes them together.
-``varied()`` gives one mirror its own:
+Those of them that lie in one plane -- a wall of mirrors, a floor laid in two
+materials -- are also one reflection: one mirror view in each view that sees
+them, cropped to all of them, which each reads. Ten mirrors down a corridor
+cost one view, not ten. Planes within a millimetre, and normals within a
+thousandth, count as one. ``varied()`` gives one mirror its own:
 
 .. code-block:: python
 
@@ -240,8 +244,10 @@ which the pass takes into account.
 
 A mirror whose reflection for a view is being drawn this frame, and was not
 before, is left out of that view, and the view is drawn again on the next
-frame. One whose reflection is not yet scheduled shows the probe meanwhile, and
-the view showing it is drawn again once the reflection is. A reflection inside
+frame. One whose reflection is not yet scheduled shows its reflection from the
+view it is seen from meanwhile -- the viewer's, for a mirror seen in a mirror
+in view -- and the probe only where there is none; the view showing it is
+drawn again once its own reflection is. A reflection inside
 a reflection weighs by its size in its parent's tile, so under a short budget
 it waits behind the mirrors in view.
 

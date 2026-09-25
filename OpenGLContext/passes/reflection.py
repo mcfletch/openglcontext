@@ -409,13 +409,15 @@ WHOLE: NDCRect = (-1.0, -1.0, 1.0, 1.0)
 
 
 def screen_rect(corners: ArrayLike, modelproj: Any) -> Optional[NDCRect]:
-    """Where a box of world ``corners`` falls in a view, clipped to it, or None.
+    """Where world ``corners`` -- a box's, or several boxes' -- fall in a view,
+    clipped to it, or None.
 
     None where the box is wholly off screen or behind the camera. A box the
     camera's plane cuts through covers an unbounded part of the view, and is
     given the whole of it.
     """
-    points = np.c_[np.asarray(corners, 'd').reshape(-1, 3), np.ones(8)]
+    points = np.asarray(corners, 'd').reshape(-1, 3)
+    points = np.c_[points, np.ones(len(points))]
     clip = points @ np.asarray(modelproj, 'd')
     w = clip[:, 3]
     if (w <= 1e-6).all():

@@ -112,6 +112,9 @@ class MirrorDraw:
     tile: Tile
     reflector: PlanarReflector
     view: Optional[ReflectedView] = None
+    #: ``id`` of the path of every mirror this view is the reflection of: one,
+    #: or each of a set in one plane sharing one reflector.
+    paths: FrozenSet[int] = frozenset()
 
     @property
     def depth(self) -> int:
@@ -127,6 +130,9 @@ class ReflectionPlan:
     draws: List[MirrorDraw] = field(default_factory=list)
     lookups: Dict[Hashable, Lookup] = field(default_factory=dict)
     candidates: List[Candidate] = field(default_factory=list)
+    #: Each mirror's key to its group's, for a mirror that shares a
+    #: reflection with others in its plane; a mirror of its own is absent.
+    aliases: Dict[Hashable, Hashable] = field(default_factory=dict)
     #: Whether a mirror in view shows something it should not go on showing
     #: in a still scene: a reflection drawn while the pass settled, none at
     #: all, or one its camera has moved too far from. The pass asks for
@@ -147,6 +153,10 @@ class ReflectionPlan:
     def lookup(self, frame: Any, record: Any) -> Optional[Lookup]:
         """What ``record``'s mirror reads in ``frame``'s view, or None."""
         return self.lookups.get(key_for(frame, record))
+
+    def canonical(self, key: Hashable) -> Hashable:
+        """The key ``key``'s reflection is planned and drawn under."""
+        return self.aliases.get(key, key)
 
 
 def key_for(frame: Any, record: Any) -> Tuple[int, int]:
@@ -187,6 +197,23 @@ class _Seen:
     rough: float
     held: Optional[_Held]
     valid: bool
+    #: Every mirror sharing this reflection, the first being ``record``.
+    members: List['_Surface'] = field(default_factory=list)
+
+
+class _Surface(NamedTuple):
+    """One mirror surface in one view, before it is grouped with its plane."""
+
+    record: Any
+    reflector: PlanarReflector
+    rough: float
+    plane: Tuple[np.ndarray, np.ndarray]
+    corners: np.ndarray
+
+
+#: How near two mirrors' planes are to be one plane: a thousandth of their
+#: normals' length, and a millimetre.
+COPLANAR = 3
 
 
 def _material(record: Any) -> Any:
@@ -215,6 +242,8 @@ class ReflectionPlanner:
         self._views: Dict[Hashable, ReflectedView] = {}
         #: The reflections in the atlas that a mirror view may read.
         self._arrived: Set[Hashable] = set()
+        #: The last plan's aliases, for what the pass says about a member.
+        self._aliases: Dict[Hashable, Hashable] = {}
 
     def reset(self) -> None:
         """Forget every tile: the atlas they were in is gone."""
@@ -241,10 +270,11 @@ class ReflectionPlanner:
         """
         held = self._held.get(key)
         if held is not None:
-            held.missing = frozenset(missing)
+            held.missing = frozenset(self._aliases.get(inner, inner) for inner in missing)
 
     # -- finding the mirrors ----------------------------------------------
     def _seen(self, frames: Sequence[Any]) -> List[_Seen]:
+        """Each view's mirrors, those in one plane sharing a reflector as one."""
         found = []
         for frame in frames:
             view = frame.view
@@ -252,13 +282,22 @@ class ReflectionPlanner:
                 continue
             modelview = np.asarray(frame.modelView, 'd')
             eye = np.linalg.inv(modelview)[3, :3]
+            groups: Dict[Hashable, List[_Surface]] = {}
             for record in frame.toRender:
-                seen = self._mirror(frame, record, eye)
+                surface = self._surface(frame, record, eye)
+                if surface is not None:
+                    point, normal = surface.plane
+                    plane = (tuple(np.round(normal, COPLANAR)),
+                             round(float(np.dot(normal, point)), COPLANAR))
+                    groups.setdefault((id(surface.reflector), plane), []).append(surface)
+            for members in groups.values():
+                seen = self._mirror(frame, sorted(members, key=lambda m: id(m.record[4])),
+                                    eye)
                 if seen is not None:
                     found.append(seen)
         return found
 
-    def _mirror(self, frame: Any, record: Any, eye: np.ndarray) -> Optional[_Seen]:
+    def _surface(self, frame: Any, record: Any, eye: np.ndarray) -> Optional[_Surface]:
         reflector = reflection.reflector_for(record)
         if reflector is None:
             return None
@@ -275,7 +314,14 @@ class ReflectionPlanner:
         plane = reflection.place_plane(local, record[2])
         if plane is None:
             return None
-        corners = reflection.world_corners(local, record[2])
+        return _Surface(record, reflector, rough, plane,
+                        np.asarray(reflection.world_corners(local, record[2]), 'd'))
+
+    def _mirror(self, frame: Any, members: List[_Surface], eye: np.ndarray
+                ) -> Optional[_Seen]:
+        first = members[0]
+        record, reflector, plane = first.record, first.reflector, first.plane
+        corners = np.concatenate([member.corners.reshape(-1, 3) for member in members])
         key = key_for(frame, record)
         held = self._held.get(key)
         if held is not None and (held.view is not frame.view or held.path is not record[4]):
@@ -296,7 +342,8 @@ class ReflectionPlanner:
                  and mirror.crop == held.mirror.crop
                  and _scaled(mirror.size, held.scale)
                  == (held.tile.width, held.tile.height))
-        return _Seen(key, frame, record, reflector, mirror, eye, rough, held, valid)
+        return _Seen(key, frame, record, reflector, mirror, eye, first.rough, held, valid,
+                     members)
 
     def _view_for(self, entry: _Seen) -> ReflectedView:
         """The view ``entry``'s mirror shows, the same one while it stays in view."""
@@ -332,8 +379,9 @@ class ReflectionPlanner:
                               (0, 0, mirror.size[0], mirror.size[1]),
                               mirror.modelView, plain, mirror.modelproj,
                               None, fitted=False)
+            own = {id(member.record[4]) for member in entry.members}
             frame.toRender = [record for record in inside(frame)
-                              if record[4] is not entry.record[4]]
+                              if id(record[4]) not in own]
             frames.append(frame)
         return self._seen(frames)
 
@@ -415,6 +463,9 @@ class ReflectionPlanner:
             decisions[key] = held_before.scale
             spare -= 1
         plan = ReflectionPlan(frames, candidates=candidates)
+        # Every group's, drawn or not: the pass names a mirror by its own key.
+        plan.aliases = {key_for(entry.frame, member.record): key
+                        for key, entry in seen.items() for member in entry.members[1:]}
         settling = self.frame <= SETTLE_FRAMES
         held: Dict[Hashable, _Held] = {}
         for key, entry in seen.items():
@@ -425,15 +476,20 @@ class ReflectionPlanner:
                 held[key] = _Held(entry.frame.view, entry.record[4], entry.mirror,
                                   tile, decisions[key], entry.eye, self.frame,
                                   provisional=settling)
-                plan.draws.append(MirrorDraw(key, entry.frame, entry.record,
-                                             entry.mirror, tile, entry.reflector,
-                                             self._view_for(entry)))
+                plan.draws.append(MirrorDraw(
+                    key, entry.frame, entry.record, entry.mirror, tile, entry.reflector,
+                    self._view_for(entry),
+                    frozenset(id(member.record[4]) for member in entry.members)))
             elif key not in packed.moved and entry.held is not None:
                 held[key] = entry.held
             else:
                 continue
-            plan.lookups[key] = self._lookup(held[key], entry, atlas)
+            lookup = self._lookup(held[key], entry, atlas)
+            for member in entry.members:
+                plan.lookups[key_for(entry.frame, member.record)] = lookup._replace(
+                    rough=member.rough)
         self._held = held
+        self._aliases = plan.aliases
         self.packer.place({key: (h.tile.width, h.tile.height) for key, h in held.items()})
         # A mirror crowded out of the atlas finds no more room next frame.
         plan.unfinished = settling and bool(plan.draws) or any(

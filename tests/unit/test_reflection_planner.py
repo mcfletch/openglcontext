@@ -439,3 +439,60 @@ def test_a_mirror_in_a_mirror_is_allowed_by_where_the_viewer_stands():
     planner.plan([_frame([front])], ATLAS, BIG, inside=lambda frame: [back])
     assert len(asked) == 2
     assert asked[0] == asked[1] == pytest.approx((0.0, 1.6, 3.0))
+
+
+# --- coplanar mirrors ---------------------------------------------------------------
+
+def test_coplanar_mirrors_sharing_a_reflector_are_one_reflection():
+    """A wall of mirrors one reflector tunes is one mirror: one view, read by all."""
+    shared = PlanarReflector(interval=3)
+    left, right = _mirror(-1.5, reflector=shared), _mirror(1.5, reflector=shared)
+    plan = _settled_planner().plan([_frame([left, right])], ATLAS, BIG)
+    assert len(plan.draws) == 1
+    first, second = plan.lookup(plan.frames[0], left), plan.lookup(plan.frames[0], right)
+    assert first is not None and first.transform == second.transform
+    crop = plan.draws[0].mirror.crop
+    single = ReflectionPlanner().plan([_frame([left])], ATLAS, BIG).draws[0].mirror.crop
+    assert crop[2] - crop[0] > single[2] - single[0]
+
+
+def test_coplanar_mirrors_with_reflectors_of_their_own_are_two():
+    left, right = _mirror(-1.5), _mirror(1.5)
+    assert len(_settled_planner().plan([_frame([left, right])], ATLAS, BIG).draws) == 2
+
+
+def test_a_mirror_a_step_behind_another_is_its_own_even_sharing_a_reflector():
+    shared = PlanarReflector(interval=3)
+    front, back = _mirror(-1.5, reflector=shared), _mirror(1.5, reflector=shared)
+    back[2][3, 2] -= 0.5
+    assert len(_settled_planner().plan([_frame([front, back])], ATLAS, BIG).draws) == 2
+
+
+def test_a_group_leaves_every_one_of_its_mirrors_out_of_its_own_view():
+    shared = PlanarReflector(interval=3)
+    left, right = _mirror(-1.5, reflector=shared), _mirror(1.5, reflector=shared)
+    plan = _settled_planner().plan([_frame([left, right])], ATLAS, BIG,
+                                   inside=lambda frame: [left, right])
+    assert [draw.depth for draw in plan.draws] == [1]
+
+
+def test_a_view_waiting_on_a_group_is_drawn_again_when_any_of_it_arrives():
+    """Drawn without a group's reflection, told so by a member's key, and drawn
+    again once the group's is drawn."""
+    planner = _settled_planner()
+    front = _mirror(reflector=PlanarReflector(interval=100))
+    shared = PlanarReflector(interval=100)
+    back = [_behind(), _behind(6.0)]
+    back[1][2][3, 0] += 3.0
+    back = [(record[0], record[1], record[2], record[3], _Path(('behind', i)), record[5])
+            for i, record in enumerate(back)]
+    for record in back:
+        record[5].appearance.material.reflector = shared
+    one = Budget(views=1, separate_views=1, texels=10 ** 9)
+    first = planner.plan([_frame([front])], ATLAS, one, inside=lambda frame: back)
+    [outer] = first.draws
+    member = (id(outer.view), id(back[1][4]))
+    planner.drawn_without(outer.key, [member])
+    planner.plan([_frame([front])], ATLAS, one, inside=lambda frame: back)
+    third = planner.plan([_frame([front])], ATLAS, NOTHING, inside=lambda frame: back)
+    assert not {c.key: c for c in third.candidates}[outer.key].valid

@@ -494,6 +494,7 @@ class _FlatEffectsMixin:
         self._incompleteMirrors = set()
         earlier = self._previous_lookups
         drawing = {draw.key for draw in plan.draws}
+        canonical = getattr(plan, 'canonical', lambda key: key)
         for draw in plan.draws:
             mirror = draw.mirror
             frame = ViewFrame(
@@ -505,16 +506,20 @@ class _FlatEffectsMixin:
                 1e-6)
             kept = []
             missing = set()
+            own = draw.paths or frozenset((id(draw.record[4]),))
             for record in self.mirrorContents(frame, texels):
                 if is_reflector(record):
-                    if record[4] is draw.record[4]:
+                    if id(record[4]) in own:
                         continue
                     key = (id(frame.view), id(record[4]))
+                    # A mirror sharing its plane's reflection is drawn under
+                    # its group's key.
+                    group = canonical(key)
                     if key not in earlier:
-                        if key in drawing:
+                        if group in drawing:
                             self._incompleteMirrors.add(draw.key)
                             continue
-                        missing.add(key)
+                        missing.add(group)
                 kept.append(record)
             if missing and self._reflection_planner is not None:
                 self._reflection_planner.drawn_without(draw.key, missing)
@@ -607,11 +612,21 @@ class _FlatEffectsMixin:
     def applyPlanarReflection(self, shader: Any, record: Any, program: Any = None) -> None:
         """Have the shape about to be drawn read its reflection, or none.
 
-        A mirror's lookup is the one for the view being drawn; every other
+        A mirror's lookup is the one for the view being drawn. A mirror seen
+        in a mirror view with none of its own yet reads the one for the view
+        that mirror is seen from, and so on to the viewer's: a reflection from
+        a little way off, where the probe would read as a flash. Every other
         shape reads none, and a run of them sets nothing.
         """
+        from OpenGLContext.passes.reflectionplanner import ReflectedView
         lookups = self._reflection_lookups
-        lookup = lookups.get((id(self.view), id(record[4]))) if lookups else None
+        lookup = None
+        if lookups:
+            view, path = self.view, id(record[4])
+            lookup = lookups.get((id(view), path))
+            while lookup is None and isinstance(view, ReflectedView):
+                view = view.source
+                lookup = lookups.get((id(view), path))
         if lookup is self._reflection_applied:
             return
         apply = getattr(shader, 'set_planar_reflection', None)

@@ -330,7 +330,9 @@ def test_a_still_scene_asks_for_frames_until_its_mirrors_settle(render_scene, en
     planner = renderpass.FLAT._reflection_planner
     assert drawn[0] and not drawn[-1]
     assert planner._held and not any(held.provisional for held in planner._held.values())
-    assert len(renderpass.FLAT._reflection_lookups) == len(planner._held)
+    # Every mirror reads a tile held for it, several in one plane reading one.
+    read = {planner._aliases.get(key, key) for key in renderpass.FLAT._reflection_lookups}
+    assert read == set(planner._held)
 
 
 

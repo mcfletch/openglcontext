@@ -122,6 +122,24 @@ def test_a_mirror_reads_its_own_lookup_and_the_next_shape_none():
 
 # --- switching reflections -------------------------------------------------------
 
+def test_a_mirror_seen_in_a_mirror_falls_back_to_its_reflection_seen_directly():
+    """Until its reflection for that mirror's view is drawn, a mirror seen in a
+    mirror shows the one the viewer sees, not the probe."""
+    from OpenGLContext.passes.reflectionplanner import ReflectedView
+    effects, shader = _FlatEffectsMixin(), _Shader()
+    main, mirror, inner = object(), object(), object()
+    through = ReflectedView(main, 'key', np.zeros(3))
+    direct = object()
+    effects._reflection_lookups = {(id(main), id(inner)): direct}
+    effects.view = through
+    effects.applyPlanarReflection(shader, ((False,), None, None, None, inner, None))
+    own = object()
+    effects._reflection_lookups[(id(through), id(inner))] = own
+    effects.applyPlanarReflection(shader, ((False,), None, None, None, inner, None))
+    effects.applyPlanarReflection(shader, ((False,), None, None, None, mirror, None))
+    assert shader.given == [direct, own, None]
+
+
 class _Program:
     planar_reflection_supported = True
 
