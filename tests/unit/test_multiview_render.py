@@ -264,3 +264,29 @@ class TestAnArrangementThatLeavesRoom:
         assert _tile_centre(frames[0], 20)[0] > 100      # the view was here
         band = frames[-1][:, :55].astype(int)
         assert band.max() < 40, band.max()               # ...and is not now
+
+
+class TestAViewThroughTheWindowsCamera:
+    def test_it_takes_the_aspect_of_its_tile(self, render_scene, env):
+        """A view with no camera of its own draws a box square in a square tile."""
+        def layout(context):
+            context.getViewPlatform().setPosition((-3.0, 0.0, 6.0))
+            return ViewLayout.split(View(name='window'), View(_camera(3.0), name='right'))
+
+        frames = frames_of(render_scene, _scene(), frames=3,
+                           layout=layout, size=(WIDTH, HEIGHT))
+        red = frames[-1][:, :WIDTH // 2, 0] > 100
+        rows = np.flatnonzero(red.any(axis=1))
+        columns = np.flatnonzero(red.any(axis=0))
+        assert rows.size and columns.size
+        height = rows[-1] - rows[0] + 1
+        width = columns[-1] - columns[0] + 1
+        assert abs(width - height) <= 2, (width, height)
+
+    def test_the_windows_camera_keeps_the_windows_aspect(self, render_scene, env):
+        def layout(context):
+            return ViewLayout.split(View(name='window'), View(_camera(3.0), name='right'))
+
+        rendered = render_scene(_scene(), frames=2, size=(WIDTH, HEIGHT), layout=layout)
+        platform = rendered.context.getViewPlatform()
+        assert platform.frustum[1] == pytest.approx(WIDTH / HEIGHT)

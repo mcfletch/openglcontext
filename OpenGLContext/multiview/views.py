@@ -28,15 +28,17 @@ fitted to.
 """
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import (
-    Any, Callable, Iterable, List, Optional, Sequence, Set, Tuple, Union,
+    Any, Callable, Iterable, Iterator, List, Optional, Sequence, Set, Tuple,
+    Union,
 )
 
 from OpenGLContext.events.mouseevents import WHEEL_BUTTONS
 
 __all__ = [
-    'MAX_VIEWS', 'Rect', 'View', 'ViewLayout', 'ViewStyle',
+    'MAX_VIEWS', 'Rect', 'View', 'ViewLayout', 'ViewStyle', 'covers', 'tile_of',
 ]
 
 #: The most views one layout holds: the size of the per-frame view table the
@@ -138,6 +140,30 @@ class View:
     def local(self, x: float, y: float) -> Tuple[float, float]:
         """Window pixel ``(x, y)`` in this view's own pixels, from its bottom left."""
         return (x - self.rect[0], y - self.rect[1])
+
+
+@contextmanager
+def tile_of(view: View, camera: Any, window: Tuple[int, int]) -> Iterator[None]:
+    """Within the block, ``camera`` projects for ``view``'s tile rather than the window.
+
+    For a view drawn through the context's own camera, which the context keeps
+    told the size of the whole window: a perspective projection computed
+    inside the block has the tile's aspect ratio, and the camera is told the
+    window's size again as the block ends. A view with a camera of its own is
+    told its tile by :meth:`ViewLayout.arrange`, and is left alone here, as is
+    a view that fills the window.
+    """
+    tell = getattr(camera, 'setViewport', None)
+    width, height = int(window[0]), int(window[1])
+    if (view.camera is not None or tell is None or not view.visible
+            or view.size == (width, height)):
+        yield
+        return
+    tell(*view.size)
+    try:
+        yield
+    finally:
+        tell(width or 1, height or 1)
 
 
 def covers(rects: Sequence[Rect], width: int, height: int) -> bool:
@@ -316,7 +342,8 @@ class ViewLayout:
         A camera of the view's own is told the size of its tile whenever that
         changes, so a perspective view's aspect ratio is that of the rectangle
         it is drawn in. A view with no camera draws through the context's,
-        whose size the context keeps.
+        which the context keeps told the window's size; the render pass
+        computes that view's projection inside :func:`tile_of`.
         """
         shown = []
         for view, rect in zip(self.views, self.rects(width, height)):

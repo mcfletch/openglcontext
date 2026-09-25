@@ -180,7 +180,10 @@ How a view draws
 When a view's rectangle changes size, its camera is given the new size. A
 perspective camera then uses the rectangle's aspect ratio rather than the
 window's. A :class:`~OpenGLContext.edit.mapview.MapViewPlatform` is given the
-size too, and its scale is metres per pixel of its own view.
+size too, and its scale is metres per pixel of its own view. A view with no
+camera of its own is drawn through the context's camera with its rectangle's
+aspect ratio as well; the context's camera keeps the window's size between
+frames.
 
 A node that draws differently in each view reads ``mode.view`` during its
 render. It holds the :class:`~OpenGLContext.multiview.views.View` being

@@ -328,7 +328,9 @@ def get_modelproj( shader: Any, mode: Any ) -> Any:
 def get_inv_modelview( shader: Any, mode: Any ) -> Any:
     return dot( mode.viewPlatform.modelMatrix(inverse=True), mode.renderPath.transformMatrix( inverse=True ) )
 def get_inv_projection( shader: Any, mode: Any ) -> Any:
-    return mode.viewPlatform.viewMatrix( mode.maxDepth, inverse=True )
+    # The projection being drawn with, which in a tile of several views is
+    # not what the camera would compute for the whole window.
+    return numpy.linalg.inv( asarray( mode.projection, 'd' ) )
 def get_inv_modelproj( shader: Any, mode: Any ) -> Any:
     mv = get_inv_modelview( shader, mode )
     proj = get_inv_projection( shader, mode )
@@ -2351,13 +2353,15 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         placed from it.
         """
         from OpenGLContext.multiview.strategy import ViewFrame
+        from OpenGLContext.multiview.views import tile_of
         layout = self.viewLayout( context )
         width, height = context.getViewPort()
         shown = layout.arrange( width, height ) or layout.views[:1]
         frames = []
         for view in shown:
             camera = view.camera if view.camera is not None else context.getViewPlatform()
-            self.setViewPlatform( camera )
+            with tile_of( view, camera, ( width, height ) ):
+                self.setViewPlatform( camera )
             frames.append( ViewFrame(
                 view, camera, view.rect if view.visible else (0, 0, width, height),
                 self.modelView, self.projection, self.modelproj,
@@ -2429,8 +2433,10 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         then culls the one table against its own frustum and trims its
         projection to the depth of what it kept.
         """
+        from OpenGLContext.multiview.views import tile_of
         from OpenGLContext.scenegraph.lod import viewer_for
         frames = self.viewFrames
+        window = self.context.getViewPort()
         self.chooseLevels( [
             viewer_for( frame.camera, frame.modelView, frame.projection )
             for frame in frames ] )
@@ -2447,7 +2453,8 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
             frame.visiblePlacements = self.visiblePlacements or {}
             frame.maxDepth = self.greatestDepth( frame.toRender )
             if frame.maxDepth:
-                frame.projection = frame.camera.viewMatrix( frame.maxDepth )
+                with tile_of( frame.view, frame.camera, window ):
+                    frame.projection = frame.camera.viewMatrix( frame.maxDepth )
         active = self.activeFrame if self.activeFrame is not None else frames[0]
         self.applyViewFrame( active, gl=False )
         self._zoneHidden = self.zoneHiddenAt( self.cameraPosition( active ) )
