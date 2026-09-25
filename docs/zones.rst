@@ -218,8 +218,10 @@ decides for its own camera.
 ``ZoneMirrors(nodes=[...])`` lets the named mirrors draw their reflection
 only for a camera inside the zone, which saves a mirror's scene draw while no
 one can see it. ``ZoneMirrors(enabled=False)`` stops every other mirror's
-reflection for a camera inside. A mirror with no reflection reflects the
-environment probe. See :doc:`reflections`.
+reflection for a camera inside. A mirror seen in another mirror is judged by
+where the viewer stands, not by the reflected camera behind the mirror. A
+mirror with no reflection reflects the environment probe. See
+:doc:`reflections`.
 
 Gravity
 -------
