@@ -28,7 +28,6 @@ Downloaded ``.glb`` files and reference screenshots are cached under the shared
 glTF cache, so reruns only re-render.
 """
 import argparse
-import hashlib
 import json
 import os
 import subprocess
@@ -163,14 +162,12 @@ def _environment_for(spec: gltf_demos.SceneSpec) -> tuple[Any, str]:
 # --------------------------------------------------------------------------- #
 # Model resolution (cached): local path the viewer can load.
 # --------------------------------------------------------------------------- #
-_MIRROR_DIR = os.path.join(resolver._default_cache_dir(), 'gltf_mirror')
+_MIRROR_DIR = os.path.join(resolver.default_cache_dir(), 'gltf_mirror')
 
 
 def _cached_url_path(url: str, cache_dir: str) -> str:
-    """Fetch ``url`` into the sha1-keyed cache and return its local path."""
-    resolver.fetch_url(url, cache_dir)
-    key = hashlib.sha1(url.encode('utf-8')).hexdigest() + os.path.splitext(url)[1]
-    return os.path.join(cache_dir, key)
+    """Fetch ``url`` into the resolver's cache (once) and return its local path."""
+    return resolver.fetch_to_cache(url, cache_dir)
 
 
 def _dl(url: str, dst: str) -> None:
@@ -196,7 +193,7 @@ def resolve_model(spec: gltf_demos.SceneSpec, parthenon: str | None = None) -> s
     source, is_local = gltf_demos.resolve_source(spec, parthenon)
     if is_local:
         return source if source and os.path.exists(source) else None
-    cache_dir = resolver._default_cache_dir()
+    cache_dir = resolver.default_cache_dir()
     if resolver.is_url(source):
         # One published file, so a failed fetch is the end of it: the .gltf
         # mirror below only makes sense for the catalogue's directory layout.
@@ -468,7 +465,7 @@ def resolve_model_url(spec: gltf_demos.SceneSpec,
     name = cast(str, source)          # a non-local scene resolves to a sample name
     glb_url = gltf.sample_model_url(name)
     try:
-        _cached_url_path(glb_url, resolver._default_cache_dir())   # confirm it exists
+        _cached_url_path(glb_url, resolver.default_cache_dir())   # confirm it exists
         return glb_url, True
     except Exception:
         return '%s/%s/glTF/%s.gltf' % (gltf.SAMPLE_MODELS_BASE, name, name), True

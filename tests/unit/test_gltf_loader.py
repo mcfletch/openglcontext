@@ -731,14 +731,14 @@ class TestCacheDir:
 
     def test_cache_dir_is_user_scoped(self):
         from OpenGLContext import userpaths
-        d = resolver._default_cache_dir()
+        d = resolver.default_cache_dir()
         assert 'cache' in os.path.basename(d).lower()
         base = userpaths.appdatadirectory()
         assert os.path.commonpath([os.path.normpath(d), os.path.normpath(base)]) \
             == os.path.normpath(base)
 
-    def test_fetch_url_uses_default_cache_dir(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(resolver, '_default_cache_dir', lambda: str(tmp_path / 'c'))
+    def test_fetch_url_usesdefault_cache_dir(self, monkeypatch, tmp_path):
+        monkeypatch.setattr(resolver, 'default_cache_dir', lambda: str(tmp_path / 'c'))
 
         class _Resp:
             """Serves its body once and is then exhausted, as a real one is."""
@@ -789,7 +789,7 @@ class TestCachePurge:
         import time
         import hashlib
         cache = tmp_path / 'c'
-        monkeypatch.setattr(resolver, '_default_cache_dir', lambda: str(cache))
+        monkeypatch.setattr(resolver, 'default_cache_dir', lambda: str(cache))
 
         class _Resp:
             """Serves its body once and is then exhausted, as a real one is."""
@@ -890,7 +890,7 @@ class TestSameOriginFetch:
                             lambda *a, **k: _Opener())
         # A sub-resource is cached on disk now, so the shared cache would answer
         # from a previous run of this test and no request would be made at all.
-        monkeypatch.setattr(resolver, '_default_cache_dir',
+        monkeypatch.setattr(resolver, 'default_cache_dir',
                             lambda: str(tmp_path))
         r = resolver.Resolver(base_url='https://example.com/a/model.gltf')
         assert r.fetch('buf.bin') == b'OK'

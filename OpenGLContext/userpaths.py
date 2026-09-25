@@ -7,7 +7,7 @@ rather than each inventing one.
 The rule is the platform's own convention: ``%APPDATA%`` on Windows,
 ``$XDG_CONFIG_HOME`` (or ``~/.config``) elsewhere.  Callers add their own
 subdirectory -- :meth:`OpenGLContext.contextconfig.ContextConfig.getUserDirectory`
-and :func:`OpenGLContext.loaders.resolver._default_cache_dir` both do -- so this
+and :func:`OpenGLContext.loaders.resolver.default_cache_dir` both do -- so this
 module never creates anything, it only says where.
 
 A file the *user* is meant to find again has its own answer:

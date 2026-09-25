@@ -44,9 +44,9 @@ def test_fetch_returns_cached_bytes_without_reresolving(tmp_path):
     assert r.fetch("a.bin") == b"CACHED"
 
 
-# --- _default_cache_dir app-data fallback -------------------------------------
+# --- default_cache_dir app-data fallback -------------------------------------
 
-def test_default_cache_dir_falls_back_to_tempdir_on_oserror(monkeypatch):
+def testdefault_cache_dir_falls_back_to_tempdir_on_oserror(monkeypatch):
     from OpenGLContext import userpaths
 
     def boom():
@@ -54,7 +54,7 @@ def test_default_cache_dir_falls_back_to_tempdir_on_oserror(monkeypatch):
 
     monkeypatch.setattr(userpaths, "appdatadirectory", boom)
     import tempfile
-    path = resolver._default_cache_dir()
+    path = resolver.default_cache_dir()
     assert path.startswith(tempfile.gettempdir())
     assert path.endswith(os.path.join("OpenGLContext", "asset_cache"))
 

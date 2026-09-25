@@ -36,7 +36,7 @@ __all__ = [
     'DEFAULT_MAX_RESOURCE_BYTES', 'DEFAULT_MAX_IMAGE_PIXELS', 'DOWNLOAD_CHUNK_BYTES',
     'safe_url', 'is_url', 'is_local', 'require_host', 'user_agent', 'check_size', 'check_pixels', 'decode_data_uri', 'resolver_max',
     'fetch_url', 'fetch_to_cache', 'stream_capped', 'stream_to', 'cached_path',
-    'purge_cache',
+    'default_cache_dir', 'purge_cache',
 ]
 
 import base64
@@ -521,7 +521,7 @@ class Resolver:
         return data
 
 
-def _default_cache_dir() -> str:
+def default_cache_dir() -> str:
     """Per-user cache directory for fetched remote assets.
 
     Cache under the per-user app-data location the rest of OpenGLContext uses
@@ -546,7 +546,7 @@ def cached_path(url: str, cache_dir: Optional[str] = None) -> str:
     so no caller re-derives the path.
     """
     import hashlib
-    cache_dir = cache_dir or _default_cache_dir()
+    cache_dir = cache_dir or default_cache_dir()
     key = hashlib.sha1(url.encode('utf-8')).hexdigest() + os.path.splitext(url)[1]
     return os.path.join(cache_dir, key)
 
@@ -717,7 +717,7 @@ def fetch_to_cache(url: str, cache_dir: Optional[str] = None,
     if not is_url(url):
         raise IOError('%r is not an http(s) URL, and only those are fetched'
                       % (_without_query(url),))
-    cache_dir = cache_dir or _default_cache_dir()
+    cache_dir = cache_dir or default_cache_dir()
     os.makedirs(cache_dir, mode=0o700, exist_ok=True)
     path = cached_path(url, cache_dir)
     if _touch(path):
@@ -752,7 +752,7 @@ def purge_cache(cache_dir: Optional[str] = None, max_age_days: int = 30) -> int:
     removed. A missing cache directory is a no-op.
     """
     import time
-    cache_dir = cache_dir or _default_cache_dir()
+    cache_dir = cache_dir or default_cache_dir()
     if not os.path.isdir(cache_dir):
         return 0
     cutoff = time.time() - max_age_days * 86400

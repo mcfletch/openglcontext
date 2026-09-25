@@ -547,9 +547,12 @@ class TestEnvPrefixFor:
 
 
 class TestFetchHelpers:
-    def test_cached_url_path_keys_by_sha1(self, monkeypatch, tmp_path):
-        monkeypatch.setattr(R.resolver, 'fetch_url', lambda url, cache: None)
+    def test_cached_url_path_is_the_resolvers_own_key(self, monkeypatch,
+                                                      tmp_path):
+        monkeypatch.setattr(R.resolver, 'fetch_to_cache',
+                            lambda url, cache: R.resolver.cached_path(url, cache))
         p = R._cached_url_path('https://x/model.glb', str(tmp_path))
+        assert p == R.resolver.cached_path('https://x/model.glb', str(tmp_path))
         assert p.startswith(str(tmp_path)) and p.endswith('.glb')
 
     def test_dl_skips_an_existing_nonempty_file(self, tmp_path):
@@ -615,3 +618,25 @@ class TestResolveModelMirror:
         monkeypatch.setattr(R, '_dl', boom)
         assert R.resolve_model(SceneSpec('Duck', source=None)) is None
         assert 'resolve FAILED' in capsys.readouterr().out
+
+
+class TestTheCachedModelPath:
+    """A model fetched for the regression run is found by the resolver's own
+    cache key, and a cached one is not read to learn where it is."""
+
+    def test_a_cache_hit_is_not_read(self, tmp_path):
+        import tracemalloc
+        from OpenGLContext.bin import gltf_regression
+        from OpenGLContext.loaders import resolver
+        url = 'https://example.invalid/model.glb'
+        path = resolver.cached_path(url, str(tmp_path))
+        with open(path, 'wb') as handle:
+            handle.write(b'\0' * (16 * 1024 * 1024))
+        tracemalloc.start()
+        try:
+            found = gltf_regression._cached_url_path(url, str(tmp_path))
+            peak = tracemalloc.get_traced_memory()[1]
+        finally:
+            tracemalloc.stop()
+        assert found == path
+        assert peak < 4 * 1024 * 1024, 'peak %d bytes' % (peak,)
