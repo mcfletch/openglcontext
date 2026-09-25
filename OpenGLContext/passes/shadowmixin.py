@@ -1078,9 +1078,12 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                     self._renderDepthGroup(group, shader, depth_prog, light_view)
                 except Exception as err:
                     log.debug("instanced shadow depth failure: %s", err)
-            for record in casters:
-                tmatrix = record[2]
-                self.matrix = dot(tmatrix, light_view).astype('f')
+            # Every caster's light-space modelview in one product of the
+            # stacked world matrices.
+            modelviews = (np.asarray([record[2] for record in casters], dtype='f')
+                          .reshape(-1, 4) @ light_view).reshape(-1, 4, 4) if casters else ()
+            for record, modelview in zip(casters, modelviews):
+                self.matrix = modelview
                 # A caster binds whatever program it draws through -- a line set
                 # draws through the unlit one and leaves it bound -- so the depth
                 # program is bound here rather than assumed to have survived the

@@ -122,6 +122,18 @@ class _MeshGPU(object):
         if self.idx_vbo is not None:
             self.idx_vbo.unbind()
 
+    def unchecked(self, program: int) -> bool:
+        """Whether these arrays have not yet been checked against ``program``; now they have.
+
+        :func:`~OpenGLContext.scenegraph.geometryarrays.report_missing_inputs`
+        is asked once per program rather than on every draw.
+        """
+        checked = self.__dict__.setdefault('_checked', set())
+        if program in checked:
+            return False
+        checked.add(program)
+        return True
+
     def vertexArrays(self) -> Any:
         """What this mesh offers a shader, in the engine's common description."""
         return GeometryArrays(
@@ -697,9 +709,10 @@ class PBRMesh(node.Node):
             # Against the program now bound -- the depth pass draws these same
             # arrays and asks for less than the lit program does.
             bound = sp.bound_program() or sp.program
-            report_missing_inputs(
-                bound, gpu.vertexArrays(), sp.required_inputs(bound),
-                mode=mode, node=self, where='PBRMesh')
+            if gpu.unchecked(bound):
+                report_missing_inputs(
+                    bound, gpu.vertexArrays(), sp.required_inputs(bound),
+                    mode=mode, node=self, where='PBRMesh')
         gpu.draw(mode)
         return 1
 

@@ -231,3 +231,21 @@ class TestTheReport:
         err = report_missing_inputs(
             program, arrays, {'aPosition', 'aNormal'}, mode=None)
         assert 'aNormal' in str(err)
+
+
+class TestAMeshAsksOncePerProgram:
+    """A mesh's arrays are checked against a program the first time it is
+    drawn with it, not on every draw: the answer changes only with the arrays,
+    and new arrays are a new GPU record."""
+
+    def test_the_first_draw_with_a_program_is_checked(self):
+        from OpenGLContext.scenegraph.pbrmesh import _MeshGPU
+        gpu = _MeshGPU.__new__(_MeshGPU)
+        assert gpu.unchecked(7)
+        assert not gpu.unchecked(7)
+
+    def test_another_program_is_checked_on_its_own(self):
+        from OpenGLContext.scenegraph.pbrmesh import _MeshGPU
+        gpu = _MeshGPU.__new__(_MeshGPU)
+        gpu.unchecked(7)
+        assert gpu.unchecked(9)
