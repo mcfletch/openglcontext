@@ -17,6 +17,9 @@ from OpenGLContext.testing.display import display_available
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(tests_root(__file__)))
 
+import test_all_scripts as tas
+import test_visual_regression as tvr
+
 
 class TestSharedHelper:
     def test_windowed_display_is_available(self):
@@ -54,11 +57,9 @@ class TestCopiesAgreeOnOffscreen:
         `tests/test_all_scripts.py` is what runs the scripts now, and its copy
         is the one below.
         """
-        import test_visual_regression as tvr
         assert not hasattr(tvr, '_check_display_available')
 
     def test_all_scripts_counts_egl(self, monkeypatch):
-        import test_all_scripts as tas
         monkeypatch.delenv('DISPLAY', raising=False)
         monkeypatch.delenv('WAYLAND_DISPLAY', raising=False)
         monkeypatch.setenv('PYOPENGL_PLATFORM', 'egl')

@@ -108,10 +108,10 @@ def assert_supplied(declared: set[str], supplier: type, describing: str,
 
 ### The reader itself
 class _Sample:
-    from typing import TYPE_CHECKING
+    from typing import TYPE_CHECKING  # noqa: PLC0415 sample input for the reader
 
     if TYPE_CHECKING:
-        import os                        # an import says nothing about a host
+        import os  # noqa: PLC0415 an import says nothing about a host
         declared_attribute: int
 
         def declared_method(self) -> None: ...

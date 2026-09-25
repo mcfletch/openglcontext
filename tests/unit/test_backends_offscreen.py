@@ -10,9 +10,12 @@ What each platform *can* do differs, so this checks the arrangement rather than
 the pixels: that the flag is read, that it reaches the platform call, and that
 turning it off still opens a window.
 """
+import inspect
+
 import pytest
 
 from OpenGLContext import renderoptions
+from OpenGLContext.contextdefinition import ContextDefinition
 
 
 def test_the_flag_is_one_the_renderer_knows_about():
@@ -30,8 +33,7 @@ class TestPygame:
         monkeypatch.setenv('SDL_VIDEODRIVER', 'dummy')
         monkeypatch.setenv('OPENGLCONTEXT_HIDDEN', '1' if hidden else '0')
         pygame.display.init()
-        from OpenGLContext import pygamecontext
-        from OpenGLContext.contextdefinition import ContextDefinition
+        from OpenGLContext import pygamecontext  # noqa: PLC0415 follows the pygame importorskip
         try:
             return pygamecontext.PygameContext.pygameFlagsFromDefinition(
                 ContextDefinition()), pygame
@@ -56,8 +58,7 @@ class TestGLUT:
 
     def test_it_hides_the_window_it_just_made(self, monkeypatch):
         pytest.importorskip('OpenGL.GLUT')
-        from OpenGLContext import glutcontext
-        import inspect
+        from OpenGLContext import glutcontext  # noqa: PLC0415 follows the GLUT importorskip
         source = inspect.getsource(glutcontext)
         assert 'glutHideWindow' in source
         assert 'hidden_window' in source
@@ -68,8 +69,7 @@ class TestWX:
 
     def test_showing_the_frame_is_conditional(self):
         pytest.importorskip('wx')
-        from OpenGLContext import wxcontext
-        import inspect
+        from OpenGLContext import wxcontext  # noqa: PLC0415 follows the wx importorskip
         source = inspect.getsource(wxcontext)
         assert 'OPENGLCONTEXT_HIDDEN' in source
 

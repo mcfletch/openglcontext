@@ -143,6 +143,10 @@ class TestChoosingTheMonitor:
 class TestThePygameDisplayMode:
     """SDL takes it as a creation flag, so the definition has to reach it."""
 
+    @pytest.fixture
+    def pygame(self):
+        return pytest.importorskip('pygame')
+
     def _flags(self, definition):
         """Which flags the window is asked for, without opening one.
 
@@ -150,23 +154,20 @@ class TestThePygameDisplayMode:
         runs where SDL has no display to give -- a headless CI runner, or a
         session whose compositor SDL does not speak.
         """
-        pytest.importorskip('pygame')
-        from OpenGLContext.pygamecontext import PygameContext
+        from OpenGLContext.pygamecontext import PygameContext  # noqa: PLC0415 pygame is optional
         return PygameContext.pygameWindowFlags(definition)
 
-    def test_a_windowed_context_asks_for_no_fullscreen_flag(self):
-        import pygame
+    def test_a_windowed_context_asks_for_no_fullscreen_flag(self, pygame):
         assert not self._flags(ContextDefinition()) & pygame.FULLSCREEN
 
-    def test_a_full_screen_context_asks_for_the_flag(self, visible):
-        import pygame
+    @pytest.mark.usefixtures('visible')
+    def test_a_full_screen_context_asks_for_the_flag(self, pygame):
         flags = self._flags(ContextDefinition(fullscreen=True))
         assert flags & pygame.FULLSCREEN
         assert flags & pygame.NOFRAME
 
-    def test_a_hidden_window_keeps_the_desktop(self, monkeypatch):
+    def test_a_hidden_window_keeps_the_desktop(self, monkeypatch, pygame):
         monkeypatch.setenv('OPENGLCONTEXT_HIDDEN', '1')
-        import pygame
         flags = self._flags(ContextDefinition(fullscreen=True))
         assert not flags & pygame.FULLSCREEN
         assert flags & pygame.HIDDEN

@@ -359,8 +359,8 @@ class TestIndentation:
         self, page, tmp_path, monkeypatch
     ):
         """docutils strips a directive's common indent; the directive puts it back."""
-        from docutils import nodes
-        from sphinx.application import Sphinx
+        from docutils import nodes  # noqa: PLC0415 the docs extra's, for this build alone
+        from sphinx.application import Sphinx  # noqa: PLC0415 the docs extra's, for this build alone
 
         monkeypatch.syspath_prepend(str(tests_root(__file__).parent / 'docs' / '_ext'))
         source = tmp_path / 'source'

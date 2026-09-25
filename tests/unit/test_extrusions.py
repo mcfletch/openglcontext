@@ -18,8 +18,9 @@ from OpenGL.GL import (
 )
 from vrml import cache
 
+from OpenGLContext import testingcontext
 from OpenGLContext.scenegraph.basenodes import (
-    Appearance, Extrusion, Material, PolyCone, PolyCylinder, Shape, sceneGraph,
+    Appearance, Extrusion, Material, PointLight, PolyCone, PolyCylinder, Shape, sceneGraph,
 )
 from OpenGLContext.scenegraph.extrusions import Lathe, Screw, Spiral
 from OpenGLContext.scenegraph.frommesh import (
@@ -217,8 +218,6 @@ def _drawn(node, profile):
     os.environ['OPENGLCONTEXT_HIDDEN'] = '1'
     os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
 
-    from OpenGLContext import testingcontext
-    from OpenGLContext.scenegraph.basenodes import PointLight
     Base = testingcontext.getInteractive()
     scene = sceneGraph(children=[
         Shape(geometry=node,

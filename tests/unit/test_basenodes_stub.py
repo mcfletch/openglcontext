@@ -206,8 +206,6 @@ class TestTheImportPathsResolve:
     """A stub naming a class that is not there declares nothing usable."""
 
     def test_every_imported_name_exists_where_it_is_named(self, stub):
-        import importlib
-
         _path, text = stub
         for module_name, attribute in _imports(text):
             module = importlib.import_module(module_name)

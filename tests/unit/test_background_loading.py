@@ -305,7 +305,6 @@ class TestWhatALoaderThreadMayDo:
         file it came from open for as long as the texture lives -- six of them
         for a cubemap.  The decode belongs on the loader thread anyway."""
         psutil = pytest.importorskip('psutil')
-        from OpenGLContext.scenegraph.imagetexture import ImageTexture
         path = _image(tmp_path, 'two.png')
         texture = ImageTexture(url=[path])
         assert until(lambda: _arrived(texture)), 'the image never arrived'

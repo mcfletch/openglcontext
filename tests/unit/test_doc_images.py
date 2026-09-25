@@ -290,7 +290,7 @@ class TestTheGalleryMarkup:
             def attval(self, text):
                 return str(text).replace('"', '&quot;')
 
-        from docutils import nodes
+        from docutils import nodes  # noqa: PLC0415 the docs extra's; the gallery fixture skipped without it
 
         translator = Translator()
         # The visitor writes the whole panel and skips the image nodes under

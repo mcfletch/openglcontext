@@ -10,6 +10,7 @@ import types
 import pytest
 
 from OpenGLContext.passes import renderpass, pbrpass
+from OpenGLContext.passes.flatcore import FlatPass
 
 
 class TestCorePassClassSelection:
@@ -21,7 +22,6 @@ class TestCorePassClassSelection:
 
     def test_plain_core_when_not_pbr(self, monkeypatch):
         monkeypatch.delenv('OPENGLCONTEXT_RENDERER', raising=False)
-        from OpenGLContext.passes.flatcore import FlatPass
         assert renderpass._core_flatpass_class() is FlatPass
 
     def test_pbr_pass_when_selected(self, monkeypatch):
@@ -34,7 +34,6 @@ class TestCorePassClassSelection:
         broken = types.ModuleType('OpenGLContext.passes.pbrpass')
         monkeypatch.setitem(sys.modules, 'OpenGLContext.passes.pbrpass', broken)
         monkeypatch.setenv('OPENGLCONTEXT_RENDERER', 'pbr')
-        from OpenGLContext.passes.flatcore import FlatPass
         # Must not raise, and must degrade to the base core pass.
         assert renderpass._core_flatpass_class() is FlatPass
 

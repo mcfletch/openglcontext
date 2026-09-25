@@ -496,7 +496,7 @@ class TestTheVRMLContextsTakeTheirArguments:
 
     def test_the_glut_vrml_context_builds_with_what_it_was_given(self, monkeypatch):
         pytest.importorskip('OpenGL.GLUT')
-        from OpenGLContext import glutcontext, glutvrmlcontext
+        from OpenGLContext import glutcontext, glutvrmlcontext  # noqa: PLC0415 follows the GLUT importorskip
 
         built = []
 

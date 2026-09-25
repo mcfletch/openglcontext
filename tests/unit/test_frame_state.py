@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from OpenGLContext import frustum
-from OpenGLContext.passes import _flat, flatcore
+from OpenGLContext.passes import _flat, flatcore, renderpass
 from OpenGLContext.scenegraph import basenodes
 
 
@@ -72,9 +72,10 @@ class TestTheFramesWalk:
 
 def test_a_frame_with_a_legacy_pick_still_draws_its_reflections(render_scene, monkeypatch):
     """The pick is drawn before the mirrors; they still find the frame's walk."""
-    pytest.importorskip('glfw')
-    from tests.unit.glrender import base_env, frames_of
-    from tests.unit.test_planar_mirror_gl import SIZE, _red, _room
+    # glrender, and the mirror test module built on it, skip their importer
+    # where glfw is missing; the tests above need no window.
+    from tests.unit.glrender import base_env, frames_of  # noqa: PLC0415 skips without glfw
+    from tests.unit.test_planar_mirror_gl import SIZE, _red, _room  # noqa: PLC0415 skips without glfw
     base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0', OPENGLCONTEXT_INSTANCE_MIN='999')
     frames = frames_of(render_scene, _room(), frames=4, size=SIZE, mrt=False,
                        picks=lambda w, h: [(w // 2, h // 2)])
@@ -84,10 +85,8 @@ def test_a_frame_with_a_legacy_pick_still_draws_its_reflections(render_scene, mo
 
 def test_a_views_combined_matrix_is_of_the_projection_it_draws_with(render_scene, monkeypatch):
     """Trimming a view's projection to its depth trims the product with it."""
-    pytest.importorskip('glfw')
-    from OpenGLContext.passes import renderpass
-    from tests.unit.glrender import base_env
-    from tests.unit.test_planar_mirror_gl import SIZE, _room
+    from tests.unit.glrender import base_env  # noqa: PLC0415 skips without glfw
+    from tests.unit.test_planar_mirror_gl import SIZE, _room  # noqa: PLC0415 skips without glfw
     base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='0')
     render_scene(_room(), frames=2, size=SIZE)
     for frame in renderpass.current_pass().viewFrames:

@@ -17,7 +17,9 @@ import sys
 
 import pytest
 
+from OpenGLContext.loaders.gltf import sample_model_url
 from OpenGLContext.testing.glcontext import gl_available
+from OpenGLContext.testing.network import unreachable
 from OpenGLContext.testing.paths import tests_root
 
 HERE = str(tests_root(__file__))
@@ -50,18 +52,6 @@ FRAMES = '40'
 NEEDS_MODEL = {'crowd_demo': 'Fox'}
 
 
-def _model_available(name):
-    try:
-        from OpenGLContext.loaders.gltf import sample_model_url
-        from OpenGLContext.loaders.resolver import fetch_to_cache
-    except Exception:
-        return False
-    try:
-        return os.path.exists(fetch_to_cache(sample_model_url(name)))
-    except Exception:
-        return False
-
-
 gl = pytest.mark.skipif(not gl_available(), reason='no GL target available')
 
 
@@ -71,9 +61,9 @@ class TestEachDemoRenders:
     @pytest.mark.parametrize('demo', sorted(DEMOS))
     def test_it_exits_cleanly_with_a_frame(self, demo, tmp_path):
         wanted = NEEDS_MODEL.get(demo)
-        if wanted and not _model_available(wanted):
-            pytest.skip('%s is not in the asset cache and cannot be fetched'
-                        % wanted)
+        reason = wanted and unreachable(sample_model_url(wanted))
+        if reason:
+            pytest.skip(reason)
         env = dict(os.environ)
         env.update(
             OPENGLCONTEXT_BACKEND='glfw',

@@ -5,7 +5,8 @@ Pure Python/numpy -- no GL, no window. :class:`Wander` holds no clips and
 the decisions a crowd's individuality comes out of can be run frame by frame in
 a test and read.
 """
-import sys
+import importlib.util
+import os
 
 import numpy as np
 import pytest
@@ -53,9 +54,11 @@ def document():
 @pytest.fixture(scope='module')
 def demo():
     """The crowd demo, imported for the constants it measured off its model."""
-    sys.path.insert(0, HERE)
-    import crowd_demo
-    return crowd_demo
+    spec = importlib.util.spec_from_file_location(
+        'crowd_demo', os.path.join(HERE, 'crowd_demo.py'))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 @pytest.fixture(scope='module')

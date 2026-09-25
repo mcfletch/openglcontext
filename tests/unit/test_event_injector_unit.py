@@ -7,6 +7,7 @@ specific socket error and the GL framebuffer capture.
 """
 
 import argparse
+import json
 import os
 import pathlib
 import socket
@@ -478,8 +479,6 @@ def test_sender_encodes_all_event_kinds():
         sender.send_resize(320, 240)
         sender.send_exit()
         sender.wait(0.0)
-
-        import json
 
         lines = []
         conn.settimeout(2.0)
