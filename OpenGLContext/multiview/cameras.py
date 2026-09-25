@@ -346,8 +346,15 @@ def point_view(view: Any, kind: str, **named: Any) -> bool:
     if isinstance(camera, OrbitView):
         camera.orthographic = flat
         return True
+    # It may go below the subject as well as above it, and is dollied within
+    # limits fitted to what the view was showing, unless ``named`` says
+    # otherwise.
     orbit = OrbitView(centre=(centre[0], centre[2]), ground=centre[1],
-                      orthographic=flat, **named)
+                      orthographic=flat,
+                      **{'lowest': -OrbitView.HIGHEST, **named})
+    orbit.fit_limits(span / 2.0)
+    orbit.nearest = float(named.get('nearest', orbit.nearest))
+    orbit.furthest = float(named.get('furthest', orbit.furthest))
     # As much of the world as the view was showing, so the switch keeps the
     # subject the size it was.
     orbit.distance = max(span / 2.0 / math.tan(math.radians(orbit.fov) / 2.0),

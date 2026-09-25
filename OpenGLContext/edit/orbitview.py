@@ -138,6 +138,16 @@ class OrbitView:
         self.distance = float(min(max(self.distance * float(factor),
                                       self.nearest), self.furthest))
 
+    def fit_limits(self, radius: float) -> None:
+        """Fit how near and how far it may be dollied to a subject of ``radius``.
+
+        Near enough to fill the view with a hundredth of the subject, far
+        enough to see a thousand of it.
+        """
+        radius = max(float(radius), 1e-6)
+        self.nearest = radius * 0.01
+        self.furthest = radius * 1000.0
+
     def look_at(self, centre: Tuple[float, float],
                 ground: float | None = None) -> None:
         """Point the camera at somewhere else on the ground."""

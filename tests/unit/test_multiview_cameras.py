@@ -291,3 +291,41 @@ class TestPointingAViewSomewhereElse:
         plain = View(name='plain')
         assert not point_view(plain, 'top')
         assert view_kind(plain) is None
+
+
+class TestASmallSubjectAcrossASwitch:
+    """A view of a two-unit object stays a view of a two-unit object."""
+
+    def _front(self):
+        from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
+        from OpenGLContext.multiview.views import View
+        return View(OrthoViewPlatform(OrthoView('front', span=2.0), (400, 300)),
+                    name='front')
+
+    def test_a_round_trip_keeps_what_the_view_shows(self):
+        from OpenGLContext.multiview.cameras import point_view, shown_by
+        view = self._front()
+        before = shown_by(view.camera.view)
+        point_view(view, 'perspective')
+        assert shown_by(view.camera.view)[1] == pytest.approx(before[1])
+        point_view(view, 'front')
+        after = shown_by(view.camera.view)
+        assert after[0] == pytest.approx(before[0])
+        assert after[1] == pytest.approx(before[1])
+
+    def test_the_turning_camera_can_be_dollied_closer(self):
+        from OpenGLContext.multiview.cameras import point_view
+        view = self._front()
+        point_view(view, 'perspective')
+        orbit = view.camera.view
+        distance = orbit.distance
+        orbit.dolly(0.5)
+        assert orbit.distance == pytest.approx(distance * 0.5)
+
+    def test_the_turning_camera_can_look_up_from_below(self):
+        from OpenGLContext.multiview.cameras import point_view
+        view = self._front()
+        point_view(view, 'perspective')
+        orbit = view.camera.view
+        orbit.orbit(0.0, -90.0 - orbit.pitch)
+        assert orbit.pitch < 0.0

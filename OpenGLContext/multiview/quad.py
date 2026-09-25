@@ -131,11 +131,7 @@ class QuadView:
         """
         low = np.asarray(minimum[:3], 'd')
         high = np.asarray(maximum[:3], 'd')
-        radius = max(float(np.linalg.norm(high - low)) / 2.0, 1e-6)
-        # Near enough to fill the view with a much smaller part of the box,
-        # far enough to see a thousand of them.
-        self.orbit.nearest = radius * 0.01
-        self.orbit.furthest = radius * 1000.0
+        self.orbit.fit_limits(float(np.linalg.norm(high - low)) / 2.0)
         self._framed = (low, high)
         self.views.frame(low, high)
 
