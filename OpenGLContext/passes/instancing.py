@@ -24,6 +24,7 @@ from OpenGL.GL import (
 from OpenGLContext.scenegraph import vertexsemantics
 
 __all__ = (
+    'Batchers',
     'InstanceGroup',
     'geometry_instance_key',
     'geometry_texture_key',
@@ -52,6 +53,11 @@ __all__ = (
     'pack_instance_buffer',
     'draw_instanced_mesh',
 )
+
+#: The ``(key, instanceable)`` pair an instance grouping is made with: the
+#: batch key of a shape (None for one that cannot batch), and whether it can be
+#: drawn instanced at all.
+Batchers = Tuple[Callable[[Any], Any], Callable[[Any], bool]]
 
 # Per-instance attribute locations, from the engine-wide table in
 # OpenGLContext.scenegraph.vertexsemantics; a mat4 occupies four consecutive

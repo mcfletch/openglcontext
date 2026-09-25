@@ -71,6 +71,7 @@ log = logging.getLogger( __name__ )
 
 if TYPE_CHECKING:
     from OpenGLContext.multiview.strategy import ViewFrame
+    from OpenGLContext.passes.instancing import Batchers
     from OpenGLContext.passes.renderfailures import RenderFailureLog
     from OpenGLContext.passes.renderstats import RenderStats
     from OpenGLContext.passes.shaderpass import VRML97ShaderProgram
@@ -746,7 +747,7 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
             glClearColor(0.0, 0.0, 0.0, 1.0)
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
-    def batchingFunctions(self) -> Tuple[Any, Any]:
+    def batchingFunctions(self) -> Batchers:
         """The ``(key, instanceable)`` functions an instance grouping is made with.
 
         A pass that remembers them per shape (the PBR pass's ``batchers``)
@@ -755,7 +756,7 @@ class FlatPass( _FlatEffectsMixin, ZonesMixin, SelectionMixin, SGObserver ):
         """
         batchers = getattr(self, 'batchers', None)
         if batchers is not None:
-            functions: Tuple[Any, Any] = batchers()
+            functions: Batchers = batchers()
             return functions
         return self._instanceKey, self._instanceable
 

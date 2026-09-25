@@ -33,6 +33,9 @@ from OpenGLContext.passes.shadowcaps import ShadowCapabilities
 from OpenGLContext.passes.shadowpool import _CascadeControllerMixin, _ShadowMapPoolMixin
 from vrml.vrml97 import nodetypes
 
+if TYPE_CHECKING:
+    from OpenGLContext.passes.instancing import Batchers
+
 log = logging.getLogger(__name__)
 
 # Shadow depth-pass acne controls, named rather than scattered as literals.
@@ -107,7 +110,7 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
 
         def getModelView(self) -> np.ndarray: ...
         def frameGather(self) -> Any: ...
-        def batchingFunctions(self) -> Tuple[Any, Any]: ...
+        def batchingFunctions(self) -> Batchers: ...
 
     use_shadows: bool = False
     shadow_pass: bool = False

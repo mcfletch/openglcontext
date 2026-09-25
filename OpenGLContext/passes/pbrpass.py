@@ -14,7 +14,7 @@ from __future__ import annotations
 import os
 import logging
 import weakref
-from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Iterator, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -41,6 +41,9 @@ from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, material_to_pbr
 from OpenGLContext.passes.ibl import IBL_UNITS, _IBL_SAMPLER
 from OpenGLContext.passes.zonelayers import MAX_ZONE_LAYERS, ZonePack
 from OpenGLContext.scenegraph.skinning import SKIN_PALETTE_UNIT, palette_supported
+
+if TYPE_CHECKING:
+    from OpenGLContext.passes.instancing import Batchers
 
 log = logging.getLogger(__name__)
 
@@ -1052,7 +1055,7 @@ class PBRPass(flatcore.FlatPass):
             return False
         return hasattr(geometry, 'instanceGPU')
 
-    def batchers(self) -> Tuple[Any, Any]:
+    def batchers(self) -> Batchers:
         """The ``(key, instanceable)`` pair for one grouping, remembered per shape.
 
         What a shape batches on is read from its geometry and its appearance,
