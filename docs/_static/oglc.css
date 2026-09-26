@@ -137,6 +137,45 @@ p.source-reference {
     text-align: center;
 }
 
+/* Mermaid gives its drawing a fixed height alongside a width that scales, so
+ * a diagram narrowed to the column keeps its full height as empty space above
+ * and below it. */
+.mermaid svg {
+    height: auto;
+    padding: 20pt;
+}
+
+/* A one-line key to the colours of the diagram above it. */
+p.diagram-legend {
+    font-size: 85%;
+    text-align: center;
+    color: var(--color-foreground-muted);
+}
+
+p.diagram-legend .swatch-ours,
+p.diagram-legend .swatch-third {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    margin: 0 0.3em 0 1em;
+    vertical-align: -0.15em;
+    border: 1px solid;
+    border-radius: 2px;
+    overflow: hidden;
+    text-indent: 2em;
+    white-space: nowrap;
+}
+
+p.diagram-legend .swatch-ours {
+    background: #dbe7ff;
+    border-color: #5a7ab5;
+}
+
+p.diagram-legend .swatch-third {
+    background: #ededed;
+    border-color: #999999;
+}
+
 /* --- tables ------------------------------------------------------------- */
 
 /* Several pages declare a field, its type and what it does, which is wider

@@ -53,18 +53,12 @@ packages.
        class glisteel,twig,forest,editor,oglc,video,pyopengl,vrml,omip,omia,ext,ttf,simple,dispatch ours
        class mini,fonttools,gltflib,numpy third
 
-.. mermaid::
+.. role:: swatch-ours
+.. role:: swatch-third
 
-   block-beta
-       columns 2
-       legendfirst["Blue: first-party packages"]
-       legendthird["Grey: third-party packages"]
+.. rst-class:: diagram-legend
 
-       classDef ours fill:#dbe7ff,stroke:#5a7ab5,color:#111
-       classDef third fill:#ededed,stroke:#999999,color:#111
-
-       class legendfirst ours
-       class legendthird third
+:swatch-ours:`blue` First-party packages :swatch-third:`grey` Third-party packages
 
 The packages it is built on
 ---------------------------
@@ -76,15 +70,14 @@ The packages it is built on
    * - Package
      - What it provides
    * - `PyOpenGL <https://mcfletch.github.io/pyopengl/>`__
-     - The OpenGL bindings: every entry point of GL, GLU, GLUT, EGL, WGL and
-       GLX, the extensions, and the array handling that passes Python data to
-       the driver.
-   * - `pyopengl-video <https://github.com/mcfletch/pyopengl-video>`__
-     - Encodes the colour buffer to H.264 on the GPU's own encoder, without
-       copying the frame off the card. An extra: ``OpenGLContext[video]``.
+     - The OpenGL bindings: GL, GLU, GLUT, EGL, WGL and GLX, the extensions,
+       array handling, platform abstractions
    * - `PyVRML97 <https://github.com/mcfletch/pyvrml97>`__
      - The node, field, route and prototype model the scenegraph is built
        from, and the VRML97 parser that fills it.
+   * - `pyopengl-video <https://github.com/mcfletch/pyopengl-video>`__
+     - Encodes the colour buffer to H.264 on the GPU's own encoder, without
+       copying the frame off the card. An extra: ``OpenGLContext[video]``.
    * - `pygltflib <https://gitlab.com/dodgyville/pygltflib>`__
      - Reads and writes glTF 2.0 and GLB, as the typed records the
        specification describes.
