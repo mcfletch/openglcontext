@@ -890,6 +890,19 @@ Run from the worktree with `PYTHONPATH=<worktree>`; GLUT and Tk need
   mix-in it behaves as before (its map view is not driven, and it handles
   the others before `super().ProcessEvent`); in Phase 4 its own routing,
   resize and maximise code can go in favour of the mix-in's.
+- Documentation: `docs/navigation.rst` (the declaration, the registries,
+  `modeSwitching`), `docs/multiview.rst` (declared views, `startViews`,
+  `quadViews`, `viewSetFor`), `docs/viewer.rst` (`m`, `v`, `x`),
+  `docs/overlayui.rst` (`ModeSelector`), CLAUDE.md's directory map.
+- Two test stubs borrowed `Context.getViewLayout`, which now chains through
+  the views; they borrow `ContextCore.getViewLayout`.  The crowd timing
+  comparisons (`test_character_scaling_performance.py`) moved to the
+  `serial` pass: they compare two wall-clock timings and failed under a
+  loaded parallel run.
+- Gates after Phase 2b: ruff, oglc-check and mypy (533 files) clean; engine
+  suite 12323 non-serial and 20 serial passed; Qt 169; openglcontext-editor
+  1478, forest 66, marble-demo 896, marble-editor 162, glisteel 1638,
+  glisteel-editor 469, twig-bb 2355.
 
 Still to do:
 
@@ -899,12 +912,6 @@ Still to do:
   with the merge staged, as preflight does, before the merge is committed.
 - wx and WGL: written against their APIs, not run here; their CI jobs are
   the gate.
-- Phase 2b docs: `docs/navigation.rst` (the `Navigation` declaration, the
-  registries, `modeSwitching`), `docs/multiview.rst` (views declared;
-  `startViews`/`quadViews`/`viewSetFor`; `v` and `x`), `docs/overlayui.rst`
-  (the `ModeSelector`), `docs/viewer.rst` (`x` maximises), CLAUDE.md's map
-  entry for `multiview/mixin.py`.  Then the whole suite and the sibling
-  suites again.
 - Phase 4 for the games (forest, twig-bb, glisteel, glisteel-editor,
   marble-demo, marble-editor): they keep working unchanged, since
   `getInteractive()` answers `Context`; moving them to `class Game(Context)`
