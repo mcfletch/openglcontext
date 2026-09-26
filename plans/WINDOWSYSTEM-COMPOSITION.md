@@ -752,14 +752,10 @@ Settled with the maintainer, 2026-09-26:
 - The folded mix-ins remain mix-in classes in their own modules, so
   `context.py` does not grow back to the size they were split out of.
 
-Open:
-
-- Whether `OverlayMixin` folds into `Context` as well. `navigation`'s
-  `controls` need the overlay stack, and five of the seven applications and
-  the viewer already mix it in; the stack is inert until something is pushed
-  onto it. Proposed: fold it, which removes the construction-time error for
-  `controls` without it and the ordering rule (`OverlayMixin` first) every
-  application has to know.
+- `OverlayMixin` folds into `Context` too (settled 2026-09-26): the stack is
+  inert until something is pushed, and folding it removes the
+  construction-time error for `controls` without it and the ordering rule
+  every application had to know.
 
 ## Progress
 
@@ -955,6 +951,23 @@ worktree at `<project>/.claude/worktrees/windowsystem`):
 - Suites against the worktrees: engine 12324 non-serial; forest 69,
   marble-demo 900 (6 xfailed), marble-editor 165, glisteel 1641,
   glisteel-editor 472, twig-bb 2357.
+
+2026-09-26, the overlay fold (0e23299f; each game's "UI The overlay stack
+comes with Context"):
+
+- The implementation is `ui.overlay.OverlayStackMixin`, first among
+  `Context`'s bases.  `OverlayMixin` could not stay the base's name: a class
+  listing it ahead of `Context` would then have no consistent MRO.  It is an
+  empty class that warns as a subclass is defined, for Phase 6 to remove.
+- Application mix-ins listed ahead of `Context` (the viewer's, recording,
+  terrain and physics walking, async loading) now come before the overlay in
+  the MRO; none of them handles input, and the two editors that override
+  `ProcessEvent` call `overlaySinks` first themselves.
+- Releasing the pointer grab goes through the overlay, which restores the
+  pointer's shape; the GLFW capture tests stub `set_cursor` for it.
+- The physics demos and `redbook_alpha3D` stepped by `time.time()` from
+  `OnIdle`, so `physics_stress.py` drew a different frame nearly every run
+  and once crossed the tolerance; they read `systemtime.systemTime()`.
 
 Still to do:
 
