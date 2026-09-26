@@ -43,7 +43,7 @@ health bar, so HUD layers and panels are separate:
      - Centred in the window
 
 Every context has HUD layers, because every context has a developer overlay.
-A context gets panels by mixing in ``OpenGLContext.ui.overlay.OverlayMixin``.
+Every context has the panel stack as well (:doc:`overlayui`).
 
 .. _hud-quickstart:
 
@@ -528,7 +528,7 @@ the camera in ``placeViewAttachments``:
 
 .. code-block:: python
 
-   class Game(OverlayMixin, Context):
+   class Game(Context):
        def placeViewAttachments(self, pass_):
            "Called once the camera is settled, before any geometry is gathered."
            aim_at_camera(self.hand, self.getViewPlatform())

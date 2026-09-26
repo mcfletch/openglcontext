@@ -400,7 +400,7 @@ and rocks are a set of vertical cylinders, resolved analytically.
 
 .. code-block:: python
 
-   class Forest( OverlayMixin, TerrainWalkMixin, BaseContext ):
+   class Forest( TerrainWalkMixin, Context ):
        def OnInit( self ):
            self.sg = my_scene                          # with the SplatTerrain in it
            self.eye_height = 1.7                       # metres; sizes the avatar

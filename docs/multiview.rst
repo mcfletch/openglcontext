@@ -44,9 +44,8 @@ the views as the context completes, after ``OnInit``:
    from OpenGLContext.contextdefinition import ContextDefinition
    from OpenGLContext.move.navigationdefinition import (
        Arrangement, Navigation, ViewDefinition, Views)
-   from OpenGLContext.ui.overlay import OverlayMixin
 
-   class Editor(OverlayMixin, Context):
+   class Editor(Context):
        contextDefinition = ContextDefinition(navigation=Navigation(
            modes=['examine'],
            views=Views(
@@ -95,10 +94,8 @@ the views as the context completes, after ``OnInit``:
   ``viewsCycleKey`` (:kbd:`v`, the arrangements in the order declared) and
   ``viewMaximiseKey`` (:kbd:`x`, the view last clicked takes the whole window
   or gives it back); both fire on the key's release, and a class sets either
-  to ``''`` to bind none. ``controls`` puts the view controls up, which are
-  drawn on ``OverlayMixin``'s overlay stack: a context that declares
-  ``controls`` without ``OverlayMixin`` raises ``TypeError`` as it is built.
-  Empty leaves switching to the application.
+  to ``''`` to bind none. ``controls`` puts the view controls up, on the
+  context's overlay stack. Empty leaves switching to the application.
 
 ``navigation.views`` NULL, the default, builds nothing, and each frame draws
 the window's one view. The application switches whatever ``switching`` says:
@@ -109,9 +106,9 @@ The views are framed on the context's ``sceneBounds()`` when they are built.
 An application that loads a scene afterwards calls ``frameViews()`` to fit
 them to it; ``oglc-view`` does this each time a scene loads.
 
-Put ``OverlayMixin`` ahead of ``Context`` in the bases. Each event then
-reaches the view controls first, and the views get the events the controls
-do not take.
+The overlay stack comes ahead of the views in ``Context``'s bases, so each
+event reaches the view controls first, and the views get the events the
+controls do not take.
 
 Each view's menu lists the scene's cameras (``context.sceneCameras()``).
 Choosing one in the perspective view binds its ``Viewpoint``. Choosing one in
@@ -125,7 +122,7 @@ from code:
 
 .. code-block:: python
 
-   class Viewer(OverlayMixin, Context):
+   class Viewer(Context):
        multiViewArrangement = 'quad'        # the default is 'single'
 
        def OnInit(self):

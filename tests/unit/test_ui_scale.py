@@ -19,7 +19,7 @@ from OpenGLContext.ui.skin import DEFAULT_SKIN, NineSlice, Skin
 from OpenGLContext.ui.widgets import Button, Label
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.scenegraph.text import fonts
-from OpenGLContext.ui.overlay import OverlayMixin
+from OpenGLContext.ui.overlay import OverlayStackMixin
 from OpenGLContext.ui.screen import ScreenMixin
 from OpenGLContext.ui.scroll import ScrollViewport
 
@@ -216,7 +216,7 @@ class TestTheContextChoosesTheSize:
             def getViewPort(self):
                 return self.viewport
 
-        class Context(OverlayMixin, ScreenMixin, World):
+        class Context(OverlayStackMixin, ScreenMixin, World):
             pass
 
         return Context()

@@ -21,7 +21,6 @@ from OpenGLContext.ui.widgets import Button
 from tests.unit.glrender import base_env
 from OpenGLContext import testingcontext
 from OpenGLContext.scenegraph import basenodes
-from OpenGLContext.ui.overlay import OverlayMixin
 
 
 @pytest.fixture
@@ -32,7 +31,7 @@ def window(monkeypatch):
 
     drawn = []
 
-    class Tipped(OverlayMixin, testingcontext.getInteractive('glfw')):
+    class Tipped(testingcontext.getInteractive('glfw')):
         def OnInit(self):
             self.sg = basenodes.sceneGraph(children=[])
 

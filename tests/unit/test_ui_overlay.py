@@ -11,7 +11,7 @@ from PIL import Image
 from OpenGLContext.events.inputstate import InputState
 from OpenGLContext.ui.layout import Column
 from OpenGLContext.ui.metrics import FontMetrics, FontMetrics as Metrics
-from OpenGLContext.ui.overlay import OverlayMixin, OverlayStack
+from OpenGLContext.ui.overlay import OverlayStackMixin, OverlayStack
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.widgets import Button, Label, TextField
 from OpenGLContext.events import systemtime
@@ -107,7 +107,7 @@ class World:
         return event
 
 
-class FakeContext(OverlayMixin, World):
+class FakeContext(OverlayStackMixin, World):
     """The real mix-in over a stand-in world, with no window at all."""
 
     def overlayMetrics(self):
@@ -601,7 +601,7 @@ def png(tmp_path):
 def context(tmp_path):
     """A context whose overlay renderer has a real, window-free cache."""
     made = FakeContext()
-    made._overlayRenderer = _FakeRenderer(str(tmp_path / 'cache'))  # noqa: SLF001 the renderer OverlayMixin makes at its first draw, stood in for without a window
+    made._overlayRenderer = _FakeRenderer(str(tmp_path / 'cache'))  # noqa: SLF001 the renderer OverlayStackMixin makes at its first draw, stood in for without a window
     return made
 
 
@@ -615,7 +615,7 @@ class TestPictureLifetime:
     """
 
     def test_closing_the_last_panel_gives_the_textures_back(self, context, png):
-        cache = context._overlayRenderer.pictures  # noqa: SLF001 the renderer OverlayMixin makes at its first draw, stood in for without a window
+        cache = context._overlayRenderer.pictures  # noqa: SLF001 the renderer OverlayStackMixin makes at its first draw, stood in for without a window
         for name in ('a.png', 'b.png'):
             assert cache.get(png(name), blocking=True) is not None
         assert cache.resident == 2
@@ -625,11 +625,11 @@ class TestPictureLifetime:
         panel.close()
 
         assert cache.resident == 0
-        assert len(context._overlayRenderer.gl.deleted) == 2  # noqa: SLF001 the renderer OverlayMixin makes at its first draw, stood in for without a window
+        assert len(context._overlayRenderer.gl.deleted) == 2  # noqa: SLF001 the renderer OverlayStackMixin makes at its first draw, stood in for without a window
 
     def test_a_panel_closing_over_another_keeps_them(self, context, png):
         """Moving between screens must not throw away what is still on show."""
-        cache = context._overlayRenderer.pictures  # noqa: SLF001 the renderer OverlayMixin makes at its first draw, stood in for without a window
+        cache = context._overlayRenderer.pictures  # noqa: SLF001 the renderer OverlayStackMixin makes at its first draw, stood in for without a window
         assert cache.get(png('a.png'), blocking=True) is not None
 
         under = dialog()
@@ -639,11 +639,11 @@ class TestPictureLifetime:
         over.close()
 
         assert cache.resident == 1
-        assert context._overlayRenderer.gl.deleted == []  # noqa: SLF001 the renderer OverlayMixin makes at its first draw, stood in for without a window
+        assert context._overlayRenderer.gl.deleted == []  # noqa: SLF001 the renderer OverlayStackMixin makes at its first draw, stood in for without a window
 
     def test_the_cache_still_works_afterwards(self, context, png):
         """Reopening reloads from disk rather than finding a dead cache."""
-        cache = context._overlayRenderer.pictures  # noqa: SLF001 the renderer OverlayMixin makes at its first draw, stood in for without a window
+        cache = context._overlayRenderer.pictures  # noqa: SLF001 the renderer OverlayStackMixin makes at its first draw, stood in for without a window
         path = png('a.png')
         assert cache.get(path, blocking=True) is not None
 

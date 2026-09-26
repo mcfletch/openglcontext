@@ -19,10 +19,9 @@ Keys:
 import math
 
 from OpenGLContext import testingcontext
-'''``OverlayMixin`` gives a context the overlay stack, the input routing and
-the drawing.  It is mixed in *ahead of* the context class so its event
-handling runs before navigation gets the same click.'''
-from OpenGLContext.ui.overlay import OverlayMixin
+'''Every context has the overlay stack, the input routing and the drawing
+(``OverlayStackMixin``, among ``Context``'s bases).  Its event handling runs
+before navigation gets the same click.'''
 from OpenGLContext.ui.layout import Column, Row
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.widgets import (
@@ -40,7 +39,7 @@ BaseContext = testingcontext.getInteractive()
 PERIOD = 4.0
 
 
-class TestContext(OverlayMixin, BaseContext):
+class TestContext(BaseContext):
     initialPosition = (0, 1.5, 6)
 
     def OnInit(self):

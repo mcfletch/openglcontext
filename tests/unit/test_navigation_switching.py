@@ -17,7 +17,6 @@ from OpenGLContext.move.navigationdefinition import Navigation
 from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
 from OpenGLContext.testing.glcontext import profile_unavailable
 from OpenGLContext.testing.scenes import scene_context
-from OpenGLContext.ui.overlay import OverlayMixin
 from OpenGLContext.ui.toolpalette import ModeSelector
 
 
@@ -184,10 +183,6 @@ class TestTheModeSelector:
         assert [str(button.tool) for button in selector.buttons()] == ['walk', 'fly']
 
 
-class _Overlaid(OverlayMixin, Context):
-    pass
-
-
 @pytest.fixture
 def core_profile():
     """Skip where this machine opens no core-profile context."""
@@ -197,16 +192,9 @@ def core_profile():
 
 
 class TestOnScreenControls:
-    def test_controls_need_the_overlay(self, core_profile):
-        """Raised as the context is built, naming what to mix in, rather than
-        leaving a declaration that silently offers nothing."""
-        with pytest.raises(TypeError, match='OverlayMixin'):
-            with scene_context([], navigation=Navigation(
-                    modes=['walk', 'fly'], modeSwitching=['controls'])):
-                pass
-
-    def test_an_overlaid_context_puts_the_selector_up(self, core_profile):
-        with scene_context([], base=_Overlaid, navigation=Navigation(
+    def test_a_context_puts_the_selector_up(self, core_profile):
+        """Every context has the overlay stack the selector is drawn on."""
+        with scene_context([], navigation=Navigation(
                 modes=['walk', 'fly'], modeSwitching=['controls'])) as context:
             selectors = [panel for panel in context.overlays.panels
                          if isinstance(panel, ModeSelector)]

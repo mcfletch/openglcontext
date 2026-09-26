@@ -328,12 +328,6 @@ class ViewPlatformMixin(PhysicsWalkMixin, _Host):
         declared = self.declaredNavigation()
         if declared is None:
             return
-        if 'controls' in declared.modeSwitching and not hasattr( self, 'overlays' ):
-            raise TypeError(
-                "%s's navigation offers on-screen controls for its movement "
-                "modes, which are drawn on the overlay stack: mix "
-                "OpenGLContext.ui.overlay.OverlayMixin into the class, ahead "
-                "of Context" % ( type( self ).__name__, ))
         if declared.examines():
             from OpenGLContext.move import smooth
             self.setMovementManager( smooth.Smooth( self.getViewPlatform() ) )

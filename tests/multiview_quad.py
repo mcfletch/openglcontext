@@ -58,10 +58,8 @@ from OpenGLContext.passes import renderpass
 from OpenGLContext.scenegraph.basenodes import (
     Background, DirectionalLight, sceneGraph,
 )
-'''The furniture is an overlay panel, so the context is one with an overlay
-stack: `OverlayMixin` is what every window with menus, dialogs or a HUD
-already mixes in.'''
-from OpenGLContext.ui.overlay import OverlayMixin
+'''The furniture is an overlay panel, pushed on the overlay stack every
+context has.'''
 from OpenGLContext.ui.viewchrome import ViewChrome
 
 MODEL = 'Lantern'
@@ -80,7 +78,7 @@ def model_path(arguments):
     return fetch_to_cache(sample_model_url(MODEL))
 
 
-class TestContext(OverlayMixin, BaseContext):
+class TestContext(BaseContext):
     def OnInit(self):
         scene = load_gltf(model_path(sys.argv[1:]))
         '''The loader makes a ``Viewpoint`` for each camera the file defines,

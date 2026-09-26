@@ -7,7 +7,7 @@ from OpenGLContext.move.navigationdefinition import Navigation
 from OpenGLContext.move import modes as movemodes
 from OpenGLContext.ui import settings
 from OpenGLContext.ui.metrics import FontMetrics
-from OpenGLContext.ui.overlay import OverlayMixin
+from OpenGLContext.ui.overlay import OverlayStackMixin
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.widgets import Slider, Toggle
 from OpenGLContext.events.inputstate import InputState
@@ -44,7 +44,7 @@ class World:
         return event
 
 
-class Context(OverlayMixin, World):
+class Context(OverlayStackMixin, World):
     def overlayMetrics(self):
         return FontMetrics(8, 16, 2)
 

@@ -8,7 +8,9 @@ See `OpenGLContext/demos/`, which is what asks.
 """
 import pytest
 
-from OpenGLContext.ui.overlay import OverlayMixin
+from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
+from OpenGLContext.multiview.mixin import MultiViewMixin
+from OpenGLContext.ui.overlay import OverlayStackMixin
 from OpenGLContext.viewer import viewerFor
 from OpenGLContext.viewer.sceneviewer import SceneViewerMixin, ViewerContext
 
@@ -24,9 +26,11 @@ class TestWhatComesBack:
         assert issubclass(found, SceneViewerMixin)
 
     def test_a_screen_that_is_up_takes_the_input_before_the_avatar_does(self):
-        """Which is what the mixin order says, and the reason it is stated."""
+        """The overlay comes ahead of the views and the navigation that move
+        the camera, which is the order ``Context`` gives its bases."""
         order = viewerFor('tk').__mro__
-        assert order.index(OverlayMixin) < order.index(SceneViewerMixin)
+        assert order.index(OverlayStackMixin) < order.index(MultiViewMixin) \
+            < order.index(ViewPlatformMixin)
 
     def test_naming_nothing_gives_whatever_the_machine_chose(self):
         assert viewerFor() is ViewerContext

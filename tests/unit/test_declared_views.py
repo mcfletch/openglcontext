@@ -26,7 +26,7 @@ from OpenGLContext.scenegraph.basenodes import Viewpoint, sceneGraph
 from OpenGLContext.testing.glcontext import profile_unavailable
 from OpenGLContext.testing.scenes import scene_context
 from OpenGLContext.ui.metrics import FontMetrics
-from OpenGLContext.ui.overlay import OverlayMixin
+from OpenGLContext.ui.overlay import OverlayStackMixin
 from OpenGLContext.ui.viewchrome import ViewChrome
 
 VIEWPORT = (800, 600)
@@ -162,7 +162,7 @@ class _World:
     def getInputState(self):
         return self.inputState
 
-    def screenTrees(self, _metrics, now=None):  # noqa: ARG002 the signature of OverlayMixin.screenTrees
+    def screenTrees(self, _metrics, now=None):  # noqa: ARG002 the signature of OverlayStackMixin.screenTrees
         return []
 
     def overlayMetrics(self):
@@ -189,7 +189,7 @@ class _Bare(MultiViewMixin, _World):
     """The mix-in with no overlay stack."""
 
 
-class _Overlaid(OverlayMixin, MultiViewMixin, _World):
+class _Overlaid(OverlayStackMixin, MultiViewMixin, _World):
     """The mix-in under an overlay stack, the order a context uses them in."""
 
 
@@ -292,12 +292,6 @@ class TestSwitchingArrangements:
     def test_no_controls_puts_none_up(self):
         window = _completed(_Overlaid, _quad())
         assert window.viewChrome is None
-
-    def test_controls_need_the_overlay(self):
-        """Raised as the context is built, naming what to mix in."""
-        window = _Bare(Navigation(views=_quad(switching=['controls'])))
-        with pytest.raises(TypeError, match='OverlayMixin'):
-            window.setupDefaultEventCallbacks()
 
 
 class TestStartingViewsAtRunTime:

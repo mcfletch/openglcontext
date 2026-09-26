@@ -18,19 +18,19 @@ under the panels; see :doc:`HUD & developer overlay <hud>`.
 
 .. _overlayui-quickstart:
 
-Adding the overlay to a context
--------------------------------
+The overlay stack
+-----------------
 
-Mix ``OpenGLContext.ui.overlay.OverlayMixin`` into the context. Put it
-**ahead of** the navigation mix-in in the bases, so that its event routing
-runs first:
+Every context has the overlay stack: ``OpenGLContext.ui.overlay.OverlayStackMixin``
+is one of ``Context``'s bases, ahead of the views and the navigation, so its
+event routing runs first. With nothing pushed, an event or a frame costs it a
+check that the stack is empty.
 
 .. code-block:: python
 
    from OpenGLContext.ui import dialogs, settings
-   from OpenGLContext.ui.overlay import OverlayMixin
 
-   class Game(OverlayMixin, Context):
+   class Game(Context):
        def OnInit(self):
            self.addEventHandler('keyboard', name='<F10>', state=1,
                                 function=self.openSettings)
@@ -465,7 +465,7 @@ open, and each receives the events the other does not take. The pointer's
 position is offered to every layer, whatever they do with it, so that each
 layer can update its hover state.
 
-``OverlayMixin`` also handles these cases:
+``OverlayStackMixin`` also handles these cases:
 
 - The input sampler (``InputState``) is not fed while a modal panel is open,
   and is cleared when one opens and when the last one closes. A key the

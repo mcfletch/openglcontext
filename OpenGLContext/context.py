@@ -105,6 +105,7 @@ from OpenGLContext.contextconfig import ContextConfigMixin
 from OpenGLContext.events.eventhandlermixin import EventHandlerMixin
 from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
 from OpenGLContext.multiview.mixin import MultiViewMixin
+from OpenGLContext.ui.overlay import OverlayStackMixin
 from OpenGLContext.ui.screen import ScreenMixin
 from OpenGLContext.vrmlcontext import VRMLSceneMixin
 from OpenGLContext import windowsystem as _windowsystem
@@ -2028,8 +2029,8 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         return type("TestingContext", (Context,), {"contextDefinition": definition})
 
 
-class Context(MultiViewMixin, ViewPlatformMixin, EventHandlerMixin, VRMLSceneMixin,
-              ContextCore):
+class Context(OverlayStackMixin, MultiViewMixin, ViewPlatformMixin, EventHandlerMixin,
+              VRMLSceneMixin, ContextCore):
     """A rendering context: a window, the GL context in it, and a scene
 
     The Context object represents a single rendering context for use by the
@@ -2046,7 +2047,8 @@ class Context(MultiViewMixin, ViewPlatformMixin, EventHandlerMixin, VRMLSceneMix
     The window it draws in belongs to a
     :class:`~OpenGLContext.windowsystem.WindowSystem` it holds, chosen by the
     definition's ``windowsystem`` field; see :mod:`OpenGLContext.windowsystem`
-    and ``docs/backends.rst``.  Every context has the event managers of
+    and ``docs/backends.rst``.  Every context has the overlay stack of
+    :class:`~OpenGLContext.ui.overlay.OverlayStackMixin`, the event managers of
     :class:`~OpenGLContext.events.eventhandlermixin.EventHandlerMixin`, the
     camera and movement modes of
     :class:`~OpenGLContext.move.viewplatformmixin.ViewPlatformMixin`, the

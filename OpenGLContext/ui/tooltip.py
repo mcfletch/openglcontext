@@ -7,7 +7,7 @@ pointer across a window somebody is only crossing.
 A tooltip takes no events: it is drawn over the panels rather than pushed on
 the stack, so nothing is under it and nothing about modality changes.
 ``Widget.tooltip`` is the line, and
-:class:`~OpenGLContext.ui.overlay.OverlayMixin` is what watches the pointer
+:class:`~OpenGLContext.ui.overlay.OverlayStackMixin` is what watches the pointer
 and puts one up.
 """
 from __future__ import annotations

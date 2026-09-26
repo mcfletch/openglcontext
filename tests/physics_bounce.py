@@ -8,9 +8,9 @@ A row of balls dropped from the same height with restitution rising from 0
 heights increase across the row — a direct read-out of the ``restitution``
 material property and its combine mode.
 '''
-import time
 
 from OpenGLContext import testingcontext
+from OpenGLContext.events import systemtime
 BaseContext = testingcontext.getInteractive()
 
 from omi_physics import model
@@ -26,7 +26,7 @@ class TestContext(BaseContext):
         self.build()
         print(__doc__)
         self.addEventHandler('keypress', name='r', function=self.on_reset)
-        self._last = time.time()
+        self._last = systemtime.systemTime()
 
     def on_reset(self, event):
         self.build()
@@ -48,7 +48,7 @@ class TestContext(BaseContext):
         self.sg = self.scene.scene_graph()
 
     def OnIdle(self, *args):
-        now = time.time()
+        now = systemtime.systemTime()
         active = self.scene.advance(min(now - self._last, 0.05))
         self._last = now
         if active:

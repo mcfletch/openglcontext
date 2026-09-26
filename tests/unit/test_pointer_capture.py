@@ -184,6 +184,8 @@ def test_the_glfw_window_system_disables_the_cursor_to_capture(monkeypatch):
     calls = []
     monkeypatch.setattr(glfw, 'set_input_mode',
                         lambda _window, mode, value: calls.append((mode, value)))
+    # Letting go puts the pointer back in the shape the overlay asks for.
+    monkeypatch.setattr(glfw, 'set_cursor', lambda _window, _cursor: None)
     monkeypatch.setattr(glfw, 'raw_mouse_motion_supported', lambda: False)
     assert context.setPointerCapture(True)
     assert calls == [(glfw.CURSOR, glfw.CURSOR_DISABLED)]
@@ -200,6 +202,8 @@ def test_raw_motion_is_asked_for_when_the_platform_has_it(monkeypatch):
     calls = []
     monkeypatch.setattr(glfw, 'set_input_mode',
                         lambda _window, mode, value: calls.append((mode, value)))
+    # Letting go puts the pointer back in the shape the overlay asks for.
+    monkeypatch.setattr(glfw, 'set_cursor', lambda _window, _cursor: None)
     monkeypatch.setattr(glfw, 'raw_mouse_motion_supported', lambda: True)
     context.setPointerCapture(True)
     assert (glfw.RAW_MOUSE_MOTION, True) in calls

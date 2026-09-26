@@ -48,9 +48,7 @@ The navigation declaration
 - ``modeSwitching`` - how the *user* may change mode. ``keys`` binds
   ``movementCycleKey`` (:kbd:`m`, on its release) to step through the
   selectable modes; ``controls`` puts a ``ModeSelector`` palette on the
-  overlay (see :doc:`overlayui`), which needs ``OverlayMixin`` among the
-  context's bases, and raises ``TypeError`` as the context is built without
-  it. Empty offers the user neither. The application's own
+  overlay (see :doc:`overlayui`). Empty offers the user neither. The application's own
   ``getNavigation().select(name)`` and ``cycle()`` work whatever the field
   says, and a mode the world imposes (swimming) applies regardless.
 - ``views`` - the views and their arrangements, described in

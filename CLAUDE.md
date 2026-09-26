@@ -225,7 +225,8 @@ OpenGLContext/
 ├── testing/          # The shipped test machinery conftest.py imports
 ├── tests/            # A second test root -- being moved to tests/unit/ (C1)
 ├── ui/               # Overlay UI: panels, widgets, skin -- docs/overlayui.rst
-│   ├── overlay.py    # OverlayStack + OverlayMixin: the stack and input routing
+│   ├── overlay.py    # OverlayStack + OverlayStackMixin (a base of Context):
+│   │                 # the stack and input routing
 │   ├── panel.py      # One screen: focus, accelerators, modality
 │   ├── widgets.py    # Label/Button/Toggle/Select/Slider/Text+NumberField
 │   ├── hudwidgets.py # The in-world HUD: reticule, meters, messages -- docs/hud.rst

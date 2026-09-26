@@ -15,9 +15,8 @@ Keys:
     escape  put a page away
 '''
 from OpenGLContext import testingcontext
-'''The pages are panels, so the context needs the overlay stack:
+'''The pages are panels, pushed on the overlay stack every context has:
 :doc:`Putting a panel on the screen <using_ui>`.'''
-from OpenGLContext.ui.overlay import OverlayMixin
 from OpenGLContext.ui import generate, settings
 from OpenGLContext.ui.layout import Column, Row
 from OpenGLContext.ui.panel import Panel
@@ -65,7 +64,7 @@ class GameOptions(node.Node):
     }
 
 
-class TestContext(OverlayMixin, BaseContext):
+class TestContext(BaseContext):
     initialPosition = (0, 1.2, 6)
 
     def OnInit(self):

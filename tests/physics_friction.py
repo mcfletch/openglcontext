@@ -8,10 +8,10 @@ Identical boxes are placed on ramps of increasing angle.  A box slides only when
 let it slide — the classic friction-cone threshold, with the material's
 ``staticFriction`` / ``dynamicFriction`` and combine mode doing the work.
 '''
-import time
 import numpy as np
 
 from OpenGLContext import testingcontext
+from OpenGLContext.events import systemtime
 BaseContext = testingcontext.getInteractive()
 
 from omi_physics import model, mathutil
@@ -27,7 +27,7 @@ class TestContext(BaseContext):
         self.build()
         print(__doc__)
         self.addEventHandler('keypress', name='r', function=self.on_reset)
-        self._last = time.time()
+        self._last = systemtime.systemTime()
 
     def on_reset(self, event):
         self.build()
@@ -57,7 +57,7 @@ class TestContext(BaseContext):
                            color=(0.9, 0.7, 0.3), material=mat, rotation=axis_angle)
 
     def OnIdle(self, *args):
-        now = time.time()
+        now = systemtime.systemTime()
         active = self.scene.advance(min(now - self._last, 0.05))
         self._last = now
         if active:

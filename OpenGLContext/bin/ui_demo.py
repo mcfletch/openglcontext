@@ -40,7 +40,6 @@ from OpenGLContext.scenegraph.quadrics import Sphere
 from OpenGLContext.scenegraph.scenegraph import SceneGraph
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.ui import bindings, console, dialogs, settings
-from OpenGLContext.ui.overlay import OverlayMixin
 
 log = logging.getLogger(__name__)
 BaseContext: Any = testingcontext.getInteractive()
@@ -113,11 +112,11 @@ def movement_modes() -> list[Any]:
     ]
 
 
-class UIDemoContext(OverlayMixin, BaseContext):
+class UIDemoContext(BaseContext):
     """A scene with the overlay screens bound to function keys.
 
-    The mix-in comes first so its event routing runs before the navigation
-    mix-in's: while a modal panel is up the movement sampler is not fed at all.
+    The overlay's event routing runs before the navigation's in every
+    context: while a modal panel is up the movement sampler is not fed at all.
     """
 
     skinned: bool = False

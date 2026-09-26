@@ -3,7 +3,7 @@
 A notch is spelled as a press and release of a button no physical mouse has --
 ``WHEEL_UP`` and ``WHEEL_DOWN``, the X11 numbering used throughout
 OpenGLContext -- so it travels the same route as a click: a pick event carrying
-a pick point, then :meth:`OverlayMixin.overlaySinks`, which turns the pair into
+a pick point, then :meth:`OverlayStackMixin.overlaySinks`, which turns the pair into
 one call on the panel under the pointer.
 
 Every window system has to produce that spelling, and they do not agree on how the
@@ -19,7 +19,7 @@ from OpenGLContext.events import glutevents, pygameevents
 from OpenGLContext.events.inputstate import InputState
 from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
 from OpenGLContext.ui.metrics import FontMetrics
-from OpenGLContext.ui.overlay import OverlayMixin
+from OpenGLContext.ui.overlay import OverlayStackMixin
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.scroll import ScrollViewport
 from OpenGLContext.ui.widgets import Button, Label
@@ -308,7 +308,7 @@ class _Viewport:
         return VIEWPORT
 
 
-class WheelContext(OverlayMixin):
+class WheelContext(OverlayStackMixin):
     """A context wired as the real one is: GLFW's events into an overlay.
 
     ``addPickEvent`` dispatches at once, standing in for the selection pass,

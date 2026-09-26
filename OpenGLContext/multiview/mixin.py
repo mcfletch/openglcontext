@@ -7,7 +7,7 @@ bases.  A context whose navigation declares a
 completes: the views, their arrangements, the keys that switch them and the
 furniture in each view, as the declaration's ``switching`` asks::
 
-    class Editor(OverlayMixin, Context):
+    class Editor(Context):
         contextDefinition = ContextDefinition(navigation=Navigation(
             modes=['examine'],
             views=Views(
@@ -25,7 +25,7 @@ A perspective view with no gestures draws through whatever
 and any camera the application swaps in drive it as they drive a window of
 one view.  The other views have cameras of their own (:func:`viewSetFor`).
 
-``OverlayMixin`` goes ahead of ``Context`` in the bases, so the overlay is
+The overlay stack sits ahead of this mix-in in ``Context``'s bases, so it is
 offered each event first -- the furniture has to have the click meant for a
 button standing in front of a view -- and what the furniture leaves reaches
 the views.
@@ -181,20 +181,11 @@ class MultiViewMixin(_Host):
         return (navigation.views or None) if navigation else None
 
     def setupDefaultEventCallbacks(self) -> None:
-        """Bind the arrangement and maximise keys, where the views offer them.
-
-        Raises TypeError where the views offer on-screen controls and the
-        context has no overlay stack to draw them on.
-        """
+        """Bind the arrangement and maximise keys, where the views offer them."""
         super().setupDefaultEventCallbacks()
         declared = self.declaredViews()
         if declared is None:
             return
-        if 'controls' in declared.switching and not hasattr(self, 'overlays'):
-            raise TypeError(
-                "%s's views offer on-screen controls, which are drawn on the "
-                "overlay stack: mix OpenGLContext.ui.overlay.OverlayMixin into "
-                "the class, ahead of Context" % (type(self).__name__,))
         if 'keys' in declared.switching:
             for key, function in ((self.viewsCycleKey, self.toggleViews),
                                   (self.viewMaximiseKey, self.maximiseView)):

@@ -17,10 +17,10 @@ Keys:
     q / e           turn left / right        shift-w run (hold w, then r)
     space           jump                     f       toggle fly
 '''
-import time
 import numpy as np
 
 from OpenGLContext import testingcontext
+from OpenGLContext.events import systemtime
 BaseContext = testingcontext.getInteractive()
 
 from OpenGLContext.scenegraph import basenodes
@@ -80,11 +80,11 @@ class TestContext(BaseContext):
         # Fire the software key-repeat quickly so a held key doesn't stutter in the
         # gap between the initial press and the first repeat (HOLD is 0.25 s).
         self.keyRepeatDelay = 0.1
-        self._last = time.time()
+        self._last = systemtime.systemTime()
 
     def _on_key(self, event):
         self._auto = False
-        self._keys[event.name] = time.time()
+        self._keys[event.name] = systemtime.systemTime()
 
     def _toggle_auto(self, event):
         self._auto = not self._auto
@@ -100,7 +100,7 @@ class TestContext(BaseContext):
         self.platform_nav.set_fly(not self.platform_nav.character.flying)
 
     def OnIdle(self, *args):
-        now = time.time()
+        now = systemtime.systemTime()
         dt = min(now - self._last, 0.05)
         self._last = now
         nav = self.platform_nav

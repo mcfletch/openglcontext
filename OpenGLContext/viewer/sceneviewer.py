@@ -66,7 +66,6 @@ from OpenGLContext.viewer import framing
 from OpenGLContext.viewer.adapters import (
     SceneAdapter, UnknownSourceType, adapter_for, adapter_named,
 )
-from OpenGLContext.ui.overlay import OverlayMixin
 from OpenGLContext.viewer.asyncscene import AsyncSceneMixin
 from OpenGLContext.video.recorder import RecordingMixin
 from OpenGLContext.viewer.capture import SettleCaptureMixin
@@ -1276,10 +1275,10 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         return time()
 
 
-class ViewerContext(OverlayMixin, SceneViewerMixin, Context):
+class ViewerContext(SceneViewerMixin, Context):
     """The viewing component, on whichever window system the definition names
 
-    ``OverlayMixin`` comes **first**, ahead of the navigation the context
-    brings, so a screen that is up takes the keys and the mouse instead of the
-    avatar walking off while somebody reads the settings.
+    A screen that is up takes the keys and the mouse ahead of the navigation,
+    as it does in every context, so the avatar does not walk off while
+    somebody reads the settings.
     """

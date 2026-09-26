@@ -14,10 +14,10 @@ Keys:
     r      reset the scene
     d      cycle debug overlay (proxies / +aabbs / +velocity / all / off)
 '''
-import time
 import numpy as np
 
 from OpenGLContext import testingcontext
+from OpenGLContext.events import systemtime
 BaseContext = testingcontext.getInteractive()
 
 from omi_physics import model
@@ -45,7 +45,7 @@ class TestContext(BaseContext):
         self.addEventHandler('keypress', name='r', function=self.on_reset)
         self.addEventHandler('keypress', name=' ', function=self.on_add)
         self.addEventHandler('keypress', name='d', function=self.on_debug)
-        self._last = time.time()
+        self._last = systemtime.systemTime()
 
     def build_scene(self):
         self.scene = DemoScene(debug_flags=DEBUG_CYCLE[self._debug_index])
@@ -67,7 +67,7 @@ class TestContext(BaseContext):
                                   color=(0.4, 0.6, 0.9), material='rubber')
 
     def OnIdle(self, *args):
-        now = time.time()
+        now = systemtime.systemTime()
         dt = min(now - self._last, 0.05)
         self._last = now
         if self.scene.advance(dt):

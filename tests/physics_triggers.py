@@ -11,9 +11,9 @@ enter/stay/exit events drive pickups, pressure plates, and region logic.
 The demo subscribes to the trigger's events through the physics manager, and
 each event arrives with the scenegraph node of the ball that entered or left.
 '''
-import time
 
 from OpenGLContext import testingcontext
+from OpenGLContext.events import systemtime
 BaseContext = testingcontext.getInteractive()
 
 from omi_physics import model
@@ -33,7 +33,7 @@ class TestContext(BaseContext):
         self.build()
         print(__doc__)
         self.addEventHandler('keypress', name='r', function=self.on_reset)
-        self._last = time.time()
+        self._last = systemtime.systemTime()
 
     def on_reset(self, event):
         self.build()
@@ -61,7 +61,7 @@ class TestContext(BaseContext):
         material.diffuseColor = GREEN if hit.phase == 'enter' else ORANGE
 
     def OnIdle(self, *args):
-        now = time.time()
+        now = systemtime.systemTime()
         active = self.scene.advance(min(now - self._last, 0.05))
         self._last = now
         if active:

@@ -13,7 +13,7 @@ from OpenGLContext.events import mouseevents
 from OpenGLContext.events.mouseevents import MouseButtonEvent
 from OpenGLContext.move import modes
 from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
-from OpenGLContext.ui.overlay import OverlayMixin
+from OpenGLContext.ui.overlay import OverlayStackMixin
 
 
 class _Event:
@@ -364,7 +364,7 @@ class TestAClickOnAScreenIsNotAnInput:
 
     def context(self, sinks):
 
-        class _Guarded(OverlayMixin, ViewPlatformMixin, _EndOfTheChain):
+        class _Guarded(OverlayStackMixin, ViewPlatformMixin, _EndOfTheChain):
             def __init__(self):
                 self._state = InputState()
 
