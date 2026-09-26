@@ -158,3 +158,29 @@ class TestTheFamilyPreferenceList:
         matchFamily(self.style(family=['Gill Sans', 'SANS', 'SERIF']), lookup)
 
         assert asked == ['Gill Sans', 'SANS']
+
+
+class TestTheTrueTypeRegistry:
+    """A TrueType font finds the system's fonts however it was asked for.
+
+    ``Text`` nodes load the font providers the first time one is drawn, and a
+    program that builds a font itself -- a bitmap font for an overlay, made in
+    ``OnInit`` before any text has been drawn -- asks the same registry.
+    """
+
+    def test_one_already_set_is_answered(self, monkeypatch):
+        from OpenGLContext.scenegraph.text.fontprovider import TTFFontProvider
+
+        registry = object()
+        monkeypatch.setattr(TTFFontProvider, 'TTFRegistry', registry)
+        assert TTFFontProvider.getTTFRegistry() is registry
+
+    def test_with_none_set_the_process_registry_is_loaded(self, monkeypatch):
+        from OpenGLContext.contextconfig import ContextConfigMixin
+        from OpenGLContext.scenegraph.text.fontprovider import TTFFontProvider
+
+        scanned = object()
+        monkeypatch.setattr(TTFFontProvider, 'TTFRegistry', None)
+        monkeypatch.setattr(ContextConfigMixin, 'ttfFileRegistry', scanned)
+        assert TTFFontProvider.getTTFRegistry() is scanned
+        assert TTFFontProvider.TTFRegistry is scanned

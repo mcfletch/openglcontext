@@ -1300,8 +1300,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         pointers already in it.
 
         Every window system calls this as it destroys a window, before the
-        context goes.  It is the whole of what a window system owes the caches,
-        which is why it is one call and not two.
+        context goes; the caches need nothing else from it.
         """
         contextresources.context_lost()
         if handle is None:
