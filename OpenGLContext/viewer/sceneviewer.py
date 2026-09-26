@@ -794,7 +794,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         a capture, which wants one deterministic frame and not a simulation.
         """
         if self.capturing or getattr(self, 'sg', None) is None:
-            self._freeManager = getattr(self, 'movementManager', None)
+            self._freeManager = self.movementManager
             return
         self.declareMovementModes()
         self.physicsYaw = self.options.yaw
@@ -910,7 +910,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         Scaled from the class default rather than from the live value, so
         framing one scene after another does not compound.
         """
-        manager = getattr(self, 'movementManager', None)
+        manager = self.movementManager
         if manager is None:
             return
         default = getattr(type(manager), 'STEPDISTANCE', None)

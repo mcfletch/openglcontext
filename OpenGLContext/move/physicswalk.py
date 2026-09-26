@@ -153,7 +153,7 @@ class PhysicsWalkMixin(object):
         failure: an isolated or floorless model is meant to be looked at from
         the free-fly camera.
         """
-        self._freeManager = getattr(self, 'movementManager', None)
+        self._freeManager = self.movementManager
         if self.physicsToggleKey:
             self.addEventHandler('keyboard', name=self.physicsToggleKey,
                                  state=1, function=self.togglePhysics)
@@ -269,14 +269,13 @@ class PhysicsWalkMixin(object):
                 assert self.physicsPlatform is not None, (
                     'ensurePhysicsWorld has built one by here')
                 self.physicsPlatform.set_fly(False)
-            manager = getattr(self, 'movementManager', None)
-            if manager is not None and self._freeManager is not None:
+            if self.movementManager is not None and self._freeManager is not None:
                 self._freeManager.unbind(self)
                 self.movementManager = None
             self.bindPhysicsInput()
             self.physicsWalking = True
         else:
-            if getattr(self, 'movementManager', None) is None \
+            if self.movementManager is None \
                     and self._freeManager is not None:
                 self._freeManager.bind(self)
                 self.movementManager = self._freeManager

@@ -899,6 +899,13 @@ Run from the worktree with `PYTHONPATH=<worktree>`; GLUT and Tk need
   comparisons (`test_character_scaling_performance.py`) moved to the
   `serial` pass: they compare two wall-clock timings and failed under a
   loaded parallel run.
+- The duck-typed probes: `movementManager` is declared on
+  `ViewPlatformMixin`, so `physicswalk` and the viewer read it directly.  The
+  render passes keep `hasattr(context, 'ProcessEvent')` and
+  `getattr(context, 'triggerRedraw', None)`: a pass's context is whatever
+  drives it, not necessarily a `Context`, and `test_asyncpick_gl` and
+  `test_select_render_shared` hold that a stand-in without those methods is
+  accepted.  `audio/scene._view_platform` stays for the same reason.
 - Gates after Phase 2b: ruff, oglc-check and mypy (533 files) clean; engine
   suite 12323 non-serial and 20 serial passed; Qt 169; openglcontext-editor
   1478, forest 66, marble-demo 896, marble-editor 162, glisteel 1638,
