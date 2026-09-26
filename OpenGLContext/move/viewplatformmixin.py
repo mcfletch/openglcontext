@@ -15,6 +15,8 @@ if TYPE_CHECKING:
         """
 
         def getViewPort( self ) -> tuple[int, int]: ...
+        def completeInit( self ) -> bool: ...
+        overlays: Any
         def triggerRedraw( self, force: int = 0 ) -> Any: ...
         def addEventHandler( self, eventType: Any, *arguments: Any,
                              **named: Any ) -> Any: ...
@@ -323,12 +325,33 @@ class ViewPlatformMixin(PhysicsWalkMixin, _Host):
         declared = self.declaredNavigation()
         if declared is None:
             return
+        if 'controls' in declared.modeSwitching and not hasattr( self, 'overlays' ):
+            raise TypeError(
+                "%s's navigation offers on-screen controls for its movement "
+                "modes, which are drawn on the overlay stack: mix "
+                "OpenGLContext.ui.overlay.OverlayMixin into the class, ahead "
+                "of Context" % ( type( self ).__name__, ))
         if declared.examines():
             from OpenGLContext.move import smooth
             self.setMovementManager( smooth.Smooth( self.getViewPlatform() ) )
         if 'keys' in declared.modeSwitching and self.movementCycleKey:
             self.addEventHandler( 'keyboard', name=self.movementCycleKey,
                                   state=1, function=self.cycleMovementMode )
+
+    def completeInit( self ) -> bool:
+        """Complete the context, then put up the mode selector if it offers one
+
+        Where the navigation's ``modeSwitching`` holds ``controls``, a
+        :class:`~OpenGLContext.ui.toolpalette.ModeSelector` goes on the
+        overlay stack, reading the modes from :meth:`getNavigation` as they
+        are declared.
+        """
+        completed = bool( super( ViewPlatformMixin, self ).completeInit() )
+        declared = self.declaredNavigation()
+        if completed and declared is not None and 'controls' in declared.modeSwitching:
+            from OpenGLContext.ui.toolpalette import ModeSelector
+            self.overlays.push( ModeSelector( navigation=self.getNavigation ) )
+        return completed
 
     def cycleMovementMode( self, event: Any = None ) -> Any:
         """Step to the next selectable movement mode; the mode now selected.
