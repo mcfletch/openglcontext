@@ -250,11 +250,17 @@ simulation packages update.
        store, safe extraction and the polled download.
      - :doc:`Content packs <contentpacks>`
    * - ``context``
-     - The window, the main loop, the profile and the context definition,
-       with one module per backend.
-     - :doc:`Windowing Backends <backends>`
+     - The context class, the main loop, the profile and the context
+       definition.
+     - :doc:`Window Systems <backends>`
+   * - ``windowsystem``
+     - The window each context draws in, one module per toolkit (``glfw``,
+       ``glut``, ``pygame``, ``tk``, ``wx``) and per offscreen binding
+       (``egl``, ``wgl``), and the choice between them.
+     - :doc:`Window Systems <backends>`
    * - ``events``
-     - One keyboard, mouse and window event model across the backends, and
+     - One keyboard, mouse and window event model across the window systems,
+       and
        the dispatch that carries a change through the scenegraph.
      - :doc:`Event Model <eventmodel>`
    * - ``contextresources``

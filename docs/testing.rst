@@ -176,11 +176,12 @@ On Linux the offscreen context renders on an EGL *device*, not through a
 display server, so it needs no ``DISPLAY``, no ``WAYLAND_DISPLAY`` and no
 windowing library. That is how it differs from the default: a hidden GLFW
 window also works on a machine with no desktop, but it needs GLFW installed.
-``OPENGLCONTEXT_EGL_DEVICE`` selects the device, as it does for
-``EGLContext``; see :doc:`offscreen`. The context class,
-``OpenGLContext.eglcontext.PbufferContext``, can also be used on its own::
+``OPENGLCONTEXT_EGL_DEVICE`` selects the device, as it does for the ``egl``
+window system; see :doc:`offscreen`. The context class,
+``OpenGLContext.windowsystem.egl.PbufferContext``, can also be used on its
+own::
 
-   from OpenGLContext.eglcontext import PbufferContext
+   from OpenGLContext.windowsystem.egl import PbufferContext
 
    with PbufferContext(width=96, height=48) as gl:
        glReadPixels(0, 0, gl.width, gl.height, GL_RGB, GL_UNSIGNED_BYTE)

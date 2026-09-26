@@ -30,7 +30,7 @@ runs first:
    from OpenGLContext.ui import dialogs, settings
    from OpenGLContext.ui.overlay import OverlayMixin
 
-   class Game(OverlayMixin, GLFWInteractiveContext):
+   class Game(OverlayMixin, Context):
        def OnInit(self):
            self.addEventHandler('keyboard', name='<F10>', state=1,
                                 function=self.openSettings)

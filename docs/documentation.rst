@@ -54,10 +54,10 @@ Optional extras add the packages for particular features:
 ``OpenGLContext[all]``
    GLFW, Pygame, Draco and audio playback together.
 
-The wxPython backend needs ``wxPython`` installed separately. The Tk backend
-needs Tcl/Tk, which some Linux distributions package apart from Python
-(``apt install python3-tk``). The Qt backend is the separate
-``OpenGLContext-qt`` distribution. :ref:`Which backends are supported
+The wxPython window system needs ``wxPython`` installed separately. The Tk
+window system needs Tcl/Tk, which some Linux distributions package apart from
+Python (``apt install python3-tk``). The Qt window system is the separate
+``OpenGLContext-qt`` distribution. :ref:`Which window systems are supported
 <backends>` has the details for each.
 
 Using ``uv``
@@ -191,10 +191,11 @@ Getting started
 - :doc:`Structural Overview <structure>` -- the packages the engine is built
   on and the packages inside it, each with the page that describes it.
 
-- :doc:`Windowing Backends <backends>` -- the six GUI toolkits and the two
-  windowless backends, what each runs on, the window-level methods every one
-  provides, filling the screen, adding a backend, and what happens when a
-  context is destroyed.
+- :doc:`Window Systems <backends>` -- the six GUI toolkits and the two
+  windowless window systems, choosing one in the context definition, what
+  each runs on, the window-level methods every one provides, filling the
+  screen, writing a window system, and what happens when a context is
+  destroyed.
 
 Rendering
 ~~~~~~~~~

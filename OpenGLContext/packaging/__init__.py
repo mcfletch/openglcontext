@@ -33,9 +33,10 @@ __all__ = ['BACKEND_MODULES', 'SESSIONS', 'SESSION_ALTERNATIVE', 'SYSTEM_LIBRARI
 #: selected with (``OPENGLCONTEXT_BACKEND``, and the name its plug-ins are
 #: registered under in :mod:`OpenGLContext.plugins`).
 #:
-#: The engine's own ``<name>context`` modules are deliberately not listed: they
-#: are a few kilobytes of Python that report the backend as unavailable when
-#: their toolkit is missing, which is what a bundle wants, while the toolkits
+#: The engine's own window-system modules (``OpenGLContext.windowsystem.<name>``
+#: and the ``<name>context`` modules naming them) are deliberately not listed:
+#: they are a few kilobytes of Python that report the window system as
+#: unavailable when their toolkit is missing, which is what a bundle wants, while the toolkits
 #: themselves are tens to hundreds of megabytes. GLUT has no entry of its own
 #: because its bindings come from PyOpenGL, which every bundle already carries,
 #: and neither do the two offscreen backends -- ``egl`` on Linux and ``wgl`` on
@@ -126,8 +127,8 @@ def unused_backend_modules(keep: Sequence[str] = ('glfw',)) -> list[str]:
     """Report the toolkit modules an application keeping only *keep* can leave out
 
     A frozen bundle picks up every toolkit that happens to be installed
-    alongside the engine, because the engine imports the Qt backend for its
-    registration side effect and names the others in its plug-in registries.
+    alongside the engine, because the engine names every window system in its
+    plug-in registries and a freezer follows each name.
     An application drives one backend and pays for the rest in download size,
     so a ``.spec`` file passes this to PyInstaller's ``excludes``.
 

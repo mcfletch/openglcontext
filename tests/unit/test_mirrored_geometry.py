@@ -101,7 +101,7 @@ def test_a_mirrored_geometry_is_its_mirror_image(name, renderer):
 
 
 def _text_columns(mirror):
-    """The columns bitmap text at x = 1 lights, drawn plain or mirrored."""
+    """The columns text at x = 1 lights, drawn plain or mirrored."""
     placed = basenodes.Transform(translation=(1.0, 0.0, -4.0), children=[
         basenodes.Shape(geometry=basenodes.Text(string=['FR']),
                         appearance=basenodes.Appearance(material=basenodes.Material()))])
@@ -114,7 +114,7 @@ def _text_columns(mirror):
     return np.flatnonzero(image.max(axis=(0, 2)) > 60)
 
 
-def test_bitmap_text_is_anchored_where_its_origin_is():
+def test_text_is_anchored_where_its_origin_is():
     """The glyphs start at the node's origin, which the mirror carries across."""
     plain, mirrored = _text_columns(False), _text_columns(True)
     assert len(plain) and len(mirrored)

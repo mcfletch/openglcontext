@@ -86,14 +86,17 @@ Choosing the renderer
        :doc:`Core-profile rendering <renderpasses>`.
    * - ``OPENGLCONTEXT_BACKEND``
      - ``glfw``, ``glut``, ``pygame``, ``tk``, ``wx``, ``qt``, ``egl``,
-       ``wgl``, or the name a third-party backend registers
+       ``wgl``, ``offscreen``, or the name a third-party window system
+       registers
      - the name in ``defaultcontext.txt`` in the user's OpenGLContext
-       app-data directory, otherwise ``glfw``
-     - Which GUI toolkit creates the window. ``qt`` needs the separate
+       app-data directory, otherwise the first that imports, ``glfw`` first
+     - The window system a context opens on where its definition's
+       ``windowsystem`` field names none.  ``qt`` needs the separate
        ``OpenGLContext-qt`` distribution. ``egl`` (Linux and Android) and
-       ``wgl`` (Windows) create no window and render offscreen; see
-       :doc:`Rendering offscreen <offscreen>`. :ref:`Which backends are
-       supported <backends>` describes each.
+       ``wgl`` (Windows) create no window and render offscreen, and
+       ``offscreen`` is whichever of the two the platform has; see
+       :doc:`Rendering offscreen <offscreen>`. :ref:`Choosing a window system
+       <choosing-a-window-system>` gives the whole order.
    * - ``OPENGLCONTEXT_RENDERER``
      - ``pbr``
      - unset

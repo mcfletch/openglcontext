@@ -21,8 +21,16 @@ from OpenGLContext.scenegraph.text import _toolsfont, font, fontprovider
 import logging
 log = logging.getLogger( __name__ )
 
-#: The vertex array each solid font draws its glyph buffer through, per GL
-#: context, with the buffer it was built over: ``(name, buffer)``.
+#: Each solid font's glyph geometry in each GL context it is drawn in: the
+#: buffer holding it and the vertex array reading it, as ``(name, version)``,
+#: where the version is the font's :attr:`ToolsSolidFont._shader_version` the
+#: name was filled from.  A font is shared by every context in the process,
+#: and a GL name means something only in the one that made it.
+_GLYPH_BUFFERS = contextresources.ContextNames(
+    '_shaderGlyphBuffers',
+    lambda name: glDeleteBuffers(1, [name]),
+    names=lambda entry: (entry[0],),
+)
 _VERTEX_ARRAYS = contextresources.ContextNames(
     '_shaderVertexArrays',
     lambda name: glDeleteVertexArrays(1, [name]),
@@ -493,8 +501,13 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
         super(ToolsSolidFont, self).__init__(*args, **kwargs)
         # Shader rendering cache: {char: {'start': int, 'count': int, 'advance': float}}
         self._shader_glyph_index: dict[str, dict[str, Any]] = {}
-        self._shader_vbo: Any = None
-        self._shader_vbo_chars: set[str] = set()  # Characters included in the VBO
+        #: The glyph geometry every context's buffer is filled from, or None
+        #: before any is built.
+        self._shader_vertices: Any = None
+        #: Bumped each time the geometry is rebuilt, so a context holding an
+        #: older copy fills its buffer again.
+        self._shader_version = 0
+        self._shader_vbo_chars: set[str] = set()  # Characters the geometry holds
 
     def render(self, lines: Any, fontStyle: Any = None, mode: Any = None) -> Any:
         """Render text, drawing from vertex buffers when in shader mode."""
@@ -601,8 +614,8 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
         unique_chars = set(text.replace('\n', '').replace('\t', ''))
         new_chars = unique_chars - self._shader_vbo_chars
 
-        if not new_chars and self._shader_vbo is not None:
-            return  # VBO already has all needed characters
+        if not new_chars and self._shader_vertices is not None:
+            return  # the geometry already has all needed characters
 
         # Rebuild VBO with all characters (existing + new)
         all_chars = self._shader_vbo_chars | unique_chars
@@ -647,11 +660,9 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
                     'advance': glyph.width / scale
                 }
 
-        if all_vertices:
-            vertex_array = np.array(all_vertices, dtype='f')
-            self._shader_vbo = vbo.VBO(vertex_array)
-        else:
-            self._shader_vbo = None
+        self._shader_vertices = (
+            np.array(all_vertices, dtype='f') if all_vertices else None)
+        self._shader_version += 1
 
         self._shader_glyph_index = glyph_index
         self._shader_vbo_chars = all_chars
@@ -672,13 +683,17 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
         # Build/update VBO
         self._ensureShaderVBO(text)
 
-        if self._shader_vbo is None:
+        if self._shader_vertices is None:
             return
 
         shader_program = getattr(mode, 'shader_program', None)
         if shader_program is None or shader_program.program is None:
             return
 
+        # The glyphs are counter-clockwise solids, so a mirroring transform
+        # turns them inside out unless the front face follows it.
+        from OpenGLContext.scenegraph.winding import apply_winding_cull
+        apply_winding_cull(mode, True, True)
         glBindVertexArray(self._shaderVertexArray())
         try:
             # Render each character with its transform
@@ -714,26 +729,30 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
             glBindVertexArray(0)
 
     def _shaderVertexArray(self) -> int:
-        """This context's vertex array over the glyph buffer.
+        """This context's vertex array over its copy of the glyph geometry.
 
-        Made once per context and kept, and made again when the buffer is
-        rebuilt for characters it did not hold.  A text node drawn every frame
-        then allocates nothing after its first.
+        Made once per context and kept; the buffer behind it is filled again
+        when the geometry has been rebuilt for characters it did not hold.  A
+        text node drawn every frame then allocates nothing after its first.
         """
         from ctypes import c_void_p
 
-        buffer = self._shader_vbo
-        assert buffer is not None
-        entries = _VERTEX_ARRAYS.entries(self)
-        held = entries.get('glyphs') if entries is not None else None
-        if held is not None and held[1] is buffer:
+        vertices = self._shader_vertices
+        version = self._shader_version
+        arrays = _VERTEX_ARRAYS.entries(self)
+        buffers = _GLYPH_BUFFERS.entries(self)
+        assert arrays is not None and buffers is not None, 'a font holds names'
+        held = arrays.get('glyphs')
+        if held is not None and held[1] == version:
             return int(held[0])
-        if held is not None:
-            glDeleteVertexArrays(1, [held[0]])
-        vertexArray = int(glGenVertexArrays(1))
+        buffer = buffers.get('glyphs')
+        if buffer is None:
+            buffer = buffers['glyphs'] = (int(glGenBuffers(1)), version)
+        vertexArray = int(held[0]) if held is not None else int(glGenVertexArrays(1))
         glBindVertexArray(vertexArray)
-        buffer.bind()
         try:
+            glBindBuffer(GL_ARRAY_BUFFER, buffer[0])
+            glBufferData(GL_ARRAY_BUFFER, vertices, GL_STATIC_DRAW)
             # normal(3) + position(3) = 6 floats = 24 bytes a vertex
             stride = 24
             glEnableVertexAttribArray(LOC_POSITION)
@@ -744,9 +763,9 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
                                   c_void_p(0))
         finally:
             glBindVertexArray(0)
-            buffer.unbind()
-        if entries is not None:
-            entries['glyphs'] = (vertexArray, buffer)
+            glBindBuffer(GL_ARRAY_BUFFER, 0)
+        buffers['glyphs'] = (buffer[0], version)
+        arrays['glyphs'] = (vertexArray, version)
         return vertexArray
 
 class ToolsOutlineFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
