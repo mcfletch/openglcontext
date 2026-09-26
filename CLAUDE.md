@@ -117,6 +117,8 @@ OpenGLContext/
 │   │                 # opened only when asked -- docs/baking.rst#writing-lod
 │   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/tiles3d.rst
 ├── move/             # Camera, movement modes, walking -- docs/navigation.rst
+│   ├── navigationdefinition.py  # Navigation, Views, ViewDefinition: the
+│   │                 # modes and views a definition declares -- no GL
 │   └── orbit.py      # The examine gestures: orbit, dolly, pan -- no GL, no events
 ├── multiview/        # Several views of one scene -- docs/multiview.rst
 │   ├── views.py      # View, ViewStyle, ViewLayout: what is drawn where, and
@@ -133,8 +135,8 @@ OpenGLContext/
 │   ├── grid.py       # The grid a view is measured against: how closely it
 │   │                 # is ruled, and where its lines are
 │   ├── viewset.py    # Several arrangements of one set of views, by name
-│   ├── mixin.py      # Four views in any context that wants them, over the
-│   │                 # camera it already had -- docs/multiview.rst
+│   ├── mixin.py      # Context's views, built from navigation.views, over
+│   │                 # the camera it already had -- docs/multiview.rst
 │   └── quad.py       # Three orthographic views around a perspective one
 ├── nav/              # Navigation mesh generated from a collision mesh
 ├── packaging/        # Shipping an application: /opt environments, .deb -- docs/packaging.rst

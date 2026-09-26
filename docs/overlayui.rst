@@ -898,7 +898,10 @@ Where things are
    * - ``ui.toolpalette``
      - A strip of tool buttons down one side, bound to an :doc:`editor's
        <editing>` ``ToolManager``: one button per tool, the active one
-       highlighted.
+       highlighted. ``ModeSelector`` is one for the movement modes: a button
+       per mode the user may select, down the right edge, the mode in force
+       lit. A context puts it up where its :ref:`navigation
+       <navigation-declaration>`'s ``modeSwitching`` holds ``controls``.
    * - ``ui.tooltip``
      - The tooltip shown when the pointer rests on a control.
    * - ``ui.screen``, ``ui.hudwidgets``, ``ui.debugoverlay``
