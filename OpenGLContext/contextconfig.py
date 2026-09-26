@@ -4,20 +4,22 @@ Resolves the user's app-data directory, and reads and writes the default-font
 and preferred-window-system files.  The members are ``classmethod`` /
 ``staticmethod`` with no per-instance state.
 
-Mixed into ``Context`` as a base, so ``cls`` is the concrete context class. The
-two members that name the concrete ``Context`` class directly (``getTTFFiles``,
-``fromConfig``) live on ``Context`` itself.
+Mixed into ``Context`` as a base, so ``cls`` is the concrete context class.
+Everything here reads or writes the user's own application-data directory.
 """
 
 import os
 import sys
 import logging
 import warnings
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, ClassVar, Optional
 
 from OpenGL.plugins import Plugin
 
 from OpenGLContext import atomicfiles, plugins, renderoptions
+
+if TYPE_CHECKING:
+    from OpenGLContext.scenegraph.text.ttfregistry import TTFRegistry
 
 log = logging.getLogger(__name__)
 
@@ -57,6 +59,47 @@ class ContextConfigMixin:
         if not os.path.isdir(path):
             os.makedirs(path, mode=0o770)
         return path
+
+    #: The system's TrueType fonts, scanned once for the process and cached
+    #: in the user's application-data directory; see :meth:`getTTFFiles`.
+    ttfFileRegistry: ClassVar[Optional['TTFRegistry']] = None
+
+    @classmethod
+    def getTTFFiles(cls) -> 'TTFRegistry':
+        """The TrueType font-file registry, loaded or scanned on first use
+
+        Read from ``font_metadata.cache`` in the user's application-data
+        directory where there is one, scanned from the system's fonts and
+        saved there where there is not.  One registry serves the process.
+        """
+        registry = ContextConfigMixin.ttfFileRegistry
+        if registry is None:
+            registryFile = os.path.join(
+                cls.getUserAppDataDirectory(), "font_metadata.cache"
+            )
+            from OpenGLContext.scenegraph.text import ttfregistry
+
+            registry = ttfregistry.TTFRegistry()
+            if os.path.isfile(registryFile):
+                log.info("Loading font metadata from cache %r", registryFile)
+                registry.load(registryFile)
+                if not registry.fonts:
+                    log.warning("Re-scanning fonts, no fonts found in cache")
+                    registry.scan()
+                    registry.save()
+                    log.info("Font metadata stored in cache %r", registryFile)
+            else:
+                log.warning(
+                    "Scanning font metadata into cache %r, please wait", registryFile
+                )
+                registry.scan()
+                registry.save(registryFile)
+                log.info("Font metadata stored in cache %r", registryFile)
+            ContextConfigMixin.ttfFileRegistry = registry
+        # The font providers find their fonts through the same registry.
+        from OpenGLContext.scenegraph.text import fontprovider
+        fontprovider.setTTFRegistry(registry)
+        return registry
 
     @classmethod
     def getDefaultTTFFont(cls, type: str = "sans") -> Optional[str]:

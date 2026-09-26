@@ -55,7 +55,6 @@ if TYPE_CHECKING:
     from OpenGLContext.framecounter import FrameCounter
     from OpenGLContext.looptrace import LoopTrace
     from OpenGLContext.multiview.views import View, ViewLayout
-    from OpenGLContext.scenegraph.text.ttfregistry import TTFRegistry
     from OpenGLContext.stalltrace import StallJournal
     from OpenGLContext.telemetry.record import ReplaySession, SessionRecording
     from OpenGLContext.video.clock import FixedStepClock
@@ -1980,45 +1979,6 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         else:
             return (sg,)
 
-    # App-framework config / backend factory lives in ContextConfigMixin
-    # (getApplicationName, getUserAppDataDirectory, get/setDefault*, getContextType*).
-    # getTTFFiles and fromConfig stay here: they name the concrete Context class
-    # directly.
-    ttfFileRegistry: TTFRegistry | None = None
-
-    def getTTFFiles(self) -> TTFRegistry:
-        """Get TrueType font-file registry object"""
-        registry = self.ttfFileRegistry
-        if registry is None:
-            registryFile = os.path.join(
-                self.getUserAppDataDirectory(), "font_metadata.cache"
-            )
-            from OpenGLContext.scenegraph.text import ttfregistry
-
-            registry = ttfregistry.TTFRegistry()
-            if os.path.isfile(registryFile):
-                log.info("Loading font metadata from cache %r", registryFile)
-                registry.load(registryFile)
-                if not registry.fonts:
-                    log.warning("Re-scanning fonts, no fonts found in cache")
-                    registry.scan()
-                    registry.save()
-                    log.info("Font metadata stored in cache %r", registryFile)
-            else:
-                log.warning(
-                    "Scanning font metadata into cache %r, please wait", registryFile
-                )
-                registry.scan()
-                registry.save(registryFile)
-                log.info("Font metadata stored in cache %r", registryFile)
-            # make this a globally-available object
-            Context.ttfFileRegistry = registry
-        # Keep the font-provider class registry in sync so that font providers
-        # registered without a full setupFontProviders() call (e.g. plain
-        # InteractiveContext + a direct toolsfont import) can still resolve fonts.
-        from OpenGLContext.scenegraph.text import fontprovider
-        fontprovider.setTTFRegistry(registry)
-        return registry
 
     #: What ``[context] type`` may name in a configuration file.  One
     #: :class:`Context` has every capability each of these once named, so

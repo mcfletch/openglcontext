@@ -312,7 +312,7 @@ class WindowSystem(abc.ABC):
         -- wx's ``App``, Qt's ``QGuiApplication``, GLUT's ``glutInit`` --
         overrides this to make it first.
         """
-        return contextClass(*args, **named).runMainLoop()
+        return contextClass(*args, **named).profiledMainLoop()
 
     def __repr__(self) -> str:
         return '<%s %s>' % (self.__class__.__name__,

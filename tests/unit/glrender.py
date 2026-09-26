@@ -1,6 +1,7 @@
 """Rendering a real scenegraph in a real context, for the suites that need one.
 
-These build a hidden-window :class:`GLFWInteractiveContext` and render a few
+These build a :class:`~OpenGLContext.context.Context` in a hidden GLFW window
+and render a few
 frames of a real scenegraph, so the shader-mode draw loops actually run -- the
 paths the pure-logic suites (``test_pbrpass_logic``, ``test_instancing_logic``,
 ``test_flateffects_logic``, ``test_selection_logic``) cannot reach without a
@@ -24,7 +25,8 @@ import pytest
 
 glfw = pytest.importorskip("glfw")
 
-from OpenGLContext import glfwcontext, testingcontext
+from OpenGLContext import testingcontext
+from OpenGLContext.context import Context
 from OpenGLContext.capture import read_back_buffer
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.events.mouseevents import MouseButtonEvent
@@ -64,17 +66,17 @@ def frames_of(render_scene, children, **named):
     """
 
     frames = []
-    original = glfwcontext.GLFWContext.SwapBuffers
+    original = Context.SwapBuffers
 
     def capturing(self):
         frames.append(read_back_buffer()[0])
         return original(self)
 
-    glfwcontext.GLFWContext.SwapBuffers = capturing
+    Context.SwapBuffers = capturing
     try:
         render_scene(children, **named)
     finally:
-        glfwcontext.GLFWContext.SwapBuffers = original
+        Context.SwapBuffers = original
     assert frames, 'the scene drew no frames at all'
     return frames
 
@@ -203,7 +205,7 @@ def render_scene_factory(monkeypatch):
     yield run
 
     # The window goes back through the context that owns it --
-    # `GLFWContext.releaseWindow`, which is what a user's application runs on
+    # `Context.releaseWindow`, which is what a user's application runs on
     # exit. It drops this context's GL objects from the engine's caches while
     # the context is still current, then destroys the window; and it is
     # idempotent, which is what makes it safe after a test has already driven

@@ -376,6 +376,7 @@ open_audit_sanctioned = [
     "OpenGLContext.telemetry",
     "OpenGLContext.video",
     "OpenGLContext.userpaths",
+    "OpenGLContext.contextconfig",
     "OpenGLContext.move.bindingstore",
     # Readers of document- and application-named files.
     "OpenGLContext.loaders.cc0",

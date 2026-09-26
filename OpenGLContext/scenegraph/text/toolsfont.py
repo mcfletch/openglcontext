@@ -16,9 +16,18 @@ from OpenGLContext.scenegraph import polygontessellator, vertex
 from OpenGLContext.scenegraph.vertexsemantics import (
     LOC_NORMAL, LOC_POSITION,
 )
+from OpenGLContext import contextresources
 from OpenGLContext.scenegraph.text import _toolsfont, font, fontprovider
 import logging
 log = logging.getLogger( __name__ )
+
+#: The vertex array each solid font draws its glyph buffer through, per GL
+#: context, with the buffer it was built over: ``(name, buffer)``.
+_VERTEX_ARRAYS = contextresources.ContextNames(
+    '_shaderVertexArrays',
+    lambda name: glDeleteVertexArrays(1, [name]),
+    names=lambda entry: (entry[0],),
+)
 import numpy as np
 
 if TYPE_CHECKING:
@@ -670,66 +679,76 @@ class ToolsSolidFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
         if shader_program is None or shader_program.program is None:
             return
 
-        # Create VAO
-        vao_id = glGenVertexArrays(1)
-        glBindVertexArray(vao_id)
-
+        glBindVertexArray(self._shaderVertexArray())
         try:
-            self._shader_vbo.bind()
-            try:
-                # Set up vertex attributes
-                # Format: normal(3) + position(3) = 6 floats = 24 bytes
-                stride = 24
-                normal_offset = 0
-                position_offset = 12
+            # Render each character with its transform
+            x_offset = 0.0
+            base_matrix = mode.matrix.copy()
 
-                from ctypes import c_void_p
+            for char in text:
+                if char == '\n' or char == '\t':
+                    continue
 
-                glEnableVertexAttribArray(LOC_POSITION)
-                glVertexAttribPointer(LOC_POSITION, 3, GL_FLOAT, GL_FALSE, stride,
-                                      c_void_p(position_offset))
-                glEnableVertexAttribArray(LOC_NORMAL)
-                glVertexAttribPointer(LOC_NORMAL, 3, GL_FLOAT, GL_FALSE, stride,
-                                      c_void_p(normal_offset))
+                glyph_info = self._shader_glyph_index.get(char)
+                if glyph_info is None:
+                    continue
 
-                # Render each character with its transform
-                x_offset = 0.0
-                base_matrix = mode.matrix.copy()
+                if glyph_info['count'] > 0:
+                    shader_program.set_matrices(
+                        self._translated(base_matrix, x_offset, 0.0),
+                        mode.getProjection(),
+                        shader_program.program
+                    )
 
-                for char in text:
-                    if char == '\n' or char == '\t':
-                        continue
+                    glDrawArrays(GL_TRIANGLES, glyph_info['start'], glyph_info['count'])
 
-                    glyph_info = self._shader_glyph_index.get(char)
-                    if glyph_info is None:
-                        continue
+                x_offset += glyph_info['advance']
 
-                    if glyph_info['count'] > 0:
-                        shader_program.set_matrices(
-                            self._translated(base_matrix, x_offset, 0.0),
-                            mode.getProjection(),
-                            shader_program.program
-                        )
-
-                        glDrawArrays(GL_TRIANGLES, glyph_info['start'], glyph_info['count'])
-
-                    x_offset += glyph_info['advance']
-
-                # Restore original matrix
-                shader_program.set_matrices(
-                    base_matrix,
-                    mode.getProjection(),
-                    shader_program.program
-                )
-
-                glDisableVertexAttribArray(LOC_POSITION)
-                glDisableVertexAttribArray(LOC_NORMAL)
-            finally:
-                self._shader_vbo.unbind()
+            # Restore original matrix
+            shader_program.set_matrices(
+                base_matrix,
+                mode.getProjection(),
+                shader_program.program
+            )
         finally:
             glBindVertexArray(0)
-            glDeleteVertexArrays(1, [vao_id])
-        
+
+    def _shaderVertexArray(self) -> int:
+        """This context's vertex array over the glyph buffer.
+
+        Made once per context and kept, and made again when the buffer is
+        rebuilt for characters it did not hold.  A text node drawn every frame
+        then allocates nothing after its first.
+        """
+        from ctypes import c_void_p
+
+        buffer = self._shader_vbo
+        assert buffer is not None
+        entries = _VERTEX_ARRAYS.entries(self)
+        held = entries.get('glyphs') if entries is not None else None
+        if held is not None and held[1] is buffer:
+            return int(held[0])
+        if held is not None:
+            glDeleteVertexArrays(1, [held[0]])
+        vertexArray = int(glGenVertexArrays(1))
+        glBindVertexArray(vertexArray)
+        buffer.bind()
+        try:
+            # normal(3) + position(3) = 6 floats = 24 bytes a vertex
+            stride = 24
+            glEnableVertexAttribArray(LOC_POSITION)
+            glVertexAttribPointer(LOC_POSITION, 3, GL_FLOAT, GL_FALSE, stride,
+                                  c_void_p(12))
+            glEnableVertexAttribArray(LOC_NORMAL)
+            glVertexAttribPointer(LOC_NORMAL, 3, GL_FLOAT, GL_FALSE, stride,
+                                  c_void_p(0))
+        finally:
+            glBindVertexArray(0)
+            buffer.unbind()
+        if entries is not None:
+            entries['glyphs'] = (vertexArray, buffer)
+        return vertexArray
+
 class ToolsOutlineFont( ToolsFontMixIn, font.PolygonalFontMixIn, font.Font ):
     """A FontTools-provided Outline (line-set) Font
 
