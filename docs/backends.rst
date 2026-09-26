@@ -127,7 +127,7 @@ A view inside an interface
        XWayland), Windows, macOS
      - Qt 6 through PySide6, from the separate :py:mod:`OpenGLContext_qt
        <OpenGLContext_qt>` distribution, which declares it in the
-       ``OpenGLContext.windowsystems`` entry-point group.  ``context.window``
+       ``openglcontext.windowsystems`` entry-point group.  ``context.window``
        is a ``QWindow``.  See :ref:`the notes on Qt <qt-backend>`.
 
 Each takes the toolkit container to open inside as the context's ``parent``
@@ -437,7 +437,7 @@ or, so that installing the package is enough, in its distribution's metadata:
 
 .. code-block:: toml
 
-   [project.entry-points."OpenGLContext.windowsystems"]
+   [project.entry-points."openglcontext.windowsystems"]
    mytoolkit = "mypackage.windowing:MyWindowSystem"
 
 Nothing is imported until a context asks for it.  ``windowsystem='mytoolkit'``

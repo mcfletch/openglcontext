@@ -215,7 +215,7 @@ in the workspace declares a context entry point today: registration is the
 hard-coded calls in `OpenGLContext/__init__.py:39-66` and a `try: import
 OpenGLContext_qt` at `:68-74`, and `getContextType`'s docstring describing
 entry points is out of date. Third parties (openglcontext-qt first) register
-through a new `OpenGLContext.windowsystems` entry-point group, which replaces
+through a new `openglcontext.windowsystems` entry-point group, which replaces
 the import probe. `scripts/writeplugins.py`, an unused generator for the
 setuptools strings, is deleted.
 
@@ -769,7 +769,7 @@ Run from the worktree with `PYTHONPATH=<worktree>`; GLUT and Tk need
 
 2026-09-26, first session:
 
-- Phase 1 landed: `plugins.WindowSystem`, the `OpenGLContext.windowsystems`
+- Phase 1 landed: `plugins.WindowSystem`, the `openglcontext.windowsystems`
   entry-point group (read lazily by `windowsystem.registered()`),
   `ContextDefinition.windowsystem`, `windowsystem.choose()`,
   `Context.windowSystemName` applied in `resolveDefinition`, and

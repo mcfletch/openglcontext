@@ -42,7 +42,7 @@ class WindowSystem( plugins.Plugin ):
     Names a :class:`OpenGLContext.windowsystem.WindowSystem` subclass by its
     dotted path, so the toolkit behind it is imported only when a context asks
     for it by name.  A package outside the engine registers one through the
-    ``OpenGLContext.windowsystems`` entry-point group; see
+    ``openglcontext.windowsystems`` entry-point group; see
     :func:`OpenGLContext.windowsystem.registered`.
     """
     registry: ClassVar[list[plugins.Plugin]] = []

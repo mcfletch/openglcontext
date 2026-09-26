@@ -16,7 +16,7 @@ context never shares a namespace with a toolkit's.
 
 A window system is written by subclassing this and registering the subclass
 (:class:`OpenGLContext.plugins.WindowSystem`, or an entry point in the
-``OpenGLContext.windowsystems`` group).  What it must provide is marked
+``openglcontext.windowsystems`` group).  What it must provide is marked
 abstract; everything else has a default that says "this toolkit cannot",
 which the context passes on to its caller as False.  ``docs/backends.rst``
 has a worked example.

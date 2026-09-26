@@ -239,6 +239,11 @@ OpenGLContext/
 ├── video/            # H.264 capture of the colour buffer -- docs/recording.rst
 ├── viewer/           # The embeddable viewer behind oglc-view -- docs/viewer.rst
 │   └── adapters/     # One per format; what oglc-view dispatches on
+├── windowsystem/     # The window a Context draws in, one module per toolkit,
+│   │                 # and choose(): which one a definition opens -- docs/backends.rst
+│   ├── base.py       # WindowSystem: the protocol, and the shared main loop
+│   ├── glfw.py, glut.py, pygame.py, tk.py, wx.py   # A window through each toolkit
+│   └── egl.py, wgl.py  # No window: a pbuffer on Linux or Windows -- docs/offscreen.rst
 ├── atomicfiles.py    # A file or directory written whole or not at all:
 │                     # staged beside its path, moved in with one rename, and
 │                     # a lock for two processes writing the same one
@@ -256,15 +261,15 @@ OpenGLContext/
 ├── contextresources.py   # Caches let go of a GL context's names as it dies;
 │                         # ContextKey, what a per-context table keys on
 ├── contextdefinition.py  # The fields a context is configured by
-├── context.py        # Base context class
+├── context.py        # Context: ContextCore plus the event, camera and scene
+│                     # mix-ins, holding a WindowSystem
 ├── glfwcontext.py, glutcontext.py, pygamecontext.py, tkcontext.py,
-│   wxcontext.py      # One per backend, plus *interactive*, *vrml*, *testing*
-├── eglcontext.py     # Offscreen on Linux: no window, no display server -- docs/offscreen.rst
-├── eglvrmlcontext.py # The VRML97-aware form of it
-├── wglcontext.py     # Offscreen on Windows: a WGL pbuffer -- docs/offscreen.rst
-├── wglvrmlcontext.py # The VRML97-aware form of it
-├── interactivecontext.py  # Interactive context with mouse/keyboard
-└── testingcontext.py      # Picks the backend's testing context
+│   wxcontext.py, eglcontext.py, wglcontext.py
+│                     # Context with one window system pinned, plus the
+│                     # *interactive*, *vrml* and *testing* names for it
+├── interactivecontext.py  # The event-handler mix-in under its published name
+├── vrmlcontext.py    # VRMLSceneMixin: load() and lazily loaded font providers
+└── testingcontext.py      # getInteractive(): Context, or one pinned by name
 ```
 
 ## Rendering Architecture
@@ -526,7 +531,10 @@ export OPENGLCONTEXT_LOD=off
 
 ### OPENGLCONTEXT_BACKEND
 
-Selects the windowing backend:
+Selects the window system a context opens on where its definition's
+`windowsystem` field names none (the field wins; then this; then the user's
+`defaultcontext.txt`; then the first that imports, GLFW first -- see
+`OpenGLContext.windowsystem.choose` and docs/backends.rst):
 
 - `glut` - Use GLUT/freeglut (default on many systems)
 - `glfw` - Use GLFW (recommended for core profile)
@@ -539,16 +547,17 @@ Selects the windowing backend:
   (`openglcontext-qt/`). Needs a Qt platform plugin that gives a drawable GL
   surface; the Wayland plugin does not in this container, so run Qt work with
   `QT_QPA_PLATFORM=xcb`.
-- `egl` - Offscreen on Linux: no window and no display server (`eglcontext.py`)
-- `wgl` - Offscreen on Windows: a pbuffer, no window on screen (`wglcontext.py`)
+- `egl` - Offscreen on Linux: no window and no display server (`windowsystem/egl.py`)
+- `wgl` - Offscreen on Windows: a pbuffer, no window on screen (`windowsystem/wgl.py`)
+- `offscreen` - whichever of `egl` and `wgl` this platform has
 
 ```bash
 export OPENGLCONTEXT_BACKEND=glfw
 ```
 
-The two offscreen backends are the same context class in the plain, interactive
-and VRML slots, because a context nothing can click on has no separate
-interactive form. See [docs/offscreen.rst](docs/offscreen.rst).
+A program pins one with `ContextDefinition(windowsystem='egl')`, or on its
+class with `windowSystemName = 'offscreen'`. See
+[docs/offscreen.rst](docs/offscreen.rst).
 
 
 ### OPENGLCONTEXT_STALL_MS / OPENGLCONTEXT_TRACE_STALLS
@@ -813,7 +822,8 @@ short answer for the places a change most often lands.
 - Scenegraph nodes are in `OpenGLContext/scenegraph/`
 - Rendering passes are in `OpenGLContext/passes/`
 - Shaders are in `OpenGLContext/shaders/` as `.vert` and `.frag` files
-- Context implementations (GLUT, GLFW, Pygame, wx) are in `OpenGLContext/`
+- The window systems (GLFW, GLUT, Pygame, Tk, wx, EGL, WGL) are in
+  `OpenGLContext/windowsystem/`; `Context` itself is `OpenGLContext/context.py`
 - User documentation is `docs/*.rst`; plans are `plans/*.md`
 
 **A capability a game would also want belongs in the engine, not in a demo or

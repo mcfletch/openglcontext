@@ -12,7 +12,7 @@ than deriving from one.  Which one is a field of its definition,
 One module per window system lives in this package, and each is imported only
 when a context asks for it, so a program pays for the toolkit it uses and no
 other.  The Qt one ships in the separate ``OpenGLContext-qt`` distribution and
-registers itself through the ``OpenGLContext.windowsystems`` entry-point group,
+registers itself through the ``openglcontext.windowsystems`` entry-point group,
 as a third party's does.  See ``docs/backends.rst``.
 """
 from __future__ import annotations
@@ -45,7 +45,7 @@ __all__ = (
 
 #: The entry-point group a distribution names its window systems in, as
 #: ``name = "package.module:ClassName"``.
-ENTRY_POINT_GROUP = 'OpenGLContext.windowsystems'
+ENTRY_POINT_GROUP = 'openglcontext.windowsystems'
 
 #: The name that asks for whichever window system renders with no window here.
 OFFSCREEN = 'offscreen'
