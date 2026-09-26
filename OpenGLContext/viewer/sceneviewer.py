@@ -146,6 +146,7 @@ if TYPE_CHECKING:
                               **named: Any) -> Any: ...
         def physicsAvatarScale(self, low: Any, high: Any) -> float: ...
         def setMovementManager(self, manager: Any) -> None: ...
+        def cycleMovementMode(self, event: Any = None) -> Any: ...
         physicsPlatform: Any
         def setupCallbacks(self) -> None: ...
         def presentFrame(self) -> Any: ...
@@ -793,10 +794,17 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         that declared its own vocabulary keeps it.
         """
         definition = getattr(self, 'contextDefinition', None)
-        if definition is None or getattr(definition, 'movementModes', None):
+        if definition is None:
+            return
+        declared = definition.navigation
+        if declared and declared.movingModes():
             return
         from OpenGLContext.move.modes import walk_fly_modes
-        definition.movementModes = walk_fly_modes(1.0)
+        if declared:
+            declared.setMovingModes(walk_fly_modes(1.0))
+        else:
+            from OpenGLContext.move.navigationdefinition import Navigation
+            definition.navigation = Navigation(modes=walk_fly_modes(1.0))
         self._declaredMovementModes = True
 
     def movementScale(self) -> float:
@@ -815,7 +823,10 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
 
         The mode *objects* are kept and their speeds rewritten, so the mode the
         player is in, the keys they have bound and anything watching
-        ``movementMode`` all survive a scene being swapped for a bigger one.
+        ``navigation.current`` all survive a scene being swapped for a bigger
+        one -- which is why this rewrites them rather than taking
+        :meth:`~OpenGLContext.move.navigationdefinition.Navigation.scaled`
+        copies.
 
         Modes a host declared itself are left alone: those are speeds somebody
         chose, and there is no scale at which to re-derive them.
@@ -828,8 +839,9 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         speeds = (('walkSpeed', WALK_SPEED), ('runSpeed', RUN_SPEED),
                   ('flySpeed', FLY_SPEED), ('boostSpeed', BOOST_SPEED),
                   ('swimSpeed', WALK_SPEED))
-        definition = getattr(self, 'contextDefinition', None)
-        for mode in (getattr(definition, 'movementModes', None) or ()):
+        declared = getattr(getattr(self, 'contextDefinition', None),
+                           'navigation', None)
+        for mode in (declared.movingModes() if declared else ()):
             for name, base in speeds:
                 if hasattr(mode, name):
                     setattr(mode, name, base * scale)
@@ -907,18 +919,16 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         mode.UI_HINTS = scaled
 
     def cycleMovementMode(self, event: Any = None) -> Any:
-        """Step to the next declared movement mode, as ``m`` does in twig-bb.
+        """Step to the next declared movement mode, and name it in the caption.
 
         The modes are declared nodes on the context definition, so the settings
         screen presents this viewer's navigation the same way it presents any
         other program's, and there is nothing to cycle until a scene has
         declared some.
         """
-        navigation = self.getNavigation()
-        mode = navigation.cycle() if navigation is not None else None
+        mode = super(SceneViewerMixin, self).cycleMovementMode(event)
         if mode is not None:
             self.updateOverlay()
-            self.triggerRedraw(1)
         return mode
 
     def physicsSpawnViewpoints(self) -> Sequence[Any]:

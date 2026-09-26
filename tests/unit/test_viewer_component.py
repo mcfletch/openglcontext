@@ -199,6 +199,7 @@ class TestTheMixinsComposeCleanly:
         'setupCallbacks',
         'getNavigationPlatform',        # walking drives the avatar, not the camera
         'onPhysicsModeChanged',         # the caption names the mode in force
+        'cycleMovementMode',            # and names the mode it steps to
         'physicsSpawnViewpoints',       # the model's cameras are curated spawns
         'options',                      # the component's own configuration
         'setMovementManager',           # sizes free-fly stepping to the scene

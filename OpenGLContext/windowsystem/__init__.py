@@ -20,7 +20,6 @@ from __future__ import annotations
 import logging
 import sys
 from collections.abc import Callable, Iterable, Sequence
-from importlib import metadata
 from typing import Optional
 
 from OpenGL.plugins import importByName
@@ -158,14 +157,6 @@ def _usable(name: str, platform: Optional[str], registered: Sequence[str],
     return name
 
 
-_discovered = False
-
-
-def _entryPoints() -> Iterable[metadata.EntryPoint]:
-    """The installed distributions' window-system entry points."""
-    return metadata.entry_points(group=ENTRY_POINT_GROUP)
-
-
 def registered() -> tuple[str, ...]:
     """The registered window-system names, in registration order.
 
@@ -173,14 +164,7 @@ def registered() -> tuple[str, ...]:
     other distributions declare in :data:`ENTRY_POINT_GROUP` are added the
     first time this is asked, from their metadata, without importing them.
     """
-    global _discovered
-    if not _discovered:
-        _discovered = True
-        known = {plugin.name for plugin in plugins.WindowSystem.all()}
-        for entry in _entryPoints():
-            if entry.name not in known:
-                plugins.WindowSystem(entry.name, entry.value.replace(':', '.'))
-                known.add(entry.name)
+    plugins.discover(plugins.WindowSystem, ENTRY_POINT_GROUP)
     return tuple(plugin.name for plugin in plugins.WindowSystem.all())
 
 

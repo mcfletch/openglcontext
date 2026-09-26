@@ -14,6 +14,7 @@ import pytest
 from vrml import node as vrmlnode
 
 from OpenGLContext.testing.gl_env import import_unconfigured
+from OpenGLContext.move.navigationdefinition import Navigation
 
 # The viewer settles the renderer as it is imported, being a program; these
 # tests read its logic, so the settling is put back.
@@ -689,25 +690,25 @@ class TestPhysicsInputHandlers:
             set_move=lambda **_k: None, set_fly_move=lambda **_k: None)
         inst.physicsWalking = True
         inst.contextDefinition = ContextDefinition(
-            movementModes=walk_fly_modes())
+            navigation=Navigation(modes=walk_fly_modes()))
         inst.navigation = None
         inst.togglePhysicsFly(None)
         assert seen['fly'] is True
-        assert inst.contextDefinition.movementMode.name == 'fly'
+        assert inst.contextDefinition.navigation.current.name == 'fly'
         inst.togglePhysicsFly(None)
         assert seen['fly'] is True                        # first answer kept
-        assert inst.contextDefinition.movementMode.name == 'walk'
+        assert inst.contextDefinition.navigation.current.name == 'walk'
 
     def test_the_fly_key_does_nothing_before_physics_exists(self):
         inst = _inst()
         inst.physicsPlatform = None
         inst.contextDefinition = ContextDefinition(
-            movementModes=walk_fly_modes())
+            navigation=Navigation(modes=walk_fly_modes()))
         inst.navigation = None
         inst.getNavigation()
-        assert inst.contextDefinition.movementMode.name == 'walk'
+        assert inst.contextDefinition.navigation.current.name == 'walk'
         inst.togglePhysicsFly(None)
-        assert inst.contextDefinition.movementMode.name == 'walk'
+        assert inst.contextDefinition.navigation.current.name == 'walk'
 
 
 class TestFrameDegenerate:

@@ -151,9 +151,9 @@ class TestTheRegistry:
         found = metadata.EntryPoint(
             name='thirdparty', value='thirdparty_ws.windowing:ThirdParty',
             group=windowsystem.ENTRY_POINT_GROUP)
-        monkeypatch.setattr(
-            windowsystem, '_entryPoints', lambda: (found,))
-        monkeypatch.setattr(windowsystem, '_discovered', False)
+        monkeypatch.setattr(plugins, '_entryPoints',
+                            lambda group: (found,) if group == found.group else ())
+        monkeypatch.setattr(plugins, '_DISCOVERED', set())
         try:
             assert 'thirdparty' in windowsystem.registered()
             plugin = plugins.WindowSystem.by_name('thirdparty')

@@ -4,6 +4,7 @@ import pytest
 from vrml import protofunctions
 
 from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.move.navigationdefinition import Navigation
 from OpenGLContext.events.inputstate import InputState
 from OpenGLContext.move import modes
 from OpenGLContext.move.navigation import NavigationManager
@@ -33,7 +34,7 @@ class _Platform:
 
 
 def _manager(*mode_nodes, platform=None):
-    definition = ContextDefinition(movementModes=list(mode_nodes))
+    definition = ContextDefinition(navigation=Navigation(modes=list(mode_nodes)))
     return NavigationManager(definition, platform or _Platform()), definition
 
 
@@ -41,19 +42,20 @@ def _manager(*mode_nodes, platform=None):
 
 def test_a_context_definition_carries_its_movement_modes():
     walk, fly = modes.WalkMode(name='walk'), modes.FlyMode(name='fly')
-    definition = ContextDefinition(movementModes=[walk, fly])
-    assert list(definition.movementModes) == [walk, fly]
+    definition = ContextDefinition(navigation=Navigation(modes=[walk, fly]))
+    assert definition.navigation.movingModes() == [walk, fly]
 
 
-def test_a_context_definition_has_no_modes_by_default():
-    assert list(ContextDefinition().movementModes) == []
+def test_a_context_definition_has_no_modes_that_move_a_body_by_default():
+    """Only the classic navigation, which the free-fly manager drives."""
+    assert ContextDefinition().navigation.movingModes() == []
 
 
 def test_the_current_mode_is_a_field_on_the_context_definition():
     walk = modes.WalkMode(name='walk')
     manager, definition = _manager(walk)
     manager.select('walk')
-    assert definition.movementMode is walk
+    assert definition.navigation.current is walk
 
 
 def test_the_current_mode_can_be_watched_for_change():
@@ -67,7 +69,8 @@ def test_the_current_mode_can_be_watched_for_change():
     def receiver(value=None):
         seen.append(value)
 
-    protofunctions.getField(definition, 'movementMode').watch(definition, receiver)
+    protofunctions.getField(definition.navigation, 'current').watch(
+        definition.navigation, receiver)
     platform.submerged = True
     manager.update(0.016, InputState())
     assert swim in seen
@@ -79,7 +82,7 @@ def test_selecting_by_name_makes_that_mode_current():
     walk, fly = modes.WalkMode(name='walk'), modes.FlyMode(name='fly')
     manager, definition = _manager(walk, fly)
     manager.select('fly')
-    assert definition.movementMode is fly
+    assert definition.navigation.current is fly
 
 
 def test_selecting_a_name_that_is_not_declared_changes_nothing():
@@ -87,7 +90,7 @@ def test_selecting_a_name_that_is_not_declared_changes_nothing():
     manager, definition = _manager(walk)
     manager.select('walk')
     assert not manager.select('nonsense')
-    assert definition.movementMode is walk
+    assert definition.navigation.current is walk
 
 
 def test_a_disabled_mode_cannot_be_selected():
@@ -96,13 +99,13 @@ def test_a_disabled_mode_cannot_be_selected():
     manager, definition = _manager(walk, fly)
     manager.select('walk')
     assert not manager.select('fly')
-    assert definition.movementMode is walk
+    assert definition.navigation.current is walk
 
 
 def test_the_first_enabled_mode_is_current_to_begin_with():
     walk, fly = modes.WalkMode(name='walk'), modes.FlyMode(name='fly')
     manager, definition = _manager(walk, fly)
-    assert definition.movementMode is walk
+    assert definition.navigation.current is walk
 
 
 def test_cycling_steps_through_the_user_selectable_modes():
@@ -110,9 +113,9 @@ def test_cycling_steps_through_the_user_selectable_modes():
     walk, fly = modes.WalkMode(name='walk'), modes.FlyMode(name='fly')
     manager, definition = _manager(walk, fly)
     manager.cycle()
-    assert definition.movementMode is fly
+    assert definition.navigation.current is fly
     manager.cycle()
-    assert definition.movementMode is walk
+    assert definition.navigation.current is walk
 
 
 @pytest.mark.parametrize('step', [1, -1])
@@ -123,7 +126,7 @@ def test_cycling_from_a_mode_taken_off_the_menu_starts_at_the_first(step):
     manager.select('run')
     run.enabled = False
     assert manager.cycle(step) is walk
-    assert definition.movementMode is walk
+    assert definition.navigation.current is walk
 
 
 def test_cycling_skips_world_imposed_modes():
@@ -133,7 +136,7 @@ def test_cycling_skips_world_imposed_modes():
     fly = modes.FlyMode(name='fly')
     manager, definition = _manager(walk, swim, fly)
     manager.cycle()
-    assert definition.movementMode is fly
+    assert definition.navigation.current is fly
 
 
 # -- the world imposing a mode -------------------------------------------------
@@ -143,10 +146,10 @@ def test_entering_water_switches_to_swimming_without_being_asked():
     platform = _Platform()
     manager, definition = _manager(walk, swim, platform=platform)
     manager.update(0.016, InputState())
-    assert definition.movementMode is walk
+    assert definition.navigation.current is walk
     platform.submerged = True
     manager.update(0.016, InputState())
-    assert definition.movementMode is swim
+    assert definition.navigation.current is swim
 
 
 def test_leaving_the_water_restores_the_mode_the_user_had_chosen():
@@ -157,10 +160,10 @@ def test_leaving_the_water_restores_the_mode_the_user_had_chosen():
     manager.select('fly')
     platform.submerged = True
     manager.update(0.016, InputState())
-    assert definition.movementMode is swim
+    assert definition.navigation.current is swim
     platform.submerged = False
     manager.update(0.016, InputState())
-    assert definition.movementMode is fly       # not walk: what the user picked
+    assert definition.navigation.current is fly       # not walk: what the user picked
 
 
 def test_an_imposed_mode_wins_over_an_explicit_selection():
@@ -171,7 +174,7 @@ def test_an_imposed_mode_wins_over_an_explicit_selection():
     manager.update(0.016, InputState())
     manager.select('walk')
     manager.update(0.016, InputState())
-    assert definition.movementMode is swim
+    assert definition.navigation.current is swim
 
 
 # -- driving the current mode --------------------------------------------------
@@ -196,7 +199,7 @@ def test_the_current_mode_gets_the_frame():
 def test_a_manager_with_no_modes_does_nothing_and_does_not_raise():
     manager, definition = _manager()
     assert manager.update(0.016, InputState()) is None
-    assert not definition.movementMode
+    assert not definition.navigation.current
 
 
 def test_every_declared_binding_is_reachable_for_a_settings_window():
@@ -244,15 +247,15 @@ class TestRetargetingKeepsTheChosenMode:
 
     def _manager(self):
         definition = ContextDefinition()
-        definition.movementModes = [modes.WalkMode(name='walk'),
-                                    modes.FlyMode(name='fly')]
+        definition.navigation.setMovingModes([modes.WalkMode(name='walk'),
+                                    modes.FlyMode(name='fly')])
         return NavigationManager(definition, _Platform()), definition
 
     def test_retargeting_keeps_the_selected_mode(self):
         manager, definition = self._manager()
         assert manager.select('fly')
         manager.retarget(_Platform())
-        assert definition.movementMode.name == 'fly'
+        assert definition.navigation.current.name == 'fly'
 
     def test_retargeting_drives_the_new_platform(self):
         manager, _definition = self._manager()
@@ -270,29 +273,29 @@ class TestRetargetingKeepsTheChosenMode:
                 return self._platform
 
         definition = ContextDefinition()
-        definition.movementModes = [modes.WalkMode(name='walk'),
-                                    modes.FlyMode(name='fly')]
+        definition.navigation.setMovingModes([modes.WalkMode(name='walk'),
+                                    modes.FlyMode(name='fly')])
         context = Ctx(definition, _Platform())
         first = context.getNavigation()
         first.select('fly')
         context._platform = _Platform()  # noqa: SLF001 stands a fake platform on the context
         second = context.getNavigation()
         assert second is first, "the manager was rebuilt from scratch"
-        assert definition.movementMode.name == 'fly'
+        assert definition.navigation.current.name == 'fly'
 
 
 class TestSelectableIsDecidedOnce:
     def test_a_world_imposed_mode_is_never_offered_to_the_player(self):
         definition = ContextDefinition()
-        definition.movementModes = [modes.WalkMode(name='walk'),
-                                    modes.SwimMode(name='swim')]
+        definition.navigation.setMovingModes([modes.WalkMode(name='walk'),
+                                    modes.SwimMode(name='swim')])
         manager = NavigationManager(definition, _Platform())
         assert [mode.name for mode in manager._selectable()] == ['walk']  # noqa: SLF001 the modes a manager offers have no public accessor
 
     def test_deciding_does_not_ask_the_platform(self):
         """``enter_when`` is a call into the world; it cannot decide this."""
         definition = ContextDefinition()
-        definition.movementModes = [modes.SwimMode(name='swim')]
+        definition.navigation.setMovingModes([modes.SwimMode(name='swim')])
         platform = _Platform()
         platform.asked = 0
 
@@ -303,7 +306,7 @@ class TestSelectableIsDecidedOnce:
                 platform.asked += 1
                 return super().enter_when(platform)
 
-        definition.movementModes = [Counting(name='swim')]
+        definition.navigation.setMovingModes([Counting(name='swim')])
         manager = NavigationManager(definition, platform)
         platform.asked = 0
         manager._selectable()  # noqa: SLF001 the modes a manager offers have no public accessor

@@ -12,6 +12,8 @@ import numpy as np
 import pytest
 
 from OpenGLContext.move import physicswalk
+from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.move.navigationdefinition import Navigation
 from OpenGLContext.move.physicswalk import PhysicsWalkMixin, yaw_from_orientation
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.scenegraph.transform import Transform
@@ -94,9 +96,9 @@ class _Platform:
     forward = ViewPlatform.forward
 
 
-class _Definition:
-    movementModes = None
-    movementMode = None
+def _Definition():
+    """A definition with no modes that move a body yet, as a viewer starts."""
+    return ContextDefinition(navigation=Navigation(modes=['examine']))
 
 
 class _Host(PhysicsWalkMixin):
@@ -258,7 +260,7 @@ class TestBuildPhysicsWorldSeam:
     def test_the_declared_movement_modes_are_scaled_to_the_avatar(self):
         host = _started()
         host.enablePhysics(True)
-        modes = host.contextDefinition.movementModes
+        modes = host.contextDefinition.navigation.movingModes()
         assert [mode.name for mode in modes] == ['walk', 'fly']
         scale = host.physicsAvatarScale(*host.buildPhysicsWorld()[1])
         assert modes[0].walkSpeed == pytest.approx(3.0 * scale)
@@ -464,8 +466,8 @@ class _NavigatingHost(_Host):
     navigation = None
 
     def getNavigation(self):
-        modes = getattr(self.contextDefinition, 'movementModes', None)
-        if not modes:
+        declared = self.contextDefinition.navigation
+        if not declared or not declared.movingModes():
             return None
         if self.navigation is None:
             self.navigation = NavigationManager(self.contextDefinition,
@@ -503,10 +505,10 @@ class TestMovementKeys:
     def test_the_fly_key_swaps_the_mode_and_tells_the_character(self):
         host = self._walking()
         host.togglePhysicsFly()
-        assert host.contextDefinition.movementMode.name == 'fly'
+        assert host.contextDefinition.navigation.current.name == 'fly'
         assert host.physicsPlatform.character.flying
         host.togglePhysicsFly()
-        assert host.contextDefinition.movementMode.name == 'walk'
+        assert host.contextDefinition.navigation.current.name == 'walk'
         assert not host.physicsPlatform.character.flying
 
     def test_the_fly_key_does_nothing_before_the_avatar_exists(self):

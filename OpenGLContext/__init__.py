@@ -36,7 +36,7 @@ __version__ = "3.0.0a5"
 __author__ = "Michael Colin Fletcher"
 __license__ = "BSD-Style, see license.txt for details and exceptions"
 
-from OpenGLContext.plugins import Context,InteractiveContext,VRMLContext,Loader,Node,Adapter,WindowSystem
+from OpenGLContext.plugins import Context,InteractiveContext,VRMLContext,Loader,Node,Adapter,WindowSystem,MovementMode,ViewGestures
 
 # The window systems a context opens on, by the name ContextDefinition's
 # `windowsystem` field gives.  Each module imports its toolkit, so none is
@@ -52,6 +52,17 @@ WindowSystem( 'wx', 'OpenGLContext.windowsystem.wx.WxWindowSystem' )
 # one a machine can actually create is a question its answer already gives.
 WindowSystem( 'egl', 'OpenGLContext.windowsystem.egl.EGLWindowSystem' )
 WindowSystem( 'wgl', 'OpenGLContext.windowsystem.wgl.WGLWindowSystem' )
+
+# The movement modes a navigation declaration names, and the gestures a view
+# is moved by, each a factory making a new node.  See
+# OpenGLContext.move.navigationdefinition.
+MovementMode( 'examine', 'OpenGLContext.move.modes.examineMode' )
+MovementMode( 'walk', 'OpenGLContext.move.modes.walkMode' )
+MovementMode( 'fly', 'OpenGLContext.move.modes.flyMode' )
+MovementMode( 'swim', 'OpenGLContext.move.modes.swimMode' )
+MovementMode( 'fps', 'OpenGLContext.move.modes.fpsMode' )
+ViewGestures( 'plan', 'OpenGLContext.multiview.navigation.plan_mode' )
+ViewGestures( 'examine', 'OpenGLContext.multiview.navigation.examine_mode' )
 
 # The context class each window system's module publishes, which
 # getContextType and getInteractive(name) read.  Deprecated with

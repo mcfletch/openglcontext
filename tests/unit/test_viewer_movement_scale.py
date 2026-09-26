@@ -9,6 +9,7 @@ seen happening. Speeds scale with the radius the viewer framed.
 import pytest
 
 from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.move.navigationdefinition import Navigation
 from OpenGLContext.move.modes import FLY_SPEED, WALK_SPEED, FlyMode
 from OpenGLContext.viewer import ViewerOptions
 from OpenGLContext.viewer.sceneviewer import ViewerContext, MOVEMENT_REFERENCE_RADIUS
@@ -23,7 +24,7 @@ def _viewer(radius):
 
 
 def _speeds(viewer):
-    return {mode.name: mode for mode in viewer.contextDefinition.movementModes}
+    return {mode.name: mode for mode in viewer.contextDefinition.navigation.movingModes()}
 
 
 class TestSpeedsFollowTheSceneSize:
@@ -55,7 +56,7 @@ class TestSpeedsFollowTheSceneSize:
     def test_the_modes_a_host_declared_itself_are_left_alone(self):
         """Those are speeds somebody chose, at a scale we cannot re-derive."""
         viewer = _viewer(radius=MOVEMENT_REFERENCE_RADIUS * 100)
-        viewer.contextDefinition.movementModes = [FlyMode(name='fly', flySpeed=2.0)]
+        viewer.contextDefinition.navigation.setMovingModes([FlyMode(name='fly', flySpeed=2.0)])
         viewer.declareMovementModes()
         viewer.scaleMovementSpeeds()
         assert _speeds(viewer)['fly'].flySpeed == pytest.approx(2.0)
@@ -64,10 +65,10 @@ class TestSpeedsFollowTheSceneSize:
         """Rebuilding the list would drop the mode the player is in."""
         viewer = _viewer(radius=4.0)
         viewer.declareMovementModes()
-        before = list(viewer.contextDefinition.movementModes)
+        before = viewer.contextDefinition.navigation.movingModes()
         viewer.radius = MOVEMENT_REFERENCE_RADIUS * 50
         viewer.scaleMovementSpeeds()
-        assert list(viewer.contextDefinition.movementModes) == before
+        assert viewer.contextDefinition.navigation.movingModes() == before
         assert before[1].flySpeed == pytest.approx(FLY_SPEED * 50)
 
 

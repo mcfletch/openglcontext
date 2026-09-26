@@ -1,4 +1,5 @@
 """Definition of a Context's visual parameters"""
+import warnings
 from typing import Any, ClassVar
 
 from vrml import node, field
@@ -47,6 +48,19 @@ def version_for_profile(profile: str) -> tuple[int, int]:
 def _get_default_version() -> tuple[int, int]:
     """The version field's default, from the profile the environment names."""
     return version_for_profile(_get_default_profile())
+
+
+def _get_default_navigation() -> Any:
+    """The classic navigation in one view, what a context that says nothing has."""
+    from OpenGLContext.move.navigationdefinition import defaultNavigation
+    return defaultNavigation()
+
+
+def _deprecated(name: str) -> None:
+    warnings.warn(
+        'ContextDefinition.%s is ContextDefinition.navigation: use '
+        'navigation.%s' % (name, 'current' if name == 'movementMode' else 'modes'),
+        DeprecationWarning, stacklevel=3)
 
 
 def _get_default_picking() -> bool:
@@ -103,14 +117,14 @@ class ContextDefinition( node.Node ):
     fullscreen = field.newField( "fullscreen", "SFBool", 1,
                                  lambda: renderoptions.env_flag('OPENGLCONTEXT_FULLSCREEN', False))
 
-    #: Movement modes this context offers, as nodes (see
-    #: :mod:`OpenGLContext.move.modes`).  Declared rather than hard-coded so a
-    #: game states which ways of moving it has and how each is tuned.
-    movementModes = field.newField( 'movementModes', 'MFNode', 1, list )
-    #: The mode in force right now.  Written by the navigation manager and
-    #: watchable like any field, so a game can react to entering water without
-    #: the manager knowing anything about it.
-    movementMode = field.newField( 'movementMode', 'SFNode', 1, node.NULL )
+    #: How the context is moved through and looked at: a
+    #: :class:`~OpenGLContext.move.navigationdefinition.Navigation` naming the
+    #: movement modes in use, the views and their arrangements, and whether
+    #: the user may switch each (see :mod:`OpenGLContext.move.modes`).  The
+    #: default is the classic arrow-key and drag navigation in one view; NULL
+    #: is no navigation at all -- no navigation keys, and no view platform.
+    #: See docs/navigation.rst.
+    navigation = field.newField( 'navigation', 'SFNode', 1, _get_default_navigation )
 
 
     # optional buffers...
@@ -286,10 +300,44 @@ class ContextDefinition( node.Node ):
                               lambda: renderoptions.env_number('OPENGLCONTEXT_UI_SCALE', 1.0))
 
     #: Fields that are *published* rather than chosen, and so are never carried
-    #: in a settings dialog's draft: ``movementMode`` says which mode is in
-    #: force right now and is written by the navigation manager every frame.
+    #: in a settings dialog's draft; the navigation's own ``current`` is one,
+    #: declared on :class:`~OpenGLContext.move.navigationdefinition.Navigation`.
     #: See :mod:`OpenGLContext.ui.session`.
-    TRANSIENT_FIELDS = ('movementMode',)
+    TRANSIENT_FIELDS: ClassVar[tuple[str, ...]] = ()
+
+    # -- movementModes and movementMode: navigation's parts under the names
+    # -- they are also read by, forwarding to it for one release
+
+    @property
+    def movementModes( self ) -> list[Any]:
+        """The declared modes that move a body: ``navigation.movingModes()``"""
+        _deprecated( 'movementModes' )
+        navigation = self.navigation
+        return navigation.movingModes() if navigation else []
+
+    @movementModes.setter
+    def movementModes( self, modes: Any ) -> None:
+        """Declare these modes, keeping the classic navigation where it was"""
+        _deprecated( 'movementModes' )
+        from OpenGLContext.move.navigationdefinition import Navigation
+        navigation = self.navigation
+        if not navigation:
+            self.navigation = Navigation( modes=list( modes or () ) )
+            return
+        navigation.setMovingModes( modes or () )
+
+    @property
+    def movementMode( self ) -> Any:
+        """The mode in force: ``navigation.current``"""
+        _deprecated( 'movementMode' )
+        navigation = self.navigation
+        return navigation.current if navigation else None
+
+    @movementMode.setter
+    def movementMode( self, mode: Any ) -> None:
+        _deprecated( 'movementMode' )
+        if self.navigation:
+            self.navigation.current = mode
 
     #: How a generated settings page presents these fields: what to call each
     #: one, and what range or set of values it accepts.  Declared beside the
@@ -368,11 +416,15 @@ class ContextDefinition( node.Node ):
     )
 
     def __init__( self, **named: Any ) -> None:
+        forwarded = {name: named.pop( name ) for name in
+                     ('movementModes', 'movementMode') if name in named}
         # Zero-argument super, so an instance of this class still finds its own
         # base after the module has been reloaded: the two-argument form looks
         # the class up as a module global, which a reload has rebound to a
         # different class object by then.
         super().__init__( **named )
+        for name, value in forwarded.items():
+            setattr( self, name, value )
         if 'profile' in named and 'version' not in named:
             # ``version``'s default is chosen from the profile, and a field
             # default cannot see the node it belongs to -- so left unset it
@@ -386,10 +438,15 @@ class ContextDefinition( node.Node ):
     def fromConfig( cls, cfg: Any, section: str = 'contextdefinition' ) -> 'ContextDefinition':
         """Generate a ContextDefinition from a ConfigParser instance"""
         from vrml import protofunctions
+        from OpenGLContext.move.navigationdefinition import navigationFromNames
         instance = cls()
         for definition in protofunctions.getFields( cls ):
             if cfg.has_option( section, definition.name ):
-                setattr( instance, definition.name,
-                         cfg.get( section, definition.name ))
+                value = cfg.get( section, definition.name )
+                if definition.name == 'navigation':
+                    # Mode names, comma-separated: ``navigation = fps, fly``.
+                    instance.navigation = navigationFromNames( value )
+                    continue
+                setattr( instance, definition.name, value )
         return instance
 

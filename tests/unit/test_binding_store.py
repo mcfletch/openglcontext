@@ -6,6 +6,7 @@ import stat
 import pytest
 
 from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.move.navigationdefinition import Navigation
 from OpenGLContext.move import bindingstore, modes as movemodes
 from OpenGLContext.move.navigation import NavigationManager
 
@@ -16,8 +17,8 @@ class Platform:
 
 @pytest.fixture
 def navigation():
-    definition = ContextDefinition(movementModes=[
-        movemodes.WalkMode(name='walk'), movemodes.FlyMode(name='fly')])
+    definition = ContextDefinition(navigation=Navigation(modes=[
+        movemodes.WalkMode(name='walk'), movemodes.FlyMode(name='fly')]))
     return NavigationManager(definition, Platform())
 
 

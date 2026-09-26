@@ -3,6 +3,7 @@
 import pytest
 
 from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.move.navigationdefinition import Navigation
 from OpenGLContext.move import modes
 from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
 from OpenGLContext.windowsystem.glfw import GLFWWindowSystem
@@ -131,12 +132,12 @@ def test_a_context_with_no_declared_modes_has_no_navigation_manager():
 
 
 def test_declared_modes_give_the_context_a_navigation_manager():
-    definition = ContextDefinition(movementModes=[modes.WalkMode(name='walk')])
+    definition = ContextDefinition(navigation=Navigation(modes=[modes.WalkMode(name='walk')]))
     assert _Context(definition).getNavigation() is not None
 
 
 def test_the_navigation_manager_drives_the_platform_from_held_keys():
-    definition = ContextDefinition(movementModes=[modes.WalkMode(name='walk')])
+    definition = ContextDefinition(navigation=Navigation(modes=[modes.WalkMode(name='walk')]))
     context = _Context(definition)
     context.ProcessEvent(_Key('w', 1))
     context.ProcessEvent(_Key(' ', 1))
@@ -151,21 +152,21 @@ def test_updating_navigation_without_modes_moves_nothing():
     context.updateNavigation(0.016)
     assert context.navigation is None
     assert context.platform.moved == [] and context.platform.jumped == 0
-    assert not context.contextDefinition.movementMode
+    assert not context.contextDefinition.navigation.current
     assert context._pointerCaptured is False  # noqa: SLF001 whether the pointer is captured has no public reader
 
 
 def test_the_current_mode_is_published_on_the_context_definition():
     walk = modes.WalkMode(name='walk')
-    definition = ContextDefinition(movementModes=[walk])
+    definition = ContextDefinition(navigation=Navigation(modes=[walk]))
     context = _Context(definition)
     context.updateNavigation(0.016)
-    assert definition.movementMode is walk
+    assert definition.navigation.current is walk
 
 
 def test_the_modes_drive_the_view_platform_by_default():
     """A viewer with no character controller still navigates."""
-    context = _Context(ContextDefinition(movementModes=[modes.WalkMode(name='walk')]))
+    context = _Context(ContextDefinition(navigation=Navigation(modes=[modes.WalkMode(name='walk')])))
     assert context.getNavigationPlatform() is context.platform
 
 
@@ -179,7 +180,7 @@ def test_a_context_can_name_a_different_thing_for_the_modes_to_drive():
             return character
 
     context = _Character(ContextDefinition(
-        movementModes=[modes.WalkMode(name='walk')]))
+        navigation=Navigation(modes=[modes.WalkMode(name='walk')])))
     context.ProcessEvent(_Key('w', 1))
     context.updateNavigation(0.016)
     assert character.moved and not context.platform.moved
@@ -188,7 +189,7 @@ def test_a_context_can_name_a_different_thing_for_the_modes_to_drive():
 def test_the_manager_is_rebuilt_when_what_it_drives_changes():
     """A character controller comes into being when a map loads, which is after
     the context has already been navigating the camera."""
-    context = _Context(ContextDefinition(movementModes=[modes.WalkMode(name='walk')]))
+    context = _Context(ContextDefinition(navigation=Navigation(modes=[modes.WalkMode(name='walk')])))
     context.updateNavigation(0.016)
     later = _Platform()
     context.getNavigationPlatform = lambda: later
@@ -216,8 +217,8 @@ class _SamplingContext(_Context, _Optimisable):
 
 
 def _fps_definition():
-    return ContextDefinition(movementModes=[
-        modes.WalkMode(name='walk'), modes.FPSMode(name='fps')])
+    return ContextDefinition(navigation=Navigation(modes=[
+        modes.WalkMode(name='walk'), modes.FPSMode(name='fps')]))
 
 
 def test_a_mouse_look_mode_keeps_move_events_alive():

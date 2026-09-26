@@ -30,6 +30,7 @@ from typing import Any, Optional
 from OpenGLContext import testingcontext
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.move import modes as movemodes
+from OpenGLContext.move.navigationdefinition import Navigation
 from OpenGLContext.scenegraph.appearance import Appearance
 from OpenGLContext.scenegraph.box import Box
 from OpenGLContext.scenegraph.transform import Transform
@@ -219,7 +220,7 @@ def main() -> int:
     UIDemoContext.ContextMainLoop(definition=ContextDefinition(
         title='OpenGLContext overlay UI',
         size=(1024, 720),
-        movementModes=movement_modes(),
+        navigation=Navigation(modes=['examine', *movement_modes()]),
     ))
     return 0
 

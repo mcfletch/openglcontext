@@ -29,7 +29,8 @@ overrides nothing -- so it can be added to any class that offers:
 ``movementManager``
     The navigator holding the camera when walking is off.
 ``contextDefinition``
-    Where the declared movement modes are published.
+    Whose ``navigation`` declares the movement modes, and publishes the one
+    in force.
 ``addEventHandler``, ``triggerRedraw``, ``getNavigation``, ``updateNavigation``
     The event and navigation plumbing every ``Context`` has.
 
@@ -208,8 +209,15 @@ class PhysicsWalkMixin(object):
         The modes' speeds have to match the character's, and the character is
         sized to the world, so this happens when the avatar is built rather
         than at startup.  A context that declares its own modes overrides this.
+        The classic navigation stays declared where it was.
         """
-        self.contextDefinition.movementModes = walk_fly_modes(scale)
+        from OpenGLContext.move.navigationdefinition import Navigation
+
+        definition = self.contextDefinition
+        if definition.navigation:
+            definition.navigation.setMovingModes(walk_fly_modes(scale))
+        else:
+            definition.navigation = Navigation(modes=walk_fly_modes(scale))
 
     def ensurePhysicsWorld(self) -> bool:
         """Build the avatar and its world once.  False if nothing is walkable."""
@@ -329,7 +337,7 @@ class PhysicsWalkMixin(object):
         navigation = self.getNavigation()
         if navigation is None or self.physicsPlatform is None:
             return
-        current = getattr(self.contextDefinition, 'movementMode', None)
+        current = navigation.current
         wanted = 'walk' if current is not None and current.name == 'fly' else 'fly'
         if navigation.select(wanted):
             self.physicsPlatform.set_fly(wanted == 'fly')

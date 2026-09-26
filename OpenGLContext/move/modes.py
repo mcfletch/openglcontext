@@ -469,6 +469,31 @@ class FPSMode(WalkMode):
         self._mouseLook(inputs, platform)
 
 
+class ExamineMode(MovementMode):
+    """The classic navigation: the arrow keys, and a drag to examine a model
+
+    Declared among the other modes so that it is one choice among them: a
+    context whose navigation declares it binds
+    :class:`~OpenGLContext.move.smooth.Smooth` as its free-fly manager, which
+    moves the camera from key and drag events, and a walking context hands
+    the camera back to it when walking stops (``g``).  A navigation without it
+    binds no classic keys at all.
+
+    It drives nothing frame by frame, so :meth:`update` does nothing, and it
+    has no :attr:`bindings` of its own: the manager binds its keys as events.
+    """
+
+    PROTO = 'ExamineMode'
+
+    UI_HINTS: ClassVar[dict[str, dict[str, Any]]] = {
+        'turnRate': {'skip': True},
+        'turnAcceleration': {'skip': True},
+        'sensitivity': {'skip': True},
+        'invertLook': {'skip': True},
+        'capturePointer': {'skip': True},
+    }
+
+
 #: Speeds a walking avatar moves at, in scene units per second at scale 1.  The
 #: avatar's own :class:`~omi_physics.character.CharacterCapabilities` and the
 #: modes that drive it have to agree on these, or a mode asks for a speed the
@@ -484,6 +509,44 @@ BOOST_SPEED = 32.0
 #: to: a viewer needs both a precise nudge and a quick spin in close quarters.
 TURN_RATE = 0.9
 TURN_ACCELERATION = 3.0
+#: How fast a swimmer moves, in scene units per second at scale 1.
+SWIM_SPEED = 2.0
+
+
+# The factories the engine registers its modes by (``plugins.MovementMode``),
+# each making a new node at ``scale``: a mode carries the player's settings,
+# so two contexts asking for 'walk' each get one of their own.
+
+def walkMode(scale: float = 1.0) -> WalkMode:
+    """``walk``: walking, running and jumping against gravity"""
+    return WalkMode(name='walk', walkSpeed=WALK_SPEED * scale,
+                    runSpeed=RUN_SPEED * scale,
+                    turnRate=TURN_RATE, turnAcceleration=TURN_ACCELERATION)
+
+
+def flyMode(scale: float = 1.0) -> FlyMode:
+    """``fly``: free movement in three axes, through anything"""
+    return FlyMode(name='fly', flySpeed=FLY_SPEED * scale,
+                   boostSpeed=BOOST_SPEED * scale,
+                   turnRate=TURN_RATE, turnAcceleration=TURN_ACCELERATION)
+
+
+def swimMode(scale: float = 1.0) -> SwimMode:
+    """``swim``: imposed by the world while the avatar is submerged"""
+    return SwimMode(name='swim', swimSpeed=SWIM_SPEED * scale,
+                    turnRate=TURN_RATE, turnAcceleration=TURN_ACCELERATION)
+
+
+def fpsMode(scale: float = 1.0) -> FPSMode:
+    """``fps``: walking with the pointer steering the view"""
+    return FPSMode(name='fps', walkSpeed=WALK_SPEED * scale,
+                   runSpeed=RUN_SPEED * scale,
+                   turnRate=TURN_RATE, turnAcceleration=TURN_ACCELERATION)
+
+
+def examineMode(scale: float = 1.0) -> ExamineMode:
+    """``examine``: the classic arrow-key and drag navigation"""
+    return ExamineMode(name='examine')
 
 
 def walk_fly_modes(scale: float = 1.0,
@@ -507,17 +570,7 @@ def walk_fly_modes(scale: float = 1.0,
     ``q``/``e`` walking stays one mode-cycle away for anyone who would rather
     keep the pointer.
     """
-    walking: Sequence[MovementMode] = [
-        WalkMode(name='walk', walkSpeed=WALK_SPEED * scale,
-                 runSpeed=RUN_SPEED * scale,
-                 turnRate=TURN_RATE, turnAcceleration=TURN_ACCELERATION),
-        FlyMode(name='fly', flySpeed=FLY_SPEED * scale,
-                boostSpeed=BOOST_SPEED * scale,
-                turnRate=TURN_RATE, turnAcceleration=TURN_ACCELERATION),
-    ]
+    walking: Sequence[MovementMode] = [walkMode(scale), flyMode(scale)]
     if not first_person:
         return walking
-    return [FPSMode(name='fps', walkSpeed=WALK_SPEED * scale,
-                    runSpeed=RUN_SPEED * scale,
-                    turnRate=TURN_RATE,
-                    turnAcceleration=TURN_ACCELERATION)] + list(walking)
+    return [fpsMode(scale), *walking]

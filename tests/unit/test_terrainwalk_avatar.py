@@ -70,9 +70,10 @@ class _Manager:
         self.bound = False
 
 
-class _Definition:
-    movementModes = None
-    movementMode = None
+def _Definition():
+    """A definition declaring the classic navigation alone, as a context starts."""
+    from OpenGLContext.contextdefinition import ContextDefinition
+    return ContextDefinition()
 
 
 class _Host(TerrainWalkMixin, ViewPlatformMixin):
@@ -147,23 +148,23 @@ class TestDeclaredModes:
     def test_walking_terrain_is_first_person(self):
         """Mouse-look is the mode a landscape starts in, as it is in twig-bb."""
         host = walking()
-        declared = list(host.contextDefinition.movementModes)
+        declared = host.contextDefinition.navigation.movingModes()
         assert isinstance(declared[0], movemodes.FPSMode)
         assert declared[0].capturePointer
 
     def test_walking_and_flying_are_offered_as_well(self):
         host = walking()
-        names = [str(mode.name) for mode in host.contextDefinition.movementModes]
+        names = [str(mode.name) for mode in host.contextDefinition.navigation.movingModes()]
         assert names == ['fps', 'walk', 'fly']
 
     def test_a_host_that_declared_its_own_modes_keeps_them(self):
         """The speeds a game chose are not overwritten by the defaults."""
         host = _Host()
-        host.contextDefinition.movementModes = [
-            movemodes.WalkMode(name='walk', walkSpeed=11.0)]
+        host.contextDefinition.navigation.setMovingModes([
+            movemodes.WalkMode(name='walk', walkSpeed=11.0)])
         host.init_walk(flat_field())
         host.setupPhysics(enable=True)
-        declared = list(host.contextDefinition.movementModes)
+        declared = host.contextDefinition.navigation.movingModes()
         assert len(declared) == 1
         assert declared[0].walkSpeed == pytest.approx(11.0)
 
@@ -219,7 +220,7 @@ class TestWalking:
         """
         def walked(speed):
             host = walking()
-            host.contextDefinition.movementModes[0].walkSpeed = speed
+            host.contextDefinition.navigation.movingModes()[0].walkSpeed = speed
             press(host, 'w')
             run(host, 1.0)
             return math.dist((0.0, 0.0), eye(host)[::2])

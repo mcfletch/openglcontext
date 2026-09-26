@@ -8,6 +8,7 @@ pointer, and the context is what knows how to take it.
 import pytest
 
 from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.move.navigationdefinition import Navigation
 from OpenGLContext.move import modes
 from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
 
@@ -58,7 +59,7 @@ class _Context(ViewPlatformMixin, _Dispatch):
 
 
 def _context(*mode_nodes):
-    return _Context(ContextDefinition(movementModes=list(mode_nodes)))
+    return _Context(ContextDefinition(navigation=Navigation(modes=list(mode_nodes))))
 
 
 def test_a_mode_that_steers_with_the_mouse_wants_the_pointer():
@@ -150,11 +151,11 @@ def test_a_context_that_cannot_capture_still_navigates():
             return False
 
     context = _NoCapture(ContextDefinition(
-        movementModes=[modes.FPSMode(name='fps')]))
+        navigation=Navigation(modes=[modes.FPSMode(name='fps')])))
     context.updateNavigation(0.016)
     context.updateNavigation(0.016)
     assert context.captures == [True]
-    assert context.contextDefinition.movementMode.name == 'fps'
+    assert context.contextDefinition.navigation.current.name == 'fps'
 
 
 # -- the GLFW window system --------------------------------------------------

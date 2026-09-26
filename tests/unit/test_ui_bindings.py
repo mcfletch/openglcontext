@@ -5,6 +5,7 @@ import os
 import pytest
 
 from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.move.navigationdefinition import Navigation
 from OpenGLContext.move import bindingstore, modes as movemodes
 from OpenGLContext.move.navigation import NavigationManager
 from OpenGLContext.ui import bindings
@@ -57,8 +58,8 @@ class Context(OverlayMixin, World):
 
 @pytest.fixture
 def context(tmp_path):
-    made = Context(ContextDefinition(movementModes=[
-        movemodes.WalkMode(name='walk'), movemodes.FlyMode(name='fly')]))
+    made = Context(ContextDefinition(navigation=Navigation(modes=[
+        movemodes.WalkMode(name='walk'), movemodes.FlyMode(name='fly')])))
     made.navigation = NavigationManager(made.contextDefinition, Platform())
     made.bindingsPath = str(tmp_path / 'keys.json')
     return made
