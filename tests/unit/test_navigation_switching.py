@@ -14,7 +14,7 @@ from OpenGLContext.context import Context
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.move import modes, smooth
 from OpenGLContext.move.navigationdefinition import Navigation
-from OpenGLContext.testing.glcontext import GLUnavailable
+from OpenGLContext.testing.glcontext import profile_unavailable
 from OpenGLContext.testing.scenes import scene_context
 from OpenGLContext.ui.overlay import OverlayMixin
 from OpenGLContext.ui.toolpalette import ModeSelector
@@ -172,27 +172,26 @@ class _Overlaid(OverlayMixin, Context):
     pass
 
 
+@pytest.fixture
+def core_profile():
+    """Skip where this machine opens no core-profile context."""
+    refused = profile_unavailable('core')
+    if refused:
+        pytest.skip(refused)
+
+
 class TestOnScreenControls:
-    def test_controls_need_the_overlay(self):
+    def test_controls_need_the_overlay(self, core_profile):
         """Raised as the context is built, naming what to mix in, rather than
         leaving a declaration that silently offers nothing."""
-        try:
+        with pytest.raises(TypeError, match='OverlayMixin'):
             with scene_context([], navigation=Navigation(
                     modes=['walk', 'fly'], modeSwitching=['controls'])):
                 pass
-        except GLUnavailable as reason:
-            pytest.skip(str(reason))
-        except TypeError as error:
-            assert 'OverlayMixin' in str(error)
-        else:
-            pytest.fail('a context with no overlay accepted on-screen controls')
 
-    def test_an_overlaid_context_puts_the_selector_up(self):
-        try:
-            with scene_context([], base=_Overlaid, navigation=Navigation(
-                    modes=['walk', 'fly'], modeSwitching=['controls'])) as context:
-                selectors = [panel for panel in context.overlays.panels
-                             if isinstance(panel, ModeSelector)]
-        except GLUnavailable as reason:
-            pytest.skip(str(reason))
+    def test_an_overlaid_context_puts_the_selector_up(self, core_profile):
+        with scene_context([], base=_Overlaid, navigation=Navigation(
+                modes=['walk', 'fly'], modeSwitching=['controls'])) as context:
+            selectors = [panel for panel in context.overlays.panels
+                         if isinstance(panel, ModeSelector)]
         assert len(selectors) == 1

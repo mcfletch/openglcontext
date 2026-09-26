@@ -79,7 +79,7 @@ def _gestures(names: Sequence[str]) -> Optional[ViewNavigationMode]:
     """
     if not names:
         return None
-    sets = [viewGestures(str(name)) for name in names]
+    sets: list[ViewNavigationMode] = [viewGestures(str(name)) for name in names]
     if len(sets) == 1:
         return sets[0]
     return ViewNavigationMode(

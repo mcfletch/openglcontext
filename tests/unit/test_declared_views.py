@@ -23,7 +23,7 @@ from OpenGLContext.multiview.views import ViewLayout
 from OpenGLContext.passes import viewpointbinding
 from OpenGLContext.passes.flatcore import FlatPass
 from OpenGLContext.scenegraph.basenodes import Viewpoint, sceneGraph
-from OpenGLContext.testing.glcontext import GLUnavailable
+from OpenGLContext.testing.glcontext import profile_unavailable
 from OpenGLContext.testing.scenes import scene_context
 from OpenGLContext.ui.metrics import FontMetrics
 from OpenGLContext.ui.overlay import OverlayMixin
@@ -333,14 +333,14 @@ class TestStartingViewsAtRunTime:
 
 class TestAWindowedContext:
     def test_a_context_opens_on_its_declared_views(self):
+        refused = profile_unavailable('core')
+        if refused:
+            pytest.skip(refused)
         views = _quad(arrangement='quad')
-        try:
-            with scene_context([], navigation=Navigation(
-                    modes=['examine'], views=views)) as context:
-                mode = context.views.mode
-                width, height = context.getViewPort()
-                placed = context.views.window
-        except GLUnavailable as reason:
-            pytest.skip(str(reason))
+        with scene_context([], navigation=Navigation(
+                modes=['examine'], views=views)) as context:
+            mode = context.views.mode
+            width, height = context.getViewPort()
+            placed = context.views.window
         assert mode == 'quad'
         assert placed == (width, height)

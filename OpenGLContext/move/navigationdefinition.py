@@ -100,7 +100,7 @@ def registeredGestures() -> tuple[str, ...]:
     return tuple(plugin.name for plugin in plugins.ViewGestures.all())
 
 
-def _factory(registry: type[plugins.Plugin], name: str,
+def _factory(registry: type[plugins.MovementMode] | type[plugins.ViewGestures], name: str,
              registered: Sequence[str], kind: str) -> Any:
     if name not in registered:
         raise KeyError('No %s is registered as %r; registered: %s'
@@ -220,7 +220,7 @@ class Views(node.Node):
             return {str(arrangement.name): tuple(arrangement.views)
                     for arrangement in self.arrangements}
         names = [str(view.name) for view in self.views]
-        offered = {name: (name,) for name in names}
+        offered: dict[str, tuple[str, ...]] = {name: (name,) for name in names}
         if len(names) >= 2:
             offered['split'] = tuple(names[:2])
         if len(names) >= 4:
