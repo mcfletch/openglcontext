@@ -14,7 +14,7 @@ fractions of one, where a notch is the sum of a stream of them.
 
 import pytest
 
-from OpenGLContext.context import Context
+from OpenGLContext.context import Context, ContextCore
 from OpenGLContext.events import glutevents, pygameevents
 from OpenGLContext.events.inputstate import InputState
 from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
@@ -269,7 +269,7 @@ class TestEveryNotchSurvivesTheFrame:
         contextDefinition = None
         viewLayout = None
         addPickEvent = Context.addPickEvent
-        getViewLayout = Context.getViewLayout
+        getViewLayout = ContextCore.getViewLayout
         routeEvent = Context.routeEvent
 
         def __init__(self):

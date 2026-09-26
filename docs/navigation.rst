@@ -5,36 +5,115 @@ Movement Modes & Navigation
 
 A **movement mode** is one way of moving through a scene: walking, flying,
 swimming, or first-person mouse-look. Each mode is a scenegraph node with its
-own speeds and its own key bindings. A context lists the modes it offers on
-its ``ContextDefinition``, and a ``NavigationManager`` chooses which mode is
-in force each frame. Because the modes are nodes, a settings screen can list
+own speeds and its own key bindings. A context declares the modes it offers,
+and how the user switches between them, in its definition's ``navigation``,
+and a ``NavigationManager`` chooses which mode is in force each frame. Because the modes are nodes, a settings screen can list
 and edit them without knowing the application, and a game can retune a mode
 by setting a field.
 
 This page also covers the examine gestures (orbit, pan and dolly), which
-every interactive context has without declaring any modes.
+a context has through the ``examine`` mode, declared by default.
 
-.. _modes:
+.. _navigation-declaration:
 
-Declaring the modes
--------------------
+The navigation declaration
+--------------------------
 
-The modes are in ``OpenGLContext.move.modes``. Each is a ``PROTO`` like any
-other node, so it can be written into a parsed file, held in an ``SFNode``
-field, and watched for changes.
+``ContextDefinition.navigation`` holds a ``Navigation`` node
+(``OpenGLContext.move.navigationdefinition``):
 
 .. code-block:: python
 
    from OpenGLContext.contextdefinition import ContextDefinition
+   from OpenGLContext.move.navigationdefinition import Navigation
+
+   # A game: its own logic switches mode (entering water, a pickup)
+   player = ContextDefinition(navigation=Navigation(
+       modes=['fps', 'swim', 'fly'], modeSwitching=[]))
+
+   # Its editor: the user switches, by key and on screen
+   editor = ContextDefinition(navigation=Navigation(
+       modes=['examine', 'fly', 'walk'], mode='examine',
+       modeSwitching=['keys', 'controls']))
+
+``Navigation`` fields:
+
+- ``modes`` - the movement modes, as nodes or as registered names. A name is
+  replaced by the node its registration makes, so ``'fly'`` and
+  ``modes.FlyMode(name='fly')`` declare the same thing.
+- ``mode`` - the mode selected at start; empty for the first selectable one.
+- ``current`` - the mode in force, written by the navigation manager each
+  frame. It is an ``SFNode``, so a HUD, a settings screen or an animation
+  state machine can watch it instead of polling.
+- ``modeSwitching`` - how the *user* may change mode. ``keys`` binds
+  ``movementCycleKey`` (:kbd:`m`, on its release) to step through the
+  selectable modes; ``controls`` puts a ``ModeSelector`` palette on the
+  overlay (see :doc:`overlayui`), which needs ``OverlayMixin`` among the
+  context's bases, and raises ``TypeError`` as the context is built without
+  it. Empty offers the user neither. The application's own
+  ``getNavigation().select(name)`` and ``cycle()`` work whatever the field
+  says, and a mode the world imposes (swimming) applies regardless.
+- ``views`` - the views and their arrangements, described in
+  :ref:`multiview <multiview-mixin>`. NULL, the default, is one view.
+
+A context that declares nothing gets ``Navigation(modes=['examine'])``: the
+classic arrow-key and drag navigation, in one view. A NULL ``navigation``
+binds nothing to move with; the context keeps a view platform that stays
+where it is put, since the render passes draw through one.
+
+A configuration file names modes by a comma-separated list in its
+``[context]`` section's ``navigation`` entry.
+
+The registries
+~~~~~~~~~~~~~~
+
+Mode names are looked up in ``plugins.MovementMode``. The engine registers
+``walk``, ``fly``, ``swim``, ``fps`` and ``examine``; each is a factory taking
+the world's ``scale``, which multiplies the mode's speeds.
+``navigationdefinition.registeredModes()`` lists the names, and
+``movementMode(name, scale)`` makes one. An unknown name raises ``KeyError``
+listing the registered ones. A game registers its own at import:
+
+.. code-block:: python
+
+   from OpenGLContext import plugins
+
+   plugins.MovementMode('fps-map', 'mygame.modes.map_mode')
+
+or from another distribution, through an entry point in the
+``openglcontext.movementmodes`` group. View gesture sets (``plan``,
+``examine``) are registered the same way in ``plugins.ViewGestures`` and the
+``openglcontext.viewgestures`` group.
+
+``Navigation.scaled(scale)`` answers a copy whose modes move ``scale`` times
+as fast, for a world bigger or smaller than a person.
+
+``examine`` is the classic navigation: arrow keys move, :kbd:`alt`\ +arrows
+move up and sideways, the right button orbits and the middle button pans. It
+is bound where it is declared, and ``Navigation.movingModes()`` answers the
+other modes, the ones that move a body.
+
+.. _modes:
+
+The modes
+---------
+
+The modes are in ``OpenGLContext.move.modes``. Each is a ``PROTO`` like any
+other node, so it can be written into a parsed file, held in an ``SFNode``
+field, and watched for changes. Declared as nodes, their fields are set
+directly:
+
+.. code-block:: python
+
    from OpenGLContext.move import modes
 
-   definition = ContextDefinition(movementModes=[
+   navigation = Navigation(modes=[
        modes.WalkMode(name='walk', walkSpeed=3.0, runSpeed=6.0),
        modes.FlyMode(name='fly', flySpeed=8.0),
        modes.FPSMode(name='fps', sensitivity=0.003),
        modes.SwimMode(name='swim', swimSpeed=2.0),
    ])
-   MyContext.ContextMainLoop(definition=definition)
+   MyContext.ContextMainLoop(navigation=navigation)
 
 .. list-table::
    :widths: auto
@@ -219,9 +298,9 @@ no motion, so the pointer entering the window does not jerk the view.
 What the context does
 ---------------------
 
-A context that declares no ``movementModes`` keeps whatever movement manager
-it had. A context that declares them gets a ``NavigationManager`` and drives
-it once a frame:
+A context whose navigation declares no mode but ``examine`` moves its camera
+with the classic navigation. A context that declares modes that move a body
+gets a ``NavigationManager`` and drives it once a frame:
 
 .. code-block:: python
 
@@ -236,7 +315,10 @@ it once a frame:
    * - Method
      - Purpose
    * - ``getNavigation()``
-     - the manager, or None when no modes are declared
+     - the manager, or None when no modes that move a body are declared
+   * - ``cycleMovementMode()``
+     - steps to the next selectable mode; what ``modeSwitching``'s ``keys``
+       binds
    * - ``getNavigationPlatform()``
      - the platform the modes drive. ``PhysicsWalkMixin`` defines it: the walking
        avatar when there is one, otherwise the view platform. A game with a
@@ -250,9 +332,7 @@ it once a frame:
    * - ``suspendPointerCapture(suspend)``
      - releases the pointer while an overlay needs it, and grabs it again after
 
-The mode in force is published on ``contextDefinition.movementMode``, an
-``SFNode``. A HUD, a settings screen or an animation state machine can watch
-that field instead of polling.
+The mode in force is published on ``contextDefinition.navigation.current``.
 
 A platform driven by the modes needs ``set_move``, ``set_fly_move``,
 ``turn``, ``look`` and ``jump``. ``ViewPlatform`` and ``PhysicsViewPlatform``
@@ -427,7 +507,7 @@ scene keeps the default speeds. Flying the 41 MB Toronto tileset (framed
 radius 7.9 km) this way moves at 785 units a second.
 
 The mode objects are kept and only their speeds change, so the mode in force,
-the bound keys and anything watching ``movementMode`` are unaffected. The
+the bound keys and anything watching ``navigation.current`` are unaffected. The
 speed sliders on the settings screen widen to match. Modes a host application
 declared itself are not scaled.
 

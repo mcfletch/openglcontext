@@ -279,12 +279,18 @@ The scene
 
 - ``v`` switches between one view of the scene and four: the plan, the front
   and left elevations, and the camera. The three orthographic views are ruled
-  with a grid. ``--views quad`` opens with four. See :doc:`multiview`.
+  with a grid. ``--views quad`` opens with four. ``x`` gives the view last
+  clicked the whole window, or gives it back. See :doc:`multiview`.
+
+- ``m`` steps to the next movement mode.
 
 These keys act once, when the key is released. A held key repeats about
 twenty times a second, which would load twenty models or skip twenty cameras.
 
-The keys are listed in ``SceneViewerMixin.viewerKeys``, a table of
+``m``, ``v`` and ``x`` come from the navigation the viewer declares
+(``SceneViewerMixin.viewerNavigation()``, which a subclass overrides, or a
+definition passed in with its own ``navigation``); the rest are listed in
+``SceneViewerMixin.viewerKeys``, a table of
 ``KeyBinding(name, method, description, modifiers, state)``. To add a key in
 a subclass, extend that table rather than overriding ``setupCallbacks``. The
 description is the text shown in key listings. Modifiers are ``(shift,
