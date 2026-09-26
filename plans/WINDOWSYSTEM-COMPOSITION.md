@@ -847,8 +847,12 @@ Run from the worktree with `PYTHONPATH=<worktree>`; GLUT and Tk need
   `viewer`, `zones`, `overlayui` and `testing` follow; CLAUDE.md's directory
   map and `OPENGLCONTEXT_BACKEND` section; the Qt README.
 - Gates in the worktree: ruff, oglc-check, mypy (from `.preflight-venv`,
-  whole package) clean; the full suite green in both passes apart from what
-  is listed under *Still to do*.
+  whole package) clean; the full suite green in both passes (12621 and 16).
+  The sibling suites, run by `verify-everything.py` against the three
+  worktrees (a `PYTHONPATH` of the packages alone -- the engine worktree's
+  root would put its own `tests` package ahead of theirs), are green:
+  openglcontext-editor 1478, forest 66, marble-demo 896, marble-editor 162,
+  glisteel 1638, glisteel-editor 469, twig-bb 2355.
 
 Still to do:
 
