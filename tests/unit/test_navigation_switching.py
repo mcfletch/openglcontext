@@ -14,6 +14,7 @@ from OpenGLContext.context import Context
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.move import modes, smooth
 from OpenGLContext.move.navigationdefinition import Navigation
+from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
 from OpenGLContext.testing.glcontext import profile_unavailable
 from OpenGLContext.testing.scenes import scene_context
 from OpenGLContext.ui.overlay import OverlayMixin
@@ -47,6 +48,15 @@ class _Keys(Context):
         return False
 
 
+class _Platformed(_Keys):
+    """A recorded context that makes its own view platform, as Context does."""
+
+    getViewPlatform = ViewPlatformMixin.getViewPlatform
+
+    def getViewPort(self):
+        return (800, 600)
+
+
 def _keysBound(context, name):
     return [function for kind, key, function, _state in context.bound
             if kind == 'keyboard' and key == name]
@@ -62,6 +72,12 @@ class TestTheClassicNavigation:
         fighting its avatar for the view."""
         context = _Keys(Navigation(modes=['fps', 'fly']))
         assert context.movementManager is None
+
+    def test_null_navigation_still_has_a_view_platform_by_init(self):
+        """The render passes draw through it, and ``OnInit`` reaches for
+        ``self.platform`` to set a frustum or hand it to a follow camera."""
+        context = _Platformed(None)
+        assert context.platform is not None
 
     def test_null_navigation_binds_nothing_to_move_with(self):
         context = _Keys(None)

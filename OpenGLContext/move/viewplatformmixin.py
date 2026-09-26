@@ -319,9 +319,12 @@ class ViewPlatformMixin(PhysicsWalkMixin, _Host):
             * '-' for straightening the view platform
 
         Where it lets the user switch modes by key, :attr:`movementCycleKey`
-        steps through them.  A NULL navigation binds none of it.
+        steps through them.  A NULL navigation binds none of it.  The view
+        platform is made here whatever the navigation says, so ``OnInit``
+        finds :attr:`platform` set.
         """
         super( ViewPlatformMixin, self ).setupDefaultEventCallbacks()
+        self.getViewPlatform()
         declared = self.declaredNavigation()
         if declared is None:
             return
