@@ -1,10 +1,13 @@
-"""Module providing translation from wxPython events to OpenGLContext events"""
-import logging
-from typing import TYPE_CHECKING, Any, Optional
+"""OpenGLContext events built from wxPython's events
 
-from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
+The event classes, key table and modifier reading the wx window system
+(:mod:`OpenGLContext.windowsystem.wx`) builds its events with.
+"""
+import logging
+from typing import Any
+
+from OpenGLContext.events import mouseevents, keyboardevents
 from OpenGLContext.events.mouseevents import WHEEL_UP
-from OpenGLContext.events.wheel import WheelNotches
 import wx
 
 log = logging.getLogger( __name__ )
@@ -29,136 +32,11 @@ BUTTON_IS_DOWN: tuple[tuple[int, str], ...] = (
 )
 
 
-class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
-    """wxPython-specific event handler mix-in
-
-    Basically provides translation from wxPython events
-    to their OpenGLContext-specific equivalents (the
-    concrete versions of which are also defined in this
-    module).
-    """
-    #: Counts a stream of wheel reports into whole notches; wx states its own
-    #: detent size on the event, so the counter is built on the first one.
-    _wheelCounter: Optional[WheelNotches] = None
-
-    if TYPE_CHECKING:
-        # What this mix-in needs of the wx canvas beside it.
-        def addPickEvent(self, event: Any) -> Any: ...
-        def triggerPick(self) -> Any: ...
-        def getViewPort(self) -> tuple[int, int]: ...
-
-    ### KEYBOARD interactions
-    def wxOnKeyDown( self, event: Any ) -> None:
-        '''Convert a key-press to a context-style event'''
-        code = event.GetKeyCode()
-        if code in self.heldKeys():
-            self.noteNativeRepeat()     # already down, so wx is repeating it
-        self.noteKeyDown( code, _modifiersOf( event ) )
-        self.ProcessEvent( wxKeyboardEvent( self, event, 1))
-        event.Skip()
-    def wxOnKeyUp( self, event: Any ) -> None:
-        '''Convert a key-release to a context-style event'''
-        self.noteKeyUp( event.GetKeyCode() )
-        self.ProcessEvent( wxKeyboardEvent( self, event, 0))
-    def wxOnCharacter( self, event: Any ) -> None:
-        """Convert character (non-control) press to context event"""
-        self.ProcessEvent( wxKeypressEvent( self, event))
-    def wxOnKillFocus( self, event: Any ) -> None:
-        """Let go of every held key as the canvas loses focus
-
-        No key-up arrives for a key that was down when focus went elsewhere, so
-        without this the key stays held for the rest of the session and the
-        camera keeps moving with nobody touching the keyboard.
-        """
-        self.clearHeldKeys()
-        event.Skip()
-    def emitKey( self, key: Any, state: int, modifiers: Any ) -> None:
-        """Send a key transition the window system did not report
-
-        ``modifiers`` is the triple that came with the press, so the synthetic
-        release matches the binding the press did; see
-        :class:`OpenGLContext.events.eventhandlermixin.HeldKeyMixin`.
-        """
-        made = wxKeyboardEvent.__new__( wxKeyboardEvent )
-        keyboardevents.KeyboardEvent.__init__( made )
-        if hasattr( self, 'currentPass' ):
-            made.renderingPass = self.currentPass
-        made.modifiers = modifiers
-        made.name = keyName( key )
-        made.state = state
-        self.ProcessEvent( made )
-    ### MOUSE Interaction
-    def wxOnMouseButton(self, event: Any ) -> None:
-        """Convert mouse-button event to context event"""
-        self.addPickEvent( wxMouseButtonEvent( self, event))
-        self.triggerPick()
-    def wxOnMouseMove(self, event: Any ) -> None:
-        """Convert mouse-movement event to context event
-
-        The movement sampler is told directly as well as through the pick
-        queue: a mouse-look mode wants every scrap of motion as it happens,
-        while a pick event is only delivered once the selection buffer resolves
-        it -- and not at all when the pointer is over nothing or picking is off.
-
-        A movement the window made itself -- the warp that keeps a grabbed
-        pointer in the middle of the window -- updates where the pointer is and
-        goes no further: it is not motion the user asked for, and it is not a
-        click on anything.
-        """
-        x, y = event.GetX(), event.GetY()
-        echo = self.pointerWarpEcho( x, y )
-        record = getattr( self, 'recordPointerMotion', None )
-        if record is not None:
-            if echo:
-                forget = getattr( self, 'forgetPointerOrigin', None )
-                if forget is not None:
-                    forget()
-            record( int(x), self.getViewPort()[1] - int(y) )
-        if echo:
-            return
-        self.recentrePointer()
-        self.addPickEvent( wxMouseMoveEvent( self, event))
-        self.triggerPick()
-    def wxOnMouseWheel(self, event: Any ) -> None:
-        """Convert scrolling to the pair of button events a wheel notch is
-
-        wx reports scrolling as an amount of rotation rather than as the wheel
-        buttons everything downstream reads (see
-        :data:`~OpenGLContext.events.mouseevents.WHEEL_UP`), so each whole
-        notch becomes a press and a release here.  Only vertical rotation is
-        used: nothing in the interface scrolls sideways.
-        """
-        if event.GetWheelAxis() != wx.MOUSE_WHEEL_VERTICAL:
-            return
-        if self._wheelCounter is None:
-            self._wheelCounter = WheelNotches( event.GetWheelDelta() or 120 )
-        for button in self._wheelCounter.notches( event.GetWheelRotation() ):
-            for state in (1, 0):
-                self.addPickEvent(
-                    wxWheelEvent( self, event, button=button, state=state ) )
-        self.triggerPick()
-    def pointerWarpEcho( self, x: int, y: int ) -> bool:
-        """Whether this movement is one the window itself caused
-
-        Answered by the canvas, which is what does the warping; see
-        :meth:`OpenGLContext.wxcontext.wxContext.pointerWarpEcho`.  A window
-        that never warps the pointer never sees an echo.
-        """
-        return False
-    def recentrePointer( self ) -> None:
-        """Put a grabbed pointer back in the middle of the window
-
-        Answered by the canvas; see
-        :meth:`OpenGLContext.wxcontext.wxContext.recentrePointer`.  A window
-        with no pointer capture has nothing to do here.
-        """
-
-
-def _modifiersOf( wxEventObject: Any ) -> tuple[bool, bool, bool]:
+def modifiersOf( wxEventObject: Any ) -> tuple[bool, bool, bool]:
     """The shift, control and alt triple a wx event was delivered with
 
-    A function rather than a method on the event classes, because the canvas
-    reads it too: a key it has to *hold* is remembered with the modifiers its
+    A function rather than a method on the event classes, because the window
+    system reads it too: a key it has to *hold* is remembered with the modifiers its
     press carried, so the release focus loss never delivered matches the
     binding the press matched.
     """
@@ -187,7 +65,7 @@ class wxXEvent(object):
     """
     def _getModifiers( self, wxEventObject: Any) -> tuple[bool, bool, bool]:
         """Get a three-tupple of shift, control, alt status"""
-        return _modifiersOf( wxEventObject )
+        return modifiersOf( wxEventObject )
 
 class wxMouseButtonEvent( wxXEvent, mouseevents.MouseButtonEvent ):
     """wxPython-specific mouse button event"""

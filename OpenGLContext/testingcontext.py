@@ -1,78 +1,81 @@
-"""Functions for acquiring and instantiating available testing contexts
+"""The context class a test script or tutorial builds its window on
 
-Testing modules can use these abstract functions to allow for
-automatic adaptation to new interactive contexts.  You should
-not use this module for real world applications, as it is
-unlikely that nontrivial code will be completely stable across
-all interactive context classes."""
+``getInteractive()`` answers :class:`~OpenGLContext.context.Context`, whose
+window system is chosen when the context is built -- from
+``OPENGLCONTEXT_BACKEND``, the user's preference, or the first that imports.
+Named, it answers the context class with that window system chosen::
 
-import optparse
-from typing import Any, Optional
+    BaseContext = testingcontext.getInteractive()       # Context
+    BaseContext = testingcontext.getInteractive('tk')   # Context on Tk
 
-from OpenGLContext import plugins, context, contextdefinition
+An application writes ``class Game(Context)`` and names its window system in
+its definition; see :mod:`OpenGLContext.windowsystem`.
+"""
+
+import warnings
+from typing import Optional
+
+from OpenGLContext import plugins, windowsystem
+from OpenGLContext.context import Context
 
 #: The context class a test runner has every test context built on, where it
-#: names one; None leaves the choice to the backend preference.
-CONFIGURED_BASE: Optional[type[context.Context]] = None
+#: names one; None leaves the choice to the window-system preference.
+CONFIGURED_BASE: Optional[type[Context]] = None
 REQUIRED_EXTENSION_MISSING = 3 # process return-code for a missing extension
 
+__all__ = (
+    'CONFIGURED_BASE',
+    'REQUIRED_EXTENSION_MISSING',
+    'contextClassFor',
+    'getInteractive',
+    'getVRML',
+)
 
-def getVRML( preference: Any = None ) -> Any:
-    """Retrieve the preferred VRML-parsing context class
 
-    returns BaseContext (a class derived from context.Context)
+def getInteractive(preference: Optional[str] = None) -> type[Context]:
+    """The context class to build a window on
 
-    Answers ``Any`` rather than ``type[Context]`` because what a caller does
-    with the answer is subclass it, and a base class has to be a class a
-    checker can name -- which this one is not until the backend is chosen.
+    preference -- the name of a registered window system, or None to leave
+        the choice to the definition, the environment and the user's
+        configuration as the context is built
 
-    Raises RuntimeError where there is no such context to be had; see
-    :func:`getInteractive`.
+    With no preference this is :class:`~OpenGLContext.context.Context`.
+    Named, it is the class for that window system (``'glfw'`` answers
+    :class:`~OpenGLContext.glfwcontext.GLFWContext`), and raises
+    :class:`~OpenGLContext.windowsystem.WindowSystemUnavailable` -- a
+    ``RuntimeError`` -- where the name is not registered or its toolkit will
+    not import.  What a caller does with the answer is subclass it, and a
+    missing base class is reported by Python several frames away from the
+    cause, naming neither the window system nor the package to install.
     """
     if CONFIGURED_BASE:
         return CONFIGURED_BASE
-    return _required(
-        context.Context.getContextType( preference, plugins.VRMLContext ),
-        preference, plugins.VRMLContext,
-    )
-def getInteractive( preference: Any = None ) -> Any:
-    """Retrieve the preferred interactive context class
+    if preference is None:
+        return Context
+    name = windowsystem.choose(
+        preference, registered=windowsystem.registered(), probe=windowsystem.probe)
+    return contextClassFor(name)
 
-    preference -- the name of a windowing backend, or None to use whichever
-        the environment and the user's configuration choose
 
-    returns BaseContext (a class derived from context.Context)
+def contextClassFor(name: str) -> type[Context]:
+    """The published context class for the window system ``name``
 
-    Answers ``Any`` rather than ``type[Context]`` because what a caller does
-    with the answer is subclass it, and a base class has to be a class a
-    checker can name -- which this one is not until the backend is chosen.
-
-    Raises RuntimeError where the backend is not registered, or is registered
-    but will not import because the toolkit it needs is not installed. What a
-    caller does with this is subclass it, and a missing base class is reported
-    by Python as a metaclass conflict several frames away from the cause,
-    naming neither the backend nor the package to install.
+    The one its ``*context`` module names where there is one, and otherwise
+    ``Context`` with ``windowSystemName`` set to ``name``.
     """
-    if CONFIGURED_BASE:
-        return CONFIGURED_BASE
-    return _required(
-        context.Context.getContextType( preference, plugins.InteractiveContext ),
-        preference, plugins.InteractiveContext,
-    )
+    plugin = plugins.InteractiveContext.by_name(name)
+    if plugin is not None:
+        loaded = plugin.load()
+        if isinstance(loaded, type) and issubclass(loaded, Context):
+            return loaded
+    return type('%sContext' % (name.capitalize(),), (Context,),
+                {'windowSystemName': name})
 
-def _required( found: Any, preference: Any, type: type[plugins.Context] ) -> Any:
-    """Return the context class, or say what was asked for and what there is
 
-    The import error itself is logged by the plug-in as it fails, which is
-    where the message naming the package to install comes from; this says which
-    backend was being asked for when it happened.
-    """
-    if found is not None:
-        return found
-    registered = sorted( plugin.name for plugin in type.all() )
-    raise RuntimeError(
-        """No %s is available for %r: it is either not one of the registered """
-        """backends (%s) or its toolkit is not installed -- see the import """
-        """error logged above."""
-        % ( type.__name__, preference, ', '.join( registered ) or 'none' )
-    )
+def getVRML(preference: Optional[str] = None) -> type[Context]:
+    """:func:`getInteractive`: every Context loads scenes, so there is one
+    class to answer"""
+    warnings.warn(
+        'testingcontext.getVRML is getInteractive: every Context loads scenes',
+        DeprecationWarning, stacklevel=2)
+    return getInteractive(preference)

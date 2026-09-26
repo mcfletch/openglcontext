@@ -1,26 +1,10 @@
-"""Interactive context using the Tk API (provides navigation support)"""
-from typing import Any
+"""The Tk window system's Context, under the name ``TkInteractiveContext``
 
-from OpenGLContext import interactivecontext, tkcontext
-from OpenGLContext.move import viewplatformmixin
+Every Context has the event managers, the camera and the scene loading, so
+this name is :class:`~OpenGLContext.tkcontext.TkContext`.
+"""
+from OpenGLContext.tkcontext import TkContext
 
+TkInteractiveContext = TkContext
 
-class TkInteractiveContext(
-    viewplatformmixin.ViewPlatformMixin,
-    interactivecontext.InteractiveContext,
-    tkcontext.TkContext,
-):
-    """Tk context providing camera, mouse and keyboard interaction"""
-
-
-if __name__ == "__main__":
-    from OpenGLContext.scenegraph.basenodes import Box, Shape, sceneGraph
-
-    class TestRenderer(TkInteractiveContext):
-        def OnInit(self) -> None:
-            self.sg = sceneGraph(children=[Shape(geometry=Box(size=(2, 2, 2)))])
-
-        def getSceneGraph(self) -> Any:
-            return self.sg
-
-    TestRenderer.ContextMainLoop()
+__all__ = ('TkInteractiveContext',)

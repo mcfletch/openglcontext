@@ -1,10 +1,13 @@
-"""Module providing translation from pygame events to OpenGLContext events"""
+"""OpenGLContext events built from Pygame's events
+
+The event classes and the key-name translation the Pygame window system
+(:mod:`OpenGLContext.windowsystem.pygame`) builds its events with.
+"""
 
 import re
-from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, ClassVar, Optional
+from typing import Any, ClassVar
 
-from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
+from OpenGLContext.events import mouseevents, keyboardevents
 from OpenGLContext.events.mouseevents import WHEEL_BUTTONS
 import pygame
 from pygame.locals import *
@@ -37,136 +40,11 @@ KEYPAD = re.compile(r'^\[(.)\]$')
 FUNCTION_KEY = re.compile(r'^<f\d+>$')
 
 
-class EventHandlerMixin(eventhandlermixin.EventHandlerMixin):
-    """Pygame-specific EventHandlerMixin
-
-    Provides mappings from Pygame events to the equivalent
-    Context event classes.
-    """
-
-    #: True while the pointer is hidden and in SDL's relative mode; see
-    #: :meth:`OpenGLContext.pygamecontext.PygameContext.setPointerCapture`.
-    #: Read rather than asking SDL, so what the events do follows from what
-    #: this context asked for.
-    _pointerGrabbed = False
-    #: Where the pointer would be if it had gone on moving, while it is
-    #: grabbed and so no longer moving at all.
-    _pygameWalked: Optional[tuple[int, int]] = None
-
-    if TYPE_CHECKING:
-        # What this mix-in needs of the Pygame context beside it.
-        def addPickEvent(self, event: Any) -> Any: ...
-        def triggerPick(self) -> Any: ...
-        def getViewPort(self) -> tuple[int, int]: ...
-
-    ### KEYBOARD interactions
-    def PygameKeyDown(self, event: Any) -> int:
-        """Convert a key-press to a context-style event
-
-        SDL repeats a held key for itself once
-        :func:`pygame.key.set_repeat` has been called, and says so, so the
-        held-key map is told and the synthetic repeat stays out of the way.
-        What the map is for here is focus loss, where no release arrives at
-        all; see
-        :class:`OpenGLContext.events.eventhandlermixin.HeldKeyMixin`.
-        """
-        if event.key in self.heldKeys():
-            self.noteNativeRepeat()     # already down, so this is SDL's repeat
-        self.noteKeyDown(event.key, self._modifierState())
-        self.ProcessEvent(PygameKeyboardEvent(self, event, 1))
-        # hack, needs work!
-        if event.unicode:
-            self.ProcessEvent(PygameKeypressEvent(self, event))
-        return 1
-
-    def PygameKeyUp(self, event: Any) -> int:
-        """Convert a key-release to a context-style event"""
-        self.noteKeyUp(event.key)
-        self.ProcessEvent(PygameKeyboardEvent(self, event, 0))
-        return 1
-
-    def emitKey(self, key: Any, state: int, modifiers: Any) -> None:
-        """Send a key transition the window system did not report
-
-        The name is what the key event carries, so a synthetic release reads
-        exactly as the real one would have.
-        """
-        made = PygameKeyboardEvent.__new__(PygameKeyboardEvent)
-        keyboardevents.KeyboardEvent.__init__(made)
-        made.context = self
-        if hasattr(self, 'currentPass'):
-            made.renderingPass = self.currentPass
-        made.modifiers = modifiers
-        made.name = made._translateKey(pygame.key.name(key))
-        made.state = state
-        self.ProcessEvent(made)
-
-    def PygameWindowFocusLost(self, event: Any) -> int:
-        """Let go of every held key: no release arrives for one held now"""
-        self.clearHeldKeys()
-        return 1
-
-    def _modifierState(self) -> tuple[bool, bool, bool]:
-        """The (shift, ctrl, alt) triple as the keyboard stands now"""
-        mods = pygame.key.get_mods()
-        return (bool(mods & KMOD_SHIFT), bool(mods & KMOD_CTRL),
-                bool(mods & KMOD_ALT))
-
-    ### MOUSE Interaction
-    def PygameMouseButtonUp(self, event: Any) -> int:
-        """Convert a mouse-button-release to a context-style event"""
-        self.addPickEvent(PygameMouseButtonEvent(self, event, state=0))
-        self.triggerPick()
-        return 1
-
-    def PygameMouseButtonDown(self, event: Any) -> int:
-        """Convert a mouse-button-press to a context-style event"""
-        self.addPickEvent(PygameMouseButtonEvent(self, event, state=1))
-        self.triggerPick()
-        return 1
-
-    def PygameMouseMotion(self, event: Any) -> int:
-        """Convert a mouse-button-move to a context-style event
-
-        The movement sampler is told directly as well as through the pick
-        queue: a mouse-look mode wants every scrap of motion as it happens,
-        while a pick event is only delivered once the selection buffer resolves
-        it -- and not at all when the pointer is over nothing or picking is off.
-
-        SDL reports both where the pointer is and how far it moved, and the
-        second is what a grabbed pointer has to be followed by: in relative
-        mode the position stops changing while the motion does not.  Both are
-        given in the pick point's origin, y counting *upward*, since that is
-        what everything downstream of the context works in.
-        """
-        record = getattr(self, 'recordPointerMotion', None)
-        if record is not None:
-            self._recordMotion(record, event)
-        self.addPickEvent(PygameMouseMoveEvent(self, event))
-        self.triggerPick()
-        return 1
-
-    def _recordMotion(self, record: Callable[[int, int], Any],
-                      event: Any) -> None:
-        """Feed one SDL motion event to the sampler, as a position it can take
-        a difference from.
-
-        The sampler works in absolute positions and takes the delta itself, so
-        a relative-mode report -- where the position no longer moves -- is
-        turned back into one by accumulating SDL's ``rel`` from wherever the
-        pointer last was.
-        """
-        height = self.getViewPort()[1]
-        if self._pointerGrabbed and getattr(event, 'rel', None):
-            walked = getattr(self, '_pygameWalked', None)
-            if walked is None:
-                walked = (event.pos[0], height - event.pos[1])
-            self._pygameWalked = walked = (walked[0] + event.rel[0],
-                                           walked[1] - event.rel[1])
-            record(walked[0], walked[1])
-            return
-        self._pygameWalked = None
-        record(event.pos[0], height - event.pos[1])
+def modifierState() -> tuple[bool, bool, bool]:
+    """The (shift, ctrl, alt) triple as the keyboard stands now"""
+    mods = pygame.key.get_mods()
+    return (bool(mods & KMOD_SHIFT), bool(mods & KMOD_CTRL),
+            bool(mods & KMOD_ALT))
 
 
 class PygameXEvent(object):
@@ -184,12 +62,7 @@ class PygameXEvent(object):
 
     def _getModifiers(self) -> tuple[bool, bool, bool]:
         "get the state of the keyboard modifiers"
-        mods = pygame.key.get_mods()
-        return (
-            not (not (mods & KMOD_SHIFT)),
-            not (not (mods & KMOD_CTRL)),
-            not (not (mods & KMOD_ALT)),
-        )
+        return modifierState()
 
     def _translateKey(self, name: str) -> str:
         """The OpenGLContext name of a key SDL has named

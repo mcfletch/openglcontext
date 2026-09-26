@@ -1,16 +1,10 @@
-"""VRML97 context for GLUT
+"""The GLUT window system's Context, under the name ``VRMLContext``
+
+Every Context has the event managers, the camera and the scene loading, so
+this name is :class:`~OpenGLContext.glutcontext.GLUTContext`.
 """
-from OpenGLContext import glutinteractivecontext
-from OpenGLContext import vrmlcontext
+from OpenGLContext.glutcontext import GLUTContext
 
+VRMLContext = GLUTContext
 
-class VRMLContext(
-    vrmlcontext.VRMLContext,
-    glutinteractivecontext.GLUTInteractiveContext
-):
-    """GLUT-specific VRML97-aware Testing Context
-
-    ``ContextMainLoop`` is the GLUT context's own: it initialises GLUT once --
-    a second ``glutInit`` ends the process -- builds the menus a VRML context
-    offers, and drives the frame itself.
-    """
+__all__ = ('VRMLContext',)

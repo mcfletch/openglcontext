@@ -132,17 +132,16 @@ class ViewPlatformMixin(PhysicsWalkMixin, _Host):
                 bool( mode is not None and mode.capturePointer ) )
 
     def setPointerCapture( self, capture: bool ) -> bool:
-        """Grab or release the pointer; False if this backend cannot.
+        """Grab or release the pointer; False if the window cannot.
 
-        Passed **down the MRO** to the backend rather than answered here.  A
-        mix-in is listed before the backend in every shipped context --
-        ``GLFWInteractiveContext`` is ``(ViewPlatformMixin, InteractiveContext,
-        GLFWContext)`` -- so a plain ``return False`` here shadows the real
-        implementation and mouse-look grabs nothing on any of them.
+        Passed **down the MRO** rather than answered here: this mix-in sits
+        ahead of :class:`~OpenGLContext.context.ContextCore`, whose own
+        ``setPointerCapture`` asks the window system, and a plain ``return
+        False`` here would shadow it and grab nothing.
 
-        A backend that genuinely has no way to hide the cursor and report
-        unbounded motion simply does not define this, and the False below
-        stands: mouse-look then works as far as the window edge.
+        A host with no way to hide the cursor and report unbounded motion
+        does not define this, and the False below stands: mouse-look then
+        works as far as the window edge.
         """
         backend = getattr( super( ViewPlatformMixin, self ),
                            'setPointerCapture', None )

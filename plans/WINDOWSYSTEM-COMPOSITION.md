@@ -1,6 +1,8 @@
 # The window system as a held object
 
-**Status:** 📋 Planned, 2026-09-26. Nothing built.
+**Status:** 🟡 In progress on branch `windowsystem` (worktree
+`openglcontext/.claude/worktrees/windowsystem`), 2026-09-26. See *Progress* at
+the foot of this page for what has landed and what is next.
 
 ## The problem
 
@@ -758,3 +760,50 @@ Open:
   onto it. Proposed: fold it, which removes the construction-time error for
   `controls` without it and the ordering rule (`OverlayMixin` first) every
   application has to know.
+
+## Progress
+
+Branch `windowsystem`, worktree `openglcontext/.claude/worktrees/windowsystem`.
+Run from the worktree with `PYTHONPATH=<worktree>`; GLUT and Tk need
+`xvfb-run -a` in the container.
+
+2026-09-26, first session:
+
+- Phase 1 landed: `plugins.WindowSystem`, the `OpenGLContext.windowsystems`
+  entry-point group (read lazily by `windowsystem.registered()`),
+  `ContextDefinition.windowsystem`, `windowsystem.choose()`,
+  `Context.windowSystemName` applied in `resolveDefinition`, and
+  `tests/unit/test_windowsystem_selection.py`.
+- Phases 2 and 3 landed together for the seven in-tree window systems, since a
+  `Context` that opens its own window system cannot coexist with backend
+  classes that open theirs:
+  - `OpenGLContext/windowsystem/` holds `base.py` (the `WindowSystem`
+    protocol, the shared loop) and `glfw.py`, `glut.py`, `pygame.py`, `tk.py`,
+    `wx.py`, `egl.py`, `wgl.py`.  The toolkit translation moved there from
+    the `events/*events.py` mix-ins; those modules keep the event classes and
+    key tables.
+  - `context.py`: the old class body is `ContextCore`;
+    `Context(ViewPlatformMixin, EventHandlerMixin, VRMLSceneMixin,
+    ContextCore)`.  The split is what lets the mix-ins' `ViewPort`,
+    `setupDefaultEventCallbacks` and `hasMouseMoveHandlers` chain into the
+    core's through `super()`; `Context`'s own body holds only `emitKey`.  The
+    `_Host` declarations cannot name `Context` (a checker would see an
+    inheritance cycle), so they stay as short protocols.
+  - `EventHandlerMixin` carries the manager table; `interactivecontext` and
+    `vrmlcontext.VRMLContext` are aliases.  Font providers load at the first
+    `Text` compile (`VRMLSceneMixin.ensureFontProviders`).
+  - `Context.__init__(definition=None, *, parent=None, **named)`;
+    `completeInit()` runs `OnInit` and sizes the viewport, called by the
+    window system for wx (which waits for the canvas to be created).
+    `Context.OnIdle` does nothing; the loop draws.
+  - The `*context`, `*interactivecontext`, `*vrmlcontext` and
+    `*testingcontext` modules are stubs naming `Context` with the window
+    system chosen.
+  - `testingcontext.getInteractive()` answers `Context`; named, the stub
+    class.  `getContextType(s)` and `getVRML` warn.
+  - GLFW, EGL, GLUT, pygame and Tk render a scene through the new `Context`
+    (GLUT and Tk under Xvfb).  wx and WGL are written but not run here.
+- Next: the unit suite is red (about 370 failures in about 70 files) where
+  tests drove the old mix-ins and backend classes directly.  Those are the
+  Phase 0 rewrites: tests go through the window system's methods.  Then Qt
+  (openglcontext-qt), the consumers, Phase 2b (navigation) and the docs.

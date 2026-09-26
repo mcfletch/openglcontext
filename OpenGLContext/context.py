@@ -40,7 +40,7 @@ from OpenGLContext.screenshot import ScreenshotMixin
 from OpenGLContext.passes import renderpass
 from vrml.vrml97 import nodetypes
 from vrml import node, cache
-from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, TypeVar
 from collections.abc import Callable, Mapping, Sequence
 import weakref
 import os
@@ -103,7 +103,14 @@ def _distanceBetween(first: Point, second: Point) -> float:
 #: this is for is rejecting the far plane, which is an order of magnitude out.
 EXAMINE_PICK_REACH = 1.5
 from OpenGLContext.contextconfig import ContextConfigMixin
+from OpenGLContext.events.eventhandlermixin import EventHandlerMixin
+from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
 from OpenGLContext.ui.screen import ScreenMixin
+from OpenGLContext.vrmlcontext import VRMLSceneMixin
+from OpenGLContext import windowsystem as _windowsystem
+
+if TYPE_CHECKING:
+    from OpenGLContext.windowsystem import WindowSystem
 
 
 class LockingError(Exception):
@@ -185,15 +192,31 @@ CURSORS = ('arrow', 'hand', 'text', 'crosshair', 'resize-x', 'resize-y',
            'resize', 'no')
 
 
-class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
-    """Abstract base class on which all Rendering Contexts are based
+class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
+    """What a :class:`Context` is beneath its event, camera and scene mix-ins
 
-    The Context object represents a single rendering context
-    for use by the application.  This base class provides only
-    the most rudimentary of application support, but sub-classes
-    provide such things as navigation, and/or event handling.
+    The definition, the window system, redraw scheduling, the render passes,
+    picking, the frame counter and loop trace, telemetry, auto-exit and
+    capture.  :class:`Context` composes this with
+    :class:`~OpenGLContext.events.eventhandlermixin.EventHandlerMixin`,
+    :class:`~OpenGLContext.move.viewplatformmixin.ViewPlatformMixin` and
+    :class:`~OpenGLContext.vrmlcontext.VRMLSceneMixin`, which sit ahead of it
+    so that the methods they extend -- ``ViewPort``,
+    ``setupDefaultEventCallbacks``, ``hasMouseMoveHandlers`` -- reach this
+    class's through ``super()``.  An application subclasses :class:`Context`,
+    never this.
 
     Attributes:
+
+        windowsystem -- the :class:`~OpenGLContext.windowsystem.WindowSystem`
+            this context draws through, chosen by the definition's
+            ``windowsystem`` field as the context is built.  See
+            :mod:`OpenGLContext.windowsystem`.
+
+        window -- the toolkit's own window or widget (a GLFW window handle,
+            a Tk ``GLFrame``, a wx ``GLCanvas``, a Qt ``QWindow``...), which
+            is what an application embedding the view packs, sizes or
+            parents; None before it is opened and after it is released.
 
         sg -- OpenGLContext.scenegraph.basenodes.sceneGraph; the root of the
             node-rendering tree.  If not NULL, is used to control
@@ -304,6 +327,13 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     #: for it without changing the process environment every later context
     #: reads.  ``None`` leaves the choice to ``OPENGLCONTEXT_RENDERER``.
     renderer: str | None = None
+    #: The window system a subclass opens on, when it has one it needs:
+    #: ``windowSystemName = 'egl'`` on a bake that must never open a window.
+    #: Applied over :attr:`contextDefinition` as :attr:`profile` is, and under
+    #: a definition passed to the constructor that names one.  ``None`` leaves
+    #: the choice to the definition, and thence to
+    #: :func:`OpenGLContext.windowsystem.choose`.
+    windowSystemName: ClassVar[str | None] = None
 
     ### State flags/values
     # Set to false to trigger a redraw on the next available iteration
@@ -319,10 +349,16 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     viewportDimensions: tuple[int, int] = (0, 0)
     drawPollTimeout = 0.01
     coreProfile = False
-    # True only for backends that have called glutInit and can safely use
-    # GLUT bitmap fonts. GLUT functions segfault if used without a GLUT
-    # context, so font providers must consult this before selecting them.
-    providesGLUT = False
+    #: How many frames ``MainLoop`` draws before returning on an offscreen
+    #: window system, where there is no user to close a window.  One is the
+    #: common case -- render an image, read it back -- and an animation that
+    #: wants a sequence sets it higher; :meth:`wantsMoreFrames` carries the
+    #: loop past it.
+    frameCount = 1
+    #: The window system this context draws through; set as it is built.
+    windowsystem: WindowSystem
+    #: Set once ``OnInit`` has run; see :meth:`completeInit`.
+    initialised = False
 
     # Auto-exit support for automated testing
     # Set OPENGLCONTEXT_AUTO_EXIT_FRAMES environment variable to exit after N frames
@@ -345,29 +381,41 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     DEF = "#Context"
 
     if TYPE_CHECKING:
-        # What :meth:`hasMouseMoveHandlers` needs of
-        # :class:`~OpenGLContext.events.eventhandlermixin.EventHandlerMixin`.
-        # Every context a backend builds mixes that in ahead of this class --
-        # ``setupDefaultEventCallbacks`` registers through it while the context
-        # is still being constructed -- so this is a declaration rather than a
-        # do-nothing definition, which would be a second implementation for the
-        # MRO to choose between.
+        # What this class calls on the mix-ins :class:`Context` puts ahead of
+        # it.  Declarations rather than do-nothing definitions, which would be
+        # a second implementation for the MRO to choose between.
         def isCapturingEvents(self, eventType: Any) -> Any: ...
         def getEventManager(self, eventType: Any) -> Any: ...
+        def initializeEventManagers(self) -> None: ...
+        def addEventHandler(self, eventType: Any, *arguments: Any,
+                            **named: Any) -> None: ...
+        def getViewPlatform(self) -> Any: ...
+        def DoEventCascade(self) -> int: ...
 
     def __init__(
-        self, definition: ContextDefinition | Mapping[str, Any] | None = None
+        self,
+        definition: ContextDefinition | Mapping[str, Any] | None = None,
+        *,
+        parent: Any = None,
+        **named: Any,
     ) -> None:
-        """Establish the Context working environment
+        """Open a window and establish the Context working environment
 
         definition -- an OpenGLContext.contextdefinition.ContextDefinition
-            instance which controls the context features (size, bit-depth, etc).
-            If null, then use self.contextDefinition if it exists, otherwise
-            create a default ContextDefinition instance.
-            Alternately, can be a dictionary of key:value pairs to set on the
-            default ContextDefinition to specify required parameters.
+            instance which controls the context features (window system,
+            size, bit-depth, etc).  If null, then use self.contextDefinition
+            if it exists, otherwise create a default ContextDefinition
+            instance.  Alternately, can be a dictionary of key:value pairs to
+            set on the default ContextDefinition to specify required
+            parameters.
+        parent -- the toolkit container to open the view inside (a Tk
+            widget, a wx window), where the window system has such a thing;
+            None opens a window of the context's own.
+        named -- individual definition fields, overriding the definition:
+            ``Context(windowsystem='egl', size=(640, 480))``.
 
-        Calls the following:
+        Opens the window system the definition names (see
+        :meth:`createWindowSystem`), then calls the following:
 
             setupThreading,
             setupExtensionManager,
@@ -375,37 +423,108 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             setupDefaultEventCallbacks,
             setupCallbacks,
             setupCache,
-            setupFontProviders,
             setupFrameRateCounter,
             setupLoopTrace,
             setupEntropy,
             setupCaptureClock,
             setupTelemetry,
             setupAutoExit,
-            DoInit
+            completeInit
+
+        ``completeInit`` runs ``OnInit`` as soon as there is a GL context to
+        run it in -- here, unless the window system has to wait for the
+        window to be shown, in which case it calls it then.
         """
         self.setupLogging()
-        definition = self.setDefinition(definition)
-        self.setupThreading()
-        self.setupExtensionManager()
-        self.initializeEventManagers()
-        # Defaults first: a key can have only one handler, and the second
-        # registration for it replaces the first.  ``setupCallbacks`` is where a
-        # context says what a key should do *here*, so it has to land on top.
-        self.setupDefaultEventCallbacks()
-        self.setupCallbacks()
-        self.allContexts.append(weakref.ref(self))
-        self.pickEvents: dict[tuple[str, Any], Any] = {}
-        self.eventCascadeQueue: queue.Queue[Any] = queue.Queue()
-        self.setupCache()
-        self.setupFontProviders()
-        self.setupFrameRateCounter()
-        self.setupLoopTrace()
-        self.setupEntropy()
-        self.setupCaptureClock()
-        self.setupTelemetry()
-        self.setupAutoExit()
+        definition = self.setDefinition(definition, **named)
+        self.windowsystem = self.createWindowSystem(definition)
+        if parent is not None and not self.windowsystem.acceptsParent:
+            raise TypeError(
+                'The %r window system opens windows of its own and takes no '
+                'parent' % (self.windowsystem.name,))
+        ready = self.windowsystem.open(definition, parent)
+        try:
+            self.setupThreading()
+            self.setupExtensionManager()
+            self.initializeEventManagers()
+            self.windowsystem.bindCallbacks()
+            # Defaults first: a key can have only one handler, and the second
+            # registration for it replaces the first.  ``setupCallbacks`` is
+            # where a context says what a key should do *here*, so it has to
+            # land on top.
+            self.setupDefaultEventCallbacks()
+            self.setupCallbacks()
+            self.allContexts.append(weakref.ref(self))
+            self.pickEvents: dict[tuple[str, Any], Any] = {}
+            self.eventCascadeQueue: queue.Queue[Any] = queue.Queue()
+            self.setupCache()
+            self.setupFrameRateCounter()
+            self.setupLoopTrace()
+            self.setupEntropy()
+            self.setupCaptureClock()
+            self.setupTelemetry()
+            self.setupAutoExit()
+            if ready:
+                self.completeInit()
+        except BaseException:
+            self.windowsystem.abandon()
+            raise
+
+    @classmethod
+    def chooseWindowSystem(cls, definition: ContextDefinition) -> str:
+        """The name of the window system a context of ``definition`` opens on.
+
+        The definition's ``windowsystem`` field, and where that is empty,
+        ``OPENGLCONTEXT_BACKEND``, then this user's preference
+        (:meth:`setDefaultContextType`), then the first registered window
+        system that imports.  Raises
+        :class:`~OpenGLContext.windowsystem.WindowSystemUnavailable` naming
+        what was asked for and why it cannot be had.  See
+        :func:`OpenGLContext.windowsystem.choose`.
+        """
+        return _windowsystem.choose(
+            str(definition.windowsystem or ''),
+            environment=renderoptions.env_text('OPENGLCONTEXT_BACKEND') or None,
+            preference=cls.getWindowSystemPreference(),
+            registered=_windowsystem.registered(),
+            probe=_windowsystem.probe,
+        )
+
+    def createWindowSystem(self, definition: ContextDefinition) -> WindowSystem:
+        """The window system this context draws through, not yet opened."""
+        chosen = _windowsystem.load(self.chooseWindowSystem(definition))
+        return chosen(self)
+
+    @property
+    def window(self) -> Any:
+        """The toolkit's own window or widget, or None when there is none."""
+        system = getattr(self, 'windowsystem', None)
+        return None if system is None else system.window
+
+    @property
+    def providesGLUT(self) -> bool:
+        """Whether GLUT is set up here, so its bitmap fonts can be drawn.
+
+        A GLUT call without GLUT set up ends the process, so font providers
+        consult this before choosing a GLUT font.
+        """
+        system = getattr(self, 'windowsystem', None)
+        return bool(system is not None and system.providesGLUT)
+
+    def completeInit(self) -> bool:
+        """Run ``OnInit`` and size the viewport; answer whether it ran now.
+
+        The constructor calls this once the window system has a GL context to
+        run ``OnInit`` in.  A window system that must wait for its window to
+        be shown first calls it itself, when it has been.  Calling it again
+        does nothing.
+        """
+        if self.initialised:
+            return False
+        self.initialised = True
         self.DoInit()
+        self.ViewPort(*self.windowsystem.drawableSize())
+        return True
 
     def setupAutoExit(self) -> None:
         """Setup auto-exit for automated testing.
@@ -558,17 +677,17 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     ) -> ContextDefinition:
         """The definition a context of this class should be created from.
 
-        A backend calls this at the top of its ``__init__``, before it opens
-        anything: the window's profile, version, buffers and size all come from
-        the definition, so a class that declares one has to be consulted while
-        there is still a window to configure.  Doing it here rather than in each
-        backend is what keeps them from disagreeing about it.
+        The constructor calls this before the window system opens anything:
+        the window system, and the window's profile, version, buffers and size,
+        all come from the definition, so a class that declares one has to be
+        consulted while there is still a window to configure.
 
         The order is: the ``definition`` passed in, then the one the class
         declares as :attr:`contextDefinition`, then a fresh one -- whose field
         defaults read the environment.  ``named`` sets fields on whichever of
         those it lands on.  A mapping rather than a node is read as the fields
-        to set.
+        to set.  :attr:`profile` and :attr:`windowSystemName` are applied over
+        the class's declaration, and under anything the caller passed.
 
         A declared definition is *copied*, never handed out: a context writes
         its own size back to its definition as the window is resized, and two
@@ -606,32 +725,36 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             definition.profile = cls.profile
             if not _fieldIsSet(definition, 'version'):
                 definition.version = contextdefinition.version_for_profile(cls.profile)
+        callerNamedOne = 'windowsystem' in named or (
+            not declared and _fieldIsSet(definition, 'windowsystem'))
+        if cls.windowSystemName and not callerNamedOne:
+            # Over the class's own declaration, but under what the caller
+            # passed: a program that asked for PygameContext meant pygame,
+            # whatever its base declared.
+            definition.windowsystem = cls.windowSystemName
         return definition
 
     def setDefinition(
-        self, definition: ContextDefinition | Mapping[str, Any] | None
+        self, definition: ContextDefinition | Mapping[str, Any] | None,
+        **named: Any,
     ) -> ContextDefinition:
-        """Store the definition this context was created from, and read it.
+        """Resolve and store the definition this context is created from.
 
-        The backend has normally resolved it already and passes it here; an
-        instance that set one on itself before calling up is honoured too.
+        See :meth:`resolveDefinition`; an instance that set one on itself
+        before calling up is honoured too.
         """
         if definition is None:
             definition = self.__dict__.get('contextDefinition')
-        self.contextDefinition = definition = self.resolveDefinition(definition)
+        self.contextDefinition = definition = self.resolveDefinition(
+            definition, **named)
         self.coreProfile = definition.profile == "core"
         return definition
 
     def DoInit(self) -> None:
-        """Call the OnInit method at a time when the context is valid
+        """Call the OnInit method with this context current
 
-        This method provides a customization point where
-        contexts which do not completely initialize during
-        their __init__ method can arrange to have the OnInit
-        method processed after their initialization has
-        completed.  The default implementation here simply
-        calls OnInit directly w/ appropriate setCurrent
-        and unsetCurrent calls.
+        :meth:`completeInit` calls this once there is a GL context to run
+        ``OnInit`` in.
 
         Redraws asked for while OnInit runs are **deferred**.  A forced
         triggerRedraw() draws immediately when it can, and during OnInit it can
@@ -641,10 +764,9 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         one satisfies it.
 
         Deferral is put back as it was found rather than switched off, because
-        it is not only start-up that wants it: a backend's main loop defers for
-        the whole session so that a burst of input costs one frame, and
-        :class:`~OpenGLContext.wxcontext.wxContext` runs this from inside that
-        loop, on the first paint.
+        it is not only start-up that wants it: a main loop defers for the whole
+        session so that a burst of input costs one frame, and a window system
+        that waits for its window to be shown runs this from inside that loop.
         """
         self.setCurrent()
         deferred = self.deferRedraw
@@ -657,14 +779,12 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
 
     ### Customisation points
     def setupCallbacks(self) -> None:
-        """Establishes GUI callbacks for asynchronous event GUI systems
+        """Customization point: bind this context's own event handlers
 
-        Subclasses and applications will register events
-        here for those event types in which they are interested.
-        Most minor applications should use interactivecontext's
-        abstract callbacks (which translate the GUI library's
-        native events into a common event framework for all
-        interactivecontexts).
+        Subclasses and applications register handlers here, through
+        :meth:`addEventHandler`, for the events they are interested in.  The
+        window system has already connected the toolkit's callbacks, which
+        arrive as the same events whichever toolkit it is.
 
         This runs **after** :meth:`setupDefaultEventCallbacks`, and a key can
         have only one handler, so a binding made here wins over the default for
@@ -689,20 +809,12 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
 
         self.extensions = extensionmanager.ExtensionManager()
 
-    def setupFontProviders(self) -> None:
-        """Load font providers for the context
-
-        See the OpenGLContext.scenegraph.text package for the
-        available font providers.
-        """
-
     def setupDefaultEventCallbacks(self) -> None:
         """Setup common callbacks for the context
 
-        This will normally be done in the GUI-lib's sub-class of
-        context.  You might override it to provide other default
-        callbacks, but you'll normally want to call the base-class
-        implementation somewhere in that overridden method.
+        You might override it to provide other default callbacks, but
+        you'll normally want to call the base-class implementation somewhere
+        in that overridden method.
 
         What a key does when nobody has said otherwise: this runs *before*
         :meth:`setupCallbacks`, so anything an application binds for the same
@@ -754,8 +866,22 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         return self.OnQuit(event)
 
     def OnQuit(self, event: Any = None) -> None:
-        """Quit the application (forcibly)"""
+        """Close the window, and quit the application (forcibly) if it is one
+
+        The window system lets its window and the GL objects in it go
+        **here** rather than after the loop, because what follows ends the
+        process with ``os._exit``: nothing after it runs, no ``finally`` and
+        no ``atexit`` hook, and closing the window or pressing Escape is the
+        path a user actually takes.
+
+        A view embedded in somebody else's application is closed and this
+        returns, since closing a view must not take the host program down;
+        :meth:`OpenGLContext.windowsystem.WindowSystem.quit` answers which
+        this is.
+        """
         self.suppressRedraw()
+        if not self.windowsystem.quit():
+            return
 
         # A node that raised on every frame has been counted rather than logged
         # sixty times a second; this is where the run says which ones, and it
@@ -1046,17 +1172,6 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             return nullcontext()
         return trace.phase(name)
 
-    def initializeEventManagers(self) -> None:
-        """Customisation point for initialising event manager objects
-
-        Does nothing here: a context that handles events mixes in
-        :class:`~OpenGLContext.events.eventhandlermixin.EventHandlerMixin`,
-        whose implementation builds the managers its ``EventManagerClasses``
-        names.  Every backend context inherits both, so the two have to take
-        the same arguments -- whichever the MRO reaches has to serve the one
-        call in :meth:`setupCallbacks`.
-        """
-
     def setupRedrawRequest(self) -> None:
         """Setup the redraw-request (threading) event"""
         if threading:
@@ -1088,7 +1203,12 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             self.scenegraphLock.release()
 
     def setCurrent(self, blocking: int = 1) -> None:
-        """Set the OpenGL focus to this context"""
+        """Set the OpenGL focus to this context
+
+        Takes the context lock and the scenegraph lock, then has the window
+        system make its GL context current and tells PyOpenGL which one that
+        is (:meth:`bindContextResources`).
+        """
         assert inContextThread(), (
             """setCurrent called from outside of the context/GUI thread! %s"""
             % (threading.current_thread())
@@ -1097,6 +1217,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             raise LockingError("""Cannot acquire without blocking""")
         Context.currentContext = self
         self.lockScenegraph()
+        self.bindContextResources(self.windowsystem.makeCurrent())
 
     def unsetCurrent(self) -> None:
         """Give up the OpenGL focus from this context"""
@@ -1122,10 +1243,10 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         ``BadAccess`` that Xlib's default error handler turns into a *process
         exit* -- not an exception anything could answer.
 
-        Two backends alive in one process is not an unusual arrangement: this
-        engine's own suite runs on one backend while several tests open a
-        window through another, and an application embedding a second renderer
-        has the same shape.  So a backend says "let go" before it takes the
+        Two window systems alive in one process is not an unusual arrangement:
+        this engine's own suite runs on one while several tests open a window
+        through another, and an application embedding a second renderer has
+        the same shape.  So a window system says "let go" before it takes the
         thread, and the cost is one query where the context already current is
         its own.
         """
@@ -1148,9 +1269,8 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         resolving, so two contexts of differing capability can share a
         resolution that is right for one of them.
 
-        Every backend calls this from ``setCurrent`` with whatever its
-        windowing library calls the context; ``None`` where it has no handle to
-        give, which costs nothing but the notification.
+        :meth:`setCurrent` calls this with the handle the window system
+        answers; ``None`` where it has no handle to give, which costs nothing.
         """
         if handle is None:
             return
@@ -1170,9 +1290,9 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         driver hands out again does not arrive with the dead context's function
         pointers already in it.
 
-        Every backend calls this as it destroys a window, before the context
-        goes.  It is the whole of what a backend owes the caches, which is why
-        it is one call and not two.
+        Every window system calls this as it destroys a window, before the
+        context goes.  It is the whole of what a window system owes the caches,
+        which is why it is one call and not two.
         """
         contextresources.context_lost()
         if handle is None:
@@ -1183,10 +1303,68 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
 
     @classmethod
     def ContextMainLoop(cls, *args: Any, **named: Any) -> Any:
-        """Enter the GUI toolkit's main loop; each backend sub-class overrides this"""
-        raise NotImplementedError(
-            """No mainloop specified for context class %r""" % (cls,)
-        )
+        """Make a context of this class and run its main loop
+
+        The entry point of a program that is one window.  The arguments are
+        the constructor's.  The window system the definition names runs it
+        (:meth:`OpenGLContext.windowsystem.WindowSystem.run`), since a toolkit
+        that needs an application object before it can make a window has to
+        make that first.
+        """
+        definition = named.get('definition', args[0] if args else None)
+        fields = {key: value for key, value in named.items()
+                  if key not in ('definition', 'parent')}
+        chosen = cls.chooseWindowSystem(cls.resolveDefinition(definition, **fields))
+        return _windowsystem.load(chosen).run(cls, *args, **named)
+
+    def MainLoop(self) -> Any:
+        """Run the window system's loop until the window is closed
+
+        An offscreen window system draws :attr:`frameCount` frames, or as many
+        as :meth:`wantsMoreFrames` asks for, and returns.  The window is let
+        go of on the way out.
+        """
+        return self.windowsystem.mainLoop()
+
+    def profiledMainLoop(self) -> Any:
+        """:meth:`MainLoop`, under ``cProfile`` where the definition names a
+        ``profileFile`` to write the profile to."""
+        definition = self.contextDefinition
+        if definition is not None and definition.profileFile:
+            import cProfile
+            return cProfile.runctx(
+                "self.MainLoop()", globals(), {'self': self},
+                definition.profileFile,
+            )
+        return self.MainLoop()
+
+    def closeJournals(self, reason: str) -> None:
+        """Finish the stall journal and any session recording, for ``reason``
+
+        A loop left while it was still slow -- a closed window, a Ctrl-C --
+        holds an episode nobody has written, and what the recording holds of
+        the last few seconds is exactly what a session that ended badly is
+        worth reading for.
+        """
+        if self.stallJournal is not None:
+            self.stallJournal.close()
+        self.stopTelemetry(reason)
+
+    def loopIteration(self) -> bool:
+        """One pass of the main loop; False once the loop is over
+
+        For a host application that owns its toolkit's loop and drives the
+        view from a timer of its own.  See
+        :meth:`OpenGLContext.windowsystem.WindowSystem.loopIteration`.
+        """
+        return self.windowsystem.loopIteration()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *exception: Any) -> Literal[False]:
+        self.releaseWindow()
+        return False
 
     def OnInit(self) -> None:
         """Customization point for scene set up and initial processing
@@ -1195,16 +1373,20 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         loading images and generating textures, loading pre-established
         geometry, spawning new threads, etc.
 
-        This method is called after the completion of the Context.__init__
-        method for the rendering context.  GUI implementers:
-            Wherever possible, this should be the very last function
-            called in the initialization of the context to allow user
-            code to use all the functionality of the context.
+        Called with this context current once its window has a GL context,
+        which is at the end of ``Context.__init__`` for every window system
+        but those that wait for the window to be shown first.  See
+        :meth:`completeInit`.
         """
 
     def OnIdle(self, *arguments: Any) -> int:
-        """Override to perform actions when the rendering loop is idle"""
-        return self.drawPoll()
+        """Animation hook, called once per pass of the main loop
+
+        The loop draws the frame itself after this, so the default does
+        nothing.  A context that animates overrides it to advance its state
+        and call :meth:`triggerRedraw`.
+        """
+        return 0
 
     def OnDraw(self, force: int = 1, *arguments: Any) -> int:
         """Callback for the rendering/drawing mechanism
@@ -1333,20 +1515,14 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         """
         ### Put your rendering code here
 
-    def DoEventCascade(self) -> int:
-        """Customization point for generating non-GUI event cascades
+    def OnResize(self, width: int, height: int) -> None:
+        """Draw at the window's new size, in the pixels the viewport counts
 
-        This method should only be called after self.lockScenegraph
-        has been called.  self.unlockScenegraph should then be called
-
-        Most Contexts will use the eventhandler mix-in's version of this
-        method.  That provides support for the defered-execution of
-        functions/method during the event cascade.
+        The window system calls this when its window has been resized.  A
+        pbuffer, which has a fixed size, is made again at this one.
         """
-        return 0
-
-    def OnResize(self, *arguments: Any) -> None:
-        """Resize the window when the windowing library says to"""
+        width, height = self.windowsystem.resize(int(width), int(height))
+        self.ViewPort(width, height)
         self.triggerRedraw(1)
 
     def triggerPick(self) -> None:
@@ -1368,14 +1544,12 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     def setFullscreen(self, fullscreen: bool) -> bool:
         """Fill the screen, or go back to a window; answer whether it happened.
 
-        A backend that can move a live window between the two overrides this.
-        The base answer is False, which is how a caller finds out that a
-        key or a settings toggle has nothing to offer here: the
+        False is how a caller finds out that a key or a settings toggle has
+        nothing to offer on this window system: the
         :attr:`ContextDefinition.fullscreen` field still decides how the window
-        is *opened*, since that much needs no backend support beyond the window
-        call every backend already makes.
+        is *opened*.
         """
-        return False
+        return self.windowsystem.setFullscreen(bool(fullscreen))
 
     def setPointerCapture(self, capture: bool) -> bool:
         """Hide and grab the pointer for mouse-look; answer whether it happened.
@@ -1383,42 +1557,39 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         Mouse-look needs *unbounded* motion: a pointer that stops at the edge of
         the screen is a view that stops turning there.  What provides it differs
         -- a relative-motion mode, a grab, or warping the pointer back to the
-        middle of the window after every movement -- so each backend does it its
-        own way and this says what a backend that cannot do it at all answers.
+        middle of the window after every movement -- so each window system
+        does it its own way.
 
         False means the caller should not offer mouse-look as though it worked;
         see
-        :meth:`OpenGLContext.move.viewplatformmixin.ViewPlatformMixin.setPointerCapture`,
+        :meth:`OpenGLContext.move.viewplatformmixin.ViewPlatformMixin.updateNavigation`,
         which is what asks.
         """
-        return False
+        return self.windowsystem.setPointerCapture(bool(capture))
 
     def applyVSync(self, definition: ContextDefinition | None = None) -> bool:
         """Wait for the display's refresh, or don't; answer whether it happened.
 
         Off uncaps the frame rate, which is what a benchmark wants.  The field
         is :attr:`ContextDefinition.vsync` and the settings screen writes it, so
-        a backend that can change the swap interval of a live context re-reads
-        it here.  One that cannot -- where the interval is part of a surface
-        format settled when the context was created -- answers False, and the
-        change takes effect in the next window.
-
-        ``definition`` is for the call a backend makes while its window is being
-        built, before the base class has stored one.
+        a window system that can change the swap interval of a live context
+        re-reads it here.  One that cannot -- where the interval is part of a
+        surface format settled when the context was created -- answers False,
+        and the change takes effect in the next window.
         """
-        return False
+        source = self.contextDefinition if definition is None else definition
+        return bool(self.windowsystem.applyVSync(source))
 
     def releaseWindow(self) -> None:
         """Let this context's window, and the GL objects in it, go.
 
-        One name for what every backend has to do as it shuts down: tell the
-        caches holding this context's GL names, then destroy the window.
-        Calling it twice is calling it once.
+        The caches holding this context's GL names are told first, then the
+        window is destroyed.  Calling it twice is calling it once.
 
         It is what :meth:`OnQuit` does before the process ends, and what a
-        program that built a context and is finished with it calls.  The base
-        class has no window to let go of.
+        program that built a context and is finished with it calls.
         """
+        self.windowsystem.release()
 
     def pumpWindowEvents(self) -> bool:
         """Let the window system deliver whatever it has queued; False if it
@@ -1428,12 +1599,10 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         a benchmark, a headless probe, a host application stepping the view
         from its own timer.  A window that is never pumped is one some
         platforms decide has stopped responding, and it never sees a keystroke
-        or a resize.
-
-        Every backend that owns a window implements it; the offscreen one has
-        no window system to ask and answers False.
+        or a resize.  An offscreen window system has nothing to deliver and
+        answers False.
         """
-        return False
+        return self.windowsystem.pump()
 
     def setVSync(self, wait: bool) -> bool:
         """Wait for the display's refresh from now on, or stop waiting.
@@ -1459,12 +1628,14 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
 
         Most rendering options are read by the render pass every frame (see
         :mod:`OpenGLContext.renderoptions`), so a change shows up on its own.
-        The few that are set once on the window -- the swap interval, the buffer
-        format -- are re-applied here. A backend overrides this for its own;
-        anything that cannot be changed without a new context is left alone.
+        The few that are set once on the window -- the swap interval, whether
+        it fills the screen -- are re-applied by the window system; anything
+        that cannot be changed without a new context is left alone.
 
         Called by the settings screen when Apply is pressed.
         """
+        if self.contextDefinition is not None:
+            self.windowsystem.settingsChanged(self.contextDefinition)
         self.triggerRedraw(1)
 
     def flushPendingPicks(self) -> int:
@@ -1567,11 +1738,12 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         return self.SwapBuffers()
 
     def SwapBuffers(self) -> None:
-        """Called by the rendering loop when the buffers should be swapped
+        """Put the back buffer on the screen, through the window system.
 
-        Each GUI library needs to override this method with the appropriate
-        code for the library.
+        What :meth:`presentFrame` calls.  An offscreen window system has
+        nothing to present to, and finishes the frame so it can be read back.
         """
+        self.windowsystem.swap()
 
     def ViewPort(self, width: int, height: int) -> None:
         """Set the size of the OpenGL rendering viewport for the context
@@ -1594,19 +1766,19 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             self.contextDefinition.size = width, height
 
     def setPointerShape(self, name: str) -> bool:
-        """Show the pointer ``name``; False where this backend cannot.
+        """Show the pointer ``name``; False where this window system cannot.
 
         The names are :data:`CURSORS`, and ``''`` is the ordinary pointer.
         What a control wants is
         :attr:`OpenGLContext.ui.widgets.Widget.cursor`, and the overlay asks
         for it as the pointer crosses the window.
 
-        A backend answers False for a shape it has no picture for and leaves
-        the pointer as it is, so the caller can show the same thing another
-        way: the splitters draw a grip, since a cursor theme need not carry a
-        resize pointer.
+        A window system answers False for a shape it has no picture for and
+        leaves the pointer as it is, so the caller can show the same thing
+        another way: the splitters draw a grip, since a cursor theme need not
+        carry a resize pointer.
         """
-        return False
+        return self.windowsystem.setPointerShape(str(name or ''))
 
     #: The views this context draws, or None for one view through its own
     #: view platform; :meth:`getViewLayout` makes that layout on first use.
@@ -1848,63 +2020,77 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         fontprovider.setTTFRegistry(registry)
         return registry
 
-    ##	def getUserContextPreferences( cls ):
-    ##		"""Retrieve user-specific context preferences"""
-    ##		raise NotImplementedError( """Don't have preferences working yet""" )
-    #: The context flavours ``[context] type`` may name, by the ``type_key``
-    #: each plugin registry answers to.
-    CONFIG_CONTEXT_PLUGINS = (
-        plugins.Context,
-        plugins.InteractiveContext,
-        plugins.VRMLContext,
-    )
+    #: What ``[context] type`` may name in a configuration file.  One
+    #: :class:`Context` has every capability each of these once named, so
+    #: they are accepted and mean the same thing.
+    CONFIG_CONTEXT_TYPES = ('context', 'interactive', 'vrml')
 
     @staticmethod
     def fromConfig(cfg: ConfigParser) -> type[Context] | None:
         """Given a ConfigParser instance, produce a configured sub-class
 
-        ``[context] type`` names the flavour, one of the ``type_key`` values in
-        :attr:`CONFIG_CONTEXT_PLUGINS`, and defaults to ``vrml``; ``[context]
-        gui`` names the backend, and defaults to the user's preference.  The
-        window's own fields come from the ``[contextdefinition]`` section.
+        The window's own fields come from the ``[contextdefinition]``
+        section, and ``[context] gui`` names the window system where that
+        section's ``windowsystem`` does not.  ``[context] type`` is accepted
+        as one of :attr:`CONFIG_CONTEXT_TYPES`.
 
-        Returns ``None`` when the named backend cannot be loaded, and raises
-        ``ValueError`` when the named flavour is not one there is.
+        Returns ``None`` when the named window system cannot be loaded, and
+        raises ``ValueError`` when the named type is not one there is.
         """
         from OpenGLContext import contextdefinition
 
-        typeKey = gui = None
         if cfg.has_option("context", "type"):
             typeKey = cfg.get("context", "type")
-        if cfg.has_option("context", "gui"):
-            gui = cfg.get("context", "gui")
-        if typeKey is None:
-            typeKey = plugins.VRMLContext.type_key
-        for plugin in Context.CONFIG_CONTEXT_PLUGINS:
-            if typeKey == plugin.type_key:
-                break
-        else:
-            raise ValueError(
-                "%r is not a context type; expected one of %s"
-                % (
-                    typeKey,
-                    ", ".join(
-                        repr(p.type_key) for p in Context.CONFIG_CONTEXT_PLUGINS
-                    ),
-                )
-            )
-        baseCls = Context.getContextType(gui, plugin)
-        if baseCls is None:
+            if typeKey not in Context.CONFIG_CONTEXT_TYPES:
+                raise ValueError(
+                    "%r is not a context type; expected one of %s"
+                    % (typeKey, ", ".join(
+                        repr(name) for name in Context.CONFIG_CONTEXT_TYPES)))
+        definition = contextdefinition.ContextDefinition.fromConfig(cfg)
+        if cfg.has_option("context", "gui") and not definition.windowsystem:
+            definition.windowsystem = cfg.get("context", "gui")
+        try:
+            Context.chooseWindowSystem(definition)
+        except _windowsystem.WindowSystemUnavailable as err:
+            log.warning("The configured window system is not usable: %s", err)
             return None
-        return type(
-            "TestingContext",
-            (baseCls,),
-            {
-                "contextDefinition": contextdefinition.ContextDefinition.fromConfig(
-                    cfg,
-                ),
-            },
-        )
+        return type("TestingContext", (Context,), {"contextDefinition": definition})
+
+
+class Context(ViewPlatformMixin, EventHandlerMixin, VRMLSceneMixin, ContextCore):
+    """A rendering context: a window, the GL context in it, and a scene
+
+    The Context object represents a single rendering context for use by the
+    application.  An application subclasses it, overrides the customisation
+    points (``OnInit``, ``Render``, ``OnIdle``, ``setupCallbacks``...) and
+    runs it with :meth:`ContextMainLoop`::
+
+        class Viewer(Context):
+            def OnInit(self):
+                self.sg = Loader.load('world.glb')
+
+        Viewer.ContextMainLoop(windowsystem='glfw', size=(800, 600))
+
+    The window it draws in belongs to a
+    :class:`~OpenGLContext.windowsystem.WindowSystem` it holds, chosen by the
+    definition's ``windowsystem`` field; see :mod:`OpenGLContext.windowsystem`
+    and ``docs/backends.rst``.  Every context has the event managers of
+    :class:`~OpenGLContext.events.eventhandlermixin.EventHandlerMixin`, the
+    camera of :class:`~OpenGLContext.move.viewplatformmixin.ViewPlatformMixin`
+    and the scene loading of :class:`~OpenGLContext.vrmlcontext.VRMLSceneMixin`,
+    on top of what :class:`ContextCore` describes.
+    """
+
+    def emitKey(self, key: Any, state: int, modifiers: Any) -> None:
+        """Send one key transition the window system did not report
+
+        The held-key tracking of
+        :class:`~OpenGLContext.events.eventhandlermixin.HeldKeyMixin` calls
+        this for the releases focus loss never delivers and the repeats a
+        platform does not make; the window system builds its own toolkit's
+        event for it.
+        """
+        self.windowsystem.emitKey(key, state, modifiers)
 
 
 ### Context render-calling child...

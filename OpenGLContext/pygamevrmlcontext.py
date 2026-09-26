@@ -1,14 +1,10 @@
-"""Testing context for PyGame API, providing default context class and main loop
+"""The Pygame window system's Context, under the name ``VRMLContext``
 
-You normally use this module via the testingcontext module.
+Every Context has the event managers, the camera and the scene loading, so
+this name is :class:`~OpenGLContext.pygamecontext.PygameContext`.
 """
-from OpenGLContext import pygameinteractivecontext
-from OpenGLContext import vrmlcontext
-import os
-import glob
+from OpenGLContext.pygamecontext import PygameContext
 
-class VRMLContext(
-    vrmlcontext.VRMLContext,
-    pygameinteractivecontext.PygameInteractiveContext
-):
-    """GLUT-specific VRML97-aware Testing Context"""
+VRMLContext = PygameContext
+
+__all__ = ('VRMLContext',)

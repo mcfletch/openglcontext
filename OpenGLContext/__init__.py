@@ -36,7 +36,22 @@ __version__ = "3.0.0a5"
 __author__ = "Michael Colin Fletcher"
 __license__ = "BSD-Style, see license.txt for details and exceptions"
 
-from OpenGLContext.plugins import Context,InteractiveContext,VRMLContext,Loader,Node,Adapter
+from OpenGLContext.plugins import Context,InteractiveContext,VRMLContext,Loader,Node,Adapter,WindowSystem
+
+# The window systems a context opens on, by the name ContextDefinition's
+# `windowsystem` field gives.  Each module imports its toolkit, so none is
+# imported until a context asks for it.  GLFW first: it is what an empty
+# request opens.  See OpenGLContext.windowsystem.
+WindowSystem( 'glfw', 'OpenGLContext.windowsystem.glfw.GLFWWindowSystem' )
+WindowSystem( 'glut', 'OpenGLContext.windowsystem.glut.GLUTWindowSystem' )
+WindowSystem( 'pygame', 'OpenGLContext.windowsystem.pygame.PygameWindowSystem' )
+WindowSystem( 'tk', 'OpenGLContext.windowsystem.tk.TkWindowSystem' )
+WindowSystem( 'wx', 'OpenGLContext.windowsystem.wx.WxWindowSystem' )
+# Offscreen: no window, no display server.  One per platform -- EGL on Linux,
+# WGL pbuffers on Windows -- and both are registered everywhere, since which
+# one a machine can actually create is a question its answer already gives.
+WindowSystem( 'egl', 'OpenGLContext.windowsystem.egl.EGLWindowSystem' )
+WindowSystem( 'wgl', 'OpenGLContext.windowsystem.wgl.WGLWindowSystem' )
 
 Context( 'pygame', 'OpenGLContext.pygamecontext.PygameContext' )
 Context( 'wx', 'OpenGLContext.wxcontext.wxContext' )

@@ -8,6 +8,10 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from OpenGL._bytes import as_str
 
+from OpenGLContext.events import (
+    keyboardevents, mouseevents, timeeventgeneratormanager,
+)
+
 log = logging.getLogger(__name__)
 
 
@@ -30,9 +34,10 @@ class HeldKeyMixin(object):
     :meth:`noteNativeRepeat` says the platform delivers its own, so a platform
     that repeats is never doubled.
 
-    A backend mixes this in and implements :meth:`emitKey`; what a key is
-    called is the backend's own business, since this only ever hands back what
-    it was given.
+    The host implements :meth:`emitKey` -- a context hands it to its window
+    system, which builds its own toolkit's event -- and what a key is called
+    is the window system's business, since this only ever hands back what it
+    was given.
     """
 
     #: Seconds a key is held before the first synthetic repeat.
@@ -45,8 +50,8 @@ class HeldKeyMixin(object):
     def emitKey(self, key: Any, state: int, modifiers: Any) -> None:
         """Send one key transition to the engine
 
-        Implemented by the backend, which is what knows how to build its own
-        event class.
+        Implemented by the host, which is what knows how to build the event;
+        see :meth:`OpenGLContext.context.Context.emitKey`.
         """
         raise NotImplementedError(
             '%s must implement emitKey to use held-key tracking'
@@ -128,12 +133,26 @@ class EventHandlerMixin(HeldKeyMixin):
 
     The event handler mix in provides a client API for the registration
     and handling of events.
+
+    Supports:
+        keyboard, keypress -- provided by the keyboardevents module
+        mousebutton, mousemove, mousein, mouseout -- provided by the
+            mouseevents module
+        timers -- provided by the timeeventgeneratormanager module
     """
 
     #: ``(eventType, managerClass)`` pairs the context builds its managers from.
-    EventManagerClasses: Sequence[tuple[Optional[str], type[Any]]] = ()
+    EventManagerClasses: Sequence[tuple[Optional[str], type[Any]]] = (
+        ('keyboard', keyboardevents.KeyboardEventManager),
+        ('keypress', keyboardevents.KeypressEventManager),
+        ('mousebutton', mouseevents.MouseButtonEventManager),
+        ('mousemove', mouseevents.MouseMoveEventManager),
+        ('mousein', mouseevents.MouseInEventManager),
+        ('mouseout', mouseevents.MouseOutEventManager),
+    )
     #: What drives the TimeSensors and Timers, or None for a context with none.
-    TimeManagerClass: Optional[type[Any]] = None
+    TimeManagerClass: Optional[type[Any]] = (
+        timeeventgeneratormanager.TimeEventGeneratorManager)
 
     if TYPE_CHECKING:
         # What this mix-in reaches for on the Context it is mixed into.  The

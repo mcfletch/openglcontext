@@ -1,35 +1,10 @@
-"""Interactive context using the GLFW API (provides navigation support)"""
-from typing import Any
+"""The GLFW window system's Context, under the name ``GLFWInteractiveContext``
 
-from OpenGLContext import interactivecontext, glfwcontext, context
-from OpenGLContext.move import viewplatformmixin
+Every Context has the event managers, the camera and the scene loading, so
+this name is :class:`~OpenGLContext.glfwcontext.GLFWContext`.
+"""
+from OpenGLContext.glfwcontext import GLFWContext
 
+GLFWInteractiveContext = GLFWContext
 
-class GLFWInteractiveContext(
-    viewplatformmixin.ViewPlatformMixin,
-    interactivecontext.InteractiveContext,
-    glfwcontext.GLFWContext,
-):
-    """GLFW context providing camera, mouse and keyboard interaction"""
-    pass
-
-
-if __name__ == "__main__":
-    from OpenGL.GL import glTranslated, glClearColor, glClear, GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT
-
-    class TestRenderer(GLFWInteractiveContext):
-        initialPosition = (0, 0, 10)
-
-        def Render(self, mode: Any = None) -> None:
-            GLFWInteractiveContext.Render(self, mode)
-            glClearColor(0.2, 0.3, 0.3, 1.0)
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-            glTranslated(2, 0, -4)
-            # Draw something simple
-            from OpenGL.GLUT import glutSolidTeapot
-            try:
-                glutSolidTeapot(1.0)
-            except Exception:
-                pass  # GLUT may not be available
-
-    TestRenderer.ContextMainLoop()
+__all__ = ('GLFWInteractiveContext',)

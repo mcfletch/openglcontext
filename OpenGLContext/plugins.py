@@ -36,6 +36,18 @@ class VRMLContext( InteractiveContext ):
     registry: ClassVar[list[plugins.Plugin]] = []
     type_key = 'vrml'
 
+class WindowSystem( plugins.Plugin ):
+    """A window system a context can open on (glfw, glut, egl, ...)
+
+    Names a :class:`OpenGLContext.windowsystem.WindowSystem` subclass by its
+    dotted path, so the toolkit behind it is imported only when a context asks
+    for it by name.  A package outside the engine registers one through the
+    ``OpenGLContext.windowsystems`` entry-point group; see
+    :func:`OpenGLContext.windowsystem.registered`.
+    """
+    registry: ClassVar[list[plugins.Plugin]] = []
+    type_key = 'windowsystem'
+
 class Loader( plugins.Plugin ):
     """A data-format loader (e.g. vrml97 or obj)"""
     registry: ClassVar[list[plugins.Plugin]] = []

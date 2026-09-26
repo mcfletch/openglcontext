@@ -1,10 +1,10 @@
-"""VRML97 context rendering offscreen on WGL"""
-from OpenGLContext import vrmlcontext, wglcontext
+"""The WGL window system's Context, under the name ``VRMLContext``
 
+Every Context has the event managers, the camera and the scene loading, so
+this name is :class:`~OpenGLContext.wglcontext.WGLContext`.
+"""
+from OpenGLContext.wglcontext import WGLContext
 
-class VRMLContext(
-    vrmlcontext.VRMLContext,
-    wglcontext.WGLContext
-):
-    """Offscreen VRML97-aware context: loads a world and renders it headlessly"""
-    pass
+VRMLContext = WGLContext
+
+__all__ = ('VRMLContext',)

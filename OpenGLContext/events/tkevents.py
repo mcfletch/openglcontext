@@ -1,10 +1,13 @@
-"""Module providing translation from Tkinter events to OpenGLContext events"""
+"""OpenGLContext events built from Tkinter's events
 
-from typing import TYPE_CHECKING, Any, Optional
+The event classes, key table and modifier reading the Tk window system
+(:mod:`OpenGLContext.windowsystem.tk`) builds its events with.
+"""
 
-from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
+from typing import Any
+
+from OpenGLContext.events import mouseevents, keyboardevents
 from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
-from OpenGLContext.events.wheel import WheelNotches
 
 SHIFT_FLAG     = 0x00001
 CTRL_FLAG      = 0x00004
@@ -18,7 +21,8 @@ MIDDLE_DOWN_FLAG = 512
 
 #: What Tk reports for one notch of a wheel in a ``<MouseWheel>`` event, which
 #: is what Windows and macOS deliver.  X11 delivers buttons 4 and 5 instead and
-#: needs no counting; see :meth:`EventHandlerMixin.tkOnMouseButton`.
+#: needs no counting; see
+#: :meth:`OpenGLContext.windowsystem.tk.TkWindowSystem.onMouseButton`.
 WHEEL_DELTA = 120.0
 
 #: Which Tk button number is which of OpenGLContext's.  Tk numbers them 1, 2,
@@ -31,158 +35,11 @@ BUTTON_MAPPING: dict[int, int] = {1: 0, 2: 2, 3: 1}
 X11_WHEEL_BUTTONS: dict[int, int] = {4: WHEEL_UP, 5: WHEEL_DOWN}
 
 
-class EventHandlerMixin( eventhandlermixin.EventHandlerMixin):
-    """Tkinter-specific event handler mix-in
-
-    Basically provides translation from Tkinter events
-    to their OpenGLContext-specific equivalents (the
-    concrete versions of which are also defined in this
-    module).
-    """
-    #: Counts a stream of ``<MouseWheel>`` reports into whole notches.
-    _wheelCounter: Optional[WheelNotches] = None
-
-    if TYPE_CHECKING:
-        # What this mix-in needs of the Tk context beside it.
-        def addPickEvent(self, event: Any) -> Any: ...
-        def triggerPick(self) -> Any: ...
-        def getViewPort(self) -> tuple[int, int]: ...
-
-    ### KEYBOARD interactions
-    def tkOnKeyDown( self, event: Any ) -> None:
-        '''Convert a key-press to a context-style event'''
-        name = keyName( event )
-        if name in self.heldKeys():
-            self.noteNativeRepeat()     # already down, so Tk is repeating it
-        self.noteKeyDown( name, modifiersOf( event ) )
-        self.ProcessEvent( tkKeyboardEvent( self, event, 1))
-        if event.char:
-            self.ProcessEvent( tkKeypressEvent( self, event))
-
-    def tkOnKeyUp( self, event: Any ) -> None:
-        '''Convert a key-release to a context-style event'''
-        self.noteKeyUp( keyName( event ) )
-        self.ProcessEvent( tkKeyboardEvent( self, event, 0))
-
-    def tkOnCharacter( self, event: Any ) -> None:
-        """Convert character (non-control) press to context event"""
-        self.ProcessEvent( tkKeypressEvent( self, event))
-
-    def tkOnFocusOut( self, event: Any ) -> None:
-        """Let go of every held key as the widget loses focus
-
-        No key-up arrives for a key that was down when focus went elsewhere, so
-        without this the key stays held for the rest of the session and the
-        camera keeps moving with nobody touching the keyboard.
-        """
-        self.clearHeldKeys()
-
-    def emitKey( self, key: Any, state: int, modifiers: Any ) -> None:
-        """Send a key transition the window system did not report
-
-        ``modifiers`` is the triple that came with the press, so the synthetic
-        release matches the binding the press did; see
-        :class:`OpenGLContext.events.eventhandlermixin.HeldKeyMixin`.
-        """
-        made = tkKeyboardEvent.__new__( tkKeyboardEvent )
-        keyboardevents.KeyboardEvent.__init__( made )
-        if hasattr( self, 'currentPass' ):
-            made.renderingPass = self.currentPass
-        made.modifiers = modifiers
-        made.name = key
-        made.state = state
-        self.ProcessEvent( made )
-
-    ### MOUSE Interaction
-    def tkOnMouseButton(self, event: Any ) -> None:
-        """Convert mouse-button event to context event
-
-        A wheel notch arrives here on X11, where Tk reports it as a press of
-        button 4 or 5; on Windows and macOS it arrives as ``<MouseWheel>``
-        instead (:meth:`tkOnMouseWheel`).
-        """
-        if event.num in X11_WHEEL_BUTTONS:
-            self._postWheel( event, X11_WHEEL_BUTTONS[event.num] )
-            return
-        self.addPickEvent( tkMouseButtonEvent( self, event, state=1))
-        self.triggerPick()
-
-    def tkOnMouseRelease( self, event: Any ) -> None:
-        """Convert release-of-mouse event to context event"""
-        if event.num in X11_WHEEL_BUTTONS:
-            return                      # the notch was delivered by the press
-        self.addPickEvent( tkMouseButtonEvent( self, event, state=0))
-        self.triggerPick()
-
-    def tkOnMouseWheel( self, event: Any ) -> None:
-        """Convert a Windows or macOS wheel report to notches
-
-        Tk states the rotation there rather than naming a button, so each whole
-        notch becomes the press and release of one; see
-        :data:`~OpenGLContext.events.mouseevents.WHEEL_UP`.
-        """
-        if self._wheelCounter is None:
-            self._wheelCounter = WheelNotches( WHEEL_DELTA )
-        for button in self._wheelCounter.notches( getattr(event, 'delta', 0) ):
-            self._postWheel( event, button )
-
-    def _postWheel( self, event: Any, button: int ) -> None:
-        """One notch, as the press and release of a button that is never held"""
-        for state in (1, 0):
-            self.addPickEvent(
-                tkWheelEvent( self, event, button=button, state=state ) )
-        self.triggerPick()
-
-    def tkOnMouseMove(self, event: Any ) -> None:
-        """Convert mouse-movement event to context event
-
-        The movement sampler is told directly as well as through the pick
-        queue: a mouse-look mode wants every scrap of motion as it happens,
-        while a pick event is only delivered once the selection buffer resolves
-        it -- and not at all when the pointer is over nothing or picking is off.
-
-        A movement the window made itself -- the warp that keeps a grabbed
-        pointer in the middle of the window -- updates where the pointer is and
-        goes no further: it is not motion the user asked for, and it is not a
-        click on anything.
-        """
-        echo = self.pointerWarpEcho( event.x, event.y )
-        record = getattr( self, 'recordPointerMotion', None )
-        if record is not None:
-            if echo:
-                forget = getattr( self, 'forgetPointerOrigin', None )
-                if forget is not None:
-                    forget()
-            record( int(event.x), self.getViewPort()[1] - int(event.y) )
-        if echo:
-            return
-        self.recentrePointer()
-        self.addPickEvent( tkMouseMoveEvent( self, event))
-        self.triggerPick()
-
-    def pointerWarpEcho( self, x: int, y: int ) -> bool:
-        """Whether this movement is one the window itself caused
-
-        Answered by the context, which is what does the warping; see
-        :meth:`OpenGLContext.tkcontext.TkContext.pointerWarpEcho`.  A window
-        that never warps the pointer never sees an echo.
-        """
-        return False
-
-    def recentrePointer( self ) -> None:
-        """Put a grabbed pointer back in the middle of the window
-
-        Answered by the context; see
-        :meth:`OpenGLContext.tkcontext.TkContext.recentrePointer`.  A window
-        with no pointer capture has nothing to do here.
-        """
-
-
 def modifiersOf( tkEventObject: Any ) -> tuple[bool, bool, bool]:
     """The shift, control and alt triple a Tk event was delivered with
 
-    A function rather than a method on the event classes, because the context
-    reads it too: a key it has to *hold* is remembered with the modifiers its
+    A function rather than a method on the event classes, because the window
+    system reads it too: a key it has to *hold* is remembered with the modifiers its
     press carried, so the release focus loss never delivered matches the
     binding the press matched.
     """

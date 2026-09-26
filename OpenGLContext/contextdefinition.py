@@ -83,6 +83,14 @@ class ContextDefinition( node.Node ):
     PROTO = 'ContextDefinition'
     size = field.newField( "size", "SFVec2f", 1, (300,300))
     title = field.newField( "title", "SFString", 1, "")
+    #: The window system the context opens on: a registered name (``glfw``,
+    #: ``glut``, ``pygame``, ``tk``, ``wx``, ``qt``, ``egl``, ``wgl``),
+    #: ``offscreen`` for whichever renders with no window on this platform, or
+    #: empty for the default -- ``OPENGLCONTEXT_BACKEND``, then the user's
+    #: preference, then the first that imports, GLFW first.  Read once, as the
+    #: context is built, so it is not offered on a settings screen.  See
+    #: :mod:`OpenGLContext.windowsystem`.
+    windowsystem = field.newField( "windowsystem", "SFString", 1, "")
     profileFile = field.newField( "profileFile", 'SFString',1,"")
 
     #: Fill the screen rather than open a window of ``size``

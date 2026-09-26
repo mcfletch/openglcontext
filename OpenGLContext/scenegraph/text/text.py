@@ -55,6 +55,9 @@ class Text( basenodes.Text ):
     def compile( self, mode: Any = None ) -> tuple[Any, Any, Any]:
         """Compile the text node to provider, font, lines-set"""
         value = '\n'.join( self.string )
+        ensure = getattr( getattr( mode, 'context', None ), 'ensureFontProviders', None )
+        if ensure is not None:
+            ensure()
         provider, font = fontprovider.FontProvider.getProviderFont(
             self.fontStyle,
             mode=mode

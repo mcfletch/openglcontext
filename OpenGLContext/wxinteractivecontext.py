@@ -1,27 +1,10 @@
-"""Interactive context using the wxPython API (provides navigation support)"""
-from typing import Any
+"""The wx window system's Context, under the name ``wxInteractiveContext``
 
-from OpenGLContext import interactivecontext, wxcontext, context
-from OpenGLContext.move import viewplatformmixin
-from OpenGL.GLUT import *
+Every Context has the event managers, the camera and the scene loading, so
+this name is :class:`~OpenGLContext.wxcontext.wxContext`.
+"""
+from OpenGLContext.wxcontext import wxContext
 
-class wxInteractiveContext (
-    viewplatformmixin.ViewPlatformMixin,
-    interactivecontext.InteractiveContext,
-    wxcontext.wxContext,
-):
-    """Sub-class of Context providing navigation support
+wxInteractiveContext = wxContext
 
-    This is basically just a shell class which inherits
-    all of its functionality from its superclasses.
-    """
-
-if __name__ == '__main__':
-    from drawcube import drawCube
-    from OpenGL.GL import glTranslated 
-    class TestContext( wxInteractiveContext ):
-        def Render( self, mode: Any = None) -> None:
-            wxInteractiveContext.Render (self, mode)
-            glTranslated ( 2,0,-4)
-            drawCube()
-    TestContext.ContextMainLoop()
+__all__ = ('wxInteractiveContext',)

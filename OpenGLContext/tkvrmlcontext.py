@@ -1,10 +1,10 @@
-"""VRML97 context for Tk"""
+"""The Tk window system's Context, under the name ``VRMLContext``
 
-from OpenGLContext import tkinteractivecontext, vrmlcontext
+Every Context has the event managers, the camera and the scene loading, so
+this name is :class:`~OpenGLContext.tkcontext.TkContext`.
+"""
+from OpenGLContext.tkcontext import TkContext
 
+VRMLContext = TkContext
 
-class VRMLContext(
-    vrmlcontext.VRMLContext,
-    tkinteractivecontext.TkInteractiveContext,
-):
-    """Tk-specific VRML97-aware context"""
+__all__ = ('VRMLContext',)
