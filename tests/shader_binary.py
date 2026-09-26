@@ -7,6 +7,8 @@ from OpenGLContext.arrays import *
 from OpenGL.GL.shaders import *
 from OpenGLContext.scenegraph.basenodes import Sphere
 
+from OpenGLContext.resources.phongprecalc_vert import data as PHONG_PRECALC
+
 class TestContext( BaseContext ):
     LIGHT_COUNT = 3
     LIGHT_SIZE = 7
@@ -97,8 +99,8 @@ class TestContext( BaseContext ):
             return vec3( attenuation, n_dot_pos, n_dot_half);
         }		
         """
-        from OpenGLContext.resources.phongprecalc_vert import data as phong_preCalc
         light_preCalc = open( '_shader_tut_lightprecalc.vert' ).read()
+        phong_preCalc = PHONG_PRECALC
         if bytes is not str:
             phong_preCalc = phong_preCalc.decode('ascii')
         

@@ -102,7 +102,7 @@ class TestContext( BaseContext ):
         self.addEventHandler( "keypress", name = 'a', function = self.OnAnimate )
         print('Press "a" to stop animation\nNote: r key has no effect')
 
-    def OnAnimate( self, event):
+    def OnAnimate( self, _event):
         self.animating = not self.animating
         
     def updatePositions( self ):

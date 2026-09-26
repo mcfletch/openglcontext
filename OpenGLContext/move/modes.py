@@ -25,7 +25,7 @@ moment needs no special case.
 
 from gettext import gettext as _
 from collections.abc import Sequence
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 from vrml import field, node
 
@@ -51,7 +51,7 @@ class KeyBinding(node.Node):
 
     #: How a generated settings page presents this; see
     #: :mod:`OpenGLContext.ui.generate`.
-    UI_HINTS = {
+    UI_HINTS: ClassVar[dict[str, dict[str, Any]]] = {
         'keys': {'label': 'Keys', 'editor': 'keys'},
         'command': {'skip': True},
         'label': {'skip': True},
@@ -93,7 +93,7 @@ class MovementMode(node.Node):
     commands: Sequence[str] = ()
 
     #: How a generated settings page presents this mode's tunables.
-    UI_HINTS = {
+    UI_HINTS: ClassVar[dict[str, dict[str, Any]]] = {
         # The name is how a game and a saved file refer to this mode, not
         # something a player chooses; renaming it from a settings screen would
         # break the binding file that stores keys under it.
@@ -258,7 +258,7 @@ class _GroundMode(MovementMode):
     #: Radians of pitch per second while a look command is held.
     lookRate = field.newField('lookRate', 'SFFloat', 1, 1.0)
 
-    UI_HINTS = {
+    UI_HINTS: ClassVar[dict[str, dict[str, Any]]] = {
         'turnRate': {'label': 'Turn rate', 'minimum': 0.25, 'maximum': 8.0,
                      'step': 0.25, 'suffix': ' rad/s'},
         'lookRate': {'label': 'Look rate', 'minimum': 0.25, 'maximum': 8.0,
@@ -308,7 +308,7 @@ class WalkMode(_GroundMode):
     walkSpeed = field.newField('walkSpeed', 'SFFloat', 1, 3.0)
     runSpeed = field.newField('runSpeed', 'SFFloat', 1, 6.0)
 
-    UI_HINTS = {
+    UI_HINTS: ClassVar[dict[str, dict[str, Any]]] = {
         'walkSpeed': {'label': 'Walking speed', 'minimum': 0.5, 'maximum': 20.0,
                       'step': 0.5, 'suffix': ' m/s'},
         'runSpeed': {'label': 'Running speed', 'minimum': 0.5, 'maximum': 40.0,
@@ -350,7 +350,7 @@ class FlyMode(_GroundMode):
     #: around, which in a streamed dataset is most of the flying there is.
     boostSpeed = field.newField('boostSpeed', 'SFFloat', 1, 32.0)
 
-    UI_HINTS = {
+    UI_HINTS: ClassVar[dict[str, dict[str, Any]]] = {
         'flySpeed': {'label': 'Flying speed', 'minimum': 0.5, 'maximum': 60.0,
                      'step': 0.5, 'suffix': ' m/s'},
         'boostSpeed': {'label': 'Boosted flying speed', 'minimum': 1.0,
@@ -394,7 +394,7 @@ class SwimMode(_GroundMode):
     capturePointer = field.newField('capturePointer', 'SFBool', 1, True)
     buoyancy = field.newField('buoyancy', 'SFFloat', 1, 0.9)
 
-    UI_HINTS = {
+    UI_HINTS: ClassVar[dict[str, dict[str, Any]]] = {
         'swimSpeed': {'label': 'Swimming speed', 'minimum': 0.25,
                       'maximum': 20.0, 'step': 0.25, 'suffix': ' m/s'},
         'buoyancy': {'label': 'Buoyancy', 'minimum': 0.0, 'maximum': 1.0,
@@ -458,7 +458,7 @@ class FPSMode(WalkMode):
     PROTO = 'FPSMode'
     capturePointer = field.newField('capturePointer', 'SFBool', 1, True)
 
-    UI_HINTS = {
+    UI_HINTS: ClassVar[dict[str, dict[str, Any]]] = {
         'sensitivity': {'label': 'Mouse sensitivity', 'minimum': 0.0005,
                         'maximum': 0.02, 'step': 0.0005},
         'invertLook': {'label': 'Invert look'},

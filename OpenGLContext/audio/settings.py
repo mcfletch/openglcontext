@@ -24,7 +24,7 @@ symptom is a volume key that prints a new number and changes nothing.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, ClassVar
 
 from vrml import field, node
 
@@ -57,7 +57,7 @@ class AudioSettings(node.Node):
 
     #: How a generated settings page presents these; see
     #: :mod:`OpenGLContext.ui.generate`.
-    UI_HINTS = {
+    UI_HINTS: ClassVar[dict[str, dict[str, Any]]] = {
         'enabled': {'label': 'Sound'},
         'volume': {'label': 'Volume', 'minimum': 0.0, 'maximum': 1.0,
                    'step': 0.05},

@@ -2,7 +2,7 @@
 
 import re
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, ClassVar, Optional
 
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
 from OpenGLContext.events.mouseevents import WHEEL_BUTTONS
@@ -180,7 +180,7 @@ class PygameXEvent(object):
             mouse buttons, a three-value list
     """
 
-    CURRENTBUTTONSTATES: list[int] = [0, 0, 0]
+    CURRENTBUTTONSTATES: ClassVar[list[int]] = [0, 0, 0]
 
     def _getModifiers(self) -> tuple[bool, bool, bool]:
         "get the state of the keyboard modifiers"

@@ -9,6 +9,7 @@ from OpenGL.GL.ARB.draw_instanced import *
 from OpenGL.GL.ARB.texture_buffer_object import *
 from numpy import random
 import weakref
+from typing import ClassVar
 import logging
 
 log = logging.getLogger(__name__)
@@ -26,11 +27,11 @@ class BufferLocks(object):
     overhead than the whole AZBO technique is supposed to save.
     """
 
-    _cleanups_ = []
+    _cleanups_: ClassVar[list] = []
 
     def __init__(self, client=False):
         self.locks = []
-        self.client = False
+        self.client = client
         self.__class__._cleanups_.append(
             weakref.ref(self, cleaner(self.locks, glDeleteSync))
         )

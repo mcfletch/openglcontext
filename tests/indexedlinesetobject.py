@@ -16,7 +16,7 @@ class TestContext(BaseContext):
         3,
     )  # set initial camera position, tutorial does the re-positioning
 
-    def cpv(self, event=None):
+    def cpv(self, _event=None):
         """colorPerVertex toggle"""
         self.shape.geometry.colorPerVertex = not self.shape.geometry.colorPerVertex
         self.triggerRedraw(1)

@@ -1,14 +1,14 @@
 """Interactions for navigating the context"""
 from gettext import gettext as _
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, ClassVar
 from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
 from OpenGLContext.move import movementmanager
 import math
 
 class Direct( movementmanager.MovementManager ):
     """OpenGLContext's original manipulation for the view platform"""
-    commands = movementmanager.MovementManager.commands + [
+    commands: ClassVar[list[tuple[str, str, str]]] = movementmanager.MovementManager.commands + [
         # User-name, key, function-name
         (_('Forward'), 'forward','forward'),
         (_('Back'), 'backward','backward' ),
@@ -27,7 +27,7 @@ class Direct( movementmanager.MovementManager ):
         (_('Faster'), 'faster', 'faster' ),
         (_('Slower'), 'slower','slower' ),
     ]
-    commandBindings = dict(
+    commandBindings: ClassVar[dict[str, dict[str, Any]]] = dict(
         forward=dict( eventType='keyboard', name='<up>', state=1, modifiers=(0,0,0) ),
         backward=dict( eventType='keyboard', name='<down>', state=1, modifiers=(0,0,0) ),
         up=dict( eventType='keyboard', name='<up>', state=1, modifiers=(0,0,1)),

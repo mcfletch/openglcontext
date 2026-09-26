@@ -20,6 +20,8 @@ import tempfile
 
 os.environ.setdefault("OPENGLCONTEXT_RENDERER", "pbr")
 os.environ.setdefault("OPENGLCONTEXT_IBL", "off")
+# A streaming demo is watched for its frame rate, not held to the display's.
+os.environ.setdefault("OPENGLCONTEXT_NO_VSYNC", "1")
 
 import numpy as np
 from OpenGLContext import testingcontext
@@ -56,11 +58,6 @@ def _walkable_spawn():
 
 class TestContext(BaseContext):
     def OnInit(self):
-        try:
-            import glfw
-            glfw.swap_interval(0)
-        except Exception:
-            pass
         print("Walk the landscape: WASD move, QE turn, G toggle fly, Space jump")
         tileset = os.environ.get("OGLC_TILES_TILESET")
         if not tileset:
@@ -102,10 +99,10 @@ class TestContext(BaseContext):
     def _up(self, event):
         self._held.discard(event.name)
 
-    def _jump(self, event):
+    def _jump(self, _event):
         self.avatar.jump()
 
-    def _fly(self, event):
+    def _fly(self, _event):
         self._flying = not self._flying
         self.avatar.set_fly(self._flying)
 

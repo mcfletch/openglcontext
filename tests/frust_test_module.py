@@ -6,7 +6,7 @@ fail_10e4 = 0
 fail_10e3 = 0
 total = 0
 
-def test( projection, modelview, multiplied, planes ):
+def test( projection, modelview, _multiplied, planes ):
     """Test for proper results from the data-set"""
     global fail_10e3
     global fail_10e4

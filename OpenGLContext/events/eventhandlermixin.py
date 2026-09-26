@@ -131,7 +131,7 @@ class EventHandlerMixin(HeldKeyMixin):
     """
 
     #: ``(eventType, managerClass)`` pairs the context builds its managers from.
-    EventManagerClasses: Sequence[tuple[Optional[str], type[Any]]] = []
+    EventManagerClasses: Sequence[tuple[Optional[str], type[Any]]] = ()
     #: What drives the TimeSensors and Timers, or None for a context with none.
     TimeManagerClass: Optional[type[Any]] = None
 
@@ -189,7 +189,7 @@ class EventHandlerMixin(HeldKeyMixin):
                                   function=self.forward )
 
         A bare closure, a lambda, a functools.partial, or any other object
-        created purely for the call will *not* survive it.  If you need one,
+        created purely for the call will *not* survive it.  If you *need* one,
         store it somewhere that lives as long as the binding should::
 
             self.handlers = []            # an attribute of a long-lived object

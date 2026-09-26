@@ -14,7 +14,7 @@ every frame -- so the mode is what a player is moving at, and editing it on the
 settings screen is felt on the next step.  A caller with no opinion passes none
 and the body keeps whatever it was built with.
 """
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 import numpy as np
 
@@ -76,7 +76,7 @@ class PhysicsViewPlatform:
 
     #: Which of the body's speeds each move tier is measured by.  Unknown tiers
     #: fall through to walking, as :meth:`CharacterController.speed` does.
-    TIER_SPEEDS = {'walk': 'walkSpeed', 'run': 'runSpeed',
+    TIER_SPEEDS: ClassVar[dict[str, str]] = {'walk': 'walkSpeed', 'run': 'runSpeed',
                    'sprint': 'sprintSpeed', 'crouch': 'crouchSpeed'}
 
     def _moveAt(self, capability: str, speed: Optional[float]) -> None:

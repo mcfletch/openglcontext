@@ -5,7 +5,7 @@ BaseContext = testingcontext.getInteractive( 'glut' )
 from OpenGL.GL import *
 from OpenGL.GLUT import *
 
-def drawText( value, x,y,  windowHeight, windowWidth, step = 18 ):
+def drawText( value, x,y,  windowHeight, windowWidth ):
     """Draw the given text at given 2D position in window
     """
     glMatrixMode(GL_PROJECTION)

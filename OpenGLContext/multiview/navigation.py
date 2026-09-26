@@ -38,7 +38,7 @@ from __future__ import annotations
 
 from gettext import gettext as _
 from collections.abc import Sequence
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 import math
 
@@ -91,7 +91,7 @@ class ViewNavigationMode(node.Node):
     #: The bindings, in the order a settings window lists them.
     bindings = field.newField('bindings', 'MFNode', 1, list)
 
-    UI_HINTS = {
+    UI_HINTS: ClassVar[dict[str, dict[str, Any]]] = {
         'name': {'skip': True},
         'label': {'label': 'Mode'},
         'enabled': {'label': 'Available'},

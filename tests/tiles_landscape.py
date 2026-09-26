@@ -16,6 +16,8 @@ import tempfile
 
 os.environ.setdefault("OPENGLCONTEXT_RENDERER", "pbr")   # honours vertex colours
 os.environ.setdefault("OPENGLCONTEXT_IBL", "off")
+# A streaming demo is watched for its frame rate, not held to the display's.
+os.environ.setdefault("OPENGLCONTEXT_NO_VSYNC", "1")
 
 from OpenGLContext import testingcontext
 
@@ -37,11 +39,6 @@ class TestContext(BaseContext):
 
     def OnInit(self):
         print("Streamed procedural landscape: terrain LOD + vegetation")
-        try:                                # don't block on vsync (offscreen capture)
-            import glfw
-            glfw.swap_interval(0)
-        except Exception:
-            pass
         tileset = os.environ.get("OGLC_TILES_TILESET")
         if not tileset:
             tmp = tempfile.mkdtemp(prefix="oglc_landscape_")

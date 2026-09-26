@@ -11,19 +11,19 @@ class InteractiveContext( eventhandlermixin.EventHandlerMixin):
         timers -- provided by the timeeventgeneratormanager module
 
     Attributes:
-        EventManagerClasses -- list of standard event-managers to be
+        EventManagerClasses -- the standard event-managers to be
             initialised for the context
         TimeManagerClass -- class for use in supporting the Timer
             functionality
     """
-    EventManagerClasses = [
+    EventManagerClasses = (
         ('keyboard', keyboardevents.KeyboardEventManager ),
         ('keypress', keyboardevents.KeypressEventManager ),
         ('mousebutton', mouseevents.MouseButtonEventManager ),
         ('mousemove', mouseevents.MouseMoveEventManager ),
         ('mousein', mouseevents.MouseInEventManager),
         ('mouseout', mouseevents.MouseOutEventManager),
-    ]
+    )
     TimeManagerClass = timeeventgeneratormanager.TimeEventGeneratorManager
 
     

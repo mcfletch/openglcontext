@@ -12,6 +12,8 @@ import os
 # skip analytic-sky IBL, which washes the terrain) so the demo runs when launched
 # directly, not only under the test harness's environment.
 os.environ.setdefault("OPENGLCONTEXT_IBL", "off")
+# A streaming demo is watched for its frame rate, not held to the display's.
+os.environ.setdefault("OPENGLCONTEXT_NO_VSYNC", "1")
 
 from OpenGLContext import testingcontext
 
@@ -29,14 +31,9 @@ class TestContext(BaseContext):
     initialOrientation = (-1, 0, 0, 0.5)
 
     def OnInit(self):
-        try:
-            import glfw
-            glfw.swap_interval(0)
-        except Exception:
-            pass
         print("Instanced vegetation scattered over a heightfield surface")
-        pos, nrm, idx = sample._grid_mesh(-120, 120, -120, 120, 21)
-        ground = gltf.load_gltf(sample._glb(
+        pos, nrm, idx = sample._grid_mesh(-120, 120, -120, 120, 21)  # noqa: SLF001 the sample module offers no public grid mesh or GLB writer
+        ground = gltf.load_gltf(sample._glb(  # noqa: SLF001 the sample module offers no public grid mesh or GLB writer
             pos, nrm, idx, color=(0.20, 0.32, 0.12, 1.0))).group
         shrub = Shape(
             geometry=Cone(bottomRadius=2.5, height=8.0),

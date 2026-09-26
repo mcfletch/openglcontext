@@ -37,7 +37,7 @@ class TestContext( BaseContext ):
             self.OnQuit(event)
         else:
             self.OnFullScreenToggle(event)
-    def OnFullScreenToggle( self, event ):
+    def OnFullScreenToggle( self, _event ):
         """Toggle between full and regular windows"""
         if self.returnValues:
             # return to the previous size

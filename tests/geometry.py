@@ -140,13 +140,13 @@ class TestContext( BaseContext ):
         self.sg.rotation = array([0,1,0,event.fraction()*pi*2],'f')
         self.appearance.material.diffuseColor = [event.fraction()]*3
         self.triggerRedraw( False )
-    def OnImageSwitch( self, event=None ):
+    def OnImageSwitch( self, _event=None ):
         """Choose a new mapped texture"""
         self.currentImage = currentImage = self.currentImage+1
         newImage = images[currentImage%len(images)]
         self.appearance.texture.url = [ newImage ]
         print("new image (loading) ->", newImage)
-    def OnSizeSwitch( self, event=None ):
+    def OnSizeSwitch( self, _event=None ):
         """Choose a new size"""
         self.currentSize = currentSize = self.currentSize+1
         newSize = cone_sizes[currentSize%len(cone_sizes)]

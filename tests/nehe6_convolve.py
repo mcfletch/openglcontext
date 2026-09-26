@@ -79,7 +79,7 @@ class TestContext( BaseContext ):
         self.imageIndex = 0
         print('''Press 'c' to toggle between convolved and non-convolved image''')
         self.addEventHandler( "keypress", name="c", function = self.OnConvolve)
-    def OnConvolve( self, event ):
+    def OnConvolve( self, _event ):
         """Convolve (choose the other image) or disable convolution"""
         self.imageIndex += 1
         if self.imageIndex %2:

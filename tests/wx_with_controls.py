@@ -39,7 +39,7 @@ class TestContext( wxinteractivecontext.wxInteractiveContext ):
             0,1,0,event.fraction()* 3.14149*2
         )
         
-    def OnButtonPause( self, event ):
+    def OnButtonPause( self, _event ):
         """Handle the wxPython event from our button"""
         if self.rotating:
             self.time.pause()
@@ -50,7 +50,7 @@ class TestContext( wxinteractivecontext.wxInteractiveContext ):
 
 if __name__ == "__main__":
     class DemoFrame( wx.Frame ):
-        def __init__(self, parent, sceneGraph=None):
+        def __init__(self, parent):
             wx.Frame.__init__(self, parent, 2400, "VRMLTreeControl Demo", size=(800,600) )
             outerbox = wx.BoxSizer(wx.HORIZONTAL)
             box = wx.BoxSizer(wx.VERTICAL)
@@ -64,7 +64,7 @@ if __name__ == "__main__":
             self.Bind(wx.EVT_BUTTON, self.context.OnButtonPause, stop_button)
             self.SetAutoLayout(True)
             self.SetSizer( outerbox )
-        def OnCloseWindow(self, event):
+        def OnCloseWindow(self, _event):
             self.Destroy()
 
     class DemoApp(wx.App):
@@ -74,7 +74,7 @@ if __name__ == "__main__":
             self.SetTopWindow(frame)
             return True
         
-    def test( sceneGraph=None ):
+    def test():
         app = DemoApp(0)
         app.MainLoop()
     test( )

@@ -1,6 +1,6 @@
 """Module providing translation from GLFW callbacks to OpenGLContext events"""
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from OpenGLContext import renderoptions
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
@@ -256,7 +256,7 @@ class GLFWXEvent(object):
             list
     """
 
-    CURRENTBUTTONSTATES: list[int] = [0, 0, 0]
+    CURRENTBUTTONSTATES: ClassVar[list[int]] = [0, 0, 0]
 
     def _getModifiers(self, modifierMask: int) -> tuple[bool, bool, bool]:
         """Get the 3-tuple of modifier booleans from GLFW modifier mask"""

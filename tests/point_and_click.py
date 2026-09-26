@@ -7,8 +7,9 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.arrays import *
 
+from OpenGLContext.scenegraph import basenodes
+
 def buildGeometry():
-    from OpenGLContext.scenegraph import basenodes
     return basenodes.sceneGraph(
         children = [
         basenodes.Transform(

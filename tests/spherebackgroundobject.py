@@ -6,6 +6,8 @@ BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
 
+from OpenGLContext.passes import renderpass
+
 colors = [
     (1,1,1),
     (1,0,0),
@@ -54,13 +56,12 @@ class TestContext( BaseContext ):
     """Tests the background object's rendering
     """
     current = 0
-    def OnBGSwitch( self, event=None):
+    def OnBGSwitch( self, _event=None):
         current = sg.children[0].whichChoice
         sg.children[0].whichChoice = (current+1) % len(sg.children[0].choice)
         self.triggerRedraw(1)
 
-    def OnModeToggle( self, event=None):
-        from OpenGLContext.passes import renderpass
+    def OnModeToggle( self, _event=None):
         if renderpass.FLAT is not None:
             renderpass.FLAT.use_shaders = not renderpass.FLAT.use_shaders
             mode = "SHADER" if renderpass.FLAT.use_shaders else "LEGACY"
@@ -76,7 +77,7 @@ class TestContext( BaseContext ):
         self.addEventHandler(
             'keypress', name = 'f', function = self.OnModeToggle
         )
-    def getSceneGraph( self, mode = None):
+    def getSceneGraph( self ):
         """Render the geometry for the scene."""
         return sg
 

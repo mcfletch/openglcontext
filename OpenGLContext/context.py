@@ -40,7 +40,7 @@ from OpenGLContext.screenshot import ScreenshotMixin
 from OpenGLContext.passes import renderpass
 from vrml.vrml97 import nodetypes
 from vrml import node, cache
-from typing import TYPE_CHECKING, Any, TypeVar
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 from collections.abc import Callable, Mapping, Sequence
 import weakref
 import os
@@ -283,7 +283,7 @@ class Context(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     """
 
     currentContext: Context | None = None
-    allContexts: list[weakref.ref[Context]] = []
+    allContexts: ClassVar[list[weakref.ref[Context]]] = []
     renderPasses = renderpass.defaultRenderPasses
     frameCounter: FrameCounter | None = None
     loopTrace: LoopTrace | None = None

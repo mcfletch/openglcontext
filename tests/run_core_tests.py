@@ -64,7 +64,7 @@ def run_test(script_path, timeout=TIMEOUT):
         return (result.returncode == 0, result.stdout + result.stderr)
     except subprocess.TimeoutExpired:
         return (False, "TIMEOUT after %d seconds" % timeout)
-    except Exception as e:
+    except (OSError, subprocess.SubprocessError) as e:
         return (False, "Exception: %s" % str(e))
 
 

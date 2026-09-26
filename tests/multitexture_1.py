@@ -9,6 +9,7 @@ BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 from OpenGLContext import texture
 import sys
+from PIL import Image
 
 multitexture = None
 
@@ -33,22 +34,14 @@ class TestContext( BaseContext ):
         the texture to an ID then loading the texture into memory.
         This didn't seem clear to me somehow in the tutorial.
         """
-        try:
-            from PIL.Image import open
-        except ImportError:
-            from Image import open
         multitexture.glActiveTextureARB(multitexture.GL_TEXTURE0_ARB)
-        return texture.Texture( open(imageName) )
+        return texture.Texture( Image.open(imageName) )
     def loadLightMap( self, imageName = "lightmap1.jpg" ):
         """Load an image from a file using PIL as a lightmap (greyscale)
         """
-        try:
-            from PIL.Image import open
-        except ImportError:
-            from Image import open
         multitexture.glActiveTextureARB(multitexture.GL_TEXTURE1_ARB) 
         glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE)
-        return texture.Texture( open(imageName) )
+        return texture.Texture( Image.open(imageName) )
 
     def Render( self, mode = 0):
         BaseContext.Render( self, mode )

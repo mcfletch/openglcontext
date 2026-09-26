@@ -9,6 +9,8 @@ from OpenGLContext import context
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
 
+from OpenGLContext.passes import renderpass
+
 class TestContext( BaseContext ):
     """Tests the CubeBackground object's rendering
     """
@@ -40,8 +42,7 @@ class TestContext( BaseContext ):
             'keypress', name='f', function=self.OnModeToggle
         )
 
-    def OnModeToggle(self, event=None):
-        from OpenGLContext.passes import renderpass
+    def OnModeToggle(self, _event=None):
         if renderpass.FLAT is not None:
             renderpass.FLAT.use_shaders = not renderpass.FLAT.use_shaders
             mode = "SHADER" if renderpass.FLAT.use_shaders else "LEGACY"

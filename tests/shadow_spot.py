@@ -94,7 +94,6 @@ def make_scene(light='spot'):
 
 class TestContext(BaseContext):
     def OnInit(self):
-        import os
         self.sg = make_scene(os.environ.get('SHADOW_LIGHT', 'spot'))
 
 

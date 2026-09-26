@@ -20,6 +20,7 @@ from OpenGL import error
 import traceback
 import sys
 from OpenGLContext.events.timer import Timer
+from PIL import Image
 
 class TestContext( BaseContext ):
     profile = 'compatibility'   # draws with the fixed-function pipeline
@@ -31,11 +32,7 @@ class TestContext( BaseContext ):
         the texture to an ID then loading the texture into memory.
         This didn't seem clear to me somehow in the tutorial.
         """
-        try:
-            from PIL.Image import open
-        except ImportError:
-            from Image import open
-        im = open(imageName)
+        im = Image.open(imageName)
         try:
             ix, iy, image = im.size[0], im.size[1], im.tobytes("raw", "RGBA", 0, -1)
         except SystemError:
@@ -64,14 +61,14 @@ class TestContext( BaseContext ):
             window_pos.glWindowPos2dvARB(())
         except (error.CopyError,GLerror,ValueError) as err:
             print('Correct handling of incorrect parameters', err)
-        except Exception:
+        except Exception:  # noqa: BLE001 any other exception type is the wrong answer, reported with its traceback
             traceback.print_exc()
             print('Incorrect handling of incorrect parameters')
         try:
             window_pos.glWindowPos3dvARB(())
         except (error.CopyError,GLerror, ValueError) as err:
             print('Correct handling of incorrect parameters', err)
-        except Exception:
+        except Exception:  # noqa: BLE001 any other exception type is the wrong answer, reported with its traceback
             traceback.print_exc()
             print('Incorrect handling of incorrect parameters')
         

@@ -150,7 +150,7 @@ class TestContext(BaseContext):
         ])
         self._start = systemtime.systemTime()
 
-    def OnIdle(self, *args):
+    def OnIdle(self, *_args):
         """Drive the animation; updating node fields re-renders the shadows."""
         t = systemtime.systemTime() - self._start
         # sphere orbits high overhead so its shadow falls onto the box, NURBS and floor

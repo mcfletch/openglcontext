@@ -882,6 +882,12 @@ openglcontext and pyopengl. What is pending:
   committed `.coverage`; simpleparse's three unused public keywords;
   omi_audio's `impact_clip(tuning)`; pydispatcher's CI lint job; marble-editor
   declaring a marble-demo floor; the forest's unused `event` parameters.
+- A new OGC rule: a `lambda` (or a `functools.partial`, or any object made
+  for the call) passed as `function=` to `addEventHandler`. The event
+  managers hold handlers weakly, so such a handler is collected at once and
+  the binding does nothing. `tests/physics_events.py` binds its keypress
+  handlers this way and its keys do nothing; `oglc-physics-events` binds
+  them correctly.
 
 ## Decided
 

@@ -104,7 +104,7 @@ class TestContext(BaseContext):
         print("Objects (left to right):",
               ", ".join(label for label, *_ in self.objects), "\n", flush=True)
 
-    def OnIdle(self, *args):
+    def OnIdle(self, *_args):
         # Smooth cosine dolly between near and far; report level changes.
         phase = ((systemtime.systemTime() - self._start) % self._period) / self._period
         cam_z = self._near + (self._far - self._near) * 0.5 * (1 - math.cos(2 * math.pi * phase))

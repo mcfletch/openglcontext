@@ -60,11 +60,11 @@ class TestContext( BaseContext ):
         self.leftFirst = 1
         self.addEventHandler( 'keypress', name='f', function = self.OnSwitch )
         print('Press "f" to switch polygon order')
-    def OnSwitch( self, event ):
+    def OnSwitch( self, _event ):
         """Switch order of triangles"""
         self.leftFirst = not self.leftFirst
         self.triggerRedraw(1)
-    def SetupDisplay( self, mode = None ):
+    def SetupDisplay( self ):
         """Setup display for display for the given mode"""
         ### NOTE:
         ### required because the context enables by default!

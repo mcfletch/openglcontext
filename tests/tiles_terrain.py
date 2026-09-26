@@ -19,6 +19,8 @@ import tempfile
 # grey, so drive lighting from an explicit sun + modest ambient.
 os.environ.setdefault("OPENGLCONTEXT_RENDERER", "pbr")  # PBR renderer honours vertex colors
 os.environ.setdefault("OPENGLCONTEXT_IBL", "off")
+# A streaming demo is watched for its frame rate, not held to the display's.
+os.environ.setdefault("OPENGLCONTEXT_NO_VSYNC", "1")
 
 from OpenGLContext import testingcontext
 
@@ -35,11 +37,6 @@ class TestContext(BaseContext):
     initialOrientation = (-1, 0, 0, 0.62)  # pitch down toward the terrain
 
     def OnInit(self):
-        try:
-            import glfw
-            glfw.swap_interval(0)
-        except Exception:
-            pass
         print("Streamed 3D Tiles terrain: green heightfield that refines up close")
         tileset = os.environ.get("OGLC_TILES_TILESET")
         if not tileset:

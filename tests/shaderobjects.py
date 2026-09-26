@@ -16,6 +16,8 @@ from OpenGLContext.scenegraph.basenodes import *
 import logging
 import math
 
+from OpenGLContext.debug import leaks
+
 log = logging.getLogger("shaderobjects")
 log.warning("Context %s", BaseContext)
 
@@ -200,7 +202,7 @@ class TestContext(BaseContext):
         r = event.fraction()
         self.sg.children[0].rotation = [0, 1, 0, r * math.pi * 2]
 
-    def OnNext(self, event):
+    def OnNext(self, _event):
         self.current_shader += 1
         shader = self.shaders[self.current_shader % len(self.shaders)]
         for shape in self.shapes:
@@ -240,8 +242,7 @@ class TestContext(BaseContext):
             center.value = center.value + vec
             print("new center", center.value)
 
-    def OnLeak(self, event):
-        from OpenGLContext.debug import leaks
+    def OnLeak(self, _event):
 
         if leaks.whole_set:
             leaks.delta()

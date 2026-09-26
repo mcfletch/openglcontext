@@ -2,7 +2,7 @@
 '''
 import logging
 from collections.abc import Hashable, Sequence
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 from OpenGL.GL import *
 from OpenGL.GLUT import *
@@ -212,7 +212,7 @@ class GLUTContext(
     #: set and no way to add to it, so what is not here is answered rather
     #: than approximated: it has no "not allowed" pointer, and ``'no'`` is
     #: refused.
-    CURSOR_SHAPES = {
+    CURSOR_SHAPES: ClassVar[dict[str, str]] = {
         'arrow': 'GLUT_CURSOR_RIGHT_ARROW',
         'hand': 'GLUT_CURSOR_INFO',
         'text': 'GLUT_CURSOR_TEXT',

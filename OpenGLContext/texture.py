@@ -1,7 +1,7 @@
 """Resource-manager for textures (with PIL conversions)"""
 
 from collections.abc import Callable, Iterable, Sequence
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 from OpenGL.GL import *
 from OpenGL.GLU import *
@@ -292,7 +292,7 @@ class Texture(object):
 class CubeTexture(Texture):
     """Texture class for use with Cube samplers"""
 
-    CUBE_NAME_MAP = {
+    CUBE_NAME_MAP: ClassVar[dict[str, int]] = {
         "-x": GL_TEXTURE_CUBE_MAP_NEGATIVE_X,
         "+x": GL_TEXTURE_CUBE_MAP_POSITIVE_X,
         "-y": GL_TEXTURE_CUBE_MAP_NEGATIVE_Y,

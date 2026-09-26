@@ -87,13 +87,13 @@ class TestContext( BaseContext ):
                 ),
             ),
         )
-    def OnImageSwitch( self, event=None ):
+    def OnImageSwitch( self, _event=None ):
         """Choose a new mapped texture"""
         self.currentImage = currentImage = self.currentImage+1
         newImage = images[currentImage%len(images)]
         self.shape.appearance.texture.url = [ newImage ]
         log.info("new image (loading): %s", newImage)
-    def OnSizeSwitch( self, event=None ):
+    def OnSizeSwitch( self, _event=None ):
         """Choose a new size"""
         self.currentSize = currentSize = self.currentSize+1
         newSize = sizes[currentSize%len(sizes)]

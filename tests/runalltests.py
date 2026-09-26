@@ -87,7 +87,7 @@ row_template = """<tr class="%(success)s">
 
 
 def main(scripts):
-    date = datetime.datetime.now().isoformat()
+    date = datetime.datetime.now().astimezone().isoformat()
     failures = []
     skips = []
     rows = []

@@ -196,7 +196,7 @@ class TestContext( BaseContext ):
         )
             
     multiplier = 1.0
-    def OnIdle( self, event=None ):
+    def OnIdle( self, _event=None ):
         self.multiplier = (self.multiplier * 1.00001)
         for name in ('t1','t2','t3'):
             t1 = self.sg.getDEF( name )

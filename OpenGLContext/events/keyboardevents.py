@@ -111,6 +111,7 @@ class KeyboardEventManager (eventmanager.EventManager):
             as being down.
 
         state -- key state (0 = up, 1 = down)
+        modifiers -- (shift, control, alt) as a tuple of booleans.
         function -- function taking a single argument (a KeyboardEvent)
             or None to deregister the callback.
 

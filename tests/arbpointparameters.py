@@ -77,7 +77,7 @@ class TestContext(BaseContext):
         self.coordinate.point = points
         self.color.color = colors
 
-    def OnDisableExtension(self, event):
+    def OnDisableExtension(self, _event):
         if self.usingExtension:
             self.geometry.attenuation = (1, 0, 0)
             self.usingExtension = False

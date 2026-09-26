@@ -21,7 +21,7 @@ and drive it from the application's own ``mainloop`` by calling
 import logging
 import tkinter
 from collections.abc import Hashable
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 from OpenGLContext.context import Context
 from OpenGLContext.contextdefinition import ContextDefinition
@@ -232,7 +232,7 @@ class TkContext(tkevents.EventHandlerMixin, Context):
     #: names on every platform and maps them to the native pointer, so these
     #: are the spellings rather than a picture this has to carry. The X11 set
     #: has no "not allowed" pointer, so ``'no'`` is refused.
-    CURSOR_SHAPES = {
+    CURSOR_SHAPES: ClassVar[dict[str, str]] = {
         'arrow': '',
         'hand': 'hand2',
         'text': 'xterm',

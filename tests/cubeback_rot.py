@@ -72,7 +72,7 @@ class TestContext( BaseContext ):
         self.tr = self.sg.getDEF( 'TR' )
         print('press <b> to switch backgrounds')
         self.addEventHandler( "keypress", name="b", function = self.OnSwitch)
-    def OnSwitch( self, event ):
+    def OnSwitch( self, _event ):
         switch= self.getSceneGraph().getDEF( 'S' )
         if switch.whichChoice:
             switch.whichChoice = 0

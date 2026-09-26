@@ -9,7 +9,7 @@ import wx
 
 from io import BytesIO
 from collections.abc import Hashable
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 from wx import glcanvas
 #from wx.glcanvas import *
@@ -439,7 +439,7 @@ class wxContext(
             self.unsetCurrent()
 
     #: wx's stock cursors, by the name a control asks for.
-    CURSOR_SHAPES = {
+    CURSOR_SHAPES: ClassVar[dict[str, str]] = {
         'arrow': 'CURSOR_ARROW',
         'hand': 'CURSOR_HAND',
         'text': 'CURSOR_IBEAM',

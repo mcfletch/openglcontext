@@ -43,7 +43,7 @@ class TestContext( BaseContext ):
         self.time.start ()
         self.teapot = Teapot( size=.2)
         
-    def OnAdd( self, event ):
+    def OnAdd( self, _event ):
         """Add a new box to the scene"""
         children = self.sg.children[0].children
         if len(children) > 128:

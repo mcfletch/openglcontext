@@ -20,7 +20,7 @@ from OpenGLContext.events import pygameevents
 from OpenGLContext.looptrace import LoopTrace
 import logging
 from collections.abc import Hashable
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 log = logging.getLogger( __name__ )
 
 # SDL's window flags and GL attributes are reached through `pygame` rather than
@@ -248,7 +248,7 @@ class PygameContext(
     #: SDL's system cursors, by the name a control asks for. SDL carries a
     #: picture for each rather than reading a desktop theme, so every one of
     #: these is there on every platform pygame runs on.
-    CURSOR_SHAPES = {
+    CURSOR_SHAPES: ClassVar[dict[str, str]] = {
         'arrow': 'SYSTEM_CURSOR_ARROW',
         'hand': 'SYSTEM_CURSOR_HAND',
         'text': 'SYSTEM_CURSOR_IBEAM',

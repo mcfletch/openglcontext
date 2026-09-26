@@ -1,6 +1,6 @@
 """Module providing translation from GLUT callbacks to OpenGLContext events"""
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from OpenGLContext.events import mouseevents, keyboardevents, eventhandlermixin
 from OpenGLContext.events.mouseevents import WHEEL_BUTTONS
@@ -125,7 +125,7 @@ class GLUTXEvent(object):
             list
     """
 
-    CURRENTBUTTONSTATES: list[int] = [0, 0, 0]
+    CURRENTBUTTONSTATES: ClassVar[list[int]] = [0, 0, 0]
 
     def _getModifiers(self, modifierMask: int) -> tuple[bool, bool, bool]:
         """Get the 3-tuple of modifier booleans"""

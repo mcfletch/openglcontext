@@ -23,7 +23,7 @@ class TestContext( BaseContext ):
         if not glFenceSync:
             print('Do not have the ARB sync extension available')
             raise SystemExit( 1 )
-    def Render( self, mode=None ):
+    def Render( self, mode=None ):  # noqa: ARG002 Context.Render's signature
         fence = glFenceSync(GL_SYNC_GPU_COMMANDS_COMPLETE, 0)
         TIMEOUT = second_to_nano(.25)
         status = glClientWaitSync(fence, 0, TIMEOUT )

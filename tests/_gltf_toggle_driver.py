@@ -12,12 +12,15 @@ the avatar past the geometry), so the walk scenario opts in with ``--physics``.
 """
 import os
 import sys
+import time
 
 os.environ['OPENGLCONTEXT_BACKEND'] = 'glfw'
 
+import glfw
 import numpy as np
 
 from OpenGLContext.bin import view
+from OpenGLContext.events.keyboardevents import KeyboardEvent
 
 
 def _cam(ctx):
@@ -35,7 +38,6 @@ def main():
     # (and, in walk mode, enables physics) from OnIdle. Pump the idle handler until
     # the real scene has replaced the empty "Loading..." placeholder, so the
     # assertions below see the finished state rather than a load-in-progress.
-    import time
     deadline = time.time() + 30.0
     while not ctx.sceneLoaded and time.time() < deadline:
         ctx.OnIdle()
@@ -47,12 +49,12 @@ def main():
         assert ctx.physicsWalking, 'expected to start in walk mode'
         assert ctx.physicsPlatform is not None
         assert ctx.movementManager is None, 'Smooth manager should be unbound'
-        assert ctx._freeManager is not None
+        assert ctx._freeManager is not None  # noqa: SLF001 the walk mixin offers no public view of the free-fly manager it restores
 
         before = _cam(ctx)
         ctx.togglePhysics()                       # -> free-fly
         assert not ctx.physicsWalking
-        assert ctx.movementManager is ctx._freeManager, 'Smooth should be rebound'
+        assert ctx.movementManager is ctx._freeManager, 'Smooth should be rebound'  # noqa: SLF001 the walk mixin offers no public view of the free-fly manager it restores
         assert np.allclose(before, _cam(ctx), atol=1e-6), \
             ('camera jumped on toggle-off', before, _cam(ctx))
 
@@ -75,8 +77,6 @@ def main():
         assert ctx.physicsWalking, 'expected to start in walk mode'
         assert ctx.getNavigation() is not None, 'no navigation manager'
         assert ctx.getNavigationPlatform() is ctx.physicsPlatform
-
-        from OpenGLContext.events.keyboardevents import KeyboardEvent
 
         def key(name, state):
             event = KeyboardEvent()
@@ -114,7 +114,7 @@ def main():
         # --no-physics: starts free-fly, physics not built; 'g' builds it lazily
         assert not ctx.physicsWalking
         assert ctx.physicsPlatform is None
-        assert ctx.movementManager is ctx._freeManager
+        assert ctx.movementManager is ctx._freeManager  # noqa: SLF001 the walk mixin offers no public view of the free-fly manager it restores
 
         ctx.togglePhysics()                       # lazily builds + enables walk
         assert ctx.physicsWalking
@@ -123,9 +123,8 @@ def main():
 
         ctx.togglePhysics()                       # back to free-fly
         assert not ctx.physicsWalking
-        assert ctx.movementManager is ctx._freeManager
+        assert ctx.movementManager is ctx._freeManager  # noqa: SLF001 the walk mixin offers no public view of the free-fly manager it restores
 
-    import glfw
     if getattr(ctx, 'window', None):
         glfw.destroy_window(ctx.window)
     sys.stdout.write('TOGGLE_OK\n')

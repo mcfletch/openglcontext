@@ -18,6 +18,9 @@ from OpenGLContext.scenegraph.quadrics import Sphere
 from OpenGLContext.scenegraph import box
 import math
 import logging
+
+from OpenGLContext.scenegraph.teapot_nurbs import steps_for_level, tessellate_teapot
+
 log = logging.getLogger( 'shaderobjects' )
 
 STRIDE = 32  # 8 interleaved floats per vertex
@@ -141,9 +144,6 @@ class TestContext( BaseContext ):
 
     def teapotVertices( self ):
         """Teapot shell as a flat triangle list (texcoord, normal, position)."""
-        from OpenGLContext.scenegraph.teapot_nurbs import (
-            tessellate_teapot, steps_for_level,
-        )
         base, lid = tessellate_teapot(
             steps=steps_for_level( 0 ), interior=False,
         )

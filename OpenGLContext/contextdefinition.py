@@ -1,5 +1,5 @@
 """Definition of a Context's visual parameters"""
-from typing import Any
+from typing import Any, ClassVar
 
 from vrml import node, field
 
@@ -293,7 +293,7 @@ class ContextDefinition( node.Node ):
     #: when the window is made and cannot be changed for a running one, so
     #: neither is offered.
     #: See :mod:`OpenGLContext.ui.generate`.
-    UI_HINTS = {
+    UI_HINTS: ClassVar[dict[str, dict[str, Any]]] = {
         'shadows': {'label': 'Shadows'},
         'shadowsSoft': {'label': 'Soft shadows'},
         'shadowCascades': {'label': 'Shadow cascades', 'minimum': 0,

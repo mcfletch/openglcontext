@@ -12,13 +12,13 @@ from OpenGLContext.arrays import array
 class TestContext( BaseContext ):
     profile = 'compatibility'   # draws with the fixed-function pipeline
     useArrays = 0
-    colors = [(1,0,0),(0,0,.75)]
+    colors = ((1,0,0),(0,0,.75))
     def OnInit( self ):
         """Initialisation"""
         print("""Should see a 2x2 box in red on white""")
         self.addEventHandler( "keypress", name="a", function = self.OnUseArrays)
         print("""  Press "a" to switch to using arrays""")
-    def OnUseArrays( self, event=None ):
+    def OnUseArrays( self, _event=None ):
         """Toggle the use of Numeric arrays"""
         self.useArrays = not self.useArrays
         self.color = self.useArrays

@@ -54,13 +54,13 @@ class TestContext( BaseContext ):
         """The cap is generated with GLU tessellation routines...
         """
         gluTessCallback(self.tess, GLU_TESS_BEGIN, glBegin)
-        def test( t, polyData=None ):
+        def test( t, _polyData=None ):
             glNormal( 0,0, -1 )
             glColor3f( t[0]/2.0,t[1]/2.0,t[2]/2.0 )
             return glVertex3f( t[0],t[1],t[2])
         gluTessCallback(self.tess, GLU_TESS_VERTEX_DATA, test)
         gluTessCallback(self.tess, GLU_TESS_END, glEnd)
-        def combine( points, vertices, weights ):
+        def combine( points, _vertices, _weights ):
             #print 'combine called', points, vertices, weights
             return points
         gluTessCallback(self.tess, GLU_TESS_COMBINE, combine)

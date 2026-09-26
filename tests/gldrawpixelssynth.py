@@ -13,6 +13,8 @@ from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
 
+import numpy
+
 class TestContext( BaseContext ):
     profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self, ):
@@ -22,7 +24,6 @@ class TestContext( BaseContext ):
     Note: bitmap is drawn in screen coordinates, so does not
     respond to moving around or rescaling the window as would
     a piece of geometry.""")
-        import numpy
         width,height = 200,50
         self.width, self.height, self.data = width,height,numpy.arange(
             0, 1.0, 1.0/(width*height*3),

@@ -3,7 +3,7 @@ import math
 import weakref
 import logging
 from collections.abc import Sequence
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 from OpenGL.GL import *
 from OpenGLContext.arrays import zeros, array, dot, ArrayType
@@ -262,7 +262,7 @@ class AtlasManager( object ):
         self.components: dict[int, list[Atlas]] = {}
         self.max_size = max_size
         self.max_child_size = max_child_size
-    FORMAT_MAPPING = {
+    FORMAT_MAPPING: ClassVar[dict[str, tuple[int, int]]] = {
         'L':(1,GL_LUMINANCE), 
         'LA':(2,GL_LUMINANCE_ALPHA),
         'RGB':(3,GL_RGB),

@@ -12,6 +12,7 @@ RGB image).
 from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGL.GL import *
+from PIL import Image
 
 class TestContext( BaseContext ):
     profile = 'compatibility'   # draws with the fixed-function pipeline
@@ -23,11 +24,7 @@ class TestContext( BaseContext ):
         the texture to an ID then loading the texture into memory.
         This didn't seem clear to me somehow in the tutorial.
         """
-        try:
-            from PIL.Image import open
-        except ImportError:
-            from Image import open
-        im = open(imageName)
+        im = Image.open(imageName)
         try:
             ix, iy, image = im.size[0], im.size[1], im.tobytes("raw", "RGBA", 0, -1)
         except SystemError:

@@ -68,7 +68,7 @@ class TestContext( BaseContext ):
             self.shader, 'Vertex_color'
         )
         self.vao = glGenVertexArrays( 1 )
-    def OnIdle( self, event=None ):
+    def OnIdle( self, _event=None ):
         self.triggerRedraw(1)
     def Render( self, mode ):
         """Render the geometry for the scene."""

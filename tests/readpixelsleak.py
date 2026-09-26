@@ -8,6 +8,7 @@ from OpenGLContext.events import systemtime
 from OpenGL.GL import *
 import os
 import sys
+from PIL import Image
 
 class TestContext( BaseContext ):
     profile = 'compatibility'   # draws with the fixed-function pipeline
@@ -46,14 +47,9 @@ class TestContext( BaseContext ):
         self.addEventHandler( 'keypress', name='d', function=self.OnViewUB )
         self.addEventHandler( 'keypress', name='t', function=self.OnUseStringDraw )
         self.addEventHandler( 'keypress', name='r', function=self.OnReverseShape )
-    def OnSave( self, event):
+    def OnSave( self, _event):
         self.SaveTo( 'test.jpg' )
     def SaveTo( self, filename, format="JPEG" ):
-        try:
-            from PIL import Image # get PIL's functionality...
-        except ImportError:
-            # old style?
-            import Image
         width, height = self.getViewPort()
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
         data = glReadPixelsub(0, 0, width, height, GL_RGB, outputType=None)
@@ -67,11 +63,6 @@ class TestContext( BaseContext ):
         print('Saved image to %s'% (os.path.abspath( filename)))
         return image
     def SaveToUB( self ):
-        try:
-            from PIL import Image # get PIL's functionality...
-        except ImportError:
-            # old style?
-            import Image
         width, height = self.getViewPort()
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
         data = glReadPixelsub(0, 0, width, height, GL_RGB, outputType=None)
@@ -87,14 +78,14 @@ class TestContext( BaseContext ):
         assert data.tobytes() == string, """Data stored differs in format"""
         self.capturedImage = data
         self.capturedSize = (width,height,3)
-    def OnViewUB( self, event ):
+    def OnViewUB( self, _event ):
         """Trigger viewing of saved data-set"""
         self.SaveToUB( )
         self.drawCapture = not self.drawCapture
-    def OnUseStringDraw( self, event ):
+    def OnUseStringDraw( self, _event ):
         """Trigger use of string drawing for display of captured"""
         self.useStringDraw = not self.useStringDraw
-    def OnReverseShape( self, event ):
+    def OnReverseShape( self, _event ):
         self.reverseShape = not self.reverseShape
 
 if __name__ == "__main__":

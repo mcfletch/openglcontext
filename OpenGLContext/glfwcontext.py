@@ -20,7 +20,7 @@ from OpenGLContext.looptrace import LoopTrace
 import logging
 import warnings
 from collections.abc import Hashable
-from typing import Any, Optional
+from typing import Any, ClassVar, Optional
 
 log = logging.getLogger(__name__)
 
@@ -365,7 +365,7 @@ class GLFWContext(
     #: the older ones: asking for `hand2` there fails, and `default` shapes
     #: answer. The shapes themselves are made on first use, since a cursor is
     #: a GLFW object and the window has to exist first.
-    CURSOR_SHAPES = {
+    CURSOR_SHAPES: ClassVar[dict[str, tuple[str, ...]]] = {
         'arrow': ('ARROW_CURSOR',),
         'hand': ('POINTING_HAND_CURSOR', 'HAND_CURSOR'),
         'text': ('IBEAM_CURSOR',),

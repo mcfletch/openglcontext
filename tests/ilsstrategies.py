@@ -18,7 +18,7 @@ class TestContext( BaseContext ):
         self.lengths = tile( array([7],dtype='i'), 50000 )
         if self.USE_VBO:
             self.geometry = vbo.VBO( self.geometry )
-    def Render( self, mode=None, **named ):
+    def Render( self, mode=None, **_named ):
         if mode.visible:
             self.render_geom()
     def render_geom( self ):

@@ -53,7 +53,7 @@ class TestContext( BaseContext ):
         self.addEventHandler(
             'keypress', name = 's', function = self.OnUseStrings
         )
-    def OnUseStrings( self, event ):
+    def OnUseStrings( self, _event ):
         self.useArrays = not self.useArrays
         print('Use arrays?', bool( self.useArrays ))
         self.triggerRedraw(1)

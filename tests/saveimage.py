@@ -13,6 +13,7 @@ from OpenGLContext.scenegraph import imagetexture
 from OpenGLContext.events import systemtime
 from OpenGL.GL import *
 import os
+from PIL import Image
 
 class TestContext( BaseContext ):
     # Requires compatibility profile for glTranslate, glRotate, drawCube, GL_DEPTH_SCALE
@@ -76,14 +77,9 @@ class TestContext( BaseContext ):
         print(self.getViewPlatform().frustum)
         print('Current depth scale', glGetDouble( GL_DEPTH_SCALE ))
         print('Current depth bias', glGetDouble( GL_DEPTH_BIAS ))
-    def OnSave( self, event=None):
+    def OnSave( self, _event=None):
         self.SaveTo( 'test.jpg' )
     def SaveTo( self, filename, format="JPEG" ):
-        try:
-            from PIL import Image # get PIL's functionality...
-        except ImportError:
-            # old style?
-            import Image
         if not len(self.capturedImage):
             self.OnCaptureColour()
         data = self.capturedImage
@@ -97,7 +93,7 @@ class TestContext( BaseContext ):
         image.save( filename, format )
         print('Saved image to %s'% (os.path.abspath( filename)))
         return image
-    def OnCaptureColour( self , event=None):
+    def OnCaptureColour( self , _event=None):
         width, height = self.getViewPort()
         glPixelStorei(GL_PACK_ALIGNMENT, 1)
         if self.typedFunction:
@@ -123,15 +119,15 @@ class TestContext( BaseContext ):
         if not len(self.capturedImage):
             self.OnCaptureColour( event )
         self.drawCapture = not self.drawCapture
-    def OnUseStringDraw( self, event ):
+    def OnUseStringDraw( self, _event ):
         """Trigger use of string drawing for display of captured"""
         self.useStringDraw = not self.useStringDraw
         print('Use string drawing:', self.useStringDraw)
-    def OnTypedFunction( self, event ):
+    def OnTypedFunction( self, _event ):
         """Use typed function for capture"""
         self.typedFunction = not self.typedFunction
         print('Use typed function:', self.typedFunction)
-    def OnReverseShape( self, event ):
+    def OnReverseShape( self, _event ):
         self.reverseShape = not self.reverseShape
         print('Reverse image shape:', self.reverseShape)
     
@@ -143,7 +139,7 @@ class TestContext( BaseContext ):
         elif event.name == 'b':
             return self.OnCaptureDepth( event, GL_BLUE )
     
-    def OnCaptureDepth( self, event, component = GL_DEPTH_COMPONENT ):
+    def OnCaptureDepth( self, _event, component = GL_DEPTH_COMPONENT ):
         """Trigger saving of depth buffer for display"""
         width, height = self.getViewPort()
         glPixelStorei(GL_PACK_ALIGNMENT, 1)

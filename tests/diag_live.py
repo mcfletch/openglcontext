@@ -43,11 +43,11 @@ def render(self, context, mode):
     return r
 F.FlatPass.Render = render
 
-o_ec = SM.ShadowMapMixin._effectiveCascades
+o_ec = SM.ShadowMapMixin._effectiveCascades  # noqa: SLF001 counts the cascades a frame draws; the shadow pass does not report them
 def ec(self):
     win['casc'] = o_ec(self)
     return win['casc']
-SM.ShadowMapMixin._effectiveCascades = ec
+SM.ShadowMapMixin._effectiveCascades = ec  # noqa: SLF001 counts the cascades a frame draws; the shadow pass does not report them
 
 Ctx = view.TestContext
 o_swap = Ctx.SwapBuffers

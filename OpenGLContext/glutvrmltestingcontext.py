@@ -15,7 +15,7 @@ class VRMLContext(
     """GLUT-specific VRML97-aware Testing Context"""
     #: What each menu entry loads, indexed by the entry's own value.  Per
     #: instance, since it is built with the menus and indexed by them.
-    worldPaths: list[str] = []
+    worldPaths: list[str]
     def createMenus( self ) -> Any:
         """Create pop-up menus for the VRML97 context"""
         # get the list of all VRML97 files in our sub-directory
