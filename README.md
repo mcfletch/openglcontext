@@ -221,8 +221,8 @@ needs changing. Everything else here is additive.
 - One viewer, `oglc-view`, for glTF, VRML97, OBJ and 3D Tiles: format is
   chosen from the source by a registered `SceneAdapter`, so a third party adds a
   format without touching the viewer. It carries a launch menu, a model library,
-  and settings and controls screens. `oglc-vrml`, `oglc-gltf` and `oglc-tiles`
-  are deprecated aliases for it. `docs/viewer.rst`.
+  and settings and controls screens. `oglc-vrml`
+  is a deprecated alias for it. `docs/viewer.rst`.
 
 - An overlay UI (`ui/`) - panels, widgets, layout and a skin, drawn in one
   batched call, with a settings screen generated from a node's own fields, a

@@ -108,12 +108,10 @@ class TestStartingTheViewer:
 
 
 class TestTheOldCommandNames:
-    """``oglc-gltf`` and ``oglc-vrml`` keep working, and say what to type now."""
+    """``oglc-vrml`` keeps working, and says what to type now."""
 
     @pytest.mark.parametrize('module, source', [
-        ('OpenGLContext.bin.gltf_view', GLTF_MODEL),
         ('OpenGLContext.bin.vrml_view', VRML_WORLD),
-        ('OpenGLContext.bin.tiles_view', VRML_WORLD),
     ])
     def test_an_alias_runs_the_one_viewer(self, module, source, monkeypatch, capsys):
         alias = importlib.import_module(module)

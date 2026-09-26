@@ -209,8 +209,8 @@ of the file it writes. See :ref:`Capturing a frame <capture>`.
 Deprecated command names
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-``oglc-gltf``, ``oglc-vrml`` and ``oglc-tiles`` are deprecated aliases. Each
-prints a notice and runs ``oglc-view`` with the same options.
+``oglc-vrml`` is a deprecated alias. It prints a notice and runs ``oglc-view``
+with the same options.
 
 ``oglc-vrml`` does not accept ``--shaders`` or ``--no-shaders``. The viewer
 always renders through the core-profile PBR pass. To render a world with the

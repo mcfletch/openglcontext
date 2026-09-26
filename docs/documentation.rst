@@ -150,8 +150,7 @@ Installing the package puts these commands on your path:
 
 .. rst-class:: technical
 
-``oglc-gltf``, ``oglc-vrml`` and ``oglc-tiles`` are deprecated aliases for
-``oglc-view``. Each prints a notice and runs ``oglc-view``. Use ``oglc-view``
+``oglc-vrml`` is a deprecated alias for ``oglc-view``. Use ``oglc-view``
 in new scripts.
 
 The documentation pages
