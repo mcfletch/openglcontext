@@ -27,7 +27,10 @@ from OpenGL.GL import (
     glReadPixels,
 )
 
-from OpenGLContext import context as contextmodule, contextdefinition, plugins, wglcontext
+from OpenGLContext import (
+    context as contextmodule, contextdefinition, plugins, wglcontext, windowsystem,
+)
+from OpenGLContext.windowsystem.wgl import WGLWindowSystem
 from OpenGLContext.events import synthetic
 from OpenGLContext.video.recorder import RecordingMixin
 from OpenGLContext.viewer.capture import SettleCaptureMixin
@@ -187,7 +190,8 @@ class TestOffscreenRendering:
 
     def test_the_surface_is_the_size_that_was_asked_for(self, renderer):
         assert tuple(int(value) for value in renderer.contextDefinition.size) == (64, 48)
-        assert (renderer.surface.width, renderer.surface.height) == (64, 48)
+        surface = renderer.windowsystem.window
+        assert (surface.width, surface.height) == (64, 48)
 
     def test_the_viewport_is_the_size_that_was_asked_for(self, renderer):
         assert renderer.getViewPort() == (64, 48)
@@ -196,7 +200,7 @@ class TestOffscreenRendering:
         """A caller that closes, and the fixture closing again, leave it closed."""
         renderer.close()
         renderer.close()
-        assert renderer.surface is None
+        assert renderer.windowsystem.window is None
 
     def test_it_works_as_a_context_manager(self):
         # Built here rather than through `renderer`, because what is under test
@@ -206,8 +210,8 @@ class TestOffscreenRendering:
         _needs_pbuffers()
         opened = wglcontext.WGLContext(size=(16, 16))
         with opened as context:
-            assert context.surface is not None
-        assert context.surface is None
+            assert context.windowsystem.window is not None
+        assert context.windowsystem.window is None
 
 
 @windows_only
@@ -450,6 +454,7 @@ class TestFinishingAFrame:
         flushed = []
         monkeypatch.setattr(gl, 'glFlush', lambda: flushed.append(True))
         instance = wglcontext.WGLContext.__new__(wglcontext.WGLContext)
+        instance.windowsystem = WGLWindowSystem(instance)
         instance.SwapBuffers()
         assert flushed == [True]
 
@@ -482,10 +487,20 @@ class TestAFailedConstructionSaysWhatIsMissing:
         assert isinstance(missing, tuple)
 
 
-class TestItIsRegisteredAsABackend:
+class TestItIsRegisteredAsAWindowSystem:
     """``OPENGLCONTEXT_BACKEND=wgl`` has to reach it, on every platform: the
     registry is what a name is looked up in, and a name absent from it is a
-    RuntimeError naming the backends that are there."""
+    RuntimeError naming the window systems that are there."""
+
+    def test_the_window_system_is_registered(self):
+        assert 'wgl' in windowsystem.registered()
+        assert windowsystem.load('wgl') is WGLWindowSystem
+
+    def test_offscreen_names_it_on_windows(self):
+        assert windowsystem.offscreenName('win32') == 'wgl'
+
+    def test_the_context_class_opens_on_it(self):
+        assert wglcontext.WGLContext.windowSystemName == 'wgl'
 
     def test_the_context_is_registered(self):
         assert plugins.Context.match('wgl').name == 'wgl'

@@ -405,7 +405,7 @@ class TestWhichPlatformsRenderWithoutAWindow:
         and reads as one rather than as a machine without EGL."""
         pytest.importorskip('OpenGL.EGL')
         monkeypatch.setattr(glcontext, 'offscreen_backend', lambda: 'egl')
-        monkeypatch.setitem(sys.modules, 'OpenGLContext.eglcontext', None)
+        monkeypatch.setitem(sys.modules, 'OpenGLContext.windowsystem.egl', None)
         with pytest.raises(ImportError) as raised:
             with glcontext.offscreen_window('nope'):
                 pass                                   # pragma: no cover - never runs

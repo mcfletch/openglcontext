@@ -9,7 +9,7 @@ from OpenGLContext.events.inputstate import InputState
 from OpenGLContext.multiview.mixin import MultiViewMixin
 from OpenGLContext.multiview.views import ViewLayout
 from OpenGLContext.ui.metrics import FontMetrics
-from OpenGLContext.ui.overlay import OverlayMixin
+from OpenGLContext.ui.overlay import OverlayStackMixin
 from OpenGLContext.passes import viewpointbinding
 from OpenGLContext.passes.flatcore import FlatPass
 from OpenGLContext.scenegraph.basenodes import sceneGraph, Viewpoint
@@ -69,7 +69,7 @@ class _World:
     def getInputState(self):
         return self.inputState
 
-    def screenTrees(self, _metrics, now=None):  # noqa: ARG002 the signature of OverlayMixin.screenTrees
+    def screenTrees(self, _metrics, now=None):  # noqa: ARG002 the signature of OverlayStackMixin.screenTrees
         return []
 
     def overlayMetrics(self):
@@ -83,7 +83,7 @@ class _World:
         return event
 
 
-class _Window(OverlayMixin, MultiViewMixin, _World):
+class _Window(OverlayStackMixin, MultiViewMixin, _World):
     """The two mix-ins over a stand-in world, in the order they are used in."""
 
 

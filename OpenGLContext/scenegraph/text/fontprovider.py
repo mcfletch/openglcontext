@@ -219,7 +219,19 @@ class TTFFontProvider(FontProvider):
 
     @classmethod
     def getTTFRegistry(cls) -> Any:
-        """Set the TTF registry for the class (global if called on TTFFontProvider)"""
+        """The TTF registry the class finds fonts in, loaded on first use
+
+        Where none has been set, the process's own registry is loaded -- from
+        the cache in the user's application-data directory, or by scanning
+        the system's fonts (see
+        :meth:`OpenGLContext.contextconfig.ContextConfigMixin.getTTFFiles`) --
+        so a font built directly finds its file as one built for a ``Text``
+        node does.
+        """
+        if cls.TTFRegistry is None:
+            from OpenGLContext.contextconfig import ContextConfigMixin
+
+            ContextConfigMixin.getTTFFiles()
         return cls.TTFRegistry
 
 

@@ -9,7 +9,8 @@ An OpenGL context is created with one of two profiles. The **core** profile
 draws with GLSL shaders on an OpenGL 3.3 or later context. The
 **compatibility** profile also offers the fixed-function pipeline:
 ``glBegin``, the matrix stack, display lists, ``glMaterial`` and ``glLight``.
-OpenGLContext renders a scene in either, and every backend can create both.
+OpenGLContext renders a scene in either, and every window system can create
+both.
 
 The core profile
 ----------------
@@ -75,7 +76,8 @@ class. To set more than the profile, declare the whole definition:
            multisampleSamples = 4,
        )
 
-Every backend reads either declaration before it creates the window. The
+The context reads either declaration before its window system creates the
+window. The
 profile, the version and the buffer formats are window-creation parameters and
 cannot be changed afterwards. A definition passed to the constructor takes
 precedence over both. Each context gets its own copy of the class's

@@ -2,14 +2,14 @@
 '''Demonstrate capture of keyboard and keypress events
 '''
 from typing import Any
-from OpenGLContext import testingcontext, vrmlcontext
+from OpenGLContext import testingcontext
 #: The backend is chosen at run time, so the class this subclasses is not
 #: one a checker can name -- which is what Any says here.
 BaseContext: Any = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
 
-class TestContext( vrmlcontext.VRMLContext, BaseContext ):
+class TestContext( BaseContext ):
     def OnInit( self ) -> None:
         """Scene set up and initial processing"""
         self.addEventHandler(

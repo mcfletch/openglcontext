@@ -72,11 +72,10 @@ class TestMovesAreDeliveredWhileCaptured:
     """The whole point: the pass must not filter away what a drag is waiting for."""
 
     def _context(self):
-        class _Probe(_Host):
-            getEventManager = EventHandlerMixin.getEventManager
-            hasMouseMoveHandlers = Context.hasMouseMoveHandlers
-        _Probe.EventManagerClasses = InteractiveContext.EventManagerClasses
-        return _Probe()
+        """A real Context's event managers, with no window and no scene"""
+        context = Context.__new__(Context)
+        context.initializeEventManagers()
+        return context
 
     def test_nobody_listening_means_moves_can_be_dropped(self):
         assert self._context().hasMouseMoveHandlers() is False

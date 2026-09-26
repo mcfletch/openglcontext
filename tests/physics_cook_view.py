@@ -13,10 +13,10 @@ Keys:
     c   cycle cooking strategy
     r   reset
 '''
-import time
 import numpy as np
 
 from OpenGLContext import testingcontext
+from OpenGLContext.events import systemtime
 BaseContext = testingcontext.getInteractive()
 
 from OpenGLContext.scenegraph import basenodes
@@ -52,7 +52,7 @@ class TestContext(BaseContext):
         print(__doc__)
         self.addEventHandler('keypress', name='c', function=self.on_cycle)
         self.addEventHandler('keypress', name='r', function=self.on_reset)
-        self._last = time.time()
+        self._last = systemtime.systemTime()
 
     def on_reset(self, event):
         self.build()
@@ -78,7 +78,7 @@ class TestContext(BaseContext):
         self.build()
 
     def OnIdle(self, *args):
-        now = time.time()
+        now = systemtime.systemTime()
         active = self.scene.advance(min(now - self._last, 0.05))
         self._last = now
         if active:

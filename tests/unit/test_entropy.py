@@ -17,9 +17,9 @@ import pytest
 
 from OpenGLContext import entropy
 from OpenGLContext.context import Context
-from OpenGLContext.interactivecontext import InteractiveContext
 from OpenGLContext.nav.navmesh import NavMesh
 from OpenGLContext.scenegraph.particles import ParticlePool
+from OpenGLContext.windowsystem.base import WindowSystem
 
 
 @pytest.fixture(autouse=True)
@@ -241,16 +241,40 @@ class TestWhenTheSeedTakesEffect:
     and a game builds its world in ``OnInit``."""
 
     def _probe(self):
-        class Probe(InteractiveContext, Context):
+        class NoWindow(WindowSystem):
+            """A window system that opens nothing and says it is ready"""
+
+            def open(self, definition, parent=None):
+                return True
+
+            def release(self):
+                pass
+
+            def makeCurrent(self):
+                return None
+
+            def swap(self):
+                pass
+
+            def drawableSize(self):
+                return (64, 48)
+
+        class Probe(Context):
             """A whole context short of the window: everything
-            ``Context.__init__`` does, with the one step that needs GL --
-            binding the window and calling ``OnInit`` -- standing in for the
-            application."""
+            ``Context.__init__`` does, with the steps that need GL -- binding
+            the window, calling ``OnInit`` and setting the viewport --
+            standing in for the application."""
+
+            def createWindowSystem(self, definition):
+                return NoWindow(self)
 
             def DoInit(self):
                 # Where an application's OnInit would be, drawing the numbers
                 # its world is made of.
                 self.world = [random.random(), float(np.random.random())]
+
+            def ViewPort(self, width, height):
+                self.viewportDimensions = width, height
 
         return Probe
 

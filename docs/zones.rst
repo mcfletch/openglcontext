@@ -309,10 +309,11 @@ prefiltered mips, in linear light.
 
 .. code-block:: python
 
-   from OpenGLContext.eglcontext import EGLContext
+   from OpenGLContext.context import Context
    from OpenGLContext.passes.zonebake import bake_zone_lights
 
-   class Baker(EGLContext):
+   class Baker(Context):
+       windowSystemName = 'offscreen'
        renderer = 'pbr'
        def OnInit(self):
            self.sg = sceneGraph(children=[sky, sun, world])

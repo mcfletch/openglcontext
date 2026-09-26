@@ -1,8 +1,8 @@
 #! /usr/bin/env python
-'''Choose Context class for use as default testing context
+'''Choose the window system a context opens on when nothing names one
 '''
 from typing import Any
-from OpenGLContext import testingcontext
+from OpenGLContext import testingcontext, windowsystem
 #: The backend is chosen at run time, so the class this subclasses is not
 #: one a checker can name -- which is what Any says here.
 BaseContext: Any = testingcontext.getInteractive()
@@ -14,11 +14,8 @@ from gettext import gettext as _
 class ChoiceContext( BaseContext ):
     currentChoice = 0
     def loadChoices( self ) -> list[tuple[int, str]]:
-        """See which contexts are available"""
-        choices = [
-            e.name for e in self.getContextTypes()
-        ]
-        return list(enumerate(choices))
+        """The registered window systems, numbered"""
+        return list(enumerate(windowsystem.registered()))
     def nameForContextType( self, index: int ) -> str:
         """The backend name choice *index* stands for, or '' where there is none"""
         if index > -1:

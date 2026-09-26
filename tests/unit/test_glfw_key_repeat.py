@@ -1,11 +1,12 @@
-"""Software key-repeat for the GLFW backend.
+"""Software key-repeat for the GLFW window system.
 
 GLFW's Wayland platform (in a nested/container compositor) often never delivers
 glfw.REPEAT, so holding a key would stop after the initial press -- breaking
-camera navigation. EventHandlerMixin synthesises repeats from PRESS..RELEASE and
+camera navigation. The context's HeldKeyMixin synthesises repeats from PRESS..RELEASE and
 disables that the moment a native repeat proves the platform delivers its own.
 
-These tests drive the dispatch stack headlessly (no GL context) with
+These tests drive a real context's event managers through a
+GLFWWindowSystem headlessly (no window, no GL context) with
 delay/interval set to 0 so each pumpKeyRepeats() deterministically emits one
 repeat -- no real-time sleeping.
 """
@@ -14,27 +15,24 @@ import inspect
 import glfw
 import pytest
 
-from OpenGLContext.events import glfwevents, keyboardevents
+from OpenGLContext.context import Context
+from OpenGLContext.events import glfwevents
+from OpenGLContext.windowsystem.glfw import GLFWWindowSystem
 
 
-class _Ctx(glfwevents.EventHandlerMixin):
-    currentPass = None
-    drawing = False
-    window = None
-    keyRepeatDelay = 0.0
-    keyRepeatInterval = 0.0
-
-    def __init__(self):
-        self._EventHandlerMixin__managers = {}
-        self.addEventManager('keyboard', keyboardevents.KeyboardEventManager())
-
-    def getViewPort(self):
-        return (100, 100)
+def _windowlessContext():
+    """A real Context's event machinery on a GLFW window system with no window"""
+    c = Context.__new__(Context)
+    c.initializeEventManagers()
+    c.windowsystem = GLFWWindowSystem(c)
+    c.keyRepeatDelay = 0.0
+    c.keyRepeatInterval = 0.0
+    return c
 
 
 @pytest.fixture
 def ctx():
-    c = _Ctx()
+    c = _windowlessContext()
     counts = {'down': 0, 'up': 0}
     # Held strongly: pydispatch connects handlers with weak references.
     handlers = [
@@ -53,11 +51,11 @@ def ctx():
 
 
 def _press(c):
-    c.glfwOnKey(None, glfw.KEY_RIGHT, 0, glfw.PRESS, 0)
+    c.windowsystem.onKey(None, glfw.KEY_RIGHT, 0, glfw.PRESS, 0)
 
 
 def _release(c):
-    c.glfwOnKey(None, glfw.KEY_RIGHT, 0, glfw.RELEASE, 0)
+    c.windowsystem.onKey(None, glfw.KEY_RIGHT, 0, glfw.RELEASE, 0)
 
 
 def test_press_emits_key_down(ctx):
@@ -87,7 +85,7 @@ def test_release_stops_repeat(ctx):
 
 def test_native_repeat_disables_software_repeat(ctx):
     _press(ctx)
-    ctx.glfwOnKey(None, glfw.KEY_RIGHT, 0, glfw.REPEAT, 0)  # native repeat
+    ctx.windowsystem.onKey(None, glfw.KEY_RIGHT, 0, glfw.REPEAT, 0)  # native repeat
     assert ctx._nativeRepeat is True  # noqa: SLF001 whether the mixin has seen the platform's own repeat is its internal switch
     down_before = ctx.counts['down']
     for _ in range(5):
@@ -144,7 +142,7 @@ class TestSpecialKeysAreNotCharacters:
     """Where a function key can be bound, and where it cannot.
 
     GLFW reports character input and key transitions through different
-    callbacks: ``glfwOnCharacter`` produces the ``keypress`` events, and a
+    callbacks: ``GLFWWindowSystem.onCharacter`` produces the ``keypress`` events, and a
     function key produces no character at all.  So a handler registered as
     ``addEventHandler('keypress', name='<F10>', ...)`` is silently dead -- the
     binding is accepted and never fires.  Special keys have to be bound on
@@ -156,15 +154,17 @@ class TestSpecialKeysAreNotCharacters:
 
     def test_a_function_key_produces_a_keyboard_event(self):
 
-        class Recorder(glfwevents.EventHandlerMixin):
+        class Recorder(Context):
             def __init__(self):
                 self.events = []
+                self.initializeEventManagers()
+                self.windowsystem = GLFWWindowSystem(self)
 
             def ProcessEvent(self, event):
                 self.events.append(event)
 
         recorder = Recorder()
-        recorder.glfwOnKey(None, glfw.KEY_F10, 0, glfw.PRESS, 0)
+        recorder.windowsystem.onKey(None, glfw.KEY_F10, 0, glfw.PRESS, 0)
         assert [(e.type, e.name, e.state) for e in recorder.events] == [
             ('keyboard', '<F10>', 1)]
 

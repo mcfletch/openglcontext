@@ -1,11 +1,10 @@
-"""VRML97 context for GLFW"""
-from OpenGLContext import glfwinteractivecontext
-from OpenGLContext import vrmlcontext
+"""The GLFW window system's Context, under the name ``VRMLContext``
 
+Every Context has the event managers, the camera and the scene loading, so
+this name is :class:`~OpenGLContext.glfwcontext.GLFWContext`.
+"""
+from OpenGLContext.glfwcontext import GLFWContext
 
-class VRMLContext(
-    vrmlcontext.VRMLContext,
-    glfwinteractivecontext.GLFWInteractiveContext
-):
-    """GLFW-specific VRML97-aware Testing Context"""
-    pass
+VRMLContext = GLFWContext
+
+__all__ = ('VRMLContext',)

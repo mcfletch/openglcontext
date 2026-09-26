@@ -1,25 +1,10 @@
-"""Interactive context using the GLUT API (provides navigation support)"""
-from typing import Any
+"""The GLUT window system's Context, under the name ``GLUTInteractiveContext``
 
-from OpenGLContext import interactivecontext, glutcontext, context
-from OpenGLContext.move import viewplatformmixin
-from OpenGL.GLUT import *
+Every Context has the event managers, the camera and the scene loading, so
+this name is :class:`~OpenGLContext.glutcontext.GLUTContext`.
+"""
+from OpenGLContext.glutcontext import GLUTContext
 
-class GLUTInteractiveContext (
-    viewplatformmixin.ViewPlatformMixin,
-    interactivecontext.InteractiveContext,
-    glutcontext.GLUTContext,
-):
-    '''GLUT context providing camera, mouse and keyboard interaction '''
-        
-    
-if __name__ == "__main__":
-    from drawcube import drawCube
-    from OpenGL.GL import glTranslated
-    class TestRenderer(GLUTInteractiveContext):
-        def Render( self, mode: Any = None) -> None:
-            GLUTInteractiveContext.Render (self, mode)
-            glTranslated ( 2,0,-4)
-            drawCube()
-    # initialize GLUT windowing system
-    TestRenderer.ContextMainLoop( )
+GLUTInteractiveContext = GLUTContext
+
+__all__ = ('GLUTInteractiveContext',)

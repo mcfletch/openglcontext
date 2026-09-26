@@ -1,4 +1,4 @@
-"""Where a context's definition comes from, whichever backend opens the window.
+"""Where a context's definition comes from, whichever window system opens the window.
 
 A program says what kind of context it needs by declaring one on its class::
 
@@ -7,20 +7,18 @@ A program says what kind of context it needs by declaring one on its class::
 
 Twenty-odd tutorials in ``tests/`` say exactly that, because they draw with the
 fixed-function pipeline.  The declaration has to reach the window *before* it is
-created, which means each backend has to consult it in ``__init__`` rather than
-leaving it to :meth:`Context.setDefinition`, which the base class runs after the
-window already exists.
+created, so the context resolves it before its window system opens anything,
+and hands the window system the result.
 
-The resolution itself lives in one place so the backends cannot disagree about
-it: what a caller passed wins, then what the class declared, then a fresh
+The resolution itself lives in one place so the window systems cannot disagree
+about it: what a caller passed wins, then what the class declared, then a fresh
 definition built from the environment.
 """
-import inspect
-
 import pytest
 
 from OpenGLContext.context import Context
 from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.windowsystem.base import WindowSystem
 
 
 class Declared(Context):
@@ -77,19 +75,66 @@ def test_a_mapping_is_read_as_the_fields_to_set():
     assert resolved.profile == 'compatibility'
 
 
-@pytest.mark.parametrize('module_name, class_name', [
-    ('OpenGLContext.glfwcontext', 'GLFWContext'),
-    ('OpenGLContext.glutcontext', 'GLUTContext'),
-    ('OpenGLContext.pygamecontext', 'PygameContext'),
-    ('OpenGLContext.wxcontext', 'wxContext'),
+class _Opened(Exception):
+    """Ends construction at the moment the window would have been made."""
+
+
+class _Recording(WindowSystem):
+    """A window system that records the definition it is asked to open with."""
+
+    name = 'recording'
+    opened = None
+
+    def open(self, definition, parent=None):
+        _Recording.opened = definition
+        raise _Opened()
+
+    def release(self):
+        pass
+
+    def makeCurrent(self):
+        return None
+
+    def swap(self):
+        pass
+
+    def drawableSize(self):
+        return (1, 1)
+
+
+@pytest.mark.parametrize('module_name, class_name, system', [
+    ('OpenGLContext.context', 'Context', None),
+    ('OpenGLContext.glfwcontext', 'GLFWContext', 'glfw'),
+    ('OpenGLContext.glutcontext', 'GLUTContext', 'glut'),
+    ('OpenGLContext.pygamecontext', 'PygameContext', 'pygame'),
+    ('OpenGLContext.tkcontext', 'TkContext', 'tk'),
+    ('OpenGLContext.wxcontext', 'wxContext', 'wx'),
+    ('OpenGLContext.eglcontext', 'EGLContext', 'egl'),
 ])
-def test_every_backend_resolves_the_definition_the_same_way(module_name, class_name):
+def test_every_window_system_opens_the_resolved_definition(module_name, class_name, system):
     """The window is made from the resolved definition, not one built locally."""
     module = pytest.importorskip(module_name)
-    source = inspect.getsource(getattr(module, class_name).__init__)
-    assert 'resolveDefinition' in source, (
-        '%s builds its own definition instead of resolving the declared one'
-        % (class_name,))
+    handed = []
+
+    class DeclaredHere(getattr(module, class_name)):
+        contextDefinition = ContextDefinition(profile='compatibility', title='declared')
+
+        def createWindowSystem(self, definition):
+            handed.append(definition)
+            return _Recording(self)
+
+    _Recording.opened = None
+    with pytest.raises(_Opened):
+        DeclaredHere()
+    opened = _Recording.opened
+    assert len(handed) == 1 and handed[0] is opened, (
+        '%s opens its window from a definition other than the one it chose '
+        'the window system by' % (class_name,))
+    assert opened is not DeclaredHere.contextDefinition
+    assert opened.profile == 'compatibility'
+    assert opened.title == 'declared'
+    if system is not None:
+        assert opened.windowsystem == system
 
 
 class TestVersionFollowsTheProfileItWasAskedFor:

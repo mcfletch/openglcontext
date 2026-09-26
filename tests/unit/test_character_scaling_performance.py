@@ -22,6 +22,10 @@ from OpenGLContext.loaders.gltf import load_gltf, parse_gltf
 from OpenGLContext.testing.paths import tests_root
 from tests.helpers._crowd_asset import crowd_character_glb
 
+# Every case compares the wall-clock time of two workloads, so the run shares
+# the machine with nothing else: the `serial` pass.
+pytestmark = pytest.mark.serial
+
 HARNESS = os.path.join(str(tests_root(__file__)), 'helpers',
                        '_crowd_perf_harness.py')
 

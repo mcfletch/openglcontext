@@ -3,10 +3,11 @@
 import pytest
 
 from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.move.navigationdefinition import Navigation
 from OpenGLContext.move import modes as movemodes
 from OpenGLContext.ui import settings
 from OpenGLContext.ui.metrics import FontMetrics
-from OpenGLContext.ui.overlay import OverlayMixin
+from OpenGLContext.ui.overlay import OverlayStackMixin
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.widgets import Slider, Toggle
 from OpenGLContext.events.inputstate import InputState
@@ -43,7 +44,7 @@ class World:
         return event
 
 
-class Context(OverlayMixin, World):
+class Context(OverlayStackMixin, World):
     def overlayMetrics(self):
         return FontMetrics(8, 16, 2)
 
@@ -51,8 +52,8 @@ class Context(OverlayMixin, World):
 @pytest.fixture
 def context():
     return Context(ContextDefinition(
-        movementModes=[movemodes.WalkMode(name='walk'),
-                       movemodes.FPSMode(name='fps')]))
+        navigation=Navigation(modes=[movemodes.WalkMode(name='walk'),
+                                     movemodes.FPSMode(name='fps')])))
 
 
 @pytest.fixture
@@ -167,7 +168,7 @@ class TestMovementSubPage:
         page = context.overlays.top
         page.find('walkSpeed').write(9.0)
         page.find('apply').activate()
-        assert context.contextDefinition.movementModes[0].walkSpeed == 3.0
+        assert context.contextDefinition.navigation.movingModes()[0].walkSpeed == 3.0
 
     def test_applying_the_sub_page_then_the_screen_saves(self, screen, context):
         context.pushOverlay(screen)
@@ -176,7 +177,7 @@ class TestMovementSubPage:
         page.find('walkSpeed').write(9.0)
         page.find('apply').activate()
         screen.find('apply').activate()
-        assert context.contextDefinition.movementModes[0].walkSpeed == 9.0
+        assert context.contextDefinition.navigation.movingModes()[0].walkSpeed == 9.0
 
     def test_cancelling_the_screen_undoes_an_applied_sub_page(self, screen, context):
         """Cancel at the top must be honest about everything below it."""
@@ -186,7 +187,7 @@ class TestMovementSubPage:
         page.find('walkSpeed').write(9.0)
         page.find('apply').activate()
         screen.find('cancel').activate()
-        assert context.contextDefinition.movementModes[0].walkSpeed == 3.0
+        assert context.contextDefinition.navigation.movingModes()[0].walkSpeed == 3.0
 
     def test_cancelling_the_sub_page_changes_nothing(self, screen, context):
         context.pushOverlay(screen)
@@ -195,7 +196,7 @@ class TestMovementSubPage:
         page.find('walkSpeed').write(9.0)
         page.find('cancel').activate()
         screen.find('apply').activate()
-        assert context.contextDefinition.movementModes[0].walkSpeed == 3.0
+        assert context.contextDefinition.navigation.movingModes()[0].walkSpeed == 3.0
 
     def test_an_applied_sub_page_lights_the_screens_apply(self, screen, context):
         context.pushOverlay(screen)

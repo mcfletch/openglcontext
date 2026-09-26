@@ -20,6 +20,7 @@ import glfw
 import numpy as np
 
 from OpenGLContext.bin import view
+from OpenGLContext.move.navigationdefinition import Navigation
 from OpenGLContext.events.keyboardevents import KeyboardEvent
 
 
@@ -105,10 +106,10 @@ def main():
             ('released w kept moving', here, after)
 
         # The mode in force is published for anything watching it.
-        assert ctx.contextDefinition.movementMode is not None
-        assert ctx.contextDefinition.movementMode.name == 'walk'
+        assert ctx.contextDefinition.navigation.current is not None
+        assert ctx.contextDefinition.navigation.current.name == 'walk'
         ctx.togglePhysicsFly(None)
-        assert ctx.contextDefinition.movementMode.name == 'fly'
+        assert ctx.contextDefinition.navigation.current.name == 'fly'
         assert ctx.physicsPlatform.character.flying
     else:
         # --no-physics: starts free-fly, physics not built; 'g' builds it lazily

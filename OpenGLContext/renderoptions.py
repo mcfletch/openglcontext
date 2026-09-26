@@ -116,7 +116,7 @@ ENVIRONMENT: tuple[str, ...] = (
     'OPENGLCONTEXT_EGL_DEVICE',
     # The same question on Windows: accepting a pixel format that is not fully
     # accelerated can put a capture on a different renderer from the reference
-    # it is compared against.  See OpenGLContext.wglcontext.
+    # it is compared against.  See OpenGLContext.windowsystem.wgl.
     'OPENGLCONTEXT_WGL_ANY_ACCELERATION',
     # A session journal names one file for one session, so a child process
     # that inherited the name would overwrite its parent's; and a replay

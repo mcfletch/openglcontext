@@ -31,8 +31,8 @@ __all__ = ['ViewerScreensMixin']
 class ViewerScreensMixin(object):
     """Gives a viewer its menu, its library and the keys that raise them.
 
-    Requires :class:`~OpenGLContext.ui.overlay.OverlayMixin` on the context for
-    the panel stack, and the viewer's own ``viewerLibrary`` and ``openEntry``.
+    Needs the viewer's own ``viewerLibrary`` and ``openEntry`` beside it; the
+    panel stack is the context's own.
     """
 
     #: Keys the screens are on.  '' binds none, for an application that wants

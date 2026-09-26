@@ -19,7 +19,7 @@ glfw = pytest.importorskip("glfw")
 
 from OpenGLContext.ui.geometry import Rect
 from OpenGLContext.ui.layout import Column, Row
-from OpenGLContext.ui.overlay import OverlayMixin, OverlayStack
+from OpenGLContext.ui.overlay import OverlayStackMixin, OverlayStack
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.widgets import (
     Button, KeyCapture, Label, PRIMARY, Select, Separator, Slider, Spacer, TextField, Toggle,
@@ -294,7 +294,7 @@ def test_the_context_hook_lays_out_and_draws():
         def hasMouseMoveHandlers(self):
             return False
 
-    class Context(OverlayMixin, ScreenMixin, World):
+    class Context(OverlayStackMixin, ScreenMixin, World):
         pass
 
     glViewport(0, 0, WIDTH, HEIGHT)
@@ -313,7 +313,7 @@ def test_the_context_hook_lays_out_and_draws():
 
 @pytest.mark.usefixtures('gl_context')
 def test_the_hook_does_nothing_with_no_overlay():
-    class Context(OverlayMixin, ScreenMixin):
+    class Context(OverlayStackMixin, ScreenMixin):
         def getViewPort(self):
             return (WIDTH, HEIGHT)
 
@@ -374,7 +374,7 @@ class TestTheContextDrawsItsOwnOverlay:
     def context(self, gl_context):  # noqa: ARG002 requested so its GL context is current while this is built
         glViewport(0, 0, WIDTH, HEIGHT)
 
-        class Context(OverlayMixin, ScreenMixin):
+        class Context(OverlayStackMixin, ScreenMixin):
             contextDefinition = None
             captured = False
 

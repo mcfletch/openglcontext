@@ -112,7 +112,7 @@ class TestDraft:
 class TestTransientFields:
     """Fields a session must not treat as settings.
 
-    ``ContextDefinition.movementMode`` is *published* by the navigation manager
+    ``Navigation.current`` is *published* by the navigation manager
     -- which mode is in force right now -- rather than chosen by a player.  A
     draft that copied it would write a stale value back on Apply, and if the
     world had imposed a different kind of mode meanwhile it would replace the
@@ -151,8 +151,10 @@ class TestTransientFields:
         finally:
             del type(target).TRANSIENT_FIELDS
 
-    def test_the_context_definition_declares_the_mode_in_force_transient(self):
-        assert 'movementMode' in ContextDefinition.TRANSIENT_FIELDS
+    def test_the_navigation_declares_the_mode_in_force_transient(self):
+        from OpenGLContext.move.navigationdefinition import Navigation
+
+        assert 'current' in Navigation.TRANSIENT_FIELDS
 
 
 class TestChildSessions:

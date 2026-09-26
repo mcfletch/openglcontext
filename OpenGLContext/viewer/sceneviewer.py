@@ -54,7 +54,8 @@ from typing import (
 
 from vrml.protofunctions import getField
 
-from OpenGLContext import renderoptions, testingcontext
+from OpenGLContext import renderoptions
+from OpenGLContext.context import Context
 from OpenGLContext.scenegraph.light import DirectionalLight, Light, PointLight
 from OpenGLContext.scenegraph.scenegraph import SceneGraph
 from OpenGLContext.scenegraph.transform import Transform
@@ -65,11 +66,9 @@ from OpenGLContext.viewer import framing
 from OpenGLContext.viewer.adapters import (
     SceneAdapter, UnknownSourceType, adapter_for, adapter_named,
 )
-from OpenGLContext.ui.overlay import OverlayMixin
 from OpenGLContext.viewer.asyncscene import AsyncSceneMixin
 from OpenGLContext.video.recorder import RecordingMixin
 from OpenGLContext.viewer.capture import SettleCaptureMixin
-from OpenGLContext.multiview.mixin import MultiViewMixin
 from OpenGLContext.viewer.options import ViewerOptions
 from OpenGLContext.viewer.caption import CaptionMixin
 from OpenGLContext.viewer.screens import ViewerScreensMixin
@@ -137,14 +136,22 @@ if TYPE_CHECKING:
         have to be declared somewhere the mix-in can see. The movement two come
         from :class:`~OpenGLContext.move.physicswalk.PhysicsWalkMixin` and
         :class:`~OpenGLContext.move.viewplatformmixin.ViewPlatformMixin` in the
-        assembled context, the frame two from the context itself.
+        assembled context, the views from
+        :class:`~OpenGLContext.multiview.mixin.MultiViewMixin`, and the frame
+        two from the context itself.
         """
+
+        multiViewArrangement: str
+        movementManager: Any
+        def frameViews(self) -> bool: ...
 
         @classmethod
         def resolveDefinition(cls, definition: Any = None,
                               **named: Any) -> Any: ...
         def physicsAvatarScale(self, low: Any, high: Any) -> float: ...
         def setMovementManager(self, manager: Any) -> None: ...
+        def cycleMovementMode(self, event: Any = None) -> Any: ...
+        physicsPlatform: Any
         def setupCallbacks(self) -> None: ...
         def presentFrame(self) -> Any: ...
 else:
@@ -153,14 +160,15 @@ else:
 
 class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
                        SettleCaptureMixin, RecordingMixin,
-                       ViewerScreensMixin, MultiViewMixin, _Host):
+                       ViewerScreensMixin, _Host):
     """Showing one scene: assembly, cameras, animation and the caption.
 
-    Four views of it as well as one: ``MultiViewMixin`` puts the plan and two
-    elevations beside the camera this already had, and ``v`` switches between
-    them. The viewer's own camera is what the perspective view draws through,
-    so the model's cameras, the turntable and the fly-through move that view
-    in either arrangement.
+    Four views of it as well as one: the navigation it declares
+    (:meth:`viewerNavigation`) puts the plan and two elevations beside the
+    camera this already had, and ``v`` switches between them. The viewer's own
+    camera is what the perspective view draws through, so the model's
+    cameras, the turntable and the fly-through move that view in either
+    arrangement.
     """
 
     #: What to show and how.  A class attribute so a subclass can simply set it.
@@ -185,6 +193,8 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         """
         resolved = super().resolveDefinition(definition, **named)
         options = cls.options
+        if not _isSet(resolved, 'navigation'):
+            resolved.navigation = cls.viewerNavigation()
         if options.shadows is not None and not _isSet(resolved, 'shadows'):
             resolved.shadows = options.shadows
         if not _isSet(resolved, 'iblIntensity'):
@@ -193,6 +203,29 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
             elif not renderoptions.env_text_once('OPENGLCONTEXT_IBL_INTENSITY').strip():
                 resolved.iblIntensity = env.VIEWER_IBL_INTENSITY
         return resolved
+
+    @classmethod
+    def viewerNavigation(cls) -> Any:
+        """The navigation a viewer declares: the classic one, and one view or four.
+
+        The user steps through the movement modes with ``m`` and through the
+        arrangements with ``v``; the views' furniture is up except in a
+        capture or a recording, since what comes out of those is the scene
+        rather than the interface.  The arrangement opened in is the
+        ``--views`` option's, else :attr:`multiViewArrangement`.  The modes
+        that move a body are declared once the context is built
+        (:meth:`declareMovementModes`).
+        """
+        from OpenGLContext.move.navigationdefinition import Navigation
+        from OpenGLContext.multiview.mixin import quadViews
+
+        options = cls.options
+        recording = bool(options.capture or options.capture_video)
+        return Navigation(
+            modes=['examine'], modeSwitching=['keys'],
+            views=quadViews(
+                arrangement=str(options.views or cls.multiViewArrangement),
+                switching=['keys'] if recording else ['keys', 'controls']))
 
     #: Resolved scene source (path or URL).
     source: Optional[str] = None
@@ -279,13 +312,6 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         if not self.capturing:
             debug.install(self)
             self.setupScreens()
-        # The views before the first scene: they are fitted to whatever the
-        # window is showing each time one is loaded, and `v` switches between
-        # one view and four whether or not anything is loaded yet. A capture
-        # or a recording gets no furniture, for the reason the caption is left
-        # off one: what comes out is the scene, not the interface.
-        self.startViews(arrangement=self.options.views,
-                        chrome=not (self.capturing or self.recording))
         if self.capturing:
             # A capture has to be deterministic, and the settle logic has to see
             # the model, so it is loaded before the loop starts rather than
@@ -768,7 +794,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         a capture, which wants one deterministic frame and not a simulation.
         """
         if self.capturing or getattr(self, 'sg', None) is None:
-            self._freeManager = getattr(self, 'movementManager', None)
+            self._freeManager = self.movementManager
             return
         self.declareMovementModes()
         self.physicsYaw = self.options.yaw
@@ -781,20 +807,26 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         """Say what the ways of moving are, before anything has moved.
 
         The modes belong to the *viewer*, not to the avatar: the controls page
-        offers what the context declares, and it used to find nothing because
-        these were declared only as a side effect of building a physics world --
-        so a viewer in free-fly, which is the default, had no controls page and
-        nothing for ``m`` to cycle.
+        offers what the context declares, so they are declared before any
+        physics world is built, and a viewer in free-fly has a controls page
+        and modes for ``m`` to cycle.
 
         At scale 1 to begin with; :meth:`applyMovementModes` redeclares them
         against the avatar's real size once a world has been cooked.  A host
         that declared its own vocabulary keeps it.
         """
         definition = getattr(self, 'contextDefinition', None)
-        if definition is None or getattr(definition, 'movementModes', None):
+        if definition is None:
+            return
+        declared = definition.navigation
+        if declared and declared.movingModes():
             return
         from OpenGLContext.move.modes import walk_fly_modes
-        definition.movementModes = walk_fly_modes(1.0)
+        if declared:
+            declared.setMovingModes(walk_fly_modes(1.0))
+        else:
+            from OpenGLContext.move.navigationdefinition import Navigation
+            definition.navigation = Navigation(modes=walk_fly_modes(1.0))
         self._declaredMovementModes = True
 
     def movementScale(self) -> float:
@@ -813,7 +845,10 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
 
         The mode *objects* are kept and their speeds rewritten, so the mode the
         player is in, the keys they have bound and anything watching
-        ``movementMode`` all survive a scene being swapped for a bigger one.
+        ``navigation.current`` all survive a scene being swapped for a bigger
+        one -- which is why this rewrites them rather than taking
+        :meth:`~OpenGLContext.move.navigationdefinition.Navigation.scaled`
+        copies.
 
         Modes a host declared itself are left alone: those are speeds somebody
         chose, and there is no scale at which to re-derive them.
@@ -826,8 +861,9 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         speeds = (('walkSpeed', WALK_SPEED), ('runSpeed', RUN_SPEED),
                   ('flySpeed', FLY_SPEED), ('boostSpeed', BOOST_SPEED),
                   ('swimSpeed', WALK_SPEED))
-        definition = getattr(self, 'contextDefinition', None)
-        for mode in (getattr(definition, 'movementModes', None) or ()):
+        declared = getattr(getattr(self, 'contextDefinition', None),
+                           'navigation', None)
+        for mode in (declared.movingModes() if declared else ()):
             for name, base in speeds:
                 if hasattr(mode, name):
                     setattr(mode, name, base * scale)
@@ -874,7 +910,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         Scaled from the class default rather than from the live value, so
         framing one scene after another does not compound.
         """
-        manager = getattr(self, 'movementManager', None)
+        manager = self.movementManager
         if manager is None:
             return
         default = getattr(type(manager), 'STEPDISTANCE', None)
@@ -905,18 +941,16 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         mode.UI_HINTS = scaled
 
     def cycleMovementMode(self, event: Any = None) -> Any:
-        """Step to the next declared movement mode, as ``m`` does in twig-bb.
+        """Step to the next declared movement mode, and name it in the caption.
 
         The modes are declared nodes on the context definition, so the settings
         screen presents this viewer's navigation the same way it presents any
         other program's, and there is nothing to cycle until a scene has
         declared some.
         """
-        navigation = self.getNavigation()
-        mode = navigation.cycle() if navigation is not None else None
+        mode = super(SceneViewerMixin, self).cycleMovementMode(event)
         if mode is not None:
             self.updateOverlay()
-            self.triggerRedraw(1)
         return mode
 
     def physicsSpawnViewpoints(self) -> Sequence[Any]:
@@ -1167,8 +1201,6 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         KeyBinding(']', 'nextAnimation', 'Next animation'),
         KeyBinding('[', 'previousAnimation', 'Previous animation'),
         KeyBinding('t', 'toggleTurntable', 'Turntable on or off'),
-        KeyBinding('m', 'cycleMovementMode', 'Next navigation mode'),
-        KeyBinding('v', 'toggleViews', 'One view of the scene, or four'),
     )
 
     # -- the frame --------------------------------------------------------
@@ -1243,40 +1275,10 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         return time()
 
 
-#: The class :data:`ViewerContext` names, built the first time it is asked for.
-_viewerContext = None
+class ViewerContext(SceneViewerMixin, Context):
+    """The viewing component, on whichever window system the definition names
 
-
-def __getattr__(name: str) -> Any:
-    """Build ``ViewerContext`` on first use, over this platform's context
-
-    Naming a base class is choosing a window system, and importing this module
-    is not: a program that wants the viewer over a *particular* toolkit --
-    :func:`OpenGLContext.viewer.viewerFor`, and every application embedding a
-    view in its own window -- would otherwise have to be able to resolve a
-    default it is not going to use.  On a machine where that default's toolkit
-    is missing, or in a frozen bundle carrying one toolkit on purpose, asking
-    for the backend that *is* there would fail for the sake of the one that is
-    not.
-
-    A program that does want the default gets it here, and gets the same
-    ``RuntimeError`` naming what could not be resolved.
+    A screen that is up takes the keys and the mouse ahead of the navigation,
+    as it does in every context, so the avatar does not walk off while
+    somebody reads the settings.
     """
-    global _viewerContext
-    if name != 'ViewerContext':
-        raise AttributeError("module %r has no attribute %r" % (__name__, name))
-    if _viewerContext is None:
-        class ViewerContext(
-            OverlayMixin, SceneViewerMixin,
-            testingcontext.getInteractive(),    # type: ignore[misc]  # chosen at run time
-        ):
-            """The viewing component over this platform's interactive context.
-
-            ``OverlayMixin`` comes **first**, ahead of the navigation the base
-            context brings, so a screen that is up takes the keys and the mouse
-            instead of the avatar walking off while somebody reads the settings.
-            """
-
-        ViewerContext.__module__ = __name__
-        _viewerContext = ViewerContext
-    return _viewerContext

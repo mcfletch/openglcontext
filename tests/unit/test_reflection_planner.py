@@ -459,6 +459,17 @@ def test_coplanar_mirrors_sharing_a_reflector_are_one_reflection():
     assert crop[2] - crop[0] > single[2] - single[0]
 
 
+def test_a_shared_reflection_is_the_first_mirror_the_scene_lists():
+    """Its key and its roughness are that mirror's, in either order the scene
+    lists them, rather than whichever happens to sit at the lower address."""
+    shared = PlanarReflector(interval=3)
+    left = _mirror(-1.5, reflector=shared, roughness=0.05)
+    right = _mirror(1.5, reflector=shared, roughness=0.1)
+    for records in ([left, right], [right, left]):
+        plan = ReflectionPlanner().plan([_frame(records)], ATLAS, BIG)
+        assert plan.draws[0].record is records[0]
+
+
 def test_coplanar_mirrors_with_reflectors_of_their_own_are_two():
     left, right = _mirror(-1.5), _mirror(1.5)
     assert len(_settled_planner().plan([_frame([left, right])], ATLAS, BIG).draws) == 2

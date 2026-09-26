@@ -16,6 +16,7 @@ import sys
 
 import pytest
 
+from OpenGLContext import windowsystem
 from OpenGLContext.context import Context
 
 
@@ -51,3 +52,25 @@ class TestLoadingTheClass:
         other = 'linux' if sys.platform.startswith('win32') else 'win32'
         loaded = Context.getOffscreenContextType(other)
         assert loaded is None or issubclass(loaded, Context)
+
+
+class TestAskingForOffscreenByName:
+    """``windowsystem='offscreen'`` in a definition is the same question, asked
+    of the window-system registry as the context is built."""
+
+    @pytest.mark.parametrize('platform, expected', [
+        ('win32', 'wgl'), ('cygwin', 'wgl'), ('linux', 'egl'), ('darwin', 'egl'),
+    ])
+    def test_it_names_the_platforms_windowless_system(self, platform, expected):
+        chosen = windowsystem.choose(
+            'offscreen', platform=platform,
+            registered=('glfw', 'egl', 'wgl'), probe=lambda _name: None)
+        assert chosen == expected
+        assert chosen == Context.getOffscreenBackendName(platform)
+
+    def test_an_empty_request_never_falls_back_to_it(self):
+        """A program that asked for nothing in particular is asking for a
+        window, so a machine with only the windowless systems says so."""
+        with pytest.raises(windowsystem.WindowSystemUnavailable):
+            windowsystem.choose(
+                '', registered=('egl', 'wgl'), probe=lambda _name: None)

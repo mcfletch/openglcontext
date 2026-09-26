@@ -16,7 +16,7 @@ import pytest
 
 from OpenGLContext.ui.hudwidgets import HUDLayer, MessageQueue, Readout
 from OpenGLContext.ui.metrics import FontMetrics
-from OpenGLContext.ui.overlay import OverlayMixin
+from OpenGLContext.ui.overlay import OverlayStackMixin
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.screen import ScreenMixin
 from OpenGLContext.events import systemtime
@@ -59,7 +59,7 @@ class Screen(ScreenMixin, Window):
     pass
 
 
-class Game(OverlayMixin, ScreenMixin, Window):
+class Game(OverlayStackMixin, ScreenMixin, Window):
     """A context with both a HUD and screens over it."""
 
     def __init__(self):

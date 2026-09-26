@@ -295,10 +295,16 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         bindings somebody chose, and there is no scale to re-derive them at.
         """
         definition = self.contextDefinition
-        if getattr(definition, 'movementModes', None):
+        declared = definition.navigation
+        if declared and declared.movingModes():
             return
         from OpenGLContext.move.modes import walk_fly_modes
-        definition.movementModes = walk_fly_modes(scale, first_person=True)
+        if declared:
+            declared.setMovingModes(walk_fly_modes(scale, first_person=True))
+        else:
+            from OpenGLContext.move.navigationdefinition import Navigation
+            definition.navigation = Navigation(
+                modes=walk_fly_modes(scale, first_person=True))
 
     def spawnAvatar(self, low: Any, high: Any,
                     capabilities: 'CharacterCapabilities',

@@ -16,8 +16,10 @@ side orthographic views around a perspective one.
 
 There are three ways to use it, from the most packaged to the most direct:
 
-- :ref:`MultiViewMixin <multiview-mixin>` adds one view or four to an
-  existing window, with the view controls and pointer gestures included.
+- :ref:`Declared views <multiview-mixin>`: the context's definition names
+  the views, their arrangements and how the user switches them, and every
+  ``Context`` builds them, with the view controls and pointer gestures
+  included.
 - :ref:`QuadView <quad-view>` and :ref:`ViewSet <view-set>` build the
   views, frame a model in them and move their cameras with the pointer, for
   an application that manages its own window.
@@ -26,51 +28,125 @@ There are three ways to use it, from the most packaged to the most direct:
 
 .. _multiview-mixin:
 
-Four views in an existing window
---------------------------------
+Declaring the views
+-------------------
 
-``OpenGLContext.multiview.mixin.MultiViewMixin`` gives a window that shows a
-scene a choice of one view or four, without the window handling layouts
-itself. It creates the views, the view controls and the pointer gestures.
+A context's views are part of its navigation: ``ContextDefinition.navigation``
+holds a ``Navigation`` whose ``views`` field is a ``Views`` declaration (both
+in ``OpenGLContext.move.navigationdefinition``; the modes beside them are
+described in :doc:`navigation`). ``Context`` has
+``OpenGLContext.multiview.mixin.MultiViewMixin`` among its bases, which builds
+the views as the context completes, after ``OnInit``:
 
 .. code-block:: python
 
-   from OpenGLContext.multiview.mixin import MultiViewMixin
+   from OpenGLContext.context import Context
+   from OpenGLContext.contextdefinition import ContextDefinition
+   from OpenGLContext.move.navigationdefinition import (
+       Arrangement, Navigation, ViewDefinition, Views)
 
-   class Viewer(OverlayMixin, MultiViewMixin, BaseContext):
+   class Editor(Context):
+       contextDefinition = ContextDefinition(navigation=Navigation(
+           modes=['examine'],
+           views=Views(
+               views=[ViewDefinition(name='top', camera='top', gestures=['plan']),
+                      ViewDefinition(name='front', camera='front', gestures=['plan']),
+                      ViewDefinition(name='left', camera='left', gestures=['plan']),
+                      ViewDefinition(name='perspective')],
+               arrangements=[
+                   Arrangement(name='single', views=['perspective']),
+                   Arrangement(name='quad',
+                               views=['top', 'front', 'left', 'perspective'])],
+               arrangement='quad',
+               switching=['keys', 'controls'])))
+
+``ViewDefinition`` fields:
+
+- ``name`` - what arrangements and the view's own menu call it.
+- ``camera`` - ``perspective`` (the default), ``top``, ``front``, ``left``,
+  ``right``, ``back``, ``bottom`` or ``scene``. A perspective view with no
+  gestures has no camera of its own: it draws through the window's camera,
+  whatever ``getViewPlatform()`` returns, so the movement modes, a bound
+  ``Viewpoint``, a model's own cameras and a turntable drive it as they would
+  drive a single view. An orthographic view looks along the axis it is named
+  for. A ``scene`` view has an orbiting camera that stands where the scene's
+  first camera (its first ``Viewpoint`` or glTF camera) stands.
+- ``gestures`` - the registered gesture sets the pointer raises in the view:
+  ``plan`` (drag pans, the wheel zooms) and ``examine`` (right drag turns,
+  middle drag pans). Several are combined; where two bind one button, the
+  first named wins. Empty gives an orthographic view ``plan`` and an
+  orbiting one ``examine``. A perspective view given gestures gets an
+  orbiting camera of its own, since the window's camera belongs to the
+  movement modes.
+- ``style`` - ``flat`` (a plain grey background with the grid) or ``scene``
+  (the scene's own background). Empty is ``flat`` for an orthographic view
+  and ``scene`` otherwise.
+
+``Views`` fields:
+
+- ``views`` - the ``ViewDefinition`` nodes, in the order a quad places them:
+  top left, top right, bottom left, bottom right.
+- ``arrangements`` - ``Arrangement(name, views)`` nodes naming one, two or
+  four views. With none, each view is offered alone under its own name, the
+  first two together as ``split`` and the first four as ``quad``.
+- ``arrangement`` - the one shown at start; empty for the first.
+- ``switching`` - how the user changes arrangement. ``keys`` binds
+  ``viewsCycleKey`` (:kbd:`v`, the arrangements in the order declared) and
+  ``viewMaximiseKey`` (:kbd:`x`, the view last clicked takes the whole window
+  or gives it back); both fire on the key's release, and a class sets either
+  to ``''`` to bind none. ``controls`` puts the view controls up, on the
+  context's overlay stack. Empty leaves switching to the application.
+
+``navigation.views`` NULL, the default, builds nothing, and each frame draws
+the window's one view. The application switches whatever ``switching`` says:
+``showViews(name)``, ``toggleViews()`` and ``maximiseView()``; the set is
+``context.views``, an ordinary :ref:`ViewSet <view-set>`.
+
+The views are framed on the context's ``sceneBounds()`` when they are built.
+An application that loads a scene afterwards calls ``frameViews()`` to fit
+them to it; ``oglc-view`` does this each time a scene loads.
+
+The overlay stack comes ahead of the views in ``Context``'s bases, so each
+event reaches the view controls first, and the views get the events the
+controls do not take.
+
+Each view's menu lists the scene's cameras (``context.sceneCameras()``).
+Choosing one in the perspective view binds its ``Viewpoint``. Choosing one in
+an orthographic view gives that view a perspective camera at that position.
+
+Starting views at run time
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``startViews()`` turns the plan, two elevations and the window's own view on
+from code:
+
+.. code-block:: python
+
+   class Viewer(Context):
        multiViewArrangement = 'quad'        # the default is 'single'
 
        def OnInit(self):
            self.startViews(bounds=lambda: (scene.minimum, scene.maximum))
 
-The perspective view has no camera of its own. It draws through the window's
-camera, whatever ``getViewPlatform()`` returns, so the navigation, a bound
-``Viewpoint``, a model's own cameras and a turntable all drive it as they
-would drive a single view. The three orthographic views belong to the mixin.
-They are framed on the bounds given to ``startViews``, and a drag in one
-moves that view only.
-
 - ``bounds`` is ``(minimum, maximum)``, or a callable that returns it. With
   no ``bounds``, the views are framed on the context's ``sceneBounds()``.
 - ``elevations`` chooses which three directions the orthographic views look
   along. The default is ``('top', 'front', 'left')``.
+- ``arrangement`` is ``'single'`` or ``'quad'``; ``multiViewArrangement``
+  where none is given.
 - ``chrome=False`` leaves out the view controls, for a window that draws its
   own.
-- ``toggleViews()`` switches between one view and four, and
-  ``maximiseView()`` gives the active view the whole window or gives it
-  back. The application binds them to keys; ``oglc-view`` binds
-  ``toggleViews`` to :kbd:`v`.
 
-Put the mixin after ``OverlayMixin`` in the bases. Each event then reaches
-the view controls first, and the views get the events the controls do not
-take. The view controls need ``OverlayMixin``'s overlay stack; without it the
-views work but have no controls.
+It writes what it built into the definition's ``navigation.views``, as
+``multiview.mixin.quadViews()`` declares it, so a settings screen or a saved
+definition sees the views the window is showing. ``quadViews()`` is also how
+a definition declares those four views without writing them out.
+``viewSetFor(views)`` answers the ``ViewSet`` a declaration describes,
+without a window.
 
-Each view's menu lists the scene's cameras (``window.sceneCameras()``).
-Choosing one in the perspective view binds its ``Viewpoint``. Choosing one in
-an orthographic view gives that view a perspective camera at that position.
-
-``oglc-view --views quad`` opens the scene viewer this way. The Tk and wx
+``oglc-view`` declares ``quadViews()`` with ``keys`` and ``controls``
+(``keys`` alone in a capture or a recording, which write the scene and not
+the interface); ``--views quad`` opens it on the four. The Tk and wx
 :doc:`embedding demos <embedding>` open in the quad, because a window with
 the scene's tree beside it is used more like an editor than a viewer.
 

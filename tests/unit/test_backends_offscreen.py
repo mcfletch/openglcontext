@@ -27,18 +27,9 @@ class TestPygame:
 
     def _flags(self, monkeypatch, hidden):
         pygame = pytest.importorskip('pygame')
-        # The flag builder sets GL attributes as it goes, which SDL will not do
-        # before its video system is up; the dummy driver brings that up
-        # without a display of any kind.
-        monkeypatch.setenv('SDL_VIDEODRIVER', 'dummy')
         monkeypatch.setenv('OPENGLCONTEXT_HIDDEN', '1' if hidden else '0')
-        pygame.display.init()
-        from OpenGLContext import pygamecontext  # noqa: PLC0415 follows the pygame importorskip
-        try:
-            return pygamecontext.PygameContext.pygameFlagsFromDefinition(
-                ContextDefinition()), pygame
-        finally:
-            pygame.display.quit()
+        from OpenGLContext.windowsystem import pygame as pygamesystem  # noqa: PLC0415 follows the pygame importorskip
+        return pygamesystem.windowFlags(ContextDefinition()), pygame
 
     def test_it_asks_for_a_hidden_window(self, monkeypatch):
         flags, pygame = self._flags(monkeypatch, True)
@@ -58,8 +49,8 @@ class TestGLUT:
 
     def test_it_hides_the_window_it_just_made(self):
         pytest.importorskip('OpenGL.GLUT')
-        from OpenGLContext import glutcontext  # noqa: PLC0415 follows the GLUT importorskip
-        source = inspect.getsource(glutcontext)
+        from OpenGLContext.windowsystem import glut as glutsystem  # noqa: PLC0415 follows the GLUT importorskip
+        source = inspect.getsource(glutsystem.GLUTWindowSystem.open)
         assert 'glutHideWindow' in source
         assert 'hidden_window' in source
 
@@ -69,9 +60,9 @@ class TestWX:
 
     def test_showing_the_frame_is_conditional(self):
         pytest.importorskip('wx')
-        from OpenGLContext import wxcontext  # noqa: PLC0415 follows the wx importorskip
-        source = inspect.getsource(wxcontext)
-        assert 'OPENGLCONTEXT_HIDDEN' in source
+        from OpenGLContext.windowsystem import wx as wxsystem  # noqa: PLC0415 follows the wx importorskip
+        source = inspect.getsource(wxsystem)
+        assert 'hidden_window' in source
 
 
 class TestTheSharedReader:

@@ -1,14 +1,10 @@
-"""Testing context for PyGame API, providing default context class and main loop
+"""The wx window system's Context, under the name ``VRMLContext``
 
-You normally use this module via the testingcontext module.
+Every Context has the event managers, the camera and the scene loading, so
+this name is :class:`~OpenGLContext.wxcontext.wxContext`.
 """
-from OpenGLContext import wxinteractivecontext
-from OpenGLContext import vrmlcontext
-import os
-import glob
+from OpenGLContext.wxcontext import wxContext
 
-class VRMLContext(
-    vrmlcontext.VRMLContext,
-    wxinteractivecontext.wxInteractiveContext
-):
-    """GLUT-specific VRML97-aware Testing Context"""
+VRMLContext = wxContext
+
+__all__ = ('VRMLContext',)

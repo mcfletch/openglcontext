@@ -1,23 +1,25 @@
-"""Per-user configuration and backend selection for :class:`~OpenGLContext.context.Context`.
+"""Per-user configuration for :class:`~OpenGLContext.context.Context`.
 
-Resolves the user's app-data directory, reads and writes the default-font and
-default-backend preference files, and loads a backend ``Context`` subclass from
-setuptools entry points. The members are ``classmethod`` / ``staticmethod`` with
-no per-instance state.
+Resolves the user's app-data directory, and reads and writes the default-font
+and preferred-window-system files.  The members are ``classmethod`` /
+``staticmethod`` with no per-instance state.
 
-Mixed into ``Context`` as a base, so ``cls`` is the concrete context class. The
-two members that name the concrete ``Context`` class directly (``getTTFFiles``,
-``fromConfig``) live on ``Context`` itself.
+Mixed into ``Context`` as a base, so ``cls`` is the concrete context class.
+Everything here reads or writes the user's own application-data directory.
 """
 
 import os
 import sys
 import logging
-from typing import Any, Optional
+import warnings
+from typing import TYPE_CHECKING, Any, ClassVar, Optional
 
 from OpenGL.plugins import Plugin
 
 from OpenGLContext import atomicfiles, plugins, renderoptions
+
+if TYPE_CHECKING:
+    from OpenGLContext.scenegraph.text.ttfregistry import TTFRegistry
 
 log = logging.getLogger(__name__)
 
@@ -58,6 +60,47 @@ class ContextConfigMixin:
             os.makedirs(path, mode=0o770)
         return path
 
+    #: The system's TrueType fonts, scanned once for the process and cached
+    #: in the user's application-data directory; see :meth:`getTTFFiles`.
+    ttfFileRegistry: ClassVar[Optional['TTFRegistry']] = None
+
+    @classmethod
+    def getTTFFiles(cls) -> 'TTFRegistry':
+        """The TrueType font-file registry, loaded or scanned on first use
+
+        Read from ``font_metadata.cache`` in the user's application-data
+        directory where there is one, scanned from the system's fonts and
+        saved there where there is not.  One registry serves the process.
+        """
+        registry = ContextConfigMixin.ttfFileRegistry
+        if registry is None:
+            registryFile = os.path.join(
+                cls.getUserAppDataDirectory(), "font_metadata.cache"
+            )
+            from OpenGLContext.scenegraph.text import ttfregistry
+
+            registry = ttfregistry.TTFRegistry()
+            if os.path.isfile(registryFile):
+                log.info("Loading font metadata from cache %r", registryFile)
+                registry.load(registryFile)
+                if not registry.fonts:
+                    log.warning("Re-scanning fonts, no fonts found in cache")
+                    registry.scan()
+                    registry.save()
+                    log.info("Font metadata stored in cache %r", registryFile)
+            else:
+                log.warning(
+                    "Scanning font metadata into cache %r, please wait", registryFile
+                )
+                registry.scan()
+                registry.save(registryFile)
+                log.info("Font metadata stored in cache %r", registryFile)
+            ContextConfigMixin.ttfFileRegistry = registry
+        # The font providers find their fonts through the same registry.
+        from OpenGLContext.scenegraph.text import fontprovider
+        fontprovider.setTTFRegistry(registry)
+        return registry
+
     @classmethod
     def getDefaultTTFFont(cls, type: str = "sans") -> Optional[str]:
         """Get the current user's preference for a default font"""
@@ -96,13 +139,16 @@ class ContextConfigMixin:
         cls,
         type: type[plugins.Context] = plugins.InteractiveContext,
     ) -> list[Plugin]:
-        """Retrieve the set of defined context types
+        """The registered per-window-system context classes, as plug-ins
 
-        type -- testing type key from setup.py for the registered modules
-
-        returns list of setuptools entry-point objects which can be passed to
-        getContextType( name ) to retrieve the actual context type.
+        Deprecated: a context's window system is its definition's
+        ``windowsystem`` field, and :func:`OpenGLContext.windowsystem.registered`
+        names the choices.
         """
+        warnings.warn(
+            'Context.getContextTypes is deprecated; the window systems are '
+            'OpenGLContext.windowsystem.registered()',
+            DeprecationWarning, stacklevel=2)
         registered: list[Plugin] = type.all()
         return registered
 
@@ -112,19 +158,27 @@ class ContextConfigMixin:
         entrypoint: Any = None,
         type: type[plugins.Context] = plugins.InteractiveContext,
     ) -> Any:
-        """Load a single context type via entry-point resolution
+        """The context class for a window system, or None where it will not load
 
-        returns a Context sub-class *or* None if there is no such
-        context defined/available, will have a ContextMainLoop method
-        for running the Context top-level loop.
+        Deprecated: every context is a :class:`~OpenGLContext.context.Context`,
+        and its window system is its definition's ``windowsystem`` field.
+        What this answers is the class the window system's ``*context``
+        module publishes.
         """
+        warnings.warn(
+            'Context.getContextType is deprecated; subclass Context and name '
+            'the window system in the definition\'s windowsystem field',
+            DeprecationWarning, stacklevel=2)
+        return cls._contextType(entrypoint, type)
+
+    @classmethod
+    def _contextType(cls, entrypoint: Any, type: type[plugins.Context]) -> Any:
         if entrypoint is None:
             entrypoint = cls.getDefaultContextType() or "glfw"
-        log.debug("Default context type: %s", entrypoint)
         if isinstance(entrypoint, (bytes, str)):
-            for ep in cls.getContextTypes(type):
+            for ep in type.all():
                 if entrypoint == ep.name:
-                    return cls.getContextType(ep, type=type)
+                    return cls._contextType(ep, type)
             return None
         try:
             classObject = entrypoint.load()
@@ -133,83 +187,64 @@ class ContextConfigMixin:
         else:
             return classObject
 
-    #: Platforms whose windowless backend is not the usual one, by the prefix
-    #: ``sys.platform`` starts with.
-    OFFSCREEN_BACKENDS = (
-        ('win32', 'wgl'),
-        ('cygwin', 'wgl'),
-    )
-
-    #: What every other platform renders with no window on: EGL, which needs
-    #: neither a window nor a display server.
-    DEFAULT_OFFSCREEN_BACKEND = 'egl'
-
     @classmethod
     def getOffscreenBackendName(cls, platform: Optional[str] = None) -> str:
-        """Which backend renders with no window here.
+        """Which window system renders with no window here.
 
         `platform` defaults to :data:`sys.platform`; pass one to ask about
-        another, which is what lets the mapping be checked anywhere.
+        another.  See :func:`OpenGLContext.windowsystem.offscreenName`, and
+        ``windowsystem='offscreen'``, which asks for it.
         """
-        if platform is None:
-            platform = sys.platform
-        for prefix, name in cls.OFFSCREEN_BACKENDS:
-            if platform.startswith(prefix):
-                return name
-        return cls.DEFAULT_OFFSCREEN_BACKEND
+        from OpenGLContext import windowsystem
+
+        return windowsystem.offscreenName(platform)
 
     @classmethod
     def getOffscreenContextType(cls, platform: Optional[str] = None) -> Optional[type]:
-        """The Context class that renders with no window here, or None.
+        """The context class that renders with no window here, or None.
 
-        A batch renderer, a build machine or a service returning images wants
-        a context and no window, and which class that is depends on the
-        machine: a WGL pbuffer on Windows, EGL elsewhere.  Both are registered
-        everywhere, so this is which one to ask for::
-
-            offscreen = Context.getOffscreenContextType()
-            if offscreen is None:
-                ...                     # nothing here renders without a window
-            context = offscreen(size=(1920, 1080))
-
-        None where the backend's bindings cannot be loaded -- an EGL with no
-        library behind it, say.  That is the same answer as having no backend
-        at all, and for the caller's purposes it is the same question.
+        The one the offscreen window system's ``*context`` module publishes;
+        None where its bindings cannot be loaded -- an EGL with no library
+        behind it, say.  ``Context(windowsystem='offscreen')`` asks for the
+        same thing without naming a class.
         """
-        loaded: Optional[type] = cls.getContextType(
-            cls.getOffscreenBackendName(platform), type=plugins.Context
+        loaded: Optional[type] = cls._contextType(
+            cls.getOffscreenBackendName(platform), plugins.Context
         )
         return loaded
 
     @classmethod
     def getDefaultContextType(cls) -> Optional[str]:
-        """Get the current user's preference for a default context type
+        """Get the current user's preference for a default window system
 
         Checks in order:
             1. OPENGLCONTEXT_BACKEND environment variable
-            2. ~/.OpenGLContext/defaultcontext.txt file
-
-        Valid backend names: glut, pygame, wx, glfw, 
+            2. the user's defaultcontext.txt (:meth:`getWindowSystemPreference`)
         """
-        # First check environment variable
         named = renderoptions.env_text('OPENGLCONTEXT_BACKEND')
         if named:
             return named
+        return cls.getWindowSystemPreference()
 
-        # Fall back to config file
+    @classmethod
+    def getWindowSystemPreference(cls) -> Optional[str]:
+        """This user's preferred window system, or None where they have none
+
+        Read from ``defaultcontext.txt`` in the user's application-data
+        directory, which :meth:`setDefaultContextType` writes.
+        """
         directory = cls.getUserAppDataDirectory()
         filename = os.path.join(directory, "defaultcontext.txt")
         name = None
         if os.path.exists(filename):
             try:
-                name = open(filename).readline().strip()
+                with open(filename) as preference:
+                    name = preference.readline().strip()
             except IOError:
                 pass
         else:
-            log.warning("No default context type in %s", filename)
-        if not name:
-            name = None
-        return name
+            log.debug("No preferred window system in %s", filename)
+        return name or None
 
     @classmethod
     def setDefaultContextType(cls, name: Optional[str]) -> bool:

@@ -5,11 +5,12 @@ import os
 import pytest
 
 from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.move.navigationdefinition import Navigation
 from OpenGLContext.move import bindingstore, modes as movemodes
 from OpenGLContext.move.navigation import NavigationManager
 from OpenGLContext.ui import bindings
 from OpenGLContext.ui.metrics import FontMetrics
-from OpenGLContext.ui.overlay import OverlayMixin
+from OpenGLContext.ui.overlay import OverlayStackMixin
 from OpenGLContext.events.inputstate import InputState
 
 
@@ -47,7 +48,7 @@ class World:
         return event
 
 
-class Context(OverlayMixin, World):
+class Context(OverlayStackMixin, World):
     def overlayMetrics(self):
         return FontMetrics(8, 16, 2)
 
@@ -57,8 +58,8 @@ class Context(OverlayMixin, World):
 
 @pytest.fixture
 def context(tmp_path):
-    made = Context(ContextDefinition(movementModes=[
-        movemodes.WalkMode(name='walk'), movemodes.FlyMode(name='fly')]))
+    made = Context(ContextDefinition(navigation=Navigation(modes=[
+        movemodes.WalkMode(name='walk'), movemodes.FlyMode(name='fly')])))
     made.navigation = NavigationManager(made.contextDefinition, Platform())
     made.bindingsPath = str(tmp_path / 'keys.json')
     return made

@@ -24,10 +24,10 @@ Keys:
     r      reset
 '''
 import sys
-import time
 import numpy as np
 
 from OpenGLContext import testingcontext
+from OpenGLContext.events import systemtime
 BaseContext = testingcontext.getInteractive()
 
 from omi_physics import model
@@ -54,7 +54,7 @@ class TestContext(BaseContext):
         self.addEventHandler('keypress', name=' ', function=self.on_add_wave)
         self.addEventHandler('keypress', name='b', function=self.on_toggle_backend)
         print('physics backend:', self.scene.world.backend.name, flush=True)
-        self._last = time.time()
+        self._last = systemtime.systemTime()
 
     def on_reset(self, event):
         self.build()
@@ -107,7 +107,7 @@ class TestContext(BaseContext):
         self.sg = self.scene.scene_graph()
 
     def OnIdle(self, *args):
-        now = time.time()
+        now = systemtime.systemTime()
         active = self.scene.advance(min(now - self._last, 0.05))
         self._last = now
         if active:

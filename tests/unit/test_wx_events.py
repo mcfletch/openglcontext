@@ -1,4 +1,4 @@
-"""What the wxPython backend makes of a wx mouse event.
+"""What the wxPython window system makes of a wx mouse or key event.
 
 OpenGLContext numbers mouse buttons in the X11 order -- 0 left, 1 right, 2
 middle, with the wheel as 3 and 4 -- because that is the order the wheel
@@ -19,6 +19,9 @@ import types
 import pytest
 
 import OpenGLContext.events as package
+import OpenGLContext.windowsystem as windowsystems
+from OpenGLContext.context import Context
+from OpenGLContext.events.eventhandlermixin import HeldKeyMixin
 
 #: wx's own numbering, from ``wx.MouseEvent``.
 WX_LEFT, WX_MIDDLE, WX_RIGHT, WX_NONE = 1, 2, 3, 0
@@ -62,6 +65,21 @@ def wxevents(monkeypatch):
     sys.modules.pop('OpenGLContext.events.wxevents', None)
     if getattr(package, 'wxevents', None) is module:
         del package.wxevents
+
+
+@pytest.fixture
+def wxsystem(wxevents, monkeypatch):
+    """``OpenGLContext.windowsystem.wx``, imported against the stand-in.
+
+    Taken back out afterwards as :func:`wxevents` is, for the same reason.
+    """
+    monkeypatch.delitem(sys.modules, 'OpenGLContext.windowsystem.wx',
+                        raising=False)
+    from OpenGLContext.windowsystem import wx as module  # noqa: PLC0415 built over the fake wx put in sys.modules above
+    yield module
+    sys.modules.pop('OpenGLContext.windowsystem.wx', None)
+    if getattr(windowsystems, 'wx', None) is module:
+        del windowsystems.wx
 
 
 class Canvas(object):
@@ -129,6 +147,9 @@ class KeyEvent(object):
 
     def GetKeyCode(self):
         return self._code
+
+    def Skip(self):
+        pass
 
     def ShiftDown(self):
         return False
@@ -211,16 +232,31 @@ class TestAKeyTheTableDoesNotName:
         event = wxevents.wxKeyboardEvent(Canvas(), KeyEvent(ord('a')), 1)
         assert event.name == 'a'
 
-    def test_a_synthetic_release_is_named_the_same_way(self, wxevents):
+    def test_a_synthetic_release_is_named_the_same_way(self, wxsystem):
         """The release focus loss never delivered has to match its press."""
-        sent = []
+        host = _Host()
+        system = host.windowsystem = wxsystem.WxWindowSystem(host)
+        system.onKeyDown(KeyEvent(4242))
+        system.onKillFocus(KeyEvent(0))
+        assert [(event.name, event.state) for event in host.sent] == [
+            ('<unknown-4242>', 1), ('<unknown-4242>', 0)]
+        assert host.heldKeys() == {}
 
-        class Canvas_(wxevents.EventHandlerMixin):
-            def ProcessEvent(self, event):
-                sent.append(event)
 
-        Canvas_().emitKey(4242, 0, (0, 0, 0))
-        assert [event.name for event in sent] == ['<unknown-4242>']
+class _Host(HeldKeyMixin):
+    """The part of a context a key reaches, recording the events it is sent.
+
+    The held-key tracking is the real :class:`HeldKeyMixin`, and a key it
+    sends goes back through the window system as a context's does.
+    """
+
+    emitKey = Context.emitKey
+
+    def __init__(self):
+        self.sent = []
+
+    def ProcessEvent(self, event):
+        self.sent.append(event)
 
 
 def test_the_pick_point_counts_up_from_the_bottom(wxevents):

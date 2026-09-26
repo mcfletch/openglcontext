@@ -279,12 +279,18 @@ The scene
 
 - ``v`` switches between one view of the scene and four: the plan, the front
   and left elevations, and the camera. The three orthographic views are ruled
-  with a grid. ``--views quad`` opens with four. See :doc:`multiview`.
+  with a grid. ``--views quad`` opens with four. ``x`` gives the view last
+  clicked the whole window, or gives it back. See :doc:`multiview`.
+
+- ``m`` steps to the next movement mode.
 
 These keys act once, when the key is released. A held key repeats about
 twenty times a second, which would load twenty models or skip twenty cameras.
 
-The keys are listed in ``SceneViewerMixin.viewerKeys``, a table of
+``m``, ``v`` and ``x`` come from the navigation the viewer declares
+(``SceneViewerMixin.viewerNavigation()``, which a subclass overrides, or a
+definition passed in with its own ``navigation``); the rest are listed in
+``SceneViewerMixin.viewerKeys``, a table of
 ``KeyBinding(name, method, description, modifiers, state)``. To add a key in
 a subclass, extend that table rather than overriding ``setupCallbacks``. The
 description is the text shown in key listings. Modifiers are ``(shift,
@@ -531,18 +537,19 @@ The component starts with the developer overlay hidden, by setting the
 The viewer on each toolkit
 --------------------------
 
-``ViewerContext`` runs on the backend the environment and the user's
-configuration choose. ``viewerFor( name )`` returns the viewer class for a
-named :doc:`backend <backends>` instead: ``glfw``, ``glut``, ``pygame``,
-``tk``, ``qt`` or ``wx``. A backend that is not registered, or whose toolkit
-is not installed, raises ``RuntimeError`` naming the registered backends; the
-import error logged before it says which toolkit is missing.
+``ViewerContext`` runs on the window system its definition names, or the one
+the environment and the user's configuration choose. ``viewerFor( name )``
+returns the viewer class pinned to a named :doc:`window system <backends>`
+instead: ``glfw``, ``glut``, ``pygame``, ``tk``, ``qt`` or ``wx``. A name that
+is not registered, or whose toolkit is not installed, raises
+``WindowSystemUnavailable`` (a ``RuntimeError``) naming the registered window
+systems and the import error.
 
 The viewer in a window of its own
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-With the scene filling the window, the program is the same on every backend
-but for the name:
+With the scene filling the window, the program is the same on every window
+system but for the name:
 
 .. code-block:: python
 
@@ -556,7 +563,7 @@ but for the name:
 
 ``ContextMainLoop`` opens the window and runs that toolkit's main loop until
 the viewer quits. GLUT and Tk need an X display (XWayland under Wayland), and
-Qt may need ``QT_QPA_PLATFORM=xcb``; :doc:`Windowing Backends <backends>` has
+Qt may need ``QT_QPA_PLATFORM=xcb``; :doc:`Window Systems <backends>` has
 what each needs.
 
 The viewer inside a Tk application
@@ -596,9 +603,10 @@ application's loop calls ``loopIteration()`` for each frame:
 The viewer inside a Qt application
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The Qt backend is the separate ``OpenGLContext-qt`` distribution. The view is
-a ``QWindow``; ``container()`` wraps it in a widget for a layout, and
-``startRenderTimer()`` has Qt's own timer draw the frames:
+The Qt window system is the separate ``OpenGLContext-qt`` distribution.
+``view.window`` is a ``QWindow``; the window system's ``container()`` wraps it
+in a widget for a layout, and its ``startRenderTimer()`` has Qt's own timer
+draw the frames:
 
 .. code-block:: python
 
@@ -617,17 +625,17 @@ a ``QWindow``; ``container()`` wraps it in a widget for a layout, and
            super().__init__()
            self.view = SceneView( size=(720, 560) )
            self.view.deferRedraw = True
-           self.setCentralWidget( self.view.container( self ) )
+           self.setCentralWidget( self.view.windowsystem.container( self ) )
            self.view.openSource( source )
 
        def closeEvent( self, event ):
-           self.view.stopRenderTimer()
+           self.view.windowsystem.stopRenderTimer()
            self.view.releaseWindow()
            super().closeEvent( event )
 
    window = Window( 'model.glb' )
    window.show()
-   window.view.startRenderTimer()          # after the window is shown
+   window.view.windowsystem.startRenderTimer()   # after the window is shown
    application.exec()
 
 Create the ``QApplication`` before the view. The view creates an application

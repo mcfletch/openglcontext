@@ -25,8 +25,8 @@ The pieces:
   real at every level of a nested dialog.
 * :mod:`~OpenGLContext.ui.skin` -- colours and optional nine-slice artwork.
 
-Typical use is through :class:`~OpenGLContext.ui.overlay.OverlayMixin`, which a
-context mixes in to gain ``pushOverlay``/``popOverlay`` and the drawing hook::
+Typical use is through a context's ``pushOverlay``/``popOverlay``, which every
+context has from :class:`~OpenGLContext.ui.overlay.OverlayStackMixin`::
 
     from OpenGLContext.ui import dialogs
     context.pushOverlay(dialogs.confirm(

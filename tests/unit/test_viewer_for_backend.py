@@ -8,25 +8,29 @@ See `OpenGLContext/demos/`, which is what asks.
 """
 import pytest
 
-from OpenGLContext.ui.overlay import OverlayMixin
+from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
+from OpenGLContext.multiview.mixin import MultiViewMixin
+from OpenGLContext.ui.overlay import OverlayStackMixin
 from OpenGLContext.viewer import viewerFor
 from OpenGLContext.viewer.sceneviewer import SceneViewerMixin, ViewerContext
 
 
 class TestWhatComesBack:
     def test_a_named_backend_gives_a_viewer_over_that_backend(self):
-        from OpenGLContext.tkcontext import TkContext
-
-        assert issubclass(viewerFor('tk'), TkContext)
+        found = viewerFor('tk')
+        assert found.windowSystemName == 'tk'
+        assert found.resolveDefinition().windowsystem == 'tk'
 
     def test_it_is_a_viewer(self):
         found = viewerFor('tk')
         assert issubclass(found, SceneViewerMixin)
 
     def test_a_screen_that_is_up_takes_the_input_before_the_avatar_does(self):
-        """Which is what the mixin order says, and the reason it is stated."""
+        """The overlay comes ahead of the views and the navigation that move
+        the camera, which is the order ``Context`` gives its bases."""
         order = viewerFor('tk').__mro__
-        assert order.index(OverlayMixin) < order.index(SceneViewerMixin)
+        assert order.index(OverlayStackMixin) < order.index(MultiViewMixin) \
+            < order.index(ViewPlatformMixin)
 
     def test_naming_nothing_gives_whatever_the_machine_chose(self):
         assert viewerFor() is ViewerContext
@@ -136,12 +140,16 @@ class TestImportingDoesNotChooseAWindowSystem:
             OPENGLCONTEXT_BACKEND='nonesuch')
         assert 'TkViewerContext' in result.stdout, result.stderr
 
-    def test_the_default_still_reports_what_it_could_not_resolve(self):
-        """Lazily, but with the same message: a program that does want the
-        default and cannot have it is owed the reason, at the point it asked."""
+    def test_the_default_reports_what_it_could_not_resolve(self):
+        """A program that does want the default and cannot have it is owed the
+        reason, at the point it asked: choosing the window system to open."""
         result = self._run(
-            'from OpenGLContext.viewer import ViewerContext',
+            'from OpenGLContext.viewer import ViewerContext\n'
+            'print("IMPORTED", flush=True)\n'
+            'ViewerContext.chooseWindowSystem(ViewerContext.resolveDefinition())',
             OPENGLCONTEXT_BACKEND='nonesuch')
+        assert 'IMPORTED' in result.stdout, result.stderr
         assert result.returncode != 0
-        assert 'No InteractiveContext is available' in result.stderr
+        assert 'WindowSystemUnavailable' in result.stderr
+        assert 'nonesuch' in result.stderr
         assert 'tk' in result.stderr

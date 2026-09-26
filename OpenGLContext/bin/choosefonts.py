@@ -67,6 +67,8 @@ class TestContext(BaseContext):
             )
 
     def OnInit(self) -> None:
+        # The families to browse come from the registry the providers load.
+        self.ensureFontProviders()
         print("""You should see a 3D-rendered text message""")
         print("  <p> previous fontstyle")
         print("  <n> next fontstyle")

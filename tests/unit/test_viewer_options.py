@@ -231,6 +231,58 @@ class TestTheArrangementAViewerOpensIn:
         assert parse_args(['model.glb', '--views', 'quad']).views == 'quad'
 
 
+class TestTheNavigationAViewerDeclares:
+    """The viewer's modes and views are declared on its definition, and the
+    keys and furniture that switch them follow from the declaration."""
+
+    def resolved(self, declared=None, definition=None, **options):
+        from OpenGLContext.viewer.sceneviewer import ViewerContext
+
+        attributes = {'options': ViewerOptions(**options)}
+        if declared is not None:
+            attributes['multiViewArrangement'] = declared
+        return type('Viewer', (ViewerContext,), attributes).resolveDefinition(definition)
+
+    def test_the_user_switches_modes_by_key(self):
+        navigation = self.resolved().navigation
+        assert list(navigation.modeSwitching) == ['keys']
+        assert navigation.examines()
+
+    def test_it_declares_one_view_or_four(self):
+        views = self.resolved().navigation.views
+        assert [view.name for view in views.views] == [
+            'top', 'front', 'left', 'perspective']
+        assert views.arrangementViews() == {
+            'single': ('perspective',),
+            'quad': ('top', 'front', 'left', 'perspective')}
+
+    def test_keys_and_furniture_switch_them(self):
+        assert list(self.resolved().navigation.views.switching) == ['keys', 'controls']
+
+    def test_a_capture_gets_no_furniture(self):
+        """What comes out is the scene, not the interface."""
+        for option in ({'capture': 'still.png'}, {'capture_video': 'clip.mp4'}):
+            assert list(self.resolved(**option).navigation.views.switching) == ['keys']
+
+    def test_it_opens_on_the_single_view_by_default(self):
+        assert self.resolved().navigation.views.arrangement == 'single'
+
+    def test_a_class_that_declares_quad_opens_in_quad(self):
+        assert self.resolved('quad').navigation.views.arrangement == 'quad'
+
+    def test_the_command_line_outranks_the_class(self):
+        assert self.resolved('quad', views='single').navigation.views.arrangement \
+            == 'single'
+
+    def test_a_definition_that_declares_a_navigation_keeps_it(self):
+        from OpenGLContext.contextdefinition import ContextDefinition
+        from OpenGLContext.move.navigationdefinition import Navigation
+
+        mine = Navigation(modes=['fly'])
+        assert self.resolved(definition=ContextDefinition(navigation=mine)).navigation \
+            is mine
+
+
 class TestWhatTheCommandLineRefuses:
     """Refused by the parser, before a window opens, rather than inside it."""
 

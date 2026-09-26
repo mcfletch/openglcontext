@@ -1,13 +1,14 @@
-"""HasMouseMoveHandlers reached into pydispatch internals and
-rescanned the whole global registry per event type. The dispatcher lookup now
-lives on the EventManager (`hasReceivers`), and the context asks the relevant
-managers instead of walking the registry itself.
+"""Whether anything is listening for pointer motion.
+
+The dispatcher lookup lives on the EventManager (`hasReceivers`), and the
+context's ``hasMouseMoveHandlers`` asks the managers of the three motion types
+rather than walking the pydispatch registry itself.
 """
 import pytest
 from pydispatch import dispatcher
 
 from OpenGLContext.events.eventmanager import EventManager
-from OpenGLContext.context import Context
+from OpenGLContext.context import ContextCore
 
 
 class _MoveManager(EventManager):
@@ -51,7 +52,7 @@ class TestHasMouseMoveHandlersDelegates:
                 """A drag that took the type over registers no receivers."""
                 return False
         f = Fake()
-        f.hasMouseMoveHandlers = Context.hasMouseMoveHandlers.__get__(f)
+        f.hasMouseMoveHandlers = ContextCore.hasMouseMoveHandlers.__get__(f)
         return f
 
     def test_true_when_a_manager_reports_receivers(self):

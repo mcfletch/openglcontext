@@ -13,6 +13,7 @@ import zipfile
 import pytest
 
 from OpenGLContext.testing.paths import tests_root
+from OpenGLContext.move import modes as movemodes
 from OpenGLContext.viewer import source as viewersource, ViewerOptions
 from OpenGLContext.viewer.adapters.gltf import GLTFAdapter
 from OpenGLContext.viewer.adapters.vrml import VRMLAdapter
@@ -205,30 +206,29 @@ class TestTheMovementItDeclares:
     def test_a_viewer_declares_them_before_anything_is_walked(self):
         viewer = self._walker()
         viewer.setupWalking()
-        assert [str(mode.name) for mode in viewer.contextDefinition.movementModes] \
-            == ['walk', 'fly']
+        assert [str(mode.name) for mode
+                in viewer.contextDefinition.navigation.movingModes()] == ['walk', 'fly']
 
     def test_a_host_that_declared_its_own_keeps_them(self):
         """A game embedding the viewer has its own vocabulary."""
         viewer = self._walker()
-        mine = ['not-really-a-mode']
-        viewer.contextDefinition.movementModes = mine
+        mine = movemodes.WalkMode(name='stroll', walkSpeed=0.5)
+        viewer.contextDefinition.navigation.setMovingModes([mine])
         viewer.setupWalking()
-        assert viewer.contextDefinition.movementModes is mine
+        assert viewer.contextDefinition.navigation.movingModes() == [mine]
 
     def test_a_capture_declares_nothing(self):
         """One deterministic frame; nobody is going to move."""
         viewer = self._walker()
         viewer.settleCapture = object()
         viewer.setupWalking()
-        assert not viewer.contextDefinition.movementModes
+        assert not viewer.contextDefinition.navigation.movingModes()
 
 
-class _Definition:
-    """The little of a ContextDefinition the declaration touches."""
-
-    movementModes = ()
-    movementMode = None
+def _Definition():
+    """A definition declaring the classic navigation alone, as a viewer starts."""
+    from OpenGLContext.contextdefinition import ContextDefinition
+    return ContextDefinition()
 
 
 class TestSteppingThroughTheShelf:

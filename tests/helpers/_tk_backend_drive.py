@@ -1,5 +1,5 @@
 #! /usr/bin/env python3
-"""Exercise one thing the Tk backend does, and report what happened.
+"""Exercise one thing the Tk window system does, and report what happened.
 
 Run as a subprocess by ``tests/unit/test_tk_backend.py``: each named step opens
 a real Tk window with a real GL context, does the one thing, prints what came of
@@ -116,8 +116,8 @@ def compatibility():
 
 def resize():
     context = built()
-    context.root.geometry('240x180')
-    context.root.update()
+    context.windowsystem.root.geometry('240x180')
+    context.windowsystem.root.update()
     context.OnDraw(force=1)
     context.setCurrent()
     say('VIEWPORT', ' '.join(
@@ -127,7 +127,7 @@ def resize():
 def hidden():
     os.environ['OPENGLCONTEXT_HIDDEN'] = '1'
     context = built()
-    say('MAPPED', bool(context.root.winfo_ismapped()))
+    say('MAPPED', bool(context.windowsystem.root.winfo_ismapped()))
     context.OnDraw(force=1)
     context.setCurrent()
     say('PIXEL', context.pixel())
@@ -147,12 +147,13 @@ def fullscreen():
     context asks, both ways, and says it did.
     """
     context = built()
+    system = context.windowsystem
     say('ASKEDFULL', bool(context.setFullscreen(True)))
-    context.root.update()
-    say('REPORTED', bool(context.isFullscreen()))
+    system.root.update()
+    say('REPORTED', bool(system.isFullscreen()))
     say('ASKEDBACK', bool(context.setFullscreen(False)))
-    context.root.update()
-    say('BACK', not context.isFullscreen())
+    system.root.update()
+    say('BACK', not system.isFullscreen())
 
 
 def quit():
@@ -174,7 +175,8 @@ def embedded():
     holder = tkinter.Frame(root)
     holder.pack(side='right', fill='both', expand=True)
     context = Driven(parent=holder, size=(200, 150))
-    say('PARENTED', context.root is None and context.frame.master is holder)
+    say('PARENTED', context.windowsystem.root is None
+        and context.window.master is holder)
     context.OnDraw(force=1)
     say('DRAWN', True)
     context.releaseWindow()

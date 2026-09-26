@@ -1,8 +1,8 @@
-"""What the Pygame backend calls each key.
+"""What the Pygame window system calls each key.
 
 A binding names a key once -- ``addEventHandler('keyboard', name='<F2>', ...)``
--- and expects it to work whichever backend the application opened its window
-with, so every backend has to produce the vocabulary
+-- and expects it to work whichever window system the application opened its
+window with, so every one of them has to produce the vocabulary
 :meth:`~OpenGLContext.events.keyboardevents.KeyboardEventManager.registerCallback`
 documents.  SDL names its keys differently from X11, Tk and wx, and this is the
 translation between the two.
@@ -13,7 +13,8 @@ import pytest
 pygame = pytest.importorskip('pygame')
 
 from OpenGLContext.events.pygameevents import PygameXEvent
-from OpenGLContext.events import pygameevents
+from OpenGLContext.context import Context
+from OpenGLContext.windowsystem.pygame import PygameWindowSystem
 from OpenGLContext.screenshot import ScreenshotMixin
 
 
@@ -100,7 +101,7 @@ class TestTheRestOfTheVocabulary:
         ('K_PAUSE', '<pause>'),
         ('K_LMETA', '<start>'),
     ])
-    def test_it_is_named_as_the_other_backends_name_it(self, translate, key,
+    def test_it_is_named_as_the_other_window_systems_name_it(self, translate, key,
                                                        expected):
         assert translate(pygame.key.name(getattr(pygame, key))) == expected
 
@@ -113,10 +114,13 @@ def test_a_synthetic_release_is_named_the_same_way():
     """
     sent = []
 
-    class Host(pygameevents.EventHandlerMixin):
+    class Host:
+        emitKey = Context.emitKey
+
         def ProcessEvent(self, event):
             sent.append(event)
 
     host = Host()
+    host.windowsystem = PygameWindowSystem(host)
     host.emitKey(pygame.K_F2, 0, (0, 0, 0))
     assert [event.name for event in sent] == ['<F2>']

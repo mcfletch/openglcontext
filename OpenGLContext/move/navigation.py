@@ -1,6 +1,7 @@
 """Choosing which movement mode is in force, and driving it.
 
-A context declares its modes on its :class:`ContextDefinition`; this manager
+A context declares its modes in its definition's ``navigation``
+(:class:`~OpenGLContext.move.navigationdefinition.Navigation`); this manager
 decides which one applies each frame and hands it the sampled input.
 
 Two things pick the mode, and one outranks the other.  The player *selects*
@@ -10,29 +11,54 @@ for as long as that stays true, and the player's own choice is remembered and
 restored when it stops — surfacing from water puts you back in the mode you
 were in, not in whichever happened to be first.
 
-The mode in force is published as ``ContextDefinition.movementMode``, an
-``SFNode`` like any other, so anything that wants to react — a swim overlay, a
-HUD label, a sound — watches that field rather than being told about it.
+The mode in force is published as ``navigation.current``, an ``SFNode`` like
+any other, so anything that wants to react — a swim overlay, a HUD label, a
+sound — watches that field, or adds itself to :attr:`NavigationManager.listeners`.
+
+The classic navigation (:class:`~OpenGLContext.move.modes.ExamineMode`) is
+declared among the modes but is not driven from here: it moves the camera from
+events, through the context's free-fly manager, and a walking context hands
+the camera back to it when walking stops.
 """
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any, Optional
 
 from .modes import KeyBinding, MovementMode
 
+#: What a listener is told: the mode now in force, or None.
+Listener = Callable[[Optional[MovementMode]], None]
+
 
 class NavigationManager:
-    """Selects and drives the movement mode for one context."""
+    """Selects and drives the movement mode for one context.
+
+    ``definition`` is the context's
+    :class:`~OpenGLContext.contextdefinition.ContextDefinition`, whose
+    ``navigation`` is read each time, so a navigation assigned later is the
+    one managed; ``platform`` is what the modes move.
+    """
 
     def __init__(self, definition: Any, platform: Any) -> None:
         self.definition = definition
         self.platform = platform
+        #: Called with the mode in force each time it changes.
+        self.listeners: list[Listener] = []
         #: What the player chose, remembered across world-imposed modes.
         self._selected: Optional[MovementMode] = None
-        first = self._selectable()
-        if first:
-            self._selected = first[0]
-            self._publish(first[0])
+        first = self._initial()
+        if first is not None:
+            self._selected = first
+            self._publish(first)
+
+    def _initial(self) -> Optional[MovementMode]:
+        """The mode the navigation names to start in, else the first selectable"""
+        choices = self._selectable()
+        wanted = str(getattr(self.navigation, 'mode', '') or '')
+        for mode in choices:
+            if mode.name == wanted:
+                return mode
+        return choices[0] if choices else None
 
     def retarget(self, platform: Any) -> None:
         """Drive a different platform, keeping the player's chosen mode.
@@ -46,8 +72,26 @@ class NavigationManager:
         self.platform = platform
 
     # -- the declared modes ----------------------------------------------
+    @property
+    def navigation(self) -> Any:
+        """The navigation declaration managed, or None"""
+        return getattr(self.definition, 'navigation', None) or None
+
     def modes(self) -> Sequence[MovementMode]:
-        return list(getattr(self.definition, 'movementModes', ()) or ())
+        """The declared modes that move a body; the classic navigation is not one"""
+        navigation = self.navigation
+        return list(navigation.movingModes()) if navigation is not None else []
+
+    @property
+    def userSwitching(self) -> tuple[str, ...]:
+        """How the user may change the mode: ``keys``, ``controls``, or neither.
+
+        What the key binding and the on-screen selector consult.  It governs
+        what the user is offered, never what the application may do:
+        :meth:`select` and :meth:`cycle` work whatever this says.
+        """
+        navigation = self.navigation
+        return tuple(navigation.modeSwitching) if navigation is not None else ()
 
     def _selectable(self) -> list[MovementMode]:
         """Modes the player may choose: enabled, and not world-imposed.
@@ -61,14 +105,28 @@ class NavigationManager:
         return [mode for mode in self.modes()
                 if mode.enabled and not self._imposable(mode)]
 
+    def selectable(self) -> list[MovementMode]:
+        """The modes a selector offers, in declared order"""
+        return self._selectable()
+
     @staticmethod
     def _imposable(mode: MovementMode) -> bool:
         """Whether the mode decides for itself when it applies."""
         return type(mode).enter_when is not MovementMode.enter_when
 
+    @property
+    def current(self) -> Optional[MovementMode]:
+        """The mode in force, as last published"""
+        navigation = self.navigation
+        return (navigation.current or None) if navigation is not None else None
+
     def _publish(self, mode: Optional[MovementMode]) -> None:
-        if getattr(self.definition, 'movementMode', None) is not mode:
-            self.definition.movementMode = mode
+        navigation = self.navigation
+        if navigation is None or (navigation.current or None) is mode:
+            return
+        navigation.current = mode
+        for listener in list(self.listeners):
+            listener(mode)
 
     # -- selecting --------------------------------------------------------
     def select(self, name: str) -> bool:

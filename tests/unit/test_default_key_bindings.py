@@ -12,7 +12,7 @@ key-down here, by name.
 
 import pytest
 
-from OpenGLContext.context import Context
+from OpenGLContext.context import Context, ContextCore
 from OpenGLContext.events.eventhandlermixin import EventHandlerMixin
 from OpenGLContext.events.keyboardevents import KeyboardEvent, KeypressEvent
 from OpenGLContext.interactivecontext import InteractiveContext
@@ -53,7 +53,7 @@ class Recorder(ScreenshotMixin):
 @pytest.fixture
 def bindings():
     recorder = Recorder()
-    Context.setupDefaultEventCallbacks(recorder)
+    ContextCore.setupDefaultEventCallbacks(recorder)
     return recorder
 
 
@@ -105,13 +105,13 @@ class Probe(ScreenshotMixin, EventHandlerMixin):
 
     The registration tests above pin the *shape* of the binding; this pins the
     thing that actually matters -- that pressing the key runs the handler --
-    through the event manager every backend dispatches into.
+    through the event manager every window system dispatches into.
     """
 
     EventManagerClasses = InteractiveContext.EventManagerClasses
     TimeManagerClass = getattr(InteractiveContext, 'TimeManagerClass', None)
 
-    setupDefaultEventCallbacks = Context.setupDefaultEventCallbacks
+    setupDefaultEventCallbacks = ContextCore.setupDefaultEventCallbacks
     OnEscape = Context.OnEscape
     OnQuit = Context.OnQuit
     OnNextViewpoint = Context.OnNextViewpoint
@@ -164,7 +164,7 @@ class TestPressingIt:
         assert probe.toggled == 1
 
     def test_a_character_event_does_not_toggle_it_a_second_time(self, probe):
-        """A backend that does raise one must not double-toggle."""
+        """A window system that does raise one must not double-toggle."""
         probe.fire('keyboard', 'f', (0, 0, 1))
         probe.fire('keypress', 'f', (0, 0, 1))
         assert probe.toggled == 1

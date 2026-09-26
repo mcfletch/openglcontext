@@ -164,12 +164,17 @@ Mouse events and selection
 --------------------------
 
 The :py:mod:`events <OpenGLContext.events>` package generates events the same
-way on every GUI library. Each backend defines subclasses of the event and
-event handler classes, which translate the toolkit's native events into
-OpenGLContext events. The event handler classes are mix-ins, included in each
-backend's Context class to provide the ``addEventHandler`` interface above.
+way on every GUI library. Each window system (:py:mod:`OpenGLContext.windowsystem`)
+connects its toolkit's input callbacks to methods of its own, which build
+OpenGLContext events -- subclasses defined per toolkit in the ``events``
+package -- and hand them to the context.  ``addEventHandler`` and the event
+managers come from
+:py:class:`~OpenGLContext.events.eventhandlermixin.EventHandlerMixin`, one of
+``Context``'s bases, so every context has them whichever window system it
+holds, and none of the toolkit's own methods are in the context's namespace.
 
-Mouse events reach the application through the pick queue. A backend adds an
+Mouse events reach the application through the pick queue. A window system
+adds an
 event with ``Context.addPickEvent``, and the selection pass dispatches it once
 it has found what is under the pick point. The queue is a mapping keyed by
 ``Event.getPickKey``, so identical events within one frame are dispatched
@@ -179,7 +184,8 @@ The mouse wheel is handled differently. Each notch arrives as a press and
 release of button 3 or 4 (``mouseevents.WHEEL_UP`` and ``WHEEL_DOWN``, the X11
 numbering). A notch is an increment rather than a state, so each notch has a
 distinct pick key and none is dropped. GLFW reports scrolling through its own
-callback as offsets, and the GLFW backend translates these into the button
+callback as offsets, and the GLFW window system translates these into the
+button
 events; see :ref:`the overlay UI documentation <wheel>`.
 
 When an event arrives, ``Context.routeEvent`` sets ``event.view`` to the view

@@ -21,7 +21,7 @@ that binding would be accepted and then never fire.  The handler has to be a
 bound method of something long-lived, because the event system holds callbacks
 weakly::
 
-    class Game(OverlayMixin, GLFWInteractiveContext):
+    class Game(Context):
         def OnInit(self):
             self.addEventHandler('keyboard', name='<F10>', state=1,
                                  function=self.openSettings)
@@ -178,7 +178,8 @@ def settings_panel(context: Any, session: Optional[SettingsSession] = None,
     cancel.on_activate = doCancel
     reset.on_activate = doReset
     keys.on_activate = doBindings
-    keys.enabled = bool(getattr(definition, 'movementModes', None))
+    declared = getattr(definition, 'navigation', None)
+    keys.enabled = bool(declared and declared.movingModes())
     return panel
 
 
@@ -189,7 +190,7 @@ def movement_panel(context: Any, session: SettingsSession, index: int,
     Its Apply writes into the settings screen's draft, so cancelling the screen
     after applying this page still changes nothing.
     """
-    child = session.child('movementModes', index=index)
+    child = session.child(node=_movingModes(session.draft)[index])
     return record_panel(context, child, title or _('Movement'))
 
 
@@ -221,6 +222,15 @@ def record_panel(context: Any, session: SettingsSession, title: str,
 
 
 # -- the pieces the screen is assembled from ------------------------------
+def _movingModes(definition: Any) -> list[Any]:
+    """The declared modes a settings page edits: those that move a body.
+
+    The classic navigation has no settings of its own to offer.
+    """
+    declared = getattr(definition, 'navigation', None)
+    return list(declared.movingModes()) if declared else []
+
+
 def _declared(node: Any, attribute: str) -> Optional[Sequence[str]]:
     """A node class's named field order, or None to show every field."""
     return getattr(type(node), attribute, None)
@@ -252,7 +262,7 @@ def _modeSection(context: Any, session: SettingsSession) -> list[Any]:
     modes with a dozen tunables each, and a settings screen that dumps all of
     them is not a settings screen.
     """
-    modes = list(getattr(session.draft, 'movementModes', ()) or ())
+    modes = _movingModes(session.draft)
     if not modes:
         return []
     buttons: list[Any] = []

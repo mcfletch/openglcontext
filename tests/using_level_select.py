@@ -22,7 +22,6 @@ import tempfile
 from OpenGLContext import testingcontext
 '''The chooser is a panel like any other -- :doc:`Putting a panel on the
 screen <using_ui>` -- and the carousel is a widget in it.'''
-from OpenGLContext.ui.overlay import OverlayMixin
 from OpenGLContext.ui.gallery import Carousel
 from OpenGLContext.ui.layout import Column, Row
 from OpenGLContext.ui.panel import Panel
@@ -45,7 +44,7 @@ LEVELS = [
 ]
 
 
-class TestContext(OverlayMixin, BaseContext):
+class TestContext(BaseContext):
     initialPosition = (0, 1.2, 6)
 
     def OnInit(self):

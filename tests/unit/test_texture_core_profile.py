@@ -19,7 +19,8 @@ pytest.importorskip("glfw")
 PIL = pytest.importorskip("PIL.Image")
 
 from OpenGLContext.scenegraph import basenodes
-from OpenGLContext import glfwcontext, texture
+from OpenGLContext import texture
+from OpenGLContext.context import Context
 from OpenGLContext.capture import read_back_buffer
 from OpenGLContext.passes import renderpass
 from tests.unit.glrender import base_env
@@ -60,19 +61,16 @@ def textured_scene(repeat=True):
 
 
 class TestAnImageTextureDrawsUnderCore:
-    def test_the_frame_is_not_black(self, render_scene):
+    def test_the_frame_is_not_black(self, render_scene, monkeypatch):
         frames = []
-        original = glfwcontext.GLFWContext.SwapBuffers
+        original = Context.SwapBuffers
 
         def capturing(self):
             frames.append(read_back_buffer()[0])
             return original(self)
 
-        glfwcontext.GLFWContext.SwapBuffers = capturing
-        try:
-            render_scene(textured_scene(), frames=4)
-        finally:
-            glfwcontext.GLFWContext.SwapBuffers = original
+        monkeypatch.setattr(Context, 'SwapBuffers', capturing)
+        render_scene(textured_scene(), frames=4)
         assert frames, 'nothing was rendered'
         assert np.asarray(frames[-1]).max() > 0
 

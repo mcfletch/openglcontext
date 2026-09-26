@@ -2,15 +2,16 @@
 (:meth:`OpenGLContext.context.Context.fromConfig`).
 
 ``oglc-test -c settings.ini script.py`` is what reaches it: the file names the
-backend to open the window with and the context flavour to open, and the
-class that comes back is subclassed by the runner to add its frame counting.
-So the result has to be a class -- something usable as a base -- carrying the
-``contextDefinition`` the same file configures.
+window system to open the window with, and the class that comes back is
+subclassed by the runner to add its frame counting.  So the result has to be a
+class -- something usable as a base -- carrying the ``contextDefinition`` the
+same file configures.
 
-``[context] type`` takes one of the plugin type keys (``context``,
-``interactive``, ``vrml``) and defaults to ``vrml``; ``[context] gui`` names a
-backend and defaults to whatever the user's preference resolves to.  The rest
-of the file is read by
+``[context] type`` is checked against the keys ``context``, ``interactive`` and
+``vrml``, each of which answers a :class:`~OpenGLContext.context.Context`;
+``[context] gui`` names a window system, set as the definition's
+``windowsystem`` where its ``[contextdefinition]`` section names none, and
+otherwise the user's preference decides.  The rest of the file is read by
 :meth:`OpenGLContext.contextdefinition.ContextDefinition.fromConfig`.
 """
 import configparser
@@ -45,10 +46,21 @@ class TestItProducesAClass:
 
         assert issubclass(Subclass, found)
 
-    def test_it_derives_from_the_backend_class(self):
+    def test_it_derives_from_context(self):
         cfg = _config(gui='glfw', type='vrml')
         found = context.Context.fromConfig(cfg)
         assert issubclass(found, context.Context)
+
+    def test_the_gui_names_the_window_system(self):
+        found = context.Context.fromConfig(_config(gui='glfw'))
+        assert found.contextDefinition.windowsystem == 'glfw'
+
+    def test_the_definitions_own_window_system_wins_over_the_gui(self):
+        cfg = _config(gui='glfw')
+        cfg.add_section('contextdefinition')
+        cfg.set('contextdefinition', 'windowsystem', 'egl')
+        found = context.Context.fromConfig(cfg)
+        assert found.contextDefinition.windowsystem == 'egl'
 
 
 class TestItCarriesTheDefinition:
@@ -79,8 +91,8 @@ class TestAnUnknownTypeIsReported:
             assert key in message, message
 
 
-class TestAnUnavailableBackendIsNothing:
-    """``oglc-test`` falls back when the named backend cannot be loaded."""
+class TestAnUnavailableWindowSystemIsNothing:
+    """``oglc-test`` falls back when the named window system cannot be loaded."""
 
     def test_it_gives_none(self):
         assert context.Context.fromConfig(

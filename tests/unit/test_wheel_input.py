@@ -3,10 +3,10 @@
 A notch is spelled as a press and release of a button no physical mouse has --
 ``WHEEL_UP`` and ``WHEEL_DOWN``, the X11 numbering used throughout
 OpenGLContext -- so it travels the same route as a click: a pick event carrying
-a pick point, then :meth:`OverlayMixin.overlaySinks`, which turns the pair into
+a pick point, then :meth:`OverlayStackMixin.overlaySinks`, which turns the pair into
 one call on the panel under the pointer.
 
-Every backend has to produce that spelling, and they do not agree on how the
+Every window system has to produce that spelling, and they do not agree on how the
 wheel arrives.  GLUT reports it as those buttons already.  GLFW has a callback
 of its own reporting offsets rather than buttons, and on a touchpad reports
 fractions of one, where a notch is the sum of a stream of them.
@@ -14,38 +14,40 @@ fractions of one, where a notch is the sum of a stream of them.
 
 import pytest
 
-from OpenGLContext.context import Context
+from OpenGLContext.context import Context, ContextCore
 from OpenGLContext.events import glutevents, pygameevents
 from OpenGLContext.events.inputstate import InputState
 from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
 from OpenGLContext.ui.metrics import FontMetrics
-from OpenGLContext.ui.overlay import OverlayMixin
+from OpenGLContext.ui.overlay import OverlayStackMixin
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.scroll import ScrollViewport
 from OpenGLContext.ui.widgets import Button, Label
 
 glfw = pytest.importorskip('glfw')
 from OpenGLContext.events import glfwevents  # needs glfw
-from OpenGLContext import glfwcontext
+from OpenGLContext.windowsystem import glfw as glfwsystem
+from OpenGLContext.windowsystem.glfw import GLFWWindowSystem
 
 VIEWPORT = (800, 600)
 
 
 def mock_glfw(monkeypatch, cursor=(100.0, 100.0), window=VIEWPORT,
               framebuffer=VIEWPORT):
-    monkeypatch.setattr(glfwevents.glfw, 'get_window_size', lambda _w: window)
-    monkeypatch.setattr(glfwevents.glfw, 'get_framebuffer_size',
+    monkeypatch.setattr(glfwsystem.glfw, 'get_window_size', lambda _w: window)
+    monkeypatch.setattr(glfwsystem.glfw, 'get_framebuffer_size',
                         lambda _w: framebuffer)
-    monkeypatch.setattr(glfwevents.glfw, 'get_cursor_pos', lambda _w: cursor)
+    monkeypatch.setattr(glfwsystem.glfw, 'get_cursor_pos', lambda _w: cursor)
 
 
-class GLFWRecorder(glfwevents.EventHandlerMixin):
-    """Enough of a context to drive the GLFW callbacks and keep the events."""
+class GLFWRecorder:
+    """Enough of a context to drive a GLFW window system and keep the events."""
 
     currentPass = None
 
     def __init__(self):
         self.picked = []
+        self.windowsystem = GLFWWindowSystem(self)
 
     def getViewPort(self):
         return VIEWPORT
@@ -57,7 +59,7 @@ class GLFWRecorder(glfwevents.EventHandlerMixin):
         pass
 
     def buttons(self):
-        """The (button, state) pairs the backend produced, in order."""
+        """The (button, state) pairs the window system produced, in order."""
         return [(event.button, event.state) for event in self.picked]
 
 
@@ -67,7 +69,7 @@ def recorder(monkeypatch):
     return GLFWRecorder()
 
 
-class TestTheGLFWBackendReportsNotches:
+class TestTheGLFWWindowSystemReportsNotches:
     """GLFW's scroll callback has to become the buttons the rest expects."""
 
     def test_the_scroll_callback_is_registered(self, monkeypatch):
@@ -77,45 +79,45 @@ class TestTheGLFWBackendReportsNotches:
                      'framebuffer_size', 'window_close', 'window_focus',
                      'scroll'):
             monkeypatch.setattr(
-                glfwcontext.glfw, 'set_%s_callback' % name,
+                glfwsystem.glfw, 'set_%s_callback' % name,
                 lambda _window, callback, name=name: registered.__setitem__(
                     name, callback))
-        context = glfwcontext.GLFWContext.__new__(glfwcontext.GLFWContext)
-        context.window = object()
-        context.setupCallbacks()
+        windowsystem = GLFWRecorder().windowsystem
+        windowsystem.window = object()
+        windowsystem.bindCallbacks()
         assert 'scroll' in registered
 
     def test_the_registered_callback_reaches_the_handler(self, monkeypatch):
+        mock_glfw(monkeypatch)
         seen = []
         monkeypatch.setattr(
-            glfwcontext.glfw, 'set_scroll_callback',
+            glfwsystem.glfw, 'set_scroll_callback',
             lambda _window, callback: seen.append(callback))
         for name in ('key', 'char', 'mouse_button', 'cursor_pos',
                      'framebuffer_size', 'window_close', 'window_focus'):
-            monkeypatch.setattr(glfwcontext.glfw, 'set_%s_callback' % name,
+            monkeypatch.setattr(glfwsystem.glfw, 'set_%s_callback' % name,
                                 lambda _window, _callback: None)
-        context = glfwcontext.GLFWContext.__new__(glfwcontext.GLFWContext)
-        context.window = object()
-        context.setupCallbacks()
-        forwarded = []
-        context.glfwOnScroll = lambda *arguments: forwarded.append(arguments)
-        seen[0](context.window, 0.0, 1.0)
-        assert forwarded == [(context.window, 0.0, 1.0)]
+        recorder = GLFWRecorder()
+        windowsystem = recorder.windowsystem
+        windowsystem.window = object()
+        windowsystem.bindCallbacks()
+        seen[0](windowsystem.window, 0.0, 1.0)
+        assert recorder.buttons() == [(WHEEL_UP, 1), (WHEEL_UP, 0)]
 
     def test_scrolling_up_is_a_press_and_release_of_the_up_button(
             self, recorder):
-        recorder.glfwOnScroll(object(), 0.0, 1.0)
+        recorder.windowsystem.onScroll(object(), 0.0, 1.0)
         assert recorder.buttons() == [(WHEEL_UP, 1), (WHEEL_UP, 0)]
 
     def test_scrolling_down_is_the_down_button(self, recorder):
-        recorder.glfwOnScroll(object(), 0.0, -1.0)
+        recorder.windowsystem.onScroll(object(), 0.0, -1.0)
         assert recorder.buttons() == [(WHEEL_DOWN, 1), (WHEEL_DOWN, 0)]
 
     def test_a_notch_carries_the_pointer_as_its_pick_point(self, monkeypatch):
         """The widget scrolled is the one under the pointer, so it must know."""
         mock_glfw(monkeypatch, cursor=(120.0, 40.0))
         recorder = GLFWRecorder()
-        recorder.glfwOnScroll(object(), 0.0, 1.0)
+        recorder.windowsystem.onScroll(object(), 0.0, 1.0)
         assert recorder.picked[0].pickPoint == (120, 600 - 40)
 
     def test_the_pick_point_is_in_framebuffer_pixels(self, monkeypatch):
@@ -124,16 +126,16 @@ class TestTheGLFWBackendReportsNotches:
                   framebuffer=(1600, 1200))
         recorder = GLFWRecorder()
         recorder.getViewPort = lambda: (1600, 1200)
-        recorder.glfwOnScroll(object(), 0.0, -1.0)
+        recorder.windowsystem.onScroll(object(), 0.0, -1.0)
         assert recorder.picked[0].pickPoint == (200, 1200 - 100)
 
     def test_several_lines_at_once_are_several_notches(self, recorder):
-        recorder.glfwOnScroll(object(), 0.0, 3.0)
+        recorder.windowsystem.onScroll(object(), 0.0, 3.0)
         assert recorder.buttons() == [(WHEEL_UP, 1), (WHEEL_UP, 0)] * 3
 
     def test_a_horizontal_scroll_alone_does_nothing(self, recorder):
         """There is nothing in the interface that scrolls sideways."""
-        recorder.glfwOnScroll(object(), 1.0, 0.0)
+        recorder.windowsystem.onScroll(object(), 1.0, 0.0)
         assert recorder.buttons() == []
 
 
@@ -145,35 +147,35 @@ class TestATouchpadScrollsSmoothly:
     """
 
     def test_a_fraction_of_a_notch_does_not_scroll_yet(self, recorder):
-        recorder.glfwOnScroll(object(), 0.0, 0.3)
+        recorder.windowsystem.onScroll(object(), 0.0, 0.3)
         assert recorder.buttons() == []
 
     def test_fractions_add_up_to_a_notch(self, recorder):
         for _ in range(4):
-            recorder.glfwOnScroll(object(), 0.0, 0.3)
+            recorder.windowsystem.onScroll(object(), 0.0, 0.3)
         assert recorder.buttons() == [(WHEEL_UP, 1), (WHEEL_UP, 0)]
 
     def test_the_remainder_is_kept_rather_than_dropped(self, recorder):
         """Ten tenths are one notch however they were delivered."""
         for _ in range(10):
-            recorder.glfwOnScroll(object(), 0.0, 0.1)
+            recorder.windowsystem.onScroll(object(), 0.0, 0.1)
         assert recorder.buttons() == [(WHEEL_UP, 1), (WHEEL_UP, 0)]
 
     def test_fractions_downward_scroll_downward(self, recorder):
         for _ in range(4):
-            recorder.glfwOnScroll(object(), 0.0, -0.3)
+            recorder.windowsystem.onScroll(object(), 0.0, -0.3)
         assert recorder.buttons() == [(WHEEL_DOWN, 1), (WHEEL_DOWN, 0)]
 
     def test_turning_back_does_not_bank_the_remainder(self, recorder):
         """Otherwise a jitter over the pad scrolls the way it is not moving."""
         for _ in range(3):
-            recorder.glfwOnScroll(object(), 0.0, 0.3)
+            recorder.windowsystem.onScroll(object(), 0.0, 0.3)
         for _ in range(3):
-            recorder.glfwOnScroll(object(), 0.0, -0.3)
+            recorder.windowsystem.onScroll(object(), 0.0, -0.3)
         assert recorder.buttons() == []
 
 
-class TestTheGLUTBackendReportsNotches:
+class TestTheGLUTWindowSystemReportsNotches:
     """GLUT names the wheel with the buttons already; it must keep them."""
 
     class Context:
@@ -203,7 +205,7 @@ class TestTheGLUTBackendReportsNotches:
         assert 'Unrecognized button' in caplog.text
 
 
-class TestThePygameBackendReportsNotches:
+class TestThePygameWindowSystemReportsNotches:
     """Pygame numbers every button one higher, the wheel included."""
 
     pygame = pytest.importorskip('pygame')
@@ -267,7 +269,7 @@ class TestEveryNotchSurvivesTheFrame:
         contextDefinition = None
         viewLayout = None
         addPickEvent = Context.addPickEvent
-        getViewLayout = Context.getViewLayout
+        getViewLayout = ContextCore.getViewLayout
         routeEvent = Context.routeEvent
 
         def __init__(self):
@@ -306,7 +308,7 @@ class _Viewport:
         return VIEWPORT
 
 
-class WheelContext(OverlayMixin, glfwevents.EventHandlerMixin):
+class WheelContext(OverlayStackMixin):
     """A context wired as the real one is: GLFW's events into an overlay.
 
     ``addPickEvent`` dispatches at once, standing in for the selection pass,
@@ -318,6 +320,7 @@ class WheelContext(OverlayMixin, glfwevents.EventHandlerMixin):
     def __init__(self):
         self.inputState = InputState()
         self.dispatched = []
+        self.windowsystem = GLFWWindowSystem(self)
 
     def getViewPort(self):
         return VIEWPORT
@@ -366,19 +369,19 @@ class TestTheWheelScrollsThePanelUnderIt:
         return view
 
     def test_a_notch_down_scrolls_the_content_down(self, context, view):
-        context.glfwOnScroll(object(), 0.0, -1.0)
+        context.windowsystem.onScroll(object(), 0.0, -1.0)
         assert view.scroll > 0
 
     def test_a_notch_up_scrolls_it_back(self, context, view):
-        context.glfwOnScroll(object(), 0.0, -3.0)
+        context.windowsystem.onScroll(object(), 0.0, -3.0)
         scrolled = view.scroll
-        context.glfwOnScroll(object(), 0.0, 1.0)
+        context.windowsystem.onScroll(object(), 0.0, 1.0)
         assert 0 < view.scroll < scrolled
 
     @pytest.mark.usefixtures('view')
     def test_the_world_never_sees_the_notch(self, context):
         """A wheel the interface used must not also turn the player's view."""
-        context.glfwOnScroll(object(), 0.0, -1.0)
+        context.windowsystem.onScroll(object(), 0.0, -1.0)
         assert context.dispatched == []
 
     def test_a_notch_does_not_press_the_widget_under_the_pointer(
@@ -388,7 +391,7 @@ class TestTheWheelScrollsThePanelUnderIt:
         button = Button(text='Ok', name='ok')
         button.on_activate = lambda widget: pressed.append(widget)
         context.pushOverlay(Panel(fill=True, children=[button]))
-        context.glfwOnScroll(object(), 0.0, -1.0)
+        context.windowsystem.onScroll(object(), 0.0, -1.0)
         assert pressed == []
 
 
@@ -407,35 +410,35 @@ class TestSayingWhatTheWheelReported:
         return GLFWRecorder()
 
     def test_it_is_silent_unless_it_is_asked(self, monkeypatch, caplog):
-        monkeypatch.delenv(glfwevents.WHEEL_DEBUG_ENV, raising=False)
+        monkeypatch.delenv(glfwsystem.WHEEL_DEBUG_ENV, raising=False)
         made = self.recorder(monkeypatch)
-        with caplog.at_level('INFO', logger=glfwevents.log.name):
-            made.glfwOnScroll(object(), 0.0, 1.0)
+        with caplog.at_level('INFO', logger=glfwsystem.log.name):
+            made.windowsystem.onScroll(object(), 0.0, 1.0)
         assert not [r for r in caplog.records if 'wheel' in r.getMessage()]
 
     def test_a_spelled_out_no_is_silent(self, monkeypatch, caplog):
-        monkeypatch.setenv(glfwevents.WHEEL_DEBUG_ENV, '0')
+        monkeypatch.setenv(glfwsystem.WHEEL_DEBUG_ENV, '0')
         made = self.recorder(monkeypatch)
-        with caplog.at_level('INFO', logger=glfwevents.log.name):
-            made.glfwOnScroll(object(), 0.0, 1.0)
+        with caplog.at_level('INFO', logger=glfwsystem.log.name):
+            made.windowsystem.onScroll(object(), 0.0, 1.0)
         assert not [r for r in caplog.records if 'wheel' in r.getMessage()]
 
     def test_asked_it_reports_the_offset_and_the_notches(self, monkeypatch,
                                                           caplog):
-        monkeypatch.setenv(glfwevents.WHEEL_DEBUG_ENV, '1')
+        monkeypatch.setenv(glfwsystem.WHEEL_DEBUG_ENV, '1')
         made = self.recorder(monkeypatch)
-        with caplog.at_level('INFO', logger=glfwevents.log.name):
-            made.glfwOnScroll(object(), 0.0, 1.0)
+        with caplog.at_level('INFO', logger=glfwsystem.log.name):
+            made.windowsystem.onScroll(object(), 0.0, 1.0)
         said = ' '.join(r.getMessage() for r in caplog.records)
         assert 'wheel' in said and '1.0' in said
 
     def test_it_reports_a_notch_that_produced_nothing_too(self, monkeypatch,
                                                            caplog):
         """A fraction of a detent is the other half of the story."""
-        monkeypatch.setenv(glfwevents.WHEEL_DEBUG_ENV, '1')
+        monkeypatch.setenv(glfwsystem.WHEEL_DEBUG_ENV, '1')
         made = self.recorder(monkeypatch)
-        with caplog.at_level('INFO', logger=glfwevents.log.name):
-            made.glfwOnScroll(object(), 0.0, 0.25)
+        with caplog.at_level('INFO', logger=glfwsystem.log.name):
+            made.windowsystem.onScroll(object(), 0.0, 0.25)
         assert [r for r in caplog.records if 'wheel' in r.getMessage()]
 
 
@@ -452,43 +455,43 @@ class TestADetentIsNotAlwaysOne:
     """
 
     def test_a_detent_of_one_and_a_half_is_one_notch(self, recorder):
-        recorder.glfwOnScroll(object(), 0.0, 1.5)
+        recorder.windowsystem.onScroll(object(), 0.0, 1.5)
         assert recorder.buttons() == [(WHEEL_UP, 1), (WHEEL_UP, 0)]
 
     def test_and_the_next_one_is_one_notch_too(self, recorder):
         """The bug in one line: the second click used to send two."""
         for _ in range(4):
-            recorder.glfwOnScroll(object(), 0.0, 1.5)
+            recorder.windowsystem.onScroll(object(), 0.0, 1.5)
         assert recorder.buttons().count((WHEEL_UP, 1)) == 4
 
     def test_two_detents_in_one_report_are_two_notches(self, recorder):
-        recorder.glfwOnScroll(object(), 0.0, 1.5)
+        recorder.windowsystem.onScroll(object(), 0.0, 1.5)
         recorder.buttons().clear()
         recorder.picked.clear()
-        recorder.glfwOnScroll(object(), 0.0, 3.0)
+        recorder.windowsystem.onScroll(object(), 0.0, 3.0)
         assert recorder.buttons().count((WHEEL_UP, 1)) == 2
 
     def test_a_platform_whose_detent_is_one_is_unchanged(self, recorder):
         for _ in range(3):
-            recorder.glfwOnScroll(object(), 0.0, 1.0)
+            recorder.windowsystem.onScroll(object(), 0.0, 1.0)
         assert recorder.buttons().count((WHEEL_UP, 1)) == 3
 
     def test_a_burst_of_three_on_such_a_platform_is_still_three(self, recorder):
-        recorder.glfwOnScroll(object(), 0.0, 3.0)
+        recorder.windowsystem.onScroll(object(), 0.0, 3.0)
         assert recorder.buttons().count((WHEEL_UP, 1)) == 3
 
     def test_the_size_is_learned_in_either_direction(self, recorder):
-        recorder.glfwOnScroll(object(), 0.0, -1.5)
+        recorder.windowsystem.onScroll(object(), 0.0, -1.5)
         assert recorder.buttons() == [(WHEEL_DOWN, 1), (WHEEL_DOWN, 0)]
 
     def test_a_touchpad_is_still_summed(self, recorder):
         """A fraction of a detent is not evidence about the detent's size."""
         for _ in range(4):
-            recorder.glfwOnScroll(object(), 0.0, 0.3)
+            recorder.windowsystem.onScroll(object(), 0.0, 0.3)
         assert recorder.buttons() == [(WHEEL_UP, 1), (WHEEL_UP, 0)]
 
     def test_a_wheel_does_not_inherit_a_touchpad_remainder(self, recorder):
         """Half a drag over a pad must not turn the next click into two."""
-        recorder.glfwOnScroll(object(), 0.0, 0.3)
-        recorder.glfwOnScroll(object(), 0.0, 1.5)
+        recorder.windowsystem.onScroll(object(), 0.0, 0.3)
+        recorder.windowsystem.onScroll(object(), 0.0, 1.5)
         assert recorder.buttons().count((WHEEL_UP, 1)) == 1

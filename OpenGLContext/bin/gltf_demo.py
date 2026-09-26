@@ -253,6 +253,8 @@ class ReferencePicture(HUDGroup):
 
 
 class TestContext(ViewerContext):
+    #: The scene the physics world was last built for.
+    _physics_scene: Any = None
     """The viewer, browsing the sample catalogue instead of one file."""
 
     def hasSceneToShow(self) -> bool:
@@ -379,8 +381,8 @@ class TestContext(ViewerContext):
     def setupCallbacks(self) -> None:  # pragma: no cover - binds live event handlers
         # Skip the viewer's PageUp/PageDown viewpoint bindings (this browser has no
         # per-model cameras); n/p and PageUp/PageDown advance the *model* instead.
-        from OpenGLContext import testingcontext
-        testingcontext.getInteractive().setupCallbacks(self)
+        from OpenGLContext.context import Context
+        Context.setupCallbacks(self)
         for key in self.NEXT_MODEL_KEYS:
             self.addEventHandler('keyboard', name=key, function=self._next_model)
         for key in self.PREV_MODEL_KEYS:

@@ -48,6 +48,7 @@
  */
 """
 from OpenGLContext import testingcontext
+from OpenGLContext.events import systemtime
 # 'glut', because the scene is drawn with glutSolidSphere and glutSolidCube:
 # those need GLUT initialised, which only the GLUT backend does. Left to the
 # default backend the window opens and freeglut then refuses the first call
@@ -57,14 +58,13 @@ from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGL.GLUT import *
 from OpenGLContext.arrays import array
-import time
 
 class Timer:
     def __init__( self, cycle = 8.0):
-        self.startTime = time.time()
+        self.startTime = systemtime.systemTime()
         self.cycle = cycle
     def fraction( self ):
-        return ((time.time() - self.startTime)% self.cycle)/self.cycle
+        return ((systemtime.systemTime() - self.startTime)% self.cycle)/self.cycle
 
 
 class TestContext( BaseContext ):
@@ -97,7 +97,7 @@ class TestContext( BaseContext ):
         self.transparentZ = -8.0
         self.transparentTimer = Timer( 4.0 )
         self.animating = 1
-        self.startTime = time.time()
+        self.startTime = systemtime.systemTime()
 
         self.addEventHandler( "keypress", name = 'a', function = self.OnAnimate )
         print('Press "a" to stop animation\nNote: r key has no effect')

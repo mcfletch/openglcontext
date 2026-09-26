@@ -1,21 +1,22 @@
-"""Every backend offers the same window, whichever toolkit opened it.
+"""Every window system offers the same window, whichever toolkit opened it.
 
 OpenGLContext is meant to be the choice a thick-client project makes for its 3D,
 which means the GUI toolkit the project already uses must not decide what the
 engine can do. The capabilities below are the window-level ones -- the ones a
-backend rather than the renderer has to provide -- and this is where they are
-demanded of every backend at once, the way
+window system rather than the renderer has to provide -- and this is where they
+are demanded of every window system at once, the way
 `test_backend_context_lifecycle.py` demands the context-loss contract.
 
-A backend that genuinely cannot do something answers ``False`` rather than not
-having the method, so a caller can tell "this platform will not" from "nobody
-implemented this" and offer the user something else. Where a platform limit is
-real it is named here, once, with what it is.
+A window system that genuinely cannot do something answers ``False`` rather
+than not having the method, so a caller can tell "this platform will not" from
+"nobody implemented this" and offer the user something else. Where a platform
+limit is real it is named here, once, with what it is.
 
-See `plans/BACKEND-PARITY.md`.
+See `plans/BACKEND-PARITY.md` and `plans/WINDOWSYSTEM-COMPOSITION.md`.
 """
 import ast
 import ctypes
+import inspect
 import os
 import threading
 from typing import ClassVar
@@ -26,43 +27,43 @@ from OpenGL.GL import (
 )
 
 from OpenGLContext.contextdefinition import ContextDefinition
-from OpenGLContext import context as context_module, plugins, testingcontext
+from OpenGLContext import context as context_module, testingcontext, windowsystem
 from OpenGLContext.context import Context, contextAddress, sameContext
 from OpenGLContext.events.eventhandlermixin import HeldKeyMixin
 from OpenGLContext.scenegraph import imagetexture
 from OpenGLContext.testing.glcontext import gl_available
+from OpenGLContext.windowsystem.base import WindowSystem
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PACKAGE = os.path.dirname(os.path.dirname(HERE))
 
-#: Every backend that owns a window, and the module its Context lives in.  A
-#: backend missing from here is a backend nothing holds to the contract.
-BACKENDS = (
-    ('glfw', 'OpenGLContext/glfwcontext.py'),
-    ('glut', 'OpenGLContext/glutcontext.py'),
-    ('pygame', 'OpenGLContext/pygamecontext.py'),
-    ('tk', 'OpenGLContext/tkcontext.py'),
-    ('wx', 'OpenGLContext/wxcontext.py'),
+#: Every window system that owns a window, the module it lives in and its
+#: class.  One missing from here is one nothing holds to the contract.
+WINDOW_SYSTEMS = (
+    ('glfw', 'OpenGLContext/windowsystem/glfw.py', 'GLFWWindowSystem'),
+    ('glut', 'OpenGLContext/windowsystem/glut.py', 'GLUTWindowSystem'),
+    ('pygame', 'OpenGLContext/windowsystem/pygame.py', 'PygameWindowSystem'),
+    ('tk', 'OpenGLContext/windowsystem/tk.py', 'TkWindowSystem'),
+    ('wx', 'OpenGLContext/windowsystem/wx.py', 'WxWindowSystem'),
 )
+WINDOW_SYSTEM_IDS = [entry[0] for entry in WINDOW_SYSTEMS]
 
-#: The three plug-in kinds a backend registers under: the bare window, the one
-#: with navigation, and the one that can open a scene file.
-KINDS = (plugins.Context, plugins.InteractiveContext, plugins.VRMLContext)
-
-#: What a backend has to define beyond the base class, and why.
+#: What a window system has to define beyond the base class, the Context call
+#: an application makes that reaches it, and why.
 CAPABILITIES = (
-    ('setPointerCapture',
+    ('setPointerCapture', 'setPointerCapture',
      'mouse-look needs a hidden pointer reporting unbounded motion'),
-    ('setFullscreen',
+    ('setFullscreen', 'setFullscreen',
      'a player has to be able to leave full screen without restarting'),
-    ('applyVSync',
+    ('applyVSync', 'applyVSync',
      'the settings screen writes the field; something has to read it'),
-    ('pumpWindowEvents',
+    ('pump', 'pumpWindowEvents',
      'a program driving its own loop has to be able to deliver input'),
-    ('releaseWindow',
+    ('release', 'releaseWindow',
      'one name for letting a window and the GL objects in it go, so a caller '
-     'that built a context need not know which backend made it'),
+     'that built a context need not know which toolkit made it'),
 )
+CAPABILITY_IDS = [entry[0] for entry in CAPABILITIES]
 
 
 def _source(path):
@@ -70,38 +71,69 @@ def _source(path):
         return handle.read()
 
 
-def _defines(path, name):
-    """Whether the module at ``path`` defines a method called ``name``"""
-    for node in ast.walk(ast.parse(_source(path))):
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            if node.name == name:
-                return True
-    return False
+def _methods(path, className):
+    """The methods the class ``className`` in the module at ``path`` defines,
+    by name.
+
+    Read from the source rather than imported, so a window system whose
+    toolkit is not installed here is held to the contract as well.
+    """
+    for node in ast.parse(_source(path)).body:
+        if isinstance(node, ast.ClassDef) and node.name == className:
+            return {child.name: child for child in node.body
+                    if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))}
+    raise AssertionError('%s defines no class %s' % (path, className))
 
 
-class TestEveryBackendIsRegistered:
-    """A name that does not resolve is a backend nobody can select."""
-
-    @pytest.mark.parametrize('name', [backend[0] for backend in BACKENDS])
-    @pytest.mark.parametrize('kind', KINDS, ids=[k.__name__ for k in KINDS])
-    def test_the_registered_name_resolves_to_a_class(self, name, kind):
-        registered = [plugin for plugin in kind.registry if plugin.name == name]
-        assert registered, '%s is not registered as a %s' % (name, kind.__name__)
-        found = Context.getContextType(name, kind)
-        if found is None:
-            pytest.skip('%s is registered but its toolkit is not installed'
-                        % (name,))
-        assert isinstance(found, type)
+#: The module each window system's toolkit is imported from, for a skip that
+#: names what is not installed here.
+TOOLKITS = {
+    'glfw': 'glfw',
+    'glut': 'OpenGL.GLUT',
+    'pygame': 'pygame',
+    'tk': 'tkinter',
+    'wx': 'wx',
+}
 
 
-class TestEveryBackendOffersTheWindowCapabilities:
-    @pytest.mark.parametrize('name,path', BACKENDS,
-                             ids=[b[0] for b in BACKENDS])
-    @pytest.mark.parametrize('capability,why', CAPABILITIES,
-                             ids=[c[0] for c in CAPABILITIES])
-    def test_it_defines_the_capability(self, name, path, capability, why):
-        assert _defines(path, capability), '%s has no %s: %s' % (
-            name, capability, why)
+def _loaded(name):
+    """The registered window-system class ``name``; skipped where its toolkit
+    is not installed here."""
+    pytest.importorskip(TOOLKITS[name])
+    return windowsystem.load(name)
+
+
+class TestEveryWindowSystemIsRegistered:
+    """A name that does not resolve is a window system nobody can select."""
+
+    @pytest.mark.parametrize('name', WINDOW_SYSTEM_IDS)
+    def test_the_registered_name_resolves_to_a_class(self, name):
+        assert name in windowsystem.registered(), (
+            '%s is not registered as a window system' % (name,))
+        loaded = _loaded(name)
+        assert issubclass(loaded, WindowSystem)
+        assert loaded.name == name
+
+    @pytest.mark.parametrize('name', WINDOW_SYSTEM_IDS)
+    def test_nothing_it_must_provide_is_missing(self, name):
+        """An abstract method a window system leaves out makes it a class
+        nobody can instantiate, so every context on it fails as it is built."""
+        loaded = _loaded(name)
+        assert not inspect.isabstract(loaded), (
+            '%s leaves abstract: %s'
+            % (name, ', '.join(sorted(loaded.__abstractmethods__))))
+
+
+class TestEveryWindowSystemOffersTheWindowCapabilities:
+    @pytest.mark.parametrize('name,path,className', WINDOW_SYSTEMS,
+                             ids=WINDOW_SYSTEM_IDS)
+    @pytest.mark.parametrize('capability,call,why', CAPABILITIES,
+                             ids=CAPABILITY_IDS)
+    def test_it_defines_the_capability(self, name, path, className,
+                                       capability, call, why):
+        assert capability in _methods(path, className), (
+            '%s has no %s, so Context.%s cannot: %s'
+            % (className, capability, call, why))
 
 
 class TestTheAnswerIsAlwaysAnAnswer:
@@ -112,75 +144,99 @@ class TestTheAnswerIsAlwaysAnAnswer:
     nothing at all while looking like a refusal.
     """
 
-    #: `releaseWindow` is not one of these: it lets a window go, and there is
+    #: `release` is not one of these: it lets a window go, and there is
     #: nothing to answer about having done so.
-    ANSWERING = tuple(entry for entry in CAPABILITIES
-                      if entry[0] != 'releaseWindow')
+    ANSWERING = tuple(entry[0] for entry in CAPABILITIES if entry[0] != 'release')
 
-    @pytest.mark.parametrize('name,path', BACKENDS,
-                             ids=[b[0] for b in BACKENDS])
-    @pytest.mark.parametrize('capability', [entry[0] for entry in ANSWERING])
-    def test_every_path_out_returns_something(self, name, path, capability):
-        for node in ast.walk(ast.parse(_source(path))):
-            if isinstance(node, ast.FunctionDef) and node.name == capability:
-                returns = [child for child in ast.walk(node)
-                           if isinstance(child, ast.Return)]
-                assert returns, '%s.%s answers nothing' % (name, capability)
-                assert all(child.value is not None for child in returns), (
-                    '%s.%s has a bare return' % (name, capability))
-                assert isinstance(node.body[-1], (ast.Return, ast.Try)), (
-                    '%s.%s can fall off the end and answer None'
-                    % (name, capability))
+    @pytest.mark.parametrize('name,path,className', WINDOW_SYSTEMS,
+                             ids=WINDOW_SYSTEM_IDS)
+    @pytest.mark.parametrize('capability', ANSWERING)
+    def test_every_path_out_returns_something(self, name, path, className,
+                                              capability):
+        node = _methods(path, className)[capability]
+        returns = [child for child in ast.walk(node)
+                   if isinstance(child, ast.Return)]
+        assert returns, '%s.%s answers nothing' % (className, capability)
+        assert all(child.value is not None for child in returns), (
+            '%s.%s has a bare return' % (className, capability))
+        assert isinstance(node.body[-1], (ast.Return, ast.Try)), (
+            '%s.%s can fall off the end and answer None'
+            % (className, capability))
 
 
-class TestEveryBackendReportsPointerMotionAsItHappens:
+class TestEveryWindowSystemReportsPointerMotionAsItHappens:
     """Mouse-look is not picking.
 
     A move delivered as a *pick* event arrives only once the selection buffer
     has resolved it, is dropped when the pointer is over nothing, and never
     arrives at all with picking switched off -- none of which has anything to do
-    with turning the view. A backend that knows where the pointer went says so
-    directly.
+    with turning the view. A window system that knows where the pointer went
+    says so directly.
     """
 
-    EVENTS: ClassVar[dict[str, str]] = {
-        'glfw': 'OpenGLContext/events/glfwevents.py',
-        'glut': 'OpenGLContext/events/glutevents.py',
-        'pygame': 'OpenGLContext/events/pygameevents.py',
-        'tk': 'OpenGLContext/events/tkevents.py',
-        'wx': 'OpenGLContext/events/wxevents.py',
-    }
-
-    @pytest.mark.parametrize('name', sorted(EVENTS))
-    def test_it_calls_record_pointer_motion(self, name):
-        assert 'recordPointerMotion' in _source(self.EVENTS[name]), (
+    @pytest.mark.parametrize('name,path,className', WINDOW_SYSTEMS,
+                             ids=WINDOW_SYSTEM_IDS)
+    def test_it_calls_record_pointer_motion(self, name, path, className):
+        assert 'recordPointerMotion' in _source(path), (
             '%s never reports pointer motion to the sampler, so a mouse-look '
             'mode grabs the pointer and the view never turns' % (name,))
 
 
-class TestEveryBackendLetsGoOfHeldKeys:
+class TestEveryWindowSystemLetsGoOfHeldKeys:
     """No key-up arrives for a key that was down when the window lost focus.
 
     Without something to say so, that key stays held for the rest of the
     session -- the camera keeps walking with nobody touching the keyboard.
     """
 
-    @pytest.mark.parametrize('name,path', BACKENDS,
-                             ids=[b[0] for b in BACKENDS])
-    def test_it_clears_held_keys(self, name, path):
-        events = 'OpenGLContext/events/%sevents.py' % (name,)
-        assert ('clearHeldKeys' in _source(path)
-                or 'clearHeldKeys' in _source(events)), (
+    @pytest.mark.parametrize('name,path,className', WINDOW_SYSTEMS,
+                             ids=WINDOW_SYSTEM_IDS)
+    def test_it_clears_held_keys(self, name, path, className):
+        assert 'clearHeldKeys' in _source(path), (
             '%s never releases held keys' % (name,))
 
 
-class TestTheContractIsStatedOnce:
-    """A new backend should inherit the contract rather than have to know it."""
+class _Bare(WindowSystem):
+    """A window system that provides what it must and nothing more."""
 
-    @pytest.mark.parametrize('capability,why', CAPABILITIES,
-                             ids=[c[0] for c in CAPABILITIES])
-    def test_the_base_context_declares_it(self, capability, why):
-        assert callable(getattr(Context, capability, None)), why
+    name = 'bare'
+
+    def open(self, definition, parent=None):
+        return True
+
+    def release(self):
+        pass
+
+    def makeCurrent(self):
+        return None
+
+    def swap(self):
+        pass
+
+    def drawableSize(self):
+        return (1, 1)
+
+
+def _onBare(contextClass=Context):
+    made = contextClass.__new__(contextClass)
+    made.contextDefinition = ContextDefinition()
+    made.windowsystem = _Bare(made)
+    return made
+
+
+class TestTheContractIsStatedOnce:
+    """A new window system should inherit the contract rather than have to
+    know it."""
+
+    @pytest.mark.parametrize('capability,call,why', CAPABILITIES,
+                             ids=CAPABILITY_IDS)
+    def test_the_base_context_declares_it(self, capability, call, why):
+        assert callable(getattr(Context, call, None)), why
+
+    @pytest.mark.parametrize('capability,call,why', CAPABILITIES,
+                             ids=CAPABILITY_IDS)
+    def test_the_base_window_system_declares_it(self, capability, call, why):
+        assert callable(getattr(WindowSystem, capability, None)), why
 
     def test_asking_for_vsync_writes_the_field_and_applies_it(self):
         """`setVSync` is the one call an application makes.
@@ -193,32 +249,29 @@ class TestTheContractIsStatedOnce:
         """
         applied = []
 
-        class _Backend(Context):
-            def applyVSync(self, _definition=None):
-                applied.append(bool(self.contextDefinition.vsync))
+        class _Applies(_Bare):
+            def applyVSync(self, definition):
+                applied.append(bool(definition.vsync))
                 return True
 
-        made = _Backend.__new__(_Backend)
-        made.contextDefinition = ContextDefinition()
+        made = _onBare()
+        made.windowsystem = _Applies(made)
         assert made.setVSync(False) is True
         assert applied == [False]
         assert bool(made.contextDefinition.vsync) is False
         made.setVSync(True)
         assert applied == [False, True]
 
-    def test_it_answers_what_the_backend_could_do(self):
-        class _Cannot(Context):
-            pass
-
-        made = _Cannot.__new__(_Cannot)
-        made.contextDefinition = ContextDefinition()
+    def test_it_answers_what_the_window_system_could_do(self):
+        made = _onBare()
         assert made.setVSync(False) is False
 
-    def test_a_backend_that_cannot_says_so_rather_than_raising(self):
+    def test_a_window_system_that_cannot_says_so_rather_than_raising(self):
         """`False` is an answer a caller can act on; an AttributeError is not."""
-        bare = Context.__new__(Context)
-        assert Context.setFullscreen(bare, True) is False
-        assert Context.setPointerCapture(bare, True) is False
+        bare = _onBare()
+        assert bare.setFullscreen(True) is False
+        assert bare.setPointerCapture(True) is False
+        assert bare.pumpWindowEvents() is False
 
     def test_held_key_tracking_is_shared(self):
         for name in ('noteKeyDown', 'noteKeyUp', 'pumpKeyRepeats',
@@ -445,10 +498,15 @@ class TestNothingKeepsTheProcessAlive:
             'has gone')
 
 
-#: Every context class in the package, windowed or offscreen, and the module it
-#: lives in.  Wider than :data:`BACKENDS` because the contract below is about
-#: the ``Context`` API rather than about owning a window.
-CONTEXT_MODULES = BACKENDS + (
+#: Every published context class in the package, windowed or offscreen, and
+#: the module it lives in.  The contract below is about the ``Context`` API
+#: rather than about owning a window.
+CONTEXT_MODULES = (
+    ('glfw', 'OpenGLContext/glfwcontext.py'),
+    ('glut', 'OpenGLContext/glutcontext.py'),
+    ('pygame', 'OpenGLContext/pygamecontext.py'),
+    ('tk', 'OpenGLContext/tkcontext.py'),
+    ('wx', 'OpenGLContext/wxcontext.py'),
     ('egl', 'OpenGLContext/eglcontext.py'),
     ('wgl', 'OpenGLContext/wglcontext.py'),
 )
@@ -465,13 +523,17 @@ def _parameters(path, name):
 
 
 class TestTakingTheContextIsTheSameCallEverywhere:
-    """``setCurrent`` takes ``blocking`` on every backend, as the base does.
+    """``setCurrent`` takes ``blocking`` on every context class, as the base
+    does.
 
     The base class acquires the context lock with it, so ``setCurrent(0)`` is
     how a caller asks for the context *if it is free* and gets a
-    ``LockingError`` rather than a wait.  A backend whose override drops the
-    parameter answers that call with ``TypeError`` instead.
+    ``LockingError`` rather than a wait.  An override that drops the parameter
+    answers that call with ``TypeError`` instead.
     """
+
+    def test_the_base_accepts_blocking(self):
+        assert 'blocking' in inspect.signature(Context.setCurrent).parameters
 
     @pytest.mark.parametrize('name,path', CONTEXT_MODULES,
                              ids=[entry[0] for entry in CONTEXT_MODULES])
@@ -493,7 +555,8 @@ class TestTheVRMLContextsTakeTheirArguments:
 
     def test_the_glut_vrml_context_builds_with_what_it_was_given(self, monkeypatch):
         pytest.importorskip('OpenGL.GLUT')
-        from OpenGLContext import glutcontext, glutvrmlcontext  # noqa: PLC0415 follows the GLUT importorskip
+        from OpenGLContext import glutvrmlcontext  # noqa: PLC0415 follows the GLUT importorskip
+        from OpenGLContext.windowsystem import glut as glutsystem  # noqa: PLC0415 follows the GLUT importorskip
 
         built = []
 
@@ -507,12 +570,11 @@ class TestTheVRMLContextsTakeTheirArguments:
 
         # Nothing here may reach GLUT: initialising it needs a display, and a
         # second initialisation ends the process rather than raising.
-        monkeypatch.setattr(glutcontext, 'ensureGlutInitialised',
+        monkeypatch.setattr(glutsystem, 'ensureGlutInitialised',
                             lambda *_args, **_named: False)
-        monkeypatch.setattr(glutvrmlcontext, 'glutInit',
-                            lambda *_args: None, raising=False)
-        monkeypatch.setattr(glutvrmlcontext, 'glutMainLoop',
-                            lambda: None, raising=False)
+        monkeypatch.setattr(glutsystem, 'glutInit', lambda *_args: None)
+        monkeypatch.setattr(glutsystem, 'glutMainLoop', lambda: None,
+                            raising=False)
 
         with pytest.raises(_Stop):
             Recording.ContextMainLoop(size=(640, 480), title='a world')

@@ -14,12 +14,16 @@ text field.  So while a modal overlay is up the sampler is not fed at all,
 opening one clears it, and closing one starts from nothing held, which is what
 the player's fingers report on the next key event anyway.
 
-Mix it in **ahead of** the navigation mix-in, so its ``ProcessEvent`` runs
-first::
+:class:`OverlayStackMixin` is one of :class:`~OpenGLContext.context.Context`'s
+bases, ahead of the views and the navigation, so its ``ProcessEvent`` runs
+first and every context has a stack to push onto::
 
-    class Game(OverlayMixin, GLFWInteractiveContext):
+    class Game(Context):
         ...
     game.pushOverlay(dialogs.confirm('Quit?', on_answer=game.quitting))
+
+With nothing pushed, an event and a frame each cost it a check that the stack
+is empty.
 """
 
 from __future__ import annotations
@@ -28,6 +32,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, Optional
 
 import logging
+import warnings
 
 from OpenGLContext.events.mouseevents import WHEEL_DOWN, WHEEL_UP
 from OpenGLContext.ui.metrics import FontMetrics
@@ -35,7 +40,7 @@ from OpenGLContext.ui.panel import Panel
 
 log = logging.getLogger(__name__)
 
-__all__ = ['OverlayStack', 'OverlayMixin', 'WHEEL_UP', 'WHEEL_DOWN']
+__all__ = ['OverlayStack', 'OverlayStackMixin', 'OverlayMixin', 'WHEEL_UP', 'WHEEL_DOWN']
 
 #: What identifies one held input: its kind, and the key name or button number.
 _Claim = tuple[str, Any]
@@ -269,7 +274,7 @@ class OverlayStack:
 
 if TYPE_CHECKING:
     class _Host:
-        """What :class:`OverlayMixin` needs of the class beside it.
+        """What :class:`OverlayStackMixin` needs of the class beside it.
 
         Declared for a checker and aliased to ``object`` at run time: the
         context and :class:`~OpenGLContext.ui.screen.ScreenMixin` are what
@@ -293,7 +298,7 @@ else:
     _Host = object
 
 
-class OverlayMixin(_Host):
+class OverlayStackMixin(_Host):
     """Gives a context an overlay stack, its input routing and its drawing.
 
     The HUD half -- the layers under these panels, and the drawing both go
@@ -409,7 +414,7 @@ class OverlayMixin(_Host):
                 continue
             event.context = self
             self._holding.pop(('keyboard', name), None)
-            super(OverlayMixin, self).ProcessEvent(event)
+            super(OverlayStackMixin, self).ProcessEvent(event)
 
     def releaseOverlayPictures(self) -> None:
         """Give the overlay's picture textures back to the card.
@@ -444,7 +449,7 @@ class OverlayMixin(_Host):
         # release (:meth:`letGoOfHeldInput`).
         previous, self._dispatching = self._dispatching, _claimKey(event)
         try:
-            return super(OverlayMixin, self).ProcessEvent(event)
+            return super(OverlayStackMixin, self).ProcessEvent(event)
         finally:
             self._dispatching = previous
 
@@ -546,7 +551,7 @@ class OverlayMixin(_Host):
         """
         if self._overlays is not None and self._overlays.visible:
             return True
-        return bool(super(OverlayMixin, self).hasMouseMoveHandlers())
+        return bool(super(OverlayStackMixin, self).hasMouseMoveHandlers())
 
     # -- layout and drawing -----------------------------------------------
     def layoutOverlays(self, force: bool = False) -> bool:
@@ -575,7 +580,7 @@ class OverlayMixin(_Host):
         The panels are advanced to ``now`` first, so one whose time is up is
         gone before it is drawn.
         """
-        trees = super(OverlayMixin, self).screenTrees(metrics, now)
+        trees = super(OverlayStackMixin, self).screenTrees(metrics, now)
         stack = self._overlays
         if stack is not None and stack.visible:
             from OpenGLContext.events import systemtime
@@ -620,7 +625,7 @@ class OverlayMixin(_Host):
         ordinary pointer, so the shape the control under it wants is asked for
         again at once.
         """
-        backend = getattr(super(OverlayMixin, self), 'setPointerCapture', None)
+        backend = getattr(super(OverlayStackMixin, self), 'setPointerCapture', None)
         if backend is None:
             return False
         done = bool(backend(capture))
@@ -680,3 +685,18 @@ class OverlayMixin(_Host):
             tip = Tooltip(text=text, anchor=self._pointerAt)
             self._tooltip = tip
         return tip
+
+
+class OverlayMixin:
+    """The name a class listed ahead of ``Context`` for an overlay stack.
+
+    Every context has one (:class:`OverlayStackMixin`), so this adds nothing
+    and a class listing it warns as it is defined.  Listed first, it leaves
+    the rest of the class as it would be without it.
+    """
+
+    def __init_subclass__(cls, **named: Any) -> None:
+        super().__init_subclass__(**named)
+        warnings.warn(
+            '%s lists OverlayMixin, which every Context now has: drop it from '
+            'the bases' % (cls.__name__,), DeprecationWarning, stacklevel=2)

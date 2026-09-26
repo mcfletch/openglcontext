@@ -10,9 +10,8 @@ enough that keeping them apart is the whole point of this module:
   key bindings, a question.  The top one takes the input and a modal one stops
   everything below it hearing anything at all.
 
-Every context has the first kind, because the developer overlay is where the
-frame rate is now drawn and every context has a frame rate; a context gains the
-second by mixing in :class:`~OpenGLContext.ui.overlay.OverlayMixin`.  Both are
+Every context has both: this mix-in for the first, and
+:class:`~OpenGLContext.ui.overlay.OverlayStackMixin` for the second.  Both are
 drawn by one renderer in one batch, HUD first and panels over it, so a dialog
 opened over a game covers its HUD instead of fighting with it.
 
@@ -149,7 +148,7 @@ class ScreenMixin(object):
         """Everything to paint over this frame, in the order it is painted.
 
         The HUD layers, advanced to ``now`` and laid out for the window they
-        are about to be drawn in.  ``OverlayMixin`` adds the open panels after
+        are about to be drawn in.  ``OverlayStackMixin`` adds the open panels after
         these, which is what puts a screen over the HUD rather than under it.
         """
         if now is None:

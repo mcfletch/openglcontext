@@ -26,15 +26,15 @@ for three toolkits, so they can be compared line by line:
      - ``root.mainloop()``, calling ``loopIteration()``
    * - Qt
      - ``python -m OpenGLContext_qt.demos.qt_viewer``
-     - ``view.container(parent)``
-     - ``QApplication.exec()``, with the backend's timer
+     - ``view.windowsystem.container(parent)``
+     - ``QApplication.exec()``, with the window system's timer
    * - wx
      - ``python -m OpenGLContext.demos.wx_viewer``
-     - the context *is* the canvas
+     - ``SceneView(parent=splitter)``, then ``view.window`` into the layout
      - ``wx.App.MainLoop()``, driving itself
 
-Each takes an optional path or URL to open. Tk, Qt and wx are the backends
-backed by a GUI library, with menus, trees and dialogs to place a view
+Each takes an optional path or URL to open. Tk, Qt and wx are the window
+systems backed by a GUI library, with menus, trees and dialogs to place a view
 beside. GLFW, Pygame and GLUT handle windows and input but have no widgets.
 An application on one of those draws its interface with
 :doc:`OpenGLContext.ui <overlayui>` instead; ``oglc-ui-demo`` shows how.
@@ -45,9 +45,10 @@ The view class
 --------------
 
 :doc:`ViewerContext <viewer>` is the class behind ``oglc-view``. It runs on
-the backend chosen by the environment and the user's configuration. An
+the window system its definition names, or the one chosen by the environment
+and the user's configuration (see :ref:`choosing-a-window-system`). An
 embedded view has to run on the toolkit that owns the host window.
-``viewerFor`` returns the viewer class for a named backend:
+``viewerFor`` returns the viewer class pinned to a named window system:
 
 .. code-block:: python
 
@@ -57,11 +58,12 @@ embedded view has to run on the toolkit that owns the host window.
        def hasSceneToShow( self ):
            return True                     # this application has its own File menu
 
-``viewerFor`` takes a backend name (``tk``, ``qt``, ``wx``, ``glfw``,
-``pygame`` or ``glut``), or no argument for the same class as
-``ViewerContext``. An unknown backend, or one whose toolkit is not installed,
-raises an error that lists the available backends. Two calls with the same
-name return the same class, so ``isinstance`` checks work as expected.
+``viewerFor`` takes a window-system name (``tk``, ``qt``, ``wx``, ``glfw``,
+``pygame`` or ``glut``), or no argument for ``ViewerContext`` itself. An
+unknown name, or one whose toolkit is not installed, raises an error that
+lists the registered window systems. Two calls with the same name return the
+same class.  ``Context(windowsystem='tk', ...)`` says the same thing without
+a class of its own.
 
 The class draws a model as ``oglc-view`` does: with the
 :doc:`PBR renderer <pbr>` (its ``renderer`` attribute is ``'pbr'``), with
@@ -83,22 +85,24 @@ and ``BINDINGS_KEY`` to ``''`` on the subclass.
 Adding the view to a window
 ---------------------------
 
-Each backend joins its toolkit's layout in that toolkit's usual way:
+The context is never a widget itself.  ``context.window`` is the toolkit's
+window or widget, made by the window system inside the ``parent`` given to the
+constructor, and it joins the toolkit's layout in that toolkit's usual way:
 
 Tk
-   Pass the containing widget when building the context:
-   ``SceneView(parent=holder)``. The context is not a widget itself. It draws
-   into a ``GLFrame``, available as ``context.frame``, which is packed into
-   the parent when the context is created.
+   ``SceneView(parent=holder)``.  ``context.window`` is a ``GLFrame``, packed
+   into the parent when the context is created.
 Qt
-   The view's window is a ``QWindow``. ``view.container(parent)`` wraps it in
-   a ``QWidget`` to place in a layout. This needs ``PySide6.QtWidgets``, so
-   the application object must be a ``QApplication``, not a bare
+   ``context.window`` is a ``QWindow``.  ``view.windowsystem.container(parent)``
+   -- ``QWidget.createWindowContainer(view.window, parent)`` -- wraps it in a
+   ``QWidget`` to place in a layout. This needs ``PySide6.QtWidgets``, so the
+   application object must be a ``QApplication``, not a bare
    ``QGuiApplication``. **Create it before building the view.** The view
    creates an application object if none exists, and Qt allows only one.
 wx
-   The context is a ``wx.glcanvas.GLCanvas``. Add ``SceneView(parent,
-   size=(720, 560))`` to a sizer directly.
+   ``SceneView(parent=splitter, size=(720, 560))``; ``context.window`` is the
+   ``wx.glcanvas.GLCanvas``, which goes into the sizer or splitter, and takes
+   the focus with ``context.window.SetFocus()``.
 
 .. _embedding-loop:
 
@@ -107,7 +111,8 @@ Running the main loop
 
 A full-window program calls ``ContextMainLoop()``, and the engine runs the
 loop. An embedded view cannot, because the host's loop is already running
-and the frames have to come from it. How that works differs by backend.
+and the frames have to come from it. How that works differs by window
+system.
 
 Tk: the host drives the view
    Call ``loopIteration()`` from an ``after`` callback. It returns ``False``
@@ -120,8 +125,8 @@ Tk: the host drives the view
               self.root.destroy()             # the view is gone; so is the window
               return
           self.root.after( 1, self.onFrame )
-Qt: the backend drives the view
-   Call ``view.startRenderTimer()`` after the window is shown. A Qt timer
+Qt: the window system drives the view
+   Call ``view.windowsystem.startRenderTimer()`` after the window is shown. A Qt timer
    then calls ``loopIteration``. The host gets no per-frame callback; to act
    when a scene has loaded, override ``onSceneReady()``.
 wx: no action needed
@@ -130,7 +135,7 @@ wx: no action needed
 
 When the host drives the loop (Tk), set ``deferRedraw``. An input event then
 requests a redraw instead of rendering immediately, so a burst of events
-costs one frame rather than one frame per event. Every backend's own
+costs one frame rather than one frame per event. Every window system's own
 ``MainLoop`` sets it for the same reason. Do not set it under wx: there is no
 ``loopIteration`` call there, and the immediate redraw is what draws the
 frame.

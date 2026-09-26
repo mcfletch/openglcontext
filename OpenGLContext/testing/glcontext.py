@@ -246,7 +246,7 @@ def _apply_hints(glfw: Any, profile: str, version: Sequence[int],
                          glfw.OPENGL_CORE_PROFILE if profile == 'core'
                          else glfw.OPENGL_COMPAT_PROFILE)
     # Core implies forward-compatible, which is the pair
-    # :mod:`OpenGLContext.glfwcontext` asks a real window for -- so a test gets
+    # :mod:`OpenGLContext.windowsystem.glfw` asks a real window for -- so a test gets
     # the context the engine ships rather than one only a test ever sees. It is
     # also the only core context macOS offers: without the flag the driver
     # refuses the request, and every GL test on that platform would skip.
@@ -434,7 +434,7 @@ def _egl_pbuffer(size: Sequence[int], profile: str, version: Sequence[int],
         import OpenGL.EGL
     except ImportError as err:
         raise GLUnavailable('no EGL here: %s' % (err,)) from err
-    from OpenGLContext.eglcontext import EGLContextError, PbufferContext
+    from OpenGLContext.windowsystem.egl import EGLContextError, PbufferContext
     width, height = size
     try:
         context = PbufferContext(

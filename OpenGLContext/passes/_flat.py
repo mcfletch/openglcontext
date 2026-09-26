@@ -84,6 +84,7 @@ __all__ = (
     'get_modelproj',
     'get_modelview',
     'get_projection',
+    'opaqueDrawOrder',
 )
 
 
@@ -113,6 +114,26 @@ def disable_object_id_blend() -> None:
         glDisablei(GL_BLEND, OBJECT_ID_ATTACHMENT)
     except Exception as err:
         log.debug("indexed blend disable unavailable: %s", err)
+
+
+def opaqueDrawOrder(opaque: Sequence[tuple[Any, Any]]) -> list[tuple[Any, Any]]:
+    """``(index, record)`` pairs in the order the opaque shapes are drawn.
+
+    Grouped by material, since a CAD assembly is hundreds of parts sharing a
+    handful of materials and consecutive same-material shapes skip the
+    appearance upload; nearest first within a group, so early depth rejection
+    still helps.  The groups come in the order their first shape does, and
+    shapes at one depth keep the order they arrived in: where two fragments
+    land at the same depth the later draw is the one seen, so an order that
+    changed from run to run would change the frame.
+    """
+    def material(record: Any) -> Any:
+        return getattr(getattr(record[5], 'appearance', None), 'material', None)
+
+    rank: dict[Any, int] = {}
+    for _index, record in opaque:
+        rank.setdefault(material(record), len(rank))
+    return sorted(opaque, key=lambda item: (rank[material(item[1])], -item[1][1][3][2]))
 
 
 class GatheredPaths( NamedTuple ):
@@ -766,19 +787,6 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
             return functions
         return self._instanceKey, self._instanceable
 
-    @staticmethod
-    def _materialSortKey(rec: Sequence[Any]) -> int:
-        """Group key so shapes sharing one material batch together in the draw.
-
-        Identity of the material object; glTF/CAD loaders share one material
-        instance across the parts that use it, so this collapses hundreds of
-        parts to a handful of appearance uploads. Alive-this-frame, so ids are
-        stable within the sort.
-        """
-        shape = rec[5]
-        appearance = getattr(shape, 'appearance', None)
-        return id(getattr(appearance, 'material', None))
-
     def shaderRenderOpaque(self, toRender: list, id_map: Optional[dict] = None,
                            skip: Optional[set] = None) -> None:
         """Render opaque geometry using shaders.
@@ -809,12 +817,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         # The original toRender index is kept as the stable picking object id.
         opaque: list[tuple[Optional[int], Any]] = [(i, rec) for i, rec in enumerate(toRender)
                   if not rec[0][0] and not (skip and i in skip)]
-        # Opaque draw order is depth-buffer-correct in any order, so group by
-        # material first (a CAD assembly is hundreds of parts sharing a handful of
-        # materials); consecutive same-material shapes then skip the per-shape
-        # appearance re-upload. Front-to-back is kept as the secondary key so early
-        # depth rejection still helps within each material group.
-        opaque.sort(key=lambda ir: (self._materialSortKey(ir[1]), -ir[1][1][3][2]))
+        opaque = opaqueDrawOrder(opaque)
 
         prog = shader.program
 

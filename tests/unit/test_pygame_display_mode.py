@@ -1,6 +1,6 @@
-"""What the pygame backend asks SDL for, from a context definition.
+"""What the pygame window system asks SDL for, from a context definition.
 
-Two vocabularies meet in :mod:`OpenGLContext.pygamecontext`: SDL's GL
+Two vocabularies meet in :mod:`OpenGLContext.windowsystem.pygame`: SDL's GL
 attributes, which are small indices into the attribute table, and OpenGL's own
 enumerants.  Several names appear in both -- ``GL_STEREO`` is 12 to SDL and
 0x0C33 to OpenGL -- so which one a request carries decides whether SDL
@@ -13,7 +13,7 @@ import pytest
 pygame = pytest.importorskip('pygame')
 
 from OpenGLContext.contextdefinition import ContextDefinition
-from OpenGLContext.pygamecontext import PygameContext
+from OpenGLContext.windowsystem.pygame import setGLAttributes, windowFlags
 
 
 @pytest.fixture
@@ -32,7 +32,7 @@ def display(monkeypatch):
 
 @pytest.mark.usefixtures('display')
 def test_the_buffers_a_definition_asks_for_reach_sdl(monkeypatch):
-    """Every attribute this backend sets is one SDL knows.
+    """Every attribute this window system sets is one SDL knows.
 
     An attribute SDL does not recognise raises, so the window is never opened
     at all -- the definition's fields have to be spelled in SDL's vocabulary.
@@ -48,8 +48,7 @@ def test_the_buffers_a_definition_asks_for_reach_sdl(monkeypatch):
         real(attribute, value)                   # SDL still validates the name
         asked[attribute] = value
     monkeypatch.setattr(pygame.display, 'gl_set_attribute', passing_through)
-    flags = PygameContext.pygameFlagsFromDefinition(definition)
-    assert flags == PygameContext.pygameWindowFlags(definition)
+    setGLAttributes(definition)
     assert asked[pygame.GL_DEPTH_SIZE] == 24
     assert asked[pygame.GL_STENCIL_SIZE] == 8
     for channel in (pygame.GL_ACCUM_RED_SIZE, pygame.GL_ACCUM_GREEN_SIZE,
@@ -67,7 +66,7 @@ def test_a_default_definition_asks_for_no_optional_buffers():
     original = pygame.display.gl_set_attribute
     pygame.display.gl_set_attribute = lambda attribute, _value: asked.append(attribute)
     try:
-        PygameContext.pygameFlagsFromDefinition(ContextDefinition())
+        setGLAttributes(ContextDefinition())
     finally:
         pygame.display.gl_set_attribute = original
     assert pygame.GL_ACCUM_RED_SIZE not in asked
@@ -77,13 +76,13 @@ def test_a_default_definition_asks_for_no_optional_buffers():
 
 @pytest.mark.usefixtures('display')
 def test_a_window_is_resizable_and_double_buffered():
-    flags = PygameContext.pygameWindowFlags(ContextDefinition())
+    flags = windowFlags(ContextDefinition())
     assert flags & pygame.RESIZABLE
     assert flags & pygame.DOUBLEBUF
 
 
 @pytest.mark.usefixtures('display')
 def test_single_buffering_is_asked_for_by_leaving_it_out():
-    flags = PygameContext.pygameWindowFlags(ContextDefinition(doubleBuffer=False))
+    flags = windowFlags(ContextDefinition(doubleBuffer=False))
     assert not (flags & pygame.DOUBLEBUF)
     assert flags & pygame.RESIZABLE

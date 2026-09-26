@@ -1,9 +1,9 @@
 """Bake a zone's light offscreen and report it (invoked as a subprocess).
 
 A grey sphere stands in a box of walls whose roof is open to a black sky, and a
-zone covering it captures its environment. An offscreen context that asks for
-the PBR pass and the full probe through its own class and definition -- not
-through the environment -- bakes the zone with
+zone covering it captures its environment. A context on the EGL window system
+that asks for the PBR pass and the full probe through its own class and
+definition -- not through the environment -- bakes the zone with
 :func:`OpenGLContext.passes.zonebake.bake_zone_lights`. What was baked is
 printed as one line of JSON.
 
@@ -13,7 +13,7 @@ import json
 import os
 import sys
 
-from OpenGLContext.eglcontext import EGLContext
+from OpenGLContext.context import Context
 from OpenGLContext.passes.zonebake import bake_zone_lights
 from OpenGLContext.scenegraph.basenodes import (
     Appearance,
@@ -51,7 +51,8 @@ def main() -> int:
         zone,
     ]
 
-    class Baker(EGLContext):
+    class Baker(Context):
+        windowSystemName = 'egl'
         renderer = 'pbr'
         profile = 'core'
 

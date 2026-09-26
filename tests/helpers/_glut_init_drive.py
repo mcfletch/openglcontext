@@ -62,9 +62,9 @@ class Driven(GLUTInteractiveContext):
 
 
 def build():
-    """The case that used to end the process: a context made directly"""
+    """A context made directly, with no ``ContextMainLoop`` to call glutInit"""
     context = Driven(size=(128, 96))
-    say('BUILT', context.windowID is not None)
+    say('BUILT', context.window is not None)
     context.releaseWindow()
 
 
@@ -87,7 +87,7 @@ def several():
 
 
 def mainloop():
-    """``ContextMainLoop`` initialised GLUT itself, and must not do it twice"""
+    """``ContextMainLoop`` initialises GLUT, and must not do it twice"""
     class Bounded(Driven):
         frames = 0
 
@@ -95,7 +95,7 @@ def mainloop():
             self.frames += 1
             if self.frames > 3:
                 say('LOOPED', True)
-                self._finished = True
+                self.windowsystem.finished = True
             self.triggerRedraw(1)
             return 0
 

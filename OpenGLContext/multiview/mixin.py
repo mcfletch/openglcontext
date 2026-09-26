@@ -1,39 +1,132 @@
-"""Four views of the scene in any window that wants them.
+"""The views a context shows, built from its definition's ``navigation.views``.
 
-A window that shows a scene can show it four ways at once -- the plan, two
-elevations and the view it already had -- without knowing anything about
-layouts. :class:`MultiViewMixin` gives it that: the arrangements, the
-furniture in each view, and a key that switches between one view and four::
+:class:`MultiViewMixin` is one of :class:`~OpenGLContext.context.Context`'s
+bases.  A context whose navigation declares a
+:class:`~OpenGLContext.move.navigationdefinition.Views` gets a
+:class:`~OpenGLContext.multiview.viewset.ViewSet` built from it as the context
+completes: the views, their arrangements, the keys that switch them and the
+furniture in each view, as the declaration's ``switching`` asks::
 
-    class Viewer(OverlayMixin, MultiViewMixin, BaseContext):
-        def OnInit(self):
-            self.startViews(bounds=(scene.minimum, scene.maximum))
+    class Editor(Context):
+        contextDefinition = ContextDefinition(navigation=Navigation(
+            modes=['examine'],
+            views=Views(
+                views=[ViewDefinition(name='top', camera='top', gestures=['plan']),
+                       ViewDefinition(name='perspective')],
+                switching=['keys', 'controls'])))
 
-The perspective view draws through whatever ``getViewPlatform()`` answers, so
-the navigation, a bound ``Viewpoint`` and any camera the application swaps in
-drive it as they drive a window of one view. The three orthographic views are
-the mixin's, and are framed on the bounds it is given.
+With ``views`` NULL, which is the default, it builds nothing and a frame draws
+the window's one view.  :meth:`MultiViewMixin.startViews` makes the plan, two
+elevations and the window's own view at run time, and writes that declaration
+into the definition.
 
-It goes *after* ``OverlayMixin`` in the bases, so the overlay is offered each
-event first -- the furniture has to have the click meant for a button standing
-in front of a view -- and what the furniture leaves reaches the views.
+A perspective view with no gestures draws through whatever
+``getViewPlatform()`` answers, so the movement modes, a bound ``Viewpoint``
+and any camera the application swaps in drive it as they drive a window of
+one view.  The other views have cameras of their own (:func:`viewSetFor`).
+
+The overlay stack sits ahead of this mix-in in ``Context``'s bases, so it is
+offered each event first -- the furniture has to have the click meant for a
+button standing in front of a view -- and what the furniture leaves reaches
+the views.
 """
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Optional
 
+from OpenGLContext.move.navigationdefinition import (
+    ORTHOGRAPHIC, Arrangement, Navigation, ViewDefinition, Views, viewGestures)
 from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
+from OpenGLContext.multiview.navigation import ViewNavigationMode, navigation_for
 from OpenGLContext.multiview.quad import ELEVATIONS, FLAT_BACKGROUND
-from OpenGLContext.multiview.viewpoints import SceneCamera, scene_cameras
+from OpenGLContext.multiview.viewpoints import (
+    SceneCamera, first_camera, look_through, scene_cameras)
 from OpenGLContext.multiview.views import View, ViewLayout, ViewStyle
 from OpenGLContext.multiview.viewset import ViewSet
 
-__all__ = ['MultiViewMixin', 'ARRANGEMENTS']
+__all__ = ['MultiViewMixin', 'ARRANGEMENTS', 'quadViews', 'viewSetFor']
 
-#: The arrangements the mixin offers, in the order its key takes them: the
-#: window's own view alone, and the four.
+#: The arrangements :meth:`MultiViewMixin.startViews` declares: the window's
+#: own view alone, and the four.
 ARRANGEMENTS = ('single', 'quad')
+
+
+def quadViews(elevations: Sequence[str] = ELEVATIONS, arrangement: str = 'single',
+              switching: Sequence[str] = ()) -> Views:
+    """The plan, two elevations and the window's own view, declared.
+
+    ``elevations`` names the orthographic views, each looking along the axis
+    of the same name, and a ``perspective`` view draws through the window's
+    own camera.  They are arranged as :data:`ARRANGEMENTS`: ``single`` (the
+    perspective view alone) and ``quad``.
+    """
+    shown = [str(direction) for direction in elevations]
+    return Views(
+        views=[ViewDefinition(name=direction, camera=direction) for direction in shown]
+        + [ViewDefinition(name='perspective')],
+        arrangements=[Arrangement(name='single', views=['perspective']),
+                      Arrangement(name='quad', views=[*shown, 'perspective'])],
+        arrangement=arrangement,
+        switching=list(switching))
+
+
+def _gestures(names: Sequence[str]) -> Optional[ViewNavigationMode]:
+    """The registered gesture sets ``names`` names, as one; None for none.
+
+    Combined in the order named, so where two sets bind one button the first
+    set's gesture is the one the button raises.
+    """
+    if not names:
+        return None
+    sets: list[ViewNavigationMode] = [viewGestures(str(name)) for name in names]
+    if len(sets) == 1:
+        return sets[0]
+    return ViewNavigationMode(
+        name='+'.join(str(chosen.name) for chosen in sets),
+        label=' + '.join(str(chosen.label) for chosen in sets),
+        bindings=[binding for chosen in sets for binding in chosen.bindings])
+
+
+def _viewFor(declared: ViewDefinition) -> View:
+    """One declared view, with the camera and the gestures it names.
+
+    An orthographic view looks along its axis.  A ``scene`` view, and a
+    perspective one given gestures of its own, get a camera that orbits, since
+    the gestures move a camera and the window's own belongs to the movement
+    modes.  A perspective view without gestures has no camera, and draws
+    through the window's.
+    """
+    from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
+
+    style = (ViewStyle(background=FLAT_BACKGROUND, grid=True) if declared.flat()
+             else ViewStyle(background=True))
+    camera: Any = None
+    if declared.camera in ORTHOGRAPHIC:
+        camera = OrthoViewPlatform(OrthoView(str(declared.camera)))
+    elif declared.camera == 'scene' or declared.gestures:
+        camera = OrbitViewPlatform(OrbitView(nearest=1e-6, lowest=-OrbitView.HIGHEST))
+    view = View(camera, name=str(declared.name), style=style)
+    mode = _gestures(declared.gestures)
+    if camera is not None and mode is not None:
+        navigation_for(view, mode)
+    return view
+
+
+def viewSetFor(declaration: Views) -> ViewSet:
+    """The :class:`ViewSet` a :class:`Views` declaration describes.
+
+    The views in the order declared, the declared arrangements (or those
+    :meth:`Views.arrangementViews` offers where none are), opening on
+    ``arrangement`` or the first.  The pointer moves every view with a camera
+    of its own; the window's own view is moved by the movement modes.
+    """
+    views = [_viewFor(declared) for declared in declaration.views]
+    return ViewSet(
+        views,
+        arrangements=declaration.arrangementViews(),
+        mode=str(declaration.arrangement) or None,
+        driven=[view for view in views if view.camera is not None])
 
 
 if TYPE_CHECKING:
@@ -51,60 +144,107 @@ if TYPE_CHECKING:
         def hasMouseMoveHandlers(self) -> bool: ...
         def ProcessEvent(self, event: Any) -> Any: ...
         def ViewPort(self, width: int, height: int) -> None: ...
+        def completeInit(self) -> bool: ...
+        def setupDefaultEventCallbacks(self) -> None: ...
+        def addEventHandler(self, eventType: Any, *arguments: Any,
+                            **named: Any) -> Any: ...
 else:
     _Host = object
 
 
 class MultiViewMixin(_Host):
-    """One view or four, over whatever camera the window already had."""
+    """The views the definition declares, over whatever camera the window had."""
 
-    #: Which arrangement a window opens in.
+    #: Which arrangement :meth:`startViews` opens in.
     multiViewArrangement: str = 'single'
+    #: The key that steps to the next arrangement, where the views' ``switching``
+    #: holds ``keys``; '' binds none.
+    viewsCycleKey: str = 'v'
+    #: The key that gives the view under the last click the whole window, and
+    #: gives it back, where ``switching`` holds ``keys``; '' binds none.
+    viewMaximiseKey: str = 'x'
 
-    #: The views, once :meth:`startViews` has made them.
+    #: The views, once they are built.
     views: Optional[ViewSet] = None
-    #: The furniture drawn in them, where this window has an overlay stack.
+    #: The furniture drawn in them, where the views offer controls.
     viewChrome: Any = None
 
     _viewBounds: Optional[Callable[[], Optional[tuple[Any, Any]]]] = None
+    #: The views that look through the scene's first camera.
+    _sceneViews: tuple[str, ...] = ()
+
+    # -- the declaration ---------------------------------------------------
+    def declaredViews(self) -> Optional[Views]:
+        """The definition's :class:`Views`, or None where it declares none."""
+        definition = getattr(self, 'contextDefinition', None)
+        navigation = definition.navigation if definition is not None else None
+        return (navigation.views or None) if navigation else None
+
+    def setupDefaultEventCallbacks(self) -> None:
+        """Bind the arrangement and maximise keys, where the views offer them."""
+        super().setupDefaultEventCallbacks()
+        declared = self.declaredViews()
+        if declared is None:
+            return
+        if 'keys' in declared.switching:
+            for key, function in ((self.viewsCycleKey, self.toggleViews),
+                                  (self.viewMaximiseKey, self.maximiseView)):
+                if key:
+                    self.addEventHandler('keyboard', name=key, state=0,
+                                         function=function)
+
+    def completeInit(self) -> bool:
+        """Complete the context, then build the views it declares."""
+        completed = bool(super().completeInit())
+        declared = self.declaredViews()
+        if completed and declared is not None and self.views is None:
+            self.buildViews(declared)
+        return completed
 
     # -- building ----------------------------------------------------------
-    def startViews(self, bounds: Optional[Any] = None,
-                   arrangement: Optional[str] = None,
-                   elevations: Sequence[str] = ELEVATIONS,
-                   chrome: bool = True) -> ViewSet:
-        """Make the views and put the furniture up; the set.
+    def buildViews(self, declaration: Views, bounds: Optional[Any] = None) -> ViewSet:
+        """Build the views ``declaration`` describes, place and frame them; the set.
 
         ``bounds`` is what there is to see, as ``(minimum, maximum)`` or a
-        callable answering that, which frames the orthographic views and is
-        what a view's *zoom to fit* fits. With none given the window's own
-        :meth:`~OpenGLContext.context.Context.sceneBounds` is asked, so a
-        window that has a scenegraph needs to say nothing at all.
-        ``arrangement`` is what to open in, ``'single'`` unless the class says
-        otherwise.
+        callable answering that, which frames the views with cameras of their
+        own and is what a view's *zoom to fit* fits.  With none given the
+        window's own :meth:`~OpenGLContext.context.Context.sceneBounds` is
+        asked.  The furniture goes up where ``switching`` holds ``controls``.
         """
-        flat = ViewStyle(background=FLAT_BACKGROUND, grid=True)
-        views = [View(OrthoViewPlatform(OrthoView(direction)), name=direction,
-                      style=flat)
-                 for direction in elevations]
-        # The window's own camera: a view with none draws through whatever
-        # `getViewPlatform` answers, which is what leaves the navigation, the
-        # bound Viewpoint and any camera the application swaps in driving it.
-        views.append(View(name='perspective', style=ViewStyle(background=True)))
-        self.views = ViewSet(
-            views,
-            arrangements={'single': ('perspective',),
-                          'quad': tuple(view.name for view in views)},
-            mode=str(arrangement or self.multiViewArrangement),
-            driven=tuple(elevations))
+        self.views = viewSetFor(declaration)
+        self._sceneViews = tuple(str(declared.name) for declared in declaration.views
+                                 if declared.camera == 'scene')
         self._viewBounds = (bounds if callable(bounds)
                             else (lambda bounds=bounds: bounds)
                             if bounds is not None else self.boundsOfScene)
         self.views.arrange(*self.getViewPort())
         self.frameViews()
-        if chrome:
+        if 'controls' in declaration.switching:
             self._startViewChrome()
         return self.views
+
+    def startViews(self, bounds: Optional[Any] = None,
+                   arrangement: Optional[str] = None,
+                   elevations: Sequence[str] = ELEVATIONS,
+                   chrome: bool = True) -> ViewSet:
+        """Show the plan, two elevations and the window's own view; the set.
+
+        For a context that turns several views on at run time.  Writes
+        :func:`quadViews` into the definition's ``navigation.views`` and
+        builds it (:meth:`buildViews`).  ``arrangement`` is what to open in,
+        :attr:`multiViewArrangement` unless given; ``chrome`` puts the
+        furniture up, where the context has an overlay stack.
+        """
+        declaration = quadViews(
+            elevations, str(arrangement or self.multiViewArrangement),
+            ['controls'] if chrome else [])
+        definition = getattr(self, 'contextDefinition', None)
+        if definition is not None:
+            if definition.navigation:
+                definition.navigation.views = declaration
+            else:
+                definition.navigation = Navigation(views=declaration)
+        return self.buildViews(declaration, bounds)
 
     def _startViewChrome(self) -> None:
         """Put the views' furniture on the overlay stack, where there is one."""
@@ -161,19 +301,26 @@ class MultiViewMixin(_Host):
                 tuple(float(value) + radius for value in centre[:3]))
 
     def frameViews(self) -> bool:
-        """Fit what there is to see into every view; False with nothing to fit."""
+        """Fit what there is to see into every view; False with nothing to fit.
+
+        A ``scene`` view then stands where the scene's first camera stands,
+        where the scene has one.
+        """
         if self.views is None or self._viewBounds is None:
             return False
         found = self._viewBounds()
-        if not found:
-            return False
-        minimum, maximum = found
-        self.views.frame(minimum, maximum)
-        return True
+        if found:
+            minimum, maximum = found
+            self.views.frame(minimum, maximum)
+        camera = first_camera(self.sceneCameras()) if self._sceneViews else None
+        if camera is not None:
+            for name in self._sceneViews:
+                look_through(self.views.named(name), camera)
+        return bool(found)
 
     # -- switching ---------------------------------------------------------
     def showViews(self, name: str) -> None:
-        """Show the arrangement ``name`` -- ``'single'`` or ``'quad'``."""
+        """Show the arrangement ``name``, whatever the views' ``switching`` says."""
         if self.views is None:
             return
         self.views.show(name)
@@ -182,12 +329,12 @@ class MultiViewMixin(_Host):
         self.viewsArranged()
 
     def toggleViews(self, event: Any = None) -> None:
-        """Take the arrangements in turn, so one key reaches them all."""
+        """Take the arrangements in the order declared, so one key reaches them all."""
         if self.views is None:
             return
-        index = ARRANGEMENTS.index(self.views.mode) if \
-            self.views.mode in ARRANGEMENTS else -1
-        self.showViews(ARRANGEMENTS[(index + 1) % len(ARRANGEMENTS)])
+        names = list(self.views.arrangements)
+        index = names.index(self.views.mode) if self.views.mode in names else -1
+        self.showViews(names[(index + 1) % len(names)])
 
     def maximiseView(self, event: Any = None) -> None:
         """Give the view under the last click the window, or give it back."""

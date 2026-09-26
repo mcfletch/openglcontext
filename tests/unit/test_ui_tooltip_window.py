@@ -21,7 +21,6 @@ from OpenGLContext.ui.widgets import Button
 from tests.unit.glrender import base_env
 from OpenGLContext import testingcontext
 from OpenGLContext.scenegraph import basenodes
-from OpenGLContext.ui.overlay import OverlayMixin
 
 
 @pytest.fixture
@@ -32,7 +31,7 @@ def window(monkeypatch):
 
     drawn = []
 
-    class Tipped(OverlayMixin, testingcontext.getInteractive()):
+    class Tipped(testingcontext.getInteractive('glfw')):
         def OnInit(self):
             self.sg = basenodes.sceneGraph(children=[])
 
@@ -62,6 +61,8 @@ def _rest_on_a_button(context):
     event.pickPoint = button.rect.centre
     event.modifiers = (0, 0, 0)
     context.ProcessEvent(event)
+    # That frame was the one the loop always draws first.
+    context.windowsystem.renderedFirst = True
     return button
 
 
@@ -69,10 +70,9 @@ def test_the_tip_is_drawn_once_the_pointer_has_rested(window):
     context, drawn = window
     _rest_on_a_button(context)
     trace = LoopTrace()
-    rendered = True
     deadline = time.monotonic() + TOOLTIP_PAUSE * 2.5
     while time.monotonic() < deadline:
-        rendered = context._loopIteration(trace, rendered)  # noqa: SLF001 one iteration of the backend's main loop, driven by the test
+        assert context.windowsystem.loopIteration(trace)
         if drawn and any(isinstance(tree, Tooltip) for tree in drawn[-1]):
             break
     assert drawn and any(isinstance(tree, Tooltip) for tree in drawn[-1]), \
@@ -84,12 +84,11 @@ def test_a_window_with_nothing_pending_stays_idle(window):
     context, drawn = window
     _rest_on_a_button(context)
     trace = LoopTrace()
-    rendered = True
     deadline = time.monotonic() + TOOLTIP_PAUSE * 2.5
     while time.monotonic() < deadline:
-        rendered = context._loopIteration(trace, rendered)  # noqa: SLF001 one iteration of the backend's main loop, driven by the test
+        assert context.windowsystem.loopIteration(trace)
     settled = len(drawn)
     deadline = time.monotonic() + 0.3
     while time.monotonic() < deadline:
-        rendered = context._loopIteration(trace, rendered)  # noqa: SLF001 one iteration of the backend's main loop, driven by the test
+        assert context.windowsystem.loopIteration(trace)
     assert len(drawn) == settled

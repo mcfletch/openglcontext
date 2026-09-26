@@ -15,7 +15,7 @@ import inspect
 
 import pytest
 
-from OpenGLContext.context import Context
+from OpenGLContext.context import Context, ContextCore
 from OpenGLContext.screenshot import ScreenshotMixin
 from OpenGLContext.viewer.sceneviewer import SceneViewerMixin
 
@@ -45,8 +45,8 @@ class _Bindings:
 class _Host(ScreenshotMixin, _Bindings):
     """A context stripped to the two setup methods and the order they run in."""
 
-    setupCallbacks = Context.setupCallbacks
-    setupDefaultEventCallbacks = Context.setupDefaultEventCallbacks
+    setupCallbacks = ContextCore.setupCallbacks
+    setupDefaultEventCallbacks = ContextCore.setupDefaultEventCallbacks
 
     def OnEscape(self, event=None):
         pass

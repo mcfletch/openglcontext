@@ -20,7 +20,8 @@ should not have to go through a menu to say so, and a designer looking for
 """
 from __future__ import annotations
 
-from typing import Any, Optional
+from collections.abc import Callable
+from typing import Any, NamedTuple, Optional
 
 from vrml import field
 
@@ -29,7 +30,7 @@ from OpenGLContext.ui.metrics import REFERENCE_METRICS, FontMetrics
 from OpenGLContext.ui.panel import Panel
 from OpenGLContext.ui.widgets import Widget
 
-__all__ = ['ToolButton', 'ToolPalette']
+__all__ = ['ModeSelector', 'ToolButton', 'ToolPalette']
 
 #: Which side of the window the strip runs down.
 LEFT, RIGHT = 'left', 'right'
@@ -215,3 +216,80 @@ class ToolPalette(Panel):
         """
         taken = super(ToolPalette, self).pointer_pressed(x, y, button)
         return taken or self.rect.contains(x, y)
+
+
+class _Choice(NamedTuple):
+    """One movement mode, as a palette button names it"""
+    name: str
+    label: str
+
+
+class _ModeChoices:
+    """A navigation manager seen as the tools a palette offers.
+
+    The manager is asked for each time, because a context's movement modes
+    may be declared after the selector is up -- a viewer declares walking and
+    flying once a scene has loaded.
+    """
+
+    def __init__(self, navigation: Callable[[], Any]) -> None:
+        self.navigation = navigation
+
+    @property
+    def tools(self) -> list[_Choice]:
+        manager = self.navigation()
+        if manager is None:
+            return []
+        return [_Choice(str(mode.name), str(mode.name).capitalize())
+                for mode in manager.selectable()]
+
+    @property
+    def active(self) -> Any:
+        manager = self.navigation()
+        return manager.current if manager is not None else None
+
+    def select(self, name: str) -> bool:
+        manager = self.navigation()
+        return bool(manager is not None and manager.select(name))
+
+
+class ModeSelector(ToolPalette):
+    """The movement modes the user may choose, with the one in force lit.
+
+    What a navigation whose ``modeSwitching`` holds ``controls`` puts on the
+    overlay (see :class:`~OpenGLContext.move.navigationdefinition.Navigation`).
+    One button per selectable mode, down the right of the window by default; a
+    click selects that mode through the navigation manager, so a mode the
+    world imposes -- swimming -- is not offered, and one the application
+    selects lights here as well.
+
+    ``navigation`` is a callable answering the context's
+    :class:`~OpenGLContext.move.navigation.NavigationManager`, or None while
+    it has no modes to choose between.
+    """
+
+    PROTO = 'ModeSelector'
+
+    def __init__(self, navigation: Optional[Callable[[], Any]] = None,
+                 **named: Any) -> None:
+        named.setdefault('edge', RIGHT)
+        named.setdefault('name', 'navigation.modes')
+        self._offered: tuple[str, ...] = ()
+        super(ModeSelector, self).__init__(
+            tools=_ModeChoices(navigation or (lambda: None)), **named)
+
+    def rebuild(self) -> None:
+        super(ModeSelector, self).rebuild()
+        self._offered = tuple(str(button.tool) for button in self.buttons())
+
+    def refresh(self) -> bool:
+        """Rebuild if the modes on offer have changed; whether it did."""
+        offered = tuple(choice.name for choice in self.tools.tools)
+        if offered == self._offered:
+            return False
+        self.rebuild()
+        return True
+
+    def layout(self, viewport: tuple[int, int], metrics: FontMetrics) -> None:
+        self.refresh()
+        super(ModeSelector, self).layout(viewport, metrics)

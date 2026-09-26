@@ -15,6 +15,11 @@ if TYPE_CHECKING:
         """
 
         def getViewPort( self ) -> tuple[int, int]: ...
+        def completeInit( self ) -> bool: ...
+        overlays: Any
+        def triggerRedraw( self, force: int = 0 ) -> Any: ...
+        def addEventHandler( self, eventType: Any, *arguments: Any,
+                             **named: Any ) -> Any: ...
         def hasMouseMoveHandlers( self ) -> bool: ...
         def setupDefaultEventCallbacks( self ) -> None: ...
         def ProcessEvent( self, event: Any ) -> Any: ...
@@ -75,6 +80,10 @@ class ViewPlatformMixin(PhysicsWalkMixin, _Host):
     inputState: Any = None
     #: Drives the declared movement modes, when the context declares any.
     navigation: Any = None
+    #: The key that steps to the next movement mode, where the navigation lets
+    #: the user switch modes by key (``modeSwitching`` holds ``keys``); ''
+    #: binds none.
+    movementCycleKey: str = 'm'
     #: Last pointer position, for turning an absolute position into a delta.
     _lastPointer: Optional[tuple[float, float]] = None
     #: Whether the backend reports pointer motion directly.  Set the first time
@@ -99,12 +108,19 @@ class ViewPlatformMixin(PhysicsWalkMixin, _Host):
             self.inputState = InputState()
         return self.inputState
 
+    def declaredNavigation( self ) -> Any:
+        """The definition's navigation declaration, or None for none at all"""
+        definition = getattr( self, 'contextDefinition', None )
+        if definition is None:
+            return None
+        return definition.navigation or None
+
     def getNavigation( self ) -> Any:
         """The navigation manager for this context's declared modes, or None.
 
-        A context that declares no ``movementModes`` gets None and keeps
-        whatever movement manager it already had, so the older navigation
-        continues to work untouched.
+        A context whose navigation declares no mode that moves a body -- the
+        classic navigation alone, which is the default -- gets None, and the
+        free-fly manager moves the camera.
 
         The manager is re-pointed when what it drives changes, since a
         character controller usually comes into being when a world finishes
@@ -112,13 +128,13 @@ class ViewPlatformMixin(PhysicsWalkMixin, _Host):
         Re-pointed rather than rebuilt, so the player keeps the mode they
         chose.
         """
-        definition = getattr( self, 'contextDefinition', None )
-        if definition is None or not getattr( definition, 'movementModes', None ):
+        declared = self.declaredNavigation()
+        if declared is None or not declared.movingModes():
             return None
         platform = self.getNavigationPlatform()
         if self.navigation is None:
             from OpenGLContext.move.navigation import NavigationManager
-            self.navigation = NavigationManager( definition, platform )
+            self.navigation = NavigationManager( self.contextDefinition, platform )
         elif self.navigation.platform is not platform:
             self.navigation.retarget( platform )
         return self.navigation
@@ -132,17 +148,16 @@ class ViewPlatformMixin(PhysicsWalkMixin, _Host):
                 bool( mode is not None and mode.capturePointer ) )
 
     def setPointerCapture( self, capture: bool ) -> bool:
-        """Grab or release the pointer; False if this backend cannot.
+        """Grab or release the pointer; False if the window cannot.
 
-        Passed **down the MRO** to the backend rather than answered here.  A
-        mix-in is listed before the backend in every shipped context --
-        ``GLFWInteractiveContext`` is ``(ViewPlatformMixin, InteractiveContext,
-        GLFWContext)`` -- so a plain ``return False`` here shadows the real
-        implementation and mouse-look grabs nothing on any of them.
+        Passed **down the MRO** rather than answered here: this mix-in sits
+        ahead of :class:`~OpenGLContext.context.ContextCore`, whose own
+        ``setPointerCapture`` asks the window system, and a plain ``return
+        False`` here would shadow it and grab nothing.
 
-        A backend that genuinely has no way to hide the cursor and report
-        unbounded motion simply does not define this, and the False below
-        stands: mouse-look then works as far as the window edge.
+        A host with no way to hide the cursor and report unbounded motion
+        does not define this, and the False below stands: mouse-look then
+        works as far as the window edge.
         """
         backend = getattr( super( ViewPlatformMixin, self ),
                            'setPointerCapture', None )
@@ -185,9 +200,9 @@ class ViewPlatformMixin(PhysicsWalkMixin, _Host):
         it is dropping are exactly the ones the view turns from, and the result
         is a mode that grabs the pointer and then never moves the camera.
         """
-        mode = getattr( getattr( self, 'contextDefinition', None ),
-                        'movementMode', None )
-        if mode is not None and getattr( mode, 'capturePointer', False ):
+        declared = self.declaredNavigation()
+        mode = declared.current if declared is not None else None
+        if mode and getattr( mode, 'capturePointer', False ):
             return True
         return bool( super( ViewPlatformMixin, self ).hasMouseMoveHandlers() )
 
@@ -291,9 +306,9 @@ class ViewPlatformMixin(PhysicsWalkMixin, _Host):
     def setupDefaultEventCallbacks( self ) -> None:
         """Customization point: Setup application default callbacks
 
-        This method binds a large number of callbacks which support
-        the OpenGLContext default camera-manipulation modes.  In
-        particular:
+        Where the definition's navigation declares the ``examine`` mode -- the
+        default does -- this binds the classic camera navigation as the
+        free-fly movement manager:
             * unmodified arrow keys for x,z (in camera coordinate
                 space) movement
             * Alt+arrow keys for x,y (in camera coordinate space)
@@ -302,10 +317,50 @@ class ViewPlatformMixin(PhysicsWalkMixin, _Host):
                 forward
             * Mouse-button-2 (right) for entering "examine" mode
             * '-' for straightening the view platform
+
+        Where it lets the user switch modes by key, :attr:`movementCycleKey`
+        steps through them.  A NULL navigation binds none of it.  The view
+        platform is made here whatever the navigation says, so ``OnInit``
+        finds :attr:`platform` set.
         """
         super( ViewPlatformMixin, self ).setupDefaultEventCallbacks()
-        from OpenGLContext.move import smooth
-        self.setMovementManager( smooth.Smooth( self.getViewPlatform() ) )
+        self.getViewPlatform()
+        declared = self.declaredNavigation()
+        if declared is None:
+            return
+        if declared.examines():
+            from OpenGLContext.move import smooth
+            self.setMovementManager( smooth.Smooth( self.getViewPlatform() ) )
+        if 'keys' in declared.modeSwitching and self.movementCycleKey:
+            self.addEventHandler( 'keyboard', name=self.movementCycleKey,
+                                  state=0, function=self.cycleMovementMode )
+
+    def completeInit( self ) -> bool:
+        """Complete the context, then put up the mode selector if it offers one
+
+        Where the navigation's ``modeSwitching`` holds ``controls``, a
+        :class:`~OpenGLContext.ui.toolpalette.ModeSelector` goes on the
+        overlay stack, reading the modes from :meth:`getNavigation` as they
+        are declared.
+        """
+        completed = bool( super( ViewPlatformMixin, self ).completeInit() )
+        declared = self.declaredNavigation()
+        if completed and declared is not None and 'controls' in declared.modeSwitching:
+            from OpenGLContext.ui.toolpalette import ModeSelector
+            self.overlays.push( ModeSelector( navigation=self.getNavigation ) )
+        return completed
+
+    def cycleMovementMode( self, event: Any = None ) -> Any:
+        """Step to the next selectable movement mode; the mode now selected.
+
+        Bound to :attr:`movementCycleKey` where the navigation lets the user
+        switch modes by key.  None where there is nothing to cycle.
+        """
+        navigation = self.getNavigation()
+        mode = navigation.cycle() if navigation is not None else None
+        if mode is not None:
+            self.triggerRedraw( 1 )
+        return mode
     def ProcessEvent( self, event: Any ) -> Any:
         """Sample the event, then dispatch it as usual.
 

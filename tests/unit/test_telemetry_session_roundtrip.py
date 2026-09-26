@@ -15,6 +15,7 @@ import random
 import pytest
 
 from OpenGLContext import entropy, telemetry
+from OpenGLContext.move.navigationdefinition import Navigation
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.events.keyboardevents import KeyboardEvent
 from OpenGLContext.events.mouseevents import MouseButtonEvent
@@ -89,7 +90,7 @@ class _Context(ViewPlatformMixin, _Dispatch):
 
 
 def _walking():
-    return ContextDefinition(movementModes=[modes.WalkMode(name='walk')])
+    return ContextDefinition(navigation=Navigation(modes=[modes.WalkMode(name='walk')]))
 
 
 def _key(name, state):

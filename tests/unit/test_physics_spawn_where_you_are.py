@@ -12,6 +12,7 @@ import pytest
 
 from omi_physics import model
 from omi_physics.world import PhysicsWorld
+from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext import quaternion
 from OpenGLContext.move.physicswalk import PhysicsWalkMixin
 from OpenGLContext.move.viewplatform import ViewPlatform
@@ -58,7 +59,7 @@ class _Host(PhysicsWalkMixin):
     def __init__(self, camera):
         self.platform = _Platform(camera)
         self.movementManager = None
-        self.contextDefinition = type('_Definition', (), {'movementModes': []})()
+        self.contextDefinition = ContextDefinition()
         self.world, self.bounds = _floor()
 
     def buildPhysicsWorld(self):

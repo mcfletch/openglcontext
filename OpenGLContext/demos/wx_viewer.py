@@ -11,16 +11,16 @@ program is written to the wx API and is not among the demos run there.  See
 ``plans/BACKEND-PARITY.md`` for what else about the wx backend that applies
 to.
 
-On GTK3, wxPython makes its GL contexts through EGL, so ``PYOPENGL_PLATFORM``
-must be ``egl`` for PyOpenGL to track the current context.  ``wxcontext`` sets
-it when it can, which is why it is imported here before anything imports
-``OpenGL`` -- see :mod:`OpenGLContext.wxcontext`.
+On GTK3, wxPython makes its GL contexts through EGL, and PyOpenGL's Linux
+platform finds the live context whichever interface made it, so nothing here
+names one -- see :mod:`OpenGLContext.windowsystem.wx`.
 
 The whole of the engine in here is three calls, and the rest is wx:
 
-* :func:`OpenGLContext.viewer.viewerFor` gives the viewer over the wx backend.
-  The context **is** a ``wx.glcanvas.GLCanvas``, so it goes straight into a
-  sizer beside the application's other controls; there is no wrapper.
+* :func:`OpenGLContext.viewer.viewerFor` gives the viewer on the wx window
+  system, made with ``parent=`` so its canvas sits in this application's
+  window.  ``context.window`` is that ``wx.glcanvas.GLCanvas``, and it goes
+  into the splitter beside the application's other controls.
 * :meth:`~OpenGLContext.viewer.sceneviewer.SceneViewerMixin.openSource` opens a
   path or a URL, on a worker thread.
 * :class:`~OpenGLContext.outline.SceneOutline` is the scene as rows, which fill
@@ -34,7 +34,7 @@ starts the backend's own timer; this one starts nothing.  For the same reason
 it is handled, which is worth doing when a loop call is about to render anyway,
 and here there is no such call.
 
-**Quitting differs on this backend.**  The Tk and Qt contexts treat a view
+**Quitting differs on this window system.**  The Tk and Qt contexts treat a view
 inside somebody else's window as a view -- quitting one closes it and leaves the
 host running -- while the wx context ends the process, as
 :meth:`OpenGLContext.context.Context.OnQuit` does everywhere by default.  So the
@@ -48,17 +48,14 @@ import sys
 from collections.abc import Callable
 from typing import Any, Optional
 
-# Before OpenGL is imported by anything else: on GTK3 this is what settles
-# PYOPENGL_PLATFORM=egl, without which shader rendering has no context to track.
 try:
-    from OpenGLContext import wxcontext
+    import wx
 except ImportError as error:
     # The distribution is `wxPython`, which the import name does not say.
     raise SystemExit(
         'This demo needs wxPython:\n    %s\n    pip install wxPython' % (error,)
     ) from None
 
-import wx
 from pydispatch import dispatcher
 
 from OpenGLContext.outline import SceneOutline, nodeSummary
@@ -119,8 +116,8 @@ class ViewerFrame(wx.Frame):
 
         # The context *is* the canvas: it goes in the layout as any other
         # window does, and it opens no window of its own.
-        self.view = SceneView(splitter, size=(720, 560))
-        splitter.SplitVertically(panel, self.view, 240)
+        self.view = SceneView(parent=splitter, size=(720, 560))
+        splitter.SplitVertically(panel, self.view.window, 240)
         splitter.SetMinimumPaneSize(160)
 
         #: The scene as rows.  The notice can arrive on the loader's worker
@@ -334,7 +331,7 @@ class ViewerApplication(wx.App):
         frame = ViewerFrame(source=self.source)
         self.SetTopWindow(frame)
         frame.Show(True)
-        frame.view.SetFocus()
+        frame.view.window.SetFocus()
         return True
 
 

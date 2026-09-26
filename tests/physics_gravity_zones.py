@@ -8,10 +8,10 @@ around it falls *inward* toward the centre instead of straight down, because the
 volume replaces the global gravity within its radius.  This is the
 ``OMI_physics_gravity`` volume resolved by priority/replace.
 '''
-import time
 import numpy as np
 
 from OpenGLContext import testingcontext
+from OpenGLContext.events import systemtime
 BaseContext = testingcontext.getInteractive()
 
 from omi_physics import model
@@ -28,7 +28,7 @@ class TestContext(BaseContext):
         self.build()
         print(__doc__)
         self.addEventHandler('keypress', name='r', function=self.on_reset)
-        self._last = time.time()
+        self._last = systemtime.systemTime()
 
     def on_reset(self, event):
         self.build()
@@ -54,7 +54,7 @@ class TestContext(BaseContext):
         self.sg = self.scene.scene_graph()
 
     def OnIdle(self, *args):
-        now = time.time()
+        now = systemtime.systemTime()
         active = self.scene.advance(min(now - self._last, 0.05))
         self._last = now
         if active:

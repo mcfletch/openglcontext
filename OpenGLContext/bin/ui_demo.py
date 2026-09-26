@@ -30,6 +30,7 @@ from typing import Any, Optional
 from OpenGLContext import testingcontext
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.move import modes as movemodes
+from OpenGLContext.move.navigationdefinition import Navigation
 from OpenGLContext.scenegraph.appearance import Appearance
 from OpenGLContext.scenegraph.box import Box
 from OpenGLContext.scenegraph.transform import Transform
@@ -39,7 +40,6 @@ from OpenGLContext.scenegraph.quadrics import Sphere
 from OpenGLContext.scenegraph.scenegraph import SceneGraph
 from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.ui import bindings, console, dialogs, settings
-from OpenGLContext.ui.overlay import OverlayMixin
 
 log = logging.getLogger(__name__)
 BaseContext: Any = testingcontext.getInteractive()
@@ -112,11 +112,11 @@ def movement_modes() -> list[Any]:
     ]
 
 
-class UIDemoContext(OverlayMixin, BaseContext):
+class UIDemoContext(BaseContext):
     """A scene with the overlay screens bound to function keys.
 
-    The mix-in comes first so its event routing runs before the navigation
-    mix-in's: while a modal panel is up the movement sampler is not fed at all.
+    The overlay's event routing runs before the navigation's in every
+    context: while a modal panel is up the movement sampler is not fed at all.
     """
 
     skinned: bool = False
@@ -219,7 +219,7 @@ def main() -> int:
     UIDemoContext.ContextMainLoop(definition=ContextDefinition(
         title='OpenGLContext overlay UI',
         size=(1024, 720),
-        movementModes=movement_modes(),
+        navigation=Navigation(modes=['examine', *movement_modes()]),
     ))
     return 0
 

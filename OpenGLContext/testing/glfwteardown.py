@@ -39,7 +39,7 @@ a little memory until it ends and nothing more.
 **Which stack this is, is asked rather than assumed.**  :func:`teardown_faults`
 builds a window in a child process and frees it; if the child aborts, this
 machine is one of them.  Where it does not, the engine's own release path --
-:meth:`OpenGLContext.glfwcontext.GLFWContext.close` and the fixtures in
+:meth:`OpenGLContext.context.Context.releaseWindow` and the fixtures in
 :mod:`OpenGLContext.testing.glcontext` -- runs as it does in a user's
 application, and so stays under test.  That is what stops the workaround
 outliving the driver defect: it retires itself on the first machine that no

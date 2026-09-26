@@ -15,7 +15,7 @@ and a settings screen needs none of its own::
 opened from the main screen edits a copy of *the parent's draft* sub-node, and
 its Apply writes into that draft -- not into the live node::
 
-    child = session.child('movementModes', index=0)
+    child = session.child(node=session.draft.navigation.movingModes()[0])
     child.commit()           # into the parent's draft; still nothing is saved
 
 Only the outermost :meth:`commit` reaches the real node.  That is the whole
@@ -56,8 +56,8 @@ def _editableFields(source: Any) -> list[Any]:
     """The fields a session copies: the settings, and nothing else.
 
     Out: the node system's own bookkeeping, and anything the class declares in
-    ``TRANSIENT_FIELDS`` -- ``ContextDefinition.movementMode``, say, which the
-    navigation manager writes to say which mode is in force.  Copying one would
+    ``TRANSIENT_FIELDS`` -- ``Navigation.current``, say, which the navigation
+    manager writes to say which mode is in force.  Copying one would
     make a draft hold a stale value and write it back on Apply.
     """
     transient = tuple(getattr(type(source), TRANSIENT_ATTRIBUTE, ()))

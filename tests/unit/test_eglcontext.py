@@ -20,6 +20,7 @@ import pytest
 
 pytest.importorskip('OpenGL.EGL', exc_type=ImportError)
 
+from OpenGL import EGL
 from OpenGL.EGL.devices import DeviceInfo, devices
 from OpenGL.GL import (
     GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, glClear, glClearColor, GL_RGB, GL_UNSIGNED_BYTE,
@@ -29,6 +30,8 @@ from OpenGL.GL import (
 from OpenGLContext import eglcontext, contextresources
 from OpenGLContext.events import synthetic
 from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.windowsystem import egl as eglwindowsystem
+from OpenGLContext.windowsystem.egl import EGLWindowSystem
 
 
 def _needs_a_device():
@@ -157,28 +160,28 @@ class TestConfigAttributes:
 
     def test_depth_and_stencil_come_from_the_definition(self):
         attributes = eglcontext.configAttributes(depthBuffer=24, stencilBuffer=8)
-        assert _attribute(attributes, eglcontext.EGL.EGL_DEPTH_SIZE) == 24
-        assert _attribute(attributes, eglcontext.EGL.EGL_STENCIL_SIZE) == 8
+        assert _attribute(attributes, EGL.EGL_DEPTH_SIZE) == 24
+        assert _attribute(attributes, EGL.EGL_STENCIL_SIZE) == 8
 
     def test_alpha_is_requested_only_when_asked_for(self):
-        assert _attribute(eglcontext.configAttributes(alpha=True), eglcontext.EGL.EGL_ALPHA_SIZE) == 8
-        assert _attribute(eglcontext.configAttributes(alpha=False), eglcontext.EGL.EGL_ALPHA_SIZE) == 0
+        assert _attribute(eglcontext.configAttributes(alpha=True), EGL.EGL_ALPHA_SIZE) == 8
+        assert _attribute(eglcontext.configAttributes(alpha=False), EGL.EGL_ALPHA_SIZE) == 0
 
     def test_multisampling_is_requested_only_when_asked_for(self):
         assert _attribute(
-            eglcontext.configAttributes(multisampleSamples=4), eglcontext.EGL.EGL_SAMPLES
+            eglcontext.configAttributes(multisampleSamples=4), EGL.EGL_SAMPLES
         ) == 4
-        assert eglcontext.EGL.EGL_SAMPLES not in _attributes(eglcontext.configAttributes())
+        assert EGL.EGL_SAMPLES not in _attributes(eglcontext.configAttributes())
 
     def test_a_pbuffer_surface_is_requested(self):
         """There is no window, so the surface has to be one EGL can make alone."""
         assert _attribute(
-            eglcontext.configAttributes(), eglcontext.EGL.EGL_SURFACE_TYPE
-        ) == eglcontext.EGL.EGL_PBUFFER_BIT
+            eglcontext.configAttributes(), EGL.EGL_SURFACE_TYPE
+        ) == EGL.EGL_PBUFFER_BIT
 
     def test_the_list_is_terminated(self):
         attributes = eglcontext.configAttributes()
-        assert attributes[-1] == eglcontext.EGL.EGL_NONE
+        assert attributes[-1] == EGL.EGL_NONE
 
 
 def _attributes(attributes):
@@ -234,14 +237,15 @@ class TestOffscreenRendering:
         assert tuple(int(value) for value in renderer.contextDefinition.size) == (64, 48)
 
     def test_it_rendered_on_the_device_the_policy_chose(self, renderer):
-        assert renderer.device is not None
-        assert renderer.device.software == eglcontext.prefersSoftware()
+        device = renderer.windowsystem.device
+        assert device is not None
+        assert device.software == eglcontext.prefersSoftware()
 
     def test_closing_twice_is_harmless(self, renderer):
         """A caller that closes, and the fixture closing again, leave it closed."""
         renderer.close()
         renderer.close()
-        assert renderer.display is None
+        assert renderer.windowsystem.display is None
 
     def test_it_works_as_a_context_manager(self):
         # Built here rather than through `renderer`, because what is under test
@@ -251,8 +255,8 @@ class TestOffscreenRendering:
         _needs_a_device()
         opened = eglcontext.EGLContext(size=(16, 16))
         with opened as context:
-            assert context.display is not None
-        assert context.display is None
+            assert context.windowsystem.display is not None
+        assert context.windowsystem.display is None
 
 
 class TestDrivingTheContext:
@@ -379,46 +383,47 @@ class TestAFailedConstructionReleasesWhatItTook:
         pass
 
     def _context_failing_at(self, monkeypatch, step):
-        """An EGLContext whose construction fails at one named step."""
+        """An EGLContext whose window system fails at one named step."""
         released = []
 
         monkeypatch.setattr(
-            eglcontext.EGLContext, '_selectDevice',
+            EGLWindowSystem, 'selectDevice',
             lambda _self: DeviceInfo(index=0, handle=object(), driver='test'),
         )
         monkeypatch.setattr(
-            eglcontext.EGLContext, '_openDisplay',
+            EGLWindowSystem, 'openDisplay',
             lambda _self, _device: 'display',
         )
         monkeypatch.setattr(
-            eglcontext.EGLContext, '_chooseConfig', lambda _self, _definition: 'config'
+            EGLWindowSystem, 'chooseConfig', lambda _self, _definition: 'config'
         )
         monkeypatch.setattr(
-            eglcontext.EGLContext, '_createContext', lambda _self, _config: 'context'
+            EGLWindowSystem, 'createContext',
+            lambda _self, _definition, _config: 'context',
         )
         monkeypatch.setattr(
-            eglcontext.EGLContext, '_createSurface',
+            EGLWindowSystem, 'createSurface',
             lambda _self, _config, _width, _height: 'surface',
         )
-        monkeypatch.setattr(eglcontext.EGLContext, '_makeCurrent', lambda _self: None)
+        monkeypatch.setattr(EGLWindowSystem, 'bind', lambda _self: None)
         monkeypatch.setattr(
-            eglcontext.EGLContext, '_releaseEGL',
+            EGLWindowSystem, 'abandon',
             lambda self: released.append(
-                (self.display, self.context, self.surface)
+                (self.display, self.eglContext, self.surface)
             ),
         )
 
         def fails(*_args, **_named):
             raise eglcontext.EGLContextError('no')
 
-        monkeypatch.setattr(eglcontext.EGLContext, step, fails)
+        monkeypatch.setattr(EGLWindowSystem, step, fails)
         with pytest.raises(eglcontext.EGLContextError):
             eglcontext.EGLContext(size=(4, 4))
         return released
 
     @pytest.mark.parametrize(
         'step',
-        ['_chooseConfig', '_createContext', '_createSurface', '_makeCurrent'],
+        ['chooseConfig', 'createContext', 'createSurface', 'bind'],
     )
     def test_the_display_is_released(self, monkeypatch, step):
         released = self._context_failing_at(monkeypatch, step)
@@ -426,7 +431,7 @@ class TestAFailedConstructionReleasesWhatItTook:
         assert released[0][0] == 'display'
 
     def test_nothing_is_released_that_was_never_taken(self, monkeypatch):
-        released = self._context_failing_at(monkeypatch, '_chooseConfig')
+        released = self._context_failing_at(monkeypatch, 'chooseConfig')
         # The config failed, so there is no context and no surface to release.
         assert released[0][1] is None
         assert released[0][2] is None
@@ -438,8 +443,15 @@ class TestAFailedConstructionReleasesWhatItTook:
         monkeypatch.setattr(
             contextresources, 'context_lost', lambda: told.append(True)
         )
-        self._context_failing_at(monkeypatch, '_createContext')
+        self._context_failing_at(monkeypatch, 'createContext')
         assert told == []
+
+
+def _unopened():
+    """An EGLContext holding its window system, with nothing opened on EGL."""
+    context = eglcontext.EGLContext.__new__(eglcontext.EGLContext)
+    context.windowsystem = EGLWindowSystem(context)
+    return context
 
 
 class TestResizingRefusesADegenerateSize:
@@ -453,10 +465,10 @@ class TestResizingRefusesADegenerateSize:
         ordering on tuples, which lets 100x0 and 100x-1 straight through."""
         made = []
         monkeypatch.setattr(
-            eglcontext.EGLContext, '_createSurface',
+            EGLWindowSystem, 'createSurface',
             lambda _self, _config, width, height: made.append((width, height)),
         )
-        instance = eglcontext.EGLContext.__new__(eglcontext.EGLContext)
+        instance = _unopened()
         with pytest.raises(eglcontext.EGLContextError) as caught:
             instance.OnResize(*size)
         assert 'cannot render at' in str(caught.value)
@@ -470,8 +482,8 @@ class TestFinishingAFrame:
 
     def test_it_flushes(self, monkeypatch):
         flushed = []
-        monkeypatch.setattr(eglcontext, 'glFlush', lambda: flushed.append(True))
-        instance = eglcontext.EGLContext.__new__(eglcontext.EGLContext)
+        monkeypatch.setattr(eglwindowsystem, 'glFlush', lambda: flushed.append(True))
+        instance = _unopened()
         instance.SwapBuffers()
         assert flushed == [True]
 
@@ -480,10 +492,10 @@ class TestConfigAttributesColourBuffer:
     def test_rgb_asks_for_an_rgb_buffer(self):
         attributes = eglcontext.configAttributes(rgb=True)
         pairs = dict(zip(attributes[::2], attributes[1::2], strict=False))
-        assert pairs[eglcontext.EGL.EGL_COLOR_BUFFER_TYPE] == (
-            eglcontext.EGL.EGL_RGB_BUFFER
+        assert pairs[EGL.EGL_COLOR_BUFFER_TYPE] == (
+            EGL.EGL_RGB_BUFFER
         )
-        assert pairs[eglcontext.EGL.EGL_RED_SIZE] == 8
+        assert pairs[EGL.EGL_RED_SIZE] == 8
 
     def test_not_rgb_asks_for_a_luminance_buffer(self):
         """A parameter that is accepted and ignored is worse than one that is
@@ -491,10 +503,10 @@ class TestConfigAttributesColourBuffer:
         decline to say how many bits per channel."""
         attributes = eglcontext.configAttributes(rgb=False)
         pairs = dict(zip(attributes[::2], attributes[1::2], strict=False))
-        assert pairs[eglcontext.EGL.EGL_COLOR_BUFFER_TYPE] == (
-            eglcontext.EGL.EGL_LUMINANCE_BUFFER
+        assert pairs[EGL.EGL_COLOR_BUFFER_TYPE] == (
+            EGL.EGL_LUMINANCE_BUFFER
         )
-        assert eglcontext.EGL.EGL_RED_SIZE not in pairs
+        assert EGL.EGL_RED_SIZE not in pairs
 
 
 class TestFlushingPendingPicks:
@@ -565,32 +577,32 @@ class TestContextAttributes:
 
     def test_the_version_asked_for_is_requested(self):
         attributes = eglcontext.contextAttributes('core', (4, 1))
-        assert _attribute(attributes, eglcontext.EGL.EGL_CONTEXT_MAJOR_VERSION) == 4
-        assert _attribute(attributes, eglcontext.EGL.EGL_CONTEXT_MINOR_VERSION) == 1
+        assert _attribute(attributes, EGL.EGL_CONTEXT_MAJOR_VERSION) == 4
+        assert _attribute(attributes, EGL.EGL_CONTEXT_MINOR_VERSION) == 1
 
     def test_core_asks_for_the_core_profile(self):
         assert _attribute(
             eglcontext.contextAttributes('core'),
-            eglcontext.EGL.EGL_CONTEXT_OPENGL_PROFILE_MASK,
-        ) == eglcontext.EGL.EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT
+            EGL.EGL_CONTEXT_OPENGL_PROFILE_MASK,
+        ) == EGL.EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT
 
     def test_compatibility_asks_for_the_compatibility_profile(self):
         assert _attribute(
             eglcontext.contextAttributes('compatibility'),
-            eglcontext.EGL.EGL_CONTEXT_OPENGL_PROFILE_MASK,
-        ) == eglcontext.EGL.EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT
+            EGL.EGL_CONTEXT_OPENGL_PROFILE_MASK,
+        ) == EGL.EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT
 
     def test_any_asks_for_nothing(self):
         """Below GL 3.2 there is no profile mask, so naming one refuses a
         context that would otherwise have been made."""
-        assert eglcontext.contextAttributes('any') == [eglcontext.EGL.EGL_NONE]
+        assert eglcontext.contextAttributes('any') == [EGL.EGL_NONE]
 
     def test_forward_compatible_is_requested_only_when_asked_for(self):
         asked = eglcontext.contextAttributes('core', forwardCompatible=True)
         assert _attribute(
-            asked, eglcontext.EGL.EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE
-        ) == eglcontext.EGL.EGL_TRUE
-        assert eglcontext.EGL.EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE not in _attributes(
+            asked, EGL.EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE
+        ) == EGL.EGL_TRUE
+        assert EGL.EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE not in _attributes(
             eglcontext.contextAttributes('core'))
 
     def test_a_profile_nobody_offers_is_a_programming_error(self):
@@ -601,7 +613,7 @@ class TestContextAttributes:
             eglcontext.contextAttributes('deluxe')
 
     def test_the_list_is_terminated(self):
-        assert eglcontext.contextAttributes('core')[-1] == eglcontext.EGL.EGL_NONE
+        assert eglcontext.contextAttributes('core')[-1] == EGL.EGL_NONE
 
 
 class TestTheDefinitionsProfile:
@@ -633,23 +645,23 @@ class TestTheDefinitionsProfile:
     def test_the_definition_decides_the_attributes(self):
         core = eglcontext.definitionAttributes(
             ContextDefinition(profile='core', version=(4, 1)))
-        assert _attribute(core, eglcontext.EGL.EGL_CONTEXT_MAJOR_VERSION) == 4
-        assert _attribute(core, eglcontext.EGL.EGL_CONTEXT_OPENGL_PROFILE_MASK) \
-            == eglcontext.EGL.EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT
-        assert _attribute(core, eglcontext.EGL.EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE) \
-            == eglcontext.EGL.EGL_TRUE
+        assert _attribute(core, EGL.EGL_CONTEXT_MAJOR_VERSION) == 4
+        assert _attribute(core, EGL.EGL_CONTEXT_OPENGL_PROFILE_MASK) \
+            == EGL.EGL_CONTEXT_OPENGL_CORE_PROFILE_BIT
+        assert _attribute(core, EGL.EGL_CONTEXT_OPENGL_FORWARD_COMPATIBLE) \
+            == EGL.EGL_TRUE
 
     def test_a_compatibility_program_with_no_version_takes_the_default(self):
         """Below GL 3.2 there is no profile to name, and (0, 0) names no version."""
         assert eglcontext.definitionAttributes(
             ContextDefinition(profile='compatibility', version=(0, 0))
-        ) == [eglcontext.EGL.EGL_NONE]
+        ) == [EGL.EGL_NONE]
 
     def test_a_compatibility_program_that_names_a_version_asks_for_it(self):
         attributes = eglcontext.definitionAttributes(
             ContextDefinition(profile='compatibility', version=(4, 5)))
-        assert _attribute(attributes, eglcontext.EGL.EGL_CONTEXT_OPENGL_PROFILE_MASK) \
-            == eglcontext.EGL.EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT
+        assert _attribute(attributes, EGL.EGL_CONTEXT_OPENGL_PROFILE_MASK) \
+            == EGL.EGL_CONTEXT_OPENGL_COMPATIBILITY_PROFILE_BIT
 
 
 class TestTheDisplayIsSharedRatherThanOwned:
@@ -663,7 +675,7 @@ class TestTheDisplayIsSharedRatherThanOwned:
         device = eglcontext.selectDevice()
         first = eglcontext.openDisplay(device)
         second = eglcontext.openDisplay(device)
-        assert eglcontext._address(first) == eglcontext._address(second)
+        assert eglwindowsystem._address(first) == eglwindowsystem._address(second)
         assert eglcontext.closeDisplay(second) is False
         assert eglcontext.closeDisplay(first) is True
 
@@ -687,11 +699,11 @@ class TestTheDisplayIsSharedRatherThanOwned:
             second = eglcontext.PbufferContext(width=16, height=16)
             first.make_current()
             second.release()
-            current = eglcontext.EGL.eglGetCurrentContext()
-            assert eglcontext._address(current) == eglcontext._address(first.context)
+            current = EGL.eglGetCurrentContext()
+            assert eglwindowsystem._address(current) == eglwindowsystem._address(first.context)
         finally:
             first.release()
-        assert not eglcontext._address(eglcontext.EGL.eglGetCurrentContext())
+        assert not eglwindowsystem._address(EGL.eglGetCurrentContext())
 
     def test_releasing_twice_is_harmless(self):
         _needs_a_device()

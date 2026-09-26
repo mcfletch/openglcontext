@@ -6,9 +6,11 @@ Rendering offscreen
 An offscreen context renders without a window. It creates a GL context
 directly on a GPU, draws, and returns the pixels. Use it on a build machine
 with no screen, in a rendering service, or in a batch job such as making
-thumbnails for thousands of models. There is one offscreen context class per
-platform: ``OpenGLContext.eglcontext.EGLContext`` on Linux and
-``OpenGLContext.wglcontext.WGLContext`` on Windows. Both behave the same way.
+thumbnails for thousands of models. It is an ordinary
+:py:class:`~OpenGLContext.context.Context` on a window system with no window:
+``egl`` on Linux (:py:mod:`OpenGLContext.windowsystem.egl`) and ``wgl`` on
+Windows (:py:mod:`OpenGLContext.windowsystem.wgl`).  ``offscreen`` names
+whichever of the two the platform has, and both behave the same way.
 
 Using an offscreen context
 --------------------------
@@ -20,20 +22,20 @@ the :doc:`event model <eventmodel>` all work as they do in a window:
 .. code-block:: python
 
    from OpenGL.GL import GL_COLOR_BUFFER_BIT, GL_DEPTH_BUFFER_BIT, glClear, glClearColor
-   from OpenGLContext.eglcontext import EGLContext        # Linux
-   # from OpenGLContext.wglcontext import WGLContext      # Windows
+   from OpenGLContext.context import Context
 
-   class Offscreen(EGLContext):
+   class Offscreen(Context):
+       windowSystemName = 'offscreen'      # EGL on Linux, WGL on Windows
+
        def Render(self, mode=None):
-           EGLContext.Render(self, mode)
            glClearColor(0.2, 0.3, 0.3, 1.0)
            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
 
    Offscreen.ContextMainLoop(size=(640, 480))
 
 ``MainLoop`` renders ``frameCount`` frames and returns. The default is one
-frame; set it higher to render an animation frame by frame. The context is
-also a context manager, which suits most scripts:
+frame; set it higher to render an animation frame by frame. A context is also
+a context manager, which releases it on the way out and suits most scripts:
 
 .. code-block:: python
 
@@ -41,13 +43,16 @@ also a context manager, which suits most scripts:
        context.OnDraw(force=1)
        pixels = glReadPixels(0, 0, 640, 480, GL_RGB, GL_UNSIGNED_BYTE)
 
-An application that already selects its backend by name needs no code
-change. Set the backend in the environment:
+An application that leaves its window system to the environment needs no
+code change:
 
 .. code-block:: bash
 
-   OPENGLCONTEXT_BACKEND=egl python my_application.py     # Linux
-   OPENGLCONTEXT_BACKEND=wgl python my_application.py     # Windows
+   OPENGLCONTEXT_BACKEND=offscreen python my_application.py
+
+``eglcontext.EGLContext`` and ``wglcontext.WGLContext`` are ``Context`` with
+one or the other pinned, and add ``close()`` under the name a pbuffer's owner
+reaches for; ``releaseWindow()`` is the same call.
 
 The context renders into a pbuffer, which is a real default framebuffer.
 Passes that draw to framebuffer zero, read it back or take a screenshot work
@@ -68,50 +73,51 @@ Platform support
    :header-rows: 1
 
    * - Platform
-     - Backend
+     - Window system
      - Requirements
    * - Linux
-     - ``egl``: ``OpenGLContext.eglcontext``
+     - ``egl``: ``OpenGLContext.windowsystem.egl``
      - An EGL device. No display server, compositor or login session is
        needed.
    * - Windows
-     - ``wgl``: ``OpenGLContext.wglcontext``
+     - ``wgl``: ``OpenGLContext.windowsystem.wgl``
      - A display driver with ``WGL_ARB_pbuffer``, and a window station with a
        desktop. A service in session 0 has both. Nothing needs to be on
        screen, and no compositor or open remote-desktop connection is needed.
    * - macOS
      - none
      - CGL can create a windowless context (``OpenGL.CGL``) but provides no
-       default framebuffer, so OpenGLContext has no offscreen backend for
-       macOS. Use a hidden window.
+       default framebuffer, so OpenGLContext has no offscreen window system
+       for macOS. Use a hidden window.
 
-On a platform without an offscreen backend, use a hidden window: set
-``OPENGLCONTEXT_HIDDEN=1`` with any windowing backend. A hidden window
+On a platform without an offscreen window system, use a hidden window: set
+``OPENGLCONTEXT_HIDDEN=1`` with any windowed one. A hidden window
 renders and reads back the same pixels, and :doc:`the test suite <testing>`
 uses one by default. A hidden window still needs a display server and a
-desktop; the offscreen backends do not.
+desktop; the offscreen window systems do not.
 
-Choosing the offscreen backend at run time
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Choosing the offscreen window system at run time
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Both backends are registered on every platform. Code that runs on several
-platforms can ask for the offscreen context type instead of naming a class:
+Both are registered on every platform.  ``windowsystem='offscreen'`` asks for
+whichever this platform has, so code that runs on several platforms names
+neither:
 
 .. code-block:: python
 
    from OpenGLContext.context import Context
+   from OpenGLContext.windowsystem import WindowSystemUnavailable
 
-   offscreen = Context.getOffscreenContextType()
-   if offscreen is None:
+   try:
+       context = Context(windowsystem='offscreen', size=(1920, 1080))
+   except WindowSystemUnavailable:
        ...                            # nothing here renders without a window
-   context = offscreen(size=(1920, 1080))
 
-``getOffscreenContextType()`` returns ``None`` when the platform has no
-offscreen backend, and also when the backend's bindings fail to load (for
-example, EGL with no library installed). The caller handles both cases the
-same way. ``Context.getOffscreenBackendName()`` returns only the name,
-``'egl'`` or ``'wgl'``, for use in a message. Pass a platform name to either
-method to ask about another platform.
+``WindowSystemUnavailable`` is raised where the platform's offscreen window
+system will not load (for example, EGL with no library installed), naming it
+and the import error.  :py:func:`OpenGLContext.windowsystem.offscreenName`
+returns only the name, ``'egl'`` or ``'wgl'``, for use in a message; pass a
+platform name to ask about another platform.
 
 When construction fails
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -123,8 +129,8 @@ error to fall back to something else. A failed construction releases
 everything it had acquired, so an application can retry with another device
 or a smaller request without leaking resources.
 
-On Windows, ``OpenGLContext.wglcontext.available()`` checks before creating
-anything. It returns the names of the extensions the driver lacks, or an
+On Windows, ``OpenGLContext.windowsystem.wgl.available()`` checks before
+creating anything. It returns the names of the extensions the driver lacks, or an
 empty sequence.
 
 Choosing a GPU (EGL)

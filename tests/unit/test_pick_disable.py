@@ -4,7 +4,7 @@ Pure/headless: exercises the env default, the field, and the addPickEvent gate
 without needing a GL context.
 """
 from OpenGLContext import contextdefinition as cd
-from OpenGLContext.context import Context
+from OpenGLContext.context import Context, ContextCore
 
 
 class _FakeEvent:
@@ -26,7 +26,7 @@ class _StubContext:
     """
 
     viewLayout = None
-    getViewLayout = Context.getViewLayout
+    getViewLayout = ContextCore.getViewLayout
     routeEvent = Context.routeEvent
 
     def __init__(self, definition):

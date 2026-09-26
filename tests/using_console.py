@@ -18,9 +18,8 @@ Type `help` in it for the commands this demo registers.
 '''
 from OpenGLContext import testingcontext
 '''The console is a ``Panel`` like any other, so a context gains it the same
-way: :doc:`Putting a panel on the screen <using_ui>` is the mix-in and the
-stack.'''
-from OpenGLContext.ui.overlay import OverlayMixin
+way: :doc:`Putting a panel on the screen <using_ui>` is the stack every
+context has.'''
 from OpenGLContext.ui import console
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, Background, Box, DirectionalLight, Material, Shape, Transform,
@@ -32,7 +31,7 @@ import logging
 BaseContext = testingcontext.getInteractive()
 
 
-class TestContext(OverlayMixin, BaseContext):
+class TestContext(BaseContext):
     initialPosition = (0, 1.2, 6)
 
     def OnInit(self):

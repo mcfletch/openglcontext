@@ -10,7 +10,7 @@ from collections.abc import Sequence
 from typing import Any, Optional
 
 log = logging.getLogger("gltest")
-from OpenGLContext import testingcontext, context, plugins
+from OpenGLContext import testingcontext, context, windowsystem
 
 
 def readConfigs(configs: Sequence[str]) -> configparser.ConfigParser:
@@ -27,18 +27,16 @@ def readConfigs(configs: Sequence[str]) -> configparser.ConfigParser:
 def contextClass(configs: Sequence[str]) -> Optional[type[Any]]:
     """The context class the test should render in
 
-    With no configuration file, the pygame VRML context is asked for, and the
-    user's default backend where there is no pygame.
+    With no configuration file, a Context on pygame where pygame is installed,
+    and on the user's default window system where it is not.
     """
     if configs:
         configured: Optional[type[Any]] = context.Context.fromConfig(
             readConfigs(configs))
         return configured
-    installed: Optional[type[Any]] = (
-        context.Context.getContextType("pygame", plugins.VRMLContext)
-        or context.Context.getContextType(None, plugins.VRMLContext)
-    )
-    return installed
+    if windowsystem.probe('pygame') is None:
+        return testingcontext.getInteractive('pygame')
+    return context.Context
 
 
 def saveAndExitClass(
