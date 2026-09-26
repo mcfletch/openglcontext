@@ -143,6 +143,7 @@ if TYPE_CHECKING:
         """
 
         multiViewArrangement: str
+        movementManager: Any
         def frameViews(self) -> bool: ...
 
         @classmethod
