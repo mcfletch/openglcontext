@@ -31,7 +31,8 @@ class _Keys(Context):
         self.setupDefaultEventCallbacks()
 
     def addEventHandler(self, eventType, *arguments, **named):
-        self.bound.append((eventType, named.get('name'), named.get('function')))
+        self.bound.append((eventType, named.get('name'), named.get('function'),
+                           named.get('state')))
 
     def setMovementManager(self, manager):
         self.movementManager = manager
@@ -47,7 +48,7 @@ class _Keys(Context):
 
 
 def _keysBound(context, name):
-    return [function for kind, key, function in context.bound
+    return [function for kind, key, function, _state in context.bound
             if kind == 'keyboard' and key == name]
 
 
@@ -84,6 +85,11 @@ class TestSwitchingByKey:
         context = _Keys(Navigation(modes=['walk', 'fly'], modeSwitching=['keys']))
         bound = _keysBound(context, context.movementCycleKey)
         assert bound and bound[-1] == context.cycleMovementMode
+
+    def test_the_cycle_key_fires_on_the_release(self):
+        context = _Keys(Navigation(modes=['walk', 'fly'], modeSwitching=['keys']))
+        assert [state for _kind, key, _function, state in context.bound
+                if key == context.movementCycleKey] == [0]
 
     def test_the_cycle_key_steps_to_the_next_mode(self):
         context = _Keys(Navigation(modes=['walk', 'fly'], modeSwitching=['keys']))

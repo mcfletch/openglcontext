@@ -336,7 +336,7 @@ class ViewPlatformMixin(PhysicsWalkMixin, _Host):
             self.setMovementManager( smooth.Smooth( self.getViewPlatform() ) )
         if 'keys' in declared.modeSwitching and self.movementCycleKey:
             self.addEventHandler( 'keyboard', name=self.movementCycleKey,
-                                  state=1, function=self.cycleMovementMode )
+                                  state=0, function=self.cycleMovementMode )
 
     def completeInit( self ) -> bool:
         """Complete the context, then put up the mode selector if it offers one

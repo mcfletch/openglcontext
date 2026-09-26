@@ -70,7 +70,6 @@ from OpenGLContext.ui.overlay import OverlayMixin
 from OpenGLContext.viewer.asyncscene import AsyncSceneMixin
 from OpenGLContext.video.recorder import RecordingMixin
 from OpenGLContext.viewer.capture import SettleCaptureMixin
-from OpenGLContext.multiview.mixin import MultiViewMixin
 from OpenGLContext.viewer.options import ViewerOptions
 from OpenGLContext.viewer.caption import CaptionMixin
 from OpenGLContext.viewer.screens import ViewerScreensMixin
@@ -138,8 +137,13 @@ if TYPE_CHECKING:
         have to be declared somewhere the mix-in can see. The movement two come
         from :class:`~OpenGLContext.move.physicswalk.PhysicsWalkMixin` and
         :class:`~OpenGLContext.move.viewplatformmixin.ViewPlatformMixin` in the
-        assembled context, the frame two from the context itself.
+        assembled context, the views from
+        :class:`~OpenGLContext.multiview.mixin.MultiViewMixin`, and the frame
+        two from the context itself.
         """
+
+        multiViewArrangement: str
+        def frameViews(self) -> bool: ...
 
         @classmethod
         def resolveDefinition(cls, definition: Any = None,
@@ -156,14 +160,15 @@ else:
 
 class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
                        SettleCaptureMixin, RecordingMixin,
-                       ViewerScreensMixin, MultiViewMixin, _Host):
+                       ViewerScreensMixin, _Host):
     """Showing one scene: assembly, cameras, animation and the caption.
 
-    Four views of it as well as one: ``MultiViewMixin`` puts the plan and two
-    elevations beside the camera this already had, and ``v`` switches between
-    them. The viewer's own camera is what the perspective view draws through,
-    so the model's cameras, the turntable and the fly-through move that view
-    in either arrangement.
+    Four views of it as well as one: the navigation it declares
+    (:meth:`viewerNavigation`) puts the plan and two elevations beside the
+    camera this already had, and ``v`` switches between them. The viewer's own
+    camera is what the perspective view draws through, so the model's
+    cameras, the turntable and the fly-through move that view in either
+    arrangement.
     """
 
     #: What to show and how.  A class attribute so a subclass can simply set it.
@@ -188,6 +193,8 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         """
         resolved = super().resolveDefinition(definition, **named)
         options = cls.options
+        if not _isSet(resolved, 'navigation'):
+            resolved.navigation = cls.viewerNavigation()
         if options.shadows is not None and not _isSet(resolved, 'shadows'):
             resolved.shadows = options.shadows
         if not _isSet(resolved, 'iblIntensity'):
@@ -196,6 +203,29 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
             elif not renderoptions.env_text_once('OPENGLCONTEXT_IBL_INTENSITY').strip():
                 resolved.iblIntensity = env.VIEWER_IBL_INTENSITY
         return resolved
+
+    @classmethod
+    def viewerNavigation(cls) -> Any:
+        """The navigation a viewer declares: the classic one, and one view or four.
+
+        The user steps through the movement modes with ``m`` and through the
+        arrangements with ``v``; the views' furniture is up except in a
+        capture or a recording, since what comes out of those is the scene
+        rather than the interface.  The arrangement opened in is the
+        ``--views`` option's, else :attr:`multiViewArrangement`.  The modes
+        that move a body are declared once the context is built
+        (:meth:`declareMovementModes`).
+        """
+        from OpenGLContext.move.navigationdefinition import Navigation
+        from OpenGLContext.multiview.mixin import quadViews
+
+        options = cls.options
+        recording = bool(options.capture or options.capture_video)
+        return Navigation(
+            modes=['examine'], modeSwitching=['keys'],
+            views=quadViews(
+                arrangement=str(options.views or cls.multiViewArrangement),
+                switching=['keys'] if recording else ['keys', 'controls']))
 
     #: Resolved scene source (path or URL).
     source: Optional[str] = None
@@ -282,13 +312,6 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         if not self.capturing:
             debug.install(self)
             self.setupScreens()
-        # The views before the first scene: they are fitted to whatever the
-        # window is showing each time one is loaded, and `v` switches between
-        # one view and four whether or not anything is loaded yet. A capture
-        # or a recording gets no furniture, for the reason the caption is left
-        # off one: what comes out is the scene, not the interface.
-        self.startViews(arrangement=self.options.views,
-                        chrome=not (self.capturing or self.recording))
         if self.capturing:
             # A capture has to be deterministic, and the settle logic has to see
             # the model, so it is loaded before the loop starts rather than
@@ -784,10 +807,9 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         """Say what the ways of moving are, before anything has moved.
 
         The modes belong to the *viewer*, not to the avatar: the controls page
-        offers what the context declares, and it used to find nothing because
-        these were declared only as a side effect of building a physics world --
-        so a viewer in free-fly, which is the default, had no controls page and
-        nothing for ``m`` to cycle.
+        offers what the context declares, so they are declared before any
+        physics world is built, and a viewer in free-fly has a controls page
+        and modes for ``m`` to cycle.
 
         At scale 1 to begin with; :meth:`applyMovementModes` redeclares them
         against the avatar's real size once a world has been cooked.  A host
@@ -1179,8 +1201,6 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         KeyBinding(']', 'nextAnimation', 'Next animation'),
         KeyBinding('[', 'previousAnimation', 'Previous animation'),
         KeyBinding('t', 'toggleTurntable', 'Turntable on or off'),
-        KeyBinding('m', 'cycleMovementMode', 'Next navigation mode'),
-        KeyBinding('v', 'toggleViews', 'One view of the scene, or four'),
     )
 
     # -- the frame --------------------------------------------------------

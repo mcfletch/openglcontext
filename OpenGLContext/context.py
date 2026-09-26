@@ -104,6 +104,7 @@ EXAMINE_PICK_REACH = 1.5
 from OpenGLContext.contextconfig import ContextConfigMixin
 from OpenGLContext.events.eventhandlermixin import EventHandlerMixin
 from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
+from OpenGLContext.multiview.mixin import MultiViewMixin
 from OpenGLContext.ui.screen import ScreenMixin
 from OpenGLContext.vrmlcontext import VRMLSceneMixin
 from OpenGLContext import windowsystem as _windowsystem
@@ -2027,7 +2028,8 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         return type("TestingContext", (Context,), {"contextDefinition": definition})
 
 
-class Context(ViewPlatformMixin, EventHandlerMixin, VRMLSceneMixin, ContextCore):
+class Context(MultiViewMixin, ViewPlatformMixin, EventHandlerMixin, VRMLSceneMixin,
+              ContextCore):
     """A rendering context: a window, the GL context in it, and a scene
 
     The Context object represents a single rendering context for use by the
@@ -2046,9 +2048,12 @@ class Context(ViewPlatformMixin, EventHandlerMixin, VRMLSceneMixin, ContextCore)
     definition's ``windowsystem`` field; see :mod:`OpenGLContext.windowsystem`
     and ``docs/backends.rst``.  Every context has the event managers of
     :class:`~OpenGLContext.events.eventhandlermixin.EventHandlerMixin`, the
-    camera of :class:`~OpenGLContext.move.viewplatformmixin.ViewPlatformMixin`
-    and the scene loading of :class:`~OpenGLContext.vrmlcontext.VRMLSceneMixin`,
-    on top of what :class:`ContextCore` describes.
+    camera and movement modes of
+    :class:`~OpenGLContext.move.viewplatformmixin.ViewPlatformMixin`, the
+    views of :class:`~OpenGLContext.multiview.mixin.MultiViewMixin` and the
+    scene loading of :class:`~OpenGLContext.vrmlcontext.VRMLSceneMixin`, on
+    top of what :class:`ContextCore` describes; the definition's
+    ``navigation`` says which modes and views it has.
     """
 
     def emitKey(self, key: Any, state: int, modifiers: Any) -> None:
