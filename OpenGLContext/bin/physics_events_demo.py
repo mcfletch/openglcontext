@@ -412,20 +412,42 @@ def main() -> int:                              # pragma: no cover - needs a win
             engine = audioscene.engine_for(self)
             if engine is not None:
                 engine.master_gain = MASTER_GAIN
-            for key, handler in (('d', self.yard.drop), ('l', self.yard.launch),
-                                 ('L', lambda: self.yard.launch(speed=1.0)),
-                                 ('m', self.yard.mend), (' ', self.OnFire),
-                                 ('w', self.yard.toggle_weight), ('c', self.OnCap)):
-                self.addEventHandler('keypress', name=key,
-                                     function=lambda event, handler=handler: handler())
+            for key, handler in (('d', self.OnDrop), ('l', self.OnLaunch),
+                                 ('L', self.OnLaunchSlow),
+                                 ('m', self.OnMend), (' ', self.OnFire),
+                                 ('w', self.OnToggleWeight), ('c', self.OnCap)):
+                if key.lower() != key:
+                    self.addEventHandler(
+                        'keypress', 
+                        name=key, 
+                        function=handler,
+                        modifiers=(True,False,False),
+                    )
+                else:
+                    self.addEventHandler('keypress', name=key, function=handler)
             self.yard.frames.step(systemtime.systemTime())
             print(__doc__, flush=True)
+        def OnDrop(self, event:Any=None) -> None:
+            """Handle a drop request"""
+            self.yard.drop()
+        def OnLaunchSlow(self, event:Any=None) -> None:
+            """Trigger launch at 1m/s"""
+            self.yard.launch(speed=1.0)
+        def OnLaunch(self, event:Any=None) -> None:
+            """Trigger launch at 1m/s"""
+            self.yard.launch()
+        def OnMend(self, event:Any=None) -> None:
+            """Fix up broken bits"""
+            self.yard.mend()
+        def OnToggleWeight(self, event:Any=None) -> None:
+            """Trigger the pressure plate with the weight"""
+            self.yard.toggle_weight()
 
-        def OnFire(self) -> None:
+        def OnFire(self, event:Any=None) -> None:
             platform = self.getViewPlatform()
             self.yard.fire(platform.position[:3], platform.forward())
 
-        def OnCap(self) -> None:
+        def OnCap(self, event:Any=None) -> None:
             cap = self.yard.toggle_cap()
             print('frame rate capped at 20 fps' if cap else 'frame rate uncapped',
                   flush=True)
