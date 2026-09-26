@@ -803,7 +803,69 @@ Run from the worktree with `PYTHONPATH=<worktree>`; GLUT and Tk need
     class.  `getContextType(s)` and `getVRML` warn.
   - GLFW, EGL, GLUT, pygame and Tk render a scene through the new `Context`
     (GLUT and Tk under Xvfb).  wx and WGL are written but not run here.
-- Next: the unit suite is red (about 370 failures in about 70 files) where
-  tests drove the old mix-ins and backend classes directly.  Those are the
-  Phase 0 rewrites: tests go through the window system's methods.  Then Qt
-  (openglcontext-qt), the consumers, Phase 2b (navigation) and the docs.
+- Phase 0 as rewrites rather than first: the tests that drove the old
+  mix-ins and backend classes (about 370 failures in 70 files once the source
+  moved) now drive the window systems' own methods, over a real `Context`
+  made with `__new__` or a small recording host.  The source-structure tests
+  (`test_backend_parity`, `test_backend_context_lifecycle`) assert the
+  capabilities of the `WindowSystem` classes, with every registered one
+  loading and none left abstract.
+- Qt (`openglcontext-qt`, branch `windowsystem`, worktree
+  `openglcontext-qt/.claude/worktrees/windowsystem`):
+  `OpenGLContext_qt/windowsystem.py` holds `QtWindowSystem` and `QtWindow`, a
+  `QWindow` whose virtuals hand the events to the window system;
+  `qtcontext` is the stub; the package declares
+  `[project.entry-points."openglcontext.windowsystems"] qt = ...`.  The
+  engine's `try: import OpenGLContext_qt` is gone.  169 tests green.  The
+  entry-point group is spelled in lower case, as groups are, and so that
+  prose naming it is not read as a module path.
+- Consumers inside the engine: `ViewerContext` is an ordinary class
+  (`OverlayMixin, SceneViewerMixin, Context`), `viewerFor(name)` pins
+  `windowSystemName`; `bin/gltest`, `bin/choosecontext`, `bin/gltf_demo`,
+  `bin/profile_view`, `bin/keyboardevents`, the Tk and wx embedding demos;
+  `testing/glcontext` imports from `windowsystem.egl`.
+  `scripts/writeplugins.py` is deleted.  `Context.fromConfig` sets the
+  field from `[context] gui`.
+- openglcontext-editor (branch `windowsystem`, worktree
+  `openglcontext-editor/.claude/worktrees/windowsystem`): the zone-probe
+  `Baker` is `Context` with `windowSystemName = 'offscreen'`, so the bake runs
+  on Windows as well.
+- Defects the fold exposed, fixed: every context now loads the TrueType
+  providers, so `Text` draws with `ToolsSolidFont` where interactive contexts
+  drew with the bitmap font; that font made a vertex array every frame, kept
+  one glyph buffer for the whole process (a second context's first frame was
+  `GL_INVALID_OPERATION`), and was culled inside out under a mirroring
+  transform.  Its buffer and vertex array are now per context
+  (`contextresources.ContextNames`), made once, and it follows the winding
+  (`winding.apply_winding_cull`).  A font built directly loads the registry
+  on first use (`TTFFontProvider.getTTFRegistry`).  `getTTFFiles` moved to
+  `ContextConfigMixin`, which is sanctioned in the open audit as a reader of
+  the user's own files.
+- Documentation: `docs/backends.rst` is rewritten as *Window Systems*
+  (choosing one, the classes, writing one); `embedding`, `offscreen`,
+  `environment`, `eventmodel`, `profiles`, `structure`, `documentation`,
+  `viewer`, `zones`, `overlayui` and `testing` follow; CLAUDE.md's directory
+  map and `OPENGLCONTEXT_BACKEND` section; the Qt README.
+- Gates in the worktree: ruff, oglc-check, mypy (from `.preflight-venv`,
+  whole package) clean; the full suite green in both passes apart from what
+  is listed under *Still to do*.
+
+Still to do:
+
+- The script suite (`tests/test_all_scripts.py`, every script's frame
+  against its reference image) passes from the worktree with `PYTHONPATH`
+  set, which the subprocesses inherit.  Run it again on the main checkout
+  with the merge staged, as preflight does, before the merge is committed.
+- wx and WGL: written against their APIs, not run here; their CI jobs are
+  the gate.
+- Phase 2b (navigation from the definition) -- not started.  It folds the
+  classic `smooth.Smooth` manager into an `examine` movement mode, which
+  touches `PhysicsWalkMixin.enablePhysics` (it unbinds and rebinds that
+  manager), the viewer's `g`/`m` keys and every game; worth doing as its own
+  change.
+- Phase 4 for the games (forest, twig-bb, glisteel, glisteel-editor,
+  marble-demo, marble-editor): they keep working unchanged, since
+  `getInteractive()` answers `Context`; moving them to `class Game(Context)`
+  with the window system in the definition is still to do.
+- Phase 6 (removal of the old registries and `getContextType`) is a release
+  later.

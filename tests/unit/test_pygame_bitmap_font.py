@@ -63,9 +63,17 @@ class TestBuildingFromAKnownFile:
 
 
 class TestWithoutARegistry:
-    """Matching needs the scanned font metadata, and says so when it has none."""
+    """Matching needs the scanned font metadata, and says so when it has none.
+
+    The registry is loaded the first time a font asks for it; a machine where
+    that produces nothing is the one left to report.
+    """
 
     @pytest.mark.usefixtures('no_registry')
-    def test_match_reports_the_missing_registry(self):
-        with pytest.raises(RuntimeError):
+    def test_match_reports_the_missing_registry(self, monkeypatch):
+        from OpenGLContext.contextconfig import ContextConfigMixin
+
+        monkeypatch.setattr(ContextConfigMixin, 'getTTFFiles',
+                            classmethod(lambda cls: None))
+        with pytest.raises(RuntimeError, match='No TrueType font registry'):
             pygamefont.PyGameFontProvider.match(None)
