@@ -364,9 +364,10 @@ class ReflectionPlanner:
                         break
                 else:
                     groups.append(_Group.of(surface))
+            # The members in the order the scene lists them: the first names
+            # the reflection and gives it its roughness, the same one each run.
             for group in groups:
-                seen = self._mirror(frame, sorted(group.members,
-                                                  key=lambda m: id(m.record[4])), eye)
+                seen = self._mirror(frame, group.members, eye)
                 if seen is not None:
                     found.append(seen)
         return found
