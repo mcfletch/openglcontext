@@ -941,6 +941,17 @@ worktree at `<project>/.claude/worktrees/windowsystem`):
   `ViewPlatformMixin.setupDefaultEventCallbacks` now makes it whatever the
   navigation (b063c97f).  marble-editor, glisteel, glisteel-editor and the
   twig-bb HUD sample each ran 40 hidden frames and exited cleanly.
+- The script suite found `cover_meadow.py` rendering one of two frames
+  (7.2% apart) from run to run.  The shader pass grouped opaque shapes by
+  `id(material)`, so the draw order followed allocation addresses, and the
+  grass's near and far card rings meet at one depth in their crossfade band,
+  where under `LEQUAL` the later draw is the one seen.
+  `_flat.opaqueDrawOrder` ranks materials by their first shape (1523d05e);
+  the reflection planner kept a shared reflection's mirrors in address order
+  and took the first's key and roughness, and keeps scene order now.  The
+  meadow's reference is re-blessed from the scene-order frame
+  (`tests/reference_images` branch `windowsystem`, 25578f7, which needs its
+  LFS object pushed with it).
 - Suites against the worktrees: engine 12324 non-serial; forest 69,
   marble-demo 900 (6 xfailed), marble-editor 165, glisteel 1641,
   glisteel-editor 472, twig-bb 2357.
