@@ -2,10 +2,10 @@
 
 Every field of :class:`~OpenGLContext.contextdefinition.ContextDefinition`
 uses -1 for "choose the default", and for the optional buffers the default the
-other three backends take is *not to ask*: GLFW, pygame and wx all read
+other window systems take is *not to ask*: GLFW, pygame and wx all read
 ``accumulationBuffer > -1`` before they request one.  GLUT asking for an
-accumulation buffer nobody requested costs the whole backend on a driver that
-publishes no accumulation-buffer framebuffer config -- freeglut finds no
+accumulation buffer nobody requested costs the whole window system on a driver
+that publishes no accumulation-buffer framebuffer config -- freeglut finds no
 matching config and aborts the process before any window exists, under either
 profile.
 """
@@ -20,11 +20,13 @@ from OpenGL.GLUT import (
 )
 
 from OpenGLContext.contextdefinition import ContextDefinition
-from OpenGLContext.glutcontext import GLUTContext
+from OpenGLContext.windowsystem.glut import (
+    GLUTWindowSystem, displayModeFromDefinition,
+)
 
 
 def flags(**named):
-    return GLUTContext.glutFlagsFromDefinition(ContextDefinition(**named))
+    return displayModeFromDefinition(ContextDefinition(**named))
 
 
 def test_a_default_context_asks_for_no_accumulation_buffer():
@@ -46,11 +48,11 @@ def test_the_buffers_a_default_context_does_want_are_untouched():
 
 
 def test_a_compatibility_context_is_asked_for_by_name():
-    """GLUT names the profile it wants, as the other backends do.
+    """GLUT names the profile it wants, as the other window systems do.
 
     A version hint with no profile hint leaves the profile to the driver, which
     for GL 3.2 and above may answer with a core context -- so a request for the
     fixed-function pipeline has to say so rather than say nothing.
     """
-    source = inspect.getsource(GLUTContext.__init__)
+    source = inspect.getsource(GLUTWindowSystem.open)
     assert 'GLUT_COMPATIBILITY_PROFILE' in source

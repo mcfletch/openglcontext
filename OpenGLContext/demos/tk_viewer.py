@@ -19,7 +19,7 @@ The whole of the engine in here is four calls, and the rest is Tk:
   path or a URL, on a worker thread.
 * :class:`~OpenGLContext.outline.SceneOutline` is the scene as rows, which fill
   the ``ttk.Treeview``.
-* :meth:`~OpenGLContext.tkcontext.TkContext.loopIteration` draws one frame, from
+* :meth:`~OpenGLContext.context.Context.loopIteration` draws one frame, from
   Tk's own timer -- the host owns the loop, so the engine is a guest in it.
 
 The engine's own screens stay on their keys: F1 for the shelf of models, F10 for

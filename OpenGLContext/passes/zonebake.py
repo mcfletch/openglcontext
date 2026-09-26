@@ -13,7 +13,8 @@ or wherever it keeps them.
 :class:`ZoneBakePlan` is the scheduling, with no GL: which zone the camera is
 in, and when it moves on.
 
-    class Baker(EGLContext):
+    class Baker(Context):
+        windowSystemName = 'offscreen'        # a pbuffer: EGL, or WGL on Windows
         renderer = 'pbr'                      # the pass that captures zones
         def OnInit(self):
             self.sg = sceneGraph(children=[sky, sun, world])

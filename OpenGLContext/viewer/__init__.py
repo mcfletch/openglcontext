@@ -52,49 +52,42 @@ _viewers: dict[str, type] = {}
 
 
 def viewerFor(backend: Optional[str] = None) -> type:
-    """The viewing context class over *backend*'s window
+    """The viewing context class on *backend*'s window system
 
-    backend -- the name a windowing backend is selected by (``tk``, ``qt``,
+    backend -- the name of a registered window system (``tk``, ``qt``,
         ``wx``, ``glfw``, ``pygame``, ``glut``), or None for whichever the
-        environment and the user's configuration choose, which is what
-        :class:`ViewerContext` already is.
+        definition, the environment and the user's configuration choose,
+        which is what :class:`ViewerContext` already is.
 
-    A program putting a view inside its own window needs the viewer over the
+    A program putting a view inside its own window needs the viewer on the
     toolkit that owns that window, whatever the machine would otherwise pick::
 
         from OpenGLContext.viewer import viewerFor
 
         view = viewerFor('tk')(parent=someFrame)
 
-    Raises ``RuntimeError`` naming the backends there are where that one is not
-    among them, or where its toolkit is not installed.
+    The class is :class:`ViewerContext` with ``windowSystemName`` set.  Raises
+    :class:`~OpenGLContext.windowsystem.WindowSystemUnavailable` (a
+    ``RuntimeError``) naming the window systems there are where that one is
+    not among them, or where its toolkit is not installed.
     """
-    if backend is None:
-        from OpenGLContext.viewer.sceneviewer import ViewerContext
+    from OpenGLContext.viewer.sceneviewer import ViewerContext
 
+    if backend is None:
         return ViewerContext
     if backend not in _viewers:
-        from OpenGLContext import plugins
-        from OpenGLContext.context import Context
-        from OpenGLContext.ui.overlay import OverlayMixin
-        from OpenGLContext.viewer.sceneviewer import SceneViewerMixin
+        from OpenGLContext import windowsystem
 
-        base = Context.getContextType(backend, plugins.InteractiveContext)
-        if base is None:
-            registered = sorted(plugin.name for plugin in plugins.InteractiveContext.all())
-            raise RuntimeError(
-                "No interactive context is available for %r: it is either not one of the "
-                "registered backends (%s) or its toolkit is not installed -- see the import "
-                "error logged above." % (backend, ', '.join(registered) or 'none')
-            )
-        # ``OverlayMixin`` first, ahead of the navigation the base context
-        # brings, for the reason :class:`ViewerContext` composes itself the same
-        # way: a screen that is up takes the keys and the mouse instead of the
-        # avatar walking off while somebody reads the settings.
+        windowsystem.choose(backend, registered=windowsystem.registered(),
+                            probe=windowsystem.probe)
         _viewers[backend] = type(
             '%sViewerContext' % (backend.title(),),
-            (OverlayMixin, SceneViewerMixin, base),
-            {'__doc__': 'The viewing component over the %s backend.' % (backend,)},
+            (ViewerContext,),
+            {
+                '__doc__': 'The viewing component on the %s window system.' % (backend,),
+                '__module__': __name__,
+                'windowSystemName': backend,
+            },
         )
     return _viewers[backend]
 
@@ -102,9 +95,9 @@ def viewerFor(backend: Optional[str] = None) -> type:
 def __getattr__(name: str) -> Any:
     """Import the context classes on demand.
 
-    Naming one binds a windowing backend, and a caller who only wants
-    :class:`ViewerOptions` -- to build a configuration, or to read a default --
-    should not have a window system chosen for them by the import.
+    A caller who only wants :class:`ViewerOptions` -- to build a
+    configuration, or to read a default -- does not import the viewer, its
+    render passes and its screens with it.
     """
     if name in ('ViewerContext', 'SceneViewerMixin'):
         from OpenGLContext.viewer import sceneviewer

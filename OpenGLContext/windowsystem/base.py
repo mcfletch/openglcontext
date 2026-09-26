@@ -111,7 +111,7 @@ class WindowSystem(abc.ABC):
         forget it.  Calling this twice is calling it once.
         """
 
-    def abandon(self) -> None:
+    def abandon(self) -> None:  # noqa: B027 an optional hook; doing nothing is the default
         """Give back what :meth:`open` made, after the context failed to build.
 
         No cache has seen this GL context, so none is told: announcing its loss
@@ -206,7 +206,7 @@ class WindowSystem(abc.ABC):
         """
         return False
 
-    def emitKey(self, key: Any, state: int, modifiers: Any) -> None:
+    def emitKey(self, key: Any, state: int, modifiers: Any) -> None:  # noqa: B027 an optional hook; doing nothing is the default
         """Send one key transition the toolkit did not report.
 
         For the releases focus loss never delivers and the repeats a platform
@@ -217,7 +217,7 @@ class WindowSystem(abc.ABC):
 
     # -- the loop -----------------------------------------------------------
 
-    def bindCallbacks(self) -> None:
+    def bindCallbacks(self) -> None:  # noqa: B027 an optional hook; doing nothing is the default
         """Connect the toolkit's input callbacks to this window system.
 
         Called once, while the context is being built, after its event

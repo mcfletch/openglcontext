@@ -14,19 +14,14 @@ from OpenGLContext import testingcontext
 #: The backend is chosen at run time, so the class this subclasses is not
 #: one a checker can name -- which is what Any says here.
 BaseContext: Any = testingcontext.getInteractive()
-from OpenGLContext import vrmlcontext
 import sys
 
-class TestContext( 
-    vrmlcontext.VRMLContext, 
-    BaseContext 
-):
+class TestContext( BaseContext ):
     """VRML97-loading Context testing class"""
     def OnInit( self ) -> None:
         """Load the image on initial load of the application"""
         filename = sys.argv[1]
         self.load( filename )
-        vrmlcontext.VRMLContext.OnInit( self )
         BaseContext.OnInit( self )
 
 def main() -> None:

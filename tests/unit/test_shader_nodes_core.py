@@ -18,7 +18,7 @@ from OpenGLContext.scenegraph.basenodes import Transform
 from OpenGLContext.scenegraph.shaders import FloatUniform3f, GLSLObject, GLSLShader, Shader, ShaderAttribute, ShaderBuffer, ShaderGeometry, ShaderSlice
 from OpenGLContext.passes import renderpass
 from OpenGLContext.capture import read_back_buffer
-from OpenGLContext import glfwcontext
+from OpenGLContext.context import Context
 
 pytest.importorskip("glfw")
 
@@ -78,19 +78,16 @@ class TestShaderGeometryDrawsUnderCore:
         render_scene(shader_scene(), frames=3)
         assert renderpass.FLAT.failures.summary() == []
 
-    def test_the_triangle_reaches_the_framebuffer(self, render_scene):
+    def test_the_triangle_reaches_the_framebuffer(self, render_scene, monkeypatch):
         frames = []
-        original = glfwcontext.GLFWContext.SwapBuffers
+        original = Context.SwapBuffers
 
         def capturing(self):
             frames.append(read_back_buffer()[0])
             return original(self)
 
-        glfwcontext.GLFWContext.SwapBuffers = capturing
-        try:
-            render_scene(shader_scene(), frames=4)
-        finally:
-            glfwcontext.GLFWContext.SwapBuffers = original
+        monkeypatch.setattr(Context, 'SwapBuffers', capturing)
+        render_scene(shader_scene(), frames=4)
         assert frames, 'nothing was rendered'
         pixels = np.asarray(frames[-1])
         assert pixels.max() > 0, 'the frame is black'

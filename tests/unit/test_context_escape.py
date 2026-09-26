@@ -21,9 +21,11 @@ class _Context(context_module.Context):
         self.quits = 0
         self.handlers = []
         self.redrawRequest = threading.Event()
+        # Real managers, for the timers the default movement mode starts.
+        self.initializeEventManagers()
 
-    def addEventHandler(self, kind, name=None, function=None, **_named):
-        self.handlers.append((kind, name, function))
+    def addEventHandler(self, eventType, name=None, function=None, **_named):
+        self.handlers.append((eventType, name, function))
         return function
 
     def OnQuit(self, _event=None):

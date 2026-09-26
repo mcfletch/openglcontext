@@ -1,11 +1,11 @@
-"""The Tk backend: what it asks its context for, and that it renders.
+"""The Tk window system: what it asks its context for, and that it renders.
 
-Tkinter ships with CPython, so this is the backend a project can reach for
-without adding a GUI toolkit to its dependencies. The window is
+Tkinter ships with CPython, so this is the window system a project can reach
+for without adding a GUI toolkit to its dependencies. The window is
 `OpenGL.Tk.GLFrame` -- an ordinary `tkinter.Frame` with a GL context of its own
--- so what this backend has to get right is the translation from a
+-- so what this window system has to get right is the translation from a
 `ContextDefinition` to what that widget is asked for, and the window-level
-capabilities every backend offers.
+capabilities every window system offers.
 
 The translation needs no display and is tested outright; the rest runs in a
 subprocess with a real X server, which is what Tk needs.
@@ -20,13 +20,14 @@ import pytest
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.testing.glcontext import display_answers
 from OpenGLContext.testing.paths import tests_root
-from OpenGLContext import plugins
-from OpenGLContext.context import Context
+from OpenGLContext import windowsystem
 
 pytest.importorskip('tkinter')
 
-# tkcontext imports tkinter, which the line above requires.
-from OpenGLContext.tkcontext import attributesFromDefinition
+# These import tkinter, which the line above requires.
+from OpenGLContext.testingcontext import getInteractive
+from OpenGLContext.tkcontext import TkContext
+from OpenGLContext.windowsystem.tk import TkWindowSystem, attributesFromDefinition
 
 DRIVER = tests_root(__file__) / 'helpers' / '_tk_backend_drive.py'
 
@@ -99,11 +100,14 @@ class TestWhatItAsksTheWidgetFor:
 
 
 class TestItIsRegistered:
-    @pytest.mark.parametrize('kind', ['Context', 'InteractiveContext',
-                                      'VRMLContext'])
-    def test_the_name_resolves(self, kind):
-        found = Context.getContextType('tk', getattr(plugins, kind))
-        assert found is not None and isinstance(found, type)
+    def test_the_name_is_registered(self):
+        assert 'tk' in windowsystem.registered()
+
+    def test_the_name_loads_the_tk_window_system(self):
+        assert windowsystem.load('tk') is TkWindowSystem
+
+    def test_the_name_answers_the_tk_context_class(self):
+        assert getInteractive('tk') is TkContext
 
 
 def _drive(*steps):
@@ -154,7 +158,8 @@ class TestARealWindow:
 
     def test_a_window_can_be_asked_to_fill_the_screen_and_come_back(self):
         """Whether it *does* is the window manager's to decide, and a bare X
-        server has none; what the backend owes is the request and an answer."""
+        server has none; what the window system owes is the request and an
+        answer."""
         reported = _drive('fullscreen')
         assert reported['ASKEDFULL'] == 'True'
         assert reported['ASKEDBACK'] == 'True'

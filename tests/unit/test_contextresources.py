@@ -6,12 +6,11 @@ each cache holding this context's names is told when the context goes, and that
 a backend makes the announcement while the context is still current.
 """
 import gc
-import importlib
 
 import pytest
 from OpenGL import contextdata, error
 
-from OpenGLContext import contextresources
+from OpenGLContext import contextresources, windowsystem
 # At module scope, so each cache registers its callback while this file is being
 # collected.  A cache imported for the first time inside a test registers itself
 # after ``restore_callbacks`` has taken its snapshot, and the teardown then hands
@@ -318,10 +317,17 @@ def test_a_backend_names_the_context_to_pyopengl_by_its_handle():
 
 
 @pytest.mark.usefixtures('gl_context')
-@pytest.mark.parametrize('module, name', [
-    ('OpenGLContext.glfwcontext', 'GLFWContext'),
-    ('OpenGLContext.eglcontext', 'EGLContext'),
+@pytest.mark.parametrize('name, toolkit', [
+    ('glfw', 'glfw'),
+    ('glut', 'OpenGL.GLUT'),
+    ('pygame', 'pygame'),
+    ('tk', 'tkinter'),
+    ('wx', 'wx'),
+    ('egl', 'OpenGL.EGL'),
+    ('wgl', 'OpenGL.WGL.offscreen'),
 ])
-def test_each_backend_binds_pyopengl_to_the_platform_handle(module, name):
-    backend = getattr(importlib.import_module(module), name)
-    assert backend._glHandle(object()) == contextdata.getContext()
+def test_each_window_system_binds_pyopengl_to_the_platform_handle(name, toolkit):
+    pytest.importorskip(toolkit)
+    chosen = windowsystem.load(name)
+    unopened = chosen.__new__(chosen)
+    assert unopened.glHandle() == contextdata.getContext()

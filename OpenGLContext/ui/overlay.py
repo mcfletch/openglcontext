@@ -17,7 +17,7 @@ the player's fingers report on the next key event anyway.
 Mix it in **ahead of** the navigation mix-in, so its ``ProcessEvent`` runs
 first::
 
-    class Game(OverlayMixin, GLFWInteractiveContext):
+    class Game(OverlayMixin, Context):
         ...
     game.pushOverlay(dialogs.confirm('Quit?', on_answer=game.quitting))
 """

@@ -19,9 +19,10 @@ from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
 from OpenGLContext.scenegraph.reflector import PlanarReflector
 from tests.unit.glrender import base_env, frames_of
-from OpenGLContext import glfwcontext, renderoptions
+from OpenGLContext import renderoptions
 from OpenGLContext.bin.mirrors_demo import MirrorHall
 from OpenGLContext.capture import read_back_buffer
+from OpenGLContext.context import Context
 from OpenGLContext.move.viewplatform import ViewPlatform
 from OpenGLContext.multiview.strategy import MultiviewCapabilities
 from OpenGLContext.multiview.views import View, ViewLayout
@@ -214,13 +215,13 @@ def test_a_reflection_reused_after_a_small_move_matches_a_fresh_one(
     """
 
     frames = []
-    original = glfwcontext.GLFWContext.SwapBuffers
+    original = Context.SwapBuffers
 
     def capturing(self):
         frames.append(read_back_buffer()[0].astype(int))
         return original(self)
 
-    monkeypatch.setattr(glfwcontext.GLFWContext, 'SwapBuffers', capturing)
+    monkeypatch.setattr(Context, 'SwapBuffers', capturing)
     env.setenv('OPENGLCONTEXT_REFLECTION_VIEWS', '1')
     platform = ViewPlatform(position=(0.0, 0.0, 6.0), orientation=(0, 1, 0, 0))
     stale = PlanarReflector(interval=1000)
@@ -366,13 +367,13 @@ def test_a_still_scene_settles_with_each_mirror_in_the_other(render_scene, env):
     what the wall mirror shows."""
     scene = _floor_and_wall()
     frames = []
-    original = glfwcontext.GLFWContext.SwapBuffers
+    original = Context.SwapBuffers
 
     def capturing(self):
         frames.append(read_back_buffer()[0].astype(int))
         return original(self)
 
-    env.setattr(glfwcontext.GLFWContext, 'SwapBuffers', capturing)
+    env.setattr(Context, 'SwapBuffers', capturing)
     context = render_scene(scene, frames=1, size=SIZE).context
     for _ in range(12):
         context.OnDraw(force=1 if context.redrawRequest.is_set() else 0)

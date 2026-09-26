@@ -40,7 +40,7 @@ from OpenGLContext.screenshot import ScreenshotMixin
 from OpenGLContext.passes import renderpass
 from vrml.vrml97 import nodetypes
 from vrml import node, cache
-from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, TypeVar
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self, TypeVar, cast
 from collections.abc import Callable, Mapping, Sequence
 import weakref
 import os
@@ -124,6 +124,15 @@ from contextlib import AbstractContextManager, nullcontext
 perf = time.perf_counter
 contextLock = threading.RLock()
 contextThread: threading.Thread | None = None
+
+
+def _composed(core: ContextCore) -> Context:
+    """``core`` as the :class:`Context` it is.
+
+    :class:`ContextCore` is only ever composed into :class:`Context`, so this
+    is a statement to a checker, which reads the core on its own.
+    """
+    return cast('Context', core)
 
 
 def contextAddress(handle: Any) -> int | None:
@@ -305,7 +314,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     """
 
     currentContext: Context | None = None
-    allContexts: ClassVar[list[weakref.ref[Context]]] = []
+    allContexts: ClassVar[list[weakref.ref[ContextCore]]] = []
     renderPasses = renderpass.defaultRenderPasses
     frameCounter: FrameCounter | None = None
     loopTrace: LoopTrace | None = None
@@ -492,7 +501,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     def createWindowSystem(self, definition: ContextDefinition) -> WindowSystem:
         """The window system this context draws through, not yet opened."""
         chosen = _windowsystem.load(self.chooseWindowSystem(definition))
-        return chosen(self)
+        return chosen(_composed(self))
 
     @property
     def window(self) -> Any:
@@ -1000,11 +1009,12 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         fast the renderer is, and this reports how fast the whole loop
         is, which is what the user's hands feel.
 
-        A backend drives it from its own loop (see GLFWContext.MainLoop);
-        OnDraw divides its share into the event cascade and the render.
-        Backends that have not been taught to drive it simply leave the
-        iteration count at zero, and the developer overlay then omits
-        the section rather than reporting nothing as if it were idle.
+        The window system's loop drives it (see
+        OpenGLContext.windowsystem.WindowSystem.loopIteration); OnDraw divides
+        its share into the event cascade and the render.  A loop that does
+        not drive it -- a host application stepping the view some other way --
+        leaves the iteration count at zero, and the developer overlay then
+        omits the section rather than reporting nothing as if it were idle.
 
         Counting is unconditional and costs a few clock reads per
         iteration. Reporting is opt-in through OPENGLCONTEXT_STALL_MS /
@@ -1214,7 +1224,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         )
         if not contextLock.acquire(bool(blocking)):
             raise LockingError("""Cannot acquire without blocking""")
-        Context.currentContext = self
+        Context.currentContext = _composed(self)
         self.lockScenegraph()
         self.bindContextResources(self.windowsystem.makeCurrent())
 
@@ -1314,7 +1324,8 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         fields = {key: value for key, value in named.items()
                   if key not in ('definition', 'parent')}
         chosen = cls.chooseWindowSystem(cls.resolveDefinition(definition, **fields))
-        return _windowsystem.load(chosen).run(cls, *args, **named)
+        return _windowsystem.load(chosen).run(
+            cast('type[Context]', cls), *args, **named)
 
     def MainLoop(self) -> Any:
         """Run the window system's loop until the window is closed

@@ -15,14 +15,14 @@ import pytest
 import numpy as np
 
 from OpenGLContext import capture, screenshot, userpaths
-from OpenGLContext.context import Context
+from OpenGLContext.context import Context, ContextCore
 from OpenGLContext.passes._flat import presentFrame
 
 
 class Recorder(screenshot.ScreenshotMixin):
     """A context stripped to the screenshot machinery and what it calls."""
 
-    setupDefaultEventCallbacks = Context.setupDefaultEventCallbacks
+    setupDefaultEventCallbacks = ContextCore.setupDefaultEventCallbacks
     presentFrame = Context.presentFrame
 
     def __init__(self):

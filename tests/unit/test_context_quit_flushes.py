@@ -21,10 +21,13 @@ import textwrap
 SCRIPT = textwrap.dedent('''
     import sys
     from OpenGLContext import context as context_module
+    from OpenGLContext.windowsystem.glfw import GLFWWindowSystem
 
     class Quiet(context_module.Context):
         def __init__(self):
-            pass
+            # A window system with no window open: it is the application,
+            # so quitting ends the process.
+            self.windowsystem = GLFWWindowSystem(self)
         def suppressRedraw(self):
             pass
 

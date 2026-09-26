@@ -1,4 +1,4 @@
-"""Every backend says when it takes a context and when it lets one go.
+"""Every window system says when it takes a context and when it lets one go.
 
 Two things listen.  The engine's own caches hold GL names keyed by the context
 handle, and PyOpenGL's C dispatch layer holds a table of resolved entry-point
@@ -7,8 +7,8 @@ tells them a context has gone, because a driver hands the same handle out again
 for the next context -- and then a cache answers the new one with the dead one's
 names, and PyOpenGL calls the dead one's function pointers.
 
-A backend that does not announce leaves both wrong, occasionally, nowhere near
-the code that caused it.
+A window system that does not announce leaves both wrong, occasionally, nowhere
+near the code that caused it.
 """
 
 import ast
@@ -23,51 +23,48 @@ from OpenGLContext.testing.glcontext import gl_available
 HERE = os.path.dirname(os.path.abspath(__file__))
 PACKAGE = os.path.dirname(os.path.dirname(HERE))
 
-#: Every backend that owns a window, and the module it lives in.  A backend
-#: missing from here is a backend nothing holds to the contract.
-BACKENDS = (
-    ('glfw', 'OpenGLContext/glfwcontext.py'),
-    ('glut', 'OpenGLContext/glutcontext.py'),
-    ('pygame', 'OpenGLContext/pygamecontext.py'),
-    ('tk', 'OpenGLContext/tkcontext.py'),
-    ('wx', 'OpenGLContext/wxcontext.py'),
-    ('egl', 'OpenGLContext/eglcontext.py'),
+#: The class every window system derives from, and the module it lives in.
+BASE = ('OpenGLContext/windowsystem/base.py', 'WindowSystem')
+
+#: Every window system that owns a GL context, the module it lives in and its
+#: class.  One missing from here is one nothing holds to the contract.
+WINDOW_SYSTEMS = (
+    ('glfw', 'OpenGLContext/windowsystem/glfw.py', 'GLFWWindowSystem'),
+    ('glut', 'OpenGLContext/windowsystem/glut.py', 'GLUTWindowSystem'),
+    ('pygame', 'OpenGLContext/windowsystem/pygame.py', 'PygameWindowSystem'),
+    ('tk', 'OpenGLContext/windowsystem/tk.py', 'TkWindowSystem'),
+    ('wx', 'OpenGLContext/windowsystem/wx.py', 'WxWindowSystem'),
+    ('egl', 'OpenGLContext/windowsystem/egl.py', 'EGLWindowSystem'),
+    ('wgl', 'OpenGLContext/windowsystem/wgl.py', 'WGLWindowSystem'),
 )
+IDS = [entry[0] for entry in WINDOW_SYSTEMS]
+
+#: What a window system calls to say its GL context is going.
+ANNOUNCEMENT = 'self.context.releaseContextResources'
 
 
-def _calls_in(path):
-    """Every attribute call written in a module, as dotted names."""
+def _methods(path, className):
+    """The methods of the class ``className`` in the module at ``path``"""
     source = open(os.path.join(PACKAGE, path), encoding='utf-8').read()
-    names = set()
-    for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.Call):
-            parts = []
-            target = node.func
-            while isinstance(target, ast.Attribute):
-                parts.append(target.attr)
-                target = target.value
-            if isinstance(target, ast.Name):
-                parts.append(target.id)
-                names.add('.'.join(reversed(parts)))
-    return names
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.ClassDef) and node.name == className:
+            return {child.name: child for child in node.body
+                    if isinstance(child, ast.FunctionDef)}
+    raise AssertionError('%s defines no class %s' % (path, className))
 
 
-def _calls_within(path, function, depth=3):
-    """Every attribute call one function of a module reaches.
+def _calls_within(path, className, function, depth=3):
+    """Every attribute call one method of a window system reaches.
 
-    Follows ``self.something()`` into that method, so a backend that calls its
-    named teardown -- ``releaseWindow`` -- rather than writing the release out
-    counts as making the call.
+    Follows ``self.something()`` into that method -- the class's own, or the
+    base class's where it does not define one -- and ``super().something()``
+    into the base class's, so a window system that leaves its teardown to
+    ``release`` rather than writing it out counts as making the call.
     """
-    source = open(os.path.join(PACKAGE, path), encoding='utf-8').read()
-    tree = ast.parse(source)
-    bodies = {}
-    for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef):
-            bodies.setdefault(node.name, node)
+    own = _methods(path, className)
+    base = _methods(*BASE)
 
-    def within(name, remaining):
-        node = bodies.get(name)
+    def within(node, remaining):
         if node is None or remaining <= 0:
             return set()
         names = set()
@@ -83,41 +80,66 @@ def _calls_within(path, function, depth=3):
                 dotted = '.'.join(reversed(parts + [target.id]))
                 names.add(dotted)
                 if target.id == 'self' and len(parts) == 1:
-                    names |= within(parts[0], remaining - 1)
+                    names |= within(own.get(parts[0], base.get(parts[0])),
+                                    remaining - 1)
+            elif (isinstance(target, ast.Call) and len(parts) == 1
+                  and isinstance(target.func, ast.Name)
+                  and target.func.id == 'super'):
+                names |= within(base.get(parts[0]), remaining - 1)
         return names
 
-    return within(function, depth)
+    return within(own.get(function, base.get(function)), depth)
 
 
-class TestEveryBackendAnnouncesTheEndOfAContext:
-    @pytest.mark.parametrize('name,path', BACKENDS, ids=[b[0] for b in BACKENDS])
-    def test_it_releases_the_context_it_owned(self, name, path):
-        assert 'self.releaseContextResources' in _calls_in(path), (
+class TestEveryWindowSystemAnnouncesTheEndOfAContext:
+    @pytest.mark.parametrize('name,path,className', WINDOW_SYSTEMS, ids=IDS)
+    def test_it_releases_the_context_it_owned(self, name, path, className):
+        assert ANNOUNCEMENT in _calls_within(path, className, 'release'), (
             '%s never says its context is going, so every cache keyed on the '
             'handle keeps answering for it' % (name,)
         )
 
-    @pytest.mark.parametrize('name,path', BACKENDS, ids=[b[0] for b in BACKENDS])
-    def test_quitting_releases_before_the_process_ends(self, name, path):
+    @pytest.mark.parametrize('name,path,className', WINDOW_SYSTEMS, ids=IDS)
+    def test_quitting_releases_before_the_process_ends(self, name, path,
+                                                       className):
         """``Context.OnQuit`` ends the process with ``os._exit``.
 
         Nothing after it runs -- no ``finally``, no ``atexit`` hook -- so a
-        backend that leaves the release to the end of its main loop does not
-        release at all on the path a user actually takes, which is pressing
-        Escape or closing the window. The release has to happen in ``OnQuit``,
-        before the base class is called.
+        window system that leaves the release to the end of its main loop does
+        not release at all on the path a user actually takes, which is pressing
+        Escape or closing the window. The release has to happen in ``quit``,
+        which ``OnQuit`` asks before it ends anything.
         """
-        assert 'self.releaseContextResources' in _calls_within(path, 'OnQuit'), (
+        assert ANNOUNCEMENT in _calls_within(path, className, 'quit'), (
             "%s releases its context only after its loop, and quitting never "
             "reaches there" % (name,)
         )
+
+    def test_the_context_asks_the_window_system_before_it_exits(self):
+        """The window system's ``quit`` is only the release if the context
+        calls it ahead of ``os._exit``."""
+        source = open(os.path.join(PACKAGE, 'OpenGLContext/context.py'),
+                      encoding='utf-8').read()
+        for node in ast.walk(ast.parse(source)):
+            if isinstance(node, ast.ClassDef) and node.name == 'ContextCore':
+                onQuit = next(child for child in node.body
+                              if isinstance(child, ast.FunctionDef)
+                              and child.name == 'OnQuit')
+                break
+        else:
+            raise AssertionError('context.py defines no ContextCore')
+        lines = {ast.unparse(call.func): call.lineno for call in ast.walk(onQuit)
+                 if isinstance(call, ast.Call)}
+        assert 'self.windowsystem.quit' in lines
+        assert 'os._exit' in lines
+        assert lines['self.windowsystem.quit'] < lines['os._exit']
 
 
 class TestQuittingReallyReleases:
     """The static contract above, run rather than read.
 
-    Through GLFW, which is the backend this container can open a window on;
-    the shape is the same on every backend, and the static check is what holds
+    Through GLFW, which is the window system this container can open a window
+    on; the shape is the same on every one, and the static check is what holds
     the ones a given machine cannot run.
     """
 
@@ -125,18 +147,16 @@ class TestQuittingReallyReleases:
         """Build a window, quit it, and answer what the quit told the caches"""
         if not gl_available():
             pytest.skip('no GL target available')
+        pytest.importorskip('glfw')
 
         told = []
         monkeypatch.setattr(contextresources, 'context_lost',
                             lambda: told.append('engine'))
-        # The base class ends the process; what is under test is what happens
-        # before it does.
-        monkeypatch.setattr(context_module.Context, 'OnQuit',
-                            lambda *_args, **_named: told.append('exited'))
+        # OnQuit ends the process; what is under test is what happens before
+        # it does.
+        monkeypatch.setattr(os, '_exit', lambda _status: told.append('exited'))
         monkeypatch.setenv('OPENGLCONTEXT_HIDDEN', '1')
-        glfwinteractivecontext = pytest.importorskip(
-            'OpenGLContext.glfwinteractivecontext', exc_type=ImportError)
-        made = glfwinteractivecontext.GLFWInteractiveContext(size=(64, 64))
+        made = context_module.Context(windowsystem='glfw', size=(64, 64))
         made.OnQuit()
         return made, told
 
@@ -159,7 +179,8 @@ class _AnyContext:
 
 
 class TestTheContractIsStatedOnce:
-    """A new backend should inherit the contract rather than have to know it."""
+    """A new window system should inherit the contract rather than have to
+    know it."""
 
     def test_the_base_context_offers_both_halves(self):
         assert callable(context_module.Context.bindContextResources)

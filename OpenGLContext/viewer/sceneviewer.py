@@ -54,7 +54,8 @@ from typing import (
 
 from vrml.protofunctions import getField
 
-from OpenGLContext import renderoptions, testingcontext
+from OpenGLContext import renderoptions
+from OpenGLContext.context import Context
 from OpenGLContext.scenegraph.light import DirectionalLight, Light, PointLight
 from OpenGLContext.scenegraph.scenegraph import SceneGraph
 from OpenGLContext.scenegraph.transform import Transform
@@ -145,6 +146,7 @@ if TYPE_CHECKING:
                               **named: Any) -> Any: ...
         def physicsAvatarScale(self, low: Any, high: Any) -> float: ...
         def setMovementManager(self, manager: Any) -> None: ...
+        physicsPlatform: Any
         def setupCallbacks(self) -> None: ...
         def presentFrame(self) -> Any: ...
 else:
@@ -1243,40 +1245,10 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         return time()
 
 
-#: The class :data:`ViewerContext` names, built the first time it is asked for.
-_viewerContext = None
+class ViewerContext(OverlayMixin, SceneViewerMixin, Context):
+    """The viewing component, on whichever window system the definition names
 
-
-def __getattr__(name: str) -> Any:
-    """Build ``ViewerContext`` on first use, over this platform's context
-
-    Naming a base class is choosing a window system, and importing this module
-    is not: a program that wants the viewer over a *particular* toolkit --
-    :func:`OpenGLContext.viewer.viewerFor`, and every application embedding a
-    view in its own window -- would otherwise have to be able to resolve a
-    default it is not going to use.  On a machine where that default's toolkit
-    is missing, or in a frozen bundle carrying one toolkit on purpose, asking
-    for the backend that *is* there would fail for the sake of the one that is
-    not.
-
-    A program that does want the default gets it here, and gets the same
-    ``RuntimeError`` naming what could not be resolved.
+    ``OverlayMixin`` comes **first**, ahead of the navigation the context
+    brings, so a screen that is up takes the keys and the mouse instead of the
+    avatar walking off while somebody reads the settings.
     """
-    global _viewerContext
-    if name != 'ViewerContext':
-        raise AttributeError("module %r has no attribute %r" % (__name__, name))
-    if _viewerContext is None:
-        class ViewerContext(
-            OverlayMixin, SceneViewerMixin,
-            testingcontext.getInteractive(),    # type: ignore[misc]  # chosen at run time
-        ):
-            """The viewing component over this platform's interactive context.
-
-            ``OverlayMixin`` comes **first**, ahead of the navigation the base
-            context brings, so a screen that is up takes the keys and the mouse
-            instead of the avatar walking off while somebody reads the settings.
-            """
-
-        ViewerContext.__module__ = __name__
-        _viewerContext = ViewerContext
-    return _viewerContext

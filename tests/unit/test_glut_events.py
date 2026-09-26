@@ -1,4 +1,4 @@
-"""What the GLUT backend makes of its callbacks, without opening a window.
+"""What the GLUT window system makes of its callbacks, without opening a window.
 
 GLUT has no relative-motion mode and no focus callback, so both halves of
 mouse-look have to be built:
@@ -16,36 +16,57 @@ import pytest
 
 pytest.importorskip('OpenGL.GLUT')
 
-from OpenGL.GLUT import GLUT_ACTIVE_CTRL, GLUT_DOWN, GLUT_LEFT_BUTTON
-from OpenGLContext.events import glutevents
+from OpenGL.GLUT import (
+    GLUT_ACTIVE_CTRL, GLUT_DOWN, GLUT_LEFT_BUTTON, GLUT_WINDOW_HEIGHT,
+    GLUT_WINDOW_WIDTH,
+)
+from OpenGLContext.context import Context
+from OpenGLContext.events.eventhandlermixin import HeldKeyMixin
+from OpenGLContext.windowsystem import glut as glutwindowsystem
+from OpenGLContext.windowsystem.glut import GLUTWindowSystem
+
+#: The size the stand-in for GLUT reports the window as.
+WINDOW = (400, 300)
 
 
 @pytest.fixture(autouse=True)
-def modifiers(monkeypatch):
-    """Answer the modifier state without a window to read it from.
+def glut(monkeypatch):
+    """Answer what the window system asks of GLUT without a window to ask.
 
     ``glutGetModifiers`` is only legal inside GLUT's own input callback, and
-    freeglut says so -- loudly -- when it is called anywhere else. What is
-    under test is what the mix-in makes of a callback's arguments, so the one
-    call that needs a live GLUT is answered here.
+    freeglut says so -- loudly -- when it is called anywhere else.  What is
+    under test is what the window system makes of a callback's arguments, so
+    the calls that need a live GLUT are answered here, and each warp of the
+    pointer is recorded.
     """
-    monkeypatch.setattr(glutevents, 'glutGetModifiers', lambda: 0)
+    warps = []
+    sizes = {GLUT_WINDOW_WIDTH: WINDOW[0], GLUT_WINDOW_HEIGHT: WINDOW[1]}
+    monkeypatch.setattr(glutwindowsystem, 'glutGetModifiers', lambda: 0)
+    monkeypatch.setattr(glutwindowsystem, 'glutSetWindow', lambda _window: None)
+    monkeypatch.setattr(glutwindowsystem, 'glutGet', sizes.__getitem__)
+    monkeypatch.setattr(glutwindowsystem, 'glutWarpPointer',
+                        lambda x, y: warps.append((x, y)))
+    return warps
 
 
-class _Handler(glutevents.EventHandlerMixin):
-    """The mix-in with the little of a window it reaches for."""
+class _Host(HeldKeyMixin):
+    """The part of a context the window system calls, recording what it is told.
 
-    def __init__(self, height=300):
+    The held-key tracking is the real :class:`HeldKeyMixin`, and a key it
+    sends goes back through the window system as a context's does.
+    """
+
+    emitKey = Context.emitKey
+
+    def __init__(self, height=WINDOW[1]):
         self.height = height
         self.sampled = []
         self.picked = []
         self.processed = []
         self.forgotten = 0
-        self.recentred = 0
-        self.warpedTo = None
 
     def getViewPort(self):
-        return (400, self.height)
+        return (WINDOW[0], self.height)
 
     def recordPointerMotion(self, x, y):
         self.sampled.append((x, y))
@@ -62,120 +83,131 @@ class _Handler(glutevents.EventHandlerMixin):
     def ProcessEvent(self, event):
         self.processed.append(event)
 
-    # What GLUTContext supplies; see its own pointer capture.
-    def recentrePointer(self):
-        self.recentred += 1
 
-    def pointerWarpEcho(self, x, y):
-        if self.warpedTo == (int(x), int(y)):
-            self.warpedTo = None
-            return True
-        return False
+def _windowSystem(height=WINDOW[1], grabbed=False):
+    """A GLUT window system over a recording host, its window id 1."""
+    host = _Host(height=height)
+    system = GLUTWindowSystem(host)
+    host.windowsystem = system
+    system.window = 1
+    system.pointerGrabbed = grabbed
+    return system
 
 
 class TestPointerMotion:
     def test_it_reaches_the_sampler(self):
-        handler = _Handler(height=300)
-        handler.glutOnMouseMove(100, 40)
-        assert handler.sampled == [(100, 260)]
+        system = _windowSystem(height=300)
+        system.onMouseMove(100, 40)
+        assert system.context.sampled == [(100, 260)]
 
     def test_y_is_flipped_to_the_pick_point_origin(self):
         """GLUT counts y downward from the top of the window."""
-        handler = _Handler(height=300)
-        handler.glutOnMouseMove(10, 0)
-        assert handler.sampled == [(10, 300)]
+        system = _windowSystem(height=300)
+        system.onMouseMove(10, 0)
+        assert system.context.sampled == [(10, 300)]
 
     def test_it_still_goes_to_the_pick_queue(self):
-        handler = _Handler()
-        handler.glutOnMouseMove(100, 40)
-        assert len(handler.picked) == 1
-        assert handler.picked[0].type == 'mousemove'
-
-    def test_a_context_with_no_sampler_is_no_error(self):
-        class _Bare(_Handler):
-            recordPointerMotion = None
-
-        handler = _Bare()
-        handler.glutOnMouseMove(100, 40)
-        assert len(handler.picked) == 1
+        system = _windowSystem()
+        system.onMouseMove(100, 40)
+        assert len(system.context.picked) == 1
+        assert system.context.picked[0].type == 'mousemove'
 
 
 class TestTheWarpTheWindowMadeItself:
     def test_the_echo_is_not_a_click_on_anything(self):
-        handler = _Handler()
-        handler.warpedTo = (200, 150)
-        handler.glutOnMouseMove(200, 150)
-        assert handler.picked == []
+        system = _windowSystem(grabbed=True)
+        system.pointerWarpedTo = (200, 150)
+        system.onMouseMove(200, 150)
+        assert system.context.picked == []
 
     def test_the_echo_does_not_turn_the_view(self):
         """Counted, it is exactly the reverse of the movement that provoked it,
         so the view would stand still however far the hand moved."""
-        handler = _Handler()
-        handler.warpedTo = (200, 150)
-        handler.glutOnMouseMove(200, 150)
-        assert handler.forgotten == 1, 'the warp was taken as motion'
+        system = _windowSystem(grabbed=True)
+        system.pointerWarpedTo = (200, 150)
+        system.onMouseMove(200, 150)
+        assert system.context.forgotten == 1, 'the warp was taken as motion'
 
-    def test_a_real_movement_warps_the_pointer_back(self):
-        handler = _Handler()
-        handler.glutOnMouseMove(212, 150)
-        assert handler.recentred == 1
+    def test_a_real_movement_warps_the_pointer_back(self, glut):
+        system = _windowSystem(grabbed=True)
+        system.onMouseMove(212, 150)
+        assert glut == [(WINDOW[0] // 2, WINDOW[1] // 2)]
+        assert system.pointerWarpedTo == (WINDOW[0] // 2, WINDOW[1] // 2)
 
-    def test_the_echo_does_not_warp_again(self):
-        handler = _Handler()
-        handler.warpedTo = (200, 150)
-        handler.glutOnMouseMove(200, 150)
-        assert handler.recentred == 0
+    def test_the_echo_does_not_warp_again(self, glut):
+        system = _windowSystem(grabbed=True)
+        system.pointerWarpedTo = (200, 150)
+        system.onMouseMove(200, 150)
+        assert glut == []
+
+    def test_a_pointer_that_is_not_grabbed_is_left_where_it_is(self, glut):
+        system = _windowSystem(grabbed=False)
+        system.onMouseMove(212, 150)
+        assert glut == []
 
     def test_the_position_is_still_tracked_through_an_echo(self):
         """So the journey is not delivered as one flick when the warp ends."""
-        handler = _Handler(height=300)
-        handler.warpedTo = (200, 150)
-        handler.glutOnMouseMove(200, 150)
-        assert handler.sampled == [(200, 150)]
+        system = _windowSystem(height=300, grabbed=True)
+        system.pointerWarpedTo = (200, 150)
+        system.onMouseMove(200, 150)
+        assert system.context.sampled == [(200, 150)]
 
 
 class TestHeldKeys:
     def test_a_key_that_goes_down_is_held(self):
-        handler = _Handler()
-        handler.glutOnKeyDown(b'w', 0, 0)
-        assert b'w' in handler.heldKeys()
+        system = _windowSystem()
+        system.onKeyDown(b'w', 0, 0)
+        assert b'w' in system.context.heldKeys()
 
     def test_a_key_that_comes_up_is_not(self):
-        handler = _Handler()
-        handler.glutOnKeyDown(b'w', 0, 0)
-        handler.glutOnKeyUp(b'w', 0, 0)
-        assert handler.heldKeys() == {}
+        system = _windowSystem()
+        system.onKeyDown(b'w', 0, 0)
+        system.onKeyUp(b'w', 0, 0)
+        assert system.context.heldKeys() == {}
 
     def test_a_character_press_is_a_key_press_too(self):
-        handler = _Handler()
-        handler.glutOnCharacter(b'w', 0, 0)
-        assert b'w' in handler.heldKeys()
-        assert [event.type for event in handler.processed] == [
+        system = _windowSystem()
+        system.onCharacter(b'w', 0, 0)
+        assert b'w' in system.context.heldKeys()
+        assert [event.type for event in system.context.processed] == [
             'keyboard', 'keypress']
 
     def test_glut_repeating_a_key_stops_the_synthetic_repeat(self):
-        handler = _Handler()
-        handler.glutOnKeyDown(b'w', 0, 0)
-        assert handler._nativeRepeat is False  # noqa: SLF001 whether the mixin has seen the platform's own repeat is its internal switch
-        handler.glutOnKeyDown(b'w', 0, 0)
-        assert handler._nativeRepeat is True  # noqa: SLF001 whether the mixin has seen the platform's own repeat is its internal switch
+        system = _windowSystem()
+        system.onKeyDown(b'w', 0, 0)
+        assert system.context._nativeRepeat is False  # noqa: SLF001 whether the mixin has seen the platform's own repeat is its internal switch
+        system.onKeyDown(b'w', 0, 0)
+        assert system.context._nativeRepeat is True  # noqa: SLF001 whether the mixin has seen the platform's own repeat is its internal switch
+
+    def test_the_pointer_leaving_the_window_lets_go_of_held_keys(self):
+        system = _windowSystem()
+        system.onKeyDown(b'w', 0, 0)
+        system.context.processed = []
+        system.onEntry(0)
+        assert system.context.heldKeys() == {}
+        assert [event.state for event in system.context.processed] == [0]
+
+    def test_the_pointer_entering_the_window_keeps_them(self):
+        system = _windowSystem()
+        system.onKeyDown(b'w', 0, 0)
+        system.onEntry(1)
+        assert b'w' in system.context.heldKeys()
 
     def test_a_synthetic_release_carries_the_modifiers_the_press_had(self):
         """A binding that wants ctrl must match on the way up as on the way
         down, or the release never reaches it."""
-        handler = _Handler()
-        handler.noteKeyDown(b'w', GLUT_ACTIVE_CTRL)
-        handler.processed = []
-        handler.clearHeldKeys()
-        assert len(handler.processed) == 1
-        assert handler.processed[0].state == 0
-        assert handler.processed[0].getModifiers() == (False, True, False)
+        system = _windowSystem()
+        system.context.noteKeyDown(b'w', GLUT_ACTIVE_CTRL)
+        system.context.clearHeldKeys()
+        assert len(system.context.processed) == 1
+        assert system.context.processed[0].state == 0
+        assert system.context.processed[0].getModifiers() == (False, True, False)
 
 
 class TestMouseButtons:
     def test_a_press_reaches_the_pick_queue(self):
-        handler = _Handler()
-        handler.glutOnMouseButton(GLUT_LEFT_BUTTON, GLUT_DOWN, 10, 20)
-        assert len(handler.picked) == 1
-        assert handler.picked[0].button == 0
-        assert handler.picked[0].state == 1
+        system = _windowSystem()
+        system.onMouseButton(GLUT_LEFT_BUTTON, GLUT_DOWN, 10, 20)
+        assert len(system.context.picked) == 1
+        assert system.context.picked[0].button == 0
+        assert system.context.picked[0].state == 1

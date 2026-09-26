@@ -5,7 +5,7 @@ import pytest
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.move import modes
 from OpenGLContext.move.viewplatformmixin import ViewPlatformMixin
-from OpenGLContext.events import glfwevents
+from OpenGLContext.windowsystem.glfw import GLFWWindowSystem
 from OpenGLContext.passes.selection import SelectionMixin
 
 
@@ -87,7 +87,7 @@ def test_the_same_input_state_is_returned_each_time():
 
 
 def test_keyboard_events_reach_the_input_state():
-    """Every backend emits these, so the sampler needs nothing backend-specific."""
+    """Every window system emits these, so the sampler needs nothing specific to one."""
     context = _Context()
     context.ProcessEvent(_Key('w', 1))
     assert context.getInputState().held('w')
@@ -263,7 +263,7 @@ def test_mouse_look_turns_the_view_from_a_delivered_move():
     assert turns and turns[0] != 0
 
 
-# -- pointer motion comes from the backend, not from the pick pipeline --------
+# -- pointer motion comes from the window system, not from the pick pipeline --
 
 def test_pointer_motion_reaches_the_sampler_without_a_pick():
     """Mouse-look is not picking.
@@ -287,7 +287,7 @@ def test_the_first_motion_only_establishes_where_the_pointer_is():
 
 
 def test_direct_motion_stops_the_event_path_double_counting():
-    """A backend that reports motion directly also queues a pick event; taking
+    """A window system that reports motion directly also queues a pick event; taking
     the delta from both would turn the view twice as far as the hand moved."""
     context = _SamplingContext(_fps_definition())
     context.recordPointerMotion(100, 100)
@@ -296,7 +296,7 @@ def test_direct_motion_stops_the_event_path_double_counting():
     assert context.getInputState().mouse_delta() == (40, 0)
 
 
-def test_a_backend_that_reports_no_motion_still_uses_the_events():
+def test_a_window_system_that_reports_no_motion_still_uses_the_events():
     """GLUT, pygame and wx deliver moves only as events; they must keep working."""
     context = _SamplingContext(_fps_definition())
     context.ProcessEvent(_Move(100, 100))
@@ -318,19 +318,18 @@ def test_motion_is_sampled_even_with_picking_switched_off():
 def test_pointer_motion_uses_the_pick_points_origin():
     """Bottom-left, y upward -- the origin every other pointer coordinate in
     the system uses.  The GLFW callback reports y downward and flips it; a
-    backend that fed the raw value would invert mouse-look's vertical and
+    window system that fed the raw value would invert mouse-look's vertical and
     nothing else, which is the hardest kind of sign error to see."""
 
-    class Backend(glfwevents.EventHandlerMixin):
+    class Host:
+        """The context methods the GLFW window system reports motion through"""
+
         def __init__(self):
             self.motions = []
             self.picks = []
 
         def getViewPort(self):
             return (800, 600)
-
-        def _cursorToFramebuffer(self, _window, x, y):
-            return x, y
 
         def recordPointerMotion(self, x, y):
             self.motions.append((x, y))
@@ -341,8 +340,11 @@ def test_pointer_motion_uses_the_pick_points_origin():
         def triggerPick(self):
             pass
 
-    backend = Backend()
-    backend.glfwOnCursorPos(None, 100.0, 150.0)
-    assert backend.motions == backend.picks, (
+    host = Host()
+    windowsystem = GLFWWindowSystem(host)
+    # An unscaled display: the window and its framebuffer are the same size.
+    windowsystem.cursorToFramebuffer = lambda _window, x, y: (x, y)
+    windowsystem.onCursorPos(None, 100.0, 150.0)
+    assert host.motions == host.picks, (
         'the sampler and the pick queue disagree about which way y runs')
-    assert backend.motions == [(100, 450)]
+    assert host.motions == [(100, 450)]

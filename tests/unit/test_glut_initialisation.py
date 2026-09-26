@@ -6,10 +6,9 @@ freeglut prints
     freeglut ERROR: Function <glutCreateWindow> called without first calling
     'glutInit'.
 
-and calls ``exit()``.  Only ``GLUTContext.ContextMainLoop`` called ``glutInit``,
-so every other way of building a context -- a test, a view embedded in an
-application with its own loop, a benchmark stepping frames itself -- ended the
-process instead of making a window.
+and calls ``exit()``.  Every way of building a context -- ``ContextMainLoop``,
+a test, a view embedded in an application with its own loop, a benchmark
+stepping frames itself -- has to call ``glutInit`` first.
 
 Nor can it simply be called again for safety: freeglut answers a second
 ``glutInit`` with ``illegal glutInit() reinitialization attempt`` and exits too.
@@ -25,7 +24,7 @@ from OpenGLContext.testing.glcontext import display_answers
 pytest.importorskip('OpenGL.GLUT')
 
 from OpenGLContext.testing.paths import tests_root
-from OpenGLContext import glutcontext
+from OpenGLContext.windowsystem import glut as glutwindowsystem
 
 DRIVER = tests_root(__file__) / 'helpers' / '_glut_init_drive.py'
 
@@ -54,12 +53,12 @@ class TestTheInitialisationGuard:
 
     def test_it_says_whether_glut_has_been_initialised(self):
 
-        assert callable(glutcontext.glutInitialised)
+        assert callable(glutwindowsystem.glutInitialised)
 
     def test_asking_twice_initialises_once(self):
         """The whole reason for the guard: a second ``glutInit`` exits."""
 
-        assert callable(glutcontext.ensureGlutInitialised)
+        assert callable(glutwindowsystem.ensureGlutInitialised)
 
 
 @pytest.mark.skipif(not display_answers(),
@@ -81,7 +80,7 @@ class TestAgainstARealDisplay:
         assert reported['_returncode'] == 0
 
     def test_the_main_loop_path_still_initialises(self):
-        """`ContextMainLoop` called ``glutInit`` itself; it still has to, and
-        must not call it twice now that the constructor does."""
+        """`ContextMainLoop` initialises GLUT before the context is built,
+        and the constructor must not call ``glutInit`` a second time."""
         reported = _drive('mainloop')
         assert reported.get('LOOPED') == 'True', reported['_stderr'][-600:]

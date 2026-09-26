@@ -53,16 +53,14 @@ WindowSystem( 'wx', 'OpenGLContext.windowsystem.wx.WxWindowSystem' )
 WindowSystem( 'egl', 'OpenGLContext.windowsystem.egl.EGLWindowSystem' )
 WindowSystem( 'wgl', 'OpenGLContext.windowsystem.wgl.WGLWindowSystem' )
 
+# The context class each window system's module publishes, which
+# getContextType and getInteractive(name) read.  Deprecated with
+# getContextType; a window system is chosen by the definition's field.
 Context( 'pygame', 'OpenGLContext.pygamecontext.PygameContext' )
 Context( 'wx', 'OpenGLContext.wxcontext.wxContext' )
 Context( 'glut', 'OpenGLContext.glutcontext.GLUTContext' )
 Context( 'glfw', 'OpenGLContext.glfwcontext.GLFWContext' )
 Context( 'tk', 'OpenGLContext.tkcontext.TkContext' )
-# Offscreen: no window, no display server.  One class fills the interactive slot
-# too, because a context nothing can click on has no separate interactive form.
-# One per platform -- EGL on Linux, WGL pbuffers on Windows -- and both are
-# registered everywhere, since which one a machine can actually create is a
-# question its answer already gives.
 Context( 'egl', 'OpenGLContext.eglcontext.EGLContext' )
 Context( 'wgl', 'OpenGLContext.wglcontext.WGLContext' )
 InteractiveContext( 'pygame', 'OpenGLContext.pygameinteractivecontext.PygameInteractiveContext' )
@@ -79,14 +77,6 @@ VRMLContext( 'glfw', 'OpenGLContext.glfwvrmlcontext.VRMLContext' )
 VRMLContext( 'tk', 'OpenGLContext.tkvrmlcontext.VRMLContext' )
 VRMLContext( 'egl', 'OpenGLContext.eglvrmlcontext.VRMLContext' )
 VRMLContext( 'wgl', 'OpenGLContext.wglvrmlcontext.VRMLContext' )
-
-# Imported for its side effect: the package registers the Qt backend with the
-# registries above as it loads.  Absent unless the separate OpenGLContext-qt
-# distribution is installed, which is the whole of what makes qt selectable.
-try:
-    import OpenGLContext_qt
-except ImportError:
-    pass
 
 Loader( 'vrml97', 'OpenGLContext.loaders.vrml97.defaultHandler', ['.wrl','.wrz','.vrml','model/vrml','x-world/x-vrml','.wrl.gz'] )
 Loader( 'obj', 'OpenGLContext.loaders.obj.defaultHandler', ['.obj'] )

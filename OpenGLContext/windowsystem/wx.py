@@ -372,7 +372,7 @@ class WxWindowSystem(WindowSystem):
         """Make the wx application and a frame, the context in it, and run"""
         made: list[Context] = []
 
-        class ContextApp(wx.App):  # type: ignore[misc]  # wx is untyped
+        class ContextApp(wx.App):
             def OnInit(self) -> bool:
                 frame = wx.Frame(
                     None, -1, contextClass.getApplicationName(),

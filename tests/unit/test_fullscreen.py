@@ -17,6 +17,7 @@ import pytest
 from OpenGLContext import renderoptions
 from OpenGLContext.context import Context
 from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.windowsystem.base import WindowSystem
 
 
 @pytest.fixture
@@ -57,7 +58,7 @@ class TestTheField:
 class TestReadingADefinitionDirectly:
     """``renderoptions`` answers about a definition it is handed.
 
-    A backend applies the window-level settings while it is building the
+    A window system applies the window-level settings while it is building the
     window, which is before there is a context to ask -- so the definition
     itself has to be an acceptable source, or every one of those settings falls
     back to its environment default and the field the application set is lost.
@@ -76,10 +77,10 @@ class TestReadingADefinitionDirectly:
         assert renderoptions.flag(definition, 'vsync', True) is True
 
 
-class TestTheQuestionEveryBackendAsks:
+class TestTheQuestionEveryWindowSystemAsks:
     """``renderoptions.fullscreen_window`` is the single reader.
 
-    Each backend spells "fill the screen" differently -- a monitor handle, a
+    Each window system spells "fill the screen" differently -- a monitor handle, a
     display-mode flag, a method on a frame -- but none of them decides *whether*
     to, or they would drift apart on the one case that matters.
     """
@@ -111,24 +112,45 @@ class TestTheQuestionEveryBackendAsks:
         assert renderoptions.fullscreen_window(Windowed()) is True
 
 
-class TestTheBackendCapability:
+class _Fixed(WindowSystem):
+    """A window system that provides only what every one must"""
+
+    def open(self, definition, parent=None):
+        return True
+
+    def release(self):
+        pass
+
+    def makeCurrent(self):
+        return None
+
+    def swap(self):
+        pass
+
+    def drawableSize(self):
+        return (1, 1)
+
+
+class TestTheWindowSystemCapability:
     """Switching a live window between full-screen and windowed."""
 
-    def test_a_backend_that_cannot_says_so(self):
+    def test_a_window_system_that_cannot_says_so(self):
         """The base answer is False, so a caller can offer the key or not."""
-        assert Context.setFullscreen(Context.__new__(Context), True) is False
+        context = Context.__new__(Context)
+        context.windowsystem = _Fixed(context)
+        assert context.setFullscreen(True) is False
 
 
 glfw = pytest.importorskip('glfw')
 
-from OpenGLContext import glfwcontext
+from OpenGLContext.windowsystem import glfw as glfwsystem
 
 
 class TestChoosingTheMonitor:
     """Which monitor GLFW is asked to fill, if any."""
 
     def _monitor(self, definition):
-        return glfwcontext.fullscreenMonitor(definition)
+        return glfwsystem.fullscreenMonitor(definition)
 
     def test_a_windowed_context_names_no_monitor(self):
         assert self._monitor(ContextDefinition()) is None
@@ -155,12 +177,12 @@ class TestThePygameDisplayMode:
     def _flags(self, definition):
         """Which flags the window is asked for, without opening one.
 
-        ``pygameWindowFlags`` reads the definition and nothing else, so this
+        ``windowFlags`` reads the definition and nothing else, so this
         runs where SDL has no display to give -- a headless CI runner, or a
         session whose compositor SDL does not speak.
         """
-        from OpenGLContext.pygamecontext import PygameContext  # noqa: PLC0415 pygame is optional
-        return PygameContext.pygameWindowFlags(definition)
+        from OpenGLContext.windowsystem.pygame import windowFlags  # noqa: PLC0415 pygame is optional
+        return windowFlags(definition)
 
     def test_a_windowed_context_asks_for_no_fullscreen_flag(self, pygame):
         assert not self._flags(ContextDefinition()) & pygame.FULLSCREEN

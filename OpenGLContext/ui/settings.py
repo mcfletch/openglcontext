@@ -21,7 +21,7 @@ that binding would be accepted and then never fire.  The handler has to be a
 bound method of something long-lived, because the event system holds callbacks
 weakly::
 
-    class Game(OverlayMixin, GLFWInteractiveContext):
+    class Game(OverlayMixin, Context):
         def OnInit(self):
             self.addEventHandler('keyboard', name='<F10>', state=1,
                                  function=self.openSettings)
