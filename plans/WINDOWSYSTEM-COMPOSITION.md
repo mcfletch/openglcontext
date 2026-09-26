@@ -854,6 +854,43 @@ Run from the worktree with `PYTHONPATH=<worktree>`; GLUT and Tk need
   openglcontext-editor 1478, forest 66, marble-demo 896, marble-editor 162,
   glisteel 1638, glisteel-editor 469, twig-bb 2355.
 
+2026-09-26, Phase 2b (commits eed5f680, 5ee0785e, c27068da):
+
+- `move/navigationdefinition.py`: `Navigation`, `Views`, `ViewDefinition`,
+  `Arrangement`, validated at construction; the `plugins.MovementMode` and
+  `plugins.ViewGestures` registries (entry-point groups
+  `openglcontext.movementmodes`, `openglcontext.viewgestures`);
+  `ContextDefinition.navigation`, default `Navigation(modes=['examine'])`.
+  `movementModes`/`movementMode` are deprecated properties forwarding to it;
+  the settings screen and saved settings use `navigation.modes`.
+- `examine` is the classic `smooth.Smooth` manager, bound where it is
+  declared; `NavigationManager` drives only the other modes.  The `g`
+  physics toggle is unchanged.
+- `modeSwitching`: `keys` binds `movementCycleKey` (`m`), `controls` puts a
+  `ui.toolpalette.ModeSelector` on the overlay (in `toolpalette.py`, where
+  the palette it is built on lives, not `hudwidgets`).  `controls` on a
+  context without `OverlayMixin` raises TypeError naming it.
+- `MultiViewMixin` is a base of `Context` (ahead of `ViewPlatformMixin`) and
+  builds `viewSetFor(navigation.views)` in `completeInit`.  `switching`:
+  `keys` binds `viewsCycleKey` (`v`, arrangements in declared order) and
+  `viewMaximiseKey` (`x`); `controls` puts `ViewChrome` up.  A `scene` view,
+  and a perspective view given gestures, get an orbiting camera of their
+  own; a `scene` view stands at the scene's first camera when framed.
+  `startViews()` writes `quadViews(...)` into the definition.
+- `oglc-view` declares `SceneViewerMixin.viewerNavigation()` in
+  `resolveDefinition` (modes switched by keys, `quadViews` with keys, and
+  controls except in a capture or recording) and binds neither `m` nor `v`
+  itself.  The switching keys fire on the release, as the viewer's do.
+- Decisions taken here, for review: a NULL navigation keeps a static view
+  platform, since the render passes need a camera; the viewer rescales its
+  modes in place rather than through `Navigation.scaled()`, so the selected
+  mode and rebound keys survive a scene swap.
+- glisteel-editor sets `self.views` to a `ViewSet` of its own cameras (map,
+  orbit) that the declared camera kinds cannot express.  Under the folded
+  mix-in it behaves as before (its map view is not driven, and it handles
+  the others before `super().ProcessEvent`); in Phase 4 its own routing,
+  resize and maximise code can go in favour of the mix-in's.
+
 Still to do:
 
 - The script suite (`tests/test_all_scripts.py`, every script's frame
@@ -862,11 +899,12 @@ Still to do:
   with the merge staged, as preflight does, before the merge is committed.
 - wx and WGL: written against their APIs, not run here; their CI jobs are
   the gate.
-- Phase 2b (navigation from the definition) -- not started.  It folds the
-  classic `smooth.Smooth` manager into an `examine` movement mode, which
-  touches `PhysicsWalkMixin.enablePhysics` (it unbinds and rebinds that
-  manager), the viewer's `g`/`m` keys and every game; worth doing as its own
-  change.
+- Phase 2b docs: `docs/navigation.rst` (the `Navigation` declaration, the
+  registries, `modeSwitching`), `docs/multiview.rst` (views declared;
+  `startViews`/`quadViews`/`viewSetFor`; `v` and `x`), `docs/overlayui.rst`
+  (the `ModeSelector`), `docs/viewer.rst` (`x` maximises), CLAUDE.md's map
+  entry for `multiview/mixin.py`.  Then the whole suite and the sibling
+  suites again.
 - Phase 4 for the games (forest, twig-bb, glisteel, glisteel-editor,
   marble-demo, marble-editor): they keep working unchanged, since
   `getInteractive()` answers `Context`; moving them to `class Game(Context)`
