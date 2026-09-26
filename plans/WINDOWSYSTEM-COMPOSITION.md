@@ -935,6 +935,15 @@ worktree at `<project>/.claude/worktrees/windowsystem`):
 - Each has a `tests/test_context_declaration.py` (twig-bb and forest in their
   existing test modules) holding the base, the window system and the
   navigation.
+- Found by marble-demo's render smoke test: with a NULL navigation nothing
+  asked for the view platform before `OnInit`, which found `self.platform`
+  None (binding the free-fly manager had been what made it).
+  `ViewPlatformMixin.setupDefaultEventCallbacks` now makes it whatever the
+  navigation (b063c97f).  marble-editor, glisteel, glisteel-editor and the
+  twig-bb HUD sample each ran 40 hidden frames and exited cleanly.
+- Suites against the worktrees: engine 12324 non-serial; forest 69,
+  marble-demo 900 (6 xfailed), marble-editor 165, glisteel 1641,
+  glisteel-editor 472, twig-bb 2357.
 
 Still to do:
 
