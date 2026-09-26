@@ -911,6 +911,31 @@ Run from the worktree with `PYTHONPATH=<worktree>`; GLUT and Tk need
   1478, forest 66, marble-demo 896, marble-editor 162, glisteel 1638,
   glisteel-editor 469, twig-bb 2355.
 
+2026-09-26, Phase 4 (each project on branch `windowsystem`, in its own
+worktree at `<project>/.claude/worktrees/windowsystem`):
+
+- Every game class is `class X(..., Context)` with `windowSystemName =
+  'glfw'`, and the `OPENGLCONTEXT_BACKEND` `setdefault` is gone.  Pinned on
+  the class rather than in the field of one definition, so the tools that
+  subclass a game (forest's bench and capture) open the same window system.
+- Navigation, per game:
+  - forest (7c4743e): `Navigation(modes=[fps, walk, fly],
+    modeSwitching=['keys'])`; the engine binds `m`, and its own
+    `cycleMovementMode` is gone.  No `examine`: the avatar sets the view.
+  - twig-bb (ed05b43): `examine` (the free-fly camera `g` returns to) and its
+    modes, `modeSwitching` empty; `m` and `f` stay game keys.  The mode in
+    force is read from `navigation.current`.
+  - marble-demo (1aed4d2), marble-editor (e0c96b2), glisteel (9dfb402),
+    glisteel-editor (1bb7b8b): a NULL navigation, since one camera of the
+    game's own (follow, map, chase, the editor's views) moves the view; the
+    code that unbound the free-fly manager is gone.
+- glisteel-editor keeps its own `ViewSet`, whose cameras (a map, an orbit)
+  are not declarable kinds, and its own routing, which redoes the map after
+  a pan; `Context` places its views on a resize.
+- Each has a `tests/test_context_declaration.py` (twig-bb and forest in their
+  existing test modules) holding the base, the window system and the
+  navigation.
+
 Still to do:
 
 - The script suite (`tests/test_all_scripts.py`, every script's frame
@@ -919,9 +944,7 @@ Still to do:
   with the merge staged, as preflight does, before the merge is committed.
 - wx and WGL: written against their APIs, not run here; their CI jobs are
   the gate.
-- Phase 4 for the games (forest, twig-bb, glisteel, glisteel-editor,
-  marble-demo, marble-editor): they keep working unchanged, since
-  `getInteractive()` answers `Context`; moving them to `class Game(Context)`
-  with the window system in the definition is still to do.
+- Merging: each game project below has a `windowsystem` branch that needs
+  the engine's, so the engine merges first and the games after it.
 - Phase 6 (removal of the old registries and `getContextType`) is a release
   later.
