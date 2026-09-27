@@ -149,6 +149,26 @@ can be handed any of three with the same ``mark()``:
    kept = Keeping(clock=lambda: driven)
    session.telemetry = Tee(kept, context.telemetry)
 
+A reason asked for every step, such as why a driver has not overtaken, changes
+back and forth at the boundary between two answers. ``Stretch(holds)`` in
+``OpenGLContext.telemetry.stretches`` turns it into one mark per stretch that
+lasted. ``hold(why, dt, at)`` is told each step's reason and its length in
+seconds, and returns the ``Held`` stretch a new reason ended. A reason that
+changes back within ``holds`` seconds is counted in the stretch it
+interrupted and named in that stretch's ``also``. ``end()`` closes the stretch
+under way, and ``announce()`` is true once per stretch, when it has held long
+enough:
+
+.. code-block:: python
+
+   from OpenGLContext.telemetry.stretches import Stretch
+
+   refusals = Stretch(holds=0.5)
+   done = refusals.hold('lane not clear', dt, at=station)
+   if done is not None:
+       context.mark('pass-refused', why=done.why, seconds=done.seconds,
+                    also=sorted(done.also))
+
 .. _randomness:
 
 Randomness
