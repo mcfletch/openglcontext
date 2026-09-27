@@ -111,12 +111,15 @@ class WindowSystem(abc.ABC):
         forget it.  Calling this twice is calling it once.
         """
 
-    def abandon(self) -> None:  # noqa: B027 an optional hook; doing nothing is the default
+    def abandon(self) -> None:  # noqa: B027 an optional hook; a window system that makes nothing has nothing to give back
         """Give back what :meth:`open` made, after the context failed to build.
 
-        No cache has seen this GL context, so none is told: announcing its loss
-        would drop whichever context is current instead.  Most toolkits have
-        nothing to do here that the process ending will not do.
+        Called with ``open`` finished or stopped part-way, so each resource is
+        given back only where it exists.  No cache has seen this GL context, so
+        none is told: announcing its loss would drop whichever context is
+        current instead.  A window system that makes a window or a GL context
+        overrides this; :meth:`release` is then the caches being told, followed
+        by this.
         """
 
     def quit(self) -> bool:

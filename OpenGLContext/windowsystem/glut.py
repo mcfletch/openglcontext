@@ -229,8 +229,13 @@ class GLUTWindowSystem(WindowSystem):
             return
         glutSetWindow(self.window)
         self.context.releaseContextResources(self.glHandle())
-        glutDestroyWindow(self.window)
-        self.window = None
+        self.abandon()
+
+    def abandon(self) -> None:
+        """Destroy the window without telling any cache"""
+        window, self.window = self.window, None
+        if window:
+            glutDestroyWindow(window)
 
     def quit(self) -> bool:
         self.finished = True

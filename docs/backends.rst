@@ -408,6 +408,12 @@ context it draws for, as ``self.context``, and provides:
    * - ``release()``
      - Calls ``context.releaseContextResources(handle)`` with the GL context
        current, then destroys the window.  Twice is once.
+   * - ``abandon()``
+     - Destroys whatever ``open()`` made, without telling any cache.  The
+       context calls it when ``open()`` or a later step of its construction
+       raises, so it must cope with ``open()`` having stopped part-way.
+       ``release()`` is usually the cache call followed by this.  The base
+       class's does nothing, for a window system that makes no window.
    * - ``bindCallbacks()``
      - Connects the toolkit's input to methods of its own, which build the
        events in :py:mod:`OpenGLContext.events` with ``self.context`` and
@@ -420,9 +426,8 @@ context it draws for, as ``self.context``, and provides:
 
 and optionally ``setFullscreen``, ``setPointerCapture``, ``setPointerShape``,
 ``applyVSync``, ``resize`` (for a surface of fixed size), ``emitKey``,
-``quit`` (answering False for a view inside somebody else's application) and
-``abandon``.  ``OpenGLContext/windowsystem/glfw.py`` is the shortest complete
-one.
+and ``quit`` (answering False for a view inside somebody else's application).
+``OpenGLContext/windowsystem/glfw.py`` is the shortest complete one.
 
 It is registered under a name, by its dotted path, either in the running
 process:

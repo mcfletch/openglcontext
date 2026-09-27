@@ -452,8 +452,10 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             raise TypeError(
                 'The %r window system opens windows of its own and takes no '
                 'parent' % (self.windowsystem.name,))
-        ready = self.windowsystem.open(definition, parent)
         try:
+            # Inside: an ``open`` that fails after making its window gives
+            # it back through ``abandon`` like any later step.
+            ready = self.windowsystem.open(definition, parent)
             self.setupThreading()
             self.setupExtensionManager()
             self.initializeEventManagers()

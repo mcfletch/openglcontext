@@ -19,6 +19,7 @@ from OpenGL import _dispatch
 
 from OpenGLContext import context as context_module, contextresources
 from OpenGLContext.testing.glcontext import gl_available
+from OpenGLContext.windowsystem.base import WindowSystem
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PACKAGE = os.path.dirname(os.path.dirname(HERE))
@@ -172,6 +173,113 @@ class TestQuittingReallyReleases:
         made, told = self._quit(monkeypatch)
         made.OnQuit()
         assert told.count('engine') == 1
+
+
+class _Failed(Exception):
+    """Raised part-way through building a context."""
+
+
+class _HalfOpened(WindowSystem):
+    """A window system whose window exists by the time ``open`` fails."""
+
+    name = 'half-opened'
+
+    def __init__(self, context, failIn='open'):
+        super().__init__(context)
+        self.failIn = failIn
+        self.abandoned = 0
+        self.released = 0
+
+    def open(self, definition, parent=None):
+        self.window = 'window'
+        if self.failIn == 'open':
+            raise _Failed()
+        return False
+
+    def abandon(self):
+        self.abandoned += 1
+        self.window = None
+
+    def release(self):
+        self.released += 1
+
+    def makeCurrent(self):
+        return None
+
+    def swap(self):
+        pass
+
+    def drawableSize(self):
+        return (1, 1)
+
+
+class TestAFailedConstructionGivesTheWindowBack:
+    """A context that fails to build hands back what its window system made.
+
+    An application that catches the failure and carries on -- tries another
+    window system, asks for a smaller context -- would otherwise keep a window
+    and a GL context for every attempt.  No cache has seen the context, so none
+    is told it is going.
+    """
+
+    def _build(self, failIn):
+        made = []
+
+        class Failing(context_module.Context):
+            def createWindowSystem(self, definition):
+                made.append(_HalfOpened(self, failIn))
+                return made[0]
+
+            def setupCallbacks(self):
+                if failIn == 'setup':
+                    raise _Failed()
+
+        with pytest.raises(_Failed):
+            Failing()
+        return made[0]
+
+    @pytest.mark.parametrize('failIn', ['open', 'setup'])
+    def test_the_window_system_abandons_what_it_made(self, failIn):
+        system = self._build(failIn)
+        assert system.abandoned == 1
+        assert system.released == 0
+        assert system.window is None
+
+    @pytest.mark.parametrize('name,path,className', WINDOW_SYSTEMS, ids=IDS)
+    def test_every_window_system_can_abandon(self, name, path, className):
+        assert 'abandon' in _methods(path, className), (
+            '%s inherits the base class\'s abandon, which gives nothing back, '
+            'so a failed construction leaves its window open' % (name,))
+
+    @pytest.mark.parametrize('name,path,className', WINDOW_SYSTEMS, ids=IDS)
+    def test_abandoning_tells_no_cache(self, name, path, className):
+        assert ANNOUNCEMENT not in _calls_within(path, className, 'abandon'), (
+            '%s announces the loss of a context no cache has seen, which drops '
+            'whichever context is current instead' % (name,))
+
+    def test_a_real_window_is_gone_afterwards(self, monkeypatch):
+        """Through GLFW, which this container can open a window on."""
+        if not gl_available():
+            pytest.skip('no GL target available')
+        pytest.importorskip('glfw')
+        told = []
+        monkeypatch.setattr(contextresources, 'context_lost',
+                            lambda: told.append('engine'))
+        monkeypatch.setenv('OPENGLCONTEXT_HIDDEN', '1')
+        made = []
+
+        class Failing(context_module.Context):
+            def createWindowSystem(self, definition):
+                made.append(super().createWindowSystem(definition))
+                return made[0]
+
+            def setupCallbacks(self):
+                raise _Failed()
+
+        with pytest.raises(_Failed):
+            Failing(windowsystem='glfw', size=(32, 32))
+        assert made[0].window is None
+        assert told == []
 
 
 class _AnyContext:

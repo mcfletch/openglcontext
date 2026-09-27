@@ -189,7 +189,7 @@ class WxWindowSystem(WindowSystem):
         The caches may *delete* what they hold rather than merely forget it,
         and deleting a name needs the context that issued it.
         """
-        canvas, self.window = self.window, None
+        canvas = self.window
         if canvas is None:
             return
         try:
@@ -199,6 +199,17 @@ class WxWindowSystem(WindowSystem):
             self.context.releaseContextResources(None)
         else:
             self.context.releaseContextResources(self.glHandle())
+        self.abandon()
+
+    def abandon(self) -> None:
+        """Drop the GL context, and destroy the frame this made, telling no cache
+
+        The frame is made before the canvas, so it is destroyed whether or not
+        the canvas was.  A canvas inside somebody else's window is theirs, and
+        stays.
+        """
+        self.window = None
+        self.glContext = None
         frame, self.frame = self.frame, None
         if frame is not None:
             frame.Destroy()

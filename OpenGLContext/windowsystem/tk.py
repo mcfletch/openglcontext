@@ -172,15 +172,25 @@ class TkWindowSystem(WindowSystem):
 
     def release(self) -> None:
         """Drop the context's GL objects and let the widget go"""
-        frame, self.window = self.window, None
+        frame = self.window
         if frame is None:
             return
-        self.stopFrameTimer(frame)
         if frame.makeCurrent():
             self.context.releaseContextResources(self.glHandle())
         else:
             self.context.releaseContextResources(None)
-        frame.destroyContext()
+        self.abandon()
+
+    def abandon(self) -> None:
+        """Destroy the GL context, and the root window this made, telling no cache
+
+        The root is made before the frame, so it is destroyed whether or not
+        the frame was.
+        """
+        frame, self.window = self.window, None
+        if frame is not None:
+            self.stopFrameTimer(frame)
+            frame.destroyContext()
         root, self.root = self.root, None
         if root is not None:
             try:

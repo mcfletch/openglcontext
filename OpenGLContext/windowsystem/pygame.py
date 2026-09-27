@@ -163,8 +163,16 @@ class PygameWindowSystem(WindowSystem):
         """Drop the context's GL objects and let the display go"""
         if self.window is None:
             return
-        self.window = None
         self.context.releaseContextResources(self.glHandle())
+        self.abandon()
+
+    def abandon(self) -> None:
+        """Close the display, and the GL context with it, telling no cache
+
+        ``open`` initialises the display before it makes the window, so the
+        display is closed whether or not the window was made.
+        """
+        self.window = None
         pygame.display.quit()
 
     # -- current and presenting --------------------------------------------

@@ -206,18 +206,23 @@ class GLFWWindowSystem(WindowSystem):
         """
         if not self.window:
             return
-        window, self.window = self.window, None
         try:
-            glfw.make_context_current(window)
+            glfw.make_context_current(self.window)
         except Exception:               # pragma: no cover - needs a lost window
             pass
         self.context.releaseContextResources(self.glHandle())
+        self.abandon()
+
+    def abandon(self) -> None:
+        """Destroy the window and its cursors without telling any cache"""
+        window, self.window = self.window, None
         # GLFW keeps a cursor until it is destroyed or GLFW is terminated, so a
         # process that opens many windows would otherwise collect them.
         for cursor in (self._cursors or {}).values():
             glfw.destroy_cursor(cursor)
         self._cursors = None
-        glfw.destroy_window(window)
+        if window:
+            glfw.destroy_window(window)
 
     def quit(self) -> bool:
         if self.window:
