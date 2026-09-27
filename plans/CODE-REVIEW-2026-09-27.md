@@ -28,19 +28,19 @@ is intended before it is fixed.
 | 3.4 | P3 | `bake_zone_lights` lists the zones once, before a streamed world has loaded them | Open | Zones outside the first view are silently never baked |
 | 3.5 | P3 | `applyZones` duplicates `_applyZoneState` | Open | Maintainability |
 | 3.6 | P3 | `ReflectionAtlas.ensure_size` leaks GL names if an allocation call raises | Open | |
-| 3.7 | P3 | `GroundCover._scatter` keys a persistent dict on `id(rung)` | Open | Safe today; OGC131 does not report an `id()` inside a tuple key (see 5.3) |
-| 3.8 | P3 | `docs/vegetation.rst` says `canopy_spread` offsets towards the sun | Open | The code offsets away from the sun |
+| 3.7 | P3 | `GroundCover._scatter` keys a persistent dict on `id(rung)` | Fixed 0e9938d5 | Safe today; OGC131 does not report an `id()` inside a tuple key (see 5.3) |
+| 3.8 | P3 | `docs/vegetation.rst` says `canopy_spread` offsets towards the sun | Fixed c6b7c89b | The code offsets away from the sun |
 | 4.1 | P2 | `LODAsset.open` reads a JSON chunk of whatever length the header claims | Fixed b061fb1b | Up to 4 GiB allocated before `max_resource_bytes` applies |
 | 4.2 | P2 | A killed "within" content-pack install leaves a staging directory nothing removes | Fixed 12bd1065 | `_install_within` bypasses `atomicfiles`' leftover sweep; also shadows `name` |
-| 4.3 | P3 | `oglc-view --pack` with a bad registry ends in a traceback | Open | `BadCatalog` is a `ValueError` and is not caught |
+| 4.3 | P3 | `oglc-view --pack` with a bad registry ends in a traceback | Fixed b6e079a9 | `BadCatalog` is a `ValueError` and is not caught |
 | 4.4 | P3 | Viewer source and adapter tidiness | Open | Lock files never removed, `source.py` mixes two jobs, `PROTO` string test beside `isinstance` |
-| 4.5 | P3 | Docs say pack names compare "in lower case"; the code uses `casefold` | Open | Documentation |
+| 4.5 | P3 | Docs say pack names compare "in lower case"; the code uses `casefold` | Fixed c6b7c89b | Documentation |
 | 5.1 | P2 | OGC101, OGC102 and OGC111 miss the `doc.get(k) or default` form | Fixed c5396b0 (openglcontext-checks) | Reproduced; a gate with a common false negative |
 | 5.2 | P2 | OGC121 misses `pathlib.Path(...).open('w')` | Fixed 58cc800 (openglcontext-checks) | Reproduced by the reviewer |
 | 5.3 | P3 | OGC131 does not report `id()` inside a tuple key | Open | Found through 3.7 |
 | 5.4 | P2 | `editcheck` drops mypy messages for Windows paths | Fixed 9464a3d (workspace) | `partition(':')` splits at the drive letter |
 | 5.5 | P3 | `preflight` and `editcheck` raise a traceback when a gate's executable is missing | Fixed 9464a3d (workspace) | The `--hook` exit status is then wrong |
-| 5.6 | P3 | `--jobs` is ignored under 48 files; the README does not say so | Open | Documentation |
+| 5.6 | P3 | `--jobs` is ignored under 48 files; the README does not say so | Fixed 1b8dc73 (openglcontext-checks) | Documentation |
 | 6.1 | P2 | `check_failing_layer` writes an inherited method onto the class it patched | Fixed fa4131ba | Order-dependent test pollution through the documented example |
 | 6.2 | P3 | Display and network probes cache a transient failure for the whole run | Open | Later tests skip for no current reason |
 | 6.3 | P3 | Testing helpers reach into production globals and patch GL process-wide | Open | `renderpass.FLAT = None`; `counting_gl` has no lock |
@@ -530,3 +530,4 @@ the chart.
 - 2026-09-27: 6.1 fixed: the stand-in is removed unless the owner held the attribute itself, and an existing triggerRedraw override is restored.
 - 2026-09-27: 7.1 fixed where the engine can be used: glisteel-editor's Project.save and marble-demo's levelfile.save call `atomicfiles.write_text`; pyopengl-glut-binaries' build script writes through one `whole()` helper that removes a partial file on failure. ttfquery and opengl_extrusions sit below OpenGLContext and keep their own few lines, which already clean up. 7.2 fixed: `DocumentValues.vectors` (new, in `docs/untrusted.rst`) reads a list of points, leaving out and reporting a bad one; glisteel-editor's Route.from_json uses it. The preflight run started earlier failed on tests caught mid-edit (a wx import before WarpedPointer existed, two tests before their fixes); those tests pass now, and a fresh preflight run is still to do.
 - 2026-09-27: 7.3 fixed: the choices are compared with the Literal alone. 7.4 fixed: `subsystem_nodes` in the profiler reads grass and clumps from `ForestScene.cover`'s rungs, is tested without a window, and an unknown PB_DISABLE name stops the run. From 7.7, the dead COVER alias is removed. 7.5 needs input: the smoke test passes here because the art is installed. On a machine without it, `art_directory()` raises NotInstalled and the test errors. Should such a machine skip it (which the workspace rules discourage) or fail it, as it does now? Or should CI fetch the pack first?
+- 2026-09-27: 3.7, 3.8, 4.3, 4.5 and 5.6 fixed. 5.3 stays open, and the gap is wider than tuples: OGC131 follows no local name at all, so `key = id(x); table.get(key)` passes as `slot = (id(x), r); table[slot] = v` does. Every exemption the rule makes (the entry holds the object, the table is temporary, the lookup compares identity) is judged from where the `id()` call sits, so following a name means judging them at each use of it instead. That is a rework of the rule, not a one-line fix.
