@@ -35,8 +35,8 @@ is intended before it is fixed.
 | 4.3 | P3 | `oglc-view --pack` with a bad registry ends in a traceback | Open | `BadCatalog` is a `ValueError` and is not caught |
 | 4.4 | P3 | Viewer source and adapter tidiness | Open | Lock files never removed, `source.py` mixes two jobs, `PROTO` string test beside `isinstance` |
 | 4.5 | P3 | Docs say pack names compare "in lower case"; the code uses `casefold` | Open | Documentation |
-| 5.1 | P2 | OGC101, OGC102 and OGC111 miss the `doc.get(k) or default` form | Open | Reproduced; a gate with a common false negative |
-| 5.2 | P2 | OGC121 misses `pathlib.Path(...).open('w')` | Open | Reproduced by the reviewer |
+| 5.1 | P2 | OGC101, OGC102 and OGC111 miss the `doc.get(k) or default` form | Fixed c5396b0 (openglcontext-checks) | Reproduced; a gate with a common false negative |
+| 5.2 | P2 | OGC121 misses `pathlib.Path(...).open('w')` | Fixed 58cc800 (openglcontext-checks) | Reproduced by the reviewer |
 | 5.3 | P3 | OGC131 does not report `id()` inside a tuple key | Open | Found through 3.7 |
 | 5.4 | P2 | `editcheck` drops mypy messages for Windows paths | Open | `partition(':')` splits at the drive letter |
 | 5.5 | P3 | `preflight` and `editcheck` raise a traceback when a gate's executable is missing | Open | The `--hook` exit status is then wrong |
@@ -525,3 +525,4 @@ the chart.
 - 2026-09-27: 3.1 fixed: `GLLayer` declares `dispose()` (ParticleEmitter's `delete` renamed to it); `instancedgl.dispose_subtree` walks children and geometry; `TilesTerrain.dispose()` gives back ground, trees and cover. glisteel's `RaceWorld.shutdown` now stops the cover's thread too (it stopped only the tile runtime) and closing a world disposes it. Documented in `docs/loading.rst`.
 - 2026-09-27: 3.2 fixed: CaptureTarget saves and restores the clear colour with the framebuffer and viewport, held by a GL test. 3.3 in part: glstate's docstring now says what OGC151 does. Open: openglcontext has 176 OGC151 findings (15 in selectionbuffers.py, 15 in bloom.py, 12 in spherebackground.py, 11 in reflectionatlas.py, ...); moving them onto the glstate managers and selecting OGC151 is the ratchet in DEFECT-PREVENTION.md, not a single fix.
 - 2026-09-27: 4.1 fixed: the declared JSON length is checked against the file size before the read (not against max_resource_bytes, which is per buffer or data URI and which existing tests set to 8 bytes). 4.2 fixed: `atomicfiles.scratch_directory` sweeps leftovers and always removes its directory; `staged_directory` and `_install_within` use it, and the shadowed `name` is gone.
+- 2026-09-27: 5.1 fixed: `named_field` looks through `or`/`and` and conditional expressions, so OGC101 and OGC111 report `x.get(k) or default`; OGC102 already walked inner expressions. No project that selects these rules gained a finding. 5.2 fixed: OGC121 reports `<path>.open(mode)` with a literal write mode (letters limited to `rwxabt+`, so a member name is not taken for a mode). It found three journals written in place on purpose, the stall trace and telemetry journal (openglcontext db459d85) and the MP4 recorder (pyopengl-video aa2e40e), which now carry reasoned noqa comments.
