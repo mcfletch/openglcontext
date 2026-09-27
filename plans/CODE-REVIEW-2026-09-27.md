@@ -19,7 +19,7 @@ is intended before it is fixed.
 | 1.5 | P2 | Pointer-warp mouse-look emulation is copied into GLUT, Tk and wx | Open | Maintainability: hoist into `windowsystem/base.py` |
 | 1.6 | P3 | Qt `release()` tells the caches the context is lost when `makeCurrent` failed | Open | Investigate: names may be deleted in another current context |
 | 1.7 | P3 | Smaller window-system and `Context` points | Open | wx import hint, GLUT non-freeglut path, `ContextMainLoop` positional argument, registry pointing at shim modules |
-| 2.1 | P1 | `Grid.spacing` from scene content is unbounded, so a tiny value builds billions of lines | Open | Untrusted-input denial of service; clamp the step or the count |
+| 2.1 | P1 | `Grid.spacing` from scene content is unbounded, so a tiny value builds billions of lines | Fixed 8fe5b051 | Untrusted-input denial of service; clamp the step or the count |
 | 2.2 | P2 | Declared scene views never fit their orbit limits, and two quad-view builders differ | Open | `_viewFor` skips `fit_limits`; heading 0 versus 330 degrees |
 | 2.3 | P3 | `MultiviewPass.disposeResources` logs every delete failure at debug | Open | |
 | 3.1 | P2 | `TilesTerrain.shutdown()` disposes no ground, vegetation or cover GL objects | Open | Leaks per world swap in a live context |
@@ -516,3 +516,7 @@ the chart.
 - 2026-09-27: 1.2 fixed with 1.1. Qt's `release()` clears `window` and holds
   the `QWindow` in `closing` until `quit()` closes it, because release runs
   inside the window's own close event.
+- 2026-09-27: 2.1 fixed. `lines_for` coarsens a pinned step by decades to at
+  most `MAXIMUM_LINES` (200) each side of the middle, keeping the lines on
+  multiples of the spacing; a non-positive or non-finite spacing is the
+  automatic step. `docs/multiview.rst` states the bound.
