@@ -18,16 +18,16 @@ is intended before it is fixed.
 | 1.4 | P2 | EGL and WGL main loops close telemetry but not the stall journal | Fixed 3e18fc36 | One-line change to `closeJournals` |
 | 1.5 | P2 | Pointer-warp mouse-look emulation is copied into GLUT, Tk and wx | Fixed 1ccda3b7 | Maintainability: hoist into `windowsystem/base.py` |
 | 1.6 | P3 | Qt `release()` tells the caches the context is lost when `makeCurrent` failed | Open | Investigate: names may be deleted in another current context |
-| 1.7 | P3 | Smaller window-system and `Context` points | Part fixed 3e18fc36 | wx import hint, GLUT non-freeglut path, `ContextMainLoop` positional argument, registry pointing at shim modules |
+| 1.7 | P3 | Smaller window-system and `Context` points | Part fixed 3e18fc36, 45535af1 | wx import hint, GLUT non-freeglut path, `ContextMainLoop` positional argument, registry pointing at shim modules |
 | 2.1 | P1 | `Grid.spacing` from scene content is unbounded, so a tiny value builds billions of lines | Fixed 8fe5b051 | Untrusted-input denial of service; clamp the step or the count |
 | 2.2 | P2 | Declared scene views never fit their orbit limits, and two quad-view builders differ | Fixed 8e489308 | `_viewFor` skips `fit_limits`; heading 0 versus 330 degrees |
-| 2.3 | P3 | `MultiviewPass.disposeResources` logs every delete failure at debug | Open | |
+| 2.3 | P3 | `MultiviewPass.disposeResources` logs every delete failure at debug | Not a defect | |
 | 3.1 | P2 | `TilesTerrain.shutdown()` disposes no ground, vegetation or cover GL objects | Fixed ad2114b4, ec2de9b (glisteel) | Leaks per world swap in a live context |
 | 3.2 | P2 | Zone capture sets the clear colour and does not restore it | Fixed 14c7c38e | `ReflectionAtlas` already saves and restores it |
 | 3.3 | P2 | `passes/glstate.py` is used by nothing, and OGC151, which its docstring cites, is not selected | Part fixed 14c7c38e | Maintainability: adopt it in the draw code or remove the claim |
 | 3.4 | P3 | `bake_zone_lights` lists the zones once, before a streamed world has loaded them | Open | Zones outside the first view are silently never baked |
-| 3.5 | P3 | `applyZones` duplicates `_applyZoneState` | Open | Maintainability |
-| 3.6 | P3 | `ReflectionAtlas.ensure_size` leaks GL names if an allocation call raises | Open | |
+| 3.5 | P3 | `applyZones` duplicates `_applyZoneState` | Fixed 0c5554b7 | Maintainability |
+| 3.6 | P3 | `ReflectionAtlas.ensure_size` leaks GL names if an allocation call raises | Fixed b2edf1bc | |
 | 3.7 | P3 | `GroundCover._scatter` keys a persistent dict on `id(rung)` | Fixed 0e9938d5 | Safe today; OGC131 does not report an `id()` inside a tuple key (see 5.3) |
 | 3.8 | P3 | `docs/vegetation.rst` says `canopy_spread` offsets towards the sun | Fixed c6b7c89b | The code offsets away from the sun |
 | 4.1 | P2 | `LODAsset.open` reads a JSON chunk of whatever length the header claims | Fixed b061fb1b | Up to 4 GiB allocated before `max_resource_bytes` applies |
@@ -42,7 +42,7 @@ is intended before it is fixed.
 | 5.5 | P3 | `preflight` and `editcheck` raise a traceback when a gate's executable is missing | Fixed 9464a3d (workspace) | The `--hook` exit status is then wrong |
 | 5.6 | P3 | `--jobs` is ignored under 48 files; the README does not say so | Fixed 1b8dc73 (openglcontext-checks) | Documentation |
 | 6.1 | P2 | `check_failing_layer` writes an inherited method onto the class it patched | Fixed fa4131ba | Order-dependent test pollution through the documented example |
-| 6.2 | P3 | Display and network probes cache a transient failure for the whole run | Open | Later tests skip for no current reason |
+| 6.2 | P3 | Display and network probes cache a transient failure for the whole run | Fixed f361b1e8 | Later tests skip for no current reason |
 | 6.3 | P3 | Testing helpers reach into production globals and patch GL process-wide | Open | `renderpass.FLAT = None`; `counting_gl` has no lock |
 | 7.1 | P2 | Atomic file writes are hand-written in five projects beside `OpenGLContext.atomicfiles` | Fixed 760a2a8 (glisteel-editor), c8630b9 (marble-demo), 60f1cd7 (pyopengl-glut-binaries) | Maintainability; glisteel-editor and marble-demo can call the engine |
 | 7.2 | P2 | A malformed route point in a glisteel-editor project raises `IndexError` | Fixed be815f16, 760a2a8 (glisteel-editor) | Contradicts `Project.open`'s documented `ValueError` |
@@ -531,3 +531,4 @@ the chart.
 - 2026-09-27: 7.1 fixed where the engine can be used: glisteel-editor's Project.save and marble-demo's levelfile.save call `atomicfiles.write_text`; pyopengl-glut-binaries' build script writes through one `whole()` helper that removes a partial file on failure. ttfquery and opengl_extrusions sit below OpenGLContext and keep their own few lines, which already clean up. 7.2 fixed: `DocumentValues.vectors` (new, in `docs/untrusted.rst`) reads a list of points, leaving out and reporting a bad one; glisteel-editor's Route.from_json uses it. The preflight run started earlier failed on tests caught mid-edit (a wx import before WarpedPointer existed, two tests before their fixes); those tests pass now, and a fresh preflight run is still to do.
 - 2026-09-27: 7.3 fixed: the choices are compared with the Literal alone. 7.4 fixed: `subsystem_nodes` in the profiler reads grass and clumps from `ForestScene.cover`'s rungs, is tested without a window, and an unknown PB_DISABLE name stops the run. From 7.7, the dead COVER alias is removed. 7.5 needs input: the smoke test passes here because the art is installed. On a machine without it, `art_directory()` raises NotInstalled and the test errors. Should such a machine skip it (which the workspace rules discourage) or fail it, as it does now? Or should CI fetch the pack first?
 - 2026-09-27: 3.7, 3.8, 4.3, 4.5 and 5.6 fixed. 5.3 stays open, and the gap is wider than tuples: OGC131 follows no local name at all, so `key = id(x); table.get(key)` passes as `slot = (id(x), r); table[slot] = v` does. Every exemption the rule makes (the entry holds the object, the table is temporary, the lookup compares identity) is judged from where the `id()` call sits, so following a name means judging them at each use of it instead. That is a rework of the rule, not a one-line fix.
+- 2026-09-27: 3.5, 3.6 and 6.2 fixed. 2.3 is not a defect: logging a failed teardown delete at debug with its traceback is the disposal convention `passes.disposal.let_go` states, since nothing can act on it then. 1.7: the wx install hint is fixed (45535af1). Question for the maintainer on the rest of 1.7: `ContextMainLoop` reads a positional first argument as the definition, while `wxContext.__init__` takes `parent` first. Should the definition become keyword-only there? And should the `InteractiveContext` plugin registry name the `*context.*Context` classes rather than the compatibility modules? Both change a public entry point.
