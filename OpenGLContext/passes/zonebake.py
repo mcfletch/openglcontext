@@ -11,7 +11,7 @@ prefiltered mips -- for the caller to write into its document, a game's cache,
 or wherever it keeps them.
 
 :class:`ZoneBakePlan` is the scheduling, with no GL: which zone the camera is
-in, and when it moves on.
+in, and when it moves on. ::
 
     class Baker(Context):
         windowSystemName = 'offscreen'        # a pbuffer: EGL, or WGL on Windows

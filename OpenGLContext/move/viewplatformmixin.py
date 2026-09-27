@@ -309,14 +309,12 @@ class ViewPlatformMixin(PhysicsWalkMixin, _Host):
         Where the definition's navigation declares the ``examine`` mode -- the
         default does -- this binds the classic camera navigation as the
         free-fly movement manager:
-            * unmodified arrow keys for x,z (in camera coordinate
-                space) movement
-            * Alt+arrow keys for x,y (in camera coordinate space)
-                movement
-            * Ctrl+up/down arrow keys for rotating the head backward/
-                forward
-            * Mouse-button-2 (right) for entering "examine" mode
-            * '-' for straightening the view platform
+
+        * unmodified arrow keys for x,z (in camera coordinate space) movement
+        * Alt+arrow keys for x,y (in camera coordinate space) movement
+        * Ctrl+up/down arrow keys for rotating the head backward/forward
+        * Mouse-button-2 (right) for entering "examine" mode
+        * ``-`` for straightening the view platform
 
         Where it lets the user switch modes by key, :attr:`movementCycleKey`
         steps through them.  A NULL navigation binds none of it.  The view
