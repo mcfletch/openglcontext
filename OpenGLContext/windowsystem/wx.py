@@ -27,9 +27,9 @@ try:
     import wx
     from wx import glcanvas
 except ImportError:
-    raise ImportError(
+    raise ModuleNotFoundError(
         "The wxPython package is required for the wx window system. "
-        "Install with: pip install wxPython") from None
+        "Install with: pip install wxPython", name='wx') from None
 
 from OpenGLContext import renderoptions, swapcontrol
 from OpenGLContext.events import keyboardevents
