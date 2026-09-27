@@ -42,7 +42,7 @@ from typing import Optional
 from OpenGL.GL import (
     GL_CLAMP_TO_EDGE, GL_COLOR_ATTACHMENT0, GL_COLOR_BUFFER_BIT,
     GL_DEPTH_ATTACHMENT, GL_DEPTH_BUFFER_BIT, GL_DEPTH_COMPONENT24,
-    GL_FRAMEBUFFER, GL_FRAMEBUFFER_BINDING, GL_FRAMEBUFFER_COMPLETE,
+    GL_COLOR_CLEAR_VALUE, GL_FRAMEBUFFER, GL_FRAMEBUFFER_BINDING, GL_FRAMEBUFFER_COMPLETE,
     GL_LINEAR, GL_LINEAR_MIPMAP_LINEAR, GL_RENDERBUFFER, GL_RGBA16F,
     GL_TEXTURE_CUBE_MAP, GL_TEXTURE_CUBE_MAP_POSITIVE_X,
     GL_TEXTURE_MAG_FILTER, GL_TEXTURE_MIN_FILTER, GL_TEXTURE_WRAP_R,
@@ -51,7 +51,7 @@ from OpenGL.GL import (
     glCheckFramebufferStatus, glClear, glClearColor, glDeleteFramebuffers,
     glDeleteRenderbuffers, glDeleteTextures, glFramebufferRenderbuffer,
     glFramebufferTexture2D, glGenFramebuffers, glGenRenderbuffers,
-    glGenTextures, glGenerateMipmap, glGetIntegerv, glRenderbufferStorage,
+    glGenTextures, glGenerateMipmap, glGetFloatv, glGetIntegerv, glRenderbufferStorage,
     glTexParameteri, glTexStorage2D, glViewport,
 )
 
@@ -264,6 +264,7 @@ class CaptureTarget:
         self._depth: Optional[int] = None
         self._previous = 0
         self._viewport: tuple[int, int, int, int] = (0, 0, 0, 0)
+        self._clear: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 0.0)
 
     def _ensure(self) -> None:
         if self.cube is not None:
@@ -286,10 +287,13 @@ class CaptureTarget:
         self._fbo = int(glGenFramebuffers(1))
 
     def begin(self) -> None:
-        """Draw into the capture from here on; :meth:`end` restores the caller's target."""
+        """Draw into the capture from here on; :meth:`end` restores the caller's
+        target, viewport and clear colour."""
         self._previous = int(glGetIntegerv(GL_FRAMEBUFFER_BINDING))
         x, y, width, height = (int(v) for v in glGetIntegerv(GL_VIEWPORT))
         self._viewport = (x, y, width, height)
+        red, green, blue, alpha = (float(v) for v in glGetFloatv(GL_COLOR_CLEAR_VALUE))
+        self._clear = (red, green, blue, alpha)
         self._ensure()
         assert self._fbo is not None and self._depth is not None
         glBindFramebuffer(GL_FRAMEBUFFER, self._fbo)
@@ -312,6 +316,7 @@ class CaptureTarget:
         """Give the caller's target back; with ``whole``, build the cube's mips."""
         glBindFramebuffer(GL_FRAMEBUFFER, self._previous)
         glViewport(*self._viewport)
+        glClearColor(*self._clear)
         if whole and self.cube is not None:
             glBindTexture(GL_TEXTURE_CUBE_MAP, self.cube)
             glGenerateMipmap(GL_TEXTURE_CUBE_MAP)

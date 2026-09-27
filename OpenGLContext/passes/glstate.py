@@ -21,8 +21,9 @@ path.
 from, set outright at its start, so that nothing a previous frame left behind
 survives into this one.
 
-The OGC151 rule of ``openglcontext-checks`` holds the engine's draw code to
-these managers or a ``try/finally`` (see ``docs/checks.rst``).
+The OGC151 rule of ``openglcontext-checks`` reports a raw state change in
+draw code that no ``try/finally`` or manager restores, and names these as the
+fix (see ``docs/checks.rst``).
 """
 
 from __future__ import annotations
