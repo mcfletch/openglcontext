@@ -1304,14 +1304,24 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         pointers already in it.
 
         Every window system calls this as it destroys a window, before the
-        context goes; the caches need nothing else from it.
+        context goes, with the handle of the context now current.  Where that is
+        not this context's own (``None``, or another window's, because this one
+        could not be made current again), the caches are told this context's
+        key instead, and forget its names without deleting any in the context
+        that is current.  A window system that never named its handle
+        (:meth:`bindContextResources`) is taken to have its context current.
         """
-        contextresources.context_lost()
-        if handle is None:
-            return
         from OpenGL import _dispatch
 
-        _dispatch.forget_context(handle)
+        own = getattr(self, '_ownContext', None)
+        if own is None or (handle is not None
+                           and (handle == own or sameContext(handle, own))):
+            contextresources.context_lost()
+            if handle is not None:
+                _dispatch.forget_context(handle)
+            return
+        contextresources.context_lost(contextresources.key_for(own))
+        _dispatch.forget_context(own)
 
     @classmethod
     def ContextMainLoop(cls, *args: Any, **named: Any) -> Any:

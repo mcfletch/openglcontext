@@ -46,6 +46,8 @@ __all__ = [
     'context_lost',
     'context_key',
     'current_handle',
+    'deletable',
+    'key_for',
     'ContextNames',
 ]
 
@@ -54,6 +56,10 @@ _callbacks: list[Callable[[], None]] = []
 
 #: What :func:`context_key` hands :class:`ContextKey`, and nothing else does.
 _ASKED = object()
+
+#: On each thread, the context :func:`context_lost` is announcing by key while
+#: it runs its callbacks, or None.
+_announcing = threading.local()
 
 
 class ContextKey:
@@ -101,8 +107,18 @@ def context_key() -> Optional[ContextKey]:
     """The key of the GL context that is current, or ``None`` where none is.
 
     What every cache here keys on, and what a callback compares against to know
-    whether the context going away is the one it holds objects for.
+    whether the context going away is the one it holds objects for.  While
+    :func:`context_lost` announces a context that is not current, the key of
+    that context, so its callbacks find the entries to forget.
     """
+    gone: Optional[ContextKey] = getattr(_announcing, 'gone', None)
+    if gone is not None:
+        return gone
+    return _current_key()
+
+
+def _current_key() -> Optional[ContextKey]:
+    """The key of the context current on this thread, or ``None``."""
     try:
         from OpenGL import contextdata
 
@@ -110,6 +126,25 @@ def context_key() -> Optional[ContextKey]:
     except Exception:
         return None
     return ContextKey(handle, _ASKED)
+
+
+def key_for(handle: Hashable) -> ContextKey:
+    """The key of the context whose platform handle is ``handle``, current or not.
+
+    What a window system records while its context is current, for announcing
+    its loss once it cannot be made current again.
+    """
+    return ContextKey(handle, _ASKED)
+
+
+def deletable() -> bool:
+    """Whether a cache may delete the GL names of the context being lost.
+
+    False while :func:`context_lost` announces a context that is not current:
+    a name deleted then is deleted in whichever context is current instead, so
+    the cache forgets the entry and leaves the name to the dying context.
+    """
+    return getattr(_announcing, 'gone', None) is None
 
 
 def on_context_lost(callback: Callable[[], None]) -> Callable[[], None]:
@@ -144,22 +179,34 @@ def forget_context_lost(callback: Callable[[], None]) -> bool:
     return True
 
 
-def context_lost() -> None:
-    """Tell every registered cache that the current GL context is going away.
+def context_lost(gone: Optional[ContextKey] = None) -> None:
+    """Tell every registered cache that a GL context is going away.
 
-    Called by a backend while the context is still current and its window still
-    whole.  One cache raising must not stop the rest from being told, since
-    what is left holding a dead context's names is what the next window will
-    draw with, so a failure is logged and the round continues.
+    With no argument it is the current context, and the caches delete its
+    names: a backend calls it that way while the context is still current and
+    its window still whole.  ``gone`` names a context that is not current (its
+    window system could not make it current again): while the callbacks run,
+    :func:`context_key` answers ``gone`` and :func:`deletable` False, so each
+    cache forgets that context's entries without deleting a name in the
+    context that is current.
+
+    One cache raising must not stop the rest from being told, since what is
+    left holding a dead context's names is what the next window will draw with,
+    so a failure is logged and the round continues.
     """
-    for callback in list(_callbacks):
-        try:
-            callback()
-        except Exception as err:
-            log.warning(
-                "Releasing GL resources for a closing context failed in %r: %s",
-                getattr(callback, '__qualname__', callback), err,
-            )
+    previous = getattr(_announcing, 'gone', None)
+    _announcing.gone = gone
+    try:
+        for callback in list(_callbacks):
+            try:
+                callback()
+            except Exception as err:
+                log.warning(
+                    "Releasing GL resources for a closing context failed in %r: %s",
+                    getattr(callback, '__qualname__', callback), err,
+                )
+    finally:
+        _announcing.gone = previous
 
 
 def _itself(entry: Any) -> Iterable[int]:
@@ -253,12 +300,18 @@ class ContextNames:
         held.by_context.clear()
 
     def _context_lost(self) -> None:
-        """Delete and forget every owner's names in the context going away."""
+        """Forget every owner's names in the context going away, deleting them
+        where that context is current (:func:`deletable`)."""
         context = context_key()
-        self.collect(context)
+        delete = deletable()
+        if delete:
+            self.collect(context)
+        else:
+            with self._lock:
+                self._orphans.pop(context, None)
         for held in list(self._holders):
             entries = held.by_context.pop(context, None)
-            if entries:
+            if entries and delete:
                 self._delete_all(
                     [name for entry in entries.values() for name in self._names(entry)])
 

@@ -132,8 +132,9 @@ def _drop_context_resources() -> None:
     """
     key = contextresources.context_key()
     _shaders.pop(key, None)
+    delete = contextresources.deletable()
     for compiled in list(_compiled_nodes):
-        compiled._drop_render_data(key)
+        compiled._drop_render_data(key, delete=delete)
 
 
 def _free_render_data(render_data: Any) -> None:
@@ -272,10 +273,12 @@ class _HDRBackground(object):
     #: Compiled skybox objects, one entry per GL context this node has drawn in.
     _render_data: dict[Optional[contextresources.ContextKey], tuple] = {}
 
-    def _drop_render_data(self, key: Optional[contextresources.ContextKey]) -> None:
-        """Free this node's skybox objects for one context (that context current)."""
+    def _drop_render_data(self, key: Optional[contextresources.ContextKey],
+                          delete: bool = True) -> None:
+        """Forget this node's skybox objects for one context, freeing them with
+        ``delete`` (that context current)."""
         compiled = self._render_data.pop(key, None)
-        if compiled is not None:
+        if compiled is not None and delete:
             _free_render_data(compiled)
 
     def compile(self, mode: Any = None) -> Optional[tuple[Any, ...]]:

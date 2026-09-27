@@ -174,6 +174,7 @@ def drop_pass() -> None:
     dying = _passes.pop( key, None )
     if dying is None:
         return
-    _dispose( dying, 'context loss' )
+    if contextresources.deletable():
+        _dispose( dying, 'context loss' )
     if FLAT is dying:
         FLAT = None

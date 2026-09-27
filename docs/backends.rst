@@ -486,12 +486,17 @@ makes the second as it destroys its window:
 *delete* their GL objects instead of only dropping them, and retires
 PyOpenGL's dispatch table for that context. It must be called **while the
 context is still current and its window still exists**, because only then
-can GL objects be deleted. Every window system makes this call.
+can GL objects be deleted. Every window system makes this call. A window
+system that could not make its context current again passes ``None``; the
+caches are then told the context by its key and forget its objects without
+deleting any, since a name deleted then would be deleted in whichever context
+is current.
 
 Application code that caches its own GL objects can register for the same
-notification. The callback takes no arguments and runs with the dying context
-current, so it can delete GL objects as well as drop them.
-``contextresources.context_key()`` identifies the context:
+notification. The callback takes no arguments.
+``contextresources.context_key()`` identifies the context going away, and
+``contextresources.deletable()`` says whether it is current, so its GL objects
+can be deleted as well as dropped:
 
 .. code-block:: python
 
@@ -499,7 +504,9 @@ current, so it can delete GL objects as well as drop them.
 
    @contextresources.on_context_lost
    def drop_my_cached_objects():
-       ...
+       held = _mine.pop(contextresources.context_key(), None)
+       if held is not None and contextresources.deletable():
+           held.delete()
 
 Registering the same callable twice registers it once, and an exception in
 one callback does not stop the others from running. The registry holds a

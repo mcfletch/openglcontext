@@ -331,3 +331,99 @@ def test_each_window_system_binds_pyopengl_to_the_platform_handle(name, toolkit)
     chosen = windowsystem.load(name)
     unopened = chosen.__new__(chosen)
     assert unopened.glHandle() == contextdata.getContext()
+
+
+class TestAContextThatIsNotCurrent:
+    """A window system that cannot make its context current as it closes.
+
+    Its caches are told by the context's key: they forget its names, and delete
+    none, since a GL name deleted now would be deleted in whatever context is
+    current instead.
+    """
+
+    GONE = 'the-closed-windows-handle'
+
+    @pytest.fixture
+    def gone(self):
+        return contextresources.key_for(self.GONE)
+
+    def test_the_caches_forget_it_by_its_key(self, gone):
+        shadertext._renderers[(gone, 32)] = object()
+        Teapot._buffers[(gone, 4)] = object()
+        shaderpass._shader_programs[gone] = object()
+        contextresources.context_lost(gone)
+        assert (gone, 32) not in shadertext._renderers
+        assert (gone, 4) not in Teapot._buffers
+        assert gone not in shaderpass._shader_programs
+
+    def test_its_render_pass_is_forgotten_not_disposed(self, gone):
+        disposed = []
+
+        class Pass:
+            def disposeResources(self):
+                disposed.append(self)
+
+        renderpass._passes[gone] = Pass()
+        contextresources.context_lost(gone)
+        assert gone not in renderpass._passes
+        assert disposed == []
+
+    def test_its_names_are_forgotten_not_deleted(self, gone, monkeypatch):
+        deleted = []
+        current = {'key': gone}
+        monkeypatch.setattr(contextresources, '_current_key', lambda: current['key'])
+        kept = contextresources.ContextNames('_names', deleted.append)
+        owner = _Owner()
+        kept.entries(owner)['a'] = 7
+        current['key'] = 'another-window'
+        contextresources.context_lost(gone)
+        assert deleted == []
+        current['key'] = gone
+        assert kept.entries(owner) == {}
+
+    def test_a_callback_is_told_which_context_and_that_it_may_not_delete(self, gone):
+        told = []
+
+        def listen():
+            told.append((contextresources.context_key(), contextresources.deletable()))
+
+        contextresources.on_context_lost(listen)
+        try:
+            contextresources.context_lost(gone)
+        finally:
+            contextresources.forget_context_lost(listen)
+        assert told == [(gone, False)]
+        assert contextresources.deletable()
+        assert contextresources.context_key() != gone
+
+
+class TestAContextSayingItIsGoing:
+    """``Context.releaseContextResources`` names its own context."""
+
+    def _context(self, own):
+        from OpenGLContext.context import ContextCore
+        made = ContextCore.__new__(ContextCore)
+        made._ownContext = own
+        return made
+
+    def test_with_its_own_context_current_the_current_one_goes(self, monkeypatch):
+        told = []
+        monkeypatch.setattr(contextresources, 'context_lost',
+                            lambda gone=None: told.append(gone))
+        self._context('mine').releaseContextResources('mine')
+        assert told == [None]
+
+    @pytest.mark.parametrize('handle', [None, 'another-window'])
+    def test_without_it_its_own_goes_by_key(self, monkeypatch, handle):
+        told = []
+        monkeypatch.setattr(contextresources, 'context_lost',
+                            lambda gone=None: told.append(gone))
+        self._context('mine').releaseContextResources(handle)
+        assert told == [contextresources.key_for('mine')]
+
+    def test_one_that_never_named_its_handle_tells_the_current_one(self, monkeypatch):
+        told = []
+        monkeypatch.setattr(contextresources, 'context_lost',
+                            lambda gone=None: told.append(gone))
+        self._context(None).releaseContextResources(None)
+        assert told == [None]
