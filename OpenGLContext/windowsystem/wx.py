@@ -373,10 +373,13 @@ class WxWindowSystem(WindowSystem):
             raise RuntimeError(
                 "A wx.App must exist before the wx main loop can run; use "
                 "ContextMainLoop, or create the application yourself")
+        # Released here as well as on the canvas's destruction: a host that
+        # stops the loop without destroying the canvas sends no such event.
         try:
             return application.MainLoop()
         finally:
             self.context.closeJournals('mainloop-ended')
+            self.release()
 
     @classmethod
     def run(cls, contextClass: type[Context], *args: Any, **named: Any) -> Any:
@@ -409,6 +412,7 @@ class WxWindowSystem(WindowSystem):
         finally:
             for context in made:
                 context.closeJournals('mainloop-ended')
+                context.windowsystem.release()
 
     # -- the canvas's own events ----------------------------------------------
 

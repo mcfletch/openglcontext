@@ -238,7 +238,7 @@ class WGLWindowSystem(WindowSystem):
                 context.OnDraw(force=1)
                 drawn += 1
         finally:
-            context.stopTelemetry('mainloop-ended')
+            context.closeJournals('mainloop-ended')
             self.release()
 
     def release(self) -> None:

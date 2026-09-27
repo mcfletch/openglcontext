@@ -116,6 +116,24 @@ class TestEveryWindowSystemAnnouncesTheEndOfAContext:
             "reaches there" % (name,)
         )
 
+    @pytest.mark.parametrize('name,path,className', WINDOW_SYSTEMS, ids=IDS)
+    def test_a_loop_that_ends_releases_and_closes_the_journals(self, name, path,
+                                                               className):
+        """However the loop ends -- a toolkit's own exit, a host program
+        stopping it, an exception from a callback -- the context and every
+        journal it was writing are finished with.  A ``run`` is held to it
+        where it drives the toolkit's loop itself rather than the context's.
+        """
+        for loop in ('mainLoop', 'run'):
+            calls = _calls_within(path, className, loop)
+            if loop == 'run' and not any(call.endswith('.MainLoop')
+                                         for call in calls):
+                continue
+            assert calls & {'self.release', 'context.windowsystem.release'}, (
+                '%s.%s can end without releasing its context' % (name, loop))
+            assert any(call.endswith('.closeJournals') for call in calls), (
+                '%s.%s can end with its journals open' % (name, loop))
+
     def test_the_context_asks_the_window_system_before_it_exits(self):
         """The window system's ``quit`` is only the release if the context
         calls it ahead of ``os._exit``."""

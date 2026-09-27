@@ -434,7 +434,11 @@ class GLUTWindowSystem(WindowSystem):
         if not available(glutMainLoopEvent):
             log.info("this GLUT has no glutMainLoopEvent; "
                      "the toolkit will own the loop")
-            return glutMainLoop()
+            try:
+                return glutMainLoop()
+            finally:
+                self.context.closeJournals('mainloop-ended')
+                self.release()
         # Otherwise freeglut calls exit() from inside the window's close
         # button, and nothing after the loop ever runs.
         if available(glutSetOption):
