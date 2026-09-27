@@ -148,7 +148,7 @@ def quitting():
     application = built(MODEL)
     loaded(application)
     application.onQuit()
-    say('RELEASED', application.context.frame is None)
+    say('RELEASED', application.context.window is None)
     say('WATCHING', application.watching is None)
     say('OUTLINE', application.outline.rows == [])
     say('WINDOW', windowGone(application))
