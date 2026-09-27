@@ -85,3 +85,50 @@ def test_a_frame_the_failure_stops_fails_the_test():
 def test_the_plugin_offers_it_as_a_fixture(check_failing_layer):
     passing = _Pass()
     assert check_failing_layer(passing.frame, passing, 'glow', frames=3).attempts == 1
+
+
+class _Base:
+    def layer(self):
+        return 'drawn'
+
+
+class _Inheriting(_Base):
+    pass
+
+
+class _Redrawn:
+    def triggerRedraw(self, *_args):
+        return None
+
+
+def _nothing():
+    return None
+
+
+def test_an_inherited_layer_is_left_inherited():
+    """The attribute is put back where it was found: on the base, so a later
+    patch of the base still reaches the class that inherits it."""
+    drive_failing_layer(_nothing, _Inheriting, 'layer', frames=1)
+    assert 'layer' not in vars(_Inheriting)
+    assert _Inheriting().layer() == 'drawn'
+
+
+def test_a_layer_of_the_class_itself_is_put_back():
+    class Own:
+        def layer(self):
+            return 'own'
+
+    original = vars(Own)['layer']
+    drive_failing_layer(_nothing, Own, 'layer', frames=1)
+    assert vars(Own)['layer'] is original
+
+
+def test_a_redraw_the_context_already_had_replaced_is_put_back():
+    context = _Redrawn()
+
+    def replaced(*_args):
+        return 'replaced'
+
+    context.triggerRedraw = replaced
+    drive_failing_layer(_nothing, _Inheriting, 'layer', frames=1, context=context)
+    assert context.triggerRedraw is replaced

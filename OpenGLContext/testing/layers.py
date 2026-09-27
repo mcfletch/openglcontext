@@ -111,13 +111,21 @@ def drive_failing_layer(frame: Callable[[], object], owner: Any, name: str, *,
             if failed[0]:
                 asked[0] += 1
             return trigger(*args, **named)
+        # An override the context already had is put back; otherwise the
+        # counting one is removed, uncovering the class's own.
+        own_trigger = vars(context).get('triggerRedraw')
         context.triggerRedraw = counting
 
         def restore_trigger() -> None:
-            del context.triggerRedraw
+            if own_trigger is not None:
+                context.triggerRedraw = own_trigger
+            else:
+                del context.triggerRedraw
 
-    held = owner.__dict__.get(name) if hasattr(owner, '__dict__') else None
-    original = getattr(owner, name)
+    # Put back where it was found: an attribute ``owner`` holds itself is
+    # restored, and one it inherits (or an instance's class provides) is
+    # uncovered again by removing the replacement.
+    held = vars(owner).get(name) if hasattr(owner, '__dict__') else None
     setattr(owner, name, failing)
     drawn = 0
     try:
@@ -126,8 +134,8 @@ def drive_failing_layer(frame: Callable[[], object], owner: Any, name: str, *,
                 frame()
                 drawn += 1
     finally:
-        if held is not None or isinstance(owner, type):
-            setattr(owner, name, held if held is not None else original)
+        if held is not None:
+            setattr(owner, name, held)
         else:
             delattr(owner, name)
         if restore_trigger is not None:
