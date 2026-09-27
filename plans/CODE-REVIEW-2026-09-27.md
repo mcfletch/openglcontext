@@ -22,7 +22,7 @@ is intended before it is fixed.
 | 2.1 | P1 | `Grid.spacing` from scene content is unbounded, so a tiny value builds billions of lines | Fixed 8fe5b051 | Untrusted-input denial of service; clamp the step or the count |
 | 2.2 | P2 | Declared scene views never fit their orbit limits, and two quad-view builders differ | Fixed 8e489308 | `_viewFor` skips `fit_limits`; heading 0 versus 330 degrees |
 | 2.3 | P3 | `MultiviewPass.disposeResources` logs every delete failure at debug | Open | |
-| 3.1 | P2 | `TilesTerrain.shutdown()` disposes no ground, vegetation or cover GL objects | Open | Leaks per world swap in a live context |
+| 3.1 | P2 | `TilesTerrain.shutdown()` disposes no ground, vegetation or cover GL objects | Fixed ad2114b4, ec2de9b (glisteel) | Leaks per world swap in a live context |
 | 3.2 | P2 | Zone capture sets the clear colour and does not restore it | Open | `ReflectionAtlas` already saves and restores it |
 | 3.3 | P2 | `passes/glstate.py` is used by nothing, and OGC151, which its docstring cites, is not selected | Open | Maintainability: adopt it in the draw code or remove the claim |
 | 3.4 | P3 | `bake_zone_lights` lists the zones once, before a streamed world has loaded them | Open | Zones outside the first view are silently never baked |
@@ -522,3 +522,4 @@ the chart.
   automatic step. `docs/multiview.rst` states the bound.
 - 2026-09-27: 1.3 and 1.4 fixed: wx's mainLoop and run release in their finally; EGL and WGL call closeJournals. From 1.7, GLUT's non-freeglut loop closes the journals and releases. A static test holds every backend's mainLoop (and a run that drives the toolkit's loop) to both. 1.5 fixed: `WarpedPointer` in `windowsystem/base.py` is the one pointer warp; GLUT, Tk and wx supply the middle and the warp call. Documented in `docs/backends.rst`. Rest of 1.7 open: wx import hint, ContextMainLoop positional argument, plugin registry names.
 - 2026-09-27: 2.2 fixed: `fit_view` fits an orbit camera's limits to the box on every framing, covering QuadView, the mixin and any other caller. The second half of the finding is not a defect: `startViews`' perspective view draws through the window's own camera by design, and the mixin's orbit cameras are for declared `scene` or gestured views, not a copy of QuadView's set. The lazy OrbitView import is hoisted.
+- 2026-09-27: 3.1 fixed: `GLLayer` declares `dispose()` (ParticleEmitter's `delete` renamed to it); `instancedgl.dispose_subtree` walks children and geometry; `TilesTerrain.dispose()` gives back ground, trees and cover. glisteel's `RaceWorld.shutdown` now stops the cover's thread too (it stopped only the tile runtime) and closing a world disposes it. Documented in `docs/loading.rst`.
