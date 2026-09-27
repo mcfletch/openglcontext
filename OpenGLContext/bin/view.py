@@ -88,6 +88,7 @@ import os
 from typing import Any, Optional
 
 from OpenGLContext import renderoptions
+from OpenGLContext.contentpacks.catalog import BadCatalog
 from OpenGLContext.viewer.commentary import say
 from OpenGLContext.viewer.environment import apply_render_env, viewer_defaults
 
@@ -368,7 +369,7 @@ def main(argv: Optional[list[str]] = None, prog: str = 'oglc-view') -> Any:
     if options.pack:
         try:
             options.source = open_pack(options.pack)
-        except (IOError, UnknownMember) as error:
+        except (IOError, UnknownMember, BadCatalog) as error:
             parser.error(str(error))
     source = options.source or renderoptions.env_text('GLTF') or None
     if options.list_cameras:

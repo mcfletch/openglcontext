@@ -360,3 +360,18 @@ class TestEyeLookAtCamera:
         # camera sits at the eye, and a look direction was turned into a rotation
         assert tuple(round(v, 3) for v in inst.platform.position) == (12.0, 0.0, 2.0)
         assert inst.platform.quaternion is not None
+
+
+def test_a_registry_that_will_not_read_is_a_usage_error(monkeypatch, capsys):
+    """A missing or malformed registry is a message, as an unknown key is."""
+    from OpenGLContext.bin import view
+    from OpenGLContext.contentpacks import catalog
+
+    def unreadable(_key):
+        raise catalog.BadCatalog('packs.json is not a registry')
+
+    monkeypatch.setattr(view, 'open_pack', unreadable)
+    with pytest.raises(SystemExit) as stopped:
+        view.main(['--pack', 'demo/world'])
+    assert stopped.value.code == 2
+    assert 'packs.json is not a registry' in capsys.readouterr().err
