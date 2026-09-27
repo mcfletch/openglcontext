@@ -104,33 +104,39 @@ class ReflectionAtlas:
         if (width, height) == self.size and self.framebuffer:
             return False
         self.release()
-        self.texture = int(gl.glGenTextures(1))
-        with self._on_unit(self.texture):
-            gl.glTexStorage2D(gl.GL_TEXTURE_2D, LEVELS, gl.GL_RGBA16F, width, height)
-            for name, value in ((gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR_MIPMAP_LINEAR),
-                                (gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR),
-                                (gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE),
-                                (gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE),
-                                (gl.GL_TEXTURE_MAX_LEVEL, LEVELS - 1)):
-                gl.glTexParameteri(gl.GL_TEXTURE_2D, name, value)
-        self.depth = int(gl.glGenRenderbuffers(1))
-        gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self.depth)
-        gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24,
-                                 width, height)
-        gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, 0)
-        previous = _bindings()
-        self.framebuffer = int(gl.glGenFramebuffers(1))
-        gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.framebuffer)
-        gl.glFramebufferTexture2D(gl.GL_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0,
-                                  gl.GL_TEXTURE_2D, self.texture, 0)
-        gl.glFramebufferRenderbuffer(gl.GL_FRAMEBUFFER, gl.GL_DEPTH_ATTACHMENT,
-                                     gl.GL_RENDERBUFFER, self.depth)
-        gl.glDrawBuffers(1, [gl.GL_COLOR_ATTACHMENT0])
-        status = gl.glCheckFramebufferStatus(gl.GL_FRAMEBUFFER)
-        _restore(previous)
-        if status != gl.GL_FRAMEBUFFER_COMPLETE:
+        # A driver refusing any step leaves nothing allocated behind it.
+        try:
+            self.texture = int(gl.glGenTextures(1))
+            with self._on_unit(self.texture):
+                gl.glTexStorage2D(gl.GL_TEXTURE_2D, LEVELS, gl.GL_RGBA16F, width, height)
+                for name, value in ((gl.GL_TEXTURE_MIN_FILTER, gl.GL_LINEAR_MIPMAP_LINEAR),
+                                    (gl.GL_TEXTURE_MAG_FILTER, gl.GL_LINEAR),
+                                    (gl.GL_TEXTURE_WRAP_S, gl.GL_CLAMP_TO_EDGE),
+                                    (gl.GL_TEXTURE_WRAP_T, gl.GL_CLAMP_TO_EDGE),
+                                    (gl.GL_TEXTURE_MAX_LEVEL, LEVELS - 1)):
+                    gl.glTexParameteri(gl.GL_TEXTURE_2D, name, value)
+            self.depth = int(gl.glGenRenderbuffers(1))
+            gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, self.depth)
+            gl.glRenderbufferStorage(gl.GL_RENDERBUFFER, gl.GL_DEPTH_COMPONENT24,
+                                     width, height)
+            gl.glBindRenderbuffer(gl.GL_RENDERBUFFER, 0)
+            previous = _bindings()
+            try:
+                self.framebuffer = int(gl.glGenFramebuffers(1))
+                gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, self.framebuffer)
+                gl.glFramebufferTexture2D(gl.GL_FRAMEBUFFER, gl.GL_COLOR_ATTACHMENT0,
+                                          gl.GL_TEXTURE_2D, self.texture, 0)
+                gl.glFramebufferRenderbuffer(gl.GL_FRAMEBUFFER, gl.GL_DEPTH_ATTACHMENT,
+                                             gl.GL_RENDERBUFFER, self.depth)
+                gl.glDrawBuffers(1, [gl.GL_COLOR_ATTACHMENT0])
+                status = gl.glCheckFramebufferStatus(gl.GL_FRAMEBUFFER)
+            finally:
+                _restore(previous)
+            if status != gl.GL_FRAMEBUFFER_COMPLETE:
+                raise RuntimeError('the reflection atlas is incomplete (0x%x)' % int(status))
+        except BaseException:
             self.release()
-            raise RuntimeError('the reflection atlas is incomplete (0x%x)' % int(status))
+            raise
         self.size = (width, height)
         return True
 

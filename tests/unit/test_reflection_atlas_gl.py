@@ -199,3 +199,27 @@ def test_the_atlas_leaves_the_state_it_found():
         gl.glBindFramebuffer(gl.GL_FRAMEBUFFER, 0)
         gl.glDeleteFramebuffers(2, [read, draw])
         gl.glDeleteTextures([texture])
+
+
+@pytest.mark.usefixtures('gl_context')
+def test_an_atlas_the_driver_refuses_gives_back_what_it_made(monkeypatch):
+    """A refusal part-way through allocating leaves no GL name behind, and the
+    caller's framebuffer bound."""
+    made = []
+    generate = gl.glGenTextures
+
+    def remembered(count):
+        name = generate(count)
+        made.append(int(name))
+        return name
+
+    def refused(*_args):
+        raise gl.GLError(gl.GL_OUT_OF_MEMORY, 'glRenderbufferStorage')
+
+    monkeypatch.setattr(gl, 'glGenTextures', remembered)
+    monkeypatch.setattr(gl, 'glRenderbufferStorage', refused)
+    atlas = ReflectionAtlas()
+    with pytest.raises(gl.GLError):
+        atlas.ensure_size(64, 64)
+    assert (atlas.texture, atlas.depth, atlas.framebuffer) == (0, 0, 0)
+    assert made and not gl.glIsTexture(made[0])
