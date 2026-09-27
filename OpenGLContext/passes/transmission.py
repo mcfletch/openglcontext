@@ -2,7 +2,8 @@
 
 Transmission (glass) needs the opaque scene as a texture the transmissive shader
 can sample at the refracted screen position. After the opaque geometry is drawn,
-:class:`TransmissionBuffer` copies the colour buffer into a mipmapped texture
+:class:`TransmissionBuffer` copies the view's rectangle of the colour buffer --
+one view's tile where a window shows several -- into a mipmapped texture
 (the mip chain gives roughness-blurred / frosted transmission), which the PBR
 fragment shader reads on unit :data:`TransmissionBuffer.UNIT`.
 
@@ -13,6 +14,7 @@ approximation instead -- see :func:`resolve_mode`.
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable
 from typing import Optional
 
 from OpenGL.GL import (
@@ -89,8 +91,12 @@ class TransmissionBuffer(object):
         glBindTexture(GL_TEXTURE_2D, 0)
         return True
 
-    def capture(self) -> None:
+    def capture(self, x: int = 0, y: int = 0) -> None:
         """Copy the read framebuffer's *colour* attachment into the texture + mips.
+
+        The copy is the texture's size, with its lower-left corner at ``(x, y)``
+        in the framebuffer: the rectangle of the view being drawn, since the
+        shader addresses the backdrop by where a point falls in that view.
 
         Explicitly reads COLOR_ATTACHMENT0: under MRT the current read buffer may
         be the object-id attachment, and copying that would capture pick ids as the
@@ -114,7 +120,7 @@ class TransmissionBuffer(object):
         if self.tex is None:
             return                      # nothing sized yet, so nothing to copy into
         glBindTexture(GL_TEXTURE_2D, self.tex)
-        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, self.w, self.h)
+        glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, int(x), int(y), self.w, self.h)
         glGenerateMipmap(GL_TEXTURE_2D)
         glBindTexture(GL_TEXTURE_2D, 0)
         glReadBuffer(prev_buffer)
@@ -137,3 +143,40 @@ class TransmissionBuffer(object):
             except Exception:
                 pass
             self.tex = None
+
+
+class TransmissionBackdrops(object):
+    """A pass's backdrops, one for each size of view it draws glass in.
+
+    A backdrop is exactly the size of the view it was captured from, and the
+    views of one window can differ in size, so each size keeps its own texture
+    rather than one being reallocated for every view of every frame. Views of
+    one size share a backdrop, each capturing into it before its own glass is
+    drawn.
+    """
+
+    def __init__(self) -> None:
+        self.buffers: dict[tuple[int, int], TransmissionBuffer] = {}
+
+    def for_view(self, width: int, height: int,
+                 sizes: Iterable[tuple[int, int]] = ()) -> TransmissionBuffer:
+        """The backdrop for a view ``width`` by ``height``, allocated if it is new.
+
+        ``sizes`` are the sizes of every view in the frame; a backdrop of any
+        other size belongs to a layout that is gone, and is released.
+        """
+        key = (max(1, int(width)), max(1, int(height)))
+        keep = {(max(1, int(w)), max(1, int(h))) for w, h in sizes} | {key}
+        for stale in [size for size in self.buffers if size not in keep]:
+            self.buffers.pop(stale).release()
+        buffer = self.buffers.get(key)
+        if buffer is None:
+            buffer = self.buffers[key] = TransmissionBuffer()
+            buffer.ensure_size(*key)
+        return buffer
+
+    def release(self) -> None:
+        """Release every backdrop."""
+        buffers, self.buffers = self.buffers, {}
+        for buffer in buffers.values():
+            buffer.release()

@@ -477,8 +477,10 @@ When the material transmits and the pass has captured a backdrop
 (``hasTransmissionBackdrop``), light coming *through* the surface replaces the
 diffuse term. The view ray is refracted through the surface by the index of
 refraction. The exit point is projected to screen space with the shared
-``projectionMatrix``, and the captured opaque scene is sampled there.
-Roughness selects a blurrier mip level for frosted glass:
+``projectionMatrix``, and the captured opaque scene is sampled there. The
+backdrop is a copy of the rectangle of the view being drawn, so the view's
+clip space covers all of it, in a window of several views as in a window of
+one. Roughness selects a blurrier mip level for frosted glass:
 
 .. code-block:: glsl
 

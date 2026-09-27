@@ -31,7 +31,7 @@ from OpenGLContext.scenegraph import fog as fognode
 if TYPE_CHECKING:
     from OpenGLContext.passes.bloom import BloomPass
     from OpenGLContext.passes.ibl import IBLController, IBLProbe
-    from OpenGLContext.passes.transmission import TransmissionBuffer
+    from OpenGLContext.passes.transmission import TransmissionBackdrops
 
 log = logging.getLogger(__name__)
 
@@ -54,6 +54,7 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
         matrix: Any
         projection: Any
         viewport: Any
+        viewFrames: Sequence[Any]
         frustum: Any
         renderPath: Any
         transparent: bool
@@ -74,7 +75,7 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
     # Transmission (KHR_materials_transmission). Filled on the first frame from the
     # GL renderer string; 'full' captures an opaque backdrop, 'blend' fakes it.
     _transmission_mode: Optional[str] = None
-    _transmission_buffer: Optional["TransmissionBuffer"] = None
+    _transmission_backdrops: Optional["TransmissionBackdrops"] = None
 
     # Image-based lighting (environment reflection for metals). Resolved once from
     # the GL renderer; the probe is built lazily on the first 'full' frame.
@@ -103,7 +104,7 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
         """Release the environment probe, bloom and the transmission backdrop."""
         let_go(self, '_ibl_probe')
         let_go(self, '_bloom_pass')
-        let_go(self, '_transmission_buffer')
+        let_go(self, '_transmission_backdrops')
         self._bloom_active = False
         super().disposeResources()
 
@@ -276,13 +277,17 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
 
         buffer = None
         if mode == 'full':
-            from OpenGLContext.passes.transmission import TransmissionBuffer
-            vp = self.context.getViewPort()
-            if self._transmission_buffer is None:
-                self._transmission_buffer = TransmissionBuffer()
-            buffer = self._transmission_buffer
-            buffer.ensure_size(int(vp[0]), int(vp[1]))
-            buffer.capture()                 # copies the just-drawn opaque scene
+            from OpenGLContext.passes.transmission import TransmissionBackdrops
+            # The view's rectangle, not the window: the shader maps the view's
+            # clip space onto the whole backdrop, and a window of several views
+            # holds the others beside it.
+            x, y, width, height = (int(value) for value in self.viewport)
+            if self._transmission_backdrops is None:
+                self._transmission_backdrops = TransmissionBackdrops()
+            buffer = self._transmission_backdrops.for_view(
+                width, height,
+                [(frame.rect[2], frame.rect[3]) for frame in self.viewFrames])
+            buffer.capture(x, y)             # copies the just-drawn opaque scene
             shader.bind_transmission_backdrop(buffer)
         else:  # blend fallback
             glEnable(GL_BLEND)
