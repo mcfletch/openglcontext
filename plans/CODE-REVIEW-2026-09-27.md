@@ -14,11 +14,11 @@ is intended before it is fixed.
 |---|---|---|---|---|
 | 1.1 | P1 | A failure in `Context.__init__` leaves the native window and GL context of six backends open | Fixed 1cb5d7f5, af7f41c (openglcontext-qt) | `open()` is outside the `try`; only EGL and WGL implement `abandon()` |
 | 1.2 | P2 | Qt `release()` leaves `window` set after the window is gone | Fixed af7f41c (openglcontext-qt) | Every other backend clears it; the README promises `None` |
-| 1.3 | P2 | wx `mainLoop()` and `run()` never call `release()` | Open | Teardown depends on `EVT_WINDOW_DESTROY` having fired |
-| 1.4 | P2 | EGL and WGL main loops close telemetry but not the stall journal | Open | One-line change to `closeJournals` |
-| 1.5 | P2 | Pointer-warp mouse-look emulation is copied into GLUT, Tk and wx | Open | Maintainability: hoist into `windowsystem/base.py` |
+| 1.3 | P2 | wx `mainLoop()` and `run()` never call `release()` | Fixed 3e18fc36 | Teardown depends on `EVT_WINDOW_DESTROY` having fired |
+| 1.4 | P2 | EGL and WGL main loops close telemetry but not the stall journal | Fixed 3e18fc36 | One-line change to `closeJournals` |
+| 1.5 | P2 | Pointer-warp mouse-look emulation is copied into GLUT, Tk and wx | Fixed 1ccda3b7 | Maintainability: hoist into `windowsystem/base.py` |
 | 1.6 | P3 | Qt `release()` tells the caches the context is lost when `makeCurrent` failed | Open | Investigate: names may be deleted in another current context |
-| 1.7 | P3 | Smaller window-system and `Context` points | Open | wx import hint, GLUT non-freeglut path, `ContextMainLoop` positional argument, registry pointing at shim modules |
+| 1.7 | P3 | Smaller window-system and `Context` points | Part fixed 3e18fc36 | wx import hint, GLUT non-freeglut path, `ContextMainLoop` positional argument, registry pointing at shim modules |
 | 2.1 | P1 | `Grid.spacing` from scene content is unbounded, so a tiny value builds billions of lines | Fixed 8fe5b051 | Untrusted-input denial of service; clamp the step or the count |
 | 2.2 | P2 | Declared scene views never fit their orbit limits, and two quad-view builders differ | Open | `_viewFor` skips `fit_limits`; heading 0 versus 330 degrees |
 | 2.3 | P3 | `MultiviewPass.disposeResources` logs every delete failure at debug | Open | |
@@ -520,3 +520,4 @@ the chart.
   most `MAXIMUM_LINES` (200) each side of the middle, keeping the lines on
   multiples of the spacing; a non-positive or non-finite spacing is the
   automatic step. `docs/multiview.rst` states the bound.
+- 2026-09-27: 1.3 and 1.4 fixed: wx's mainLoop and run release in their finally; EGL and WGL call closeJournals. From 1.7, GLUT's non-freeglut loop closes the journals and releases. A static test holds every backend's mainLoop (and a run that drives the toolkit's loop) to both. 1.5 fixed: `WarpedPointer` in `windowsystem/base.py` is the one pointer warp; GLUT, Tk and wx supply the middle and the warp call. Documented in `docs/backends.rst`. Rest of 1.7 open: wx import hint, ContextMainLoop positional argument, plugin registry names.
