@@ -25,7 +25,7 @@ is intended before it is fixed.
 | 3.1 | P2 | `TilesTerrain.shutdown()` disposes no ground, vegetation or cover GL objects | Fixed ad2114b4, ec2de9b (glisteel) | Leaks per world swap in a live context |
 | 3.2 | P2 | Zone capture sets the clear colour and does not restore it | Fixed 14c7c38e | `ReflectionAtlas` already saves and restores it |
 | 3.3 | P2 | `passes/glstate.py` is used by nothing, and OGC151, which its docstring cites, is not selected | Part fixed 14c7c38e | Maintainability: adopt it in the draw code or remove the claim |
-| 3.4 | P3 | `bake_zone_lights` lists the zones once, before a streamed world has loaded them | Open | Zones outside the first view are silently never baked |
+| 3.4 | P3 | `bake_zone_lights` lists the zones once, before a streamed world has loaded them | Fixed 63b10cda | Zones outside the first view are silently never baked |
 | 3.5 | P3 | `applyZones` duplicates `_applyZoneState` | Fixed 0c5554b7 | Maintainability |
 | 3.6 | P3 | `ReflectionAtlas.ensure_size` leaks GL names if an allocation call raises | Fixed b2edf1bc | |
 | 3.7 | P3 | `GroundCover._scatter` keys a persistent dict on `id(rung)` | Fixed 0e9938d5 | Safe today; OGC131 does not report an `id()` inside a tuple key (see 5.3) |
@@ -50,9 +50,9 @@ is intended before it is fixed.
 | 7.4 | P2 | Forest `profile_breakdown.py` reads scene attributes that no longer exist | Fixed 1be51fd (openglcontext-forest) | `PB_DISABLE=grass` and `clumps` raise `AttributeError` |
 | 7.5 | P3 | Forest smoke test errors rather than skips when the art is not installed | Needs input | `art_directory()` raises `NotInstalled` outside the `try` |
 | 7.6 | P3 | glisteel's `Stretch`/`Held` journal is generic and belongs in the engine | Open | Engine placement |
-| 7.7 | P3 | Game and editor nits | Part fixed 1be51fd (openglcontext-forest) | Blanket `tests/*` TID251 ignore, `split_art` without a lock, dead `COVER` alias, twig-bb README sentence, glisteel duplicates |
+| 7.7 | P3 | Game and editor nits | Part fixed 1be51fd (forest), 01127de, bd20dba (glisteel-editor), 63e3e45 (twig-bb) | Blanket `tests/*` TID251 ignore, `split_art` without a lock, dead `COVER` alias, twig-bb README sentence, glisteel duplicates |
 | 8.1 | P3 | A UV-seam vertex on the mesh border can never collapse | Open | Investigate: likely intended; needs a test that says so |
-| 8.2 | P3 | Decimation and small-library nits | Open | Duplicate bounds check, unguarded native call, `on_edge` invariant, simpleparse exception change, GLUT partial file |
+| 8.2 | P3 | Decimation and small-library nits | Part fixed e0dcf87 (opengl_decimate) | Duplicate bounds check, unguarded native call, `on_edge` invariant, simpleparse exception change, GLUT partial file |
 | 9 | - | Withdrawn during validation | - | Three reported findings were not defects |
 
 Not reviewed: omi_physics, omi_audio, marble-demo and marble-editor. Their
@@ -533,3 +533,4 @@ the chart.
 - 2026-09-27: 3.7, 3.8, 4.3, 4.5 and 5.6 fixed. 5.3 stays open, and the gap is wider than tuples: OGC131 follows no local name at all, so `key = id(x); table.get(key)` passes as `slot = (id(x), r); table[slot] = v` does. Every exemption the rule makes (the entry holds the object, the table is temporary, the lookup compares identity) is judged from where the `id()` call sits, so following a name means judging them at each use of it instead. That is a rework of the rule, not a one-line fix.
 - 2026-09-27: 3.5, 3.6 and 6.2 fixed. 2.3 is not a defect: logging a failed teardown delete at debug with its traceback is the disposal convention `passes.disposal.let_go` states, since nothing can act on it then. 1.7: the wx install hint is fixed (45535af1). Question for the maintainer on the rest of 1.7: `ContextMainLoop` reads a positional first argument as the definition, while `wxContext.__init__` takes `parent` first. Should the definition become keyword-only there? And should the `InteractiveContext` plugin registry name the `*context.*Context` classes rather than the compatibility modules? Both change a public entry point.
 - 2026-09-27: 1.6 confirmed and wider than Qt: Qt, Tk and wx each call `releaseContextResources(None)` when they cannot make their own context current, and `contextresources.context_lost()` then runs every cache's callback against whatever context is current, dropping (and deleting) a live context's names. Skipping the call would leave the dead context's entries under a key the driver can hand out again. The fix is a `context_lost` told which context is going, so a cache forgets that context's names without deleting them. The callbacks take no argument today, so this changes the registration API in `contextresources` and every cache registered with it.
+- 2026-09-27: 3.4 fixed: `ZoneBakePlan.extend` and a rescan after every frame. 8.2 in part: decimate's compiled entry points raise DecimateError without the accelerator. 7.7 in part: glisteel-editor's tests are no longer exempt from TID251 (none needed it), and `split_art` locks each directory from check to copy; twig-bb's README sentence is fixed; the forest's dead alias is gone.
