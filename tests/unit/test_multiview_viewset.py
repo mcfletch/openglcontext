@@ -164,6 +164,17 @@ class TestFramingABox:
         views.frame(LOW, HIGH)
         assert views.view('plan').camera.view.centre == pytest.approx((0.0, 0.0))
 
+    @pytest.mark.parametrize('size', [1e-3, 1e6])
+    def test_a_turning_view_frames_a_box_of_any_size(self, size):
+        """How near and far it may dolly follows the box, so neither a model
+        in millimetres nor a world of a thousand kilometres is clamped away."""
+        views = _set(mode='quad')
+        low, high = (-size, -size, -size), (size, size, size)
+        views.frame(low, high)
+        view = views.view('angled')
+        for corner in (low, high):
+            assert np.all(np.abs(_ndc(view, corner)) <= 1.0 + 1e-5), size
+
     def test_a_view_that_is_not_on_screen_is_framed_for_the_window(self):
         views = _set()
         views.frame(LOW, HIGH)

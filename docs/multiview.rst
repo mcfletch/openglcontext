@@ -425,7 +425,10 @@ The left button is left for the application; see :ref:`view-navigation`.
   for an application that reads the pointer another way.
 - ``OrbitView`` takes ``nearest`` and ``furthest``, the closest and furthest
   it can be dollied, and ``frame_box`` fits a whole object rather than an
-  area of ground. ``QuadView.frame`` sets all three from the box.
+  area of ground. Framing a view set (``ViewSet.frame``, which
+  ``QuadView.frame`` and ``MultiViewMixin.frameViews`` call) fits
+  ``nearest`` and ``furthest`` to the box before framing it: a hundredth and
+  a thousand times its half-diagonal.
 - ``lowest`` and ``highest`` are the pitches the orbit is limited to, in
   degrees above the horizontal. ``QuadView``'s perspective view can go below
   the model as well as above it.

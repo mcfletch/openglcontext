@@ -35,6 +35,7 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Optional
 
+from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
 from OpenGLContext.move.navigationdefinition import (
     ORTHOGRAPHIC, Arrangement, Navigation, ViewDefinition, Views, viewGestures)
 from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
@@ -97,8 +98,6 @@ def _viewFor(declared: ViewDefinition) -> View:
     modes.  A perspective view without gestures has no camera, and draws
     through the window's.
     """
-    from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
-
     style = (ViewStyle(background=FLAT_BACKGROUND, grid=True) if declared.flat()
              else ViewStyle(background=True))
     camera: Any = None

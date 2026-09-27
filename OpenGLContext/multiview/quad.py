@@ -138,7 +138,6 @@ class QuadView:
         """
         low = np.asarray(minimum[:3], 'd')
         high = np.asarray(maximum[:3], 'd')
-        self.orbit.fit_limits(float(np.linalg.norm(high - low)) / 2.0)
         self._framed = (low, high)
         self.views.frame(low, high)
 

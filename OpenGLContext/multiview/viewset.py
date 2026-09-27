@@ -228,13 +228,18 @@ def fit_view(view: View, minimum: Box, maximum: Box,
     """Fit a box into one view; False for a view with no camera to fit it in.
 
     Each camera is framed as its kind is: an orthographic view and one that
-    turns take the box, and a plan view takes the ground it stands on.
+    turns take the box, and a plan view takes the ground it stands on.  A
+    camera that dollies within limits has them fitted to the box first, so
+    the distance framing wants is inside them at any scale.
     """
     camera = getattr(view.camera, 'view', None)
     if camera is None:
         return False
     low = np.asarray(minimum[:3], 'd')
     high = np.asarray(maximum[:3], 'd')
+    fit_limits = getattr(camera, 'fit_limits', None)
+    if fit_limits is not None:
+        fit_limits(float(np.linalg.norm(high - low)) / 2.0)
     box = getattr(camera, 'frame_box', None)
     if box is not None:
         box(low, high, size)
