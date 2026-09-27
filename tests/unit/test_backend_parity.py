@@ -582,3 +582,14 @@ class TestTheVRMLContextsTakeTheirArguments:
         with pytest.raises(_Stop):
             Recording.ContextMainLoop(size=(640, 480), title='a world')
         assert built == [((), {'size': (640, 480), 'title': 'a world'})]
+
+
+def test_a_missing_wxpython_says_how_to_install_it(monkeypatch):
+    """As a missing glfw, pygame or tkinter does."""
+    import importlib
+    import sys
+
+    monkeypatch.setitem(sys.modules, 'wx', None)
+    monkeypatch.delitem(sys.modules, 'OpenGLContext.windowsystem.wx', raising=False)
+    with pytest.raises(ImportError, match='pip install wxPython'):
+        importlib.import_module('OpenGLContext.windowsystem.wx')
