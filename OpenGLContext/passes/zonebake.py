@@ -96,6 +96,15 @@ class ZoneBakePlan:
         """``(zones finished, zones in all)``."""
         return self._index, len(self.zones)
 
+    def extend(self, zones: Sequence[tuple[Hashable, Eye]]) -> None:
+        """Plan the zones among ``zones`` not already planned, after the rest.
+
+        A streamed world places a zone once the tiles around it load, which
+        may be while the bake stands in another.
+        """
+        planned = {key for key, _eye in self.zones}
+        self.zones.extend(zone for zone in zones if zone[0] not in planned)
+
     def step(self, settled: bool) -> Optional[bool]:
         """One frame was drawn for the current zone.
 
@@ -158,6 +167,7 @@ def bake_zone_lights(context: Any, frames_per_zone: int = FRAMES_PER_ZONE,
         if before_frame is not None:
             before_frame(eye)
         context.OnDraw(force=1)
+        plan.extend(_capturing(flat))
         if plan.step(flat.zoneCaptureSettled(zone)) is None:
             continue
         light = flat.zoneLightImage(zone)

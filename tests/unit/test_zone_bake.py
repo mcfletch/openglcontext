@@ -90,3 +90,22 @@ def test_a_zone_is_baked_offscreen_without_touching_the_environment():
     assert report['finite'] == [True]
     assert report['progress'] == [[1, 1]]
     assert report['environment'] == []
+
+
+class TestZonesFoundOnTheWay:
+    """A streamed world loads what surrounds the camera, so a zone may first
+    be placed while the bake is standing in another."""
+
+    def test_a_zone_found_later_is_visited_after_those_already_planned(self):
+        plan = ZoneBakePlan([('hall', (0.0, 0.0, 0.0))], frames_per_zone=1)
+        plan.extend([('hall', (0.0, 0.0, 0.0)), ('crypt', (0.0, -5.0, 0.0))])
+        plan.step(True)
+        assert plan.current == ('crypt', (0.0, -5.0, 0.0))
+        plan.step(True)
+        assert plan.finished and plan.progress == (2, 2)
+
+    def test_a_zone_already_baked_is_not_planned_again(self):
+        plan = ZoneBakePlan([('hall', (0.0, 0.0, 0.0))], frames_per_zone=1)
+        plan.step(True)
+        plan.extend([('hall', (0.0, 0.0, 0.0))])
+        assert plan.finished

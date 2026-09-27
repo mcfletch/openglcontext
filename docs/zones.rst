@@ -324,7 +324,8 @@ prefiltered mips, in linear light.
 The context needs the PBR renderer and the ``full`` probe, asked for on the
 class and the definition as above. ``before_frame(eye)`` is called before
 every frame, which is where a streamed world loads what surrounds the camera.
-The scheduling is ``ZoneBakePlan``, which holds no GL.
+A capturing zone placed on the way, once its tiles have loaded, is baked after
+the ones already planned. The scheduling is ``ZoneBakePlan``, which holds no GL.
 OpenGLContext-editor's ``bake_probes`` writes the results into a baked world's
 zones document.
 
