@@ -41,7 +41,7 @@ is intended before it is fixed.
 | 5.4 | P2 | `editcheck` drops mypy messages for Windows paths | Fixed 9464a3d (workspace) | `partition(':')` splits at the drive letter |
 | 5.5 | P3 | `preflight` and `editcheck` raise a traceback when a gate's executable is missing | Fixed 9464a3d (workspace) | The `--hook` exit status is then wrong |
 | 5.6 | P3 | `--jobs` is ignored under 48 files; the README does not say so | Open | Documentation |
-| 6.1 | P2 | `check_failing_layer` writes an inherited method onto the class it patched | Open | Order-dependent test pollution through the documented example |
+| 6.1 | P2 | `check_failing_layer` writes an inherited method onto the class it patched | Fixed fa4131ba | Order-dependent test pollution through the documented example |
 | 6.2 | P3 | Display and network probes cache a transient failure for the whole run | Open | Later tests skip for no current reason |
 | 6.3 | P3 | Testing helpers reach into production globals and patch GL process-wide | Open | `renderpass.FLAT = None`; `counting_gl` has no lock |
 | 7.1 | P2 | Atomic file writes are hand-written in five projects beside `OpenGLContext.atomicfiles` | Open | Maintainability; glisteel-editor and marble-demo can call the engine |
@@ -527,3 +527,4 @@ the chart.
 - 2026-09-27: 4.1 fixed: the declared JSON length is checked against the file size before the read (not against max_resource_bytes, which is per buffer or data URI and which existing tests set to 8 bytes). 4.2 fixed: `atomicfiles.scratch_directory` sweeps leftovers and always removes its directory; `staged_directory` and `_install_within` use it, and the shadowed `name` is gone.
 - 2026-09-27: 5.1 fixed: `named_field` looks through `or`/`and` and conditional expressions, so OGC101 and OGC111 report `x.get(k) or default`; OGC102 already walked inner expressions. No project that selects these rules gained a finding. 5.2 fixed: OGC121 reports `<path>.open(mode)` with a literal write mode (letters limited to `rwxabt+`, so a member name is not taken for a mode). It found three journals written in place on purpose, the stall trace and telemetry journal (openglcontext db459d85) and the MP4 recorder (pyopengl-video aa2e40e), which now carry reasoned noqa comments.
 - 2026-09-27: 5.4 and 5.5 fixed in the workspace root: editcheck matches mypy's message prefix with a regex that allows a drive letter; a missing gate executable is a note in editcheck and a status-127 failure in preflight.
+- 2026-09-27: 6.1 fixed: the stand-in is removed unless the owner held the attribute itself, and an existing triggerRedraw override is restored.
