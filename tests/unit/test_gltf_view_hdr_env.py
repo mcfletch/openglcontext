@@ -56,6 +56,13 @@ def test_hdr_url_routes_to_env_hdr():
     assert os.environ['OPENGLCONTEXT_IBL'] == 'full'
 
 
+def test_an_exr_path_routes_to_env_hdr():
+    path = '186_hdrmaps_com_free_2K.exr'
+    view.apply_render_env(_Args(environment=path))
+    assert os.environ['OPENGLCONTEXT_ENV_HDR'] == path
+    assert 'OPENGLCONTEXT_ENV_CUBEMAP' not in os.environ
+
+
 def test_catalogue_name_routes_to_env_hdr():
     view.apply_render_env(_Args(environment='studio_small_03'))
     assert os.environ['OPENGLCONTEXT_ENV_HDR'] == hdri.CATALOG['studio_small_03'].url

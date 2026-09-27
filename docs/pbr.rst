@@ -467,8 +467,9 @@ Both are also ``ContextDefinition`` fields (``iblIntensity`` and ``ibl``),
 which a settings screen can change while the program runs; see
 :doc:`environment` and :ref:`overlayui-settings`.
 
-A scene can supply its own environment. ``HDRBackground`` takes a Radiance
-``.hdr`` equirectangular panorama, the usual HDRI format. It draws the
+A scene can supply its own environment. ``HDRBackground`` takes an
+equirectangular panorama: a Radiance ``.hdr``, the usual HDRI format, or an
+OpenEXR ``.exr`` with the ``OpenGLContext[exr]`` extra. It draws the
 panorama as the sky and registers it as the lighting environment, so metals
 reflect the sky that is behind them. The panorama keeps values above 1.0 where
 the sun and sky are brighter than white, which an 8-bit image cannot store.

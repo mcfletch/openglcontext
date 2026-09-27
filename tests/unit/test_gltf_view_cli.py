@@ -32,7 +32,7 @@ view = import_unconfigured('OpenGLContext.bin.view')
 
 from OpenGLContext.viewer import source
 from tests.unit.viewcapture import PROJECT_ROOT, view_command, view_frame
-from OpenGLContext.viewer.options import ViewerOptions
+from OpenGLContext.viewer.options import PlacedLight, ViewerOptions
 
 
 class TestParseArgs:
@@ -316,6 +316,29 @@ class TestEyeLookAtCamera:
         a = view.parse_args(['m.glb', '--eye=12,0,2', '--look-at=-14,4,-3'])
         assert a.eye == (12.0, 0.0, 2.0)
         assert a.look_at == (-14.0, 4.0, -3.0)
+
+    def test_a_point_light_is_placed_at_its_location(self):
+        a = view.parse_args(['m.glb', '--point-light=1,2.5,-3'])
+        assert a.point_lights == (PlacedLight((1.0, 2.5, -3.0)),)
+
+    def test_a_point_light_takes_an_intensity_in_candela(self):
+        a = view.parse_args(['m.glb', '--point-light=1,2,3,15'])
+        assert a.point_lights[0].intensity == 15.0
+
+    def test_point_lights_accumulate_in_order(self):
+        a = view.parse_args(['m.glb', '--point-light=1,2,3',
+                             '--point-light=-4,5,6,8'])
+        assert [light.location for light in a.point_lights] == [
+            (1.0, 2.0, 3.0), (-4.0, 5.0, 6.0)]
+
+    def test_no_point_lights_by_default(self):
+        assert view.parse_args(['m.glb']).point_lights == ()
+
+    @pytest.mark.parametrize('text', ['1,2', '1,2,3,4,5', '1,2,3,-1', 'a,b,c',
+                                      '1,2,nan', '1,2,3,inf'])
+    def test_a_malformed_point_light_is_rejected(self, text):
+        with pytest.raises(argparse.ArgumentTypeError):
+            view._parse_point_light(text)  # noqa: SLF001 the --point-light value parser on its own
 
     def test_default_no_explicit_camera(self):
         a = view.parse_args(['m.glb'])

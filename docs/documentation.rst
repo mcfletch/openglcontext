@@ -45,6 +45,10 @@ Optional extras add the packages for particular features:
    Draco-compressed glTF geometry, through DracoPy. The :doc:`glTF loader
    <gltf>` itself is part of the core install, so :doc:`oglc-view <viewer>`
    reads ``.gltf`` and ``.glb`` files without any extra.
+``OpenGLContext[exr]``
+   OpenEXR ``.exr`` panoramas as the :ref:`environment <environment-lighting>`,
+   through the OpenEXR project's own bindings (BSD-3-Clause). Radiance ``.hdr``
+   panoramas need no extra.
 ``OpenGLContext[audio]``
    The playback backend that sends sound to a sound card. :doc:`Audio <audio>`
    is part of the core install and mixes without it, but plays nothing.
@@ -52,7 +56,7 @@ Optional extras add the packages for particular features:
    :doc:`Recording what the engine draws <recording>` to an H.264 file, using
    the video encoder in the graphics driver.
 ``OpenGLContext[all]``
-   GLFW, Pygame, Draco and audio playback together.
+   GLFW, Pygame, Draco, OpenEXR and audio playback together.
 
 The wxPython window system needs ``wxPython`` installed separately. The Tk
 window system needs Tcl/Tk, which some Linux distributions package apart from

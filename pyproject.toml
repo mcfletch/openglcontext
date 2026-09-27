@@ -68,6 +68,11 @@ video = ["pyopengl-video>=1.0.0a1"]
 # gltf is now pretty much core to OpenGLContext...
 gltf = []
 draco = ["DracoPy>=1.4"]
+# OpenEXR panoramas as the environment (--environment sky.exr). Radiance .hdr
+# needs nothing: the engine decodes it itself. EXR's PIZ and DWA codecs are
+# the Academy Software Foundation's own library's job, and these are its
+# bindings (BSD-3, wheels for Linux, macOS and Windows).
+exr = ["OpenEXR>=3.3"]
 # Sound that is actually heard. omi_audio itself is a core dependency -- the
 # scenegraph's audio nodes are built on its model -- and it mixes happily with
 # no backend at all; this extra adds the one that reaches a sound card. Optional
@@ -81,7 +86,7 @@ audio = ["omi_audio[playback]"]
 # accelerate is now part of the core install; kept as an empty set so external
 # setups that still request OpenGLContext[accelerate] don't break.
 accelerate = []
-all = ["OpenGLContext[pygame,glfw,gltf,draco,audio,accelerate]"]
+all = ["OpenGLContext[pygame,glfw,gltf,draco,exr,audio,accelerate]"]
 # What `build-docs.py` needs to build the documentation set. The generator for
 # the module pages is PyOpenGL's `directdocs`, which is in the PyOpenGL
 # repository rather than in the PyOpenGL distribution, so it is not here: point

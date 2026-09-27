@@ -97,7 +97,7 @@ from OpenGLContext.viewer.adapters import (
     UnknownSourceType, adapter_for, adapter_named, known_sources,
 )
 from OpenGLContext.viewer.sceneviewer import ViewerContext
-from OpenGLContext.viewer.options import ViewerOptions
+from OpenGLContext.viewer.options import PlacedLight, ViewerOptions
 from OpenGLContext.viewer.source import (
     UnknownMember, open_pack, resolve_source,
 )
@@ -152,6 +152,38 @@ def _parse_vec3(text: str) -> tuple[float, ...]:
     if len(parts) != 3:
         raise argparse.ArgumentTypeError('expected X,Y,Z, got %r' % text)
     return tuple(float(v) for v in parts)
+
+
+def _parse_point_light(text: str) -> PlacedLight:
+    """Parse ``X,Y,Z`` or ``X,Y,Z,INTENSITY`` into a :class:`PlacedLight`."""
+    try:
+        values = [float(v) for v in text.split(',')]
+    except ValueError:
+        values = []
+    if len(values) not in (3, 4) or not all(math.isfinite(v) for v in values):
+        raise argparse.ArgumentTypeError(
+            'expected X,Y,Z or X,Y,Z,INTENSITY, got %r' % text)
+    x, y, z = values[:3]
+    if len(values) == 3:
+        return PlacedLight((x, y, z))
+    if values[3] < 0.0:
+        raise argparse.ArgumentTypeError(
+            'a light cannot have a negative intensity: %r' % text)
+    return PlacedLight((x, y, z), intensity=values[3])
+
+
+class _Accumulate(argparse.Action):
+    """Add each use of an option to the tuple its field already holds.
+
+    ``append`` would copy the field and call ``append`` on it, which a tuple
+    does not have; the options' defaults are tuples so that one default is
+    never shared and edited by two instances.
+    """
+
+    def __call__(self, parser: argparse.ArgumentParser, namespace: Any,
+                 values: Any, option_string: str | None = None) -> None:
+        setattr(namespace, self.dest,
+                tuple(getattr(namespace, self.dest, ())) + (values,))
 
 
 def build_parser(prog: str = 'oglc-view') -> argparse.ArgumentParser:
@@ -229,6 +261,12 @@ def build_parser(prog: str = 'oglc-view') -> argparse.ArgumentParser:
     parser.add_argument('--lights', choices=['auto', 'on', 'off'],
                         help="default light rig: auto (add only if the file has none), "
                              "on (always add), off (never add)")
+    parser.add_argument('--point-light', dest='point_lights', action=_Accumulate,
+                        type=_parse_point_light, metavar='X,Y,Z[,CANDELA]',
+                        help='add a warm point light at X,Y,Z (world space, as '
+                             '--eye), beside the rig or the file\'s own lights; '
+                             'CANDELA is its intensity (default 40, about a 40 W '
+                             'bulb). Repeat for more lamps')
     parser.add_argument('--ibl-intensity', type=float, metavar='SCALE',
                         help='scale the analytic-sky ambient/IBL contribution')
     parser.add_argument('--environment', metavar='PREFIX|HDR|NAME',

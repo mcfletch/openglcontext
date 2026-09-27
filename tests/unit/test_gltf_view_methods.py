@@ -21,8 +21,8 @@ from OpenGLContext.move.navigationdefinition import Navigation
 V = import_unconfigured('OpenGLContext.bin.view')
 
 from OpenGLContext.viewer import environment
-from OpenGLContext.viewer.options import ViewerOptions
-from OpenGLContext.scenegraph.light import DirectionalLight
+from OpenGLContext.viewer.options import PlacedLight, ViewerOptions
+from OpenGLContext.scenegraph.light import DirectionalLight, PointLight
 from OpenGLContext.scenegraph.background import Background
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.viewpoint import Viewpoint
@@ -255,6 +255,33 @@ class TestLightsChildren:
         inst = _inst()
         inst.options = _config(lights='on')
         assert len(V.TestContext.lightsFor(inst, self._scene(lights=5))) == 2
+
+    def test_a_placed_light_is_a_warm_inverse_square_point_light(self):
+        inst = _inst()
+        inst.options = _config(lights='off', point_lights=(
+            PlacedLight((1.0, 2.0, 3.0), intensity=12.0),))
+        (light,) = V.TestContext.lightsFor(inst, self._scene())
+        assert isinstance(light, PointLight)
+        assert tuple(light.location) == (1.0, 2.0, 3.0)
+        assert light.intensity == 12.0
+        assert tuple(light.attenuation) == (0.0, 0.0, 1.0)
+        red, green, blue = light.color
+        assert red > green > blue
+
+    def test_placed_lights_are_added_beside_the_rig(self):
+        inst = _inst()
+        inst.options = _config(lights='auto', point_lights=(
+            PlacedLight((0.0, 1.0, 0.0)), PlacedLight((4.0, 1.0, 0.0))))
+        lights = V.TestContext.lightsFor(inst, self._scene(0))
+        assert len(lights) == 4
+        assert [tuple(light.location) for light in lights[2:]] == [
+            (0.0, 1.0, 0.0), (4.0, 1.0, 0.0)]
+
+    def test_placed_lights_are_added_beside_the_files_own(self):
+        inst = _inst()
+        inst.options = _config(lights='auto', point_lights=(
+            PlacedLight((0.0, 1.0, 0.0)),))
+        assert len(V.TestContext.lightsFor(inst, self._scene(lights=2))) == 1
 
 
 def _fake_scene(viewpoints=(), cameras=()):

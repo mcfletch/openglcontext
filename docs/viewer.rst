@@ -180,6 +180,39 @@ constants ``STRAY_RATIO`` (4), ``STRAY_CROWD`` (0.9) and ``STRAY_GAP`` (2)
 are the numbers above. It applies to glTF sources; other formats frame their
 whole extent.
 
+.. _viewer-lighting:
+
+Lighting a scene
+~~~~~~~~~~~~~~~~
+
+A file with no lights of its own gets a default rig: a low warm sun that casts
+shadows and a cool fill from the other side. ``--lights on`` adds the rig to
+every file, and ``--lights off`` to none.
+
+``--point-light X,Y,Z[,CANDELA]`` adds a warm point light at ``X,Y,Z``, beside
+the rig or the file's own lights. The position is in the same frame as
+``--eye``: the model centred and turned to its starting yaw. The intensity is
+luminous intensity in candela and falls off with the square of the distance,
+as a glTF point light does; the default of 40 is about a 40 W incandescent
+bulb. The lights cast no shadows. Repeat the option for each lamp an interior
+needs:
+
+.. code-block:: bash
+
+   oglc-view room.glb --lights off --environment studio_small_03 \
+       --eye=-12.5,-0.5,3.46 --look-at=-8.7,-0.9,-5.8 \
+       --point-light=-11,1.3,-0.2,30 --point-light=-9,1.3,-4.9,30
+
+``--environment`` names the image-based light: a bundled HDRI name such as
+``studio_small_03`` or ``kloofendal_43d_clear_puresky``
+(``OpenGLContext.loaders.hdri``), an equirectangular panorama as a path or URL,
+or the common prefix of six cubemap faces. It lights and reflects the scene
+and is drawn as the sky. A panorama is a Radiance ``.hdr`` or ``.pic``, or an
+OpenEXR ``.exr``, which needs the ``OpenGLContext[exr]`` extra. The
+environment is not occluded, so a floor indoors receives the whole sky above
+it: an interior under a sunlit sky reads brighter than its windows allow, and
+a studio panorama suits it better.
+
 .. _viewer-window:
 
 The window
@@ -552,8 +585,9 @@ so each flag and its field share one default. The fields, by group:
 - cameras: ``camera``, ``no_cameras``, ``list_cameras``;
 - auto-framing: ``yaw``, ``margin``, ``elevation``, ``tilt``, ``eye``,
   ``look_at``;
-- lighting and environment: ``lights``, ``shadows``, ``ibl_intensity``,
-  ``environment``, ``background``;
+- lighting and environment: ``lights``, ``point_lights`` (a tuple of
+  ``PlacedLight``), ``shadows``, ``ibl_intensity``, ``environment``,
+  ``background``;
 - animation: ``animate``, ``animation``, ``anim_time``, ``turntable``,
   ``no_rotate``;
 - ``physics``;

@@ -41,6 +41,18 @@ careless about which ones we host:
 | `demos/gallery.jpg` | the bust-gallery content pack &mdash; 'Marble Bust 01' by Rico Cilliers (Poly Haven) and ambientCG materials, all CC0 1.0 |
 | `toronto-3dtiles.jpg` | City of Toronto 3D massing data, Open Government Licence &mdash; Toronto |
 
+## Third-party scenes
+
+Rendered by this project in `oglc-view`; each model is its author's work under
+the licence named, and each environment panorama is from
+[Poly Haven](https://polyhaven.com), CC0 1.0.
+
+| Picture | Terms |
+|---|---|
+| `gallery/showcase/church-interior.jpg` | "Old church modeling - Interior Scene" (https://skfb.ly/STIp) by Aurélien Martel &mdash; CC-BY 4.0; sky `kloofendal_43d_clear_puresky` by Greg Zaal and Sergej Majboroda &mdash; CC0 1.0 |
+| `gallery/showcase/vintage-living-room.jpg` | "Modular Vintage Living Room - Game Ready PBR" (https://skfb.ly/pNnDt) by Renend Studio &mdash; CC-BY 4.0; environment `studio_small_03` by Greg Zaal &mdash; CC0 1.0 |
+| `gallery/showcase/modern-bedroom.jpg` | "Minimalistic Modern Bedroom" (https://skfb.ly/oCnNx) by dylanheyes &mdash; CC-BY 4.0 |
+
 ## Khronos glTF sample models
 
 Rendered by this project; each model is its authors' work under the licence

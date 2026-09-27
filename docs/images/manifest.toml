@@ -83,10 +83,82 @@ out = "images/gallery/showcase/parthenon.jpg"
 size = [1200, 675]
 licence = "CC0 1.0; CC-BY 4.0 statue"
 credit = "the Parthenon model, CC0; its statue from &ldquo;Athena #3DST8&rdquo; by Digitage, CC-BY 4.0"
-alt = "Inside a Greek temple, looking down the inner colonnade at a painted coffered ceiling"
-caption = "A reconstruction walked from the inside: baked cameras, a painted ceiling, and light through the colonnade."
+alt = "Inside a Greek temple, looking down the colonnaded naos and its pool to the statue of Athena"
+caption = "The Parthenon walked from the inside: the naos, its two-storey colonnade, and the Athena Parthenos reflected in the pool at her feet."
 producer = "copy"
 source = "images/parthenon/5-naos-entering.jpg"
+
+[[image]]
+id = "showcase/parthenon-look-out"
+out = "images/gallery/showcase/parthenon-look-out.jpg"
+size = [1200, 675]
+licence = "CC0 1.0"
+credit = "the Parthenon model, CC0"
+alt = "From the statue's feet in a dark temple, looking out through the door to the sunlit columns, doubled in the pool"
+caption = "From the statue back to the door: the only light in the naos comes through it, and the pool carries the sunlit columns to the camera in a planar reflection."
+producer = "copy"
+source = "images/parthenon/6-naos-look-out.jpg"
+
+# Third-party interiors, opened in oglc-view from the workspace's
+# content-samples/ directory, which is not in any repository: where a model is
+# absent the entry is skipped and the committed picture stands.  The eye and
+# target are in the viewer's frame -- the model centred and turned to its
+# default yaw -- which is the position the viewer reports.
+[[image]]
+id = "showcase/church-interior"
+out = "images/gallery/showcase/church-interior.jpg"
+size = [1200, 675]
+licence = "CC-BY 4.0; CC0 environment"
+credit = "&ldquo;Old church modeling - Interior Scene&rdquo; by Aur&eacute;lien Martel, CC-BY 4.0; sky by Greg Zaal and Sergej Majboroda (Poly Haven), CC0"
+alt = "Looking up the nave of a Gothic church to the stained-glass windows of its apse and the rib vault above"
+caption = "A Gothic interior lit by the sky through its windows: stained glass, rib vaults and weathered stone, opened straight from a Sketchfab glTF."
+producer = "command"
+cwd = "content-samples"
+timeout = 900
+requires = ["old_church_modeling_-_interior_scene.glb"]
+argv = ["-m", "OpenGLContext.bin.view", "old_church_modeling_-_interior_scene.glb",
+        "--size", "1600x900", "--frames", "30",
+        "--environment", "kloofendal_43d_clear_puresky",
+        "--eye=-3.8,-7.6,-2.5", "--look-at=3.27,-1.0,4.57",
+        "--capture", "{png}"]
+
+[[image]]
+id = "showcase/vintage-living-room"
+out = "images/gallery/showcase/vintage-living-room.jpg"
+size = [1200, 675]
+licence = "CC-BY 4.0; CC0 environment"
+credit = "&ldquo;Modular Vintage Living Room - Game Ready PBR&rdquo; by Renend Studio, CC-BY 4.0; studio environment by Greg Zaal (Poly Haven), CC0"
+alt = "A long panelled living room with a coffered wooden ceiling, chandeliers, a bookcase, two sofas and a brick fireplace"
+caption = "An interior lit by lamps placed from the command line (<code>oglc-view --point-light</code>) under an image-based studio light."
+producer = "command"
+cwd = "content-samples"
+timeout = 900
+requires = ["modular-vintage-living-room/source/Vintage_Living_Room.glb"]
+argv = ["-m", "OpenGLContext.bin.view",
+        "modular-vintage-living-room/source/Vintage_Living_Room.glb",
+        "--size", "1600x900", "--frames", "30",
+        "--environment", "studio_small_03", "--lights", "off",
+        "--eye=-12.5,-0.5,3.46", "--look-at=-8.67,-0.9,-5.78",
+        "--point-light=-10.97,1.3,-0.24,30", "--point-light=-9.05,1.3,-4.86,30",
+        "--point-light=-7.14,1.3,-9.47,30",
+        "--capture", "{png}"]
+
+[[image]]
+id = "showcase/modern-bedroom"
+out = "images/gallery/showcase/modern-bedroom.jpg"
+size = [1200, 675]
+licence = "CC-BY 4.0"
+credit = "&ldquo;Minimalistic Modern Bedroom&rdquo; by dylanheyes, CC-BY 4.0"
+alt = "A minimal bedroom: a dark bed under a tall window, a long low sideboard, an abstract print and a grey rug on a pale wood floor"
+caption = "A Sketchfab room opened as it was published, from a camera given on the command line."
+producer = "command"
+cwd = "content-samples"
+timeout = 900
+requires = ["minimalistic_modern_bedroom.glb"]
+argv = ["-m", "OpenGLContext.bin.view", "minimalistic_modern_bedroom.glb",
+        "--size", "1600x900", "--frames", "30",
+        "--eye=-1.2,-0.35,4.95", "--look-at=0,-0.35,0",
+        "--capture", "{png}"]
 
 [[image]]
 id = "showcase/flight-helmet"
@@ -797,6 +869,10 @@ images = [
     "showcase/crowd",
     "showcase/glisteel-viaduct",
     "showcase/parthenon",
+    "showcase/parthenon-look-out",
+    "showcase/church-interior",
+    "showcase/vintage-living-room",
+    "showcase/modern-bedroom",
     "showcase/marble-board",
     "showcase/flight-helmet",
 ]

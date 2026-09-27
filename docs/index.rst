@@ -134,8 +134,8 @@ Features
     stone and brushed metals made with NumPy, and geometry that wears them by
     the metre
 
-  - :ref:`HDR backgrounds <environment-lighting>`: a Radiance ``.hdr``
-    panorama drawn as the sky, tone-mapped with the scene and reflected by
+  - :ref:`HDR backgrounds <environment-lighting>`: a Radiance ``.hdr`` or
+    OpenEXR ``.exr`` panorama drawn as the sky, tone-mapped with the scene and reflected by
     metallic surfaces
 
   - :doc:`Dynamic shadows <shadows>` from cascaded shadow maps, shared by the

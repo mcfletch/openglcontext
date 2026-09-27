@@ -192,16 +192,14 @@ def background_for(spec: Optional[str], report: Any = None) -> Any:
 
 
 def _is_hdr_environment(spec: Optional[str]) -> bool:
-    """Whether ``--environment SPEC`` names a Radiance ``.hdr`` panorama.
+    """Whether ``--environment SPEC`` names an HDR panorama.
 
-    An equirectangular ``.hdr``/``.pic`` (local path or http(s) URL) is treated as
-    an HDR IBL source + skybox; anything else is a six-face cubemap prefix. The
-    query string of a URL is ignored so a CDN link with parameters still matches.
+    An equirectangular ``.hdr``, ``.pic`` or ``.exr`` (local path or http(s) URL)
+    is treated as an HDR IBL source + skybox; anything else is a six-face
+    cubemap prefix. See :func:`OpenGLContext.loaders.panorama.is_panorama`.
     """
-    if not spec:
-        return False
-    path = spec.split('?', 1)[0].split('#', 1)[0]
-    return path.lower().endswith(('.hdr', '.pic'))
+    from OpenGLContext.loaders import panorama
+    return panorama.is_panorama(spec)
 
 
 def apply_render_env(args: ViewerOptions) -> None:

@@ -156,8 +156,9 @@ Lighting and shadows
    * - ``OPENGLCONTEXT_ENV_HDR``
      - path or URL
      - unset
-     - An equirectangular Radiance ``.hdr`` image used for lighting and
-       reflections and drawn as the skybox. Takes precedence over
+     - An equirectangular Radiance ``.hdr`` or OpenEXR ``.exr`` image used for
+       lighting and reflections and drawn as the skybox. An ``.exr`` needs the
+       ``OpenGLContext[exr]`` extra. Takes precedence over
        ``OPENGLCONTEXT_ENV_CUBEMAP``.
    * - ``OPENGLCONTEXT_ENV_CUBEMAP``
      - face-name prefix

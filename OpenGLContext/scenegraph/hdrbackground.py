@@ -1,7 +1,7 @@
-"""Radiance HDR (equirectangular) Background node.
+"""High-dynamic-range (equirectangular) Background node.
 
-Draws a high-dynamic-range equirectangular panorama (a Radiance ``.hdr`` file,
-the common HDRI interchange format) as the skybox, and registers the same
+Draws a high-dynamic-range equirectangular panorama (a Radiance ``.hdr`` or an
+OpenEXR ``.exr``, the two HDRI interchange formats) as the skybox, and registers the same
 panorama as the image-based-lighting environment so metals and glass reflect the
 scene they sit in. The panorama is loaded from a URL (fetched and cached through
 the Resolver) or a local path.
@@ -53,13 +53,18 @@ log = logging.getLogger(__name__)
 def prepare_panorama_loading() -> None:
     """Make a background panorama load's imports, here on the calling thread.
 
-    The fetch and the RGBE decode run on a loader thread, and a first-use
-    import taken there is one nothing can interrupt -- see
+    The fetch and the decode run on a loader thread, and a first-use import
+    taken there is one nothing can interrupt -- see
     :mod:`OpenGLContext.loaders.background`.  A decoded panorama is handed
-    straight to the image-based lighting probe, so that comes too.
+    straight to the image-based lighting probe, so that comes too, and so do
+    the OpenEXR bindings where they are installed.
     """
-    from OpenGLContext.loaders import hdr
+    from OpenGLContext.loaders import panorama
     from OpenGLContext.loaders import resolver
+    try:
+        import OpenEXR  # noqa: F401 imported here so an .exr load on the loader thread finds it loaded
+    except ImportError:
+        pass
     from OpenGLContext.passes import ibl
 
 
@@ -191,7 +196,7 @@ class _HDRBackground(object):
         Resolver; a local path is decoded directly. On success the panorama is
         registered as the IBL environment and every live context is redrawn.
         """
-        from OpenGLContext.loaders import hdr
+        from OpenGLContext.loaders import panorama
         from OpenGLContext.loaders.resolver import checked_url, fetch_to_cache
 
         urls = [url] if isinstance(url, str) else list(url)
@@ -202,7 +207,7 @@ class _HDRBackground(object):
                     path = fetch_to_cache(checked_url(u))
                 else:
                     path = os.path.abspath(u)
-                image = hdr.load_hdr(path)
+                image = panorama.load_panorama(path, name=u)
             except Exception as err:
                 log.warning("HDR background: failed to load %s: %s", u, err)
                 continue
@@ -435,7 +440,8 @@ class HDRBackground(_HDRBackground, nodetypes.Background, nodetypes.Children,
 
     Fields:
 
-        url -- MFString URL(s) or local path(s) of a Radiance ``.hdr`` panorama;
+        url -- MFString URL(s) or local path(s) of a Radiance ``.hdr`` or an
+            OpenEXR ``.exr`` panorama (the latter with ``OpenGLContext[exr]``);
             the first that decodes is used. Loaded asynchronously and cached.
         exposure -- SFFloat multiplier on the sky's brightness (default 1.0).
         bound -- SFBool, whether this is the active background.

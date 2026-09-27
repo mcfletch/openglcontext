@@ -69,7 +69,7 @@ from OpenGLContext.viewer.adapters import (
 from OpenGLContext.viewer.asyncscene import AsyncSceneMixin
 from OpenGLContext.video.recorder import RecordingMixin
 from OpenGLContext.viewer.capture import SettleCaptureMixin
-from OpenGLContext.viewer.options import ViewerOptions
+from OpenGLContext.viewer.options import PlacedLight, ViewerOptions
 from OpenGLContext.viewer.caption import CaptionMixin
 from OpenGLContext.viewer.screens import ViewerScreensMixin
 from OpenGLContext.multiview.grid import Grid
@@ -656,17 +656,34 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
 
         ``auto`` leaves a scene that lights itself alone and rigs one that does
         not, so nothing is ever shown in the dark and nothing authored is
-        overridden.
+        overridden.  :attr:`ViewerOptions.point_lights` are added whatever the
+        mode says.
         """
+        placed = [self.placedLight(light) for light in self.options.point_lights]
         mode = self.options.lights
         if mode == 'off':
-            return []
+            return placed
         found = env.count_lights(scene.group)
         if mode == 'auto' and found:
             commentary.say("Found %d light(s) in the file; using them.\n" % found)
-            return []
+            return placed
         commentary.say("Adding a default sun + fill rig.\n")
-        return self.defaultLights(self.radius)
+        return self.defaultLights(self.radius) + placed
+
+    #: Warm white, about 2700 K: the colour of an incandescent lamp.
+    PLACED_LIGHT_COLOR = (1.0, 0.8, 0.6)
+
+    @classmethod
+    def placedLight(cls, light: PlacedLight) -> PointLight:
+        """The PointLight for one of :attr:`ViewerOptions.point_lights`.
+
+        Inverse-square, as a glTF point light is.  It casts no shadow, so an
+        interior can have a lamp in every corner for the price of the lighting
+        alone.
+        """
+        return PointLight(location=light.location, color=cls.PLACED_LIGHT_COLOR,
+                          intensity=light.intensity, attenuation=(0.0, 0.0, 1.0),
+                          castShadows=False)
 
     @staticmethod
     def defaultLights(radius: float) -> List[Light]:

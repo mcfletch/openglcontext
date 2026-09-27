@@ -140,17 +140,18 @@ def equirect_hdr_path() -> Optional[str]:
 
 
 def load_equirect_hdr(source: str) -> np.ndarray:
-    """Decode an equirect Radiance ``.hdr`` from a path or http(s) URL.
+    """Decode an equirect ``.hdr`` or ``.exr`` panorama from a path or http(s) URL.
 
     A URL is fetched into the shared asset cache (origin-locked, size-capped) via
     the Resolver, so repeated loads of the same panorama hit the disk cache.
     Returns an ``(H, W, 3)`` linear float32 array.
     """
-    from OpenGLContext.loaders import hdr
+    from OpenGLContext.loaders import panorama
+    path = source
     if source.startswith(('http://', 'https://')):
         from OpenGLContext.loaders.resolver import checked_url, fetch_to_cache
-        source = fetch_to_cache(checked_url(source))
-    return hdr.load_hdr(source)
+        path = fetch_to_cache(checked_url(source))
+    return panorama.load_panorama(path, name=source)
 
 
 def resolve_equirect_source() -> Optional[np.ndarray]:

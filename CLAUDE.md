@@ -106,6 +106,8 @@ OpenGLContext/
 │   ├── documentvalues.py  # A document's values, checked: JSONObject, a
 │   │                 # default or a bound and one report, or DocumentError
 │   │                 # for a part the document cannot be read without
+│   ├── panorama.py   # Environment panoramas: which sources are (.hdr, .pic,
+│   │                 # .exr) and one decode for all of them -- docs/pbr.rst
 │   ├── notices.py    # A file's copyright and licence notices, as Notice
 │   │                 # records a loader fills -- docs/viewer.rst#viewer-notices
 │   ├── resolver.py   # Where a document's references may lead; ContainedPath

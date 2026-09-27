@@ -69,12 +69,13 @@ def resolve(name_or_source: str) -> str:
     """Resolve a catalogue name to its URL, or pass a path/URL through unchanged.
 
     Accepts ``studio_small_03``, ``polyhaven:studio_small_03``, an ``http(s)://``
-    URL, or a local filesystem path (anything containing a ``/`` or ending ``.hdr``
+    URL, or a local filesystem path (anything containing a ``/`` or ending in a
+    panorama's suffix, :data:`~OpenGLContext.loaders.panorama.PANORAMA_SUFFIXES`,
     is treated as an explicit source). Raises ``KeyError`` for an unknown bare name.
     """
+    from OpenGLContext.loaders import panorama
     s = name_or_source.strip()
-    if s.startswith(('http://', 'https://')) or '/' in s or s.lower().endswith(
-            ('.hdr', '.pic')):
+    if s.startswith(('http://', 'https://')) or '/' in s or panorama.is_panorama(s):
         return s
     if ':' in s:
         provider, _, bare = s.partition(':')

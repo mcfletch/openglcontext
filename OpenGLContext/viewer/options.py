@@ -22,11 +22,25 @@ from typing import Any, Optional
 
 from OpenGLContext import renderoptions
 
-__all__ = ['ViewerOptions', 'WINDOW_SIZE']
+__all__ = ['PlacedLight', 'ViewerOptions', 'WINDOW_SIZE']
 
 #: The window an interactive viewer opens when no size is given, and the one
 #: it returns to from full screen: 1080p.
 WINDOW_SIZE: tuple[int, int] = (1920, 1080)
+
+
+@dataclass(frozen=True)
+class PlacedLight:
+    """A lamp the viewer puts into a scene that has none where one is wanted.
+
+    ``location`` is in the viewer's world space, the frame :attr:`ViewerOptions.eye`
+    is given in.  ``intensity`` is luminous intensity in candela, falling off
+    with the square of the distance, as a glTF ``KHR_lights_punctual`` point
+    light does; 40 cd is about a 40 W incandescent bulb.
+    """
+
+    location: tuple[float, float, float]
+    intensity: float = 40.0
 
 
 @dataclass
@@ -85,6 +99,9 @@ class ViewerOptions:
     #: ``auto`` adds a default rig only to a model with no lights of its own;
     #: ``on`` always adds it, ``off`` never does.
     lights: str = 'auto'
+    #: Point lights to add wherever the scene is, beside the rig or the
+    #: file's own lights: the lamps an interior needs when the file has none.
+    point_lights: tuple[PlacedLight, ...] = ()
     #: Force shadows on or off; None leaves the renderer's own default.
     shadows: Optional[bool] = None
     #: Scale on the analytic-sky ambient contribution.

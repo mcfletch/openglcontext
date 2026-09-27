@@ -1,0 +1,26 @@
+{
+  "argv": [
+    "-m",
+    "OpenGLContext.bin.view",
+    "old_church_modeling_-_interior_scene.glb",
+    "--size",
+    "1600x900",
+    "--frames",
+    "30",
+    "--environment",
+    "kloofendal_43d_clear_puresky",
+    "--eye=-3.8,-7.6,-2.5",
+    "--look-at=3.27,-1.0,4.57",
+    "--capture",
+    "{png}"
+  ],
+  "credit": "&ldquo;Old church modeling - Interior Scene&rdquo; by Aur&eacute;lien Martel, CC-BY 4.0; sky by Greg Zaal and Sergej Majboroda (Poly Haven), CC0",
+  "git": "v3.0.0a4-554-gd7c279de-dirty",
+  "id": "showcase/church-interior",
+  "licence": "CC-BY 4.0; CC0 environment",
+  "producer": "command",
+  "size": [
+    1200,
+    675
+  ]
+}
