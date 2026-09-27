@@ -127,6 +127,25 @@ def test_what_is_no_vector_is_the_default(values, said, raw):
     assert len(said) == 1
 
 
+def test_a_list_of_vectors_is_their_numbers(values, said):
+    raw = [[0, 1], ['2', 3.5]]
+    assert values.vectors(raw, 'route points', length=2) == [(0.0, 1.0), (2.0, 3.5)]
+    assert said == []
+
+
+def test_a_vector_in_a_list_that_is_no_vector_is_left_out(values, said):
+    """Put in its place, a default would move a road's corner to the origin."""
+    raw = [[0, 1], [3], [1, 'x'], None, [2, 2]]
+    assert values.vectors(raw, 'route points', length=2) == [(0.0, 1.0), (2.0, 2.0)]
+    assert len(said) == 3
+
+
+@pytest.mark.parametrize('raw, reports', [(None, 0), ('abc', 1), ({'a': 1}, 1)])
+def test_what_is_no_list_is_no_vectors(values, said, raw, reports):
+    assert values.vectors(raw, 'route points', length=2) == []
+    assert len(said) == reports
+
+
 # --- structure ----------------------------------------------------------------
 
 def test_a_mapping_is_itself(values, said):

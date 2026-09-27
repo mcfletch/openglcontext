@@ -110,7 +110,9 @@ one is an ``object`` that mypy refuses to use as a number, a string or a table
 until it is narrowed. ``OpenGLContext.loaders.documentvalues`` narrows:
 ``DocumentValues.number``, ``integer``, ``flag``, ``choice``, ``vector``,
 ``mapping``, ``array``, ``text`` and ``texts`` report a value they cannot use
-once and answer the default; ``require_object``, ``require_array``,
+once and answer the default; ``vectors`` reads an array of them, reporting and
+leaving out an entry that is not one, since a default among the others would
+be a point the document never named; ``require_object``, ``require_array``,
 ``require_number``, ``require_numbers``, ``require_text``, ``require_whole``,
 ``require_index`` and ``require_item`` refuse a part the document cannot be
 read without with ``DocumentError``, a ``ValueError`` naming the part.

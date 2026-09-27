@@ -313,6 +313,25 @@ class DocumentValues:
                   % (what, raw, length, tuple(default)))
         return tuple(default)
 
+    def vectors(self, raw: object, what: str,
+                length: int = 3) -> list[tuple[float, ...]]:
+        """Each entry of the array ``raw`` as ``length`` finite floats.
+
+        An entry that is not is reported and left out rather than given a
+        default, since a default put among the others is a point the document
+        never named: a road's corner moved to the origin.  None is an empty
+        list without a report.
+        """
+        found = []
+        for index, entry in enumerate(self.array(raw, what)):
+            numbers = None if entry is None else _numbers(entry, length)
+            if numbers is None:
+                self.warn('%s[%d] is %r, which is not %d finite numbers; it is '
+                          'left out' % (what, index, entry, length))
+            else:
+                found.append(numbers)
+        return found
+
 
     def mapping(self, raw: object, what: str) -> JSONObject:
         """``raw`` as a JSON object, or an empty one.
