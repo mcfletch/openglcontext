@@ -6,6 +6,7 @@ stand-in context with no window at all, as the overlay's own cases use.
 """
 import numpy as np
 from OpenGLContext.events.inputstate import InputState
+from OpenGLContext.move.viewplatform import ViewPlatform
 from OpenGLContext.multiview.mixin import MultiViewMixin
 from OpenGLContext.multiview.views import ViewLayout
 from OpenGLContext.ui.metrics import FontMetrics
@@ -178,6 +179,25 @@ class TestWhatTheViewsAreFittedTo:
         window.startViews(bounds=bounds, arrangement='quad')
         assert asked
 
+    def test_a_long_low_scene_fills_its_elevations(self):
+        """A car's box, not the cube round its sphere, is what the views are fitted to."""
+        window = _Window()
+        window.sceneBox = lambda: ((-1.1, 0.0, -2.4), (1.1, 1.1, 2.6))
+        window.startViews(arrangement='quad')
+        corners = np.array([(x, y, z, 1.0) for x in (-1.1, 1.1) for y in (0.0, 1.1)
+                            for z in (-2.4, 2.6)])
+        for name in ('top', 'front', 'left'):
+            clip = corners @ window.views.named(name).camera.matrix()
+            reach = np.abs(clip[:, :2] / clip[:, 3:]).max(axis=0)
+            assert reach.max() > 0.8, (name, reach)
+            assert reach.max() <= 1.0 + 1e-5, (name, reach)
+
+    def test_the_windows_own_box_is_what_is_fitted(self):
+        window = _Window()
+        window.sceneBox = lambda: (LOW, HIGH)
+        window.startViews(arrangement='quad')
+        assert window.frameViews()
+
     def test_a_window_that_says_nothing_frames_nothing(self):
         window = _Window()
         window.startViews()
@@ -223,6 +243,44 @@ class TestThePointer:
         window = _window(arrangement='quad')
         window.ViewPort(1000, 800)
         assert window.views.named('front').size == (500, 400)
+
+
+class TestTheWindowsOwnViewPointedElsewhere:
+    """The perspective view's menu can give it a camera of its own, and take it back."""
+
+    def _window(self):
+        window = _window()
+        window.platform = ViewPlatform(position=(0, 2, 20))
+        return window, window.views.named('perspective')
+
+    def _drag(self, window, view):
+        x, y, width, height = view.rect
+        press = _Event(x + width // 2, y + height // 2)
+        window.ProcessEvent(press)
+        window.ProcessEvent(_Event(x + width // 2 + 30, y + height // 2, kind='mousemove'))
+        window.ProcessEvent(_Event(x + width // 2 + 30, y + height // 2, state=0))
+        return press
+
+    def test_the_furniture_is_given_the_arrangements_and_the_windows_camera(self):
+        window, _view = self._window()
+        assert window.viewChrome.view_set is window.views
+        assert window.viewChrome.window_camera() is window.platform
+
+    def test_pointed_at_the_plan_the_pointer_moves_it(self):
+        window, view = self._window()
+        window.viewChrome.point(view, 'top')
+        before = np.array(view.camera.view.centre)
+        press = self._drag(window, view)
+        assert press not in window.dispatched
+        assert not np.allclose(view.camera.view.centre, before)
+
+    def test_given_back_the_pointer_reaches_the_window_again(self):
+        window, view = self._window()
+        window.viewChrome.point(view, 'top')
+        window.viewChrome.point(view, 'perspective')
+        assert view.camera is None
+        press = self._drag(window, view)
+        assert press in window.dispatched
 
 
 class TestWithoutAnOverlay:

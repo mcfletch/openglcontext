@@ -133,3 +133,49 @@ def test_frustum_extraction_matches_glfrustum():
 
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+class TestTheBoxAroundARunOfNodes:
+    """``boundingBox``: the corners of what a run of nodes covers, in their space."""
+
+    @staticmethod
+    def _placed(translation, size, rotation=(0, 1, 0, 0.0)):
+        from OpenGLContext.scenegraph.basenodes import Box, Shape, Transform
+        return Transform(translation=translation, rotation=rotation,
+                         children=[Shape(geometry=Box(size=size))])
+
+    def test_it_is_the_corners_of_what_is_drawn(self):
+        low, high = boundingvolume.boundingBox([self._placed((4.0, 0.0, 0.0), (2, 4, 6))])
+        assert np.allclose(low, (3.0, -2.0, -3.0))
+        assert np.allclose(high, (5.0, 2.0, 3.0))
+
+    def test_it_covers_every_node(self):
+        low, high = boundingvolume.boundingBox([
+            self._placed((-5.0, 0.0, 0.0), (2, 2, 2)),
+            self._placed((5.0, 1.0, 0.0), (2, 2, 2))])
+        assert np.allclose(low, (-6.0, -1.0, -1.0))
+        assert np.allclose(high, (6.0, 2.0, 1.0))
+
+    def test_a_turned_node_is_boxed_as_it_is_turned(self):
+        low, high = boundingvolume.boundingBox(
+            [self._placed((0.0, 0.0, 0.0), (4, 1, 2), rotation=(0, 1, 0, np.pi / 2))])
+        assert np.allclose(low, (-1.0, -0.5, -2.0), atol=1e-5)
+        assert np.allclose(high, (1.0, 0.5, 2.0), atol=1e-5)
+
+    def test_what_has_no_extent_is_left_out(self):
+        from OpenGLContext.scenegraph.basenodes import Background, DirectionalLight
+        low, high = boundingvolume.boundingBox([
+            Background(), DirectionalLight(), self._placed((0.0, 0.0, 0.0), (2, 2, 2))])
+        assert np.allclose(low, (-1.0, -1.0, -1.0))
+        assert np.allclose(high, (1.0, 1.0, 1.0))
+
+    def test_nothing_measurable_is_none(self):
+        from OpenGLContext.scenegraph.basenodes import Background
+        assert boundingvolume.boundingBox([]) is None
+        assert boundingvolume.boundingBox([Background()]) is None
+
+    def test_the_sphere_is_the_one_round_the_box(self):
+        nodes = [self._placed((4.0, 0.0, 0.0), (2, 4, 6))]
+        centre, radius = boundingvolume.boundingSphere(nodes)
+        assert np.allclose(centre, (4.0, 0.0, 0.0))
+        assert radius == pytest.approx(np.sqrt(1 + 4 + 9))

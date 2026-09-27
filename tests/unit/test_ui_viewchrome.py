@@ -8,8 +8,11 @@ import pytest
 
 from OpenGLContext.edit.mapview import MapView, MapViewPlatform
 from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
+from OpenGLContext.move.viewplatform import ViewPlatform
 from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform, view_kind
+from OpenGLContext.multiview.mixin import quadViews, viewSetFor
 from OpenGLContext.multiview.views import View, ViewLayout
+from OpenGLContext.multiview.viewset import ViewSet
 from OpenGLContext.ui.menu import Menu, MenuItem
 from OpenGLContext.ui.metrics import REFERENCE_METRICS
 from OpenGLContext.ui.widgets import Separator
@@ -602,6 +605,127 @@ class TestTheViewsOwnMenu:
     def test_an_application_with_nothing_to_add_adds_nothing(self):
         _chrome_, _view, items = self._opened(menu_items=lambda view: [])
         assert [str(item.text) for item in items] == ['View', 'Rendering', 'Single tile']
+
+
+def _view_set(arrangement='single'):
+    """The plan, two elevations and the window's own view, as a context declares them."""
+    views = viewSetFor(quadViews(arrangement=arrangement))
+    views.arrange(*VIEWPORT)
+    return views
+
+
+def _set_chrome(views, **named):
+    chrome = ViewChrome(layout=views.layout, view_set=views, **named)
+    chrome.layout(VIEWPORT, REFERENCE_METRICS)
+    return chrome
+
+
+def _press(chrome, widget):
+    chrome.pointer_pressed(*widget.rect.centre)
+    chrome.pointer_released(*widget.rect.centre)
+
+
+class TestSwitchingTheTiling:
+    """A view set's arrangements, reached from the view alone in the window."""
+
+    def test_a_view_alone_has_the_button_for_the_tiles(self):
+        chrome = _set_chrome(_view_set())
+        buttons = _of(chrome, ExpandButton)
+        assert len(buttons) == 1
+        assert buttons[0].maximised()          # it draws the tiles it would show
+
+    def test_pressing_it_shows_the_four(self):
+        placed = []
+        views = _view_set()
+        chrome = _set_chrome(views, on_arrange=lambda: placed.append(1))
+        _press(chrome, _of(chrome, ExpandButton)[0])
+        assert views.mode == 'quad'
+        assert chrome.layout_of is views.layout
+        assert placed
+
+    def test_the_menu_offers_the_four(self):
+        views = _view_set()
+        stack = _RecordingStack()
+        chrome = _set_chrome(views, stack=stack)
+        _press(chrome, _of(chrome, ViewLabel)[0])
+        item = [one for one in _items(stack.pushed[0]) if str(one.text) == 'Four tiles']
+        assert item, 'the menu offers no way to the tiles'
+        item[0].on_activate(item[0])
+        assert views.mode == 'quad'
+
+    def test_in_the_four_a_view_is_still_given_the_window(self):
+        views = _view_set('quad')
+        chrome = _set_chrome(views)
+        button = [one for one in _of(chrome, ExpandButton)
+                  if one.view.name == 'front'][0]
+        _press(chrome, button)
+        assert views.mode == 'quad'
+        assert views.layout.maximised is button.view
+
+    def test_the_tiles_are_named_by_how_many_there_are(self):
+        views = ViewSet([View(name='one'), View(name='two')],
+                        arrangements={'one': ['one'], 'split': ['one', 'two']})
+        views.arrange(*VIEWPORT)
+        stack = _RecordingStack()
+        chrome = _set_chrome(views, stack=stack)
+        _press(chrome, _of(chrome, ViewLabel)[0])
+        assert 'Two tiles' in [str(one.text) for one in _items(stack.pushed[0])]
+
+    def test_a_view_no_tiling_holds_has_nowhere_to_go(self):
+        views = ViewSet([View(name='one'), View(name='two')],
+                        arrangements={'one': ['one'], 'two': ['two']})
+        views.arrange(*VIEWPORT)
+        assert _of(_set_chrome(views), ExpandButton) == []
+
+
+class TestTheWindowsOwnView:
+    """The view drawn through the window's camera is pointed as any other is."""
+
+    BOUNDS = ((-1.0, -1.0, -1.0), (1.0, 1.0, 1.0))
+
+    def _opened(self, views, platform):
+        stack = _RecordingStack()
+        chrome = _set_chrome(views, stack=stack, window_camera=lambda: platform,
+                             bounds=lambda: self.BOUNDS)
+        view = views.named('perspective')
+        label = [one for one in _of(chrome, ViewLabel) if one.view is view][0]
+        _press(chrome, label)
+        return view, _sub(_items(stack.pushed[-1]), 'View')
+
+    def _choose(self, views, platform, text):
+        view, kinds = self._opened(views, platform)
+        item = [one for one in kinds if str(one.text) == text][0]
+        item.on_activate(item)
+        return view
+
+    def test_it_offers_the_ways_of_looking_with_perspective_ticked(self):
+        _view, kinds = self._opened(_view_set(), ViewPlatform(position=(0, 2, 10)))
+        assert [str(one.text) for one in kinds if one.checked] == ['Perspective']
+
+    def test_an_elevation_looks_at_what_the_window_was_looking_at(self):
+        view = self._choose(_view_set(), ViewPlatform(position=(0, 2, 10)), 'Top')
+        assert view_kind(view) == 'top'
+        centre = np.asarray(view.camera.view.centre, 'd')
+        assert np.allclose(centre[[0, 2]], (0.0, 0.0), atol=1e-6)
+
+    def test_ortho_turns_about_what_the_window_was_looking_at(self):
+        view = self._choose(_view_set(), ViewPlatform(position=(0, 2, 10)), 'Ortho')
+        assert view_kind(view) == 'ortho'
+        assert np.allclose(view.camera.view.target(), (0.0, 2.0, 0.0), atol=1e-6)
+
+    def test_perspective_gives_it_back_to_the_window(self):
+        views = _view_set()
+        platform = ViewPlatform(position=(0, 2, 10))
+        self._choose(views, platform, 'Front')
+        view = self._choose(views, platform, 'Perspective')
+        assert view.camera is None
+
+    def test_a_chrome_told_no_window_camera_offers_none(self):
+        views = _view_set()
+        stack = _RecordingStack()
+        chrome = _set_chrome(views, stack=stack)
+        _press(chrome, _of(chrome, ViewLabel)[0])
+        assert 'View' not in [str(one.text) for one in _items(stack.pushed[0])]
 
 
 class TestTheButtonsGlyph:

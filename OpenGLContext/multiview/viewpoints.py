@@ -25,7 +25,7 @@ import numpy as np
 
 __all__ = [
     'SceneCamera', 'CameraChooser', 'scene_cameras', 'camera_at',
-    'first_camera', 'look_through',
+    'first_camera', 'look_through', 'platform_camera',
 ]
 
 Vector = tuple[float, float, float]
@@ -93,6 +93,21 @@ def camera_at(viewpoint: Any, matrix: Any = None, name: str = '',
         up=_unit(np.append(up, 0.0) @ world),
         fov=float(viewpoint.fieldOfView),
         viewpoint=viewpoint, path=path)
+
+
+def platform_camera(platform: Any, name: str = '') -> SceneCamera:
+    """Where a :class:`~OpenGLContext.move.viewplatform.ViewPlatform` stands, as a camera.
+
+    What a view drawn through the window's own camera is seeded from when it
+    is given one of its own. It names no Viewpoint.
+    """
+    position = np.asarray(platform.position, 'd')[:3]
+    up = np.asarray(platform.quaternion * [0.0, 1.0, 0.0, 0.0], 'd')[:3]
+    return SceneCamera(
+        name=name,
+        position=(float(position[0]), float(position[1]), float(position[2])),
+        forward=_unit(platform.forward()), up=_unit(up),
+        fov=math.radians(float(platform.frustum[0])))
 
 
 def scene_cameras(scenegraph: Any) -> list[SceneCamera]:

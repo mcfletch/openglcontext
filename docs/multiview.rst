@@ -102,7 +102,10 @@ the window's one view. The application switches whatever ``switching`` says:
 ``showViews(name)``, ``toggleViews()`` and ``maximiseView()``; the set is
 ``context.views``, an ordinary :ref:`ViewSet <view-set>`.
 
-The views are framed on the context's ``sceneBounds()`` when they are built.
+The views are framed on the context's ``sceneBox()`` when they are built:
+the axis-aligned box round everything in the scene that has an extent, so a
+long, low model fills its elevations along both its length and its height.
+The view menu's Zoom to fit uses the same box.
 An application that loads a scene afterwards calls ``frameViews()`` to fit
 them to it; ``oglc-view`` does this each time a scene loads.
 
@@ -129,7 +132,7 @@ from code:
            self.startViews(bounds=lambda: (scene.minimum, scene.maximum))
 
 - ``bounds`` is ``(minimum, maximum)``, or a callable that returns it. With
-  no ``bounds``, the views are framed on the context's ``sceneBounds()``.
+  no ``bounds``, the views are framed on the context's ``sceneBox()``.
 - ``elevations`` chooses which three directions the orthographic views look
   along. The default is ``('top', 'front', 'left')``.
 - ``arrangement`` is ``'single'`` or ``'quad'``; ``multiViewArrangement``
@@ -628,9 +631,12 @@ In each view it draws:
 - an axis triad that turns with the camera, in a view that has a camera of
   its own. ``MultiViewMixin``'s perspective view draws through the window's
   own camera and has no triad;
-- a button that shows the view on its own or restores the arrangement. It
-  shows an outline when it will show the view alone and four tiles when it
-  will restore. An arrangement of one view has no such button.
+- a button that shows the view on its own or restores the tiles. It shows an
+  outline when it will show the view alone and four tiles when it will
+  restore. In an arrangement of one view, the button shows the first of the
+  ``view_set``'s arrangements that tiles that view with others: from the
+  viewer's ``single`` arrangement, it shows ``quad``. With no ``view_set``, an
+  arrangement of one view has no such button.
 
 Between the views it draws a splitter on each dividing line, and in a quad a
 handle where the two lines cross, which moves both. The icons are drawn in
@@ -644,16 +650,27 @@ The view's menu has these entries:
 - View - the direction the view looks (front, back, right, left, top,
   bottom), and ``perspective`` or ``ortho``. ``ortho`` draws a camera that
   turns without perspective, so two objects of one size measure the same
-  wherever they stand. Absent for a view drawn through the window's own
-  camera.
+  wherever they stand. A view drawn through the window's own camera is
+  ticked ``perspective``. Choosing another way gives it a camera of its own,
+  standing where the window's camera stands and turning about what it looks
+  at, which the pointer then moves. Choosing ``perspective`` gives the view
+  back to the window's camera and its movement modes. The entry is absent for
+  such a view where the chrome was given no ``window_camera``.
 - Cameras - the scene's own cameras, where ``cameras`` supplies them:
   a list of ``SceneCamera``, or a callable that returns one and is called
   each time the menu opens. Choosing one points the view through it.
 - Rendering - shaded or wireframe.
 - Zoom to fit - present when the window passed ``bounds``.
-- Single tile, or Four tiles when the view already fills the window.
-  Neither appears in an arrangement of one view.
+- Single tile, or Four tiles (Two tiles for a split) when the view already
+  fills the window. It does what the corner button does, so neither appears
+  where the button would not.
 - The application's own entries, below a separator, where it has any.
+
+``view_set`` is the :class:`~OpenGLContext.multiview.viewset.ViewSet` the
+layout is one arrangement of, and ``window_camera`` a callable that returns
+the window's own camera. ``MultiViewMixin`` passes both, so every context
+that declares views in its ``navigation`` offers the tiles and the ways of
+looking without code of its own.
 
 The first three open submenus beside their rows. The menu hangs below the
 name, or sits over it in a view with no room below. Each row has a letter
@@ -789,6 +806,10 @@ camera. Work that depends only on the scene is done once for all views:
   view covers is cleared to black, as it is without bloom.
 - Transparency - transparent shapes are sorted back to front for each view's
   own camera.
+- Glass - each view's transmissive shapes refract a backdrop captured from
+  that view's own rectangle, so glass shows the scene behind it in that view
+  and never a neighbouring view. The pass keeps one backdrop texture for
+  each size of view.
 
 Content kept loaded around the viewer, such as streamed 3D Tiles or a
 vegetation field, has to cover every view.

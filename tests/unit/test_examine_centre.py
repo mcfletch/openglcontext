@@ -178,6 +178,29 @@ class TestTheSceneBoundsItself:
         assert np.allclose(centre, [4.0, 0.0, 0.0])
         assert radius == pytest.approx(np.sqrt(3.0), abs=0.01)
 
+    def test_a_context_reports_the_box_round_its_scenegraph(self):
+        class _Real:
+            sceneBox = Context.sceneBox
+
+            def getSceneGraph(self):
+                return SceneGraph(children=[
+                    Transform(translation=(4.0, 0.0, 0.0),
+                              children=[Shape(geometry=Box(size=(2, 4, 6)))]),
+                ])
+
+        low, high = _Real().sceneBox()
+        assert np.allclose(low, [3.0, -2.0, -3.0])
+        assert np.allclose(high, [5.0, 2.0, 3.0])
+
+    def test_a_context_with_no_scenegraph_has_no_box(self):
+        class _Bare:
+            sceneBox = Context.sceneBox
+
+            def getSceneGraph(self):
+                return None
+
+        assert _Bare().sceneBox() is None
+
     def test_a_context_with_no_scenegraph_reports_nothing(self):
         class _Bare:
             sceneBounds = Context.sceneBounds

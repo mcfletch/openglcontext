@@ -144,9 +144,23 @@ class ViewSet:
         layout = self._layouts[name]
         layout.arrange(*self.window)
         self.gestures.layout = layout
-        self.gestures.views = [view for view in layout.views
-                               if any(view is mine for mine in self.driven)]
+        self._drivenShown()
         return layout
+
+    def drive(self, views: Iterable[Any]) -> None:
+        """Have the pointer move the cameras of ``views``, and of no others.
+
+        For a window whose views change hands: one drawn through the window's
+        own camera is moved by the window, and given a camera of its own it
+        is moved by the pointer.
+        """
+        self.driven = [self.named(view) for view in views]
+        self._drivenShown()
+
+    def _drivenShown(self) -> None:
+        """Hand the gestures the driven views the arrangement shows."""
+        self.gestures.views = [view for view in self.layout.views
+                               if any(view is mine for mine in self.driven)]
 
     def release_all(self) -> None:
         """Let go of the pointer: end any drag, and free the layout's capture."""

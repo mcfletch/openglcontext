@@ -40,6 +40,12 @@ and licence notices there::
     ViewChrome(layout=layout, stack=context.overlays,
                menu_items=lambda view: [MenuItem(text='About', on_activate=about)])
 
+``view_set`` is the :class:`~OpenGLContext.multiview.viewset.ViewSet` the
+layout is an arrangement of, which lets a view alone in the window go back to
+the tiles; ``window_camera`` answers the window's own camera, which a view
+drawn through it is seeded from when its menu points it another way.
+:class:`~OpenGLContext.multiview.mixin.MultiViewMixin` passes both.
+
 Every part is optional -- ``labels``, ``axes``, ``expand`` and ``splitters``
 each switch a kind off for the whole window, and ``only`` gives
 one view a set of its own::
@@ -61,10 +67,10 @@ from typing import Any, Optional
 import numpy as np
 from vrml import field
 
-from OpenGLContext.multiview.cameras import VIEW_KINDS, point_view, view_kind
+from OpenGLContext.multiview.cameras import PERSPECTIVE, VIEW_KINDS, point_view, view_kind
 from OpenGLContext.multiview.views import View, ViewLayout
-from OpenGLContext.multiview.viewpoints import SceneCamera, look_through
-from OpenGLContext.multiview.viewset import fit_view
+from OpenGLContext.multiview.viewpoints import SceneCamera, look_through, platform_camera
+from OpenGLContext.multiview.viewset import ViewSet, fit_view
 from OpenGLContext.ui.geometry import Rect
 from OpenGLContext.ui.menu import Menu, MenuItem
 from OpenGLContext.ui.widgets import Separator
@@ -117,7 +123,8 @@ KIND_LABELS = {
 #: looking, and the two ways what it holds is drawn.
 FIT_LABEL = _('Zoom to fit')
 SINGLE_TILE_LABEL = _('Single tile')
-TILES_LABEL = _('Four tiles')
+#: What going back to the tiles is called, by how many tiles there are.
+TILES_LABELS = {2: _('Two tiles'), 4: _('Four tiles')}
 SHADED_LABEL = _('Shaded')
 WIREFRAME_LABEL = _('Wireframe')
 CAMERAS_LABEL = _('Cameras')
@@ -303,20 +310,20 @@ class _ChromeButton(_ViewWidget):
 
 
 class ExpandButton(_ChromeButton):
-    """Gives this view the whole window, and gives the arrangement back.
+    """Gives this view the whole window, and gives the tiles back.
 
     One button, and which it is doing is what it draws: an outline where the
     view would be given the window, and the tiles it would be given back to
-    where it already has it.
+    where it already has it -- maximised in its arrangement, or alone in an
+    arrangement of one beside another that tiles it.
     """
 
     PROTO = 'ExpandButton'
     cursor = 'hand'
 
     def maximised(self) -> bool:
-        """Whether this view already has the window."""
-        layout = getattr(self.chrome, 'layout_of', None)
-        return layout is not None and layout.maximised is self.view
+        """Whether this view has the window, and pressing gives the tiles back."""
+        return self.chrome is not None and self.chrome.gives_tiles(self.view)
 
     def glyph(self, renderer: Any, rect: Rect, colour: Any) -> None:
         if not self.maximised():
@@ -337,7 +344,7 @@ class ExpandButton(_ChromeButton):
 
     def activate(self) -> None:
         if self.chrome is not None:
-            self.chrome.maximise(self.view)
+            self.chrome.tile(self.view)
         super(ExpandButton, self).activate()
 
 
@@ -434,6 +441,8 @@ class ViewChrome(Panel):
                  only: Optional[dict[str, Sequence[str]]] = None,
                  bounds: Optional[Callable[[], Optional[tuple[Any, Any]]]] = None,
                  cameras: Sequence[SceneCamera] | Callable[[], Sequence[SceneCamera]] | None = None,
+                 view_set: Optional[ViewSet] = None,
+                 window_camera: Optional[Callable[[], Any]] = None,
                  menu_items: Optional[Callable[[View], Sequence[Any]]] = None,
                  **named: Any) -> None:
         named.setdefault('modal', False)
@@ -454,6 +463,13 @@ class ViewChrome(Panel):
         #: The scene's cameras, or what answers them, for the menu's
         #: *Cameras*. None, or none answered, offers no such item.
         self.cameras = cameras
+        #: The arrangements the layout is one of, for going between a view
+        #: alone and the tiles; None offers only giving a view the window.
+        self.view_set = view_set
+        #: What answers the window's own camera, which a view drawn through
+        #: it is seeded from when pointed another way; None offers such a
+        #: view no ways of looking.
+        self.window_camera = window_camera
         #: What answers the application's own rows for a view's menu, asked
         #: with the view each time the menu opens; they go at its foot.
         self.menu_items: Callable[[View], Sequence[Any]] = (
@@ -504,7 +520,7 @@ class ViewChrome(Panel):
                                           chrome=self))
             if 'axes' in parts and navigable:
                 children.append(AxisTriad(view=view, chrome=self))
-            if 'expand' in parts and self._can_maximise():
+            if 'expand' in parts and self._can_tile(view):
                 children.append(ExpandButton(view=view, chrome=self))
         if self.splitters:
             self._splitters = self._split_widgets()
@@ -643,6 +659,59 @@ class ViewChrome(Panel):
         layout.maximise(view)
         self._changed()
 
+    def tiles_for(self, view: View) -> Optional[str]:
+        """The arrangement that tiles ``view`` with others, where it is shown alone.
+
+        The first of :attr:`view_set`'s arrangements that shows ``view`` among
+        other views; None where the layout already has others, or no view
+        set is offered.
+        """
+        layout = self.layout_of
+        if self.view_set is None or layout is None or len(layout.views) > 1:
+            return None
+        for name, arranged in self.view_set.arrangements.items():
+            if (len(arranged.views) > 1
+                    and any(view is shown for shown in arranged.views)):
+                return name
+        return None
+
+    def gives_tiles(self, view: View) -> bool:
+        """Whether ``view`` has the window, with tiles for its control to give back."""
+        return self._maximised(view) or self.tiles_for(view) is not None
+
+    def tile(self, view: View) -> None:
+        """Show ``view`` alone or among its tiles, whichever it is not.
+
+        Where the arrangement has other views, ``view`` is given the window
+        and given it back; where it is alone, the arrangement that tiles it
+        is shown.
+        """
+        tiled = self.tiles_for(view)
+        if tiled is None:
+            self.maximise(view)
+        else:
+            self.show(tiled)
+
+    def show(self, name: str) -> None:
+        """Show :attr:`view_set`'s arrangement ``name``, and dress its views."""
+        if self.view_set is None:
+            return
+        self.view_set.show(name)
+        self.layout_of = self.view_set.layout
+        self._changed()
+
+    def _can_tile(self, view: View) -> bool:
+        """Whether ``view``'s control has anywhere to go: the window, or the tiles."""
+        return self._can_maximise() or self.tiles_for(view) is not None
+
+    def _tiles_label(self, view: View) -> str:
+        """What the tiles ``view`` would go back to are called."""
+        tiled = self.tiles_for(view)
+        layout = (self.view_set.arrangements[tiled] if tiled is not None
+                  and self.view_set is not None else self.layout_of)
+        count = len(layout.views) if layout is not None else 0
+        return str(TILES_LABELS.get(count, TILES_LABELS[4]))
+
     def move_split(self, splitter: Splitter, x: float, y: float) -> None:
         """Put the line the splitter stands on where the pointer is."""
         layout = self.layout_of
@@ -671,7 +740,7 @@ class ViewChrome(Panel):
         if self.stack is None:
             return None
         items: list[Any] = []
-        if view.camera is not None:
+        if view.camera is not None or self._windowPlatform() is not None:
             items.append(MenuItem(text=VIEW_LABEL, submenu=[
                 self._kind_item(view, kind) for kind in VIEW_KINDS]))
         cameras = self.scene_cameras()
@@ -686,10 +755,11 @@ class ViewChrome(Panel):
                 self.fit(view)
 
             items.append(MenuItem(text=FIT_LABEL, on_activate=fit_it))
-        if self._can_maximise():
+        if self._can_tile(view):
             items.append(MenuItem(
-                text=(TILES_LABEL if self._maximised(view) else SINGLE_TILE_LABEL),
-                on_activate=lambda widget: self.maximise(view)))
+                text=(self._tiles_label(view) if self.gives_tiles(view)
+                      else SINGLE_TILE_LABEL),
+                on_activate=lambda widget: self.tile(view)))
         own = list(self.menu_items(view))
         if own:
             items.append(Separator())
@@ -721,16 +791,53 @@ class ViewChrome(Panel):
         return max(along, float(np.linalg.norm(high - low)) * 0.05, 1e-6)
 
     def _kind_item(self, view: View, kind: str) -> MenuItem:
-        """One way of looking, ticked where the view is looking that way."""
+        """One way of looking, ticked where the view is looking that way.
+
+        A view drawn through the window's own camera is looking in
+        perspective.
+        """
+        looking = view_kind(view) if view.camera is not None else PERSPECTIVE
         item = MenuItem(text=KIND_LABELS.get(kind, kind), checkable=True,
-                        checked=(view_kind(view) == kind))
+                        checked=(looking == kind))
 
         def chosen(widget: Any, kind: str = kind) -> None:
-            point_view(view, kind)
-            self._changed()
+            self.point(view, kind)
 
         item.on_activate = chosen
         return item
+
+    def point(self, view: View, kind: str) -> bool:
+        """Point ``view`` at ``kind``, one of the view kinds; False where it cannot be.
+
+        A view drawn through the window's own camera is given a camera of its
+        own, standing where the window's stands and turning about what it
+        looks at, and then pointed. Such a view pointed at ``'perspective'``
+        is given back to the window's camera, and to whatever moves it.
+        """
+        if kind == PERSPECTIVE and view.windowView:
+            view.camera = None
+        elif view.camera is None and not self._ownCamera(view):
+            return False
+        else:
+            point_view(view, kind)
+        self._changed()
+        return True
+
+    def _windowPlatform(self) -> Any:
+        """The window's own camera, or None where this chrome is told of none."""
+        return self.window_camera() if self.window_camera is not None else None
+
+    def _ownCamera(self, view: View) -> bool:
+        """Give ``view`` a camera where the window's stands; False with none to copy."""
+        platform = self._windowPlatform()
+        if platform is None:
+            return False
+        from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
+        standing = platform_camera(platform)
+        view.camera = OrbitViewPlatform(
+            OrbitView(nearest=1e-6, lowest=-OrbitView.HIGHEST), view.size)
+        look_through(view, standing, distance=self._ahead_of(standing))
+        return True
 
     def _drawn_items(self, view: View) -> list[MenuItem]:
         """Shaded or wireframe: how what the view holds is drawn."""

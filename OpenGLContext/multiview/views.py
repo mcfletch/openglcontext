@@ -132,6 +132,11 @@ class View:
     ``rect`` is where the layout last placed the view; a view the layout is not
     showing (the others, while one is maximised) is placed nowhere.
 
+    ``windowView`` is True for a view made with no camera: the window's own
+    view, which may be given a camera of its own for a while -- pointed along
+    an axis from its menu -- and handed back to the window's by setting
+    ``camera`` to None again.
+
     ``navigation`` is what the pointer moves this view's camera by -- the
     gestures it offers and the buttons that raise them. It is made for the
     camera the first time something asks
@@ -143,6 +148,7 @@ class View:
                  style: Optional[ViewStyle] = None,
                  navigation: Optional['ViewNavigation'] = None) -> None:
         self.camera: Optional[ViewCamera] = camera
+        self.windowView = camera is None
         self.name = name
         self.style = style if style is not None else ViewStyle()
         self.navigation: Optional['ViewNavigation'] = navigation

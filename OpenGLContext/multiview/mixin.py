@@ -140,6 +140,7 @@ if TYPE_CHECKING:
 
         def getViewPort(self) -> tuple[int, int]: ...
         def getViewLayout(self) -> Any: ...
+        def getViewPlatform(self) -> Any: ...
         def triggerRedraw(self, force: int = 0) -> Any: ...
         def hasMouseMoveHandlers(self) -> bool: ...
         def ProcessEvent(self, event: Any) -> Any: ...
@@ -255,7 +256,8 @@ class MultiViewMixin(_Host):
         self.viewChrome = ViewChrome(
             layout=self.views.layout, stack=stack,
             on_arrange=self.viewsArranged, bounds=self._viewBounds,
-            cameras=self.sceneCameras,
+            cameras=self.sceneCameras, view_set=self.views,
+            window_camera=self.getViewPlatform,
             menu_items=self.viewMenuItems)
         stack.push(self.viewChrome)
 
@@ -277,9 +279,15 @@ class MultiViewMixin(_Host):
         return super().getViewLayout()
 
     def viewsArranged(self) -> None:
-        """Place the views again: something changed what is on screen."""
+        """Place the views again: something changed what is on screen.
+
+        The pointer moves every view with a camera of its own, and a view
+        the furniture gave one or gave back to the window's is among them or
+        not from here on.
+        """
         if self.views is None:
             return
+        self.views.drive(view for view in self.views.views if view.camera is not None)
         self.views.arrange(*self.getViewPort())
         stack = getattr(self, 'overlays', None)
         if stack is not None:
@@ -298,18 +306,12 @@ class MultiViewMixin(_Host):
     def boundsOfScene(self) -> Optional[tuple[Any, Any]]:
         """The box round what the window is showing, or None where it shows nothing.
 
-        From the context's own ``sceneBounds``, which answers a centre and a
-        radius: the box round that sphere is what the views are fitted to,
-        which is the same thing the single-view framing already works in.
+        From the context's own ``sceneBox``: the box round what is drawn, so a
+        long, low scene fills its elevations along its length and its height.
         """
-        found = getattr(self, 'sceneBounds', None)
-        around = found() if found is not None else None
-        if not around:
-            return None
-        centre, radius = around
-        radius = float(radius) or 1.0
-        return (tuple(float(value) - radius for value in centre[:3]),
-                tuple(float(value) + radius for value in centre[:3]))
+        found = getattr(self, 'sceneBox', None)
+        box = found() if found is not None else None
+        return tuple(box) if box else None
 
     def frameViews(self) -> bool:
         """Fit what there is to see into every view; False with nothing to fit.

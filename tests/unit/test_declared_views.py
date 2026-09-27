@@ -231,7 +231,7 @@ class TestAContextBuildsItsDeclaredViews:
 
     def test_they_are_framed_on_the_scene(self):
         window = _Bare(Navigation(views=_quad(arrangement='quad')))
-        window.sceneBounds = lambda: ((0.0, 3.0, 0.0), 10.0)
+        window.sceneBox = lambda: ((-10.0, -7.0, -10.0), (10.0, 13.0, 10.0))
         window.completeInit()
         assert window.views.named('top').camera.view.span != 10.0
 

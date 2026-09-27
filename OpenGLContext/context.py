@@ -1897,6 +1897,18 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             return None
         return boundingSphere(getattr(sg, 'children', None) or ())
 
+    def sceneBox(self) -> tuple[Point, Point] | None:
+        """``(minimum, maximum)``, the corners of the box round this context's scene, or None.
+
+        What the views are fitted to: the box keeps a scene's proportions,
+        where :meth:`sceneBounds`'s sphere is as tall and as deep as it is long.
+        """
+        from OpenGLContext.scenegraph.boundingvolume import boundingBox
+        sg = self.getSceneGraph()
+        if sg is None:
+            return None
+        return boundingBox(getattr(sg, 'children', None) or ())
+
     def examineCenter(self, event: Any) -> Any:
         """The world point an examine drag should orbit about.
 

@@ -283,7 +283,11 @@ The scene
 - ``v`` switches between one view of the scene and four: the plan, the front
   and left elevations, and the camera. The three orthographic views are ruled
   with a grid. ``--views quad`` opens with four. ``x`` gives the view last
-  clicked the whole window, or gives it back. See :doc:`multiview`.
+  clicked the whole window, or gives it back. The button in each view's
+  top-right corner, and the Single tile and Four tiles entries in the menu
+  under its name, do the same with the pointer. That menu's View entry
+  points any view, the camera's included, along an axis or at an
+  orthographic or perspective camera. See :doc:`multiview`.
 
 - ``m`` steps to the next movement mode.
 

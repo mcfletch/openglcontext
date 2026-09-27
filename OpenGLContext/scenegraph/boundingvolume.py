@@ -307,17 +307,20 @@ class _Measure(object):
         self.cache = cache.CACHE
 
 
-def boundingSphere(
-    nodes: Sequence[Any],
-) -> Optional[tuple[tuple[float, ...], float]]:
-    """``(centre, radius)`` around a run of nodes, or None if none can be measured.
+Corner = tuple[float, float, float]
 
-    Nodes with no extent -- a ``Background``, a light, a sensor -- are skipped
-    rather than making the whole answer unbounded, which is what asking a
-    grouping node for its volume would do.
 
-    What a caller wants when it needs to know **where a scene is and how big**:
-    framing a camera on it, or choosing the point an examine drag pivots about.
+def boundingBox(nodes: Sequence[Any]) -> Optional[tuple[Corner, Corner]]:
+    """``(minimum, maximum)``, the corners of the axis-aligned box around a run of nodes.
+
+    None if none of them can be measured. Nodes with no extent -- a
+    ``Background``, a light, a sensor -- are skipped rather than making the
+    whole answer unbounded, which is what asking a grouping node for its
+    volume would do.
+
+    What a caller fitting a view to a scene wants: the box keeps a long, low
+    scene's proportions, which the sphere round it (:func:`boundingSphere`)
+    does not.
     """
     mode = _Measure()
     volumes = []
@@ -337,13 +340,32 @@ def boundingSphere(
     size = getattr(volume, 'size', None)
     if center is None or size is None:
         return None
+    x, y, z = (float(value) for value in center[:3])
+    width, height, depth = (float(value) / 2.0 for value in size[:3])
+    return ((x - width, y - height, z - depth), (x + width, y + height, z + depth))
+
+
+def boundingSphere(
+    nodes: Sequence[Any],
+) -> Optional[tuple[tuple[float, ...], float]]:
+    """``(centre, radius)`` around a run of nodes, or None if none can be measured.
+
+    The sphere round :func:`boundingBox`'s box. What a caller wants when it
+    needs to know **where a scene is and how big**: framing a camera on it, or
+    choosing the point an examine drag pivots about.
+    """
+    found = boundingBox(nodes)
+    if found is None:
+        return None
+    low, high = found
+    centre = tuple((a + b) / 2.0 for a, b in zip(low, high))
     # An explicit accumulator: ``from OpenGLContext.arrays import *`` above
     # shadows the builtin ``sum`` with numpy's, which refuses a generator.
     squared = 0.0
-    for value in size:
-        half = float(value) / 2.0
+    for a, b in zip(low, high):
+        half = (b - a) / 2.0
         squared += half * half
-    return tuple(float(v) for v in center), squared ** 0.5
+    return centre, squared ** 0.5
 
 
 def volumeFromCoordinate(node: Any) -> BoundingVolume:
