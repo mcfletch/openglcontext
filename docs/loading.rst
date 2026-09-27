@@ -158,7 +158,11 @@ disk (``cache_dir=``). ``max_sse`` is the screen-space error, in pixels, a
 tile may show before a finer one is fetched, and ``memory_budget`` is the
 resident tile memory in bytes. Pass ``physics_world=`` to make the loaded
 tiles colliders. Call ``terrain.shutdown()`` when you are done with it, to
-stop its worker threads. :doc:`Streamed 3D Tiles <tiles3d>` covers the rest:
+stop its worker threads, and ``terrain.dispose()`` with the context it was
+drawn in current, to delete the GL objects of its ground, trees and ground
+cover where the context goes on drawing another world.
+``instancedgl.dispose_subtree(node)`` does the same for any subtree of
+terrain, vegetation or particle nodes. :doc:`Streamed 3D Tiles <tiles3d>` covers the rest:
 generating a world, tuning detail and memory, and what the loader supports.
 
 .. _background-loading:

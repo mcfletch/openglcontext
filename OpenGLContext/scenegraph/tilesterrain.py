@@ -34,6 +34,7 @@ from OpenGLContext.loaders.documentvalues import (
 from OpenGLContext.loaders import resolver
 from OpenGLContext.loaders.resolver import ContainedPath, Located
 from OpenGLContext.scenegraph.group import Group
+from OpenGLContext.scenegraph.instancedgl import dispose_subtree
 from OpenGLContext.loaders.tiles3d import fetch
 from OpenGLContext.loaders.tiles3d.tileset import build_runtime_tileset
 from OpenGLContext.loaders.tiles3d.runtime import TilesetRuntime
@@ -381,6 +382,17 @@ class TilesTerrain(Group):
         self.runtime.shutdown()
         if self.cover is not None:
             self.cover.shutdown()
+
+    def dispose(self) -> None:
+        """Delete the GL objects of the ground, the trees and the ground cover.
+
+        With the context the world was drawn in current, when the world is
+        taken out of a scene that goes on being drawn.  The tiles themselves
+        belong to the render pass and go with it.
+        """
+        for layer in (self.ground, self.vegetation, self.cover):
+            if layer is not None:
+                dispose_subtree(layer)
 
 
 def _facing(view_projection: Any) -> Any:

@@ -33,6 +33,8 @@ from OpenGL.GL import (
 )
 from OpenGL.GL.shaders import compileProgram, compileShader
 
+from OpenGLContext.scenegraph.walk import reachable
+
 log = logging.getLogger(__name__)
 
 # OpenGLContext/shaders (this file lives in OpenGLContext/scenegraph/).
@@ -332,6 +334,13 @@ class GLLayer:
         """Make the node's GL objects and set ``_gl``. GL thread."""
         raise NotImplementedError
 
+    def dispose(self) -> None:
+        """Delete the node's GL objects, with its context current.
+
+        The next draw makes them again.  Calling it twice is calling it once.
+        """
+        raise NotImplementedError
+
     def ensure_gl(self) -> bool:
         """Whether the node is to draw now, making its GL objects if need be."""
         if not self.drawn or self.failed:
@@ -345,6 +354,20 @@ class GLLayer:
                             exc_info=err)
                 return False
         return True
+
+
+def dispose_subtree(root: Any) -> None:
+    """Delete the GL objects of every node under ``root`` that makes its own.
+
+    Through ``children`` and a Shape's ``geometry``, where the terrain and
+    vegetation nodes sit.  With the context they were drawn in current: a
+    world taken out of a scene that goes on being drawn leaves them allocated
+    otherwise, since no pass owns them.
+    """
+    for node in reachable(root, ('children', 'geometry')):
+        dispose = getattr(node, 'dispose', None)
+        if callable(dispose):
+            dispose()
 
 
 def delete_gl(vaos: Iterable[int] = (), buffers: Iterable[int] = (),

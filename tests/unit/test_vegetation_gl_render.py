@@ -285,3 +285,44 @@ def test_a_cover_retuned_after_it_is_drawn_sends_its_new_windows(tmp_path):
     assert _uniformf(cards._prog, "uFarFade") == pytest.approx(60.0)
     for node in cover.rungs[0].nodes:
         node.dispose()
+
+
+@pytest.mark.usefixtures('gl')
+def test_a_subtree_gives_back_every_layer_in_it(tmp_path):
+    """Through groups and a Shape's geometry, as a world's scene holds them."""
+    from OpenGLContext.scenegraph.basenodes import Group, Shape
+    from OpenGLContext.scenegraph.instancedgl import dispose_subtree
+
+    pos = np.array([[0, 0, 0], [1, 0, 1]], 'f4')
+    layers = [InstancedBillboards(pos, np.zeros(2, 'f4'), np.ones(2, 'f4'),
+                                  _tex_png(tmp_path)) for _ in range(2)]
+    for layer in layers:
+        layer.render(_mode())
+        assert layer._gl is not None
+    root = Group(children=[Shape(geometry=layers[0]),
+                           Group(children=[layers[1]])])
+    dispose_subtree(root)
+    assert [layer._gl for layer in layers] == [None, None]
+    assert glGetError() == GL_NO_ERROR
+
+
+def test_a_streamed_terrain_gives_back_what_it_draws():
+    """Its ground, its trees and its ground cover, which a world swapped in
+    one context would otherwise keep."""
+    from OpenGLContext.scenegraph.tilesterrain import TilesTerrain
+
+    disposed = []
+
+    class _Layer:
+        def __init__(self, name):
+            self.name = name
+
+        def dispose(self):
+            disposed.append(self.name)
+
+    terrain = TilesTerrain.__new__(TilesTerrain)
+    terrain.ground = _Layer('ground')
+    terrain.vegetation = _Layer('vegetation')
+    terrain.cover = _Layer('cover')
+    terrain.dispose()
+    assert sorted(disposed) == ['cover', 'ground', 'vegetation']

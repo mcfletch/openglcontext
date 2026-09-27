@@ -717,7 +717,7 @@ class ParticleEmitter(nodetypes.Rendering, nodetypes.Children, node.Node, GLLaye
         glBindVertexArray(0)
         glUseProgram(previous)
 
-    def delete(self) -> None:
+    def dispose(self) -> None:
         """Release the GL objects this emitter owns."""
         gl, self._gl = self._gl, None
         if gl:
