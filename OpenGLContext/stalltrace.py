@@ -354,7 +354,7 @@ class StallJournal:
         }
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            with self.path.open('w') as handle:
+            with self.path.open('w') as handle:  # noqa: OGC121 a trace written record by record as the run goes; a cut-short one is a shorter trace
                 handle.write(json.dumps(header) + '\n')
         except OSError as error:
             log.warning('cannot write the stall trace to %s (%s); '

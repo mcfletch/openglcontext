@@ -87,7 +87,7 @@ class SessionJournal:
     def _open(self, header: dict[str, Any]) -> None:
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
-            self._handle = self.path.open('w')
+            self._handle = self.path.open('w')  # noqa: OGC121 a journal written record by record as the session runs; a cut-short one is a shorter journal
         except OSError as error:
             log.warning('cannot record telemetry to %s (%s); '
                         'this session will not be recorded', self.path, error)
