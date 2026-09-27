@@ -177,7 +177,10 @@ class TestEveryWindowSystemReportsPointerMotionAsItHappens:
     @pytest.mark.parametrize('name,path,className', WINDOW_SYSTEMS,
                              ids=WINDOW_SYSTEM_IDS)
     def test_it_calls_record_pointer_motion(self, name, path, className):
-        assert 'recordPointerMotion' in _source(path), (
+        # WarpedPointer.pointerMoved makes the call for a toolkit that warps.
+        source = _source(path)
+        assert ('recordPointerMotion' in source
+                or 'self.pointerMoved(' in source), (
             '%s never reports pointer motion to the sampler, so a mouse-look '
             'mode grabs the pointer and the view never turns' % (name,))
 

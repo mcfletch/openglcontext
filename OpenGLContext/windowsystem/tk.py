@@ -31,7 +31,7 @@ from OpenGLContext.events.tkevents import (
     tkKeypressEvent, tkMouseButtonEvent, tkMouseMoveEvent, tkWheelEvent,
 )
 from OpenGLContext.events.wheel import WheelNotches
-from OpenGLContext.windowsystem.base import WindowSystem, wantsVSync
+from OpenGLContext.windowsystem.base import WarpedPointer, WindowSystem, wantsVSync
 
 try:
     from OpenGL.Tk import ContextAttributes, GLFrame
@@ -84,7 +84,7 @@ def attributesFromDefinition(definition: Any) -> ContextAttributes:
     )
 
 
-class TkWindowSystem(WindowSystem):
+class TkWindowSystem(WarpedPointer, WindowSystem):
     """A GLFrame in a Tk window, and the translation of its events
 
     Rendering is driven from a Tk timer rather than from expose events: the
@@ -117,12 +117,6 @@ class TkWindowSystem(WindowSystem):
     root: Optional[tkinter.Tk] = None
     #: The pending ``after`` callback that drives the next frame.
     frameJob: Optional[str] = None
-    #: True while the pointer is hidden and being warped back to the middle of
-    #: the window for a mouse-look mode.
-    pointerGrabbed = False
-    #: Where the pointer was last warped to, so the movement the warp itself
-    #: generates can be told from a real one.
-    pointerWarpedTo: Optional[tuple[int, int]] = None
     #: Counts a stream of ``<MouseWheel>`` reports into whole notches.
     wheelCounter: Optional[WheelNotches] = None
 
@@ -286,54 +280,32 @@ class TkWindowSystem(WindowSystem):
         """Hide the pointer and keep it in the window, for a mouse-look mode
 
         Tk has no relative-motion mode, so the pointer is warped back to the
-        middle of the widget after every movement -- which is what makes the
-        motion unbounded, since a pointer that stops at the edge of the screen
-        is a view that stops turning there.  The warp arrives back as an
-        ordinary movement and is recognised and dropped; see
-        :meth:`onMouseMove`.
+        middle of the widget after every movement; see :class:`WarpedPointer`.
         """
         frame = self.window
         if frame is None:
             return False
         capture = bool(capture)
-        self.pointerGrabbed = capture
-        self.pointerWarpedTo = None
         frame.configure(cursor='none' if capture else '')
         if capture:
             frame.grab_set()
         else:
             frame.grab_release()
-        # Where the pointer is means something different on each side of this,
-        # so the first report afterwards establishes a position rather than
-        # arriving as one flick of the view.
-        self.context.forgetPointerOrigin()
-        if capture:
-            self.recentrePointer()
+        self.grabPointer(capture)
         return True
 
-    def recentrePointer(self) -> None:
-        """Put the pointer back in the middle of the widget, if it is grabbed"""
+    def pointerMiddle(self) -> Optional[tuple[int, int]]:
         frame = self.window
-        if not self.pointerGrabbed or frame is None:
-            return
-        middle = (frame.winfo_width() // 2, frame.winfo_height() // 2)
-        self.pointerWarpedTo = middle
+        if frame is None:
+            return None
+        return (frame.winfo_width() // 2, frame.winfo_height() // 2)
+
+    def warpPointer(self, x: int, y: int) -> None:
         # Tk's own way of moving the pointer: a warping motion event, which the
         # server acts on rather than merely reporting.
-        frame.event_generate('<Motion>', warp=True, x=middle[0], y=middle[1])
+        if self.window is not None:
+            self.window.event_generate('<Motion>', warp=True, x=x, y=y)
 
-    def pointerWarpEcho(self, x: float, y: float) -> bool:
-        """Whether this movement is the one :meth:`recentrePointer` caused
-
-        A movement the program made itself is not motion the user asked for:
-        left in, it cancels out every real movement and mouse-look never turns.
-        """
-        if self.pointerWarpedTo is None:
-            return False
-        echo = (int(x), int(y)) == self.pointerWarpedTo
-        if echo:
-            self.pointerWarpedTo = None
-        return echo
 
     # -- the loop -----------------------------------------------------------
 
@@ -516,14 +488,8 @@ class TkWindowSystem(WindowSystem):
         click on anything.
         """
         context = self.context
-        echo = self.pointerWarpEcho(event.x, event.y)
-        if echo:
-            context.forgetPointerOrigin()
-        context.recordPointerMotion(
-            int(event.x), context.getViewPort()[1] - int(event.y))
-        if echo:
+        if not self.pointerMoved(event.x, event.y):
             return
-        self.recentrePointer()
         context.addPickEvent(tkMouseMoveEvent(context, event))
         context.triggerPick()
 

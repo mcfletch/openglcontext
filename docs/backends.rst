@@ -427,7 +427,12 @@ context it draws for, as ``self.context``, and provides:
 and optionally ``setFullscreen``, ``setPointerCapture``, ``setPointerShape``,
 ``applyVSync``, ``resize`` (for a surface of fixed size), ``emitKey``,
 and ``quit`` (answering False for a view inside somebody else's application).
-``OpenGLContext/windowsystem/glfw.py`` is the shortest complete one.
+``OpenGLContext/windowsystem/glfw.py`` is the shortest complete one. A toolkit
+with no relative-motion mode mixes in ``WarpedPointer`` from the same module
+for mouse-look: it supplies ``pointerMiddle`` and ``warpPointer``, calls
+``grabPointer`` from ``setPointerCapture`` and ``pointerMoved`` from its
+pointer-motion handler, and the mixin keeps the pointer in the middle of the
+window and drops the movement each warp causes.
 
 It is registered under a name, by its dotted path, either in the running
 process:

@@ -320,3 +320,89 @@ class WindowSystem(abc.ABC):
     def __repr__(self) -> str:
         return '<%s %s>' % (self.__class__.__name__,
                             'open' if self.window is not None else 'closed')
+
+
+class WarpedPointer:
+    """Mouse-look for a toolkit with no relative-motion mode
+
+    A grabbed pointer is warped back to the middle of the window after every
+    movement, which is what makes the motion unbounded: a pointer that stops at
+    the edge of the screen is a view that stops turning there.  The warp
+    arrives back as an ordinary movement, and :meth:`pointerMoved` recognises
+    it and drops it.
+
+    Mixed into a :class:`WindowSystem`, which supplies :meth:`pointerMiddle`
+    and :meth:`warpPointer`, hides and grabs the pointer in the toolkit's own
+    way, and calls :meth:`grabPointer` and :meth:`pointerMoved`.
+    """
+
+    context: Context
+    #: True while the pointer is hidden and being warped back to the middle of
+    #: the window for a mouse-look mode.
+    pointerGrabbed = False
+    #: Where the pointer was last warped to, so the movement the warp itself
+    #: generates can be told from a real one.
+    pointerWarpedTo: Optional[tuple[int, int]] = None
+
+    def pointerMiddle(self) -> Optional[tuple[int, int]]:
+        """The middle of the window in the toolkit's pointer coordinates, or
+        None where there is no window."""
+        raise NotImplementedError
+
+    def warpPointer(self, x: int, y: int) -> None:
+        """Move the pointer to ``(x, y)`` in the window."""
+        raise NotImplementedError
+
+    def grabPointer(self, capture: bool) -> None:
+        """Start or stop warping, once the toolkit has hidden or shown the pointer
+
+        Where the pointer is means something different on each side of this,
+        so the first report afterwards establishes a position rather than
+        arriving as one flick of the view.
+        """
+        self.pointerGrabbed = bool(capture)
+        self.pointerWarpedTo = None
+        self.context.forgetPointerOrigin()
+        self.recentrePointer()
+
+    def recentrePointer(self) -> None:
+        """Put the pointer back in the middle of the window, if it is grabbed"""
+        if not self.pointerGrabbed:
+            return
+        middle = self.pointerMiddle()
+        if middle is None:
+            return
+        self.pointerWarpedTo = middle
+        self.warpPointer(*middle)
+
+    def pointerWarpEcho(self, x: float, y: float) -> bool:
+        """Whether this movement is the one :meth:`recentrePointer` caused
+
+        A movement the program made itself is not motion the user asked for:
+        left in, it cancels out every real movement and mouse-look never turns.
+        """
+        if self.pointerWarpedTo is None:
+            return False
+        echo = (int(x), int(y)) == self.pointerWarpedTo
+        if echo:
+            self.pointerWarpedTo = None
+        return echo
+
+    def pointerMoved(self, x: float, y: float) -> bool:
+        """Tell the context the pointer is at ``(x, y)``; True where the user moved it
+
+        ``y`` counts down from the top, as the toolkits report it; the context
+        is told it counting up from the bottom.  The warp's own echo updates
+        where the pointer is and answers False: it is not motion the user asked
+        for, and it is not a click on anything.  A real movement is warped
+        back again.
+        """
+        context = self.context
+        echo = self.pointerWarpEcho(x, y)
+        if echo:
+            context.forgetPointerOrigin()
+        context.recordPointerMotion(int(x), context.getViewPort()[1] - int(y))
+        if echo:
+            return False
+        self.recentrePointer()
+        return True

@@ -35,7 +35,7 @@ from OpenGLContext.events.glutevents import (
     GLUTKeyboardEvent, GLUTKeypressEvent, GLUTMouseButtonEvent,
     GLUTMouseMoveEvent,
 )
-from OpenGLContext.windowsystem.base import WindowSystem, wantsVSync
+from OpenGLContext.windowsystem.base import WarpedPointer, WindowSystem, wantsVSync
 
 if TYPE_CHECKING:
     from OpenGLContext.context import Context
@@ -136,7 +136,7 @@ def null_display() -> None:
     """A display callback that draws nothing, for a window on its way out"""
 
 
-class GLUTWindowSystem(WindowSystem):
+class GLUTWindowSystem(WarpedPointer, WindowSystem):
     """A GLUT window, and the translation of its callbacks into events"""
 
     name = 'glut'
@@ -155,12 +155,6 @@ class GLUTWindowSystem(WindowSystem):
     }
 
     window: Optional[int] = None
-    #: True while the pointer is hidden and being warped back to the middle of
-    #: the window for a mouse-look mode.
-    pointerGrabbed = False
-    #: Where the pointer was last warped to, so the movement the warp itself
-    #: generates can be told from a real one.
-    pointerWarpedTo: Optional[tuple[int, int]] = None
     #: What each entry of the world menu loads, by the entry's own value; see
     #: :meth:`createWorldMenu`.
     worldPaths: list[str]
@@ -345,48 +339,25 @@ class GLUTWindowSystem(WindowSystem):
         """Hide the pointer and keep it in the window, for a mouse-look mode
 
         GLUT has no relative-motion mode, so the pointer is warped back to the
-        middle of the window after every movement -- which is what makes the
-        motion unbounded, since a pointer that stops at the edge of the screen
-        is a view that stops turning there.  The warp arrives back as an
-        ordinary movement and is recognised and dropped; see
-        :meth:`onMouseMove`.
+        middle of the window after every movement; see :class:`WarpedPointer`.
         """
         if not self.window:
             return False
         glutSetWindow(self.window)
-        self.pointerGrabbed = bool(capture)
-        self.pointerWarpedTo = None
         glutSetCursor(GLUT_CURSOR_NONE if capture else GLUT_CURSOR_INHERIT)
-        # Where the pointer is means something different on each side of this,
-        # so the first report afterwards establishes a position rather than
-        # arriving as one flick of the view.
-        self.context.forgetPointerOrigin()
-        if capture:
-            self.recentrePointer()
+        self.grabPointer(capture)
         return True
 
-    def recentrePointer(self) -> None:
-        """Put the pointer back in the middle of the window, if it is grabbed"""
-        if not self.pointerGrabbed or not self.window:
-            return
+    def pointerMiddle(self) -> Optional[tuple[int, int]]:
+        if not self.window:
+            return None
         glutSetWindow(self.window)
-        middle = (int(glutGet(GLUT_WINDOW_WIDTH)) // 2,
-                  int(glutGet(GLUT_WINDOW_HEIGHT)) // 2)
-        self.pointerWarpedTo = middle
-        glutWarpPointer(*middle)
+        return (int(glutGet(GLUT_WINDOW_WIDTH)) // 2,
+                int(glutGet(GLUT_WINDOW_HEIGHT)) // 2)
 
-    def pointerWarpEcho(self, x: float, y: float) -> bool:
-        """Whether this movement is the one :meth:`recentrePointer` caused
+    def warpPointer(self, x: int, y: int) -> None:
+        glutWarpPointer(x, y)
 
-        A movement the program made itself is not motion the user asked for:
-        left in, it cancels out every real movement and mouse-look never turns.
-        """
-        if self.pointerWarpedTo is None:
-            return False
-        echo = (int(x), int(y)) == self.pointerWarpedTo
-        if echo:
-            self.pointerWarpedTo = None
-        return echo
 
     # -- the loop -----------------------------------------------------------
 
@@ -531,13 +502,8 @@ class GLUTWindowSystem(WindowSystem):
         in and GLUT counts it the other way.
         """
         context = self.context
-        echo = self.pointerWarpEcho(x, y)
-        if echo:
-            context.forgetPointerOrigin()
-        context.recordPointerMotion(int(x), context.getViewPort()[1] - int(y))
-        if echo:
+        if not self.pointerMoved(x, y):
             return
-        self.recentrePointer()
         context.addPickEvent(GLUTMouseMoveEvent(context, x, y))
         context.triggerPick()
 

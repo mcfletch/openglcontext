@@ -33,7 +33,7 @@ from OpenGLContext.events.wxevents import (
     keyName, modifiersOf, wxKeyboardEvent, wxKeypressEvent, wxMouseButtonEvent,
     wxMouseMoveEvent, wxWheelEvent,
 )
-from OpenGLContext.windowsystem.base import WindowSystem, wantsVSync
+from OpenGLContext.windowsystem.base import WarpedPointer, WindowSystem, wantsVSync
 
 if TYPE_CHECKING:
     from OpenGLContext.context import Context
@@ -109,7 +109,7 @@ def getDefaultIcons() -> Any:
     return bundle
 
 
-class WxWindowSystem(WindowSystem):
+class WxWindowSystem(WarpedPointer, WindowSystem):
     """A GLCanvas in a wx window, and the translation of its events
 
     The canvas's GL context is not ready for ``OnInit`` until the toolkit has
@@ -139,12 +139,6 @@ class WxWindowSystem(WindowSystem):
     glContext: Any = None
     #: The frame this window system made, where it was given no parent.
     frame: Any = None
-    #: True while the pointer is hidden and being warped back to the middle of
-    #: the canvas for a mouse-look mode.
-    pointerGrabbed = False
-    #: Where the pointer was last warped to, so the movement the warp itself
-    #: generates can be told from a real one.
-    pointerWarpedTo: Optional[tuple[int, int]] = None
     #: Counts a stream of wheel reports into whole notches; wx states its own
     #: detent size on the event, so the counter is built on the first one.
     wheelCounter: Optional[WheelNotches] = None
@@ -278,18 +272,12 @@ class WxWindowSystem(WindowSystem):
         """Hide the pointer and keep it in the window, for a mouse-look mode
 
         wx has no relative-motion mode, so the pointer is warped back to the
-        middle of the canvas after every movement -- which is what makes the
-        motion unbounded, since a pointer that stops at the edge of the screen
-        is a view that stops turning there.  The warp arrives back as an
-        ordinary movement and is recognised and dropped; see
-        :meth:`onMouseMove`.
+        middle of the canvas after every movement; see :class:`WarpedPointer`.
         """
         canvas = self.window
         if canvas is None:
             return False
         capture = bool(capture)
-        self.pointerGrabbed = capture
-        self.pointerWarpedTo = None
         if capture:
             canvas.SetCursor(wx.Cursor(wx.CURSOR_BLANK))
             if not canvas.HasCapture():
@@ -299,35 +287,19 @@ class WxWindowSystem(WindowSystem):
             while canvas.HasCapture():
                 # wx counts captures, and releases one per call.
                 canvas.ReleaseMouse()
-        # Where the pointer is means something different on each side of this,
-        # so the first report afterwards establishes a position rather than
-        # arriving as one flick of the view.
-        self.context.forgetPointerOrigin()
-        if capture:
-            self.recentrePointer()
+        self.grabPointer(capture)
         return True
 
-    def recentrePointer(self) -> None:
-        """Put the pointer back in the middle of the canvas, if it is grabbed"""
-        if not self.pointerGrabbed or self.window is None:
-            return
+    def pointerMiddle(self) -> Optional[tuple[int, int]]:
+        if self.window is None:
+            return None
         size = self.window.GetClientSize()
-        middle = (int(size.width) // 2, int(size.height) // 2)
-        self.pointerWarpedTo = middle
-        self.window.WarpPointer(*middle)
+        return (int(size.width) // 2, int(size.height) // 2)
 
-    def pointerWarpEcho(self, x: float, y: float) -> bool:
-        """Whether this movement is the one :meth:`recentrePointer` caused
+    def warpPointer(self, x: int, y: int) -> None:
+        if self.window is not None:
+            self.window.WarpPointer(x, y)
 
-        A movement the program made itself is not motion the user asked for:
-        left in, it cancels out every real movement and mouse-look never turns.
-        """
-        if self.pointerWarpedTo is None:
-            return False
-        echo = (int(x), int(y)) == self.pointerWarpedTo
-        if echo:
-            self.pointerWarpedTo = None
-        return echo
 
     # -- the loop -----------------------------------------------------------
 
@@ -532,14 +504,8 @@ class WxWindowSystem(WindowSystem):
         click on anything.
         """
         context = self.context
-        x, y = event.GetX(), event.GetY()
-        echo = self.pointerWarpEcho(x, y)
-        if echo:
-            context.forgetPointerOrigin()
-        context.recordPointerMotion(int(x), context.getViewPort()[1] - int(y))
-        if echo:
+        if not self.pointerMoved(event.GetX(), event.GetY()):
             return
-        self.recentrePointer()
         context.addPickEvent(wxMouseMoveEvent(context, event))
         context.triggerPick()
 
