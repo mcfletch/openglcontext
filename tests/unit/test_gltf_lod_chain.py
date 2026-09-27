@@ -169,6 +169,15 @@ class TestReadingOnlyWhatIsWanted:
         with pytest.raises(ValueError, match='short'):
             LODAsset.open(path).load(0)
 
+    def test_a_json_chunk_longer_than_the_file_is_refused_unread(self, tmp_path):
+        """The length is whatever the header says: four gigabytes would be
+        allocated before a short read found out."""
+        path = tmp_path / 'claims.glb'
+        path.write_bytes(struct.pack('<III', 0x46546C67, 2, 64)
+                         + struct.pack('<II', 0xFFFFFFF0, 0x4E4F534A) + b'{}')
+        with pytest.raises(ValueError, match='longer than the file'):
+            LODAsset.open(str(path))
+
     def test_something_that_is_not_a_glb_is_refused(self, tmp_path):
         (tmp_path / 'nonsense.glb').write_bytes(b'not a glb at all, really')
         with pytest.raises(ValueError, match='not a glb'):

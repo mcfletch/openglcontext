@@ -125,6 +125,11 @@ class LODAsset:
             json_length, json_kind = struct.unpack('<II', handle.read(8))
             if json_kind != _JSON_CHUNK:
                 raise ValueError('%r does not begin with a JSON chunk' % (path,))
+            # Checked before the read: a buffered read allocates the length
+            # it is asked for, whatever the file holds.
+            if 20 + json_length > os.path.getsize(path):
+                raise ValueError('%r declares a JSON chunk longer than the file'
+                                 % (path,))
             document = parse_object(handle.read(json_length), '%r glTF JSON' % (path,))
             binary_offset = 12 + 8 + json_length
             chunk = handle.read(8)
