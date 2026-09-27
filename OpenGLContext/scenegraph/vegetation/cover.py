@@ -682,7 +682,7 @@ class GroundCover(Group):
         # The table as it is now: one the render thread replaces while this
         # runs keeps what this makes out of the new one.
         blocks = self._blocks
-        slot = (id(rung), role)
+        slot = (rung, role)
         # A block a fraction of the disc's width, so a disc is a few dozen
         # of them however far it reaches.
         metres = max(BLOCK_METRES, radius / BLOCKS_ACROSS)
