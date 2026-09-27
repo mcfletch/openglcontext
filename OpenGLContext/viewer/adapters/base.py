@@ -72,6 +72,11 @@ class ViewerScene(object):
         Where to open the camera, when the adapter knows better than a fit of
         the bounding sphere -- a streamed dataset opens *inside* itself. None
         leaves the viewer to frame the whole scene as it always has.
+    ``notices``
+        The copyright and licence notices the source carries, as
+        :class:`~OpenGLContext.loaders.notices.Notice` records, the whole
+        file's first.  Empty when it states none, or when its format has
+        nowhere to state them.
     """
 
     def __init__(self, group: Any,
@@ -83,7 +88,8 @@ class ViewerScene(object):
                  exposure: float = 1.0,
                  sceneGraph: Any = None,
                  pose: Any = None,
-                 metric: bool = False) -> None:
+                 metric: bool = False,
+                 notices: Optional[list] = None) -> None:
         self.group = group
         self.center: tuple[float, ...] = tuple(float(v) for v in center)
         self.radius = float(radius)
@@ -95,6 +101,7 @@ class ViewerScene(object):
         self.exposure = exposure
         self.pose = pose
         self.metric = metric
+        self.notices = notices if notices is not None else []
         #: The loaded document's own root, when it has one, for its DEF registry.
         self.sceneGraph = sceneGraph
 

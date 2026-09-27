@@ -277,6 +277,9 @@ The scene
 
 - ``t`` starts and stops the turntable.
 
+- ``i`` shows the copyright and licence notices the file carries
+  (:ref:`viewer-notices`).
+
 - ``v`` switches between one view of the scene and four: the plan, the front
   and left elevations, and the camera. The three orthographic views are ruled
   with a grid. ``--views quad`` opens with four. ``x`` gives the view last
@@ -327,6 +330,40 @@ Screens
        for framing, the bound camera, the animation and the movement mode.
 
 ``twig-bb`` uses the same keys.
+
+.. _viewer-notices:
+
+Copyright and licence
+~~~~~~~~~~~~~~~~~~~~~
+
+``i`` opens the copyright and licence notices of the open file. When the file
+carries any, the menu has a *Copyright and licence* button and each view's
+menu a row of the same name. The screen lists the notice for the whole file
+first, then one for each part of the file with terms of its own, headed by
+the parts it covers: a scanned statue placed in a building, say, whose
+maker and licence differ from the building's.
+
+Where each format states them:
+
+- glTF - ``asset.copyright``; the ``title``, ``author``, ``license`` and
+  ``source`` in ``asset.extras`` that Sketchfab and other exporters write;
+  and ``KHR_xmp_json_ld`` packets attached to the asset or to a scene, node,
+  mesh, material, image or animation. From a packet the screen shows
+  ``dc:title``, ``dc:creator``, ``dc:source`` and the first of ``dc:rights``,
+  ``xmpRights:UsageTerms``, ``cc:license`` and ``xmpRights:WebStatement`` as
+  the licence. A part is named by its ``name``, or by its kind and index.
+- VRML97 - each top-level ``WorldInfo``: its ``title``, and its ``info``
+  strings one to a line.
+- Wavefront OBJ and 3D Tiles state none, and the screen says the file
+  carries no notice.
+
+A program reads the same records from the scene it loaded:
+``scene.notices`` is a list of
+:class:`~OpenGLContext.loaders.notices.Notice` (``covers``, ``title``,
+``creator``, ``copyright``, ``licence``, ``source``), and
+``OpenGLContext.loaders.notices.notices_text`` sets them out as the viewer
+shows them. An adapter for another format fills ``notices`` on the
+:class:`~OpenGLContext.viewer.adapters.base.ViewerScene` it returns.
 
 Every screen works from the keyboard alone. The up and down arrows, or Tab
 and Shift-Tab, move between items. Space or Return presses the focused item,
@@ -531,6 +568,11 @@ with (full screen, or 1920x1080), for an application that wants the same::
 
 The component starts with the developer overlay hidden, by setting the
 ``debugOverlayStartsVisible`` attribute every context has.
+
+A subclass adds its own commands to the menu under each view's name by
+overriding ``viewMenuItems(view)``, calling up to it so the viewer's own
+*Copyright and licence* row stays (:ref:`view-menu-items`), and its own keys
+by extending ``viewerKeys``.
 
 .. _viewer-toolkits:
 

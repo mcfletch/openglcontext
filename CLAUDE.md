@@ -106,6 +106,8 @@ OpenGLContext/
 │   ├── documentvalues.py  # A document's values, checked: JSONObject, a
 │   │                 # default or a bound and one report, or DocumentError
 │   │                 # for a part the document cannot be read without
+│   ├── notices.py    # A file's copyright and licence notices, as Notice
+│   │                 # records a loader fills -- docs/viewer.rst#viewer-notices
 │   ├── resolver.py   # Where a document's references may lead; ContainedPath
 │   │                 # and CheckedURL, and the openers that take only them
 │   │                 # -- docs/untrusted.rst
@@ -113,8 +115,10 @@ OpenGLContext/
 │   │   ├── lod.py    # MSFT_lod: a node's coarser levels, and when each is
 │   │   │             # worth drawing -- docs/gltf.rst#lod. Making them is
 │   │   │             # openglcontext-editor's job, not the engine's
-│   │   └── lodasset.py  # A chain read one level at a time, sidecars
-│   │                 # opened only when asked -- docs/baking.rst#writing-lod
+│   │   ├── lodasset.py  # A chain read one level at a time, sidecars
+│   │   │             # opened only when asked -- docs/baking.rst#writing-lod
+│   │   └── notices.py   # asset.copyright, exporter extras and
+│   │                 # KHR_xmp_json_ld packets, as Notice records
 │   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/tiles3d.rst
 ├── move/             # Camera, movement modes, walking -- docs/navigation.rst
 │   ├── navigationdefinition.py  # Navigation, Views, ViewDefinition: the

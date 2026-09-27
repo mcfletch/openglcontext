@@ -186,6 +186,12 @@ animation:
   It marks a mesh's ``COLOR_0`` as light calculated when the world was built,
   not as a tint on the surface. See :ref:`Baked light <baked-light-ext>` below.
 
+- Copyright and licence - ``asset.copyright``, exporters' ``asset.extras``
+  (``title``, ``author``, ``license``, ``source``) and ``KHR_xmp_json_ld``
+  packets on the asset or on any scene, node, mesh, material, image or
+  animation, read into ``scene.notices``. The viewer shows them on ``i``; see
+  :ref:`viewer-notices`.
+
 - Geometry compression - ``KHR_draco_mesh_compression``, when the optional
   ``DracoPy`` package is installed (``pip install DracoPy``, or
   ``OpenGLContext[draco]``). Without it, the loader skips a Draco-compressed
@@ -897,6 +903,11 @@ builds a metre-scale glTF model of the temple and bakes a set of cameras into
 it: a walking tour from the eastern approach, up the steps, through the
 pronaos door and into the naos. Load it in ``oglc-view`` and press PageDown to
 step through the cameras. Each image below is one baked camera.
+
+The statue of Athena Parthenos in the naos is reduced from a scan by another
+author, under CC-BY 4.0, while the rest of the model is CC0. The file states
+both: ``asset.copyright`` for the whole, and a ``KHR_xmp_json_ld`` packet on
+the statue's node for that part. Press ``i`` in the viewer to see them.
 
 .. figure:: images/parthenon/1-east-approach.jpg
    :alt: east approach

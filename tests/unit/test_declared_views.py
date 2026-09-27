@@ -293,6 +293,18 @@ class TestSwitchingArrangements:
         window = _completed(_Overlaid, _quad())
         assert window.viewChrome is None
 
+    def test_each_views_menu_asks_the_window_for_its_own_rows(self):
+        class _Adding(_Overlaid):
+            def viewMenuItems(self, view):
+                return ['for %s' % view]
+
+        window = _completed(_Adding, _quad(switching=['controls']))
+        assert window.viewChrome.menu_items('top') == ['for top']
+
+    def test_a_window_adds_no_rows_of_its_own_unless_it_says(self):
+        window = _completed(_Overlaid, _quad(switching=['controls']))
+        assert window.viewChrome.menu_items('top') == []
+
 
 class TestStartingViewsAtRunTime:
     def test_it_writes_what_it_made_into_the_definition(self):

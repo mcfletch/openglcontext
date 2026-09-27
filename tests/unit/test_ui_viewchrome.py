@@ -12,6 +12,7 @@ from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform, view_k
 from OpenGLContext.multiview.views import View, ViewLayout
 from OpenGLContext.ui.menu import Menu, MenuItem
 from OpenGLContext.ui.metrics import REFERENCE_METRICS
+from OpenGLContext.ui.widgets import Separator
 from OpenGLContext.ui.viewchrome import (
     AxisTriad,
     ExpandButton,
@@ -575,6 +576,32 @@ class TestTheViewsOwnMenu:
     def test_what_the_pointer_does_is_not_offered(self):
         _chrome_, _view, items = self._opened()
         assert 'What the pointer does' not in [str(item.text) for item in items]
+
+    def test_an_application_adds_its_own_rows_at_the_foot(self):
+        asked = []
+
+        def mine(view):
+            asked.append(view)
+            return [MenuItem(text='Copyright and licence')]
+
+        _chrome_, view, items = self._opened(menu_items=mine)
+        assert [str(item.text) for item in items][-1] == 'Copyright and licence'
+        assert asked == [view]
+
+    def test_the_applications_rows_are_set_apart(self):
+        stack = _RecordingStack()
+        chrome = _chrome(stack=stack,
+                         menu_items=lambda view: [MenuItem(text='Mine')])
+        label = _of(chrome, ViewLabel)[0]
+        chrome.pointer_pressed(*label.rect.centre)
+        chrome.pointer_released(*label.rect.centre)
+        rows = [widget for widget in stack.pushed[0].walk()
+                if isinstance(widget, (MenuItem, Separator))]
+        assert isinstance(rows[-2], Separator) and str(rows[-1].text) == 'Mine'
+
+    def test_an_application_with_nothing_to_add_adds_nothing(self):
+        _chrome_, _view, items = self._opened(menu_items=lambda view: [])
+        assert [str(item.text) for item in items] == ['View', 'Rendering', 'Single tile']
 
 
 class TestTheButtonsGlyph:

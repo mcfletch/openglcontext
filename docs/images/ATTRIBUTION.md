@@ -36,7 +36,7 @@ careless about which ones we host:
 | `gallery/showcase/glisteel-*.jpg` | [GLinting Steel](https://github.com/mcfletch/glisteel), BSD-3-Clause, on CC0 generated assets |
 | `gallery/showcase/forest-walk.jpg` | the forest demo, BSD-3-Clause; assets per its own `ASSET-LICENSES.md` |
 | `gallery/showcase/marble-board.jpg` | the marble demo, MIT, on CC0 generated assets |
-| `gallery/showcase/parthenon.jpg`, `parthenon/*.jpg` | the Parthenon model, CC0 |
+| `gallery/showcase/parthenon.jpg`, `parthenon/*.jpg` | the Parthenon model, CC0; the statue of Athena Parthenos in the naos is reduced from "Athena #3DST8" (https://skfb.ly/AEw8) by Digitage, CC-BY 4.0 |
 | `demos/*.jpg`, `extrusions/*.png`, `shadow_demo.jpg`, `text_simple.png` | BSD-3-Clause; scenes built by the demo scripts in `tests/` |
 | `demos/gallery.jpg` | the bust-gallery content pack &mdash; 'Marble Bust 01' by Rico Cilliers (Poly Haven) and ambientCG materials, all CC0 1.0 |
 | `toronto-3dtiles.jpg` | City of Toronto 3D massing data, Open Government Licence &mdash; Toronto |

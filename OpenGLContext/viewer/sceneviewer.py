@@ -1201,6 +1201,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         KeyBinding(']', 'nextAnimation', 'Next animation'),
         KeyBinding('[', 'previousAnimation', 'Previous animation'),
         KeyBinding('t', 'toggleTurntable', 'Turntable on or off'),
+        KeyBinding('i', 'showNotices', "The file's copyright and licence notices"),
     )
 
     # -- the frame --------------------------------------------------------

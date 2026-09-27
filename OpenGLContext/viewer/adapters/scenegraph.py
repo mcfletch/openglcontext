@@ -9,6 +9,7 @@ mean anything.  This fills that in, once, for all of them.
 """
 from typing import Any
 
+from OpenGLContext.loaders.notices import Notice
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.viewpoint import Viewpoint
 from OpenGLContext.viewer.adapters.base import (
@@ -55,7 +56,27 @@ class SceneGraphAdapter(SceneAdapter):
             cameras=[{'name': camera_name(viewpoint, index)}
                      for index, viewpoint in enumerate(viewpoints)],
             sceneGraph=sceneGraph,
+            notices=self.worldNotices(rest),
         )
+
+    @staticmethod
+    def worldNotices(children: Any) -> list[Notice]:
+        """The notice each top-level ``WorldInfo`` states.
+
+        VRML97 gives ``WorldInfo`` a ``title`` and free ``info`` strings, which
+        is where a world's author puts its copyright and its terms.
+        """
+        notices = []
+        for child in children:
+            if getattr(child, 'PROTO', None) != 'WorldInfo':
+                continue
+            notice = Notice(title=str(child.title or '').strip(),
+                            copyright='\n'.join(str(line).strip()
+                                                for line in child.info or ()
+                                                if str(line).strip()))
+            if notice:
+                notices.append(notice)
+        return notices
 
     @staticmethod
     def splitViewpoints(children: Any) -> tuple[list[Any], list[Any]]:

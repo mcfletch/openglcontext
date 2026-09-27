@@ -63,6 +63,7 @@ from OpenGLContext.loaders.gltf import environment_sky
 from OpenGLContext.loaders.gltf import hooks as hookreg
 from OpenGLContext.loaders.gltf import imagebased, zoning
 from OpenGLContext.loaders.gltf.meshes import _primitive_shape
+from OpenGLContext.loaders.gltf.notices import document_notices
 from OpenGLContext.loaders.gltf.transforms import (
     _transform_for, _local_matrix_rv, _world_box, framing_bounds,
     look_orientation,
@@ -140,6 +141,10 @@ class GLTFScene(object):
         # consumer read an extension the loader does not -- an avatar's
         # humanoid bone map, say.
         self.extensions: dict = {}
+        # The copyright and licence notices the document carries, as
+        # loaders.notices.Notice records: the whole file's first, then one per
+        # set of parts with terms of their own (loaders/gltf/notices.py).
+        self.notices: list = []
         # camera: None, or a dict with position/forward/up/fov/near/far taken from
         # the first camera the glTF defines (so a viewer can adopt its viewpoint).
         self.camera = camera
@@ -1146,6 +1151,7 @@ class _SceneBuilder:
         scene.environment = environment
         top = getattr(g, 'extensions', None) or {}
         scene.extensions = top if isinstance(top, dict) else {}
+        scene.notices = document_notices(g)
         if self.skins:
             # Deform to the rest/bind pose once so a static (unanimated) skinned
             # model renders posed, not in raw undeformed vertices.

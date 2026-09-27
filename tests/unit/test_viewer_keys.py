@@ -104,6 +104,7 @@ class TestTheRestOfTheKeys:
         (']', 'nextAnimation'),
         ('[', 'previousAnimation'),
         ('t', 'toggleTurntable'),
+        ('i', 'showNotices'),
     ])
     def test_a_bare_key_runs_its_method(self, keyboard, name, method):
         manager, viewer = keyboard

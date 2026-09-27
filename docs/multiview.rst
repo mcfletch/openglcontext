@@ -653,6 +653,7 @@ The view's menu has these entries:
 - Zoom to fit - present when the window passed ``bounds``.
 - Single tile, or Four tiles when the view already fills the window.
   Neither appears in an arrangement of one view.
+- The application's own entries, below a separator, where it has any.
 
 The first three open submenus beside their rows. The menu hangs below the
 name, or sits over it in a view with no room below. Each row has a letter
@@ -687,6 +688,44 @@ palette.
 ``axis_directions(view)`` returns the screen direction of each world axis in
 a view, as unit vectors in the view's own pixels, or None for a view with no
 camera. The axis triad is drawn from it.
+
+.. _view-menu-items:
+
+Adding entries to the view's menu
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+An application puts its own commands in each view's menu by overriding
+``viewMenuItems(view)`` on its context. It is called with the
+:class:`~OpenGLContext.multiview.views.View` each time that view's name is
+clicked, and returns a list of :class:`~OpenGLContext.ui.menu.MenuItem`
+rows; the menu shows them at its foot, below a separator. The default
+returns an empty list, so a window adds nothing unless it says so. Call up
+to the method and add to its answer, so that each mix-in in a context can
+contribute:
+
+.. code-block:: python
+
+   from OpenGLContext.ui.menu import MenuItem
+
+   class MyContext(BaseContext):
+       def viewMenuItems(self, view):
+           items = super().viewMenuItems(view)
+           if self.selection:
+               items.append(MenuItem(text='Frame selection',
+                                     on_activate=lambda widget: self.frame(view)))
+           return items
+
+Since it is asked on every click, the rows can follow the state of the
+scene: the viewer offers *Copyright and licence* only when the open file
+carries a notice (:ref:`viewer-notices`).
+
+A window that builds its own ``ViewChrome`` passes the same thing as
+``menu_items``, a callable taking the view:
+
+.. code-block:: python
+
+   ViewChrome(layout=layout, stack=self.overlays,
+              menu_items=lambda view: [MenuItem(text='About', on_activate=about)])
 
 .. _scene-cameras:
 

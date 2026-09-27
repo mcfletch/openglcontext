@@ -255,8 +255,19 @@ class MultiViewMixin(_Host):
         self.viewChrome = ViewChrome(
             layout=self.views.layout, stack=stack,
             on_arrange=self.viewsArranged, bounds=self._viewBounds,
-            cameras=self.sceneCameras)
+            cameras=self.sceneCameras,
+            menu_items=self.viewMenuItems)
         stack.push(self.viewChrome)
+
+    def viewMenuItems(self, view: Any) -> list[Any]:
+        """The application's own rows for ``view``'s menu; none unless overridden.
+
+        Asked each time a view's name is clicked, so what it answers can follow
+        the scene.  Return :class:`~OpenGLContext.ui.menu.MenuItem` rows; they
+        go below a separator at the foot of the menu.  An override calls up to
+        this and adds to what it answers, so mix-ins can each add their own.
+        """
+        return []
 
     # -- what the window draws ---------------------------------------------
     def getViewLayout(self) -> Any:

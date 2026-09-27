@@ -28,7 +28,8 @@ from OpenGLContext.ui.widgets import (
 )
 from OpenGLContext.viewer.library import Entry, Library
 
-__all__ = ['main_menu', 'browse_screen', 'MENU_NAME', 'BROWSE_NAME', 'SHOWN']
+__all__ = ['main_menu', 'browse_screen', 'MENU_NAME', 'BROWSE_NAME',
+           'NOTICES_LABEL', 'SHOWN']
 
 #: What the launch menu calls itself.
 TITLE = 'oglc-view'
@@ -37,6 +38,10 @@ TITLE = 'oglc-view'
 #: already up instead of stacking another over it.
 MENU_NAME = 'viewer-menu'
 BROWSE_NAME = 'viewer-browse'
+
+#: What the button, the view's menu row and the screen for a file's
+#: copyright and licence notices are called.
+NOTICES_LABEL = _('Copyright and licence')
 
 #: Content width, in characters.  The band needs room -- pictures cramped into a
 #: narrow column defeat the point of showing them -- and everything else is
@@ -68,6 +73,7 @@ def main_menu(on_browse: Optional[Callable[[], None]] = None,
               on_quit: Optional[Callable[[], None]] = None,
               on_resume: Optional[Callable[[], None]] = None,
               on_open: Optional[Callable[[str], None]] = None,
+              on_notices: Optional[Callable[[], None]] = None,
               subtitle: str = '') -> Panel:
     """The first screen, and the one Escape brings up: what someone can do.
 
@@ -81,6 +87,9 @@ def main_menu(on_browse: Optional[Callable[[], None]] = None,
     ``on_open`` is called with whatever was typed into the address box.  Not
     everything worth looking at is on the shelf, and a viewer launched from a
     desktop has no command line to pass a URL on.
+
+    ``on_notices`` adds a "Copyright and licence" button, for a scene whose
+    file states either.
     """
     children: list[Any] = [Label(text=TITLE, name='title')]
     if subtitle:
@@ -93,6 +102,8 @@ def main_menu(on_browse: Optional[Callable[[], None]] = None,
                             role='' if on_resume is not None else 'primary'))
     children.append(_button('settings', _('Settings'), on_settings))
     children.append(_button('bindings', _('Controls'), on_bindings))
+    if on_notices is not None:
+        children.append(_button('notices', NOTICES_LABEL, on_notices))
     children.append(_button('quit', _('Quit'), on_quit))
     children.append(Separator(top=6))
     children.append(Label(text=_('...or open an address:'), name='url-label'))

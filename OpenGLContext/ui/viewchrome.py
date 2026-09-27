@@ -32,6 +32,14 @@ answering one, asked each time the menu opens::
     ViewChrome(layout=layout, stack=context.overlays,
                cameras=lambda: scene_cameras(context.getSceneGraph()))
 
+``menu_items`` adds an application's own rows to the foot of that menu -- a
+callable given the view, asked each time the menu opens, answering a list of
+:class:`~OpenGLContext.ui.menu.MenuItem`. The viewer adds the model's copyright
+and licence notices there::
+
+    ViewChrome(layout=layout, stack=context.overlays,
+               menu_items=lambda view: [MenuItem(text='About', on_activate=about)])
+
 Every part is optional -- ``labels``, ``axes``, ``expand`` and ``splitters``
 each switch a kind off for the whole window, and ``only`` gives
 one view a set of its own::
@@ -426,6 +434,7 @@ class ViewChrome(Panel):
                  only: Optional[dict[str, Sequence[str]]] = None,
                  bounds: Optional[Callable[[], Optional[tuple[Any, Any]]]] = None,
                  cameras: Sequence[SceneCamera] | Callable[[], Sequence[SceneCamera]] | None = None,
+                 menu_items: Optional[Callable[[View], Sequence[Any]]] = None,
                  **named: Any) -> None:
         named.setdefault('modal', False)
         named.setdefault('closeOnEscape', False)
@@ -445,6 +454,10 @@ class ViewChrome(Panel):
         #: The scene's cameras, or what answers them, for the menu's
         #: *Cameras*. None, or none answered, offers no such item.
         self.cameras = cameras
+        #: What answers the application's own rows for a view's menu, asked
+        #: with the view each time the menu opens; they go at its foot.
+        self.menu_items: Callable[[View], Sequence[Any]] = (
+            menu_items if menu_items is not None else (lambda view: ()))
         self._splitters: list[Splitter] = []
         #: What the furniture was last built for; see :meth:`furniture_key`.
         self._builtFor: Any = None
@@ -652,7 +665,8 @@ class ViewChrome(Panel):
         window or give it back, where the arrangement has other views to
         hide. A view drawn through the window's own camera
         has no ways of looking to offer, and a scene with no cameras no
-        cameras.
+        cameras. Below a separator come whatever rows :attr:`menu_items`
+        answers for this view.
         """
         if self.stack is None:
             return None
@@ -676,6 +690,10 @@ class ViewChrome(Panel):
             items.append(MenuItem(
                 text=(TILES_LABEL if self._maximised(view) else SINGLE_TILE_LABEL),
                 on_activate=lambda widget: self.maximise(view)))
+        own = list(self.menu_items(view))
+        if own:
+            items.append(Separator())
+            items.extend(own)
         return self._put_up(Menu(items=items, anchor=(float(at.x), float(at.y)),
                                  above=float(at.top), stack=self.stack))
 

@@ -17,15 +17,23 @@ these programs knows the other::
     F2    save a screenshot
     Alt+F the developer overlay (every context has this)
 
+The copyright and licence notices the open file carries are on ``i`` (a
+character key, bound in :class:`~OpenGLContext.viewer.sceneviewer.SceneViewerMixin`),
+and on the menu and each view's menu when the file states any.
+
 They are bound as **key-down** rather than as characters: a function key
 produces no character, so a ``keypress`` binding would be accepted and then
 never fire.
 """
 from typing import TYPE_CHECKING, Any, Optional
 
+from OpenGLContext.loaders.notices import notices_text
 from OpenGLContext.viewer import menu
 
-__all__ = ['ViewerScreensMixin']
+__all__ = ['ViewerScreensMixin', 'NOTICES_NAME']
+
+#: The name the notices screen is pushed under.
+NOTICES_NAME = 'viewer-notices'
 
 
 class ViewerScreensMixin(object):
@@ -44,6 +52,7 @@ class ViewerScreensMixin(object):
     if TYPE_CHECKING:
         overlays: Any
         source: Optional[str]
+        scene: Any
 
         def addEventHandler(self, eventType: str, *arguments: Any,
                             **named: Any) -> Any: ...
@@ -104,6 +113,7 @@ class ViewerScreensMixin(object):
             on_quit=self.OnQuit,
             on_resume=self.closeMenu if showing else None,
             on_open=self.openTyped,
+            on_notices=self.showNotices if self.sceneNotices() else None,
             subtitle=self.menuSubtitle()))
 
     def openTyped(self, source: str) -> None:
@@ -171,3 +181,39 @@ class ViewerScreensMixin(object):
         """Raise the shared key-bindings screen."""
         from OpenGLContext.ui import bindings
         return bindings.open_bindings(self)
+
+    # -- the file's notices ------------------------------------------------
+    def sceneNotices(self) -> list:
+        """The notices the scene on show carries; empty with none on show.
+
+        A scene built by a third-party adapter may not answer ``notices`` at
+        all, which is the same as answering none.
+        """
+        return list(getattr(getattr(self, 'scene', None), 'notices', None) or [])
+
+    def showNotices(self, event: Any = None) -> Any:
+        """Raise the open file's copyright and licence notices.
+
+        Replaces the menu when it came from there, as the library does.  With
+        no scene on show there is no file to ask, and nothing goes up.
+        """
+        if getattr(self, 'scene', None) is None:
+            return None
+        existing = self.overlays.named(NOTICES_NAME)
+        if existing is not None:
+            return existing
+        self.closeMenu()
+        from OpenGLContext.ui.dialogs import notice
+        panel = notice(menu.NOTICES_LABEL, notices_text(self.sceneNotices()))
+        panel.name = NOTICES_NAME
+        return self.pushOverlay(panel)
+
+    def viewMenuItems(self, view: Any) -> list:
+        """Each view's menu, with the file's notices at its foot when it has any."""
+        above = getattr(super(), 'viewMenuItems', None)
+        items = list(above(view)) if above is not None else []
+        if self.sceneNotices():
+            from OpenGLContext.ui.menu import MenuItem
+            items.append(MenuItem(text=menu.NOTICES_LABEL,
+                                  on_activate=lambda widget: self.showNotices()))
+        return items
