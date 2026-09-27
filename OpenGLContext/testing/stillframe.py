@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import contextlib
 import sys
+import threading
 from collections import Counter
 from dataclasses import dataclass, field
 from collections.abc import Callable, Iterable, Iterator
@@ -120,7 +121,27 @@ def counting_gl(names: Iterable[str] = ALLOCATIONS + UPLOADS + COMPILES
     Yields a :class:`FrameWork`, filled as the calls are made. An entry
     point is found by identity with ``OpenGL.GL``'s, so a module that
     imported it under another name is counted as well.
+
+    The entry points are replaced in every loaded module for the process, so
+    one count runs at a time; a second, on this thread or another, raises
+    ``RuntimeError`` rather than counting nothing.
     """
+    if not _COUNTING.acquire(blocking=False):
+        raise RuntimeError('counting_gl is already counting; one count runs at a time')
+    try:
+        with _counted(names) as work:
+            yield work
+    finally:
+        _COUNTING.release()
+
+
+#: Held while a :func:`counting_gl` block runs.
+_COUNTING = threading.Lock()
+
+
+@contextlib.contextmanager
+def _counted(names: Iterable[str]) -> Iterator[FrameWork]:
+    """The replacement and restoration :func:`counting_gl` makes."""
     from OpenGL import GL
     work = FrameWork()
     counts, sites = work.calls, work.sites

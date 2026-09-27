@@ -46,3 +46,16 @@ def test_a_frame_that_does_nothing_passes():
 
 def test_the_plugin_offers_it_as_a_fixture(check_still_frame):
     assert check_still_frame(lambda: None).allocations == 0
+
+
+def test_a_count_inside_a_count_is_refused():
+    """The inner one would find the outer one's wrappers rather than GL's own
+    entry points, and count nothing."""
+    from OpenGLContext.testing.stillframe import counting_gl
+
+    with counting_gl():
+        with pytest.raises(RuntimeError, match='already counting'):
+            with counting_gl():
+                pass
+    with counting_gl():
+        pass

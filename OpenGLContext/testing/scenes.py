@@ -101,10 +101,12 @@ def scene_context(children: Sequence[Any], *, size: tuple[int, int] = (96, 96),
 
 
 def _release(context: Any) -> None:
-    """Let the context's window go, and the engine's hold on its pass."""
-    from OpenGLContext.passes import renderpass
+    """Let the context's window go, and with it the engine's hold on its pass.
+
+    The window system's release tells the engine's caches the context is
+    going, and the render pass cache drops this context's pass.
+    """
     context.releaseWindow()
-    renderpass.FLAT = None
     gc.collect()
 
 

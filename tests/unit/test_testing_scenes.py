@@ -38,3 +38,14 @@ def test_the_scene_configuration_is_put_back(monkeypatch):
         assert os.environ['OPENGLCONTEXT_BLOOM'] == '1'
         assert os.environ['OPENGLCONTEXT_HIDDEN'] == '1'
     assert os.environ['OPENGLCONTEXT_BLOOM'] == '0'
+
+
+def test_the_pass_goes_with_the_context():
+    """Released through the context's own teardown, which drops that context's
+    pass and no other."""
+    from OpenGLContext.passes import renderpass
+
+    with scene_context(_red_box(), size=(32, 24)) as context:
+        drawn_image(context)
+        assert renderpass.FLAT is not None
+    assert renderpass.FLAT is None
