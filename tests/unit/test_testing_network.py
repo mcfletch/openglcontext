@@ -64,3 +64,18 @@ def test_the_port_follows_the_scheme(monkeypatch, tmp_path):
     network.unreachable('https://example.invalid/a.glb', str(tmp_path))
     network.unreachable('http://example.invalid/a.glb', str(tmp_path))
     assert asked == [('example.invalid', 443), ('example.invalid', 80)]
+
+
+def test_a_host_that_refused_is_asked_again_after_a_while(tmp_path, monkeypatch):
+    """A blip early in a run does not skip every later test that needs the host."""
+    answers = ['refused', None]
+    monkeypatch.setattr(network, '_connection_refused',
+                        lambda host, port: answers.pop(0))
+    clock = [100.0]
+    monkeypatch.setattr(network.time, 'monotonic', lambda: clock[0])
+    url = 'http://example.invalid/model.glb'
+    assert network.unreachable(url, str(tmp_path)) is not None
+    assert network.unreachable(url, str(tmp_path)) is not None
+    clock[0] += network.RETRY_SECONDS
+    assert network.unreachable(url, str(tmp_path)) is None
+    assert answers == []

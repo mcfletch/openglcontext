@@ -627,7 +627,9 @@ A test that reads a published sample, such as a Khronos model or a Poly
 Haven panorama, needs a copy in the resolver's cache or a connection to the
 host that serves it. ``OpenGLContext.testing.network.unreachable(url)``
 answers that without fetching anything, and returns the reason to skip or
-``None``:
+``None``. A host that answered is not asked again in the run; one that did not
+is asked again after ``RETRY_SECONDS`` (30), so a moment without a network
+early in a run does not skip every later test that needs it:
 
 .. code-block:: python
 

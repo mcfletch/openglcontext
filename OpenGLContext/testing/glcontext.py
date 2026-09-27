@@ -47,6 +47,7 @@ import functools
 import os
 import socket
 import sys
+import time
 from collections.abc import Iterator, Mapping, Sequence
 from typing import Any, Optional
 
@@ -148,7 +149,9 @@ def display_answers(name: str | None = None,
     this process may use -- being listened to is not being let in, and the
     authority a client needs is the client's own business.  With no client to
     run, a display that accepts a connection is taken at its word.  The client
-    runs once per display in a process; several test modules ask at import.
+    runs once per display in a process while it succeeds, several test modules
+    asking at import; one that failed is tried again after
+    :data:`RETRY_SECONDS`.
     """
     display = (os.environ.get('DISPLAY', '') if name is None else name).strip()
     if not _display_listens(display, directory, min(timeout, 2.0)):
@@ -160,17 +163,35 @@ def display_answers(name: str | None = None,
     return _client_opens(display, timeout)
 
 
-@functools.lru_cache(maxsize=None)
+#: Seconds before a display whose client failed is tried again.  One that
+#: opened a window is taken at its word for the rest of the run.
+RETRY_SECONDS = 10.0
+
+#: Whether a client opened a window on each display, and when it was tried.
+_OPENED: dict[str, tuple[bool, float]] = {}
+
+
 def _client_opens(display: str, timeout: float) -> bool:
-    """Whether a client opens a window on ``display``, run once per display."""
+    """Whether a client opens a window on ``display``.
+
+    Tried once per display while it answers, and again after
+    :data:`RETRY_SECONDS` where it did not: a client timing out under load is
+    not the answer for the rest of the run.
+    """
+    now = time.monotonic()
+    remembered = _OPENED.get(display)
+    if remembered is not None and (remembered[0] or now - remembered[1] < RETRY_SECONDS):
+        return remembered[0]
     import subprocess
     try:
         opened = subprocess.run(
             [sys.executable, '-c', X_CLIENT], capture_output=True,
             timeout=timeout, env=dict(os.environ, DISPLAY=display))
+        answer = opened.returncode == 0
     except (OSError, subprocess.SubprocessError):
-        return False
-    return opened.returncode == 0
+        answer = False
+    _OPENED[display] = (answer, now)
+    return answer
 
 
 def _display_listens(display: str, directory: str, timeout: float) -> bool:

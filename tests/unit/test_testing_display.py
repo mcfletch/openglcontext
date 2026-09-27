@@ -109,11 +109,27 @@ class TestAskedOnce:
 
         monkeypatch.setattr(glcontext, '_display_listens', lambda *_args: True)
         monkeypatch.setattr(subprocess, 'run', run)
-        glcontext._client_opens.cache_clear()  # noqa: SLF001 the per-display memo, cleared around the test
-        try:
-            assert display_answers(':%d' % NOBODY)
-            assert display_answers(':%d' % NOBODY)
-            assert display_answers(':%d' % (NOBODY - 1))
-        finally:
-            glcontext._client_opens.cache_clear()  # noqa: SLF001 the per-display memo, cleared around the test
+        monkeypatch.setattr(glcontext, '_OPENED', {})
+        assert display_answers(':%d' % NOBODY)
+        assert display_answers(':%d' % NOBODY)
+        assert display_answers(':%d' % (NOBODY - 1))
         assert ran == [':%d' % NOBODY, ':%d' % (NOBODY - 1)]
+
+    def test_a_display_that_refused_is_asked_again_after_a_while(self, monkeypatch):
+        """A client that timed out under load is not the answer for the rest of the run."""
+        pytest.importorskip('tkinter')
+        codes = [1, 0]
+
+        class Finished:
+            def __init__(self):
+                self.returncode = codes.pop(0)
+
+        clock = [100.0]
+        monkeypatch.setattr(glcontext, '_display_listens', lambda *_args: True)
+        monkeypatch.setattr(subprocess, 'run', lambda *_args, **_named: Finished())
+        monkeypatch.setattr(glcontext, '_OPENED', {})
+        monkeypatch.setattr(glcontext.time, 'monotonic', lambda: clock[0])
+        assert not display_answers(':%d' % NOBODY)
+        assert not display_answers(':%d' % NOBODY)
+        clock[0] += glcontext.RETRY_SECONDS
+        assert display_answers(':%d' % NOBODY)
