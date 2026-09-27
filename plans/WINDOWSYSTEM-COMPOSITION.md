@@ -969,15 +969,16 @@ comes with Context"):
   `OnIdle`, so `physics_stress.py` drew a different frame nearly every run
   and once crossed the tolerance; they read `systemtime.systemTime()`.
 
+2026-09-27: merged to `develop` in all nine projects, and
+`tools/preflight.py --rebuild-env` passed every gate in the workspace (95 of
+95), the script suite and the serial passes among them.
+
 Still to do:
 
-- The script suite (`tests/test_all_scripts.py`, every script's frame
-  against its reference image) passes from the worktree with `PYTHONPATH`
-  set, which the subprocesses inherit.  Run it again on the main checkout
-  with the merge staged, as preflight does, before the merge is committed.
 - wx and WGL: written against their APIs, not run here; their CI jobs are
   the gate.
-- Merging: each game project below has a `windowsystem` branch that needs
-  the engine's, so the engine merges first and the games after it.
-- Phase 6 (removal of the old registries and `getContextType`) is a release
-  later.
+- The reference-images commit holding the re-blessed `cover_meadow.png`
+  (25578f7) is pushed with its LFS object.
+- Phase 6, a release later: the old registries, `getContextType`, the
+  `movementModes`/`movementMode` properties and the `OverlayMixin` shell,
+  each of which warns until then.
