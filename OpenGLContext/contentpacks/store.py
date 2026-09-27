@@ -181,11 +181,8 @@ class ContentStore:
         file moves, and the complete one after the last, so an install that
         stops between the two reads as not here.
         """
-        parent, name = os.path.split(where)
         os.makedirs(where, exist_ok=True)
-        staging = tempfile.mkdtemp(prefix='.%s%s' % (name, atomicfiles.PARTIAL),
-                                   dir=parent)
-        try:
+        with atomicfiles.scratch_directory(where) as staging:
             archive.extract(path, staging, pack.archive, max_bytes=limit,
                             cancel=cancel)
             files = _files_under(staging)
@@ -193,13 +190,11 @@ class ContentStore:
             _write_record(where, pack, files=files, complete=False)
             if previous is not None:
                 _remove_files(where, _listed(previous))
-            for name in files:
-                target = os.path.join(where, *name.split('/'))
+            for member in files:
+                target = os.path.join(where, *member.split('/'))
                 os.makedirs(os.path.dirname(target), exist_ok=True)
-                os.replace(os.path.join(staging, *name.split('/')), target)
+                os.replace(os.path.join(staging, *member.split('/')), target)
             _write_record(where, pack, files=files)
-        finally:
-            shutil.rmtree(staging, ignore_errors=True)  # noqa: TID251 the private staging directory, emptied into place above; nothing reads it
 
     def remove(self, pack: ContentPack,
                within: ContentPack | None = None) -> None:

@@ -181,6 +181,18 @@ class TestContentInsideAnotherPack:
             assert handle.read() == b'2'
         assert not os.path.exists(os.path.join(root, 'trees', 'old-oak.npz'))
 
+    def test_what_a_killed_install_left_is_cleared_by_the_next(self, tmp_path,
+                                                               store):
+        """A staging directory is removed by the process that made it; one
+        killed part-way leaves it, and the next install of that pack clears it."""
+        world, art = self.world_and_art(tmp_path, store)
+        parent, name = os.path.split(store.directory_for(world))
+        leftover = os.path.join(parent, '.%s.partial-killed' % (name,))
+        os.makedirs(os.path.join(leftover, 'trees'))
+        rebuilt = tarball(tmp_path / 'a2.tar.gz', [('trees/fir.npz', b'2')])
+        store.install(art, rebuilt, within=world, replace=True)
+        assert not os.path.exists(leftover)
+
     def test_publish_replacing_the_art_keeps_the_world(self, tmp_path, store):
         """``--reinstall`` of a needed pack removes that pack and only it."""
         world, art = self.world_and_art(tmp_path, store)

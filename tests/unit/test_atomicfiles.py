@@ -208,3 +208,25 @@ class TestRemovingADirectory:
         (tmp_path / 'neighbour.txt').write_text('kept')
         atomicfiles.remove_directory(str(tmp_path / 'absent'))
         assert os.listdir(tmp_path) == ['neighbour.txt']
+
+
+class TestAScratchDirectory:
+    def test_it_is_beside_the_path_and_gone_afterwards(self, tmp_path):
+        target = tmp_path / 'pack'
+        with atomicfiles.scratch_directory(str(target)) as scratch:
+            assert os.path.dirname(scratch) == str(tmp_path)
+            open(os.path.join(scratch, 'member'), 'w').close()
+        assert not os.path.exists(scratch)
+        assert not target.exists()
+
+    def test_it_is_gone_after_a_failure_too(self, tmp_path):
+        with pytest.raises(RuntimeError):
+            with atomicfiles.scratch_directory(str(tmp_path / 'pack')) as scratch:
+                raise RuntimeError('stopped')
+        assert not os.path.exists(scratch)
+
+    def test_what_a_killed_process_left_is_cleared_first(self, tmp_path):
+        leftover = tmp_path / ('.pack%sabc' % (atomicfiles.PARTIAL,))
+        leftover.mkdir()
+        with atomicfiles.scratch_directory(str(tmp_path / 'pack')):
+            assert not leftover.exists()

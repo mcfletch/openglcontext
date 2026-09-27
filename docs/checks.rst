@@ -159,8 +159,9 @@ The rules and what to use instead
    ``open(path, 'w')``, ``Path.write_text``, ``shutil.copyfile`` and the like
    outside the test scope: a write cut short is taken for the whole file by the
    next reader. Write through ``OpenGLContext.atomicfiles`` (``write_text``,
-   ``write_bytes``, ``copy_file``, ``staged_file``, ``staged_directory``), or
-   beside the path followed by ``os.replace``. A stream opened to append is not
+   ``write_bytes``, ``copy_file``, ``staged_file``, ``staged_directory``, and
+   ``scratch_directory`` for files moved into place one at a time), or beside
+   the path followed by ``os.replace``. A stream opened to append is not
    reported.
 
 ``OGC151`` -- GL state left changed, in passes

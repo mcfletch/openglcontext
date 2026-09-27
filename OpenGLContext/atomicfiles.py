@@ -36,7 +36,8 @@ from collections.abc import Iterator
 from typing import IO, Any
 
 __all__ = ['copy_file', 'file_lock', 'remove_directory', 'replace_directory',
-           'staged_directory', 'staged_file', 'write_bytes', 'write_text']
+           'scratch_directory', 'staged_directory', 'staged_file', 'write_bytes',
+           'write_text']
 
 #: What a staging directory's name starts with after the target's own name.
 PARTIAL = '.partial-'
@@ -112,16 +113,29 @@ def staged_directory(path: str) -> Iterator[str]:
     this is to be used under :func:`file_lock` wherever two processes can stage
     the same path at once.
     """
+    with scratch_directory(path) as staging:
+        yield staging
+        replace_directory(staging, path)
+
+
+@contextlib.contextmanager
+def scratch_directory(path: str) -> Iterator[str]:
+    """A new, empty directory beside ``path``, removed when the block ends.
+
+    For an install that moves what it builds into ``path`` a file at a time
+    rather than whole; :func:`staged_directory` is built on it.  It is named as
+    a staging directory of ``path`` is, so one left by a process that was
+    killed is removed when the next begins, and it is to be used under
+    :func:`file_lock` wherever two processes can work on the same path.
+    """
     parent, name = os.path.split(os.path.abspath(path))
     os.makedirs(parent, exist_ok=True)
     _remove_leftovers(parent, name)
     staging = tempfile.mkdtemp(prefix='.%s%s' % (name, PARTIAL), dir=parent)
     try:
         yield staging
-        replace_directory(staging, path)
-    except BaseException:
-        shutil.rmtree(staging, ignore_errors=True)
-        raise
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)  # noqa: TID251 the private staging directory; after a staged_directory it is already gone
 
 
 def replace_directory(source: str, path: str) -> str:
