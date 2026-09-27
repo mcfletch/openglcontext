@@ -295,6 +295,10 @@ node does not move them. With ``spacing`` 0, the default, each view is ruled
 to its own scale: the step is 1, 2 or 5 times a power of ten, chosen to put
 the lines about 24 pixels apart, so zooming changes the step rather than
 crowding the lines. A ``spacing`` in world units pins the step in every view.
+A view is drawn with at most 200 lines each side of its middle in each
+direction (``grid.MAXIMUM_LINES``); where the pinned step would need more, the
+view is ruled ten, a hundred or more times coarser, still on multiples of the
+spacing. A negative, infinite or not-a-number ``spacing`` is treated as 0.
 ``colour`` and ``heavyColour`` are RGB. The grid takes no picks, casts no
 shadow and adds nothing to the scene's bounds, so framing ignores it.
 ``MultiViewMixin`` and ``QuadView`` rule their three orthographic views, and

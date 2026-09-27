@@ -34,7 +34,7 @@ from vrml.vrml97 import nodetypes
 from OpenGLContext.multiview.views import View
 
 __all__ = ['Grid', 'GridLines', 'lines_for', 'spacing_for',
-           'DECADE', 'WANTED_PIXELS', 'HEAVY_EVERY']
+           'DECADE', 'WANTED_PIXELS', 'HEAVY_EVERY', 'MAXIMUM_LINES']
 
 #: The base the steps are chosen in: one, two and five of every power of ten.
 DECADE = 10.0
@@ -49,6 +49,11 @@ HEAVY_EVERY = 10
 
 #: The steps a ruler is marked in, within one decade.
 STEPS = (1.0, 2.0, 5.0)
+
+#: The most lines drawn on each side of a view's middle, in each direction. A
+#: pinned spacing finer than that for the view is ruled a decade coarser, as
+#: often as it takes, so the lines still fall on multiples of it.
+MAXIMUM_LINES = 200
 
 Point = tuple[float, float, float]
 
@@ -85,6 +90,22 @@ def spacing_for(shown: float, pixels: int) -> float:
             if nearest is None or apart < nearest:
                 best, nearest = candidate, apart
     return best
+
+
+def _pinned_step(spacing: Optional[float], reach: float) -> Optional[float]:
+    """The step a pinned ``spacing`` rules a view reaching ``reach`` at.
+
+    None where no spacing is pinned, or where it is no distance at all (zero,
+    negative, infinite or not a number), so the view is ruled to its own scale.
+    A spacing finer than :data:`MAXIMUM_LINES` allows is coarsened by decades.
+    """
+    if spacing is None or not math.isfinite(spacing) or spacing <= 0.0:
+        return None
+    step = float(spacing)
+    wanted = reach / MAXIMUM_LINES
+    if step < wanted:
+        step *= DECADE ** math.ceil(math.log10(wanted / step))
+    return step
 
 
 def _plane(view: View) -> Optional[tuple[np.ndarray, np.ndarray, Point, float]]:
@@ -128,10 +149,10 @@ def lines_for(view: View, spacing: Optional[float] = None) -> Optional[GridLines
     width, height = view.size
     height = int(height) or 1
     width = int(width) or height
-    step = float(spacing) if spacing else spacing_for(shown, height)
     # As much as the view shows, and half again, so a view panned between
     # frames is still ruled to its edges.
     reach = max(shown, shown * width / height) * 0.75
+    step = _pinned_step(spacing, reach) or spacing_for(shown, height)
     count = int(math.ceil(reach / step))
     origin = np.asarray(middle, 'd')
     # Where the middle of the view falls on the grid, so the lines are on the

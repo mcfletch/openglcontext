@@ -15,6 +15,7 @@ from OpenGLContext.edit.orbitview import OrbitView, OrbitViewPlatform
 from OpenGLContext.multiview.cameras import OrthoView, OrthoViewPlatform
 from OpenGLContext.multiview.grid import (
     DECADE,
+    MAXIMUM_LINES,
     Grid,
     lines_for,
     spacing_for,
@@ -156,6 +157,36 @@ class TestTheNodeAViewDraws:
         view = _plan(span=100.0)
         view.style = ViewStyle(grid=True)
         assert Grid(spacing=2.5).linesFor(view).spacing == 2.5
+
+    def test_a_spacing_too_fine_to_draw_is_coarsened(self):
+        """A scene's spacing is whatever the file says; a millionth of a unit
+        across a hundred-unit view would be millions of lines a frame."""
+        view = _plan(span=100.0)
+        view.style = ViewStyle(grid=True)
+        lines = Grid(spacing=1e-6).linesFor(view)
+        assert len(lines.segments) <= 2 * (2 * MAXIMUM_LINES + 1)
+        assert lines.spacing > 1e-6
+
+    def test_a_coarsened_spacing_is_still_a_multiple_of_the_one_asked_for(self):
+        view = _plan(span=100.0)
+        view.style = ViewStyle(grid=True)
+        spacing = Grid(spacing=0.003).linesFor(view).spacing
+        ratio = spacing / 0.003
+        assert ratio == pytest.approx(DECADE ** round(np.log10(ratio)))
+
+    def test_a_spacing_fine_enough_to_draw_is_kept(self):
+        view = _plan(span=100.0)
+        view.style = ViewStyle(grid=True)
+        assert Grid(spacing=0.5).linesFor(view).spacing == 0.5
+
+    @pytest.mark.parametrize('spacing', [0.0, -2.0, float('inf'), float('nan')])
+    def test_a_spacing_that_is_no_distance_rules_to_the_view(self, spacing):
+        view = _plan(span=100.0)
+        view.style = ViewStyle(grid=True)
+        automatic = Grid().linesFor(view)
+        lines = Grid(spacing=spacing).linesFor(view)
+        assert lines.spacing == automatic.spacing
+        assert len(lines.segments) == len(automatic.segments)
 
     def test_the_heavier_lines_are_drawn_in_their_own_colour(self):
         view = _plan(span=100.0)
