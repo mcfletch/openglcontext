@@ -579,17 +579,7 @@ class ZonesMixin(PassResources):
             pack, mask = held.pack, held.mask
         else:
             pack, mask = self.zoneState(path, tmatrix, bvolume)
-        key = None if pack is None else pack.key
-        if key is not self._zoneApplied and key != self._zoneApplied:
-            setter = getattr(shader, 'set_zones', None)
-            if setter is not None:
-                setter(pack, program=program)
-            self._zoneApplied = key
-        if mask != self._lightsOffApplied:
-            setter = getattr(shader, 'set_lights_off', None)
-            if setter is not None:
-                setter(mask, program=program)
-            self._lightsOffApplied = mask
+        self._applyZoneState(shader, pack, mask, program)
 
     def applyZonesToGroup(self, shader: Any, members: Sequence[Any],
                           program: Any = None, *, key: Hashable) -> None:
@@ -633,7 +623,9 @@ class ZonesMixin(PassResources):
     def _applyZoneState(self, shader: Any, pack: Optional[ZonePack], mask: int,
                         program: Any) -> None:
         key = None if pack is None else pack.key
-        if key != self._zoneApplied:
+        # Identity first: a draw of an unmoved object hands back the very key
+        # it was given, and comparing that one is all most draws need.
+        if key is not self._zoneApplied and key != self._zoneApplied:
             setter = getattr(shader, 'set_zones', None)
             if setter is not None:
                 setter(pack, program=program)
