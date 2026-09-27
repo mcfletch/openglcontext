@@ -339,7 +339,7 @@ in. The terrain settings are:
   1.3).
 - ``canopy_deepest`` - the largest fraction of the light the canopy may remove
   (default 0.78).
-- ``canopy_spread`` - how far the shadow is offset towards the sun, in metres
+- ``canopy_spread`` - how far the shadow is offset away from the sun, in metres
   (default 12), because a tree's shadow falls along the light rather than
   straight down.
 

@@ -223,7 +223,7 @@ names. An added registry cannot declare ``glisteel/ashdown``, so it cannot be
 loaded in place of the pack the application shipped.
 
 Content is stored by namespace on disk, at
-``<store>/packs/<namespace>/<directory>``, both in lower case, since macOS and
+``<store>/packs/<namespace>/<directory>``, both case-folded (``str.casefold``), since macOS and
 Windows treat names differing only in case as one directory. Namespaces are
 compared the same way, so ``Glisteel`` and ``glisteel`` are one namespace. The registry format namespaces
 only the *key*; a registry can choose any ``directory``. Without separate
