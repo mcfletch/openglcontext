@@ -9,11 +9,15 @@ mean anything.  This fills that in, once, for all of them.
 """
 from typing import Any
 
+from vrml.vrml97.basenodes import WorldInfo
+
 from OpenGLContext.loaders.notices import Notice
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.viewpoint import Viewpoint
 from OpenGLContext.viewer.adapters.base import (
-    SceneAdapter, ViewerScene, scene_bounds,
+    SceneAdapter,
+    ViewerScene,
+    scene_bounds,
 )
 
 __all__ = ['SceneGraphAdapter', 'camera_name']
@@ -68,7 +72,7 @@ class SceneGraphAdapter(SceneAdapter):
         """
         notices = []
         for child in children:
-            if getattr(child, 'PROTO', None) != 'WorldInfo':
+            if not isinstance(child, WorldInfo):
                 continue
             notice = Notice(title=str(child.title or '').strip(),
                             copyright='\n'.join(str(line).strip()

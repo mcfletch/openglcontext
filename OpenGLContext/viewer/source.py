@@ -12,6 +12,10 @@ The difference matters further than the fetch: a multi-file ``.gltf`` names its
 ``.bin`` and its images by URI *relative to the document*, so whatever fetches
 it has to keep hold of where it came from -- which is also why an archive is
 unpacked whole rather than one member at a time.
+
+A content pack is named by its key (``oglc-view --pack``): :func:`open_pack`
+finds it in a registry, fetches it into the store if it is not there, and
+answers the scene it holds.
 """
 import hashlib
 import os
