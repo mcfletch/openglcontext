@@ -150,6 +150,9 @@ class ContextDefinition( node.Node ):
     # object-id buffer and its readback are all skipped (env: OPENGLCONTEXT_PICKING).
     pickEnabled = field.newField( "pickEnabled", "SFBool", 1, _get_default_picking )
 
+    # Use the PBR render passes or the older VRML97 render passes
+    renderer = field.newField("renderer","SFString",1, "pbr")
+
     # Non-blocking pick readback: read the MRT object-id/depth under each pick
     # sample into a PBO with a fence instead of a synchronous glReadPixels, and
     # dispatch the resolved events a frame later. Avoids the GPU->CPU stall so
@@ -367,6 +370,9 @@ class ContextDefinition( node.Node ):
         'transmission': {'label': 'Glass refraction',
                          'options': renderoptions.CHOICES['transmission'],
                          'optionLabels': renderoptions.LABELS['transmission']},
+        'renderer': {'label': 'Render Engine',
+                     'options': renderoptions.CHOICES['renderer'],
+                     'optionLabels':renderoptions.LABELS['renderer']},
         'planarReflections': {'label': 'Reflections'},
         'reflectionViews': {'label': 'Reflections per frame', 'minimum': 0,
                             'maximum': 16, 'step': 1},
@@ -398,6 +404,7 @@ class ContextDefinition( node.Node ):
         'bloom', 'ibl', 'iblIntensity', 'transmission', 'planarReflections',
         'reflectionViews', 'reflectionBounces', 'zoneCaptureFaces', 'instancing',
         'gpuSkinning', 'tessellationLOD', 'multisampleSamples', 'vsync',
+        'renderer',
     )
     #: Fields a settings screen shows under "Interface": how the overlay itself
     #: is drawn and how much of the display the window takes, as opposed to what

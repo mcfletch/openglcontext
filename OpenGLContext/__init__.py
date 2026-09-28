@@ -208,3 +208,5 @@ Node( 'ShaderGeometry','OpenGLContext.scenegraph.shaders.ShaderGeometry' )
 Node( 'Shader','OpenGLContext.scenegraph.shaders.Shader' )
 Node( 'ROUTE','vrml.route.ROUTE' )
 Node( 'IS','vrml.route.IS' )
+
+Node( 'PBRMaterial','OpenGLContext.scenegraph.pbrmaterial.PBRMaterial')

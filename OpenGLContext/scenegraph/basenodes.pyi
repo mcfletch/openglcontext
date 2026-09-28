@@ -138,6 +138,8 @@ from vrml.vrml97.basenodes import TouchSensor as TouchSensor
 from vrml.vrml97.basenodes import VisibilitySensor as VisibilitySensor
 from vrml.vrml97.basenodes import WorldInfo as WorldInfo
 
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial as PBRMaterial
+
 __all__ = [
     'Anchor',
     'Appearance',
@@ -207,6 +209,7 @@ __all__ = [
     'NurbsToleranceSample',
     'OrientationInterpolator',
     'ParticleEmitter',
+    'PBRMaterial',
     'PixelTexture',
     'PlanarReflector',
     'PlaneSensor',

@@ -72,7 +72,11 @@ def _core_flatpass_class( context: Any = None ) -> type:
     would otherwise break plain core rendering for every user, PBR or not. The PBR
     path is attempted defensively and falls back to the base core ``FlatPass``.
     """
-    want_pbr = getattr( context, 'renderer', None ) == 'pbr'
+    want_pbr = getattr( context, 'renderer', None ) == 'pbr' or getattr(
+        getattr(context,'contextDefinition',None),
+        'renderer',
+        None
+    ) == 'pbr'
     try:
         from OpenGLContext.passes.pbrpass import renderer_is_pbr
         want_pbr = want_pbr or renderer_is_pbr()

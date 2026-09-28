@@ -194,6 +194,7 @@ CHOICES: dict[str, tuple[str, ...]] = {
     'transmission': ('auto', 'full', 'blend', 'off'),
     'profile': ('compatibility', 'core'),
     'multiview': ('auto', 'vertex', 'geometry', 'sequential'),
+    'renderer': ('pbr','vrml97'),
 }
 
 #: Other spellings an environment variable may give a choice by.
@@ -207,6 +208,7 @@ LABELS: dict[str, tuple[str, ...]] = {
     'transmission': ('Automatic', 'Refractive', 'Blended', 'Off'),
     'profile': ('Compatibility', 'Core'),
     'multiview': ('Automatic', 'Vertex shader', 'Geometry shader', 'One view at a time'),
+    'renderer': ('Physically Based','VRML97'),
 }
 
 
