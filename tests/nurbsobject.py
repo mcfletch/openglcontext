@@ -11,9 +11,7 @@ This version includes an animation that morphs the NURBS surface
 through different shapes: original mound, flattened, expanded, and risen.
 '''
 
-from OpenGLContext import testingcontext
-
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
 

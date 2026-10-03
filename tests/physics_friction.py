@@ -10,9 +10,8 @@ let it slide — the classic friction-cone threshold, with the material's
 '''
 import numpy as np
 
-from OpenGLContext import testingcontext
 from OpenGLContext.events import systemtime
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 from omi_physics import model, mathutil
 from OpenGLContext.physics import debugdraw

@@ -14,14 +14,12 @@ import math
 import os
 import tempfile
 
-os.environ.setdefault("OPENGLCONTEXT_RENDERER", "pbr")   # honours vertex colours
-os.environ.setdefault("OPENGLCONTEXT_IBL", "off")
-# A streaming demo is watched for its frame rate, not held to the display's.
-os.environ.setdefault("OPENGLCONTEXT_NO_VSYNC", "1")
+# os.environ.setdefault("OPENGLCONTEXT_RENDERER", "pbr")   # honours vertex colours
+# os.environ.setdefault("OPENGLCONTEXT_IBL", "off")
+# # A streaming demo is watched for its frame rate, not held to the display's.
+# os.environ.setdefault("OPENGLCONTEXT_NO_VSYNC", "1")
 
-from OpenGLContext import testingcontext
-
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import (
     sceneGraph, DirectionalLight, Background, Shape, Cone, Box, Appearance, Material,
 )
@@ -97,4 +95,9 @@ class TestContext(BaseContext):
 
 
 if __name__ == "__main__":
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(definition={
+        'renderer': 'pbr',
+        'ibl': 'off',
+        'no_vsync':1,
+    })
+

@@ -1,9 +1,7 @@
 #! /usr/bin/env python
 """Test point parameter rendering code"""
 
-from OpenGLContext import testingcontext
-
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.arrays import *
 import sys
 import math

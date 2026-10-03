@@ -36,7 +36,7 @@ from OpenGLContext.scenegraph.basenodes import (
     Box, Shape, Transform, sceneGraph,
 )
 
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 START = (int(sys.argv[1]), int(sys.argv[2]))
 DRAG = (int(sys.argv[3]), int(sys.argv[4]))

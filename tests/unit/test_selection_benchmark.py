@@ -22,7 +22,7 @@ from pathlib import Path
 # Force core profile and GLFW for consistent testing
 
 from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.arrays import array, zeros

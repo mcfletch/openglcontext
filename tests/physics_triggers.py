@@ -12,9 +12,8 @@ The demo subscribes to the trigger's events through the physics manager, and
 each event arrives with the scenegraph node of the ball that entered or left.
 '''
 
-from OpenGLContext import testingcontext
 from OpenGLContext.events import systemtime
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 from omi_physics import model
 from OpenGLContext.physics import debugdraw

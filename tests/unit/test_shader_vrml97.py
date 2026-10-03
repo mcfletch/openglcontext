@@ -12,9 +12,7 @@ Press 's' to toggle between shader and legacy rendering modes.
 Press 'f' to toggle FlatPass shader mode (integrated mode).
 Press 'c' to capture comparison screenshots.
 """
-from OpenGLContext import testingcontext
-
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 from OpenGL.GL import *
 from OpenGL.arrays import vbo

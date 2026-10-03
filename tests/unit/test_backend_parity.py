@@ -366,7 +366,7 @@ class TestAContextKnowsItsSizeAsSoonAsItExists:
     def test_the_run_s_backend_reports_a_size(self):
         if not gl_available():
             pytest.skip('no GL target available')
-        BaseContext = testingcontext.getInteractive()
+        from OpenGLContext.context import Context as BaseContext
 
         class Sized(BaseContext):
             def Render(self, mode=None):
@@ -440,7 +440,7 @@ class TestTheProfileAskedForIsTheProfileGiven:
     """
 
     def _built(self, profile):
-        BaseContext = testingcontext.getInteractive()
+        from OpenGLContext.context import Context as BaseContext
 
         class Profiled(BaseContext):
             def OnInit(self):

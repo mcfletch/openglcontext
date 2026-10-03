@@ -9,9 +9,8 @@ heights increase across the row — a direct read-out of the ``restitution``
 material property and its combine mode.
 '''
 
-from OpenGLContext import testingcontext
 from OpenGLContext.events import systemtime
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 from omi_physics import model
 from OpenGLContext.physics import debugdraw

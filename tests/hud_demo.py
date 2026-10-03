@@ -60,7 +60,7 @@ from OpenGLContext.ui.hudwidgets import (                      # noqa: E402
 )
 from OpenGLContext.ui.skin import NineSlice                     # noqa: E402
 
-BaseContext = testingcontext.getInteractive('glfw')
+from OpenGLContext.context import Context as BaseContext
 
 #: Pillars in the ring the demo walks around, and how far out they stand.
 PILLARS, RING = 12, 11.0

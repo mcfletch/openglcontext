@@ -356,7 +356,7 @@ class EventHandlerMixin(HeldKeyMixin):
         """Get the time-event manager for this context"""
         return self.__timeManager
 
-    def createTimer(self, *args, **named) -> 'timer.Timer':
+    def createTimer(self, *args: Any, **named: Any) -> 'timer.Timer':
         """Create a registered, running Timer with *args and **named"""
         from .timer import Timer
         timer = Timer(*args, **named)

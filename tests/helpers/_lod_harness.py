@@ -34,7 +34,7 @@ def main():
     os.environ.setdefault('OPENGLCONTEXT_NO_VSYNC', '1')
     os.environ['OPENGLCONTEXT_AUTO_EXIT_FRAMES'] = '24'
 
-    BaseContext = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as BaseContext
 
     #: Where the fine level gives way to the coarse one.
     EDGE = 20.0

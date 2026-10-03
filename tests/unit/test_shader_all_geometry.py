@@ -15,9 +15,7 @@ Press 'f' to toggle between shader and legacy rendering modes.
 Press 'c' to capture and compare center pixel.
 Press 'q' to quit.
 """
-from OpenGLContext import testingcontext
-
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 from OpenGL.GL import *
 from OpenGLContext.scenegraph.basenodes import *

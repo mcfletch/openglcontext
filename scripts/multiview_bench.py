@@ -107,11 +107,11 @@ def measure(children: list, bounds: tuple[Any, Any], views: int,
     ``views`` is 1 for a single view of the scene or 4 for the editor's quad;
     ``strategy`` pins how a multi-view frame is drawn.
     """
-    Base: Any = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as BaseContext
     times: list[float] = []
     counted: list[int] = []
 
-    class _Bench(Base):
+    class _Bench(BaseContext):
         contextDefinition = ContextDefinition(size=size)
 
         def OnInit(self) -> None:
@@ -129,7 +129,7 @@ def measure(children: list, bounds: tuple[Any, Any], views: int,
                 self.viewLayout = ViewLayout.single(
                     OrbitViewPlatform(orbit, size), name='single')
 
-        def OnIdle(self, *arguments: Any) -> None:
+        def OnIdle(self, *arguments: Any) -> int:
             if len(times) >= frames + warmup:
                 self.ContextMainLoop and self.setCurrent()
                 raise SystemExit(0)
@@ -138,6 +138,7 @@ def measure(children: list, bounds: tuple[Any, Any], views: int,
             times.append(time.perf_counter() - started)
             flat = renderpass.FLAT
             counted.append(int(getattr(flat.stats, 'draws', 0)) if flat else 0)
+            return 1
 
     try:
         _Bench.ContextMainLoop()

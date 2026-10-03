@@ -15,9 +15,7 @@ os.environ.setdefault("OPENGLCONTEXT_IBL", "off")
 # A streaming demo is watched for its frame rate, not held to the display's.
 os.environ.setdefault("OPENGLCONTEXT_NO_VSYNC", "1")
 
-from OpenGLContext import testingcontext
-
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import (
     sceneGraph, DirectionalLight, Background, Shape, Cone, Appearance, Material,
     Transform,

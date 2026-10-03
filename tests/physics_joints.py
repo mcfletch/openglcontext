@@ -10,9 +10,8 @@ velocity constraints alongside contacts.
 '''
 import numpy as np
 
-from OpenGLContext import testingcontext
 from OpenGLContext.events import systemtime
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 from omi_physics import model
 from OpenGLContext.physics import debugdraw

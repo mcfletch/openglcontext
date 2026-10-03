@@ -67,7 +67,7 @@ def main() -> int:
     os.environ['OPENGLCONTEXT_IBL'] = 'full'
     os.environ.setdefault('OPENGLCONTEXT_AUTO_EXIT_FRAMES', '10')
 
-    BaseContext = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as BaseContext
 
     def grey():
         if renderer == 'flat':

@@ -20,10 +20,7 @@ import os
 os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
 os.environ.setdefault('OPENGLCONTEXT_SHADOWS', '1')
 
-from OpenGLContext import testingcontext
-
-BaseContext = testingcontext.getInteractive()
-
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph import basenodes
 
 

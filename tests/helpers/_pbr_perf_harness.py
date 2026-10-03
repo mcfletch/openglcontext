@@ -76,7 +76,7 @@ def main() -> int:
     # per-mesh VAO allocation this test counts.
     os.environ['OPENGLCONTEXT_INSTANCING'] = '0'
 
-    BaseContext = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as BaseContext
 
     # Count VAO allocations so we can prove "built once" vs "rebuilt per frame".
     alloc = {'count': 0}

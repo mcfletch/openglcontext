@@ -24,9 +24,7 @@ os.environ.setdefault("OPENGLCONTEXT_IBL", "off")
 os.environ.setdefault("OPENGLCONTEXT_NO_VSYNC", "1")
 
 import numpy as np
-from OpenGLContext import testingcontext
-
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import (
     sceneGraph, DirectionalLight, Background,
 )

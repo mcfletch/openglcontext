@@ -29,7 +29,7 @@ def main() -> int:
     # Sibling scene modules (shadow_spot) live in the parent tests/ directory.
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-    BaseContext = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as BaseContext
     # The scene script sets its own environment defaults and picks a backend
     # as it is imported, so it comes after the settings above.
     from shadow_spot import make_scene  # noqa: PLC0415 imported after this process's settings, which it reads on import

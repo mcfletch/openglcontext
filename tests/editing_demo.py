@@ -68,7 +68,7 @@ from OpenGLContext.scenegraph.basenodes import (
     Transform,
 )
 
-BaseContext = testingcontext.getInteractive('glfw')
+from OpenGLContext.context import Context as BaseContext
 
 #: How far the ground reaches, in metres square.  Wider than any window's
 #: worth of map, so the plan view never runs off the edge of the world.

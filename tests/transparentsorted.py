@@ -1,9 +1,7 @@
 #! /usr/bin/env python
 """Test of transparent, sorted IndexedFaceSet geometry"""
 
-from OpenGLContext import testingcontext
-
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 from OpenGL.GL import *
 from OpenGL.GLU import *

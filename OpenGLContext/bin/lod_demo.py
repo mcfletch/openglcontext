@@ -225,9 +225,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     from OpenGLContext import testingcontext
     from OpenGLContext.contextdefinition import ContextDefinition
 
-    base: Any = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as BaseContext
 
-    class LODContext(base):                     # pragma: no cover - needs a window
+    class LODContext(BaseContext):                     # pragma: no cover - needs a window
         #: The orbs and the hall are metallic/roughness materials.
         renderer = 'pbr'
         initialPosition = (0.0, 1.6, 4.0)

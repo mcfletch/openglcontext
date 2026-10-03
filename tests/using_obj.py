@@ -31,7 +31,7 @@ from OpenGLContext.scenegraph.basenodes import (
     Background, DirectionalLight, Transform, sceneGraph,
 )
 
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 #: Seconds for one turn of the model.
 PERIOD = 8.0

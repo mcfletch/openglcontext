@@ -31,7 +31,7 @@ from OpenGLContext.scenegraph.basenodes import (
     sceneGraph,
 )
 
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 #: The levels this game offers: the name it is loaded by, the name a player
 #: reads, and the colour standing in for the world it loads.

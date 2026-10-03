@@ -42,7 +42,7 @@ from OpenGLContext.scenegraph.shape import Shape
 from OpenGLContext.ui import bindings, console, dialogs, settings
 
 log = logging.getLogger(__name__)
-BaseContext: Any = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 #: A short licence-shaped wall of text, so the notice screen has to scroll.
 NOTICE = '\n\n'.join([

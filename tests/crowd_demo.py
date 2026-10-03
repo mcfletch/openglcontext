@@ -70,7 +70,6 @@ os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
 
 import numpy as np
 
-from OpenGLContext import testingcontext
 from OpenGLContext.character.model import CharacterModel
 from OpenGLContext.character.wander import STAND, TURN, Gait, WanderingCrowd
 from OpenGLContext.loaders.gltf import load_gltf, parse_gltf, sample_model_url
@@ -81,7 +80,7 @@ from OpenGLContext.scenegraph.basenodes import (
 )
 import typing
 
-BaseContext = testingcontext.getInteractive('glfw')
+from OpenGLContext.context import Context as BaseContext
 
 #: Khronos sample model to fill the field with: a fox, twenty-six joints, and
 #: the three clips a wandering figure wants -- a look-around, a walk and a run.

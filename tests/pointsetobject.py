@@ -1,10 +1,8 @@
 #! /usr/bin/env python
 """PointSet object test (draw line of coloured dots)"""
 
-from OpenGLContext import testingcontext
 import math
-
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.arrays import *
 
 from OpenGLContext.scenegraph.basenodes import *

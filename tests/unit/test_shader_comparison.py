@@ -13,9 +13,7 @@ Press 'l' to cycle through light types (directional/point/spot).
 Press 'r' to save current left side as reference.
 Press 't' to test right side against saved reference.
 """
-from OpenGLContext import testingcontext
-
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 from OpenGL.GL import *
 from OpenGL.arrays import vbo

@@ -31,7 +31,7 @@ from OpenGLContext.scenegraph.basenodes import (
     sceneGraph,
 )
 
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 
 class GameOptions(node.Node):

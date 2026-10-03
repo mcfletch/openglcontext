@@ -62,7 +62,6 @@ os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
 
 import numpy as np
 
-from OpenGLContext import testingcontext
 from OpenGLContext.character.model import CharacterModel
 from OpenGLContext.events.systemtime import systemTime
 from OpenGLContext.loaders.gltf import sample_model_url
@@ -72,7 +71,7 @@ from OpenGLContext.scenegraph.basenodes import (
     IndexedLineSet, Material, Shape, Sphere, Transform,
 )
 
-BaseContext = testingcontext.getInteractive('glfw')
+from OpenGLContext.context import Context as BaseContext
 
 #: The room, in metres square, meshed as one-metre quads.
 ROOM = 16

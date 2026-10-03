@@ -6,9 +6,7 @@ Material
 Normal-per-face generation
 """
 
-from OpenGLContext import testingcontext
-
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from io import StringIO
 from OpenGL.GL import *
 from OpenGLContext.arrays import *

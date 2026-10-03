@@ -6,9 +6,7 @@ Material
 Normal-per-vertex generation
 """
 
-from OpenGLContext import testingcontext
-
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 from OpenGL.GL import *
 from OpenGLContext.arrays import *

@@ -399,9 +399,9 @@ def main() -> int:                              # pragma: no cover - needs a win
     from OpenGLContext.contextdefinition import ContextDefinition
     from OpenGLContext.events import systemtime
 
-    base: Any = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as BaseContext
 
-    class EventsContext(base):
+    class EventsContext(BaseContext):
         #: The yard is dressed in metallic/roughness materials.
         renderer = 'pbr'
         initialPosition = (0, 2.2, 9)

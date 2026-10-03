@@ -16,7 +16,7 @@ if __name__ == '__main__':
     os.environ['OPENGLCONTEXT_BACKEND'] = 'glut'
 
 from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.arrays import arange, zeros, sin, cos

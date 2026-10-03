@@ -21,7 +21,7 @@ from OpenGLContext.scenegraph.basenodes import (
 )
 from OpenGLContext.testing.event_injector import EventInjectionMixin
 
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 CLICK_MARKER = "PICKED_CLICK_DISPATCHED"
 

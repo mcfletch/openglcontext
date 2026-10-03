@@ -81,7 +81,7 @@ def main():
     os.environ['OPENGLCONTEXT_GPU_SKINNING'] = \
         '1' if options['skinning'] == 'gpu' else '0'
 
-    BaseContext = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as BaseContext
 
     timings = {'update': [], 'draw': []}
     built = {}

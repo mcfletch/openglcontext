@@ -84,7 +84,7 @@ def compare(model_path, _out_dir):
     report = {}
     frames = {}
 
-    BaseContext = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as BaseContext
 
     class SkinContext(BaseContext):
         def OnInit(self):
@@ -177,7 +177,7 @@ def uploads(model_path, _out_dir):
 
     skinning.JointPalette.write = counting_write
 
-    BaseContext = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as BaseContext
 
     state = {}
 
@@ -253,7 +253,7 @@ def shadows(model_path, out_dir):
     report = {}
     frames = {}
 
-    BaseContext = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as BaseContext
 
     class ShadowContext(BaseContext):
         def OnInit(self):
@@ -348,7 +348,7 @@ def main():
 def compute(model_path, _out_dir):
     """Compare the palettes a compute shader writes with the ones numpy does."""
     _setup(True)
-    BaseContext = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as BaseContext
 
     report = {}
 
@@ -431,7 +431,7 @@ def fallback(model_path, _out_dir):
     _setup(False)
     renderoptions.reset_env_cache()
 
-    BaseContext = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as BaseContext
 
     state = {}
 
@@ -488,7 +488,7 @@ def _at_rest(mesh):
 def blend(model_path, _out_dir):
     """Compare the pose a compute shader blends with the one numpy blends."""
     _setup(True)
-    BaseContext = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as BaseContext
 
     report = {}
 

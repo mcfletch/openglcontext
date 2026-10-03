@@ -9,9 +9,8 @@ This tutorial is based on the [http://nehe.gamedev.net/data/lessons/lesson.asp?l
 with the tutorial, so that only changes from the tutorial are noted 
 here.
 '''
-from OpenGLContext import testingcontext
 from OpenGLContext.events import systemtime
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 '''Because this tutorial uses legacy/immediate-mode OpenGL functions
 (glBegin, glEnd, glVertex, glNormal, glTexCoord, glTranslate, glRotate,
 glLight, glBlendFunc), we need to explicitly request a compatibility

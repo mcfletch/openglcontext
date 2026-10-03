@@ -28,7 +28,7 @@ from OpenGLContext.scenegraph.basenodes import (
 
 import logging
 
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 
 class TestContext(BaseContext):

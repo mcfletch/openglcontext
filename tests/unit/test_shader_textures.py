@@ -12,9 +12,7 @@ Press 'n' to cycle through test scenes.
 Press 'q' to quit.
 """
 import os
-from OpenGLContext import testingcontext
-
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 from OpenGL.GL import *
 from OpenGLContext.scenegraph.basenodes import *

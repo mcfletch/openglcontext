@@ -51,7 +51,7 @@ def main() -> int:
         # comparison measuring the probe.
         os.environ.setdefault('OPENGLCONTEXT_IBL', 'off')
 
-    BaseContext = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as BaseContext
 
     def blend_scene():
         # An opaque red sphere with a translucent (alphaMode=BLEND) unlit-blue

@@ -2,10 +2,7 @@
 '''Demonstrate capture of keyboard and keypress events
 '''
 from typing import Any
-from OpenGLContext import testingcontext
-#: The backend is chosen at run time, so the class this subclasses is not
-#: one a checker can name -- which is what Any says here.
-BaseContext: Any = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
 

@@ -4,9 +4,8 @@
 NOTE: This tutorial uses legacy OpenGL (immediate mode) and requires
 a compatibility profile context.
 '''
-from OpenGLContext import testingcontext
 from OpenGLContext.events import systemtime
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGL.GL.EXT.texture_compression_s3tc import *
 try:

@@ -179,10 +179,9 @@ def main(argv: list[str] | None = None) -> int:
     ).parse_args(argv)
     from OpenGLContext import testingcontext
     from OpenGLContext.contextdefinition import ContextDefinition
+    from OpenGLContext.context import Context as BaseContext
 
-    base: Any = testingcontext.getInteractive()
-
-    class MirrorContext(base):
+    class MirrorContext(BaseContext):
         #: The mirrors are metallic/roughness materials.
         renderer = 'pbr'
 

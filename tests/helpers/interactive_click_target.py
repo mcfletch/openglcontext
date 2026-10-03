@@ -20,7 +20,7 @@ os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
 from OpenGLContext import testingcontext
 from OpenGLContext.testing.event_injector import EventInjectionMixin
 
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 CLICK_MARKER = "INJECTED_CLICK_DISPATCHED"
 
