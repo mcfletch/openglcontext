@@ -1,7 +1,6 @@
 '''Test of text objects with fontprovider
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.scenegraph.text import wglfontprovider, fontprovider

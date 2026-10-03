@@ -67,8 +67,7 @@ try:
         return _orig_submit(self, mode, events, id_map)
     selection.SelectionMixin.submitAsyncPicks = _scan_submit
 
-    from OpenGLContext import testingcontext
-    Base = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as Base
     from OpenGLContext.scenegraph import basenodes
     from OpenGLContext.events.mouseevents import MouseButtonEvent
 

@@ -14,8 +14,7 @@ Keys:
 import os
 os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
 
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 '''``CharacterModel`` is a rigged model and what can be done with it: the
 clips it carries, the skeleton they move, and the points something can be
 hung on.'''
@@ -63,7 +62,7 @@ class TestContext(BaseContext):
         self.last = systemTime()
         print(__doc__)
 
-    def OnIdle(self, event=None):
+    def OnIdle(self, *arguments):
         '''The clips advance when they are told how much time has passed.
         ``update`` steps every layer and poses the skeleton; nothing moves
         without it, and a paused game is a game that stops calling it.'''

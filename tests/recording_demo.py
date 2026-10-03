@@ -262,7 +262,7 @@ class TestContext(RecordingMixin, BaseContext):
             print('recording unavailable: %s' % (error,))
         return super(TestContext, self).SwapBuffers()
 
-    def OnIdle(self, event=None):
+    def OnIdle(self, *arguments):
         # A recording wants a frame every time round the loop, whether or not
         # the last one changed anything the renderer noticed.
         self.triggerRedraw(1)

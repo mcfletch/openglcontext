@@ -19,9 +19,7 @@ import os
 
 os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
 
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
-
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.audio import scene as audioscene
 from OpenGLContext.events import systemtime
 from OpenGLContext.bin.physics_events_demo import CollisionYard
@@ -79,7 +77,7 @@ class TestContext(BaseContext):
         platform = self.getViewPlatform()
         self.yard.fire(platform.position[:3], platform.forward())
 
-    def OnIdle(self, *args):
+    def OnIdle(self, *arguments):
         '''The engine's clock rather than the wall's, so a capture advances
         by whole frames and lands on the same picture every time.'''
         now = systemtime.systemTime()

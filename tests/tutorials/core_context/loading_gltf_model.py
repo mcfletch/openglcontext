@@ -3,6 +3,18 @@
 
 [using_gltf_model.py-screen-0001.png Screenshot]
 
+Most of the time you will not want to hand-build your scene from primitive
+objects or calculate the positions of vertices in meshes with a calculator.
+Tools such as `Blender<https://www.blender.org/>`_ are freely available,
+provide extensive tutorials and pre-made worlds, and can export into the
+glTF format that OpenGLContext supports.
+
+OpenGLContext's :py:mod:`OpenGLContext.loaders` package implement the
+various loaders we support, and the :py:mod:`OpenGLContext.loaders.gltf`
+module provides the interface to the glTF loading API. It can handle
+both `glb` (binary, single file) and `gltf` (json index + binary and image 
+files).
+
 Loading a glTF or GLB file into a scene, framing it, reaching one object
 inside it, and moving what was loaded.  The model is `Lantern` from the
 Khronos sample catalogue (CC0), which is four objects in one file -- a
@@ -26,10 +38,9 @@ can set for itself as long as it does so before the engine is imported.
 ``oglc-view`` does the same thing.'''
 import math
 import os
-os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
 
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+
+from OpenGLContext.context import Context as BaseContext
 '''``load_gltf`` reads a ``.gltf`` or ``.glb`` and returns a ``GLTFScene``.
 Two of its attributes are used below: ``group``, the ``Transform`` holding
 what was in the file, and ``radius``, the radius of the sphere that contains
@@ -61,7 +72,9 @@ class TestContext(BaseContext):
     initialPosition = (0, 0, 3)
 
     def OnInit(self):
-        scene = load_gltf(fetch_to_cache(sample_model_url(MODEL)))
+        scene:'OpenGLContext.loaders.gltf.GLTFScene' = load_gltf(
+            fetch_to_cache(sample_model_url(MODEL))
+        )
         '''``scene.group`` is an ordinary ``Transform``, so framing the model
         is writing its own fields rather than wrapping it in something.
 
@@ -208,4 +221,7 @@ this engine switches between by distance: :ref:`making levels in Blender
 '''
 
 if __name__ == "__main__":
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(definition={
+        'renderer':'pbr',
+        
+    })

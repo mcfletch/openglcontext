@@ -31,12 +31,14 @@ os.environ['OPENGLCONTEXT_PROFILE'] = PROFILE
 os.environ['OPENGLCONTEXT_BACKEND'] = 'glfw'
 os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
 os.environ['OPENGLCONTEXT_SHADOWS'] = '0'
+# The two profiles are compared in the VRML97 lighting model, which the
+# fixed-function pipeline is the other half of.
+os.environ['OPENGLCONTEXT_RENDERER'] = 'vrml97'
 STATE = {'gl_ok': False, 'lum': -1.0}
 try:
     import glfw
     from OpenGL.GL import glReadPixels, GL_RGB, GL_UNSIGNED_BYTE
-    from OpenGLContext import testingcontext
-    Base = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as Base
     from OpenGLContext.scenegraph import basenodes
 
     class C(Base):

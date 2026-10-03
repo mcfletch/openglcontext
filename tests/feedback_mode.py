@@ -1,10 +1,14 @@
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+'''Exercises (extremely old) feedback buffer features
+
+Modern machines often have a size-0 or similar feedback buffer,
+which makes this demo not particularly interesting.
+'''
+
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 
 class TestContext( BaseContext ):
     """Feedback-mode testing context"""
-    profile = 'compatibility'   # draws with the fixed-function pipeline
     def Render( self, mode = 0):
         """Render the geometry for the scene."""
         if mode.visible:
@@ -50,9 +54,10 @@ class TestContext( BaseContext ):
                     print("Got wrong results for pass-throughs", result)
                 else:
                     print("Got expected results for pass-through", result)
-##			import pdb
-##			pdb.set_trace()
                 
 
 if __name__ == "__main__":
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(definition={
+        'renderer':'vrml97',
+        'profile': 'compatibility',
+    })

@@ -42,8 +42,7 @@ try:
         return _od(gpu, mvs, oids, material_indices, **named)
     instancing.draw_instanced_mesh = _cd
 
-    from OpenGLContext import testingcontext
-    Base = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as Base
     from OpenGLContext.scenegraph import basenodes
     from OpenGLContext.events.mouseevents import MouseButtonEvent
 

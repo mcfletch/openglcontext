@@ -37,7 +37,7 @@ class InteractiveClickTarget(EventInjectionMixin, BaseContext):
         # -> event manager -> handler. Flush so the parent sees it promptly.
         print(CLICK_MARKER, flush=True)
 
-    def OnIdle(self, *_args):
+    def OnIdle(self, *arguments):
         self.poll_injected_events()
         self.triggerRedraw(1)
 

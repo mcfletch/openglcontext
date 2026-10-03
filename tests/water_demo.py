@@ -58,14 +58,6 @@ Press `h` to print the surface height at each pool's centre at this
 moment, and the usual keys to walk around.
 '''
 import os
-
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
-# What this demo is about is the shape of a surface, and a shadow map costs a
-# whole depth pass over a scene that has nothing to cast one onto.
-os.environ.setdefault('OPENGLCONTEXT_SHADOWS', '0')
-
-
 import numpy as np
 
 from OpenGLContext import testingcontext
@@ -325,7 +317,7 @@ class TestContext(BaseContext):
             print('  %-8s surface at %+.3f m (t=%.2fs)'
                   % (label, float(height), when))
 
-    def OnIdle(self, event=None):
+    def OnIdle(self, *arguments):
         when = systemtime.systemTime() - self._start
         # The whole per-frame cost of moving five bodies of water: one uniform
         # each. The meshes were uploaded in OnInit and are not touched again.
@@ -345,4 +337,8 @@ class TestContext(BaseContext):
 
 
 if __name__ == "__main__":
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(
+        definition={
+            'renderer':'pbr',
+        }
+    )

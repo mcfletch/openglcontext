@@ -45,8 +45,7 @@
  *  Use the 't' key to toggle the order of drawing polygons.
  */
 """
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 
 class TestContext( BaseContext ):

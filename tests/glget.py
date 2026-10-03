@@ -1,8 +1,6 @@
 #! /usr/bin/env python
 """Retrieve OpenGL state values and print to console"""
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
-
+from OpenGLContext.context import Context as BaseContext
 class TestContext( BaseContext ):
     profile = 'compatibility'   # draws with the fixed-function pipeline
     def Render( self, mode = 0):

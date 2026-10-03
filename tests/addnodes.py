@@ -12,14 +12,10 @@ must be set before the first render; glfw is required for a core context.
 """
 import os
 
-os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import *
 import random
 from OpenGLContext.events.timer import Timer
+from OpenGLContext.viewer import ViewerContext as BaseContext
 
 scene = sceneGraph(
     children = [
@@ -73,4 +69,6 @@ class TestContext( BaseContext ):
         
 
 if __name__ == "__main__":
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(definition={
+        'renderer':'vrml97',
+    })

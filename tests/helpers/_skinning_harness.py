@@ -107,7 +107,7 @@ def compare(model_path, _out_dir):
             self._frame = 0
             self._stage = 0
 
-        def OnIdle(self, *_args):
+        def OnIdle(self, *arguments):
             self.triggerRedraw(1)
             return 1
 
@@ -192,7 +192,7 @@ def uploads(model_path, _out_dir):
             ])
             self.platform.setPosition((0, 0, 5))
 
-        def OnIdle(self, *_args):
+        def OnIdle(self, *arguments):
             self.model.update(1 / 60.0)
             self.triggerRedraw(1)
             return 1
@@ -282,7 +282,7 @@ def shadows(model_path, out_dir):
             self.platform.setOrientation((1, 0, 0, -0.62))
             self._frame = 0
 
-        def OnIdle(self, *_args):
+        def OnIdle(self, *arguments):
             self.triggerRedraw(1)
             return 1
 
@@ -372,7 +372,7 @@ def compute(model_path, _out_dir):
             self.platform.setPosition((0, 0, 8))
             self._frame = 0
 
-        def OnIdle(self, *_args):
+        def OnIdle(self, *arguments):
             self.triggerRedraw(1)
             return 1
 
@@ -452,7 +452,7 @@ def fallback(model_path, _out_dir):
             self.platform.setPosition((0, 0, 8))
             self._frame = 0
 
-        def OnIdle(self, *_args):
+        def OnIdle(self, *arguments):
             for model in self.models:
                 model.update(1 / 60.0)
             self.triggerRedraw(1)
@@ -539,7 +539,7 @@ def blend(model_path, _out_dir):
             self.platform.setPosition((0, 0, 9))
             self._frame = 0
 
-        def OnIdle(self, *_args):
+        def OnIdle(self, *arguments):
             self.triggerRedraw(1)
             return 1
 

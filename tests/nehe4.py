@@ -37,7 +37,7 @@ class TestContext( BaseContext ):
     We force a redraw of the context to show the next "frame" of the
     animation.
     '''
-    def OnIdle( self, ):
+    def OnIdle(self, *arguments):
         """Request refresh of the context whenever idle"""
         self.triggerRedraw(1)
         return 1

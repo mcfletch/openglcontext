@@ -11,8 +11,7 @@ We use Numpy to do the heavy lifting of the actual updates to
 the particles.  We use the PointSet object's ability to render 
 using the applied texture as a sprite (GL.ARB.point_parameters).
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
 from OpenGLContext.events.timer import Timer

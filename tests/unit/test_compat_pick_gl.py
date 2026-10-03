@@ -27,8 +27,7 @@ os.environ['OPENGLCONTEXT_SHADOWS'] = '0'
 STATE = {'gl_ok': False, 'crashed': None, 'hit': False}
 try:
     import glfw
-    from OpenGLContext import testingcontext
-    Base = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as Base
     from OpenGLContext.scenegraph import basenodes
     from OpenGLContext.events.mouseevents import MouseButtonEvent
 

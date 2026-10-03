@@ -31,9 +31,7 @@ import numpy as np
 
 from opengl_extrusions import circle
 
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
-
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, DirectionalLight, Extrusion, Material, Shape, Transform,
     Viewpoint, sceneGraph,
@@ -121,4 +119,6 @@ class TestContext(BaseContext):
 
 
 if __name__ == '__main__':
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(definition={
+        'renderer': 'vrml97',
+    })

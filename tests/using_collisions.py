@@ -15,9 +15,7 @@ that report an overlap without stopping anything.
 Keys:
     space   drop the balls again
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
-
+from OpenGLContext.context import Context as BaseContext
 '''``systemTime`` is the engine's own clock rather than the wall clock.  A
 recording or a capture replaces it with one that advances a frame's worth per
 frame drawn, so a scene stepped from it runs at the same rate however long the
@@ -73,7 +71,7 @@ class TestContext(BaseContext):
         self.build()
         self.triggerRedraw(1)
 
-    def OnIdle(self, event=None):
+    def OnIdle(self, *arguments):
         now = systemTime()
         step = min(now - self.last, 0.05)
         self.last = now

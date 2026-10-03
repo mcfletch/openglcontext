@@ -3,8 +3,7 @@
 '''
 #import OpenGL 
 #OpenGL.FULL_LOGGING = True
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import (
     sceneGraph,Transform, MouseOver,Sphere, Appearance, Material, Shape
 )

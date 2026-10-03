@@ -4,8 +4,7 @@
 NOTE: This test queries legacy OpenGL state variables and requires
 a compatibility profile context.
 """
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.arrays import allclose
 
 from OpenGLContext.scenegraph import basenodes

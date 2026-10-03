@@ -18,12 +18,11 @@ os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
 os.environ['OPENGLCONTEXT_SHADOWS'] = '0'
 try:
     import glfw
-    from OpenGLContext import testingcontext
-    Base = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as BaseContext
     from OpenGLContext.scenegraph import basenodes
     from OpenGLContext.events.mouseevents import MouseButtonEvent
     RESULT = {'hits': []}
-    class C(Base):
+    class C(BaseContext):
         def OnInit(self):
             self.sg = basenodes.sceneGraph(children=[basenodes.Transform(children=[
                 basenodes.TouchSensor(),

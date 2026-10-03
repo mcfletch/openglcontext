@@ -25,10 +25,10 @@ Based on:
 NOTE: This tutorial uses legacy OpenGL (immediate mode) and requires
 a compatibility profile context.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 import sys
+from OpenGLContext import testingcontext
 try:
     from PIL.Image import open
 except ImportError:
@@ -223,7 +223,7 @@ class TestContext( BaseContext ):
         glVertex3f(-1.0,  1.0, -1.0)
         glEnd()
         
-    def OnIdle( self, ):
+    def OnIdle(self, *arguments):
         """Request refresh of the context whenever idle"""
         self.triggerRedraw(1)
         return 1

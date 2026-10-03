@@ -10,8 +10,7 @@ same rate as the frames they are drawing.
 '''
 import math
 
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 '''A ``Timer`` reports where it has got to.  ``duration`` is how long one
 cycle takes in seconds and ``repeating`` starts it again at the end of each
 one.'''

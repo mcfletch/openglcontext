@@ -41,7 +41,7 @@ class OnDemandClickTarget(EventInjectionMixin, BaseContext):
     def OnClick(self, event=None):  # noqa: ARG002 an event handler's signature
         print(CLICK_MARKER, flush=True)
 
-    def OnIdle(self, *_args):
+    def OnIdle(self, *arguments):
         # Deliberately no triggerRedraw: nothing here animates, so the loop
         # renders only when the application or the pass asks it to.
         self.poll_injected_events()

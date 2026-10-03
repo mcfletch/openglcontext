@@ -26,11 +26,11 @@ class TestWhatComesBack:
         assert issubclass(found, SceneViewerMixin)
 
     def test_a_screen_that_is_up_takes_the_input_before_the_avatar_does(self):
-        """The overlay comes ahead of the views and the navigation that move
-        the camera, which is the order ``Context`` gives its bases."""
+        """The overlay comes ahead of the navigation that moves the camera,
+        and the views it hands an event to are the viewer's own."""
         order = viewerFor('tk').__mro__
-        assert order.index(OverlayStackMixin) < order.index(MultiViewMixin) \
-            < order.index(ViewPlatformMixin)
+        assert MultiViewMixin in order
+        assert order.index(OverlayStackMixin) < order.index(ViewPlatformMixin)
 
     def test_naming_nothing_gives_whatever_the_machine_chose(self):
         assert viewerFor() is ViewerContext

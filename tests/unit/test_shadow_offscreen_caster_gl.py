@@ -46,8 +46,7 @@ try:
         return _cull(self, toRender, light_view, light_proj)
     ShadowMapMixin._cullOccluders = _cull_wrap
 
-    from OpenGLContext import testingcontext
-    Base = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as Base
     from OpenGLContext.scenegraph import basenodes
 
     # Camera default looks down -Z from +Z. Visible content sits near the origin;

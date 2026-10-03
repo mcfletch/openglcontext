@@ -29,9 +29,7 @@ import numpy as np
 
 from opengl_extrusions import bezier, bspline, catmull_rom
 
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
-
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, DirectionalLight, Material, PointLight, PolyCylinder, Shape,
     Transform, Viewpoint, sceneGraph,

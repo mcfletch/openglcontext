@@ -18,8 +18,7 @@ basically "shininess", that is, the tendancy of a material to
 re-emit light *in a particular direction* based on the angle of 
 incidence of the light ray.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *

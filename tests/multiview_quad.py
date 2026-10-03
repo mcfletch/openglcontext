@@ -45,8 +45,7 @@ import sys
 
 os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
 
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 '''``QuadView`` is plain Python: views, cameras and the arithmetic of
 panning and zooming them, with no GL in it.  The layout it builds is what the
 context draws.'''

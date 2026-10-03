@@ -134,7 +134,7 @@ try:
         def getSceneGraph(self):
             return self.sg
 
-        def OnIdle(self, *args):
+        def OnIdle(self, *arguments):
             self.triggerRedraw(1)
             return 1
 

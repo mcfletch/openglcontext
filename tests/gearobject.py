@@ -1,8 +1,7 @@
 #! /usr/bin/env python
 '''Tests rendering of the Box geometry object
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
@@ -196,7 +195,7 @@ class TestContext( BaseContext ):
         )
             
     multiplier = 1.0
-    def OnIdle( self, _event=None ):
+    def OnIdle(self, *arguments):
         self.multiplier = (self.multiplier * 1.00001)
         for name in ('t1','t2','t3'):
             t1 = self.sg.getDEF( name )

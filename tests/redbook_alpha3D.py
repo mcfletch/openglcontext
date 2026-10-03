@@ -110,7 +110,7 @@ class TestContext( BaseContext ):
             self.solidZ = self.solidTimer.fraction() * 16 - 8.0
             self.transparentZ = -(self.transparentTimer.fraction() * 16 - 8.0)
 ##			print 'positions', self.solidZ, self.transparentZ
-    def OnIdle( self, ):
+    def OnIdle(self, *arguments):
         if self.animating:
             self.triggerRedraw(1)
             return 1

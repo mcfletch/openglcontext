@@ -18,8 +18,7 @@ We're also going to quickly demonstrate the use of GLSL structures
 to bind together similar information into namespaces for easier
 reference.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *

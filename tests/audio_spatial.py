@@ -37,9 +37,7 @@ automated test.
 
     pip install "OpenGLContext[audio]"      # turn sound on
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
-
+from OpenGLContext.context import Context as BaseContext
 import math
 
 from omi_audio import device as audiodevice
@@ -241,4 +239,6 @@ class TestContext(BaseContext):
 
 
 if __name__ == "__main__":
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(definition={
+        'renderer':'vrml97',
+    })

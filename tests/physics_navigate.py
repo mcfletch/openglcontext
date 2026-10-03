@@ -99,7 +99,7 @@ class TestContext(BaseContext):
     def _toggle_fly(self, event):
         self.platform_nav.set_fly(not self.platform_nav.character.flying)
 
-    def OnIdle(self, *args):
+    def OnIdle(self, *arguments):
         now = systemtime.systemTime()
         dt = min(now - self._last, 0.05)
         self._last = now

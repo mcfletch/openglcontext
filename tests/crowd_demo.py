@@ -79,6 +79,7 @@ from OpenGLContext.scenegraph.basenodes import (
     Appearance, Background, Box, DirectionalLight, Material, Shape, Transform,
     sceneGraph,
 )
+import typing
 
 BaseContext = testingcontext.getInteractive('glfw')
 
@@ -236,7 +237,7 @@ class TestContext(BaseContext):
             self._report()
         return drawn
 
-    def OnIdle(self, event=None):
+    def OnIdle(self, *arguments: typing.Any) -> None:
         # The crowd is stepped from the draw, so a still frame is a stopped
         # walk: an animation demo has to keep asking for frames.
         self.triggerRedraw(1)

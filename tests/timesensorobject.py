@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 """Test of routing the modification of one node to another"""
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 import os
 import sys
 from OpenGLContext.events.timer import Timer

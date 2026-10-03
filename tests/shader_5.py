@@ -68,8 +68,7 @@ the material's ambient value may actually change the colour of the
 ambient reflected light.  Similarly, a strongly coloured ambient light 
 will tend to give all materials a strong "undercast" of that colour.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *

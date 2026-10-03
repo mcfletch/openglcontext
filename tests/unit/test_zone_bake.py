@@ -59,11 +59,11 @@ class TestThePlan:
 
 
 class TestAContextNamesItsRenderer:
-    """A bake, a tool or a test asks for the PBR pass for its own context;
+    """A bake, a tool or a test asks for a renderer for its own context;
     the process environment is left as it was."""
 
     def test_the_context_asking_for_pbr_gets_it(self, monkeypatch):
-        monkeypatch.delenv('OPENGLCONTEXT_RENDERER', raising=False)
+        monkeypatch.setenv('OPENGLCONTEXT_RENDERER', 'vrml97')
         pbrpass.reset_renderer_cache()
         try:
             chosen = renderpass._core_flatpass_class(SimpleNamespace(renderer='pbr'))  # noqa: SLF001 the choice renderpass makes between the core passes

@@ -38,7 +38,7 @@ class TestContext( BaseContext ):
         glTranslatef(1.5,0.0,-6.0)
         glRotated( systemtime.systemTime()%(1.0)/1 * -360, 1,0,0)
         self.drawCube()
-    def OnIdle( self, ):
+    def OnIdle(self, *arguments):
         """Request refresh of the context whenever idle"""
         self.triggerRedraw(1)
         return 1

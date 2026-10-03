@@ -20,9 +20,29 @@ class TestCorePassClassSelection:
     def teardown_method(self):
         pbrpass._renderer_is_pbr_cache = None
 
-    def test_plain_core_when_not_pbr(self, monkeypatch):
-        monkeypatch.delenv('OPENGLCONTEXT_RENDERER', raising=False)
+    def test_plain_core_when_vrml97_selected(self, monkeypatch):
+        monkeypatch.setenv('OPENGLCONTEXT_RENDERER', 'vrml97')
         assert renderpass._core_flatpass_class() is FlatPass
+
+    def test_pbr_pass_when_nothing_selected(self, monkeypatch):
+        monkeypatch.delenv('OPENGLCONTEXT_RENDERER', raising=False)
+        assert renderpass._core_flatpass_class() is pbrpass.PBRPass
+
+    def test_context_class_outranks_its_definition(self):
+        # A definition's renderer field always holds a value, so the class
+        # attribute has to be read first for a class to ask for VRML97.
+        context = types.SimpleNamespace(
+            renderer='vrml97',
+            contextDefinition=types.SimpleNamespace(renderer='pbr'),
+        )
+        assert renderpass._core_flatpass_class(context) is FlatPass
+
+    def test_definition_renderer_used_when_class_names_none(self):
+        context = types.SimpleNamespace(
+            renderer=None,
+            contextDefinition=types.SimpleNamespace(renderer='vrml97'),
+        )
+        assert renderpass._core_flatpass_class(context) is FlatPass
 
     def test_pbr_pass_when_selected(self, monkeypatch):
         monkeypatch.setenv('OPENGLCONTEXT_RENDERER', 'pbr')

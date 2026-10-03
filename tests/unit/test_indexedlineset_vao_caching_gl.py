@@ -27,8 +27,7 @@ try:
     import glfw, numpy as np
     import OpenGL.GL as GL
     from OpenGL.GL import glReadPixels, GL_RGB, GL_UNSIGNED_BYTE
-    from OpenGLContext import testingcontext
-    Base = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as Base
     from OpenGLContext.scenegraph import basenodes
 
     from OpenGLContext.scenegraph import indexedlineset as ils_mod

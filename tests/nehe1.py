@@ -7,8 +7,7 @@ This tutorial is based loosely on the [http://nehe.gamedev.net/data/lessons/less
 
 The first thing we do is get a Context class.  OpenGLContext provides a "testingcontext" module which allows you to use whatever context-type the user has specified as "prefered".  The testingcontext module provides a function "getInteractive" which takes an optional type of context-name to retrieve, and returns an appropriate Context sub-class.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 '''We make the standard OpenGL commands available to our code using an import * statement.'''
 from OpenGL.GL import *
 '''Now we sub-class the BaseContext class we got in stage one with our own "TestContext" class.  In this very simple example this stage is not actually necessary, as we have no customisations of the class that we want to do, but it is the "normal" approach to using OpenGLContext Contexts.'''

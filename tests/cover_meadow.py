@@ -12,9 +12,7 @@ import os
 
 os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
 
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
-
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.bin.cover_demo import Meadow
 from OpenGLContext.scenegraph.basenodes import sceneGraph
 

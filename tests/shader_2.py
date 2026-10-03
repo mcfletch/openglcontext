@@ -16,8 +16,7 @@ for the last tutorial, so we can ignore them.  If you don't
 recognize something, go back to the previous tutorial's 
 introduction.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *

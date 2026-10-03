@@ -66,7 +66,7 @@ class TestContext(BaseContext):
             self.scene.add_sphere(radius=0.6, position=(x, y, z),
                                   color=(0.4, 0.6, 0.9), material='rubber')
 
-    def OnIdle(self, *args):
+    def OnIdle(self, *arguments):
         now = systemtime.systemTime()
         dt = min(now - self._last, 0.05)
         self._last = now

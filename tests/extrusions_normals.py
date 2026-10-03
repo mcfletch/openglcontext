@@ -30,9 +30,7 @@ Pick `edge` unless you know you want one of the others: it keeps the
 outline's curves smooth and the path's corners sharp, which is what most
 swept shapes mean.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
-
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, DirectionalLight, Material, PointLight, PolyCylinder, Shape,
     Transform, Viewpoint, sceneGraph,

@@ -1,8 +1,6 @@
 #! /usr/bin/env python
 """Retrieve OpenGL material state values and print to console"""
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
-
+from OpenGLContext.context import Context as BaseContext
 ##from arraystuff import *
 from OpenGL.GL import *
 

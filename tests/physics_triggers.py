@@ -60,7 +60,7 @@ class TestContext(BaseContext):
         material = hit.other_node.children[0].appearance.material
         material.diffuseColor = GREEN if hit.phase == 'enter' else ORANGE
 
-    def OnIdle(self, *args):
+    def OnIdle(self, *arguments):
         now = systemtime.systemTime()
         active = self.scene.advance(min(now - self._last, 0.05))
         self._last = now

@@ -106,7 +106,7 @@ class TestContext(BaseContext):
         self.scene.advance(0.0)
         self.sg = self.scene.scene_graph()
 
-    def OnIdle(self, *args):
+    def OnIdle(self, *arguments):
         now = systemtime.systemTime()
         active = self.scene.advance(min(now - self._last, 0.05))
         self._last = now

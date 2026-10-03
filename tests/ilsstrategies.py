@@ -1,6 +1,5 @@
 #! /usr/bin/env python
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.arrays import *
 from OpenGL.GL import *
 from OpenGL.GLU import *

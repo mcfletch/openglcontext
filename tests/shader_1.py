@@ -18,8 +18,7 @@ machine.  If you have not installed any "extra" packages, such as
 Pygame or wxPython, this will likely be a GLUT context on your 
 machine.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 '''Now we import the PyOpenGL functionality we'll be using.
 
 OpenGL.GL contains the standard OpenGL functions that you can 

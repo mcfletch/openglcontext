@@ -29,8 +29,7 @@ if SCENARIO == 'pbr_unlit':
     os.environ['OPENGLCONTEXT_RENDERER'] = 'pbr'
 try:
     import glfw
-    from OpenGLContext import testingcontext
-    Base = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as Base
     from OpenGLContext.scenegraph import basenodes
     from OpenGLContext.events.mouseevents import MouseButtonEvent
 

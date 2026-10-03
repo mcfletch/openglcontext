@@ -23,8 +23,7 @@ lives.
 '''
 '''We do not import any OpenGL module. The nodes and the engine's
 rendering passes are the whole of the API we need.'''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.arrays import pi
 

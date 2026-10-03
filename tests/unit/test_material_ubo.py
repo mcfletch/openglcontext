@@ -9,7 +9,7 @@ import numpy as np
 import pytest
 
 from OpenGLContext.passes.pbrpass import pack_material_block, MATERIAL_BLOCK_WORDS
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, srgb_to_linear
 from OpenGLContext.scenegraph import basenodes
 
 
@@ -92,7 +92,7 @@ def test_uv_transform_columns_packed_column_major():
 
 def test_none_material_is_neutral_grey():
     buf = pack_material_block(None)
-    assert np.allclose(buf[0:3], (0.8, 0.8, 0.8))   # default base color
+    assert np.allclose(buf[0:3], srgb_to_linear((0.8, 0.8, 0.8)))   # default base color
     assert np.isclose(buf[3], 0.0)                  # metallic 0 (dielectric)
     iv = buf.view(np.int32)
     assert iv[28] == 0                              # not unlit
@@ -101,7 +101,7 @@ def test_none_material_is_neutral_grey():
 def test_vrml97_material_up_converts():
     vm = basenodes.Material(diffuseColor=(0.2, 0.5, 0.9), shininess=0.0)
     buf = pack_material_block(vm)
-    assert np.allclose(buf[0:3], (0.2, 0.5, 0.9))
+    assert np.allclose(buf[0:3], srgb_to_linear((0.2, 0.5, 0.9)))
     assert np.isclose(buf[3], 0.0)                  # metallic 0 for legacy
     assert buf[7] > 0.0                             # roughness derived from shininess
 

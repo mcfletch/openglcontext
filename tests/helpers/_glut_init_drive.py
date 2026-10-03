@@ -91,7 +91,7 @@ def mainloop():
     class Bounded(Driven):
         frames = 0
 
-        def OnIdle(self, *_arguments):
+        def OnIdle(self, *arguments):
             self.frames += 1
             if self.frames > 3:
                 say('LOOPED', True)

@@ -10,7 +10,7 @@ made back into the definition.
 """
 import pytest
 
-from OpenGLContext.context import Context
+from OpenGLContext.context import Context, MultiViewContext
 from OpenGLContext.contextdefinition import ContextDefinition
 from OpenGLContext.edit.orbitview import OrbitViewPlatform
 from OpenGLContext.events.inputstate import InputState
@@ -206,8 +206,12 @@ def _keysBound(window, name):
 
 
 class TestAContextBuildsItsDeclaredViews:
-    def test_it_is_one_of_contexts_bases(self):
-        assert issubclass(Context, MultiViewMixin)
+    def test_it_is_one_of_multiviewcontexts_bases(self):
+        assert issubclass(MultiViewContext, MultiViewMixin)
+        assert issubclass(MultiViewContext, Context)
+
+    def test_a_plain_context_has_no_views(self):
+        assert not issubclass(Context, MultiViewMixin)
 
     def test_no_declared_views_builds_nothing(self):
         window = _completed(_Bare, None)
@@ -343,7 +347,7 @@ class TestAWindowedContext:
         if refused:
             pytest.skip(refused)
         views = _quad(arrangement='quad')
-        with scene_context([], navigation=Navigation(
+        with scene_context([], base=MultiViewContext, navigation=Navigation(
                 modes=['examine'], views=views)) as context:
             mode = context.views.mode
             width, height = context.getViewPort()

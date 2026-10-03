@@ -17,7 +17,6 @@ Keys and mouse:
     escape           abandon a drag part-way, or deselect
     r                reset the boxes
 '''
-from OpenGLContext import testingcontext
 '''The handle is an engine part rather than a demo's own: ``edit`` is the
 authoring toolkit -- tool modes, plan views, handles -- that the editors are
 built out of.'''
@@ -26,8 +25,7 @@ from OpenGLContext.scenegraph.basenodes import (
     Appearance, Background, Box, DirectionalLight, Material, Shape, Transform,
     sceneGraph,
 )
-
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 #: Where the boxes start, and what colour each one is.
 BOXES = [

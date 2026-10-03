@@ -12,8 +12,7 @@ Point Light sources which have shields/reflectors which block
 light in most directions, while focussing the light (to some 
 degree) in a particular direction.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *

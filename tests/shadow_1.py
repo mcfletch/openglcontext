@@ -43,8 +43,7 @@ choices with regard to attempts to minimize artefacts in the shadows.
 '''
 #import OpenGL
 #OpenGL.FULL_LOGGING = True
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *
 from OpenGL.GLU import *

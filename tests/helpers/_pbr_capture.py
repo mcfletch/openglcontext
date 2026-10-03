@@ -220,6 +220,9 @@ def main() -> int:
             elif mode == 'teapot':
                 self.sg = teapot_scene()
             elif mode == 'lightmap':
+                # A flat fill, so the plain quad is lit enough to be found
+                # beside the lightmapped one with the environment off.
+                self.gltf_scene_ambient = 0.2
                 self.sg = lightmap_scene()
             elif mode == 'lightgrid':
                 # No flat ambient fill either: it stands in for lights a scene

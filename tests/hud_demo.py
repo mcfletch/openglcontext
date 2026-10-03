@@ -268,7 +268,7 @@ class TestContext(BaseContext):
         self.ammo.critical = rounds <= 10
         self.map.marks = [tuple(self.platform.position[:3:2]) + ('hudGood',)]
 
-    def OnIdle(self, event=None):
+    def OnIdle(self, *arguments):
         # The readings are a function of the clock, so a still frame is a
         # stopped one: a HUD demo has to keep asking for frames.
         self.updateHUD(systemtime.systemTime())

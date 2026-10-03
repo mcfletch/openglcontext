@@ -5,6 +5,7 @@ collapse into one instanced draw (each instance indexes its own material).
 from OpenGLContext.passes.instancing import (
     geometry_texture_key, build_instance_groups, group_material_table,
 )
+from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
 
 
@@ -28,9 +29,10 @@ def real_material(baseColor):
 
 
 class FakeShape:
-    def __init__(self, geometry, material=None, texture=None):
+    def __init__(self, geometry, material=None, texture=None, textureTransform=None):
         self.geometry = geometry
-        self.appearance = type('A', (), {'material': material, 'texture': texture})()
+        self.appearance = type('A', (), {'material': material, 'texture': texture,
+                                         'textureTransform': textureTransform})()
 
 
 def rec(shape):
@@ -79,14 +81,29 @@ class TestMaterialTable:
 
     def test_single_material_group_all_index_zero(self):
         g = FakeGeometry('g')
-        m = FakeMaterial('m')
-        members = [rec(FakeShape(g, m)) for _ in range(4)]
+        m = basenodes.Material(diffuseColor=(0.5, 0.25, 0.125))
+        shapes = [FakeShape(g, m) for _ in range(4)]
         groups, _ = build_instance_groups(
-            members, min_instances=2, key=geometry_texture_key,
-            instanceable=instanceable)
+            [rec(shape) for shape in shapes], min_instances=2,
+            key=geometry_texture_key, instanceable=instanceable)
         materials, indices = group_material_table(groups[0])
-        assert materials == [m]
+        assert [entry.material for entry in materials] == [m]
         assert indices == [0, 0, 0, 0]
+
+    def test_a_texture_transform_is_the_members_own(self):
+        """One texture, one Material, two transforms: one draw, two slots."""
+        g, m, texture = FakeGeometry('g'), basenodes.Material(), object()
+        shifted = basenodes.TextureTransform(translation=(0.5, 0.0))
+        shapes = [FakeShape(g, m, texture=texture),
+                  FakeShape(g, m, texture=texture, textureTransform=shifted),
+                  FakeShape(g, m, texture=texture)]
+        groups, _ = build_instance_groups(
+            [rec(shape) for shape in shapes], min_instances=2,
+            key=geometry_texture_key, instanceable=instanceable)
+        assert len(groups) == 1
+        materials, indices = group_material_table(groups[0])
+        assert len(materials) == 2
+        assert indices == [0, 1, 0]
 
 
 class TestOneMaterialManyObjects:

@@ -117,6 +117,8 @@ shaders = [
 
 
 class TestContext(BaseContext):
+    # ARB shader objects replace the legacy pass's own shading.
+    renderer = 'vrml97'
     rotation = 0.00
 
     current_shader = 0

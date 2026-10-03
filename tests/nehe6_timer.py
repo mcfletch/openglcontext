@@ -13,8 +13,7 @@ reference compared to real world time.  This allows
 for speeding, slowing and reversing the state of
 rotation.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 '''Because this tutorial uses legacy/immediate-mode OpenGL functions
 (glBegin, glEnd, glVertex, glTranslate, glRotate, glTexCoord), we need to
 explicitly request a compatibility profile OpenGL context.

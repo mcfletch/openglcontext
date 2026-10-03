@@ -158,7 +158,7 @@ class TestContext( BaseContext ):
         self.drawCube()
 
     ### Callback-handlers
-    def OnIdle( self, ):
+    def OnIdle(self, *arguments):
         self.triggerRedraw(1)
         return 1
     

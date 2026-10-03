@@ -6,8 +6,7 @@ and requires a compatibility profile context.
 '''
 import OpenGL
 OpenGL.UNSIGNED_BYTE_IMAGES_AS_STRING = False
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext import drawcube
 from OpenGLContext.scenegraph import imagetexture
 from OpenGLContext.events import systemtime
@@ -47,7 +46,7 @@ class TestContext( BaseContext ):
             self.texture.render(mode=mode)
             drawcube.drawCube()
             self.texture.renderPost(mode=mode)
-    def OnIdle( self, ):
+    def OnIdle(self, *arguments):
         self.triggerRedraw(1)
         return 1
     def OnInit( self ):

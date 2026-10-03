@@ -77,7 +77,7 @@ class TestContext(BaseContext):
         self._strategy = (self._strategy + 1) % len(STRATEGIES)
         self.build()
 
-    def OnIdle(self, *args):
+    def OnIdle(self, *arguments):
         now = systemtime.systemTime()
         active = self.scene.advance(min(now - self._last, 0.05))
         self._last = now

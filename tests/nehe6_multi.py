@@ -7,8 +7,7 @@ This customization of the Timer customization of the
 rotating cube demo adds multiple-texture support with 
 a "light map" modulating the base texture.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 '''Because this tutorial uses legacy/immediate-mode OpenGL functions
 (glBegin, glEnd, glVertex, glTranslate, glMultiTexCoord), we need to
 explicitly request a compatibility profile OpenGL context.
@@ -188,7 +187,7 @@ class TestContext( BaseContext ):
         glVertex3f(-1.0,  1.0, -1.0)
         glEnd()
         
-    def OnIdle( self, ):
+    def OnIdle(self, *arguments):
         """Request refresh of the context whenever idle"""
         self.triggerRedraw(1)
         return 1

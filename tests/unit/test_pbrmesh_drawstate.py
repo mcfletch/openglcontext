@@ -114,7 +114,7 @@ class TestFinalizerNeverTouchesGL:
     def test_del_enqueues_instead_of_deleting(self, monkeypatch):
         deleted = []
         monkeypatch.setattr(pbrmesh, 'glDeleteVertexArrays',
-                            lambda _n, ids: deleted.extend(ids))
+                            lambda _n, name: deleted.append(name))
         queue = []
         gpu = self._gpu(7, queue)
         gpu.__del__()
@@ -124,7 +124,7 @@ class TestFinalizerNeverTouchesGL:
     def test_del_without_queue_is_silent(self, monkeypatch):
         deleted = []
         monkeypatch.setattr(pbrmesh, 'glDeleteVertexArrays',
-                            lambda _n, ids: deleted.extend(ids))
+                            lambda _n, name: deleted.append(name))
         gpu = self._gpu(9, None)
         gpu.__del__()                 # no queue attached -> nothing happens, no crash
         assert deleted == []
@@ -132,7 +132,7 @@ class TestFinalizerNeverTouchesGL:
     def test_flush_deletes_queued_ids_once(self, monkeypatch):
         deleted = []
         monkeypatch.setattr(pbrmesh, 'glDeleteVertexArrays',
-                            lambda _n, ids: deleted.extend(ids))
+                            lambda _n, name: deleted.append(name))
         ctx = _FakeContext()
         mode = FakeMode()
         mode.context = ctx

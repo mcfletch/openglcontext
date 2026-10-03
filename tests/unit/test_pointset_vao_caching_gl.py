@@ -26,8 +26,7 @@ STATE = {'gl_ok': False, 'warm': None, 'final': None, 'nonblack': -1}
 try:
     import glfw, numpy as np
     from OpenGL.GL import glReadPixels, GL_RGB, GL_UNSIGNED_BYTE
-    from OpenGLContext import testingcontext
-    Base = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as Base
     from OpenGLContext.scenegraph import basenodes
     from OpenGLContext.scenegraph import pointset as pointset_mod
 

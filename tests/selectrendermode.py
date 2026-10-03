@@ -5,8 +5,7 @@ Demonstrates use of "named transforms", objects which
 use push/pop of the name-stack to report selection during
 the rendermode.SelectRenderMode pass.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGL.GLU import *
 from OpenGLContext.arrays import *

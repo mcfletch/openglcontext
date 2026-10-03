@@ -8,7 +8,7 @@ from OpenGLContext.scenegraph.material_fields import (
     read_material_fields, DEFAULT_MATERIAL_FIELDS,
 )
 from OpenGLContext.scenegraph.material import Material
-from OpenGLContext.scenegraph.pbrmaterial import material_to_pbr
+from OpenGLContext.scenegraph.pbrmaterial import material_to_pbr, srgb_to_linear
 
 
 class TestReadMaterialFields:
@@ -39,11 +39,11 @@ class TestConsumersAgreeOnRawRead:
                      transparency=0.3, emissiveColor=(0.1, 0.0, 0.0))
         f = read_material_fields(m)
         pbr = material_to_pbr(m)
-        # base color is the raw diffuse; roughness/emissive/transparency are all
-        # derived from the same shared read.
+        # base color and emissive are the shared read's colours, decoded from
+        # the display encoding; roughness/transparency derive from it too.
         assert tuple(round(v, 3) for v in pbr['base_color']) == \
-            tuple(round(v, 3) for v in f.diffuseColor)
+            tuple(round(v, 3) for v in srgb_to_linear(f.diffuseColor))
         assert tuple(round(v, 3) for v in pbr['emissive']) == \
-            tuple(round(v, 3) for v in f.emissiveColor)
+            tuple(round(v, 3) for v in srgb_to_linear(f.emissiveColor))
         assert round(pbr['transparency'], 3) == round(f.transparency, 3)
         assert round(pbr['roughness'], 4) == round(max(0.04, 1.0 - min(1.0, f.shininess)), 4)

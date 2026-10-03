@@ -20,8 +20,7 @@ Chapter 9.
 
 Our imports are by now quite familiar...
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGL.GL import shaders

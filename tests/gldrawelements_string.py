@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 '''Test of the glDrawElements function (draws square from string)'''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
 

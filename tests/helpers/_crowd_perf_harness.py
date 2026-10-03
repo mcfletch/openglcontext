@@ -158,7 +158,7 @@ def main():
             self.platform.setPosition((0, 2, 14))
             self._frame = 0
 
-        def OnIdle(self, *_args):
+        def OnIdle(self, *arguments):
             self.triggerRedraw(1)
             return 1
 

@@ -25,8 +25,7 @@ os.environ['OPENGLCONTEXT_SHADOWS'] = '0'
 STATE = {'gl_ok': False, 'warm': None, 'final': None}
 try:
     import glfw
-    from OpenGLContext import testingcontext
-    Base = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as Base
     from OpenGLContext.scenegraph import basenodes
     from OpenGLContext.scenegraph import shadergeometry
 

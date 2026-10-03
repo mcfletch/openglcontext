@@ -150,7 +150,7 @@ class TestContext( BaseContext ):
         glVertex3f(-1.0,  1.0, -1.0)
         glEnd()
         
-    def OnIdle( self, ):
+    def OnIdle(self, *arguments):
         """Request refresh of the context whenever idle"""
         self.triggerRedraw(1)
         return 1

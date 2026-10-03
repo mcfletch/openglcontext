@@ -15,8 +15,7 @@ scenegraph.
 Note that the legacy OpenGL lighting model described here can be 
 replaced when using shader-based geometry.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 '''We'll load the whole set of VRML97 base nodes and get the value 
 of pi to some reasonable accuracy (from numpy).'''
 from OpenGLContext.scenegraph.basenodes import *
@@ -27,6 +26,9 @@ the whole tutorial is accomplished with scenegraph nodes, rather than
 raw OpenGL rendering.'''
 
 class TestContext( BaseContext ):
+    # The VRML97 light fields (color, ambientIntensity, attenuation) of the
+    # legacy lighting model this tutorial describes.
+    renderer = 'vrml97'
     angle = 0
     def OnInit( self ):
         """Load the image on initial load of the application"""

@@ -26,9 +26,7 @@ miter limit doing its job: without a limit the outside of a nearly-reversed
 corner stretches away to a spike, and past the limit the join bevels
 instead.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
-
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, DirectionalLight, Material, PointLight, PolyCylinder, Shape,
     Transform, Viewpoint, sceneGraph,

@@ -26,8 +26,7 @@ STATE = {'gl_ok': False, 'nonblack': -1, 'via_ip': False}
 try:
     import glfw, numpy as np
     from OpenGL.GL import glReadPixels, GL_RGB, GL_UNSIGNED_BYTE
-    from OpenGLContext import testingcontext
-    Base = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as Base
     from OpenGLContext.scenegraph import basenodes
     from OpenGLContext.scenegraph.indexedfaceset import IndexedPolygonsCompiler
 

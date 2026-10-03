@@ -6,8 +6,7 @@ NOTE: CubeBackground currently uses GL_QUADS which requires compatibility profil
 import OpenGL
 OpenGL.ERROR_ON_COPY = True
 #OpenGL.FULL_LOGGING = True
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.loaders.loader import Loader
 
 scene = """#VRML V2.0 utf8

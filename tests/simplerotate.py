@@ -1,8 +1,7 @@
 #! /usr/bin/env python
 '''Simple demo of a rotating image mapped to a square
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGLContext.events.timer import Timer
 from OpenGL.GL import *

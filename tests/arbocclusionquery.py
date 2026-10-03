@@ -1,8 +1,7 @@
 #! /usr/bin/env python
 '''Tests operation of the OpenGL1.5/ARB Occlusion Query extension
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph import imagetexture, shape, material, appearance, box
 from OpenGL.GL import *
 from OpenGL.GL.ARB.occlusion_query import *
@@ -104,5 +103,6 @@ class TestContext( BaseContext ):
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    logging.getLogger('OpenGLContext').setLevel(logging.WARN)
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(definition={
+        'renderer':'vrml97',
+    })

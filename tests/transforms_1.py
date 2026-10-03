@@ -10,8 +10,7 @@ We'll get started by doing some basic imports to get the
 OpenGLContext context, numpy, and all the other tools 
 we're going to use.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
 from OpenGL.GL import shaders

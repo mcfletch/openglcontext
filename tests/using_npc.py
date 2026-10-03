@@ -16,15 +16,12 @@ by PixelMannen and tomkranis).
 Keys:
     g       send it to the next corner
 '''
-import os
-os.environ.setdefault('OPENGLCONTEXT_RENDERER', 'pbr')
 
 import math
 
 import numpy as np
 
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.viewer import ViewerContext as BaseContext
 from OpenGLContext.nav import navmesh
 from OpenGLContext.events.systemtime import systemTime
 from OpenGLContext.character.model import CharacterModel
@@ -122,7 +119,7 @@ class TestContext(BaseContext):
         self.route = self.plan()
         self.show_route()
 
-    def OnIdle(self, event=None):
+    def OnIdle(self, *arguments):
         '''One step of the world: where the figure is, then what its body is
         doing.  Both take the same time step.'''
         now = systemTime()
@@ -196,10 +193,15 @@ def mesh_shape(points, triangles, colour):
     index = []
     for triangle in triangles:
         index.extend([int(triangle[0]), int(triangle[1]), int(triangle[2]), -1])
+    # TODO: mesh is not rendering properly under pbr
+    # because it appears to be ignoring the solid field,
+    # which in this case is papering over some issues with the
+    # environment model...
     return Shape(
         geometry=IndexedFaceSet(coord=Coordinate(point=points.tolist()),
                                 coordIndex=index, solid=False),
         appearance=Appearance(material=Material(diffuseColor=colour)),
+        
     )
 
 

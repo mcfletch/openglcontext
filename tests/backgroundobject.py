@@ -1,8 +1,7 @@
 #! /usr/bin/env python
 '''Tests operation of SimpleBackground object -> solid color background
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import *
 
 class TestContext( BaseContext ):

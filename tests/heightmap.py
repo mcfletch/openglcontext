@@ -1,7 +1,6 @@
 #! /usr/bin/env python
 '''Test/demo of heightmap rendering (array-based)'''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
 from OpenGLContext.scenegraph.basenodes import *

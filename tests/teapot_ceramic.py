@@ -19,15 +19,7 @@ plays across the surface.  Run with the lid off to see the textured interior::
 """
 import os
 
-# PBR pass selection is a whole-process decision (see passes/renderpass.py); it
-# must be set before the first render.  glfw is required for a core context.
-os.environ['OPENGLCONTEXT_RENDERER'] = 'pbr'
-os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
-
-from OpenGLContext import testingcontext
-
-BaseContext = testingcontext.getInteractive('glfw')
-
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph import basenodes
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, PBRTexture
 from _ceramic_textures import ceramic_textures
@@ -85,4 +77,9 @@ class TestContext(BaseContext):
 
 
 if __name__ == "__main__":
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(
+        definition={
+            'windowsystem': 'glfw',
+            'renderer': 'pbr',
+        }
+    )

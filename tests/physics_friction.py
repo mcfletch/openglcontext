@@ -56,7 +56,7 @@ class TestContext(BaseContext):
         self.scene.add_box(size=(0.8, 0.8, 0.8), position=tuple(pos),
                            color=(0.9, 0.7, 0.3), material=mat, rotation=axis_angle)
 
-    def OnIdle(self, *args):
+    def OnIdle(self, *arguments):
         now = systemtime.systemTime()
         active = self.scene.advance(min(now - self._last, 0.05))
         self._last = now

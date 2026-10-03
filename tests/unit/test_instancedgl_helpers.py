@@ -148,9 +148,9 @@ def test_delete_gl_swallows_bad_handles(monkeypatch):
     assert ig.delete_gl(vaos=[1, 5], buffers=[2], textures=[3],
                         programs=[4]) is None
     assert attempted == [
-        ('glDeleteVertexArrays', (1, [1])),
-        ('glDeleteVertexArrays', (1, [5])),
-        ('glDeleteBuffers', (1, [2])),
-        ('glDeleteTextures', ([3],)),
+        ('glDeleteVertexArrays', (1, 1)),
+        ('glDeleteVertexArrays', (1, 5)),
+        ('glDeleteBuffers', (1, 2)),
+        ('glDeleteTextures', (1, 3)),
         ('glDeleteProgram', (4,)),
     ]

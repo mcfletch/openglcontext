@@ -7,8 +7,7 @@ rather than the legacy glUseProgram / glutSolid* / glRotate calls the original
 version of this test used.  The sphere, cube and teapot buffers come from the
 scenegraph geometry generators, so no GLUT primitives are needed.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGLContext.arrays import array, concatenate
 from OpenGLContext.events.timer import Timer

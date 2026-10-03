@@ -29,9 +29,7 @@ Use the arrow keys and the mouse to walk around them.
 '''
 from math import pi
 
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
-
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, DirectionalLight, Material, PointLight, PolyCone, PolyCylinder,
     Shape, Transform, Viewpoint, sceneGraph,

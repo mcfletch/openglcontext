@@ -4,9 +4,7 @@
 NOTE: This test uses legacy OpenGL (glMap2f, glEvalMesh2, display lists) and requires
 a compatibility profile context.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
-
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
 from OpenGLContext.scenegraph.basenodes import *
@@ -75,4 +73,8 @@ class TestContext( BaseContext ):
     
 
 if __name__ == "__main__":
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(
+        definition=dict(
+            profile='compatibility',
+        )
+    )

@@ -30,8 +30,7 @@ try:
     import glfw
     from OpenGL.GL import (
         glReadPixels, GL_RGB, GL_UNSIGNED_BYTE)
-    from OpenGLContext import testingcontext
-    Base = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as Base
     from OpenGLContext.scenegraph import basenodes
 
     # Quad in the z=0 plane, wound so its front faces -Z (away from the default

@@ -8,8 +8,7 @@ visual effect as the original MoleHill Demo using the
 OpenGLContext Nurbs extension (patterned after the Blaxxun
 Nurbs extension).
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGLContext.arrays import *
 

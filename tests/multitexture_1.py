@@ -4,8 +4,7 @@
 NOTE: This test uses legacy OpenGL (glBegin/glEnd, glTexEnv) and requires
 a compatibility profile context.
 """
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGLContext import texture
 import sys

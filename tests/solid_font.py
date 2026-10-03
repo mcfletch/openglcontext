@@ -30,8 +30,7 @@ Keys:
 
     n       the next installed font
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import *
 
 ## The following makes the toolsfont provider available, toolsfont is dependent

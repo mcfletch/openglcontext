@@ -322,7 +322,7 @@ class TestContext(BaseContext):
                  and seconds < self._flare_until else 1.0)
         self.lamp.scale = (scale, scale, scale)
 
-    def OnIdle(self, event=None):
+    def OnIdle(self, *arguments):
         """Keep asking for frames; the orbits advance in each one."""
         self.triggerRedraw(1)
 

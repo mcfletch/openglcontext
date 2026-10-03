@@ -4,8 +4,7 @@ import sys
 if sys.argv[1:]:
     import OpenGL 
     OpenGL.ERROR_ON_COPY = True
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGLContext.arrays import array
 

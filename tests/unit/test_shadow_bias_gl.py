@@ -39,8 +39,13 @@ BOX_CENTRE = (1.5, 1.5, WALL_FACE + BOX / 2.0)
 
 @pytest.fixture(autouse=True)
 def shadowed_env(monkeypatch):
-    """Shadows on, in the core profile, with the frame-rate probe out of it."""
-    base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='1', OPENGLCONTEXT_SHADOW_CASCADES='3')
+    """Shadows on, in the core profile, with the frame-rate probe out of it.
+
+    The environment is dim: it fills a shadow, and these measure the shadow,
+    which has to stay bright enough to be told from the unlit frame's black.
+    """
+    base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='1', OPENGLCONTEXT_SHADOW_CASCADES='3',
+             OPENGLCONTEXT_IBL='analytic', OPENGLCONTEXT_IBL_INTENSITY='0.15')
 
 
 def wall_scene(light):
@@ -82,7 +87,7 @@ FLOOR_TOP = -0.38 + FLOOR[1] / 2.0
 def pole_scene():
     """A red pole standing on a grey floor, lit by a spot three units away."""
     return [
-        basenodes.Viewpoint(position=(0.5, 1.0, 3.0)),
+        basenodes.Viewpoint(position=(1.0, 1.0, 5.0)),
         basenodes.Transform(translation=(0, -0.38, 0), children=[basenodes.Shape(
             geometry=basenodes.Box(size=FLOOR),
             appearance=basenodes.Appearance(material=basenodes.Material(
@@ -95,7 +100,7 @@ def pole_scene():
         )]),
         basenodes.SpotLight(
             location=(3, 3, 3), direction=(-3, -3, -3), color=(0.75, 0.75, 1.0),
-            intensity=0.5, ambientIntensity=0.05, attenuation=(1, 0, 0)),
+            intensity=2.0, ambientIntensity=0.05, attenuation=(1, 0, 0)),
     ]
 
 
@@ -111,11 +116,13 @@ def foot_gap(render_scene):
     rows, columns = np.nonzero(pole)
     if not len(rows):
         pytest.skip("the pole did not render")
-    foot = (rows.max(), (columns.min() + columns.max()) // 2)
+    # The foot is the pole's bottom edge, a segment as wide as the pole.
+    foot_row, left, right = rows.max(), columns.min(), columns.max()
     shadow_rows, shadow_columns = np.nonzero(shadow)
     if not len(shadow_rows):
         return float('inf')
-    return float(np.hypot(shadow_rows - foot[0], shadow_columns - foot[1]).min())
+    across = np.maximum(np.maximum(left - shadow_columns, shadow_columns - right), 0)
+    return float(np.hypot(shadow_rows - foot_row, across).min())
 
 
 def frame(render_scene, light):

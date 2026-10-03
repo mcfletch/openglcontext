@@ -1,8 +1,7 @@
 #! /usr/bin/env python
 import OpenGL 
 OpenGL.USE_ACCELERATE = False
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGL.GL import shaders
@@ -68,7 +67,7 @@ class TestContext( BaseContext ):
             self.shader, 'Vertex_color'
         )
         self.vao = glGenVertexArrays( 1 )
-    def OnIdle( self, _event=None ):
+    def OnIdle(self, *arguments):
         self.triggerRedraw(1)
     def Render( self, mode ):
         """Render the geometry for the scene."""

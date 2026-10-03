@@ -323,7 +323,7 @@ class TestContext(BaseContext):
         self._last = (route, pulled, corridor)
 
     # -- walking it ------------------------------------------------------
-    def OnIdle(self, event=None):
+    def OnIdle(self, *arguments):
         """One step of the world: the fox moves, then its body is posed."""
         now = systemTime()
         step = min(now - self._clock, 0.1)

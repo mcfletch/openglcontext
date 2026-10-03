@@ -162,7 +162,7 @@ class BenchmarkContext(BaseContext):
         self._viewport_size = None
         self._frame_start = None
 
-    def OnIdle(self):
+    def OnIdle(self, *arguments):
         """Drive the benchmark."""
         if self.current_iteration >= self.num_iterations + self.warmup_frames:
             print("Benchmark complete, finishing...", flush=True)

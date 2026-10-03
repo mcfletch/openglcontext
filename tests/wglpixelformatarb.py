@@ -1,5 +1,4 @@
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL import WGL
 from OpenGL.WGL.ARB import pixel_format
 

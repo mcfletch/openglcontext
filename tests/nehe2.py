@@ -18,8 +18,7 @@ The previous tutorial discussed this setup procedure at length.
 NOTE: This tutorial uses legacy OpenGL (immediate mode) and requires
 a compatibility profile context.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 '''Because this tutorial uses legacy/immediate-mode OpenGL functions
 (glBegin, glEnd, glVertex, glTranslate), we need to explicitly request
 a compatibility profile OpenGL context. Modern OpenGL (3.2+ core profile)

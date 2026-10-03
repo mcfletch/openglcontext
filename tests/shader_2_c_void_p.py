@@ -4,8 +4,7 @@
 #import OpenGL 
 #OpenGL.FULL_LOGGING = True
 #OpenGL.USE_ACCELERATOR = False
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGL.GL import shaders
 from OpenGL.arrays import vbo

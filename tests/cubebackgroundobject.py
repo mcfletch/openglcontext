@@ -3,8 +3,7 @@
 
 NOTE: CubeBackground currently uses GL_QUADS which requires compatibility profile.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext import context
 from OpenGLContext.scenegraph.basenodes import *
 from OpenGL.GL import *

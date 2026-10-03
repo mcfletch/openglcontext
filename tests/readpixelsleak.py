@@ -1,8 +1,7 @@
 #! /usr/bin/env python
 '''Test leak on glReadPixelsub
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext import drawcube
 from OpenGLContext.events import systemtime
 from OpenGL.GL import *
@@ -38,7 +37,7 @@ class TestContext( BaseContext ):
 ##		pixels[:,:, 0] = red
 ##		glDrawPixelsub(GL_RGB, pixels)
         
-    def OnIdle( self, ):
+    def OnIdle(self, *arguments):
         self.triggerRedraw(1)
         return 1
     def OnInit( self ):

@@ -36,8 +36,7 @@ try:
         return _real_gen(*a, **k)
     GL.glGenVertexArrays = _counting_gen
 
-    from OpenGLContext import testingcontext
-    Base = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as Base
     from OpenGLContext.scenegraph import basenodes
 
     material = basenodes.Material(diffuseColor=(0.2, 0.6, 1.0))
@@ -113,8 +112,7 @@ try:
         return _real(*a, **k)
     GL.glGenBuffers = _counting
 
-    from OpenGLContext import testingcontext
-    Base = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as Base
     from OpenGLContext.scenegraph import basenodes
     from OpenGLContext.scenegraph.pbrmesh import PBRMesh
     from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial

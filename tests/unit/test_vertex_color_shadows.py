@@ -69,9 +69,10 @@ os.environ.update(OPENGLCONTEXT_PROFILE='core', OPENGLCONTEXT_BACKEND='glfw',
     # different ambient term from the same render made alone -- and ambient is
     # exactly what fills a shadow in.  Unpinned, the two means below closed to
     # within 4.7% of each other in a full run and stayed 5% apart in isolation,
-    # which is a coin toss rather than a measurement.  See the same pin, for
-    # the same reason, in test_passes_render_gl._base_env.
-    OPENGLCONTEXT_IBL='analytic')
+    # which is a coin toss rather than a measurement.  Off, there is no ambient
+    # term at all, so the shadowed mean is the shadow alone.  See the same pin,
+    # for the same reason, in test_passes_render_gl._base_env.
+    OPENGLCONTEXT_IBL='off')
 WITH_CASTER = 'caster' in sys.argv
 try:
     import glfw, numpy as np
@@ -80,8 +81,7 @@ try:
     # post-process pass leaves its own FBO bound -- reading that one back gives
     # a black frame.
     from OpenGLContext.capture import read_back_buffer
-    from OpenGLContext import testingcontext
-    Base = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as Base
     from OpenGLContext.scenegraph import basenodes as b
 
     N, S = 24, 6.0

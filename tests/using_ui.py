@@ -18,7 +18,6 @@ Keys:
 '''
 import math
 
-from OpenGLContext import testingcontext
 '''Every context has the overlay stack, the input routing and the drawing
 (``OverlayStackMixin``, among ``Context``'s bases).  Its event handling runs
 before navigation gets the same click.'''
@@ -33,7 +32,7 @@ from OpenGLContext.scenegraph.basenodes import (
     sceneGraph,
 )
 
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 #: Seconds for one full turn at the slider's maximum.
 PERIOD = 4.0
@@ -129,4 +128,5 @@ class TestContext(BaseContext):
 
 
 if __name__ == "__main__":
-    TestContext.ContextMainLoop()
+    TestContext.ContextMainLoop(
+    )

@@ -50,8 +50,7 @@ try:
         return view, proj
     shadowmath.directional_cascade = _dc_wrap
 
-    from OpenGLContext import testingcontext
-    Base = testingcontext.getInteractive()
+    from OpenGLContext.context import Context as Base
     from OpenGLContext.scenegraph import basenodes
 
     floor = basenodes.Shape(

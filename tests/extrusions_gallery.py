@@ -26,9 +26,7 @@ from opengl_extrusions import (
     catmull_rom, circle, rectangle, rounded_rectangle, star,
 )
 
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
-
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, DirectionalLight, Material, PixelTexture, PointLight, PolyCone,
     PolyCylinder, Shape, Transform, Viewpoint, sceneGraph,

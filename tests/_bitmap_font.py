@@ -1,7 +1,6 @@
 '''Low-level tests of bitmap-based fonts'''
 from OpenGL.GL import *
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import *
 import _fontstyles
 import sys

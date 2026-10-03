@@ -33,9 +33,7 @@ import numpy as np
 
 from opengl_extrusions import circle, tessellate
 
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
-
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, DirectionalLight, Material, PointLight, Shape, Transform,
     Viewpoint, sceneGraph,

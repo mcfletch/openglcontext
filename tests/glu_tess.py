@@ -4,8 +4,7 @@
 NOTE: This test uses legacy OpenGL (glBegin/glEnd, glColor, glVertex) and requires
 a compatibility profile context.
 """
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.scenegraph import polygontessellator, vertex
 from OpenGL.GL import *
 from OpenGL.GLU import *

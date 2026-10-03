@@ -17,8 +17,7 @@ source is also going to support "attenuation", which is the
 natural effect where the intensity of a light falls off over 
 distance due to the spreading of the light rays.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 from OpenGL.GL import *
 from OpenGL.arrays import vbo
 from OpenGLContext.arrays import *

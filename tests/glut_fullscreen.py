@@ -55,7 +55,7 @@ class TestContext( BaseContext ):
             )
             self.fullscreen = True
             glutFullScreen( )
-    def OnIdle( self, ):
+    def OnIdle(self, *arguments):
         self.triggerRedraw(1)
         return 1
     

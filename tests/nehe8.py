@@ -162,7 +162,7 @@ class TestContext( BaseContext ):
         
         return IDs
 
-    def OnIdle( self, ):
+    def OnIdle(self, *arguments):
         self.triggerRedraw(1)
         return 1
     def OnBlendToggle( self, event ):

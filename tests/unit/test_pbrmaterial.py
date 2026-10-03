@@ -4,7 +4,7 @@ import math
 import pytest
 
 from OpenGLContext.scenegraph.pbrmaterial import (
-    PBRMaterial, PBRTexture, material_is_transparent, material_to_pbr,
+    PBRMaterial, PBRTexture, material_is_transparent, material_to_pbr, srgb_to_linear,
     uv_transform_matrix,
 )
 from OpenGLContext.scenegraph.basenodes import Appearance, Material
@@ -63,7 +63,7 @@ class TestUpConversion:
             """Mimics vrml's null sentinel: truthy, but no material fields."""
         f = material_to_pbr(NullNode())
         assert f['metallic'] == 0.0
-        assert tuple(f['base_color']) == (0.8, 0.8, 0.8)
+        assert tuple(f['base_color']) == srgb_to_linear((0.8, 0.8, 0.8))
         assert 0.0 < f['roughness'] <= 1.0
 
 

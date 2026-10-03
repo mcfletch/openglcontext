@@ -22,6 +22,8 @@ def main() -> int:
     os.environ.setdefault('OPENGLCONTEXT_BACKEND', 'glfw')
     os.environ['OPENGLCONTEXT_DISABLE_FPS_DISPLAY'] = '1'
     os.environ['OPENGLCONTEXT_SHADOWS'] = '1' if shadows else '0'
+    # What is measured is the light a shadow takes away; an environment fills it in.
+    os.environ['OPENGLCONTEXT_IBL'] = 'off'
     os.environ.setdefault('OPENGLCONTEXT_AUTO_EXIT_FRAMES', '8')
 
     # Sibling scene modules (shadow_spot) live in the parent tests/ directory.

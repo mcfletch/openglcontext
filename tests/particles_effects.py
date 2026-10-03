@@ -23,9 +23,7 @@ particle is a soft round dot computed in the fragment shader.
 Press the space bar to set the two burst effects off again, `p` to pause
 and resume emission, and the usual keys to walk around.
 '''
-from OpenGLContext import testingcontext
-BaseContext = testingcontext.getInteractive()
-
+from OpenGLContext.context import Context as BaseContext
 from OpenGLContext.events.timer import Timer
 from OpenGLContext.scenegraph import particles
 from OpenGLContext.scenegraph.basenodes import (
@@ -96,7 +94,7 @@ class TestContext(BaseContext):
             emitter.enabled = not emitter.enabled
         self.triggerRedraw(1)
 
-    def OnIdle(self, event=None):
+    def OnIdle(self, *arguments):
         # Particles are stepped from the draw, so a still frame is a stopped
         # simulation: an effects demo has to keep asking for frames.
         self.triggerRedraw(1)
