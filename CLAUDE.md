@@ -1,5 +1,9 @@
 # OpenGLContext - Claude Code Guidelines
 
+## Project Overview
+
+OpenGLContext is a Python OpenGL framework providing a scenegraph-based rendering system with VRML97 compatibility. It supports both legacy fixed-function OpenGL (compatibility profile) and modern shader-based rendering (core profile).
+
 ## Development environment: real OpenGL IS available
 
 This is a **Wayland** dev container with **hardware-accelerated OpenGL** (`WAYLAND_DISPLAY` set).
@@ -9,21 +13,13 @@ The `egl` backend renders with no window at all, and `LIBGL_ALWAYS_SOFTWARE=1` g
 a run wants a deterministic rasteriser. Do **not** claim the sandbox is headless or that GL can't run.
 
 **Ask which GPU this is rather than assuming** — the container has been rebuilt on different
-hardware, and a fault can be specific to one vendor's driver:
+hardware, and faults are commonly specific to one vendor's driver. We also run on software
+renderers that have their own faults:
 
 ```bash
 /workspaces/OpenGL-dev/.venv/bin/python -c \
   "from OpenGLContext.testing.glcontext import describe_gl; print(describe_gl())"
 ```
-
-At the time of writing that answers AMD Radeon (radeonsi, Mesa). It matters: the teardown segfault
-PyOpenGL's `tests/README.md` records — roughly one context teardown in ten, inside
-`libnvidia-eglcore` — appears on **NVIDIA only**, so a machine like this one cannot reproduce it
-and a green run here says nothing about it. See `OpenGLContext.testing.glfwteardown`.
-
-## Project Overview
-
-OpenGLContext is a Python OpenGL framework providing a scenegraph-based rendering system with VRML97 compatibility. It supports both legacy fixed-function OpenGL (compatibility profile) and modern shader-based rendering (core profile).
 
 ## User Documentation
 
@@ -63,6 +59,9 @@ When creating new plans:
    - Current status (Planned, In Progress, Complete, etc.)
    - Brief description
 3. Keep individual plan files focused on a single feature or initiative
+
+
+
 
 ## Directory Structure
 
@@ -281,6 +280,16 @@ OpenGLContext/
 └── testingcontext.py      # getInteractive(): Context, or one pinned by name
 ```
 
+- Unit tests are in `tests/unit/`; the runnable demo scripts the visual
+  regression suite drives are in `tests/`
+- Shaders are in `OpenGLContext/shaders/` as `.vert` and `.frag` files
+- User documentation is `docs/*.rst`; plans are `plans/*.md`
+
+**A capability a game would also want belongs in the engine, not in a demo or
+a tool.** If the natural home is a new module, add it to a package that already
+owns the subject and add it to the directory map above.
+
+
 ## Rendering Architecture
 
 ### Multi-Pass Rendering System
@@ -297,19 +306,21 @@ The rendering system uses a **FlatPass** that observes the scenegraph structure 
 
 The system supports two rendering modes, controlled by `use_shaders` on FlatPass:
 
-**Legacy Mode (use_shaders=False)**:
+**Shader Mode (use_shaders=True)**:
+
+- `OpenGLContext.passes.pbrpass.PBRPass` (default) or `OpenGLContext.passes.flatcore.FlatPass` (vrml97)
+- Uses GLSL shaders implementing PBR or VRML97 lighting model respectively
+- Compatible with OpenGL 3.3+ core profile
+- Geometry nodes check `mode.shader_mode` and use VAO/VBO rendering
+- Shader program manages uniforms for matrices, materials, lights
+
+**Compatability Mode (use_shaders=False)**:
 
 - Uses OpenGL fixed-function pipeline
 - Requires compatibility profile
 - Uses `glLight*`, `glMaterial*`, display lists
 - Geometry nodes use `glVertexPointer`, `glColorPointer`, etc.
-
-**Shader Mode (use_shaders=True)**:
-
-- Uses GLSL shaders implementing VRML97 lighting model
-- Compatible with OpenGL 3.3+ core profile
-- Geometry nodes check `mode.shader_mode` and use VAO/VBO rendering
-- Shader program manages uniforms for matrices, materials, lights
+- Solely for testing/demonstrating fixed-function rendering in tutorials/demos/tests
 
 ### Key Mode Attributes
 
@@ -364,7 +375,10 @@ def _render_shader(self, mode):
 
 ### Shader Programs
 
-The `VRML97ShaderProgram` class (in `passes/shaderpass.py`) manages multiple shader programs:
+* `OpenGLContext.passes.pbrpass.PBRShaderProgram` -- PBR renderer
+* `OpenGLContext.passes.shaderpass.VRML97ShaderProgram` -- VRML97 renderer
+
+Manage multiple shader programs:
 
 - `program` - Main lit shader with VRML97 Phong lighting
 - `unlit_program` - For selection/picking and unlit rendering
@@ -554,8 +568,7 @@ Selects the window system a context opens on where its definition's
 - `wx` - Use wxPython
 - `qt` - Use Qt 6 / PySide6, from the separate `OpenGLContext-qt` distribution
   (`openglcontext-qt/`). Needs a Qt platform plugin that gives a drawable GL
-  surface; the Wayland plugin does not in this container, so run Qt work with
-  `QT_QPA_PLATFORM=xcb`.
+  surface.
 - `egl` - Offscreen on Linux: no window and no display server (`windowsystem/egl.py`)
 - `wgl` - Offscreen on Windows: a pbuffer, no window on screen (`windowsystem/wgl.py`)
 - `offscreen` - whichever of `egl` and `wgl` this platform has
@@ -679,6 +692,10 @@ Only what reads `OpenGLContext.events.systemtime` follows — every `Timer` and
 the main loop calls as often as it has room for. `OpenGLContext.video.clock`.
 
 ## Code Conventions
+
+### File Locations
+
+See: [Directory Structure](#directory-structure)
 
 ### Writing Style
 

@@ -341,7 +341,7 @@ class IndexedLineSet(
             if gpu['vao'] is not None:
                 # The layout may have changed with the data; rebind it against
                 # the new upload rather than drawing through stale pointers.
-                glDeleteVertexArrays(1, [gpu['vao']])
+                glDeleteVertexArrays(1, np.array([gpu['vao']], dtype=np.uint32))
                 gpu['vao'] = None
         gpu['vbo'].bind()
         gpu['vbo'].unbind()
@@ -428,7 +428,7 @@ class _LineInstanceGPU(object):
         vao = self._instance_vao
         if vao is not None:
             try:
-                glDeleteVertexArrays(1, [vao])
+                glDeleteVertexArrays(1, np.array([vao], dtype=np.uint32))
             except Exception:
                 pass
             self._instance_vao = None

@@ -12,7 +12,7 @@ from typing import Any, Optional
 
 import numpy as np
 
-from vrml import node, field
+from vrml import cache, field, node, protofunctions
 
 
 class PBRTexture(object):
@@ -394,26 +394,145 @@ def uv_transform_matrix(offset: tuple[float, float] = (0.0, 0.0), rotation: floa
     ]
 
 
+def srgb_to_linear(colour: Any) -> tuple[float, float, float]:
+    """A display-referred RGB colour as the linear light the PBR shader works in.
+
+    VRML97 colours are the numbers its lighting equation multiplies and the
+    display shows, so they are encoded; the PBR program lights in linear space
+    and encodes its result, which makes an unconverted 0.5 come out at 0.73.
+    """
+    out = []
+    for value in tuple(colour)[:3]:
+        value = min(max(float(value), 0.0), 1.0)
+        out.append(value / 12.92 if value <= 0.04045
+                   else ((value + 0.055) / 1.055) ** 2.4)
+    return (out[0], out[1], out[2])
+
+
 def material_to_pbr(material_node: Any) -> dict[str, Any]:
     """Up-convert a VRML97 Material to plausible metallic/roughness PBR inputs.
 
     Lets a PBR pass draw legacy materials through the single PBR program:
     diffuse -> baseColor, shininess -> roughness (inverted), specular folds into
-    the dielectric response, emissive carried across. Returns a dict of factors.
+    the dielectric response, emissive carried across. The colours are decoded
+    from the display encoding VRML97 states them in (:func:`srgb_to_linear`).
+    Returns a dict of factors.
     """
     # None, VRML's NullNode sentinel, or any node without material fields (a Shape
     # may carry geometry with no material) -> the default grey material. Keying on
     # the field rather than the type also covers appearance.material being unset.
     if material_node is None or not hasattr(material_node, 'diffuseColor'):
-        return dict(base_color=(0.8, 0.8, 0.8), metallic=0.0, roughness=0.6,
+        return dict(base_color=srgb_to_linear((0.8, 0.8, 0.8)), metallic=0.0, roughness=0.6,
                     emissive=(0.0, 0.0, 0.0), occlusion=1.0, transparency=0.0)
     from OpenGLContext.scenegraph.material_fields import read_material_fields
     f = read_material_fields(material_node)   # shared raw read
     return dict(
-        base_color=f.diffuseColor,
+        base_color=srgb_to_linear(f.diffuseColor),
         metallic=0.0,
         roughness=max(0.04, 1.0 - min(1.0, f.shininess)),
-        emissive=f.emissiveColor,
+        emissive=srgb_to_linear(f.emissiveColor),
         occlusion=1.0,
         transparency=f.transparency,
     )
+
+
+#: The key an :class:`AppearanceMaterial` holds its current version under in
+#: vrml's global cache, against its appearance.
+_VIEW_KEY = 'pbr_material'
+
+
+class AppearanceMaterial(object):
+    """The metallic/roughness material a VRML97 ``Appearance`` is drawn as.
+
+    The PBR program reads a material's maps from ``textures`` and its factors
+    from a packed block. A VRML97 appearance keeps the same information in
+    three nodes, and this reads it from them: ``texture`` is the base colour
+    map, ``textureTransform`` is that map's UV transform, and ``material``
+    gives the factors, up-converted by :func:`material_to_pbr`.
+
+    :attr:`factorVersion` moves when a field any of those is read from is set,
+    as :attr:`PBRMaterial.factorVersion` does, so the pass repacks the block
+    after an edit. :func:`pbr_material` makes one per appearance, which it
+    refers to weakly.
+    """
+
+    def __init__(self, appearance: Any) -> None:
+        self._appearance = weakref.ref(appearance)
+        self._version = 0
+
+    @property
+    def appearance(self) -> Any:
+        """The appearance this is the view of, or None once it is collected."""
+        return self._appearance()
+
+    @property
+    def material(self) -> Any:
+        """The appearance's VRML97 ``Material``, or None."""
+        return getattr(self.appearance, 'material', None)
+
+    @property
+    def textures(self) -> dict[str, Any]:
+        """The maps by glTF channel name: the appearance's texture as the base colour."""
+        texture = getattr(self.appearance, 'texture', None)
+        return {'baseColor': texture} if texture else {}
+
+    @property
+    def uv_transform(self) -> Optional[np.ndarray]:
+        """The base colour map's 3x3 UV transform, or None for none.
+
+        Row-major, multiplying a column ``(u, v, 1)``: the matrix the flat
+        pass draws the same node with.
+        """
+        transform = getattr(self.appearance, 'textureTransform', None)
+        if not transform:
+            return None
+        from OpenGLContext.passes.shaderpass import texture_transform_matrix
+        return texture_transform_matrix(transform)
+
+    @property
+    def transparency(self) -> float:
+        """The material's transparency: which pass the appearance sorts into."""
+        return float(getattr(self.material, 'transparency', 0.0) or 0.0)
+
+    @property
+    def factorVersion(self) -> int:
+        """A count that moves whenever a field this view reads from is set."""
+        appearance = self.appearance
+        if appearance is not None and cache.CACHE.getData(appearance, _VIEW_KEY) is None:
+            self._version += 1
+            self._watch(appearance)
+        return self._version
+
+    @staticmethod
+    def _watch(appearance: Any) -> None:
+        """Hold a version against the fields of the nodes the view reads now."""
+        holder = cache.CACHE.holder(appearance, True, _VIEW_KEY)
+        for name in ('material', 'texture', 'textureTransform'):
+            holder.depend(appearance, name)
+        for source in (appearance.material, appearance.textureTransform):
+            if source:
+                for source_field in protofunctions.getFields(source):
+                    holder.depend(source, source_field)
+
+
+_appearance_views: 'weakref.WeakKeyDictionary[Any, AppearanceMaterial]' = \
+    weakref.WeakKeyDictionary()
+
+
+def pbr_material(appearance: Any) -> Any:
+    """The material the PBR pass draws ``appearance`` with; None for no appearance.
+
+    A :class:`PBRMaterial` carries its own maps and is drawn as itself. Any
+    other appearance -- a VRML97 ``Material`` with its ``texture`` and
+    ``textureTransform`` beside it, or no material -- is drawn as its
+    :class:`AppearanceMaterial`, one per appearance.
+    """
+    if appearance is None:
+        return None
+    material = getattr(appearance, 'material', None)
+    if isinstance(material, PBRMaterial):
+        return material
+    view = _appearance_views.get(appearance)
+    if view is None:
+        view = _appearance_views[appearance] = AppearanceMaterial(appearance)
+    return view

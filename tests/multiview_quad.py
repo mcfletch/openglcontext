@@ -38,7 +38,7 @@ Mouse and keys:
     i            print how this driver is drawing the views
 '''
 '''A glTF model is drawn with the PBR renderer, chosen before the engine is
-imported; :doc:`Loading a glTF model <using_gltf_model>` covers the loading
+imported; :doc:`Loading a glTF model <loading_gltf_model>` covers the loading
 itself.'''
 import os
 import sys

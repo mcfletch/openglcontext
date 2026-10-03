@@ -18,7 +18,7 @@ There are three ways to use it, from the most packaged to the most direct:
 
 - :ref:`Declared views <multiview-mixin>`: the context's definition names
   the views, their arrangements and how the user switches them, and every
-  ``Context`` builds them, with the view controls and pointer gestures
+  ``MultiViewContext`` builds them, with the view controls and pointer gestures
   included.
 - :ref:`QuadView <quad-view>` and :ref:`ViewSet <view-set>` build the
   views, frame a model in them and move their cameras with the pointer, for
@@ -34,18 +34,18 @@ Declaring the views
 A context's views are part of its navigation: ``ContextDefinition.navigation``
 holds a ``Navigation`` whose ``views`` field is a ``Views`` declaration (both
 in ``OpenGLContext.move.navigationdefinition``; the modes beside them are
-described in :doc:`navigation`). ``Context`` has
+described in :doc:`navigation`). ``MultiViewContext`` has
 ``OpenGLContext.multiview.mixin.MultiViewMixin`` among its bases, which builds
 the views as the context completes, after ``OnInit``:
 
 .. code-block:: python
 
-   from OpenGLContext.context import Context
+   from OpenGLContext.context import MultiViewContext
    from OpenGLContext.contextdefinition import ContextDefinition
    from OpenGLContext.move.navigationdefinition import (
        Arrangement, Navigation, ViewDefinition, Views)
 
-   class Editor(Context):
+   class Editor(MultiViewContext):
        contextDefinition = ContextDefinition(navigation=Navigation(
            modes=['examine'],
            views=Views(
@@ -109,27 +109,40 @@ The view menu's Zoom to fit uses the same box.
 An application that loads a scene afterwards calls ``frameViews()`` to fit
 them to it; ``oglc-view`` does this each time a scene loads.
 
-The overlay stack comes ahead of the views in ``Context``'s bases, so each
-event reaches the view controls first, and the views get the events the
+The overlay stack takes each event before the views of a ``MultiViewContext``,
+so each event reaches the view controls first, and the views get the events the
 controls do not take.
 
 Each view's menu lists the scene's cameras (``context.sceneCameras()``).
 Choosing one in the perspective view binds its ``Viewpoint``. Choosing one in
 an orthographic view gives that view a perspective camera at that position.
 
-Starting views at run time
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+A context with views
+~~~~~~~~~~~~~~~~~~~~
 
-``startViews()`` turns the plan, two elevations and the window's own view on
-from code:
+``Context`` draws the window's one view. Changing the base class gives it the
+plan, two elevations and the window's own view, each with its menu and
+controls, and nothing else in the script changes:
 
 .. code-block:: python
 
-   class Viewer(Context):
-       multiViewArrangement = 'quad'        # the default is 'single'
+   from OpenGLContext.context import MultiViewContext as BaseContext
 
-       def OnInit(self):
-           self.startViews(bounds=lambda: (scene.minimum, scene.maximum))
+``MultiViewContext`` calls ``setupViews()`` once ``OnInit`` has run, where the
+navigation declares no views. The default is ``startViews()`` in the quad
+arrangement. Overriding ``setupViews()`` changes the arrangements, the framing
+or the chrome, and overriding ``viewMenuItems(view)`` adds rows to each view's
+menu:
+
+.. code-block:: python
+
+   class Viewer(BaseContext):
+       def setupViews(self):
+           self.startViews(arrangement='single',
+                           bounds=lambda: (scene.minimum, scene.maximum))
+
+``startViews()`` turns the views on from code, at any time after the scene
+exists:
 
 - ``bounds`` is ``(minimum, maximum)``, or a callable that returns it. With
   no ``bounds``, the views are framed on the context's ``sceneBox()``.

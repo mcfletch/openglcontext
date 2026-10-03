@@ -65,6 +65,7 @@ from OpenGLContext.scenegraph.nurbs import NurbsToleranceSample as NurbsToleranc
 from OpenGLContext.scenegraph.nurbs import Polyline2D as Polyline2D
 from OpenGLContext.scenegraph.nurbs import TrimmedSurface as TrimmedSurface
 from OpenGLContext.scenegraph.particles import ParticleEmitter as ParticleEmitter
+from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial as PBRMaterial
 from OpenGLContext.scenegraph.pointset import PointSet as PointSet
 from OpenGLContext.scenegraph.quadrics import Cone as Cone
 from OpenGLContext.scenegraph.quadrics import Cylinder as Cylinder
@@ -138,8 +139,6 @@ from vrml.vrml97.basenodes import TouchSensor as TouchSensor
 from vrml.vrml97.basenodes import VisibilitySensor as VisibilitySensor
 from vrml.vrml97.basenodes import WorldInfo as WorldInfo
 
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial as PBRMaterial
-
 __all__ = [
     'Anchor',
     'Appearance',
@@ -208,8 +207,8 @@ __all__ = [
     'NurbsSurface',
     'NurbsToleranceSample',
     'OrientationInterpolator',
-    'ParticleEmitter',
     'PBRMaterial',
+    'ParticleEmitter',
     'PixelTexture',
     'PlanarReflector',
     'PlaneSensor',

@@ -1,13 +1,13 @@
 """The views a context shows, built from its definition's ``navigation.views``.
 
-:class:`MultiViewMixin` is one of :class:`~OpenGLContext.context.Context`'s
-bases.  A context whose navigation declares a
+:class:`MultiViewMixin` is one of
+:class:`~OpenGLContext.context.MultiViewContext`'s bases.  A context whose navigation declares a
 :class:`~OpenGLContext.move.navigationdefinition.Views` gets a
 :class:`~OpenGLContext.multiview.viewset.ViewSet` built from it as the context
 completes: the views, their arrangements, the keys that switch them and the
 furniture in each view, as the declaration's ``switching`` asks::
 
-    class Editor(Context):
+    class Editor(MultiViewContext):
         contextDefinition = ContextDefinition(navigation=Navigation(
             modes=['examine'],
             views=Views(
@@ -15,8 +15,9 @@ furniture in each view, as the declaration's ``switching`` asks::
                        ViewDefinition(name='perspective')],
                 switching=['keys', 'controls'])))
 
-With ``views`` NULL, which is the default, it builds nothing and a frame draws
-the window's one view.  :meth:`MultiViewMixin.startViews` makes the plan, two
+With ``views`` NULL, which is the default, the mix-in builds nothing and a
+frame draws the window's one view; :class:`~OpenGLContext.context.MultiViewContext`
+calls ``setupViews`` then.  :meth:`MultiViewMixin.startViews` makes the plan, two
 elevations and the window's own view at run time, and writes that declaration
 into the definition.
 
@@ -25,8 +26,7 @@ A perspective view with no gestures draws through whatever
 and any camera the application swaps in drive it as they drive a window of
 one view.  The other views have cameras of their own (:func:`viewSetFor`).
 
-The overlay stack sits ahead of this mix-in in ``Context``'s bases, so it is
-offered each event first -- the furniture has to have the click meant for a
+The overlay stack offers each event first, through ``offerBelowOverlay`` -- the furniture has to have the click meant for a
 button standing in front of a view -- and what the furniture leaves reaches
 the views.
 """
@@ -142,7 +142,6 @@ if TYPE_CHECKING:
         def getViewPlatform(self) -> Any: ...
         def triggerRedraw(self, force: int = 0) -> Any: ...
         def hasMouseMoveHandlers(self) -> bool: ...
-        def ProcessEvent(self, event: Any) -> Any: ...
         def ViewPort(self, width: int, height: int) -> None: ...
         def completeInit(self) -> bool: ...
         def setupDefaultEventCallbacks(self) -> None: ...
@@ -151,10 +150,12 @@ if TYPE_CHECKING:
 else:
     _Host = object
 
+ViewBoundsCallback = Optional[Callable[[], Optional[tuple[Any, Any]]]]
 
 class MultiViewMixin(_Host):
     """The views the definition declares, over whatever camera the window had."""
 
+    enableViewChrome:bool = True
     #: Which arrangement :meth:`startViews` opens in.
     multiViewArrangement: str = 'single'
     #: The key that steps to the next arrangement, where the views' ``switching``
@@ -169,7 +170,7 @@ class MultiViewMixin(_Host):
     #: The furniture drawn in them, where the views offer controls.
     viewChrome: Any = None
 
-    _viewBounds: Optional[Callable[[], Optional[tuple[Any, Any]]]] = None
+    _viewBounds: Optional[ViewBoundsCallback] = None
     #: The views that look through the scene's first camera.
     _sceneViews: tuple[str, ...] = ()
 
@@ -202,7 +203,7 @@ class MultiViewMixin(_Host):
         return completed
 
     # -- building ----------------------------------------------------------
-    def buildViews(self, declaration: Views, bounds: Optional[Any] = None) -> ViewSet:
+    def buildViews(self, declaration: Views, bounds: Optional[ViewBoundsCallback|tuple] = None) -> ViewSet:
         """Build the views ``declaration`` describes, place and frame them; the set.
 
         ``bounds`` is what there is to see, as ``(minimum, maximum)`` or a
@@ -356,17 +357,17 @@ class MultiViewMixin(_Host):
         self.viewsArranged()
 
     # -- the pointer -------------------------------------------------------
-    def ProcessEvent(self, event: Any) -> Any:
+    def offerBelowOverlay(self, event: Any) -> bool:
         """Offer the pointer to the views before the window's own navigation.
 
-        The furniture has already had it, since this sits under the overlay in
-        the bases; a drag the views take never reaches the navigation, so
-        panning an elevation does not also walk the camera.
+        The overlay stack calls this once the furniture has declined the
+        event; a drag the views take never reaches the navigation, so panning
+        an elevation does not also walk the camera.
         """
         if self.views is not None and self.views.handle(event):
             self.triggerRedraw(1)
-            return None
-        return super().ProcessEvent(event)
+            return True
+        return False
 
     def hasMouseMoveHandlers(self) -> bool:
         """True while a view is being dragged, which the handler registry does not see."""

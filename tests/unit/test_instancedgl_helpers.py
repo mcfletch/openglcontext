@@ -147,10 +147,11 @@ def test_delete_gl_swallows_bad_handles(monkeypatch):
         monkeypatch.setattr(ig, name, boom(name))
     assert ig.delete_gl(vaos=[1, 5], buffers=[2], textures=[3],
                         programs=[4]) is None
-    assert attempted == [
-        ('glDeleteVertexArrays', (1, 1)),
-        ('glDeleteVertexArrays', (1, 5)),
-        ('glDeleteBuffers', (1, 2)),
-        ('glDeleteTextures', (1, 3)),
-        ('glDeleteProgram', (4,)),
+    assert [(name, args[0], list(args[1])) for name, args in attempted[:-1]] == [
+        ('glDeleteVertexArrays', 1, [1]),
+        ('glDeleteVertexArrays', 1, [5]),
+        ('glDeleteBuffers', 1, [2]),
+        ('glDeleteTextures', 1, [3]),
     ]
+    assert all(args[1].dtype == np.uint32 for _, args in attempted[:-1])
+    assert attempted[-1] == ('glDeleteProgram', (4,))

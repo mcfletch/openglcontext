@@ -41,6 +41,10 @@ from OpenGLContext.scenegraph.basenodes import (
     Transform,
 )
 from OpenGLContext.scenegraph.zone import Zone, ZoneAudio, ZoneReverb
+from OpenGLContext.context import Context as BaseContext
+from OpenGLContext.audio import scene as audioscene
+from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.events import systemtime
 
 __all__ = ['AudioYard', 'Finishes', 'main']
 
@@ -117,7 +121,12 @@ def _bell_clip(sample_rate: int) -> Clip:
 
 
 class AudioYard:
-    """The demo's world and its sounds, with no GL and no window.
+    """The demo's scenegraph, rigid-body physics and sounds.
+
+    The scene holds five rigid-body balls dropped onto a floor, a bell, a
+    spinning motor and two zones (a cave and a stream). :meth:`step` advances
+    the physics and the motor and plays a thud for each ball impact. This class
+    creates no GL objects and no window, so a test can drive it directly.
 
     The context builds one, puts :meth:`scene` in front of the camera, takes
     each frame's time step from :attr:`frames`, calls :meth:`step` with it and
@@ -288,56 +297,48 @@ class AudioYard:
         audio.volume = min(1.0, max(0.0, float(audio.volume) + delta))
         return float(audio.volume)
 
+class AudioDemoContext(BaseContext):
+    """The yard in a window: keys in, the time step out."""
+
+    #: The yard is dressed in metallic/roughness materials.
+    renderer = 'pbr'
+
+    initialPosition = (0, 1.6, 12)
+
+    def OnInit(self) -> None:
+        super().OnInit()
+        self.yard = AudioYard()
+        self.sg = self.yard.scene()
+        engine = audioscene.engine_for(self)
+        if engine is not None:
+            engine.master_gain = MASTER_GAIN
+        yard = self.yard
+        for key, handler in (
+                ('b', yard.drop), ('g', yard.ring),
+                (' ', lambda: yard.fire(audioscene.existing_engine(self))),
+                ('r', yard.toggle_motor),
+                ('m', lambda: yard.toggle_muffle(audioscene.existing_engine(self))),
+                ('+', lambda: self.volume(0.1)), ('=', lambda: self.volume(0.1)),
+                ('-', lambda: self.volume(-0.1))):
+            self.addEventHandler('keypress', name=key,
+                                    function=lambda event, handler=handler: handler())
+        yard.frames.step(systemtime.systemTime())
+        print(__doc__, flush=True)
+        print(audioscene.describe(self), flush=True)
+
+    def OnIdle(self, *arguments: Any) -> int:
+        dt = self.yard.frames.step(systemtime.systemTime())
+        self.yard.step(dt, audioscene.existing_engine(self))
+        self.triggerRedraw(1)
+        return 1
+
+    def volume(self, delta: float) -> None:
+        level = self.yard.change_volume(self.contextDefinition.audio, delta)
+        print('volume %.2f' % (level,), flush=True)
 
 def main() -> int:                              # pragma: no cover - needs a window
     """Open the yard in a window."""
     argparse.ArgumentParser(description=(__doc__ or '').splitlines()[0]).parse_args()
-    from OpenGLContext import testingcontext
-    from OpenGLContext.audio import scene as audioscene
-    from OpenGLContext.contextdefinition import ContextDefinition
-    from OpenGLContext.events import systemtime
-
-    base: Any = testingcontext.getInteractive()
-
-    class AudioDemoContext(base):
-        """The yard in a window: keys in, the time step out."""
-
-        #: The yard is dressed in metallic/roughness materials.
-        renderer = 'pbr'
-
-        initialPosition = (0, 1.6, 12)
-
-        def OnInit(self) -> None:
-            base.OnInit(self)
-            self.yard = AudioYard()
-            self.sg = self.yard.scene()
-            engine = audioscene.engine_for(self)
-            if engine is not None:
-                engine.master_gain = MASTER_GAIN
-            yard = self.yard
-            for key, handler in (
-                    ('b', yard.drop), ('g', yard.ring),
-                    (' ', lambda: yard.fire(audioscene.existing_engine(self))),
-                    ('r', yard.toggle_motor),
-                    ('m', lambda: yard.toggle_muffle(audioscene.existing_engine(self))),
-                    ('+', lambda: self.volume(0.1)), ('=', lambda: self.volume(0.1)),
-                    ('-', lambda: self.volume(-0.1))):
-                self.addEventHandler('keypress', name=key,
-                                     function=lambda event, handler=handler: handler())
-            yard.frames.step(systemtime.systemTime())
-            print(__doc__, flush=True)
-            print(audioscene.describe(self), flush=True)
-
-        def OnIdle(self, *args: Any) -> int:
-            dt = self.yard.frames.step(systemtime.systemTime())
-            self.yard.step(dt, audioscene.existing_engine(self))
-            self.triggerRedraw(1)
-            return 1
-
-        def volume(self, delta: float) -> None:
-            level = self.yard.change_volume(self.contextDefinition.audio, delta)
-            print('volume %.2f' % (level,), flush=True)
-
     AudioDemoContext.ContextMainLoop(definition=ContextDefinition(
         title='OpenGLContext sound', size=(1024, 720)))
     return 0

@@ -40,7 +40,9 @@ from OpenGLContext.passes.shaderpass import (
 from OpenGLContext.passes.transmission import TransmissionBuffer
 from OpenGLContext.passes import reflection
 from OpenGLContext.passes.reflection import REFLECTION_UNIT, REFLECTION_UNITS_NEEDED
-from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial, material_to_pbr
+from OpenGLContext.scenegraph.pbrmaterial import (
+    AppearanceMaterial, PBRMaterial, material_to_pbr, pbr_material,
+)
 from OpenGLContext.passes.ibl import IBL_UNITS, _IBL_SAMPLER
 from OpenGLContext.passes.zonelayers import MAX_ZONE_LAYERS, ZonePack
 from OpenGLContext.scenegraph.skinning import SKIN_PALETTE_UNIT, palette_supported
@@ -203,6 +205,10 @@ def _material_factors(material: Any) -> dict:
             diffuse_transmission_color=tuple(
                 getattr(m, 'diffuseTransmissionColor', (1.0, 1.0, 1.0)))[:3],
         )
+    uv_transform = None
+    if isinstance(material, AppearanceMaterial):
+        uv_transform = material.uv_transform
+        material = material.material
     f = material_to_pbr(material)      # None / VRML97 Material -> plausible defaults
     return dict(
         base_color=f['base_color'], metallic=f['metallic'], roughness=f['roughness'],
@@ -210,8 +216,10 @@ def _material_factors(material: Any) -> dict:
         alpha_cutoff=0.5, unlit=0, emissive_strength=1.0, specular=1.0,
         specular_color=(1.0, 1.0, 1.0), clearcoat=0.0, clearcoat_roughness=0.0,
         sheen_color=(0.0, 0.0, 0.0), sheen_roughness=0.0, ior=1.5, thickness=0.0,
-        attenuation_color=(1.0, 1.0, 1.0), attenuation_distance=0.0, uv_transform=None,
-        tex_coord_mask=0, iridescence=0.0, iridescence_ior=1.3,
+        attenuation_color=(1.0, 1.0, 1.0), attenuation_distance=0.0,
+        uv_transform=uv_transform,
+        tex_coord_mask=BASE_COLOR_TRANSFORM_BIT if uv_transform is not None else 0,
+        iridescence=0.0, iridescence_ior=1.3,
         iridescence_thick_min=100.0, iridescence_thick_max=400.0,
         anisotropy_strength=0.0, anisotropy_rotation=0.0, dispersion=0.0,
         diffuse_transmission=0.0, diffuse_transmission_color=(1.0, 1.0, 1.0),
@@ -252,6 +260,11 @@ def pbr_feature_defines(enabled: Optional[Any] = None) -> list:
 #: baked light rather than a tint. Above the per-channel UV-set bits (1 to
 #: 32), and read by the fragment shader as ``bakedLightMode``.
 BAKED_LIGHT_BIT = 64
+
+#: Which bit of the texture-coordinate mask says the base colour map's
+#: coordinates go through the block's UV transform: the map's UV-set bit,
+#: shifted into the byte of transform bits.
+BASE_COLOR_TRANSFORM_BIT = 1 << 8
 
 
 def pack_material_block(material: Any) -> np.ndarray:
@@ -577,9 +590,11 @@ class PBRShaderProgram(VRML97ShaderProgram):
         if idx != GL_INVALID_INDEX:
             glUniformBlockBinding(program, idx, self.MATERIAL_UBO_BINDING)
 
-    def _upload_material_ubo(self, material: Any) -> int:
+    def _upload_material_ubo(self, material: Any, buf: Optional[int] = None) -> int:
+        """Fill ``buf``, or a new buffer, with ``material``'s block; the buffer filled."""
         data = pack_material_block(material)
-        buf = int(glGenBuffers(1))
+        if buf is None:
+            buf = int(glGenBuffers(1))
         glBindBuffer(GL_UNIFORM_BUFFER, buf)
         glBufferData(GL_UNIFORM_BUFFER, data.nbytes, data, GL_STATIC_DRAW)
         glBindBuffer(GL_UNIFORM_BUFFER, 0)
@@ -596,12 +611,14 @@ class PBRShaderProgram(VRML97ShaderProgram):
                 self._default_material_ubo = self._upload_material_ubo(None)
             return self._default_material_ubo
         # Cache (buffer, version). A live edit (KHR_animation_pointer driving a
-        # material factor / texture transform) moves material.factorVersion, so the
-        # block is re-packed on the next draw instead of staying stale.
+        # material factor / texture transform, a route into a VRML97 Material)
+        # moves material.factorVersion, so the block is re-packed on the next
+        # draw into the buffer the material already has.
         entry = self._material_ubos.get(material)
         version = int(getattr(material, 'factorVersion', 0))
         if entry is None or entry[1] != version:
-            buf = self._upload_material_ubo(material)
+            buf = self._upload_material_ubo(
+                material, entry[0] if entry is not None else None)
             self._material_ubos[material] = (buf, version)
             return buf
         return entry[0]
@@ -866,10 +883,11 @@ class PBRShaderProgram(VRML97ShaderProgram):
     def configure_appearance(self, appearance: Any, mode: Any) -> None:
         """Configure PBR material + textures from a Shape's appearance.
 
-        Routes both PBRMaterial (directly) and VRML97 Material (up-converted)
-        through this single PBR program.
+        Routes both PBRMaterial (directly) and a VRML97 appearance -- its
+        Material up-converted, its texture as the base colour map -- through
+        this single PBR program; :func:`pbr_material` says which.
         """
-        material = getattr(appearance, 'material', None) if appearance else None
+        material = pbr_material(appearance) if appearance else None
         # Publish the material's double-sidedness to the geometry's cull decision
         #: a hand-built PBRMaterial(doubleSided=True) must disable
         # back-face culling even when the mesh itself is marked solid. Set before
@@ -914,10 +932,9 @@ class PBRShaderProgram(VRML97ShaderProgram):
             # fields (see pack_material_block), so they need no loose-uniform set.
             self.bind_pbr_textures(material, mode)
         else:
-            f = material_to_pbr(material)
-            self.set_alpha(1.0 - f['transparency'], 0)
+            self.set_alpha(1.0 - float(getattr(material, 'transparency', 0.0)), 0)
             self.set_transmission(0.0)
-            self.bind_pbr_textures(None, mode)  # clears has* flags
+            self.bind_pbr_textures(material, mode)
 
     def set_ibl_mode(self, mode_code: int, intensity: float = 1.0) -> None:
         """Set the environment-lighting path (0=off, 1=analytic, 2=full)."""
@@ -992,6 +1009,10 @@ class PBRPass(flatcore.FlatPass):
     """Render pass using the PBR metallic/roughness shader."""
 
     use_shaders: bool = True
+    #: No flat fill: the light that is not from a lamp comes from the environment
+    #: (:meth:`iblPrepare`), and with the environment off there is none.
+    #: ``context.gltf_scene_ambient`` adds one.
+    DEFAULT_AMBIENT: tuple[float, float, float] = (0.0, 0.0, 0.0)
     #: The one buffer every instanced group's material array is uploaded to.
     _instance_material_ubo: Optional[int] = None
     #: What :attr:`_instance_material_ubo` was last filled with.
@@ -1002,7 +1023,7 @@ class PBRPass(flatcore.FlatPass):
         buffer, self._instance_material_ubo = self._instance_material_ubo, None
         if buffer is not None:
             try:
-                glDeleteBuffers(1, [buffer])
+                glDeleteBuffers(1, np.array([buffer], dtype=np.uint32))
             except Exception:
                 log.debug('deleting the instance material buffer failed', exc_info=True)
         super().disposeResources()
@@ -1083,11 +1104,12 @@ class PBRPass(flatcore.FlatPass):
             geometry = getattr(shape, 'geometry', None)
             appearance = getattr(shape, 'appearance', None)
             material = getattr(appearance, 'material', None)
-            version = getattr(material, 'batchingVersion', None)
+            drawn_as = pbr_material(appearance)
+            version = getattr(drawn_as, 'batchingVersion', None)
             made_from = (geometry, appearance, material,
                          getattr(appearance, 'texture', None))
             stamps = (version() if version is not None
-                      else getattr(material, 'factorVersion', 0), collapse, mirrors)
+                      else getattr(drawn_as, 'factorVersion', 0), collapse, mirrors)
             held = memo.get(shape)
             if held is not None and held[1] == stamps and all(
                     was is now for was, now in zip(held[0], made_from, strict=True)):

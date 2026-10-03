@@ -18,7 +18,7 @@ from collections.abc import Callable, Iterable
 from typing import Any, Optional, TYPE_CHECKING
 
 from OpenGL.GL import (
-    GL_FALSE, GL_VERTEX_SHADER, GL_FRAGMENT_SHADER, GL_GEOMETRY_SHADER,
+    GL_FALSE, GL_TRUE, GL_VERTEX_SHADER, GL_FRAGMENT_SHADER, GL_GEOMETRY_SHADER,
     GL_INVALID_INDEX,
     GL_TEXTURE0, GL_TEXTURE_2D, GL_TEXTURE_2D_ARRAY, GL_TEXTURE_CUBE_MAP,
     GL_TEXTURE_CUBE_MAP_ARRAY,
@@ -1097,12 +1097,15 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
     def set_texture_transform(self, transform_node: Optional[Any] = None) -> None:
         """Upload the UV transform matrix for a VRML97 TextureTransform node.
 
+        The matrix is row-major and multiplies a column ``(u, v, 1)``, so it
+        is uploaded transposed: GL reads a matrix column by column.
+
         Args:
             transform_node: TextureTransform node, or None for identity
         """
         loc = self._get_location('textureMatrix')
         if loc != -1:
-            glUniformMatrix3fv(loc, 1, GL_FALSE, texture_transform_matrix(transform_node))
+            glUniformMatrix3fv(loc, 1, GL_TRUE, texture_transform_matrix(transform_node))
 
     def set_default_texture_transform(self) -> None:
         """Set identity texture transform."""

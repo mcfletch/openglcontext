@@ -54,7 +54,7 @@ if TYPE_CHECKING:
 
         def triggerRedraw(self, force: int = 0) -> Any: ...
         def DoEventCascade(self) -> Any: ...
-        def OnIdle(self, *args: Any) -> Any: ...
+        def OnIdle(self, *arguments: Any) -> Any: ...
 else:
     _WalkHost = object
 
@@ -430,7 +430,7 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
         p = self.platform.position
         return (float(p[0]), float(p[1]), float(p[2])) + tuple(float(v) for v in self.platform.quaternion.internal)
 
-    def OnIdle(self, *args: Any) -> Any:
+    def OnIdle(self, *arguments: Any) -> Any:
         if self.platform is not None and getattr(self, '_tw_hf', None) is not None:
             # The avatar first, so the streamers below and the frame they feed
             # see where the walker has got to rather than where it was.
@@ -455,4 +455,4 @@ class TerrainWalkMixin(PhysicsWalkMixin, _WalkHost):
                 self._tw_pose = pose
                 self.triggerRedraw(1)
         sup = super(TerrainWalkMixin, self)
-        return sup.OnIdle(*args) if hasattr(sup, 'OnIdle') else None
+        return sup.OnIdle(*arguments) if hasattr(sup, 'OnIdle') else None

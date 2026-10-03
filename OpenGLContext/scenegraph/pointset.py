@@ -255,7 +255,7 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
             if gpu['vao'] is not None:
                 # The layout may have changed with the data; rebind it against
                 # the new upload rather than drawing through stale pointers.
-                glDeleteVertexArrays(1, [gpu['vao']])
+                glDeleteVertexArrays(1, np.array([gpu['vao']], dtype=np.uint32))
                 gpu['vao'] = None
         # Force the (re-)upload now so the buffer is populated before draw.
         gpu['vbo'].bind()

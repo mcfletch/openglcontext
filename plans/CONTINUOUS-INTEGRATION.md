@@ -18,7 +18,7 @@ for open source. So the two implementations CI uses are the two that are free:
 | Job | Implementation | What it covers |
 |---|---|---|
 | `llvmpipe` (`ubuntu-latest`, under `xvfb-run`) | Mesa llvmpipe, GL 4.5 core and compatibility | Everything that is not about speed or about pixels matching a blessed image. The same renderer on every run, so a difference between runs means something. |
-| `macos` (`macos-14`, `macos-15`) | Apple GL through **CGL** | A second vendor's implementation. Mesa is lenient; a call that survives on it because of that fails here. No compatibility profile above 2.1 there, so the fixed-function arms skip. |
+| `macos` ( `macos-15`) | Apple GL through **CGL** | A second vendor's implementation. Mesa is lenient; a call that survives on it because of that fails here. No compatibility profile above 2.1 there, so the fixed-function arms skip. |
 
 `LIBGL_ALWAYS_SOFTWARE=1` reproduces the Linux job on a machine with a GPU,
 which is how a failure seen in CI is chased locally.

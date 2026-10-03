@@ -55,7 +55,7 @@ from typing import (
 from vrml.protofunctions import getField
 
 from OpenGLContext import renderoptions
-from OpenGLContext.context import Context
+from OpenGLContext.context import MultiViewContext
 from OpenGLContext.scenegraph.light import DirectionalLight, Light, PointLight
 from OpenGLContext.scenegraph.scenegraph import SceneGraph
 from OpenGLContext.scenegraph.transform import Transform
@@ -157,8 +157,43 @@ if TYPE_CHECKING:
 else:
     _Host = object
 
+class SceneLoaderMixin(AsyncSceneMixin):
+    """Provides scene scene loading mechanisms needed for loading any file
+    
+    Isolates the concern "load a scene" from "present a scene" such that
+    a newly registered loader can be used to get a SceneGraph regardless
+    of whether the core code is aware of the format.
+    """
+    #: Resolved scene source (path or URL).
+    source: Optional[str] = None
+    #: How to read it.  Chosen from the source by :meth:`prepareSource`; a host
+    #: with scenes of its own sets one directly.
+    adapter: SceneAdapter = SceneAdapter()
+    #: ``Viewpoint`` nodes for the model's own cameras, in document order.
+    viewpoints: List[Any]
+    #: The scene as the adapter loaded it, kept because it is what knows how to
+    #: build an animation player wired to its own skins and morph targets.
+    scene: Any = None
+    if TYPE_CHECKING:
+        sg: Any
+        platform: Any
+        contextDefinition: Any
+        physicsYaw: float
+        physicsWalking: bool
 
-class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
+        def addEventHandler(self, eventType: str, *arguments: Any,
+                            **named: Any) -> Any: ...
+        def triggerRedraw(self, force: int = 0) -> Any: ...
+        def getSceneGraph(self) -> Any: ...
+        def getViewPlatform(self) -> Any: ...
+        def setupPhysics(self, enable: bool = False) -> bool: ...
+        def enablePhysics(self, on: bool = True) -> bool: ...
+        def stepPhysics(self, dt: Optional[float] = None) -> None: ...
+        def moveAvatarToViewpoint(self, viewpoint: Any) -> None: ...
+        def getNavigation(self) -> Any: ...
+
+
+class SceneViewerMixin( SceneLoaderMixin, CaptionMixin,
                        SettleCaptureMixin, RecordingMixin,
                        ViewerScreensMixin, _Host):
     """Showing one scene: assembly, cameras, animation and the caption.
@@ -227,17 +262,10 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
                 arrangement=str(options.views or cls.multiViewArrangement),
                 switching=['keys'] if recording else ['keys', 'controls']))
 
-    #: Resolved scene source (path or URL).
-    source: Optional[str] = None
-    #: How to read it.  Chosen from the source by :meth:`prepareSource`; a host
-    #: with scenes of its own sets one directly.
-    adapter: SceneAdapter = SceneAdapter()
     #: Radius of the loaded model, which sizes the framing and the light rig.
     radius: float = 1.0
     #: The transform the whole model hangs from, and which the turntable turns.
     modelTransform: Optional[Transform] = None
-    #: ``Viewpoint`` nodes for the model's own cameras, in document order.
-    viewpoints: List[Any]
     #: Which of them is bound.
     cameraIndex: int = 0
 
@@ -250,9 +278,6 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
     _flyDone: bool = False
     #: The shelf, built on first use.
     _library: Any = None
-    #: The scene as the adapter loaded it, kept because it is what knows how to
-    #: build an animation player wired to its own skins and morph targets.
-    scene: Any = None
     #: The library entry currently open, or None when the source came from
     #: somewhere else.  It is what PageUp/PageDown step along.
     libraryEntry: Any = None
@@ -1239,7 +1264,7 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         """
         return bool(self.adapter.update(self))
 
-    def OnIdle(self, *args: Any) -> int:  # pragma: no cover - interactive idle loop
+    def OnIdle(self, *arguments: Any) -> int:  # pragma: no cover - interactive idle loop
         # A finished background load is applied here, on the render thread,
         # before anything else looks at the scenegraph.
         if self.pollPendingScene():
@@ -1293,10 +1318,13 @@ class SceneViewerMixin(AsyncSceneMixin, CaptionMixin,
         return time()
 
 
-class ViewerContext(SceneViewerMixin, Context):
+class ViewerContext(SceneViewerMixin, MultiViewContext):
     """The viewing component, on whichever window system the definition names
 
     A screen that is up takes the keys and the mouse ahead of the navigation,
     as it does in every context, so the avatar does not walk off while
-    somebody reads the settings.
+    somebody reads the settings.  It opens on one view unless its class or
+    ``--views`` says otherwise.
     """
+
+    multiViewArrangement = 'single'

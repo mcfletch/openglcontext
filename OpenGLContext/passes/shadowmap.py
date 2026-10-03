@@ -17,6 +17,7 @@ lifecycle of ``SelectionFBO`` in :mod:`OpenGLContext.passes._flat`.
 """
 from __future__ import annotations
 
+import numpy as np
 import logging
 from typing import Optional
 
@@ -149,13 +150,13 @@ class ShadowMapArray:
     def cleanup(self) -> None:
         if self.fbo is not None:
             try:
-                glDeleteFramebuffers(1, [self.fbo])
+                glDeleteFramebuffers(1, np.array([self.fbo], dtype=np.uint32))
             except Exception:
                 pass
             self.fbo = None
         if self.depth_texture is not None:
             try:
-                glDeleteTextures([self.depth_texture])
+                glDeleteTextures(1, np.array([self.depth_texture], dtype=np.uint32))
             except Exception:
                 pass
             self.depth_texture = None
@@ -253,13 +254,13 @@ class ShadowMapCubeArray:
     def cleanup(self) -> None:
         if self.fbo is not None:
             try:
-                glDeleteFramebuffers(1, [self.fbo])
+                glDeleteFramebuffers(1, np.array([self.fbo], dtype=np.uint32))
             except Exception:
                 pass
             self.fbo = None
         if self.depth_texture is not None:
             try:
-                glDeleteTextures([self.depth_texture])
+                glDeleteTextures(1, np.array([self.depth_texture], dtype=np.uint32))
             except Exception:
                 pass
             self.depth_texture = None
@@ -361,13 +362,13 @@ class ShadowMapCube:
     def cleanup(self) -> None:
         if self.fbo is not None:
             try:
-                glDeleteFramebuffers(1, [self.fbo])
+                glDeleteFramebuffers(1, np.array([self.fbo], dtype=np.uint32))
             except Exception:
                 pass
             self.fbo = None
         if self.depth_texture is not None:
             try:
-                glDeleteTextures([self.depth_texture])
+                glDeleteTextures(1, np.array([self.depth_texture], dtype=np.uint32))
             except Exception:
                 pass
             self.depth_texture = None

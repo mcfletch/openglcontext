@@ -63,6 +63,18 @@ def _deprecated(name: str) -> None:
         DeprecationWarning, stacklevel=3)
 
 
+def _get_default_renderer() -> str:
+    """The render passes a definition asks for when its program names none.
+
+    ``OPENGLCONTEXT_RENDERER`` names one of
+    :data:`~OpenGLContext.renderoptions.CHOICES` ``['renderer']``; unset or
+    blank is ``'pbr'``.
+    """
+    return renderoptions.env_choice(
+        'OPENGLCONTEXT_RENDERER', renderoptions.CHOICES['renderer'], {}, 'pbr',
+    )
+
+
 def _get_default_picking() -> bool:
     """Whether colour-based scenegraph picking is enabled by default.
 
@@ -151,7 +163,8 @@ class ContextDefinition( node.Node ):
     pickEnabled = field.newField( "pickEnabled", "SFBool", 1, _get_default_picking )
 
     # Use the PBR render passes or the older VRML97 render passes
-    renderer = field.newField("renderer","SFString",1, "pbr")
+    # (env: OPENGLCONTEXT_RENDERER).
+    renderer = field.newField("renderer", "SFString", 1, _get_default_renderer)
 
     # Non-blocking pick readback: read the MRT object-id/depth under each pick
     # sample into a PBO with a fence instead of a synchronous glReadPixels, and

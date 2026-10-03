@@ -31,6 +31,7 @@ recording of an interactive session -- stalls and all -- wants.
 """
 from __future__ import annotations
 
+import numpy as np
 import logging
 from pathlib import Path
 from typing import Any
@@ -98,10 +99,10 @@ class CaptureTarget:
     def close(self) -> None:
         """Give the texture and framebuffer back to the driver."""
         if self.framebuffer:
-            glDeleteFramebuffers(1, [self.framebuffer])
+            glDeleteFramebuffers(1, np.array([self.framebuffer], dtype=np.uint32))
             self.framebuffer = 0
         if self.texture:
-            glDeleteTextures([self.texture])
+            glDeleteTextures(1, np.array([self.texture], dtype=np.uint32))
             self.texture = 0
 
 

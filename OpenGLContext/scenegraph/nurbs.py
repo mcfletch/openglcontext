@@ -234,7 +234,7 @@ class _SurfaceRenderer(object):
                     glDrawElements(GL_TRIANGLES, count, GL_UNSIGNED_INT, None)
                 finally:
                     glBindVertexArray(0)
-                    glDeleteVertexArrays(1, [transient])
+                    glDeleteVertexArrays(1, np.array([transient], dtype=np.uint32))
         finally:
             if switched_shader:
                 shader_program.use(lit=True, vertex_colors=False)
@@ -645,7 +645,7 @@ class NurbsCurve(nurbs.NurbsCurve):
                     glDrawArrays(GL_LINE_STRIP, 0, len(points))
                 finally:
                     glBindVertexArray(0)
-                    glDeleteVertexArrays(1, [transient])
+                    glDeleteVertexArrays(1, np.array([transient], dtype=np.uint32))
         finally:
             shader_program.use(lit=True)
         return 1

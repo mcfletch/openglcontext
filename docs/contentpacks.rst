@@ -390,7 +390,7 @@ message from the window manager.
    job = fetch.FetchJob(fetch.wanted_for(chosen, packs, store), store,
                         within=chosen, on_progress=self.triggerRedraw)
 
-   def OnIdle(self, *args):
+   def OnIdle(self, *arguments):
        job.poll()                      # the only place the worker's work is read
        if job.finished and job.failed is None and not job.cancelled:
            self.play(job.roots)
@@ -523,7 +523,7 @@ reason. The result stays on screen until the next download starts.
        on_finished=lambda job: refresh_the_library())
    context.pushOverlay(screen.panel)
 
-   def OnIdle(self):                   # once a frame
+   def OnIdle(self, *arguments):                   # once a frame
        screen.poll()
 
 ``on_fetch(pack)`` returns the job it made (the screen starts it), or None to

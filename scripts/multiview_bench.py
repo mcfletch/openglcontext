@@ -129,7 +129,7 @@ def measure(children: list, bounds: tuple[Any, Any], views: int,
                 self.viewLayout = ViewLayout.single(
                     OrbitViewPlatform(orbit, size), name='single')
 
-        def OnIdle(self, *_arguments: Any) -> None:
+        def OnIdle(self, *arguments: Any) -> None:
             if len(times) >= frames + warmup:
                 self.ContextMainLoop and self.setCurrent()
                 raise SystemExit(0)

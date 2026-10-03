@@ -1,5 +1,6 @@
 """Resource-manager for textures (with PIL conversions)"""
 
+import numpy as np
 from collections.abc import Callable, Iterable, Sequence
 from typing import Any, ClassVar, Optional
 
@@ -20,7 +21,7 @@ def _textureDeleter(textureID: int) -> Callable[[Any], None]:
 
     def cleanup(ref: Any) -> None:
         if available(glDeleteTextures):
-            glDeleteTextures([textureID])
+            glDeleteTextures(1, np.array([textureID], dtype=np.uint32))
 
     return cleanup
 

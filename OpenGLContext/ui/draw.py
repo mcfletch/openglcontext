@@ -306,7 +306,7 @@ class OverlayRenderer:
 
     @staticmethod
     def _deleteTexture(texture: Any) -> None:
-        glDeleteTextures(1, [int(texture)])
+        glDeleteTextures(1, np.array([int(texture)], dtype=np.uint32))
 
     # -- the batch --------------------------------------------------------
     def _state(self, texture: Any, mode: str) -> None:

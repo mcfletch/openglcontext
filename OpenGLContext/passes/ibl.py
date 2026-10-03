@@ -256,9 +256,9 @@ def _run_float_render_capability_probe() -> bool:
         glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo)
         glBindTexture(GL_TEXTURE_2D, prev_tex)
         if fbo is not None:
-            glDeleteFramebuffers(1, [fbo])
+            glDeleteFramebuffers(1, np.array([fbo], dtype=np.uint32))
         if tex is not None:
-            glDeleteTextures([tex])
+            glDeleteTextures(1, np.array([tex], dtype=np.uint32))
 
 
 def probe_float_render_capability(force: bool = False) -> bool:
@@ -529,7 +529,7 @@ class IBLProbe(object):
                                     setup=bind_equirect)
         finally:
             try:
-                glDeleteTextures([src])
+                glDeleteTextures(1, np.array([src], dtype=np.uint32))
             except Exception as err:
                 log.debug("IBL equirect source-texture teardown: %s", err)
             try:
@@ -703,10 +703,10 @@ class IBLProbe(object):
             glUseProgram(0)
             glBindVertexArray(0)
             if vao is not None:
-                glDeleteVertexArrays(1, [vao])
+                glDeleteVertexArrays(1, np.array([vao], dtype=np.uint32))
             glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo)
             if fbo is not None:
-                glDeleteFramebuffers(1, [fbo])
+                glDeleteFramebuffers(1, np.array([fbo], dtype=np.uint32))
             for prog in progs:
                 try:
                     glDeleteProgram(prog)
@@ -782,10 +782,10 @@ class IBLProbe(object):
             glUseProgram(prev_program)
             glBindVertexArray(0)
             if vao is not None:
-                glDeleteVertexArrays(1, [vao])
+                glDeleteVertexArrays(1, np.array([vao], dtype=np.uint32))
             glBindFramebuffer(GL_FRAMEBUFFER, prev_fbo)
             if fbo is not None:
-                glDeleteFramebuffers(1, [fbo])
+                glDeleteFramebuffers(1, np.array([fbo], dtype=np.uint32))
             glActiveTexture(GL_TEXTURE0)
             glViewport(int(prev_vp[0]), int(prev_vp[1]), int(prev_vp[2]), int(prev_vp[3]))
             for cap, enabled in switches.items():
@@ -906,7 +906,8 @@ class IBLProbe(object):
             except Exception as err:
                 log.warning("IBL layers could not be copied into the grown arrays: %s",
                             err)
-        glDeleteTextures([old[0], old[1]])
+        for name in old[:2]:
+            glDeleteTextures(1, np.array([name], dtype=np.uint32))
         self.irradiance, self.prefilter = irradiance, prefilter
         if not kept:
             self.lost += 1
@@ -930,13 +931,13 @@ class IBLProbe(object):
             tex = getattr(self, attr, None)
             if tex is not None:
                 try:
-                    glDeleteTextures([tex])
+                    glDeleteTextures(1, np.array([tex], dtype=np.uint32))
                 except Exception as err:
                     log.debug("IBL %s texture teardown: %s", attr, err)
                 setattr(self, attr, None)
         if self.brdf is not None:
             try:
-                glDeleteTextures([self.brdf])
+                glDeleteTextures(1, np.array([self.brdf], dtype=np.uint32))
             except Exception as err:
                 log.debug("IBL brdf texture teardown: %s", err)
             self.brdf = None

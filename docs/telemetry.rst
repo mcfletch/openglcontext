@@ -473,7 +473,7 @@ cannot record:
            print('session: %s' % (self.telemetry.path,))
            self.mark('scene-ready', bodies=len(self.bodies))
 
-       def OnIdle(self, event=None):
+       def OnIdle(self, *arguments):
            seconds = self.motionTime()
            for body in self.bodies:
                laps = body.completed(seconds)

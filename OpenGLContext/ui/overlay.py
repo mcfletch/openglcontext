@@ -449,6 +449,12 @@ class OverlayStackMixin(_Host):
         # release (:meth:`letGoOfHeldInput`).
         previous, self._dispatching = self._dispatching, _claimKey(event)
         try:
+            # What stands between the overlay and the navigation -- a context
+            # with views offers the pointer to them -- is a method of that
+            # mix-in, whichever side of this one it is listed on.
+            below = getattr(self, 'offerBelowOverlay', None)
+            if below is not None and below(event):
+                return None
             return super(OverlayStackMixin, self).ProcessEvent(event)
         finally:
             self._dispatching = previous

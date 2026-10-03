@@ -28,12 +28,12 @@ log = logging.getLogger( __name__ )
 #: and a GL name means something only in the one that made it.
 _GLYPH_BUFFERS = contextresources.ContextNames(
     '_shaderGlyphBuffers',
-    lambda name: glDeleteBuffers(1, [name]),
+    lambda name: glDeleteBuffers(1, np.array([name], dtype=np.uint32)),
     names=lambda entry: (entry[0],),
 )
 _VERTEX_ARRAYS = contextresources.ContextNames(
     '_shaderVertexArrays',
-    lambda name: glDeleteVertexArrays(1, [name]),
+    lambda name: glDeleteVertexArrays(1, np.array([name], dtype=np.uint32)),
     names=lambda entry: (entry[0],),
 )
 import numpy as np

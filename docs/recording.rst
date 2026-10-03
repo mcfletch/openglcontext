@@ -138,7 +138,7 @@ frame every time round the loop:
                print('not recording: %s' % (error,))
            return super().presentFrame()
 
-       def OnIdle(self, event=None):
+       def OnIdle(self, *arguments):
            self.triggerRedraw(1)               # a recording wants every frame
 
 

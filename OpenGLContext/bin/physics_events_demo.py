@@ -452,7 +452,7 @@ def main() -> int:                              # pragma: no cover - needs a win
             print('frame rate capped at 20 fps' if cap else 'frame rate uncapped',
                   flush=True)
 
-        def OnIdle(self, *args: Any) -> int:
+        def OnIdle(self, *arguments: Any) -> int:
             frames = self.yard.frames
             time.sleep(frames.wait(systemtime.systemTime()))
             dt = frames.step(systemtime.systemTime())

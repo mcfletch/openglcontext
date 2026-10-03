@@ -21,6 +21,7 @@ interleaved layouts the engine's own geometry is built in:
 """
 from __future__ import annotations
 
+import numpy as np
 from collections.abc import Callable, Sequence
 from typing import Any, Optional
 
@@ -87,7 +88,7 @@ def _entry_names(entry: _Entry) -> tuple[int]:
 #: Every node's vertex array objects, by context and then by layout, kept on
 #: the node as ``_shader_vao_cache``.
 _ARRAYS = contextresources.ContextNames(
-    '_shader_vao_cache', lambda vao: glDeleteVertexArrays(1, [vao]), _entry_names)
+    '_shader_vao_cache', lambda vao: glDeleteVertexArrays(1, np.array([vao], dtype=np.uint32)), _entry_names)
 
 
 def get_or_build_vao(owner: Any, program: Any, vbo_refs: Sequence[Any],
@@ -124,7 +125,7 @@ def get_or_build_vao(owner: Any, program: Any, vbo_refs: Sequence[Any],
         if _same_refs(cached_refs, vbo_refs):
             return vao
         # VBOs were replaced (data changed) -> the recorded pointers are stale.
-        glDeleteVertexArrays(1, [vao])
+        glDeleteVertexArrays(1, np.array([vao], dtype=np.uint32))
     # One name asked for is one name answered; the entry point's result follows
     # the count it was given, so the caller is what knows the shape.
     vao = int(glGenVertexArrays(1))

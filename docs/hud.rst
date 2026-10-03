@@ -711,7 +711,7 @@ no trace is running, so the caller needs no ``if``:
 
 .. code-block:: python
 
-   def OnIdle(self):
+   def OnIdle(self, *arguments):
        with self.tracePhase('character'):
            self.player.update(dt)
        with self.tracePhase('match'):

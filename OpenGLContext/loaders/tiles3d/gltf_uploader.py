@@ -176,7 +176,7 @@ def _dispose_material_textures(material: Any, context: Any) -> None:
         if not tid:
             continue
         try:
-            glDeleteTextures([tid])
+            glDeleteTextures(1, np.array([tid], dtype=np.uint32))
         except Exception:
             pass
         tex.texture = 0        # already-freed guard for any later cleanup

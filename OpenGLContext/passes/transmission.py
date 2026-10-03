@@ -13,6 +13,7 @@ approximation instead -- see :func:`resolve_mode`.
 """
 from __future__ import annotations
 
+import numpy as np
 import math
 from collections.abc import Iterable
 from typing import Optional
@@ -76,7 +77,7 @@ class TransmissionBuffer(object):
         if self.tex is not None and (w, h) == (self.w, self.h):
             return True
         if self.tex is not None:
-            glDeleteTextures([self.tex])
+            glDeleteTextures(1, np.array([self.tex], dtype=np.uint32))
             self.tex = None
         self.w, self.h = w, h
         self.levels = max(1, int(math.floor(math.log2(max(w, h)))) + 1)
@@ -139,7 +140,7 @@ class TransmissionBuffer(object):
     def release(self) -> None:
         if self.tex is not None:
             try:
-                glDeleteTextures([self.tex])
+                glDeleteTextures(1, np.array([self.tex], dtype=np.uint32))
             except Exception:
                 pass
             self.tex = None

@@ -18,6 +18,7 @@ it, so a bright object at the edge of one view does not glow into the next.
 """
 from __future__ import annotations
 
+import numpy as np
 import logging
 import os
 from dataclasses import dataclass
@@ -387,7 +388,7 @@ class BloomPass(object):
             except Exception:
                 log.debug('deleting a bloom program failed', exc_info=True)
         try:
-            glDeleteVertexArrays(1, [chain.vao])
+            glDeleteVertexArrays(1, np.array([chain.vao], dtype=np.uint32))
         except Exception:
             log.debug('deleting the bloom vertex array failed', exc_info=True)
 
@@ -402,15 +403,15 @@ class BloomPass(object):
             return
         for fbo in (targets.scene_fbo,) + targets.ping_fbo:
             try:
-                glDeleteFramebuffers(1, [fbo])
+                glDeleteFramebuffers(1, np.array([fbo], dtype=np.uint32))
             except Exception:
                 pass
         for tex in (targets.scene_tex,) + targets.ping_tex:
             try:
-                glDeleteTextures([tex])
+                glDeleteTextures(1, np.array([tex], dtype=np.uint32))
             except Exception:
                 pass
         try:
-            glDeleteRenderbuffers(1, [targets.depth_rb])
+            glDeleteRenderbuffers(1, np.array([targets.depth_rb], dtype=np.uint32))
         except Exception:
             pass

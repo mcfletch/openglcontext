@@ -392,7 +392,7 @@ were closing, in metres per second, which sets how loud the sound is:
        self.scene.manager.events.subscribe(
            self.blows.append, body=self.crates, above=0.5)
 
-   def OnIdle(self):
+   def OnIdle(self, *arguments):
        self.scene.advance(dt)                    # delivers this frame's blows
        engine = audioscene.engine_for(self)
        for blow in self.blows:
@@ -456,7 +456,7 @@ its ``blend``:
    cave = AudioSource(url=['sounds/drips.ogg'], loop=True, gain=0.0)
    cave_sound = AudioEmitter(type='global', sources=[cave])  # anywhere in the scene
 
-   def OnIdle(self):
+   def OnIdle(self, *arguments):
        where = self.getViewPlatform().position
        cave.gain = box_gain(where, centre=(-14, 1, -10),
                             half_size=(5, 4, 5), margin=4.0)
@@ -484,7 +484,7 @@ being built. ``useClip()`` gives one to an ``AudioSource``:
    motor.useClip(synth.tone(110.0, 1.0, harmonics=7, fade=0.0))
    car_body.children.append(AudioEmitter(sources=[motor]))
 
-   def OnIdle(self):
+   def OnIdle(self, *arguments):
        motor.gain = 0.2 + 0.1 * throttle
        motor.playbackRate = 0.5 + speed / 40.0
 
@@ -528,7 +528,7 @@ one ``global`` emitter, so the sound rides with the listener in the vehicle.
                                                 tyre_scrub_at=3.5))
    scene.children.append(track.node)
 
-   def OnIdle(self):
+   def OnIdle(self, *arguments):
        track.update(dt, vehicle)          # after the physics step
        if contact is not None:
            track.hit(closing_speed)       # m/s; a nudge under 1 m/s is silent

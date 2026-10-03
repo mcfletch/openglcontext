@@ -2,7 +2,8 @@
 
 ``OpenGL.ERROR_ON_COPY`` makes a list argument an error, since turning it into
 an array copies it, and a program that sets it must be able to run the engine's
-teardown paths.  ``glDeleteX(1, name)`` passes the name as a scalar.
+teardown paths.  ``glDeleteX(1, numpy.array([name], dtype=numpy.uint32))``
+passes the name as a one-value ``GLuint`` array, which PyOpenGL uses as it is.
 """
 import re
 from pathlib import Path

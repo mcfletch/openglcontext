@@ -234,7 +234,7 @@ lands on the same picture every time; ``time.time()`` does not follow it.
 
    self.frames = FrameStep(start=systemtime.systemTime(), longest=0.1)
 
-   def OnIdle(self, *args):
+   def OnIdle(self, *arguments):
        time.sleep(self.frames.wait(systemtime.systemTime()))
        self.world.advance(self.frames.step(systemtime.systemTime()))
 

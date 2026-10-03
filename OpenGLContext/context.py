@@ -386,6 +386,9 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     #: The frame-counting clock this run advances, if it is a capture.
     _captureClock: FixedStepClock | None = None
 
+    # when defined, an animation player
+    _player = None # animation player
+
     ### Node-like attributes
     PROTO = "Context"
     DEF = "#Context"
@@ -1402,7 +1405,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         :meth:`completeInit`.
         """
 
-    def OnIdle(self, *arguments: Any) -> int:
+    def OnIdle(self, *_arguments: Any) -> int:
         """Animation hook, called once per pass of the main loop
 
         The loop draws the frame itself after this, so the default does
@@ -2053,7 +2056,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         return type("TestingContext", (Context,), {"contextDefinition": definition})
 
 
-class Context(OverlayStackMixin, MultiViewMixin, ViewPlatformMixin, EventHandlerMixin,
+class Context(OverlayStackMixin, ViewPlatformMixin, EventHandlerMixin,
               VRMLSceneMixin, ContextCore):
     """A rendering context: a window, the GL context in it, and a scene
 
@@ -2075,11 +2078,11 @@ class Context(OverlayStackMixin, MultiViewMixin, ViewPlatformMixin, EventHandler
     :class:`~OpenGLContext.ui.overlay.OverlayStackMixin`, the event managers of
     :class:`~OpenGLContext.events.eventhandlermixin.EventHandlerMixin`, the
     camera and movement modes of
-    :class:`~OpenGLContext.move.viewplatformmixin.ViewPlatformMixin`, the
-    views of :class:`~OpenGLContext.multiview.mixin.MultiViewMixin` and the
+    :class:`~OpenGLContext.move.viewplatformmixin.ViewPlatformMixin` and the
     scene loading of :class:`~OpenGLContext.vrmlcontext.VRMLSceneMixin`, on
     top of what :class:`ContextCore` describes; the definition's
-    ``navigation`` says which modes and views it has.
+    ``navigation`` says which modes it has.  It draws the window's one view;
+    :class:`MultiViewContext` adds the views a navigation declares.
     """
 
     def emitKey(self, key: Any, state: int, modifiers: Any) -> None:
@@ -2093,6 +2096,41 @@ class Context(OverlayStackMixin, MultiViewMixin, ViewPlatformMixin, EventHandler
         """
         self.windowsystem.emitKey(key, state, modifiers)
 
+
+class MultiViewContext(MultiViewMixin, Context):
+    """A :class:`Context` that shows the views its navigation declares
+
+    :class:`~OpenGLContext.multiview.mixin.MultiViewMixin` builds a
+    :class:`~OpenGLContext.multiview.viewset.ViewSet` from the definition's
+    ``navigation.views`` as the context completes, and offers the pointer to
+    those views after the overlay and before the navigation.
+
+    A context whose navigation declares no views gets the quad arrangement --
+    the plan, two elevations and the window's own view, with each view's menu
+    -- from :meth:`setupViews` once its ``OnInit`` has run.  Overriding
+    :meth:`setupViews` changes the arrangements, the menus or the framing;
+    ``multiViewArrangement`` names the arrangement it opens in.
+    """
+
+    multiViewArrangement = 'quad'
+
+    def completeInit(self) -> bool:
+        """Complete the context, then set up the views if nothing declared any."""
+        completed = bool(super().completeInit())
+        if completed and self.views is None:
+            self.setupViews()
+        return completed
+
+    def setupViews(self) -> None:
+        """Make the views this context shows; called once, after ``OnInit``.
+
+        The default is :meth:`~OpenGLContext.multiview.mixin.MultiViewMixin.startViews`
+        with its quad arrangement.  An override calls ``startViews`` with other
+        elevations or chrome, or ``buildViews`` with its own
+        :class:`~OpenGLContext.move.navigationdefinition.Views`, and adds rows
+        to each view's menu by overriding ``viewMenuItems``.
+        """
+        self.startViews()
 
 ### Context render-calling child...
 class _ContextRenderNode(nodetypes.Rendering, nodetypes.Children, node.Node):

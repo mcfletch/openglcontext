@@ -358,7 +358,9 @@ def group_material_table(group: Any) -> tuple[list, list]:
     """Distinct materials of a group + a per-member index into that table.
 
     Returns (materials, indices): ``materials`` lists the group's distinct
-    material objects in first-seen order; ``indices[i]`` is member i's slot in that
+    materials, each member's being what
+    :func:`~OpenGLContext.scenegraph.pbrmaterial.pbr_material` answers for its
+    appearance, in first-seen order; ``indices[i]`` is member i's slot in that
     list. This is what the material-array UBO is packed from and what the
     per-instance material-index attribute carries.
 
@@ -370,13 +372,12 @@ def group_material_table(group: Any) -> tuple[list, list]:
     are one slot -- and the group key has already settled that a group's
     textures agree.
     """
+    from OpenGLContext.scenegraph.pbrmaterial import pbr_material
     materials: list = []
     slot: dict = {}
     indices: list = []
     for rec in group.members:
-        shape = rec[5]
-        appearance = getattr(shape, 'appearance', None)
-        material = getattr(appearance, 'material', None) if appearance is not None else None
+        material = pbr_material(getattr(rec[5], 'appearance', None))
         k = _material_content_key(material)
         if k not in slot:
             slot[k] = len(materials)

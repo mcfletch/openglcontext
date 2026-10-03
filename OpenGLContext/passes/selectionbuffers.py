@@ -16,6 +16,7 @@ picking *logic* in :mod:`selection` stays free of framebuffer bookkeeping.
 """
 from __future__ import annotations
 
+import numpy as np
 from typing import Optional
 
 from OpenGL.GL import (
@@ -146,21 +147,21 @@ class SelectionFBO:
         """Clean up OpenGL resources."""
         if self.fbo is not None:
             try:
-                glDeleteFramebuffers(1, [self.fbo])
+                glDeleteFramebuffers(1, np.array([self.fbo], dtype=np.uint32))
             except Exception:
                 pass
             self.fbo = None
 
         if self.color_texture is not None:
             try:
-                glDeleteTextures([self.color_texture])
+                glDeleteTextures(1, np.array([self.color_texture], dtype=np.uint32))
             except Exception:
                 pass
             self.color_texture = None
 
         if self.depth_renderbuffer is not None:
             try:
-                glDeleteRenderbuffers(1, [self.depth_renderbuffer])
+                glDeleteRenderbuffers(1, np.array([self.depth_renderbuffer], dtype=np.uint32))
             except Exception:
                 pass
             self.depth_renderbuffer = None
@@ -351,28 +352,28 @@ class SelectionBufferFBO:
         """Clean up OpenGL resources."""
         if self.fbo is not None:
             try:
-                glDeleteFramebuffers(1, [self.fbo])
+                glDeleteFramebuffers(1, np.array([self.fbo], dtype=np.uint32))
             except Exception:
                 pass
             self.fbo = None
 
         if self.color_texture is not None:
             try:
-                glDeleteTextures([self.color_texture])
+                glDeleteTextures(1, np.array([self.color_texture], dtype=np.uint32))
             except Exception:
                 pass
             self.color_texture = None
 
         if self.id_texture is not None:
             try:
-                glDeleteTextures([self.id_texture])
+                glDeleteTextures(1, np.array([self.id_texture], dtype=np.uint32))
             except Exception:
                 pass
             self.id_texture = None
 
         if self.depth_renderbuffer is not None:
             try:
-                glDeleteRenderbuffers(1, [self.depth_renderbuffer])
+                glDeleteRenderbuffers(1, np.array([self.depth_renderbuffer], dtype=np.uint32))
             except Exception:
                 pass
             self.depth_renderbuffer = None

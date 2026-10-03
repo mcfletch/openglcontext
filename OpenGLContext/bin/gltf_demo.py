@@ -276,6 +276,12 @@ class TestContext(ViewerContext):
         self.index = resolve_start_index([e['name'] for e in self.catalog], start)
 
     def loadScene(self) -> Any:
+        """Customise the scene loader to load from our catalog instead of self.source
+        
+        Overrides :py:method:`OpenGLContext.viewer.SceneViewer.loadScene`
+        to look into self.catalog at our current index. It then sets our label
+        so that the user can see which file is currently loaded.
+        """
         entry = self.catalog[self.index]
         label = "[%d/%d] %s" % (self.index + 1, len(self.catalog), entry['display'])
         self._ref_current = entry['name']

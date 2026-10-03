@@ -165,7 +165,7 @@ The format is geometry and surface colour, and a program supplies the rest:
 
 For anything beyond a static prop, glTF is the format to convert to --
 Blender reads OBJ and writes glTF, and
-:doc:`Loading a glTF model <using_gltf_model>` covers the export.
+:doc:`Loading a glTF model <loading_gltf_model>` covers the export.
 '''
 
 if __name__ == "__main__":

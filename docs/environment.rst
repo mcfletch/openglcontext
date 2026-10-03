@@ -98,10 +98,11 @@ Choosing the renderer
        :doc:`Rendering offscreen <offscreen>`. :ref:`Choosing a window system
        <choosing-a-window-system>` gives the whole order.
    * - ``OPENGLCONTEXT_RENDERER``
+     - ``pbr``, ``vrml97``
      - ``pbr``
-     - unset
-     - ``pbr`` selects the metallic/roughness renderer. A context class may
-       set ``renderer = 'pbr'`` for itself instead. See :doc:`PBR <pbr>`.
+     - ``pbr`` selects the metallic/roughness renderer and ``vrml97`` the
+       renderer with the legacy VRML97 lighting model. A context class may set
+       ``renderer`` for itself instead. See :doc:`PBR <pbr>`.
    * - ``OPENGLCONTEXT_MULTIVIEW``
      - ``auto``, ``vertex``, ``geometry``, ``sequential``
      - ``auto``

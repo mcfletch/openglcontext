@@ -30,19 +30,31 @@ on for you:
 
    oglc-view path/to/model.glb
 
-To use PBR for your own scene, set the renderer:
+A core-profile context draws with the PBR renderer unless it asks for the
+VRML97 renderer, which shades with the legacy VRML97 lighting model. The
+environment chooses for every context in a process:
 
 .. code-block:: bash
 
-   OPENGLCONTEXT_RENDERER=pbr python your_script.py
+   OPENGLCONTEXT_RENDERER=vrml97 python your_script.py
 
-or have the context class ask for it, which leaves the environment of the
-process, and so every other context in it, as it was:
+``pbr`` and ``vrml97`` are the two values. A context class chooses for itself,
+which leaves the environment of the process, and so every other context in it,
+as it was:
 
 .. code-block:: python
 
    class MyContext(BaseContext):
-       renderer = 'pbr'
+       renderer = 'vrml97'
+
+A ``ContextDefinition`` carries the choice as its ``renderer`` field, whose
+default is the environment's value. The class attribute outranks the field.
+
+A VRML97 ``Material`` drawn by the PBR renderer is converted: its diffuse
+colour becomes the base colour and its shininess sets the roughness. Lighting
+is computed in linear light and the scene has a flat ambient term, so such a
+scene is paler than under the VRML97 renderer, and a floor the lights do not
+reach is dark grey rather than black.
 
 PBR needs the core profile, which is the default. If the PBR renderer cannot
 start, the plain :doc:`core renderer <renderpasses>` is used instead.
@@ -279,6 +291,17 @@ The most used fields are ``baseColor``, ``metallic``, ``roughness``,
 ``ior``, and the transparency controls ``alphaMode`` (``OPAQUE``, ``MASK`` or
 ``BLEND``) and ``alphaCutoff``. VRML97 ``Material`` nodes are converted to
 metallic/roughness automatically, so a scene can mix the two without changes.
+
+A VRML97 ``Appearance`` keeps its maps beside the material rather than in it,
+and the PBR renderer reads them from there: the appearance's ``texture``
+(``ImageTexture`` or ``PixelTexture``) is the base colour map, multiplying the
+``Material``'s ``diffuseColor`` as it does under the VRML97 renderer, and its
+``textureTransform`` is that map's UV transform.
+``pbrmaterial.pbr_material(appearance)`` returns the material the renderer
+draws an appearance with: a ``PBRMaterial`` as itself, and any other
+appearance as an ``AppearanceMaterial`` holding its texture, transform and
+converted factors. A change to any of those fields is drawn from the next
+frame.
 
 .. rst-class:: technical
 

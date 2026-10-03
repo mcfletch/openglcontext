@@ -363,7 +363,7 @@ placed exactly on the target when it arrives. What stands on it is carried.
    door = KinematicMover(world, door_body.index, speed=1.5)
    plate = manager.events.occupancy(plate_body)
 
-   def OnIdle(self):
+   def OnIdle(self, *arguments):
        x, y, z = DOOR_SHUT
        door.target = (x, y + 2.2, z) if plate.occupied else DOOR_SHUT
        door.update(dt)

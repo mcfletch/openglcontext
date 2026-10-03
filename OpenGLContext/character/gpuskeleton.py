@@ -167,7 +167,7 @@ class _Buffer:
         from OpenGL.GL import glDeleteBuffers
         if self.name:
             try:
-                glDeleteBuffers(1, [self.name])
+                glDeleteBuffers(1, np.array([self.name], dtype=np.uint32))
             except Exception:
                 pass
             self.name = 0

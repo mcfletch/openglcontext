@@ -147,7 +147,7 @@ def _free_render_data(render_data: Any) -> None:
         return
     tex, vert_vbo, index_vbo, program, locations, vao = render_data
     try:
-        glDeleteTextures([tex])
+        glDeleteTextures(1, np.array([tex], dtype=np.uint32))
     except Exception as err:
         log.debug("HDR skybox texture teardown: %s", err)
     for buffer in (vert_vbo, index_vbo):
@@ -156,7 +156,7 @@ def _free_render_data(render_data: Any) -> None:
         except Exception as err:
             log.debug("HDR skybox buffer teardown: %s", err)
     try:
-        glDeleteVertexArrays(1, [vao])
+        glDeleteVertexArrays(1, np.array([vao], dtype=np.uint32))
     except Exception as err:
         log.debug("HDR skybox VAO teardown: %s", err)
 

@@ -34,6 +34,7 @@ the depth buffer they share.
 """
 from __future__ import annotations
 
+import numpy as np
 import logging
 from dataclasses import dataclass
 from collections.abc import Callable, Hashable, Iterable
@@ -326,11 +327,11 @@ class CaptureTarget:
         """Let go of the GL objects; the next capture makes them again."""
         try:
             if self._fbo is not None:
-                glDeleteFramebuffers(1, [self._fbo])
+                glDeleteFramebuffers(1, np.array([self._fbo], dtype=np.uint32))
             if self._depth is not None:
-                glDeleteRenderbuffers(1, [self._depth])
+                glDeleteRenderbuffers(1, np.array([self._depth], dtype=np.uint32))
             if self.cube is not None:
-                glDeleteTextures([self.cube])
+                glDeleteTextures(1, np.array([self.cube], dtype=np.uint32))
         except Exception as err:     # pragma: no cover - teardown after the context
             log.debug('zone capture target teardown: %s', err)
         self.cube = self._fbo = self._depth = None

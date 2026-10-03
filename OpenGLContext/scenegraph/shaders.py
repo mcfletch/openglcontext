@@ -1,5 +1,6 @@
 """Shader node implementation"""
 
+import numpy as np
 import contextlib
 import traceback
 from functools import reduce
@@ -877,7 +878,7 @@ class ShaderGeometry(shaders.ShaderGeometry):
         finally:
             glBindVertexArray(0)
             if transient:
-                glDeleteVertexArrays(1, [vao])
+                glDeleteVertexArrays(1, np.array([vao], dtype=np.uint32))
 
     def sortKey(self, mode: Any, matrix: Any) -> tuple[Any, ...]:
         """Produce the sorting key for this shape's appearance/shaders/etc"""

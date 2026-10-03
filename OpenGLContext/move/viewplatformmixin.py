@@ -73,7 +73,7 @@ class ViewPlatformMixin(PhysicsWalkMixin, _Host):
     platform: Any = None
     movementManager: Any = None
     slider: Any = None
-    initialPosition = (0,0,10)
+    initialPosition: tuple[float, float, float] = (0,0,10)
     initialOrientation = (0,1,0,0)
     #: Sampled key/pointer state, built on demand.  See
     #: :mod:`OpenGLContext.events.inputstate`.

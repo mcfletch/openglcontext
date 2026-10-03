@@ -61,7 +61,8 @@ class Inline(basenodes.Inline):
     ) -> list[Any]:
         """Choose child from level that is at appropriate range"""
         if self.scenegraph:
-            return self.scenegraph.children
+            children: list[Any] = self.scenegraph.children
+            return children
         return []
     url = InlineURLField(
         'url', 1, list

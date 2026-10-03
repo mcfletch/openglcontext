@@ -96,8 +96,8 @@ PATHS = [
         each of the three formats, animating it, playing the clips a rigged
         model was authored with, and walking a character along a route.""",
         [
-            'getting_a_context',
-            'using_gltf_model',
+            'tutorials/core_context/getting_a_context',
+            'tutorials/core_context/loading_gltf_model',
             'using_vrml97',
             'using_obj',
             'using_animation',

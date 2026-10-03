@@ -38,7 +38,7 @@ class VRMLSceneMixin(_Host):
         sg -- the scenegraph :meth:`load` read, or None
     """
 
-    initialPosition = (0, 0, 10)
+    initialPosition: tuple[float, float, float] = (0, 0, 10)
     USE_FRUSTUM_CULLING = 1
     USE_OCCLUSION_CULLING = 0
     sg: Any = None

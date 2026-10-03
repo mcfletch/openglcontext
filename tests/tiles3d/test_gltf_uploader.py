@@ -168,7 +168,7 @@ def test_release_deletes_gl_buffers_and_textures(monkeypatch):
     group = _FakeGroup([_FakeShape(geo)])
 
     deleted_textures = []
-    monkeypatch.setattr(gl, 'glDeleteTextures', lambda ids: deleted_textures.extend(ids))
+    monkeypatch.setattr(gl, 'glDeleteTextures', lambda count, ids: deleted_textures.extend(ids.tolist()))
     monkeypatch.setattr(ctxmod, 'getCurrentContext', lambda: ctx)
 
     up, drawable, nbytes = _upload_group(group)
@@ -195,7 +195,7 @@ def test_dispose_is_idempotent(monkeypatch):
     group = _FakeGroup([_FakeShape(geo)])
 
     calls = []
-    monkeypatch.setattr(gl, 'glDeleteTextures', lambda ids: calls.append(ids))
+    monkeypatch.setattr(gl, 'glDeleteTextures', lambda count, ids: calls.append(ids))
     monkeypatch.setattr(ctxmod, 'getCurrentContext', lambda: ctx)
 
     up, drawable, _ = _upload_group(group)

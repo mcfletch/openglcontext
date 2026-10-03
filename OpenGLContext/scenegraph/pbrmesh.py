@@ -196,7 +196,7 @@ class _MeshGPU(object):
             vao = getattr(self, attr, None)
             if vao:
                 try:
-                    glDeleteVertexArrays(1, [vao])
+                    glDeleteVertexArrays(1, np.array([vao], dtype=np.uint32))
                 except Exception:
                     pass
                 setattr(self, attr, empty)
@@ -718,7 +718,7 @@ class PBRMesh(node.Node):
         ids, q[:] = q[:], []
         for vao in ids:
             try:
-                glDeleteVertexArrays(1, [vao])
+                glDeleteVertexArrays(1, np.array([vao], dtype=np.uint32))
             except Exception:
                 pass
 

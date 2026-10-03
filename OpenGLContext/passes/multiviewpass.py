@@ -156,7 +156,7 @@ class MultiviewPassMixin( PassResources ):
         table, self._viewTable = self._viewTable, None
         if table is not None:
             try:
-                glDeleteBuffers( 1, [table] )
+                glDeleteBuffers( 1, numpy.array([table], dtype=numpy.uint32))
             except Exception:
                 log.debug( 'deleting the view table failed', exc_info=True )
         super().disposeResources()

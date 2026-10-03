@@ -503,12 +503,12 @@ class TerrainViewer(_ContextBase):
             self.terrain.update_for_camera(eye, self.getViewPort()[1] or 700,
                                            view_projection=self._view_projection(eye))
 
-    def OnIdle(self, *args: Any) -> int:
+    def OnIdle(self, *arguments: Any) -> int:
         if getattr(self, "avatar", None) is None:
             return 0
         # The per-frame walk/fly movement loop below needs a live navigator +
         # window; it is driven by the terrain render/subprocess tests.
-        return self._on_idle_move(*args)  # pragma: no cover - interactive movement loop
+        return self._on_idle_move(*arguments)  # pragma: no cover - interactive movement loop
 
     def _on_idle_move(self, *args: Any) -> int:  # pragma: no cover - interactive loop
         now = time.time()

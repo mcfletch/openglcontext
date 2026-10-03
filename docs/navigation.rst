@@ -302,7 +302,7 @@ gets a ``NavigationManager`` and drives it once a frame:
 
 .. code-block:: python
 
-   def OnIdle(self, *args):
+   def OnIdle(self, *arguments):
        self.updateNavigation(dt)          # settle the mode, give it the frame
        return 1
 

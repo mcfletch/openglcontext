@@ -375,17 +375,17 @@ def delete_gl(vaos: Iterable[int] = (), buffers: Iterable[int] = (),
     """Delete GL objects, tolerating already-freed handles / no current context."""
     for vao in vaos:
         try:
-            glDeleteVertexArrays(1, [vao])
+            glDeleteVertexArrays(1, np.array([vao], dtype=np.uint32))
         except Exception:
             pass
     for buf in buffers:
         try:
-            glDeleteBuffers(1, [buf])
+            glDeleteBuffers(1, np.array([buf], dtype=np.uint32))
         except Exception:
             pass
     for tex in textures:
         try:
-            glDeleteTextures([tex])
+            glDeleteTextures(1, np.array([tex], dtype=np.uint32))
         except Exception:
             pass
     for prog in programs:

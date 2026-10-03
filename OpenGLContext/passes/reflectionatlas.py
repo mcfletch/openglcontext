@@ -27,6 +27,7 @@ is read from.
 """
 from __future__ import annotations
 
+import numpy as np
 import contextlib
 import math
 from collections.abc import Iterable, Iterator
@@ -250,15 +251,15 @@ class ReflectionAtlas:
         """Give back the atlas's GL names; the next use allocates again."""
         from OpenGL import GL as gl
         if self.framebuffer:
-            gl.glDeleteFramebuffers(1, [self.framebuffer])
+            gl.glDeleteFramebuffers(1, np.array([self.framebuffer], dtype=np.uint32))
         if self.texture:
-            gl.glDeleteTextures([self.texture])
+            gl.glDeleteTextures(1, np.array([self.texture], dtype=np.uint32))
         if self.depth:
-            gl.glDeleteRenderbuffers(1, [self.depth])
+            gl.glDeleteRenderbuffers(1, np.array([self.depth], dtype=np.uint32))
         if self._kept_framebuffer:
-            gl.glDeleteFramebuffers(1, [self._kept_framebuffer])
+            gl.glDeleteFramebuffers(1, np.array([self._kept_framebuffer], dtype=np.uint32))
         if self.kept:
-            gl.glDeleteTextures([self.kept])
+            gl.glDeleteTextures(1, np.array([self.kept], dtype=np.uint32))
         self.framebuffer = self.texture = self.depth = 0
         self.kept = self._kept_framebuffer = 0
         self.size = (0, 0)

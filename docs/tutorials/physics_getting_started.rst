@@ -67,7 +67,7 @@ Step the world from real elapsed time and let it write the poses back onto the
            self.scene.advance(0.0)
            self.sg = self.scene.scene_graph()
            self._last = time.time()
-       def OnIdle(self, *args):
+       def OnIdle(self, *arguments):
            now = time.time()
            self.scene.advance(min(now - self._last, 0.05))   # clamp the spiral of death
            self._last = now

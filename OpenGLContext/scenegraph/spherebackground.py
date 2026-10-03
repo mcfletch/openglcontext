@@ -1,4 +1,5 @@
 """Gradient-sphere background node"""
+import numpy as np
 import os
 from typing import Any, Optional
 
@@ -470,7 +471,7 @@ class _SphereBackground( object ):
         finally:
             # Restore state
             glBindVertexArray(0)
-            glDeleteVertexArrays(1, [vao])
+            glDeleteVertexArrays(1, np.array([vao], dtype=np.uint32))
             if depth_test_enabled:
                 glEnable(GL_DEPTH_TEST)
             if cull_face_enabled:

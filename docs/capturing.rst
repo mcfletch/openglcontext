@@ -110,7 +110,7 @@ for a scene to settle first. Call either from ``presentFrame``:
                self.OnQuit()
            return super().presentFrame()
 
-       def OnIdle( self, event=None ):
+       def OnIdle(self, *arguments):
            self.triggerRedraw( 1 )       # a still scene draws no more frames by itself
 
 ``delay`` is a minimum in seconds and ``min_frames`` a minimum in frames;

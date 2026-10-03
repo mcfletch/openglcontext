@@ -11,7 +11,7 @@ one and hands the context to it.
 from collections.abc import Callable
 from typing import Any, Optional
 
-from OpenGLContext import contextresources
+from OpenGLContext import contextresources, renderoptions
 from OpenGLContext.passes import viewpointbinding
 import logging
 log = logging.getLogger( __name__ )
@@ -72,16 +72,18 @@ def _core_flatpass_class( context: Any = None ) -> type:
     would otherwise break plain core rendering for every user, PBR or not. The PBR
     path is attempted defensively and falls back to the base core ``FlatPass``.
     """
-    want_pbr = getattr( context, 'renderer', None ) == 'pbr' or getattr(
+    # What the context's class asks for outranks its definition, whose field
+    # always holds a value (the environment's, or PBR).
+    explicit = getattr( context, 'renderer', None ) or getattr(
         getattr(context,'contextDefinition',None),
         'renderer',
         None
-    ) == 'pbr'
-    try:
-        from OpenGLContext.passes.pbrpass import renderer_is_pbr
-        want_pbr = want_pbr or renderer_is_pbr()
-    except Exception as err:
-        log.warning("PBR renderer detection failed (%s); using plain core", err)
+    )
+    if explicit is None:
+        # No definition to ask: the environment names the renderer, and PBR
+        # where it names none.
+        explicit = renderoptions.env_text( 'OPENGLCONTEXT_RENDERER', 'pbr' ).lower()
+    want_pbr = explicit == 'pbr'
     if want_pbr:
         try:
             from OpenGLContext.passes.pbrpass import PBRPass
