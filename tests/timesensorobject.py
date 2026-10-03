@@ -4,7 +4,6 @@ from OpenGLContext.context import Context as BaseContext
 import os
 import sys
 from OpenGLContext.events.timer import Timer
-from OpenGLContext.loaders.loader import Loader
 
 class TestContext( BaseContext ):
     """Context to load wrls/box.wrl and watch routing changes
@@ -18,7 +17,11 @@ class TestContext( BaseContext ):
     rot = 6.283
     def OnInit( self ):
         """Load the image on initial load of the application"""
-        self.sg = Loader.load( os.path.join("wrls","timesensor.wrl") )
+        self.sceneLoader.load( os.path.join("wrls","timesensor.wrl"),
+                               on_loaded=self.OnLoaded )
+    def OnLoaded( self, request ):
+        """Mount the scene when the loader has read it"""
+        self.sg = request.result
 ##		self.trans = self.sg.getDEF( "Box01" )
 ##		self.timesensor = self.sg.getDEF( "Timer" )
 ##		timer = self.timesensor.getTimer( self )

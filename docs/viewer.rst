@@ -812,8 +812,9 @@ Each of these can also be used by a context that is not a viewer.
      - The launch menu and the browse screen, as plain :doc:`panels <overlayui>`.
    * - ``viewer.screens``
      - The key that opens each screen, and the action taken when one closes.
-   * - ``viewer.asyncscene``
-     - Loading off the render thread, for any format.
+   * - ``loaders.sceneloader``
+     - Loading off the render thread, for any format: the ``SceneLoader``
+       every context holds. See :ref:`the scene loader <scene-loader>`.
    * - ``viewer.framing``
      - Camera placement to fit an object: arithmetic only, no GL.
    * - ``viewer.environment``
@@ -834,8 +835,13 @@ through ``OpenGLContext.move.physicswalk``; see :ref:`Walking any scene
 Adding a format
 ---------------
 
-A format is an *adapter*: a class that reads one kind of source and returns a
-``ViewerScene``. The rest of the viewer does not change.
+A format is an *adapter*: a ``SceneReader`` (see :ref:`Formats <scene-loader>`)
+that can also say what a viewer needs to show what it read. The same registration
+serves the viewer and the scene loader, which read a source with ``read()``; the
+viewer then asks the adapter to ``present()`` the result as a ``ViewerScene``.
+A format registered as a plain reader, such as a game's levels, is read by the
+scene loader and is not offered by the viewer. The rest of the viewer does not
+change.
 
 .. code-block:: python
 
@@ -845,8 +851,12 @@ A format is an *adapter*: a class that reads one kind of source and returns a
        name = 'stl'
        recentres = True         # a model may be moved to the middle of the frame
 
-       def load( self, source ):
+       def read( self, source ):
            # Runs on a worker thread: no GL here.
+           return parse_stl( source )          # what the format's loader makes
+
+       def present( self, native ):
+           # Runs on the render thread: measure and wrap, do not read.
            return ViewerScene( group = ..., center = ..., radius = ... )
 
 Register it in the plugin registry, with the suffixes and content types it
@@ -856,6 +866,13 @@ handles, alongside the loader, context and node registrations:
 
    from OpenGLContext.plugins import Adapter
    Adapter( 'stl', 'mypackage.stl.STLAdapter', ['.stl', 'model/stl'] )
+
+``read()`` returns what the format's own loader produces, which is what
+``SceneLoader`` gives its callers. ``present()`` turns that into a
+``ViewerScene``; leave it out where the result already answers the questions
+below, as a ``GLTFScene`` does. ``load()`` is ``present( read( source ) )``.
+A format that can also be read from bytes sets ``accepts_content = True`` and
+implements ``read_content( data, name )``.
 
 A ``ViewerScene`` holds:
 

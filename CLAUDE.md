@@ -97,11 +97,21 @@ OpenGLContext/
 ├── events/           # Cross-backend event generation and dispatch -- docs/eventmodel.rst
 │   ├── framestep.py  # A simulation's time step each frame, from the clock:
 │   │                 # the longest step and a frame cap -- no GL
+│   ├── renderqueue.py  # Calls background threads queue to be made on the
+│   │                 # render thread before OnIdle -- docs/loading.rst#render-queue
 │   └── wheel.py      # Rotation reports into whole notches, for the backends
 │                     # whose toolkit states a detent size
 ├── loaders/          # File formats into the scenegraph -- docs/loading.rst, gltf.rst, vrml97.rst
 │   ├── background.py # The pool a url field hands its fetch to, and the rule
 │   │                 # that its imports are made by the submitting thread
+│   ├── sceneloader.py  # SceneLoader, the loader package's front door and
+│   │                 # the one every Context holds: a path, URL or bytes read
+│   │                 # on a worker, delivered on the render thread
+│   │                 # -- docs/loading.rst#scene-loader
+│   ├── readers.py    # SceneReader: what a format provides to the loader;
+│   │                 # registered under plugins.Adapter
+│   ├── formats.py    # Which registered adapter opens a source: by content
+│   │                 # type, name or content
 │   ├── documentvalues.py  # A document's values, checked: JSONObject, a
 │   │                 # default or a bound and one report, or DocumentError
 │   │                 # for a part the document cannot be read without
@@ -121,6 +131,7 @@ OpenGLContext/
 │   │   └── notices.py   # asset.copyright, exporter extras and
 │   │                 # KHR_xmp_json_ld packets, as Notice records
 │   └── tiles3d/      # Streamed OGC 3D Tiles -- docs/tiles3d.rst
+│                     # (reader.py: the SceneReader registered for it)
 ├── move/             # Camera, movement modes, walking -- docs/navigation.rst
 │   ├── navigationdefinition.py  # Navigation, Views, ViewDefinition: the
 │   │                 # modes and views a definition declares -- no GL
@@ -246,7 +257,7 @@ OpenGLContext/
 │   └── generate.py   # A settings page from a node's fields (UI_HINTS)
 ├── video/            # H.264 capture of the colour buffer -- docs/recording.rst
 ├── viewer/           # The embeddable viewer behind oglc-view -- docs/viewer.rst
-│   └── adapters/     # One per format; what oglc-view dispatches on
+│   └── adapters/     # One per format: read it, and present it to a viewer
 ├── windowsystem/     # The window a Context draws in, one module per toolkit,
 │   │                 # and choose(): which one a definition opens -- docs/backends.rst
 │   ├── base.py       # WindowSystem: the protocol, and the shared main loop
@@ -589,7 +600,7 @@ frame counter times only the inside of `OnDraw`, only for frames that changed
 something, and publishes a *median* — so an application whose simulation lives
 in `OnIdle` can crawl at a few updates a second with no number contradicting
 another. `OpenGLContext.looptrace` measures wall-clock time per **loop
-iteration**, divided among phases that sum to it (`poll`, `repeats`, `idle`,
+iteration**, divided among phases that sum to it (`poll`, `handoff`, `repeats`, `idle`,
 `wait`, `draw`, and `cascade`/`render` inside the draw).
 
 `OPENGLCONTEXT_STALL_MS` sets what counts as a stall (default 50) *and*

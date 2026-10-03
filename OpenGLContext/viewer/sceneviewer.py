@@ -25,10 +25,12 @@ handful of methods meant to be overridden:
 ``prepareSource()``
     Where the scene comes from.  A browser that walks a catalogue has no single
     source and overrides this to nothing.
-``loadScene()``
-    Produce the scene.  Runs on a **worker thread**, so it must not touch GL.
 ``requestInitialScene()``
-    What to load first.
+    What to load first.  :meth:`requestSource` reads a source in the background
+    through the context's :class:`~OpenGLContext.loaders.sceneloader.SceneLoader`,
+    and :meth:`requestScene` runs a producer of your own the same way.
+``loadScene()``
+    Read the scene now, on the calling thread, which a capture needs.
 ``buildScenegraph(scene)``
     Turn a loaded scene into ``self.sg``.  Called again for each new model.
 ``onSceneReady()``
@@ -38,7 +40,7 @@ handful of methods meant to be overridden:
 
 The pieces underneath are useful on their own and live beside this module:
 :mod:`~OpenGLContext.viewer.adapters` (what a source is and how to read it),
-:mod:`~OpenGLContext.viewer.asyncscene` (loading without freezing),
+:class:`~OpenGLContext.loaders.sceneloader.SceneLoader` (loading without freezing),
 :mod:`~OpenGLContext.viewer.framing` (where to put the camera),
 :mod:`~OpenGLContext.viewer.environment` (sky and skybox),
 :mod:`~OpenGLContext.viewer.capture`, and
@@ -48,6 +50,7 @@ interactive context has.
 See [docs/gltf.rst](../../docs/gltf.rst).
 """
 import os
+from collections.abc import Callable
 from typing import (
     TYPE_CHECKING, Any, List, NamedTuple, Optional, Sequence, Tuple, cast,
 )
@@ -63,10 +66,10 @@ from OpenGLContext.viewer import commentary
 from OpenGLContext.viewer import debug
 from OpenGLContext.viewer import environment as env
 from OpenGLContext.viewer import framing
+from OpenGLContext.loaders.sceneloader import LoadRequest, SceneLoader
 from OpenGLContext.viewer.adapters import (
     SceneAdapter, UnknownSourceType, adapter_for, adapter_named,
 )
-from OpenGLContext.viewer.asyncscene import AsyncSceneMixin
 from OpenGLContext.video.recorder import RecordingMixin
 from OpenGLContext.viewer.capture import SettleCaptureMixin
 from OpenGLContext.viewer.options import PlacedLight, ViewerOptions
@@ -157,43 +160,7 @@ if TYPE_CHECKING:
 else:
     _Host = object
 
-class SceneLoaderMixin(AsyncSceneMixin):
-    """Provides scene scene loading mechanisms needed for loading any file
-    
-    Isolates the concern "load a scene" from "present a scene" such that
-    a newly registered loader can be used to get a SceneGraph regardless
-    of whether the core code is aware of the format.
-    """
-    #: Resolved scene source (path or URL).
-    source: Optional[str] = None
-    #: How to read it.  Chosen from the source by :meth:`prepareSource`; a host
-    #: with scenes of its own sets one directly.
-    adapter: SceneAdapter = SceneAdapter()
-    #: ``Viewpoint`` nodes for the model's own cameras, in document order.
-    viewpoints: List[Any]
-    #: The scene as the adapter loaded it, kept because it is what knows how to
-    #: build an animation player wired to its own skins and morph targets.
-    scene: Any = None
-    if TYPE_CHECKING:
-        sg: Any
-        platform: Any
-        contextDefinition: Any
-        physicsYaw: float
-        physicsWalking: bool
-
-        def addEventHandler(self, eventType: str, *arguments: Any,
-                            **named: Any) -> Any: ...
-        def triggerRedraw(self, force: int = 0) -> Any: ...
-        def getSceneGraph(self) -> Any: ...
-        def getViewPlatform(self) -> Any: ...
-        def setupPhysics(self, enable: bool = False) -> bool: ...
-        def enablePhysics(self, on: bool = True) -> bool: ...
-        def stepPhysics(self, dt: Optional[float] = None) -> None: ...
-        def moveAvatarToViewpoint(self, viewpoint: Any) -> None: ...
-        def getNavigation(self) -> Any: ...
-
-
-class SceneViewerMixin( SceneLoaderMixin, CaptionMixin,
+class SceneViewerMixin( CaptionMixin,
                        SettleCaptureMixin, RecordingMixin,
                        ViewerScreensMixin, _Host):
     """Showing one scene: assembly, cameras, animation and the caption.
@@ -262,6 +229,23 @@ class SceneViewerMixin( SceneLoaderMixin, CaptionMixin,
                 arrangement=str(options.views or cls.multiViewArrangement),
                 switching=['keys'] if recording else ['keys', 'controls']))
 
+    #: Resolved scene source (path or URL).
+    source: Optional[str] = None
+    #: How to read it.  Chosen from the source by :meth:`prepareSource`; a host
+    #: with scenes of its own sets one directly.
+    adapter: SceneAdapter = SceneAdapter()
+    #: ``Viewpoint`` nodes for the model's own cameras, in document order.
+    viewpoints: List[Any]
+    #: The scene as the adapter loaded it, kept because it is what knows how to
+    #: build an animation player wired to its own skins and morph targets.
+    scene: Any = None
+    #: Whether a scene has been built, as opposed to the empty one shown while
+    #: the first is read.
+    sceneLoaded: bool = False
+    #: The load in flight.  A new one cancels it, so what ends up on screen is
+    #: the scene asked for last and not whichever finished last.
+    _sceneRequest: Optional[LoadRequest] = None
+
     #: Radius of the loaded model, which sizes the framing and the light rig.
     radius: float = 1.0
     #: The transform the whole model hangs from, and which the turntable turns.
@@ -283,6 +267,7 @@ class SceneViewerMixin( SceneLoaderMixin, CaptionMixin,
     libraryEntry: Any = None
 
     if TYPE_CHECKING:
+        sceneLoader: SceneLoader
         sg: Any
         platform: Any
         contextDefinition: Any
@@ -319,7 +304,6 @@ class SceneViewerMixin( SceneLoaderMixin, CaptionMixin,
         self._animationClock = 0.0
         self._animationLast: Optional[float] = None
         self._player: Any = None
-        self.setupAsyncScene()
         self.setupCaption()
         self.prepareSource()
         self.setupRecording(
@@ -389,18 +373,24 @@ class SceneViewerMixin( SceneLoaderMixin, CaptionMixin,
         except UnknownSourceType as error:
             commentary.warn("ERROR: %s\n" % (error,))
             raise SystemExit(2) from None
-        self.adapter.configure(self.options)
 
     def loadScene(self) -> Any:
-        """Produce the scene to show.  **Runs on a worker thread: no GL here.**"""
+        """Read the scene to show, here and now, as a :class:`ViewerScene`.
+
+        On the calling thread: for a capture, which has to have the model
+        before the first frame.  The window's own loads go through
+        :meth:`requestSource`.
+        """
         commentary.say("Loading %s ...\n" % self.source)
-        return self.adapter.load(cast(str, self.source))
+        request = self.sceneLoader.load_now(
+            cast(str, self.source), reader=self.adapter, options=self.options)
+        return self.adapter.present(request.result)
 
     def requestInitialScene(self) -> None:
         """Start loading whatever is shown first, if there is anything."""
         if self.source is None:
             return
-        self.requestScene(self.loadScene, self.loadingLabel())
+        self.requestSource(self.source)
 
     # -- opening something else -------------------------------------------
     def openSource(self, source: str, format: Optional[str] = None) -> bool:
@@ -408,9 +398,8 @@ class SceneViewerMixin( SceneLoaderMixin, CaptionMixin,
 
         The load runs in the background like the first one does, so the window
         keeps drawing the scene it already has while the next one arrives, and
-        :class:`~OpenGLContext.viewer.asyncscene.AsyncSceneMixin` drops a load
-        that a later one has overtaken -- which is what makes clicking quickly
-        through a library safe.
+        :meth:`requestSource` drops a load that a later one has overtaken, which
+        is what makes clicking quickly through a library safe.
         """
         try:
             resolved = resolve_source(source)
@@ -437,8 +426,7 @@ class SceneViewerMixin( SceneLoaderMixin, CaptionMixin,
         # line -- is leaving the shelf behind, so there is no longer a list to
         # step along.  openEntry sets it again straight after this.
         self.libraryEntry = None
-        adapter.configure(self.options)
-        self.requestScene(self.loadScene, self.loadingLabel())
+        self.requestSource(resolved)
         return True
 
     def openEntry(self, entry: Any) -> bool:
@@ -512,7 +500,58 @@ class SceneViewerMixin( SceneLoaderMixin, CaptionMixin,
         return "Loading %s ..." % os.path.basename(self.source or 'scene')
 
     # -- the handover from the loader thread ------------------------------
+    def requestSource(self, source: str, label: Optional[str] = None) -> None:
+        """Read ``source`` with :attr:`adapter` in the background and show it.
+
+        The scene reaches :meth:`applyLoadedScene` on the render thread, or the
+        exception reading it raised reaches :meth:`applyFailedLoad`; the window
+        draws what it already has meanwhile.  One scene is being loaded at a
+        time: a request cancels the one before it, so someone paging through a
+        catalogue faster than it downloads ends on the model they stopped on.
+        ``label`` is what the caption says meanwhile, by default
+        :meth:`loadingLabel`.
+        """
+        commentary.say("Loading %s ...\n" % source)
+        self._supersede()
+        label = label if label is not None else self.loadingLabel()
+        self.onSceneLoading(label)
+        self._sceneRequest = self.sceneLoader.load(
+            source, reader=self.adapter, options=self.options, label=label,
+            on_loaded=self._sourceArrived, on_failed=self._sceneFailed)
+
+    def requestScene(self, produce: Callable[[], Any], label: str = '') -> None:
+        """Load a scene that is not a source, and show it when it arrives.
+
+        ``produce`` is a no-argument callable run on a worker: it builds the
+        :class:`ViewerScene` and **must not touch GL**.  Otherwise as
+        :meth:`requestSource`.
+        """
+        self._supersede()
+        self.onSceneLoading(label)
+        self._sceneRequest = self.sceneLoader.submit(
+            produce, label=label,
+            on_loaded=self._sceneArrived, on_failed=self._sceneFailed)
+
+    def _supersede(self) -> None:
+        if self._sceneRequest is not None:
+            self._sceneRequest.cancel()
+
+    def _sourceArrived(self, request: LoadRequest) -> None:
+        try:
+            scene = self.adapter.present(request.result)
+        except Exception as error:      # a result that cannot be shown is a failed load
+            self.applyFailedLoad(error)
+            return
+        self.applyLoadedScene(scene)
+
+    def _sceneArrived(self, request: LoadRequest) -> None:
+        self.applyLoadedScene(request.result)
+
+    def _sceneFailed(self, request: LoadRequest) -> None:
+        self.applyFailedLoad(request.error)
+
     def onSceneLoading(self, label: str) -> None:
+        """A load has started: show ``label`` while it is read."""
         self.overlayText = label
         self.overlayError = False
 
@@ -1265,10 +1304,6 @@ class SceneViewerMixin( SceneLoaderMixin, CaptionMixin,
         return bool(self.adapter.update(self))
 
     def OnIdle(self, *arguments: Any) -> int:  # pragma: no cover - interactive idle loop
-        # A finished background load is applied here, on the render thread,
-        # before anything else looks at the scenegraph.
-        if self.pollPendingScene():
-            return 1
         streamed = self.advanceStreaming()
         animated = self.advanceAnimation()
         hooked = self.advanceHooks()

@@ -378,7 +378,7 @@ engine's clock. These things fall outside that:
   identical, which is usually enough to reproduce the problem.
 
 Scenes loaded in the background are handled: a scene loaded off the render
-thread (``AsyncSceneMixin``) is added to the world on the same frame as in
+thread (the context's ``sceneLoader``) is added to the world on the same frame as in
 the recording. If it is ready early it is held back, and if it is late the
 replay waits for it.
 

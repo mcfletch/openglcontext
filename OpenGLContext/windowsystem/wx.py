@@ -430,6 +430,7 @@ class WxWindowSystem(WarpedPointer, WindowSystem):
         """Run the context's idle hook and draw, then ask for more idle time"""
         context = self.context
         if self.window is not None and context.initialised:
+            context.runRenderQueue()
             context.pumpKeyRepeats()
             context.OnIdle()
             context.drawPoll()

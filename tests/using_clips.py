@@ -21,7 +21,6 @@ hung on.'''
 from OpenGLContext.events.systemtime import systemTime
 from OpenGLContext.character.model import CharacterModel
 from OpenGLContext.loaders.gltf import sample_model_url
-from OpenGLContext.loaders.resolver import fetch_to_cache
 from OpenGLContext.scenegraph.basenodes import (
     Background, DirectionalLight, Transform, sceneGraph,
 )
@@ -37,9 +36,25 @@ class TestContext(BaseContext):
     initialOrientation = (-1, 0, 0, 0.02)
 
     def OnInit(self):
-        '''Loading a character is loading a glTF file: ``CharacterModel.load``
-        takes a path, a URL or the bytes of a ``.glb``.'''
-        self.model = CharacterModel.load(fetch_to_cache(sample_model_url(MODEL)))
+        '''Loading a character is loading a glTF file: the context's
+        ``sceneLoader`` reads it on a worker thread, and ``CharacterModel``
+        takes the scene it answers.  The window draws the empty room until
+        ``OnLoaded`` is called.'''
+        self.model = None
+        self.index = 0
+        self.sg = sceneGraph(children=[
+            Background(skyColor=[(0.16, 0.18, 0.21)]),
+            DirectionalLight(direction=(-0.4, -0.7, -0.5)),
+        ])
+        self.sceneLoader.load(sample_model_url(MODEL), on_loaded=self.OnLoaded)
+        for key in ('1', '2', '3'):
+            self.addEventHandler('keypress', name=key, function=self.OnChoose)
+        self.addEventHandler('keypress', name=' ', function=self.OnNext)
+        self.last = systemTime()
+        print(__doc__)
+
+    def OnLoaded(self, request):
+        self.model = CharacterModel.from_scene(request.result)
         print('%s carries %d clips: %s' % (
             MODEL, len(self.model.clips), ', '.join(sorted(self.model.clips)),
         ))
@@ -47,25 +62,19 @@ class TestContext(BaseContext):
         how many seconds to take blending out of whatever was playing, so a
         walk becomes a run over a quarter of a second rather than switching
         between poses in one frame.'''
-        self.index = 0
         self.model.play(CLIPS[self.index], loop=True)
         '''``model.group`` is the renderable subtree, mounted in the scene
         like any other node.'''
-        self.sg = sceneGraph(children=[
-            Background(skyColor=[(0.16, 0.18, 0.21)]),
-            DirectionalLight(direction=(-0.4, -0.7, -0.5)),
-            Transform(rotation=(0, 1, 0, 0.7), children=[self.model.group]),
-        ])
-        for key in ('1', '2', '3'):
-            self.addEventHandler('keypress', name=key, function=self.OnChoose)
-        self.addEventHandler('keypress', name=' ', function=self.OnNext)
+        self.sg.children = list(self.sg.children) + [
+            Transform(rotation=(0, 1, 0, 0.7), children=[self.model.group])]
         self.last = systemTime()
-        print(__doc__)
 
     def OnIdle(self, *arguments):
         '''The clips advance when they are told how much time has passed.
         ``update`` steps every layer and poses the skeleton; nothing moves
         without it, and a paused game is a game that stops calling it.'''
+        if self.model is None:
+            return
         now = systemTime()
         self.model.update(now - self.last)
         self.last = now
@@ -86,6 +95,8 @@ class TestContext(BaseContext):
         clips at once -- a walk on the legs and a wave on the arm -- are two
         *layers*, which is what :doc:`the characters page </characters>`
         covers.'''
+        if self.model is None:
+            return
         name = CLIPS[self.index]
         self.model.play(name, loop=True, fade=0.25)
         print('playing %s' % (name,))

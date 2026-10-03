@@ -73,19 +73,20 @@ class TestPrepareSource:
 
 class TestLoadScene:
     def test_successful_load_sets_the_label(self, monkeypatch):
-        monkeypatch.setattr(D.gltf, 'load_sample', lambda name: 'SCENE:%s' % name)
         inst = _inst()
+        inst.sceneLoader = types.SimpleNamespace(
+            load_now=lambda url, format: types.SimpleNamespace(result='SCENE:%s' % url))
         inst.catalog = _catalog('Duck')
         inst.index = 0
         scene = inst.loadScene()
-        assert scene == 'SCENE:Duck'
+        assert scene == 'SCENE:%s' % D.gltf.sample_model_url('Duck')
         assert inst._ref_current == 'Duck' and inst.overlayError is False
 
     def test_failed_load_flags_the_overlay(self, monkeypatch):
-        def boom(_name):
+        def boom(_url, format):
             raise RuntimeError('decode error line one\nline two')
-        monkeypatch.setattr(D.gltf, 'load_sample', boom)
         inst = _inst()
+        inst.sceneLoader = types.SimpleNamespace(load_now=boom)
         inst.catalog = _catalog('Broken')
         inst.index = 0
         assert inst.loadScene() is None
@@ -98,11 +99,13 @@ class TestRequestCurrentModel:
         inst.catalog = _catalog('Duck', 'Helmet')
         inst.index = 1
         recorded = {}
-        inst.requestScene = lambda produce, label: recorded.update(
-            produce=produce, label=label)
+        inst.requestSource = lambda source, label: recorded.update(
+            source=source, label=label)
         inst._request_current_model()
         assert inst._pending_name == 'Helmet'
+        assert recorded['source'] == D.gltf.sample_model_url('Helmet')
         assert 'Helmet' in recorded['label']
+        assert inst.adapter.name == 'gltf'
 
     def test_request_initial_scene_pulls_the_current_model(self):
         inst = _inst()

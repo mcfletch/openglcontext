@@ -36,11 +36,13 @@ def main():
     ctx = view.TestContext()
 
     # The interactive path loads the model on a background thread and applies it
-    # (and, in walk mode, enables physics) from OnIdle. Pump the idle handler until
-    # the real scene has replaced the empty "Loading..." placeholder, so the
-    # assertions below see the finished state rather than a load-in-progress.
+    # (and, in walk mode, enables physics) from the render queue, which the main
+    # loop runs before OnIdle. Run both until the real scene has replaced the
+    # empty "Loading..." placeholder, so the assertions below see the finished
+    # state rather than a load-in-progress.
     deadline = time.time() + 30.0
     while not ctx.sceneLoaded and time.time() < deadline:
+        ctx.runRenderQueue()
         ctx.OnIdle()
         time.sleep(0.02)
     assert ctx.sceneLoaded, 'model did not finish loading within 30s'

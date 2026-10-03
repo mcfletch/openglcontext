@@ -268,6 +268,8 @@ class WindowSystem(abc.ABC):
                     self.pump()
                 if not self.running():
                     return False
+            with trace.phase('handoff'):
+                context.runRenderQueue()
             with trace.phase('repeats'):
                 context.pumpKeyRepeats()
             with trace.phase('idle'):

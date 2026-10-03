@@ -51,8 +51,7 @@ panning and zooming them, with no GL in it.  The layout it builds is what the
 context draws.'''
 from OpenGLContext.multiview.quad import QuadView
 from OpenGLContext.multiview.viewpoints import scene_cameras
-from OpenGLContext.loaders.gltf import load_gltf, sample_model_url
-from OpenGLContext.loaders.resolver import fetch_to_cache
+from OpenGLContext.loaders.gltf import sample_model_url
 from OpenGLContext.passes import renderpass
 from OpenGLContext.scenegraph.basenodes import (
     Background, DirectionalLight, sceneGraph,
@@ -74,20 +73,29 @@ def model_path(arguments):
     for argument in arguments:
         if argument.lower().endswith(('.gltf', '.glb')) and os.path.exists(argument):
             return argument
-    return fetch_to_cache(sample_model_url(MODEL))
+    return sample_model_url(MODEL)
 
 
 class TestContext(BaseContext):
     def OnInit(self):
-        scene = load_gltf(model_path(sys.argv[1:]))
-        '''The loader makes a ``Viewpoint`` for each camera the file defines,
-        standing where that camera stands; mounted beside the model they are
-        the scene's cameras, as a VRML97 world's own Viewpoints would be.'''
+        '''The model is read in the background by the context's scene loader,
+        so the window opens at once; ``OnLoaded`` is called with the scene when
+        it is ready, and the views are built around it there.'''
+        self.quad = None
         self.sg = sceneGraph(children=[
             Background(skyColor=[(0.15, 0.17, 0.2)]),
             DirectionalLight(direction=(-0.4, -0.6, -1.0), intensity=1.0),
-            scene.group,
-        ] + list(scene.viewpoints))
+        ])
+        self.sceneLoader.load(model_path(sys.argv[1:]), on_loaded=self.OnLoaded)
+        print(__doc__)
+
+    def OnLoaded(self, request):
+        scene = request.result
+        '''The loader makes a ``Viewpoint`` for each camera the file defines,
+        standing where that camera stands; mounted beside the model they are
+        the scene's cameras, as a VRML97 world's own Viewpoints would be.'''
+        self.sg.children = (list(self.sg.children) + [scene.group]
+                            + list(scene.viewpoints))
         '''The model is left in its own units and where the file put it; the
         views are fitted to it instead.  ``minimum`` and ``maximum`` are the
         corners of the box around what was loaded.'''
@@ -127,7 +135,6 @@ class TestContext(BaseContext):
         self.addEventHandler('keypress', name=' ', function=self.OnMaximise)
         self.addEventHandler('keypress', name='f', function=self.OnFrame)
         self.addEventHandler('keypress', name='i', function=self.OnStrategy)
-        print(__doc__)
 
     def ProcessEvent(self, event):
         '''*The pointer, and the order it is offered in.*  The furniture
@@ -144,7 +151,7 @@ class TestContext(BaseContext):
         context's own navigation never sees a drag meant for a view.'''
         if self.overlaySinks(event):
             return None
-        if self.quad.handle(event):
+        if self.quad is not None and self.quad.handle(event):
             self.triggerRedraw(1)
             return None
         return super(TestContext, self).ProcessEvent(event)
@@ -154,7 +161,8 @@ class TestContext(BaseContext):
         in the scene and calls this when the set changes.  ``cameras_found``
         points the perspective view through the first of them the first time
         there are any, and keeps the list for each view's *Cameras* menu.'''
-        self.quad.cameras_found(scene_cameras(self.sg))
+        if self.quad is not None:
+            self.quad.cameras_found(scene_cameras(self.sg))
         self.triggerRedraw(1)
 
     def hasMouseMoveHandlers(self):

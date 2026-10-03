@@ -66,7 +66,6 @@ from OpenGLContext import testingcontext
 from OpenGLContext.character.model import CharacterModel
 from OpenGLContext.events.systemtime import systemTime
 from OpenGLContext.loaders.gltf import sample_model_url
-from OpenGLContext.loaders.resolver import fetch_to_cache
 from OpenGLContext.nav import navmesh
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, Color, Coordinate, DirectionalLight, IndexedFaceSet,
@@ -228,11 +227,13 @@ class TestContext(BaseContext):
         self.route = []
         self.rest_until = None
         self._clock = systemTime()
-        self.model = CharacterModel.load(fetch_to_cache(sample_model_url(MODEL)))
+        # The fox is read in the background; it walks once it has arrived.
+        self.model = None
         self.figure = Transform(
             scale=(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE),
-            children=[self.model.group],
+            children=[],
         )
+        self.sceneLoader.load(sample_model_url(MODEL), on_loaded=self.OnLoaded)
 
         shared = Coordinate(point=points)
         children = [
@@ -263,6 +264,12 @@ class TestContext(BaseContext):
               '(max slope %.1f degrees, clearance %.1f m)'
               % (len(self.mesh), self.triangles, navmesh.DEFAULT_MAX_SLOPE,
                  CLEARANCE))
+
+    def OnLoaded(self, request):
+        """The fox has arrived: put it in the scene and send it to its goal."""
+        self.model = CharacterModel.from_scene(request.result)
+        self.figure.children = [self.model.group]
+        self._clock = systemTime()
         self.repath()
 
     def _cells(self):
@@ -284,6 +291,8 @@ class TestContext(BaseContext):
         fixed point, which is what a game asks for: the question is always
         "from here to there".
         """
+        if self.model is None:
+            return
         start = tuple(self.position)
         cells = self.mesh.corridor(start, self.target)
         if not cells:
@@ -325,6 +334,8 @@ class TestContext(BaseContext):
     # -- walking it ------------------------------------------------------
     def OnIdle(self, *arguments):
         """One step of the world: the fox moves, then its body is posed."""
+        if self.model is None:
+            return
         now = systemTime()
         step = min(now - self._clock, 0.1)
         self._clock = now

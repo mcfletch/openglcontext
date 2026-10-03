@@ -3,6 +3,7 @@
 import queue
 import logging
 import time
+import typing
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -11,6 +12,8 @@ from OpenGL._bytes import as_str
 from OpenGLContext.events import (
     keyboardevents, mouseevents, timeeventgeneratormanager,
 )
+if typing.TYPE_CHECKING:
+    from . import timer
 
 log = logging.getLogger(__name__)
 
@@ -352,3 +355,11 @@ class EventHandlerMixin(HeldKeyMixin):
     def getTimeManager(self) -> Any:
         """Get the time-event manager for this context"""
         return self.__timeManager
+
+    def createTimer(self, *args, **named) -> 'timer.Timer':
+        """Create a registered, running Timer with *args and **named"""
+        from .timer import Timer
+        timer = Timer(*args, **named)
+        timer.register(self)
+        timer.start()
+        return timer

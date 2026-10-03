@@ -12,13 +12,12 @@ already answers them and is handed back as it is; a loader that returns
 something else is wrapped in a :class:`ViewerScene`.
 """
 from collections.abc import Iterable, Sequence
-from typing import Any, Optional
+from typing import Any, Optional, cast
+
+from OpenGLContext.loaders.formats import UnknownSourceType
+from OpenGLContext.loaders.readers import SceneReader
 
 __all__ = ['SceneAdapter', 'ViewerScene', 'UnknownSourceType', 'scene_bounds']
-
-
-class UnknownSourceType(ValueError):
-    """No adapter is registered for this source."""
 
 
 def scene_bounds(nodes: Iterable[Any]) -> tuple[tuple[float, float, float], float]:
@@ -114,18 +113,18 @@ class ViewerScene(object):
         return None
 
 
-class SceneAdapter(object):
+class SceneAdapter(SceneReader):
     """How a viewer opens one kind of source.
 
-    Registered under :class:`OpenGLContext.plugins.Adapter` against the
-    suffixes and content types it handles, so a third party adds a format
-    without touching the viewer or this package.  Instantiated per scene: an
-    adapter may keep state for the scene it loaded, which is how a streaming
-    format keeps its runtime alive.
+    A :class:`~OpenGLContext.loaders.readers.SceneReader` that can also say
+    what a viewer needs to show what it read.  Registered under
+    :class:`OpenGLContext.plugins.Adapter` against the suffixes and content
+    types it handles, so a third party adds a format without touching the
+    viewer or this package.  Instantiated per scene: an adapter may keep state
+    for the scene it loaded, which is how a streaming format keeps its runtime
+    alive.  :meth:`read` returns the format's own result and :meth:`present`
+    turns it into a :class:`ViewerScene`.
     """
-
-    #: Registry key, for ``--format`` and for error messages.
-    name: str = ''
 
     #: Whether a scene with no camera of its own may be moved to the origin so
     #: it can be framed.  A *model* may -- its coordinates are arbitrary.  A
@@ -133,23 +132,23 @@ class SceneAdapter(object):
     #: space, and moving it would put the avatar underground.
     recentres: bool = True
 
-    def configure(self, options: Any) -> None:
-        """Take what the viewer's options say about *this kind of* source.
+    def present(self, native: Any) -> ViewerScene:
+        """What :meth:`read` returned, in the shape a viewer consumes.
 
-        Called before :meth:`load`.  Most formats are read the one way there is
-        to read them and want nothing here; a streaming one has a detail target
-        and a memory budget, and a user moving from a per-format command to the
-        one viewer must not lose the controls they had.
+        Runs on the render thread, so it does measuring and wrapping and no
+        reading.  A result that already answers the questions on
+        :class:`ViewerScene` comes back as it is.
         """
+        return cast(ViewerScene, native)
 
-    def load(self, source: str) -> Any:
-        """Read ``source`` and return the scene to show.
+    def load(self, source: str) -> ViewerScene:
+        """Read ``source`` and return the scene to show: :meth:`read`, presented.
 
-        **Runs on a worker thread, so it must not touch GL.**  Everything that
-        uploads is left to the render thread, which is what lets the window keep
-        drawing through a download.
+        For a caller with no :class:`~OpenGLContext.loaders.sceneloader.SceneLoader`;
+        **runs on whatever thread calls it, so off the render thread it must
+        not touch GL.**
         """
-        raise NotImplementedError("%s.load" % (type(self).__name__,))
+        return self.present(self.read(source))
 
     def update(self, viewer: Any) -> bool:
         """Per-frame work for a source that is still arriving.
@@ -160,6 +159,3 @@ class SceneAdapter(object):
         formats -- everything read once from a file -- want nothing here.
         """
         return False
-
-    def shutdown(self) -> None:
-        """Release anything the scene is still holding.  Called on teardown."""

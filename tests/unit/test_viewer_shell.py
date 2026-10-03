@@ -15,6 +15,7 @@ import pytest
 from OpenGLContext.testing.paths import tests_root
 from OpenGLContext.move import modes as movemodes
 from OpenGLContext.viewer import source as viewersource, ViewerOptions
+from OpenGLContext.loaders.sceneloader import LoadRequest, SceneLoader
 from OpenGLContext.viewer.adapters.gltf import GLTFAdapter
 from OpenGLContext.viewer.adapters.vrml import VRMLAdapter
 from OpenGLContext.viewer.library import Entry, Library, MODELS
@@ -38,6 +39,18 @@ class _Platform:
         self.orientation = o
 
 
+class _RecordingLoader(SceneLoader):
+    """A loader that records what the viewer asks it to read, and reads nothing."""
+
+    def __init__(self):
+        super().__init__()
+        self.requested = []
+
+    def load(self, source, **named):
+        self.requested.append((source, named))
+        return LoadRequest(named.get('label', ''), source=source)
+
+
 def _viewer(source=None, **named):
     viewer = ViewerContext.__new__(ViewerContext)
     viewer.options = ViewerOptions(source=source, **named)
@@ -58,9 +71,8 @@ def _viewer(source=None, **named):
     viewer.physicsPlatform = None
     viewer.sceneLoaded = False
     viewer.triggerRedraw = lambda count=1: None  # noqa: ARG005 triggerRedraw's signature
-    viewer.requested = []
-    viewer.requestScene = lambda produce, label='': viewer.requested.append(
-        (produce, label))
+    viewer.sceneLoader = _RecordingLoader()
+    viewer.requested = viewer.sceneLoader.requested
     return viewer
 
 
@@ -80,9 +92,21 @@ class TestOpeningSomethingElse:
         viewer.prepareSource()
         viewer.openSource(VRML_WORLD)
         assert len(viewer.requested) == 1
-        produce, label = viewer.requested[0]
-        assert '3shapes.wrl' in label
-        assert produce().radius > 0, 'and the producer really loads it'
+        source, named = viewer.requested[0]
+        assert source == VRML_WORLD
+        assert '3shapes.wrl' in named['label']
+        assert named['reader'] is viewer.adapter
+
+    def test_what_is_read_is_shown_when_it_arrives(self):
+        viewer = _viewer(GLTF_MODEL)
+        viewer.prepareSource()
+        viewer.sceneLoader = SceneLoader(owner=viewer)
+        shown = []
+        viewer.applyLoadedScene = shown.append
+        viewer.openSource(VRML_WORLD)
+        viewer.sceneLoader.pending[0].wait(5.0)
+        assert viewer.sceneLoader.poll() == 1
+        assert shown[0].radius > 0, 'the world was read and presented for the viewer'
 
     def test_an_archive_holding_a_choice_says_what_it_holds(self, tmp_path, monkeypatch):
         """The listing is the answer to "then what", so the viewer shows it."""

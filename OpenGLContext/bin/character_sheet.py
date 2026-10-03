@@ -165,12 +165,19 @@ class SheetContext(ViewerContext):
         self.plan = self.sheet.plan(self.model)
 
     def _hold(self, point: str, path: str) -> None:
-        """Put a model on one of the character's attachment points."""
+        """Read a model to put on one of the character's attachment points.
+
+        The sheet starts drawing cells once every such model has arrived.
+        """
+        self.sceneLoader.load(
+            path, on_loaded=lambda request: self._attach(point, path, request.result))
+
+    def _attach(self, point: str, path: str, scene: Any) -> None:
+        """Hang a held model on the character."""
         from OpenGLContext.character.attachment import mounted
-        from OpenGLContext.loaders.gltf import load_gltf
         # Through `mounted`, so a model that says where it is held is taken at
         # its word rather than hung on the rig by its own origin.
-        held = mounted(load_gltf(path), point)
+        held = mounted(scene, point)
         if self.model is not None and self.model.attach(point, held) is None:
             sys.stderr.write('%s has no attachment point %r; %s is not shown\n'
                              % (os.path.basename(self.sheet.source), point,
@@ -194,7 +201,7 @@ class SheetContext(ViewerContext):
     def OnIdle(self, *arguments: Any) -> int:
         """Set up the next cell and ask for the frame that shows it."""
         result: int = super(SheetContext, self).OnIdle(*arguments)
-        if self.model is None or self.written:
+        if self.model is None or self.written or self.loadsPending():
             return result
         if self.warmed >= self.WARMUP and len(self.taken) < len(self.plan):
             self.pose(self.model, *self.plan[len(self.taken)])
@@ -203,7 +210,7 @@ class SheetContext(ViewerContext):
 
     def SwapBuffers(self) -> Any:
         """Keep the frame just drawn, before it is swapped away."""
-        if self.model is not None and not self.written:
+        if self.model is not None and not self.written and not self.loadsPending():
             if self.warmed < self.WARMUP:
                 self.warmed += 1
             elif len(self.taken) < len(self.plan):

@@ -3,11 +3,6 @@
 from OpenGLContext.context import Context as BaseContext
 import os
 from OpenGLContext.events.timer import Timer
-try:
-    from OpenGLContext.loaders.loader import Loader
-except ImportError:
-    print("""This demo requires the VRML97 loader""")
-
 class TestContext( BaseContext ):
     """Context to load wrls/box.wrl and watch routing changes
 
@@ -24,7 +19,11 @@ class TestContext( BaseContext ):
 the rotation of the transform which contains one of the two boxes.
 The ROUTE in the scene transmits this rotational change to the
 transform which contains the other box.""")
-        self.sg = Loader.load( os.path.join("wrls","box.wrl") )
+        self.sceneLoader.load( os.path.join("wrls","box.wrl"),
+                               on_loaded=self.OnLoaded )
+    def OnLoaded( self, request ):
+        """Mount the scene when the loader has read it, and start modifying it"""
+        self.sg = request.result
         self.trans = self.sg.getDEF( "Box01" )
         self.time = Timer( duration = 8.0, repeating = 1 )
         self.time.addEventHandler( "fraction", self.OnTimerFraction )

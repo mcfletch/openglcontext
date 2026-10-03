@@ -53,6 +53,8 @@ if TYPE_CHECKING:
 
     from OpenGLContext.contextdefinition import ContextDefinition
     from OpenGLContext.framecounter import FrameCounter
+    from OpenGLContext.events.renderqueue import RenderQueue
+    from OpenGLContext.loaders.sceneloader import SceneLoader
     from OpenGLContext.looptrace import LoopTrace
     from OpenGLContext.multiview.views import View, ViewLayout
     from OpenGLContext.stalltrace import StallJournal
@@ -322,6 +324,15 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
     loopTrace: LoopTrace | None = None
     stallJournal: StallJournal | None = None
     telemetry: SessionRecording | ReplaySession | None = None
+
+    #: Calls background threads have queued to be made on the render thread,
+    #: which the main loop makes before ``OnIdle``.  See
+    #: :class:`~OpenGLContext.events.renderqueue.RenderQueue`.
+    renderQueue: RenderQueue
+    #: Loads scenes in the background and delivers them through
+    #: :attr:`renderQueue`.  Closed when the window is released.  See
+    #: :class:`~OpenGLContext.loaders.sceneloader.SceneLoader`.
+    sceneLoader: SceneLoader
     contextDefinition: ContextDefinition | None = None
     #: The OpenGL profile a subclass needs, when that is all it has to say:
     #: ``profile = 'compatibility'`` on a demo that draws with the
@@ -441,6 +452,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             setupEntropy,
             setupCaptureClock,
             setupTelemetry,
+            setupRenderQueue,
             setupAutoExit,
             completeInit
 
@@ -478,6 +490,7 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
             self.setupEntropy()
             self.setupCaptureClock()
             self.setupTelemetry()
+            self.setupRenderQueue()
             self.setupAutoExit()
             if ready:
                 self.completeInit()
@@ -1077,6 +1090,41 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
 
         self.telemetry = telemetry.install(self)
 
+    def setupRenderQueue(self) -> None:
+        """Make ``self.renderQueue`` and ``self.sceneLoader``
+
+        The queue is what a background thread uses to have a call made on the
+        render thread (see :class:`~OpenGLContext.events.renderqueue.RenderQueue`);
+        queueing one asks the loop for a frame so an idle window makes it
+        promptly.  The loader delivers through it.  Set up after telemetry,
+        since a replayed session has the loader deliver each scene on the
+        frame the recording did.
+        """
+        from OpenGLContext.events.renderqueue import RenderQueue
+        from OpenGLContext.loaders.sceneloader import SceneLoader
+
+        self.renderQueue = RenderQueue(wake=self.redrawRequest.set)
+        self.sceneLoader = SceneLoader(owner=self, queue=self.renderQueue)
+
+    def loadsPending(self) -> bool:
+        """Whether a scene is still being loaded or waits to be delivered
+
+        What a bounded run (a capture, an auto-exit) waits out before it counts
+        another frame.  False for a context assembled without ``__init__``.
+        """
+        loader = getattr(self, 'sceneLoader', None)
+        return bool(loader is not None and loader.pending)
+
+    def runRenderQueue(self) -> int:
+        """Make the calls other threads have queued on :attr:`renderQueue`
+
+        Called by the main loop once an iteration, on the render thread, before
+        :meth:`OnIdle`.  Answers how many calls were made.  A context assembled
+        without ``__init__`` -- a test double -- has no queue and makes none.
+        """
+        queue = getattr(self, 'renderQueue', None)
+        return queue.run() if queue is not None else 0
+
     def mark(self, name: str, /, **fields: Any) -> None:
         """Note something this application knows and the engine cannot
 
@@ -1459,12 +1507,16 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         # that reads the clock.  Unconditionally: a scene whose only change is
         # the one a timer drives would otherwise return early below, leaving
         # the clock where it was and the animation stopped.
-        if self._captureClock is not None:
+        # A bounded run counts frames of the scene it is to capture, so the
+        # frames drawn while a load is still arriving are not among them: the
+        # clock stands still and the count does not move until it is mounted.
+        counting = not self.loadsPending()
+        if self._captureClock is not None and counting:
             self._captureClock.advance()
 
         # Check for auto-exit on each OnDraw call, even if we return early
         # This ensures we count total calls rather than just rendered frames
-        if self._autoExitFrames is not None:
+        if self._autoExitFrames is not None and counting:
             self._autoExitFrameCount += 1
             if self._autoExitFrameCount >= self._autoExitFrames:
                 log.info(f"Auto-exit: {self._autoExitFrameCount} OnDraw calls")
@@ -1615,6 +1667,9 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         It is what :meth:`OnQuit` does before the process ends, and what a
         program that built a context and is finished with it calls.
         """
+        loader = getattr(self, 'sceneLoader', None)
+        if loader is not None:
+            loader.close()
         self.windowsystem.release()
 
     def pumpWindowEvents(self) -> bool:

@@ -29,10 +29,10 @@ class TestContext(BaseContext):
         ``0.05`` and ``0``, the last keeping the coarsest orb on screen however
         far away it is.  ``_from_file`` writes the right-hand row with
         ``GLTFWriter.add_lod``, as ``MSFT_lod`` chains, and reads it back with
-        ``load_gltf``, which builds the same node from the file.  The columns
+        the context's scene loader, which builds the same node from the file.  The columns
         are VRML97's ``LOD``, chosen by distance, with a ``range`` of 12 and
         24 metres.'''
-        self.hall = LODHall()
+        self.hall = LODHall(loader=self.sceneLoader)
         self.sg = sceneGraph(children=self.hall.children)
         '''``t`` dresses each level in its own metal -- gold, copper, steel,
         silver -- so the places where the levels change can be seen while

@@ -22,11 +22,10 @@ import os
 import tempfile
 
 from OpenGLContext import testingcontext
-'''One loader for every format: ``Loader.load`` looks at the name, picks
-the handler registered for it, and answers a scenegraph.  An ``.obj`` and a
-``.wrl`` are the same call -- :doc:`Loading a VRML97 model <using_vrml97>`
-is the other one.'''
-from OpenGLContext.loaders.loader import Loader
+'''One loader for every format: the context's ``sceneLoader`` looks at the
+name, picks the reader registered for it, and answers a scenegraph.  An
+``.obj`` and a ``.wrl`` are the same call --
+:doc:`Loading a VRML97 model <using_vrml97>` is the other one.'''
 from OpenGLContext.events.timer import Timer
 from OpenGLContext.scenegraph.basenodes import (
     Background, DirectionalLight, Transform, sceneGraph,
@@ -100,17 +99,8 @@ class TestContext(BaseContext):
 
     def OnInit(self):
         path = write_model()
-        '''The material file is found beside the model, by the name the
-        ``mtllib`` line gives -- which is why an OBJ moved without its
-        ``.mtl`` arrives grey.'''
-        loaded = Loader.load(path)
-        print('%s: %d root nodes' % (os.path.basename(path),
-                                     len(loaded.children)))
-        '''The file's nodes are mounted under a ``Transform`` of this
-        program's own.  OBJ says nothing about scale or orientation, so what
-        the file measures in is something the model's author has to be asked
-        -- or worked out from the size of what arrives.'''
-        self.model = Transform(children=list(loaded.children))
+        self.path = path
+        self.running = True
         self.sg = sceneGraph(children=[
             Background(skyColor=[(0.12, 0.14, 0.17)]),
             DirectionalLight(direction=(-0.5, -0.7, -0.5)),
@@ -118,18 +108,32 @@ class TestContext(BaseContext):
             # key light is shaded rather than black.
             DirectionalLight(direction=(0.7, -0.3, 0.5), intensity=0.45,
                              color=(0.8, 0.85, 1.0)),
-            self.model,
         ])
+        '''The material file is found beside the model, by the name the
+        ``mtllib`` line gives -- which is why an OBJ moved without its
+        ``.mtl`` arrives grey.  The scene loader reads it on a worker thread
+        and calls ``OnLoaded`` on the render thread when it is ready.'''
+        self.sceneLoader.load(path, on_loaded=self.OnLoaded)
+        self.addEventHandler('keypress', name=' ', function=self.OnToggle)
+        print(__doc__)
+
+    def OnLoaded(self, request):
+        loaded = request.result
+        print('%s: %d root nodes' % (os.path.basename(self.path),
+                                     len(loaded.children)))
+        '''The file's nodes are mounted under a ``Transform`` of this
+        program's own.  OBJ says nothing about scale or orientation, so what
+        the file measures in is something the model's author has to be asked
+        -- or worked out from the size of what arrives.'''
+        self.model = Transform(children=list(loaded.children))
+        self.sg.children = list(self.sg.children) + [self.model]
         '''Nothing in the file moves, so the movement is this program's:
         a turntable, from a ``Timer``, as in
         :doc:`Animating a transform <using_animation>`.'''
-        self.running = True
         self.timer = Timer(duration=PERIOD, repeating=1)
         self.timer.addEventHandler('fraction', self.OnFraction)
         self.timer.register(self)
         self.timer.start()
-        self.addEventHandler('keypress', name=' ', function=self.OnToggle)
-        print(__doc__)
 
     def OnFraction(self, event):
         if self.running:

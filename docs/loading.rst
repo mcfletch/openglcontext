@@ -45,6 +45,147 @@ checked value to the readers below it, which accept nothing else (see
 part the format requires that is missing or of the wrong type is a
 ``DocumentError`` (a ``ValueError``) naming it.
 
+.. _scene-loader:
+
+The scene loader
+----------------
+
+Every context holds a ``SceneLoader`` as ``self.sceneLoader``. It reads a file,
+a URL or a document in memory on a worker thread and delivers the result on the
+render thread, so a model downloads and decodes while the window goes on
+drawing:
+
+.. code-block:: python
+
+   class Viewer( Context ):
+       def OnInit( self ):
+           self.sceneLoader.load( 'model.glb', on_loaded=self.show,
+                                  on_failed=self.report )
+
+       def show( self, request ):
+           self.sg = sceneGraph( children=[ request.result.group ] )
+
+       def report( self, request ):
+           print( 'could not load %s: %s' % ( request.label, request.error ) )
+
+``load()`` takes a path or an ``http(s)`` URL as a string, or the bytes of a
+document. The format comes from ``format=`` where given (``'gltf'``,
+``'vrml97'``, ``'obj'``, ``'tiles3d'``, or a name registered since), then from
+``content_type=``, then from the source's name, and for a local ``.json`` from
+what is inside it. Bytes have no name, so ``name='chair.glb'`` says what they
+would be called as a file: that chooses the format, and is where a ``.gltf``
+looks for the files it names. A source no registered format opens raises
+``UnknownSourceType`` at once, naming the suffixes that are known.
+``options=`` is given to the format's reader to configure itself with, and
+``reader=`` supplies a reader to use instead of choosing one, for a program that
+keeps it to ask more of it later.
+
+``request.result`` is what the format's own loader produces: a ``GLTFScene``
+for glTF, a ``SceneGraph`` for VRML97 and OBJ, the streaming ``TilesTerrain``
+for 3D Tiles, a game's level for a game's format. The loader does nothing with
+it; whether it is mounted, kept or discarded is for the caller. The reader that
+read it, which knows how to frame and animate it, is ``request.reader``.
+
+``submit()`` runs any callable the same way, for a result no registered format
+reads. The callable takes no arguments and **must not touch GL**.
+``load_now()`` reads on the calling thread and returns the finished request, for
+a program that has to have the scene before it goes on.
+
+Requests are independent. Any number may be in flight and each is delivered once,
+when it finishes; a request that raises reaches its own ``on_failed`` and
+disturbs no other. A program that wants only the newest of a sequence keeps the
+request it made last and calls ``request.cancel()`` before making the next. A
+cancelled request is never delivered, though its worker finishes the read, since
+a read cannot be interrupted.
+
+A request is also announced as the signals ``SCENE_LOADING``, ``SCENE_LOADED``
+and ``SCENE_FAILED``, sent through ``pydispatch`` with the loader as the sender
+and the request as ``request=``, for code other than the caller to hear:
+
+.. code-block:: python
+
+   from pydispatch import dispatcher
+   from OpenGLContext.loaders.sceneloader import SCENE_LOADED
+
+   dispatcher.connect( on_scene, signal=SCENE_LOADED, sender=self.sceneLoader )
+
+.. _render-queue:
+
+Calls on the render thread
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+A worker does not call back into the program itself. When a read finishes it
+queues the delivery on the context's ``renderQueue``, and the main loop makes
+the queued calls on the render thread, once an iteration, **before** ``OnIdle``
+and before anything is drawn. Callbacks and signals therefore run where GL is
+current, and what they build is what that frame's idle hook and draw see.
+
+The queue is for any background work, not only loading:
+
+.. code-block:: python
+
+   def OnInit( self ):
+       threading.Thread( target=self.fetchScores ).start()
+
+   def fetchScores( self ):                  # on a worker
+       scores = download( ... )
+       self.renderQueue.call( self.showScores, scores )
+
+   def showScores( self, scores ):           # on the render thread
+       self.table.rows = scores
+
+``call( function, *arguments, **named )`` is safe from any thread, wakes the
+loop so an idle window makes the call promptly, and calls are made in the order
+they were queued. A call that queues another has that one made on the next
+iteration. A call that is not ready returns ``renderqueue.DEFER`` and is made
+again on the next. A call that raises propagates out of the loop iteration; the
+calls after it stay queued. A program that drives its own loop calls
+``context.runRenderQueue()`` once an iteration, and a program with no context
+builds ``SceneLoader()``, waits with ``request.wait( timeout )`` and calls
+``poll()``.
+
+A bounded run (``OPENGLCONTEXT_AUTO_EXIT_FRAMES``, a capture) does not count a
+frame while a request is pending, and its clock stands still, so a script that
+loads in ``OnInit`` is captured with its scene mounted. ``context.loadsPending()``
+answers whether any request is pending, for a program that has to wait for
+its scenes in the same way.
+
+Releasing a context's window closes its loader: pending requests are cancelled
+and ``load()`` and ``submit()`` raise ``RuntimeError``.
+
+A session recorded with :doc:`telemetry <telemetry>` has each delivery marked,
+and a replay delivers each scene on the frame it was delivered on in the
+recording. ``loader.sceneWaitSeconds`` (30) is how long a replay waits for a read
+the recording had finished.
+
+Formats
+~~~~~~~
+
+A format is a *reader*, a ``SceneReader`` (``OpenGLContext.loaders.readers``)
+registered under ``OpenGLContext.plugins.Adapter`` against the suffixes and
+content types it handles. The engine registers glTF, VRML97, OBJ and 3D Tiles;
+a game registers its own, as twig-bb registers ``.bsp`` and ``.pk3``:
+
+.. code-block:: python
+
+   from OpenGLContext.loaders.readers import SceneReader
+   from OpenGLContext.plugins import Adapter
+
+   class LevelReader( SceneReader ):
+       name = 'level'
+       def configure( self, options ):       # options= from load()
+           self.settings = options
+       def read( self, source ):             # on a worker: no GL
+           return build_level( source, self.settings )
+
+   Adapter( 'level', 'mygame.levels.LevelReader', ['.lvl'] )
+
+   self.sceneLoader.load( 'maps/one.lvl', options=settings, on_loaded=self.play )
+
+A reader that can be read from bytes sets ``accepts_content = True`` and
+implements ``read_content( data, name )``. A format a viewer can show is a
+``SceneAdapter``, :ref:`described with the viewer <adapters>`.
+
 VRML97 worlds
 -------------
 
@@ -201,8 +342,7 @@ the scenegraph's, such as remote content that may be slow, create a separate
 The engine's own pool lasts as long as the process.
 
 The loaders above run on the thread that calls them. To load a whole model
-without stopping the frame, call them from a worker, as :doc:`the viewer
-<viewer>` does, and add the result to the scene on the render thread.
+without stopping the frame, use :ref:`the scene loader <scene-loader>`.
 
 .. rst-class:: technical
 

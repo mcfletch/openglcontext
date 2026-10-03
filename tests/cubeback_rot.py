@@ -7,7 +7,6 @@ import OpenGL
 OpenGL.ERROR_ON_COPY = True
 #OpenGL.FULL_LOGGING = True
 from OpenGLContext.context import Context as BaseContext
-from OpenGLContext.loaders.loader import Loader
 
 scene = """#VRML V2.0 utf8
 
@@ -67,11 +66,17 @@ class TestContext( BaseContext ):
     def OnInit( self ):
         """Scene set up and initial processing"""
         print('Loading scene from embedded VRML97 file')
-        self.sg = Loader.loads( scene, 'test.wrl' )
-        self.tr = self.sg.getDEF( 'TR' )
+        self.sceneLoader.load( scene.encode('utf-8'), name='test.wrl',
+                               on_loaded=self.OnLoaded )
         print('press <b> to switch backgrounds')
         self.addEventHandler( "keypress", name="b", function = self.OnSwitch)
+    def OnLoaded( self, request ):
+        """Mount the scene when the loader has parsed it"""
+        self.sg = request.result
+        self.tr = self.sg.getDEF( 'TR' )
     def OnSwitch( self, _event ):
+        if self.sg is None:
+            return
         switch= self.getSceneGraph().getDEF( 'S' )
         if switch.whichChoice:
             switch.whichChoice = 0

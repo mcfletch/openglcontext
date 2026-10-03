@@ -239,7 +239,8 @@ simulation packages update.
        :doc:`Zones <zones>`, :doc:`Particles <particles>`
    * - ``loaders``
      - File formats into the scenegraph: glTF and GLB, VRML97, OBJ and
-       streamed 3D Tiles.
+       streamed 3D Tiles, and the ``SceneLoader`` every context holds to read
+       any of them in the background.
      - :doc:`Loading Content <loading>`
    * - ``shaders``, ``resources``
      - The GLSL sources the passes compile, and the icons, font atlases and

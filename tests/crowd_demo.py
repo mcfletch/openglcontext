@@ -144,9 +144,6 @@ class TestContext(BaseContext):
 
     def OnInit(self):
         BaseContext.OnInit(self)
-        # One parse, one scenegraph per figure: they share their vertex and
-        # keyframe data, and a crowd requires them to be of one build anyway.
-        document = parse_gltf(fetch_to_cache(sample_model_url(MODEL)))
         # The ground takes shadows but casts none: there is nothing under it
         # to shadow, and keeping a slab this wide out of every cascade leaves
         # the depth passes to the bodies.
@@ -170,10 +167,14 @@ class TestContext(BaseContext):
                              color=(0.6, 0.7, 1.0)),
             Transform(translation=(0.0, -0.05, -6.0), children=[ground]),
         ]
-        for _ in range(FIGURES):
-            children.append(self.crowd.add(CharacterModel(
-                load_gltf(document=document))))
         self.sg = sceneGraph(children=children)
+        # One parse, one scenegraph per figure: they share their vertex and
+        # keyframe data, and a crowd requires them to be of one build anyway.
+        # The parse is the slow part, so it runs on the scene loader's worker
+        # and the figures are built when it is done.
+        self.sceneLoader.submit(
+            lambda: parse_gltf(fetch_to_cache(sample_model_url(MODEL))),
+            label=MODEL, on_loaded=self.OnParsed)
         # PBR ambient is image-based and this scene carries no probe, so the
         # fill is set here and the sun does the rest of the lighting.
         self.gltf_scene_ambient = 0.25
@@ -187,6 +188,12 @@ class TestContext(BaseContext):
         #: Poses counted since the last print-out.
         self._posed = []
         print(__doc__)
+
+    def OnParsed(self, request):
+        document = request.result
+        figures = [self.crowd.add(CharacterModel(load_gltf(document=document)))
+                   for _ in range(FIGURES)]
+        self.sg.children = list(self.sg.children) + figures
 
     def OnScheduler(self, event):
         self.scheduling = not self.scheduling

@@ -24,7 +24,6 @@ from OpenGLContext import testingcontext
 from OpenGLContext.context import Context
 from OpenGLContext.move.physicswalk import PhysicsWalkMixin
 from OpenGLContext.multiview.grid import Grid
-from OpenGLContext.viewer.asyncscene import AsyncSceneMixin
 from OpenGLContext.viewer.caption import CaptionMixin
 from OpenGLContext.viewer.capture import SettleCaptureMixin
 
@@ -225,8 +224,7 @@ class TestTheMixinsComposeCleanly:
         inherited = set()
         for klass in testingcontext.getInteractive().__mro__:
             inherited |= self._declared(klass)
-        for mixin in (AsyncSceneMixin, CaptionMixin,
-                      SettleCaptureMixin, SceneViewerMixin):
+        for mixin in (CaptionMixin, SettleCaptureMixin, SceneViewerMixin):
             clashes = self._declared(mixin) & inherited - self.DELIBERATE
             assert not clashes, '%s shadows %s' % (mixin.__name__, sorted(clashes))
 

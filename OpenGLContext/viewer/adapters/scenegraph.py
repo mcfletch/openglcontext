@@ -37,10 +37,25 @@ def camera_name(viewpoint: Any, index: int) -> str:
 class SceneGraphAdapter(SceneAdapter):
     """A format whose loader hands back a VRML97 ``SceneGraph``."""
 
-    def load(self, source: str) -> ViewerScene:
-        """Parse ``source`` into a scene, measuring it so it can be framed."""
+    accepts_content = True
+
+    def read(self, source: str) -> Any:
+        """Parse ``source`` into a VRML97 ``SceneGraph``."""
         from OpenGLContext.loaders.loader import Loader
-        return self.sceneFrom(Loader.load(source))
+        return Loader.load(source)
+
+    def read_content(self, data: bytes, name: str = '') -> Any:
+        """Parse a document held in memory.
+
+        ``name`` chooses the handler by its suffix, as it does for a file, and
+        is the base the document's relative references resolve against.
+        """
+        from OpenGLContext.loaders.loader import Loader
+        return Loader.loads(data, name) if name else Loader.loads(data)
+
+    def present(self, native: Any) -> ViewerScene:
+        """Measure a parsed ``SceneGraph`` so it can be framed."""
+        return native if isinstance(native, ViewerScene) else self.sceneFrom(native)
 
     def sceneFrom(self, sceneGraph: Any) -> ViewerScene:
         """Wrap an already-parsed ``SceneGraph`` as a viewable scene.

@@ -17,9 +17,10 @@ from OpenGLContext.viewer.adapters import adapter_for, adapter_named, UnknownSou
 from OpenGLContext.viewer.adapters.obj import OBJAdapter
 from OpenGLContext.loaders.loader import Loader
 from OpenGLContext.viewer.adapters.gltf import GLTFAdapter
-from OpenGLContext.viewer.adapters.tiles import (
-    DEFAULT_MEMORY, DEFAULT_SSE, leaf_tile, TilesAdapter,
+from OpenGLContext.loaders.tiles3d.reader import (
+    DEFAULT_MEMORY, DEFAULT_SSE, leaf_tile,
 )
+from OpenGLContext.viewer.adapters.tiles import TilesAdapter
 from OpenGLContext.viewer.options import ViewerOptions
 
 #: A unit cube, the smallest OBJ that exercises vertices and faces.

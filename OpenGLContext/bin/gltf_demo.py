@@ -43,6 +43,7 @@ from OpenGLContext.ui.gallery import Picture
 from OpenGLContext.ui.hudwidgets import HUDGroup, Readout
 from OpenGLContext.viewer.sceneviewer import ViewerContext
 from OpenGLContext.viewer import ViewerOptions
+from OpenGLContext.viewer.adapters import adapter_named
 from OpenGLContext.viewer.caption import CaptionLayer
 from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders import gltf_demos
@@ -287,7 +288,8 @@ class TestContext(ViewerContext):
         self._ref_current = entry['name']
         print("Loading %s ..." % label)
         try:
-            scene = gltf.load_sample(entry['name'])
+            scene = self.sceneLoader.load_now(
+                gltf.sample_model_url(entry['name']), format='gltf').result
         except Exception as err:
             self._label = "%s\nFAILED: %s" % (label, str(err).splitlines()[0][:50])
             self.overlayError = True
@@ -311,8 +313,9 @@ class TestContext(ViewerContext):
         self._pending_name = name
         self._pending_label = label
         print("Loading %s ..." % label)
-        self.requestScene(lambda: gltf.load_sample(name),
-                            label="Loading %s ..." % label)
+        self.adapter = adapter_named('gltf')
+        self.requestSource(gltf.sample_model_url(name),
+                           label="Loading %s ..." % label)
 
     def applyLoadedScene(self, scene: Any) -> None:
         # buildScenegraph reads _ref_current for the per-model profile, so set the

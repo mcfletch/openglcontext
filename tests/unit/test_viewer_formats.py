@@ -11,6 +11,7 @@ import os
 
 import pytest
 
+from OpenGLContext.loaders.sceneloader import SceneLoader
 from OpenGLContext.scenegraph.background import Background
 from OpenGLContext.scenegraph.light import Light
 from OpenGLContext.testing.paths import tests_root
@@ -103,10 +104,15 @@ class TestTheSourceChoosesTheAdapter:
         loaded = []
 
         class _Recording(GLTFAdapter):
-            def load(self, source):
+            def read(self, source):
                 loaded.append(source)
+                return 'native'
+
+            def present(self, native):
+                assert native == 'native'
                 return 'scene'
 
+        viewer.sceneLoader = SceneLoader()
         viewer.adapter = _Recording()
         assert viewer.loadScene() == 'scene'
         assert loaded == [GLTF_MODEL]

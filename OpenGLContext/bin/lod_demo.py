@@ -23,6 +23,7 @@ import sys
 from collections.abc import Sequence
 from typing import Any, ClassVar, Optional
 
+from OpenGLContext.loaders.sceneloader import SceneLoader
 from OpenGLContext.scenegraph import basenodes, surfaces
 
 __all__ = ['LODHall', 'main']
@@ -69,6 +70,11 @@ class LODHall:
     ``children`` is the scene. ``chains`` are the orbs' ``ScreenCoverageLOD``
     nodes, the code-built row first and then the row read from the file, and
     ``columns`` the distance ``LOD`` nodes. :meth:`press` answers a key.
+
+    The written row is read back through ``loader``, a
+    :class:`~OpenGLContext.loaders.sceneloader.SceneLoader`: a context passes
+    its own, and the row is mounted when the read completes.  With none, the
+    row is read here and now.
     """
 
     KEYS: ClassVar[dict[str, str]] = {
@@ -76,8 +82,10 @@ class LODHall:
         'h': 'hysteresis off, or back on at its default',
     }
 
-    def __init__(self, finishes: Optional[Finishes] = None) -> None:
+    def __init__(self, finishes: Optional[Finishes] = None,
+                 loader: Optional[SceneLoader] = None) -> None:
         self.finishes = finishes if finishes is not None else Finishes()
+        self.loader = loader
         self.tinted = False
         self.chains: list[Any] = []
         self.columns: list[Any] = []
@@ -126,7 +134,6 @@ class LODHall:
 
     def _from_file(self) -> Any:
         """The right-hand row, written as MSFT_lod chains and read back."""
-        from OpenGLContext.loaders.gltf import load_gltf
         from OpenGLContext.loaders.gltf.writer import GLTFWriter, SceneNode
         from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
         from OpenGLContext.scenegraph.pbrmesh import PBRMesh
@@ -144,9 +151,21 @@ class LODHall:
                                  material=copper),
                     translation=at))
             writer.add_lod(levels, coverage=COVERAGE)
-        scene = load_gltf(writer.to_glb())
+        data = writer.to_glb()
+        placeholder = basenodes.Transform()
+        if self.loader is None:
+            self._mount(placeholder,
+                        SceneLoader().load_now(data, name='lod-row.glb').result)
+        else:
+            self.loader.load(
+                data, name='lod-row.glb',
+                on_loaded=lambda request: self._mount(placeholder, request.result))
+        return placeholder
+
+    def _mount(self, row: Any, scene: Any) -> None:
+        """Hang the row read back from the file where its placeholder stands."""
         self.chains.extend(_chains_under(scene.group))
-        return scene.group
+        row.children = [scene.group]
 
     # -- the keys ------------------------------------------------------------
     def levels(self) -> list[list[Any]]:
@@ -214,7 +233,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         initialPosition = (0.0, 1.6, 4.0)
 
         def OnInit(self) -> None:
-            self.hall = LODHall()
+            self.hall = LODHall(loader=self.sceneLoader)
             self.sg = basenodes.sceneGraph(children=self.hall.children)
             for key in LODHall.KEYS:
                 self.addEventHandler('keypress', name=key, function=self.OnKey)

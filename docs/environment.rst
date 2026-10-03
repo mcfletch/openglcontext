@@ -335,7 +335,10 @@ The window, capture and the interface
      - integer
      - unset
      - Quit after this many frames. Together with the capture settings below,
-       this takes a screenshot without anyone present.
+       this takes a screenshot without anyone present. Frames drawn while the
+       context's ``sceneLoader`` still has a scene loading or waiting to be
+       delivered are not counted, and the capture clock below does not
+       advance, so the frames counted are of the scene that was loaded.
    * - ``OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR``
      - path
      - unset

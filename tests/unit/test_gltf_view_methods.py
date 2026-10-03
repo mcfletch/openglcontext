@@ -27,6 +27,7 @@ from OpenGLContext.scenegraph.background import Background
 from OpenGLContext.scenegraph.group import Group
 from OpenGLContext.scenegraph.viewpoint import Viewpoint
 from OpenGLContext.contextdefinition import ContextDefinition
+from OpenGLContext.loaders.sceneloader import SceneLoader
 from OpenGLContext.loaders.gltf import animation as anim_mod
 from OpenGLContext.move.modes import walk_fly_modes
 from OpenGLContext.move.viewplatform import ViewPlatform
@@ -461,46 +462,84 @@ class TestPrepareAndLoadSource:
             inst.prepareSource()
 
     def test_load_scene_delegates_to_the_adapter(self, monkeypatch):
-        inst = _inst()
+        inst = _loading_inst()
         inst.source = '/models/Duck.glb'
         inst.adapter = gltf.GLTFAdapter()
         monkeypatch.setattr(gltf, 'load_gltf_source', lambda src: 'SCENE:%s' % src)
         assert inst.loadScene() == 'SCENE:/models/Duck.glb'
 
 
+def _settle(inst, timeout=5.0):
+    """Poll the viewer's loader until a request is delivered; how many were."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        delivered = inst.sceneLoader.poll()
+        if delivered:
+            return delivered
+        time.sleep(0.01)
+    return 0
+
+
+def _loading_inst():
+    """A viewer made without a window, with the loader a context would hold."""
+    inst = _inst()
+    inst.sceneLoader = SceneLoader(owner=inst)
+    inst.overlayText = ''
+    inst.overlayError = False
+    inst.triggerRedraw = lambda _n: None
+    return inst
+
+
 class TestAsyncLoading:
-    def _inst(self):
-        inst = _inst()
-        inst._loadLock = threading.Lock()
-        inst._loadToken = 0
-        inst._loading = False
-        inst._pendingScene = None
-        inst.overlayText = ''
-        inst.overlayError = False
-        inst.triggerRedraw = lambda _n: None
-        return inst
-
     def test_request_scene_runs_the_producer_off_thread(self):
-        inst = self._inst()
-        inst.requestScene(lambda: 'LOADED', 'Loading ...')
-        for _ in range(200):
-            if inst._pendingScene is not None:
-                break
-            time.sleep(0.01)
-        assert inst._pendingScene == ('LOADED', None)
+        inst = _loading_inst()
+        where = {}
+        inst.applyLoadedScene = lambda scene: where.update(
+            scene=scene, applied=threading.current_thread())
 
-    def test_poll_applies_a_failed_load_as_an_error_overlay(self, capsys):
-        inst = self._inst()
+        def produce():
+            where['produced'] = threading.current_thread()
+            return 'LOADED'
+
+        inst.requestScene(produce, 'Loading ...')
+        assert _settle(inst) == 1
+        assert where['scene'] == 'LOADED'
+        assert where['produced'] is not threading.current_thread()
+        assert where['applied'] is threading.current_thread()
+
+    def test_a_failed_load_is_applied_as_an_error_overlay(self, capsys):
+        inst = _loading_inst()
         inst.sg = None
-        inst._pendingScene = (None, RuntimeError('bad'))
-        assert inst.pollPendingScene() is True
-        assert inst.overlayError is True
+
+        def boom():
+            raise RuntimeError('bad')
+
+        inst.requestScene(boom, 'Loading ...')
+        assert _settle(inst) == 1
+        assert inst.overlayError is True and 'bad' in inst.overlayText
         capsys.readouterr()
 
-    def test_poll_with_nothing_pending_returns_false(self):
-        inst = self._inst()
-        inst._pendingScene = None
-        assert inst.pollPendingScene() is False
+    def test_a_load_names_itself_on_the_overlay_at_once(self):
+        inst = _loading_inst()
+        inst.applyLoadedScene = lambda scene: None
+        inst.requestScene(lambda: 'LOADED', 'Loading Duck ...')
+        assert inst.overlayText == 'Loading Duck ...'
+        assert inst.overlayError is False
+        assert _settle(inst)
+
+    def test_a_newer_request_cancels_the_one_before(self):
+        """Page past a slow model and the viewer ends on the one stopped on."""
+        inst = _loading_inst()
+        applied = []
+        inst.applyLoadedScene = applied.append
+        release = threading.Event()
+        inst.requestScene(lambda: release.wait(5.0) and 'OLD', 'old')
+        inst.requestScene(lambda: 'NEW', 'new')
+        assert _settle(inst) == 1
+        release.set()
+        time.sleep(0.05)
+        assert inst.sceneLoader.poll() == 0
+        assert applied == ['NEW']
 
 
 class TestScreenshotQueue:
@@ -829,40 +868,10 @@ class TestRequestAndPollExtras:
     def test_request_initial_scene_kicks_off_the_source_load(self):
         inst = _inst()
         inst.source = 'Duck.glb'
-        recorded = {}
-        inst.requestScene = lambda produce, label: recorded.update(
-            produce=produce, label=label)
+        requested = []
+        inst.requestSource = requested.append
         inst.requestInitialScene()
-        assert recorded['produce'] == inst.loadScene
-        assert 'Duck.glb' in recorded['label']
-
-    def test_request_scene_captures_a_producer_failure(self):
-        inst = _inst()
-        inst._loadLock = threading.Lock()
-        inst._loadToken = 0
-        inst.overlayText = ''
-        inst.overlayError = False
-        inst.triggerRedraw = lambda _n: None
-
-        def boom():
-            raise RuntimeError('decode failed')
-        inst.requestScene(boom, 'Loading ...')
-        for _ in range(200):
-            if inst._pendingScene is not None:
-                break
-            time.sleep(0.01)
-        scene, error = inst._pendingScene
-        assert scene is None and isinstance(error, RuntimeError)
-
-    def test_poll_applies_a_loaded_scene(self):
-        inst = _inst()
-        inst._loadLock = threading.Lock()
-        inst.triggerRedraw = lambda _n: None
-        applied = {}
-        inst.applyLoadedScene = lambda s: applied.setdefault('scene', s)
-        inst._pendingScene = ('SCENE', None)
-        assert inst.pollPendingScene() is True
-        assert applied['scene'] == 'SCENE'
+        assert requested == ['Duck.glb']
 
 
 class TestCycleViewpointPhysics:

@@ -20,9 +20,12 @@ class TestContext( BaseContext ):
     """VRML97-loading Context testing class"""
     def OnInit( self ) -> None:
         """Load the image on initial load of the application"""
-        filename = sys.argv[1]
-        self.load( filename )
         BaseContext.OnInit( self )
+        self.sceneLoader.load( sys.argv[1], on_loaded=self.OnLoaded )
+
+    def OnLoaded( self, request: Any ) -> None:
+        """Mount the scene once the loader has read it"""
+        self.sg = request.result
 
 def main() -> None:
     usage = """python -m OpenGLContext.bin.profile_view myscene.wrl

@@ -20,8 +20,8 @@ from OpenGLContext import testingcontext
 BaseContext = testingcontext.getInteractive()
 from OpenGLContext.scenegraph.basenodes import (
     sceneGraph, DirectionalLight, Background, Shape, Cone, Appearance, Material,
+    Transform,
 )
-from OpenGLContext.loaders import gltf
 from OpenGLContext.loaders.tiles3d import sample
 from OpenGLContext.loaders.tiles3d.vegetation import build_vegetation_group
 
@@ -33,8 +33,15 @@ class TestContext(BaseContext):
     def OnInit(self):
         print("Instanced vegetation scattered over a heightfield surface")
         pos, nrm, idx = sample._grid_mesh(-120, 120, -120, 120, 21)  # noqa: SLF001 the sample module offers no public grid mesh or GLB writer
-        ground = gltf.load_gltf(sample._glb(  # noqa: SLF001 the sample module offers no public grid mesh or GLB writer
-            pos, nrm, idx, color=(0.20, 0.32, 0.12, 1.0))).group
+        # The ground is a generated mesh written as a .glb and read back by the
+        # scene loader, which mounts it when the read completes.
+        ground = Transform()
+        self.sceneLoader.load(
+            sample._glb(  # noqa: SLF001 the sample module offers no public grid mesh or GLB writer
+                pos, nrm, idx, color=(0.20, 0.32, 0.12, 1.0)),
+            name='ground.glb',
+            on_loaded=lambda request: setattr(ground, 'children',
+                                              [request.result.group]))
         shrub = Shape(
             geometry=Cone(bottomRadius=2.5, height=8.0),
             appearance=Appearance(material=Material(

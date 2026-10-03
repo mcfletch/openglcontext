@@ -5,8 +5,8 @@
 
 What is on screen was never mounted as authored geometry.  The demo builds a
 scene in code, writes it to a `.glb` with
-`OpenGLContext.loaders.gltf.writer`, loads that file back with
-`OpenGLContext.loaders.gltf.load_gltf`, and mounts *the loaded result*.  The
+`OpenGLContext.loaders.gltf.writer`, loads that file back with the
+context's scene loader, and mounts *the loaded result*.  The
 picture is therefore evidence about the file: whatever survived the write is
 what is lit here.
 
@@ -43,7 +43,6 @@ import tempfile
 import numpy as np
 
 from OpenGLContext import testingcontext
-from OpenGLContext.loaders.gltf import load_gltf
 from OpenGLContext.loaders.gltf.writer import GLTFWriter, InstanceSet, SceneNode
 from OpenGLContext.loaders.tiles3d.procedural import terrain_patch
 from OpenGLContext.scenegraph.basenodes import DirectionalLight, Transform
@@ -201,10 +200,6 @@ class TestContext(BaseContext):
         self.written = written_counts(writer.document())
         self.size = len(data)
 
-        scene = load_gltf(self.path)
-        self.read = loaded_counts(scene)
-        self.report()
-
         # The sky and the lights are the demo's own: a document written from
         # meshes carries no environment, and an unlit boulder is a silhouette.
         # A key from over the viewer's left shoulder, a cool fill opposite it.
@@ -213,12 +208,20 @@ class TestContext(BaseContext):
             DirectionalLight(direction=(-0.4, -0.75, -0.5), intensity=1.1),
             DirectionalLight(direction=(0.6, -0.25, 0.6), intensity=0.35,
                              color=(0.55, 0.66, 0.9)),
-            scene.group,
         ])
+        self.read = None
+        self.sceneLoader.load(self.path, on_loaded=self.OnLoaded)
         self.addEventHandler('keypress', name='r', function=self.OnReport)
 
-    def OnReport(self, event):
+    def OnLoaded(self, request):
+        scene = request.result
+        self.read = loaded_counts(scene)
         self.report()
+        self.sg.children = list(self.sg.children) + [scene.group]
+
+    def OnReport(self, event):
+        if self.read is not None:
+            self.report()
 
     def report(self):
         """The written file and what each side of the round trip counts."""

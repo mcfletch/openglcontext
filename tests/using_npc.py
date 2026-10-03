@@ -26,7 +26,6 @@ from OpenGLContext.nav import navmesh
 from OpenGLContext.events.systemtime import systemTime
 from OpenGLContext.character.model import CharacterModel
 from OpenGLContext.loaders.gltf import sample_model_url
-from OpenGLContext.loaders.resolver import fetch_to_cache
 from OpenGLContext.scenegraph.basenodes import (
     Appearance, Background, Coordinate, DirectionalLight, IndexedFaceSet,
     IndexedLineSet, Material, Shape, Transform, sceneGraph,
@@ -71,18 +70,19 @@ class TestContext(BaseContext):
         print('navmesh: %d walkable cells from %d triangles'
               % (len(self.mesh), len(triangles)))
 
-        '''``CharacterModel.load`` reads a rigged glTF file and gives the clips
-        in it names.  The walk plays for as long as the figure is walking, and
-        nothing else starts it or stops it.'''
-        self.model = CharacterModel.load(fetch_to_cache(sample_model_url(MODEL)))
-        self.model.play('Walk', loop=True)
-        '''The figure is a ``Transform`` with the model under it.  Moving the
+        '''The model is a rigged glTF file, read in the background by the
+        context's ``sceneLoader``; ``OnLoaded`` is called when it is ready,
+        and until then the figure is an empty ``Transform``.
+
+        The figure is a ``Transform`` with the model under it.  Moving the
         NPC is writing ``translation`` and ``rotation`` on that node; the model
         under it knows nothing about where it is.'''
+        self.model = None
         self.figure = Transform(
             scale=(MODEL_SCALE, MODEL_SCALE, MODEL_SCALE),
-            children=[self.model.group],
+            children=[],
         )
+        self.sceneLoader.load(sample_model_url(MODEL), on_loaded=self.OnLoaded)
         self.position = np.array(GOALS[-1], dtype='d')
         self.goal = 0
         self.route = self.plan()
@@ -105,6 +105,15 @@ class TestContext(BaseContext):
         self.last = systemTime()
         print(__doc__)
 
+    def OnLoaded(self, request):
+        '''``CharacterModel.from_scene`` takes the rigged glTF scene and gives
+        the clips in it names.  The walk plays for as long as the figure is
+        walking, and nothing else starts it or stops it.'''
+        self.model = CharacterModel.from_scene(request.result)
+        self.model.play('Walk', loop=True)
+        self.figure.children = [self.model.group]
+        self.last = systemTime()
+
     def plan(self):
         '''``path`` answers the points to walk through.  It answers an empty
         list where the two ends are not connected -- a bot on a ledge with no
@@ -122,6 +131,8 @@ class TestContext(BaseContext):
     def OnIdle(self, *arguments):
         '''One step of the world: where the figure is, then what its body is
         doing.  Both take the same time step.'''
+        if self.model is None:
+            return
         now = systemTime()
         step = min(now - self.last, 0.1)
         self.last = now
