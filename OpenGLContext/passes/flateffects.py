@@ -58,6 +58,7 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
         frustum: Any
         renderPath: Any
         transparent: bool
+        boundLights: Sequence[Any]
 
         def _writeShapeId(self, shader: Any, path: Any, node: Any, prog: Any,
                           id_map: Optional[dict]) -> Any: ...
@@ -182,7 +183,14 @@ class _FlatEffectsMixin(ReflectionsMixin, PassResources):
         ibl_scale = float(renderoptions.number(
             self, 'iblIntensity',
             renderoptions.env_number('OPENGLCONTEXT_IBL_INTENSITY', 1.0)))
-        shader.set_ibl_mode(ibl.MODE_CODE[mode], ibl_scale)
+        # The bound lights are the scene's own; with none the default headlight
+        # is all the light there is besides the environment.
+        studio_fill = float(renderoptions.number(
+            self, 'iblStudioFill',
+            renderoptions.env_number('OPENGLCONTEXT_IBL_STUDIO_FILL', ibl.STUDIO_FILL)))
+        shader.set_ibl_mode(ibl.MODE_CODE[mode], ibl_scale,
+                            ibl.fill_scale(mode, probe, bool(self.boundLights),
+                                           studio_fill))
         # Camera exposure (1.0 unless a glTF scene with absolute-unit punctual lights
         # set a light-meter value on the context). Default keeps every other scene
         # -- VRML, IBL-lit demos, the blessed baselines -- pixel-identical.

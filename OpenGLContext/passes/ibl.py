@@ -80,6 +80,36 @@ _CUBE_FACES = (('RT', 0), ('LF', 1), ('UP', 2), ('DN', 3), ('FR', 4), ('BK', 5))
 _CUBE_EXTS = ('.jpg', '.jpeg', '.png', '.bmp')
 
 
+#: The default of ``ContextDefinition.iblStudioFill``: the factor on what the
+#: built-in studio environment gives a non-metal, its diffuse light and its
+#: reflection, in a scene that has lights of its own. The
+#: studio is bright so that metal reflects something; a matte or glossy
+#: dielectric lit at that brightness is lifted close to white, and the shadow of
+#: every light in the scene is filled in. A metal's reflection is not scaled. A
+#: scene with no lights of its own is lit by the studio and the default headlight
+#: alone, so the studio keeps its strength there, as does an environment the
+#: scene supplies.
+STUDIO_FILL = 0.15
+
+
+def fill_scale(mode: str, probe: Optional['IBLProbe'], scene_lit: bool = True,
+               strength: float = STUDIO_FILL) -> float:
+    """The factor on the environment's fill of a non-metal for ``mode`` and its ``probe``.
+
+    ``strength`` (``ContextDefinition.iblStudioFill``) where the environment is the built-in studio (the
+    analytic sky, or a probe built from it) and ``scene_lit`` says the scene
+    has lights of its own. 1.0 otherwise: for a probe holding an environment
+    the scene supplied, for a scene with no lights, and with the environment off.
+    """
+    if not scene_lit:
+        return 1.0
+    if mode == 'analytic':
+        return strength
+    if mode == 'full' and probe is not None and probe.studio:
+        return strength
+    return 1.0
+
+
 def environment_cubemap_prefix() -> Optional[str]:
     """Path prefix of an environment cubemap face set, or None.
 
@@ -384,6 +414,9 @@ class IBLProbe(object):
         self._source_gen: Optional[int] = None   # equirect_env_generation() at last build
         #: Cube-map array layers, or 0 for plain cube maps.
         self.layers = max(0, int(layers))
+        #: Whether layer 0 holds the built-in studio rather than an
+        #: environment the scene supplied.
+        self.studio = True
         self.env: Optional[int] = None
         self.irradiance: Optional[int] = None
         self.prefilter: Optional[int] = None
@@ -580,6 +613,7 @@ class IBLProbe(object):
         prefix = environment_cubemap_prefix()
         faces = (load_cubemap_faces(prefix, self.ENV_SIZE)
                  if (equirect is None and prefix) else None)
+        self.studio = equirect is None and faces is None
         if equirect is not None:
             self._render_equirect_env(fbo, equirect)
             log.info("IBL environment loaded from equirect HDR %s", equirect.shape)
@@ -825,6 +859,8 @@ class IBLProbe(object):
                                 (size, size), Image.Resampling.BILINEAR))
                             for channel in range(3)], -1)
                     self._upload_face(target, level, layer, face, pixels)
+            if layer == 0:
+                self.studio = False
             return True
         except Exception as err:
             log.error("IBL layer %d could not take the image-based light: %s", layer, err)

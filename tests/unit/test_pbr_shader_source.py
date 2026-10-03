@@ -41,12 +41,13 @@ class TestTangentTransform:
 
 
 class TestAnalyticIBLEnergy:
-    def test_analytic_diffuse_divided_by_pi(self):
+    def test_analytic_diffuse_is_radiance_like_the_probe(self):
+        """The probe's irradiance map holds E/PI, which is the radiance itself for
+        a uniform sky (tests/unit/test_ibl_studio.py measures it), so the
+        analytic path must not divide by PI again."""
         src = _read('pbr.frag')
-        # the analytic env diffuse must be irradiance (radiance / PI == radiance *
-        # INV_PI), not raw radiance
-        assert re.search(r'envColor\((?:Nw|d)\)\s*(?:/\s*PI|\*\s*INV_PI)', src), \
-            "analytic IBL diffuse must divide by PI (4.4)"
+        assert not re.search(r'envColor\((?:Nw|d)\)\s*(?:/\s*PI|\*\s*INV_PI)', src), \
+            "analytic IBL diffuse is the radiance, as the probe's irradiance is"
 
 
 class TestSRGBPipeline:

@@ -154,6 +154,13 @@ Lighting and shadows
      - number
      - ``1.0``
      - Scale on the ambient light from the environment.
+   * - ``OPENGLCONTEXT_IBL_STUDIO_FILL``
+     - number
+     - ``0.15``
+     - What the built-in studio environment gives a non-metal in a scene with
+       lights of its own, as a fraction of its strength; ``1.0`` lights it at
+       the studio's own brightness. A metal's reflection, a scene with no lights
+       and an environment the scene supplies are not scaled.
    * - ``OPENGLCONTEXT_ENV_HDR``
      - path or URL
      - unset

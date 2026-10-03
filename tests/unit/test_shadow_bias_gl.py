@@ -45,7 +45,7 @@ def shadowed_env(monkeypatch):
     which has to stay bright enough to be told from the unlit frame's black.
     """
     base_env(monkeypatch, OPENGLCONTEXT_SHADOWS='1', OPENGLCONTEXT_SHADOW_CASCADES='3',
-             OPENGLCONTEXT_IBL='analytic', OPENGLCONTEXT_IBL_INTENSITY='0.15')
+             OPENGLCONTEXT_IBL='analytic', OPENGLCONTEXT_IBL_INTENSITY='0.3')
 
 
 def wall_scene(light):

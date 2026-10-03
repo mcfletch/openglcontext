@@ -85,8 +85,8 @@ class TestContext( BaseContext ):
                         location = [0,5,10],
                         color = [1,.95,.95],
                         intensity = 1,
-                        ambientIntensity = 0.10,
                         direction = [0,-5,-10],
+                        castShadows = True,
                     ),
                 ],
             ),
@@ -94,8 +94,8 @@ class TestContext( BaseContext ):
                 location = [3,3,3],
                 color = [.75,.75,1.0],
                 intensity = .5,
-                ambientIntensity = .05,
                 direction = [-3,-3,-3],
+                castShadows = True,
             ),
         ]
     '''=The Scene=
@@ -202,6 +202,10 @@ class TestContext( BaseContext ):
 if __name__ == "__main__":
     TestContext.ContextMainLoop(
         size = (512,512),
+        definition={
+            'renderer':'vrml97',
+            'shadows': True,
+        }
     )
 '''Shadows have a small number of controls, all of them optional:
 

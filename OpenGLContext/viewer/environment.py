@@ -26,7 +26,7 @@ from OpenGLContext.viewer.options import ViewerOptions
 __all__ = ['count_nodes', 'count_lights', 'count_backgrounds', 'sky_background',
            'hdr_background', 'cube_background', 'background_for',
            'apply_render_env', 'viewer_defaults', 'VIEWER_DEFAULTS',
-           'VIEWER_IBL_INTENSITY']
+           'VIEWER_IBL_INTENSITY', 'VIEWER_STUDIO_FILL']
 
 
 #: What a viewer's command line settles before anything imports a window
@@ -44,6 +44,11 @@ VIEWER_DEFAULTS = {
 #: :meth:`~OpenGLContext.viewer.sceneviewer.SceneViewerMixin.resolveDefinition`
 #: where neither the options nor ``OPENGLCONTEXT_IBL_INTENSITY`` choose one.
 VIEWER_IBL_INTENSITY = 0.4
+
+#: The viewer's ``iblStudioFill``: 1.0, since :data:`VIEWER_IBL_INTENSITY`
+#: already sets how strong the studio is under the viewer's lights, and a model
+#: is shown in that environment rather than lit by its lights over a fill.
+VIEWER_STUDIO_FILL = 1.0
 
 
 def viewer_defaults() -> None:

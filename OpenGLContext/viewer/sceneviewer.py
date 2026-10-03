@@ -190,8 +190,12 @@ class SceneViewerMixin( CaptionMixin,
         :attr:`options` choose shadows and the ambient scale where they say
         anything.  Where they do not, ``OPENGLCONTEXT_IBL_INTENSITY`` is left
         to supply the ambient scale, and failing that it is
-        :data:`~OpenGLContext.viewer.environment.VIEWER_IBL_INTENSITY`.  A
-        field the definition passed in already sets is left as it is.
+        :data:`~OpenGLContext.viewer.environment.VIEWER_IBL_INTENSITY`.  The
+        built-in studio is the environment a model is shown in, so it is not
+        dimmed under the viewer's lights: ``iblStudioFill`` is
+        :data:`~OpenGLContext.viewer.environment.VIEWER_STUDIO_FILL` where
+        nothing else sets it.  A field the definition passed in already sets is
+        left as it is.
         """
         resolved = super().resolveDefinition(definition, **named)
         options = cls.options
@@ -204,6 +208,9 @@ class SceneViewerMixin( CaptionMixin,
                 resolved.iblIntensity = options.ibl_intensity
             elif not renderoptions.env_text_once('OPENGLCONTEXT_IBL_INTENSITY').strip():
                 resolved.iblIntensity = env.VIEWER_IBL_INTENSITY
+        if (not _isSet(resolved, 'iblStudioFill')
+                and not renderoptions.env_text_once('OPENGLCONTEXT_IBL_STUDIO_FILL').strip()):
+            resolved.iblStudioFill = env.VIEWER_STUDIO_FILL
         return resolved
 
     @classmethod

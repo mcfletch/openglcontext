@@ -937,10 +937,17 @@ class PBRShaderProgram(VRML97ShaderProgram):
             self.set_transmission(0.0)
             self.bind_pbr_textures(material, mode)
 
-    def set_ibl_mode(self, mode_code: int, intensity: float = 1.0) -> None:
-        """Set the environment-lighting path (0=off, 1=analytic, 2=full)."""
+    def set_ibl_mode(self, mode_code: int, intensity: float = 1.0,
+                     fill_scale: float = 1.0) -> None:
+        """Set the environment-lighting path (0=off, 1=analytic, 2=full).
+
+        ``fill_scale`` multiplies what the environment gives a non-metal; the
+        built-in studio environment is lowered this way (see
+        :func:`OpenGLContext.passes.ibl.fill_scale`).
+        """
         self._set_uniform1i('iblMode', int(mode_code), self.program)
         self._set_uniform1f('iblIntensity', float(intensity), self.program)
+        self._set_uniform1f('iblFill', float(fill_scale), self.program)
 
     def set_exposure(self, exposure: float = 1.0) -> None:
         """Set the camera exposure multiplier (1.0 = neutral). Scenes lit by

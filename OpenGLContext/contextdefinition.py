@@ -219,6 +219,11 @@ class ContextDefinition( node.Node ):
     #: shadow-casting key light read clearly (env: OPENGLCONTEXT_IBL_INTENSITY).
     iblIntensity = field.newField( "iblIntensity", "SFFloat", 1,
                                    lambda: renderoptions.env_number('OPENGLCONTEXT_IBL_INTENSITY', 1.0))
+    #: What the built-in studio environment gives a non-metal in a scene that has
+    #: lights of its own, as a fraction of the studio's strength; 1.0 lights it at
+    #: the studio's own brightness (env: OPENGLCONTEXT_IBL_STUDIO_FILL).
+    iblStudioFill = field.newField( "iblStudioFill", "SFFloat", 1,
+                                    lambda: renderoptions.env_number('OPENGLCONTEXT_IBL_STUDIO_FILL', 0.15))
     #: Refraction through glass: "auto", "full", "blend" or "off"
     #: (env: OPENGLCONTEXT_TRANSMISSION).
     transmission = field.newField( "transmission", "SFString", 1,
@@ -378,6 +383,8 @@ class ContextDefinition( node.Node ):
                 'optionLabels': renderoptions.LABELS['ibl']},
         'iblIntensity': {'label': 'Environment intensity', 'minimum': 0.0,
                          'maximum': 2.0, 'step': 0.05},
+        'iblStudioFill': {'label': 'Studio fill under lights', 'minimum': 0.0,
+                          'maximum': 1.0, 'step': 0.05},
         'zoneCaptureFaces': {'label': 'Zone capture faces per frame', 'minimum': 1,
                              'maximum': 6, 'step': 1},
         'transmission': {'label': 'Glass refraction',
@@ -414,7 +421,7 @@ class ContextDefinition( node.Node ):
     #: should read: the expensive things first, the diagnostics last.
     RENDERING_FIELDS = (
         'shadows', 'shadowsSoft', 'shadowCascades', 'maximumLights',
-        'bloom', 'ibl', 'iblIntensity', 'transmission', 'planarReflections',
+        'bloom', 'ibl', 'iblIntensity', 'iblStudioFill', 'transmission', 'planarReflections',
         'reflectionViews', 'reflectionBounces', 'zoneCaptureFaces', 'instancing',
         'gpuSkinning', 'tessellationLOD', 'multisampleSamples', 'vsync',
         'renderer',

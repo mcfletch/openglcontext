@@ -476,8 +476,17 @@ Environment Lighting (Reflections and Ambient)
 Real surfaces reflect their surroundings and pick up soft light from the whole
 scene, not only from direct lights. The renderer supplies this "image-based
 lighting" from a built-in studio environment. Metals get something to reflect,
-and matte surfaces are softly lit even in shadow. It is on by default. Two
-environment variables adjust it:
+and other surfaces get a gentle fill light. It is on by default.
+
+The studio is bright, so that metal has a strong reflection. A metal reflects
+it at full strength; the diffuse light and the reflection it gives a non-metal
+are scaled by ``iblStudioFill`` (default 0.15) in a scene that
+has lights of its own, so a floor lit by a spotlight is not lifted toward white
+and the spotlight's shadow stays visible. A scene with no lights is lit by the
+studio and the default headlight alone, and the studio keeps its full strength.
+An environment the scene supplies -- an ``HDRBackground``, an
+``ImageBasedLight`` or a glTF image-based light -- lights at its own strength.
+Three environment variables adjust the built-in one:
 
 - ``OPENGLCONTEXT_IBL_INTENSITY`` - scales the environment and ambient
   strength (default 1.0). The viewer sets it to 0.4 so cast shadows stay
@@ -486,8 +495,12 @@ environment variables adjust it:
 - ``OPENGLCONTEXT_IBL`` - ``auto`` (the default), ``full``, ``analytic`` (a
   cheaper approximation) or ``off`` (flat ambient, no reflections).
 
-Both are also ``ContextDefinition`` fields (``iblIntensity`` and ``ibl``),
-which a settings screen can change while the program runs; see
+- ``OPENGLCONTEXT_IBL_STUDIO_FILL`` - the fraction of the built-in studio that
+  a non-metal gets in a scene with lights of its own (default 0.15). 1.0 lights
+  it at the studio's own strength.
+
+All three are also ``ContextDefinition`` fields (``iblIntensity``, ``ibl`` and
+``iblStudioFill``), which a settings screen can change while the program runs; see
 :doc:`environment` and :ref:`overlayui-settings`.
 
 A scene can supply its own environment. ``HDRBackground`` takes an

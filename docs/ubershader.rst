@@ -430,7 +430,9 @@ split-sum approximation:
 ``passes/ibl.py`` builds these three textures at run time, from the
 procedural studio environment (``ibl_env.frag``) or from the panorama of an
 ``HDRBackground`` in the scene, and builds them again when that panorama
-changes. The prefilter and LUT precomputes use the same
+changes. A probe built from the studio is marked ``studio`` and is scaled by
+``iblFill`` when the scene has lights of its own; one holding the panorama, a
+cube map or an image-based light is not. The prefilter and LUT precomputes use the same
 ``importanceSampleGGX`` and Hammersley sampling in ``_brdf_inc.glsl`` as the
 direct path's terms, so the baked probe and the per-pixel shading use one
 definition of the BRDF.
@@ -441,8 +443,10 @@ iblMode 1 -- analytic environment
 .. rst-class:: technical
 
 This path uses no probe, and ``auto`` selects it on software rasterizers.
-``envColor()`` gives a sky/ground gradient, divided by ``π`` for the diffuse
-irradiance, and ``envBRDFApprox()`` (Karis' analytic fit) supplies the
+``envColor()`` gives a sky/ground gradient, which is the diffuse light as it
+stands: the full path's irradiance map holds E/π, the radiance of a uniform sky.
+Both paths multiply what the built-in environment gives a non-metal by
+``iblFill`` (``iblStudioFill``), and ``envBRDFApprox()`` (Karis' analytic fit) supplies the
 split-sum scale and bias without a lookup table. It has the same energy and
 roughness response as the full path, with a simpler environment.
 

@@ -226,6 +226,11 @@ field on the ``ContextDefinition``, and the screen shows all of them:
      - float, 0–2
      - Scales the unshadowed ambient/environment term.
      - ``OPENGLCONTEXT_IBL_INTENSITY``
+   * - ``iblStudioFill``
+     - float, 0–1
+     - What the built-in studio environment gives a non-metal in a scene that
+       has lights of its own, as a fraction of its strength (default 0.15).
+     - ``OPENGLCONTEXT_IBL_STUDIO_FILL``
    * - ``transmission``
      - ``auto``/``full``/``blend``/``off``
      - Refraction through glass.

@@ -365,6 +365,11 @@ uniform vec3 lightGridDirection;
 // The probe cubes are world-oriented, sampled via eyeToWorld (declared below).
 uniform int iblMode;
 uniform float iblIntensity;
+// Scales what the built-in studio environment gives a non-metal: its diffuse
+// light and its reflection. A metal reflects the studio at full strength.
+// 1.0 where the scene supplies its own environment, which lights at its own
+// strength.
+uniform float iblFill;
 #if PBR_ZONE_PROBES
 // Layer 0 is the scene's environment; a zone with a probe of its own has
 // another layer, named by its zoneLight.z.
@@ -497,7 +502,7 @@ vec3 envColor(vec3 dir) {
 // sceneAmbient stands in.
 vec3 envIrradiance(vec3 d) {
     if (iblMode == 2) {
-        vec3 c = probeIrradiance(d, 0.0) * zoneScene;
+        vec3 c = probeIrradiance(d, 0.0) * zoneScene * iblFill;
 #if PBR_ZONE_PROBES
         for (int i = 0; i < zoneLayers; ++i) {
             if (zoneShare[i] > 0.0) c += probeIrradiance(d, zoneLight[i].z) * zoneShare[i];
@@ -506,11 +511,10 @@ vec3 envIrradiance(vec3 d) {
         return c * iblIntensity;
     }
     if (iblMode == 1) {
-        // envColor is a single radiance sample; a Lambertian surface needs the
-        // cosine-weighted hemispherical *irradiance*. Dividing the radiance by
-        // PI approximates that integral, and puts the analytic diffuse at the
-        // level the prefiltered-probe path gives.
-        return envColor(d) * INV_PI * iblIntensity * zoneAll;
+        // The probe's irradiance map holds E/PI (ibl_irradiance.frag), which for
+        // a smooth sky is the radiance itself, so the radiance stands in for it
+        // directly and the two paths light a surface alike.
+        return envColor(d) * iblIntensity * zoneAll * iblFill;
     }
     return sceneAmbient * zoneAll;
 }
@@ -1000,7 +1004,8 @@ void main() {
     // Only a surface that transmits diffuse light reads what arrives behind it.
     if (diffuseTransFactorEff > 0.0) irrBack = envIrradiance(-Nw);
     if (iblMode != 0) {                // a probe (split-sum LUT) or the analytic sky
-        vec3 pre = planarReflected(envRadiance(Rw, roughness), N, roughness);
+        vec3 pre = planarReflected(
+            envRadiance(Rw, roughness) * mix(iblFill, 1.0, metallic), N, roughness);
         vec2 ab = iblMode == 2 ? texture(brdfLUT, vec2(NdotV, roughness)).rg
                                : envBRDFApprox(NdotV, roughness);
         ambSpecular = pre * (F0 * ab.x + specF90 * ab.y) * ao;
