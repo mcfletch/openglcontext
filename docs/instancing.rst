@@ -106,6 +106,11 @@ again when the shape's geometry, appearance, material or texture is replaced,
 when a material field or texture channel is set, and when any shape becomes a
 mirror or stops being one, so an edit takes effect on the next frame.
 
+A group is drawn with one winding and one face-culling state. A geometry's
+``ccw`` and ``solid`` fields set them, so a ``solid FALSE`` surface such as a
+wall or a chair seat is drawn from both sides instanced as it is on its own,
+and a group never mixes instances of opposite modelview determinant.
+
 Explicit and opportunistic instances
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

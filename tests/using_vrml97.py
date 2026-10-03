@@ -3,18 +3,14 @@
 
 [using_vrml97.py-screen-0001.png Screenshot]
 
-A ``.wrl`` file is a scenegraph written down, and this engine's scenegraph
-is VRML97's, so loading one is reading the nodes it names.  The file used
-here animates itself: it carries a ``TimeSensor``, two interpolators and
-the ``ROUTE``\\ s that wire them to a ``Transform``, so it moves with no
-code at all.
+OpenGLContext's native scenegraph is based on the VRML97 scenegraph,
+and it includes support for loading VRML97 scenes. The 
+:py:mod:`OpenGLContext.basenodes` module has the common VRML97 nodes
+defined, and these are available to load from a VRML97 formatted
+file (a .wrl file).
 
-:doc:`The VRML97 page </vrml97>` is what the format holds and what this
-engine does with it; this is how to put one on screen.
-
-Keys:
-
-    space   turn the file's own animation on and off
+Content authored in VRML97 is relatively rare these days, but you
+can load it in essentially the same way as you would load a glTF scene.
 '''
 import os
 
@@ -24,7 +20,7 @@ from OpenGLContext.scenegraph.basenodes import (
     Background, DirectionalLight, Transform, sceneGraph,
 )
 
-BaseContext = testingcontext.getInteractive()
+from OpenGLContext.context import Context as BaseContext
 
 #: The file, beside this script.  It is a pyramid on a looping path -- the
 #: animation is in the file rather than in this program.

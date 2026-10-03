@@ -142,6 +142,7 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
             draw_instanced_mesh, instance_counts, instance_matrices, per_instance,
         )
         from OpenGLContext.passes.shaderpass import configure_material_from_node
+        from OpenGLContext.scenegraph.winding import apply_winding_cull
         from OpenGL.GL import GL_LINES
         members = group.members
         geom = group.geometry
@@ -187,6 +188,9 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
             shader.set_vertex_color(getattr(geom, 'colors', None) is not None)
         if hasattr(geom, '_apply_draw_state'):
             geom._apply_draw_state(self)
+        else:
+            apply_winding_cull(self, bool(getattr(geom, 'ccw', True)),
+                               bool(getattr(geom, 'solid', True)))
         shader.set_instancing(True, program=prog)
         try:
             draw_instanced_mesh(gpu, modelviews, oids, copies=self.viewCopies)

@@ -408,14 +408,16 @@ class _LineInstanceGPU(object):
     """GL_LINES vertex buffers for the shared instanced-draw path.
 
     Exposes the same surface ``draw_instanced_mesh`` reads on a PBRMesh
-    ``_MeshGPU`` -- ``attr_layout`` (position@0, colour@1), ``count``,
+    ``_MeshGPU`` -- ``attr_layout`` (position and colour at the engine's
+    ``LOC_POSITION`` and ``LOC_COLOR``), ``count``,
     ``draw_mode`` (GL_LINES), ``indexed`` (False) and an ``_instance_vao`` slot --
     so lines flow through the identical instancing machinery as meshes.
     """
     def __init__(self, positions: Any, colors: Any) -> None:
         self._pos_vbo = VBO(np.ascontiguousarray(positions, dtype='f'))
         self._col_vbo = VBO(np.ascontiguousarray(colors, dtype='f'))
-        self.attr_layout = [(self._pos_vbo, 0, 3), (self._col_vbo, 1, 3)]
+        self.attr_layout = [(self._pos_vbo, LOC_POSITION, 3),
+                            (self._col_vbo, LOC_COLOR, 3)]
         self.idx_vbo = None
         self.indexed = False
         self.count = len(positions)

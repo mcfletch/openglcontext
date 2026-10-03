@@ -161,7 +161,8 @@ specification:
   (larger is finer); the default, 0, chooses it from the camera distance
 
 - :doc:`ScreenCoverageLOD <lod>` -- a level-of-detail node that chooses by
-  screen coverage rather than distance
+  screen coverage rather than distance. A file names it ``ScreenCoverageLOD``;
+  ``LOD`` in a file is VRML97's distance-based node with its ``range`` field.
 
 .. rst-class:: technical
 

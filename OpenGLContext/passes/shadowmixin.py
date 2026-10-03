@@ -28,6 +28,7 @@ from OpenGLContext.arrays import dot  # numpy re-export via vrml.arrays star imp
 from OpenGLContext import frustum as frustum_module
 from OpenGLContext.scenegraph import light as light_module
 from OpenGLContext.passes import shadowmath
+from OpenGLContext.passes.instancing import forget_cull_state
 from OpenGLContext.passes.shadowmath import SHADOW_DEPTH_BIAS
 from OpenGLContext.passes.shadowcaps import ShadowCapabilities
 from OpenGLContext.passes.shadowpool import _CascadeControllerMixin, _ShadowMapPoolMixin
@@ -1150,6 +1151,9 @@ class ShadowMapMixin(_CascadeControllerMixin, _ShadowMapPoolMixin):
                 glEnable(GL_CULL_FACE)
             else:
                 glDisable(GL_CULL_FACE)
+            # The draws above went through set_cull_state, whose memo now
+            # describes the depth pass rather than the state just restored.
+            forget_cull_state(self)
             glDisable(GL_POLYGON_OFFSET_FILL)
             if depth_clamp:
                 glDisable(GL_DEPTH_CLAMP)

@@ -46,6 +46,7 @@ from OpenGLContext.scenegraph.pbrmaterial import (
 from OpenGLContext.passes.ibl import IBL_UNITS, _IBL_SAMPLER
 from OpenGLContext.passes.zonelayers import MAX_ZONE_LAYERS, ZonePack
 from OpenGLContext.scenegraph.skinning import SKIN_PALETTE_UNIT, palette_supported
+from OpenGLContext.scenegraph.winding import apply_winding_cull
 
 if TYPE_CHECKING:
     from OpenGLContext.passes.instancing import Batchers
@@ -1220,6 +1221,12 @@ class PBRPass(flatcore.FlatPass):
         shader.set_matrices(self.matrix, self.projection, program=prog)
         if hasattr(geom, '_apply_draw_state'):
             geom._apply_draw_state(self)
+        else:
+            # A geometry with no draw state of its own still says how its
+            # faces wind and whether its back is ever seen; a single-sided
+            # surface (a VRML ``solid FALSE``) is drawn from both sides.
+            apply_winding_cull(self, bool(getattr(geom, 'ccw', True)),
+                               bool(getattr(geom, 'solid', True)))
         if hasattr(shader, 'set_vertex_color'):
             shader.set_vertex_color(getattr(geom, 'colors', None) is not None)
 

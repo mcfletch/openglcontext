@@ -425,6 +425,9 @@ class ScreenCoverageLOD(LOD):
         https://github.com/KhronosGroup/glTF/tree/main/extensions/2.0/Vendor/MSFT_lod
     """
 
+    #: Its own VRML97 name; ``LOD`` stays the standard distance-based node.
+    PROTO = 'ScreenCoverageLOD'
+
     #: The coverage at which each level takes over, finest first, decreasing.
     screenCoverage = field.newField('screenCoverage', 'MFFloat', 1, list)
     #: The object's bounding-sphere radius in its own coordinates; 0 to measure

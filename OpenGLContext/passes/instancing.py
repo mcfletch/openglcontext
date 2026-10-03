@@ -339,6 +339,18 @@ def set_cull_state(mode: Any, enabled: bool, front_face: int) -> None:
         mode._cull_enabled = enabled
 
 
+def forget_cull_state(mode: Any) -> None:
+    """Drop the memo of what GL has, after something else has set it.
+
+    A pass that changes the cull state outside :func:`set_cull_state` -- the
+    shadow depth pass disables culling and puts the caller's state back -- leaves
+    the memo describing GL as it was mid-pass. The next draw then finds the memo
+    agreeing with what it wants and skips a call GL needed.
+    """
+    mode._cull_front_face = None
+    mode._cull_enabled = None
+
+
 def reset_cull_state(mode: Any) -> None:
     """Put culling and winding back to the GL defaults after a geometry loop.
 
