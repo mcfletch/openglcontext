@@ -25,7 +25,7 @@ DEF Pyramid01 Transform {
       0 0 1 -1.01, 0 0 1 -1.05, ] },
     Shape {
       appearance Appearance {
-        material Material {
+        material DEF Pyramid01-Material Material {
           diffuseColor 0.424 0.0314 0.533
         }
       }

@@ -18,6 +18,7 @@ from OpenGLContext import testingcontext
 from OpenGLContext.events.timer import Timer
 from OpenGLContext.scenegraph.basenodes import (
     Background, DirectionalLight, Transform, sceneGraph,
+    ColorInterpolator,
 )
 
 from OpenGLContext.context import Context as BaseContext
@@ -51,40 +52,32 @@ class TestContext(BaseContext):
         print(__doc__)
 
     def OnLoaded(self, request):
-        '''``request.result`` is the scene the file describes -- nodes,
-        materials, lights, sensors and routes -- as a scenegraph like any
-        other, so it can be mounted under a ``Transform`` and put in a scene
-        of your own.'''
-        loaded = request.result
-        print('%s: %d root nodes' % (os.path.basename(MODEL),
-                                     len(loaded.children)))
+        '''For a VRML97 world, the result of the request is a sceneGraph
+        node. To render the world as-is you can assign it to `self.sg`.
+        You can also pull nodes out of the sceneGraph's children and
+        add them to your own sceneGraph.
+        '''
+        loaded:sceneGraph = request.result
         '''The loaded object is a ``sceneGraph``: the root of the file.  Its
         ``children`` are the nodes to mount, which is what lets a file be put
         inside a scene of your own rather than becoming the whole of it.'''
-        self.model = Transform(scale=(1.6, 1.6, 1.6),
-                               children=list(loaded.children))
-        self.spin = Transform(children=[self.model])
-        self.sg.children = list(self.sg.children) + [self.spin]
-
-        '''A ``DEF`` name in the file is how its author labelled a node, and
-        ``getDEF`` is how to get hold of one: the handle a program needs to
-        change what the file describes.  Here it is the timer the file's own
-        animation runs on, which the space bar stops and starts.'''
+        self.sg = loaded
+        '''As with glTF we can pull a particular node out of the scenegraph
+        in order to modify it.'''
         self.timeSensor = loaded.getDEF('Pyramid01-TIMER')
+        self.pyramidMaterial = loaded.getDEF('Pyramid01-Material')
 
-        '''The file's animation runs itself; this is a second one, written in
-        Python over the top of it, to show that the two compose -- the loaded
-        scene is ordinary nodes and nothing about it is closed to a program.
-        :doc:`Animating a transform <using_animation>` is the timer in
-        detail.'''
-        self.timer = Timer(duration=PERIOD, repeating=1)
-        self.timer.addEventHandler('fraction', self.OnFraction)
-        self.timer.register(self)
-        self.timer.start()
-
-    def OnFraction(self, event):
-        import math
-        self.spin.rotation = (0, 1, 0, 2.0 * math.pi * event.fraction())
+        colorInterpolator = ColorInterpolator(
+            keyValue=[1,0,0, 0,1,0, 0,0,1, 0,1,0, 1,0,0],
+            key=[0,.25,.5,.75,1.0],
+        )
+        self.sg.children.append(colorInterpolator)
+        self.sg.addRoute(
+            (self.timeSensor,'fraction_changed',colorInterpolator,'set_fraction'),
+        )
+        self.sg.addRoute(
+            (colorInterpolator,'value_changed',self.pyramidMaterial,'set_diffuseColor'),
+        )
 
     def OnToggle(self, event):
         '''``enabled`` is the ``TimeSensor``'s own field: switching it off
@@ -94,8 +87,6 @@ class TestContext(BaseContext):
         if self.timeSensor is None:
             return
         self.timeSensor.enabled = not self.timeSensor.enabled
-        print('the file\'s animation is %s'
-              % ('running' if self.timeSensor.enabled else 'stopped',))
 
 
 '''_What a .wrl file brings with it_

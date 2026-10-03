@@ -39,7 +39,15 @@ class TimeSensor(basenodes.TimeSensor):
                 "fraction", function = self.onFraction 
             )
             timerObject.addEventHandler( "cycle", function = self.onCycle )
+            field = protofunctions.getField( self, 'enabled' )
+            dispatcher.connect(
+                timerObject.set_active,
+                signal=('set',field),
+                sender=self,
+            )
+
         return timerObject
+
     def bind( self, context: Any ) -> bool:
         """Bind this time-sensor to a particular context"""
         self.getTimer(context)

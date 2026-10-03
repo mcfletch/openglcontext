@@ -149,6 +149,12 @@ class Timer( eventmanager.EventManager ):
     def resume(self, realTime: Optional[float] = None) -> None:
         """Resume the internal timer"""
         self._doAndDispatch(self.internal.resume, realTime)
+    def set_active(self, value, *args, **named):
+        """Set our active state to the given value"""
+        if value:
+            self.resume()
+        else:
+            self.pause()
 
 if __name__ == "__main__":
     def test () -> None:

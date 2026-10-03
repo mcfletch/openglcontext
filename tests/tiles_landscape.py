@@ -98,6 +98,6 @@ if __name__ == "__main__":
     TestContext.ContextMainLoop(definition={
         'renderer': 'pbr',
         'ibl': 'off',
-        'no_vsync':1,
+        'vsync': False,
     })
 

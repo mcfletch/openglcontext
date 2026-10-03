@@ -7,7 +7,8 @@ non-solid shape found the record agreeing with it and left culling on. A VRML
 world of single-sided walls viewed from inside lost every wall.
 
 The quad faces away from the camera and is not solid; its centre pixel has to be
-the quad's red rather than the background.
+red rather than the black background. The light reaches only its front face, so
+the red it shows is the environment's.
 
 Skips (not fails) when no usable GL context can be created.
 """
@@ -53,7 +54,7 @@ try:
     pixels, width, height = read_back_buffer(0)
     r, g, b = [int(v) for v in pixels[height // 2, width // 2][:3]]
     sys.stderr.write('centre=%r\n' % ((r, g, b),))
-    os._exit(0 if r > 120 and r > 2 * b else 2)
+    os._exit(0 if r > 40 and r > 2 * b else 2)
 except SystemExit:
     raise
 except BaseException as e:
