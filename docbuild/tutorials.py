@@ -98,6 +98,7 @@ PATHS = [
         [
             'tutorials/core_context/getting_a_context',
             'tutorials/core_context/loading_gltf_model',
+            'keyboardevents',
             'using_vrml97',
             'using_obj',
             'using_animation',
