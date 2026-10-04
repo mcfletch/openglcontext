@@ -46,11 +46,16 @@ def built(source=None):
 
 
 def loaded(application):
-    """Pump frames until the scene the worker thread is loading is on screen"""
+    """Pump frames until the scene the worker thread is loading is on screen
+
+    The context shows an empty scene until the load arrives, and that scene is
+    one row (the root, with nothing under it), so a scene is loaded once the
+    outline has a second.
+    """
     deadline = time.time() + LOAD_SECONDS
     while time.time() < deadline:
         application.onFrame()
-        if application.shownScene is not None and application.outline.rows:
+        if application.shownScene is not None and len(application.outline.rows) > 1:
             return True
         time.sleep(0.01)
     return False
