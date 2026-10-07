@@ -134,6 +134,9 @@ implements these X3D nodes, by component:
 
 .. x3d-implemented-end
 
+Geometry
+~~~~~~~~
+
 The triangle sets and ``ElevationGrid`` are drawn as the mesh their fields
 build (``OpenGLContext.scenegraph.meshgeometry``): normals that are not given
 are generated, smoothed across folds within ``creaseAngle`` for
@@ -153,9 +156,27 @@ coordinates across their bounds, ``Circle2D``, ``Arc2D`` and ``Polyline2D`` as
 lines, and ``Polypoint2D`` as points. A curve has 48 segments to a whole turn
 (``geometry2d.SEGMENTS``).
 
-Materials and appearance are described with the :doc:`PBR renderer <pbr>`:
-``PhysicalMaterial``, ``UnlitMaterial`` and ``Material`` with their texture
-fields and mapping labels, ``Appearance.alphaMode`` and ``alphaCutoff``, and
+An ``IndexedFaceSet`` or a triangle set with no ``texCoord`` takes X3D's
+default texture coordinates: s from 0 to 1 along the largest dimension of
+its coordinates' bounding box, t along the second largest in the same units
+(``composedgeometry.default_texcoords``).
+
+A composed geometry's first texture coordinate set may come from a
+``TextureCoordinateGenerator``: the PBR vertex shader makes it in the
+generator's ``mode`` (``OpenGLContext.scenegraph.texgen``), from the
+vertex's own or camera-space position or normal. A generator for a later
+set is reported once and not drawn, and the fixed-function and VRML97
+shader paths do not generate coordinates.
+
+A grouping node or shape whose ``visible`` is false is not drawn, picked or
+shadowed, nor is anything under it; setting it takes effect on the next frame.
+
+Materials and appearance
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+The :doc:`PBR renderer <pbr>` page describes ``PhysicalMaterial``,
+``UnlitMaterial`` and ``Material`` with their texture fields and mapping
+labels, ``Appearance.alphaMode`` and ``alphaCutoff``, and
 ``MultiTextureTransform``. A ``Material``'s ``diffuseTexture``,
 ``emissiveTexture``, ``normalTexture`` and ``occlusionTexture`` are its base
 colour, emissive, normal and occlusion maps, and its ``normalScale`` and
@@ -172,8 +193,8 @@ shape is drawn a side at a time and is not batched with others. The alpha
 mode is the front material's, and the fixed-function path draws both sides
 with the front material.
 
-A grouping node or shape whose ``visible`` is false is not drawn, picked or
-shadowed, nor is anything under it; setting it takes effect on the next frame.
+Lighting
+~~~~~~~~
 
 A ``DirectionalLight`` whose ``global`` is false (X3D's default) lights only
 the descendants of its parent grouping node; point and spot lights, global by
@@ -191,18 +212,6 @@ specular level is made from the same coefficients, so smooth surfaces
 reflect a blurred environment; the cube-map textures, ``origin`` and
 ``global`` are not read. It needs full image-based lighting
 (``ContextDefinition.ibl``).
-
-Walking (:doc:`physics`) collides with what X3D's ``Collision`` groups say:
-a disabled group's children are walked through, a ``proxy`` collides in
-place of the children, and each enabled group's geometry is a body of its
-own in the walk's world (``gltf_world.collision_groups``). As the avatar
-touches it the group sends ``isActive TRUE`` and ``collideTime``, as does
-each enabled group around it, and ``isActive FALSE`` when the touch ends
-(``OpenGLContext.physics.x3dcollision``).
-
-A ``Fog`` or ``LocalFog`` fades the colour as it is displayed, after tone
-mapping, by X3D's equation: a ``LINEAR`` fog leaves an object
-``(visibilityRange - distance) / visibilityRange`` of its own colour.
 
 A document is lit by its own lights and its headlight: the PBR pass's
 built-in studio environment, which lights a scene built in code, is off for it,
@@ -228,6 +237,19 @@ default, applies X3D's rules to a scene loaded from a document and the
 engine's to one built in code; ``x3d`` and ``engine`` apply one set to every
 scene.
 
+A point or spot light's ``radius`` is how far it reaches in its own
+coordinates: nothing past it is lit, in the shader paths. A light a document
+builds has VRML97's and X3D's 100 unless the document sets another; one made
+in code reaches everywhere unless given one; a glTF light's is its ``range``.
+The fixed-function path has no such cut-off.
+
+Fog and backgrounds
+~~~~~~~~~~~~~~~~~~~
+
+A ``Fog`` or ``LocalFog`` fades the colour as it is displayed, after tone
+mapping, by X3D's equation: a ``LINEAR`` fog leaves an object
+``(visibilityRange - distance) / visibilityRange`` of its own colour.
+
 An enabled ``LocalFog`` fogs the siblings in its parent group and their
 descendants in place of the bound ``Fog`` (``OpenGLContext.passes.localfog``);
 where LocalFogs nest, the deepest group's fogs what is in it. An instanced
@@ -242,13 +264,26 @@ shows the sky and ground. A ``TextureBackground`` is drawn the same way from
 its six ``...Texture`` sides. A side is an ``ImageTexture`` or a
 ``PixelTexture``; ``transparency`` is not read.
 
-A point or spot light's ``radius`` is how far it reaches in its own
-coordinates: nothing past it is lit, in the shader paths. A light a document
-builds has VRML97's and X3D's 100 unless the document sets another; one made
-in code reaches everywhere unless given one; a glTF light's is its ``range``.
-The fixed-function path has no such cut-off.
+Collision
+~~~~~~~~~
 
-.. _x3d-binding:
+Walking (:doc:`physics`) collides with what X3D's ``Collision`` groups say:
+a disabled group's children are walked through, a ``proxy`` collides in
+place of the children, and each enabled group's geometry is a body of its
+own in the walk's world (``gltf_world.collision_groups``). As the avatar
+touches it the group sends ``isActive TRUE`` and ``collideTime``, as does
+each enabled group around it, and ``isActive FALSE`` when the touch ends
+(``OpenGLContext.physics.x3dcollision``).
+
+Inline
+~~~~~~
+
+An ``Inline`` reads any format a registered reader opens: another X3D or
+VRML97 world, an OBJ model or a glTF model. Its scene is read on the loader
+pool and drawn from the frame after it arrives. See :ref:`x3d-worlds`.
+
+Time
+~~~~
 
 The event utilities, sequencers, followers and interpolators are pyvrml97's
 behaviours (``vrml.x3d.runtime``, ``vrml.x3d.followers``). In the engine:
@@ -268,6 +303,14 @@ behaviours (``vrml.x3d.runtime``, ``vrml.x3d.followers``). In the engine:
 - A ``LoadSensor`` is polled in the same way. ``Inline`` and ``ImageTexture``
   record their load state as they read (``vrml.x3d.loadsensor``); other url
   nodes record none and are not waited for.
+- A follower moves a step each frame on the engine's clock while it is
+  moving, queued on its window's render queue.
+
+.. _x3d-binding:
+
+Binding, viewpoints and navigation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 - The background, fog and viewpoint the pass uses are the bound ones, on
   X3D's bind stacks (``vrml.x3d.binding``): of the nodes the scene draws, the
   topmost on its stack, and with none bound the first. ``set_bind``, sent by
@@ -293,32 +336,6 @@ behaviours (``vrml.x3d.runtime``, ``vrml.x3d.followers``). In the engine:
   maximum y), widened along one axis to the shape of the window it is drawn
   in (``ViewPlatform.setOrthographic``); a perspective viewpoint bound after
   it ends the orthographic projection.
-- The environmental sensors are told once a frame what they sense
-  (``OpenGLContext.scenegraph.x3dsensors``): a ``ProximitySensor`` the
-  active view's camera, a ``TransformSensor`` its ``targetObject`` where the
-  scene draws it, and a ``VisibilitySensor`` whether its box is within any
-  view's frustum.
-- The pointing-device sensors (``TouchSensor``, ``PlaneSensor``,
-  ``CylinderSensor``, ``SphereSensor``) are told of their context's picked
-  pointer (``OpenGLContext.scenegraph.x3dpointing``). The sensors reached are
-  the enabled ones beside the geometry under the pointer, in the lowest group
-  on its path that has any; the primary button presses them, and a drag
-  continues on or off their geometry until it is released. The scene's and
-  the application's own handlers receive the same events. The hit is the picked point, with no
-  normal or texture coordinate. Picking (``ContextDefinition.pickEnabled``)
-  has to be on.
-- A ``Billboard`` is turned toward the camera of a frame's first view once a
-  frame, before the frame is drawn (``FlatPass.faceBillboards``): about its
-  ``axisOfRotation``, or with ``0 0 0`` facing the camera with its +Y along the
-  camera's up. Shadows are cast as it faces the camera.
-- An ``IndexedFaceSet`` or a triangle set with no ``texCoord`` takes X3D's
-  default texture coordinates: s from 0 to 1 along the largest dimension of
-  its coordinates' bounding box, t along the second largest in the same units
-  (``composedgeometry.default_texcoords``).
-- An ``Anchor`` draws its children as a group, and a click released over
-  them calls ``Context.OnAnchor(anchor, url, parameter)``. The context binds
-  the viewpoint a ``#name`` url names; opening any other url is left to an
-  application that overrides ``OnAnchor``.
 - The bound ``NavigationInfo`` (``OpenGLContext.move.navigationinfo``):
   ``headlight`` true adds a headlight to the scene's lights and false leaves
   it off. A document with no NavigationInfo has X3D's default one: the
@@ -348,8 +365,33 @@ behaviours (``vrml.x3d.runtime``, ``vrml.x3d.followers``). In the engine:
   passes over those of a group that is not ``displayed``, or that has a
   ``size`` and the viewer is outside the box of that size about its
   ``center``.
-- A follower moves a step each frame on the engine's clock while it is
-  moving, queued on its window's render queue.
+- An ``Anchor`` draws its children as a group, and a click released over
+  them calls ``Context.OnAnchor(anchor, url, parameter)``. The context binds
+  the viewpoint a ``#name`` url names; opening any other url is left to an
+  application that overrides ``OnAnchor``.
+
+- A ``Billboard`` is turned toward the camera of a frame's first view once a
+  frame, before the frame is drawn (``FlatPass.faceBillboards``): about its
+  ``axisOfRotation``, or with ``0 0 0`` facing the camera with its +Y along the
+  camera's up. Shadows are cast as it faces the camera.
+
+Sensors
+~~~~~~~
+
+- The environmental sensors are told once a frame what they sense
+  (``OpenGLContext.scenegraph.x3dsensors``): a ``ProximitySensor`` the
+  active view's camera, a ``TransformSensor`` its ``targetObject`` where the
+  scene draws it, and a ``VisibilitySensor`` whether its box is within any
+  view's frustum.
+- The pointing-device sensors (``TouchSensor``, ``PlaneSensor``,
+  ``CylinderSensor``, ``SphereSensor``) are told of their context's picked
+  pointer (``OpenGLContext.scenegraph.x3dpointing``). The sensors reached are
+  the enabled ones beside the geometry under the pointer, in the lowest group
+  on its path that has any; the primary button presses them, and a drag
+  continues on or off their geometry until it is released. The scene's and
+  the application's own handlers receive the same events. The hit is the picked point, with no
+  normal or texture coordinate. Picking (``ContextDefinition.pickEnabled``)
+  has to be on.
 - A ``KeySensor`` hears every key its window receives, including keys a
   program has bound itself: ``keyPress`` for a character, ``actionKeyPress``
   for the function, arrow and page keys, and ``shiftKey``, ``controlKey`` and
@@ -358,22 +400,13 @@ behaviours (``vrml.x3d.runtime``, ``vrml.x3d.followers``). In the engine:
 
 ``Context.observeEvents`` is how the sensors listen.
 
-An ``Inline`` reads any format a registered reader opens: another X3D or
-VRML97 world, an OBJ model or a glTF model. Its scene is read on the loader
-pool and drawn from the frame after it arrives. See :ref:`x3d-worlds`.
-
 Kept and not drawn
 ~~~~~~~~~~~~~~~~~~
 
 - ``Script`` nodes are read, kept and written, and never run.
-- A composed geometry's first texture coordinate set may come from a
-  ``TextureCoordinateGenerator``: the PBR vertex shader makes it in the
-  generator's ``mode`` (``OpenGLContext.scenegraph.texgen``), from the
-  vertex's own or camera-space position or normal. A generator for a later
-  set is reported once and not drawn, and the fixed-function and VRML97
-  shader paths do not generate coordinates. ``FogCoordinate`` and the
-  ``attrib`` vertex attributes are kept.
 - ``CoordinateDouble`` is kept and not drawn.
+- ``FogCoordinate`` and the ``attrib`` vertex attributes are kept and not
+  drawn.
 - The NURBS component's nodes are X3D's own declarations; the engine's NURBS
   nodes (:doc:`NURBS <nurbs>`) are the VRML97 extension's, with other fields.
 
@@ -409,8 +442,10 @@ SHA-256, and served with the documents from 127.0.0.1. Each document is
 captured half a second after X_ITE reports it loaded; its ``<slug>.json``
 records the X_ITE and Chromium versions and the errors the page reported.
 
-The difference counts pixels more than 32 apart in a channel; two renderers
-never agree pixel for pixel, so it says where to look and never fails a run.
+The difference counts pixels more than 32 apart in a channel. It is for the
+reader of the report and fails no run. X_ITE draws a document at the
+browser's clock, and ours at a fixed time in 2000 (below), so an animated
+document is at a different point of its animation in the two.
 
 .. code-block:: bash
 
@@ -453,6 +488,50 @@ never agree pixel for pixel, so it says where to look and never fails a run.
 - Only the XML encoding is drawn; pyvrml97's corpus tests hold the other
   encodings to the same scene graph. Scripts are not run, so a scene a
   Script builds is drawn as the document leaves it.
+
+.. list-table:: ``oglc-x3d-regression`` options
+   :widths: auto
+   :header-rows: 1
+
+   * - Option
+     - What it does
+   * - ``--fetch``
+     - download and extract the archives, with their images and Web3D's
+       renders, before drawing
+   * - ``--archive NAME``
+     - an archive to draw (repeatable; ConformanceNist and Vrml2Sourcebook
+       where none is named)
+   * - ``--corpus DIR``
+     - the corpus directory (pyvrml97's where not given)
+   * - ``--only PART``
+     - draw only the documents whose name contains ``PART`` (repeatable)
+   * - ``--bless [PART ...]``
+     - make the renders already drawn the baselines, as above
+   * - ``--report-only``
+     - rebuild the report from the renders already drawn
+   * - ``--jobs N``
+     - documents drawn at a time (the processor count)
+   * - ``--size WxH``
+     - the render size (792x465)
+   * - ``--frames N``
+     - frames drawn once the loads have arrived
+   * - ``--renderer pbr|vrml97``
+     - the pass the documents are drawn with (``pbr``)
+   * - ``--reference x_ite|web3d``
+     - the reference each render is shown beside (``x_ite``)
+   * - ``--reference-root DIR``
+     - X_ITE's renders (``tests/reference_images/x3d_xite``)
+   * - ``--baseline-root DIR``
+     - the baselines (``tests/reference_images/x3d_baseline``, or
+       ``OPENGLCONTEXT_X3D_BASELINE``)
+   * - ``--out-dir DIR``
+     - the renders, records and differences
+       (``tests/x3d_regression/renders``)
+   * - ``--report HTML``
+     - where the report is written
+   * - ``--tolerance PCT``, ``--diff-threshold N``
+     - the percent of pixels that may differ (2), and by how much in a
+       channel a pixel must (8)
 
 Writing
 -------

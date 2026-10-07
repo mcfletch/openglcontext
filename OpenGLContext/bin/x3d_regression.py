@@ -10,12 +10,12 @@ is compared with **our reference** -- the blessed baseline in the
 beside them: X_ITE's, from the ``x3d_xite`` folder of the same submodule
 (``scripts/x3d_xite_references.py`` draws them), else Web3D's own render of the
 same viewpoint, published with each example. Each row says how much ours
-differs from the reference: a guide to what to look at, since two renderers
-never agree pixel for pixel, and never a failure.
+differs from the reference; that figure is for the reader of the report and
+fails no run.
 
     oglc-x3d-regression --fetch          # download the corpus with its images, once
-    oglc-x3d-regression --bless          # the renders reviewed in the report become baselines
     oglc-x3d-regression                  # exit non-zero if a render regressed or failed
+    oglc-x3d-regression --bless          # the renders reviewed in the report become baselines
     oglc-x3d-regression --only Geometry/Box --jobs 8
 
 Each document is drawn in a process of its own, and ``--jobs`` runs that

@@ -251,7 +251,10 @@ def add_content_root(directory: str) -> None:
     A document read from a file inside it may then reference any file under
     it, not only those under its own directory: levels beside a shared
     textures folder. A document outside every root is held to its own
-    directory as before, and a URL-loaded document is unaffected.
+    directory, and a URL-loaded document is unaffected. A root applies to the
+    whole process, to every reference :func:`contain` checks (a vegetation
+    manifest, a glTF level-of-detail sidecar, a content-pack catalog among
+    them): declare only a tree whose every file the application would read.
     """
     global _content_roots
     real = os.path.realpath(directory)

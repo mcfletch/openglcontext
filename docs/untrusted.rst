@@ -69,13 +69,17 @@ those under its own directory:
 .. code-block:: python
 
    from OpenGLContext.loaders import resolver
+   from OpenGLContext.loaders.loader import Loader
 
    resolver.add_content_root('/opt/mygame/content')
    scene = Loader.load('/opt/mygame/content/levels/one.x3d')   # may name ../textures/brick.png
 
 A reference is held to the outermost declared root that holds the
 document's directory; a document outside every root is held to its own
-directory, and a URL-loaded document is unaffected. ``remove_content_root``
+directory, and a URL-loaded document is unaffected. A root applies to the
+whole process, to every reference the resolver contains, so declare only a
+tree whose every file the application would read: one that also holds
+downloaded, untrusted documents gives them the whole tree. ``remove_content_root``
 withdraws one and ``content_roots()`` lists them. Declare only a tree any of
 whose files a document in it may read.
 
