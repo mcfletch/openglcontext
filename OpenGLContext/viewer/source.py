@@ -45,7 +45,8 @@ ARCHIVE_SUFFIXES = {
 }
 
 #: What counts as a scene to open, when an archive is not told which member.
-SCENE_SUFFIXES = ('.glb', '.gltf', '.wrl', '.wrz', '.vrml', '.x3d', '.obj')
+SCENE_SUFFIXES = ('.glb', '.gltf', '.wrl', '.wrz', '.vrml', '.x3d', '.x3dz', '.x3dv', '.x3dvz',
+                  '.x3dj', '.obj')
 
 #: Ceiling on an archive fetched from a URL. A world is tens of megabytes; this
 #: is the same order as a content pack and far below what would exhaust memory.

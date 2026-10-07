@@ -122,6 +122,8 @@ OpenGLContext/
 │   ├── resolver.py   # Where a document's references may lead; ContainedPath
 │   │                 # and CheckedURL, and the openers that take only them
 │   │                 # -- docs/untrusted.rst
+│   ├── x3d.py        # X3D in every encoding, read by vrml.x3d into the
+│   │                 # engine's nodes (prototypes()) -- docs/loading.rst
 │   ├── gltf/         # glTF 2.0 / GLB
 │   │   ├── lod.py    # MSFT_lod: a node's coarser levels, and when each is
 │   │   │             # worth drawing -- docs/gltf.rst#lod. Making them is

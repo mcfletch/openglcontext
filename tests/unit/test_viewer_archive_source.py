@@ -120,6 +120,13 @@ class TestOpeningAMemberOfALocalArchive:
 
         assert os.path.basename(got) == 'gallery.glb'
 
+    @pytest.mark.parametrize('name', ['world.x3d', 'world.x3dz', 'world.x3dv',
+                                      'world.x3dvz', 'world.x3dj'])
+    def test_an_x3d_world_is_a_scene_file(self, tmp_path, cache, name):
+        path = _tar(tmp_path / 'world.tar', [name, 'textures/wall.png'])
+        got = viewersource.open_archive(path, cache_dir=cache)
+        assert os.path.basename(got) == name
+
     def test_a_choice_of_scenes_asks_for_one(self, tmp_path, cache):
         path = _tar(tmp_path / 'w.tar.gz', ['a.glb', 'b.glb'])
 

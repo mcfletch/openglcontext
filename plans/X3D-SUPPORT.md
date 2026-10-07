@@ -59,7 +59,8 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [ ] implementations rebased on `vrml.x3d.nodes` (done: the suite passes against them); every X3D node registered
   - [ ] the render pass skips nodes whose X3D `visible` is false
   - [ ] lights: X3D `shadows` and the engine's `castShadows`; `InstancedShape` the X3D node
-  - [ ] X3D loaders and adapters; `Inline` on `SceneLoader`
+  - [x] X3D loader (`loaders/x3d.py`, `prototypes()`), viewer adapter with the `head` as a notice, `.json` sniffing, archive members
+  - [ ] `Inline` on `SceneLoader`
   - [ ] geometry as `Primitive`s; Interchange geometry nodes
   - [ ] other X3D materials; light scope and attenuation; environment
   - [ ] showcase command and reference captures

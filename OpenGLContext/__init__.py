@@ -91,12 +91,17 @@ VRMLContext( 'wgl', 'OpenGLContext.wglvrmlcontext.VRMLContext' )
 
 Loader( 'vrml97', 'OpenGLContext.loaders.vrml97.defaultHandler', ['.wrl','.wrz','.vrml','model/vrml','x-world/x-vrml','.wrl.gz'] )
 Loader( 'obj', 'OpenGLContext.loaders.obj.defaultHandler', ['.obj'] )
+Loader( 'x3d', 'OpenGLContext.loaders.x3d.defaultHandler', ['.x3d','.x3dz','.x3dv','.x3dvz','.x3dj'] )
 
 # What `oglc-view` can open, keyed by file suffix and content type. One viewer
 # serves every format; the adapter is chosen from the source itself.
 Adapter( 'gltf', 'OpenGLContext.viewer.adapters.gltf.GLTFAdapter', ['.gltf','.glb','model/gltf+json','model/gltf-binary'] )
 Adapter( 'vrml97', 'OpenGLContext.viewer.adapters.vrml.VRMLAdapter', ['.wrl','.wrz','.vrml','.wrl.gz','model/vrml','x-world/x-vrml'] )
 Adapter( 'obj', 'OpenGLContext.viewer.adapters.obj.OBJAdapter', ['.obj','.obj.gz','model/obj'] )
+# X3D JSON is usually named .json, so a document of that name is recognised by
+# its content (loaders.formats). model/x3d+vrml is how ClassicVRML names its
+# type; model/x3d-vrml is the registered name.
+Adapter( 'x3d', 'OpenGLContext.viewer.adapters.x3d.X3DAdapter', ['.x3d','.x3dz','.x3dv','.x3dvz','.x3dj','model/x3d+xml','model/x3d+vrml','model/x3d-vrml'] )
 # A tileset is any .json, so the registry only claims the conventional name; a
 # document under another name is recognised by its content (loaders.formats).
 Adapter( 'tiles3d', 'OpenGLContext.viewer.adapters.tiles.TilesAdapter', ['tileset.json'] )
@@ -173,6 +178,7 @@ Node( 'ZoneMirrors', 'OpenGLContext.scenegraph.zone.ZoneMirrors' )
 Node( 'ZoneReverb', 'OpenGLContext.scenegraph.zone.ZoneReverb' )
 Node( 'ZoneVisibility', 'OpenGLContext.scenegraph.zone.ZoneVisibility' )
 Node( 'sceneGraph', 'OpenGLContext.scenegraph.scenegraph.SceneGraph' )
+Node( 'X3DScene', 'OpenGLContext.scenegraph.scenegraph.X3DScene' )
 Node( 'ImageBasedLight', 'OpenGLContext.scenegraph.imagebasedlight.ImageBasedLight' )
 Node( 'IndexedPolygons', 'OpenGLContext.scenegraph.indexedpolygons.IndexedPolygons' )
 Node( 'FontStyle3D', 'OpenGLContext.scenegraph.text.fontstyle3d.FontStyle3D' )

@@ -5,11 +5,12 @@ Loading Content
 
 .. rst-class:: introduction
 
-OpenGLContext reads four formats into its scenegraph: VRML97 worlds, glTF 2.0
-and GLB models, Wavefront OBJ models, and streamed OGC 3D Tiles datasets. This
-page shows the call that loads each from Python, what it returns, and how to
-wait for the files a scene names. To open a file and look at it without
-writing any code, use :doc:`oglc-view <viewer>`, which opens all four.
+OpenGLContext reads five formats into its scenegraph: X3D and VRML97 worlds,
+glTF 2.0 and GLB models, Wavefront OBJ models, and streamed OGC 3D Tiles
+datasets. This page shows the call that loads each from Python, what it
+returns, and how to wait for the files a scene names. To open a file and look
+at it without writing any code, use :doc:`oglc-view <viewer>`, which opens all
+five.
 
 .. list-table::
    :widths: auto
@@ -18,6 +19,9 @@ writing any code, use :doc:`oglc-view <viewer>`, which opens all four.
    * - Format
      - Call
      - Returns
+   * - X3D (``.x3d``, ``.x3dz``, ``.x3dv``, ``.x3dvz``, ``.x3dj``)
+     - ``Loader.load(url)``
+     - an ``X3DScene``, a ``sceneGraph``
    * - VRML97 (``.wrl``, ``.wrz``, ``.vrml``, ``.wrl.gz``)
      - ``Loader.load(url)``
      - a ``sceneGraph``
@@ -70,9 +74,10 @@ drawing:
 
 ``load()`` takes a path or an ``http(s)`` URL as a string, or the bytes of a
 document. The format comes from ``format=`` where given (``'gltf'``,
-``'vrml97'``, ``'obj'``, ``'tiles3d'``, or a name registered since), then from
-``content_type=``, then from the source's name, and for a local ``.json`` from
-what is inside it. Bytes have no name, so ``name='chair.glb'`` says what they
+``'x3d'``, ``'vrml97'``, ``'obj'``, ``'tiles3d'``, or a name registered
+since), then from ``content_type=``, then from the source's name, and for a
+local ``.json`` from what is inside it: X3D JSON by its ``"X3D"`` key, a
+tileset by its ``asset`` and ``root``. Bytes have no name, so ``name='chair.glb'`` says what they
 would be called as a file: that chooses the format, and is where a ``.gltf``
 looks for the files it names. A source no registered format opens raises
 ``UnknownSourceType`` at once, naming the suffixes that are known.
@@ -81,7 +86,7 @@ looks for the files it names. A source no registered format opens raises
 keeps it to ask more of it later.
 
 ``request.result`` is what the format's own loader produces: a ``GLTFScene``
-for glTF, a ``SceneGraph`` for VRML97 and OBJ, the streaming ``TilesTerrain``
+for glTF, a ``SceneGraph`` for X3D, VRML97 and OBJ, the streaming ``TilesTerrain``
 for 3D Tiles, a game's level for a game's format. The loader does nothing with
 it; whether it is mounted, kept or discarded is for the caller. The reader that
 read it, which knows how to frame and animate it, is ``request.reader``.
@@ -163,7 +168,7 @@ Formats
 
 A format is a *reader*, a ``SceneReader`` (``OpenGLContext.loaders.readers``)
 registered under ``OpenGLContext.plugins.Adapter`` against the suffixes and
-content types it handles. The engine registers glTF, VRML97, OBJ and 3D Tiles;
+content types it handles. The engine registers glTF, X3D, VRML97, OBJ and 3D Tiles;
 a game registers its own, as twig-bb registers ``.bsp`` and ``.pk3``:
 
 .. code-block:: python
@@ -185,6 +190,39 @@ a game registers its own, as twig-bb registers ``.bsp`` and ``.pk3``:
 A reader that can be read from bytes sets ``accepts_content = True`` and
 implements ``read_content( data, name )``. A format a viewer can show is a
 ``SceneAdapter``, :ref:`described with the viewer <adapters>`.
+
+.. _x3d-worlds:
+
+X3D worlds
+----------
+
+An X3D document loads through the same ``Loader``, in any of its encodings:
+XML (``.x3d``), ClassicVRML (``.x3dv``) and JSON (``.x3dj``, or ``.json`` when
+its top-level key is ``"X3D"``), each also gzip-compressed (``.x3dz``,
+``.x3dvz``):
+
+.. code-block:: python
+
+   from OpenGLContext.loaders.loader import Loader
+
+   scene = Loader.load( 'world.x3d' )
+   self.sg = scene
+   for problem in scene.problems:              # what the read found wrong
+       print( problem )
+
+``vrml.x3d`` reads the document. Each node is built from the engine's class
+for it where the engine implements that X3D node, and from the X3D
+declaration where it does not; ``OpenGLContext.loaders.x3d.prototypes()`` is
+the map. A node with only its declaration keeps its fields and is not drawn,
+and its type is listed once among the scene's ``problems`` at ``info``
+severity. The scene is an ``X3DScene``: a ``sceneGraph`` that also holds the
+document's ``profile``, ``version``, ``components``, ``units`` and ``meta``.
+
+A document with errors in it loads as far as it reads; each problem is in
+``scene.problems`` and is logged at its severity. A document in no X3D
+encoding raises ``ValueError``. ``Script`` nodes are read and kept and never
+run. ``vrml.x3d`` (pyvrml97's ``docs/x3d.rst``) covers reading and writing X3D
+without the engine.
 
 VRML97 worlds
 -------------

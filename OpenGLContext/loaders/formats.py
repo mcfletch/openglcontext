@@ -19,6 +19,7 @@ code wants; this module is what it asks.
 from __future__ import annotations
 
 import os
+import re
 import urllib.parse
 from typing import TYPE_CHECKING, Any, Optional
 
@@ -114,20 +115,27 @@ def _by_content_type(contentType: str) -> Optional[Any]:
     return _keys().get(contentType.split(';')[0].strip().lower())
 
 
+#: The start of an X3D JSON document: an object whose first key is "X3D".
+_X3D_JSON = re.compile(rb'^\s*\{\s*"X3D"\s*:')
+
+
 def _sniff(source: str) -> Optional[Any]:
     """Look inside a local file whose name did not settle it.
 
-    Only JSON is sniffed, and only for 3D Tiles, because a tileset is the one
-    format in regular use whose name (``anything.json``) says nothing.  Anything
-    unreadable simply does not match -- sniffing must never be the thing that
-    raises.
+    Only JSON is sniffed: a 3D Tiles tileset and an X3D JSON document are the
+    formats in regular use named ``anything.json``. X3D JSON is told by its
+    first key, a tileset by its ``asset`` and ``root``.  Anything unreadable
+    simply does not match -- sniffing must never be the thing that raises.
     """
     from OpenGLContext import plugins
     if not os.path.isfile(source):
         return None
     try:
         with open_contained(contained_source(source)) as handle:
-            document = parse_object(handle.read(SNIFF_BYTES), source)
+            head = handle.read(SNIFF_BYTES)
+        if _X3D_JSON.match(head.lstrip(b'\xef\xbb\xbf')):
+            return plugins.Adapter.by_name('x3d')
+        document = parse_object(head, source)
     except (OSError, ValueError):
         return None
     if 'asset' in document and 'root' in document:

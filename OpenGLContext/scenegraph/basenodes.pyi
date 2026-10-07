@@ -73,6 +73,7 @@ from OpenGLContext.scenegraph.quadrics import Cylinder as Cylinder
 from OpenGLContext.scenegraph.quadrics import Sphere as Sphere
 from OpenGLContext.scenegraph.reflector import PlanarReflector as PlanarReflector
 from OpenGLContext.scenegraph.scenegraph import SceneGraph as sceneGraph
+from OpenGLContext.scenegraph.scenegraph import X3DScene as X3DScene
 class FloatUniform1f(_FloatUniform): ...
 class FloatUniform2f(_FloatUniform): ...
 class FloatUniform3f(_FloatUniform): ...
@@ -253,6 +254,7 @@ __all__ = [
     'Viewpoint',
     'VisibilitySensor',
     'WorldInfo',
+    'X3DScene',
     'Zone',
     'ZoneAudio',
     'ZoneEnvironment',

@@ -5,7 +5,7 @@ The viewer
 
 ``oglc-view`` opens a 3D scene and renders it with the :doc:`core-profile PBR
 renderer <pbr>`. You can look around the scene or walk through it. It opens
-glTF models, VRML97 worlds, Wavefront OBJ files and streamed 3D Tiles
+glTF models, X3D and VRML97 worlds, Wavefront OBJ files and streamed 3D Tiles
 datasets. The viewer identifies the format from the source itself, so one
 command opens all of them.
 
@@ -61,6 +61,11 @@ Supported formats
      - ``vrml97``
      - A VRML97 *world*: shown where it was authored, with its own sky, lights
        and ``Viewpoint`` nodes. See :doc:`VRML97 <vrml97>`.
+   * - ``.x3d`` ``.x3dz`` ``.x3dv`` ``.x3dvz`` ``.x3dj``, and ``.json`` whose
+       top-level key is ``"X3D"``
+     - ``x3d``
+     - An X3D *world*, in any of its encodings: shown where it was authored,
+       as a VRML97 world is. See :ref:`Loading X3D <x3d-worlds>`.
    * - ``.obj`` ``.obj.gz``
      - ``obj``
      - A Wavefront model. OBJ has no lights, cameras or sky, so the viewer
@@ -100,7 +105,8 @@ as a path or a URL. ``#member`` after it names the scene to open inside:
    oglc-view world.zip                 # holds exactly one scene file
 
 An archive holding exactly one scene file (``.glb``, ``.gltf``, ``.wrl``,
-``.wrz``, ``.vrml``, ``.x3d`` or ``.obj``) needs no ``#``. One holding several
+``.wrz``, ``.vrml``, ``.x3d``, ``.x3dz``, ``.x3dv``, ``.x3dvz``, ``.x3dj`` or
+``.obj``) needs no ``#``. One holding several
 is refused with a list of what it holds, and one that holds no such file says
 so. The whole archive is unpacked, not only the member, so a ``.gltf``'s
 buffers and textures and a level-of-detail chain's sidecars resolve against
@@ -391,6 +397,9 @@ Where each format states them:
   the licence. A part is named by its ``name``, or by its kind and index.
 - VRML97 - each top-level ``WorldInfo``: its ``title``, and its ``info``
   strings one to a line.
+- X3D - the ``head``'s ``meta`` statements, first: ``title``, ``creator``,
+  ``rights`` as the copyright, ``license`` and ``reference``; then each
+  top-level ``WorldInfo`` as for VRML97.
 - Wavefront OBJ and 3D Tiles state none, and the screen says the file
   carries no notice.
 

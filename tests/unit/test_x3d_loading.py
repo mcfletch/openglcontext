@@ -1,0 +1,154 @@
+"""X3D documents opened by the engine: every encoding, into the engine's nodes.
+
+`OpenGLContext.loaders.x3d` reads `.x3d`, `.x3dz`, `.x3dv`, `.x3dvz` and
+`.x3dj` (and `.json` whose top-level key is "X3D") through `vrml.x3d`,
+building the engine's implementation of each node it has one of. The scene is
+an `X3DScene` the render pass draws.
+"""
+import gzip
+import json
+import logging
+
+import numpy as np
+import pytest
+from vrml import x3d as vrml_x3d
+from vrml.x3d import nodes as x3d
+
+from OpenGLContext.loaders import formats
+from OpenGLContext.loaders.loader import Loader
+from OpenGLContext.loaders.x3d import X3DHandler, prototypes
+from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.scenegraph.scenegraph import SceneGraph
+from OpenGLContext.testing.scenes import drawn_image, scene_context
+
+XML = b'''<?xml version="1.0" encoding="UTF-8"?>
+<X3D profile="Interchange" version="4.0">
+  <Scene>
+    <Viewpoint position="0 0 6"/>
+    <Shape>
+      <Appearance><Material diffuseColor="1 0 0" emissiveColor="1 0 0"/></Appearance>
+      <Box size="3 3 3"/>
+    </Shape>
+    <Shape><Disk2D/></Shape>
+  </Scene>
+</X3D>
+'''
+
+
+def classic():
+    return vrml_x3d.dumps(vrml_x3d.loads(XML), encoding='classic').encode('utf-8')
+
+
+def as_json():
+    return vrml_x3d.dumps(vrml_x3d.loads(XML), encoding='json').encode('utf-8')
+
+
+ENCODED = {
+    'scene.x3d': lambda: XML,
+    'scene.x3dz': lambda: gzip.compress(XML),
+    'scene.x3dv': classic,
+    'scene.x3dvz': lambda: gzip.compress(classic()),
+    'scene.x3dj': as_json,
+}
+
+
+@pytest.mark.parametrize('name', sorted(ENCODED))
+def test_each_encoding_loads_into_the_engines_nodes(name):
+    scene = Loader.loads(ENCODED[name](), name)
+    assert isinstance(scene, SceneGraph)
+    shape = scene.children[1]
+    assert type(shape) is basenodes.Shape
+    assert type(shape.geometry) is basenodes.Box
+    assert type(shape.appearance.material) is basenodes.Material
+
+
+def test_a_node_the_engine_does_not_implement_is_its_declaration_and_reported():
+    scene = Loader.loads(XML, 'scene.x3d')
+    assert type(scene.children[2].geometry) is x3d.Disk2D
+    assert any('Disk2D' in str(problem.message) for problem in scene.problems)
+
+
+def test_the_engines_classes_are_used_only_where_they_implement_the_declaration():
+    found = prototypes()
+    for name, cls in found.items():
+        if name != 'X3DScene':
+            assert issubclass(cls, x3d.CONCRETE_NODES[name]), name
+    assert found['Shape'] is basenodes.Shape
+    assert 'Disk2D' not in found
+
+
+def test_a_broken_document_gives_what_it_read_and_logs_the_errors(caplog):
+    with caplog.at_level(logging.ERROR, logger='OpenGLContext.loaders.x3d'):
+        success, scene = X3DHandler().parse(b'<X3D><Scene><Shape>', 'broken.x3d', '', None)
+    assert success
+    assert type(scene.children[0]) is basenodes.Shape
+    assert 'broken.x3d' in caplog.text
+
+
+def test_a_document_in_no_encoding_is_an_error():
+    with pytest.raises(ValueError):
+        X3DHandler().parse(b'nothing at all', 'mystery', '', None)
+
+
+@pytest.mark.parametrize('name, content_type', [
+    ('world.x3d', None), ('world.x3dz', None), ('world.x3dv', None),
+    ('world.x3dvz', None), ('world.x3dj', None),
+    ('world', 'model/x3d+xml'), ('world', 'model/x3d+vrml'), ('world', 'model/x3d-vrml'),
+])
+def test_the_reader_is_chosen_by_name_and_type(name, content_type):
+    assert formats.adapter_for(name, content_type).name == 'x3d'
+
+
+def test_x3d_json_named_json_is_recognised_by_its_content(tmp_path):
+    path = tmp_path / 'world.json'
+    path.write_bytes(as_json())
+    assert formats.adapter_for(str(path)).name == 'x3d'
+
+
+def test_other_json_is_not(tmp_path):
+    path = tmp_path / 'other.json'
+    path.write_text(json.dumps({'X3Dish': 1}))
+    with pytest.raises(formats.UnknownSourceType):
+        formats.adapter_for(str(path))
+
+
+def test_the_viewer_adapter_presents_the_world():
+    reader = formats.adapter_for('scene.x3d')
+    presented = reader.present(reader.read_content(XML, 'scene.x3d'))
+    assert presented.viewpoints
+
+
+HEADED = XML.replace(b'<Scene>', b'''<head>
+    <meta name="title" content="Gallery"/>
+    <meta name="creator" content="A. Author"/>
+    <meta name="rights" content="(c) 2026 A. Author"/>
+    <meta name="license" content="CC-BY-4.0"/>
+    <meta name="reference" content="https://example.com/gallery"/>
+    <meta name="generator" content="hand"/>
+  </head>
+  <Scene>''')
+
+
+def test_the_documents_head_is_a_notice():
+    reader = formats.adapter_for('scene.x3d')
+    notices = reader.present(reader.read_content(HEADED, 'scene.x3d')).notices
+    assert len(notices) == 1
+    notice = notices[0]
+    assert (notice.title, notice.creator, notice.copyright, notice.licence, notice.source) == (
+        'Gallery', 'A. Author', '(c) 2026 A. Author', 'CC-BY-4.0', 'https://example.com/gallery')
+
+
+def test_a_head_with_nothing_to_say_is_no_notice():
+    reader = formats.adapter_for('scene.x3d')
+    assert reader.present(reader.read_content(XML, 'scene.x3d')).notices == []
+
+
+def test_a_loaded_scene_draws(gl_context):
+    scene = Loader.loads(XML, 'scene.x3d')
+    with scene_context(list(scene.children)[1:2]) as context:
+        context.OnDraw(force=1)
+        image = drawn_image(context)
+    centre = image[image.shape[0] // 2 - 4:image.shape[0] // 2 + 4,
+                   image.shape[1] // 2 - 4:image.shape[1] // 2 + 4].reshape(-1, 3).mean(axis=0)
+    assert centre[0] > 100 and centre[0] > 3 * max(centre[1], centre[2], 1)
+    assert np.isfinite(centre).all()
