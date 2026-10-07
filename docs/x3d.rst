@@ -222,12 +222,15 @@ descendants in place of the bound ``Fog`` (``OpenGLContext.passes.localfog``);
 where LocalFogs nest, the deepest group's fogs what is in it. An instanced
 group of shapes takes the LocalFog of the first of them.
 
-A ``Background``'s sky and ground colours are drawn on a sphere, and each of
-its six images over them, turned as X3D turns it, once that image has loaded;
-a side with no image, or a transparent part of one, shows the sky and ground.
-A ``TextureBackground`` is drawn the same way from its six ``...Texture``
-sides. A side is an ``ImageTexture`` or a ``PixelTexture``; ``transparency``
-is not read.
+A ``Background``'s sky and ground colours are drawn on a sphere. One
+``groundColor`` with no ``groundAngle`` is a ground of that colour from the
+nadir to the horizon, as one ``skyColor`` with no ``skyAngle`` is a sky all
+over. Each of its six images is drawn over them, turned as X3D turns it, once
+that image has loaded; a side with no image, or a transparent part of one,
+shows the sky and ground. A ``TextureBackground`` is drawn the same way from
+its six ``...Texture`` sides. A side is an ``ImageTexture`` or a
+``PixelTexture``; ``transparency`` is not read.
+
 A point or spot light's ``radius`` is how far it reaches in its own
 coordinates: nothing past it is lit, in the shader paths. A light a document
 builds has VRML97's and X3D's 100 unless the document sets another; one made

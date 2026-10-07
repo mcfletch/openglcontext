@@ -202,11 +202,17 @@ class _SphereBackground( object ):
 
     def colorSet( self ) -> Any:
         """Compound the sky and ground angle:color arrays into a single angle:color array-set"""
+        groundAngle, groundColor = self.groundAngle, self.groundColor
+        if len(groundColor) and not len(groundAngle):
+            # One ground colour and no angle is that colour from the nadir to
+            # the horizon, as one sky colour is the sky all over
+            groundAngle = array([pi / 2.0], 'f')
+            groundColor = array([groundColor[0], groundColor[0]], 'f')
         # okay, ground angles are pi-groundA
         if (
             not len(self.skyAngle) and 
-            not len(self.groundAngle) and 
-            not len(self.groundColor)
+            not len(groundAngle) and 
+            not len(groundColor)
         ):
             # Nothing but sky colours. One of them, with no angle to grade it
             # against, is VRML97's way of saying the sky is that colour all
@@ -262,9 +268,9 @@ class _SphereBackground( object ):
         else:
             skys = zeros((0,4),'f')
         # now need to cap skys to ground's minimum value...
-        if len(self.groundAngle):
+        if len(groundAngle):
             # no capping if no grounds, so require angles
-            groundA = pi - self.groundAngle
+            groundA = pi - asarray(groundAngle, 'f')
             capAngle = min( groundA )
             if len(skys):
                 t = len(compress( less(skys[:,0],capAngle), skys, 0 ))-1
@@ -277,10 +283,10 @@ class _SphereBackground( object ):
                 if capAngle > MAXANGLE:
                     skys = self.pushOut(skys, MAXANGLE-(pi/4), MAXANGLE )
 
-            grounds = zeros( (len(self.groundColor),4), 'f')
+            grounds = zeros( (len(groundColor),4), 'f')
             grounds[0,0] = pi
             grounds[1:,0] = groundA
-            grounds[:,1:] = self.groundColor
+            grounds[:,1:] = groundColor
             grounds = setSort(grounds)
             if capAngle < MAXANGLE:
                 grounds = self.pushOut(grounds,MAXANGLE-(pi/4), MAXANGLE )

@@ -142,11 +142,13 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] test_binding5 bound the third Background: the capture clock started at
     0, so TimeSensors with `startTime 0` ran at load and bound it.
     `OPENGLCONTEXT_CAPTURE_START`; the regression starts worlds at 2000-01-01
-  - [x] verify_clampingsky, set_skycolor2, verify_lastground: ours matches
-    NIST's own expected images (`verify-clampingsky-front.jpg`,
-    `verify-lastground-front.jpg`); X_ITE 16.4.3 draws a ground colour with no
-    groundAngle over the lower hemisphere, and the last ground colour up to the
-    equator
+  - [x] one groundColor with no groundAngle is a ground over the lower
+    hemisphere, as X_ITE draws it and as one skyColor with no angle is a sky all
+    over (2026-10-07, the maintainer's choice; 106 of the 206 documents over 10%
+    unlike X_ITE). The spec allows the pair and does not say how far it reaches;
+    NIST's description of verify_clampingsky reads it the other way.
+    verify_lastground matches NIST's expected image; X_ITE carries the last
+    ground colour up to the equator
   - [x] every PIL-loaded 2D texture was uploaded top row first, which glTF wants
     and VRML97/X3D do not: a texture node now says which row (0, 0) names
     (`_Texture.TOP_FIRST`, true for `ImageDataTexture`), the texture cache keys on

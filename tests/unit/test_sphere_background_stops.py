@@ -9,6 +9,7 @@ the visible sky ends at ``pi``, with the colour there interpolated between the
 stops either side of it.
 
 ``tests/unit/test_background_uniform_sky.py`` covers the single-colour case.
+A single ``groundColor`` with no ``groundAngle`` covers the lower hemisphere.
 """
 from math import pi
 
@@ -105,12 +106,17 @@ class TestASkyColourWithNoAngle:
         ).colorSet()
         assert tuple(round(float(v), 5) for v in found[-1][1:]) == (0.2, 0.4, 0.1)
 
-    def test_a_ground_colour_with_no_angle_leaves_the_sky_alone(self):
-        """``groundAngle`` empty gives the ground no extent to cover."""
-        found = Background(skyColor=[BLUE], groundColor=[(0.2, 0.4, 0.1)]).colorSet()
+    def test_a_ground_colour_with_no_angle_is_the_ground_hemisphere(self):
+        """One ``groundColor`` and no ``groundAngle`` is a ground of that colour
+        from the nadir to the horizon, as one ``skyColor`` is a sky all over"""
+        import numpy as np  # noqa: PLC0415 kept with its use
+        found = np.asarray(Background(skyColor=[BLUE], groundColor=[(0.2, 0.4, 0.1)]).colorSet(), float)
         _assert_spans_the_sphere([float(stop[0]) for stop in found])
-        for stop in found:
-            assert tuple(round(float(v), 5) for v in stop[1:]) == BLUE, stop
+        for angle in (pi / 2 + 0.01, 2.0, pi):
+            colour = [float(np.interp(angle, found[:, 0], found[:, c])) for c in (1, 2, 3)]
+            assert colour == pytest.approx([0.2, 0.4, 0.1]), angle
+        sky = [float(np.interp(0.5, found[:, 0], found[:, c])) for c in (1, 2, 3)]
+        assert sky == pytest.approx(list(BLUE))
 
 
 class TestSkyAndGroundPastTheSouthPole:
