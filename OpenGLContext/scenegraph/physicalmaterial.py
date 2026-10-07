@@ -327,7 +327,7 @@ def appearance_alpha(appearance: Any) -> "tuple[str, float]":
     cutoff = float(getattr(appearance, 'alphaCutoff', 0.5))
     if mode == 'AUTO':
         material = getattr(appearance, 'material', None)
-        if isinstance(material, ChannelMaterial):
+        if isinstance(material, ChannelMaterial) and material.texture('baseColor') is not None:
             base = material.texture('baseColor')
         else:
             base = getattr(appearance, 'texture', None)
@@ -500,11 +500,91 @@ class AppearanceMaterial(object):
                 holder.depend(appearance.material, source_field)
 
 
+#: Where :func:`pbr_material` keeps an appearance's :class:`AppearanceTextured`.
+TEXTURED_VIEW_KEY = 'pbr-textured-view'
+
+
+class AppearanceTextured(object):
+    """A PhysicalMaterial or UnlitMaterial drawn with its appearance's `texture`
+
+    X3D 4 (ISO/IEC 19775-1, 17.2.2.4 and 17.2.2.6): where the material's own
+    base map (`baseTexture`, or an UnlitMaterial's `emissiveTexture`) is
+    NULL, the appearance's `texture` is used in its place. This is the
+    material with that map; every other field is read from the material
+    (:attr:`material`). :func:`pbr_material` makes one per appearance.
+    """
+
+    def __init__(self, appearance: Any) -> None:
+        self._appearance = weakref.ref(appearance)
+        self._version = 0
+        self._seen: Any = None
+
+    @property
+    def appearance(self) -> Any:
+        """The appearance this is the view of, or None once it is collected"""
+        return self._appearance()
+
+    @property
+    def material(self) -> Any:
+        """The appearance's PhysicalMaterial or UnlitMaterial"""
+        return getattr(self.appearance, 'material', None)
+
+    @property
+    def textures(self) -> "dict[str, Any]":
+        """The material's maps, with the appearance's texture as the base colour map"""
+        found = dict(self.material.textures)
+        texture = getattr(self.appearance, 'texture', None)
+        if 'baseColor' not in found and texture:
+            found['baseColor'] = texture
+        return found
+
+    def texture(self, channel: str) -> Any:
+        """The texture node of `channel`, or None"""
+        return self.textures.get(channel)
+
+    def textureMapping(self, channel: str) -> str:
+        """The mapping label of `channel`'s map; the appearance's texture has none"""
+        if channel == 'baseColor' and self.material.texture('baseColor') is None:
+            return ''
+        found: str = self.material.textureMapping(channel)
+        return found
+
+    @property
+    def factorVersion(self) -> int:
+        """A count that moves when the material's factors or the appearance's texture do"""
+        material = self.material
+        seen = (material, getattr(material, 'factorVersion', 0),
+                getattr(self.appearance, 'texture', None))
+        if self._seen is None or any(
+                was is not now and was != now for was, now in zip(self._seen, seen)):
+            self._version += 1
+            self._seen = seen
+        return self._version
+
+    def batchingVersion(self) -> int:
+        """A value that changes whenever something deciding how this batches does"""
+        return self.factorVersion
+
+    def __getattr__(self, name: str) -> Any:
+        if name.startswith('_'):
+            raise AttributeError(name)
+        return getattr(self.material, name)
+
+
+def source_of(material: Any) -> Any:
+    """The PhysicalMaterial or UnlitMaterial a drawn material is, through any view of it"""
+    if isinstance(material, AppearanceTextured):
+        return material.material
+    return material
+
+
 def pbr_material(appearance: Any) -> Any:
     """The material the PBR pass draws `appearance` with; None for no appearance
 
     A :class:`PhysicalMaterial` or `UnlitMaterial` carries its own maps and
-    is drawn as itself.
+    is drawn as itself, or, where its base map is NULL and the appearance has
+    a `texture`, as its :class:`AppearanceTextured`, kept in vrml's cache
+    under :data:`TEXTURED_VIEW_KEY`.
     Any other appearance (a VRML97 `Material` with its `texture` and
     `textureTransform` beside it, or no material) is drawn as its
     :class:`AppearanceMaterial`, one per appearance, kept in vrml's cache
@@ -514,7 +594,13 @@ def pbr_material(appearance: Any) -> Any:
         return None
     material = getattr(appearance, 'material', None)
     if isinstance(material, ChannelMaterial):
-        return material
+        if material.texture('baseColor') is not None or not getattr(appearance, 'texture', None):
+            return material
+        textured = cache.CACHE.getData(appearance, TEXTURED_VIEW_KEY)
+        if textured is None:
+            textured = AppearanceTextured(appearance)
+            cache.CACHE.holder(appearance, textured, TEXTURED_VIEW_KEY)
+        return textured
     view = cache.CACHE.getData(appearance, VIEW_KEY)
     if view is None:
         view = AppearanceMaterial(appearance)

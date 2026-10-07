@@ -502,6 +502,18 @@ class TestSharedTextures:
         assert shape.appearance.material.textures['baseColor'].image.getpixel(
             (0, 0)) == (12, 34, 56, 255)
 
+    @pytest.mark.parametrize('kind', ['PhysicalMaterial', 'UnlitMaterial'])
+    def test_the_appearance_texture_is_written_as_the_base_map(self, kind):
+        """X3D 4's Appearance.texture, where the material has no base map of its own"""
+        from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial  # noqa: PLC0415 kept with its use
+        material = {'PhysicalMaterial': PhysicalMaterial, 'UnlitMaterial': UnlitMaterial}[kind]()
+        mesh = _quad()
+        mesh.appearance = Appearance(material=material,
+                                     texture=x3d.ImageTexture(url=['beside.png']))
+        doc = json.loads(_json_chunk(write_glb(mesh)))
+        assert doc['images'] == [{'uri': 'beside.png'}]
+        assert 'baseColorTexture' in doc['materials'][0]['pbrMetallicRoughness']
+
     def test_one_image_texture_is_named_once_however_many_channels_use_it(self):
         shared = x3d.ImageTexture(url=['maps.png'])
         material = PhysicalMaterial()

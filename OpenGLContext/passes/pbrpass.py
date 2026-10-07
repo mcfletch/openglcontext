@@ -42,7 +42,7 @@ from OpenGLContext.passes.transmission import TransmissionBuffer
 from OpenGLContext.passes import reflection
 from OpenGLContext.passes.reflection import REFLECTION_UNIT, REFLECTION_UNITS_NEEDED
 from OpenGLContext.scenegraph.physicalmaterial import (
-    AppearanceMaterial, ChannelMaterial, PhysicalMaterial, appearance_alpha,
+    AppearanceMaterial, ChannelMaterial, PhysicalMaterial, appearance_alpha, source_of,
     material_to_pbr, pbr_material,
 )
 from OpenGLContext.scenegraph.texgen import TexGen
@@ -215,6 +215,7 @@ _DEFAULT_FACTORS: "dict[str, Any]" = dict(
 
 def _material_factors(material: Any) -> dict:
     """Uniform-ready factors for a PhysicalMaterial, an UnlitMaterial, a VRML97 Material, or None"""
+    material = source_of(material)
     if isinstance(material, PhysicalMaterial):
         m = material
         return dict(
@@ -972,7 +973,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         self.bind_material_block(material)
         code = _ALPHA_MODES[alpha_mode]
         alpha = 1.0 - float(getattr(material, 'transparency', 0.0) or 0.0)
-        if isinstance(material, ChannelMaterial):
+        if isinstance(source_of(material), ChannelMaterial):
             tf = float(getattr(material, 'transmission', 0.0) or 0.0)
             if tf > 0.0 and self.transmission_mode == 'blend':
                 # Cheap fallback: no backdrop refraction -- approximate the glass

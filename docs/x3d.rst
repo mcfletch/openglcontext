@@ -150,7 +150,10 @@ fields and mapping labels, ``Appearance.alphaMode`` and ``alphaCutoff``, and
 ``emissiveTexture``, ``normalTexture`` and ``occlusionTexture`` are its base
 colour, emissive, normal and occlusion maps, and its ``normalScale`` and
 ``occlusionStrength`` are read; without a ``diffuseTexture``, the
-appearance's ``texture`` is the base colour map. ``ambientTexture``,
+appearance's ``texture`` is the base colour map. In the same way it is a
+``PhysicalMaterial``'s base map without a ``baseTexture``, and an
+``UnlitMaterial``'s emissive map without an ``emissiveTexture``, in drawing
+and in a glTF written from the scene. ``ambientTexture``,
 ``shininessTexture`` and ``specularTexture`` are kept and not drawn.
 ``TwoSidedMaterial`` and ``Appearance.backMaterial`` are kept and not drawn.
 

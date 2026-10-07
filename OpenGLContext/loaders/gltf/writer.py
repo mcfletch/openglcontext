@@ -48,7 +48,9 @@ from OpenGLContext.loaders.gltf.materials import GLTF_TEXTURE_KEYS, khr_transfor
 from OpenGLContext.loaders.gltf.textures import gl_sampler
 from OpenGLContext.scenegraph.imagedata import ImageDataTexture
 from OpenGLContext.scenegraph.pbrmesh import PBRMesh
-from OpenGLContext.scenegraph.physicalmaterial import appearance_alpha
+from OpenGLContext.scenegraph.physicalmaterial import (
+    ChannelMaterial, appearance_alpha, pbr_material, source_of,
+)
 from OpenGLContext.scenegraph.texturemapping import (
     channel_labels, coordinate_set, transform_for, transform_matrix,
 )
@@ -582,6 +584,10 @@ class GLTFWriter:
             primitive['mode'] = mode
         appearance = getattr(mesh, 'appearance', None)
         material = getattr(appearance, 'material', None)
+        if isinstance(material, ChannelMaterial):
+            # With the appearance's texture as the base map where it stands in
+            # for the material's own.
+            material = pbr_material(appearance)
         if material:
             primitive['material'] = self.add_material(
                 material, alpha=appearance_alpha(appearance),
@@ -651,7 +657,7 @@ class GLTFWriter:
             return info
 
         alpha = 1.0 - float(getattr(material, 'transparency', 0.0))
-        if isinstance(material, UnlitMaterial):
+        if isinstance(source_of(material), UnlitMaterial):
             pbr: dict[str, Any] = {
                 'baseColorFactor': [float(c) for c in material.emissiveColor] + [alpha],
                 'metallicFactor': 0.0, 'roughnessFactor': 1.0}
