@@ -368,6 +368,13 @@ The window, capture and the interface
        animated by a ``Timer`` or a ``TimeSensor`` then reaches the same point
        in every run, however long the process took to start. ``0`` keeps the
        wall clock. See :ref:`The clock a recording runs on <recording-clock>`.
+   * - ``OPENGLCONTEXT_CAPTURE_START``
+     - seconds
+     - ``0``
+     - The world time a capture's first frame is drawn at. A VRML97 or X3D
+       world is written against seconds since 1970, and started at ``0`` its
+       TimeSensors with ``startTime 0`` run at load; ``oglc-x3d-regression``
+       starts each document at 2000-01-01 (``946684800``).
    * - ``OPENGLCONTEXT_GLTF_BASELINE``
      - path
      - ``tests/reference_images/gltf_baseline``

@@ -59,6 +59,18 @@ class TestWhereItStarts:
         monkeypatch.setenv('OPENGLCONTEXT_AUTO_EXIT_FRAMES', '8')
         assert capture_clock()() == capture_clock()()
 
+    def test_at_zero_unless_named(self, monkeypatch):
+        monkeypatch.setenv('OPENGLCONTEXT_AUTO_EXIT_FRAMES', '8')
+        monkeypatch.delenv('OPENGLCONTEXT_CAPTURE_START', raising=False)
+        assert capture_clock()() == 0.0
+
+    def test_a_start_can_be_named(self, monkeypatch):
+        """A world authored against real time: a TimeSensor with startTime 0
+        has finished long before the scene is loaded"""
+        monkeypatch.setenv('OPENGLCONTEXT_AUTO_EXIT_FRAMES', '8')
+        monkeypatch.setenv('OPENGLCONTEXT_CAPTURE_START', '946684800')
+        assert capture_clock()() == 946684800.0
+
     def test_the_frames_it_counts_decide_the_time(self, monkeypatch):
         monkeypatch.setenv('OPENGLCONTEXT_AUTO_EXIT_FRAMES', '8')
         monkeypatch.setenv('OPENGLCONTEXT_CAPTURE_FPS', '50')

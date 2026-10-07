@@ -164,7 +164,7 @@ def cube_background() -> Any:
             return None
         urls[_CUBE_FIELDS[suffix]] = [path]
     from OpenGLContext.scenegraph.cubebackground import CubeBackground
-    return CubeBackground(**urls)
+    return CubeBackground(faceLayout='CUBEMAP', **urls)
 
 
 def background_for(spec: Optional[str], report: Any = None) -> Any:

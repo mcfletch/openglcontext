@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 '''CubeBackground object test (image cube background)
 
-NOTE: CubeBackground currently uses GL_QUADS which requires compatibility profile.
+The six images are an IBL environment's, laid out as GL cube map faces.
 '''
 import OpenGL
 OpenGL.ERROR_ON_COPY = True
@@ -27,6 +27,7 @@ DEF TR Transform {
             whichChoice 0
             choice [
                 DEF BG CubeBackground {
+                    faceLayout "CUBEMAP"
                     backUrl "pimbackground_BK.jpg"
                     frontUrl "pimbackground_FR.jpg"
                     leftUrl "pimbackground_LF.jpg"
@@ -61,7 +62,6 @@ ROUTE Rot.value_changed TO TR.set_rotation
 class TestContext( BaseContext ):
     """Tests the CubeBackground object's rendering
     """
-    # Requires compatibility profile for GL_QUADS in CubeBackground
     profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         """Scene set up and initial processing"""

@@ -144,7 +144,10 @@ OpenGLContext adds these nodes, which are not part of the VRML97
 specification:
 
 - :py:mod:`CubeBackground <OpenGLContext.scenegraph.cubebackground>` -- a
-  background with a cubic image map only (no gradient sphere)
+  background with a cubic image map only (no gradient sphere). Its
+  ``faceLayout`` is ``"X3D"``, each image turned as a VRML97 or X3D
+  ``Background`` turns it, or ``"CUBEMAP"``, each laid out as a GL cube map
+  face, as an IBL environment's faces are
 
 - :py:mod:`SphereBackground <OpenGLContext.scenegraph.spherebackground>` -- a
   background with a gradient sphere only (no cubic image map)

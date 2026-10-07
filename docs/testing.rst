@@ -501,7 +501,8 @@ reaches a different point on a fast machine than on a slow one. Under
 ``FixedStepClock`` that starts at zero and advances one frame's worth per
 ``OnDraw``. A ``TimeSensor`` one third of the way through its cycle is at
 the same point in every run on every machine. ``OPENGLCONTEXT_CAPTURE_FPS``
-sets a rate other than the default 60, or ``0`` to use real time.
+sets a rate other than the default 60, or ``0`` to use real time, and
+``OPENGLCONTEXT_CAPTURE_START`` a start other than zero.
 
 Everything that reads ``OpenGLContext.events.systemtime`` follows this
 clock, which includes every ``Timer`` and every ``TimeSensor``. Code that

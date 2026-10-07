@@ -379,14 +379,15 @@ def _panorama_background(sky: PanoramaSky, g: "pygltflib.GLTF2",
         return HDRBackground(
             image=_to_shader_orientation(_linear_panorama(image)))
     if sky.cubemap is not None:
-        faces = [texture_image(g, index, resolver) for index in sky.cubemap]
-        if any(face is None for face in faces):
+        found = [texture_image(g, index, resolver) for index in sky.cubemap]
+        faces = [face for face in found if face is not None]
+        if len(faces) != len(found):
             # A partial face set would draw a skybox with holes in it.
             log.warning('glTF: %s cubemap is missing a face; the scene has no sky',
                         EXTENSION)
             return None
         from OpenGLContext.scenegraph.cubebackground import CubeBackground
-        background = CubeBackground()
+        background = CubeBackground(faceLayout='CUBEMAP')
         for name, face in zip(CUBE_FACES, faces, strict=True):
             getattr(background, name).setImage(face)
         return background

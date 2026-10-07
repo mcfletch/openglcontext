@@ -40,9 +40,10 @@ __all__ = ['FixedStepClock', 'capture_clock', 'CAPTURE_FPS', 'CAPTURE_START']
 #: Frames a second a capture advances at when nothing names a rate.
 CAPTURE_FPS = 60
 
-#: The time a capture's clock starts at.  Pinned rather than taken from the
-#: wall clock, because the first frame of every run has to begin at the same
-#: point in a scene's animation for the last one to be comparable.
+#: The time a capture's clock starts at, where ``OPENGLCONTEXT_CAPTURE_START``
+#: names no other.  Pinned rather than taken from the wall clock, because the
+#: first frame of every run has to begin at the same point in a scene's
+#: animation for the last one to be comparable.
 CAPTURE_START = 0.0
 
 
@@ -146,7 +147,10 @@ def capture_clock() -> "FixedStepClock | None":
     ``OPENGLCONTEXT_AUTO_EXIT_FRAMES`` asks for a bounded run, which is what a
     capture is, so that alone turns this on at :data:`CAPTURE_FPS`.
     ``OPENGLCONTEXT_CAPTURE_FPS`` names a different rate, or 0 for a run that
-    wants to watch real time pass.
+    wants to watch real time pass. ``OPENGLCONTEXT_CAPTURE_START`` names the
+    time in seconds the first frame is drawn at, :data:`CAPTURE_START` by
+    default: a VRML97 or X3D world is written against seconds since 1970, and
+    started at 0 its TimeSensors with ``startTime 0`` run at load.
 
     Only what reads :mod:`OpenGLContext.events.systemtime` follows -- which is
     every Timer and TimeSensor.  Code calling ``time.time()`` itself does not,
@@ -159,4 +163,5 @@ def capture_clock() -> "FixedStepClock | None":
     )
     if fps <= 0:
         return None
-    return FixedStepClock(fps=int(fps), start=CAPTURE_START)
+    start = renderoptions.env_number('OPENGLCONTEXT_CAPTURE_START', CAPTURE_START)
+    return FixedStepClock(fps=int(fps), start=start)

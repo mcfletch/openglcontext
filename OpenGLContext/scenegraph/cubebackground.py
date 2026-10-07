@@ -1,25 +1,30 @@
 """Panoramic image-cube Background node
 """
-from OpenGLContext.scenegraph import imagetexture
-from OpenGL.arrays import vbo
-from typing import Any
-from OpenGLContext.arrays import array
-from vrml import field, protofunctions, fieldtypes, node
-from vrml.vrml97 import basenodes, nodetypes
-from vrml.x3d import binding
-from OpenGLContext.scenegraph import bindable
+import os
+from typing import Any, Optional
 
+from numpy import array, concatenate, cross, dot
+from OpenGL.arrays import vbo
 from OpenGL.GL import *
 from OpenGL.GL import shaders
-from OpenGL.GL import glGenVertexArrays, glBindVertexArray, glDeleteVertexArrays
-from OpenGLContext import texture
-from OpenGLContext.arrays import *
-from math import pi
+from OpenGL.GL import glBindVertexArray, glGenVertexArrays
+from vrml import field, fieldtypes, node
+from vrml.vrml97 import nodetypes
+from vrml.x3d import binding
+
+from OpenGLContext import contextresources, texture
+from OpenGLContext.passes import glstate
+from OpenGLContext.scenegraph import bindable, imagetexture
+from OpenGLContext.scenegraph.vertexsemantics import LOC_POSITION, LOC_TEXCOORD
 
 
 #: ``vbo.VBO`` types as ``None``: PyOpenGL binds the name late, to whichever of
 #: the accelerated and the pure-Python class it loaded.
 VBO: Any = vbo.VBO
+
+#: Where the faces' buffers and textures are kept in the pass's cache: a key of
+#: its own, as `Background` mixes this class with the sky sphere's.
+CACHE_KEY = 'cube_faces'
 
 
 class URLField( fieldtypes.MFString ):
@@ -38,7 +43,82 @@ class URLField( fieldtypes.MFString ):
         delattr( imageObject, 'components' )
         return value
 
+#: Each side: the direction it is looked at along from the origin, and the view
+#: up with which X3D shows its image upright (19775-1, Background).
+FACES: dict[str, tuple[tuple[float, float, float], tuple[float, float, float]]] = {
+    'front': ((0.0, 0.0, -1.0), (0.0, 1.0, 0.0)),
+    'back': ((0.0, 0.0, 1.0), (0.0, 1.0, 0.0)),
+    'left': ((-1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
+    'right': ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0)),
+    'top': ((0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
+    'bottom': ((0.0, -1.0, 0.0), (0.0, 0.0, -1.0)),
+}
+#: The corners of a side, as texture coordinates of its image.
+CORNERS = ((0.0, 0.0), (1.0, 0.0), (1.0, 1.0), (0.0, 1.0))
+#: The layouts a side's image may be in: X3D's, or a GL cube map face's, which
+#: seen from inside the cube is X3D's mirrored left to right on the four sides
+#: and top to bottom on the top and bottom.
+LAYOUTS = ('X3D', 'CUBEMAP')
+#: Half the cube's side: inside any far plane a view has.
+CUBE_SIZE = 100.0
+SHADER_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'shaders')
+
+#: The faces' program, per GL context that compiled one.
+_programs: dict[Optional[contextresources.ContextKey], Any] = {}
+
+
+@contextresources.on_context_lost
+def _drop_context_resources() -> None:
+    """Forget the program of the context now being destroyed"""
+    _programs.pop(contextresources.context_key(), None)
+
+
+def face_quad(side: str, layout: str = 'X3D') -> tuple[Any, Any]:
+    """(positions, texcoords) of a side's four corners, on the cube of half-size 1,
+    for an image in `layout` (:data:`LAYOUTS`)"""
+    looking, up = (array(axis, 'f') for axis in FACES[side])
+    right = cross(looking, up)
+    positions = array([looking + (2 * u - 1) * right + (2 * v - 1) * up
+                       for u, v in CORNERS], 'f')
+    texcoords = array(CORNERS, 'f')
+    if layout == 'CUBEMAP':
+        mirrored = 1 if side in ('top', 'bottom') else 0
+        texcoords[:, mirrored] = 1.0 - texcoords[:, mirrored]
+    elif layout != 'X3D':
+        raise ValueError('A face layout is one of %s, not %r' % (LAYOUTS, layout))
+    return positions, texcoords
+
+
+def has_image(side: Any) -> bool:
+    """Whether a side has an image loaded to draw"""
+    return bool(side is not None and getattr(side, 'components', 0)
+                and getattr(side, 'image', None) is not None)
+
+
+def _program() -> tuple[Any, int, int]:
+    """The faces' program and its two uniforms, for the current context"""
+    key = contextresources.context_key()
+    found: Optional[tuple[Any, int, int]] = _programs.get(key)
+    if found is None:
+        sources = []
+        for name in ('background_faces.vert', 'background_faces.frag'):
+            with open(os.path.join(SHADER_DIR, name)) as stream:
+                sources.append(stream.read())
+        program = shaders.compileProgram(
+            shaders.compileShader(sources[0], GL_VERTEX_SHADER),
+            shaders.compileShader(sources[1], GL_FRAGMENT_SHADER))
+        found = (program, glGetUniformLocation(program, 'mvpMatrix'),
+                 glGetUniformLocation(program, 'faceImage'))
+        _programs[key] = found
+    return found
+
+
 class _CubeBackground( object ):
+    """Six images on a cube around the viewer, each side drawn once it has one
+
+    Each side's image is turned as X3D says (:data:`FACES`); a transparent
+    part of one, or a side with none, shows what was drawn before it.
+    """
     right = field.newField('right', 'SFNode', default=imagetexture.ImageTexture)
     top = field.newField('top', 'SFNode', default=imagetexture.ImageTexture)
     back = field.newField('back', 'SFNode', default=imagetexture.ImageTexture)
@@ -46,159 +126,98 @@ class _CubeBackground( object ):
     front = field.newField('front', 'SFNode', default=imagetexture.ImageTexture)
     bottom = field.newField('bottom', 'SFNode', default=imagetexture.ImageTexture)
     bound = bindable.bound_field()
-    
+
     rightUrl = URLField( 'rightUrl')
     topUrl = URLField( 'topUrl')
     backUrl = URLField( 'backUrl')
     leftUrl = URLField( 'leftUrl')
     frontUrl = URLField( 'frontUrl')
     bottomUrl = URLField( 'bottomUrl')
-    
+
+    def hasImages( self ) -> bool:
+        """Whether any side has an image to draw"""
+        return any(has_image(getattr(self, side)) for side in FACES)
+
     def Render( self, mode: Any, clear: int = 1 ) -> int:
-        """Render the cube background
+        """Draw the sides that have images; 1 where one was drawn, else 0
 
-        This renders those of our cube-faces which are
-        facing us, and which have a non-0 component-count.
-
-        After it's finished, it clears the depth-buffer
-        to make the geometry appear "behind" everything
-        else.
-
-        Answers 1 where the faces were drawn and 0 where there was nothing to
-        draw -- the same answer every background gives, so a caller that wants
-        to know whether the buffer was filled can ask any of them.
+        `clear` clears the buffers first. The depth buffer is neither read
+        nor written, so the scene is drawn over the sides.
         """
-        if mode.passCount == 0:
-            render_data = mode.cache.getData(self)
-            if render_data is None:
-                render_data = self.compile(mode)
-                if not render_data:
-                    return 0
-            texture, vert_vbo, index_vbo, shader, vertex_loc, mvp_matrix_loc, vao = render_data
-            if clear:
-                glClear(
-                    GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT|GL_STENCIL_BUFFER_BIT
-                )
-            # Only disable legacy lighting in compat mode
-            shader_mode = getattr(mode, 'shader_mode', False)
-            if not shader_mode:
-                glDisable( GL_LIGHTING )
-                glDisable( GL_COLOR_MATERIAL )
+        if mode.passCount != 0:
+            return 0
+        render_data = mode.cache.getData(self, CACHE_KEY)
+        if render_data is None:
+            render_data = self.compile(mode)
+        if clear:
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
+        textures, vertices, vao = render_data
+        if not textures:
+            return 0
+        program, mvp_location, image_location = _program()
+        matrix = dot(mode.matrix, mode.projection).astype('f')
+        glActiveTexture(GL_TEXTURE0)
+        with glstate.program(program), glstate.disabled(GL_DEPTH_TEST, GL_CULL_FACE), \
+                glstate.enabled(GL_BLEND):
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
+            glDepthMask(GL_FALSE)
+            glUniformMatrix4fv(mvp_location, 1, GL_FALSE, matrix)
+            glUniform1i(image_location, 0)
+            glBindVertexArray(vao)
             try:
-                with texture:
-                    # we don't currently have it handy...
-                    with shader:
-                        glBindVertexArray(vao)
-                        glEnableVertexAttribArray(vertex_loc)
-                        with vert_vbo:
-                            glVertexAttribPointer(vertex_loc, 3, GL_FLOAT, GL_FALSE, 0, vert_vbo)
-                            matrix = dot(mode.matrix,mode.projection).astype('f')
-                            glUniformMatrix4fv(mvp_matrix_loc,1,GL_FALSE,matrix)
-                            with index_vbo:
-                                # 6 faces x 2 triangles x 3 indices (GL_QUADS is
-                                # gone from core profile)
-                                glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_SHORT, index_vbo)
-                        glDisableVertexAttribArray(vertex_loc)
-                        glBindVertexArray(0)
+                with vertices:
+                    glEnableVertexAttribArray(LOC_POSITION)
+                    glEnableVertexAttribArray(LOC_TEXCOORD)
+                    glVertexAttribPointer(LOC_POSITION, 3, GL_FLOAT, GL_FALSE, 20, vertices)
+                    glVertexAttribPointer(LOC_TEXCOORD, 2, GL_FLOAT, GL_FALSE, 20, vertices + 12)
+                    for index, tex in textures:
+                        glBindTexture(GL_TEXTURE_2D, tex.texture)
+                        glDrawArrays(GL_TRIANGLE_FAN, index * 4, 4)
             finally:
-                glDepthMask( GL_TRUE )
-                if not shader_mode:
-                    glEnable( GL_LIGHTING )
-                    glEnable( GL_COLOR_MATERIAL )
-            return 1
-        return 0
+                glBindTexture(GL_TEXTURE_2D, 0)
+                glBindVertexArray(0)
+                glDepthMask(GL_TRUE)
+        return 1
 
-    CUBE_VERTICES =  array([
-        -100.0,  100.0,  100.0,
-        -100.0, -100.0,  100.0,
-        100.0, -100.0,  100.0,
-        100.0,  100.0,  100.0,
-        -100.0,  100.0, -100.0,
-        -100.0, -100.0, -100.0,
-        100.0, -100.0, -100.0,
-        100.0,  100.0, -100.0,
-    ],'f')
-    # Two triangles per cube face (fan of the former GL_QUADS a,b,c,d ->
-    # a,b,c + a,c,d), so the skybox draws in a core profile.
-    CUBE_INDICES = array([
-        3, 2, 1,  3, 1, 0,
-        0, 1, 5,  0, 5, 4,
-        7, 6, 2,  7, 2, 3,
-        4, 5, 6,  4, 6, 7,
-        4, 7, 3,  4, 3, 0,
-        1, 2, 6,  1, 6, 5,
-    ], 'H')
-
-    # TODO: should have one-per-context...
     def compile( self, mode: Any ) -> Any:
-        """Compile a VBO with our various triangles to render"""
-        images = {
-            '-x':self.left,
-            '+x':self.right,
-            '+y':self.top,
-            '-y':self.bottom,
-            '-z':self.front,
-            '+z':self.back,
-        }
-        def all_same( key: str ) -> bool:
-            current = None
-            for _k,value in images.items():
-                new = getattr(value,key)
-                if current is None:
-                    current = new 
-                else:
-                    if new != current:
-                        return False 
-            return True
-        if not all_same( 'components' ):
-            return None 
-        tex = texture.CubeTexture( )
-        try:
-            tex.fromPIL( [(k,i.image) for k,i in images.items()] )
-        except ValueError:
-            return None
-        
-        vert_vbo = VBO( self.CUBE_VERTICES )
-        index_vbo = VBO( self.CUBE_INDICES, target=GL_ELEMENT_ARRAY_BUFFER )
-        # this shader is from 
-        shader = shaders.compileProgram(
-            shaders.compileShader(
-                '''#version 130
-    in vec3 vertex;
-    out vec3 texCoord;
-    uniform mat4 mvp_matrix;
-
-    void main() {
-        gl_Position = mvp_matrix * vec4( vertex, 1.0);
-        texCoord = normalize(vertex);
-    }''', GL_VERTEX_SHADER ),
-            shaders.compileShader(
-                '''#version 130
-    in vec3 texCoord;
-    out vec4 fragColor;
-    uniform samplerCube cube_map;
-
-    void main( ) {
-        fragColor = texture(cube_map, texCoord);
-    }''', GL_FRAGMENT_SHADER ),
-        )
-        vertex_loc = glGetAttribLocation( shader, 'vertex' )
-        mvp_matrix_loc = glGetUniformLocation( shader, 'mvp_matrix' )
-        # Create VAO for core profile compatibility
-        vao = glGenVertexArrays(1)
-        render_data = (tex, vert_vbo, index_vbo, shader, vertex_loc, mvp_matrix_loc, vao)
-        if hasattr(mode,'cache'):
-            holder = mode.cache.holder( self, render_data )
-            for node, name in self.sideDependencies():
-                holder.depend( node, name )
+        """(textures, vertex buffer, vertex array): a texture for each side with
+        an image, by its place in the buffer, kept until a side changes"""
+        textures = []
+        quads = []
+        layout = str(getattr(self, 'faceLayout', 'X3D'))
+        for index, side in enumerate(FACES):
+            positions, texcoords = face_quad(side, layout)
+            quads.append(concatenate((positions * CUBE_SIZE, texcoords), axis=1))
+            source = getattr(self, side)
+            if has_image(source):
+                tex = texture.Texture(source.image)
+                glBindTexture(GL_TEXTURE_2D, tex.texture)
+                # Mipmapped: a side is seen at every scale as the view turns
+                glGenerateMipmap(GL_TEXTURE_2D)
+                for parameter, value in ((GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE),
+                                         (GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE),
+                                         (GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR),
+                                         (GL_TEXTURE_MAG_FILTER, GL_LINEAR)):
+                    glTexParameteri(GL_TEXTURE_2D, parameter, value)
+                glBindTexture(GL_TEXTURE_2D, 0)
+                textures.append((index, tex))
+        render_data = (textures, VBO(concatenate(quads).astype('f')), glGenVertexArrays(1))
+        holder = mode.cache.holder(self, render_data, CACHE_KEY)
+        for node_, name in self.sideDependencies():
+            holder.depend(node_, name)
         return render_data
 
     def sideDependencies( self ) -> list[tuple[Any, str]]:
         """(node, field name) for each field the drawn sides are read from"""
-        return [
-            (self, key + 'Url')
-            for key in ('right', 'left', 'top', 'bottom', 'front', 'back')
-        ]
+        found: list[tuple[Any, str]] = []
+        if hasattr(type(self), 'faceLayout'):
+            found.append((self, 'faceLayout'))
+        for side in FACES:
+            found.append((self, side + 'Url'))
+            source = getattr(self, side)
+            if source is not None and hasattr(type(source), 'image'):
+                found.append((source, 'image'))
+        return found
 
 class CubeBackground( _CubeBackground, binding.Bindable, nodetypes.Background, nodetypes.Children, node.Node  ):
     """Image-cube Background node
@@ -219,10 +238,10 @@ class CubeBackground( _CubeBackground, binding.Bindable, nodetypes.Background, n
         bottomUrl -- texture urls (MFStrings) used to
             load the images above
 
-    Note: the common practice in 3DSMax for creating
-    a cubic environment map produces useful
-    background images, but it is often necessary to
-    swap left and right images to work with the
-    VRML 97 system.
+        faceLayout -- ``"X3D"``, each image turned as X3D's
+            Background turns it, or ``"CUBEMAP"``, each laid out as
+            a GL cube map face (an IBL environment's, a glTF sky's)
     """
+    PROTO = 'CubeBackground'
+    faceLayout = field.newField('faceLayout', 'SFString', 1, 'X3D')
     

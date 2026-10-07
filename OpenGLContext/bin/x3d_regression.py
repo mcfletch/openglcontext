@@ -55,6 +55,9 @@ RENDER_TIMEOUT = 120.0
 DEFAULT_ARCHIVES = ('ConformanceNist', 'Vrml2Sourcebook')
 #: The most problems a document's record keeps.
 MAX_PROBLEMS = 20
+#: The world time, in seconds since 1970, a document's first frame is drawn at
+#: (2000-01-01): a TimeSensor with startTime 0 has run its cycle long before.
+WORLD_START = 946684800.0
 #: Begins the line the drawing process reports on.
 REPORT_MARK = 'X3D_RENDER '
 #: The per-channel difference a pixel must exceed to count as differing from
@@ -185,6 +188,7 @@ def _render_environment(out: str, frames: int) -> dict[str, str]:
         OPENGLCONTEXT_SHADOW_CASCADES='3', OPENGLCONTEXT_BLOOM='0',
         OPENGLCONTEXT_DISABLE_FPS_DISPLAY='1', OPENGLCONTEXT_AUDIO='0',
         OPENGLCONTEXT_SEED='4242',
+        OPENGLCONTEXT_CAPTURE_START=repr(WORLD_START),
         OPENGLCONTEXT_AUTO_EXIT_FRAMES=str(frames),
         OPENGLCONTEXT_AUTO_EXIT_CAPTURE_DIR=os.path.dirname(os.path.abspath(out)),
         OPENGLCONTEXT_AUTO_EXIT_CAPTURE_NAME=os.path.splitext(os.path.basename(out))[0])

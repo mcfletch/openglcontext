@@ -86,13 +86,23 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
     `tests/reference_images/x3d_xite`, which the regression reads. Chromium needs
     libnss3, libnspr4, libatk1.0, libatk-bridge2.0, libxdamage1 and libatspi2.0 in
     the container (the workspace's `.devcontainer/Dockerfile` installs them)
-  - [ ] found against X_ITE, still to fix: Background `*Url` image faces draw
-    nothing; background binding picks another background (test_binding5); the sky
-    below the last skyAngle where there is no ground (ours carries the last colour,
-    X_ITE draws black: read the spec); ground colours and angles
-    (verify_lastground); fog with a Background fades to white (Figure23_5); the
-    cut-out alpha tree. X_ITE runs Scripts, so its render of a document whose
-    scene a Script builds shows what ours does not draw
+  - [ ] found against X_ITE, still to fix: fog with a Background fades to white
+    (Figure23_5); the cut-out alpha tree (Figure17_10cTextureTransparencyTree);
+    Billboard does not turn toward the viewer. X_ITE runs Scripts, so its render
+    of a document whose scene a Script builds shows what ours does not draw
+  - [x] Background image faces: each side drawn as its own quad once its image
+    has loaded, turned as X3D says, transparent parts showing the sky
+    (`tests/unit/test_background_faces.py`); the old cube map drew only with
+    all six and mirrored each. `CubeBackground.faceLayout "CUBEMAP"` keeps GL's
+    layout for the IBL environment and glTF cube map skies
+  - [x] test_binding5 bound the third Background: the capture clock started at
+    0, so TimeSensors with `startTime 0` ran at load and bound it.
+    `OPENGLCONTEXT_CAPTURE_START`; the regression starts worlds at 2000-01-01
+  - [x] verify_clampingsky, set_skycolor2, verify_lastground: ours matches
+    NIST's own expected images (`verify-clampingsky-front.jpg`,
+    `verify-lastground-front.jpg`); X_ITE 16.4.3 draws a ground colour with no
+    groundAngle over the lower hemisphere, and the last ground colour up to the
+    equator
   - [x] every PIL-loaded 2D texture was uploaded top row first, which glTF wants
     and VRML97/X3D do not: a texture node now says which row (0, 0) names
     (`_Texture.TOP_FIRST`, true for `ImageDataTexture`), the texture cache keys on
@@ -112,6 +122,8 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
     `saveimage`, `pbodemo`, `shader_instanced`, `shader_instanced_mapped`,
     `transparentsorted`: an `ImageTexture` is drawn the right way up
   - `node_modify`: as `timesensorobject`, below
+  - `cubeback_rot`, `cubebackgroundobject`: the teapot is drawn with its own
+    material; the former cube left its state behind for the teapot
   - `timesensorobject`: the TimeSensor's fraction is measured from
     `startTime` on the engine clock, one frame ahead of the old Timer's
   - `lightobject`: `cycleTime` is sent when the TimeSensor starts, as X3D

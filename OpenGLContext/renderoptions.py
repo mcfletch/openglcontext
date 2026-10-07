@@ -103,7 +103,7 @@ ENVIRONMENT: tuple[str, ...] = (
     # What a capture's world clock advances by per frame decides where every
     # animation in the scene has got to by the frame that is read back. See
     # OpenGLContext.video.clock.capture_clock.
-    'OPENGLCONTEXT_CAPTURE_FPS',
+    'OPENGLCONTEXT_CAPTURE_FPS', 'OPENGLCONTEXT_CAPTURE_START',
     'OPENGLCONTEXT_DISABLE_FPS_DISPLAY', 'OPENGLCONTEXT_HIDDEN',
     'OPENGLCONTEXT_NO_VSYNC', 'OPENGLCONTEXT_GLTF_BASELINE', 'OPENGLCONTEXT_X3D_BASELINE',
     # Filling the screen changes the resolution and the aspect ratio a frame is

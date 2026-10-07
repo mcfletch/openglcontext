@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 '''CubeBackground object test (image cube background)
 
-NOTE: CubeBackground currently uses GL_QUADS which requires compatibility profile.
+The six images are an IBL environment's, laid out as GL cube map faces.
 '''
 from OpenGLContext.context import Context as BaseContext
 from OpenGLContext import context
@@ -13,7 +13,7 @@ from OpenGLContext.passes import renderpass
 class TestContext( BaseContext ):
     """Tests the CubeBackground object's rendering
     """
-    # Requires compatibility profile for GL_QUADS in CubeBackground
+    # The f key switches to the fixed-function pass, which needs a compatibility profile
     profile = 'compatibility'   # draws with the fixed-function pipeline
     def OnInit( self ):
         """Scene set up and initial processing"""
@@ -28,6 +28,7 @@ class TestContext( BaseContext ):
                     )),
                 ),
                 CubeBackground(
+                    faceLayout = "CUBEMAP",
                     backUrl = "pimbackground_BK.jpg",
                     frontUrl = "pimbackground_FR.jpg",
                     leftUrl = "pimbackground_LF.jpg",

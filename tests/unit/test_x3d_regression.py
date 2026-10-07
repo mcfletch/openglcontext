@@ -201,3 +201,11 @@ def test_without_x_ite_web3ds_render_is_the_reference(monkeypatch, tmp_path):
 def test_the_references_are_in_the_reference_images():
     assert R.default_reference_root().endswith(
         os.path.join('tests', 'reference_images', 'x3d_xite'))
+
+
+def test_a_world_is_drawn_long_after_time_zero(tmp_path):
+    """X3D's times are seconds since 1970: a TimeSensor with startTime 0 has
+    finished before any browser loads the world"""
+    env = R._render_environment(str(tmp_path / 'a.png'), 8)
+    assert float(env['OPENGLCONTEXT_CAPTURE_START']) == R.WORLD_START
+    assert R.WORLD_START > 365 * 24 * 3600

@@ -292,6 +292,11 @@ class TestThePanoramaSky:
             got = getattr(node, name).image.convert('RGB').getpixel((0, 0))
             assert got == color, '%s should be %r, got %r' % (name, color, got)
 
+    def test_the_cubemap_faces_keep_gls_layout(self):
+        """A cube map face's layout is GL's, which the CubeBackground is told"""
+        block = [{'type': 'panorama', 'panorama': {'cubemap': [0, 1, 2, 3, 4, 5]}}]
+        assert background_of(document(block, images=6)).faceLayout == 'CUBEMAP'
+
     def test_an_equirectangular_panorama_wins_over_a_cubemap(self):
         """The specification names it the fallback for engines without cubemap
         skyboxes, and it is the one that also drives the reflections."""

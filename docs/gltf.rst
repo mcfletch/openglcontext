@@ -585,7 +585,7 @@ Background pass then draws it:
        environment, so metals reflect the sky drawn behind them.
    * - ``panorama``, cubemap
      - ``CubeBackground``, with six faces in the extension's ``+X, -X, +Y, -Y, +Z,
-       -Z`` order.
+       -Z`` order, laid out as GL cube map faces (``faceLayout "CUBEMAP"``).
    * - ``plain``
      - ``SimpleBackground``.
    * - ``physical``
