@@ -357,8 +357,9 @@ automatically. These are instanceable:
 
 - PBRMesh and IndexedFaceSet - the general triangle meshes, the most common
   shapes in ``.wrl`` and glTF content. An instanced IndexedFaceSet uses the
-  same triangle data it tessellates for normal drawing, so it looks identical
-  to a per-shape one.
+  same triangle data and colours it tessellates for normal drawing, so it
+  looks identical to a per-shape one. Face sets batch together only where
+  their coordinates, normals, texture coordinates and colours are equal.
 
 - glTF ``EXT_mesh_gpu_instancing`` and shared glTF meshes - recognised by the
   loader and batched automatically.
@@ -491,9 +492,6 @@ Limitations
   extrusions) are not instanced, so they keep it. The Teapot is instanced at
   one tessellation (its ``steps``, or the finest). Teapots with different
   ``steps`` are different meshes and so separate draws.
-
-- Per-vertex colour is dropped. A mesh with per-vertex colours still batches,
-  but it renders with its material colour instead of the vertex colours.
 
 - At most 73 distinct materials per instanced draw. Larger groups are split
   into several draws.

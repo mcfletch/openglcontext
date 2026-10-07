@@ -195,18 +195,30 @@ class ArrayGeometry(object):
         return 1
 
     def _render_shader(self, mode: Any) -> Any:
-        """Render using shader pipeline with separate attribute arrays."""
+        """Render using shader pipeline with separate attribute arrays.
+
+        The colours, where there are any, replace the material's diffuse
+        colour; the shader is told so for this draw, as it is for every mesh.
+        """
         from OpenGLContext.scenegraph.geometryarrays import (
-            GeometryArrays, render_geometry,
+            GeometryArrays, VertexArray, render_geometry,
         )
 
         objectType, startIndex, count = self.arguments
+        colours = None
+        if self.colours is not None and len(self.colours):
+            colours = VertexArray(self.colours, self.componentCounts[1])
+        set_vertex_color = getattr(getattr(mode, 'shader_program', None),
+                                   'set_vertex_color', None)
+        if set_vertex_color is not None and not getattr(mode, 'shadow_pass', False):
+            set_vertex_color(colours is not None)
         return render_geometry(mode, GeometryArrays.separate(
             count=count,
             draw_mode=objectType,
             positions=self.vertices,
             normals=self.normals,
             texcoords=self.textures,
+            colors=colours,
         ), owner=self, where='ArrayGeometry', ccw=self.ccw == GL_CCW,
             solid=bool(self.solid))
     def draw( self ) -> None:

@@ -90,12 +90,10 @@ class IFSCompiler(object):
         """Compile a renderer to represent the IFS at run-time"""
         raise NotImplementedError
 
-    def buildCacheHolder(self, key: str = "", mode: Any = None) -> Any:
-        """Get a cache holder with all dependencies set"""
-        holder = mode.cache.holder(self.target, None, key=key)
-        for field in protofunctions.getFields(self.target):
-            # change to any field requires a recompile
-            holder.depend(self.target, field)
+    def dependencies(self) -> list[tuple[Any, Any]]:
+        """(node, field) for every field the compiled arrays are made from:
+        each of the face set's own, and the values of its property nodes"""
+        found = [(self.target, field) for field in protofunctions.getFields(self.target)]
         for n, attr in [
             (self.target.coord, "point"),
             (self.target.color, "color"),
@@ -103,7 +101,14 @@ class IFSCompiler(object):
             (self.target.normal, "vector"),
         ]:
             if n:
-                holder.depend(n, protofunctions.getField(n, attr))
+                found.append((n, protofunctions.getField(n, attr)))
+        return found
+
+    def buildCacheHolder(self, key: str = "", mode: Any = None) -> Any:
+        """Get a cache holder with all dependencies set"""
+        holder = mode.cache.holder(self.target, None, key=key)
+        for n, field in self.dependencies():
+            holder.depend(n, field)
         return holder
 
     def tessellate(self, polygons: Any = None, sources: Any = None) -> list[Any]:

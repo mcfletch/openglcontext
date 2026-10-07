@@ -14,7 +14,7 @@ nodes, and ``EXT_mesh_gpu_instancing`` all feed the same batcher.
 """
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from typing import Any, Optional
 import numpy as np
 import ctypes
@@ -280,14 +280,18 @@ def geometry_content_instance_key(shape: Any) -> Optional[tuple]:
 def build_mesh_gpu(mode: Any, node: Any, positions: Any, normals: Any = None,
                    texcoords: Any = None, indices: Any = None,
                    cache_key: str = 'instance_gpu',
-                   depend_fields: tuple = ()) -> Any:
+                   depend_fields: tuple = (), colors: Any = None,
+                   depends: Iterable[tuple[Any, Any]] = ()) -> Any:
     """Build (and cache on the context) a PBRMesh-style ``_MeshGPU`` from raw arrays.
 
     Lets any geometry become instanceable by handing over its expanded vertex
     arrays in the shader's attribute layout (separate VBOs at locations
     texcoord=0, normal=1, position=2); the same ``_MeshGPU`` + ``draw_instanced_mesh``
-    path then serves Box, Sphere and PBRMesh alike. Cached per node (rebuilt when a
-    ``depend_fields`` field changes, e.g. Box.size / Sphere.radius).
+    path then serves Box, Sphere and PBRMesh alike. ``colors`` are per-vertex
+    RGB or RGBA. Cached per node, and rebuilt when a ``depend_fields`` field of
+    the node changes (Box.size, Sphere.radius) or a field of another node that
+    ``depends`` names as a ``(node, field)`` pair (an IndexedFaceSet's
+    Coordinate.point).
     """
     gpu = mode.cache.getData(node, key=cache_key)
     if gpu is not None:
@@ -311,7 +315,7 @@ def build_mesh_gpu(mode: Any, node: Any, positions: Any, normals: Any = None,
     m.texcoords = None if texcoords is None else np.ascontiguousarray(texcoords, dtype=np.float32)
     m.texcoords1 = None      # quadric/IFS geometry has no second UV set
     m.tangents = None
-    m.colors = None
+    m.colors = PBRMesh._rgba(colors)
     m.indices = None if indices is None else np.ascontiguousarray(indices, dtype=np.uint32).ravel()
     gpu = _MeshGPU(m, pending_deletes=PBRMesh._pending_delete_queue(mode))
     holder = mode.cache.holder(node, gpu, key=cache_key)
@@ -320,6 +324,8 @@ def build_mesh_gpu(mode: Any, node: Any, positions: Any, normals: Any = None,
             holder.depend(node, f)
         except Exception:
             pass
+    for other, f in depends:
+        holder.depend(other, f)
     return gpu
 
 
@@ -1002,6 +1008,13 @@ def _set_instance_divisor(divisor: int) -> None:
                 INSTANCE_ATTR_LOC + 3, INSTANCE_OBJECT_ID_LOC, INSTANCE_MATERIAL_LOC,
                 INSTANCE_JOINT_BASE_LOC):
         glVertexAttribDivisor(loc, divisor)
+
+
+def carries_colours(gpu: Any) -> bool:
+    """Whether an instanced mesh (``instanceGPU``'s answer) has per-vertex colours"""
+    location = vertexsemantics.location('COLOR_0')
+    return gpu is not None and any(
+        loc == location for _buffer, loc, _size in gpu.attr_layout)
 
 
 def draw_instanced_mesh(gpu: Any, modelviews: Any, object_ids: Any,

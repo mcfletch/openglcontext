@@ -1309,7 +1309,7 @@ class PBRPass(flatcore.FlatPass):
         distinct pick id via ``_objectIdFor``; a non-pickable instance packs 0.
         """
         from OpenGLContext.passes.instancing import (
-            draw_instanced_mesh, group_material_table, instance_counts,
+            carries_colours, draw_instanced_mesh, group_material_table, instance_counts,
             instance_joint_bases, instance_matrices, member_joint_bases,
             per_instance,
         )
@@ -1330,8 +1330,9 @@ class PBRPass(flatcore.FlatPass):
             # surface (a VRML ``solid FALSE``) is drawn from both sides.
             apply_winding_cull(self, bool(getattr(geom, 'ccw', True)),
                                bool(getattr(geom, 'solid', True)))
+        gpu = geom.instanceGPU(self)
         if hasattr(shader, 'set_vertex_color'):
-            shader.set_vertex_color(getattr(geom, 'colors', None) is not None)
+            shader.set_vertex_color(carries_colours(gpu))
         if hasattr(shader, 'set_texgen'):
             shader.set_texgen(getattr(geom, 'texGen', None))
 
@@ -1340,7 +1341,6 @@ class PBRPass(flatcore.FlatPass):
         if apply_zones is not None:
             apply_zones(shader, group.members, prog, key=group.key)
 
-        gpu = geom.instanceGPU(self)
         bases = instance_joint_bases(self, group)
         shader.set_instancing(True, program=prog)
         if hasattr(shader, 'set_skinning'):

@@ -130,14 +130,17 @@ class GeometryArrays(object):
         """One buffer per attribute, named as the engine's geometry names them.
 
         ``positions``, ``normals``, ``texcoords``, ``tangents``, ``colors`` and
-        ``texcoords1``; anything passed as None is simply not offered.
+        ``texcoords1``; anything passed as None is not offered. Each is a
+        buffer read at the components :data:`SEPARATE_KEYS` gives it, or a
+        :class:`VertexArray` read as it says (RGB colours, three wide).
         """
         unknown = set(buffers) - {name for name, _, _ in SEPARATE_KEYS}
         if unknown:
             raise TypeError('not vertex arrays this engine names: %s'
                             % (', '.join(sorted(unknown)),))
         arrays = {
-            semantic: VertexArray(buffers[name], components)
+            semantic: (buffers[name] if isinstance(buffers[name], VertexArray)
+                       else VertexArray(buffers[name], components))
             for name, semantic, components in SEPARATE_KEYS
             if buffers.get(name) is not None
         }

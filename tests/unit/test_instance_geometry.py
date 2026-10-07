@@ -7,7 +7,7 @@ two hooks (see ``plans/INSTANCED-GEOMETRY.md``):
                                identical geometry collapse into one draw; equal
                                content -> equal key, different content -> different
                                key.
-  ``_instanceArrays()``     -- the expanded (positions, normals, texcoords) the
+  ``_instanceArrays()``     -- the expanded (positions, normals, texcoords, colours) the
                                shared mesh-GPU is built from; ``instanceGPU(mode)``
                                wraps these for GL (tested separately under GL).
 
@@ -49,11 +49,19 @@ class TestIndexedFaceSetInstancing:
         b.coordIndex = [0, 1, 2, -1]   # a triangle, not a quad
         assert a.instanceContentKey() != b.instanceContentKey()
 
+    def test_content_key_tracks_colours(self):
+        a, b = _quad_ifs(), _quad_ifs()
+        a.color = basenodes.Color(color=[(1, 0, 0)])
+        b.color = basenodes.Color(color=[(0, 1, 0)])
+        assert a.instanceContentKey() != b.instanceContentKey()
+        assert a.instanceContentKey() != _quad_ifs().instanceContentKey()
+
     def test_instance_arrays_expand_to_triangle_soup(self):
-        positions, normals, texcoords = _quad_ifs()._instanceArrays()  # noqa: SLF001 the triangle soup a geometry offers the instancer, read without a GL context
+        positions, normals, texcoords, colours = _quad_ifs()._instanceArrays()  # noqa: SLF001 the triangle soup a geometry offers the instancer, read without a GL context
         # A quad tessellates to two triangles = six expanded vertices.
         assert positions.shape == (6, 3)
         assert normals.shape == (6, 3)
+        assert colours is None
         # A front-facing quad (CCW in the xy plane) has +z normals.
         assert np.allclose(normals[:, 2], 1.0, atol=1e-3)
 

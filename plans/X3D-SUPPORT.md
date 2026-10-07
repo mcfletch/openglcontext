@@ -176,6 +176,8 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - `lightobject`: `cycleTime` is sent when the TimeSensor starts, as X3D
     says, so the demo's random light switch runs at start-up
   - `zones_demo`: its lamps' `radius = 8` is honoured (`f10f71ca`)
+  - `hud_demo`: one `groundColor` and no `groundAngle` is the ground
+    hemisphere (`2dea754e`)
   - `glelathe`: minified rings are mipmapped, and with opengl_extrusions'
     `uv-seam` branch the spiral and screw no longer squeeze the texture back
     across the contour's seam

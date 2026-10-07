@@ -62,7 +62,6 @@ from typing import Any, Optional
 import numpy as np
 from OpenGLContext.scenegraph import coordinatebounded
 from vrml.vrml97 import basenodes
-from vrml import protofunctions
 
 # The compile pipeline lives in ``ifscompiler``; re-exported here so importers
 # that used ``from ...indexedfaceset import IndexedPolygonsCompiler`` etc. keep
@@ -81,6 +80,9 @@ from OpenGLContext.scenegraph.ifscompiler import (
 import logging
 
 log = logging.getLogger(__name__)
+
+#: Where an IndexedFaceSet keeps its instanced mesh, in the pass's cache.
+INSTANCE_KEY = 'instance_gpu'
 
 
 class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceSet):
@@ -182,15 +184,13 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
     def _hasGeometry(self) -> bool:
         return bool(len(self.coordIndex) and self.coord and len(self.coord.point))
 
-    def _instanceArrays(self) -> Optional[tuple[Any, Any, Any]]:
-        """Expanded (positions, normals, texcoords) triangle soup for instancing.
+    def _instanceArrays(self) -> Optional[tuple[Any, Any, Any, Any]]:
+        """Expanded (positions, normals, texcoords, colours) triangle soup for instancing.
 
         Reuses ``ArrayGeometryCompiler`` -- the same tessellation the
         non-instanced shader path draws -- so an instanced IndexedFaceSet looks
-        identical to its per-shape rendering. Returns ``None`` when empty. Note
-        per-vertex color is dropped by the shared instanced mesh (documented
-        limitation of ``build_mesh_gpu``); a color-varying field still batches by
-        shape, it just renders with the material colour.
+        identical to its per-shape rendering. Returns ``None`` when empty;
+        colours are None for a set without them.
         """
         if not self._hasGeometry():
             return None
@@ -198,7 +198,7 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
         if expanded is None:
             return None
         vertexArray, colorArray, normalArray, textureCoordinateArray = expanded
-        return vertexArray, normalArray, textureCoordinateArray
+        return vertexArray, normalArray, textureCoordinateArray, colorArray
 
     def instanceContentKey(self) -> Optional[tuple[Any, ...]]:
         """Hashable signature so distinct-but-identical IFS nodes share one draw.
@@ -224,21 +224,27 @@ class IndexedFaceSet(coordinatebounded.CoordinateBounded, basenodes.IndexedFaceS
         feed('normal', self.normal.vector if self.normal else None)
         feed('texCoordIndex', self.texCoordIndex)
         feed('texCoord', self.texCoord.point if self.texCoord else None)
+        feed('colorIndex', self.colorIndex)
+        feed('color', self.color.color if self.color else None)
         return ('IndexedFaceSet', h.hexdigest(),
-                bool(self.normalPerVertex), round(float(self.creaseAngle), 6),
+                bool(self.normalPerVertex), bool(self.colorPerVertex),
+                round(float(self.creaseAngle), 6),
                 bool(self.ccw), bool(self.solid), bool(getattr(self, 'convex', True)))
 
     def instanceGPU(self, mode: Any) -> Any:
-        """Cached separate-VBO mesh-GPU (position/normal/texcoord) for instancing."""
+        """Cached separate-VBO mesh-GPU (position/normal/texcoord/colour) for
+        instancing, rebuilt when any field the arrays are made from changes."""
         from OpenGLContext.passes.instancing import build_mesh_gpu
+        held = mode.cache.getData(self, key=INSTANCE_KEY)
+        if held is not None:
+            return held
         arrays = self._instanceArrays()
         if arrays is None:
             return None
-        positions, normals, texcoords = arrays
+        positions, normals, texcoords, colours = arrays
         return build_mesh_gpu(
             mode, self, positions, normals, texcoords, indices=None,
-            cache_key='instance_gpu',
-            depend_fields=(protofunctions.getField(self, 'coordIndex'),
-                           protofunctions.getField(self, 'coord')))
+            cache_key=INSTANCE_KEY, colors=colours,
+            depends=ArrayGeometryCompiler(self).dependencies())
 
 

@@ -139,7 +139,8 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
         id; a non-pickable instance packs 0.
         """
         from OpenGLContext.passes.instancing import (
-            draw_instanced_mesh, instance_counts, instance_matrices, per_instance,
+            carries_colours, draw_instanced_mesh, instance_counts, instance_matrices,
+            per_instance,
         )
         from OpenGLContext.passes.shaderpass import configure_material_from_node
         from OpenGLContext.scenegraph.winding import apply_winding_cull
@@ -185,7 +186,7 @@ class FlatPass(ShadowMapMixin, _flat.FlatPass):
             shader.set_default_material()
         shader.set_matrices(self.matrix, self.projection, program=prog)
         if hasattr(shader, 'set_vertex_color'):
-            shader.set_vertex_color(getattr(geom, 'colors', None) is not None)
+            shader.set_vertex_color(carries_colours(gpu))
         if hasattr(geom, '_apply_draw_state'):
             geom._apply_draw_state(self)
         else:

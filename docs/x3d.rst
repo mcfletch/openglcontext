@@ -140,7 +140,9 @@ are generated, smoothed across folds within ``creaseAngle`` for
 ``ElevationGrid`` and across every shared coordinate for the triangle sets
 whose ``normalPerVertex`` is true; ``colorPerVertex`` and ``normalPerVertex``
 false give one value per triangle (per quad for ``ElevationGrid``); ``ccw``
-false turns the triangles round. A ``MultiTextureCoordinate``'s entries are
+false turns the triangles round. In these and in ``IndexedFaceSet``, a
+``Color`` or ``ColorRGBA`` replaces the ``Material``'s ``diffuseColor``, in
+both renderers. A ``MultiTextureCoordinate``'s entries are
 ``TEXCOORD_0``, ``TEXCOORD_1`` and so on, and an entry's ``mapping`` label is
 what a material's ``...TextureMapping`` names. The renderer reads two
 coordinate sets. A ``LineSet`` is drawn as an ``IndexedLineSet``.
