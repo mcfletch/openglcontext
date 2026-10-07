@@ -25,7 +25,7 @@ from OpenGL.GL import GL_TRIANGLES
 
 from OpenGLContext import triangleutilities
 from OpenGLContext.debug.logs import getTraceback
-from OpenGLContext.scenegraph import arraygeometry
+from OpenGLContext.scenegraph import arraygeometry, composedgeometry
 from OpenGLContext.scenegraph import (
     polygon,
     vertex,
@@ -312,6 +312,9 @@ class ArrayGeometryCompiler(IFSCompiler):
             textureCoordinateArray = array(
                 [vertex.textureCoordinate for vertex in vertices], "f"
             )
+        elif not self.target.texCoord:
+            textureCoordinateArray = composedgeometry.default_texcoords(
+                vertexArray, self.target.coord.point)
         else:
             textureCoordinateArray = None
         return vertexArray, colorArray, normalArray, textureCoordinateArray
@@ -523,11 +526,9 @@ def build_normalPerVertex(vertices: Any, creaseAngle: float, vertexArray: Any = 
                     # and increment the element counts
                     counts[vertexSet[index]] = counts[vertexSet[index]] + 1
                     counts[vertexSet[innerindex]] = counts[vertexSet[innerindex]] + 1
-    # reshape counts to allow for in-place division...
-    counts.shape = (-1, 1)
     # divide in place, completing the averaging (and thereby hopefully
     # re-normalising the Normal vectors)
-    divide(vertexNormals, counts, vertexNormals)
+    divide(vertexNormals, counts.reshape(-1, 1), vertexNormals)
     return vertexNormals
 
 

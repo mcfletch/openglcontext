@@ -275,6 +275,10 @@ VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
   the application's own handlers receive the same events. The hit is the picked point, with no
   normal or texture coordinate. Picking (``ContextDefinition.pickEnabled``)
   has to be on.
+- An ``IndexedFaceSet`` or a triangle set with no ``texCoord`` takes X3D's
+  default texture coordinates: s from 0 to 1 along the largest dimension of
+  its coordinates' bounding box, t along the second largest in the same units
+  (``composedgeometry.default_texcoords``).
 - An ``Anchor`` draws its children as a group, and a click released over
   them calls ``Context.OnAnchor(anchor, url, parameter)``. The context binds
   the viewpoint a ``#name`` url names; opening any other url is left to an

@@ -196,7 +196,8 @@ class MeshGeometry(MeshDrawn, x3d.X3DComposedGeometryNode):
             points, self.triangles(), ccw=bool(self.ccw),
             normals=_values(self.normal, 'vector'), normal_per_vertex=bool(self.normalPerVertex),
             colors=_values(self.color, 'color'), color_per_vertex=bool(self.colorPerVertex),
-            texcoords=self.coordinates(), tangents=_values(self.tangent, 'vector')),
+            texcoords=self.coordinates() or [composedgeometry.default_texcoords(points)],
+            tangents=_values(self.tangent, 'vector')),
             solid=bool(self.solid))
 
 

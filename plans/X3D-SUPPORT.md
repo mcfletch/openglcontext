@@ -87,14 +87,19 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
     libnss3, libnspr4, libatk1.0, libatk-bridge2.0, libxdamage1 and libatspi2.0 in
     the container (the workspace's `.devcontainer/Dockerfile` installs them)
   - [ ] found against X_ITE, still to fix: fog with a Background fades to white
-    (Figure23_5); the cut-out alpha tree (Figure17_10cTextureTransparencyTree);
-    Billboard does not turn toward the viewer. X_ITE runs Scripts, so its render
+    (Figure23_5); Billboard does not turn toward the viewer; a shape with no
+    Material is lit grey where X3D draws it unlit, and a Material is lit
+    brighter than X3D's lighting equation gives (the tree's ground). X_ITE runs Scripts, so its render
     of a document whose scene a Script builds shows what ours does not draw
   - [x] Background image faces: each side drawn as its own quad once its image
     has loaded, turned as X3D says, transparent parts showing the sky
     (`tests/unit/test_background_faces.py`); the old cube map drew only with
     all six and mirrored each. `CubeBackground.faceLayout "CUBEMAP"` keeps GL's
     layout for the IBL environment and glTF cube map skies
+  - [x] the cut-out tree drew nothing: a face set with no texCoord had no
+    texture coordinates, so every vertex read the image's corner. X3D's default
+    (`composedgeometry.default_texcoords`) for IndexedFaceSet and the triangle
+    sets (`tests/unit/test_default_texcoords.py`)
   - [x] test_binding5 bound the third Background: the capture clock started at
     0, so TimeSensors with `startTime 0` ran at load and bound it.
     `OPENGLCONTEXT_CAPTURE_START`; the regression starts worlds at 2000-01-01

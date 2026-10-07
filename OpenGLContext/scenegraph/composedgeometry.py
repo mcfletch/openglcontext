@@ -195,6 +195,25 @@ def arc_points(radius: float, start: float, end: float, segments: int) -> np.nda
                      np.zeros_like(angles)], axis=1).astype(np.float32)
 
 
+def default_texcoords(points: ArrayLike, bounds: Optional[ArrayLike] = None) -> np.ndarray:
+    """X3D's texture coordinates for a face set with no texCoord, one per point
+
+    s runs from 0 to 1 along the largest dimension of the bounding box of
+    `bounds` (default `points`), t along the second largest, from 0 to its
+    size over the largest's; ties go to X, then Y, then Z.
+    """
+    found = np.asarray(points, np.float64).reshape(-1, 3)
+    box = found if bounds is None else np.asarray(bounds, np.float64).reshape(-1, 3)
+    if not len(found) or not len(box):
+        return np.zeros((len(found), 2), np.float32)
+    low = box.min(axis=0)
+    size = box.max(axis=0) - low
+    # A stable sort of the negated sizes keeps X before Y before Z among equals
+    largest, second = np.argsort(-size, kind='stable')[:2]
+    scale = size[largest] if size[largest] > 0 else 1.0
+    return ((found[:, [largest, second]] - low[[largest, second]]) / scale).astype(np.float32)
+
+
 def _flat_texcoords(points: np.ndarray, low: ArrayLike, high: ArrayLike) -> np.ndarray:
     """Points' x and y across a box, as texture coordinates from 0 to 1"""
     bottom, top = np.asarray(low, np.float64), np.asarray(high, np.float64)
