@@ -56,7 +56,7 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   Each demo either declares `renderer='vrml97'` or has its baseline re-blessed;
   the maintainer's choice
 - Phase 6, OpenGLContext Interchange (§9.11, §9.12, §9.14)
-  - [ ] implementations rebased on `vrml.x3d.nodes` (done: the suite passes against them); every X3D node registered
+  - [ ] implementations rebased on `vrml.x3d.nodes` (done: the suite passes against them); every X3D node registered (done: CADAssembly, CADLayer, CADPart, PickableGroup, Anchor; left: LayoutGroup, ScreenGroup, Viewport)
   - [x] the render pass skips nodes whose X3D `visible` is false (`FlatPass.onVisibleChange`)
   - [x] an Inline's scene arriving after the world was walked is drawn (`CHILDREN_CHANGE_SIGNAL`, delivered through the render queue)
   - [x] lights: X3D's `shadows` replaces `castShadows` (true for a light made in code, X3D's false in a document: the builder's `declared_defaults`); `shadowIntensity` per shadow slot; `Shape.castShadow` replaces `castsShadow`
@@ -81,11 +81,16 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] bind stacks (`vrml.x3d.binding`): backgrounds (the engine's own too), fogs, viewpoints and NavigationInfo bound by `set_bind`; `next_viewpoint`
   - [x] `OrthoViewpoint` (`ViewPlatform.setOrthographic`), `nearDistance`/`farDistance`
   - [x] NavigationInfo `headlight` and `type` (`move.navigationinfo`); `speed`, `avatarSize`, `visibilityLimit` and the transitions not read
-  - [ ] `ViewpointGroup`; `centerOfRotation`, `retainUserOffsets`, `viewAll`
+  - [x] `ViewpointGroup` (displayed, proximity); NavigationInfo `visibilityLimit`
+  - [ ] `centerOfRotation`, `retainUserOffsets`, `viewAll`; NavigationInfo `speed`, `avatarSize`, transitions
   - [x] environmental sensors (`vrml.x3d.sensors`, sensed once a frame by `scenegraph.x3dsensors`)
   - [x] pointing-device sensors (`vrml.x3d.pointing`, the picked pointer through `scenegraph.x3dpointing`; the hit has no normal or texture coordinate)
-  - [ ] `TimeSensor`'s start, stop, pause and resume; `LoadSensor`; `Anchor`; `Collision`'s outputs
-  - [ ] the cascade replacing immediate route forwarding
+  - [x] `TimeSensor` (`vrml.x3d.timesensor`): start, stop, pause, resume, and the engine's `rate`; polled by the context's time manager
+  - [x] `LoadSensor` (`vrml.x3d.loadsensor`); `Inline` and `ImageTexture` record their load state
+  - [x] `Anchor`: a group; `#viewpoint` bound, other urls through `Context.OnAnchor`
+  - [x] the cascade: a field is reached once per cascade, through handlers and their outputs (`vrml.event`)
+  - [ ] `Collision`'s `collideTime` and `isActive`
+  - [ ] `getTimer(context)` back on the engine's TimeSensor, over the X3D sensor
 - Phase 8, engine-mapped components (§9.17)
 - Phase 9, Fast Infoset reader
 - [ ] SimpleParse speed: the ClassicVRML reader runs at about 7 MB/s against
