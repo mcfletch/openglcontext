@@ -68,6 +68,10 @@ The vertex attributes arrive at the engine's :ref:`fixed attribute locations
 
 All of a material's constant factors are packed into one uniform buffer
 object, ``MaterialBlock``, which the pass binds with one call per shape.
+Each material has one such buffer in each context, shared by every program
+there; it is packed again when the material's ``factorVersion`` moves, and
+deleted when the material is collected or the context is torn down
+(``contextresources.ContextNames``).
 Setting the same data field by field takes about twenty ``glUniform`` calls
 per shape, and in a scene with hundreds of shapes those calls take most of
 the frame's CPU time. The block holds an array of materials, so an instanced

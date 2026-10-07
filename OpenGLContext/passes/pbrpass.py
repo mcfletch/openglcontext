@@ -31,7 +31,7 @@ from OpenGL.GL import (
 from OpenGL.GL import shaders as GL_shaders
 from vrml import cache
 
-from OpenGLContext import renderoptions
+from OpenGLContext import contextresources, renderoptions
 from OpenGLContext.passes import flatcore
 from OpenGLContext.passes.instancing import instance_collapse_is_enabled
 from OpenGLContext.passes.shaderpass import (
@@ -62,6 +62,20 @@ log = logging.getLogger(__name__)
 # Sentinel distinct from any real material (including None) so the first shape of
 # each frame always reconfigures.
 _APPEARANCE_UNSET = object()
+
+
+class _NoMaterial:
+    """The owner of the block drawn for a shape with no material"""
+
+
+_NO_MATERIAL = _NoMaterial()
+
+#: Each material's factor block in each context, as ``{'block': (buffer,
+#: version)}``: deleted when the material is collected or the context is lost.
+_MATERIAL_BLOCKS = contextresources.ContextNames(
+    '_materialBlocks',
+    lambda name: glDeleteBuffers(1, np.array([name], dtype=np.uint32)),
+    names=lambda entry: (entry[0],))
 
 # Fragment texture-unit budget. GL 3.3 core only guarantees 16 units
 # (valid indices 0..15), so every sampler the PBR program uses must fit under 16.
@@ -431,12 +445,6 @@ class PBRShaderProgram(VRML97ShaderProgram):
 
     def __init__(self) -> None:
         super().__init__()
-        # One GL uniform buffer per material, uploaded once and reused across
-        # frames. Weak keys so a buffer's bookkeeping drops when its material is
-        # collected (the GL buffer itself is reclaimed at context teardown).
-        self._material_ubos: "weakref.WeakKeyDictionary[Any, tuple[int, int]]" = \
-            weakref.WeakKeyDictionary()
-        self._default_material_ubo: Optional[int] = None
         # Per-instance so two programs (or two passes) never share transmission /
         # material-cache state through the class.
         self.transmission_mode = 'off'
@@ -447,19 +455,9 @@ class PBRShaderProgram(VRML97ShaderProgram):
         self._appearance_tmode = None
 
     def release(self) -> None:
-        """Delete the programs and every material's uniform buffer."""
-        buffers = [buffer for buffer, _version in self._material_ubos.values()]
-        if self._default_material_ubo is not None:
-            buffers.append(self._default_material_ubo)
-        self._material_ubos.clear()
-        self._default_material_ubo = None
+        """Delete the programs; the materials' blocks stay with their materials."""
         self._appearance_material = _APPEARANCE_UNSET
         self._impostor = PBRShaderProgram._impostor
-        if buffers:
-            try:
-                glDeleteBuffers(len(buffers), buffers)
-            except Exception:
-                log.debug('deleting the material buffers failed', exc_info=True)
         super().release()
 
     def compile(self) -> bool:
@@ -628,40 +626,39 @@ class PBRShaderProgram(VRML97ShaderProgram):
         glBindBuffer(GL_UNIFORM_BUFFER, 0)
         return buf
 
-    def _material_ubo(self, material: Any) -> int:
-        """The GL buffer holding ``material``'s factor block, built on first use.
+    #: Moved by :meth:`invalidate_material_ubo` to have every block packed again.
+    _blocks_packed: int = 0
 
-        Cached across frames: PBR materials are static, so the block is packed and
-        uploaded once. Mutating a material in place needs invalidate_material_ubo.
+    def _material_ubo(self, material: Any) -> int:
+        """The GL buffer holding ``material``'s factor block in this context.
+
+        Built on first use and shared by every program in the context. A live
+        edit (KHR_animation_pointer driving a material factor, a route into a
+        VRML97 Material) moves ``material.factorVersion``, and the block is
+        packed again into the buffer the material already has; an edit that
+        does not needs :meth:`invalidate_material_ubo`.
         """
-        if material is None:
-            if self._default_material_ubo is None:
-                self._default_material_ubo = self._upload_material_ubo(None)
-            return self._default_material_ubo
-        # Cache (buffer, version). A live edit (KHR_animation_pointer driving a
-        # material factor / texture transform, a route into a VRML97 Material)
-        # moves material.factorVersion, so the block is re-packed on the next
-        # draw into the buffer the material already has.
-        entry = self._material_ubos.get(material)
-        version = int(getattr(material, 'factorVersion', 0))
+        owner = _NO_MATERIAL if material is None else material
+        entries = _MATERIAL_BLOCKS.entries(owner)
+        if entries is None:
+            raise TypeError('%r cannot hold a material block' % (material,))
+        version = (PBRShaderProgram._blocks_packed, int(getattr(material, 'factorVersion', 0)))
+        entry = entries.get('block')
         if entry is None or entry[1] != version:
-            buf = self._upload_material_ubo(
-                material, entry[0] if entry is not None else None)
-            self._material_ubos[material] = (buf, version)
+            buf = self._upload_material_ubo(material, entry[0] if entry is not None else None)
+            entries['block'] = (buf, version)
             return buf
-        return entry[0]
+        found: int = entry[0]
+        return found
 
     def invalidate_material_ubo(self, material: Any = None) -> None:
-        """Drop a cached block so the next draw re-packs it (after a material edit).
-
-        ``material=None`` clears every cached block. The GL buffers are left for
-        context teardown to reclaim; only the bookkeeping is dropped.
-        """
+        """Have ``material``'s block packed again at its next draw; every block's where None"""
         if material is None:
-            self._material_ubos.clear()
-            self._default_material_ubo = None
-        else:
-            self._material_ubos.pop(material, None)
+            PBRShaderProgram._blocks_packed += 1
+            return
+        entries = _MATERIAL_BLOCKS.entries(material)
+        if entries and 'block' in entries:
+            entries['block'] = (entries['block'][0], None)
 
     def bind_material_block(self, material: Any) -> None:
         """Bind ``material``'s factor block for the shapes that follow."""

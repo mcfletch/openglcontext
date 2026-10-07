@@ -1,8 +1,7 @@
 """Headless tests for PBR-pass logic that needs no GL context.
 
 The instancing/collapse env toggles, the pass's instance predicate and batch-key
-choice, the material-array chunking that keeps a draw under the UBO capacity, and
-the material-UBO cache invalidation bookkeeping.
+choice, and the material-array chunking that keeps a draw under the UBO capacity.
 """
 from OpenGLContext.passes import pbrpass
 from OpenGLContext.passes.pbrpass import PBRPass, PBRShaderProgram
@@ -14,10 +13,6 @@ class Geom:
         if instanceable:
             self.instanceGPU = lambda _mode: None
         self.instanceContentKey = lambda: content
-
-
-class Mat:
-    """A weakref-able stand-in material (WeakKeyDictionary keys need this)."""
 
 
 class Shape:
@@ -116,26 +111,6 @@ class TestMaterialChunks:
         indices = [0, 1, 0]     # only two distinct materials
         chunks = self._chunks(members, materials, indices, max_mats=2)
         assert len(chunks) == 1
-
-
-class TestMaterialUBOInvalidation:
-    def test_invalidate_all_clears_cache_and_default(self):
-        prog = PBRShaderProgram()
-        marker = Mat()
-        prog._material_ubos[marker] = (7, 0)
-        prog._default_material_ubo = 42
-        prog.invalidate_material_ubo(None)
-        assert len(prog._material_ubos) == 0
-        assert prog._default_material_ubo is None
-
-    def test_invalidate_one_material_leaves_others(self):
-        prog = PBRShaderProgram()
-        a, b = Mat(), Mat()
-        prog._material_ubos[a] = (1, 0)
-        prog._material_ubos[b] = (2, 0)
-        prog.invalidate_material_ubo(a)
-        assert a not in prog._material_ubos
-        assert b in prog._material_ubos
 
 
 def test_an_impostor_setting_is_uploaded_only_when_it_changes(monkeypatch):
