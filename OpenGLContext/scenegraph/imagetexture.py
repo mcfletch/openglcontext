@@ -368,6 +368,36 @@ class MMImageTexture(ImageTexture):
             return None
 
 
+def sfimage_pixels(image: Any, owner: Any = None) -> Optional[tuple[int, int, int, bytes]]:
+    """(components, width, height, bytes) of an SFImage, bottom row first; None where it is not one
+
+    `owner` is named in the warning a malformed image logs.
+    """
+    if len(image) < 4:
+        return None
+    width, height, componentCount = [int(x) for x in image[:3]]
+    if not componentCount:
+        log.warning("bad component count in pixeltexture %s", owner)
+        return None
+    if (not width) or (not height):
+        log.warning("0-size dimension in pixeltexture %s", owner)
+        return None
+    if len(image) != width * height + 3:
+        log.warning(
+            "PixelTexture has incorrect image size, expected %s items (%s*%s)+3, got %s",
+            width * height + 3,
+            width,
+            height,
+            len(image),
+        )
+        return None
+    import struct
+    data = b"".join(
+        [struct.pack(b">L", int(item))[-componentCount:] for item in image[3:]]
+    )
+    return componentCount, width, height, data
+
+
 class PixelTexture(_Texture, basenodes.PixelTexture):
     """PixelTexture, in-file node for small textures"""
 
@@ -377,33 +407,10 @@ class PixelTexture(_Texture, basenodes.PixelTexture):
         Uses the TextureCache to try to minimise the
         number of textures created
         """
-        # basically just the interpretation of an SFImage
-        # field as a texture...
-        if len(image) < 4:
-            # don't have any components...
+        decoded = sfimage_pixels(image, self)
+        if decoded is None:
             return None
-        width, height, componentCount = [int(x) for x in image[:3]]
-        if not componentCount:
-            log.warning("bad component count in pixeltexture %s", self)
-            return None
-        if (not width) or (not height):
-            log.warning("0-size dimension in pixeltexture %s", self)
-            return None
-        if len(image) != width * height + 3:
-            log.warning(
-                "PixelTexture has incorrect image size, expected %s items (%s*%s)+3, got %s",
-                width * height + 3,
-                width,
-                height,
-                len(image),
-            )
-            return None
-        import struct
-
-        imageBody = image[3:]
-        data = b"".join(
-            [struct.pack(b">L", item)[-componentCount:] for item in imageBody]
-        )
+        componentCount, width, height, data = decoded
         tex = texture.Texture()
         tex.store(
             componentCount,

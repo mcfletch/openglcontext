@@ -126,6 +126,7 @@ from OpenGLContext.scenegraph.teapot import Teapot as Teapot
 from OpenGLContext.scenegraph.text.fontstyle3d import FontStyle as FontStyle
 from OpenGLContext.scenegraph.text.fontstyle3d import FontStyle3D as FontStyle3D
 from OpenGLContext.scenegraph.text.text import Text as Text
+from OpenGLContext.scenegraph.texturebackground import TextureBackground as TextureBackground
 from OpenGLContext.scenegraph.texturetransform import TextureTransform as TextureTransform
 from OpenGLContext.scenegraph.timesensor import TimeSensor as TimeSensor
 from OpenGLContext.scenegraph.transform import CADPart as CADPart
@@ -362,6 +363,7 @@ __all__ = [
     'TexCoordChaser2D',
     'TexCoordDamper2D',
     'Text',
+    'TextureBackground',
     'TextureBufferUniform',
     'TextureCoordinate',
     'TextureProperties',

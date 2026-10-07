@@ -187,9 +187,16 @@ class _CubeBackground( object ):
         render_data = (tex, vert_vbo, index_vbo, shader, vertex_loc, mvp_matrix_loc, vao)
         if hasattr(mode,'cache'):
             holder = mode.cache.holder( self, render_data )
-            for key in ('right','left','top','bottom','front','back'):
-                holder.depend( self, key+'Url' )
+            for node, name in self.sideDependencies():
+                holder.depend( node, name )
         return render_data
+
+    def sideDependencies( self ) -> list[tuple[Any, str]]:
+        """(node, field name) for each field the drawn sides are read from"""
+        return [
+            (self, key + 'Url')
+            for key in ('right', 'left', 'top', 'bottom', 'front', 'back')
+        ]
 
 class CubeBackground( _CubeBackground, binding.Bindable, nodetypes.Background, nodetypes.Children, node.Node  ):
     """Image-cube Background node

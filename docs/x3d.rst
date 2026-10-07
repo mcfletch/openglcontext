@@ -88,7 +88,7 @@ implements these X3D nodes, by component:
 - CADGeometry - CADAssembly, CADLayer, CADPart
 - Core - MetadataBoolean, MetadataDouble, MetadataFloat, MetadataInteger,
   MetadataSet, MetadataString, WorldInfo
-- EnvironmentalEffects - Background, Fog
+- EnvironmentalEffects - Background, Fog, TextureBackground
 - EventUtilities - BooleanFilter, BooleanSequencer, BooleanToggle,
   BooleanTrigger, IntegerSequencer, IntegerTrigger, TimeTrigger
 - EnvironmentalSensor - ProximitySensor, TransformSensor, VisibilitySensor
@@ -171,6 +171,11 @@ default, light everything. A light casts shadows where its ``shadows`` is
 true, and ``shadowIntensity`` sets how dark they are; ``Shape.castShadow``
 false leaves a shape out of the shadow maps. See :doc:`Shadows <shadows>`.
 The engine's lights made in code are global and cast shadows by default.
+
+A ``TextureBackground`` is drawn as a ``Background`` is: its sky and ground
+colours on a sphere, and its six ``...Texture`` sides as a cube over it once
+every side has an image. A side is an ``ImageTexture``, drawn once its image
+has loaded, or a ``PixelTexture``; ``transparency`` is not read.
 A point or spot light's ``radius`` is how far it reaches in its own
 coordinates: nothing past it is lit, in the shader paths. A light a document
 builds has VRML97's and X3D's 100 unless the document sets another; one made

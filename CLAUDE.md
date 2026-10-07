@@ -232,6 +232,8 @@ OpenGLContext/
 │   │                 # groups (CADPart is in transform.py)
 │   ├── viewpointgroup.py  # X3D's ViewpointGroup: which viewpoints the
 │   │                 # next-viewpoint key offers
+│   ├── texturebackground.py  # X3D's TextureBackground: the engine's
+│   │                 # sky-and-cube background with texture-node sides
 │   ├── texgen.py     # X3D's TextureCoordinateGenerator as the vertex
 │   │                 # shader's texture-coordinate mode -- no GL
 │   ├── meshgeometry.py   # X3D's triangle sets, ElevationGrid and LineSet,
