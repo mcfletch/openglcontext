@@ -172,6 +172,18 @@ class _Loader(object):
             self._resolvers[baseURL] = resolver
         return resolver
 
+    def resolve(self, ref: str, baseURL: Optional[str] = None) -> str:
+        """Where a document's reference ``ref`` leads, under ``baseURL``'s policy
+
+        With a ``baseURL``, the absolute path or URL the resolver allows
+        (:meth:`~OpenGLContext.loaders.resolver.Resolver.resolve`); raises
+        ``IOError`` for a reference out of bounds. With none, ``ref`` itself,
+        as a top-level source the caller chose.
+        """
+        if not baseURL:
+            return ref
+        return str(self._resolver(baseURL).resolve(ref))
+
     def get_reference(self, ref: str, baseURL: str) -> Fetched:
         """Resolve and fetch an untrusted reference under ``baseURL``'s policy.
 

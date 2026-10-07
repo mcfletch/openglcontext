@@ -188,7 +188,9 @@ a game registers its own, as twig-bb registers ``.bsp`` and ``.pk3``:
    self.sceneLoader.load( 'maps/one.lvl', options=settings, on_loaded=self.play )
 
 A reader that can be read from bytes sets ``accepts_content = True`` and
-implements ``read_content( data, name )``. A format a viewer can show is a
+implements ``read_content( data, name )``. ``nodes( native )`` returns the
+scenegraph nodes a result is drawn as when an ``Inline`` mounts it: a scene's
+children by default, and the model's ``group`` for glTF. A format a viewer can show is a
 ``SceneAdapter``, :ref:`described with the viewer <adapters>`.
 
 .. _x3d-worlds:
@@ -221,8 +223,15 @@ document's ``profile``, ``version``, ``components``, ``units`` and ``meta``.
 A document with errors in it loads as far as it reads; each problem is in
 ``scene.problems`` and is logged at its severity. A document in no X3D
 encoding raises ``ValueError``. ``Script`` nodes are read and kept and never
-run. ``vrml.x3d`` (pyvrml97's ``docs/x3d.rst``) covers reading and writing X3D
+run. pyvrml97's ``vrml.x3d`` documentation covers reading and writing X3D
 without the engine.
+
+An ``Inline`` in an X3D or VRML97 world reads any format a registered reader
+opens, chosen as the scene loader chooses: another X3D or VRML97 world, an OBJ
+model, or a glTF model, which is drawn without its animations. Its ``url`` is
+resolved against the inlining document and held to the same directory or
+origin. X3D's ``load`` field false leaves the Inline empty until it is set
+true.
 
 VRML97 worlds
 -------------

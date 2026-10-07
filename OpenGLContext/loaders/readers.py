@@ -64,5 +64,15 @@ class SceneReader:
             "the %r reader reads from a path or a URL, not from memory"
             % (self.name or type(self).__name__,))
 
+    def nodes(self, native: Any) -> "list[Any]":
+        """The scenegraph nodes ``native`` is drawn as, mounted under another scene
+
+        An ``Inline`` draws these. A result with ``children`` (a
+        ``SceneGraph``) is drawn as its children, and any other as itself; a
+        format whose result is neither says what it is drawn as.
+        """
+        children = getattr(native, 'children', None)
+        return list(children) if children is not None else [native]
+
     def shutdown(self) -> None:
         """Release anything the result is still holding.  Called on teardown."""

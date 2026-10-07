@@ -33,6 +33,10 @@ class GLTFAdapter(SceneAdapter):
         """
         return load_gltf_source(source)
 
+    def nodes(self, native: Any) -> "list[Any]":
+        """The model's ``group``: the nodes a ``GLTFScene`` is drawn as"""
+        return [native.group]
+
     def read_content(self, data: bytes, name: str = '') -> Any:
         """Load a ``.glb``, or a ``.gltf`` whose buffers and images are embedded.
 

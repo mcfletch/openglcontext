@@ -1,4 +1,17 @@
-"""VRML97 Inline node"""
+"""Inline: a scene read from a url and drawn in place
+
+Each url is resolved against the inlining document under its policy
+(:meth:`~OpenGLContext.loaders.loader._Loader.resolve`), the reader for it is
+chosen as :class:`~OpenGLContext.loaders.sceneloader.SceneLoader` chooses one
+(:func:`~OpenGLContext.loaders.formats.adapter_for`), and the Inline draws the
+nodes that reader says its result is drawn as
+(:meth:`~OpenGLContext.loaders.readers.SceneReader.nodes`): an X3D, VRML97 or
+OBJ scene's children, a glTF model's group. The first url that reads is used.
+
+The read happens on the loader pool. X3D's `load` field says whether the
+scene is wanted: false leaves the Inline empty, and setting it true reads the
+scene again. Setting `url` or `load` supersedes a read still under way.
+"""
 from collections.abc import Sequence
 from typing import Any
 
@@ -14,100 +27,113 @@ log = logging.getLogger(__name__)
 def prepare_scene_loading() -> None:
     """Make an inlined scene's imports, here on the calling thread.
 
-    The scene is parsed on a loader thread, and a first-use import taken there
+    The scene is read on a loader thread, and a first-use import taken there
     is one nothing can interrupt -- see
-    :mod:`OpenGLContext.loaders.background`.  Reading a scene means the parser
-    for its format, which the loader imports from the plugin registry the
-    first time it is asked for a handler, so that is done here.
+    :mod:`OpenGLContext.loaders.background`.  Reading a scene means the reader
+    for its format, which comes from the plugin registry, so every registered
+    reader and the loader's handlers are imported here.
 
     The scene is built on that thread too, and its textures, shaders and
     panoramas submit their own loads from there, so their preparations are
     made here as well. An Inline inside it finds this one already made.
     """
+    from OpenGLContext import plugins
+    from OpenGLContext.loaders import formats  # noqa: F401 imported for the loader thread
     from OpenGLContext.loaders.loader import Loader
     from OpenGLContext.scenegraph import hdrbackground, imagetexture, shaders
     Loader.loadHandlers()
+    for entry in plugins.Adapter.all():
+        entry.load()
     background.prepare(imagetexture.prepare_image_loading,
                        shaders.prepare_shader_loading,
                        hdrbackground.prepare_panorama_loading)
 
 
 class InlineURLField( fieldtypes.MFString ):
-    """Field for managing interactions with an Inline's URL value"""
+    """The url of an Inline: setting it reads the scene, where `load` allows"""
     fieldType = "MFString"
     def fset( self, client: Any, value: Any, notify: int = 1 ) -> Any:
-        """Set the client's URL, then try to load the scene"""
         value = super(InlineURLField, self).fset( client, value, notify )
-        background.load_in_background(
-            value, client.loadBackground, value, context.Context.allContexts,
-            prepare=prepare_scene_loading,
-        )
+        client.reload()
         return value
     def fdel( self, client: Any, notify: int = 1 ) -> Any:
-        """Delete the client's URL, which should delete the scene as well"""
+        """Delete the client's URL, which empties the Inline"""
         value = super( InlineURLField, self).fdel( client, notify )
-        del client.scenegraph
+        client.reload()
+        return value
+
+
+class InlineLoadField( fieldtypes.SFBool ):
+    """X3D's `load`: whether the Inline reads its scene"""
+    fieldType = "SFBool"
+    def fset( self, client: Any, value: Any, notify: int = 1 ) -> Any:
+        value = super(InlineLoadField, self).fset( client, value, notify )
+        client.reload()
         return value
 
 
 class Inline(basenodes.Inline):
-    """Inline VRML97 scene based on VRML 97 Inline
+    """X3D's (and VRML97's) Inline, reading any format a registered reader opens
+
     Reference:
-        http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#Inline
+        https://www.web3d.org/specifications/X3Dv4/ISO-IEC19775-1v4-IS/Part01/components/networking.html#Inline
     """
-    scenegraph = None
+    url = InlineURLField( 'url', 1, list )
+    load = InlineLoadField( 'load', 1, True )
+    #: The nodes the read scene is drawn as; empty until a read finishes.
+    inlined: Sequence[Any] = ()
+
     def renderedChildren(
         self, types: Any = (nodetypes.Children, nodetypes.Rendering,)
     ) -> list[Any]:
-        """Choose child from level that is at appropriate range"""
-        if self.scenegraph:
-            children: list[Any] = self.scenegraph.children
-            return children
-        return []
-    url = InlineURLField(
-        'url', 1, list
-    )
-    def loadBackground( self, url: Any, contexts: Sequence[Any] = () ) -> None:
-        """Load an image from the given url in the background
+        """The nodes the inlined scene is drawn as"""
+        return list(self.inlined)
 
-        url -- SF or MFString URL to load relative to the
-            node's root's baseURL
+    def reload( self ) -> None:
+        """Empty the Inline and, where `load` is true, read the scene from `url` again"""
+        generation = self.__dict__['_generation'] = self.__dict__.get('_generation', 0) + 1
+        self.inlined = ()
+        url = list(self.__dict__.get('url', ()))
+        if not url or not self.__dict__.get('load', True):
+            return
+        background.load_in_background(
+            ' '.join(url), self.loadBackground, url, context.Context.allContexts, generation,
+            prepare=prepare_scene_loading,
+        )
 
-        On success:
-            Sets the resulting PIL image to the
-            client's image property (triggering an un-caching
-            and re-compile if there was a previous image).
+    def loadBackground(
+        self, url: Any, contexts: Sequence[Any] = (), generation: Any = None,
+    ) -> None:
+        """Read the first of `url` that reads, and draw it; runs on the loader pool
 
-            if contexts, iterate through the list calling
-            context.triggerRedraw(1)
+        url -- the urls to try, relative to the root's `baseURI`
+        contexts -- weak references to the contexts to redraw once it is read
+        generation -- the read this is, from :meth:`reload`; a result for a
+            read since superseded is dropped
         """
-        try:
-            from OpenGLContext.loaders.loader import Loader
-        except ImportError:
-            pass
-        else:
-            for u in url:
-                try:
-                    baseNode = protofunctions.root(self)
-                    if baseNode:
-                        baseURI = baseNode.baseURI
-                    else:
-                        baseURI = None
-
-                    result = Loader.load( u, baseURL = baseURI )
-                except IOError:
-                    pass
-                else:
-                    log.info("loaded %s", u)
-                    self.scenegraph = result
-                    for reference in contexts:
-                        c = reference()
-                        if c:
-                            c.triggerRedraw(1)
-                    return
+        from OpenGLContext.loaders import formats
+        from OpenGLContext.loaders.loader import Loader
+        root = protofunctions.root(self)
+        baseURI = root.baseURI if root else None
+        for u in url:
+            try:
+                target = Loader.resolve(u, baseURI)
+                reader = formats.adapter_for(target)
+                nodes = reader.nodes(reader.read(target))
+            except (OSError, ValueError, SyntaxError) as err:
+                log.info("Inline url %s did not read: %s", u, err)
+                continue
+            if generation is not None and generation != self.__dict__.get('_generation'):
+                return
+            log.info("loaded %s", u)
+            self.inlined = tuple(nodes)
+            for reference in contexts:
+                c = reference()
+                if c:
+                    c.triggerRedraw(1)
+            return
         log.warning(
             """Unable to load any scene from the url %s for the node %s""",
             url,
             str(self),
         )
-

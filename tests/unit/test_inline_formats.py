@@ -1,0 +1,92 @@
+"""An Inline loads any format a registered reader opens.
+
+The url is resolved under the inlining document's policy, the reader is chosen
+as `SceneLoader` chooses one, and the Inline draws the nodes the reader says
+its result is drawn as: a scene's children, a glTF's group.
+"""
+import logging
+
+import numpy as np
+import pytest
+from vrml.vrml97 import nodetypes
+
+from OpenGLContext.loaders import background, formats
+from OpenGLContext.loaders.gltf.writer import write_glb
+from OpenGLContext.loaders.loader import Loader
+from OpenGLContext.scenegraph import basenodes
+from OpenGLContext.scenegraph.inline import Inline
+from OpenGLContext.scenegraph.pbrmesh import PBRMesh
+
+PATIENCE = 20.0
+
+PART = b'''<X3D version="4.0"><Scene>
+  <Shape><Appearance><Material diffuseColor="0 0 1"/></Appearance><Sphere radius="2"/></Shape>
+</Scene></X3D>'''
+
+
+def document(url):
+    return ('''<X3D version="4.0"><Scene><Inline url='"%s"'/></Scene></X3D>''' % url).encode()
+
+
+def inlined(scene):
+    """The scene's Inline, once its load has finished"""
+    assert background.wait_for_idle(PATIENCE)
+    found = scene.children[0]
+    assert isinstance(found, Inline)
+    return found
+
+
+def test_an_x3d_document_inlines_another(tmp_path):
+    (tmp_path / 'part.x3d').write_bytes(PART)
+    (tmp_path / 'world.x3d').write_bytes(document('part.x3d'))
+    children = inlined(Loader.load(str(tmp_path / 'world.x3d'))).renderedChildren()
+    assert [type(child) for child in children] == [basenodes.Shape]
+    assert type(children[0].geometry) is basenodes.Sphere
+
+
+def test_an_x3d_document_inlines_a_gltf_model(tmp_path):
+    quad = PBRMesh(positions=np.array([(0, 0, 0), (1, 0, 0), (1, 1, 0)], 'f'),
+                   indices=np.array([0, 1, 2], np.uint32))
+    (tmp_path / 'part.glb').write_bytes(write_glb(quad))
+    (tmp_path / 'world.x3d').write_bytes(document('part.glb'))
+    children = inlined(Loader.load(str(tmp_path / 'world.x3d'))).renderedChildren()
+    assert len(children) == 1
+    assert isinstance(children[0], nodetypes.Grouping)
+    assert children[0].children
+
+
+def test_a_url_outside_the_documents_directory_is_refused(tmp_path, caplog):
+    (tmp_path / 'part.x3d').write_bytes(PART)
+    inside = tmp_path / 'inside'
+    inside.mkdir()
+    (inside / 'world.x3d').write_bytes(document('../part.x3d'))
+    with caplog.at_level(logging.WARNING, logger='OpenGLContext.scenegraph.inline'):
+        found = inlined(Loader.load(str(inside / 'world.x3d')))
+    assert found.renderedChildren() == []
+    assert 'Unable to load' in caplog.text
+
+
+def test_load_false_loads_nothing_until_it_is_set(tmp_path):
+    (tmp_path / 'part.x3d').write_bytes(PART)
+    (tmp_path / 'world.x3d').write_bytes(document('part.x3d').replace(
+        b'<Inline ', b'<Inline load="false" '))
+    found = inlined(Loader.load(str(tmp_path / 'world.x3d')))
+    assert found.renderedChildren() == []
+    found.load = True
+    assert background.wait_for_idle(PATIENCE)
+    assert len(found.renderedChildren()) == 1
+    found.load = False
+    assert found.renderedChildren() == []
+
+
+@pytest.mark.parametrize('name', ['scene.x3d', 'scene.wrl', 'model.obj'])
+def test_a_scene_reader_mounts_a_scenes_children(name):
+    class Native:
+        children = ['a', 'b']
+    assert formats.adapter_for(name).nodes(Native()) == ['a', 'b']
+
+
+def test_the_gltf_reader_mounts_its_group():
+    class Native:
+        group = 'the group'
+    assert formats.adapter_for('model.glb').nodes(Native()) == ['the group']
