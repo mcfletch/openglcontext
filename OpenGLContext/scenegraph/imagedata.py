@@ -10,12 +10,16 @@ the context's node cache until its image or sampler is set.
 """
 from typing import Any, Optional
 
+from vrml import cache
 from vrml.x3d import nodes as x3d
 
 from OpenGLContext.scenegraph.imagetexture import PILImage, _Texture
 from OpenGLContext.scenegraph.sampler import sampler_of, texture_properties
 
-__all__ = ['ImageDataTexture', 'green_mean', 'sampler_of', 'texture_properties']
+__all__ = ['ImageDataTexture', 'ROUGHNESS_KEY', 'green_mean', 'sampler_of', 'texture_properties']
+
+#: The key an image's mean roughness is kept under in vrml's cache.
+ROUGHNESS_KEY = 'mean-roughness'
 
 
 class ImageDataTexture(_Texture, x3d.X3DTexture2DNode):
@@ -23,6 +27,20 @@ class ImageDataTexture(_Texture, x3d.X3DTexture2DNode):
 
     PROTO = 'ImageDataTexture'
     image = PILImage(' image', 1, None)
+
+    def x3dEquivalent(self) -> Any:
+        """An X3D `ImageTexture` of the image as a PNG `data:` URL, for the X3D writers"""
+        import io  # noqa: PLC0415 only an X3D writer asks
+        stream = io.BytesIO()
+        self.image.save(stream, 'PNG')
+        return self.x3dTexture('image/png', stream.getvalue())
+
+    def x3dTexture(self, mime_type: str, data: bytes) -> Any:
+        """An X3D `ImageTexture` of encoded image bytes, sampled as this texture is"""
+        import base64  # noqa: PLC0415 only an X3D writer asks
+        url = 'data:%s;base64,%s' % (mime_type, base64.b64encode(data).decode('ascii'))
+        return x3d.ImageTexture(url=[url], repeatS=self.repeatS, repeatT=self.repeatT,
+                                textureProperties=self.textureProperties)
 
     def sampler(self) -> "dict[str, str]":
         """The X3D boundary modes and filters the texture is sampled with"""
@@ -32,14 +50,14 @@ class ImageDataTexture(_Texture, x3d.X3DTexture2DNode):
         """The mean of the image's green channel, from 0 to 1
 
         The green channel is roughness in a glTF metallic-roughness map.
-        Worked out from a copy of at most 256 texels a side, once per image:
-        a new `image` is measured again.
+        Worked out from a copy of at most 256 texels a side, and kept in
+        vrml's cache under :data:`ROUGHNESS_KEY` until `image` is set.
         """
-        image = self.image
-        known: Optional[tuple[Any, float]] = self.__dict__.get('_mean_roughness')
-        if known is None or known[0] is not image:
-            known = self.__dict__['_mean_roughness'] = (image, green_mean(image))
-        return known[1]
+        found: Optional[float] = cache.CACHE.getData(self, ROUGHNESS_KEY)
+        if found is None:
+            found = green_mean(self.image)
+            cache.CACHE.holder(self, found, ROUGHNESS_KEY).depend(self, type(self).image)
+        return found
 
 
 def green_mean(image: Any) -> float:

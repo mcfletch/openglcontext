@@ -126,6 +126,13 @@ class TestImageDataTexture:
         texture.image = image((0, 255, 0, 255))
         assert texture.mean_roughness() == pytest.approx(1.0)
 
+    def test_the_measure_is_held_in_the_scenegraph_cache(self):
+        from vrml import cache  # noqa: PLC0415 kept with its one use
+        from OpenGLContext.scenegraph.imagedata import ROUGHNESS_KEY  # noqa: PLC0415 kept with its one use
+        texture = ImageDataTexture(image=image((0, 51, 0, 255)))
+        measured = texture.mean_roughness()
+        assert cache.CACHE.getData(texture, ROUGHNESS_KEY) == measured
+
     def test_the_sampler_is_texture_properties(self):
         properties = x3d.TextureProperties(
             boundaryModeS='CLAMP_TO_EDGE', boundaryModeT='MIRRORED_REPEAT',

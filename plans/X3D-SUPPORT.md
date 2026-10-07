@@ -47,7 +47,7 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] alpha on `Appearance` (AUTO reads the base texture's alpha), sidedness on `solid`; `UnlitMaterial`
   - [x] OpenGLContext callers migrated
   - [ ] callers in the other projects migrated (openglcontext-editor, twig-bb, glisteel, glisteel-editor, marble-demo, marble-editor)
-  - [ ] glTF material round trip through X3D
+  - [x] glTF material round trip through X3D (`vrml.x3d.extension`: a class's `x3dExtension` set, `x3dEquivalent()`; the set is named `OpenGLContext`, since it carries the engine's fields as well as glTF's)
   - [x] the packed material block and `pbr_material`'s per-appearance view kept in `vrml.cache` (`MATERIAL_BLOCK_KEY`, `VIEW_KEY`)
   - [ ] the two tables still outside it: `PBRShaderProgram._material_ubos` (GL buffers, deleted by `release()`; moving them to `mode.cache` needs a buffer owner that `contextresources` frees) and the glTF loader's `_SHARED` (texture nodes interned by image content, so two documents' copies of one image are one node and instance together)
 - [ ] Visual suite (not this plan's, found during Phase 5): `8a81ad99` made
@@ -1208,7 +1208,7 @@ class PhysicalMaterial(x3d.PhysicalMaterial):          # scenegraph/physicalmate
   an `unlit` flag.
 - Round trip. Writing a scene as X3D writes the standard fields as
   `PhysicalMaterial` attributes and the extension fields in a
-  `MetadataSet name='glTF'` on the material's `metadata` field, which is where
+  `MetadataSet name='OpenGLContext'` on the material's `metadata` field, which is where
   X3D carries data outside the specification. Reading restores them, so a
   glTF-loaded scene survives being written as X3D and read back.
 

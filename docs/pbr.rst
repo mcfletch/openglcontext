@@ -336,6 +336,23 @@ channel name. The glTF loader builds these when it imports a model.
 ``emissiveTexture``, with no lighting; the glTF loader makes one for
 ``KHR_materials_unlit``.
 
+Written as X3D (``vrml.x3d.dump``), both materials write X3D's own fields as
+usual, and the fields X3D's nodes lack (the glTF extension factors and
+textures, the lightmap, the impostor views) in a ``MetadataSet`` named
+``OpenGLContext`` on the material's ``metadata``. An ``ImageDataTexture`` is
+written as an ``ImageTexture`` whose URL is the image as a PNG ``data:`` URL;
+an ``EncodedImage`` keeps its own encoding. Read back with the engine's
+classes among the reader's ``prototypes``, the material has the fields it was
+written with:
+
+.. code-block:: python
+
+    from vrml import x3d
+    from OpenGLContext.scenegraph.physicalmaterial import PhysicalMaterial
+
+    x3d.dump(scene, 'model.x3d')
+    again = x3d.load('model.x3d', prototypes={'PhysicalMaterial': PhysicalMaterial})
+
 .. code-block:: python
 
     from OpenGLContext.scenegraph.imagedata import ImageDataTexture

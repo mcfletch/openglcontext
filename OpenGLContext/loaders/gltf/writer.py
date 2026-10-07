@@ -128,6 +128,10 @@ class EncodedImage(ImageDataTexture):
             self.image = Image.open(io.BytesIO(self.data))
         return super().cached(mode)
 
+    def x3dEquivalent(self) -> Any:
+        """An X3D `ImageTexture` of the encoded bytes as a `data:` URL"""
+        return self.x3dTexture(self.mime_type, self.data)
+
     @classmethod
     def from_path(cls, path: str, **named: Any) -> "EncodedImage":
         """Read an image file, taking its MIME type from the extension"""

@@ -92,6 +92,9 @@ class ChannelMaterial:
     """
 
     CHANNELS: "dict[str, str]" = {}
+    #: The metadata set an X3D document carries the fields X3D's node lacks
+    #: in (`vrml.x3d.extension`).
+    x3dExtension = 'OpenGLContext'
 
     @property
     def textures(self) -> "types.MappingProxyType[str, Any]":
