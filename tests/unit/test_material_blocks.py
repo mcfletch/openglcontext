@@ -73,6 +73,42 @@ class TestRepacking:
         assert packed == [material]
 
 
+class TestThePackedBytes:
+    """An edit that moves no factorVersion, then an invalidation: the bytes
+    uploaded are the edited ones"""
+
+    def uploaded(self, monkeypatch):
+        from OpenGLContext.passes import pbrpass  # noqa: PLC0415 kept with its use
+        found = []
+
+        def upload(self, material, buf=None):
+            found.append(pbrpass.pack_material_block(material).copy())
+            return buf if buf is not None else len(found)
+        monkeypatch.setattr(PBRShaderProgram, '_upload_material_ubo', upload)
+        return found
+
+    def test_invalidating_a_material_packs_its_edit(self, monkeypatch):
+        found = self.uploaded(monkeypatch)
+        material = PhysicalMaterial(baseColor=(1, 0, 0))
+        program = PBRShaderProgram()
+        program._material_ubo(material)
+        material.__dict__['baseColor'] = (0, 0, 1)
+        program.invalidate_material_ubo(material)
+        program._material_ubo(material)
+        assert list(found[0][:3]) != list(found[1][:3])
+        assert list(found[1][:3]) == [0.0, 0.0, 1.0]
+
+    def test_invalidating_every_block_packs_each_edit(self, monkeypatch):
+        found = self.uploaded(monkeypatch)
+        material = PhysicalMaterial(baseColor=(1, 0, 0))
+        program = PBRShaderProgram()
+        program._material_ubo(material)
+        material.__dict__['baseColor'] = (0, 1, 0)
+        program.invalidate_material_ubo()
+        program._material_ubo(material)
+        assert list(found[1][:3]) == [0.0, 1.0, 0.0]
+
+
 class TestTheBuffer:
     def test_a_collected_materials_buffer_is_deleted(self, gl_context):
         program = PBRShaderProgram()

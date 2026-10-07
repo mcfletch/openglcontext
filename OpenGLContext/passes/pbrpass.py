@@ -335,22 +335,26 @@ PHONG_BIT = 128
 
 
 #: The key a material's packed block is kept under in vrml's cache, with the
-#: ``factorVersion`` it was packed at.
+#: ``factorVersion`` and the :data:`_repacks` generation it was packed at.
 MATERIAL_BLOCK_KEY = 'material-block'
+
+#: Moved by ``invalidate_material_ubo()`` to have every block packed again.
+_repacks = 0
 
 
 def pack_material_block(material: Any) -> np.ndarray:
     """Pack a material into the std140 MaterialBlock byte layout (float32 array).
 
-    Kept in vrml's cache against the material and its ``factorVersion``, the
-    count every runtime material edit moves: an instanced group repacks its
-    whole material table every frame, and a crowd of figures out of one
-    document carries a material apiece that nothing is changing. None, the
-    neutral grey of a shape with no material, is packed each time.
+    Kept in vrml's cache against the material, its ``factorVersion`` (the
+    count every runtime material edit moves) and the generation
+    ``invalidate_material_ubo()`` moves: an instanced group repacks its whole
+    material table every frame, and a crowd of figures out of one document
+    carries a material apiece that nothing is changing. None, the neutral grey
+    of a shape with no material, is packed each time.
     """
     if material is None:
         return _pack_material_block(None)
-    version = int(getattr(material, 'factorVersion', 0))
+    version = (int(getattr(material, 'factorVersion', 0)), _repacks)
     cached = cache.CACHE.getData(material, MATERIAL_BLOCK_KEY)
     if cached is not None and cached[0] == version:
         return np.asarray(cached[1])
@@ -655,9 +659,6 @@ class PBRShaderProgram(VRML97ShaderProgram):
         glBindBuffer(GL_UNIFORM_BUFFER, 0)
         return buf
 
-    #: Moved by :meth:`invalidate_material_ubo` to have every block packed again.
-    _blocks_packed: int = 0
-
     def _material_ubo(self, material: Any) -> int:
         """The GL buffer holding ``material``'s factor block in this context.
 
@@ -671,7 +672,7 @@ class PBRShaderProgram(VRML97ShaderProgram):
         entries = _MATERIAL_BLOCKS.entries(owner)
         if entries is None:
             raise TypeError('%r cannot hold a material block' % (material,))
-        version = (PBRShaderProgram._blocks_packed, int(getattr(material, 'factorVersion', 0)))
+        version = (_repacks, int(getattr(material, 'factorVersion', 0)))
         entry = entries.get('block')
         if entry is None or entry[1] != version:
             buf = self._upload_material_ubo(material, entry[0] if entry is not None else None)
@@ -682,9 +683,13 @@ class PBRShaderProgram(VRML97ShaderProgram):
 
     def invalidate_material_ubo(self, material: Any = None) -> None:
         """Have ``material``'s block packed again at its next draw; every block's where None"""
+        global _repacks
         if material is None:
-            PBRShaderProgram._blocks_packed += 1
+            _repacks += 1
             return
+        held = cache.CACHE.getHolder(material, MATERIAL_BLOCK_KEY)
+        if held is not None:
+            held.data = None
         entries = _MATERIAL_BLOCKS.entries(material)
         if entries and 'block' in entries:
             entries['block'] = (entries['block'][0], None)
