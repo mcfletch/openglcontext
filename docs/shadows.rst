@@ -72,7 +72,8 @@ can change while the program runs. See :doc:`environment` and
 
 A light casts shadows when its ``shadows`` field (X3D's) is set. It is set
 by default on all three light types made in code. Clear it on a light that
-should light the scene without casting shadows. A light in an X3D document
+should light the scene without casting shadows; ``castShadows`` is another
+name for the same field. A light in an X3D document
 casts shadows only where the document sets ``shadows``, as X3D specifies. A
 glTF ``KHR_lights_punctual`` light uses the extension's ``castShadows`` value
 where the file gives one; otherwise only a directional light casts shadows.
@@ -85,7 +86,8 @@ shadow is: a shadowed point receives ``1 - shadowIntensity`` of that light.
 Geometry That Does Not Cast
 ---------------------------
 
-Clear ``castShadow`` (X3D's) on a ``Shape`` to leave it out of every shadow map. The
+Clear ``castShadow`` (X3D's; ``castsShadow`` is another name for it) on a
+``Shape`` to leave it out of every shadow map. The
 shape still renders, is still lit, and still receives shadows from other
 objects. It does not cast a shadow of its own.
 

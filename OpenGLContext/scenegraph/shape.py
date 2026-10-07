@@ -52,6 +52,8 @@ class Shape(basenodes.Shape):
     # backdrop. The shape rather than the geometry, because a shadow caster is
     # a renderable and the geometry under one may be shared with a shape that
     # does cast. The field is the X3D declaration's.
+    #: Another name for `castShadow`, which engine code uses
+    castsShadow = field.AliasField('castsShadow', 'castShadow')
 
     def Render(self, mode: Any = None) -> Any:
         """Do run-time rendering of the Shape for the given mode"""

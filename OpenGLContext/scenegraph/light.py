@@ -177,6 +177,8 @@ class PointLight(basenodes.PointLight, Light):
     #: unless told not to. A light an X3D document builds has X3D's false
     #: unless the document says otherwise.
     shadows = field.newField('shadows', 'SFBool', 1, True)
+    #: Another name for `shadows`, which engine code uses
+    castShadows = field.AliasField('castShadows', 'shadows')
     #: How far the light reaches, in its own coordinates; nothing past it is
     #: lit. Unbounded for a light made in code; a light a VRML97 or X3D
     #: document builds has their 100 unless the document says otherwise.
@@ -257,6 +259,8 @@ class DirectionalLight (basenodes.DirectionalLight, Light):
     #: unless told not to. A light an X3D document builds has X3D's false
     #: unless the document says otherwise.
     shadows = field.newField('shadows', 'SFBool', 1, True)
+    #: Another name for `shadows`, which engine code uses
+    castShadows = field.AliasField('castShadows', 'shadows')
     # Shadow-mapping controls (OpenGLContext extension fields)
     shadowBias = field.newField('shadowBias', 'SFFloat', 1, SHADOW_DEPTH_BIAS)
     shadowMapResolution = field.newField('shadowMapResolution', 'SFInt32', 1, 2048)
