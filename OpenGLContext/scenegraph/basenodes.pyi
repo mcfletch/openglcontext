@@ -129,6 +129,7 @@ from OpenGLContext.scenegraph.texturetransform import TextureTransform as Textur
 from OpenGLContext.scenegraph.timesensor import TimeSensor as TimeSensor
 from OpenGLContext.scenegraph.transform import Transform as Transform
 from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial as UnlitMaterial
+from OpenGLContext.scenegraph.viewpoint import OrthoViewpoint as OrthoViewpoint
 from OpenGLContext.scenegraph.viewpoint import Viewpoint as Viewpoint
 from OpenGLContext.scenegraph.x3druntime import ColorChaser as ColorChaser
 from OpenGLContext.scenegraph.x3druntime import ColorDamper as ColorDamper
@@ -299,6 +300,7 @@ __all__ = [
     'OrientationChaser',
     'OrientationDamper',
     'OrientationInterpolator',
+    'OrthoViewpoint',
     'ParticleEmitter',
     'PhysicalMaterial',
     'PixelTexture',

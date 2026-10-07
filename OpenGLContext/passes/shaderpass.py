@@ -898,17 +898,6 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         self._set_uniform1f(f'lightBeamWidth[{index}]', beam_width, program)
         self._set_uniform1f(f'lightCutOffAngle[{index}]', cutoff_angle, program)
 
-    def set_default_light(self) -> None:
-        """Set up default VRML97 headlight (directional from camera)."""
-        self.set_num_lights(1)
-        self.set_light(
-            0,
-            light_type='directional',
-            color=(1.0, 1.0, 1.0),
-            direction=(0.0, 0.0, -1.0),
-            intensity=1.0
-        )
-
     def set_texture_enabled(self, enabled: bool, texture_unit: int = 0) -> None:
         """Enable or disable diffuse texture."""
         self._set_uniform1i('hasDiffuseTexture', 1 if enabled else 0)

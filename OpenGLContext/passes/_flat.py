@@ -38,6 +38,7 @@ from OpenGLContext.arrays import (
 import numpy
 
 from OpenGLContext import frustum
+from OpenGLContext.move import navigationinfo
 from OpenGLContext.passes import lightscope
 from OpenGLContext.passes.disposal import let_go
 from OpenGLContext.passes.framestate import FrameState
@@ -806,13 +807,14 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         self.boundLights = bound
         self.scopedLights = lightscope.scoped_lights(bound_paths)
 
-        if light_count == 0:
-            # Set default VRML97 headlight (direction already in eye space)
-            shader.set_default_light()
-            log.debug("Using default headlight")
-        else:
-            shader.set_num_lights(light_count)
-            log.debug("Set up %d lights", light_count)
+        if (navigationinfo.headlight(self.currentNavigation(), light_count)
+                and light_count < shader.MAX_LIGHTS):
+            # Directional along the view, given in eye space.
+            shader.set_light(light_count, light_type='directional',
+                             color=(1.0, 1.0, 1.0), direction=(0.0, 0.0, -1.0),
+                             intensity=1.0)
+            light_count += 1
+        shader.set_num_lights(light_count)
 
     def maxLights(self, ceiling: int) -> int:
         """Lights to bind this frame.  The base pass uses all the shader has."""
@@ -1137,6 +1139,15 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         """
         from OpenGLContext.scenegraph.fog import bound_fog
         return bound_fog( self.paths.get( nodetypes.Fog, () ) )
+
+    def currentNavigation( self ) -> Any:
+        """The bound NavigationInfo node, or None.
+
+        Bound as the background is: the stack's topmost NavigationInfo a
+        drawn path reaches, or with none the first drawn.
+        """
+        path = binding.current_path( list( self.paths.get( nodetypes.NavigationInfo, () ) ) )
+        return None if path is None else path[-1]
 
     # Persistent object-id <-> path map for MRT picking. Stable per-path ids
     # (stashed on the NodePath) mean the {id: path} map is only mutated when the

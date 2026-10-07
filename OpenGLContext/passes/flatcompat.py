@@ -10,6 +10,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from . import _flat
+from OpenGLContext.move import navigationinfo
 from OpenGLContext.scenegraph import nodepath,switch,boundingvolume
 from OpenGL.GL import *
 from OpenGLContext.arrays import array, dot, allclose
@@ -195,12 +196,11 @@ class FlatPass( _flat.FlatPass ):
             bound += 1
             if bound >= (self.MAX_LIGHTS-1):
                 break
-        if not bound:
-            # default VRML lighting...
+        if navigationinfo.headlight( self.currentNavigation(), bound ):
             from OpenGLContext.scenegraph import light
             l = light.DirectionalLight( direction = (0,0,-1.0))
             glLoadMatrixf( matrix )
-            l.Light( GL_LIGHT0, mode = self )
+            l.Light( GL_LIGHT0 + bound, mode = self )
         self.matrix = matrix
     
     def renderOpaque( self, toRender: Sequence[Any] ) -> None:

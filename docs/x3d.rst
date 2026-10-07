@@ -186,6 +186,15 @@ VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
   maximum y), widened along one axis to the shape of the window it is drawn
   in (``ViewPlatform.setOrthographic``); a perspective viewpoint bound after
   it ends the orthographic projection.
+- The bound ``NavigationInfo`` (``OpenGLContext.move.navigationinfo``):
+  ``headlight`` true adds a headlight to the scene's lights and false leaves
+  it off; a scene with no NavigationInfo has the headlight only where it has
+  no lights. When one is bound, the first of its ``type`` values the
+  context's declared movement modes offer is selected: ``WALK`` is ``walk``
+  or ``fps``, ``FLY`` is ``fly``, and ``EXAMINE``, ``LOOKAT`` and
+  ``EXPLORE`` are ``examine``. A context with no declared modes keeps its
+  own navigation. ``speed``, ``avatarSize``, ``visibilityLimit`` and the
+  transition fields are not read.
 - A follower moves a step each frame on the engine's clock while it is
   moving, queued on its window's render queue.
 - A ``KeySensor`` hears every key its window receives, including keys a

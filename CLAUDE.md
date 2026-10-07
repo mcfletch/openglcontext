@@ -137,6 +137,8 @@ OpenGLContext/
 ├── move/             # Camera, movement modes, walking -- docs/navigation.rst
 │   ├── navigationdefinition.py  # Navigation, Views, ViewDefinition: the
 │   │                 # modes and views a definition declares -- no GL
+│   ├── navigationinfo.py  # A scene's bound NavigationInfo: its headlight
+│   │                 # and the movement mode its type asks for -- no GL
 │   └── orbit.py      # The examine gestures: orbit, dolly, pan -- no GL, no events
 ├── multiview/        # Several views of one scene -- docs/multiview.rst
 │   ├── views.py      # View, ViewStyle, ViewLayout: what is drawn where, and

@@ -12,6 +12,7 @@ from collections.abc import Callable
 from typing import Any, Optional
 
 from OpenGLContext import contextresources, renderoptions
+from OpenGLContext.move import navigationinfo
 from OpenGLContext.passes import viewpointbinding
 import logging
 log = logging.getLogger( __name__ )
@@ -159,6 +160,7 @@ class _defaultRenderPasses( object ):
             # bind the scene's active Viewpoint into the platform here (the legacy
             # path does this inside its scenegraph traversal instead).
             viewpointbinding.bind_scene_viewpoint( context )
+        navigationinfo.apply( context, pass_.currentNavigation() )
         return pass_( context )
 defaultRenderPasses = _defaultRenderPasses()
 
