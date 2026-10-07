@@ -102,7 +102,13 @@ coordinate sets. A ``LineSet`` is drawn as an ``IndexedLineSet``.
 Materials and appearance are described with the :doc:`PBR renderer <pbr>`:
 ``PhysicalMaterial``, ``UnlitMaterial`` and ``Material`` with their texture
 fields and mapping labels, ``Appearance.alphaMode`` and ``alphaCutoff``, and
-``MultiTextureTransform``.
+``MultiTextureTransform``. A ``Material``'s ``diffuseTexture``,
+``emissiveTexture``, ``normalTexture`` and ``occlusionTexture`` are its base
+colour, emissive, normal and occlusion maps, and its ``normalScale`` and
+``occlusionStrength`` are read; without a ``diffuseTexture``, the
+appearance's ``texture`` is the base colour map. ``ambientTexture``,
+``shininessTexture`` and ``specularTexture`` are kept and not drawn.
+``TwoSidedMaterial`` and ``Appearance.backMaterial`` are kept and not drawn.
 
 A grouping node or shape whose ``visible`` is false is not drawn, picked or
 shadowed, nor is anything under it; setting it takes effect on the next frame.

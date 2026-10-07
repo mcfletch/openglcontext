@@ -194,12 +194,16 @@ def texture_transform_matrix(transform_node: Optional[Any]) -> np.ndarray:
 
 
 def channel_labels(material: Any) -> "dict[str, str]":
-    """Each textured channel of a material and its mapping label"""
+    """Each textured channel of a material and its mapping label
+
+    A material with a `textureMapping(channel)` method names each channel's
+    label; any other reads every map through the first coordinate set.
+    """
     textures = getattr(material, 'textures', None) or {}
-    if not isinstance(material, ChannelMaterial):
+    labelled = getattr(material, 'textureMapping', None)
+    if not callable(labelled):
         return {channel: '' for channel in textures}
-    return {channel: str(getattr(material, material.CHANNELS[channel] + 'Mapping', ''))
-            for channel in textures}
+    return {channel: str(labelled(channel)) for channel in textures}
 
 
 def texture_mapping(appearance: Any, geometry: Any) -> TextureMapping:

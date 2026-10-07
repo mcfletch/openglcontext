@@ -117,6 +117,10 @@ class ChannelMaterial:
         """The texture node of `channel`, or None"""
         return self.textures.get(channel)
 
+    def textureMapping(self, channel: str) -> str:
+        """The mapping label of `channel`'s map: its `...TextureMapping` field"""
+        return str(getattr(self, self.CHANNELS[channel] + 'Mapping', '') or '')
+
     def setTexture(self, channel: str, texture: Any) -> None:
         """Set the texture field of `channel` (a key of `CHANNELS`)
 
@@ -386,7 +390,8 @@ def material_to_pbr(material_node: Any) -> "dict[str, Any]":
     # No node, NULL, or a node without material fields: the default grey.
     if material_node is None or not hasattr(material_node, 'diffuseColor'):
         return dict(base_color=srgb_to_linear((0.8, 0.8, 0.8)), metallic=0.0, roughness=0.6,
-                    emissive=(0.0, 0.0, 0.0), occlusion=1.0, transparency=0.0)
+                    emissive=(0.0, 0.0, 0.0), occlusion=1.0, normal_scale=1.0,
+                    transparency=0.0)
     from OpenGLContext.scenegraph.material_fields import read_material_fields  # noqa: PLC0415 material_fields imports the scenegraph
     f = read_material_fields(material_node)
     return dict(
@@ -394,7 +399,8 @@ def material_to_pbr(material_node: Any) -> "dict[str, Any]":
         metallic=0.0,
         roughness=max(0.04, 1.0 - min(1.0, f.shininess)),
         emissive=srgb_to_linear(f.emissiveColor),
-        occlusion=1.0,
+        occlusion=float(getattr(material_node, 'occlusionStrength', 1.0)),
+        normal_scale=float(getattr(material_node, 'normalScale', 1.0)),
         transparency=f.transparency,
     )
 
@@ -436,11 +442,38 @@ class AppearanceMaterial(object):
         """The appearance's `Material`, or None"""
         return getattr(self.appearance, 'material', None)
 
+    #: The channels an X3D 4 `Material` has maps for, and their fields.
+    CHANNELS: "dict[str, str]" = {
+        'baseColor': 'diffuseTexture', 'emissive': 'emissiveTexture',
+        'normal': 'normalTexture', 'occlusion': 'occlusionTexture',
+    }
+
     @property
     def textures(self) -> "dict[str, Any]":
-        """The maps by channel name: the appearance's texture as the base colour"""
-        texture = getattr(self.appearance, 'texture', None)
-        return {'baseColor': texture} if texture else {}
+        """The maps by channel name, from the material's texture fields
+
+        Without a `diffuseTexture`, the appearance's `texture` is the base
+        colour map.
+        """
+        material = self.material
+        found = {}
+        for channel, name in self.CHANNELS.items():
+            texture = getattr(material, name, None) if material else None
+            if texture:
+                found[channel] = texture
+        if 'baseColor' not in found:
+            texture = getattr(self.appearance, 'texture', None)
+            if texture:
+                found['baseColor'] = texture
+        return found
+
+    def textureMapping(self, channel: str) -> str:
+        """The mapping label of `channel`'s map: the material's `...TextureMapping`"""
+        material = self.material
+        name = self.CHANNELS.get(channel)
+        if not material or name is None or not getattr(material, name, None):
+            return ''
+        return str(getattr(material, name + 'Mapping', '') or '')
 
     @property
     def transparency(self) -> float:

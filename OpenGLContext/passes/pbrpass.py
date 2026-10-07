@@ -248,7 +248,7 @@ def _material_factors(material: Any) -> dict:
     return dict(
         _DEFAULT_FACTORS,
         base_color=f['base_color'], metallic=f['metallic'], roughness=f['roughness'],
-        emissive=f['emissive'], occlusion=f['occlusion'],
+        emissive=f['emissive'], occlusion=f['occlusion'], normal_scale=f['normal_scale'],
     )
 
 
