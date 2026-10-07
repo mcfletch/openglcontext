@@ -340,8 +340,22 @@ Comparing renders with Web3D's examples
 archives (``vrml.x3d.corpus``) as its author wrote it -- from its bound
 viewpoint, against its own Background or black, once the textures and
 Inlines it names have arrived -- and compares each render with a blessed
-baseline in ``tests/reference_images/x3d_baseline``. The report shows Web3D's
-own render of the same viewpoint, published with each example, beside ours.
+baseline in ``tests/reference_images/x3d_baseline``. The report shows a
+reference render beside ours, and how much ours differs from it:
+
+- ``--reference x_ite`` (the default): the document drawn by X_ITE, the MIT
+  JavaScript X3D browser Web3D publishes its examples with, in a headless
+  Chromium with software WebGL (``OpenGLContext.testing.xite``). It needs the
+  ``x3d-reference`` extra (``pip install OpenGLContext[x3d-reference]``, then
+  ``playwright install chromium-headless-shell``). X_ITE is downloaded from
+  npm once, at a pinned version checked by its SHA-256, and served with the
+  documents from 127.0.0.1. Each reference is kept beside the corpus and
+  drawn again only with ``--refresh-references``. Without the extra, Web3D's
+  renders are shown instead.
+- ``--reference web3d``: the render Web3D publishes of the same viewpoint.
+
+The difference counts pixels more than 32 apart in a channel; two renderers
+never agree pixel for pixel, so it says where to look and never fails a run.
 
 .. code-block:: bash
 

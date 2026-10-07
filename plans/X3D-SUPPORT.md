@@ -78,10 +78,17 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
     that Web3D does not (SphereSensor/multisensor); Figure20_17a framed differently;
     Billboard does not turn toward the viewer; Inlines naming another archive's
     scenes fail (each archive is extracted to its own tree)
-  - [ ] X_ITE (MIT, the browser Web3D publishes an X_ITE.html for each example
-    with) as a second, current reference: render each example in headless
-    Chromium through a local copy of x_ite.min.js at 792x465, cached beside the
-    corpus, as an optional tool dependency (Playwright), never the engine's
+  - [x] X_ITE references (`OpenGLContext.testing.xite`, `--reference x_ite`): X_ITE
+    16.4.3 (MIT) from npm, digest-checked, served with the corpus from 127.0.0.1 to
+    Playwright's headless Chromium (SwiftShader); the `x3d-reference` extra. Needs
+    libnss3, libnspr4, libatk1.0, libatk-bridge2.0, libxdamage1 and libatspi2.0 in
+    the container (installed by hand 2026-10-07; the devcontainer should install them)
+  - [ ] found against X_ITE, still to fix: Background `*Url` image faces draw
+    nothing; background binding picks another background (test_binding5); the sky
+    below the last skyAngle where there is no ground (ours carries the last colour,
+    X_ITE draws black: read the spec); ground colours and angles
+    (verify_lastground); fog with a Background fades to white (Figure23_5); the
+    cut-out alpha tree; a textured Box's image upside down
 - [ ] Visual suite, this branch (2026-10-07, run with `PYTHONPATH` on the
   worktrees, compared with the main checkout's current baselines): four
   scripts render differently, each traced by bisecting the branch's commits;

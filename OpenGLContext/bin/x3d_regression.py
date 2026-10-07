@@ -6,8 +6,12 @@ Every ``.x3d`` document in the chosen archives of Web3D's example corpus
 its bound viewpoint or X3D's default one, against its own Background or
 black, and after the textures and Inlines it names have arrived. Each render
 is compared with **our reference** -- the blessed baseline in the
-``tests/reference_images`` submodule -- and the report shows Web3D's own render
-of the same viewpoint beside them, which Web3D publishes with each example.
+``tests/reference_images`` submodule -- and the report shows a reference render
+beside them: X_ITE's (``--reference x_ite``, the default where the
+``x3d-reference`` extra is installed; :mod:`OpenGLContext.testing.xite`), else
+Web3D's own render of the same viewpoint, published with each example. Each row
+says how much ours differs from the reference: a guide to what to look at,
+since two renderers never agree pixel for pixel, and never a failure.
 
     oglc-x3d-regression --fetch          # download the corpus with its images, once
     oglc-x3d-regression --bless          # establish or refresh baselines, after review
@@ -32,7 +36,7 @@ from dataclasses import dataclass
 from typing import Any, Optional
 
 from OpenGLContext import atomicfiles, renderoptions
-from OpenGLContext.testing import renderregression
+from OpenGLContext.testing import renderregression, xite
 
 __all__ = [
     'Scene', 'find_scenes', 'upstream_render', 'render_scene', 'parse_render_report',
@@ -53,6 +57,9 @@ DEFAULT_ARCHIVES = ('ConformanceNist', 'Vrml2Sourcebook')
 MAX_PROBLEMS = 20
 #: Begins the line the drawing process reports on.
 REPORT_MARK = 'X3D_RENDER '
+#: The per-channel difference a pixel must exceed to count as differing from
+#: the reference: wider than DIFF_THRESHOLD, as another renderer shades otherwise.
+REFERENCE_THRESHOLD = 32
 
 
 @dataclass(frozen=True)
@@ -228,6 +235,82 @@ def draw_document(path: str, root: str, size: tuple[int, int]) -> None:
     Document.ContextMainLoop(definition=ContextDefinition(size=size))
 
 
+def references_available() -> bool:
+    """Whether X_ITE's references can be drawn here: Playwright and its Chromium"""
+    try:
+        import playwright  # noqa: F401, PLC0415 only asking whether the extra is installed
+    except ImportError:
+        return False
+    return xite.browser_available()
+
+
+def _reference_record(path: str) -> str:
+    return os.path.splitext(path)[0] + '.json'
+
+
+def render_references(scenes: Sequence[Scene], jobs: int, size: tuple[int, int],
+                      refresh: bool = False) -> None:
+    """Draw X_ITE's reference of each scene that has none (each, with `refresh`),
+    `jobs` browsers at a time, keeping what X_ITE reported beside each"""
+    wanted = [scene for scene in scenes
+              if refresh or not os.path.exists(xite.reference_path(scene.root, scene.slug))]
+    if not wanted:
+        return
+    dist = xite.distribution()
+    by_root: dict[str, list[Scene]] = {}
+    for scene in wanted:
+        by_root.setdefault(scene.root, []).append(scene)
+    print('X_ITE %s references: %d to draw' % (xite.VERSION, len(wanted)), flush=True)
+
+    def draw(root: str, share: Sequence[Scene]) -> None:
+        with xite.ReferenceRenderer(root, dist, size) as renderer:
+            for scene in share:
+                out = xite.reference_path(root, scene.slug)
+                report = renderer.render(os.path.relpath(scene.path, root), out)
+                atomicfiles.write_text(_reference_record(out), json.dumps(report, indent=2))
+                print('  %-5s %s' % ('X_ITE' if report['ok'] else 'NONE', scene.name), flush=True)
+
+    workers = max(1, jobs)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = [pool.submit(draw, root, share[index::workers])
+                   for root, share in by_root.items() for index in range(workers)
+                   if share[index::workers]]
+        for future in futures:
+            future.result()
+
+
+def _difference(reference: str, ours: str) -> Optional[float]:
+    """Percent of pixels differing from the reference beyond REFERENCE_THRESHOLD"""
+    import numpy as np  # noqa: PLC0415 only when comparing
+    from PIL import Image  # noqa: PLC0415 only when comparing
+    from OpenGLContext.testing.framebuffer_comparison import compare_images  # noqa: PLC0415 only when comparing
+    try:
+        theirs = np.asarray(Image.open(reference).convert('RGB'))
+        mine = np.asarray(Image.open(ours).convert('RGB'))
+    except OSError:
+        return None
+    result = compare_images(theirs, mine, threshold=REFERENCE_THRESHOLD)
+    return 100.0 if not result.shapes_match else float(result.percent_different)
+
+
+def _reference(scene: Scene, report: dict[str, Any], args: argparse.Namespace,
+               rendered: str) -> dict[str, Any]:
+    """The reference a render is shown beside, and how much it differs from it"""
+    found: dict[str, Any] = {'reference': 'Web3D', 'reference_errors': [],
+                             'upstream': upstream_render(scene.path, report.get('viewpoint'))}
+    x_ite = xite.reference_path(scene.root, scene.slug)
+    if args.reference == 'x_ite' and os.path.exists(x_ite):
+        found.update(reference='X_ITE %s' % xite.VERSION, upstream=x_ite)
+        try:
+            with open(_reference_record(x_ite)) as stream:
+                found['reference_errors'] = list(json.load(stream).get('errors', ()))
+        except (OSError, ValueError):
+            pass
+    found['reference_difference'] = (_difference(found['upstream'], rendered)
+                                     if found['upstream'] else None)
+    return found
+
+
 def _view_metadata(scene: Scene, report: dict[str, Any], args: argparse.Namespace,
                    provenance: dict[str, str]) -> dict[str, Any]:
     return {
@@ -237,7 +320,6 @@ def _view_metadata(scene: Scene, report: dict[str, Any], args: argparse.Namespac
         'problems': list(report.get('problems', ())),
         'viewpoint': report.get('viewpoint'),
         'loads_waited': report.get('loads_waited', False),
-        'upstream': upstream_render(scene.path, report.get('viewpoint')),
         'frames': args.frames,
         'size': list(args.size),
         'git': provenance['git'],
@@ -260,7 +342,9 @@ def render_scenes(scenes: Sequence[Scene], out_dir: str, baseline_root: str,
         ok, report = render_scene(scene, new_path, args.size, args.frames)
         if not ok:
             return '  FAIL  %s (%s)' % (scene.name, report.get('error', 'no render'))
-        metadata = json.dumps(_view_metadata(scene, report, args, provenance), indent=2)
+        record = _view_metadata(scene, report, args, provenance)
+        record.update(_reference(scene, report, args, new_path))
+        metadata = json.dumps(record, indent=2)
         atomicfiles.write_text(os.path.join(out_dir, scene.slug + '.json'), metadata)
         blessed = args.bless == [] or (args.bless and any(part in scene.name for part in args.bless))
         if blessed:
@@ -281,7 +365,16 @@ def build_report(out_dir: str, baseline_root: str, report_path: str, tolerance: 
         out_dir, baseline_root, report_path, tolerance, diff_threshold,
         title='X3D Example Regression -- our reference vs new',
         upstream=lambda meta, _slug: meta.get('upstream'),
-        describe=lambda meta: meta.get('scene', ''))
+        describe=_describe)
+
+
+def _describe(meta: dict[str, Any]) -> str:
+    """A row's title: the document, and how far it is from its reference"""
+    difference = meta.get('reference_difference')
+    if difference is None:
+        return str(meta.get('scene', ''))
+    return '%s -- %.0f%% unlike %s' % (meta.get('scene', ''), difference,
+                                       meta.get('reference', 'the reference'))
 
 
 def run(args: argparse.Namespace) -> int:
@@ -299,6 +392,12 @@ def run(args: argparse.Namespace) -> int:
         if not scenes:
             print('No X3D documents in %s; --fetch downloads the corpus' % root)
             return 2
+        if args.reference == 'x_ite':
+            if references_available():
+                render_references(scenes, args.jobs, args.size, args.refresh_references)
+            else:
+                print("X_ITE references need the x3d-reference extra and Playwright's "
+                      "Chromium; Web3D's renders are shown instead")
         provenance = renderregression.provenance(lambda: renderregression.gl_renderer())
         print('Corpus:     %s (%d documents)' % (root, len(scenes)))
         print('Baselines:  %s' % baseline_root)
@@ -360,6 +459,12 @@ def build_parser(prog: str = 'oglc-x3d-regression') -> argparse.ArgumentParser:
     parser.add_argument('--diff-threshold', type=int, default=renderregression.DIFF_THRESHOLD,
                         metavar='N', help='per-channel difference a pixel must exceed to count '
                         '(default %d)' % renderregression.DIFF_THRESHOLD)
+    parser.add_argument('--reference', choices=('x_ite', 'web3d'), default='x_ite',
+                        help="what each render is shown beside: X_ITE's render of it "
+                             "(default, where the x3d-reference extra is installed), or "
+                             "Web3D's published one")
+    parser.add_argument('--refresh-references', action='store_true',
+                        help="draw X_ITE's references again rather than keep them")
     parser.add_argument('--render', metavar='DOCUMENT', help=argparse.SUPPRESS)
     parser.add_argument('--root', metavar='DIR', help=argparse.SUPPRESS)
     return parser
