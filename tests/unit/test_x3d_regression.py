@@ -319,20 +319,61 @@ def test_the_references_are_in_the_reference_images():
         os.path.join('tests', 'reference_images', 'x3d_xite'))
 
 
-def test_a_world_is_drawn_long_after_time_zero(tmp_path):
-    """X3D's times are seconds since 1970: a TimeSensor with startTime 0 has
-    finished before any browser loads the world"""
-    env = R._render_environment(str(tmp_path / 'a.png'), 8)
-    assert float(env['OPENGLCONTEXT_CAPTURE_START']) == R.WORLD_START
-    assert R.WORLD_START > 365 * 24 * 3600
+def render_document(tmp_path, scene_xml, **options):
+    """`scene_xml` drawn as a corpus document through a child process; its pixels"""
+    from OpenGLContext.testing.glcontext import gl_available  # noqa: PLC0415 kept with its use
+    if not gl_available():
+        pytest.skip('no GL context on this machine')
+    root = write_corpus(str(tmp_path / 'corpus'), {'Time/doc.x3d': ''})
+    scene = R.find_scenes(root, ['ConformanceNist'])[0]
+    with open(scene.path, 'w') as stream:
+        stream.write('<X3D profile="Immersive" version="3.3"><Scene>%s</Scene></X3D>' % scene_xml)
+    out = str(tmp_path / ('%s.png' % options.get('renderer', 'pbr')))
+    ok, report = R.render_scene(scene, out, size=(96, 64), frames=3, **options)
+    assert ok, report
+    return np.asarray(Image.open(out).convert('RGB')).astype(int)
 
 
-@pytest.mark.parametrize('renderer', ['pbr', 'vrml97'])
-def test_the_renderer_a_document_is_drawn_with(tmp_path, renderer):
-    """The PBR pass by default, or X3D's own Phong equation in the VRML97 pass"""
-    env = R._render_environment(str(tmp_path / 'a.png'), 8, renderer)
-    assert env['OPENGLCONTEXT_RENDERER'] == renderer
+def test_a_time_sensor_started_at_zero_has_finished_when_the_world_is_drawn(tmp_path):
+    """X3D's times are seconds since 1970: a non-looping TimeSensor with
+    startTime 0 ended long before the world is loaded, so it never runs"""
+    pixels = render_document(tmp_path, '''
+      <TimeSensor DEF="Clock" startTime="0" cycleInterval="1"/>
+      <ColorInterpolator DEF="Paint" key="0 1" keyValue="0 1 0 0 1 0"/>
+      <Shape><Appearance><Material DEF="Skin" diffuseColor="0 0 0" emissiveColor="1 0 0"/>
+        </Appearance><Box/></Shape>
+      <ROUTE fromNode="Clock" fromField="fraction_changed" toNode="Paint" toField="set_fraction"/>
+      <ROUTE fromNode="Paint" fromField="value_changed" toNode="Skin" toField="emissiveColor"/>
+    ''')
+    centre = pixels[32, 48]
+    assert centre[0] > 150 and centre[1] < 80, centre
+
+
+LIT = '''
+  <NavigationInfo headlight="false"/>
+  <DirectionalLight direction="-0.3 -0.4 -1" intensity="1"/>
+  <Shape><Appearance><PhysicalMaterial baseColor="0.8 0.6 0.2" metallic="1"
+    roughness="0.3"/></Appearance><Sphere/></Shape>
+'''
+
+
+def test_the_renderer_a_document_is_drawn_with(tmp_path):
+    """The PBR pass by default, or the VRML97 pass: a PhysicalMaterial, which
+    the PBR pass shades by its BRDF, comes out differently in the two"""
     assert R.build_parser().parse_args([]).renderer == 'pbr'
+    pbr = render_document(tmp_path, LIT)
+    phong = render_document(tmp_path, LIT, renderer='vrml97')
+    assert pbr[32, 48].sum() > 60 and phong[32, 48].sum() > 60
+    assert np.abs(pbr - phong).max() > 30
+
+
+def test_documents_drawn_at_a_time(monkeypatch):
+    monkeypatch.setattr(os, 'cpu_count', lambda: 64)
+    assert R.default_jobs() == R.MAX_DEFAULT_JOBS
+    monkeypatch.setattr(os, 'cpu_count', lambda: 3)
+    assert R.default_jobs() == 3
+    monkeypatch.setattr(os, 'cpu_count', lambda: None)
+    assert R.default_jobs() == 1
 
 
 def test_the_backend_a_document_is_drawn_on():

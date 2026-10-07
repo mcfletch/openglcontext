@@ -441,6 +441,10 @@ X_ITE is downloaded from npm once, at a pinned version checked by its
 SHA-256, and served with the documents from 127.0.0.1. Each document is
 captured half a second after X_ITE reports it loaded; its ``<slug>.json``
 records the X_ITE and Chromium versions and the errors the page reported.
+``--jobs`` sets how many browsers draw at a time (a quarter of the
+processors by default, as SwiftShader runs threads of its own), and
+``--archive`` names any archive under ``--corpus``. The script prints
+``FAIL`` beside a document it could not draw and exits 1 when there is one.
 
 The difference counts pixels more than 32 apart in a channel. It is for the
 reader of the report and fails no run. X_ITE draws a document at the
@@ -510,7 +514,7 @@ document is at a different point of its animation in the two.
    * - ``--report-only``
      - rebuild the report from the renders already drawn
    * - ``--jobs N``
-     - documents drawn at a time (the processor count)
+     - documents drawn at a time (the processor count, at most 8)
    * - ``--size WxH``
      - the render size (792x465)
    * - ``--frames N``

@@ -49,6 +49,9 @@ DEFAULT_SIZE = (792, 465)
 DEFAULT_FRAMES = 8
 #: Seconds one document's process is given.
 RENDER_TIMEOUT = 120.0
+#: The most drawing processes run at once by default: each holds a GL
+#: context and a scene, and they share one GPU.
+MAX_DEFAULT_JOBS = 8
 #: The archives drawn where none are named.
 DEFAULT_ARCHIVES = ('ConformanceNist', 'Vrml2Sourcebook')
 #: The most problems a document's record keeps.
@@ -79,6 +82,12 @@ class Scene:
     def slug(self) -> str:
         """The name its render and baseline files take"""
         return self.name.replace('/', '.')
+
+
+def default_jobs() -> int:
+    """Documents drawn at a time where none is named: the processor count, at
+    most :data:`MAX_DEFAULT_JOBS`"""
+    return max(1, min(os.cpu_count() or 1, MAX_DEFAULT_JOBS))
 
 
 def default_baseline_root() -> str:
@@ -425,8 +434,9 @@ def build_parser(prog: str = 'oglc-x3d-regression') -> argparse.ArgumentParser:
         baselines='tests/reference_images/x3d_baseline or $OPENGLCONTEXT_X3D_BASELINE',
         renders='tests/x3d_regression/renders', size=DEFAULT_SIZE, frames=DEFAULT_FRAMES,
         frames_help='frames drawn once the loads have arrived')
-    parser.add_argument('--jobs', type=int, default=os.cpu_count() or 1,
-                        help='documents drawn at a time (default: the processor count)')
+    parser.add_argument('--jobs', type=int, default=default_jobs(), metavar='N',
+                        help='documents drawn at a time (default: the processor count, '
+                        'at most %d)' % MAX_DEFAULT_JOBS)
     parser.add_argument('--reference', choices=('x_ite', 'web3d'), default='x_ite',
                         help="what each render is shown beside: X_ITE's render of it "
                              "(default, where there is one), or Web3D's published one")

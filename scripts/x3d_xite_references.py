@@ -41,9 +41,11 @@ import http.server
 import json
 import mimetypes
 import os
+import shutil
 import subprocess
 import sys
 import tarfile
+import tempfile
 import threading
 import time
 import urllib.parse
@@ -150,22 +152,36 @@ def write_file(path: str, data: bytes) -> None:
 
 
 def unpack(source: str, destination: str) -> str:
-    """Unpack the ``package/dist`` folder of an X_ITE tarball; its path"""
-    root = os.path.realpath(destination)
-    with tarfile.open(source, 'r:gz') as archive:
-        for member in archive.getmembers():
-            if not member.isfile() or not member.name.startswith('package/dist/'):
-                continue
-            target = os.path.realpath(os.path.join(root, member.name[len('package/'):]))
-            if not target.startswith(root + os.sep):
-                raise ValueError('Tarball member %r leaves %s' % (member.name, root))
-            os.makedirs(os.path.dirname(target), exist_ok=True)
-            extracted = archive.extractfile(member)
-            if extracted is None:
-                continue
-            with extracted:
-                write_file(target, extracted.read())
-    return os.path.join(root, 'dist')
+    """Unpack the ``package/dist`` folder of an X_ITE tarball into `destination`;
+    its path
+
+    The folder is unpacked beside its place and renamed into it whole, so an
+    unpack cut short leaves no ``dist`` to be taken for a complete one.
+    """
+    os.makedirs(destination, exist_ok=True)
+    final = os.path.join(os.path.realpath(destination), 'dist')
+    staging = tempfile.mkdtemp(prefix='.dist-', dir=destination)
+    try:
+        root = os.path.realpath(staging)
+        with tarfile.open(source, 'r:gz') as archive:
+            for member in archive.getmembers():
+                if not member.isfile() or not member.name.startswith('package/dist/'):
+                    continue
+                target = os.path.realpath(os.path.join(root, member.name[len('package/'):]))
+                if not target.startswith(root + os.sep):
+                    raise ValueError('Tarball member %r leaves %s' % (member.name, destination))
+                os.makedirs(os.path.dirname(target), exist_ok=True)
+                extracted = archive.extractfile(member)
+                if extracted is None:
+                    continue
+                with extracted, open(target, 'wb') as stream:  # noqa: OGC121 inside the staging folder
+                    stream.write(extracted.read())
+        if os.path.isdir(final):
+            shutil.rmtree(final)
+        os.replace(os.path.join(root, 'dist'), final)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    return final
 
 
 def _distribution_directory(cache: Optional[str] = None) -> str:
@@ -225,6 +241,10 @@ class _Handler(http.server.BaseHTTPRequestHandler):
         """Quiet: a run asks for thousands of files"""
 
     def do_GET(self) -> None:
+        if self.headers.get('Host') != '%s:%d' % self.connection.getsockname()[:2]:
+            # A page elsewhere that rebinds a name to 127.0.0.1 reads nothing.
+            self.send_error(403)
+            return
         path = urllib.parse.urlsplit(self.path).path.lstrip('/')
         if path == 'harness.html':
             self._send(self.page, 'text/html')
@@ -237,7 +257,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             found = contain(folder, rest)
             with open(found, 'rb') as stream:
                 data = stream.read()
-        except OSError:
+        except (OSError, ValueError):     # ValueError: a NUL byte in the path
             self.send_error(404)
             return
         suffix = os.path.splitext(found)[1].lower()
@@ -335,19 +355,35 @@ def ensure_browser() -> None:
                    check=True)
 
 
+class Outcome(NamedTuple):
+    """What a run drew: how many documents, and the names of those that failed"""
+
+    drawn: int
+    failed: list[str]
+
+
+def default_jobs() -> int:
+    """Browsers at a time: a quarter of the processors, as SwiftShader draws
+    each browser's frames on threads of its own"""
+    return max(1, (os.cpu_count() or 1) // 4)
+
+
 def render_all(documents: Sequence[Document], out_dir: str, size: tuple[int, int],
-               jobs: int, refresh: bool = False) -> int:
+               jobs: int, refresh: bool = False) -> Outcome:
     """Draw each document without a reference in `out_dir` (each, with `refresh`),
-    `jobs` browsers at a time; the number drawn"""
+    `jobs` browsers at a time, installing the browser where something is to
+    be drawn"""
     wanted = [document for document in documents
               if refresh or not os.path.exists(os.path.join(out_dir, document.slug + '.png'))]
     if not wanted:
-        return 0
+        return Outcome(0, [])
+    ensure_browser()
     dist = distribution()
     os.makedirs(out_dir, exist_ok=True)
     by_root: dict[str, list[Document]] = {}
     for document in wanted:
         by_root.setdefault(document.root, []).append(document)
+    failed: list[str] = []
 
     def draw(root: str, share: Sequence[Document]) -> None:
         with Renderer(root, dist, size) as renderer:
@@ -359,7 +395,9 @@ def render_all(documents: Sequence[Document], out_dir: str, size: tuple[int, int
                               rendered_at=datetime.datetime.now().isoformat(timespec='seconds'))
                 write_file(os.path.join(out_dir, document.slug + '.json'),
                            json.dumps(record, indent=2).encode('utf-8'))
-                print('  %-5s %s' % ('OK' if report['ok'] else 'NONE', document.name), flush=True)
+                if not report['ok']:
+                    failed.append(document.name)
+                print('  %-5s %s' % ('OK' if report['ok'] else 'FAIL', document.name), flush=True)
 
     workers = max(1, jobs)
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as pool:
@@ -368,7 +406,7 @@ def render_all(documents: Sequence[Document], out_dir: str, size: tuple[int, int
                    if share[index::workers]]
         for future in futures:
             future.result()
-    return len(wanted)
+    return Outcome(len(wanted), sorted(failed))
 
 
 def default_out_dir() -> str:
@@ -382,29 +420,36 @@ def _parse_size(text: str) -> tuple[int, int]:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    parser.add_argument('--corpus', default=None, help='the corpus directory (default: '
-                        "pyvrml97's, $PYVRML97_X3D_CORPUS or its cache)")
-    parser.add_argument('--archive', action='append', help='an archive to draw (repeatable; '
-                        'default %s)' % ' and '.join(DEFAULT_ARCHIVES))
+    parser.add_argument('--corpus', default=None, metavar='DIR',
+                        help="the corpus directory (default: pyvrml97's, "
+                        '$PYVRML97_X3D_CORPUS or its cache)')
+    parser.add_argument('--archive', action='append', metavar='NAME',
+                        help='an archive under the corpus to draw (repeatable; default %s)'
+                        % ' and '.join(DEFAULT_ARCHIVES))
     parser.add_argument('--only', action='append', metavar='PART',
                         help='draw only the documents whose name contains PART (repeatable)')
-    parser.add_argument('--out', default=None, help='where the references are written '
+    parser.add_argument('--out', default=None, metavar='DIR',
+                        help='where the references are written '
                         '(default: tests/reference_images/x3d_xite)')
     parser.add_argument('--refresh', action='store_true',
                         help='draw again the documents that already have a reference')
-    parser.add_argument('--jobs', type=int, default=os.cpu_count() or 1,
-                        help='browsers at a time (default: the processor count)')
-    parser.add_argument('--size', type=_parse_size, default=DEFAULT_SIZE, metavar='WxH')
+    parser.add_argument('--jobs', type=int, default=default_jobs(), metavar='N',
+                        help='browsers at a time (default: a quarter of the processors, %(default)s)')
+    parser.add_argument('--size', type=_parse_size, default=DEFAULT_SIZE, metavar='WxH',
+                        help='the size of each render (default: %dx%d, as Web3D renders)'
+                        % DEFAULT_SIZE)
     options = parser.parse_args(argv)
     root = options.corpus or corpus_directory()
     documents = find_documents(root, options.archive or DEFAULT_ARCHIVES, options.only)
     if not documents:
         print('No X3D documents in %s; oglc-x3d-regression --fetch downloads the corpus' % root)
         return 2
-    ensure_browser()
     out_dir = options.out or default_out_dir()
-    drawn = render_all(documents, out_dir, options.size, options.jobs, options.refresh)
-    print('%d of %d documents drawn into %s' % (drawn, len(documents), out_dir))
+    outcome = render_all(documents, out_dir, options.size, options.jobs, options.refresh)
+    print('%d of %d documents drawn into %s' % (outcome.drawn, len(documents), out_dir))
+    if outcome.failed:
+        print('%d of %d documents failed' % (len(outcome.failed), outcome.drawn))
+        return 1
     return 0
 
 

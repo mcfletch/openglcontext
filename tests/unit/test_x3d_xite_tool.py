@@ -102,6 +102,21 @@ class TestUnpacking:
         with pytest.raises(ValueError):
             tool.unpack(source, str(tmp_path / 'out'))
 
+    def test_an_unpack_cut_short_leaves_nothing_taken_for_complete(self, tool, tmp_path):
+        source = tarball(tmp_path, {'package/dist/x_ite.min.js': b'js',
+                                    'package/dist/../../../escaped.js': b'x'})
+        with pytest.raises(ValueError):
+            tool.unpack(source, str(tmp_path / 'out'))
+        assert not (tmp_path / 'out' / 'dist').exists()
+        assert os.listdir(tmp_path / 'out') == []
+
+    def test_an_unpack_over_one_already_there(self, tool, tmp_path):
+        source = tarball(tmp_path, {'package/dist/x_ite.min.js': b'js'})
+        tool.unpack(source, str(tmp_path / 'out'))
+        dist = tool.unpack(source, str(tmp_path / 'out'))
+        assert sorted(os.listdir(tmp_path / 'out')) == ['dist']
+        assert os.listdir(dist) == ['x_ite.min.js']
+
 
 def test_the_harness_names_the_size(tool):
     page = tool.harness_page((792, 465))
@@ -135,6 +150,25 @@ class TestTheServer:
                     self.get(server, path)
 
 
+    def test_a_request_naming_another_host(self, tool, tmp_path):
+        (tmp_path / 'dist').mkdir()
+        (tmp_path / 'corpus').mkdir()
+        with tool.SceneServer(str(tmp_path / 'corpus'), str(tmp_path / 'dist'), (40, 30)) as server:
+            request = urllib.request.Request(server.url + '/harness.html',
+                                             headers={'Host': 'rebound.example'})
+            with pytest.raises(urllib.error.HTTPError) as refused:
+                urllib.request.urlopen(request, timeout=5)
+            assert refused.value.code == 403
+
+    def test_a_nul_byte_is_not_found(self, tool, tmp_path):
+        (tmp_path / 'dist').mkdir()
+        (tmp_path / 'corpus').mkdir()
+        with tool.SceneServer(str(tmp_path / 'corpus'), str(tmp_path / 'dist'), (40, 30)) as server:
+            with pytest.raises(urllib.error.HTTPError) as missing:
+                self.get(server, 'scene/a%00b.x3d')
+            assert missing.value.code == 404
+
+
 def test_only_the_local_server_is_reached(tool):
     base = 'http://127.0.0.1:4242'
     assert tool.is_local(base + '/scene/a.x3d', base)
@@ -145,16 +179,16 @@ def test_only_the_local_server_is_reached(tool):
         assert not tool.is_local(url, base), url
 
 
-def test_documents_with_references_are_not_drawn_again(tool, tmp_path, monkeypatch):
-    out = tmp_path / 'out'
-    out.mkdir()
-    (out / 'A.done.png').write_bytes(b'png')
-    documents = [tool.Document('A/done', 'p', 'r'), tool.Document('A/new', 'p', 'r')]
-    drawn = []
-    monkeypatch.setattr(tool, 'distribution', lambda: str(tmp_path))
+@pytest.fixture
+def stand_in(tool, tmp_path, monkeypatch):
+    """The tool with a renderer that draws nothing, failing the documents
+    named in its `failing`; `drawn` and `installs` record what it was asked"""
 
     class Renderer:
         version = 'test'
+        drawn: list = []
+        installs: list = []
+        failing: set = set()
 
         def __init__(self, documents, dist, size):
             pass
@@ -166,14 +200,59 @@ def test_documents_with_references_are_not_drawn_again(tool, tmp_path, monkeypat
             return False
 
         def render(self, relative, path):
-            drawn.append(path)
-            return {'ok': True, 'errors': [], 'seconds': 0.0}
+            Renderer.drawn.append(path)
+            return {'ok': os.path.basename(path) not in Renderer.failing, 'errors': [],
+                    'seconds': 0.0}
 
+    monkeypatch.setattr(tool, 'distribution', lambda: str(tmp_path))
+    monkeypatch.setattr(tool, 'ensure_browser', lambda: Renderer.installs.append(True))
     monkeypatch.setattr(tool, 'Renderer', Renderer)
-    assert tool.render_all(documents, str(out), (8, 8), jobs=2) == 1
-    assert drawn == [str(out / 'A.new.png')]
+    return Renderer
+
+
+def test_documents_with_references_are_not_drawn_again(tool, tmp_path, stand_in):
+    out = tmp_path / 'out'
+    out.mkdir()
+    (out / 'A.done.png').write_bytes(b'png')
+    documents = [tool.Document('A/done', 'p', 'r'), tool.Document('A/new', 'p', 'r')]
+    assert tool.render_all(documents, str(out), (8, 8), jobs=2) == tool.Outcome(1, [])
+    assert stand_in.drawn == [str(out / 'A.new.png')]
     assert (out / 'A.new.json').exists()
-    assert tool.render_all(documents, str(out), (8, 8), jobs=2, refresh=True) == 2
+    assert tool.render_all(documents, str(out), (8, 8), jobs=2, refresh=True).drawn == 2
+
+
+def test_nothing_is_installed_when_nothing_is_drawn(tool, tmp_path, stand_in):
+    out = tmp_path / 'out'
+    out.mkdir()
+    (out / 'A.done.png').write_bytes(b'png')
+    assert tool.render_all([tool.Document('A/done', 'p', 'r')], str(out), (8, 8), jobs=1) \
+        == tool.Outcome(0, [])
+    assert stand_in.installs == []
+    tool.render_all([tool.Document('A/new', 'p', 'r')], str(out), (8, 8), jobs=1)
+    assert stand_in.installs == [True]
+
+
+def test_a_failed_render_fails_the_run(tool, tmp_path, stand_in, capsys):
+    corpus = str(tmp_path / 'corpus')
+    write_corpus(corpus, 'Tiny', {'good.x3d': '<X3D/>', 'bad.x3d': '<X3D/>'})
+    stand_in.failing = {'Tiny.bad.png'}
+    out = str(tmp_path / 'out')
+    status = tool.main(['--corpus', corpus, '--archive', 'Tiny', '--out', out])
+    printed = capsys.readouterr().out
+    assert status == 1
+    assert 'FAIL  Tiny/bad' in printed and 'OK    Tiny/good' in printed
+    assert '1 of 2 documents failed' in printed
+    stand_in.failing = set()
+    assert tool.main(['--corpus', corpus, '--archive', 'Tiny', '--out', out, '--refresh']) == 0
+
+
+def test_browsers_at_a_time_leave_room_for_swiftshader(tool, monkeypatch):
+    monkeypatch.setattr(os, 'cpu_count', lambda: 32)
+    assert tool.default_jobs() == 8
+    monkeypatch.setattr(os, 'cpu_count', lambda: 2)
+    assert tool.default_jobs() == 1
+    monkeypatch.setattr(os, 'cpu_count', lambda: None)
+    assert tool.default_jobs() == 1
 
 
 #: What ``uv run`` resolves the script's dependencies from.
