@@ -22,20 +22,15 @@ def _record(material, depth):
     return (None, matrix, None, None, None, shape)
 
 
-def _material_after(earlier):
-    """A material at a higher address than ``earlier``, so address order and
+def _two_materials():
+    """Two materials, the first at the higher address, so address order and
     arrival order disagree."""
-    held = []
-    while True:
-        candidate = object()
-        if id(candidate) > id(earlier):
-            return candidate
-        held.append(candidate)
+    one, other = object(), object()
+    return (one, other) if id(one) > id(other) else (other, one)
 
 
 def test_groups_follow_the_order_their_first_shape_arrives_in():
-    second = object()
-    first = _material_after(second)
+    first, second = _two_materials()
     records = [_record(first, -1.0), _record(second, -2.0), _record(first, -3.0)]
     ordered = opaqueDrawOrder(list(enumerate(records)))
     assert [index for index, _record in ordered] == [0, 2, 1]

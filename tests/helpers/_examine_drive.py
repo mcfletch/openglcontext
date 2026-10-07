@@ -106,6 +106,10 @@ class DriverContext(BaseContext):
 
     def _drag(self):
         if not self.isCapturingEvents('mousemove'):
+            # The press is picked asynchronously; wait for that answer rather
+            # than for a number of idle calls, which a busy machine outruns.
+            self.flushPendingPicks()
+        if not self.isCapturingEvents('mousemove'):
             return False                    # the examine mode has not begun
         self._pivotPoint = np.asarray(self._pivot(), 'd')
         print('PIVOT %s' % (' '.join('%.6f' % value

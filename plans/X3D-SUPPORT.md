@@ -18,27 +18,29 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] `accessType`, bounds, choices and unit category on field descriptors
   - [x] `nodetypes.Sensor` is a `Children`
 - Phase 2, vocabulary (§9.2, §9.3)
-  - [ ] XML field codecs (`vrml.x3d.codecs`)
-  - [ ] generator `tools/generate_x3d.py`: pinned download, digest, cache
-  - [ ] generated `vrml/x3d/nodes.py` and `nodes.pyi`
-  - [ ] `AliasField` for renamed fields
-  - [ ] `Dialect`/`FieldRename`/`FieldDefault` nodes; VRML97 dialect; 3.x dialects from the version diff
-  - [ ] `vrml.vrml97.basenodes` re-exports the X3D classes
-  - [ ] `x3d-generated` tox environment and preflight check
+  - [x] XML field codecs (`vrml.x3d.codecs`)
+  - [x] generator `tools/generate_x3d.py`: pinned download, digest, cache
+  - [x] generated `vrml/x3d/nodes.py` and `nodes.pyi`
+  - [x] `AliasField` for renamed fields
+  - [x] `Dialect`/`FieldRename`/`FieldDefault` nodes; VRML97 dialect; 3.x dialects from the version diff
+  - [x] `vrml.vrml97.basenodes` re-exports the X3D classes
+  - [x] `x3d-generated` tox environment and preflight check
 - Phase 3, builder and readers (§9.4, §9.5, §9.7, §9.9)
-  - [ ] `X3DScene`, `LoadProblem`, `ComponentInfo`, `UnitInfo`, `MetaInfo` nodes
-  - [ ] `SceneBuilder`
-  - [ ] XML reader (`.x3d`, `.x3dz`)
-  - [ ] JSON reader
-  - [ ] ClassicVRML/VRML97 reader; VRML97 parsing on the builder
-  - [ ] prototypes, `EXTERNPROTO`, `Script` field declarations
-  - [ ] `UNIT` scaling
-  - [ ] `IMPORT`/`EXPORT`
-  - [ ] profiles and `validate()`
-  - [ ] corpus fetch script, committed subset, cross-encoding test
+  - [x] `X3DScene`, `LoadProblem`, `ComponentInfo`, `UnitInfo`, `MetaInfo` nodes
+  - [x] `SceneBuilder`
+  - [x] XML reader (`.x3d`, `.x3dz`)
+  - [x] JSON reader
+  - [x] ClassicVRML/VRML97 reader (SimpleParse grammar); VRML97 parsing on the builder (the legacy `vrml.vrml97.parser` is kept)
+  - [x] prototypes, `EXTERNPROTO`, `Script` field declarations (builder, XML, JSON)
+  - [x] `UNIT` scaling
+  - [x] `IMPORT`/`EXPORT`
+  - [x] profiles and `validate()`
+  - [x] `vrml.x3d.load()` and `loads()`; local `EXTERNPROTO` files
+  - [x] corpus fetch script, committed subset, cross-encoding test (XML, JSON and ClassicVRML; Fast Infoset with Phase 9)
 - Phase 4, writers (§9.6)
-  - [ ] XML (with canonical form), ClassicVRML/VRML97, JSON writers
-  - [ ] round trip and schema validation tests
+  - [x] XML (with canonical form), ClassicVRML/VRML97, JSON writers; `dump()`/`dumps()`
+  - [x] round trip and schema validation tests (1,181 corpus scenes in each encoding; written XML valid against the X3D 4.1 XSD; `.wrl` back to VRML97)
+  - [x] dialects record each version's absent fields; reading warns on one, writing refuses a non-default one
 - Phase 5, `PhysicalMaterial` (§9.13)
   - [ ] `PBRMaterial` reworked into `PhysicalMaterial`; extension and engine fields
   - [ ] texture fields and mapping labels; per-channel texture transforms
@@ -46,7 +48,9 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [ ] every caller in the workspace migrated
   - [ ] glTF material round trip through X3D
 - Phase 6, OpenGLContext Interchange (§9.11, §9.12, §9.14)
-  - [ ] implementations rebased on `vrml.x3d.nodes`; every X3D node registered
+  - [ ] implementations rebased on `vrml.x3d.nodes` (done: the suite passes against them); every X3D node registered
+  - [ ] the render pass skips nodes whose X3D `visible` is false
+  - [ ] lights: X3D `shadows` and the engine's `castShadows`; `InstancedShape` the X3D node
   - [ ] X3D loaders and adapters; `Inline` on `SceneLoader`
   - [ ] geometry as `Primitive`s; Interchange geometry nodes
   - [ ] other X3D materials; light scope and attenuation; environment
@@ -57,6 +61,9 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [ ] sensors
 - Phase 8, engine-mapped components (§9.17)
 - Phase 9, Fast Infoset reader
+- [ ] SimpleParse speed: the ClassicVRML reader runs at about 7 MB/s against
+  16.5 MB/s for XML through expat. SimpleParse should be much faster than that;
+  profile the grammar and the result-tree walk and find where the time goes
 - Phase 10, Geospatial, VolumeRendering, GaussianSplats, `MovieTexture`
 - Documentation (§12)
 
@@ -978,6 +985,34 @@ X3D Canonical Form (attribute order, quoting, number formatting) so written
 files diff cleanly. The ClassicVRML writer extends `vrml.vrml97.linearise`
 and replaces its VRML97-only path.
 
+As built (pyvrml97 `b4ad359`):
+
+- `vrml.x3d.writers` (`base.SceneWriter` and one subclass per encoding)
+  rather than an extension of `vrml.vrml97.linearise`, which is kept for
+  `Node.toString()` and existing callers.
+- Each `Dialect` gained `absent` (`AbsentFields` nodes): the fields of its
+  node types the version does not have. Generated from the X3DUOM for 3.0 to
+  4.0; for VRML97, written by hand from the section 6 node clauses. A field
+  the target lacks is written only if it has a non-default value, and then
+  the write fails with `X3DWriteError` listing every such case, as for node
+  types and (VRML97) field types.
+- `DEF` names are kept; a node used twice or named by a route without one is
+  given `Type`, `Type_2`, ...; a clash between two nodes' names is resolved
+  the same way. The scene is not modified.
+- Units: a version with `UNIT` (3.3+) writes the statements and divides
+  values back into them; an earlier one writes base units.
+- Program source: CDATA (XML), `#sourceCode` (JSON), the `sourceCode` field
+  (ClassicVRML 4.0 and 4.1), else an inline entry first in `url` (VRML97 and
+  X3D 3.x ClassicVRML; prefixed `ecmascript:` for a Script that has no
+  scheme).
+- Canonical form: attribute order and quoting always; `canonical=True` adds
+  the DTD and schema attributes. Apostrophes in an MFString are written
+  `&apos;` where 19776-3 4.2.3 says `&#8242;` (a different character).
+  Numbers are written positionally below 1e16, because the schema's patterns
+  for ranged types (colours) allow an exponent only on a mantissa in [0, 1].
+- The XML writer puts a node's `metadata` child first and a Script's `field`
+  declarations before its `IS`, as the schema and the readers need.
+
 ### 9.7 Prototypes
 
 X3D's XML prototype statements (`ProtoDeclare`, `ProtoInterface`, `field`,
@@ -1200,6 +1235,39 @@ maps carry different transforms renders one of them wrongly today. The
 material block gains a 3×3 transform per channel and the set selection widens
 beyond two, and `texCoordMask` and `uv_transform` are replaced by the
 labels.
+
+Implementation detail (2026-10-07, before Phase 5 starts):
+
+- `scenegraph/physicalmaterial.py`: `PhysicalMaterial(x3d.PhysicalMaterial)`.
+  The X3D texture fields hold the core channels (`baseTexture`,
+  `metallicRoughnessTexture`, `normalTexture`, `occlusionTexture`,
+  `emissiveTexture`); the extension and engine channels are SFNode fields of
+  the same pattern (`clearcoatTexture`, ..., `lightmapTexture`), each with its
+  `…TextureMapping`. `textures` stays as a read-only view, channel name to
+  texture node, built from the fields, for the pass and the instancing key.
+  `texCoordMask`, `uv_transform`, `unlit`, `alphaMode`, `alphaCutoff` and
+  `doubleSided` leave the material.
+- Decoded images: `ImageDataTexture(x3d.X3DTexture2DNode)` holds a PIL image
+  as an attribute, with `repeatS`/`repeatT` and a `TextureProperties` for the
+  glTF sampler's filters and wrap modes. It replaces `PBRTexture`.
+- Coordinate sets: a geometry answers `textureCoordinateSet(label)`. X3D
+  geometry by the position of the `MultiTextureCoordinate` entry with that
+  `mapping`; `PBRMesh` by its `textureMappings` (labels) and
+  `textureMappingSets` (the set each names), and otherwise `""` is set 0 and
+  `TEXCOORD_n` is set n. The shader keeps two sets (`TEXCOORD_0`/`_1`); a
+  label naming a third is reported once and read as set 0.
+- Transforms: the appearance's `textureTransform` (a `MultiTextureTransform`
+  or a single transform) gives each label its transform; a single transform
+  with an empty `mapping` applies to every channel, as in VRML97. glTF's
+  `KHR_texture_transform` (scale, then rotation, then translation) is not
+  X3D `TextureTransform`'s order, so the glTF loader writes
+  `TextureTransformMatrix3D` entries.
+- Material block: the one `uvTransform` mat3 becomes four affine transforms
+  (two vec4 rows each) and three words of per-channel codes, five bits a
+  channel (two for the set, three for the transform slot, 0 for none); 80
+  words, so `MAX_INSTANCE_MATERIALS` becomes 51. A material whose channels
+  use more than four distinct transforms is reported and the rest read as
+  untransformed.
 
 `ImageTexture`, `PixelTexture`, `ImageCubeMapTexture`, `ComposedCubeMapTexture`,
 `ImageTexture3D` load through the existing texture cache; `TextureProperties`

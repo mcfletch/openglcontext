@@ -93,6 +93,9 @@ try:
             ev.modifiers = (0, 0, 0); ev.pickPoint = (w // 2, h // 2)
             inst.addPickEvent(ev); inst.triggerPick()
         inst.OnDraw(force=1)
+    # The pick is read back asynchronously; how many frames that takes depends
+    # on how busy the machine is, so the result is waited for, not counted on.
+    inst.flushPendingPicks()
 
     expected = {
         'opaque_pickable': 'BACK',

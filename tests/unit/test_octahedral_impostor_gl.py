@@ -176,7 +176,8 @@ def seen(tmp_path_factory):
     })
     done = subprocess.run([sys.executable, str(script)], capture_output=True,
                           text=True, timeout=300,
-                          env=dict(os.environ, PYTHONPATH=os.getcwd()))
+                          env=dict(os.environ, PYTHONPATH=os.pathsep.join(
+                              filter(None, (os.getcwd(), os.environ.get('PYTHONPATH'))))))
     if 'RESULT ' not in done.stdout:
         pytest.skip('the GL driver said nothing: %s' % (done.stderr[-600:],))
     state = json.loads(done.stdout.split('RESULT ', 1)[1].splitlines()[0])
