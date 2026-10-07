@@ -49,6 +49,7 @@ from vrml.vrml97 import nodetypes
 from vrml import olist
 from vrml.x3d import binding
 from vrml.x3d import nodes as x3dnodes
+from vrml.x3d.scene import X3DScene
 from OpenGLContext.scenegraph import shaders
 from pydispatch.dispatcher import connect
 
@@ -808,8 +809,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         self.boundLights = bound
         self.scopedLights = lightscope.scoped_lights(bound_paths)
 
-        if (navigationinfo.headlight(self.currentNavigation(), light_count)
-                and light_count < shader.MAX_LIGHTS):
+        if self.hasHeadlight(light_count) and light_count < shader.MAX_LIGHTS:
             # Directional along the view, given in eye space.
             shader.set_light(light_count, light_type='directional',
                              color=(1.0, 1.0, 1.0), direction=(0.0, 0.0, -1.0),
@@ -1158,6 +1158,15 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         """
         path = binding.current_path( list( self.paths.get( nodetypes.NavigationInfo, () ) ) )
         return None if path is None else path[-1]
+
+    def hasHeadlight( self, lights: int ) -> bool:
+        """Whether a frame with ``lights`` of the scene's own lights adds the headlight
+
+        A scene read from a document has X3D's default NavigationInfo where it
+        binds none (:func:`OpenGLContext.move.navigationinfo.headlight`).
+        """
+        return navigationinfo.headlight( self.currentNavigation(), lights,
+                                         isinstance( self.scene, X3DScene ) )
 
     # Persistent object-id <-> path map for MRT picking. Stable per-path ids
     # (stashed on the NodePath) mean the {id: path} map is only mutated when the

@@ -22,6 +22,7 @@ import numpy as np
 
 from vrml import cache, field, node, protofunctions
 from vrml.x3d import nodes as x3d
+from vrml.x3d.scene import X3DScene
 
 #: The texture field of each channel the PBR pass binds, by channel name.
 CHANNEL_FIELDS = {
@@ -475,6 +476,7 @@ class AppearanceMaterial(object):
         self._appearance = weakref.ref(appearance)
         self._back = back
         self._version = 0
+        self._document: Optional[bool] = None
 
     @property
     def appearance(self) -> Any:
@@ -526,13 +528,25 @@ class AppearanceMaterial(object):
 
     @property
     def factorVersion(self) -> int:
-        """A count that moves whenever a field this view reads from is set"""
+        """A count that moves whenever a field this view reads from is set, or
+        the appearance joins or leaves a document (:attr:`inDocument`)"""
         appearance = self.appearance
         key = _VIEW_VERSION_KEY + ('-back' if self._back else '')
         if appearance is not None and cache.CACHE.getData(appearance, key) is None:
             self._version += 1
             self._watch(appearance, key)
+        document = self.inDocument
+        if document != self._document:
+            self._document = document
+            self._version += 1
         return self._version
+
+    @property
+    def inDocument(self) -> bool:
+        """Whether the appearance belongs to a scene read from a VRML97 or X3D
+        document, where an appearance with no material is unlit"""
+        appearance = self.appearance
+        return appearance is not None and isinstance(protofunctions.root(appearance), X3DScene)
 
     @staticmethod
     def _watch(appearance: Any, key: str) -> None:

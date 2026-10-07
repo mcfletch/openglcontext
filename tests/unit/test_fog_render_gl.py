@@ -107,3 +107,29 @@ def test_a_range_the_geometry_is_beyond_hides_it_completely(render_scene):
     swallowing = Fog(color=(0, 1, 0), visibilityRange=BOX_DISTANCE * 0.5)
     image = rendered(render_scene, swallowing)
     assert image[1] > image[0] + 40 and image[1] > image[2] + 40
+
+
+def black_wall(distance, *extra, unlit=False):
+    """A black square filling the view at ``distance`` down -Z from a viewpoint at the origin"""
+    material = (basenodes.UnlitMaterial(emissiveColor=(0, 0, 0)) if unlit
+                else basenodes.Material(diffuseColor=(0, 0, 0), specularColor=(0, 0, 0)))
+    wall = basenodes.Transform(
+        translation=(0, 0, -distance),
+        children=[basenodes.Shape(
+            geometry=basenodes.Box(size=(400, 400, 0.01)),
+            appearance=basenodes.Appearance(material=material))])
+    return [basenodes.Viewpoint(position=(0, 0, 0)), wall] + list(extra)
+
+
+@pytest.mark.parametrize('fog_type', ['LINEAR', 'EXPONENTIAL'])
+@pytest.mark.parametrize('unlit', [False, True], ids=['lit', 'unlit'])
+def test_x3ds_fog_blends_the_displayed_colour(render_scene, fog_type, unlit):
+    """X3D (19775-1, 17.2.2.3): the displayed colour is lerp(f, fogColor, colour),
+    f the object's share; a black wall at half the range under white fog is
+    displayed at 1 - f of white"""
+    distance, visibility = 10.0, 20.0
+    fog = Fog(color=(1, 1, 1), visibilityRange=visibility, fogType=fog_type)
+    share = ((visibility - distance) / visibility if fog_type == 'LINEAR'
+             else np.exp(-distance / (visibility - distance)))
+    image = frames_of(render_scene, black_wall(distance, fog, unlit=unlit))[-1]
+    assert middle(image) == pytest.approx([255 * (1 - share)] * 3, abs=12)

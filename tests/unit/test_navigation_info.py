@@ -2,8 +2,9 @@
 
 The scene's NavigationInfo nodes are bound as its viewpoints are
 (``vrml.x3d.binding``). ``headlight`` adds the headlight to the scene's own
-lights or leaves it off; a scene with no NavigationInfo has the headlight only
-where it has no lights. ``type`` names the movement modes the document asks
+lights or leaves it off. A document with no NavigationInfo has X3D's default
+one, and so the headlight; a scene built in code with none has the headlight
+only where it has no lights. ``type`` names the movement modes the document asks
 for, the first the context offers being chosen when the node is bound.
 """
 import numpy as np
@@ -35,12 +36,12 @@ def test_the_first_requested_mode_offered_is_chosen():
     assert navigationinfo.chosen_mode(NavigationInfo(type=['ANY']), ['examine']) is None
 
 
-@pytest.mark.parametrize('info, lights, expected', [
-    (None, 0, True), (None, 2, False),
-    (NavigationInfo(), 2, True), (NavigationInfo(headlight=False), 0, False),
+@pytest.mark.parametrize('info, lights, document, expected', [
+    (None, 0, False, True), (None, 2, False, False), (None, 2, True, True),
+    (NavigationInfo(), 2, False, True), (NavigationInfo(headlight=False), 0, True, False),
 ])
-def test_the_headlight(info, lights, expected):
-    assert navigationinfo.headlight(info, lights) is expected
+def test_the_headlight(info, lights, document, expected):
+    assert navigationinfo.headlight(info, lights, document) is expected
 
 
 class Paths:
@@ -130,7 +131,9 @@ def test_headlight_false_takes_the_headlight_from_a_scene_without_lights(gl_cont
 
 def test_headlight_true_adds_to_the_scenes_lights(gl_context):
     dim = b'<DirectionalLight direction="0 -1 0" intensity="0.2"/>'
-    assert brightness(dim + b'<NavigationInfo/>') > brightness(dim) + 20
+    unlit = brightness(dim + b'<NavigationInfo headlight="false"/>')
+    assert brightness(dim + b'<NavigationInfo/>') > unlit + 20
+    assert brightness(dim) > unlit + 20, "a document's default NavigationInfo"
 
 
 def test_the_fixed_function_headlight(gl_context_compat):

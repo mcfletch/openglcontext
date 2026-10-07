@@ -4,8 +4,9 @@ X3D's ``NavigationInfo`` (ISO/IEC 19775-1, 23.4.4) is bound as viewpoints are
 (:mod:`vrml.x3d.binding`). The engine reads these of its fields:
 
 - ``headlight``: true adds a headlight to the scene's own lights, false leaves
-  it off (:func:`headlight`). A scene with no NavigationInfo has the headlight
-  only where it has no lights.
+  it off (:func:`headlight`). A document with no NavigationInfo has X3D's
+  default one, so the headlight; a scene built in code with none has the
+  headlight only where it has no lights.
 - ``type``: the navigation types the document asks for, in order of
   preference, as the engine's movement modes (:data:`MODES`). When a
   NavigationInfo is bound, the first of them the context's declared
@@ -85,13 +86,14 @@ def chosen_mode(info: Any, offered: Sequence[str]) -> Optional[str]:
     return None
 
 
-def headlight(info: Any, lights: int) -> bool:
+def headlight(info: Any, lights: int, document: bool = False) -> bool:
     """Whether a frame with `lights` of the scene's own lights has the headlight
 
-    `info` is the bound NavigationInfo, or None where the scene has none.
+    `info` is the bound NavigationInfo, or None where the scene has none;
+    `document` says the scene was read from a VRML97 or X3D document.
     """
     if info is None:
-        return lights == 0
+        return document or lights == 0
     return bool(info.headlight)
 
 

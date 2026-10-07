@@ -198,6 +198,17 @@ touches it the group sends ``isActive TRUE`` and ``collideTime``, as does
 each enabled group around it, and ``isActive FALSE`` when the touch ends
 (``OpenGLContext.physics.x3dcollision``).
 
+A ``Fog`` or ``LocalFog`` fades the colour as it is displayed, after tone
+mapping, by X3D's equation: a ``LINEAR`` fog leaves an object
+``(visibilityRange - distance) / visibilityRange`` of its own colour.
+
+In a document, an ``Appearance`` with no ``material`` is unlit: the shape is
+its texture's colour, or white. A scene built in code draws such an
+appearance in a lit neutral grey. A ``Material`` is drawn by the PBR pass
+as metallic-roughness factors converted from it, so its shading differs from
+X3D's Phong equation; ``OPENGLCONTEXT_RENDERER=vrml97`` draws it by that
+equation, without fog.
+
 An enabled ``LocalFog`` fogs the siblings in its parent group and their
 descendants in place of the bound ``Fog`` (``OpenGLContext.passes.localfog``);
 where LocalFogs nest, the deepest group's fogs what is in it. An instanced
@@ -289,8 +300,9 @@ VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
   application that overrides ``OnAnchor``.
 - The bound ``NavigationInfo`` (``OpenGLContext.move.navigationinfo``):
   ``headlight`` true adds a headlight to the scene's lights and false leaves
-  it off; a scene with no NavigationInfo has the headlight only where it has
-  no lights. When one is bound, the first of its ``type`` values the
+  it off. A document with no NavigationInfo has X3D's default one, and so
+  the headlight; a scene built in code with none has the headlight only
+  where it has no lights. When one is bound, the first of its ``type`` values the
   context's declared movement modes offer is selected: ``WALK`` is ``walk``
   or ``fps``, ``FLY`` is ``fly``, and ``EXAMINE``, ``LOOKAT`` and
   ``EXPLORE`` are ``examine``. A context with no declared modes keeps its

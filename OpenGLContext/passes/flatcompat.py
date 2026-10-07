@@ -196,7 +196,7 @@ class FlatPass( _flat.FlatPass ):
             bound += 1
             if bound >= (self.MAX_LIGHTS-1):
                 break
-        if navigationinfo.headlight( self.currentNavigation(), bound ):
+        if self.hasHeadlight( bound ):
             from OpenGLContext.scenegraph import light
             l = light.DirectionalLight( direction = (0,0,-1.0))
             glLoadMatrixf( matrix )

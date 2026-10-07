@@ -84,13 +84,20 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
     `tests/reference_images/x3d_xite`, which the regression reads. Chromium needs
     libnss3, libnspr4, libatk1.0, libatk-bridge2.0, libxdamage1 and libatspi2.0 in
     the container (the workspace's `.devcontainer/Dockerfile` installs them)
-  - [ ] found against X_ITE, still to fix: fog with a Background fades to white
-    (Figure23_5): the fog formulas are X3D's, mixed in linear light and then
-    tone-mapped and sRGB-encoded, where X3D's equations work on the colour values
-    themselves; a shape with no Material is lit grey where X3D draws it unlit, and a
-    Material's shading differs from X3D's Phong equation (brighter on the tree's
-    ground, darker on Figure23_1's) for the same reason: Material is drawn through
-    the PBR conversion X_ITE runs Scripts, so its render
+  - [ ] a `Material` is drawn by the PBR pass through its metallic-roughness
+    conversion, so its shading differs from X3D's Phong equation (brighter on the
+    tree's ground). The vrml97 pass draws X3D's equation (within 0.5% of X_ITE on
+    the tree, the Box, the cafe sign) but has no fog. Which a document's Material
+    is drawn by in the PBR pass is a decision for the maintainer
+  - [ ] a Shape with no Appearance in a document is drawn lit grey; X3D draws it
+    unlit white
+  - [x] X3D's fog curves fade the displayed colour, after tone mapping
+    (`tests/unit/test_fog_render_gl.py`); the aerial-perspective curve stays in
+    linear light
+  - [x] a document's Appearance with no material is unlit
+    (`tests/unit/test_document_unlit.py`)
+  - [x] a document with no NavigationInfo has the headlight (Figure23_1's ground
+    was lit by its 0.2 DirectionalLight alone) X_ITE runs Scripts, so its render
     of a document whose scene a Script builds shows what ours does not draw
   - [x] Background image faces: each side drawn as its own quad once its image
     has loaded, turned as X3D says, transparent parts showing the sky
@@ -131,6 +138,7 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
     `saveimage`, `pbodemo`, `shader_instanced`, `shader_instanced_mapped`,
     `transparentsorted`: an `ImageTexture` is drawn the right way up
   - `node_modify`: as `timesensorobject`, below
+  - `roads_demo`: its LINEAR Fog fades the displayed colour, as X3D says
   - `cubeback_rot`, `cubebackgroundobject`: the teapot is drawn with its own
     material; the former cube left its state behind for the teapot
   - `timesensorobject`: the TimeSensor's fraction is measured from
