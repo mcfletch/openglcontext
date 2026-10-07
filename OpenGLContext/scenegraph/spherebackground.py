@@ -14,6 +14,7 @@ from OpenGL.arrays import vbo
 from vrml import cache
 from vrml import field, protofunctions, node
 from vrml.vrml97 import nodetypes
+from vrml.x3d import binding
 from OpenGLContext import contextresources, displaylist
 import bisect
 
@@ -53,8 +54,6 @@ class _SphereBackground( object ):
     groundColor = field.newField( 'groundColor', 'MFColor', 1, [])
     skyColor = field.newField( 'skyColor', 'MFColor', 1, [[0.0, 0.0, 0.0]])
     skyAngle = field.newField( 'skyAngle', 'MFFloat', 1, [])
-    
-    bound = field.newField( 'bound', 'SFBool', 1, 0)
 
     def compile(self, mode: Any) -> Any:
         """Build the cached display list for this background object
@@ -114,8 +113,7 @@ class _SphereBackground( object ):
                 holder = mode.cache.holder(self, (first, second), LEGACY_CACHE_KEY)
                 for field in protofunctions.getFields( self ):
                     # change to any field requires a recompile
-                    if field.name != 'bound':
-                        holder.depend( self, field )
+                    holder.depend( self, field )
                 return second
             finally:
                 second.end()
@@ -180,7 +178,7 @@ class _SphereBackground( object ):
             mode's passCount == 0
         """
         if mode.passCount == 0:
-            if self.bound:
+            if binding.bound(self) is self:
                 dl = mode.cache.getData(self, LEGACY_CACHE_KEY)
                 if dl is None:
                     # This class's own compile, not whichever the MRO offers:
@@ -378,7 +376,7 @@ class _SphereBackground( object ):
             mode: RenderingPass object with matrix and projection
             clear: Whether to clear buffers before rendering
         """
-        if mode.passCount != 0 or not self.bound:
+        if mode.passCount != 0 or binding.bound(self) is not self:
             return 0
 
         # Get or compile shader data
@@ -388,8 +386,7 @@ class _SphereBackground( object ):
             if shader_data is not None:
                 holder = mode.cache.holder(self, shader_data, 'shader_bg')
                 for fld in protofunctions.getFields(self):
-                    if fld.name != 'bound':
-                        holder.depend(self, fld)
+                    holder.depend(self, fld)
 
         if clear:
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT)
@@ -479,7 +476,7 @@ class _SphereBackground( object ):
 
         return 1
 
-class SphereBackground( _SphereBackground, nodetypes.Background, nodetypes.Children, node.Node ):
+class SphereBackground( _SphereBackground, binding.Bindable, nodetypes.Background, nodetypes.Children, node.Node ):
     """Gradient-sphere Background Node
 
     This Background object (gradient sphere) provides a

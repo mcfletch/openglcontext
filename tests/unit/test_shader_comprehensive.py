@@ -427,8 +427,6 @@ class BackgroundScene(TestScene):
         )
 
         # Background with sky gradient
-        # Note: bound=1 is set directly here - the background will be bound
-        # when the context processes the scenegraph
         bg = Background(
             skyColor=[
                 (0.0, 0.0, 0.4),   # Dark blue at horizon
@@ -440,7 +438,6 @@ class BackgroundScene(TestScene):
                 (0.4, 0.5, 0.2),   # Light green
             ],
             groundAngle=[1.3],
-            bound=1,
         )
 
         light = DirectionalLight(

@@ -15,6 +15,7 @@ import OpenGLContext.scenegraph.hdrbackground as H
 from OpenGLContext.loaders import background
 from tests.unit.test_hdr_loader import encode_new_rle, encode_flat
 from vrml.vrml97 import nodetypes
+from vrml.x3d import binding
 
 
 @pytest.fixture(autouse=True)
@@ -70,8 +71,8 @@ def test_is_a_background_node():
     bg = HDRBackground(image=_panorama())
     assert isinstance(bg, nodetypes.Background)
     # carries the fields the pass reads
-    bg.bound = 1
-    assert bg.bound
+    bg.set_bind = True
+    assert binding.bound(bg) is bg
     assert hasattr(bg, 'RenderShader') and hasattr(bg, 'Render')
 
 

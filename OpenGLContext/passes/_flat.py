@@ -45,6 +45,7 @@ from OpenGLContext.debug.logs import getTraceback
 from OpenGLContext.passes.renderfailures import describe
 from vrml.vrml97 import nodetypes
 from vrml import olist
+from vrml.x3d import binding
 from vrml.x3d import nodes as x3dnodes
 from OpenGLContext.scenegraph import shaders
 from pydispatch.dispatcher import connect
@@ -1121,23 +1122,18 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         return dot(array(local + (1.0,), 'd'), tmatrix)[:3]
 
     def currentBackground( self ) -> Any:
-        """Find our current background node"""
-        paths = self.paths.get( nodetypes.Background, () )
-        for background in paths:
-            if background[-1].bound:
-                return background
-        if paths:
-            current = paths[0]
-            current[-1].bound = 1
-            return current
-        return None
+        """The bound Background's path, or None.
+
+        The background on top of the scene's stack that a drawn path reaches;
+        with none, the first drawn is bound (:func:`vrml.x3d.binding.current_path`).
+        """
+        return binding.current_path( list( self.paths.get( nodetypes.Background, () ) ) )
 
     def currentFog( self ) -> Any:
         """The bound Fog node's path, or None.
 
-        Bindable like the background: the first node that says it is bound
-        wins, and with none bound the first found is bound and used, so a scene
-        that simply contains a fog gets it without anyone sending `set_bind`.
+        Bound as the background is: the stack's topmost fog a drawn path
+        reaches, or with none the first drawn.
         """
         from OpenGLContext.scenegraph.fog import bound_fog
         return bound_fog( self.paths.get( nodetypes.Fog, () ) )

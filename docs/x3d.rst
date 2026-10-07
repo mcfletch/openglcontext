@@ -161,6 +161,8 @@ true, and ``shadowIntensity`` sets how dark they are; ``Shape.castShadow``
 false leaves a shape out of the shadow maps. See :doc:`Shadows <shadows>`.
 The engine's lights made in code are global and cast shadows by default.
 
+.. _x3d-binding:
+
 The event utilities, sequencers, followers and the interpolators X3D adds to
 VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
 ``vrml.x3d.followers``). In the engine:
@@ -169,6 +171,15 @@ VRML97's are pyvrml97's behaviours (``vrml.x3d.runtime``,
   steps a frame at a time): ``SceneGraph.clock`` is what pyvrml97's timed
   nodes read, and the engine's own timed classes read it in no scene too.
 - A ``TimeTrigger`` sends the engine's time.
+- The background, fog and viewpoint the pass uses are the bound ones, on
+  X3D's bind stacks (``vrml.x3d.binding``): of the nodes the scene draws, the
+  topmost on its stack, and with none bound the first. ``set_bind``, sent by
+  a route or set from Python, chooses another, and ``isBound`` and
+  ``bindTime`` are sent as X3D says. The engine's own backgrounds
+  (``SimpleBackground``, ``SphereBackground``, ``CubeBackground``,
+  ``HDRBackground``) are bindable in the same way. The next-viewpoint key
+  binds the viewpoint after the bound one
+  (``viewpointbinding.next_viewpoint``).
 - A follower moves a step each frame on the engine's clock while it is
   moving, queued on its window's render queue.
 - A ``KeySensor`` hears every key its window receives, including keys a

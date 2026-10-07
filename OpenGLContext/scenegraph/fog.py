@@ -1,8 +1,6 @@
-"""VRML97's ``Fog`` node, rendered at last.
+"""VRML97's and X3D's ``Fog`` node
 
-pyvrml97 has declared ``Fog`` since the beginning and the render pass has
-collected its paths for nearly as long; nothing ever drew one.  This is that
-node, working: bind it and the scene fades into :attr:`Fog.color` over
+Bound, it fades the scene into :attr:`Fog.color` over
 :attr:`Fog.visibilityRange`.
 
 **Why a node rather than a number on the context.** Fog is a property of the
@@ -29,6 +27,7 @@ from typing import Any, Optional
 import numpy as np
 from vrml import field
 from vrml.vrml97 import basenodes
+from vrml.x3d import binding
 
 #: No fog: what a node with no ``visibilityRange`` produces, and the value the
 #: shader is left at for a scene that has none.
@@ -60,13 +59,6 @@ class Fog(basenodes.Fog):
     """
 
     PROTO = 'Fog'
-
-    #: Which of a scene's fogs is in force.  VRML97 gives a bindable node the
-    #: ``set_bind`` event and the ``isBound`` eventOut but no field holding the
-    #: answer, so each bindable here declares one -- the backgrounds do the
-    #: same, and for the same reason: an eventOut is something you send, not
-    #: something you can read back.
-    bound = field.newField('bound', 'SFBool', 1, 0)
 
     UI_HINTS = {
         'color': {'label': 'Colour'},
@@ -110,15 +102,7 @@ def _scale_of(matrix: Any) -> float:
 def bound_fog(paths: Any) -> Optional[Any]:
     """The bound ``Fog`` path among ``paths``, or None.
 
-    Follows what :meth:`~OpenGLContext.passes._flat.FlatPass.currentBackground`
-    does for backgrounds: the first node that says it is bound wins, and with
-    none bound the first found is bound and used -- so a scene that simply
-    contains a fog gets it without anyone having to send ``set_bind``.
+    The fog on top of the scene's stack that a path reaches; with none, the
+    first path's fog is bound (:func:`vrml.x3d.binding.current_path`).
     """
-    for path in paths or ():
-        if path[-1].bound:
-            return path
-    for path in paths or ():
-        path[-1].bound = 1
-        return path
-    return None
+    return binding.current_path(list(paths or ()))

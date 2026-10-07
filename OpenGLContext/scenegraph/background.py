@@ -4,6 +4,7 @@ from typing import Any
 from OpenGLContext.scenegraph import cubebackground, spherebackground, imagetexture
 from vrml import field
 from vrml.vrml97 import basenodes
+from vrml.x3d import binding
 
 ##print 'mros:'
 ##print basenodes.Background.__mro__
@@ -72,7 +73,7 @@ class Background(
         background answers, whichever one it is.
         """
         if mode.passCount == 0:
-            if self.bound:
+            if binding.bound(self) is self:
                 drawn = spherebackground._SphereBackground.Render( self, mode, clear=1)
                 if (
                     self.right.components and
@@ -101,7 +102,7 @@ class Background(
         Answers 1 where something was drawn and 0 where nothing was.
         """
         if mode.passCount == 0:
-            if self.bound:
+            if binding.bound(self) is self:
                 drawn = spherebackground._SphereBackground.RenderShader(
                     self, mode, clear=True)
                 if (

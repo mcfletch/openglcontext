@@ -976,13 +976,9 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
         """
 
     def OnNextViewpoint(self, event: Any = None) -> None:
-        """Go to the next viewpoint for the scenegraph"""
-        sg = self.getSceneGraph()
-        if sg:
-            current = getattr(sg, "boundViewpoint", None)
-            if current:
-                current.isBound = False
-                current.set_bound = False
+        """Bind the scene's next viewpoint after the bound one"""
+        from OpenGLContext.passes.viewpointbinding import next_viewpoint  # noqa: PLC0415 cycle: passes import context
+        next_viewpoint(self)
         self.triggerRedraw(1)
 
     def setupThreading(self) -> None:

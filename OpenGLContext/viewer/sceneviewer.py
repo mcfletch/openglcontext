@@ -838,7 +838,7 @@ class SceneViewerMixin( CaptionMixin,
         if index is None:
             commentary.warn("No camera matching %r; using the first.\n" % selector)
             return
-        self.viewpoints[index].isBound = True
+        self.viewpoints[index].set_bind = True
         self.cameraIndex = index
 
     def cycleViewpoint(self, delta: int) -> None:
@@ -856,12 +856,7 @@ class SceneViewerMixin( CaptionMixin,
         except ValueError:
             index = self.cameraIndex
         following = (index + delta) % len(self.viewpoints)
-        # Truth rather than `is not None`: an SFNode that holds nothing holds
-        # the NULL node, and writing `isBound` onto that writes it onto the
-        # one NULL every empty node field in the process shares.
-        if current:
-            current.isBound = False
-        self.viewpoints[following].isBound = True
+        self.viewpoints[following].set_bind = True
         self.cameraIndex = following
         self.moveAvatarToViewpoint(self.viewpoints[following])
         self.updateOverlay()

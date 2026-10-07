@@ -37,6 +37,7 @@ from OpenGL.arrays import vbo
 
 from vrml import field, fieldtypes, node
 from vrml.vrml97 import nodetypes
+from vrml.x3d import binding
 
 from OpenGLContext import context, contextresources
 from OpenGLContext.loaders import background
@@ -166,7 +167,6 @@ class _HDRBackground(object):
 
     url = HDRURLField('url')
     exposure = field.newField('exposure', 'SFFloat', 1, 1.0)
-    bound = field.newField('bound', 'SFBool', 1, 0)
 
     # Load-thread / render-thread contract for _equirect and _render_data:
     # the daemon loader thread (HDRURLField) decodes off the render thread and
@@ -353,7 +353,7 @@ class _HDRBackground(object):
     # -- rendering ---------------------------------------------------------
     def _render(self, mode: Any, clear: bool = True,
                 shader_mode: bool = False) -> int:
-        if getattr(mode, 'passCount', 0) != 0 or not self.bound:
+        if getattr(mode, 'passCount', 0) != 0 or binding.bound(self) is not self:
             return 0
         self._drain_stale_render_data()   # free GL objects a prior env change queued
         if self._equirect is None:
@@ -437,7 +437,7 @@ class _HDRBackground(object):
                             shader_mode=bool(getattr(mode, 'shader_mode', False)))
 
 
-class HDRBackground(_HDRBackground, nodetypes.Background, nodetypes.Children,
+class HDRBackground(_HDRBackground, binding.Bindable, nodetypes.Background, nodetypes.Children,
                     node.Node):
     """Equirectangular Radiance-HDR skybox + IBL environment Background node.
 
@@ -447,7 +447,8 @@ class HDRBackground(_HDRBackground, nodetypes.Background, nodetypes.Children,
             OpenEXR ``.exr`` panorama (the latter with ``OpenGLContext[exr]``);
             the first that decodes is used. Loaded asynchronously and cached.
         exposure -- SFFloat multiplier on the sky's brightness (default 1.0).
-        bound -- SFBool, whether this is the active background.
+        set_bind, isBound, bindTime -- X3D's binding (:mod:`vrml.x3d.binding`):
+            the background on top of its scene's stack is the one drawn.
 
     The loaded panorama is registered as the IBL probe environment (see
     :mod:`OpenGLContext.passes.ibl`), so with full IBL active, scene metals reflect

@@ -26,21 +26,21 @@ sg = sceneGraph(
                     # sky-only
                     skyColor = colors[:4],
                     skyAngle=[.5, 1, 1.5],
-                    bound = 1,
+                    set_bind = True,
                 ),
                 SphereBackground(
                     # ground-only
                     skyColor = [],
                     groundColor = colors[:3],
                     groundAngle=[1.3,1.58],
-                    bound = 1,
+                    set_bind = True,
                 ),
                 SphereBackground(
                     skyColor = colors[-4:],
                     skyAngle=[.5, 1, 1.75],
                     groundColor = colors[:3],
                     groundAngle=[1.3,1.58],
-                    bound = 1,
+                    set_bind = True,
                 ),
             ],
         ),

@@ -171,9 +171,5 @@ def _bind(camera: SceneCamera) -> bool:
     viewpoint, path = camera.viewpoint, camera.path
     if viewpoint is None or path is None:
         return False
-    graph = path[0]
-    bound = getattr(graph, 'boundViewpoint', None)
-    if bound and bound is not viewpoint:
-        bound.isBound = False
-    viewpoint.isBound = True
+    viewpoint.set_bind = True
     return True

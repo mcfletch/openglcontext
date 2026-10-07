@@ -78,7 +78,7 @@ def _band(image, top, bottom):
 
 def _bound(**fields):
     background = Background(**fields)
-    background.bound = 1
+    background.set_bind = True
     return background
 
 
@@ -155,7 +155,6 @@ class TestWhenThereIsNothingToDraw:
     @pytest.mark.usefixtures('gl_context')
     def test_an_unbound_background_draws_nothing(self):
         background = Background(skyColor=[RED])
-        background.bound = 0
         assert _frame(background, clear=False).max() == 0
 
     @pytest.mark.usefixtures('gl_context')
@@ -205,7 +204,6 @@ class TestWhatItAnswers:
     @pytest.mark.usefixtures('gl_context')
     def test_an_unbound_background_answers_zero(self):
         background = Background(skyColor=[RED])
-        background.bound = 0
         assert background.RenderShader(mode=_Mode(), clear=False) == 0
 
     @pytest.mark.usefixtures('gl_context')
@@ -222,7 +220,6 @@ class TestWhatItAnswers:
         background = _bound(skyColor=[RED, BLUE], skyAngle=[math.pi / 2.0])
         assert background.Render(mode=_Mode(), clear=False) == 1
         unbound = Background(skyColor=[RED])
-        unbound.bound = 0
         assert unbound.Render(mode=_Mode(), clear=False) == 0
 
 

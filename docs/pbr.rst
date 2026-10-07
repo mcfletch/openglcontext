@@ -732,7 +732,9 @@ the same way it finds the background. No other setup is needed:
 <https://www.web3d.org/documents/specifications/14772/V2.0/part1/nodesRef.html#Fog>`__).
 Because fog is a node, it belongs to a place in the scene: it binds and stacks
 like a viewpoint. Under water, a smoke-filled room and clear air outside can
-be three ``Fog`` nodes in one scene, with one in force at a time.
+be three ``Fog`` nodes in one scene, with one in force at a time:
+``fog.set_bind = True`` puts one in force, and ``set_bind = False`` returns to
+the one it covered (:ref:`X3D binding <x3d-binding>`).
 
 Fog is applied by the PBR shader. The VRML97 core shader does not apply it.
 

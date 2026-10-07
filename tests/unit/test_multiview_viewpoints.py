@@ -165,7 +165,7 @@ class TestLookingThroughOne:
     def test_a_view_drawn_through_the_window_binds_the_viewpoint(self):
         first, second = Viewpoint(description='a'), Viewpoint(description='b')
         graph, _pass = _published(first, second)
-        first.isBound = True
+        first.set_bind = True
         graph.boundViewpoint = first
         view = View()
         assert look_through(view, scene_cameras(graph)[1])

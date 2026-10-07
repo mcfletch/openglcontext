@@ -90,20 +90,19 @@ class TestCoreViewpointBridge:
 
     def test_binds_preselected_isbound(self):
         sg, vps = self._scene()
-        vps[2].isBound = True
+        vps[2].set_bind = True
         sg.viewpointPaths = tuple(_Path(vp) for vp in vps)
         ctx = FakeContext(sg)
         viewpointbinding.bind_scene_viewpoint(ctx)
         assert sg.boundViewpoint is vps[2]
         assert ctx.platform.position == (2.0, 0.0, 0.0, 1.0)
 
-    def test_cycles_to_next_when_unbound(self):
+    def test_cycles_to_the_next(self):
         sg, vps = self._scene()
         sg.viewpointPaths = tuple(_Path(vp) for vp in vps)
         ctx = FakeContext(sg)
         viewpointbinding.bind_scene_viewpoint(ctx)          # binds cam0
-        # emulate OnNextViewpoint: unbind current
-        sg.boundViewpoint.isBound = False
+        viewpointbinding.next_viewpoint(ctx)
         viewpointbinding.bind_scene_viewpoint(ctx)          # advances to cam1
         assert sg.boundViewpoint is vps[1]
 

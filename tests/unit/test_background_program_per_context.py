@@ -64,13 +64,13 @@ def _panorama(h=32, w=64):
 def _gradient_sphere():
     background = Background(skyColor=[(1, 0, 0), (0, 0, 1)],
                             skyAngle=[math.pi / 2.0])
-    background.bound = 1
+    background.set_bind = True
     return background
 
 
 def _panorama_background():
     background = HDRBackground(image=_panorama())
-    background.bound = 1
+    background.set_bind = True
     return background
 
 

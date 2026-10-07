@@ -7,14 +7,16 @@ paths to the scenegraph each frame as ``SceneGraph.viewpointPaths``, which is
 where anything outside the pass reads the scene's cameras from, and tells the
 context when the set has changed.
 
-:func:`bind_scene_viewpoint` bridges the standard VRML97 binding mechanism into
-the core-profile pass, which takes its camera from the view platform only.
+:func:`bind_scene_viewpoint` moves the view platform to the viewpoint X3D's
+bind stack has bound, for the core-profile pass, which takes its camera from
+the view platform only; :func:`next_viewpoint` binds the next.
 """
 
 from collections.abc import Sequence
 from typing import Any
 
 from vrml.vrml97 import nodetypes
+from vrml.x3d import binding
 import logging
 
 log = logging.getLogger(__name__)
@@ -43,15 +45,14 @@ def publish_viewpoints(context: Any, pass_: Any) -> None:
 
 
 def bind_scene_viewpoint(context: Any) -> None:
-    """Move ``context``'s platform to the scene's currently-bound Viewpoint.
+    """Move ``context``'s platform to the scene's bound Viewpoint.
 
-    The core-profile FlatPass drives the camera purely from the view platform and
-    does not itself walk the scenegraph to process Viewpoint bindables. This
-    bridges the standard VRML97 viewpoint-binding mechanism -- ``isBound`` /
-    ``SceneGraph.boundViewpoint``, cycled by ``Context.OnNextViewpoint`` -- into the
-    core profile, so any Viewpoint (from a VRML world or synthesised for a glTF
-    camera) becomes bindable there too. It only teleports when the bound viewpoint
-    changes, so it never fights ordinary walk-around navigation.
+    The core-profile FlatPass drives the camera from the view platform alone.
+    This moves the platform to the viewpoint X3D's bind stack has on top
+    (:func:`vrml.x3d.binding.current_path`, which binds the first where none
+    is), and only when that changes, so it never fights ordinary navigation.
+    ``SceneGraph.boundViewpoint`` is the viewpoint the platform was last moved
+    to.
 
     The paths are the ones :func:`publish_viewpoints` gave the scenegraph, so a
     Viewpoint that arrives after the first frame is as bindable as one that was
@@ -60,25 +61,27 @@ def bind_scene_viewpoint(context: Any) -> None:
     sg = context.getSceneGraph()
     if sg is None:
         return
-    paths = list(getattr(sg, 'viewpointPaths', ()))
-    if not paths:
+    view_path = binding.current_path(list(getattr(sg, 'viewpointPaths', ())))
+    if view_path is None:
         return
-    view = view_path = None
-    for path in paths:
-        if getattr(path[-1], 'isBound', None):
-            view, view_path = path[-1], path
-    if view is None:
-        bound = getattr(sg, 'boundViewpoint', None)
-        if bound is not None:
-            for i, path in enumerate(paths):
-                if path[-1] is bound:
-                    view_path = paths[(i + 1) % len(paths)]
-                    view = view_path[-1]
-                    break
-        if view is None:
-            view_path = paths[0]
-            view = view_path[-1]
-        view.isBound = True
+    view = view_path[-1]
     if getattr(sg, 'boundViewpoint', None) is not view:
         view.moveTo(view_path, context)
         sg.boundViewpoint = view
+
+
+def next_viewpoint(context: Any, step: int = 1) -> Any:
+    """Bind the viewpoint `step` along the scene's from the bound one; that viewpoint
+
+    None where the scene has no viewpoints.
+    """
+    sg = context.getSceneGraph()
+    paths = list(getattr(sg, 'viewpointPaths', ())) if sg is not None else []
+    if not paths:
+        return None
+    views = [path[-1] for path in paths]
+    current = binding.bound(views[0])
+    index = next((i for i, view in enumerate(views) if view is current), -step)
+    following = views[(index + step) % len(views)]
+    following.set_bind = True
+    return following

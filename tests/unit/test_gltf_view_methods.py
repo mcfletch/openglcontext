@@ -881,7 +881,7 @@ class TestCycleViewpointPhysics:
         inst.viewpoints = [vp0, vp1]
         inst._cameraNames = ['front', 'side']
         inst.cameraIndex = 0
-        vp0.isBound = True
+        vp0.set_bind = True
         moved = {}
         inst.physicsPlatform = types.SimpleNamespace(
             yaw=0.0, pitch=0.0,

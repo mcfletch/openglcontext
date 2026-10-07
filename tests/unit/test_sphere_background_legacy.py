@@ -50,7 +50,7 @@ def _frame(near):
     GL.glMatrixMode(GL.GL_MODELVIEW)
     GL.glLoadIdentity()
     background = Background(skyColor=[SKY])
-    background.bound = 1
+    background.set_bind = True
     background.Render(mode=_Mode(), clear=True)
     raw = GL.glReadPixels(0, 0, SIZE, SIZE, GL.GL_RGB, GL.GL_UNSIGNED_BYTE)
     return np.frombuffer(raw, dtype=np.uint8).reshape(SIZE, SIZE, 3)

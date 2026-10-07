@@ -93,7 +93,7 @@ def _render_frame(bg, size=128):
 @pytest.mark.usefixtures('gl_context')
 def test_skybox_shows_sky_on_top_ground_on_bottom():
     bg = HDRBackground(image=_panorama())
-    bg.bound = 1
+    bg.set_bind = True
     img = _render_frame(bg).astype(int)
     top = img[:40].reshape(-1, 3).mean(0)
     bottom = img[-40:].reshape(-1, 3).mean(0)
@@ -108,12 +108,12 @@ def test_skybox_shows_sky_on_top_ground_on_bottom():
 @pytest.mark.usefixtures('gl_context')
 def test_exposure_brightens_the_sky():
     dim = HDRBackground(image=_panorama())
-    dim.bound = 1
+    dim.set_bind = True
     dim.exposure = 0.25
     dim_top = _render_frame(dim).astype(int)[:40].reshape(-1, 3).mean(0).sum()
 
     bright = HDRBackground(image=_panorama())
-    bright.bound = 1
+    bright.set_bind = True
     bright.exposure = 2.0
     bright_top = _render_frame(bright).astype(int)[:40].reshape(-1, 3).mean(0).sum()
 
@@ -129,7 +129,7 @@ def test_skybox_falls_back_to_ldr_without_float_support(monkeypatch):
     monkeypatch.setattr(ibl, 'probe_float_render_capability',
                         lambda _force=False: False)
     bg = HDRBackground(image=_panorama())
-    bg.bound = 1
+    bg.set_bind = True
     img = _render_frame(bg).astype(int)
     top = img[:40].reshape(-1, 3).mean(0)
     bottom = img[-40:].reshape(-1, 3).mean(0)
@@ -141,7 +141,7 @@ def test_skybox_falls_back_to_ldr_without_float_support(monkeypatch):
 @pytest.mark.usefixtures('gl_context')
 def test_render_clears_when_requested():
     bg = HDRBackground(image=_panorama())
-    bg.bound = 1
+    bg.set_bind = True
     assert bg.RenderShader(mode=_Mode(), clear=True) == 1   # clear=True path
 
 
@@ -150,7 +150,7 @@ def test_render_restores_depth_and_cull_state():
     glEnable(GL_DEPTH_TEST)
     glEnable(GL_CULL_FACE)
     bg = HDRBackground(image=_panorama())
-    bg.bound = 1
+    bg.set_bind = True
     bg.RenderShader(mode=_Mode(), clear=False)
     # both were enabled going in, so both must be re-enabled on the way out
     assert glIsEnabled(GL_DEPTH_TEST)
@@ -164,14 +164,14 @@ def test_render_legacy_mode_toggles_lighting():
         shader_mode = False       # exercises the glDisable/glEnable(GL_LIGHTING) arms
 
     bg = HDRBackground(image=_panorama())
-    bg.bound = 1
+    bg.set_bind = True
     assert bg._render(_LegacyMode(), clear=False) == 1
 
 
 @pytest.mark.usefixtures('gl_context')
 def test_render_via_compat_render_method():
     bg = HDRBackground(image=_panorama())
-    bg.bound = 1
+    bg.set_bind = True
     assert bg.Render(mode=_Mode(), clear=False) == 1     # Render() delegates to _render
 
 
@@ -188,21 +188,21 @@ def test_render_skipped_on_secondary_pass():
         passCount = 1
 
     bg = HDRBackground(image=_panorama())
-    bg.bound = 1
+    bg.set_bind = True
     assert bg._render(_SecondPass()) == 0
 
 
 @pytest.mark.usefixtures('gl_context')
 def test_render_skipped_without_panorama():
     bg = HDRBackground()                        # no image
-    bg.bound = 1
+    bg.set_bind = True
     assert bg._render(_Mode()) == 0
 
 
 @pytest.mark.usefixtures('gl_context')
 def test_render_skipped_when_compile_yields_nothing():
     bg = HDRBackground(image=_panorama())
-    bg.bound = 1
+    bg.set_bind = True
     bg.compile = lambda _mode=None: None         # simulate a compile that produced nothing
     assert bg._render(_Mode()) == 0
 
@@ -224,7 +224,7 @@ def test_dispose_frees_compiled_skybox():
 @pytest.mark.usefixtures('gl_context')
 def test_free_render_data_deletes_real_objects():
     bg = HDRBackground(image=_panorama())
-    bg.bound = 1
+    bg.set_bind = True
     _render_frame(bg)                           # binds every object it made
     (render_data,) = bg._render_data.values()
     tex, vert_vbo, index_vbo, _program, _locations, vao = render_data

@@ -6,6 +6,7 @@ from typing import Any
 from OpenGLContext.arrays import array
 from vrml import field, protofunctions, fieldtypes, node
 from vrml.vrml97 import basenodes, nodetypes
+from vrml.x3d import binding
 
 from OpenGL.GL import *
 from OpenGL.GL import shaders
@@ -50,8 +51,6 @@ class _CubeBackground( object ):
     leftUrl = URLField( 'leftUrl')
     frontUrl = URLField( 'frontUrl')
     bottomUrl = URLField( 'bottomUrl')
-    
-    bound = field.newField( 'bound', 'SFBool', 1, 0)
     
     def Render( self, mode: Any, clear: int = 1 ) -> int:
         """Render the cube background
@@ -192,7 +191,7 @@ class _CubeBackground( object ):
                 holder.depend( self, key+'Url' )
         return render_data
 
-class CubeBackground( _CubeBackground, nodetypes.Background, nodetypes.Children, node.Node  ):
+class CubeBackground( _CubeBackground, binding.Bindable, nodetypes.Background, nodetypes.Children, node.Node  ):
     """Image-cube Background node
 
     The CubeBackground node implements 1/2 of the VRML97
