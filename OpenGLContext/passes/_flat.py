@@ -1163,7 +1163,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         """Whether the scene was read from a VRML97 or X3D document, which is
         lit as those standards say rather than as the engine lights a scene
         built in code"""
-        return isinstance( self.scene, X3DScene )
+        return isinstance( getattr( self, 'scene', None ), X3DScene )
 
     def hasHeadlight( self, lights: int ) -> bool:
         """Whether a frame with ``lights`` of the scene's own lights adds the headlight
@@ -2009,12 +2009,17 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
     def sceneAmbient( self ) -> tuple[float, float, float]:
         """The flat fill light the shader adds to everything.
 
-        A glTF scene is lit by its image-based and punctual lights alone, and a
-        flat fill lightens every shadow of a scene lit that way, so a glTF
+        None in a VRML97 or X3D document, whose ambient light is each light's
+        ``ambientIntensity``. A glTF scene is lit by its image-based and
+        punctual lights alone, and a flat fill lightens every shadow of a
+        scene lit that way, so a glTF
         viewer sets ``context.gltf_scene_ambient`` low or to zero. It is one
         grey level or an RGB colour (extra components are ignored); anything
         else is reported once and :attr:`DEFAULT_AMBIENT` stands.
         """
+        if self.sceneIsDocument():
+            # X3D's ambient light is each light's ambientIntensity alone
+            return (0.0, 0.0, 0.0)
         amb = getattr(getattr(self, 'context', None), 'gltf_scene_ambient', None)
         if amb is None:
             return self.DEFAULT_AMBIENT

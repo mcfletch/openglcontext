@@ -114,6 +114,12 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] a viewpoint, background, fog or navigation in an Inline's file is not
     bound first (pyvrml97 `binding.current_path`; 19775-1 7.2.2 rule 4):
     Figure20_09 opened on the vaulted ceiling's own viewpoint
+  - [x] the PBR pass draws a document's Material by X3D's Phong equation
+    (`PHONG_BIT`, `phong_factors`, `_phong_inc.glsl` shared with the VRML97 pass);
+    each light's `ambientIntensity` (`lightAmbientIntensity`), no flat fill in a
+    document; an Inline holds the scene its nodes were read into, which they
+    hold only weakly (an Inline's nodes had no root, so were not a document's,
+    and an Inline among them could not resolve a relative url)
   - [ ] whole corpus against X_ITE (2026-10-07): median 4.9% of pixels unlike
     with the PBR pass, 1.8% with the VRML97 pass, whose worst were the fog
     documents it did not fog;

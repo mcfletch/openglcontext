@@ -43,3 +43,12 @@ def test_anything_else_is_reported_once_and_the_fill_stands(value, caplog):
         assert passing.sceneAmbient() == (0.2, 0.2, 0.2)
         assert passing.sceneAmbient() == (0.2, 0.2, 0.2)
     assert len([r for r in caplog.records if 'gltf_scene_ambient' in r.getMessage()]) == 1
+
+
+def test_a_document_has_no_fill():
+    """X3D's ambient light is each light's ambientIntensity alone"""
+    from OpenGLContext.scenegraph.scenegraph import X3DScene  # noqa: PLC0415 kept with its use
+    passing = FlatPass.__new__(FlatPass)
+    passing.context = _Context(None)
+    passing.scene = X3DScene()
+    assert passing.sceneAmbient() == (0.0, 0.0, 0.0)

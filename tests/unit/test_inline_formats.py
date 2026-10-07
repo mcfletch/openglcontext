@@ -124,3 +124,34 @@ def test_a_scene_read_after_the_world_is_drawn_is_drawn(gl_context, tmp_path):
         scene.children[1].load = False
         context.OnDraw(force=1)
         assert drawn_image(context)[h // 2, w // 2].sum() < 60
+
+
+def test_an_inlined_documents_nodes_keep_their_scene(tmp_path):
+    """The scene its nodes are rooted in lives as long as the Inline: it is what
+    says they are a document's, and the base an Inline among them resolves
+    its url against"""
+    import gc  # noqa: PLC0415 kept with its use
+
+    from vrml import protofunctions  # noqa: PLC0415 kept with its use
+    from vrml.x3d.scene import X3DScene  # noqa: PLC0415 kept with its use
+    (tmp_path / 'part.x3d').write_bytes(PART)
+    (tmp_path / 'world.x3d').write_bytes(document('part.x3d'))
+    inline = inlined(Loader.load(str(tmp_path / 'world.x3d')))
+    gc.collect()
+    shape = inline.renderedChildren()[0]
+    assert isinstance(protofunctions.root(shape), X3DScene)
+    assert protofunctions.root(shape.appearance) is protofunctions.root(shape)
+
+
+def test_an_inline_in_an_inlined_document_reads_beside_it(tmp_path):
+    (tmp_path / 'parts').mkdir()
+    (tmp_path / 'parts' / 'part.x3d').write_bytes(PART)
+    (tmp_path / 'parts' / 'middle.x3d').write_bytes(document('part.x3d'))
+    (tmp_path / 'world.x3d').write_bytes(document('parts/middle.x3d'))
+    import gc  # noqa: PLC0415 kept with its use
+    middle = inlined(Loader.load(str(tmp_path / 'world.x3d')))
+    gc.collect()
+    inner = middle.renderedChildren()[0]
+    inner.load = True
+    settle()
+    assert [type(child) for child in inner.renderedChildren()] == [basenodes.Shape]

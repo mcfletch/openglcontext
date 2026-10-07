@@ -894,6 +894,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         light_range: float = 0.0,
         light_radius: float = 0.0,
         attenuation_floor: float = 1.0,
+        ambient_intensity: float = 0.0,
         program: Optional[int] = None
     ) -> None:
         """Set parameters for a single light.
@@ -914,6 +915,8 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
             attenuation_floor: the least the attenuation divides by: 1 for
                 X3D's lights, which never light more than their intensity,
                 and near 0 for glTF's, which fall off inverse-square
+            ambient_intensity: X3D's ambientIntensity, the light's ambient
+                term in the Phong equation; 0 for a glTF light
             program: Shader program to set uniforms on (defaults to main lit program)
         """
         if index >= self.MAX_LIGHTS:
@@ -930,6 +933,7 @@ class VRML97ShaderProgram(_ShadowUniformMixin):
         self._set_uniform1f(f'lightRange[{index}]', light_range, program)
         self._set_uniform1f(f'lightRadius[{index}]', light_radius, program)
         self._set_uniform1f(f'lightAttenuationFloor[{index}]', attenuation_floor, program)
+        self._set_uniform1f(f'lightAmbientIntensity[{index}]', ambient_intensity, program)
         self._set_uniform1f(f'lightIntensity[{index}]', intensity, program)
         self._set_uniform1f(f'lightBeamWidth[{index}]', beam_width, program)
         self._set_uniform1f(f'lightCutOffAngle[{index}]', cutoff_angle, program)
@@ -1243,6 +1247,13 @@ def _attenuation_floor(light_node: Any) -> float:
     return GLTF_ATTENUATION_FLOOR if hasattr(light_node, '_gltf_range') else 1.0
 
 
+def _ambient_intensity(light_node: Any) -> float:
+    """`light_node`'s ambientIntensity; 0 for a glTF light, which has none"""
+    if hasattr(light_node, '_gltf_range'):
+        return 0.0
+    return float(getattr(light_node, 'ambientIntensity', 0.0) or 0.0)
+
+
 def configure_light_from_node(
     shader_program: VRML97ShaderProgram,
     index: int,
@@ -1312,6 +1323,7 @@ def configure_light_from_node(
             color=color,
             direction=direction,
             intensity=intensity,
+            ambient_intensity=_ambient_intensity(light_node),
             program=program,
         )
 
@@ -1338,6 +1350,7 @@ def configure_light_from_node(
             light_range=float(getattr(light_node, '_gltf_range', 0.0)),
             light_radius=_eye_radius(light_node, modelview_matrix),
             attenuation_floor=_attenuation_floor(light_node),
+            ambient_intensity=_ambient_intensity(light_node),
             program=program,
         )
 
@@ -1356,6 +1369,7 @@ def configure_light_from_node(
             light_range=float(getattr(light_node, '_gltf_range', 0.0)),
             light_radius=_eye_radius(light_node, modelview_matrix),
             attenuation_floor=_attenuation_floor(light_node),
+            ambient_intensity=_ambient_intensity(light_node),
             program=program,
         )
 

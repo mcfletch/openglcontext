@@ -50,11 +50,16 @@ as it was:
 A ``ContextDefinition`` carries the choice as its ``renderer`` field, whose
 default is the environment's value. The class attribute outranks the field.
 
-A VRML97 ``Material`` drawn by the PBR renderer is converted: its diffuse
-colour becomes the base colour and its shininess sets the roughness. Lighting
-is computed in linear light and the scene has a flat ambient term, so such a
-scene is paler than under the VRML97 renderer, and a floor the lights do not
-reach is dark grey rather than black.
+A ``Material`` read from a VRML97 or X3D document is drawn by X3D's Phong
+equation (ISO/IEC 19775-1, 17.2.2.5): the emissive colour, plus for each light
+its ``ambientIntensity`` times the Material's ``ambientIntensity`` and diffuse
+colour, its diffuse and its Blinn-Phong specular terms, on the colour values as
+given and without the tone map. A ``Color`` node replaces the diffuse colour, a
+texture multiplies it, and fog is X3D's. Image-based lighting, normal and
+occlusion maps, lightmaps and planar reflections are not read for such a
+shape. A ``Material`` built in code is converted instead: its diffuse colour
+becomes the base colour and its shininess sets the roughness, lit in linear
+light with a flat ambient term.
 
 PBR needs the core profile, which is the default. If the PBR renderer cannot
 start, the plain :doc:`core renderer <renderpasses>` is used instead.
@@ -301,8 +306,9 @@ The most used fields are ``baseColor``, ``metallic``, ``roughness``,
 ``emissiveColor``, ``emissiveStrength``, ``clearcoat`` /
 ``clearcoatRoughness``, ``sheenColor`` / ``sheenRoughness``, ``transmission``,
 and ``ior``. How transparency is drawn is the appearance's, not the
-material's (see below). VRML97 ``Material`` nodes are converted to
-metallic/roughness automatically, so a scene can mix the two without changes.
+material's (see below). VRML97 ``Material`` nodes built in code are converted
+to metallic/roughness automatically, so a scene can mix the two without
+changes; a document's are drawn by X3D's Phong equation (above).
 
 A VRML97 ``Appearance`` keeps its maps beside the material rather than in it,
 and the PBR renderer reads them from there: the appearance's ``texture``

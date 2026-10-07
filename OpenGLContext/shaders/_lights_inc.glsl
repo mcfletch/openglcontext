@@ -28,6 +28,7 @@ uniform float lightRadius[MAX_LIGHTS];        // VRML97/X3D radius: no light pas
 uniform float lightBeamWidth[MAX_LIGHTS];     // spot inner cone (radians)
 uniform float lightCutOffAngle[MAX_LIGHTS];   // spot outer cone (radians)
 uniform float lightIntensity[MAX_LIGHTS];
+uniform float lightAmbientIntensity[MAX_LIGHTS]; // X3D's ambientIntensity; 0 for glTF's and the headlight
 uniform vec3  sceneAmbient;
 
 // The RGBA8 object-id encode is shared with the unlit/point/line shaders too.

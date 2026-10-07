@@ -154,6 +154,10 @@ Material _M;
 // Bit 64 of that mask: the vertex colours are light worked out when the world
 // was built rather than a tint on the surface.
 #define bakedLightMode       ((materialFlags & 64) != 0)
+// Bit 128: an X3D Material drawn by X3D's Phong equation. Its colours are the
+// Material's own, ambientIntensity is in the metallic slot and shininess in
+// the roughness slot (pbrpass.phong_factors).
+#define phongMode            ((materialFlags & 128) != 0)
 #define iridescenceFactor    _M.iridescence.x
 #define iridescenceIor       _M.iridescence.y
 #define iridescenceThickMin  _M.iridescence.z
@@ -495,6 +499,8 @@ uint effectiveObjectId() {
 // per-slot cubes). Needs the enums (above), the vPosition/vNormal varyings and
 // eyeToWorld, all declared before this point.
 #include "_shadow_inc.glsl"
+// X3D's Phong terms per light, for phongMode
+#include "_phong_inc.glsl"
 
 // sRGB decode alias kept local so callers read as intent ("decode this texel").
 vec3 toLinear(vec3 c) { return sRGBToLinear(c); }
@@ -669,6 +675,37 @@ void main() {
                    : (fogMode == 1 ? linearToSRGB(fogged(albedo)) : fogged(linearToSRGB(albedo)));
         fragColor = vec4(unlit, alpha);
         fragObjectId = encodeObjectId(effectiveObjectId());   // unlit is still pickable
+        return;
+    }
+
+    // X3D's Phong equation (19775-1, 17.2.2.5) on the colour values as given:
+    // a Color node replaces the diffuse colour, a texture multiplies it, and
+    // the sum is displayed as it is, without the tone map.
+    if (phongMode) {
+        vec3 diffuse = (hasVertexColor ? vColor.rgb : baseColorFactor)
+                     * (hasBaseColor ? baseTex.rgb : vec3(1.0));
+        vec3 N = normalize(vNormal);
+        if (!gl_FrontFacing) N = -N;
+        vec3 V = normalize(toViewer(vPosition));
+        float shadows[MAX_LIGHTS];
+        resolveShadows(shadows);
+        vec3 color = emissiveFactor
+                   * (hasEmissive ? texture(emissiveTexture, uvFor(CH_EMISSIVE)).rgb : vec3(1.0))
+                   + metallicFactor * diffuse * sceneAmbient;
+        for (int i = 0; i < MAX_LIGHTS; i++) {
+            if (i >= numLights) break;
+            if ((lightsOff & (1 << i)) != 0) continue;   // a zone's light, off for this draw
+            color += phongLight(i, N, V, vPosition, diffuse, metallicFactor * diffuse,
+                                specularColorFactor, roughnessFactor, shadows[i]);
+        }
+        color = clamp(color, 0.0, 1.0);
+        if (hdrOutput) {
+            color = fogged(sRGBToLinear(color));     // the bloom composite tone-maps
+        } else {
+            color = fogged(color);
+        }
+        fragColor = vec4(color, alpha);
+        fragObjectId = encodeObjectId(effectiveObjectId());
         return;
     }
 

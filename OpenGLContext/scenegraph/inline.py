@@ -99,6 +99,7 @@ class Inline(basenodes.Inline):
         generation = self.__dict__['_generation'] = self.__dict__.get('_generation', 0) + 1
         if self.inlined:
             self.inlined = ()
+            self.__dict__.pop('_inlinedSource', None)
             dispatcher.send(signal=CHILDREN_CHANGE_SIGNAL, sender=self)
         url = list(self.__dict__.get('url', ()))
         if not url or not self.__dict__.get('load', True):
@@ -127,13 +128,18 @@ class Inline(basenodes.Inline):
             try:
                 target = Loader.resolve(u, baseURI)
                 reader = formats.adapter_for(target)
-                nodes = reader.nodes(reader.read(target))
+                native = reader.read(target)
+                nodes = reader.nodes(native)
             except (OSError, ValueError, SyntaxError) as err:
                 log.info("Inline url %s did not read: %s", u, err)
                 continue
             if generation is not None and generation != self.__dict__.get('_generation'):
                 return
             log.info("loaded %s", u)
+            # Held for as long as its nodes are drawn: they hold the scene they
+            # were read into weakly, and it is what says they are a document's
+            # and the base an Inline among them resolves its url against.
+            self.__dict__['_inlinedSource'] = native
             self.inlined = tuple(nodes)
             loadsensor.set_load_state(self, loadsensor.LOADED)
             dispatcher.send(signal=CHILDREN_CHANGE_SIGNAL, sender=self)

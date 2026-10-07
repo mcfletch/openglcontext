@@ -46,6 +46,7 @@ from OpenGLContext.scenegraph.physicalmaterial import (
     two_sided, in_document,
     material_to_pbr, pbr_material,
 )
+from OpenGLContext.scenegraph.material_fields import read_material_fields
 from OpenGLContext.scenegraph.texgen import TexGen
 from OpenGLContext.scenegraph.texturemapping import TextureMapping, texture_mapping
 from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
@@ -231,6 +232,21 @@ _DEFAULT_FACTORS: "dict[str, Any]" = dict(
 )
 
 
+def phong_factors(material_node: Any) -> dict:
+    """The block of an X3D Material drawn by X3D's Phong equation (:data:`PHONG_BIT`)
+
+    The colours are the Material's own, not decoded to linear light; the
+    metallic slot carries its ``ambientIntensity`` and the roughness slot its
+    ``shininess``.
+    """
+    f = read_material_fields(material_node)
+    return dict(_DEFAULT_FACTORS, base_color=tuple(f.diffuseColor)[:3],
+                emissive=tuple(f.emissiveColor)[:3],
+                specular_color=tuple(f.specularColor)[:3],
+                metallic=float(f.ambientIntensity), roughness=float(f.shininess),
+                flags=PHONG_BIT)
+
+
 def _material_factors(material: Any) -> dict:
     """Uniform-ready factors for a PhysicalMaterial, an UnlitMaterial, a VRML97 Material, or None"""
     material = source_of(material)
@@ -263,9 +279,12 @@ def _material_factors(material: Any) -> dict:
         return dict(_DEFAULT_FACTORS, base_color=tuple(material.emissiveColor)[:3],
                     normal_scale=float(material.normalScale), unlit=1)
     if isinstance(material, AppearanceMaterial):
-        if not material.material and material.inDocument:
-            # X3D: an appearance with no material is unlit, white times its texture
-            return dict(_DEFAULT_FACTORS, unlit=1)
+        if material.inDocument:
+            if not material.material:
+                # X3D: an appearance with no material is unlit, white times its texture
+                return dict(_DEFAULT_FACTORS, unlit=1)
+            if hasattr(material.material, 'diffuseColor'):
+                return phong_factors(material.material)
         material = material.material
     f = material_to_pbr(material)      # None / VRML97 Material -> plausible defaults
     return dict(
@@ -308,6 +327,9 @@ def pbr_feature_defines(enabled: Optional[Any] = None) -> list:
 #: The bit of the block's flags word saying the vertex colours are baked light
 #: rather than a tint; the fragment shader reads it as ``bakedLightMode``.
 BAKED_LIGHT_BIT = 64
+#: The bit saying the block is an X3D Material drawn by X3D's Phong equation
+#: (:func:`phong_factors`); the fragment shader reads it as ``phongMode``.
+PHONG_BIT = 128
 
 
 

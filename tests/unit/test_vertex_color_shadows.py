@@ -38,7 +38,11 @@ def test_shared_lighting_include_exists():
     # The shared math must expose calcLight taking a per-light shadow factor.
     assert 'calcLight' in inc
     assert 'shadowFactor' in inc
-    assert 'calcAttenuation' in inc and 'calcSpotEffect' in inc
+    # X3D's Phong terms, which the PBR shader's Phong mode draws with too
+    assert '#include "_phong_inc.glsl"' in inc
+    assert '#include "_phong_inc.glsl"' in _read('pbr.frag')
+    phong = _read('_phong_inc.glsl')
+    assert 'calcAttenuation' in phong and 'calcSpotEffect' in phong
 
 
 def test_both_lit_shaders_use_shared_include():
