@@ -66,10 +66,13 @@ pyvrml97, X3DUOM 4.1 fetched by download, `PBRMaterial` reworked into the X3D
   - [x] Interchange geometry: the six triangle sets, `ElevationGrid` (with `creaseAngle`), `LineSet`; `ColorRGBA`, `Tangent`, `MultiTextureCoordinate` mapping labels (`composedgeometry`, `meshgeometry`); data nodes registered as their declarations
   - [x] Geometry2D: Rectangle2D, TriangleSet2D, Disk2D, ArcClose2D as meshes; Circle2D, Arc2D, Polyline2D, Polypoint2D through `DrawnAs` (`loaders.x3d.X3D_ONLY` for the name the NURBS trim curve holds)
   - [x] `Extrusion` rebased on X3D's declaration (its engine fields carried as `OpenGLContext` metadata)
-  - [ ] `IndexedFaceSet` and the primitives onto the same arrays; `TextureCoordinateGenerator`; `CoordinateDouble` rebased to a float32 origin
+  - [x] `TextureCoordinateGenerator` for a composed geometry's first set (`scenegraph.texgen`, the PBR vertex shader)
+  - [x] point/spot `radius`: a cut-off in the shader paths; unbounded for a light made in code, 100 for a document's, a glTF light's `range`
+  - [ ] `IndexedFaceSet` and the primitives onto the same arrays; `CoordinateDouble` rebased to a float32 origin
+  - [ ] question: with an `UnlitMaterial`, should `Appearance.texture` apply? It draws untextured now; check X3D 4's Unlit lighting clause before changing it
   - [x] docs/x3d.rst with the implemented-node list, held to `prototypes()` by a test
   - [x] light scope: `global` false lights only its parent group's descendants (`passes.lightscope`, the per-draw `lightsOff` mask); the engine's DirectionalLight made in code is global; VRML97 dialect default `global FALSE`
-  - [ ] point/spot `radius`; the fixed-function pipeline's scope
+  - [ ] the fixed-function pipeline's light scope and radius
   - [x] X3D 4 `Material`'s diffuse, emissive, normal and occlusion textures with mapping labels; `normalScale`, `occlusionStrength`
   - [ ] `TwoSidedMaterial` and `backMaterial`; environment (`EnvironmentLight`, `TextureBackground`, `LocalFog`; the cube-map nodes are Phase 8's CubeMapTexturing)
   - [x] showcase: `oglc-x3d` opens `bin/x3d_gallery.x3d` (metals, marble, brick, sandstone, a scoped lamp, shadows, the triangle sets, ElevationGrid, an Inlined glTF vase); `tests/x3d_demo.py` tutorial and reference capture

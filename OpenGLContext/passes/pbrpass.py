@@ -26,7 +26,7 @@ from OpenGL.GL import (
     glUseProgram, glActiveTexture, glBindTexture, glGetIntegerv,
     glGenBuffers, glBindBuffer, glBufferData, glBindBufferBase, glDeleteBuffers,
     glGetUniformBlockIndex, glUniformBlockBinding, glUniformMatrix4fv,
-    glUniform1iv, glUniform4fv,
+    glUniform1fv, glUniform1iv, glUniform4fv,
 )
 from OpenGL.GL import shaders as GL_shaders
 from vrml import cache
@@ -45,6 +45,7 @@ from OpenGLContext.scenegraph.physicalmaterial import (
     AppearanceMaterial, ChannelMaterial, PhysicalMaterial, appearance_alpha,
     material_to_pbr, pbr_material,
 )
+from OpenGLContext.scenegraph.texgen import TexGen
 from OpenGLContext.scenegraph.texturemapping import TextureMapping, texture_mapping
 from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial
 from OpenGLContext.passes.ibl import IBL_UNITS, _IBL_SAMPLER
@@ -794,6 +795,29 @@ class PBRShaderProgram(VRML97ShaderProgram):
         self._set_uniform1i('impostorHemi', 1 if state[2] else 0, self.program)
         self._impostor = state
 
+    #: What :meth:`set_texgen` last set, and on which program.
+    _texgen: tuple[Optional[int], int, tuple[float, ...]] = (None, 0, ())
+
+    def set_texgen(self, generator: Optional[TexGen]) -> None:
+        """Make the first texture coordinate set with `generator`, or read it from the arrays
+
+        X3D's TextureCoordinateGenerator, as :mod:`OpenGLContext.scenegraph.texgen`
+        numbers its modes; None reads ``aTexCoord``. Called for every shape
+        drawn, since the uniform outlives the draw that set it.
+        """
+        if generator is None:
+            state: tuple[Optional[int], int, tuple[float, ...]] = (self.program, 0, ())
+        else:
+            state = (self.program, generator.mode, generator.parameters)
+        if state == self._texgen:
+            return
+        self._set_uniform1i('texGenMode', state[1], self.program)
+        if state[2]:
+            loc = self._get_location('texGenParameter', self.program)
+            if loc != -1:
+                glUniform1fv(loc, len(state[2]), np.asarray(state[2], dtype=np.float32))
+        self._texgen = state
+
     # -- skinning ----------------------------------------------------------
     def _init_skinning(self, program: Any) -> None:
         """Point a program's palette sampler at its unit, once at compile time."""
@@ -1269,6 +1293,8 @@ class PBRPass(flatcore.FlatPass):
                                bool(getattr(geom, 'solid', True)))
         if hasattr(shader, 'set_vertex_color'):
             shader.set_vertex_color(getattr(geom, 'colors', None) is not None)
+        if hasattr(shader, 'set_texgen'):
+            shader.set_texgen(getattr(geom, 'texGen', None))
 
         # The whole group draws as one, reached by the zones any member is.
         apply_zones = getattr(self, 'applyZonesToGroup', None)

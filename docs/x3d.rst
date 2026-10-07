@@ -163,6 +163,11 @@ default, light everything. A light casts shadows where its ``shadows`` is
 true, and ``shadowIntensity`` sets how dark they are; ``Shape.castShadow``
 false leaves a shape out of the shadow maps. See :doc:`Shadows <shadows>`.
 The engine's lights made in code are global and cast shadows by default.
+A point or spot light's ``radius`` is how far it reaches in its own
+coordinates: nothing past it is lit, in the shader paths. A light a document
+builds has VRML97's and X3D's 100 unless the document sets another; one made
+in code reaches everywhere unless given one; a glTF light's is its ``range``.
+The fixed-function path has no such cut-off.
 
 .. _x3d-binding:
 
@@ -250,9 +255,13 @@ Kept and not drawn
 ~~~~~~~~~~~~~~~~~~
 
 - ``Script`` nodes are read, kept and written, and never run.
-- ``TextureCoordinateGenerator``, ``FogCoordinate`` and the ``attrib`` vertex
-  attributes are kept; a set whose texture coordinates come from a generator
-  is reported once.
+- A composed geometry's first texture coordinate set may come from a
+  ``TextureCoordinateGenerator``: the PBR vertex shader makes it in the
+  generator's ``mode`` (``OpenGLContext.scenegraph.texgen``), from the
+  vertex's own or camera-space position or normal. A generator for a later
+  set is reported once and not drawn, and the fixed-function and VRML97
+  shader paths do not generate coordinates. ``FogCoordinate`` and the
+  ``attrib`` vertex attributes are kept.
 - ``CoordinateDouble`` is kept and not drawn.
 - The NURBS component's nodes are X3D's own declarations; the engine's NURBS
   nodes (:doc:`NURBS <nurbs>`) are the VRML97 extension's, with other fields.

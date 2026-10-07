@@ -24,6 +24,7 @@ layout(location = 11) in vec2 aTexCoord1;          // optional: second UV set (g
 
 #include "_skinning_inc.glsl"
 #include "_wave_inc.glsl"
+#include "_texgen_inc.glsl"
 
 uniform mat4 modelViewMatrix;
 uniform mat4 projectionMatrix;
@@ -151,6 +152,10 @@ void main() {
     vTexCoord = impostorGrid > 0
         ? impostorOrigin + aTexCoord * impostorSpan
         : aTexCoord;
+    if (texGenMode > 0 && impostorGrid == 0) {
+        vec3 localEye = (inverse(mv) * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+        vTexCoord = generatedTexCoord(position, normal, vPosition, vNormal, localEye);
+    }
     vTexCoord1 = aTexCoord1;
     vColor = aColor;
     // The view is rigid (no scale), so the modelview upper-3x3 column lengths are the

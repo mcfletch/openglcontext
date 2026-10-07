@@ -27,7 +27,7 @@ import numpy as np
 from vrml import cache, protofunctions
 from vrml.x3d import nodes as x3d
 
-from OpenGLContext.scenegraph import boundingvolume, composedgeometry
+from OpenGLContext.scenegraph import boundingvolume, composedgeometry, texgen
 from OpenGLContext.scenegraph.texturemapping import label_set
 
 log = logging.getLogger(__name__)
@@ -109,15 +109,26 @@ class MeshDrawn:
         return label_set(label)
 
     def coordinates(self) -> "list[Any]":
-        """Each texture coordinate set's points; None for a generator, which is not drawn"""
+        """Each texture coordinate set's points; None for a generator, made in the shader
+
+        A generator after the first set is not drawn, and is reported.
+        """
         found: "list[Any]" = []
-        for entry in self.coordinateNodes():
+        for number, entry in enumerate(self.coordinateNodes()):
             if isinstance(entry, x3d.TextureCoordinateGenerator):
-                _report(self, 'reads its texture coordinates from a generator, which is not drawn')
+                if number:
+                    _report(self, 'reads a texture coordinate set after the first from a '
+                            'generator, which is not drawn')
                 found.append(None)
             else:
                 found.append(_values(entry, 'point'))
         return found
+
+    @property
+    def texGen(self) -> Optional[texgen.TexGen]:
+        """The generator the first texture coordinate set is made by, or None"""
+        nodes = self.coordinateNodes()
+        return texgen.texgen_of(nodes[0]) if nodes else None
 
     def meshFrom(self, arrays: Any, solid: bool) -> Any:
         """A mesh of composed arrays, with tangents where there are coordinates for them

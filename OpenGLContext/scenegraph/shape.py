@@ -139,6 +139,9 @@ class Shape(basenodes.Shape):
             if hasattr(shader_program, 'set_vertex_color'):
                 shader_program.set_vertex_color(
                     getattr(self.geometry, 'colors', None) is not None)
+            # The same for texture coordinates a generator makes.
+            if hasattr(shader_program, 'set_texgen'):
+                shader_program.set_texgen(getattr(self.geometry, 'texGen', None))
             # Water moves on the card: the mesh is uploaded once and the wave
             # is a handful of uniforms. Answered for every shape rather than
             # only by water, or the hillside after a lake would ripple too.

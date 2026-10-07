@@ -46,7 +46,10 @@ the fragment stage:
   zero, and the fragment shader treats that as "no tangent".
 
 - ``vTexCoord``, ``vTexCoord1`` -- the first and second UV sets
-  (``TEXCOORD_0`` and ``TEXCOORD_1``).
+  (``TEXCOORD_0`` and ``TEXCOORD_1``). Where ``texGenMode`` is not 0 the
+  first is made from the vertex instead (``_texgen_inc.glsl``, X3D's
+  ``TextureCoordinateGenerator``), with ``texGenParameter`` as its
+  parameters.
 
 - ``vColor`` -- per-vertex colour (glTF ``COLOR_0``).
 
@@ -294,7 +297,9 @@ each light it computes the light direction ``L`` and an attenuation:
 - Point and spot lights use the vector to ``lightPosition``, and
   ``1 / (constant + linear·d + quadratic·d²)`` from ``lightAttenuation``.
   Where a light has a ``lightRange``, the ``KHR_lights_punctual`` range window
-  ``clamp(1 - (d/range)⁴, 0, 1)`` also applies.
+  ``clamp(1 - (d/range)⁴, 0, 1)`` also applies. Past a light's
+  ``lightRadius`` (VRML97's and X3D's ``radius``, carried into eye space by
+  the light's transform) the attenuation is 0.
 - A spot light multiplies in a cone falloff (``spotAttenuation``): a linear
   ramp from the outer cutoff to the inner beam, clamped to ``[0, 1]`` and
   squared, as in the ``KHR_lights_punctual`` reference.
