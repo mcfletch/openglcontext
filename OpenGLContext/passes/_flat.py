@@ -809,7 +809,7 @@ class FlatPass( _FlatEffectsMixin, MultiviewPassMixin, ZonesMixin, SelectionMixi
         self.boundLights = bound
         self.scopedLights = lightscope.scoped_lights(bound_paths)
 
-        if self.hasHeadlight(light_count) and light_count < shader.MAX_LIGHTS:
+        if self.hasHeadlight(light_count) and light_count < ceiling:
             # Directional along the view, given in eye space.
             shader.set_light(light_count, light_type='directional',
                              color=(1.0, 1.0, 1.0), direction=(0.0, 0.0, -1.0),

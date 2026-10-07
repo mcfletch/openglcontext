@@ -136,6 +136,14 @@ def test_headlight_true_adds_to_the_scenes_lights(gl_context):
     assert brightness(dim) > unlit + 20, "a document's default NavigationInfo"
 
 
+def test_the_headlight_counts_against_the_lights_a_frame_binds(gl_context):
+    """maximumLights is every light bound, the headlight among them"""
+    dim = b'<DirectionalLight direction="0 -1 0" intensity="0.2"/>'
+    unlit = brightness(dim + b'<NavigationInfo headlight="false"/>', maximumLights=1)
+    assert brightness(dim, maximumLights=1) == pytest.approx(unlit, abs=1)
+    assert brightness(dim, maximumLights=2) > unlit + 20
+
+
 def test_the_fixed_function_headlight(gl_context_compat):
     compat = {'profile': 'compatibility'}
     dark = brightness(b'<NavigationInfo headlight="false"/>', **compat)

@@ -148,8 +148,8 @@ Lighting and shadows
    * - ``OPENGLCONTEXT_MAXIMUM_LIGHTS``
      - integer 0–8
      - ``8``
-     - The number of lights the shader binds in one frame. A lower value is
-       faster in a scene with many lights. The shader's own maximum still
+     - The number of lights the shader binds in one frame, the headlight
+       among them. A lower value is faster in a scene with many lights. The shader's own maximum still
        applies.
    * - ``OPENGLCONTEXT_IBL``
      - ``auto``, ``full``, ``analytic``, ``off``

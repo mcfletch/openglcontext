@@ -211,7 +211,8 @@ field on the ``ContextDefinition``, and the screen shows all of them:
      - ``OPENGLCONTEXT_SHADOW_CASCADES``
    * - ``maximumLights``
      - int, 0–8
-     - Lights bound in one frame. The shader's own limit still applies.
+     - Lights bound in one frame, the headlight among them. The shader's own
+       limit still applies.
      - —
    * - ``bloom``
      - bool
