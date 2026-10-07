@@ -132,6 +132,10 @@ class WindowSystem(abc.ABC):
         self.release()
         return True
 
+    def isOpen(self) -> bool:
+        """Whether there is a window to draw into: one has been made and not released"""
+        return self.window is not None
+
     # -- current and presenting --------------------------------------------
 
     @abc.abstractmethod

@@ -1550,6 +1550,10 @@ class ContextCore(ScreenMixin, ScreenshotMixin, ContextConfigMixin):
                 return 0
         finally:
             self.unlockScenegraph()
+        # A released window has no GL context to make current; a frame
+        # drawn now would land in whichever one is.
+        if not self.windowsystem.isOpen():
+            return 0
         self.setCurrent()
         self.drawing = 1
         if threading:
