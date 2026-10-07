@@ -601,7 +601,7 @@ def test_an_up_axis_that_is_no_axis_is_the_default():
 def test_a_tileset_with_no_base_holds_its_content_to_the_working_directory():
     root = {"boundingVolume": {"sphere": [0, 0, 0, 1]}, "geometricError": 1.0,
             "content": {"uri": "../../etc/passwd"}}
-    with pytest.raises(IOError, match="escapes the base directory"):
+    with pytest.raises(IOError, match="leads out of"):
         build_runtime_tileset(_tileset(root))
     root["content"] = {"uri": "tile.glb"}
     assert build_runtime_tileset(_tileset(root)).root.content_uri == os.path.join(

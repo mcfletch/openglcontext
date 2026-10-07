@@ -290,7 +290,8 @@ def contain(base_dir: str, name: str) -> ContainedPath:
     """``name``, a relative path, resolved under ``base_dir``; else ``IOError``.
 
     A ``name`` like ``../../../etc/passwd``, an absolute path, or one carrying
-    a URL scheme would otherwise let a document read arbitrary files. The
+    a URL scheme would otherwise let a document read arbitrary files; one
+    holding a NUL byte names no file. The
     realpath of the result must stay within the realpath of ``base_dir`` --
     or of the content root holding it (:func:`add_content_root`) -- so a
     symbolic link leading out is refused too. ``name`` is percent-decoded, as
@@ -300,13 +301,15 @@ def contain(base_dir: str, name: str) -> ContainedPath:
     if parsed.scheme or parsed.netloc:
         raise IOError("local load may only reference local files, not %r" % name)
     rel = urllib.parse.unquote(parsed.path)
+    if '\0' in rel:
+        raise IOError("uri %r holds a NUL byte" % name)
     if os.path.isabs(rel):
         raise IOError("uri must be a relative path, not %r" % name)
     base_real = os.path.realpath(base_dir)
     full = os.path.realpath(os.path.join(base_real, rel))
     bound = _bound_for(base_real)
     if full != bound and not full.startswith(bound + os.sep):
-        raise IOError("uri %r escapes the base directory" % name)
+        raise IOError("uri %r leads out of %s" % (name, bound))
     return ContainedPath(full, _CHECKED)
 
 

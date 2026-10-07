@@ -646,7 +646,7 @@ class TestACoverManifest:
 
     def test_a_species_naming_a_file_outside_it_is_refused(self, tmp_path) -> None:
         self._write(tmp_path, [{'name': 'grass', 'card': '../../etc/passwd'}])
-        with pytest.raises(IOError, match='escapes the base directory'):
+        with pytest.raises(IOError, match='leads out of'):
             read_cover_manifest(str(tmp_path))
 
     def test_a_manifest_that_lists_no_species_is_refused(self, tmp_path) -> None:

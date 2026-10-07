@@ -67,3 +67,42 @@ def test_the_roots_declared(tree, declared):
 def test_a_root_is_a_directory(tree):
     with pytest.raises(ValueError):
         resolver.add_content_root(str(tree / 'secret.txt'))
+
+
+def test_the_outermost_of_nested_roots_bounds_a_reference(tree, declared):
+    inner = str(tree / 'content' / 'levels')
+    resolver.add_content_root(inner)
+    try:
+        found = resolver.contain(inner, '../textures/brick.png')
+    finally:
+        resolver.remove_content_root(inner)
+    assert found.endswith('brick.png')
+
+
+def test_a_link_leading_out_of_a_root_is_refused(tree, declared):
+    os.symlink(tree / 'secret.txt', tree / 'content' / 'textures' / 'leak.txt')
+    with pytest.raises(IOError):
+        resolver.contain(str(tree / 'content' / 'levels'), '../textures/leak.txt')
+
+
+def test_a_root_named_through_a_link(tree):
+    os.symlink(tree / 'content', tree / 'linked')
+    resolver.add_content_root(str(tree / 'linked'))
+    try:
+        found = resolver.contain(str(tree / 'linked' / 'levels'), '../textures/brick.png')
+        with pytest.raises(IOError):
+            resolver.contain(str(tree / 'linked' / 'levels'), '../../secret.txt')
+    finally:
+        resolver.remove_content_root(str(tree / 'linked'))
+    assert found == os.path.realpath(str(tree / 'content' / 'textures' / 'brick.png'))
+
+
+def test_an_escape_names_the_root_it_left(tree, declared):
+    with pytest.raises(IOError, match='content'):
+        resolver.contain(str(tree / 'content' / 'levels'), '../../secret.txt')
+
+
+@pytest.mark.parametrize('name', ['a%00b.png', 'a\0b.png'])
+def test_a_nul_byte_is_refused_as_an_io_error(tree, name):
+    with pytest.raises(IOError, match='NUL'):
+        resolver.contain(str(tree), name)
