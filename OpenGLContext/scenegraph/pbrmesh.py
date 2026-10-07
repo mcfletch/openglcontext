@@ -26,6 +26,7 @@ from OpenGL.GL import (
 from OpenGL.arrays import vbo
 from pydispatch import dispatcher
 from vrml import node, field
+from vrml.x3d import nodes as x3d
 from OpenGLContext.scenegraph import boundingvolume
 from OpenGLContext.scenegraph import vertexsemantics
 from OpenGLContext.scenegraph.geometryarrays import (
@@ -228,7 +229,7 @@ class _MeshGPU(object):
 MATERIAL_CHANGE_SIGNAL = 'PBRMesh.material'
 
 
-class PBRMesh(node.Node):
+class PBRMesh(x3d.X3DGeometryNode):
     """Indexed triangle mesh with PBR vertex attributes."""
     PROTO = 'PBRMesh'
 

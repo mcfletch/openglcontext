@@ -35,7 +35,7 @@ def _model(document):
 
 
 def _lods(node):
-    return [each for each in reachable(node, fields=('children', 'level'))
+    return [each for each in reachable(node, fields=('children',))
             if isinstance(each, LOD)]
 
 
@@ -105,7 +105,7 @@ class TestTheRendererReachesTheLevelItDraws:
 
 
 def _skinned_under(node):
-    return [each for each in reachable(node, fields=('children', 'geometry', 'level'))
+    return [each for each in reachable(node, fields=('children', 'geometry'))
             if getattr(each, 'skin_joints', None) is not None]
 
 

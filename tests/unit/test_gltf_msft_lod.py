@@ -77,8 +77,6 @@ def _flatten(node, out=None):
     out.append(node)
     for child in getattr(node, 'children', None) or []:
         _flatten(child, out)
-    for level in getattr(node, 'level', None) or []:
-        _flatten(level, out)
     return out
 
 
@@ -247,10 +245,6 @@ def _world_of(scene, node, level):
         here = local @ matrix
         for child in (getattr(current, 'children', None) or []):
             found = walk(child, here)
-            if found is not None:
-                return found
-        for one in (getattr(current, 'level', None) or []):
-            found = walk(one, here)
             if found is not None:
                 return found
         return None

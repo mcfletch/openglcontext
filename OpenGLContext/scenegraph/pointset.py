@@ -4,6 +4,7 @@ from OpenGL.GL import *
 from OpenGL.GL import glDeleteVertexArrays
 from OpenGL.arrays import vbo
 from typing import Any
+from vrml import field
 from vrml.vrml97 import basenodes
 from OpenGLContext.scenegraph import coordinatebounded
 from OpenGLContext.scenegraph.vertexsemantics import (
@@ -41,7 +42,16 @@ class PointSet(coordinatebounded.CoordinateBounded, basenodes.PointSet):
     """VRML97-style Point-Set object
 
     http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#PointSet
+
+    `size`, `minSize`, `maxSize` and `attenuation` are the engine's own: the
+    point size in pixels, its bounds, and the distance attenuation
+    coefficients (constant, linear, quadratic) GL applies to it.
     """
+
+    size = field.newField('size', 'SFFloat', 1, 1.0)
+    minSize = field.newField('minSize', 'SFFloat', 1, 0.0)
+    maxSize = field.newField('maxSize', 'SFFloat', 1, 1.0)
+    attenuation = field.newField('attenuation', 'SFVec3f', 1, [1.0, 0.0, 0.0])
 
     def render(
         self,

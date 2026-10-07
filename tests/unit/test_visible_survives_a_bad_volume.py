@@ -1,6 +1,6 @@
 """A frustum check that cannot be made logs and culls nothing.
 
-``visible()`` on :class:`OpenGLContext.scenegraph.shape.Shape` and on
+``inFrustum()`` on :class:`OpenGLContext.scenegraph.shape.Shape` and on
 :class:`OpenGLContext.scenegraph.shaders.ShaderGeometry` is called per node
 per frame from the render pass.  A geometry whose bounding volume cannot be
 worked out -- an attribute array of the wrong shape, a coordinate node that
@@ -34,12 +34,12 @@ def node(request, monkeypatch):
 def test_it_does_not_raise(node, caplog):
     instance, _module = node
     with caplog.at_level(logging.WARNING):
-        assert not instance.visible(frustum=None, matrix=None, mode=None)
+        assert not instance.inFrustum(frustum=None, matrix=None, mode=None)
 
 
 def test_it_says_which_node_and_why(node, caplog):
     instance, module = node
     with caplog.at_level(logging.WARNING, logger=module.log.name):
-        instance.visible(frustum=None, matrix=None, mode=None)
+        instance.inFrustum(frustum=None, matrix=None, mode=None)
     text = '\n'.join(record.getMessage() for record in caplog.records)
     assert 'no volume for you' in text, text

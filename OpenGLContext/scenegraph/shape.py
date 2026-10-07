@@ -309,8 +309,8 @@ class Shape(basenodes.Shape):
             ((self, "geometry"), (volume, None)),
         )
 
-    def visible(self, frustum: Any = None, matrix: Any = None,
-                occlusion: int = 0, mode: Any = None) -> Any:
+    def inFrustum(self, frustum: Any = None, matrix: Any = None,
+                  occlusion: int = 0, mode: Any = None) -> Any:
         """Check whether this renderable node intersects frustum
 
         frustum -- the bounding volume frustum with a planes
@@ -327,4 +327,4 @@ class Shape(basenodes.Shape):
             )
         except Exception:
             tb = traceback.format_exc()
-            log.warning("""Failure during Shape.visible check for %r:\n%s""", self, tb)
+            log.warning("""Failure during Shape.inFrustum check for %r:\n%s""", self, tb)

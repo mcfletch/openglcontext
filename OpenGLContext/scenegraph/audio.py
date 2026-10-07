@@ -68,13 +68,13 @@ DISTANCE_MODELS = tuple(entry.value for entry in spatial.DistanceModel)
 SHAPE_TYPES = tuple(entry.value for entry in spatial.ShapeType)
 
 
-def point_to_world(point: Sequence[float], matrix: Any) -> np.ndarray:
+def point_to_world(point: Sequence[float] | np.ndarray, matrix: Any) -> np.ndarray:
     """A point in a node's own frame, in world coordinates."""
     homogeneous = np.array([point[0], point[1], point[2], 1.0])
     return np.asarray(np.dot(homogeneous, matrix))[:3]
 
 
-def direction_to_world(direction: Sequence[float], matrix: Any) -> np.ndarray:
+def direction_to_world(direction: Sequence[float] | np.ndarray, matrix: Any) -> np.ndarray:
     """A direction in a node's own frame, in world coordinates.
 
     The fourth component is zero, so the transform's translation is ignored --

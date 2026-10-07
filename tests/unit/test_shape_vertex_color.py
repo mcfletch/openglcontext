@@ -15,6 +15,7 @@ import numpy as np
 import pytest
 
 from vrml import node
+from vrml.vrml97 import nodetypes
 
 from OpenGLContext.scenegraph.appearance import Appearance
 from OpenGLContext.scenegraph.pbrmaterial import PBRMaterial
@@ -43,7 +44,7 @@ class Recording:
         self.visible = True
 
 
-class Plain(node.Node):
+class Plain(nodetypes.Geometry, node.Node):
     """Geometry that draws nothing and carries no per-vertex colours."""
 
     PROTO = 'PlainTestGeometry'

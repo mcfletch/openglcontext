@@ -139,12 +139,12 @@ def _material_texture_ids(material: Any) -> tuple:
                      if tex is not None)
     # Fallback for other material types: scan common single-texture attributes,
     # skipping methods (e.g. PBRMaterial.texture is a lookup method, not a node)
-    # and unset channels.
+    # and unset channels, which are None or the NULL node.
     ids: list = []
     for attr in ('baseColorTexture', 'metallicRoughnessTexture', 'normalTexture',
                  'occlusionTexture', 'emissiveTexture'):
         tex = getattr(material, attr, None)
-        if tex is not None and not callable(tex):
+        if tex and not callable(tex):
             ids.append((attr, id(tex)))
     return tuple(ids)
 

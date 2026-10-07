@@ -30,7 +30,7 @@ class LorentzContext(BaseContext):
             point=points,
         )
         color = Color(
-            color=zip(line, line2, [0] * len(line)),
+            color=list(zip(line, line2, [0] * len(line))),
         )
         self.ps = PointSet(
             coord=coord,

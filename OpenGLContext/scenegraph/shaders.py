@@ -918,7 +918,7 @@ class ShaderGeometry(shaders.ShaderGeometry):
             return boundingvolume.UnboundedVolume()
         return bb
 
-    def visible(self, frustum: Any = None, matrix: Any = None,
+    def inFrustum(self, frustum: Any = None, matrix: Any = None,
                 occlusion: int = 0, mode: Any = None) -> Any:
         """Check whether this renderable node intersects frustum
 
@@ -936,7 +936,7 @@ class ShaderGeometry(shaders.ShaderGeometry):
             )
         except Exception:
             tb = traceback.format_exc()
-            log.warning("""Failure during Shape.visible check for %r:\n%s""", self, tb)
+            log.warning("""Failure during ShaderGeometry.inFrustum check for %r:\n%s""", self, tb)
             return None
 
 

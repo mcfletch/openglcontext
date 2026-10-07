@@ -107,8 +107,8 @@ class Grouping(object):
         """List all children which are instances of given types"""
         children: ChildrenTypedField = self.__class__.children
         return children.byType( self, types )
-    def visible( self, frustum: Any = None, matrix: Any = None,
-                 occlusion: int = 0, mode: Any = None ) -> Any:
+    def inFrustum( self, frustum: Any = None, matrix: Any = None,
+                   occlusion: int = 0, mode: Any = None ) -> Any:
         """Check whether this grouping node intersects frustum
 
         frustum -- the bounding volume frustum with a planes

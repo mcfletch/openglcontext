@@ -250,7 +250,10 @@ def particle_hook(ctx: "hooks.HookContext") -> Any:
                                       values=ctx.values, resolver=ctx.resolver))
     if not ctx.children:
         return emitter, False
-    return Group(children=[*ctx.children, emitter]), False
+    # The loader's children are the glTF node's subtree, typed as plain
+    # nodes; each is a child node.
+    children: list[Any] = [*ctx.children, emitter]
+    return Group(children=children), False
 
 
 def advance(emitters: list[ParticleEmitter], when: float) -> bool:

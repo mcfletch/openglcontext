@@ -242,8 +242,7 @@ def _all_shapes(node, out=None):
     out = [] if out is None else out
     if isinstance(node, Shape):
         out.append(node)
-    for child in (getattr(node, 'children', None) or []) + \
-            list(getattr(node, 'level', None) or []):
+    for child in getattr(node, 'children', None) or []:
         _all_shapes(child, out)
     return out
 

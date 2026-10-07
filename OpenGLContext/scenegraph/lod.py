@@ -209,6 +209,11 @@ class LOD(basenodes.LOD):
         http://www.web3d.org/x3d/specifications/vrml/ISO-IEC-14772-IS-VRML97WithAmendment1/part1/nodesRef.html#LOD
     """
 
+    #: The levels, finest first. Declared here rather than inherited so that
+    #: a change to a level-of-detail node's levels is a signal of its own,
+    #: apart from every other grouping node's children.
+    children = basenodes.LOD.children.copy(basenodes.LOD)
+
     #: Which level is being drawn. Not a VRML field: the file says what the
     #: levels are and where they change over, and this is what that comes to
     #: for the viewer as it stands.
@@ -341,7 +346,7 @@ class LOD(basenodes.LOD):
         """The level index a viewer ``distance`` away should be shown."""
         # ``range`` is an MFFloat, which arrives as an array: its emptiness has
         # to be asked by length rather than by truth.
-        ranges: Sequence[float] = self.range if self.range is not None else ()
+        ranges: Sequence[float] | np.ndarray = self.range if self.range is not None else ()
         levels = len(self.level)
         if not levels or not len(ranges):
             return 0
@@ -385,7 +390,7 @@ class LOD(basenodes.LOD):
         if current is not None:
             return current
         volumes = []
-        dependencies: list = [(self, 'level'), (self, 'range')]
+        dependencies: list = [(self, 'children'), (self, 'range')]
         for child in self.boundedChildren():
             if hasattr(child, 'boundingVolume'):
                 child_volume = child.boundingVolume(mode)
@@ -528,7 +533,7 @@ def _levels_changed(*_args: Any, **_named: Any) -> None:
 
 
 def _watch_level_fields() -> None:
-    for owner, name in ((LOD, 'level'), (LOD, 'range'), (LOD, 'center'),
+    for owner, name in ((LOD, 'children'), (LOD, 'range'), (LOD, 'center'),
                         (ScreenCoverageLOD, 'screenCoverage'),
                         (ScreenCoverageLOD, 'radius')):
         dispatcher.connect(_levels_changed, signal=('set', getattr(owner, name)),

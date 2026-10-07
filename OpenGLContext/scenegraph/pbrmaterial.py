@@ -13,6 +13,7 @@ from typing import Any, Optional
 import numpy as np
 
 from vrml import cache, field, node, protofunctions
+from vrml.x3d import nodes as x3d
 
 
 class PBRTexture(object):
@@ -142,7 +143,7 @@ class TextureChannels(dict[str, Any]):
         self._changed()
 
 
-class PBRMaterial(node.Node):
+class PBRMaterial(x3d.X3DMaterialNode):
     """Metallic/roughness PBR material (glTF 2.0)."""
     PROTO = 'PBRMaterial'
 

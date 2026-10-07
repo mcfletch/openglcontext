@@ -25,7 +25,7 @@ if TYPE_CHECKING:
         asks with ``hasattr`` and ``getattr`` rather than reading them
         outright.
         """
-        on: int
+        on: bool
         color: Any
         intensity: float
         ambientIntensity: float

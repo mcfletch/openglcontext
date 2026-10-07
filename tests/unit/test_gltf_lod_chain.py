@@ -121,8 +121,7 @@ class TestWritingAChain:
 
 def _walk(node):
     yield node
-    for child in list(getattr(node, 'children', None) or []) + list(
-            getattr(node, 'level', None) or []):
+    for child in list(getattr(node, 'children', None) or []):
         yield from _walk(child)
 
 

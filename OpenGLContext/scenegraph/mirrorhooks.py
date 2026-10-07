@@ -140,10 +140,9 @@ def mirrored(node: Any, material: PBRMaterial) -> Any:
         appearance.material = material
         made.appearance = appearance
         return made
-    for name in ('children', 'level', 'choice'):
-        nodes = getattr(node, name, None)
-        if nodes:
-            setattr(node, name, [mirrored(child, material) for child in nodes])
+    nodes = getattr(node, 'children', None)
+    if nodes:
+        node.children = [mirrored(child, material) for child in nodes]
     return node
 
 

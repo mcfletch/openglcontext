@@ -79,7 +79,7 @@ class Switch(basenodes.Switch):
         # on the appropriate fields...
         volumes: list[Any] = []
         dependencies: list[tuple[Any, Optional[str]]] = [
-            (self,'choice'),(self,'whichChoice')]
+            (self,'children'),(self,'whichChoice')]
         unbounded = 0
         for child in self.renderedChildren():
             try:
