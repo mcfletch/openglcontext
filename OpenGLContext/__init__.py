@@ -202,6 +202,7 @@ Node( 'BooleanSequencer', 'vrml.x3d.runtime.BooleanSequencer' )
 Node( 'IntegerSequencer', 'vrml.x3d.runtime.IntegerSequencer' )
 Node( 'TimeTrigger', 'OpenGLContext.scenegraph.x3druntime.TimeTrigger' )
 Node( 'KeySensor', 'OpenGLContext.scenegraph.x3druntime.KeySensor' )
+Node( 'StringSensor', 'OpenGLContext.scenegraph.x3druntime.StringSensor' )
 # X3D nodes that are data the engine reads through their declarations.
 Node( 'ColorRGBA', 'vrml.x3d.nodes.ColorRGBA' )
 Node( 'MultiTextureCoordinate', 'vrml.x3d.nodes.MultiTextureCoordinate' )

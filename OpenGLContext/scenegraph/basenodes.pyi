@@ -131,6 +131,7 @@ from OpenGLContext.scenegraph.transform import Transform as Transform
 from OpenGLContext.scenegraph.unlitmaterial import UnlitMaterial as UnlitMaterial
 from OpenGLContext.scenegraph.viewpoint import Viewpoint as Viewpoint
 from OpenGLContext.scenegraph.x3druntime import KeySensor as KeySensor
+from OpenGLContext.scenegraph.x3druntime import StringSensor as StringSensor
 from OpenGLContext.scenegraph.x3druntime import TimeTrigger as TimeTrigger
 from OpenGLContext.scenegraph.zone import Zone as Zone
 from OpenGLContext.scenegraph.zone import ZoneAudio as ZoneAudio
@@ -299,6 +300,7 @@ __all__ = [
     'SphereBackground',
     'SphereSensor',
     'SpotLight',
+    'StringSensor',
     'Switch',
     'Tangent',
     'Teapot',

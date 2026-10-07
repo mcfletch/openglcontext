@@ -2,10 +2,11 @@
 
 The behaviours are pyvrml97's (:mod:`vrml.x3d.runtime`). Here a
 `TimeTrigger` sends the engine's time
-(:func:`~OpenGLContext.events.systemtime.systemTime`), and a `KeySensor`
+(:func:`~OpenGLContext.events.systemtime.systemTime`); a `KeySensor`
 observes every keyboard event of each context it is bound to
 (:meth:`~OpenGLContext.events.eventhandlermixin.EventHandlerMixin.observeEvents`),
-under X3D's names for the keys (:func:`x3d_key`).
+under X3D's names for the keys (:func:`x3d_key`), and a `StringSensor` every
+character typed (`keypress` events).
 """
 from __future__ import annotations
 
@@ -15,7 +16,7 @@ from vrml.x3d import runtime
 
 from OpenGLContext.events import systemtime
 
-__all__ = ['ENGINE_KEYS', 'KeySensor', 'TimeTrigger', 'x3d_key']
+__all__ = ['ENGINE_KEYS', 'KeySensor', 'StringSensor', 'TimeTrigger', 'x3d_key']
 
 #: The engine's names for the keys X3D names otherwise.
 ENGINE_KEYS = {
@@ -60,3 +61,19 @@ class KeySensor(runtime.KeySensor):
             self.keyDown(name)
         else:
             self.keyUp(name)
+
+
+class StringSensor(runtime.StringSensor):
+    """The characters typed into each context the sensor is bound to"""
+
+    def bind(self, context: Any) -> bool:
+        """Observe `context`'s character input while this sensor lives"""
+        context.observeEvents('keypress', self.onKeypress)
+        return True
+
+    def onKeypress(self, event: Any) -> None:
+        """A character typed, sent on as X3D's character"""
+        character = x3d_key(event.name)
+        if character is not None and character not in runtime.ACTION_KEYS \
+                and character not in runtime.MODIFIER_KEYS:
+            self.typed(character)

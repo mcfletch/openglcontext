@@ -95,7 +95,7 @@ implements these X3D nodes, by component:
   Rectangle2D, TriangleSet2D
 - Geometry3D - Box, Cone, Cylinder, ElevationGrid, IndexedFaceSet, Sphere
 - Grouping - Group, Switch, Transform
-- KeyDeviceSensor - KeySensor
+- KeyDeviceSensor - KeySensor, StringSensor
 - Interpolation - ColorInterpolator, CoordinateInterpolator,
   NormalInterpolator, OrientationInterpolator, PositionInterpolator,
   ScalarInterpolator
@@ -160,7 +160,8 @@ The event utilities and sequencers are pyvrml97's behaviours
 ``KeySensor`` hears every key its window receives, including keys a program has
 bound itself, as ``keyPress`` for a character, ``actionKeyPress`` for the
 function, arrow and page keys, and ``shiftKey``, ``controlKey`` and ``altKey``
-while those are held. ``Context.observeEvents`` is how it listens.
+while those are held; a ``StringSensor`` hears every character typed into its
+window. ``Context.observeEvents`` is how they listen.
 
 An ``Inline`` reads any format a registered reader opens: another X3D or
 VRML97 world, an OBJ model or a glTF model. Its scene is read on the loader

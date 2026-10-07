@@ -15,7 +15,7 @@ from OpenGLContext.scenegraph import x3druntime
 
 @pytest.mark.parametrize('name', ['BooleanFilter', 'BooleanToggle', 'BooleanTrigger',
                                   'IntegerTrigger', 'TimeTrigger', 'BooleanSequencer',
-                                  'IntegerSequencer', 'KeySensor'])
+                                  'IntegerSequencer', 'KeySensor', 'StringSensor'])
 def test_each_is_the_engines(name):
     assert issubclass(prototypes()[name], runtime.PROTOTYPES[name])
 
@@ -73,3 +73,20 @@ def test_a_documents_key_sensor_hears_the_window(gl_context):
         context.OnDraw(force=1)
         context.ProcessEvent(keyboard('g', 1))
         assert scene.getDEF('K').keyPress == 'g'
+
+
+def keypress(name):
+    event = keyboardevents.KeypressEvent()
+    event.name = name
+    return event
+
+
+def test_a_string_sensor_observes_its_contexts_typing():
+    sensor = x3druntime.StringSensor()
+    context = FakeContext()
+    sensor.bind(context)
+    (kind, function, _stop), = context.observed
+    assert kind == 'keypress'
+    for name in ('H', 'i', 'x', '<backspace>', '<numlock>', '<return>'):
+        function(keypress(name))
+    assert sensor.finalText == 'Hi'
